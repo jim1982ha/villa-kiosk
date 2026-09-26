@@ -51,12 +51,7 @@ import { Color3 } from "@babylonjs/core/Maths/math.color";
 import { sliceChanged } from "./entityMapDiff";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { PBRMaterial } from "@babylonjs/core/Materials/PBR/pbrMaterial";
-import { PointLight } from "@babylonjs/core/Lights/pointLight";
-import { ShadowGenerator } from "@babylonjs/core/Lights/Shadows/shadowGenerator";
-// Imported for its REFRESHRATE_* constants only (see syncEntityShadow). Adds
-// nothing to the bundle — ShadowGenerator already pulls this module in.
-import { RenderTargetTexture } from "@babylonjs/core/Materials/Textures/renderTargetTexture";
-import { Vector3, Matrix, Quaternion } from "@babylonjs/core/Maths/math.vector";
+import { Vector3, Matrix } from "@babylonjs/core/Maths/math.vector";
 import type { Viewport } from "@babylonjs/core/Maths/math.viewport";
 // Type-only: annotates the viewport cullLabels already computes and passes to
 // Vector3.ProjectToRef. A `import type` adds no runtime import, so it cannot
@@ -81,8 +76,8 @@ import { chipProportions } from "@/config/chipProportions";
 import {
   badgeMetricsFor, detectPointerClass, observePointerClass, type BadgeMetrics, type PointerClass,
   CHIP_MAX_VIEWPORT_FRACTION, CARD_MAX_VIEWPORT_FRACTION,
-  PHONE_MAX_CSS_WIDTH, ICON_ZOOM_EXPONENT, ICON_ZOOM_MIN_SCALE,
-  GROUP_ZOOM_STEPS_PER_DOUBLING, snapToZoomLattice,
+  PHONE_MAX_CSS_WIDTH,
+  snapToZoomLattice,
   SUMMARY_TEXT_OF_HEIGHT, VALUE_CHAR_ADVANCE,
 } from "./badgeMetrics";
 import { badgeRank } from "./badgePriority";
@@ -92,7 +87,6 @@ import {
 } from "./badgeProjection";
 import {
   solvePlacement, markContacts, createPlacementScratch,
-  mergeCollidingPiles, buildCliques,
   type PlacementItem, type PlacementScratch, type PlacementStats,
 } from "./badgePlacement";
 import { clampIconScale } from "@/config/AppConfig";
@@ -101,26 +95,35 @@ import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 import { resolveMeshToMapping, extractVariantSuffix, hasVariantSuffix, inferTypeFromEntityId } from "@/config/EntityMap";
 import { groupMemberIds, groupForPrimary } from "@/config/deviceGroups";
 import { effectiveCategory, subjectOf, categorySurface, categorySurfaceRinged } from "@/config/EntityCategories";
-import { badgeKindFor, badgeFaceAndRing, type DeviceReading } from "@/utils/deviceActivity";
+import { badgeKindFor, badgeFaceAndRing, meshLookFor, type DeviceReading } from "@/utils/deviceActivity";
 import { alertStateFor } from "@/config/BinarySensorClasses";
 import type { BadgeKind } from "@/utils/deviceActivity";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
-import { isUnavailable, UNKNOWN_STATES } from "@/utils/stateColors";
 import { compactValue, VALUE_CAPABLE_TYPES } from "@/utils/entityValue";
 import { mergeOverlapping } from "./boxMerge";
 import { phantomEntity } from "@/utils/phantomEntity";
 import { channelEnabled, tapDebug } from "@/utils/tapDebug";
 import { debugFlagEnabled } from "@/utils/devLog";
 import { beginSpan } from "@/utils/perfSpans";
-import { clipPolygonToConvex, distanceToPolygonBoundary, pointInPolygon, type Pt2 } from "@/utils/geometry";
+import { pointInPolygon } from "@/utils/geometry";
 import { formatCountBadge } from "@/utils/countBadge";
 import { RoomHighlight } from "./RoomHighlight";
 import { CameraBeams, type BeamSource } from "./CameraBeams";
 import { blocksCameraBeam, isResolvedCeiling, isHelperMesh } from "./meshRoles";
-import { onStorey, storeyFloorYAt, nearestFloorRoom } from "./roomStorey";
+import { Storeys } from "./storeys";
 import { FloorProbe } from "./floorProbe";
 import { axisWorldScale } from "./meshUnits";
-import { LightPool, poolFootprint } from "./LightPools";
+import type { LightReading } from "./lightPoolSet";
+import { OcclusionSweep } from "./occlusionSweep";
+import { bucketRoomChips, combineChips, chipSuffixOf, type RoomChip } from "./roomChips";
+import { rungAt, referenceDepthAt, iconZoomAt, viewportPx } from "./badgeScale";
+import { solveRoomZoom } from "./roomZoomSolver";
+import { RoomFocus } from "./roomFocus";
+import { PlacementCheck, type ScreenBox } from "./placementCheck";
+import { FanRigs } from "./fanRigs";
+import { PlacementPass, GROUP_OVERLAP_ALLOW_WIDTHS, type ShownLabel, type PendingEntityGroup } from "./placementPass";
+import { onGlass, glyphDrawPx, glyphBakePx } from "./badgeLayout";
+import type { FrameRequests } from "./frameScheduler";
 import { badgeImageDataUrl, BADGE_INSET_CARD, BADGE_CORNER_FRACTION } from "./badgeIcons";
 import { badgeText } from "./badgeText";
 import { badgeShadow } from "./badgeShadow";
@@ -130,7 +133,7 @@ import {
   type CardArrangement,
 } from "./badgeCard";
 import { iconKeyFor } from "./badgeIconKeys";
-import { ALERT_RED, ALERT_RED_HEX, UNAVAILABLE_AMBER, AVAILABLE_GREEN_HEX } from "./colors";
+import { ALERT_RED, ALERT_RED_HEX, UNAVAILABLE_AMBER, AVAILABLE_GREEN_HEX, SECURE_GREEN, ACTIVE_GLOW } from "./colors";
 import { COSMETIC_MAPPING_FIELDS, entityMapDelta } from "./entityMapDiff";
 // Pose-word resolution (which "__<word>" mesh variant a live state asks for)
 // — pure logic, extracted to keep this file to the things that actually touch
@@ -141,10 +144,10 @@ import {
 // Pure label/chip overlap geometry — see labelLayout.ts.
 import { chipWidthPx, fitChipLabel, type ChipTextMetrics } from "./labelLayout";
 // Babylon prototype patches this module depends on — see babylonSideEffects.
+import { BulbSet, WARM_GLOW, STRIP_MIN_LENGTH, type BulbReading } from "./bulbSet";
+import { lightingModeFor, type LightingMode } from "./lightingMode";
 import "./babylonSideEffects";
 
-const WARM_GLOW = new Color3(1.0, 0.89, 0.63);
-const MAX_LIGHT_INTENSITY = 1.3;
 // Baseline emissive for an UNWIRED light marker (no HA state yet). SweetHome
 // ceiling spots / LED strips export as small placeholder spheres; at the old
 // 0.18 they were almost invisible — especially the clustered ones (Bedroom 1
@@ -153,73 +156,6 @@ const MAX_LIGHT_INTENSITY = 1.3;
 // wired; applyToMesh still overrides this from live HA state (on = bright, off
 // = black).
 const LIGHT_BASELINE_GLOW = 0.5;
-// Room-scale reach for a fixture's PointLight. An early value (8 m) lit straight
-// through walls into the next room because point lights have no occlusion of
-// their own — only the entity's REPRESENTATIVE light is wall-blocked by the
-// per-entity shadow below; any extra un-shadowed markers of a multi-marker strip
-// rely purely on this range to stay out of the adjacent room. 4 m is a deliberate
-// middle ground (rooms were reading as barely lit at the old 2.8 m) — if a light
-// starts bleeding into a neighbouring room, especially at night, shrink this
-// back down rather than raising it further.
-const LIGHT_RANGE = 4;
-// Floor-pool radius for BAKED-mode lights (see LightPools.ts) — a separate
-// knob from LIGHT_RANGE above, which only matters for the real PointLight
-// non-baked villas get (baked structure is unlit and can't be reached by a
-// PointLight at all, at any range/intensity — that's the whole reason the
-// pool trick exists).
-const LIGHT_POOL_RADIUS = 1.8;
-/** Floor for the radius of a pool that belongs to NO room polygon and so is
- *  bounded by the nearest room's edge instead (see reshapeLightPools). Without
- *  a floor, a fixture standing right on a boundary would shrink to nothing and
- *  read as an unlit lamp; a small pool is a better answer than none. */
-const POOL_MIN_RADIUS = 0.4;
-/**
- * ⚠️ HISTORICAL NOTE, not a live constant. There is NO cell ceiling for a
- * FOCUSED group's card — the one a room chip's tap produces — and this records
- * why, because "add a cap" is the obvious-looking change that keeps being
- * proposed. (`FOCUS_MAX_CHIPS` was deleted here; `badgeCard.cellMax` still
- * points at this paragraph.)
- *
- * MAX_TOTAL_CHIPS (6) is set by the summary-vs-summary clearance test: a wide
- * arrangement claims a wide disc and starts escalating rooms to their chip. A
- * focused group is seated UNCONDITIONALLY and can never escalate its room, so
- * that test — the entire reason for the cap — does not apply to it.
- *
- * ⚠️ 2.304.0 let a focused pile exceed the cap and fall through to a COUNT
- * badge, and wrote it up as a deliberate trade against overlapping cards. It
- * was neither deliberate nor a trade the user had left open: tapping a room
- * must show that room's DEVICES, which had been stated twice, and an "8" in
- * the middle of the pool is the same answer the chip already gave. Both had to
- * go, and the way to have both is a card that can actually draw its members.
- *
- * The real bound is physical and already exists — the width budget, which
- * `arrange` wraps into — so a focused group has NO cell ceiling of its own.
- *
- * ⚠️ There WAS one, `FOCUS_MAX_CHIPS = 12`, and it was chosen as "high enough
- * that the viewport is what decides". It wasn't. A focused pile of nineteen
- * (a Living Room tap) hit it, `gridCells` refused anything over its max by
- * returning ZERO cells, and zero cells is a count badge — so the one code path
- * that must never produce a number produced a "19". A fixed ceiling next to a
- * physical one is always a second bound that can bind first, and the fix is
- * not a bigger number: it is no number. `cellMax` returns the group's own
- * membership for a focused group, so the clamp can never be the thing that
- * refuses, and the budget stays the only bound.
- */
-/** Closer than this to its own fixture, a pool is not on a floor — it is on the
- *  ceiling the fixture hangs from. Half a metre is below any real mounting
- *  height (a table lamp clears its floor by more) and far above the few
- *  centimetres a ceiling lamp clears its slab by. See `airborne` in
- *  reshapeLightPools. */
-/** The comparison key of the no-room bucket, normalised ONCE at module level —
- *  `roomOf` hands out the LABEL and every map here is keyed by `roomKey`, so
- *  the two must be related in exactly one place. See chipRoom, which refuses
- *  to chip it. */
-const NO_ROOM_KEY = roomKey(NO_ROOM_LABEL);
-const POOL_AIRBORNE_M = 0.5;
-/** How far a pool sits above the floor it was probed onto. Enough to clear
- *  z-fighting with the floor polygon, small enough that it still reads as
- *  lying ON it rather than hovering. */
-const POOL_FLOOR_LIFT = 0.02;
 /** Clamp a per-light intensity override (Advanced Settings, -100%..+100%,
  *  stored as -1..1) to a safe range — a stale/hand-edited config value
  *  outside that range must not blow the fixture out or invert it. */
@@ -228,17 +164,7 @@ function clampRatio(ratio: number | undefined): number {
 }
 
 
-// A SweetHome "line light" (the Sweet Home Light plugin's linear LED strip) is
-// mounted flush against a ceiling/wall. A PointLight placed ON the strip sits
-// centimetres from that surface, so it prints a hard bright pool right there —
-// and sampling several lights along the strip (tried in v2.4.72) just prints a
-// CHAIN of pools, reading as separate bulbs instead of a line. The continuous
-// "LED line" look must come from the strip mesh's own emissive colour
-// (view-independent), NOT from dynamic lights. The dynamic light's only
-// job is the soft ambient wash on the room, so for elongated strips we push it
-// DOWN toward the floor, well clear of the mounting surface, where its pool is
-// wide and soft instead of a tight hotspot.
-const STRIP_MIN_LENGTH = 1.5; // metres — fixture meshes longer than this are "strips"
+// Strips — what counts as one, and why its light is lowered: bulbSet.ts.
 
 /**
  * Every `PLACEMENT:` assertion, on the `place` channel — one call so sixteen
@@ -293,8 +219,6 @@ const WALL_OCCLUSION = true;
  *  a walk across the villa is a handful of lines rather than a wall of them,
  *  and short enough that a capture of a lag complaint contains several. */
 const WALK_REPORT_MS = 2000;
-const STRIP_DROP_FRACTION = 0.45; // drop the light this fraction of the way to the floor
-const STRIP_DROP_MAX = 1.1; // metres — cap the drop so tall rooms don't put it at knee height
 // SweetHome's Led Line asset is modelled just 1 cm wide (and 3 cm tall) — from
 // almost any camera angle/distance that's under a pixel on screen, so the
 // rasteriser only lights a handful of scattered sub-pixel samples along its
@@ -324,25 +248,8 @@ const MIN_STRIP_THICKNESS = 0.06; // metres (6 cm) — still reads as a slim cov
 // to blend with the ceiling around it for whatever alpha remains.
 const LED_HOUSING_COLOR = new Color3(0.8, 0.79, 0.77);
 // The inflated ~6cm bar is sized for the ON state, where the emissive core
-// needs several on-screen pixels to read as one continuous line. When the
-// light is OFF that same bar is just dead geometry, and no
-// base colour can make a 6cm slab at ceiling height look like the ~1cm
-// recessed channel it really is. So the OFF state turns the strip
-// see-through — the SAME technique as window glass (ModelLoader): material
-// alpha + MATERIAL_ALPHABLEND + forceDepthWrite. Material-level alpha rather
-// than mesh.visibility on purpose: forceDepthWrite is a material flag, and
-// without depth writing Babylon sorts transparent meshes back-to-front per
-// frame, which can flip against the (also transparent) glass walls as the
-// camera moves — the exact appear/disappear glitch ModelLoader documents for
-// glass vs. strips. Transparency does not affect pickability, so an off
-// strip stays clickable exactly where its faint trace shows. Every light
-// fixture mesh gets this treatment now, strip or not (see applyToMesh) — a
-// smart light should read as "off" the instant HA says so, not stay a
-// permanently solid, statically-coloured prop just because it happens to be
-// nicely modelled geometry rather than stand-in placeholder geometry.
-// When the light is ON, applyToMesh restores alpha 1 + MATERIAL_OPAQUE, so
-// the on-state render path is byte-identical to before this existed.
-const STRIP_OFF_ALPHA = 0.25; // slightly clearer than window glass (0.38)
+// needs several on-screen pixels to read as one continuous line. OFF, it goes
+// see-through like window glass — bulbSet's OFF_ALPHA, for every light fixture.
 // A rectangular LED cove (dining-table/sofa perimeter) is built from 4
 // separate straight strip pieces (top/bottom/left/right), one per side. Their
 // authored endpoints don't always reach far enough to overlap at the
@@ -361,10 +268,6 @@ const STRIP_OFF_ALPHA = 0.25; // slightly clearer than window glass (0.38)
 // distance, not a scale, so it can't blow up — same lesson as
 // inflateThinStrip's earlier bug).
 const STRIP_JOINT_EXTENSION = 0.02; // metres (2 cm) past each modelled endpoint
-// Cube shadow maps for point lights are 6 faces each, so keep them small. We cast
-// ONE per light ENTITY (the markers of a strip are clustered, so a single occluder
-// covers them) and only while the light is on, so an idle/off light costs nothing.
-const LIGHT_SHADOW_SIZE = 256;
 // Climate-running outline: same forward-pass outline+overlay technique as the
 // blue "clickable" highlight (see SceneManager.applyHighlight for why — a
 // Mesh.renderOutline/renderOverlay pair, not a screen-space EffectLayer).
@@ -598,143 +501,6 @@ const BADGE_PLACEMENT = "priority" as "priority" | "legacy";
 const VIEW_METRIC = "plane" as ProjectionMode;
 /** Reused, because getDirectionToRef takes the local axis by reference. */
 const CAMERA_LOCAL_FORWARD = new Vector3(0, 0, 1);
-/**
- * How much of its own width a badge ICON may overlap a neighbour before the
- * two count as piled together.
- *
- * This is THE control over how large badges can get before a room summarises,
- * and there are only ever three ways to resolve two badges that want the same
- * pixels: let them overlap, move one, or merge them. Moving is ruled out (it
- * is the fan, removed in 2.159.0 — see the file header), so the choice is
- * between this number and how early the room chip appears. They are the same
- * dial read from two ends.
- *
- * Back to ZERO in 2.173.0, and it should stay there. It was raised to half a
- * width in 2.168.0 as the only lever available while badges were pinned to
- * their anchors — the size ceiling had to be bought from somewhere, and
- * overlap was all there was. 2.169.0 let badges move again, which buys the
- * same headroom without the cost, so the tolerance became a licence to
- * overlap that nothing needed. Reported, correctly, as badges sitting on top
- * of each other.
- */
-const GROUP_OVERLAP_ALLOW_WIDTHS = 0;
-/*
- * ── ZERO BY EXPLICIT DECISION (2.413.0), NOT BY OVERSIGHT ──────────────────
- * The owner was shown the trade in numbers and chose pure contact: nothing
- * groups until the ink actually meets. Do NOT restore the margin because a
- * `PLACEMENT: … OVERLAP` counter fires — that counter firing is the ACCEPTED
- * COST of this setting, not evidence of a regression, and the whole point of
- * the paragraphs below is that the cost was known before the choice was made.
- *
- * What it means in practice, measured from the capture that prompted it: the
- * rule now fires when the visible gap drops under ~9% of a badge height (the
- * 2px legibility gap alone) instead of ~24%. The pair that triggered the
- * report — a corridor light and a bedroom curtain at `dy=85` against a need of
- * `89` — stays apart, because ink-to-ink they do not touch until 72.
- *
- * ── What the 15% was for, kept so nobody re-derives it ─────────────────────
- * Read as written, this is "how much of its own width a badge may overlap a
- * neighbour". A NEGATIVE value was the opposite request: reserve that much
- * MORE than the ink. It paid for the one approximation 2.287.0 bought its
- * correctness with, and the residual it covered was measured, not guessed:
- * one to five overlapping badge pairs out of twenty to thirty-four drawn, one
- * summary pair inside a narrow band of tilt, and one or two things over a room
- * chip. Those are the pairs that may now reappear, always in the direction of
- * the plane over-estimating separation, and always for objects further from
- * the camera than the zoom rung's reference depth.
- *
- * ⚠️ The honest mitigation if they become a nuisance is NOT to reinstate a
- * blanket margin — it is that a badge drawn under another is still reachable,
- * because SceneManager's tap and long-press both ask `pickBadgeAt` before
- * answering. Set this to -0.075 for half the old margin if the overlaps are
- * worse in practice than the early grouping was; that is the dial, and it is
- * one number.
- *
- * It pays for the one thing 2.287.0 bought its correctness with. Placement is
- * measured on an orthographic view plane at ONE pixels-per-world for the whole
- * scene; the renderer divides every drawn thing by its OWN depth. Two objects
- * further from the camera than the zoom rung's reference depth therefore draw
- * closer together than the plane predicted, by the ratio of those depths, and
- * nothing inside a position-invariant metric can know that ratio — knowing it
- * is precisely what "invariant to where the camera stands" forbids.
- *
- * So it is not an error to be removed, it is a bounded approximation to be
- * covered, and 15% is what the field numbers cost: after 2.291.0 the residual
- * was one to five overlapping badge pairs out of twenty to thirty-four drawn,
- * one summary pair inside a narrow band of tilt, and one or two things over a
- * room chip — small, and always in the direction of the plane over-estimating
- * separation. This buys all three at once because all three read `allow`.
- *
- * The cost is stated: everything merges very slightly earlier, so a crowded
- * corner reaches its summary card, and a summary reaches its room chip, at a
- * marginally wider zoom than before. That is the trade this dial has always
- * been — "how large badges can get before a room summarises" — and it is the
- * right side of it, because a badge that has merged is still reachable through
- * its card while a badge drawn under another one is not.
- *
- * ZERO restores the pre-2.292.0 geometry exactly.
- */
-/**
- * Do room chips take part in the collision they were the answer to?
- *
- * Until 2.290.0 they did not, and the omission was invisible because it looks
- * like a completed cascade: a crowded room hands its badges to a chip, and the
- * chip is the tier of last resort, so nothing checks it against anything. But
- * `updateClusters` only ever tested chips against OTHER CHIPS. A chip sits at
- * its room's device centroid, which is nobody's badge position and nobody's
- * card position, and it is far wider than either — so a neighbouring room's
- * badge or summary lands on top of it routinely. That is the card sitting on
- * "Staircase" in the top-down screenshots.
- *
- * The resolution is the same one every other tier uses: the thing that can
- * escalate does. A drawn badge or a placed card overlapping a chip sends its
- * OWN room(s) to their own chip — never the other way round, because a chip is
- * already the last tier and has nowhere to go. Rooms are only ever added to
- * `roomClustered`, so the loop is monotone and terminates in at most one round
- * per room.
- *
- * Two spaces, deliberately, and this must not be "tidied up" into one:
- * chip-vs-chip MERGING stays in true perspective (it is cosmetic, post-hoc,
- * cannot feed back into the solve, and being exact there is free), while
- * chip-vs-badge/card ESCALATION uses the view plane, because it decides what
- * is drawn and must stay invariant to where the camera is standing.
- *
- * ⚠️ THAT SENTENCE WAS A LIE FROM 2.290.0 TO 2.298.0, and 2.299.0 is what
- * makes it true. Escalation did use the plane — for the chips' POSITIONS. But
- * the chips it was handed were the MERGED ones, and which chips exist, how
- * many there are and where each sits are all decided by the perspective merge
- * above. A camera-position-dependent computation therefore chose the obstacle
- * set for the one test that decides what is drawn, which is the exact property
- * six rewrites died protecting. Escalation now collides against the UNMERGED
- * per-room chips — one box per chipped room, at that room's own centroid, at
- * its own text width — and merging is applied afterwards, to the render set
- * only, where it genuinely is cosmetic and genuinely cannot feed back.
- *
- * The leak was not theoretical. Merging is a function of screen distance, so
- * zooming in SPLITS a merged pill, and the pieces do not stay where the pill
- * was: each drops onto its own room's centroid, which may be somewhere the
- * obstacle set previously had nothing at all. A room that had decluttered into
- * a summary card then collides with a chip that only just appeared under it,
- * escalates, and collapses back to a chip — one rung after it expanded. That
- * is the reported "Living Room goes chip → entities → chip → entities as I
- * zoom in", captured in sources/files/zoom_in.gif. Panning did the same thing
- * for the same reason and would have been reported as badges dancing again.
- *
- * Unmerged obstacles also restore monotonicity in ZOOM, which the merged set
- * could not have: each box is a fixed pixel size at a fixed world point, so a
- * higher rung strictly increases every separation, and `roomClustered` only
- * shrinks between rungs. Nothing that has expanded can re-collapse without the
- * view direction itself changing.
- *
- * `false` restores the pre-2.290.0 behaviour exactly. It is here because this
- * is the tier that spends chips, and how many chips is too many is a judgement
- * only a screenshot can make.
- */
-const CHIP_COLLISION = true as boolean;
-
-
-
-/**
 /*
  * The minimum clear gap between two badges' drawn footprints now lives in
  * badgeMetrics as `minGapPx` — it is a badge DIMENSION, and keeping it here
@@ -755,50 +521,6 @@ const CHIP_COLLISION = true as boolean;
  *  hue (green/orange/purple/gold/blue) so a chip reads as UI chrome — a
  *  navigation affordance, not a device — rather than any category's badge. */
 const CLUSTER_BG_COLOR = "#475569"; // fallback only — see --chip-surface
-/**
- * One room chip as DERIVED — everything needed to decide where it lands and
- * what it swallows, before a single GUI control is touched.
- *
- * Lifted out of `updateClusters` when that method split into `deriveChips`
- * (pure) and `renderChips`: CHIP_COLLISION has to re-derive the chips several
- * times in one pass, and a function that also writes to the GUI cannot be run
- * in a loop.
- */
-interface RoomChip {
-  /** roomKey() — identity, and the key its GUI controls live under. */
-  key: string;
-  /**
-   * EVERY roomKey this chip stands for, its own included, growing as it merges.
-   * `key` alone was enough while nothing outside the merge loop asked what a
-   * chip covered; the collision pass does, and `roomNames` cannot answer it —
-   * those are printable spellings, and roomKey() exists precisely because a
-   * printable spelling is not an identity.
-   */
-  keys: string[];
-  /** The raw name this chip stands for — the identity a person reads and the
-   *  modal title. NOT necessarily what is drawn: see `label`. */
-  room: string;
-  /**
-   * The string actually PRINTED, i.e. `room` (+ any "+N") after truncation to
-   * the viewport budget. Set by `measure` so the width the merge test reserves
-   * and the width `renderChips` paints are the same string through the same
-   * estimator — reserving one width and painting another is this subsystem's
-   * oldest rule broken.
-   */
-  label: string;
-  ids: string[]; centre: Vector3; rooms: number; roomNames: string[];
-  ringRed: boolean; unavailable: boolean;
-  /** True-perspective screen position and half-extents — the merge test only.
-   *  The collision test re-projects `centre` onto the view plane instead; see
-   *  CHIP_COLLISION for why the two spaces are not the same one. */
-  x: number; y: number; halfW: number; halfH: number;
-}
-/** A merged chip says so with "+N", so the count pill's total is never
- *  mistaken for one room's device count. */
-/** The "+N" a chip carries when it has swallowed other rooms, or "" when it
- *  names exactly one. Kept SEPARATE from the room name because fitChipLabel
- *  must never truncate it — see that function. */
-const chipSuffixOf = (c: RoomChip) => (c.rooms > 1 ? `+${c.rooms - 1}` : "");
 /**
  * ── The summaries are ONE family, built from ONE unit ────────────────────
  * A summary is never given a size of its own. Every dimension of the room
@@ -845,44 +567,6 @@ const chipSuffixOf = (c: RoomChip) => (c.rooms > 1 ? `+${c.rooms - 1}` : "");
 // why an estimate is the right answer here. The per-style values used by
 // labelBoxes travel with the rest of the badge geometry — see badgeMetrics.
 
-/** A badge that survived the per-entity culls (category / floor / enabled),
- *  with BOTH its world-space anchor and its projected screen position. */
-interface ShownLabel {
-  id: string;
-  lbl: LabelControls;
-  /** Projected screen position of the anchor, in render pixels. */
-  x: number;
-  y: number;
-  /** World-space anchor position. `wy` (mounting HEIGHT) counts as much as the
-   *  ground axes: an anchor sits just above its own geometry
-   *  (buildLabelAnchors), so a ceiling fan's is ~2.7m up while a table lamp's
-   *  is barely off the floor. Kept because two things genuinely need a world
-   *  position — quantisedPixelsPerWorldUnit's distance to the camera, and
-   *  solveRoomZoomRadius's framing — and because it is what the projection
-   *  projects. */
-  wx: number;
-  wy: number;
-  wz: number;
-  /** Where the badge's BOX IS DRAWN on this pass's view plane, in GUI pixels —
-   *  THE input to grouping. The anchor projected (see badgeProjection for why
-   *  the decision is made in this plane rather than in world space or in true
-   *  perspective) and then lifted by the badge's own `cy`, because a badge
-   *  hangs above its anchor by an amount that differs between badges. Written
-   *  by placementItems, the one place the projection happens. */
-  sx: number;
-  sy: number;
-  sz: number;
-  /** Anchor is in front of the camera, i.e. has a valid screen position at
-   *  all. Purely a RENDER gate — deliberately not an input to grouping. */
-  inFront: boolean;
-  /** A wall (or slab, or shell) stands between the walking camera's eye and
-   *  this anchor. First-person only, and — like `inFront`, and for the same
-   *  reason — purely a RENDER gate: an occluded badge still takes part in
-   *  grouping, so walking around a room can never change how it is presented.
-   *  Always false in overview, where the whole villa is deliberately seen at
-   *  once and through its own walls. */
-  occluded: boolean;
-}
 
 // Status/enum SENSOR states (a text sensor like an AP's connectivity state).
 // NOMINAL = "all good, nothing to report" — its value is hidden (the badge is
@@ -900,21 +584,6 @@ interface ShownLabel {
 // a 60 Hz tablet and a 120 Hz phone.
 const PULSE_RAD_PER_SEC = 3.6;
 
-// Ceiling-fan spin: angular speed (rad/s) at full fan percentage. A whole-mesh
-// spin reads as "blades turning" at kiosk distance; ~1 rev/s is lively without
-// strobing. Scaled down by the fan's percentage (min 15%) when reported.
-const FAN_MAX_RAD_PER_SEC = 6.2;
-// A ceiling fan is exported as ONE fused mesh (mount + motor + blades all one
-// piece, one material — no separate "blade" sub-object to isolate), so the
-// whole thing has to spin together; see updateFanSpin/computeFanSpin. The top
-// fraction of its height (the ceiling mount/canopy) is reliably the one part
-// that's round and centred exactly on the true axle, so its own vertices —
-// not the whole mesh's bounding box — decide WHERE that axle sits. Get this
-// right and the mount+pole (rotationally symmetric) reads as motionless even
-// though it's technically rotating with the blades; get it wrong (the old
-// plain bbox-midpoint) and the pole visibly orbits in a small circle instead
-// of spinning in place.
-const FAN_AXIS_TOP_SLICE = 0.25;
 
 /** Bucket name for badges whose entity has no room configured — they still
  *  cluster together rather than each becoming its own singleton chip. */
@@ -933,7 +602,7 @@ export interface CeilingState {
   at: { x: number; y: number; z: number };
 }
 
-interface LabelControls {
+export interface LabelControls {
   container: StackPanel;
   badge: Rectangle;
   glyph: Image;
@@ -1010,61 +679,6 @@ interface EntityGroupControls {
   gridN: number;
 }
 
-/** An entity group decided this frame, before it has been checked for
- *  clearance and given controls. */
-interface PendingEntityGroup {
-  /** Stable identity across frames: room + the lowest entity id in the pile.
-   *  Membership is a pure function of world positions and quantised zoom, so
-   *  the same pile yields the same key on every device and every frame. */
-  key: string;
-  /** The room's name as it will be PRINTED (raw, from HA), carrying the room
-   *  chip's own "+N" suffix when the group straddles a boundary — see
-   *  badgePlacement's DeferralBucket.rooms for why it now can. */
-  room: string;
-  /** Every room the group covers, as Map keys — see EntityVisuals.roomClustered
-   *  for why the printable and the key form are carried separately rather than
-   *  derived at each use. A group that cannot be placed escalates ALL of them,
-   *  because all-or-nothing per room is what makes a chip readable. */
-  roomKeys: string[];
-  members: number[];
-  /** The members' world centroid — the ONLY stored position. The card RENDERS
-   *  here (linkWithMesh on a node at this point). */
-  wx: number; wy: number; wz: number;
-  /** The same point, projected into this pass's plane. DERIVED from wx/wy/wz by
-   *  the same projection every badge uses, never accumulated in parallel: the
-   *  projection is affine, so the plane centroid of the members IS the
-   *  projection of their world centroid, and that identity is what makes "the
-   *  card is measured where it is drawn" a fact rather than a discipline. */
-  sx: number; sy: number; sz: number;
-  /**
-   * How many device pictograms this group asks to draw. Never 0: every group
-   * reaching the renderer has at least two members, and `gridCells` stopped
-   * refusing in 2.363.0.
-   *
-   * The card is an integer number of badge boxes on each axis (see
-   * babylon/badgeCard), so every cell's tap zone is exactly the box of the
-   * badge it stands in for. Decided where the group is made and never revoked:
-   * the size is not a clearance decision. It was once, and because clearance
-   * depends on the quantised ZOOM the same pair drew as a full-size card at one
-   * rung and a half-scale one at the next — one situation, two objects, which
-   * is not a distinction anybody reading a floor plan can act on.
-   *
-   * `badgeCard.gridCells` is the cap, applied by the layout itself rather than
-   * trusted to this field: a card is one badge per column, so an unbounded
-   * count is an unbounded card.
-   */
-  grid: number;
-  /**
-   * Made inside the FOCUSED room (see pairFocusedRoom), not by the main solve.
-   *
-   * It skips the clearance test and can never escalate a room to its chip:
-   * it stands in for two badges that were already being drawn on top of each
-   * other, so refusing it would put back the very overlap it exists to
-   * remove, and chipping the room the user just asked to see would break the
-   * one promise the focus makes.
-   */
-  focused: boolean;
-}
 
 /* The state ring's stroke lives in badgeMetrics (`ringThicknessPx`) — it is a
  * badge dimension and has to scale with the badge, because Babylon's Rectangle
@@ -1165,53 +779,14 @@ export class EntityVisuals {
   private markLayoutDirty(): void {
     this.layoutDirty = true;
   }
-  /** entity_id → angular speed (rad/s) for a CEILING fan currently spinning. */
-  private spinningFans = new Map<string, number>();
-  /** entity_id → total accumulated spin angle (radians, wrapped to 2π) — the
-   *  rotation is recomputed FRESH from this absolute angle every frame (never
-   *  accumulated incrementally), so there is no possible drift. */
-  private fanAngles = new Map<string, number>();
-  /** entity_id → per-mesh spin rig, set up once (lazily, on first "on") via
-   *  setupFanRig: `pivot` is an invisible TransformNode sitting at the mesh's
-   *  own true axle (see setupFanRig) that the mesh got REPARENTED under —
-   *  animateFans only ever rotates `pivot`, never the mesh's own transform,
-   *  so the mesh's local bounding info / pivot matrix (which the badge's
-   *  linkWithMesh tracking reads) stay exactly what they always were. */
-  private fanRigs = new Map<string, { mesh: AbstractMesh; pivot: TransformNode; axisLocal: Vector3 }[]>();
   private pulseT = 0;
   /** Scratch for animatePulse — see its comment. */
   private pulseColor = new Color3(0, 0, 0);
 
-  // Real light sources for `light` entities. Keyed by MESH uniqueId (not entity
-  // id) so an entity whose fixture is several distinct meshes — e.g. the two
-  // bedside lamps that share one HA entity, or the four Led Line meshes of a
-  // perimeter strip — gets a real light at EACH piece. ONE light per mesh, no
-  // more: materials cap simultaneous lights (ModelLoader), and every light past
-  // the cap is silently dropped, which reads as patchy/arbitrary illumination.
-  private meshLights = new Map<number, PointLight>();
-  /** Baked-mode counterpart to meshLights — see LightPools.ts for why a real
-   *  PointLight is pointless there (the structure renders unlit) and what
-   *  this fakes instead. Keyed the same way, one per fixture mesh. A compact
-   *  fixture gets a single pool; an elongated strip gets an ARRAY — one
-   *  full-intensity pool at its centre plus two half-intensity pools at its
-   *  ends, so two strips meeting at a corner light that corner too instead of
-   *  leaving it dark between their centres (see the light-creation block). */
-  private meshLightPools = new Map<number, LightPool[]>();
-  /** Fixture spots whose LOAD-PATH floor probe came up empty, kept so
-   *  `reshapeLightPools` can ask again once the probe can answer per ROOM
-   *  instead of per 4-metre grid. Keyed by fixture mesh uniqueId, exactly as
-   *  `meshLightPools` is, and emptied into it as each retry succeeds — see the
-   *  deferral site in the light-creation block for why a load-path miss is not
-   *  a final answer. */
-  private pendingPoolSpots = new Map<number, {
-    mesh: AbstractMesh; x: number; z: number; y: number; scale: number; i: number;
-  }[]>();
-  /** config.render.lightPoolIntensity, cached — see setLightPoolIntensity. */
-  private lightPoolStrength = 1;
-  /** One wall-blocking cube shadow map per light ENTITY, keyed by entity_id and
-   *  attached to that entity's representative light. Created lazily while the
-   *  light is on; a 12-marker strip therefore costs a single shadow map, not 12. */
-  private lightShadows = new Map<string, ShadowGenerator>();
+  /** Every bulb and every light it gives — its own glow and off-state
+   *  transparency, PointLights, floor pools, the furniture light, the shadow
+   *  maps, the slider and the storey rule: bulbSet.ts. */
+  private bulbs!: BulbSet;
   /** Structural meshes (walls/floors/shell) that occlude entity-light shadows. */
   private shadowCasters: AbstractMesh[] = [];
   /** Fullscreen GUI layer for state labels. */
@@ -1232,77 +807,11 @@ export class EntityVisuals {
   /** Last line emitted by logPlacement, so the pass logs only on CHANGE. */
   private lastPlaceLog = "";
 
-  /** `?debug` only: badges pulled into a summary because they were underneath
-   *  it (see the absorb phase in placeEntityGroups). */
-  private absorbed = 0;
-  /** Summaries made inside the focused room — pair cards and counts alike
-   *  (see pairFocusedRoom). One per pile, so this is also "how many piles the
-   *  focused room had", which is the number worth watching: it should be small
-   *  after the zoom solver has framed the room. */
-  private focusPairs = 0;
   /** Rooms chipped THIS pass purely because another room holds the focus —
    *  the third way a chip can appear, and the only one the solver never sees.
    *  Reported in the `place` line beside the solver's own two. */
 
-  /**
-   * Why each room became a chip, keyed by reason.
-   *
-   * ⚠️ `chipWhy` reported THREE reasons while TEN call sites could chip a room,
-   * so a field capture read `undrawable=0 degenerate=0 focus=0` beside
-   * `chips=8` — a zero that meant "not measured", not "did not happen", and it
-   * pointed every reader at the solver when the solver had chipped nothing.
-   * That is this project's own instruments-never-skip rule broken in its own
-   * telemetry. Every write to `roomClustered` now goes through `chipRoom` and
-   * states a reason, so the totals reconcile with `chips=` by construction.
-   *
-   * Counted on the FALSE→TRUE transition only: a room chipped by one rule and
-   * re-set by a later one is one chip, not two, and the point of these numbers
-   * is to add up to the chips actually drawn.
-   */
-  private chipWhyCount = new Map<string, number>();
-  /** How many times a chip was REFUSED for naming the no-room bucket — see
-   *  chipRoom. Deliberately not in `chipWhyCount`: that map holds reasons a chip
-   *  EXISTS, and `total=` sums it against `chips=`. */
-  private chipRefusedNoRoom = 0;
 
-  /**
-   * THE one writer for `roomClustered` — a room may not become a chip without
-   * saying which rule did it. See chipWhyCount for what that is worth.
-   */
-  private chipRoom(key: string, why: string): void {
-    // ⚠️ THE NO-ROOM BUCKET IS NOT A ROOM, AND MUST NEVER DRAW A CHIP (2.440.0).
-    //
-    // `roomOf` falls back to NO_ROOM_LABEL ("Other") for any entity whose room
-    // is unknown — no HA Area, and no drawn polygon containing it. That bucket
-    // is a legitimate thing to LIST (the Cockpit and the group panel both sort
-    // it last on purpose), but on the map a chip is a claim: "this room,
-    // summarised, tap it to see inside". There is no Other room in the villa,
-    // so the chip names a place that does not exist and puts it at the
-    // centroid of devices that have nothing to do with each other.
-    //
-    // Refused HERE because this is the one writer of `roomClustered` (2.403.0),
-    // so one guard covers every tier that can chip — solver, seating, focus,
-    // chip-vs-badge, chip-vs-card. Its members keep their individual badges;
-    // they can still form summary CARDS, which are per-PILE and make no claim
-    // about rooms, and nothing hides them, so the orphan invariant is
-    // unaffected.
-    //
-    // Counted, never silently dropped: `noroom=` in chipWhy is how many rooms'
-    // worth of chipping this guard turned down, so the guard cannot become
-    // invisible the way the ten unnamed chip sites were before 2.403.0.
-    if (key === NO_ROOM_KEY) {
-      // ⚠️ ITS OWN COUNTER, NOT chipWhyCount. That map is the list of REASONS A
-      // CHIP EXISTS and `total=` sums it to reconcile against `chips=` — a
-      // refusal in there would inflate the total above the chips drawn and make
-      // the one field that audits this tier stop adding up. Counted separately,
-      // printed separately, labelled as a refusal.
-      this.chipRefusedNoRoom += 1;
-      return;
-    }
-    if (this.roomClustered.get(key)) return;
-    this.roomClustered.set(key, true);
-    this.chipWhyCount.set(why, (this.chipWhyCount.get(why) ?? 0) + 1);
-  }
   private iconUserScale = 1;
   private iconZoomScale = 1;
   /** Every badge dimension, in CSS px, for the pointer currently driving this
@@ -1316,11 +825,6 @@ export class EntityVisuals {
   /** The layout pass's own solver workspace. solveRoomZoomRadius keeps a
    *  SEPARATE one — see PlacementResult's warning about pooled returns. */
   private placeScratch: PlacementScratch = createPlacementScratch();
-  /** Solver input for the focused room's own pass — see pairFocusedRoom. */
-  private focusItems: PlacementItem[] = [];
-  /** shown-index per focusItems slot, pooled: this runs per frame while a room
-   *  is focused, and the steady state should allocate nothing. */
-  private focusIdx: number[] = [];
   private zoomScratch: PlacementScratch = createPlacementScratch();
   /** Grow-only pools for the per-pass placement input and its groups. */
   private placeItems: PlacementItem[] = [];
@@ -1331,129 +835,56 @@ export class EntityVisuals {
   /** Scratch for quantisedPixelsPerWorldUnit's median. */
   private distPool: Float64Array = new Float64Array(0);
   /** Entities the owner removed as "no longer in HA" — see badgeEligible. */
-  /** ?debug-only solver workspaces — see assertPlacementInvariants. Separate
-   *  from the live ones because a PlacementResult is pooled and a second solve
-   *  would rewrite the result the pass is still using. */
-  private debugScratchA: PlacementScratch = createPlacementScratch();
-  private debugScratchB: PlacementScratch = createPlacementScratch();
-  /** Which rooms are showing their cluster chip instead of individual badges.
-   *  Recomputed from scratch every frame by cullLabels — deliberately NOT
-   *  carried over as state: grouping is a pure function of world positions
-   *  and zoom now, and the previous frame's answer must never influence this
-   *  one (that path-dependence was the "stays grouped when I slide back"
-   *  bug — see the grouping thresholds' comment). Kept as a field only so
-   *  updateClusters and pickClusterAt can read the current frame's result. */
-  /**
-   * Rooms summarised into a chip this frame.
-   *
-   * Per ROOM, deliberately: when a room collapses it takes ALL of its badges
-   * with it. 2.166.0 briefly clustered per PILE instead — a chip swallowed
-   * only the devices that actually overlapped and left the room's other
-   * badges in place, the way a map clusters markers. It is a defensible model
-   * and it was rejected: a room that is half chip and half loose badges asks
-   * the user to work out which of its devices the chip stands for, and a
-   * count that covers some of a room but not the rest is not a fact anyone
-   * can use. All-or-nothing per room is the readable contract — the chip
-   * means "this room, summarised", every time.
-   *
-   * Keyed by roomKey(), never the raw name. It used to be the raw name while
-   * roomShownCount and the one-room test next to it already used roomKey(),
-   * and rooms come from HA Area names whose casing and padding are whatever
-   * HA has — so "Master Bedroom" and "master bedroom " counted as ONE room
-   * for the denominator and TWO for this flag. That combination can collapse
-   * one spelling and leave the other's badges drawn: a half-chip, half-badges
-   * room, which is exactly the state the paragraph above says must never
-   * exist. Per CLAUDE.md the key is a Map key only; every displayed name
-   * stays the raw one (see roomDisplay).
-   */
-  private roomClustered = new Map<string, boolean>();
-  /** roomKey() → the raw room name to PRINT for it. The lexicographically
-   *  smallest spelling seen in the current pass, so two casings of one room
-   *  cannot make a chip's label flip between frames. */
-  private roomDisplay = new Map<string, string>();
+  /** The `?debug=place` self-check over what a pass painted — placementCheck.ts. */
+  private readonly placementCheck = new PlacementCheck();
+  /** Ceiling fans that spin — the rig, the turn, the teardown: fanRigs.ts. */
+  private readonly fans: FanRigs;
   /** Room-cluster chips, keyed by roomKey(). Built lazily the first time a
    *  room clusters; disposed with everything else in rebuildLabels. */
   private clusters = new Map<string, ClusterControls>();
-  /**
-   * The room the user asked to SEE (tapped its chip), as a roomKey — or null.
-   *
-   * ── Why an exemption exists at all ────────────────────────────────────────
-   * "Tap a room, see its devices" was implemented four times as a search for a
-   * zoom at which that room's badges happen not to collide, and it kept coming
-   * back as "I still see the chip". The last of those attempts is why: two
-   * devices mounted at ONE 3D point (a ceiling fan and its own light kit) are
-   * separated by no zoom level that exists, so for those rooms the promise is
-   * unkeepable by construction — no amount of solving finds a distance that
-   * is not there.
-   *
-   * The requirement is not "try hard to declutter". It is: tapping a room ALWAYS
-   * shows that room's badges, never a summary of them. So the focused room is
-   * simply exempt from grouping: its badges take no part in the pile-building
-   * at all (see groupBadges), which makes them individually drawn as a matter
-   * of fact rather than as an outcome the camera has to earn. The zoom solve
-   * still runs and still picks the tightest shot that separates them where one
-   * exists — it just no longer decides WHETHER the user gets what they asked
-   * for.
-   *
-   * The trade-off is explicit: for a room whose devices genuinely cannot be
-   * separated, its two badges will overlap at the chosen zoom. That is the
-   * honest presentation of "these two things are in the same place", and it is
-   * what was asked for over a chip that hides both.
-   */
-  private focusedRooms = new Set<string>();
-  /** The quantised zoom the focus was granted at. The focus lasts exactly as
-   *  long as that zoom does — see cullLabels — so panning around a focused
-   *  room keeps it open, and zooming away lets the map behave normally again
-   *  without needing any camera-event plumbing to tell us the user did it. */
-  private focusedAtZoom = 0;
+  /** The rooms the user asked to SEE (tapped a chip, picked from the radial
+   *  menu) — exempt from grouping — and how long that lasts: roomFocus.ts. */
+  private readonly focus = new RoomFocus();
+  /** One placement pass's cards and chips, and why — placementPass.ts. Its
+   *  state (roomClustered, entityGrouped, the chip reasons, the seat log) is
+   *  read here by the renderer and the logs. */
+  private readonly pass = new PlacementPass({
+    roomOf: (id) => this.roomOf(id),
+    layoutOf: (g, n) => this.layoutOf(g, n),
+    planeOf: (c, x, y, z) => this.planeOf(c, x, y, z),
+    drawnDistance: (ax, ay, az, bx, by, bz) => this.drawnDistance(ax, ay, az, bx, by, bz),
+    summaryMetrics: () => this.summaryMetrics(),
+    sortCardMembers: (shown, m) => this.sortCardMembers(shown, m),
+    cardOf: (cells, max, maxWidth) => this.cardOf(cells, max, maxWidth),
+    cardBudget: () => this.cardBudget(),
+    cardCellCap: (max) => this.cardCellCap(max),
+    effectiveScale: () => this.effectiveScale(),
+    deriveChips: (shown, merge) => this.deriveChips(shown, merge),
+    metrics: () => this.metrics,
+    focus: () => this.focus,
+  });
 
   /** Entity groups drawn this frame, keyed by PendingEntityGroup.key. Same
    *  lazy-build / dispose-with-rebuildLabels lifecycle as `clusters`. */
   private entityGroups = new Map<string, EntityGroupControls>();
-  /** Entity ids currently standing behind an entity group, so cullLabels'
-   *  visibility pass hides them exactly like a room-clustered badge. */
-  private entityGrouped = new Set<string>();
-  /** Each room's real drawn polygon (world-space X/Z, original casing) — the
-   *  geometric signal roomForEntity uses to auto-fill a freshly detected
-   *  entity's room on first sight (see getDetectedMappings). Stored as the
-   *  actual point list because containment testing needs it.
-   *
-   *  ⚠️ `floorY` is carried, not dropped, and it is what makes every lookup here
-   *  STOREY-AWARE. These polygons are a floor PLAN — flat outlines with no
-   *  height — and on a two-storey villa the upper storey's outlines cover the
-   *  lower one's in XZ. A containment test alone therefore answers with
-   *  whichever polygon the array lists first, which is the load order of
-   *  `.rooms.json` and nothing else. See `roomPolyAt`. */
-  private roomPolys: { name: string; pts: { x: number; z: number }[]; floorY: number }[] = [];
+  /** THE VILLA PLAN (storeys.ts) — the calibrated room outlines with their
+   *  floors and storeys, the one object SceneManager built and every reader
+   *  shares. Room auto-fill (roomForEntity) and the floor probe's room
+   *  resolver ask it which room a point is in, ON ITS STOREY: the outlines
+   *  are a flat floor plan, and upstairs lies over downstairs in XZ, so a bare
+   *  containment test answers with `.rooms.json`'s load order. */
+  private plan = new Storeys<{ name: string; pts: { x: number; z: number }[]; floorY: number; storey?: number }>([]);
   /** True while the walking camera is the active one — see setFirstPerson. */
   private firstPerson = false;
-  /** Entity ids whose badge is behind a wall from the walker's current eye
-   *  position. A SET rather than a flag on the label, because `shown` is
-   *  rebuilt every pass while the answer outlives it (the sweep is
-   *  round-robin). Empty in overview, always. */
-  private occludedIds = new Set<string>();
-  /** Scratch for pruning `occludedIds` to the live shown set — allocated once,
-   *  because the prune runs on every sweep restart, i.e. every walking frame. */
-  private readonly occlLive = new Set<string>();
-  /** Where the answers in `occludedIds` were measured from; a different eye
-   *  position restarts the sweep. */
-  private occlusionFrom = new Vector3(NaN, NaN, NaN);
-  /** How many badges have been answered at `occlusionFrom`, and where the
-   *  round-robin is. The cursor deliberately does NOT reset with the sweep —
-   *  resuming where it left off spreads the cost evenly instead of re-testing
-   *  the same first eight badges on every step. */
-  private occlusionSwept = 0;
-  private occlusionCursor = 0;
-  /** Rays cast on the last pass, and what they COST in ms — reported by the
-   *  `walk:` line, so the budget is a measurement rather than a claim. A budget
-   *  that is never measured is how a per-frame raycast becomes a freeze. */
-  private occlRays = 0;
-  private occlMs = 0;
+  /** Which badges are behind a wall from the walker's eye — see
+   *  occlusionSweep.ts, which owns the answers, when they go stale and what a
+   *  pass may spend. This file only supplies the ray cast. Empty in overview. */
+  private readonly occlusion = new OcclusionSweep({
+    settleMs: OCCLUSION_SETTLE_MS, nearM: OCCLUSION_NEAR_M, slackM: OCCLUSION_SLACK_M,
+    cast: (ox, oy, oz, dx, dy, dz, len) => this.castOcclusionRay(ox, oy, oz, dx, dy, dz, len),
+  });
   /** Dedupe for the badge-geometry diagnostic — see logBadgeGeometry. */
   private lastBadgeGeom = "";
-  /** entityId → the mesh that blocked its badge, stem-collapsed. Read by the
-   *  `walk:` line's `occludedBy=` field; see refreshWallOcclusion. */
-  private readonly occlBlockedBy = new Map<string, string>();
   /** Frames logBadgeGeometry refused to print because the row's children were
    *  not inside their own badge yet — see there. Printed on the next good line
    *  rather than dropped, so "it stopped complaining" and "it never measured"
@@ -1470,9 +901,6 @@ export class EntityVisuals {
   private walkFloorCost:
     (() => { rays: number; ms: number; still: number; flat: boolean; cand: number })
     | null = null;
-  /** performance.now() when the eye last MOVED. The sweep waits for this to go
-   *  quiet, so a walking frame never pays for a ray — see refreshWallOcclusion. */
-  private movingSince = 0;
   /**
    * The meshes a wall-occlusion ray may hit — resolved ONCE per indexMeshes,
    * because it cannot change while you walk.
@@ -1490,21 +918,15 @@ export class EntityVisuals {
    *  Ray and a Vector3 per badge per frame is exactly the kind of steady-state
    *  garbage this file pools everything else to avoid. */
   private occlRay = new Ray(new Vector3(0, 0, 0), new Vector3(0, 0, 1), 1);
-  private occlDir = new Vector3(0, 0, 0);
   /** Active storey from FloorManager (1-based). Floors below it stay rendered
    *  (cumulative visibility), so enabled-state alone can't cull their badges —
    *  cullLabels compares each label's stamped floorIndex against this. */
   private activeFloor = 1;
 
-  /** Baked-lighting GLB loaded (see ModelLoader). All lighting — including
-   *  every fixture's contribution to the room — is already painted into the
-   *  structure's texture, and the structure is unlit, so a runtime PointLight
-   *  can't brighten it anyway; per-entity lights and their cube shadow maps
-   *  would be pure cost with no visible effect. Skipped entirely in baked
-   *  mode. The fixture's own emissive glow is KEPT — that's surface glow
-   *  on the fixture itself (the on/off signal the user reads), not light
-   *  transport. */
-  private bakedMode = false;
+  /** Which lights this model gets (lightingMode.ts), from ModelLoader. The
+   *  fixture's own emissive glow is kept in every mode: it is the on/off
+   *  signal the user reads, not light transport. */
+  private lighting: LightingMode = lightingModeFor("unbaked");
 
   /** camera entity_id -> world-space unit facing direction (may include a
    *  vertical tilt component from SweetHome's `pitch`), computed by
@@ -1544,23 +966,27 @@ export class EntityVisuals {
   constructor(
     scene: Scene,
     config: AppConfig,
-    requestRender: () => void,
-    /** Re-arm the loop for a CONTINUOUS animation (fan spin, alert pulse).
-     *  Rate-capped by the caller so a fan left on doesn't hold the GPU at the
-     *  display's full rate for weeks — see SceneManager.requestAnimationRender.
-     *  Falls back to requestRender when not supplied. */
-    requestAnimationRender?: () => void,
+    /** What this module may ask of the render loop: a repaint after a change,
+     *  or a rate-capped frame for a CONTINUOUS animation (fan spin, alert
+     *  pulse) — see frameScheduler.ts. One object, so the capped half can no
+     *  longer be dropped: it was an optional second callback that fell back
+     *  to the uncapped one. */
+    frames: FrameRequests,
   ) {
     this.scene = scene;
     this.config = config;
-    this.requestRender = requestRender;
-    this.requestAnimationRender = requestAnimationRender ?? requestRender;
+    this.requestRender = () => frames.repaint();
+    this.requestAnimationRender = () => frames.animate();
     this.probe = new FloorProbe(scene);
     // The probe can only key by ROOM once calibration has produced the world
-    // polygons; until then roomContaining returns null and it falls back to the
+    // polygons; until then the plan is empty, answers null, and it falls back to the
     // grid, exactly as every load did before 2.300.0 (see floorProbe.ts).
-    this.probe.setRoomResolver((x, y, z) => this.roomContaining(x, y, z));
-    this.roomHighlight = new RoomHighlight(scene, requestRender, this.probe, this.requestAnimationRender);
+    this.probe.setRoomResolver((x, y, z) => this.plan.roomAt(x, y, z)?.name ?? null);
+    this.roomHighlight = new RoomHighlight(scene, frames, this.probe);
+    // Every baked-mode floor pool — see lightPoolSet.ts. The probe is its floor
+    // port; the readings callback lets it repaint a pool it creates late.
+    this.fans = new FanRigs(scene, (id) => this.labelAnchors.get(id), () => this.requestRender());
+    this.bulbs = new BulbSet(scene, this.probe, () => this.bulbReadings(), tapDebug, () => this.shadowCasters);
     this.beams = new CameraBeams(scene);
     // ⚠️ KEPT SO `dispose()` CAN DETACH THEM. Both observers below used to be
     // registered and never removed, while this class's own dispose() docstring
@@ -1574,8 +1000,9 @@ export class EntityVisuals {
       // engine.getDeltaTime() cannot answer this.
       const dtMs = this.animClock.step(performance.now());
       this.animatePulse(dtMs);
-      this.animateFans(dtMs);
+      if (this.fans.animate(dtMs, this.activeFloor)) this.requestAnimationRender();
       this.cullLabels();
+      this.bulbs.syncGlow();
     };
     scene.registerBeforeRender(this.onBeforeRender);
     // AFTER render, not before: Babylon reprojects every linkWithMesh control
@@ -1606,9 +1033,11 @@ export class EntityVisuals {
     });
   }
 
-  /** MUST be called before indexMeshes() — that's where lights are created. */
-  setBakedMode(baked: boolean): void {
-    this.bakedMode = baked;
+  /** MUST be called before indexMeshes() — that's where the bulbs are built
+   *  for the mode. */
+  setLightingMode(mode: LightingMode): void {
+    this.lighting = mode;
+    this.bulbs.setCastShadows(mode.lightShadows);
   }
 
   /** Repaint every badge from the current config (per-entity colour + glyph).
@@ -1798,75 +1227,40 @@ export class EntityVisuals {
    *  pools, making it a silent no-op on a non-baked model) — so dragging
    *  the slider previews live on any light that's already on. */
   setLightPoolIntensity(value: number): void {
-    if (value === this.lightPoolStrength) return;
-    this.lightPoolStrength = value;
-    this.resyncLightIntensities();
+    if (this.bulbs.setStrength(value)) this.requestRender();
   }
 
-  /** Re-derive EVERY light's brightness from its entity's last known state and
-   *  the current config — pools and dynamic PointLights together, since a
-   *  fixture may drive either. Call after anything that changes an input to
-   *  the brightness formula without an accompanying state_changed event: the
-   *  global "Light effect strength" slider, or a per-light intensity override
-   *  edited in Advanced Settings. */
-  private resyncLightIntensities(): void {
-    this.forEachLightPoolState((pool, on, colour, brightnessFrac) =>
-      pool.setState(on, colour, brightnessFrac * this.lightPoolStrength));
-    this.resyncDynamicLightIntensities();
-    this.requestRender();
+  /** One light's state as its fixture shows it: on/off, colour, and the
+   *  brightness fraction with the per-light override (Advanced Settings,
+   *  -100%..+100%) applied ON TOP of HA's own dimmer level. The ONE copy of
+   *  that formula — it was written three times, for the state pass, the
+   *  dynamic-light resync and the pool resync, and they had to agree exactly
+   *  for a slider drag and the next state_changed to land on the same value. */
+  private lightReading(state: HassEntity, map: EntityMapping): LightReading {
+    const brightnessFrac = state.attributes.brightness ? state.attributes.brightness / 255 : 1;
+    return {
+      on: state.state === "on",
+      colour: this.lightColour(state),
+      frac: brightnessFrac * (1 + clampRatio(map.lightIntensityRatio)),
+    };
   }
 
-  /** Re-derive every dynamic PointLight's intensity from its entity's last
-   *  known state — the non-baked counterpart of forEachLightPoolState's pool
-   *  resync, for when a GLOBAL factor (lightPoolStrength) changes without
-   *  any entity state change. Mirrors applyToMesh's light branch exactly
-   *  (same effectiveFrac/lightShare formula) so a slider drag and the next
-   *  real state_changed event land on identical values. */
-  private resyncDynamicLightIntensities(): void {
-    if (this.meshLights.size === 0) return; // nothing to resync (no fixtures)
+  /** Every light entity's bulbs and current reading, for BulbSet's bulk
+   *  repaint (slider, floor switch, a pool created late). */
+  private *bulbReadings(): Iterable<BulbReading> {
     for (const [entityId, map] of this.mapping) {
       if (map.type !== "light") continue;
       const state = this.lastState.get(entityId);
       const meshes = this.byEntity.get(entityId);
       if (!state || !meshes) continue;
-      const on = state.state === "on";
-      const brightnessFrac = state.attributes.brightness ? state.attributes.brightness / 255 : 1;
-      const effectiveFrac = brightnessFrac * (1 + clampRatio(map.lightIntensityRatio));
-      const lightShare =
-        new Set(meshes.map((m) => this.meshLights.get(m.uniqueId)).filter(Boolean)).size || 1;
-      for (const mesh of meshes) {
-        const light = this.meshLights.get(mesh.uniqueId);
-        if (light) {
-          light.intensity = on
-            ? (MAX_LIGHT_INTENSITY * effectiveFrac * this.lightPoolStrength) / lightShare
-            : 0;
-        }
-      }
+      yield { meshes, reading: this.lightReading(state, map) };
     }
   }
 
-  /** Every light entity's pool, resolved to its floor-and-state-correct on/off
-   *  + colour + brightness right now — shared by anything that needs to
-   *  resync ALL pools at once (a floor change, the "Light effect strength"
-   *  slider) rather than just the one entity apply() is currently handling.
-   *  `on` already folds in the fixture mesh's live enabled state, so a light
-   *  left on behind a now-hidden floor comes back off instead of staying lit. */
-  private forEachLightPoolState(
-    fn: (pool: LightPool, on: boolean, colour: Color3, brightnessFrac: number) => void,
-  ): void {
-    for (const [entityId, map] of this.mapping) {
-      if (map.type !== "light") continue;
-      const state = this.lastState.get(entityId);
-      const meshes = this.byEntity.get(entityId);
-      if (!state || !meshes) continue;
-      const on = state.state === "on";
-      const colour = this.lightColour(state);
-      const brightnessFrac = state.attributes.brightness ? state.attributes.brightness / 255 : 1;
-      const effectiveFrac = brightnessFrac * (1 + clampRatio(map.lightIntensityRatio));
-      for (const mesh of meshes) {
-        const pools = this.meshLightPools.get(mesh.uniqueId);
-        if (pools) for (const pool of pools) fn(pool, on && mesh.isEnabled(), colour, effectiveFrac);
-      }
+  /** Every light entity's fixture meshes. */
+  private *lightEntityMeshes(): Iterable<readonly AbstractMesh[]> {
+    for (const [entityId, meshes] of this.byEntity) {
+      if (this.mapping.get(entityId)?.type === "light") yield meshes;
     }
   }
 
@@ -1915,62 +1309,19 @@ export class EntityVisuals {
    *  module owns the ray, the predicate and the cache (see floorProbe.ts). */
   get floorProbe(): FloorProbe { return this.probe; }
 
-  /**
-   * The pixel size a badge's baked squircle is DRAWN at, for the two styles.
-   *
-   * One expression, called by both the control that sets `glyph.width` and the
-   * bake that fills it, because those two numbers agreeing IS the fix in
-   * 2.301.0: the image is composited on a canvas and then drawn by Babylon GUI
-   * with `drawImage`, and WebKit resamples that with a single bilinear tap
-   * where Chrome mip-filters. Baked at 128 and drawn at 34 it staircased on
-   * Safari and looked fine on Chrome. Baked at the drawn size it cannot
-   * resample at all. If these two ever drift apart the blur comes straight
-   * back, so they read the same expression rather than the same constant.
-   */
+  /** The size a badge's glyph is DRAWN at, base CSS px — badgeLayout.glyphDrawPx,
+   *  which carries why the control and the bake must read one expression. */
   private glyphPxFor(card: boolean): number {
-    const m = this.metrics;
-    if (!card) return m.badgeDiameterPx;
-    // The card's WORST-CASE inner box: Babylon insets a Rectangle's children
-    // by its border, heaviest (ringThicknessPx) while the device is active or
-    // alerting. Sizing the icon to anything larger clips it in exactly those
-    // states — see the fuller note at the control's own construction.
-    const cardMaxInnerH = m.cardHeightPx - 2 * m.ringThicknessPx;
-    return Math.min(Math.round(m.cardHeightPx * m.cardIconFraction), cardMaxInnerH);
+    return glyphDrawPx(this.metrics, card);
   }
 
-  /**
-   * The size a glyph is actually PAINTED at, which is what its bitmap must be
-   * baked at — and it is not `glyphPxFor`.
-   *
-   * ⚠️ `this.metrics` is UNSCALED. Every badge control is built in base CSS
-   * pixels and the whole container is then transform-scaled by
-   * `effectiveScale()` (see applyIconScale), so a control whose `width` says 44
-   * covers 44·s render pixels. 2.301.0 made the bake read the same expression
-   * as the control's width and called that "baked at the size it is drawn" —
-   * true of the two NUMBERS, and false of the pixels, because both are on the
-   * unscaled side of a transform. On any retina device cssToGui() alone makes
-   * s≈2 (a fact this file already states, in labelBaseOffsetY), so every badge
-   * has been baking a 44px bitmap and painting it across ~88 render pixels.
-   * That is a 2x upscale of the artwork before the canvas is composited, and
-   * on WebKit — one bilinear tap, no mips — it is the whole reported "the
-   * entity icons are very low resolution", on iPad and iPhone alike.
-   *
-   * ⚠️ It deliberately does NOT include `iconZoomScale`. Re-baking means
-   * rebuildLabels (a data-URL swap on a live Babylon Image does not reliably
-   * re-render the GUI texture — see repaintBadges), and the bird's-eye zoom
-   * factor moves continuously, so including it would hitch the map every time
-   * the ladder crossed a rung mid-pinch. It is capped at 1, so excluding it can
-   * only ever leave the bitmap LARGER than the paint — a mild downscale, which
-   * is the direction BAKE_LADDER's headroom exists to absorb and the direction
-   * WebKit handles acceptably. The two factors that are left change only when
-   * the resolution valve fires or the user moves the size stepper, which re-bakes through
-   *  `repaintGlyphs` — and did NOT until 2.496.29. The claim that used to
-   *  stand here ("both of those already repaint") was false: the stepper
-   *  only re-scaled, so every badge wore an upscaled bitmap until its own
-   *  device next reported.
-   */
+  /** The size a glyph must be BAKED at, render px — badgeLayout.glyphBakePx,
+   *  which carries why it is not the drawn size. The two inputs besides the
+   *  metrics change only when the resolution valve fires or the size stepper
+   *  moves, and both re-bake through `repaintGlyphs` (which the stepper did
+   *  NOT until 2.496.29). */
   private glyphBakePx(card: boolean): number {
-    return this.glyphPxFor(card) * this.iconUserScale * this.bestCssToGui();
+    return glyphBakePx(this.metrics, card, this.iconUserScale, this.bestCssToGui());
   }
 
   /**
@@ -1994,14 +1345,6 @@ export class EntityVisuals {
    */
   private bestCssToGui(): number {
     return Math.max(1, window.devicePixelRatio || 1);
-  }
-
-  /** Y of the first structure surface below (x, y, z) — see FloorProbe.below.
-   *  Kept as a one-line wrapper rather than inlining the probe at every call
-   *  site so `exclude` (the fixture must not pick itself) stays impossible to
-   *  forget. */
-  private surfaceBelow(x: number, y: number, z: number, exclude?: AbstractMesh): number | null {
-    return this.probe.below(x, y, z, exclude);
   }
 
   /** Build the reverse index entity_id -> meshes from the loaded GLB. */
@@ -2030,24 +1373,8 @@ export class EntityVisuals {
     this.disposeLabelAnchors();
     this.beams.dispose();
     this.pulsing.clear();
-    this.spinningFans.clear();
-    // TransformNode.dispose() with no args is RECURSIVE — it disposes the
-    // whole descendant hierarchy, not just the node itself. Each fan mesh is
-    // a child of its pivot (see setupFanRig's `m.setParent(pivot)`), so
-    // disposing the pivot outright silently destroyed the fan mesh forever
-    // on every structural re-index after the fan had ever been spun (any
-    // Advanced Settings edit that touches entityMap triggers one). The mesh
-    // must be moved back out onto the pivot's original parent FIRST — same
-    // world-preserving setParent() used to rig it — so only the now-childless
-    // pivot gets disposed.
-    for (const rig of this.fanRigs.values()) {
-      for (const r of rig) {
-        r.mesh.setParent(r.pivot.parent);
-        r.pivot.dispose();
-      }
-    }
-    this.fanRigs.clear();
-    this.fanAngles.clear();
+    // Fan meshes back out of their pivots, pivots disposed — fanRigs.ts.
+    this.fans.clear();
     this.byEntity.clear();
     this.mapping.clear();
     this.meshVariants.clear();
@@ -2168,140 +1495,16 @@ export class EntityVisuals {
         this.inflateThinStrip(m);
         // EVERY light fixture mesh — marker sphere, inflated strip, or a
         // fully modelled bulb/fixture from the SweetHome catalog — gets the
-        // same off-state alpha treatment in applyToMesh (see STRIP_OFF_ALPHA):
+        // same off-state alpha treatment in BulbSet.show (see its OFF_ALPHA):
         // a smart light should read as "off" (translucent) the instant HA
         // says so, not stay a permanently opaque, statically-coloured prop.
         // That toggle needs depth writing while alpha-blended (see the
-        // window-glass/strip depth-sort note by STRIP_OFF_ALPHA), so set it
+        // window-glass/strip depth-sort note by OFF_ALPHA), so set it
         // here, once, for every light mesh — not only the ones inflateThinStrip
         // happens to touch.
         if (mat) mat.forceDepthWrite = true;
-        // A real (diffuse-only, shadowless) PointLight at the fixture — created
-        // in BOTH modes now. In non-baked mode it lights the whole room. In
-        // BAKED mode the structure renders unlit (ModelLoader sets mat.unlit =
-        // true), so this light does NOT touch the already-baked walls/floor —
-        // it falls only on the separate furniture/entity meshes below the
-        // fixture, which the bake never covered. That's the fix for baked night
-        // scenes where furniture under an ON light stayed pitch-black while the
-        // floor around it was lit (the floor gets the pool below; the 3D assets
-        // get this light). Shadow maps stay OFF in baked mode (ensureLightShadow
-        // returns early), so the only added cost is the lights themselves — and
-        // they're disabled until their entity turns on, so an all-off villa pays
-        // nothing.
-        const bb = m.getBoundingInfo().boundingBox;
-        const pos = bb.centerWorld.clone();
-        // Elongated strips are mounted flush against a ceiling or wall; a light
-        // AT the strip prints a hard hotspot on that surface (or a chain of
-        // them). Drop the light partway toward whatever is below so its pool is
-        // a wide soft wash instead — the visible "LED line" itself stays the
-        // mesh's emissive + glow, not this light.
-        const size = bb.maximumWorld.subtract(bb.minimumWorld);
-        const longest = Math.max(size.x, size.y, size.z);
-        if (longest >= STRIP_MIN_LENGTH) {
-          const surfaceY = this.surfaceBelow(pos.x, pos.y, pos.z, m);
-          const distance = surfaceY === null ? 0 : pos.y - surfaceY;
-          if (distance > 0.3) {
-            pos.y -= Math.min(STRIP_DROP_MAX, distance * STRIP_DROP_FRACTION);
-          }
-        }
-        const light = new PointLight(`elight_${m.name}_${m.uniqueId}`, pos, this.scene);
-        light.intensity = 0;
-        light.range = LIGHT_RANGE;
-        light.diffuse = WARM_GLOW.clone();
-        // No specular: on glossy surfaces (the tiled floor) a point light's
-        // white specular lobe is a bright glint that SLIDES as the camera moves
-        // — easily mistaken for the light itself flickering. Diffuse-only keeps
-        // the wash identical from every viewpoint.
-        light.specular = Color3.Black();
-        // Start DISABLED, not just intensity 0. A disabled light is dropped from
-        // every material's shader light-loop entirely, so an off fixture costs
-        // nothing to compile or shade; it's re-enabled in applyToMesh when the
-        // entity turns on. With most lights off at load, this slashes the active
-        // light count the first frame has to compile shaders for.
-        light.setEnabled(false);
-        this.meshLights.set(m.uniqueId, light);
-
-        // Baked mode ALSO gets the floor glow pool: the unlit baked floor can't
-        // be lit by the PointLight above, so the pool paints the on-floor wash
-        // while the PointLight handles the 3D furniture. (see LightPools.ts —
-        // same floor-finding raycast; scene-wide predicate because every mesh is
-        // already in the scene even though this loop hasn't reached them all.)
-        //
-        // An elongated strip (e.g. one side of a rectangular LED ceiling cove)
-        // only lighting its OWN centre left the CORNERS dark where two adjoining
-        // strips' ends meet — each strip's single pool fades out well before
-        // reaching that far. Fixed by giving a strip THREE pools instead of one:
-        // full-intensity at its centre (unchanged), plus two half-intensity
-        // pools at its own ends. At a shared corner, the two adjoining strips'
-        // half-intensity end-pools land on (almost) the same spot and sum back
-        // to roughly the centre's brightness — lighting the corner without
-        // doubling it into a hotspot. A compact (non-strip) fixture is
-        // unaffected: it still gets exactly one full-intensity pool.
-        if (this.bakedMode) {
-          const min = bb.minimumWorld, max = bb.maximumWorld;
-          const cx = (min.x + max.x) / 2, cz = (min.z + max.z) / 2;
-          const horiz = Math.max(size.x, size.z);
-          const isStrip = longest >= STRIP_MIN_LENGTH && horiz >= STRIP_MIN_LENGTH;
-          const spots: { x: number; z: number; scale: number }[] = isStrip
-            ? (size.x >= size.z
-              ? [{ x: cx, z: cz, scale: 1 }, { x: min.x, z: cz, scale: 0.5 }, { x: max.x, z: cz, scale: 0.5 }]
-              : [{ x: cx, z: cz, scale: 1 }, { x: cx, z: min.z, scale: 0.5 }, { x: cx, z: max.z, scale: 0.5 }])
-            : [{ x: cx, z: cz, scale: 1 }];
-
-          const pools = spots
-            .map(({ x, z, scale }, i) => {
-              const fixturePos = new Vector3(x, bb.centerWorld.y, z);
-              const surfaceY = this.surfaceBelow(fixturePos.x, fixturePos.y, fixturePos.z, m);
-              // No floor found within the probe's reach: the old fallback
-              // placed the pool 1m below the fixture regardless — a glow
-              // patch floating at roughly window/furniture height instead of
-              // on the floor, reported (accurately) as "a disk floating in
-              // the air" and traced to surfaceBelow's predicate accepting
-              // furniture as a floor hit (now fixed via isStructureMesh — see
-              // that method). No pool at all — this one spot just reads as
-              // an unlit fixture — is a far smaller miss than a wrongly-
-              // placed glow, and with structure-only hits plus a 20m ray and
-              // the seam-nudge retry, an actual miss here should now mean
-              // there is genuinely no floor within reach (an outdoor fixture
-              // over water, say). Logged rather than silently swallowed so
-              // that rarer case is still visible on the kiosk itself via
-              // ?debug, without needing devtools.
-              if (surfaceY === null) {
-                // DEFERRED, not abandoned (2.434.0). This probe runs on the
-                // LOAD path, where no room resolver exists yet, so it is keyed
-                // by the 4-metre grid — the very key 2.300.0 removed for
-                // merging THROUGH A WALL. A fixture near a wall can therefore
-                // inherit a cached `null` from a neighbouring cell that really
-                // has no floor (a void, the garden), and until now that verdict
-                // was FINAL: no pool object was created, so `reshapeLightPools`
-                // — which re-probes every pool room-keyed a moment later — had
-                // nothing to correct. The fixture stayed permanently unlit
-                // beside identical fixtures that drew a full pool, which is the
-                // "why are the light effects shown differently" report.
-                //
-                // Recorded as five numbers and a mesh reference, not a mesh: no
-                // GPU allocation happens until the retry actually succeeds, so
-                // a fixture that genuinely has no floor under it (an outdoor
-                // light over water) still costs nothing at all.
-                const spots = this.pendingPoolSpots.get(m.uniqueId) ?? [];
-                spots.push({ mesh: m, x: fixturePos.x, z: fixturePos.z, y: fixturePos.y, scale, i });
-                this.pendingPoolSpots.set(m.uniqueId, spots);
-                return null;
-              }
-              const floorPos = new Vector3(fixturePos.x, surfaceY + POOL_FLOOR_LIFT, fixturePos.z);
-              // Built as its plain footprint here, deliberately. Room polygons
-              // do not exist yet — SceneManager calibrates AFTER indexMeshes,
-              // post-first-frame, because the fit's raycasts are too heavy for
-              // the load path — so clipping happens later, in reshapeLightPools,
-              // which keeps all of the new work off the critical path.
-              const pool = new LightPool(this.scene, `${m.name}_${m.uniqueId}_${i}`, floorPos, LIGHT_POOL_RADIUS);
-              pool.intensityScale = scale;
-              pool.probeFromY = fixturePos.y;
-              return pool;
-            })
-            .filter((p): p is LightPool => p !== null);
-          this.meshLightPools.set(m.uniqueId, pools);
-        }
+        // Its PointLight and, on a baked villa, its floor pools: bulbSet.ts.
+        this.bulbs.addFixture(m, this.lighting.pools);
       }
     }
     endScan();
@@ -2352,7 +1555,8 @@ export class EntityVisuals {
     this.occluders = this.shadowCasters.filter(
       (m) => blocksCameraBeam(m) && !isResolvedCeiling(m));
     this.extendStripJoints();
-    this.mergeStripEntityLights();
+    this.bulbs.mergeStrips(this.lightEntityMeshes());
+    if (this.lighting.furnitureLight) this.bulbs.glowEverythingLit();
     scene.blockMaterialDirtyMechanism = false;
 
     this.buildLabelAnchors();
@@ -2427,54 +1631,6 @@ export class EntityVisuals {
     this.rebuildLabels(); // labels are always shown
     this.stats.labelsMs = Math.round(performance.now() - tLabels);
     this.probe.save();
-  }
-
-  /** A rectangular LED cove (e.g. the dining-table or sofa-area perimeter) is
-   *  modelled as SEVERAL separate elongated strip meshes — one per side — so
-   *  the per-mesh loop above gives it one PointLight per side: 4 distinct
-   *  light "pools" instead of one even wash ("I want to keep seeing a light
-   *  line, not separate light bulbs"). When EVERY mesh of a light
-   *  entity is an elongated strip, merge their individual PointLights into
-   *  ONE shared light at the merged bounding box's centre — one soft,
-   *  even room-fill instead of N hotspots. Genuinely separate fixtures under
-   *  one entity (e.g. two bedside lamps) don't pass the "every mesh is a
-   *  strip" test, so each keeps its own light exactly as before. */
-  private mergeStripEntityLights(): void {
-    // Runs in BOTH modes now — baked mode gained per-fixture PointLights (to
-    // light furniture), so a multi-piece LED strip would otherwise spawn one
-    // light per side here too. Pools are per-marker and untouched by this merge.
-    for (const [entityId, meshes] of this.byEntity) {
-      const map = this.mapping.get(entityId);
-      if (!map || map.type !== "light" || meshes.length < 2) continue;
-      const allStrips = meshes.every((m) => {
-        const size = m.getBoundingInfo().boundingBox.maximumWorld.subtract(
-          m.getBoundingInfo().boundingBox.minimumWorld);
-        return Math.max(size.x, size.y, size.z) >= STRIP_MIN_LENGTH;
-      });
-      if (!allStrips) continue;
-
-      const bounds = this.mergedWorldBounds(meshes);
-      if (!bounds) continue;
-      const pos = Vector3.Center(bounds.min, bounds.max);
-      const surfaceY = this.surfaceBelow(pos.x, pos.y, pos.z, meshes[0]);
-      const distance = surfaceY === null ? 0 : pos.y - surfaceY;
-      if (distance > 0.3) {
-        pos.y -= Math.min(STRIP_DROP_MAX, distance * STRIP_DROP_FRACTION);
-      }
-
-      const seen = new Set<PointLight>();
-      for (const m of meshes) {
-        const l = this.meshLights.get(m.uniqueId);
-        if (l && !seen.has(l)) { seen.add(l); l.dispose(); }
-      }
-      const shared = new PointLight(`elight_${entityId}_merged`, pos, this.scene);
-      shared.intensity = 0;
-      shared.range = LIGHT_RANGE;
-      shared.diffuse = WARM_GLOW.clone();
-      shared.specular = Color3.Black();
-      shared.setEnabled(false);
-      for (const m of meshes) this.meshLights.set(m.uniqueId, shared);
-    }
   }
 
   /** Stretch every strip mesh of a multi-piece light entity past its own
@@ -2651,19 +1807,7 @@ export class EntityVisuals {
 
   /** Tear down all entity light sources and their shadow generators. */
   private disposeLights(): void {
-    this.lightShadows.forEach((g) => g.dispose());
-    this.lightShadows.clear();
-    // A merged strip entity (mergeStripEntityLights) stores the SAME light
-    // instance under several mesh keys — dedupe before disposing.
-    const seen = new Set<PointLight>();
-    this.meshLights.forEach((l) => { if (!seen.has(l)) { seen.add(l); l.dispose(); } });
-    this.meshLights.clear();
-    this.meshLightPools.forEach((arr) => arr.forEach((p) => p.dispose()));
-    this.meshLightPools.clear();
-    // Holds mesh references from the outgoing model — clearing it here (rather
-    // than only on the next indexMeshes) is what stops a reload's calibration
-    // retrying spots that belong to a scene that no longer exists.
-    this.pendingPoolSpots.clear();
+    this.bulbs.clear();
   }
 
   /** World-space bounding box spanning ALL of an entity's meshes merged (e.g.
@@ -2732,12 +1876,8 @@ export class EntityVisuals {
     this.disposeLabelAnchors();
     this.beams.dispose();
     this.roomHighlight.dispose();
-    for (const rig of this.fanRigs.values()) {
-      for (const r of rig) r.pivot.dispose();
-    }
-    this.fanRigs.clear();
+    this.fans.clear();
     this.pulsing.clear();
-    this.spinningFans.clear();
     this.labels.clear();
     this.labelsNewestFirst.length = 0;
     this.lastState.clear();
@@ -2745,249 +1885,20 @@ export class EntityVisuals {
     this.labelLayer = null;
   }
 
-  /** Replace the calibrated room polygons (world space) — forwarded straight
-   *  to RoomHighlight. Called by SceneManager after every plan→world re-fit
-   *  (load + mirror-flip toggles), same trigger as the teleport grid. */
-  setRoomPolygons(polys: { name: string; pts: { x: number; z: number }[]; floorY?: number; conform?: { positions: number[]; indices: number[] } }[]): void {
-    this.roomHighlight.setRooms(polys);
+  /** The calibrated villa plan (world space, storeys.ts) — the one object
+   *  SceneManager builds per plan→world re-fit (load + mirror-flip toggles),
+   *  handed on as-is to the room highlight and the bulbs' pools. */
+  setPlan(plan: Storeys<{ name: string; pts: { x: number; z: number }[]; floorY: number; storey?: number; conform?: { positions: number[]; indices: number[] } }>): void {
+    this.roomHighlight.setRooms(plan);
     // Each room's ground WIDTH used to be cached here too, as the "is there
     // space here?" denominator for laying a pile of badges out across a room.
     // Nothing lays badges out any more (2.159.0 — badges sit on their anchors
     // or their room summarises), so the room's own size no longer takes part
     // in any grouping decision and the cache is gone with the fan.
-    this.roomPolys = polys.filter((p) => p.pts.length >= 3)
-      .map((p) => ({ name: p.name, pts: p.pts, floorY: p.floorY ?? 0 }));
-    // Everything below depends on these polygons and nothing above does, so
-    // this is the earliest moment either half of the 2.300.0 fix can run.
-    this.reshapeLightPools();
-  }
-
-  /**
-   * Give every light pool its room's shape and its room's floor height, once
-   * the plan→world calibration has produced the polygons that make both
-   * answerable. Fixes two reported defects at once, and they were reported
-   * together because they share a cause — a fixture near a wall:
-   *
-   *   - the pool drawn THROUGH the wall into the next room. A horizontal disc
-   *     passes straight through the base of a vertical wall, so a fixture
-   *     within LIGHT_POOL_RADIUS of one painted glow on both sides of it.
-   *     Inherent to the primitive; no radius both covers the walkway and stops
-   *     at its edge. The pool is now its ROOM clipped to its own footprint, so
-   *     the wall bounds it by construction.
-   *   - the pool NOT VISIBLE under a lit fixture. Its floor height came from a
-   *     4-metre-bucketed probe that merged across walls, so the fixture
-   *     inherited the neighbouring room's floor and the disc ended up under the
-   *     one it was meant to sit on. Re-probing here gets a ROOM-keyed answer
-   *     (see floorProbe.ts).
-   *
-   * Runs once per calibration, after first paint — never on a state change.
-   * A tap still costs exactly what it always did: LightPool.setState is
-   * setEnabled plus two material writes, and nothing here is on that path.
-   */
-  private reshapeLightPools(): void {
-    if (this.meshLightPools.size === 0 || this.roomPolys.length === 0) return;
-    // The memoised answers were keyed by grid (no resolver was available during
-    // indexMeshes); the persisted ones are keyed by whatever they were computed
-    // under. Dropping the in-memory map lets the same points be re-asked now
-    // that the resolver can name their room — a few dozen rays, post-reveal.
-    this.probe.clearMemo();
-    // Bucketed, never dropped: a pool that ends up looking different from its
-    // neighbours got that way through exactly one of these branches, and until
-    // 2.434.0 none of them was counted. "Some lights show a floor wash and
-    // others do not" is unanswerable from a screenshot; it is one line from
-    // here. (See the same rule in the badge tier — an expected category gets a
-    // labelled number, never a silent `continue`.)
-    let clipped = 0, whole = 0, bounded = 0, nofloor = 0;
-    // ⚠️ THE PER-POOL NAMING IS GONE, AND THESE COUNTERS ARE WHAT IT LEFT
-    // (2.482.0, /dry-audit). It printed a line per suspicious pool for three
-    // releases and earned every one of them — it is what separated an LED strip
-    // parked on a neighbour's floor (cached 2.15 m, real 0.00 m) from a stair
-    // light 14 cm above its tread, after two fixes aimed at a single number had
-    // moved nothing. Both answers are now encoded: the first became the
-    // re-probe, the second became `nearFixture`, and `bounded`/`crushed` went to
-    // zero once the storey rule was fixed. A counter that still separates two
-    // outcomes stays; forty lines of naming a question nobody is asking do not.
-    /** Pools whose bucketed floor was wrong and was re-probed — a real fix. */
-    let poolCorrected = 0;
-    /** Pools legitimately mounted close to what they light — NOT a fault. */
-    let nearFixture = 0;
-    /** Pools bounded all the way down to POOL_MIN_RADIUS — visually absent. */
-    let crushed = 0;
-    const recovered = this.retryPendingPools();
-    for (const pools of this.meshLightPools.values()) {
-      for (const pool of pools) {
-        const x = pool.mesh.position.x, z = pool.mesh.position.z;
-        // PROBE FIRST, then resolve the room — the order is the correctness
-        // argument, not a tidy-up.
-        //
-        // This lookup is storey-aware as of 2.434.0 (see roomPolyAt; the plain
-        // XZ containment it replaced handed a ground-floor pool the outline of
-        // the room ABOVE it whenever that polygon was listed first). But a
-        // storey read off the FIXTURE's height has one genuinely ambiguous
-        // band, and light fixtures live in it: a ceiling lamp hangs within
-        // centimetres of the slab overhead, which is the very height that slab
-        // reports as the next storey's floor. A downward ray does not have that
-        // problem — it answers "which floor is physically under this fixture"
-        // by touching it — and this method is already casting one. So the
-        // pool's room is resolved at the height of the floor it will be drawn
-        // on, and the fixture's own height is only the fallback for a probe
-        // that found nothing at all.
-        let surfaceY = this.surfaceBelow(x, pool.probeFromY, z);
-        if (surfaceY === null) nofloor++;
-        // THE COUNTER THAT NAMES THE 2.435.0 BUG, and the one whose absence let
-        // it ship: a pool that lands within POOL_AIRBORNE_M of its own fixture
-        // is not lying on a floor, it is stuck to the ceiling that fixture hangs
-        // from — "the light disk is floating in the air". A light is mounted a
-        // usable distance above what it lights, so this is 0 on a healthy villa
-        // and the exact number of wrong pools on a sick one.
-        else if (pool.probeFromY - surfaceY < POOL_AIRBORNE_M) {
-          // ⚠️ THE BUCKET IS TOO COARSE FOR FIXTURES MOUNTED HIGH (2.476.0).
-          // The memo keys by `room | round(height)`, so every fixture in one
-          // room at one rounded height shares an answer — which is right for
-          // the ceiling lamps it was designed around and wrong for anything
-          // mounted ON something. An owner capture named both cases at once:
-          //
-          //   bedroom1_light_led_top  fixtureY=2.20 cached=2.15 fresh=0.00
-          //   stairs1f_light_stairs   fixtureY=0.60 cached=0.46 fresh=0.46
-          //
-          // The first is a strip whose pool was parked at 2.15 m because a
-          // neighbour under a soffit answered first. The second is a STEP light
-          // 14 cm above its tread — correct, and only "airborne" because the
-          // threshold was written for lamps. A count could never separate them;
-          // they need opposite responses and one of them needs none.
-          //
-          // So a suspicious answer is re-asked WITHOUT the cache, and the fresh
-          // one wins. Bounded by construction: only pools already inside
-          // POOL_AIRBORNE_M pay for it — 20 of 144 here — and it runs after
-          // first paint, never on the load path.
-          const fresh = this.probe.describeBelow(x, pool.probeFromY, z);
-          const poolCorrectedHere = !!fresh && Math.abs(fresh.y - surfaceY) > 2 * POOL_FLOOR_LIFT;
-          if (poolCorrectedHere) {
-            surfaceY = fresh.y;
-            poolCorrected++;
-          } else {
-            // Cached and fresh agree: the fixture really is mounted close to
-            // what it lights. A stair light, a plinth strip, an under-counter
-            // run. Reported separately because it is NOT a fault, and counting
-            // it as one is what made this number unreadable for a whole session.
-            nearFixture++;
-          }
-          // ⚠️ NAME THEM. Two fixes have been aimed at this counter from causes
-          // I inferred rather than observed, and neither moved it. A count says
-          // "26 pools are wrong"; it cannot say whether they are ceiling lamps
-          // landing on a ceiling, floor-level strips that are CORRECTLY within
-          // half a metre of the floor and merely tripping a threshold written
-          // for lamps, or something else entirely. Those need opposite fixes —
-          // and one of them needs no fix at all. Debug-gated: this re-probes
-          // uncached, ~21 ms a piece.
-        }
-        // Two rules, and which one applies is decided by what we KNOW: a probed
-        // surface is a floor being stood on (nearest), a fixture height is an
-        // unknown distance above one (clearance). See roomPolyOnFloor.
-        const room = surfaceY !== null
-          ? this.roomPolyOnFloor(x, surfaceY, z)
-          : this.roomPolyAt(x, pool.probeFromY, z);
-        let radius = LIGHT_POOL_RADIUS;
-        let shape: Pt2[] | undefined;
-        if (room) {
-          // Room = SUBJECT (may be L-shaped), footprint = CLIP (convex). That
-          // order is the correctness argument — see clipPolygonToConvex.
-          const cut = clipPolygonToConvex(room.pts, poolFootprint(x, z, radius));
-          if (cut.length >= 3) { shape = cut; clipped++; } else whole++;
-        } else {
-          // Outside every polygon ON THIS STOREY — open ground, or a fixture
-          // whose anchor sits just past a wall. There is no room to clip to, so
-          // bound the radius by the nearest room boundary instead: still cannot
-          // cross a wall, and a fixture far from everything keeps its full pool.
-          //
-          // Same-storey rooms ONLY. Measuring against every polygon in the model
-          // let a terrace fixture standing clear of everything on its own storey
-          // be crushed to POOL_MIN_RADIUS by a bedroom wall one floor up —
-          // a 0.4 m pool under a fixture whose neighbours drew 1.8 m ones.
-          // Same distinction for the no-room fallback: bounding a pool against
-          // "same-storey rooms only" is meaningless if the storey was resolved
-          // by the wrong rule.
-          const storeyY = surfaceY !== null
-            ? (this.roomPolyOnFloor(x, surfaceY, z)?.floorY ?? surfaceY)
-            : this.storeyFloorYAt(pool.probeFromY);
-          let nearest = Infinity;
-          for (const r of this.roomPolys) {
-            if (!onStorey(r.floorY, storeyY)) continue;
-            nearest = Math.min(nearest, distanceToPolygonBoundary(x, z, r.pts));
-          }
-          if (Number.isFinite(nearest)) radius = Math.min(radius, Math.max(POOL_MIN_RADIUS, nearest));
-          bounded++;
-          // ⚠️ NAME THE ONES THAT VANISH. A pool crushed to POOL_MIN_RADIUS is
-          // 0.4 m across and reads on screen as "this light does not light the
-          // floor at all" — reported for the entrance light, and once before for
-          // a terrace fixture (the same-storey fix). The bucket counts them;
-          // only a name says WHICH light and how far the wall that crushed it
-          // was, which is the difference between "a real wall is 30 cm away"
-          // and "a polygon from another storey is being measured against".
-          if (radius <= POOL_MIN_RADIUS + 1e-3) crushed += 1;
-        }
-        pool.reshape(shape, radius, surfaceY === null ? undefined : surfaceY + POOL_FLOOR_LIFT);
-      }
-    }
-    this.probe.save();
-    // A pool created just now has never been handed a live HA state — the state
-    // pass ran long before calibration — so an already-ON light would keep a
-    // dark pool until its next state change. This is the same resync a floor
-    // toggle runs, and it is skipped entirely when nothing was recovered.
-    if (recovered) this.resyncLightPoolsToFloor();
-    tapDebug(
-      `light pools: clipped=${clipped} whole=${whole} bounded=${bounded} nofloor=${nofloor}`
-      + ` corrected=${poolCorrected} nearFixture=${nearFixture} crushed=${crushed}`
-      + ` bucketAbove=${this.probe.stats.probeAbove}`
-      + ` recovered=${recovered} stillNoFloor=${
-        [...this.pendingPoolSpots.values()].reduce((n, s) => n + s.length, 0)}`
-      + ` rooms=${this.roomPolys.length} storeys=${new Set(this.roomPolys.map((r) => Math.round(r.floorY))).size}`,
-    );
+    this.plan = plan;
+    // The earliest moment the pools can take their rooms' shapes and floors.
+    this.bulbs.setRooms(plan);
     this.requestRender();
-  }
-
-  /**
-   * Ask again for every fixture whose LOAD-PATH floor probe missed, now that
-   * the probe can key by ROOM. Returns how many pools this created.
-   *
-   * The load path is grid-keyed by necessity (calibration has not run, so there
-   * is no room resolver), and a 4-metre grid merges straight through a wall —
-   * so a `null` there is not "there is no floor under this fixture", it is "the
-   * cell this fixture shares with something else had none". Every other
-   * consequence of that key is already corrected here (shape, height); this was
-   * the one verdict that used to be final, because nothing was allocated to
-   * correct. A spot that misses AGAIN stays pending and is reported by the
-   * `light pools:` line, so "this fixture genuinely has no floor beneath it"
-   * and "we never asked twice" stop looking identical.
-   *
-   * Costs nothing on a villa with no misses: the map is empty and this returns
-   * immediately.
-   */
-  private retryPendingPools(): number {
-    if (this.pendingPoolSpots.size === 0) return 0;
-    let created = 0;
-    for (const [uniqueId, spots] of [...this.pendingPoolSpots]) {
-      const stillMissing: typeof spots = [];
-      const pools = this.meshLightPools.get(uniqueId) ?? [];
-      for (const spot of spots) {
-        const surfaceY = this.surfaceBelow(spot.x, spot.y, spot.z, spot.mesh);
-        if (surfaceY === null) { stillMissing.push(spot); continue; }
-        const pool = new LightPool(
-          this.scene,
-          `${spot.mesh.name}_${uniqueId}_${spot.i}`,
-          new Vector3(spot.x, surfaceY + POOL_FLOOR_LIFT, spot.z),
-          LIGHT_POOL_RADIUS,
-        );
-        pool.intensityScale = spot.scale;
-        pool.probeFromY = spot.y;
-        pools.push(pool);
-        created++;
-      }
-      if (pools.length) this.meshLightPools.set(uniqueId, pools);
-      if (stillMissing.length) this.pendingPoolSpots.set(uniqueId, stillMissing);
-      else this.pendingPoolSpots.delete(uniqueId);
-    }
-    return created;
   }
 
   /** Replace the resolved entity->room map (see the field's own docstring) —
@@ -3012,99 +1923,6 @@ export class EntityVisuals {
     this.markLayoutDirty();
   }
 
-  /** Which drawn room polygon (if any) contains this world-space ground
-   *  point — the geometric half of roomForEntity's room auto-fill. Straight
-   *  linear scan: called only once per freshly detected entity right after a
-   *  model load, never per-frame, so the room count (a couple dozen at most)
-   *  costs nothing worth caching further. */
-  private roomContaining(x: number, y: number, z: number): string | null {
-    return this.roomPolyAt(x, y, z)?.name ?? null;
-  }
-
-  /**
-   * The room polygon a world point is IN — containment in XZ **and** on the
-   * storey the point stands on.
-   *
-   * ⚠️ The storey half is the whole point, and its absence was a real defect
-   * (see `roomPolys`). A room polygon is a flat outline with no height, and on
-   * a two-storey villa the upper storey's outlines sit directly over the lower
-   * one's, so `find(pointInPolygon)` returns whichever polygon `.rooms.json`
-   * happened to list first. Two consequences, both visible on the glass:
-   *
-   *   - a ground-floor light's pool clipped to the outline of the room ABOVE
-   *     it — cut off along edges that do not exist on this storey, or spilling
-   *     through this storey's walls where the upper room is wider. Which of
-   *     the two you got depended on array order, so identical fixtures in one
-   *     room could look different from each other. That is the "why are the
-   *     light effects shown differently" report.
-   *   - the floor probe's cache key (`floorProbe.bucket`) is `room|round(y)`,
-   *     so two rooms on one storey lying under a single room of the storey
-   *     above collapsed to ONE key and shared a probed floor height. The 4-metre
-   *     grid key 2.300.0 removed for merging THROUGH A WALL had been
-   *     reintroduced along the vertical axis, where a wall is a whole slab.
-   *
-   * The storey is chosen from the point's own height: the highest room floor at
-   * or (marginally) below it. `STOREY_PICK_EPS` is deliberately centimetres and
-   * not a generous margin — a 1F ceiling fixture hangs within centimetres of the
-   * 2F slab, so any tolerance wide enough to "be safe" hands it to the storey
-   * above, which is the bug this exists to prevent. A point below every floor
-   * (a fixture under the ground slab, or a villa whose probe found nothing)
-   * falls back to the LOWEST storey rather than to none.
-   *
-   * Degrades to the previous behaviour exactly on a single-storey villa, and on
-   * any model whose per-storey floor heights all came back equal: every room is
-   * then on the point's storey and the first containing one wins, as before.
-   */
-  /**
-   * The room a point STANDING ON A FLOOR is in — nearest-floor semantics.
-   *
-   * ⚠️ THE SECOND OF THE TWO RULES (2.477.0), and using the wrong one is why
-   * every upper-storey light pool washed through its own walls. `roomPolyAt`
-   * below asks `storeyFloorYAt`, which answers "a point at an UNKNOWN height
-   * above its floor" by taking the highest floor at least STOREY_MIN_MOUNT
-   * BELOW it. Hand it a floor the pool is standing ON — 2.44 m, the upper
-   * storey's slab — and the highest floor 0.30 m below that is the GROUND floor
-   * at 0.00, so every upper-storey room polygon fails `onStorey`, no room is
-   * found, and the pool stays a full circle bounded only by the nearest other
-   * room's edge. Reported as "the lights are lighting outside the walls", with a
-   * Gym Room that turned out to be on 2F.
-   *
-   * roomStorey.ts states this outright — "`nearestFloorRoom` answers 'I am
-   * STANDING on a floor at exactly this height' (the walker's feet, a landing
-   * anchor, A PROBED FLOOR)" — and a light pool sits on a probed floor. The
-   * rule was written and documented; this call site simply used the other one.
-   *
-   * ⚠️ Exposed, not caused, by 2.474.0: before it the probe could land on a
-   * CEILING, so `surfaceY` was often a height in the middle of a storey where
-   * the clearance rule happened to answer correctly. Fixing the probe made the
-   * floors right and the wrong rule visible.
-   */
-  private roomPolyOnFloor(
-    x: number, floorY: number, z: number,
-  ): { name: string; pts: { x: number; z: number }[]; floorY: number } | null {
-    return nearestFloorRoom(this.roomPolys, floorY, (r) => pointInPolygon(x, z, r.pts));
-  }
-
-  private roomPolyAt(
-    x: number, y: number, z: number,
-  ): { name: string; pts: { x: number; z: number }[]; floorY: number } | null {
-    const storeyY = this.storeyFloorYAt(y);
-    for (const room of this.roomPolys) {
-      if (!onStorey(room.floorY, storeyY)) continue;
-      if (pointInPolygon(x, z, room.pts)) return room;
-    }
-    return null;
-  }
-
-  /** The floor height of the storey a world Y stands on. Delegates to
-   *  roomStorey.ts, which owns the two tolerances and is pinned by
-   *  `tests/oracles/badge_geometry.mjs`; shared by `roomPolyAt` and the light pool's
-   *  no-room fallback so the two cannot disagree about which storey a fixture
-   *  belongs to. */
-  private storeyFloorYAt(y: number): number {
-    return storeyFloorYAt(this.roomPolys, y);
-  }
-
   /** Geometric room fallback: which real drawn room polygon this entity's
    *  own mesh anchor sits inside, or null if it sits outside every polygon
    *  (open ground between rooms, a fixture whose anchor sits just past a
@@ -3119,9 +1937,10 @@ export class EntityVisuals {
     if (!anchor) return null;
     const p = anchor.getAbsolutePosition();
     // The anchor's OWN height decides the storey — a 2F device is not in the
-    // 1F room its outline happens to sit over (see roomPolyAt).
-    const onMyStorey = this.roomContaining(p.x, p.y, p.z);
-    if (onMyStorey) return onMyStorey;
+    // 1F room its outline happens to sit over (Storeys.roomAt: containment,
+    // on the storey a point at an unknown height above its floor is on).
+    const onMyStorey = this.plan.roomAt(p.x, p.y, p.z);
+    if (onMyStorey) return onMyStorey.name;
     // ⚠️ THE STOREY FILTER MAY REFINE AN ANSWER, NEVER DELETE ONE (2.440.0).
     //
     // A device inside a drawn room got a room name before 2.434.0 and must
@@ -3132,12 +1951,12 @@ export class EntityVisuals {
     // the clearance test to name a storey none of whose rooms contain a given
     // anchor, which used to turn a perfectly good room into "Other".
     //
-    // Deliberately NOT pushed down into roomPolyAt: the light pool wants the
+    // Deliberately NOT pushed down into Storeys.roomAt: the light pool wants the
     // opposite when its storey has no room here — it falls through to bounding
     // the pool by the nearest boundary, which is a better answer than a room
     // one floor up. Same lookup, two right answers, so the fallback belongs to
     // the caller that wants it.
-    for (const room of this.roomPolys) {
+    for (const room of this.plan.rooms) {
       if (pointInPolygon(p.x, p.z, room.pts)) return room.name;
     }
     return null;
@@ -3180,20 +1999,14 @@ export class EntityVisuals {
    * changes what the very next pass will draw.
    */
   setFocusedRooms(rooms: readonly string[] | null): void {
-    const keys = (rooms ?? []).map(roomKey).filter(Boolean);
-    if (keys.length === this.focusedRooms.size && keys.every((k) => this.focusedRooms.has(k))) return;
-    this.focusedRooms = new Set(keys);
-    // Stamped on the NEXT pass, once the camera has actually been moved to the
-    // solved pose — reading the zoom here would capture the pre-flight one and
-    // clear the focus on arrival.
-    this.focusedAtZoom = 0;
+    if (!this.focus.grant((rooms ?? []).map(roomKey).filter(Boolean))) return;
     this.markLayoutDirty();
     this.requestRender();
   }
 
   /** The rooms currently exempt from grouping (roomKey form). */
   focusedRoomKeys(): string[] {
-    return [...this.focusedRooms];
+    return [...this.focus.rooms];
   }
 
   /**
@@ -3317,210 +2130,19 @@ export class EntityVisuals {
     // the exact bug this solver exists to prevent.
     const minSepPx = this.metrics.minCentrePitchPx
       * this.cssToGui() * Math.min(1, this.iconZoomScale);
-    const n = members.length;
-    // Solver input, built once and re-projected per rung. The loop INVERTED in
-    // 2.287.0: `reach` used to be the rung-dependent term and the anchors fixed.
-    // Now `reach` is a drawn pixel count that no rung can change, and the plane
-    // coordinates scale with that rung's pxPerWorld — so the plane offsets are
-    // precomputed once in world units here and multiplied through below.
-    //
-    // The basis is the DESTINATION's, and since 2.325.0 that is no longer the
-    // live one: computeRoomOverviewPose keeps the current alpha but forces beta
-    // to the camera's top-down limit, so the ladder MUST be walked through the
-    // direction the camera will arrive at, not the one it is leaving. It is
-    // handed in for exactly that reason. markContacts below is then the SAME test the
-    // renderer will run — a rung that predicted a clean shot under different
-    // geometry from the one that draws it is the bug this whole solver was
-    // written to avoid. `fromCentre` above stays in real world units: framing a
-    // room is a 3D question, not a screen-overlap one.
-    const basis = this.currentViewBasis(view.dir);
-    // Its own object per member, not the frame loop's shared scratch: these
-    // have to survive the whole rung walk. This runs once per tap, so the
-    // allocation is not on any hot path.
-    const plane = members.map(
-      (mm) => projectToView(basis, mm.wx, mm.wy, mm.wz, { px: 0, py: 0, pz: 0, pd: 0 }));
-    const items: PlacementItem[] = members.map(() => ({
-      sx: 0, sy: 0, sz: 0,
-      // rank/sortKey/category/room are unused by markContacts (it is a
-      // symmetric contact sweep, not the ranked solve, and it never runs the
-      // pull-back) — only the geometry matters here.
-      reach: 0, reachY: 0, rank: 0, sortKey: "", category: "", room: "", exempt: false,
-    }));
-    // Each anchor's offset from the shot's centre, ON THE DESTINATION'S VIEW
-    // PLANE, in world units — one coordinate per SCREEN axis. Only THIS room's
-    // badges have to be in frame: a neighbour's badge sitting off screen is
-    // fine and expected, and demanding it be visible would push every shot out
-    // to frame the whole villa.
-    //
-    // This was a single radial `hypot` against one half-extent until 2.364.0,
-    // which is a circle inscribed in the frame — it asks a badge near the top
-    // of a tall portrait screen to be as close to centre as one near the side,
-    // and so held the camera at the same distance the isotropic wall fit did.
-    // A screen has two axes and a badge box has two half-extents; both are
-    // tested separately here.
-    const framePlane = members.map((m) =>
-      projectToView(view.frame, m.wx - view.cx, m.wy - view.cy, m.wz - view.cz,
-        { px: 0, py: 0, pz: 0, pd: 0 }));
-    const mine: number[] = [];
-    for (let i = 0; i < n; i++) if (members[i].mine) mine.push(i);
-
-    const q = GROUP_ZOOM_STEPS_PER_DOUBLING;
-    const tanV = Math.tan(view.vFov / 2);
-    // The frame's own half-extents, in the same drawn pixels the badge boxes
-    // are measured in — so the test is literally "is this box on the glass".
-    const halfWpx = view.vpW / 2;
-    const halfHpx = view.vpH / 2;
-    // Walk the rungs from CLOSEST outward and take the first that works, so the
-    // answer is the tightest shot rather than merely a valid one.
-    const lo = Math.max(view.minRadius, 0.1);
-    const hi = Math.max(lo, view.maxRadius);
-    const kLo = Math.floor(Math.log2(lo) * q);
-    const kHi = Math.ceil(Math.log2(hi) * q);
-    let widestFitting: number | null = null;
-    // ── The two conditions pull in OPPOSITE directions, and that is the whole
-    //    shape of this problem ────────────────────────────────────────────
-    // `fits` (every badge on screen) gets easier as the camera backs off: the
-    // world-space frame grows while a badge stays the same pixel size. `clean`
-    // (no badge touching another) gets easier as it comes in: separations are
-    // world-space and scale with pxPerWorld while the clearance is fixed
-    // pixels. So each holds on one side of a threshold, and there are two
-    // cases — they overlap, or they do not.
-    //
-    // Until 2.365.0 a rung that failed `fits` was skipped before `clean` was
-    // ever evaluated, which silently made framing the hard constraint and
-    // decluttering a hope. When the two did not overlap the shot landed on the
-    // closest rung that framed every badge — reported as "I click the room and
-    // then have to zoom in a little more myself", with the badges arriving as
-    // a cluster of grouped cards and separating into readable ones a rung or
-    // two closer. That is the opposite of this solver's stated purpose, and of
-    // the comment in computeRoomOverviewPose promising that a room whose badges
-    // only separate at maximum zoom is taken to maximum zoom.
-    //
-    // So `clean` is now evaluated at EVERY rung, and framing is the preference
-    // it was written to be:
-    //   * both hold somewhere → the WIDEST such rung (see below);
-    //   * they never overlap → the WIDEST clean rung, i.e. the readable shot
-    //     that crops least. A device at the room's edge may hang off the frame;
-    //     that beats every device in the room being illegible;
-    //   * nothing is clean at any zoom → the WIDEST framing rung.
-    //
-    // ── EVERY BRANCH TAKES THE WIDEST, AND THAT IS THE FIX (2.424.0) ───────
-    // All three used to take the TIGHTEST qualifying rung, so the shot was
-    // framed on the BADGES and the room's own footprint entered only as
-    // `maxRadius` — a bound the search never had to reach. Tapping a room with
-    // two devices near its middle therefore dived past the room to whatever
-    // distance those two badges happened to need, which is "the zoom is acting
-    // very poorly, it is zooming on the entities and not the room".
-    //
-    // The search interval is [minRadius, wallFit], so taking the WIDEST rung
-    // that still satisfies the predicates means exactly: FRAME THE ROOM, and
-    // come closer only as far as the badges actually force. Decluttering stays
-    // a hard requirement in the first branch — this does not reopen 2.365.0,
-    // where a rung was accepted with the badges still grouped — it only stops
-    // buying more zoom than legibility asked for.
-    //
-    // It also retires, by description rather than by a cap, the symptom the
-    // note above MIN_ROOM_FIT_RADIUS records: a fan and its own light kit
-    // driving the camera point-blank onto a bed. 2.209.0 removed
-    // DECLUTTER_RADIUS_MIN_FRACTION for capping that at half the wall fit and
-    // was right that the cap was the wrong description. The right one is that
-    // no rung tighter than the room's own fit was ever wanted.
-    let widestClean: number | null = null;
-    for (let k = kLo; k <= kHi; k++) {
-      const radius = Math.pow(2, k / q);
-      if (radius < lo || radius > hi) continue;
-      // The zoom the renderer will actually quantise to at this radius — and
-      // now genuinely so. This read `Math.round` while the renderer has used
-      // `Math.ceil` since 2.407.0, so the rung this loop tested was up to 2.9%
-      // below the one that would be drawn (/dry-audit, 2.425.0). One function,
-      // every walker of the lattice.
-      const raw = view.vpH / (2 * radius * tanV);
-      if (!(raw > 0)) continue;
-      const pxPerWorld = snapToZoomLattice(raw);
-
-      // Every badge fully inside the frame? Per screen axis, in drawn pixels,
-      // against the box the renderer will actually paint — including the `cy`
-      // by which it hangs above its anchor, which is asymmetric and so cannot
-      // be folded into a single radial reach.
-      let fits = true;
-      for (const i of mine) {
-        const sx = framePlane[i].px * pxPerWorld;
-        const sy = framePlane[i].py * pxPerWorld + boxes[i].cy;
-        if (Math.abs(sx) + boxes[i].halfW > halfWpx
-          || Math.abs(sy) + boxes[i].halfH > halfHpx) { fits = false; break; }
-      }
-      if (fits) widestFitting = radius;
-
-      // Is every badge of THIS room drawn on its own here? "Clear of every
-      // other eligible badge" is the exact test — against neighbours from
-      // other rooms too, since those are what put the room back in a chip.
-      //
-      // markContacts, not a copy of its arithmetic: whatever decides a thing
-      // must BE the thing that does it, and a rung solver that promised a shot
-      // the renderer then declined is a bug this file has already produced.
-      // Its own scratch, because the layout pass may be holding a live result
-      // from the shared one (see PlacementResult).
-      for (let i = 0; i < n; i++) {
-        items[i].sx = plane[i].px * pxPerWorld;
-        // `cy` here for the same reason placementItems adds it: the box the
-        // renderer paints hangs above the anchor, by an amount that differs
-        // between badges. This ladder must run the identical test.
-        items[i].sy = plane[i].py * pxPerWorld + boxes[i].cy;
-        items[i].sz = plane[i].pz * pxPerWorld;
-        items[i].reach = boxes[i].halfW * allow;
-        items[i].reachY = boxes[i].halfH * allow;
-      }
-      const touching = markContacts(items, gapPx, minSepPx, this.zoomScratch);
-      let clean = true;
-      for (const i of mine) if (touching[i]) { clean = false; break; }
-      // The rungs ascend, so the last write is the widest clean one. Recorded
-      // rather than derived from a threshold: `clean` is very nearly monotone
-      // in radius but not exactly, because pxPerWorld is quantised onto the
-      // renderer's ladder, and taking the widest rung that actually tested
-      // clean is correct either way.
-      // Recorded for the ADVISORY flag only — it no longer selects. The rungs
-      // ascend, so the last write is the widest.
-      if (clean) widestClean = radius;
-    }
-
-    // ── `clean` NO LONGER SELECTS THE SHOT, BECAUSE IT CANNOT FIRE (2.426.0) ─
-    // Reported: tapping a room lands far too close — the pool filled the glass
-    // edge to edge, the living room cropped its own curtains off the sides.
-    // Measured from two taps: rung 271.223 where the user then settled at ~152,
-    // and rung 170.860 where they settled at ~117. Consistently 1.5-1.8x too
-    // close, and `clean` is what did it: it gets EASIER as the camera comes in,
-    // so making it a requirement drags the shot toward the camera.
-    //
-    // And it is measuring a rule that CANNOT FIRE for a focused room:
-    //
-    //   * every OTHER room is chipped for the focus — the same captures show
-    //     `chipWhy: focus=10 total=10`, all ten of them — so there are no
-    //     other rooms' badges left on screen to collide with;
-    //   * the focused room's OWN badges are EXEMPT from grouping, and
-    //     pairFocusedRoom draws them individually or as pair-cards.
-    //
-    // The captures prove the exemption had already delivered it at the shot the
-    // old code chose: `exempt=9 drawn=7 focusGroups=1` (a 2-cell card) accounts
-    // for all nine pool devices, and `exempt=17 drawn=9 focusGroups=4` for all
-    // seventeen living-room ones. Every device was already drawn. The declutter
-    // search bought nothing and cost 1.5-1.8x of zoom.
-    //
-    // This solver's own docstring already contains the argument, applied to the
-    // OTHER branch: "ONE room only. With several, the wall fit IS the answer...
-    // The badges are not left to chance either — the EXEMPTION above is
-    // unconditional and is what guarantees they are drawn individually, at
-    // whatever distance the framing lands on." That reasoning holds verbatim
-    // for one room. It was applied to merged chips and not to a single room.
-    //
-    // What remains is a genuine framing guarantee — every one of the room's
-    // badges fully on screen — and `fits` gets easier as the camera backs off,
-    // so the widest such rung is the room's own fit whenever it is reachable.
-    // `declutters` stays as the ADVISORY it already was (SceneManager: "it says
-    // whether the shot also separates the badges or merely frames them. Either
-    // way they are drawn"), so nothing downstream loses information.
-    return widestFitting === null
-      ? null
-      : { radius: widestFitting, declutters: widestClean !== null };
+    return solveRoomZoom(
+      members.map((m, i) => ({ wx: m.wx, wy: m.wy, wz: m.wz, mine: m.mine, halfW: boxes[i].halfW, halfH: boxes[i].halfH, cy: boxes[i].cy })),
+      {
+        vpH: view.vpH, vpW: view.vpW, vFov: view.vFov, frame: view.frame,
+        // The DESTINATION's grouping basis: computeRoomOverviewPose keeps the
+        // current alpha but forces a top-down beta, so the ladder is walked
+        // through the direction the camera will ARRIVE at (roomZoomSolver.ts).
+        grouping: this.currentViewBasis(view.dir),
+        cx: view.cx, cy: view.cy, cz: view.cz, minRadius: view.minRadius, maxRadius: view.maxRadius,
+      },
+      { gapPx, minSepPx, allow },
+      this.zoomScratch,
+    );
   }
 
   /** Replace the named-viewpoint "rooms" (config.teleportPoints) that don't
@@ -3717,17 +2339,9 @@ export class EntityVisuals {
     ) {
       tapDebug(`apply(${entity.entity_id}): resolved mesh(es) but map.type="${map.type}" — a variant pose will NEVER be applied while the type mismatch stands (check Advanced Settings' Type field for this entity).`, "mesh");
     }
-    // Normalise by the number of DISTINCT light objects, not meshes — a merged
-    // strip entity (mergeStripEntityLights) shares ONE light across several
-    // meshes, so it must get the full intensity, not 1/N of it.
-    const lightShare = map.type === "light"
-      ? new Set(meshes.map((m) => this.meshLights.get(m.uniqueId)).filter(Boolean)).size || 1
-      : 1;
-    for (const mesh of meshes) this.applyToMesh(mesh, map, entity, lightShare);
-    if (map.type === "fan") this.updateFanSpin(entity, meshes);
-    if (map.type === "light") {
-      this.syncEntityShadow(entity.entity_id, meshes, entity.state === "on");
-    }
+    for (const mesh of meshes) this.applyToMesh(mesh, map, entity);
+    if (map.type === "light") this.bulbs.show(meshes, this.lightReading(entity, map));
+    if (map.type === "fan") this.fans.show(entity, meshes);
     // Pose selection — ONE call, no type branch at all. A cover, a lock, a
     // switch, a sensor and any future type all resolve their pose the same
     // way (see desiredVariantWord). A pure no-op for the overwhelming common
@@ -3825,7 +2439,7 @@ export class EntityVisuals {
     // be redrawn. Gated on an ACTUAL change: this function runs for every
     // state event on every pose-capable entity, and re-arming on a no-op
     // would put the per-frame cost straight back.
-    if (poseChanged) this.invalidateShadowMaps();
+    if (poseChanged) { this.bulbs.invalidateShadows(); this.requestRender(); }
     // Read the flags straight back off the mesh objects (not just "what we
     // just set") so this answers "is __open ACTUALLY hidden right now" with
     // zero ambiguity — a mesh only renders if BOTH isVisible AND isEnabled()
@@ -3942,29 +2556,20 @@ export class EntityVisuals {
     // Badges are culled per storey, and FloorManager's setEnabled sweep is not
     // otherwise visible to the layout pass.
     this.markLayoutDirty();
-    this.resyncLightPoolsToFloor();
+    // The slabs that occlude changed with the storey: re-test every badge, even
+    // if the walker has not moved a millimetre (the sweep used to keep its old
+    // answers until the next step).
+    this.occlusion.invalidate();
+    // A bulb on a now-hidden storey must go dark — its pools are decals
+    // FloorManager never toggles, and its PointLight kept lighting through the
+    // slab until 2.496.82. Repaint every bulb from its floor-correct state;
+    // resync also redraws the shadow maps, since which storey's geometry
+    // occludes a lamp just changed (they render once and then hold).
+    this.bulbs.resync();
     // Mesh variants (curtain/lock poses) need NO floor resync: their
     // exclusivity rides `isVisible`, which FloorManager's per-floor
     // `setEnabled` never touches — see applyMeshVariant's docstring.
-    //
-    // The shadow maps DO need it: FloorManager's setEnabled sweep just changed
-    // which storey's geometry exists to occlude a lamp, and those maps render
-    // once and then hold (see syncEntityShadow).
-    this.invalidateShadowMaps();
     this.requestRender();
-  }
-
-  /** A baked-villa light's floor "pool" (see LightPools.ts) is a freestanding
-   *  decal mesh that FloorManager never indexes or toggles — unlike the
-   *  fixture mesh itself, it doesn't automatically vanish when its floor is
-   *  hidden. Without this, a 2F light left on stayed visible (floating,
-   *  unoccluded) while viewing 1F. Re-derive each pool's on/off state from
-   *  its fixture mesh's CURRENT enabled state (already floor-correct by the
-   *  time this runs) whenever the active floor changes. */
-  private resyncLightPoolsToFloor(): void {
-    if (this.meshLightPools.size === 0) return;
-    this.forEachLightPoolState((pool, on, colour, brightnessFrac) =>
-      pool.setState(on, colour, brightnessFrac * this.lightPoolStrength));
   }
 
   /**
@@ -4188,8 +2793,7 @@ export class EntityVisuals {
     // ensureEntityGroup would hand one back.
     for (const c of this.entityGroups.values()) c.node.dispose();
     this.entityGroups.clear();
-    this.entityGrouped.clear();
-    this.roomClustered.clear();
+    this.pass.begin();
     this.labels.clear();
     this.labelLayer.rootContainer.isVisible = true;
 
@@ -4648,10 +3252,8 @@ export class EntityVisuals {
       const meshesForEntity = this.byEntity.get(entityId);
       const mapForEntity = this.mapping.get(entityId);
       if (meshesForEntity?.length && mapForEntity) {
-        const lightShare = mapForEntity.type === "light"
-          ? new Set(meshesForEntity.map((m) => this.meshLights.get(m.uniqueId)).filter(Boolean)).size || 1
-          : 1;
-        for (const mesh of meshesForEntity) this.applyToMesh(mesh, mapForEntity, cached, lightShare);
+        for (const mesh of meshesForEntity) this.applyToMesh(mesh, mapForEntity, cached);
+        if (mapForEntity.type === "light") this.bulbs.show(meshesForEntity, this.lightReading(cached, mapForEntity));
       }
     }
     // The label set is now final for this build — refresh the hit-test view.
@@ -4881,7 +3483,7 @@ export class EntityVisuals {
     // there wiped every one of them and a capture came back with a `place`
     // line and no pairs at all. Anything buffered for this pass has to be
     // reset where the pass begins, or the buffer eats the earliest writers.
-    this.seatLog.length = 0;
+    this.pass.seatLog.length = 0;
     if (this.labels.size === 0) return;
     const cam = this.scene.activeCamera;
     if (!cam) return;
@@ -4970,7 +3572,7 @@ export class EntityVisuals {
       s.wy = wp.y;
       s.wz = wp.z;
       s.inFront = p.z >= 0 && p.z <= 1;
-      s.occluded = this.occludedIds.has(id);
+      s.occluded = this.occlusion.occluded.has(id);
       shown[shownCount] = s;
       shownCount++;
     }
@@ -4981,58 +3583,12 @@ export class EntityVisuals {
     // world positions are collected and BEFORE anything reads `occluded`.
     this.refreshWallOcclusion(shown, cam);
 
-    // ── The focus lasts as long as you stay at least as close ──────────────
+    // ── The focus, and how long each half of it lasts: roomFocus.ts ────────
     // Resolved BEFORE any grouping runs, so a single pass cannot group with a
-    // focus it is about to drop. No camera-event plumbing, and nothing that has
-    // to tell "the user zoomed" from "we flew there": the exemption is stamped
-    // with the quantised zoom of the first pass after it was granted, and
-    // dropped once the view gets FARTHER than that. Panning keeps it (the zoom
-    // is unchanged, and looking around a room you asked to see should not
-    // collapse it); zooming out ends it, which is exactly when a summary
-    // becomes the right answer again.
-    //
-    // ⚠️ `z < focusedAtZoom`, NOT `z !== focusedAtZoom`, and the difference is
-    // a reported bug. Tapping the Swimming Pool chip expanded the room; zooming
-    // IN by one rung changed z, dropped the exemption, and the room collapsed
-    // straight back to the very chip that had just been tapped — then expanded
-    // again a rung later, once the badges genuinely separated. Zooming in
-    // strictly increases the distance between anchors: it is the one direction
-    // that can never make a room less legible, so it must never be the thing
-    // that takes it away. The original stamp stays the floor rather than
-    // re-stamping on the way in, which is what makes "at least as close as when
-    // you asked" the literal rule.
-    //
-    // ⚠️ CSS PIXELS, and that is the second half of the same rule. This is the
-    // only place the measure is compared BETWEEN frames, so it is the only
-    // place the resolution valve can forge a zoom change — see
-    // quantisedPixelsPerWorldUnit for the full symptom. Grouping keeps render
-    // pixels because it compares within one frame against boxes in the same
-    // units; this must not.
-    // ── The focus has TWO consequences and they expire differently ─────────
-    // The EXEMPTION — the focused room's own badges drawn individually — keeps
-    // the rule above: it survives zooming in, because coming closer can never
-    // make a room less legible.
-    //
-    // The SUPPRESSION added in 2.368.0 — every OTHER room held at its chip —
-    // must not. It exists to stop the neighbours competing for the frame at the
-    // moment you ask for a room, and that is all it is for. Left to share the
-    // exemption's lifetime it became sticky: focus a room, pan across to
-    // another, and that one stayed a chip at every zoom, because the pass was
-    // still forcing it clustered. Reported as "the other room badge never
-    // declutters into entity icons".
-    //
-    // So it holds only while the camera is AT OR WIDER THAN the zoom the focus
-    // was granted at. Zoom in from there and every room is back under the
-    // ordinary rules, decluttering by zoom exactly as it did before — which is
-    // the property being asked for, expressed as the one condition that already
-    // means "you have not yet earned the space to draw these".
-    let suppressOthers = false;
-    if (this.focusedRooms.size > 0) {
-      const z = this.quantisedPixelsPerWorldUnit(shown, true);
-      if (this.focusedAtZoom === 0) this.focusedAtZoom = z;
-      else if (z < this.focusedAtZoom) { this.focusedRooms.clear(); this.focusedAtZoom = 0; }
-      suppressOthers = this.focusedRooms.size > 0 && z <= this.focusedAtZoom;
-    }
+    // focus it is about to drop. The zoom is in CSS px (see
+    // quantisedPixelsPerWorldUnit) — the one comparison made BETWEEN frames.
+    const suppressOthers = this.focus.size > 0
+      && this.focus.step(this.quantisedPixelsPerWorldUnit(shown, true));
 
     // ── Layout ───────────────────────────────────────────────────────────
     // Grouping is decided in world space against the current zoom alone, so
@@ -5204,18 +3760,15 @@ export class EntityVisuals {
     // always, which is the honest answer: there is no view in which both could
     // be read, and drawing one on top of the other hides a device without
     // saying so.
-    this.roomClustered.clear();
-    this.chipWhyCount.clear();
-    this.chipRefusedNoRoom = 0;
-    this.roomDisplay.clear();
-    this.entityGrouped.clear();
+    // A new pass: the last one's chips, cards, reasons and counters go.
+    this.pass.begin();
     for (const s2 of shown) {
       const raw = this.roomOf(s2.id);
       const k = roomKey(raw);
       // Smallest spelling wins, so a chip's label cannot depend on which badge
       // of the room happened to be projected first.
-      const seen = this.roomDisplay.get(k);
-      if (seen === undefined || raw < seen) this.roomDisplay.set(k, raw);
+      const seen = this.pass.roomDisplay.get(k);
+      if (seen === undefined || raw < seen) this.pass.roomDisplay.set(k, raw);
     }
 
     // ── A FOCUSED ROOM GETS THE SCREEN TO ITSELF (2.368.0) ─────────────────
@@ -5243,17 +3796,15 @@ export class EntityVisuals {
     // Only while the camera is still at the zoom the focus was granted at — see
     // `suppressOthers`. Past that the neighbours are on their own merits again.
     if (suppressOthers) {
-      for (const k of this.roomDisplay.keys()) {
-        if (!this.focusedRooms.has(k)) {
-          this.chipRoom(k, "focus");
+      for (const k of this.pass.roomDisplay.keys()) {
+        if (!this.focus.rooms.has(k)) {
+          this.pass.chipRoom(k, "focus");
         }
       }
     }
 
     const pending: PendingEntityGroup[] = this.pendingGroups;
     pending.length = 0;
-    this.focusPairs = 0;
-    this.absorbed = 0;
     let solved: PlacementStats | null = null;
     if (clearance) {
       const items = this.placementItems(shown, boxes, clearance);
@@ -5283,7 +3834,7 @@ export class EntityVisuals {
           const dx = Math.hypot(B.sx - A.sx, B.sz - A.sz), dy = Math.abs(B.sy - A.sy);
           const needX = Math.max(A.reach + B.reach + clearance.gap, clearance.minSep);
           const needY = Math.max(A.reachY + B.reachY + clearance.gap, clearance.minSep);
-          this.seatLog.push(
+          this.pass.seatLog.push(
             `pair ${shown[ia].id} + ${shown[ib].id}`
             + ` dx=${dx.toFixed(0)}/${needX.toFixed(0)} dy=${dy.toFixed(0)}/${needY.toFixed(0)}`
             + ` halfW=${A.reach.toFixed(0)},${B.reach.toFixed(0)}`
@@ -5292,13 +3843,13 @@ export class EntityVisuals {
             + `${shown[ib].lbl.valueWrap.isVisible ? "y" : "n"}`);
         }
       }
-      for (const room of result.chipRooms) this.chipRoom(room, "solver");
+      for (const room of result.chipRooms) this.pass.chipRoom(room, "solver");
       for (let b = 0; b < result.bucketCount; b++) {
         const bucket = result.buckets[b];
         let wx = 0, wy = 0, wz = 0;
         for (const i of bucket.members) {
           wx += shown[i].wx; wy += shown[i].wy; wz += shown[i].wz;
-          this.entityGrouped.add(shown[i].id);
+          this.pass.entityGrouped.add(shown[i].id);
         }
         const n = bucket.members.length;
         // Keyed by the PILE alone. It was `room|pileKey`, which was stable only
@@ -5306,7 +3857,7 @@ export class EntityVisuals {
         // cross-room pile loses a member and becomes single-room), which would
         // have rebuilt the group's GUI controls mid-zoom and flickered.
         // pileKey is the pile's lowest entity_id, so it is already unique.
-        const primary = this.roomDisplay.get(bucket.room) ?? bucket.room;
+        const primary = this.pass.roomDisplay.get(bucket.room) ?? bucket.room;
         pending.push({
           key: `grp|${bucket.pileKey}`,
           // The room chip's own convention for "and others" (see chipLabel), so
@@ -5333,18 +3884,18 @@ export class EntityVisuals {
           focused: false,
         });
       }
-      this.pairFocusedRoom(shown, items, clearance, pending);
+      this.pass.pairFocusedRoom(shown, items, clearance, pending);
     }
 
     // Placed only after every bucket is known: a group's clearance is measured
     // against the badges that were ACCEPTED, and which those are is not
     // settled until the solve above has finished.
-    if (clearance) this.placeEntityGroups(shown, boxes, pending, clearance);
+    if (clearance) this.pass.placeEntityGroups(shown, boxes, pending, clearance);
 
     // Chips are derived and drawn LAST, but which rooms have one is settled
     // here — a chip can push a neighbour's badge or card to its own room's
     // chip, and every visibility flag below has to be this pass's final answer.
-    const chips = this.settleChips(shown, boxes, pending, clearance);
+    const chips = this.pass.settleChips(shown, boxes, pending, clearance);
 
     for (const s of shown) {
       // ZERO X offset and a FIXED Y lift that centres every badge over its
@@ -5360,8 +3911,8 @@ export class EntityVisuals {
         // grouping has already been decided, so neither can move a badge or
         // change which pile it belongs to.
         && !s.occluded
-        && !this.roomClustered.get(roomKey(this.roomOf(s.id)))
-        && !this.entityGrouped.has(s.id);
+        && !this.pass.roomClustered.get(roomKey(this.roomOf(s.id)))
+        && !this.pass.entityGrouped.has(s.id);
     }
     this.renderChips(chips);
     this.updateEntityGroups(shown, pending);
@@ -5438,147 +3989,44 @@ export class EntityVisuals {
     if (!WALL_OCCLUSION || !this.firstPerson || shown.length === 0) {
       // Leaving first-person must not strand a hidden badge — the overview has
       // no notion of occlusion at all.
-      if (this.occludedIds.size) {
-        this.occludedIds.clear();
+      if (this.occlusion.occluded.size) {
+        this.occlusion.reset(true);
         for (const s of shown) s.occluded = false;
       }
       return;
     }
-    const eye = cam.globalPosition;
-    // Compared in WORLD METRES, deliberately — the one quantity in this file
-    // that is compared BETWEEN frames and so must not be in render pixels,
-    // which the resolution valve moves every time the camera starts or stops
-    // (see quantisedPixelsPerWorldUnit's cssPixels note). A camera position
-    // cannot be forged by a resolution change.
-    const still = this.occlusionFrom.equalsWithEpsilon(eye, 1e-4);
-    if (this.occlusionSwept >= shown.length && still) {
-      // Zero rays is the truth for this pass, and leaving the previous pass's
-      // count standing would overstate the sustained cost in every capture
-      // taken while standing still.
-      this.occlRays = 0;
-      this.occlMs = 0;
-      return;
-    }
-    if (!still) {
-      this.occlusionFrom.copyFrom(eye);
-      this.occlusionSwept = 0;
-      this.movingSince = performance.now();
-      // ⚠️ PRUNE TO THE LIVE SET. `occludedIds` persists across frames on
-      // purpose — it is what carries the last still pose's answers — but it was
-      // only ever CLEARED on leaving first-person, so walking UPSTAIRS kept
-      // every id the ground floor had occluded. Caught by its own counter
-      // printing the impossible `occl=52/16`: 52 remembered ids against 16
-      // badges on the storey.
-      //
-      // Not cosmetic. Every frame seeds `s.occluded` from this set, and
-      // `settleChips` hides a whole room chip when EVERY member is in it — so a
-      // stale id can hide a badge, or a room's chip, until the round-robin
-      // sweep happens to re-test it, which is 2-8 rays a pass.
-      if (this.occludedIds.size > 0) {
-        this.occlLive.clear();
-        for (const s of shown) this.occlLive.add(s.id);
-        for (const id of this.occludedIds) {
-          if (this.occlLive.has(id)) continue;
-          this.occludedIds.delete(id);
-          this.occlBlockedBy.delete(id);
-        }
-      }
-    }
-    // ⚠️ NOT A FRAME OF RAYS WHILE MOVING — see this method's header. The
-    // answers on screen are the last still pose's, stale by at most the
-    // distance walked, and the cost of a walking frame is unchanged from before
-    // this feature existed. `requestRender` keeps a settle frame coming so the
-    // sweep starts the moment the camera stops.
-    if (performance.now() - this.movingSince < OCCLUSION_SETTLE_MS) {
-      this.occlRays = 0;
-      this.occlMs = 0;
-      this.requestRender();
-      return;
-    }
-    const dir = this.occlDir;
-    // A TIME budget, halved on a phone. A ray-count budget was the wrong unit:
-    // the same eight rays measured 7 ms in a corridor and 121 ms down the
-    // length of the villa, so the count that is safe in one pose is a dropped
-    // frame in another. This one is self-limiting on any device and any villa.
-    const msBudget = this.pointer === "coarse" ? OCCLUSION_MS_COARSE : OCCLUSION_MS_BUDGET;
-    const t0 = performance.now();
-    let rays = 0;
-    // `rays < 1 ||` — at least one ray always runs, or a villa where a single
-    // ray exceeds the whole budget would never sweep at all.
-    while (this.occlusionSwept < shown.length
-      && (rays < 1 || performance.now() - t0 < msBudget)) {
-      const s = shown[this.occlusionCursor % shown.length];
-      this.occlusionCursor++;
-      this.occlusionSwept++;
-      rays++;
-      dir.set(s.wx - eye.x, s.wy - eye.y, s.wz - eye.z);
-      const dist = dir.length();
-      // Anything within arm's reach is in the room with you; and a ray shorter
-      // than the slack below has no interval left to test.
-      if (dist <= OCCLUSION_NEAR_M) { s.occluded = false; this.occludedIds.delete(s.id); continue; }
-      dir.scaleInPlace(1 / dist);
-      this.occlRay.origin.copyFrom(eye);
-      this.occlRay.direction.copyFrom(dir);
-      // Stop SHORT of the anchor. A device is normally mounted ON a wall or a
-      // ceiling, so a ray run all the way to its anchor ends inside the very
-      // surface it hangs from and every wall-mounted device would report itself
-      // occluded.
-      this.occlRay.length = dist - OCCLUSION_SLACK_M;
-      // ⚠️ NOT `scene.pickWithRay` (2.437.0). That walks EVERY mesh in the scene
-      // and calls the predicate on each — ~900 here — and the predicate was
-      // `blocksCameraBeam`, which falls through to `normaliseMeshName` plus a
-      // regex for any mesh the pipeline did not stamp. Eight rays a frame made
-      // that ~7,200 regex-backed classifications per frame, on the one code
-      // path that has frozen this app before, and it is the nameable half of
-      // "it feels a bit more laggy now".
-      //
-      // The occluder set does not change while you walk, so it is resolved ONCE
-      // (occludersFor) and each ray tests only those meshes. Babylon's
-      // `intersectsMesh` does the same bounding-sphere/box rejection and the
-      // same submesh octree as the pick did — what is gone is the scene walk
-      // and the classification, not the accuracy. `fastCheck` because the
-      // question is "is anything in the way", not "what is nearest".
-      let blocked = false;
-      let blocker = "";
-      for (const m of this.occluders) {
-        // Visibility is asked HERE for the same reason the old predicate had to
-        // ask it: a hidden storey's slab must not occlude the storey you are
-        // standing on. Cheap, and it has to be per-frame — the ceiling that
-        // 2.435.0 added appears and disappears with the view mode.
-        if (!m.isEnabled() || !m.isVisible) continue;
-        if (this.occlRay.intersectsMesh(m, true).hit) {
-          blocked = true;
-          blocker = m.name;
-          break;
-        }
-      }
-      s.occluded = blocked;
-      // ⚠️ WHICH MESH, not just how many. `occl=58/70` is a count, and a count
-      // cannot answer the only question ever asked of this tier — "why is THAT
-      // badge missing when I can see the device". A 2026-08-19 report (a ceiling
-      // fan and the sensor under it, both plainly on screen, neither badged)
-      // could not be diagnosed from a capture at all: the two hypotheses worth
-      // having, self-occlusion against the ceiling the device hangs from and
-      // the disabled storey-above slab, are BOTH already handled in this loop
-      // (OCCLUSION_SLACK_M above, the isEnabled test just now), so the honest
-      // next step was a name rather than a third guess.
-      if (blocked) {
-        this.occludedIds.add(s.id);
-        this.occlBlockedBy.set(s.id, blocker.replace(/_primitive\d+$/, ""));
-      } else {
-        this.occludedIds.delete(s.id);
-        this.occlBlockedBy.delete(s.id);
-      }
-    }
-    this.occlRays = rays;
-    this.occlMs = performance.now() - t0;
+    // A TIME budget, halved on a phone — see occlusionSweep.ts.
+    const budget = this.pointer === "coarse" ? OCCLUSION_MS_COARSE : OCCLUSION_MS_BUDGET;
+    const pass = this.occlusion.step(shown, cam.globalPosition, budget);
+    if (pass === "idle") return;
+    // Settling: no rays while moving, but a frame must come to start the sweep
+    // the moment the camera stops.
+    if (pass === "settling") { this.requestRender(); return; }
     this.reportWalkCost(shown.length);
-    if (this.occlusionSwept < shown.length) {
+    if (pass === "sweeping") {
       // The sweep owes answers and the camera may now stop moving — see the
-      // early-return in cullLabels.
+      // early-return in cullLabels, which would otherwise freeze half the
+      // badges on a stale answer.
       this.layoutDirty = true;
       this.requestRender();
     }
+  }
+
+  /** The occlusion sweep's adapter: is this segment blocked by a VISIBLE
+   *  structure mesh? Tests only `occluders` (resolved once per load, not a
+   *  scene walk — 2.437.0), and asks visibility per ray because a hidden
+   *  storey's slab, or the ceiling hidden in overview, must not occlude. */
+  private castOcclusionRay(
+    ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, len: number,
+  ): string | null {
+    this.occlRay.origin.set(ox, oy, oz);
+    this.occlRay.direction.set(dx, dy, dz);
+    this.occlRay.length = len;
+    for (const m of this.occluders) {
+      if (!m.isEnabled() || !m.isVisible) continue;
+      if (this.occlRay.intersectsMesh(m, true).hit) return m.name.replace(/_primitive\d+$/, "");
+    }
+    return null;
   }
 
   /**
@@ -5645,12 +4093,12 @@ export class EntityVisuals {
     const eng = this.scene.getEngine();
     tapDebug(
       `walk: fps=${eng.getFps().toFixed(0)}`
-      + ` occl=${this.occludedIds.size}/${eligible} swept=${this.occlusionSwept}/${eligible}`
+      + ` occl=${this.occlusion.occluded.size}/${eligible} swept=${this.occlusion.swept}/${eligible}`
       // `moving` is the field that says whether the sweep was even ALLOWED to
       // run this pass — without it, `rays=0` reads as "cheap" when it means
       // "not asked", which is the misread this project keeps paying for.
-      + ` moving=${performance.now() - this.movingSince < OCCLUSION_SETTLE_MS ? "y" : "n"}`
-      + ` rays=${this.occlRays}/pass occlMs=${this.occlMs.toFixed(2)}`
+      + ` moving=${this.occlusion.isMoving() ? "y" : "n"}`
+      + ` rays=${this.occlusion.lastRays}/pass occlMs=${this.occlusion.lastMs.toFixed(2)}`
       + ` occluders=${this.occluders.length} active=${this.scene.getActiveMeshes().length}`
       + ` win=${(winMs / 1000).toFixed(1)}s`
       // ⚠️ The field that turns `occl=N/M` from a count into a diagnosis. Top
@@ -5660,10 +4108,10 @@ export class EntityVisuals {
       // glance apart. Empty string when nothing is occluded, so it costs a
       // stationary overview capture nothing.
       + (() => {
-        if (!this.occlBlockedBy.size) return "";
+        if (!this.occlusion.blockedBy.size) return "";
         const counts = new Map<string, number>();
         const eg = new Map<string, string[]>();
-        for (const [id, mesh] of this.occlBlockedBy) {
+        for (const [id, mesh] of this.occlusion.blockedBy) {
           counts.set(mesh, (counts.get(mesh) ?? 0) + 1);
           const list = eg.get(mesh) ?? [];
           if (list.length < 2) { list.push(id); eg.set(mesh, list); }
@@ -5718,9 +4166,7 @@ export class EntityVisuals {
   setFirstPerson(on: boolean): void {
     if (on === this.firstPerson) return;
     this.firstPerson = on;
-    this.occlusionSwept = 0;
-    this.occlusionCursor = 0;
-    if (!on) this.occludedIds.clear();
+    this.occlusion.reset(!on);
     this.markLayoutDirty();
   }
 
@@ -6035,8 +4481,7 @@ export class EntityVisuals {
     clearance: { pxPerWorld: number; allow: number; basis: ViewBasis; refDepth: number },
   ): PlacementItem[] {
     const pool = this.placeItems;
-    const focus = this.focusedRooms;
-    const k = clearance.pxPerWorld;
+    const focus = this.focus.rooms;
     const p = this.projPlane;
     for (let i = 0; i < shown.length; i++) {
       const s = shown[i];
@@ -6045,38 +4490,13 @@ export class EntityVisuals {
         it = { sx: 0, sy: 0, sz: 0, reach: 0, reachY: 0, rank: 0, sortKey: "", category: "", room: "", exempt: false };
         pool[i] = it;
       }
-      projectToView(clearance.basis, s.wx, s.wy, s.wz, p);
-      s.sx = p.px * k; s.sy = p.py * k + boxes[i].cy; s.sz = p.pz * k;
-      it.sx = s.sx; it.sy = s.sy; it.sz = s.sz;
-      // ── THE DEPTH CORRECTION ──────────────────────────────────────────
-      // Placement measures on an orthographic plane at ONE pixels-per-world
-      // for the whole scene; the renderer divides every drawn thing by its OWN
-      // depth. So two badges further from the camera than the rung's reference
-      // depth DRAW CLOSER TOGETHER than the plane predicted, by the ratio of
-      // those depths — and the solver, believing them clear, lets them overlap.
-      // Reported as badges sitting on top of one another on the far side of
-      // the villa, which is exactly where the ratio is largest.
-      //
-      // Measured before it was changed: a pair the solver judged EXACTLY
-      // touching overlaps by 9% of a badge width 8 m beyond the reference
-      // depth, 14% at 12 m, 22% at 20 m. Zero at the reference depth itself.
-      //
-      // ⚠️ THIS IS NOT THE BLANKET MARGIN, AND MUST NOT BECOME ONE.
-      // GROUP_OVERLAP_ALLOW_WIDTHS bought the same headroom by making
-      // EVERYTHING merge earlier, including badges near the camera where the
-      // residual is zero or negative; it was set to 0 in 2.173.0 with "it
-      // should stay there", and it does. This asks each badge for exactly the
-      // extra room its OWN depth will cost it, so a near badge is untouched.
-      //
-      // Clamped at 1: a badge NEARER than the reference draws further apart
-      // than the plane predicted, and shrinking its claim on that basis would
-      // group it late — an error in the direction this subsystem has spent
-      // several releases removing. One-sided, like the CEIL on the rung.
-      const depthPull = clearance.refDepth > 0
-        ? Math.max(1, (clearance.refDepth + p.pd) / clearance.refDepth)
-        : 1;
-      it.reach = boxes[i].halfW * clearance.allow * depthPull;
-      it.reachY = boxes[i].halfH * clearance.allow * depthPull;
+      // Position on the glass (centred where the box is DRAWN) and the room it
+      // claims there (inflated by its OWN depth) — badgeLayout.onGlass, which
+      // carries both rules and their history. Written back onto the
+      // ShownLabel too: placeEntityGroups needs the same plane coordinates,
+      // and projecting twice is how two spaces drift apart.
+      onGlass(clearance, s.wx, s.wy, s.wz, boxes[i], p, it);
+      s.sx = it.sx; s.sy = it.sy; s.sz = it.sz;
       it.rank = badgeRank(s.lbl.type, s.lbl.category);
       it.sortKey = s.id;
       // Tiebreak only, never a gate — see PlacementItem.category.
@@ -6145,7 +4565,7 @@ export class EntityVisuals {
       if (s.lbl.container.isVisible) drawn++;
     }
     const chips: string[] = [];
-    for (const [k, on] of this.roomClustered) if (on) chips.push(k);
+    for (const [k, on] of this.pass.roomClustered) if (on) chips.push(k);
     chips.sort();
     // Sorted so two frames with identical content produce identical text —
     // otherwise Map iteration order would make this log its own noise source.
@@ -6200,15 +4620,15 @@ export class EntityVisuals {
       // current eye position: anything below `eligible` means some badges are
       // still carrying the previous pose's answer.
       + (this.firstPerson
-        ? ` occl=${this.occludedIds.size} swept=${this.occlusionSwept}/${shown.length}`
-        + ` rays=${this.occlRays}`
+        ? ` occl=${this.occlusion.occluded.size} swept=${this.occlusion.swept}/${shown.length}`
+        + ` rays=${this.occlusion.lastRays}`
         : " occl=off")
       + ` | piles=${stats.piles} exempt=${stats.exempt} accepted=${stats.accepted}`
       + ` deferred=${stats.deferred} pulledBack=${stats.pulledBack}`
       + ` | groups=${placed.length}/${stats.buckets} cross=${stats.crossRoom}`
       + ` cards=${cardSizes} counts=${counts}${split ? `/${split}split` : ""}`
-      + (this.absorbed ? ` absorbed=${this.absorbed}` : "")
-      + (this.focusPairs ? ` focusGroups=${this.focusPairs}` : "")
+      + (this.pass.absorbed ? ` absorbed=${this.pass.absorbed}` : "")
+      + (this.pass.focusPairs ? ` focusGroups=${this.pass.focusPairs}` : "")
       // WHY the chips exist, not just how many. A "the whole villa chipped at
       // one zoom" report is unanswerable from a count: several different rules
       // produce a chip and they fail in opposite directions under zoom.
@@ -6222,13 +4642,13 @@ export class EntityVisuals {
       // Always printed, including the zeroes — a diagnostic that omits its own
       // null result reads as a missing measurement.
       + ` | chipWhy: solver=${stats.chipUndrawable}u/${stats.chipDegenerate}d`
-      + [...this.chipWhyCount.entries()]
+      + [...this.pass.chipWhyCount.entries()]
         .filter(([k]) => k !== "solver")
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([k, v]) => ` ${k}=${v}`).join("")
-      + ` total=${[...this.chipWhyCount.values()].reduce((a, b) => a + b, 0)}`
+      + ` total=${[...this.pass.chipWhyCount.values()].reduce((a, b) => a + b, 0)}`
       // OUTSIDE total, on purpose: a chip that was refused is not a chip.
-      + (this.chipRefusedNoRoom ? ` noroomRefused=${this.chipRefusedNoRoom}` : "")
+      + (this.pass.chipRefusedNoRoom ? ` noroomRefused=${this.pass.chipRefusedNoRoom}` : "")
       + ` [${groups}] chips=${chips.length} [${chips.join(", ")}]`;
     // ⚠️ Dedupe on the OUTCOME, not the whole line. rung/sinTilt/az change on
     // every frame of a drag, so the old whole-line compare emitted a `place`
@@ -6240,7 +4660,7 @@ export class EntityVisuals {
     // deduping it away would hide exactly the transition a zoom report is about.
     const outcome = `${drawn}|${stats.accepted}|${placed.length}/${stats.buckets}`
       + `|${chips.length}|${stats.chipUndrawable}|${stats.chipDegenerate}`
-      + `|${[...this.chipWhyCount.entries()].sort(([a], [b]) => a.localeCompare(b))
+      + `|${[...this.pass.chipWhyCount.entries()].sort(([a], [b]) => a.localeCompare(b))
         .map(([k, v]) => `${k}:${v}`).join(",")}`;
     if (outcome === this.lastPlaceLog) return;
     this.lastPlaceLog = outcome;
@@ -6250,7 +4670,7 @@ export class EntityVisuals {
     // of once per frame. A field capture of the unbuffered version was dozens
     // of identical lines per frame with the informative ones scrolled away —
     // an instrument nobody can read is not an instrument.
-    for (const l of this.seatLog) tapDebug(l, "seat");
+    for (const l of this.pass.seatLog) tapDebug(l, "seat");
   }
 
   /**
@@ -6287,59 +4707,26 @@ export class EntityVisuals {
     tm: Matrix,
     vp: Viewport,
   ): void {
-    const items = this.placementItems(shown, boxes, clearance);
-
-    // ── OVERLAP, MEASURED IN THE SPACE A PERSON ACTUALLY SEES ────────────
-    // What used to be here fed `placementItems` straight back into
-    // `conflicts` — the same items, the same predicate, the same gap and
-    // minSep the solver had satisfied a few lines earlier. That is a
-    // tautology: it could not fail whatever the screen looked like, and for
-    // as long as it existed it reported a clean layout over screenshots full
-    // of badges and cards drawn on top of each other. An assertion that
-    // restates its subject's own conclusion is worse than no assertion,
-    // because it is read as evidence.
-    //
-    // Everything below is measured from `Vector3.ProjectToRef` — the TRUE
-    // perspective projection the GUI layer draws through, which cullLabels
-    // has always computed and, until now, never read (ShownLabel.x/y were
-    // dead fields; `tsc` does not police unused interface members). It shares
-    // no arithmetic at all with the solver, which is the only reason it is
-    // able to disagree with it.
-    //
-    // Everything is in RENDER pixels and that is commensurable by
-    // construction: Vector3.Project works in the global viewport, and
-    // effectiveScale() carries cssToGui() — the render-pixel conversion —
-    // so `boxes` and the card layout are already in the same space as `p`.
-    interface ScreenBox { cx: number; cy: number; hw: number; hh: number }
-    const onScreen = (b: ScreenBox) =>
-      b.cx + b.hw >= vp.x && b.cx - b.hw <= vp.x + vp.width
-      && b.cy + b.hh >= vp.y && b.cy - b.hh <= vp.y + vp.height;
-    // Ink on ink. No gap, no minimum pitch, no tolerance: two things either
-    // cover the same pixels or they don't, and that is the one claim about
-    // this subsystem nobody can argue with from a screenshot.
-    const hits = (a: ScreenBox, b: ScreenBox) =>
-      Math.abs(a.cx - b.cx) < a.hw + b.hw && Math.abs(a.cy - b.cy) < a.hh + b.hh;
-
+    // The RULES are placementCheck.ts's; this only says what was painted, in
+    // the TRUE perspective the GUI layer draws through (Vector3.ProjectToRef),
+    // sharing no arithmetic with the solver — the only reason it can disagree.
     const scale = this.effectiveScale();
-    const focus = this.focusedRooms;
-    const p = new Vector3();
-
+    const focus = this.focus.rooms;
+    const covered = new Set<string>();
+    for (const g of groups) for (const i of g.members) covered.add(shown[i].id);
     // `container.isVisible` rather than a reconstruction of the same decision
     // from entityGrouped/roomClustered: the renderer's own answer to "is this
     // drawn", read after the visibility loop has run.
-    const badgeBoxes: ScreenBox[] = [];
-    const badgeExempt: boolean[] = [];
-    for (let i = 0; i < shown.length; i++) {
-      const s = shown[i];
-      if (!s.inFront || !s.lbl.container.isVisible) continue;
-      const b: ScreenBox = {
-        cx: s.x, cy: s.y + boxes[i].cy, hw: boxes[i].halfW, hh: boxes[i].halfH,
+    const badges = shown.map((s2, i) => {
+      const room = roomKey(this.roomOf(s2.id));
+      return {
+        id: s2.id,
+        box: { cx: s2.x, cy: s2.y + boxes[i].cy, hw: boxes[i].halfW, hh: boxes[i].halfH },
+        visible: s2.lbl.container.isVisible, inFront: s2.inFront, occluded: s2.occluded,
+        exempt: focus.has(room), roomChipped: !!this.pass.roomClustered.get(room),
+        covered: covered.has(s2.id), offsetX: s2.lbl.container.linkOffsetXInPixels,
       };
-      if (!onScreen(b)) continue; // off-screen overlap is not something anyone sees
-      badgeBoxes.push(b);
-      badgeExempt.push(focus.has(roomKey(this.roomOf(s.id))));
-    }
-
+    });
     // A card is drawn ENTIRELY ABOVE its anchor — updateEntityGroups sets
     // linkOffsetYInPixels = -(lay.height / 2) * scale so the card's bottom
     // edge lands on the anchor, exactly as a badge's does. The LAYOUT models
@@ -6347,9 +4734,8 @@ export class EntityVisuals {
     // asymmetry; using the layout's model here would report overlaps nobody
     // can see and miss the ones they can, which is the whole failure mode this
     // method just stopped repeating.
-    const cardBoxes: ScreenBox[] = [];
-    const cardInk: ScreenBox[] = [];
-    const cardFocused: boolean[] = [];
+    const cards: { box: ScreenBox; ink: ScreenBox; focused: boolean }[] = [];
+    const p = new Vector3();
     for (const g of groups) {
       const lay = this.layoutOf(g, g.members.length);
       p.set(g.wx, g.wy, g.wz);
@@ -6357,334 +4743,27 @@ export class EntityVisuals {
       if (!(p.z >= 0 && p.z <= 1)) continue;
       const hw = (lay.width / 2) * scale;
       const hh = (lay.height / 2) * scale;
-      const box: ScreenBox = { cx: p.x, cy: p.y - hh, hw, hh };
-      if (!onScreen(box)) continue;
-      cardBoxes.push(box);
       // The square INSCRIBED in the card — "is this badge under my ink", the
       // question absorb exists to answer, and a different question from "do we
       // clear each other". Same distinction cardInscribedHalf draws.
       const inner = Math.min(hw, hh);
-      cardInk.push({ cx: box.cx, cy: box.cy, hw: inner, hh: inner });
-      cardFocused.push(g.focused);
+      const box = { cx: p.x, cy: p.y - hh, hw, hh };
+      cards.push({ box, ink: { cx: box.cx, cy: box.cy, hw: inner, hh: inner }, focused: g.focused });
     }
-
-    // (a) Drawn badge vs drawn badge. The headline number.
-    //
-    // The accessibility PITCH is counted separately from visual overlap on
-    // purpose: they mean different things (one is a tap-target rule, the other
-    // is legibility) and one of them is much more likely to be non-zero for a
-    // legitimate reason. Rolled together, the first excusable case would
-    // teach whoever reads this to ignore the line.
-    //
-    // Focused-room badges get their own bucket rather than being dropped:
-    // their overlap is DELIBERATE (the exemption stacks them, which is exactly
-    // why pairFocusedRoom exists), so mixing them in would poison the number
-    // that matters while hiding the one case where the pairing failed.
-    const minSepPx = clearance.minSep;
-    let overlaps = 0, tooClose = 0, focusOverlaps = 0;
-    for (let i = 0; i < badgeBoxes.length; i++) {
-      for (let j = i + 1; j < badgeBoxes.length; j++) {
-        const a = badgeBoxes[i], b = badgeBoxes[j];
-        const ink = hits(a, b);
-        if (badgeExempt[i] || badgeExempt[j]) { if (ink) focusOverlaps++; continue; }
-        if (ink) overlaps++;
-        else if (Math.hypot(a.cx - b.cx, a.cy - b.cy) < minSepPx) tooClose++;
-      }
-    }
-    if (overlaps) placeDebug(`PLACEMENT: ${overlaps} drawn badge pair(s) OVERLAP on screen`);
-    if (tooClose) placeDebug(`PLACEMENT: ${tooClose} drawn badge pair(s) closer than the ${Math.round(minSepPx)}px tap pitch`);
-    if (focusOverlaps) placeDebug(`PLACEMENT: ${focusOverlaps} overlapping pair(s) inside the FOCUSED room (expected; pairFocusedRoom's leftovers)`);
-
-    // (b) Drawn badge vs summary card, split in two — and the split is what
-    // makes the line actionable. `overhung` is expressly allowed: a card MAY be
-    // drawn over a badge outside its ink, because gating a card's existence on
-    // its full width sends groups to room chips instead (see `fits`). A single
-    // undifferentiated counter would be permanently non-zero for a documented
-    // reason, and a permanently non-zero assertion is a disabled one.
-    //
-    // ⚠️ `buried` IS NOT AN INVARIANT VIOLATION EITHER, AND CALLING IT ONE COST
-    // TWO ROUNDS OF CHASING (2.428.0). It is measured in a DIFFERENT SPACE from
-    // the decision it appears to contradict:
-    //
-    //   * absorb decides in the ORTHOGRAPHIC view plane at the QUANTISED rung
-    //     (`g.sx` vs `shown[j].sx`), which is what makes grouping invariant to
-    //     camera position at all;
-    //   * these boxes come from `Vector3.ProjectToRef(…, tm, vp, …)` — TRUE
-    //     PERSPECTIVE at the LIVE camera — which is deliberate, because the
-    //     assertion's job is to check the renderer's own output, not to re-run
-    //     the solver's arithmetic.
-    //
-    // The gap between those two spaces is the orthographic-vs-perspective
-    // residual CLAUDE.md documents as the ACCEPTED COST of
-    // GROUP_OVERLAP_ALLOW_WIDTHS = 0, "always in the direction of the plane
-    // over-estimating separation, and always for objects further from the camera
-    // than the zoom rung's reference depth" — which is exactly a badge absorb
-    // believed was clear being drawn under the ink. Its own list of what the old
-    // margin covered includes "one or two things over a room chip": same family.
-    //
-    // So a small, transient `buried` is a MEASUREMENT. The invariant that really
-    // must hold is the other side of the same absorb block — `seat REFUSED …
-    // blocked by badge`, which cannot happen because the absorb box strictly
-    // contains the refusal box on every axis — and every capture since 2.415.0
-    // shows zero of those. Do NOT reinstate a margin on sight of this counter;
-    // the honest mitigation is that a covered badge is still reachable, because
-    // tap and long-press both ask pickBadgeAt first. The one dial, if it ever
-    // costs more than the early grouping did, is GROUP_OVERLAP_ALLOW_WIDTHS at
-    // -0.075 (half the old margin).
-    // ── BUCKET, DO NOT DROP (2.432.0) ─────────────────────────────────────
-    // These two `continue`s USED to skip every pair involving a focused card or
-    // a focused badge, which made this test blind in exactly the state every
-    // reported overlap has come from. The exemption is NOT the same condition as
-    // "all other rooms are chipped": cullLabels computes `suppressOthers`
-    // separately (`focusedRooms.size > 0 && z <= focusedAtZoom`), so a focus can
-    // be live while other rooms still draw their own badges and cards — a
-    // capture caught precisely that, `exempt=12` beside `chips=1`.
-    //
-    // So focused pairs go in their own bucket, which is the pattern the
-    // badge-vs-badge test two tiers up already uses (`focusOverlaps`). Dropping
-    // them is what made `chipHits` report 0 for the case a screenshot showed
-    // plainly (2.430.0), and /dry-audit found the same shape here. A counter
-    // must never be blind to the case it exists to see; if a category is
-    // expected, LABEL it, do not exclude it.
-    let buried = 0, overhung = 0, focusCardHits = 0;
-    for (let k = 0; k < cardBoxes.length; k++) {
-      for (let i = 0; i < badgeBoxes.length; i++) {
-        const ink = hits(cardInk[k], badgeBoxes[i]);
-        if (!ink && !hits(cardBoxes[k], badgeBoxes[i])) continue;
-        // A focused card never went through `fits`, and a focused badge blocks
-        // nobody — so neither is a violation. Still counted, so the number
-        // exists.
-        if (cardFocused[k] || badgeExempt[i]) { focusCardHits++; continue; }
-        if (ink) buried++; else overhung++;
-      }
-    }
-    if (buried) placeDebug(`PLACEMENT: ${buried} drawn badge(s) BURIED under a summary's ink`);
-    if (overhung) placeDebug(`PLACEMENT: ${overhung} drawn badge(s) under a card's overhang (allowed)`);
-    if (focusCardHits) {
-      placeDebug(`PLACEMENT: ${focusCardHits} badge/card overlap(s) involving a FOCUSED`
-        + " object (expected: a focused card skips `fits`, a focused badge blocks"
-        + " nobody — pairFocusedRoom is what keeps them all tappable)");
-    }
-
-    // (c) Summary vs summary. This one must be EXACTLY ZERO for cards that went
-    // through `fits` — the single clearance guarantee it makes without
-    // qualification, and nothing verified it before 2.405.0.
-    //
-    // Focused groups are BUCKETED rather than skipped, for the reason (b) above
-    // spells out: they never went through `fits`, so they are not violations,
-    // but two focused pair-cards CAN overlap each other (pairFocusedRoom emits
-    // several per room) and a counter that drops them cannot say so.
-    let summaryOverlaps = 0, summaryFocusOverlaps = 0;
-    for (let i = 0; i < cardBoxes.length; i++) {
-      for (let j = i + 1; j < cardBoxes.length; j++) {
-        if (!hits(cardBoxes[i], cardBoxes[j])) continue;
-        if (cardFocused[i] || cardFocused[j]) summaryFocusOverlaps++;
-        else summaryOverlaps++;
-      }
-    }
-    if (summaryFocusOverlaps) {
-      placeDebug(`PLACEMENT: ${summaryFocusOverlaps} summary pair(s) OVERLAP involving a`
-        + " FOCUSED card (expected: a focused card is seated unconditionally and"
-        + " never went through `fits`)");
-    }
-    if (summaryOverlaps) {
-      placeDebug(`PLACEMENT: ${summaryOverlaps} summary pair(s) OVERLAP on screen`
-        + (GROUP_OVERLAP_ALLOW_WIDTHS === 0
-          // Saying "fits() promises this cannot happen" was true while a margin
-          // covered the plane-vs-perspective residual. At zero it is not, and a
-          // guard that cries regression at an accepted cost teaches its reader
-          // to ignore it.
-          ? " — expected: GROUP_OVERLAP_ALLOW_WIDTHS is 0, so nothing covers the"
-            + " orthographic/perspective depth residual"
-          : " — fits() promises this cannot happen"));
-    }
-
-    // (d) Room chip vs everything the chip outranks. A chip is the tier of
-    // last resort and nothing used to test it against anything but another
-    // chip — see CHIP_COLLISION. Measured in TRUE perspective like every other
-    // counter here, against the chip's DRAWN box (it is lifted by half its own
-    // height, exactly as badges and cards are). Focused-room badges are
-    // excluded: they are exempt from the escalation pass by design, because
-    // tapping a room must not be able to make that room vanish.
-    // ⚠️ THE FOCUSED CASE IS COUNTED, NOT EXCLUDED (2.430.0). This skipped every
-    // exempt badge and focused card — and when a room is focused those are the
-    // ONLY things drawn besides the chips, so `chipHits=0` meant "not measured"
-    // rather than "did not happen". A capture of exactly this complaint came
-    // back clean while the screenshot showed it plainly. Third blind counter in
-    // this file's history — same shape as estErr (2.421.0) and the chip-vs-chip
-    // pair test (2.420.0): a counter must never be blind to the case it exists
-    // to see. Reported SEPARATELY because it is expected and now harmless: the
-    // chip paints behind (zIndex -1) and is asked last for taps, so the device
-    // stays both visible and reachable.
-    let chipHits = 0;
-    let chipHitsFocused = 0;
-    for (const c of chips) {
-      const box: ScreenBox = { cx: c.x, cy: c.y - c.halfH, hw: c.halfW, hh: c.halfH };
-      if (!onScreen(box)) continue;
-      for (let i = 0; i < badgeBoxes.length; i++) {
-        if (!hits(box, badgeBoxes[i])) continue;
-        if (badgeExempt[i]) chipHitsFocused++; else chipHits++;
-      }
-      for (let k = 0; k < cardBoxes.length; k++) {
-        if (!hits(box, cardBoxes[k])) continue;
-        if (cardFocused[k]) chipHitsFocused++; else chipHits++;
-      }
-    }
-    if (chipHits) placeDebug(`PLACEMENT: ${chipHits} drawn badge(s)/card(s) OVERLAP a room chip`);
-    // ⚠️ SHOULD NOW BE ZERO (2.431.0). settleChips drops any chip a focused
-    // badge or card collides with, so this line firing means the drop missed —
-    // most likely because the render set is measured here in TRUE PERSPECTIVE
-    // while the drop tests the orthographic plane, i.e. the same residual the
-    // BURIED counter reports. A small transient count is that; a persistent one
-    // is a real gap in the drop.
-    if (chipHitsFocused) {
-      placeDebug(`PLACEMENT: ${chipHitsFocused} FOCUSED badge(s)/card(s) over a room chip`
-        + " — ONE FRAME while the camera flies in is the plane-vs-perspective"
-        + " residual (expected); a PERSISTENT count is a gap in settleChips'"
-        + " focus drop");
-    }
-
-    // ── (e) CHIP vs CHIP, AND THE ESTIMATE THAT DECIDES IT (2.420.0) ──────
-    // The last hole in this family: every other tier had an overlap counter
-    // and the chip-vs-chip merge — the one test 2.419.0 retuned — had none.
-    //
-    // Worth two counters rather than one, because the merge is the ONLY
-    // collision test in the subsystem whose inputs are an ESTIMATE.
-    // `chipWidthPx` is `len * 8.2 + 24`; the real width comes from Babylon's
-    // `adaptWidthToChildren` and is not readable until after the frame is laid
-    // out. Its docstring says it "only has to be close enough to keep chips
-    // apart" — which was fair while a 6 px gap covered the error and is a
-    // thinner claim now that 2.419.0 cut that to 2. Under-estimate by more
-    // than the slack and two chips overlap on the glass with nothing merging
-    // them; over-estimate and they merge while visibly clear, which is the
-    // complaint 2.419.0 answered.
-    //
-    // So: `estErr` reads the width the renderer ACTUALLY laid out (the
-    // previous frame's `_currentMeasure` — this pass has not laid out yet,
-    // which is the whole reason the estimate exists) and reports the worst
-    // disagreement in CSS px. If it comes back bigger than `minGapPx`, the gap
-    // is not the dial to move: the estimate is, or the merge has to read the
-    // drawn width a frame late.
-    let chipPairs = 0;
-    const chipBoxOf = (c: RoomChip): ScreenBox =>
-      ({ cx: c.x, cy: c.y - c.halfH, hw: c.halfW, hh: c.halfH });
-    for (let i = 0; i < chips.length; i++) {
-      const a = chipBoxOf(chips[i]);
-      if (!onScreen(a)) continue;
-      for (let j = i + 1; j < chips.length; j++) {
-        const b = chipBoxOf(chips[j]);
-        if (onScreen(b) && hits(a, b)) chipPairs++;
-      }
-    }
-    if (chipPairs) {
-      // ⚠️ This measures the merge against its OWN boxes, so it can only catch
-      // a merge that failed to reach a fixpoint — never a wrong `halfW`, since
-      // both sides read the same estimate. `estErr` below is the half that can
-      // see the estimate, and it is the one to trust about width.
-      placeDebug(`PLACEMENT: ${chipPairs} room chip pair(s) OVERLAP on screen`
-        + " — the merge did not reach a fixpoint (width error is estErr's job)");
-    }
-    let estErr = 0;
-    let estWorst = "";
-    const chipScale = this.effectiveScale();
-    for (const c of chips) {
-      const ctl = this.clusters.get(c.key)?.container as unknown as
-        { _currentMeasure?: { width: number } } | undefined;
-      const drawn = ctl?._currentMeasure?.width;
-      if (!(typeof drawn === "number" && drawn > 0) || !(chipScale > 0)) continue;
-      // ⚠️ ONLY THE ESTIMATE IS DIVIDED (2.421.0). `_currentMeasure` is the
-      // control's PRE-TRANSFORM measure, so it is already in the CSS px the
-      // control's own `width`/padding strings are written in — `scaleX` is
-      // applied at draw time and never reaches it. `c.halfW` alone carries the
-      // scale. As shipped, this divided both and reported 76-135 CSS px of
-      // disagreement on a build whose estimate was within 30%: an instrument
-      // that indicts the thing it is auditing is worse than no instrument, and
-      // this one nearly bought a rewrite of chipWidthPx that was not needed.
-      const err = Math.abs((c.halfW * 2) / chipScale - drawn);
-      if (err > estErr) { estErr = err; estWorst = c.label; }
-    }
-    if (estErr > this.metrics.minGapPx) {
-      placeDebug(`PLACEMENT: chipWidthPx is off by ${estErr.toFixed(1)} CSS px`
-        + ` (worst: "${estWorst}") — more than minGapPx=${this.metrics.minGapPx},`
-        + " so the chip merge is deciding on a width it cannot trust");
-    }
-
-    // A badge never moves: the layout writes one shared lift and no X offset.
-    let moved = 0;
-    for (const s of shown) if (s.lbl.container.linkOffsetXInPixels !== 0) moved++;
-    if (moved) placeDebug(`PLACEMENT: ${moved} badge(s) have a non-zero X offset`);
-
-    // A chipped room hands over ALL of its badges, never a subset.
-    let leaked = 0;
-    for (let i = 0; i < shown.length; i++) {
-      if (!this.roomClustered.get(roomKey(this.roomOf(shown[i].id)))) continue;
-      if (shown[i].lbl.container.isVisible) leaked++;
-    }
-    if (leaked) placeDebug(`PLACEMENT: ${leaked} badge(s) visible inside a chipped room`);
-
-    // ── EVERY BADGE IS DRAWN, INSIDE A DRAWN SUMMARY, OR CHIPPED ─────────
-    // The one whole-system promise: a device the map knows about is always
-    // reachable. `entityGrouped` marks a badge as "hidden because a summary
-    // stands for it", but a summary can be DROPPED after the fact — a
-    // cross-room group whose other room chipped is removed at the end of
-    // placeEntityGroups while its members stay marked, so a badge in the room
-    // that did NOT chip ends up hidden with nothing in its place. There has
-    // never been a check for it; the 2x2 card makes the path more reachable,
-    // because a bigger card fails `fits` more often and every failure
-    // escalates a room.
-    const covered = new Set<string>();
-    for (const g of groups) for (const i of g.members) covered.add(shown[i].id);
-    let orphaned = 0;
-    // BUCKETED, NOT DROPPED. A badge behind a wall in first-person is hidden on
-    // purpose and is not an orphan — but a bare `continue` would delete it from
-    // the only number that can report it, and this subsystem has already been
-    // burned four times by an expected case swallowed by a `continue` (see the
-    // badge-rules skill). It gets its own count on the same line, so "the wall
-    // cull is hiding more than you think" stays visible from a capture.
-    let byWall = 0;
-    for (const s of shown) {
-      if (s.lbl.container.isVisible) continue;
-      if (!s.inFront) continue; // off screen is not the same as unreachable
-      if (this.roomClustered.get(roomKey(this.roomOf(s.id)))) continue;
-      if (covered.has(s.id)) continue;
-      if (s.occluded) { byWall++; continue; }
-      orphaned++;
-    }
-    if (orphaned || byWall) {
-      placeDebug(
-        `PLACEMENT: ${orphaned} badge(s) hidden with no summary and no chip`
-        + ` (+${byWall} deliberately, behind a wall)`,
-      );
-    }
-
-    // "Nothing is drawn inside a summary's ink" — the invariant the absorb
-    // phase exists to establish — used to be checked separately here, via
-    // drawnDistance. That made it circular in exactly the way the badge-pair
-    // check was: absorb decides with drawnDistance, so re-asking drawnDistance
-    // could only ever agree. It is check (b)'s `buried` counter now, measured
-    // against the card's drawn box.
-
-    // Order independence — the purity guard.
-    const reversed = items.slice().reverse();
-    // The SAME drawableMax as the live solve, or this guard verifies the
-    // purity of a function that does not ship.
-    const a = solvePlacement(
-      items, clearance.gap, clearance.minSep, BADGE_PLACEMENT, this.debugScratchA,
-      this.drawableMax(),
-    );
-    const idsA = new Set<string>();
-    for (let i = 0; i < items.length; i++) if (a.accepted[i]) idsA.add(items[i].sortKey);
-    const b = solvePlacement(
-      reversed, clearance.gap, clearance.minSep, BADGE_PLACEMENT, this.debugScratchB,
-      this.drawableMax(),
-    );
-    const idsB = new Set<string>();
-    for (let i = 0; i < reversed.length; i++) if (b.accepted[i]) idsB.add(reversed[i].sortKey);
-    let differing = idsA.size !== idsB.size;
-    if (!differing) for (const id of idsA) if (!idsB.has(id)) { differing = true; break; }
-    if (differing) {
-      placeDebug(`PLACEMENT: ORDER DEPENDENT — ${idsA.size} vs ${idsB.size} accepted on a reversed input`);
-    }
+    const found = this.placementCheck.check({
+      viewport: vp, badges, cards, chips,
+      chipDrawnWidth: (key) => (this.clusters.get(key)?.container as unknown as
+        { _currentMeasure?: { width: number } } | undefined)?._currentMeasure?.width,
+      chipScale: scale,
+      minSepPx: clearance.minSep,
+      minGapPx: this.metrics.minGapPx,
+      overlapAllow: GROUP_OVERLAP_ALLOW_WIDTHS,
+      solve: {
+        items: this.placementItems(shown, boxes, clearance), gap: clearance.gap, minSep: clearance.minSep,
+        mode: BADGE_PLACEMENT, drawableMax: this.drawableMax(),
+      },
+    });
+    for (const line of found.lines) placeDebug(line);
   }
 
 
@@ -6705,13 +4784,6 @@ export class EntityVisuals {
    * to a group of devices SHOULD separate them, the same way zooming does.
    * Median rather than mean so one far-off badge can't skew the whole scale.
    */
-  /** Pixels per world unit at a given distance — ONE expression, two callers:
-   *  the rung (at the camera's own distance) and the icon-zoom reference (at
-   *  the fit radius). They must not be two formulas; the whole point of
-   *  2.417.0 is that the icon scale is the rung measured against this. */
-  private static pxPerWorldAt(vpH: number, fov: number, dist: number): number {
-    return vpH / (2 * dist * Math.tan(fov / 2));
-  }
 
   /**
    * The depth at which a rung's single scene-wide scale is EXACT.
@@ -6733,21 +4805,15 @@ export class EntityVisuals {
    * depth, 14% at 12 m and 22% at 20 m — which is the far side of a villa, and
    * is exactly where the overlapping badges were reported.
    */
+
   /** This pass's reference depth, from the same viewport and field of view the
    *  rung was measured with. 0 when either is unavailable, which reads as "no
    *  correction" everywhere downstream. */
   private rungReferenceDepth(pxPerWorld: number): number {
     const cam = this.scene.activeCamera;
     if (!cam) return 0;
-    const vpH = this.scene.getEngine().getRenderHeight();
-    const fov = 2 * cameraFrame(this.scene, cam).vHalf;
-    return EntityVisuals.referenceDepthAt(vpH, fov, pxPerWorld);
-  }
-
-  private static referenceDepthAt(vpH: number, fov: number, pxPerWorld: number): number {
-    const t = Math.tan(fov / 2);
-    if (!(pxPerWorld > 0) || !(t > 0) || !(vpH > 0)) return 0;
-    return vpH / (2 * pxPerWorld * t);
+    return referenceDepthAt(this.scene.getEngine().getRenderHeight(),
+      Math.tan(cameraFrame(this.scene, cam).vHalf), pxPerWorld);
   }
 
   /**
@@ -6780,17 +4846,15 @@ export class EntityVisuals {
     const cam = this.scene.activeCamera;
     if (!cam) return;
     const vpH = this.scene.getEngine().getRenderHeight();
-    const fov = 2 * cameraFrame(this.scene, cam).vHalf;
     // ⚠️ RENDER pixels on BOTH sides, and deliberately not the `cssPixels`
     // variant. It cancels in the ratio, so this is hw-independent anyway — and
     // asking for CSS px here would quantise against a DIFFERENT rung from the
     // one scaling the positions, which is the offset-lattice bug this method
     // exists to remove, reintroduced through the other door.
-    const atFit = EntityVisuals.pxPerWorldAt(vpH, fov, fit);
-    const rung = this.quantisedPixelsPerWorldUnit(shown);
-    if (!(atFit > 0) || !(rung > 0)) return;
-    const ratio = Math.pow(rung / atFit, ICON_ZOOM_EXPONENT);
-    this.applyIconZoom(Math.min(1, Math.max(ICON_ZOOM_MIN_SCALE, ratio)));
+    // A function of the RUNG — badgeScale.iconZoomAt, which carries why.
+    const z = iconZoomAt(this.quantisedPixelsPerWorldUnit(shown), vpH,
+      Math.tan(cameraFrame(this.scene, cam).vHalf), fit);
+    if (z !== null) this.applyIconZoom(z);
   }
 
   private quantisedPixelsPerWorldUnit(shown: ShownLabel[], cssPixels = false): number {
@@ -6819,9 +4883,7 @@ export class EntityVisuals {
     // they only came back a rung or two later once the badges genuinely fitted
     // — entities, chip, entities, going one direction. Reproduces only where
     // dpr > HW_START_CAP, which is why a dpr-1.6 laptop never showed it.
-    const vpH = cssPixels
-      ? engine.getRenderHeight() * engine.getHardwareScalingLevel()
-      : engine.getRenderHeight();
+    const vpH = viewportPx(engine.getRenderHeight(), engine.getHardwareScalingLevel(), cssPixels);
     // Not `cam.fov` directly: whether that is the vertical or the horizontal
     // angle is cameraFrame.ts's question, and this reader was one of four that
     // each answered it separately. Its `|| 0.8` fallback lived on there too.
@@ -6844,9 +4906,7 @@ export class EntityVisuals {
       view.sort();
       dist = view[shown.length >> 1];
     }
-    if (!(dist > 0) || vpH <= 0) return 0;
-    const raw = EntityVisuals.pxPerWorldAt(vpH, fov, dist);
-    if (!(raw > 0)) return 0;
+    // Ceiled onto the zoom lattice — see badgeScale.rungAt and the note below.
     // ⚠️ CEIL, NOT ROUND — the rung must never sit BELOW the drawn zoom.
     // `k` scales every separation the solver measures (`s.sx = p.px * k`)
     // while the badge boxes it compares them against are real drawn pixels
@@ -6856,7 +4916,7 @@ export class EntityVisuals {
     // error one-sided: measured separations are always ≥ drawn, so grouping
     // can only ever be late, never early. See GROUP_ZOOM_STEPS_PER_DOUBLING
     // for why the step is small enough that "late" is imperceptible.
-    return snapToZoomLattice(raw);
+    return rungAt(vpH, Math.tan(fov / 2), dist);
   }
 
   /** Each label's collision box in screen px, relative to its anchor point —
@@ -6943,908 +5003,8 @@ export class EntityVisuals {
 
   // ── Entity groups (tier 4 — several of a room's badges as one) ────────────
 
-  /**
-   * Decide which pending entity groups may actually be drawn, and drop the
-   * rest to their room's chip.
-   *
-   * A group badge is a badge: it has to clear everything a badge has to clear,
-   * or it is just a new way to draw two things on top of each other — the
-   * exact failure the whole subsystem exists to prevent. It is checked against
-   * the three things that can be in its way, all in WORLD space against the
-   * quantised zoom, like every other decision here:
-   *
-   *   * badges that were ACCEPTED — every one of them is at its own anchor,
-   *     because nothing in this file moves a badge, so the anchor is the
-   *     position to test and there is no seat to look up;
-   *   * other groups, in a fixed order so each pair meets exactly once.
-   *
-   * The centroid being inside the pile's own hull makes a collision unlikely
-   * but not impossible — a point interior to a hull can sit closer to an
-   * outside badge than any vertex does — so it is checked rather than assumed.
-   *
-   * Mutates `this.entityGrouped` (which badges hide) and `this.roomClustered`
-   * (which rooms escalate), and prunes `pending` in place to what survived.
-   */
-  private placeEntityGroups(
-    shown: ShownLabel[],
-    boxes: { halfW: number; halfH: number; cy: number }[],
-    pending: PendingEntityGroup[],
-    /** This pass's own clearance — passed in rather than re-derived, so the
-     *  absorb sweep re-projects a moved centroid through exactly the basis and
-     *  rung the members were projected with. */
-    clearance: { pxPerWorld: number; basis: ViewBasis },
-  ): void {
-    if (pending.length === 0) return;
-    const pxPerWorld = clearance.pxPerWorld;
-    const scale = this.effectiveScale();
-    if (pxPerWorld <= 0) {
-      // No usable projection this frame — fall back to the tier that needs
-      // none rather than drawing groups at unverified positions.
-      for (const g of pending) for (const k of g.roomKeys) this.chipRoom(k, "noproj");
-      pending.length = 0;
-      return;
-    }
-    const gapPx = this.metrics.minGapPx * scale;
-    const allow = 1 - GROUP_OVERLAP_ALLOW_WIDTHS;
-    // Everything below compares PIXELS to PIXELS. Groups and badges alike
-    // arrive already projected onto this pass's view plane (see
-    // badgeProjection), which is the space both of these comparisons — a
-    // summary against a badge, a summary against another summary — are
-    // actually asking about: what overlaps ON SCREEN.
-    // ── DELIBERATELY NOT CONVERGED with the other box tests ────────────────
-    // `|dx| < needX && |dy| < needY` also appears in badgePlacement's
-    // `conflicts` and `mergeCollidingPiles`, in settleChips' `clears`, and in
-    // the placement guard's `hits`. A /dry-audit weighed folding them into one
-    // helper and the answer is no: the shared part is ONE line, while
-    // everything that can actually drift — which half-extents, whose gap,
-    // whether the tap-pitch floor applies, whether the along-view residual
-    // folds in — is per tier and cannot be shared. `hits` must stay separate
-    // outright: it is the GUARD, and measures ink on ink in true perspective
-    // with no gap and no tolerance, the opposite of every other instance by
-    // design. Recorded so the next audit re-reads this rather than re-deciding.
-    // The larger of the two half-extents, because a neighbour can lie in any
-    // direction and this is a radial test rather than a box overlap.
-    const halfOf = (i: number) => Math.max(boxes[i].halfW, boxes[i].halfH);
-    // A group is drawn at the badge scale and at the badge size (see
-    // summaryMetrics), so this measures it with the same numbers the renderer
-    // uses — no second scale to keep in step. There used to be one: the group
-    // was floored at CLUSTER_MIN_SCALE while badges took the 0.7 far-zoom cap,
-    // which made a summary bigger than the badges it replaced AND forced this
-    // method to reason in a scale of its own. Both went together.
-    const sm = this.summaryMetrics();
-    const squareHalf = (sm.size / 2) * scale * allow;
-    // From the SAME function that draws it — the width a group is TESTED at
-    // has to be the width it is DRAWN at, which is this file's oldest rule.
-    // ── THE CIRCUMSCRIBED RADIUS, not half the width ────────────────────
-    // This test is a DISC — it works in world distance scaled by the quantised
-    // zoom, and knowing which way a neighbour lies relative to the card would
-    // need the camera, the one dependency this subsystem is built without. A
-    // disc of half the WIDTH is honest for a card that is wider than it is
-    // tall and badly dishonest for a square one: two 2x2 cards two units apart
-    // on the diagonal would each be 1.41 units away on both axes and overlap
-    // in both, while the test called them clear. `hypot` is the smallest disc
-    // that actually contains the card.
-    //
-    // "A summary must clear other summaries" is the one thing this test still
-    // promises absolutely (see `fits`), so it is the one place that cannot be
-    // approximated downward.
-    const cardHalfOf = (g: PendingEntityGroup) => {
-      const lay = this.layoutOf(g, g.members.length);
-      return (Math.hypot(lay.width, lay.height) / 2) * scale * allow;
-    };
-    /**
-     * The plane Y where the card's INK actually is: its anchor lifted by half
-     * its OWN height, exactly as updateEntityGroups sets linkOffsetYInPixels.
-     *
-     * Two cards of different heights are lifted by different amounts, so a test
-     * that compared their ANCHORS was measuring points up to half a card apart
-     * from where the ink is. Circumscribed discs at the anchors are no defence:
-     * shifting one box relative to the other closes the gap the discs were
-     * counting on, and 2.287.0's counters found real pairs doing it — up to
-     * five at once on a phone, against a promise `fits` makes absolutely.
-     *
-     * Same rule as the badge's `cy` (see placementItems): measure the card
-     * where it is drawn.
-     */
-    const cardCentreY = (g: PendingEntityGroup) => {
-      const lay = this.layoutOf(g, g.members.length);
-      return g.sy - (lay.height / 2) * scale;
-    };
-    /**
-     * The largest disc that fits INSIDE the card — "is this badge underneath
-     * my ink", which is a different question from "do we clear each other".
-     *
-     * It has to be the inscribed radius and not `cardHalfOf`'s circumscribed
-     * one. A 2x2 card's circumscribed disc is 1.41 units while its ink only
-     * reaches 1.0 on either axis, and `fits` accepts a badge from about 1.0
-     * plus a gap — so absorbing at 1.41 would swallow badges that are visibly
-     * clear of the card. That is deleting devices from the map to fix a bug
-     * about the opposite.
-     *
-     * ⚠️ Inscribed leaves exactly a `gapPx`-wide annulus between this and the
-     * box `fits` refuses at, and the absorb sweep adds `gapPx` back to close
-     * it — see the block there. This comment used to call that annulus "the
-     * right amount of nothing"; a badge in it refused its card and chipped
-     * every room the card covered.
-     */
-    const cardInscribedHalf = (g: PendingEntityGroup) => {
-      const lay = this.layoutOf(g, g.members.length);
-      return (Math.min(lay.width, lay.height) / 2) * scale * allow;
-    };
-    // A group is measured against OTHER GROUPS at the width it is actually
-    // DRAWN at — the file's oldest rule. Against badges it is measured at ONE
-    // badge box (`vsBadge`) instead; see `fits` for why that asymmetry is
-    // deliberate. Both of these used to branch on `drawnCells < 2` and fall
-    // back to `squareHalf` — the count badge's footprint, unreachable since
-    // 2.363.0. See the absorb block for the proof.
-    const groupHalf = (g: PendingEntityGroup) => cardHalfOf(g);
 
-    /** The same extent as `groupHalf`, kept as SEPARATE half-width and
-     *  half-height instead of collapsed into a circumscribed radius — see the
-     *  boxes-not-discs block in `fits`. */
-    const groupBox = (g: PendingEntityGroup): { hw: number; hh: number } => {
-      const lay = this.layoutOf(g, g.members.length);
-      return { hw: (lay.width / 2) * scale * allow, hh: (lay.height / 2) * scale * allow };
-    };
-    /** Only the plane metric puts both card axes on the screen's own axes;
-     *  see projectToView, which zeroes `pz` there and not in world3d. */
-    const planar = clearance.basis.mode === "plane";
 
-    // Fixed order (the key is stable and total), so which of two conflicting
-    // groups survives never depends on the order the solver emitted them in.
-    // Byte order, not localeCompare: collation is environment-dependent, and
-    // two clients must resolve the same conflict the same way.
-    pending.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
-    const placed: PendingEntityGroup[] = [];
-    /**
-     * Does this group clear every drawn badge, and every OTHER placed group, at
-     * whatever width `g.pair` currently asks for?
-     *
-     * `others` is passed rather than closed over because this runs in two
-     * passes and they need different sets — see below.
-     */
-    const focus = this.focusedRooms;
-    // ── WHY a seat was refused, in pixels (the `seat` debug channel) ───────
-    // `fits` is a boolean, and a boolean cannot answer "they are not even
-    // touching". This records the blocker and the per-axis SHORTFALL — how
-    // many pixels short of the required clearance the pair actually was — so a
-    // refusal can be read as a measurement instead of a verdict. Written only
-    // on the refusing comparison, so it costs one string per refusal and
-    // nothing at all when nothing is refused.
-    let why = "";
-    const shortfall = (dx: number, needX: number, dy: number, needY: number) =>
-      `dx=${dx.toFixed(0)}/${needX.toFixed(0)}(-${(needX - dx).toFixed(0)})`
-      + ` dy=${dy.toFixed(0)}/${needY.toFixed(0)}(-${(needY - dy).toFixed(0)})`;
-    const fits = (g: PendingEntityGroup, others: PendingEntityGroup[]): boolean => {
-      const mineHalf = groupHalf(g);
-      // ── A SUMMARY MUST CLEAR OTHER SUMMARIES; IT MAY OVERLAP A BADGE ─────
-      // Against BADGES a group is measured at the count's single-badge box,
-      // not at the card it draws. That is a deliberate, stated cost, and it
-      // grew when the card gained a second row: a 2x2 card occupies four badge
-      // boxes and reaches two badge-heights above its anchor, so it can be
-      // drawn over a badge that this test called clear.
-      //
-      // It stays anyway. Gating a card's EXISTENCE on its full box sends
-      // groups to their room's chip that a count would have seated, which is
-      // the outcome this whole tier exists to avoid — one visible regression
-      // traded for a worse one. What makes it survivable is that a covered
-      // badge is still REACHABLE: SceneManager's tap and long-press paths both
-      // ask the badges before answering for a card cell that is empty.
-      //
-      // (An earlier version of this comment justified the asymmetry with "the
-      // card is half as tall, so most of what it refused was a neighbour above
-      // or below it". That was true of a one-row card and is not true of a
-      // square one; it is corrected rather than left standing beside the
-      // opposite fact.)
-      //
-      // Two SUMMARIES on top of each other is a different matter and is still
-      // refused, at the card's circumscribed radius: that is two controls each
-      // claiming to stand for the other's devices, and it is the one thing
-      // this test still promises absolutely.
-      const vsBadge = squareHalf;
-      for (let j = 0; j < shown.length; j++) {
-        // Only badges that are actually DRAWN can be in the way, and a drawn
-        // badge is always at its own anchor because nothing here moves one —
-        // so the anchor is the position to test and there is no seat to look
-        // up. A badge already behind this or another summary is not on screen;
-        // testing it anyway made one room's chip push another room's group to
-        // a chip it never needed, an escalation cascade driven by geometry
-        // nobody could see. Safe to read both here: every solver decision is
-        // final by the time this runs.
-        if (this.entityGrouped.has(shown[j].id)) continue;
-        if (this.roomClustered.get(roomKey(this.roomOf(shown[j].id)))) continue;
-        // A FOCUSED room's badge blocks nobody — the same contract the `others`
-        // loop below already honours for focused groups, and the one
-        // PlacementItem.exempt states in the solver: "accepted unconditionally,
-        // AND never counted as a blocker for anyone else". This loop was the
-        // one place it was not honoured, so a focused room could push a
-        // NEIGHBOURING room's group to its chip while the focus lasted — the
-        // focus renegotiating the rest of the map, which is exactly what the
-        // exemption exists to prevent.
-        if (focus.has(roomKey(this.roomOf(shown[j].id)))) continue;
-        // The SAME rule as everywhere else on the glass since 2.406.0: boxes,
-        // per axis, not a radius against a scalar distance — `halfOf(j)` is
-        // max(halfW, halfH), which judged a wide badge's vertical clearance by
-        // its width. Plane metric only; the walk camera keeps the 3-axis
-        // distance, as it does in the summary-vs-summary loop below.
-        if (planar) {
-          const dx = Math.abs(g.sx - shown[j].sx);
-          const dy = Math.abs(cardCentreY(g) - shown[j].sy);
-          const needX = vsBadge + boxes[j].halfW * allow + gapPx;
-          const needY = vsBadge + boxes[j].halfH * allow + gapPx;
-          if (dx < needX && dy < needY) {
-            why = `badge ${shown[j].id} ${shortfall(dx, needX, dy, needY)}`;
-            return false;
-          }
-          continue;
-        }
-        const d = this.drawnDistance(
-          g.sx, cardCentreY(g), g.sz, shown[j].sx, shown[j].sy, shown[j].sz);
-        if (d < vsBadge + halfOf(j) * allow + gapPx) return false;
-      }
-      for (const o of others) {
-        if (o === g) continue;
-        // A focused pair blocks nobody, exactly as the badges it replaces did
-        // not (see PlacementItem.exempt). The focus is a deliberate, temporary
-        // state and it does not get to renegotiate the rest of the map.
-        if (o.focused) continue;
-        // ── BOXES, NOT DISCS — the correction the CHIP tier already made ────
-        // `cardHalfOf` is `hypot(width, height) / 2`: the CIRCUMSCRIBED radius
-        // of the card. Comparing two of those against a scalar distance is a
-        // disc test, and CLAUDE.md already records why that is wrong one tier
-        // down — "a chip is a wide short pill, so a circumscribed disc would
-        // chip half the villa, and since 2.287.0 the plane's axes ARE the
-        // screen's axes so an exact axis-aligned test is finally expressible".
-        // Cards are wide short pills too: the field capture that prompted this
-        // carried `cards=2x3,4x2`, and a 4x2 card's circumscribed radius is
-        // 2.2x its own half-height, so two of them one above the other were
-        // refused while their ink cleared easily.
-        //
-        // The consequence was not one card: a refusal escalates EVERY room the
-        // group covered, and dropEscalatedGroups then takes every group
-        // touching those rooms to a fixpoint — so a handful of false refusals
-        // collapse the whole villa at one zoom step. That is the reported
-        // "entities group too soon", recorded in sources/files/group.mov, where
-        // a room showing a readable 2x2 card with space around it becomes a
-        // "Master Bedroom 6" chip on the next rung.
-        //
-        // A box test can only refuse LESS than the disc that contains it, so
-        // the promise this function makes absolutely — two summaries never
-        // overlap — is preserved exactly and merely stops being approximated
-        // from the conservative side.
-        //
-        // Only in the PLANE metric, where projectToView sets `pz = 0` and the
-        // two axes ARE the screen's. The walk camera keeps the 3-axis distance
-        // for the same reason it keeps its own metric (see VIEW_METRIC).
-        if (planar) {
-          const mine = groupBox(g), theirs = groupBox(o);
-          const dx = Math.abs(g.sx - o.sx);
-          const dy = Math.abs(cardCentreY(g) - cardCentreY(o));
-          const needX = mine.hw + theirs.hw + gapPx;
-          const needY = mine.hh + theirs.hh + gapPx;
-          if (dx < needX && dy < needY) {
-            why = `card ${o.key}(${o.members.length}) ${shortfall(dx, needX, dy, needY)}`;
-            return false;
-          }
-          continue;
-        }
-        const d = this.drawnDistance(
-          g.sx, cardCentreY(g), g.sz, o.sx, cardCentreY(o), o.sz);
-        if (d < mineHalf + groupHalf(o) + gapPx) return false;
-      }
-      return true;
-    };
-
-    // ── ONE PASS. THE WIDTH IS NOT A DECISION ANY MORE ────────────────────
-    // A group of two is ALWAYS the full-size card, so there is nothing to
-    // upgrade and nothing to decline: one situation, one appearance, one
-    // behaviour, everywhere on the map.
-    //
-    // Two earlier shapes of this are worth remembering, because both were
-    // attempts to have it both ways. 2.256.0 asked for the wide card and
-    // settled for a smaller one per group, in key order — which let an early
-    // group's upgrade demote a later one. 2.257.0 fixed the unfairness with a
-    // seat-then-upgrade pass, and 2.259.0 made the fallback a half-scale card
-    // rather than a digit. What none of them fixed is that the SAME situation
-    // then drew as two visibly different objects depending on how crowded its
-    // corner of the villa happened to be, which is not a distinction anybody
-    // reading a floor plan can act on. Reported exactly that way, with both
-    // forms on screen at once.
-    //
-    // The cost is stated rather than hidden: a pair card may now OVERLAP a
-    // badge where the clearance test would have shrunk it. That test is a DISC
-    // of the card's half-WIDTH while the card is half as tall, so most of what
-    // it refused was a neighbour directly above or below — rejected on a
-    // distance the card does not occupy. It has to be a disc: it works in
-    // world distance scaled by the quantised zoom, and knowing which way a
-    // neighbour lies relative to the card's long axis would need the camera,
-    // which is the dependency this whole subsystem exists without.
-
-    // ── ABSORB: NOTHING IS LEFT DRAWN UNDERNEATH A SUMMARY ───────────────
-    // The bug this closes, in full, because it is not obvious and it survived
-    // a long time: for a pile of CO-LOCATED devices the solver accepts the
-    // highest-ranked one — still drawn, at its own anchor — and defers the
-    // rest. The card for those losers is drawn at THEIR centroid, which for a
-    // co-located pile is the same world point as the badge still drawn there.
-    // `fits` then measured `d = 0` against a requirement in fixed pixels, so
-    // `0 < requirement` held at EVERY zoom rung and the card was always
-    // refused, escalating the room to its chip.
-    //
-    // That is why zooming right in on such a room never decluttered it. Two
-    // points at the same place project to the same place at any zoom; no rung
-    // could ever satisfy the test. Every OTHER refusal in `fits` is a real
-    // separation that grows as the camera closes in, which is the behaviour
-    // people expect and were not getting.
-    //
-    // So: a summary swallows the drawn badges that lie inside its own ink,
-    // and only those (see cardInscribedHalf). It is the same reasoning as the
-    // solver's lone-deferral pull-back — a summary standing on top of a device
-    // it does not represent is a lie — applied at the one place that knows how
-    // big the summary is actually drawn.
-    //
-    // Batched per round, then the centroid is recomputed, then swept again:
-    // absorbing one at a time would move the centroid mid-round and make the
-    // result depend on which candidate was visited first. Membership only ever
-    // grows, so this cannot oscillate; the round bound is belt and braces.
-    let absorbed = 0;
-    for (const g of pending) {
-      // Focused groups already take whole piles and skip `fits`, so they have
-      // no badge of their own left to sit on — and eating a NEIGHBOURING
-      // pile's focused badge is the one thing the focus forbids.
-      if (g.focused) continue;
-      for (let round = 0; round <= shown.length; round++) {
-        const reach = cardInscribedHalf(g);
-        const inkY = cardCentreY(g);
-        const take: number[] = [];
-        for (let j = 0; j < shown.length; j++) {
-          if (this.entityGrouped.has(shown[j].id)) continue;
-          const rk = roomKey(this.roomOf(shown[j].id));
-          if (this.roomClustered.get(rk)) continue;
-          if (focus.has(rk)) continue;
-          // ── BOX vs BOX, ON EACH AXIS ─────────────────────────────────
-          // Burial is a question about two rectangles of ink, and it has to be
-          // tested as one. Two earlier shapes of this were both wrong in the
-          // same direction and each left the counter non-zero:
-          //
-          //   the badge's CENTRE against a disc (pre-2.289.0) — a badge
-          //   straddling the ink's edge, centre just outside and half of it
-          //   inside, was absorbed by nobody: outside this sweep, and inside
-          //   the ring `fits` starts refusing at;
-          //
-          //   the badge's centre against a disc GROWN by the badge's radius
-          //   (2.289.0) — better, but a disc still cannot reach the corners of
-          //   a square. `cardInk` in assertPlacementInvariants is the square
-          //   INSCRIBED in the card, so its corners stand 41% further out than
-          //   any disc of the same half-side, and a badge sitting in one was
-          //   still drawn half under the ink. That is the 1–4 the counter kept
-          //   reporting on both machines after 2.289.0.
-          //
-          // So: the same axis-aligned test the assertion uses, against the same
-          // square, grown per axis by the badge's own half-extents. Expressible
-          // for the same reason the chip test is (see CHIP_COLLISION): since
-          // 2.287.0 the plane's axes ARE the screen's axes, so "do these two
-          // rectangles overlap" is an exact question here, not one a radius has
-          // to stand in for.
-          //
-          // `sz` is the walk camera's depth residual and is identically 0 under
-          // the orbit camera, so keeping it as a third axis leaves first person
-          // separating down a corridor exactly as it did.
-          //
-          // ── THE `+ gapPx` IS WHAT MAKES A BADGE UNABLE TO REFUSE A CARD ──
-          // Without it this stops exactly `gapPx` short of the box `fits`
-          // starts refusing at (`vsBadge + halfW + gapPx`), and an earlier
-          // comment here called that annulus "the right amount of nothing".
-          // It is not nothing: a badge landing in that 2 CSS px band is
-          // neither absorbed nor clear, so its card is refused and EVERY room
-          // that card covered goes to its chip. A phone capture caught it three
-          // times in one zoom-in — `seat REFUSED … blocked by badge … dx=59/63`
-          // against the card's OWN pile-mate, chipping that room at rung 483
-          // when 456 and 542 either side of it drew every device. That is the
-          // non-monotone chip → entities → chip the tier may not have.
-          //
-          // With the gap included, the absorb box strictly CONTAINS the refusal
-          // box on every axis (`cardInscribedHalf >= squareHalf` for every
-          // arrangement — a card is at least one unit tall — and `allow <= 1`),
-          // so the two regions are one region and the outcome is total: a drawn
-          // badge is either clear of a summary or a cell inside it. A
-          // `seat REFUSED … blocked by badge` line is therefore now an
-          // invariant violation, not a measurement.
-          const dx = Math.abs(g.sx - shown[j].sx);
-          const dy = Math.abs(inkY - shown[j].sy);
-          const dz = Math.abs(g.sz - shown[j].sz);
-          if (dx < reach + boxes[j].halfW + gapPx
-            && dy < reach + boxes[j].halfH + gapPx
-            && dz < reach + halfOf(j) + gapPx) take.push(j);
-        }
-        if (take.length === 0) break;
-        for (const j of take) {
-          g.members.push(j);
-          // Claimed immediately, before any `fits` runs — otherwise the badge
-          // blocks its own group, and a second group in key order could claim
-          // it as well.
-          this.entityGrouped.add(shown[j].id);
-          const rk = roomKey(this.roomOf(shown[j].id));
-          if (!g.roomKeys.includes(rk)) g.roomKeys.push(rk);
-        }
-        absorbed += take.length;
-        // Everything the card reads about itself has to move with its
-        // membership. Miss any one of these and the absorbed device is in the
-        // group, hidden as a badge, and NOT drawn as a cell — invisible and
-        // untappable, which is worse than the overlap this is fixing.
-        this.sortCardMembers(shown, g.members);
-        // The RAW membership — `gridCells` decides what that draws as. This
-        // line shipped as the truncating one: absorb is the only producer that
-        // can push a group past the card's capacity, and clamping there would
-        // have drawn six of seven devices and left the seventh hidden with no
-        // cell to tap.
-        g.grid = g.members.length;
-        g.roomKeys.sort();
-        const primary = this.roomDisplay.get(g.roomKeys[0]) ?? g.roomKeys[0];
-        g.room = g.roomKeys.length > 1 ? `${primary} +${g.roomKeys.length - 1}` : primary;
-        let wx = 0, wy = 0, wz = 0;
-        for (const i of g.members) { wx += shown[i].wx; wy += shown[i].wy; wz += shown[i].wz; }
-        g.wx = wx / g.members.length;
-        g.wy = wy / g.members.length;
-        g.wz = wz / g.members.length;
-        // Re-derived, in the same statement as the centroid it comes from.
-        // Accumulating plane coordinates separately here is the drift bug in
-        // embryo, because absorb runs in ROUNDS.
-        const q = this.planeOf(clearance, g.wx, g.wy, g.wz);
-        g.sx = q.sx; g.sy = q.sy; g.sz = q.sz;
-      }
-
-      // ── THE TWO COUNT-BADGE TIERS ARE GONE, AND THEY WERE UNREACHABLE ──
-      // `strays` (2.294.0 — "a count must stand where its devices are", born of
-      // a badge reading "50" in the middle of the villa) and `wholeroom` (a
-      // count covering every badge its room shows IS the room, so defer to the
-      // chip, which at least says which room) both guarded the same thing: a
-      // summary that draws a NUMBER instead of its devices.
-      //
-      // 2.363.0 deleted that summary. Since then `drawnCells` cannot return
-      // less than two for any group that reaches here, so neither branch could
-      // fire — found by /dry-audit sweeping "everything that still expects a
-      // COUNT", the predicate that also turned up PHONE_MAX_TOTAL_CHIPS.
-      //
-      // Removed rather than left as dead insurance because each owned a
-      // `chipWhy` REASON, and an unreachable reason is worse than no reason: it
-      // prints as absent, which reads as "measured, did not happen" instead of
-      // "cannot happen". This session already lost four captures to a counter
-      // read that way.
-      //
-      // The proof, so a future member-pruning change knows what it would break:
-      // badgePlacement step 7 kills every bucket under two members before the
-      // caller sees it (`dead[b] = 1`, compacted at the `live` sweep);
-      // pairFocusedRoom skips piles under two; absorb only ever grows; and
-      // dropEscalatedGroups either keeps two or splices the group out. Restore
-      // BOTH branches if any of those four stops holding.
-    }
-    this.absorbed = absorbed;
-
-    // ── SEATING ORDER IS A CHOICE, AND IT WAS BEING MADE AT RANDOM ─────────
-    // This is a greedy fill: a card seated early occupies space a later card
-    // then cannot have, so which cards survive depends on the order they are
-    // tried. That order used to be `pending`'s, which is bucket order, which
-    // 2.366.0 established is inherited from the caller's item order — i.e. it
-    // carried no meaning at all.
-    //
-    // It is worth getting right because a refusal is not cheap: a card that
-    // cannot be seated hands EVERY room it covers to that room's chip, which
-    // hides those rooms' badges too, including ones the solver had already
-    // accepted and which were nowhere near the crowding. A `?debug` capture at
-    // one zoom rung showed 14 cards built, 4 seated, and 7 rooms chipped as a
-    // result — 30 badges accepted by the solver, 9 actually drawn.
-    //
-    // So the cost of refusing a card is measured in DEVICES, and the biggest
-    // groups are the ones worth seating first. Focused groups go ahead of
-    // everything (they are seated unconditionally anyway, and their space has
-    // to be reserved before anyone else claims it), then member count
-    // descending, then `key` — which is `grp|<pileKey>`, already unique and
-    // stable, so this is a total order and introduces no new order dependence
-    // of the kind 2.366.0 removed.
-    const seating = pending.slice().sort((a, b) =>
-      (a.focused === b.focused ? 0 : a.focused ? -1 : 1)
-      || b.members.length - a.members.length
-      || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
-    for (const g of seating) {
-      // A FOCUSED pair is seated unconditionally. It stands in for two badges
-      // that the room exemption was already drawing on top of each other, so a
-      // refusal would restore the exact overlap it exists to remove — and it
-      // can never escalate the focused room to its chip, which would break the
-      // one promise tapping a room makes.
-      if (g.focused) { placed.push(g); continue; }
-      if (!fits(g, placed)) {
-        // Nowhere to stand: this is room-level crowding after all. EVERY room
-        // the group covered escalates, not just its primary one — a group that
-        // straddles a boundary and then fails to place cannot leave half its
-        // members behind a chip and half loose.
-        //
-        // ⚠️ THIS IS THE AMPLIFIER, and the `seat` channel exists to size it.
-        // A field capture showed three refusals here turning into seven chipped
-        // rooms and thirteen lost cards across ONE 5.9% zoom step, while the
-        // solver's own verdict barely moved (25 accepted -> 23). So the number
-        // that matters is not whether a refusal is correct but how far it
-        // travels: each line names the blocker and the per-axis shortfall, and
-        // the CASCADE lines below name every room dragged along after it.
-        if (channelEnabled("seat")) {
-          // `box` vs `wasSpread` is the question the user actually asked: the
-          // MEMBERS were grouped because their badge boxes collided, but what
-          // gets seated is a CARD, and a card can be LARGER than the cluster it
-          // stands for (a 4-cell card is 2x2 badge boxes; four badges that
-          // merely touched occupied far less). If box >> wasSpread, the card
-          // manufactured the collision that refused it.
-          const bx = groupBox(g);
-          let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-          for (const m of g.members) {
-            minX = Math.min(minX, shown[m].sx); maxX = Math.max(maxX, shown[m].sx);
-            minY = Math.min(minY, shown[m].sy); maxY = Math.max(maxY, shown[m].sy);
-          }
-          this.seatLog.push(
-            `seat REFUSED ${g.key} n=${g.members.length}`
-            + ` card=${(bx.hw * 2).toFixed(0)}x${(bx.hh * 2).toFixed(0)}`
-            + ` members spanned ${(maxX - minX).toFixed(0)}x${(maxY - minY).toFixed(0)}`
-            + ` rooms=[${g.roomKeys.join("|")}] -> chips those rooms; blocked by ${why}`);
-        }
-        for (const k of g.roomKeys) this.chipRoom(k, "noseat");
-        continue;
-      }
-      placed.push(g);
-    }
-    this.dropEscalatedGroups(placed, shown);
-    pending.length = 0;
-    for (const g of placed) pending.push(g);
-  }
-
-  /**
-   * ── A DROPPED GROUP TAKES EVERY ROOM IT COVERED WITH IT ──────────────
-   * A group whose room was escalated by a LATER pile must not also draw: the
-   * chip already covers its members, and two renderings of the same content
-   * is how a viewer learns to distrust both.
-   *
-   * But dropping it is only half the move. This used to claim "the chip hides
-   * every badge in the room regardless, so nothing ends up hidden with
-   * nothing in its place", and that is true only of a SINGLE-ROOM group. A
-   * group straddling a boundary has members in a room that did not chip, and
-   * they stay marked in `entityGrouped` — hidden, with no summary and no
-   * chip. Invisible AND untappable, and the field log said so on nearly every
-   * pass: `PLACEMENT: N badge(s) hidden with no summary and no chip`.
-   *
-   * So it escalates all of its rooms, exactly as the `!fits` branch does for
-   * the same reason. That costs chips — the honest price of not losing a
-   * device — and it has to run to a FIXPOINT, because escalating a room can
-   * drop a group that was already past in the sweep, whose own rooms then have
-   * to go too. Bounded: every round drops at least one group.
-   *
-   * Extracted in 2.290.0 because CHIP_COLLISION escalates rooms from OUTSIDE
-   * this method and must settle the groups the same way. Writing a second
-   * escalation path is how the orphan bug in the paragraph above got made in
-   * the first place; there is one.
-   *
-   * Prunes `placed` IN PLACE.
-   */
-  private dropEscalatedGroups(placed: PendingEntityGroup[], shown: ShownLabel[]): void {
-    for (let round = 0; round <= placed.length; round++) {
-      let dropped = false;
-      for (let i = placed.length - 1; i >= 0; i--) {
-        const g = placed[i];
-        // The focused room is never chipped by its own pass, and another
-        // room's escalation must not take its card down either.
-        if (g.focused) continue;
-        if (!g.roomKeys.some((k) => this.roomClustered.get(k))) continue;
-        // ── A LOST ROOM RELEASES THE OTHERS; IT NO LONGER CHIPS THEM ────────
-        // This used to chip EVERY room the group covered, and that made a
-        // cross-room group a BRIDGE a single refusal walks the villa across.
-        // Measured, from the field capture that prompted this — ONE refusal in
-        // the living room:
-        //     drop camera.main_house_door_cam   -> ALSO chips [outdoor]
-        //     drop binary_sensor.motion1        -> ALSO chips [staircase]
-        //     drop fan.ceiling_fan_patio_terrace-> ALSO chips [patio 1f]
-        //     drop binary_sensor.motion0        -> ALSO chips [master bathroom]
-        // Five rooms chipped because ONE card in a sixth had nowhere to stand.
-        // No device in `outdoor` was crowded; it lost its badges because a
-        // group it shared with the living room was tidied away.
-        //
-        // The reason it chipped them was real and is preserved differently:
-        // those members stay marked in `entityGrouped`, so dropping the group
-        // without a plan leaves them hidden with no summary and no chip — the
-        // orphan bug this method was extracted to prevent. But chipping their
-        // room was never the only answer to that, merely the loudest. The
-        // members whose OWN room did not chip are RELEASED instead: the
-        // partners that crowded them are behind a chip now and off the glass,
-        // so the honest thing is to draw them at their own anchors again.
-        //
-        // Two or more survivors keep their card (pruned, so it SHRINKS — the
-        // strictly safer direction for a seating test that already passed);
-        // one survivor draws as a badge; none drops silently. Nothing is
-        // orphaned in any branch, and no room is chipped here at all, so the
-        // bridge is cut rather than narrowed. Termination is now trivial:
-        // `roomClustered` gains nothing in this method, so one pass suffices.
-        const keep: number[] = [];
-        for (const m of g.members) {
-          if (!this.roomClustered.get(roomKey(this.roomOf(shown[m].id)))) keep.push(m);
-        }
-        if (channelEnabled("seat") && keep.length) {
-          this.seatLog.push(
-            `seat RELEASE ${g.key} n=${g.members.length}`
-            + ` (room ${g.roomKeys.filter((k) => this.roomClustered.get(k)).join("|")} chipped)`
-            + ` -> ${keep.length >= 2 ? `card keeps ${keep.length}` : "1 badge redrawn"}`
-            + `, chips nothing`);
-        }
-        if (keep.length >= 2) {
-          // Survives as a smaller card. Its rooms are by construction the
-          // un-chipped ones, so it cannot be re-entered on a later round.
-          g.members = keep;
-          // `grid` moves WITH the membership. It was left stale here, and only
-          // two coincidences hid it: every reader takes `min(g.grid, length)`,
-          // and `cellMax`'s `g.grid` arm is focused-only while a focused group
-          // never reaches this method. Neither is a rule, so neither is a
-          // guarantee — absorb already updates the pair together, and so does
-          // this. (/dry-audit)
-          g.grid = keep.length;
-          g.roomKeys = [...new Set(keep.map((m) => roomKey(this.roomOf(shown[m].id))))].sort();
-          continue;
-        }
-        for (const m of keep) this.entityGrouped.delete(shown[m].id);
-        placed.splice(i, 1);
-        dropped = true;
-      }
-      if (!dropped) break;
-    }
-  }
-
-  /**
-   * Pair up the FOCUSED room's own overlapping badges.
-   *
-   * ── The gap this closes ───────────────────────────────────────────────────
-   * Tapping a room grants it an exemption: its badges are accepted
-   * unconditionally and are never counted as blockers, because "tap a room,
-   * see its devices" is a promise the layout is not allowed to renegotiate,
-   * and two devices at ONE point are separated by no zoom that exists. So the
-   * zoom solver frames the room, and anything genuinely co-located inside it —
-   * a ceiling fan, its own light, the sensor clipped to the same mount — draws
-   * stacked.
-   *
-   * Stacked is where the promise quietly stops being kept. `badgeContaining`
-   * returns the TOPMOST control containing the point, so a badge completely
-   * covered by another cannot be tapped at all: the device is on screen and
-   * unreachable, which is a worse answer than the chip the exemption exists to
-   * avoid.
-   *
-   * A pair card fixes exactly that and nothing else. It shows both
-   * pictograms, in their own colours and their own live states, and gives each
-   * a tap target — so the room's devices are MORE visible and MORE reachable
-   * than the stack was, which is the promise, kept properly.
-   *
-   * ── Why it is a second pass rather than a change to the first ────────────
-   * The exemption is a property of the MAIN pass and has to stay one: a
-   * focused badge must not block anybody, and letting exempt items into that
-   * graph would make them blockers. So this runs over the focused room alone,
-   * with the exemption dropped so its badges are compared with each other, and
-   * with the SAME overlap predicate (`conflicts`) and the SAME canonical order
-   * the rest of the subsystem uses. Nothing about the main result changes and
-   * badgePlacement is untouched.
-   */
-  private pairFocusedRoom(
-    shown: ShownLabel[],
-    items: readonly PlacementItem[],
-    clearance: { gap: number; minSep: number; pxPerWorld: number; basis: ViewBasis },
-    pending: PendingEntityGroup[],
-  ): void {
-    const focus = this.focusedRooms;
-    if (focus.size === 0) return;
-    // Indices into `shown`, so a strip's members map straight back.
-    const idx = this.focusIdx;
-    idx.length = 0;
-    const sub = this.focusItems;
-    for (let i = 0; i < items.length; i++) {
-      if (!focus.has(items[i].room)) continue;
-      const src = items[i];
-      let it = sub[idx.length];
-      if (!it) {
-        it = { sx: 0, sy: 0, sz: 0, reach: 0, reachY: 0, rank: 0, sortKey: "", category: "", room: "", exempt: false };
-        sub[idx.length] = it;
-      }
-      it.sx = src.sx; it.sy = src.sy; it.sz = src.sz;
-      // ⚠️ reachY TOO, AND ITS ABSENCE WAS THE BUG (2.429.0). This copied every
-      // field of the item EXCEPT reachY, so the pooled 0 it was constructed
-      // with survived into `conflicts` — and reachY is the entire VERTICAL half
-      // of the collision rule. needY collapsed from
-      // `halfH_a + halfH_b + gap` to `max(gap, minSep)` = the tap pitch alone:
-      // 24 render px demanded where 50 is drawn, at icon 1.00x/css 1.00.
-      //
-      // The axis it broke is the one that matters most here. badgeProjection
-      // SUMS world height (at cos tilt) and depth (at sin tilt) onto the
-      // screen's VERTICAL, so two devices at one floor spot at different
-      // heights — a ceiling fan and the floor lamp under it, a "..._top" light
-      // and the "..._bottom" LED on the same fitting — separate almost entirely
-      // in Y. Those are exactly the pairs this failed to pair, so they drew
-      // stacked while horizontally-offset pairs (whose `reach` was correct)
-      // paired fine. Reported from a screenshot as entities overlapping, with
-      // the right guess attached: "some assets are on the floor and others
-      // higher on the wall, and the collision algorithm is failing".
-      //
-      // That is also why `PLACEMENT: N overlapping pair(s) inside the FOCUSED
-      // room` was never zero — the counter measures with the REAL boxes while
-      // the pairing decided with a flat 0, so the two could not agree.
-      it.reach = src.reach; it.reachY = src.reachY; it.rank = src.rank;
-      it.sortKey = src.sortKey; it.category = src.category; it.room = src.room;
-      it.exempt = false;
-      idx.push(i);
-    }
-    sub.length = idx.length;
-    if (idx.length < 2) return;
-
-    // ── MUTUAL overlap, not TRANSITIVE reachability ──────────────────────
-    // The predicate is the same one every other tier uses. What changed is how
-    // a set is built out of it.
-    //
-    // Union-find answers "is there a CHAIN of overlaps from A to B", and inside
-    // one room that is almost always yes: A touches B, B touches C, and eleven
-    // badges strung across a living room collapse into a single component
-    // whose members mostly do not overlap each other at all. Tapping the room
-    // then produced one summary reading `11` — the opposite of the promise the
-    // focus makes, and the third time this exact chain has bitten (2.261.0
-    // painted the same component as a card the width of the screen; capping
-    // the card turned it into this digit instead of fixing it).
-    //
-    // A group here is therefore a CLIQUE: every member overlaps every other
-    // member. That is the honest reading of "these cannot be drawn separately",
-    // and it is what makes the card's claim true — the devices it hides really
-    // were all on top of one another. A chain breaks into the several small
-    // groups it always was, and everything else stays a badge of its own.
-    //
-    // Greedy, in the canonical (rank, entity_id) order every other decision
-    // here uses, so the result depends on nothing but geometry and rank. Capped
-    // at what a card can DRAW, so a clique never becomes a count: a group that
-    // cannot show its devices is not an answer to "show me this room's
-    // devices". ⚠️ That is a property of the CLIQUES only — the card-vs-card
-    // merge below can still take a pile past the cap, deliberately; see it for
-    // the trade.
-    //
-    // One room's badges, so the plain O(n^2) sweep is cheaper than any index.
-    // `sub` is indexed locally; `sortCardMembers` speaks in `shown` indices.
-    // Going through it rather than repeating its comparator is the point — one
-    // definition of "the canonical order", shared with the card renderer.
-    const local = new Map<number, number>();
-    for (let k = 0; k < idx.length; k++) local.set(idx[k], k);
-    const order = this.sortCardMembers(shown, idx.slice())
-      .map((i) => local.get(i) as number);
-    // The clique build lives in badgePlacement.buildCliques — pure, and
-    // testable for the property that actually broke here: a clique whose
-    // members are valid but SPREAD draws its card at a centroid none of them
-    // is near. Candidates are offered nearest-first with category as the
-    // tiebreak; `order` still seeds and still breaks every remaining tie.
-    // ⚠️ cardCellCap(), NOT the raw MAX_TOTAL_CHIPS — the one MEASURED answer
-    // to "how many cells fit on this screen", which the solver's own
-    // `drawableMax` has always come through. This was a third answer: it built
-    // cliques of 6 on a narrow phone while cardCellCap allowed fewer, so a
-    // tapped room could produce a card the renderer could not draw in full.
-    // Found by /dry-audit against `drawableMax`.
-    const piles = buildCliques(
-      sub, order, clearance.gap, clearance.minSep, this.cardCellCap());
-
-    // ── …and then the CARDS must clear each other ─────────────────────────
-    // The cliques above are built from where the BADGES are. What gets drawn
-    // is a CARD, and a card is far bigger than the badge it replaces — a 2x2
-    // is two badge boxes wide and two tall. So two cliques whose badges never
-    // touched can produce two cards that sit right on top of each other, which
-    // is what a tapped room actually looked like: a stack of overlapping white
-    // boxes where the promise was "your devices, side by side".
-    //
-    // Nothing here moves; that rule is absolute in this file. Two cards that
-    // collide become ONE card, which is the same answer every other tier in
-    // this subsystem gives (piles merge, chips merge). Repeated to a fixpoint
-    // because merging grows the survivor and can bring it into contact with a
-    // third — bounded by the pile count, since every round strictly reduces it.
-    //
-    // ⚠️ A merged pile CAN now exceed what a card can draw, and then it draws a
-    // count. The comment above says a focused room can never show one; that was
-    // true while piles were capped, and it is the smaller of the two evils it
-    // was weighed against — but overlapping cards is the LARGER one, and a
-    // count here is honest in a way the "50" of 2.294.0 was not: these devices
-    // are piled by construction, since their own cards could not be told apart.
-    if (piles.length > 1) {
-      const scale = this.effectiveScale();
-      const gapPx = this.metrics.minGapPx * scale;
-      const boxOf = (pile: number[]) => {
-        let wx = 0, wy = 0, wz = 0;
-        for (const k of pile) { const i = idx[k]; wx += shown[i].wx; wy += shown[i].wy; wz += shown[i].wz; }
-        const n = pile.length;
-        const q = this.planeOf(clearance, wx / n, wy / n, wz / n);
-        // The pile's OWN size, not a shared cap: these piles are focused, so
-        // the renderer will draw one cell per member (see cellMax), and
-        // measuring them against any smaller number sizes a box the card is
-        // about to overflow.
-        const lay = this.cardOf(pile.length, pile.length, this.cardBudget());
-        const hh = (lay.height / 2) * scale;
-        // Anchored bottom-edge-on-anchor exactly as the renderer draws it —
-        // this file's oldest rule, and the one 2.288.0 had to restate.
-        return { cx: q.sx, cy: q.sy - hh, hw: (lay.width / 2) * scale + gapPx, hh: hh + gapPx };
-      };
-      // ⚠️ The fixpoint itself lives in badgePlacement.mergeCollidingPiles, and
-      // it moved there because the loop bound written here was wrong: it read
-      // `round < piles.length`, and `piles.length` shrinks on every merge while
-      // `round` grows, so the two met in the middle after about half the merges
-      // a full collapse needs. Two and three piles happen to need the same
-      // number either way, which is why it survived; from four up it exited
-      // early and drew the overlapping cards this was written to prevent.
-      // Out there it is a pure function over boxes and has a test.
-      mergeCollidingPiles(piles, boxOf);
-    }
-
-    for (const pile of piles) {
-      // ── ONE PILE, ONE CONTROL. THE SIZE DECIDES WHICH ─────────────────
-      // A pile is a set of badges that are on top of each other, so it draws
-      // as exactly one thing — its devices side by side (up to a 2x2 card), or
-      // a count.
-      //
-      // That is one control per pile, and NOT the stronger claim an earlier
-      // version of this comment made ("nothing inside a focused room can
-      // overlap"). Pile separation comes from each badge's half-WIDTH, so two
-      // piles can sit about a badge apart while each draws a card two badges
-      // across and two tall — and focused cards skip `fits` entirely, by
-      // design, because refusing one restores the overlap it exists to remove.
-      // One control per pile is a large improvement on a stack of four; it is
-      // not a guarantee, and saying so here is cheaper than a screenshot.
-      //
-      // The bound that matters is the CARD's, and it is on the strip below,
-      // not here. Three earlier shapes of this got the bound wrong:
-      //
-      //   2.260.0  took each pile's LOSERS. A pile of three drew an accepted
-      //            badge plus a card of the other two at the same point — the
-      //            overlap came back with an extra control in it.
-      //   2.261.0  took the whole pile as a card of N chips. A focused room
-      //            whose badges transitively touch is ONE pile, so it painted
-      //            a single card the full width of the screen.
-      //   2.262.0  took only piles of exactly two, which left every pile of
-      //            three or more stacked — reported, with three cameras and
-      //            two lights drawn on top of each other.
-      //   2.267.0  capped the CARD instead of the pile, so the screen-wide card
-      //            became a summary reading `11` in a room with visible space
-      //            all round it — reported as "I expect to see the entities".
-      //
-      // The whole clique, and the clique is built no larger than a card can
-      // draw (see above), so a focused room cannot produce a count badge at
-      // all. Bounded where the set is BUILT rather than where it is drawn:
-      // capping the drawing only ever turns "too many to show" into "showing
-      // none of them".
-      if (pile.length < 2) continue;
-      // The same cell order the main solve's cards use — one comparator, so
-      // the two producers cannot drift.
-      const members = this.sortCardMembers(shown, pile.map((k) => idx[k]));
-      const pairRooms = [...new Set(members.map((i) => roomKey(this.roomOf(shown[i].id))))];
-      let wx = 0, wy = 0, wz = 0;
-      let pileKey = shown[members[0]].id;
-      for (const i of members) {
-        wx += shown[i].wx; wy += shown[i].wy; wz += shown[i].wz;
-        if (shown[i].id < pileKey) pileKey = shown[i].id;
-        this.entityGrouped.add(shown[i].id);
-      }
-      const n = members.length;
-      pending.push({
-        // Distinct namespace from the main solve's `grp|`: the same devices
-        // can be a focused strip now and an ordinary group after the focus
-        // lapses, and giving them one key would reuse a control whose
-        // placement rules just changed.
-        key: `fgrp|${pileKey}`,
-        // Taken from the MEMBERS, not from "the focused room": with several
-        // rooms focused at once (a merged chip's short tap) a pair can straddle
-        // two of them, and naming it after whichever was focused first would
-        // file it under a room half its devices are not in.
-        room: this.roomDisplay.get(pairRooms[0]) ?? pairRooms[0],
-        roomKeys: pairRooms,
-        members,
-        wx: wx / n, wy: wy / n, wz: wz / n,
-        // Derived from the world centroid, by the one projection — see planeOf.
-        ...this.planeOf(clearance, wx / n, wy / n, wz / n),
-        // Same rule as the main solve, and it is badgeCard's rule, not a copy
-        // of it: `gridCells` is where "more than a card can hold" becomes the
-        // count badge.
-        grid: n,
-        focused: true,
-      });
-      this.focusPairs++;
-    }
-  }
 
   /**
    * THE geometry of a summary card that carries pictograms — for every form of
@@ -8064,6 +5224,38 @@ export class EntityVisuals {
     return this.cardOf(this.drawnCells(g, memberCount), this.cellMax(g), this.cardBudget());
   }
 
+  /**
+   * ⚠️ HISTORICAL NOTE, not a live constant. There is NO cell ceiling for a
+   * FOCUSED group's card — the one a room chip's tap produces — and this records
+   * why, because "add a cap" is the obvious-looking change that keeps being
+   * proposed. (`FOCUS_MAX_CHIPS` was deleted here; `badgeCard.cellMax` still
+   * points at this paragraph.)
+   *
+   * MAX_TOTAL_CHIPS (6) is set by the summary-vs-summary clearance test: a wide
+   * arrangement claims a wide disc and starts escalating rooms to their chip. A
+   * focused group is seated UNCONDITIONALLY and can never escalate its room, so
+   * that test — the entire reason for the cap — does not apply to it.
+   *
+   * ⚠️ 2.304.0 let a focused pile exceed the cap and fall through to a COUNT
+   * badge, and wrote it up as a deliberate trade against overlapping cards. It
+   * was neither deliberate nor a trade the user had left open: tapping a room
+   * must show that room's DEVICES, which had been stated twice, and an "8" in
+   * the middle of the pool is the same answer the chip already gave. Both had to
+   * go, and the way to have both is a card that can actually draw its members.
+   *
+   * The real bound is physical and already exists — the width budget, which
+   * `arrange` wraps into — so a focused group has NO cell ceiling of its own.
+   *
+   * ⚠️ There WAS one, `FOCUS_MAX_CHIPS = 12`, and it was chosen as "high enough
+   * that the viewport is what decides". It wasn't. A focused pile of nineteen
+   * (a Living Room tap) hit it, `gridCells` refused anything over its max by
+   * returning ZERO cells, and zero cells is a count badge — so the one code path
+   * that must never produce a number produced a "19". A fixed ceiling next to a
+   * physical one is always a second bound that can bind first, and the fix is
+   * not a bigger number: it is no number. `cellMax` returns the group's own
+   * membership for a focused group, so the clamp can never be the thing that
+   * refuses, and the budget stays the only bound.
+   */
   /** The cell ceiling this group is entitled to. A FOCUSED group has none —
    *  it is entitled to a cell per member, and the width budget decides the
    *  shape. See the note where FOCUS_MAX_CHIPS used to be. */
@@ -8425,179 +5617,6 @@ export class EntityVisuals {
 
   // ── Room clusters (the "clusters" LOD band) ───────────────────────────────
 
-  /**
-   * Collapse the visible badges into one chip per room, anchored at the
-   * world-space centroid of that room's badge anchors. Because the anchor is
-   * a fixed point in the SCENE rather than a solved screen position, the chip
-   * projects to a continuous screen path as the camera moves — it physically
-   * cannot exhibit the jitter this whole mechanism exists to remove.
-   *
-   * Membership comes from resolvedRooms (roomOf), the same live-resolved room
-   * SummaryGroupPanel groups by, so tapping a chip can hand its entity list
-   * straight to that existing modal instead of inventing a second grouping
-   * concept.
-   */
-  /**
-   * Derive the room chips, then let them take part in the collision they were
-   * the answer to — see CHIP_COLLISION for why they did not until 2.290.0 and
-   * why only ONE direction of escalation is available here.
-   *
-   * A drawn badge or a placed card overlapping a chip sends its OWN room(s) to
-   * their own chip. Never the reverse: a chip is already the last tier, so
-   * "yield to the badge" has nothing to yield to. That asymmetry is what makes
-   * this terminate — `roomClustered` only ever gains keys, and there are
-   * finitely many rooms, which is the same monotonicity the existing chip
-   * cascade runs on.
-   *
-   * Boxes, not discs, and that is now expressible: a chip is a wide, short
-   * pill (a room name plus a count), so a circumscribed disc would reserve
-   * most of its own width above and below itself and chip half the villa.
-   * Since 2.287.0 the plane's axes ARE the screen's axes, so an exact
-   * axis-aligned test is available where a radial approximation used to be the
-   * only honest option. The chip-vs-chip merge in `deriveChips` has always
-   * tested boxes for the same reason.
-   *
-   * Returns the chips to draw; `pending` is pruned in place to the groups that
-   * survived.
-   */
-  private settleChips(
-    shown: ShownLabel[],
-    boxes: { halfW: number; halfH: number; cy: number }[],
-    pending: PendingEntityGroup[],
-    clearance: { pxPerWorld: number; basis: ViewBasis } | null,
-  ): RoomChip[] {
-    // UNMERGED inside the loop — see CHIP_COLLISION. The merge is a function of
-    // where the camera stands, so a merged obstacle set would hand the one test
-    // that decides what is drawn back to the camera's position, and would let a
-    // pill splitting at the next zoom rung drop a brand-new box onto a room
-    // that had just expanded. Merging happens once, at the end, to the set that
-    // is actually rendered.
-    let chips = this.deriveChips(shown, false);
-    if (!CHIP_COLLISION || !clearance || clearance.pxPerWorld <= 0) {
-      return this.deriveChips(shown);
-    }
-    const scale = this.effectiveScale();
-    const gapPx = this.metrics.minGapPx * scale;
-    const focus = this.focusedRooms;
-    const half = (this.summaryMetrics().size / 2) * scale;
-    // One round per room is the worst case: each has to be able to escalate,
-    // and nothing can un-escalate. The `<=` is the belt to that braces.
-    for (let round = 0; round <= this.roomDisplay.size; round++) {
-      // A chip is drawn ENTIRELY ABOVE its anchor — renderChips sets
-      // linkOffsetYInPixels to minus half its height, exactly as a badge and a
-      // card do. Measured where it is DRAWN, which is this file's oldest rule
-      // and the one 2.288.0 had to restate for badges and cards.
-      const chipBoxes = chips.map((c) => {
-        const q = this.planeOf(clearance, c.centre.x, c.centre.y, c.centre.z);
-        return { cx: q.sx, cy: q.sy - half, hw: c.halfW + gapPx, hh: half + gapPx };
-      });
-      const clears = (cx: number, cy: number, hw: number, hh: number) => {
-        for (const b of chipBoxes) {
-          if (Math.abs(cx - b.cx) < hw + b.hw && Math.abs(cy - b.cy) < hh + b.hh) return false;
-        }
-        return true;
-      };
-      let escalated = false;
-      // Drawn badges. The same three exclusions `fits` applies, for the same
-      // reasons: a grouped badge is not drawn, a chipped room's badge is not
-      // drawn, and a FOCUSED room's badge blocks nobody and is not allowed to
-      // spend its own room's chip either — tapping a room must not be able to
-      // make that room disappear.
-      for (let i = 0; i < shown.length; i++) {
-        const s2 = shown[i];
-        if (this.entityGrouped.has(s2.id)) continue;
-        const rk = roomKey(this.roomOf(s2.id));
-        if (this.roomClustered.get(rk)) continue;
-        if (focus.has(rk)) continue;
-        if (clears(s2.sx, s2.sy, boxes[i].halfW, boxes[i].halfH)) continue;
-        this.chipRoom(rk, "chip-v-badge");
-        escalated = true;
-      }
-      // Placed summaries, measured at the card they actually draw.
-      for (const g of pending) {
-        if (g.focused) continue;
-        if (g.roomKeys.some((k) => this.roomClustered.get(k))) continue;
-        const lay = this.layoutOf(g, g.members.length);
-        const hh = (lay.height / 2) * scale;
-        if (clears(g.sx, g.sy - hh, (lay.width / 2) * scale, hh)) continue;
-        for (const k of g.roomKeys) this.chipRoom(k, "chip-v-card");
-        escalated = true;
-      }
-      if (!escalated) break;
-      // The EXISTING fixpoint, not a second escalation path — a group whose
-      // room just chipped has to take every other room it covered with it or
-      // its members are hidden with nothing in their place.
-      this.dropEscalatedGroups(pending, shown);
-      chips = this.deriveChips(shown, false);
-    }
-    // Only now, and only for the render: the escalation above is settled, so
-    // merging can no longer change which badges are drawn — which is the
-    // property its own docstring has always claimed.
-    const rendered = this.deriveChips(shown);
-    if (focus.size === 0) return rendered;
-
-    // ── A FOCUSED ROOM'S DEVICES OUTRANK ANOTHER ROOM'S LABEL (2.431.0) ─────
-    // Reported three times, last with a screenshot: focus a room and its badges
-    // sit on top of other rooms' chips. 2.430.0 fixed WHICH of them paints in
-    // front and which answers a tap; it could not remove the overlap, and the
-    // owner's rule is that things must not overlap at all.
-    //
-    // Nothing above can resolve it, and that is structural rather than an
-    // oversight:
-    //
-    //   * the focused room's badges are EXEMPT — they block nobody and may not
-    //     spend their own room's chip, because tapping a room must not be able
-    //     to make that room vanish. So the escalation loop skips them, by
-    //     design, three times over;
-    //   * a chip may never be DISPLACED — "a chip must never leave the room it
-    //     names" is one of the five forbidden fixes, and relaxBoxes was deleted
-    //     in 2.120.0 for flinging one clear off the villa.
-    //
-    // It is also geometrically unavoidable for the case that prompted it: the
-    // focused room was `Outdoor`, which SURROUNDS the others, so its devices
-    // land near interior rooms' centroids however the camera is placed. No gap,
-    // metric or lattice can separate a point inside a room from that room's own
-    // label.
-    //
-    // So the chip yields. While a focus is active a chip is not the last tier
-    // for a crowded room — it is a navigation label for a room the user has
-    // just said they are NOT looking at, and every other room's devices are
-    // already hidden by the focus itself. Dropping the two or three that
-    // actually collide costs one tap of navigation (exit focus, tap the room)
-    // and buys the clean view the focus was asked for.
-    //
-    // ⚠️ This is NOT the orphan bug. That rule guards a room whose devices were
-    // hidden BY CROWDING and would then have no representation at all; here the
-    // hiding is the focus, it is modal, and leaving it restores everything. And
-    // it runs on the RENDER set only, after the escalation fixpoint — exactly
-    // where merging runs, and for the same reason: it must not be able to
-    // change which badges are drawn. `roomClustered` gains nothing here, so
-    // termination is untouched.
-    const focusBoxes: { cx: number; cy: number; hw: number; hh: number }[] = [];
-    for (let i = 0; i < shown.length; i++) {
-      if (this.entityGrouped.has(shown[i].id)) continue;
-      if (!focus.has(roomKey(this.roomOf(shown[i].id)))) continue;
-      // The same box the escalation loop above measures a badge with.
-      focusBoxes.push({
-        cx: shown[i].sx, cy: shown[i].sy, hw: boxes[i].halfW, hh: boxes[i].halfH,
-      });
-    }
-    for (const g of pending) {
-      if (!g.focused) continue;
-      const lay = this.layoutOf(g, g.members.length);
-      const hh = (lay.height / 2) * scale;
-      focusBoxes.push({ cx: g.sx, cy: g.sy - hh, hw: (lay.width / 2) * scale, hh });
-    }
-    if (focusBoxes.length === 0) return rendered;
-    return rendered.filter((c) => {
-      const q = this.planeOf(clearance, c.centre.x, c.centre.y, c.centre.z);
-      const cx = q.sx, cy = q.sy - half, hw = c.halfW + gapPx, hh = half + gapPx;
-      for (const b of focusBoxes) {
-        if (Math.abs(cx - b.cx) < hw + b.hw && Math.abs(cy - b.cy) < hh + b.hh) return false;
-      }
-      return true;
-    });
-  }
 
   /**
    * `merge` is false for the collision pass and true (the default) for the set
@@ -8632,24 +5651,14 @@ export class EntityVisuals {
     // roomClustered).
     // Keyed by roomKey() like roomClustered itself, so two spellings of one
     // HA Area produce one chip rather than two overlapping ones.
-    const groups = new Map<string, { ids: string[]; sum: Vector3; ringRed: boolean; unavailable: boolean }>();
-    for (const s of shown) {
-      const key = roomKey(this.roomOf(s.id));
-      if (!this.roomClustered.get(key)) continue;
-      let g = groups.get(key);
-      if (!g) { g = { ids: [], sum: Vector3.Zero(), ringRed: false, unavailable: false }; groups.set(key, g); }
-      g.ids.push(s.id);
-      g.sum.addInPlace(s.lbl.anchor.getAbsolutePosition());
-      const st = this.lastState.get(s.id);
-      if (st) {
-        const kind = this.badgeKind(s.lbl.type, st);
-        // Same rule as the individual badge ring (BADGE_RING): "on" and
-        // "alert" both ring red, "unavailable" does not — dimming is that
-        // kind's own signal, not a ring (see BADGE_RING's comment).
-        if (kind === "on" || kind === "alert") g.ringRed = true;
-        if (kind === "unavailable") g.unavailable = true;
-      }
-    }
+    // Which badges each chip stands for — roomChips.bucketRoomChips.
+    const members = shown.map((sh) => {
+      const st = this.lastState.get(sh.id);
+      const p = sh.lbl.anchor.getAbsolutePosition();
+      return { id: sh.id, room: roomKey(this.roomOf(sh.id)), pos: { x: p.x, y: p.y, z: p.z },
+               kind: st ? this.badgeKind(sh.lbl.type, st) : undefined };
+    });
+    const seeds = bucketRoomChips(members, (k) => !!this.pass.roomClustered.get(k), (k) => this.pass.roomDisplay.get(k) ?? k);
 
     const scale = this.effectiveScale();
 
@@ -8711,19 +5720,8 @@ export class EntityVisuals {
       c.halfH = (this.summaryMetrics().size / 2) * scale;
     };
 
-    const chips: RoomChip[] = [];
-    for (const [key, g] of groups) {
-      // Back to the raw spelling for anything a person reads or taps: the key
-      // is a Map key only (CLAUDE.md), and roomDisplay holds what to print.
-      const room = this.roomDisplay.get(key) ?? key;
-      const c: RoomChip = {
-        key, keys: [key], room, label: room, ids: g.ids.slice(), centre: g.sum.scale(1 / g.ids.length), rooms: 1, roomNames: [room],
-        ringRed: g.ringRed, unavailable: g.unavailable,
-        x: 0, y: 0, halfW: 0, halfH: 0,
-      };
-      measure(c);
-      chips.push(c);
-    }
+    const chips: RoomChip[] = seeds;
+    for (const c of chips) measure(c);
 
     if (merge && vp && chips.length > 1) {
       // ── THE SAME GAP AS EVERY OTHER TIER (2.419.0) ────────────────────
@@ -8760,21 +5758,8 @@ export class EntityVisuals {
         chips,
         gap,
         (c) => c.ids.length,
-        (keep, drop) => {
-          const a = keep, b = drop;
-          const na = a.ids.length, nb = b.ids.length;
-          keep.centre = a.centre.scale(na / (na + nb))
-            .addInPlace(b.centre.scale(nb / (na + nb)));
-          keep.ids = keep.ids.concat(drop.ids);
-          keep.rooms = a.rooms + b.rooms;
-          // Keep the NAMES, not just the count: a merged chip has to be able to
-          // offer the rooms it swallowed when it is tapped, and "+2" cannot.
-          keep.roomNames = [...a.roomNames, ...b.roomNames];
-          keep.keys = [...a.keys, ...b.keys];
-          keep.ringRed = a.ringRed || b.ringRed;
-          keep.unavailable = a.unavailable || b.unavailable;
-          measure(keep);
-        },
+        // What the merged chip becomes — roomChips.combineChips.
+        (keep, drop) => { combineChips(keep, drop); measure(keep); },
       );
     }
 
@@ -8868,10 +5853,8 @@ export class EntityVisuals {
     }
   }
 
-  /** This pass's `seat` detail, flushed by logPlacement on a real change. */
   /** Whole-villa fit radius, or 0 for no zoom shrink. See setIconZoomFit. */
   private iconZoomFitRadius = 0;
-  private seatLog: string[] = [];
 
   /** Previous frame's DRAWN chip position per room key, for watchChipJump. */
   private lastChipDraw = new Map<
@@ -8958,10 +5941,10 @@ export class EntityVisuals {
       // which badges are drawn and cannot feed back into any collision test.
       // It is also `every`, not `some` — a chip stands for its whole room, and
       // one visible device in that room is reason enough to keep the room's
-      // label on the glass. `occludedIds` is empty in overview, so this is a
+      // label on the glass. the occluded set is empty in overview, so this is a
       // set lookup that can never fire there.
       if (this.firstPerson && chip.ids.length > 0
-        && chip.ids.every((id) => this.occludedIds.has(id))) {
+        && chip.ids.every((id) => this.occlusion.occluded.has(id))) {
         const stale = this.clusters.get(chip.key);
         if (stale) stale.container.isVisible = false;
         continue;
@@ -9429,281 +6412,67 @@ export class EntityVisuals {
     return WARM_GLOW.clone();
   }
 
-  /**
-   * Make walls actually block a lamp's light. Always-on (no quality toggle): a
-   * single cube shadow map per light ENTITY, attached to its representative
-   * (first) fixture light, since the markers of a strip are clustered and one
-   * occluder covers them — so a 12-marker strip costs one shadow map, not 12. The
-   * un-shadowed sibling markers stay out of the next room via the tight LIGHT_RANGE.
-   * Created lazily when the entity turns on and disposed when it turns off, so an
-   * idle/off light costs nothing. Called once per entity from apply().
-   */
-  private syncEntityShadow(entityId: string, meshes: AbstractMesh[], on: boolean): void {
-    // Baked mode DOES have entity lights now (they light the furniture — see the
-    // light-creation block), but deliberately NO shadow maps: wall shadows are
-    // already painted into the baked atlas, and per-fixture furniture shadows
-    // aren't worth the cube-shadow-map cost the user asked us to keep low.
-    if (this.bakedMode) return;
-    const existing = this.lightShadows.get(entityId);
-
-    if (!on) {
-      if (existing) {
-        existing.dispose();
-        this.lightShadows.delete(entityId);
-      }
-      return;
-    }
-    if (existing) return; // already casting
-
-    // Representative light = the first fixture mesh that owns a PointLight.
-    let light: PointLight | undefined;
-    for (const m of meshes) {
-      light = this.meshLights.get(m.uniqueId);
-      if (light) break;
-    }
-    if (!light) return;
-
-    const gen = new ShadowGenerator(LIGHT_SHADOW_SIZE, light);
-    gen.usePoissonSampling = true; // cheap soft edge; blur-ESM isn't supported for cube maps
-    const shadowMap = gen.getShadowMap();
-    if (shadowMap) {
-      shadowMap.renderList = this.shadowCasters.slice();
-      for (const caster of this.shadowCasters) caster.receiveShadows = true;
-      // ── Render ONCE, not every frame (the app's biggest idle GPU cost) ────
-      // Babylon's ObjectRenderer defaults refreshRate to 1 =
-      // REFRESHRATE_RENDER_ONEVERYFRAME, and a PointLight needs a CUBE map, so
-      // every lit fixture was re-rendering the entire shadowCasters list — the
-      // whole villa shell plus furniture — SIX times per frame, on every frame
-      // the scene drew. With the handful of lights a villa normally leaves on
-      // that is tens of full-geometry depth passes per frame, forever, and it
-      // dominated the main camera pass. Reported as the device heating slowly
-      // for as long as the app stayed open, which fits exactly: lights-on is
-      // the resting state of a house, so this ran essentially always.
-      //
-      // Rendering once is CORRECT here, not a quality trade: a shadow map is
-      // rendered from the LIGHT's point of view, so it is independent of the
-      // camera — panning, walking and zooming cannot change it. The lights are
-      // fixed at their fixture positions and the casters are static villa
-      // shell/furniture, so the map's content only changes when the set of
-      // VISIBLE occluders does. invalidateShadowMaps() re-renders it for
-      // exactly those events (floor switch, pose swap); nothing else needs to.
-      shadowMap.refreshRate = RenderTargetTexture.REFRESHRATE_RENDER_ONCE;
-    }
-    this.lightShadows.set(entityId, gen);
-  }
-
-  /** Re-render every live shadow map ONCE on the next frame.
-   *
-   *  Call whenever the set of VISIBLE shadow-casting geometry changes — a
-   *  floor switch hiding/showing a storey, or a pose variant swapping a door
-   *  or cover mesh. Deliberately NOT called for camera movement or for a
-   *  light's own brightness/colour: neither can alter a depth map rendered
-   *  from the light's position, so re-rendering for those would reintroduce
-   *  the per-frame cost this exists to avoid.
-   *
-   *  resetRefreshCounter() puts the map back into its "never rendered" state,
-   *  which makes the next frame draw it once and then stop again. */
-  private invalidateShadowMaps(): void {
-    if (this.lightShadows.size === 0) return;
-    for (const gen of this.lightShadows.values()) gen.getShadowMap()?.resetRefreshCounter();
-    this.requestRender();
-  }
-
-  private applyToMesh(mesh: AbstractMesh, map: EntityMapping, state: HassEntity, lightShare = 1): void {
+  private applyToMesh(mesh: AbstractMesh, map: EntityMapping, state: HassEntity): void {
     const setEmissive = this.emissiveOf(mesh);
     const setDiffuse = this.diffuseOf(mesh);
 
-    switch (map.type) {
-      case "light": {
-        const on = state.state === "on";
-        const colour = this.lightColour(state);
-        const brightnessFrac = state.attributes.brightness ? state.attributes.brightness / 255 : 1;
-        // Per-light override (Advanced Settings, -100%..+100%): a ratio applied
-        // ON TOP of the entity's live brightness, so one fixture can be tuned
-        // brighter/dimmer than its HA dimmer level alone would produce — e.g. a
-        // light whose SweetHome placement reads darker than the others —
-        // without touching the global "Light effect strength" slider that
-        // affects every light. 0 = no change; -100% = off; +100% = double.
-        const effectiveFrac = brightnessFrac * (1 + clampRatio(map.lightIntensityRatio));
+    // What the mesh shows is utils/deviceActivity's meshLookFor — the SAME
+    // classification the badge is painted from (device_class, the villa's
+    // alert override, in-between states). Only the painting is here.
+    const look = meshLookFor(this.reading(map.type, state, false));
+    // A device authored as POSE meshes (lock.foo__locked / __unlocked, a
+    // door "__open"/"__closed") shows its state by which pose is visible
+    // (applyMeshVariant); tinting or pulsing that same mesh on top is
+    // redundant, and paints a real door leaf flat green/red. Checked against
+    // THIS entity's registered poses, not a word list.
+    const poseWord = extractVariantSuffix(mesh.name);
+    const isPose = !!poseWord && !!this.meshVariants.get(state.entity_id)?.has(poseWord);
 
-        // 1) The fixture mesh glows.
-        setEmissive?.(on ? colour.scale(effectiveFrac) : Color3.Black());
+    switch (look.kind) {
+      case "none":
+        // Lights: BulbSet.show owns their whole look. Covers: never deformed
+        // to fake motion — position is a whole-mesh SWAP between pre-posed
+        // meshes (applyMeshVariant), an entity-level decision made in apply().
+        break;
 
-        // EVERY light fixture mesh — an inflated LED strip bar, a geometry-
-        // less marker sphere, or a fully modelled bulb/fixture straight from
-        // the SweetHome catalog — goes window-glass transparent while off
-        // and fully opaque again once on (see STRIP_OFF_ALPHA for why
-        // material alpha, not mesh.visibility). Applied unconditionally, by
-        // TYPE alone (map.type === "light"), not by guessing which meshes
-        // "look like" stand-in geometry from their size/name — any current
-        // or future light asset gets this for free, no per-fixture setup.
-        const fixtureMat = mesh.material;
-        if (fixtureMat) {
-          fixtureMat.alpha = on ? 1 : STRIP_OFF_ALPHA;
-          fixtureMat.transparencyMode = on
-            ? Material.MATERIAL_OPAQUE
-            : Material.MATERIAL_ALPHABLEND;
-        }
-
-        // 2) This fixture mesh's own light source illuminates the room.
-        //    A single HA light is frequently modelled in SweetHome 3D as MANY
-        //    co-located virtual markers (e.g. a LED strip drawn as 8–12 point
-        //    lights for a soft, diffuse spread). Each marker becomes its own
-        //    PointLight, and point lights are ADDITIVE — 12 markers at full
-        //    intensity would blow out to solid white. Normalise by the number of
-        //    DISTINCT lights sharing this entity (lightShare, computed in apply())
-        //    so the whole group reads as one fixture's worth of light, regardless
-        //    of how many markers/meshes model it or whether they share one merged
-        //    light (mergeStripEntityLights).
-        const light = this.meshLights.get(mesh.uniqueId);
-        if (light) {
-          light.diffuse = colour;
-          // lightPoolStrength (Settings' global "Light effect strength")
-          // scales the DYNAMIC light too, not just baked-mode pools — before
-          // this, the slider was a silent no-op on a non-baked GLB, where
-          // room illumination comes from these real PointLights.
-          light.intensity = on
-            ? (MAX_LIGHT_INTENSITY * effectiveFrac * this.lightPoolStrength) / lightShare
-            : 0;
-          // Drop the light out of (or back into) shaders entirely with its state,
-          // so only lights that are actually on add per-pixel cost.
-          light.setEnabled(on);
-        }
-        // Baked mode's counterpart to the light above — see LightPools.ts.
-        // `mesh.isEnabled()` folds in FloorManager's floor toggle: a fixture
-        // on a currently-hidden floor must not light its pool even if the HA
-        // entity itself is "on" (see resyncLightPoolsToFloor for the other
-        // direction — a floor SWITCH with no entity-state change).
-        const pools = this.meshLightPools.get(mesh.uniqueId);
-        if (pools) {
-          for (const pool of pools) {
-            pool.setState(on && mesh.isEnabled(), colour, effectiveFrac * this.lightPoolStrength);
-          }
-        }
-        // Wall occlusion is handled once per entity in apply(), not per mesh.
+      case "tint": {
+        if (isPose) break;
+        // Unavailable is amber, never red: a lock HA has lost contact with
+        // asserts no "unlocked" reading (see colors.ts).
+        const c = look.tone === "unavailable" ? UNAVAILABLE_AMBER : look.tone === "alert" ? ALERT_RED : SECURE_GREEN;
+        setDiffuse?.(c);
+        setEmissive?.(c.scale(look.tone === "unavailable" ? 0.25 : 0.2));
         break;
       }
 
-      case "lock": {
-        // A lock authored as POSE meshes (lock.foo__locked / __unlocked — a
-        // door leaf that visibly swings open/closed) communicates its state
-        // through which pose is shown (see applyMeshVariant), so the
-        // red/green diffuse+emissive tint is both redundant AND ugly: it
-        // paints the whole door leaf flat green/red. Skip ALL colour
-        // treatment for a named pose mesh and let it keep its real door
-        // material; the state is already legible from the open/closed pose.
-        // A plain, single-mesh lock (lock.foo, no "__word" suffix) has no
-        // pose to read, so it still relies on the tint below — that's the
-        // one that stays coloured. Checked against THIS entity's own
-        // registered poses (meshVariants), not a fixed word list: there is no
-        // per-type vocabulary any more, so "is this mesh actually one of its
-        // poses" is both the only question that still makes sense and a
-        // strictly tighter test than the old list (an unrelated "__x" suffix
-        // that never grouped as a pose can't match).
-        const poseWord = extractVariantSuffix(mesh.name);
-        if (poseWord && this.meshVariants.get(state.entity_id)?.has(poseWord)) break;
-
-        // unavailable MUST win over the locked/unlocked colouring below —
-        // colouring the mesh confirmed-red for a lock HA has actually lost
-        // contact with asserts an "unlocked" reading that was never taken
-        // (the bug this fixed: a lock reporting "unavailable" rendered, on
-        // the map AND in its panel, exactly like a confirmed open door).
-        if (isUnavailable(state)) {
-          setDiffuse?.(UNAVAILABLE_AMBER);
-          setEmissive?.(UNAVAILABLE_AMBER.scale(0.25));
-          break;
-        }
-        const locked = state.state === "locked";
-        setDiffuse?.(locked ? new Color3(0.2, 0.75, 0.3) : new Color3(0.9, 0.2, 0.2));
-        setEmissive?.(locked ? new Color3(0.0, 0.15, 0.05) : new Color3(0.25, 0, 0));
-        break;
-      }
-
-      case "binary_sensor": {
-        // Same reasoning as lock's pose meshes: a binary_sensor authored
-        // with alternate poses (e.g. "__on"/"__off", or a door/window
-        // "__open"/"__closed") already shows its state by which pose is
-        // visible, so pulsing/tinting that same mesh red on top would be
-        // redundant (and, for a triggered-but-informational class, actively
-        // misleading — it'd read as an alert the device_class says it
-        // isn't). Checked against THIS entity's actually-registered pose
-        // words (meshVariants), not a fixed list — binary_sensor has no
-        // fixed vocabulary any more, so "is this mesh
-        // really one of ITS poses" is the only question that still makes
-        // sense. The plain, single-mesh case (the overwhelming majority of
-        // binary_sensors — leak/motion/smoke/… — never authored with poses)
-        // is completely unaffected and still pulses exactly as before.
-        const poseWord = extractVariantSuffix(mesh.name);
-        if (poseWord && this.meshVariants.get(state.entity_id)?.has(poseWord)) {
-          this.pulsing.delete(mesh);
-          break;
-        }
-
-        // Same reasoning as lock above: silently reading "unavailable" as
-        // "not triggered" makes an offline leak/smoke sensor look exactly
-        // like a safe, monitored one — flag it instead of going quiet.
-        if (isUnavailable(state)) {
+      case "pulse":
+        if (isPose) { this.pulsing.delete(mesh); break; }
+        if (look.unavailable) {
+          // An offline leak/smoke sensor must not look like a safe, monitored
+          // one — flag it instead of going quiet.
           this.pulsing.delete(mesh);
           setEmissive?.(UNAVAILABLE_AMBER.scale(0.4));
-          break;
-        }
-        const alert = state.state === "on"; // "on" = triggered (e.g. leak)
-        if (alert) this.pulsing.add(mesh);
-        else {
+        } else if (look.on) {
+          this.pulsing.add(mesh);
+        } else {
           this.pulsing.delete(mesh);
           setEmissive?.(Color3.Black());
         }
         break;
-      }
 
-      // No emissive tint for on/off — a spinning ceiling fan (see updateFanSpin)
-      // already reads as "on" by itself; a glow was redundant and, per product
-      // decision, unwanted.
-      case "fan":
+      case "glow":
+        setEmissive?.(look.on ? ACTIVE_GLOW : Color3.Black());
+        break;
+
+      case "dark":
+        // Fans read as on by spinning (updateFanSpin) — a glow was unwanted.
+        // Sensors and climate are informational, and a geometry-less one falls
+        // back to a placeholder sharing the lights' warm marker material,
+        // whose baked glow must be overridden or it reads "lit like a light".
         setEmissive?.(Color3.Black());
-        break;
-
-      case "switch":
-      case "media_player": {
-        const on = state.state === "on" || state.state === "playing";
-        setEmissive?.(on ? new Color3(0.1, 0.35, 0.4) : Color3.Black());
-        break;
-      }
-
-      // No per-mesh material/colour treatment for covers — a single curtain
-      // mesh is never deformed/scaled to fake motion (fabric doesn't behave
-      // like a rigid body, and there's no reliable way to infer a gather
-      // pivot from arbitrary SweetHome3D geometry). Position IS reflected
-      // now, but as a whole-mesh SWAP between up to 3 alternate, pre-posed
-      // meshes (see applyMeshVariant) — that's an
-      // entity-level decision (which mesh to show), not a per-mesh one, so
-      // it happens once in apply(), not here. Kept as an explicit case (not
-      // falling to default) so a cover doesn't get treated as something else.
-      case "cover":
-        break;
-
-      // Purely informational domains — never meant to glow. Explicit (not
-      // `default`) because a geometry-less sensor/climate device falls back
-      // to a placeholder sphere sharing the SAME warm-emissive marker
-      // material lights use (see blender_pipeline's _light_marker_material:
-      // "the app overrides its emissive from live HA state ... the baked
-      // baseline only makes an UNWIRED marker visible"). Every other domain
-      // above does override it; sensor/climate never did, so a sensor that
-      // fell back to a placeholder (e.g. its real geometry got matched to a
-      // nearby entity instead — see compute_group_instance_map) stayed at
-      // that baked-in glow forever, reading as "lit like a light fixture".
-      case "sensor":
-        setEmissive?.(Color3.Black());
-        break;
-
-      case "climate": {
-        setEmissive?.(Color3.Black());
-        const running = state.state !== "off" && !UNKNOWN_STATES.has(state.state);
-        this.applyClimateOutline(mesh, running);
-        break;
-      }
-
-      default:
+        if (map.type === "climate") {
+          this.applyClimateOutline(mesh, badgeKindFor(this.reading("climate", state, false)) === "on");
+        }
         break;
     }
   }
@@ -9724,197 +6493,7 @@ export class EntityVisuals {
     this.requestAnimationRender();
   }
 
-  /** Start/stop a fan's spin from its on/off (+ percentage) state. Only true
-   *  CEILING fans spin — VMC/exhaust `fan.*` entities (bathroom vents) must not. */
-  private updateFanSpin(entity: HassEntity, meshes: AbstractMesh[]): void {
-    const id = entity.entity_id;
-    // ⚠️ Unanchored on purpose, and safe only because of the `map.type === "fan"`
-    // gate at the call site — without it this would match `light.x_ceiling_fan_light`
-    // and spin a lamp. /dry-audit re-flags this shape (the documented trap is
-    // `door` matching inside `outdoor`); anchoring to (^|[._])…([._]|$) would
-    // not change the verdict for any realistic id, since the ambiguous cases
-    // (`fan.bathroom_ceiling_fan`, a ceiling-mounted extractor) match either way.
-    if (!/ceiling[_-]?fan/i.test(id)) return; // e.g. fan.ceiling_fan_* only
-    if (entity.state === "on") {
-      const pct = entity.attributes.percentage as number | undefined;
-      const frac = typeof pct === "number" ? Math.max(0.15, Math.min(1, pct / 100)) : 0.6;
-      if (!this.fanRigs.has(id)) {
-        const rig = this.setupFanRig(meshes);
-        this.fanRigs.set(id, rig);
-        this.detachFanLabelAnchor(id, rig);
-      }
-      this.spinningFans.set(id, FAN_MAX_RAD_PER_SEC * frac);
-      this.requestRender(); // wake the loop so animateFans starts turning it
-    } else {
-      this.spinningFans.delete(id);
-    }
-  }
 
-  /**
-   * Rig each of the fan's meshes to spin in place around its TRUE axle.
-   *
-   * Two earlier approaches both broke on this exact mesh shape:
-   *  - `rotateAround` re-derives its pivot offset from the mesh's CURRENT
-   *    `.position` every call (`point - this.position`), so it only spins in
-   *    place when the pivot is *exactly* that position. These fan meshes
-   *    import with `.position` at the parent-local origin (0,0,0) — the real
-   *    placement is baked entirely into vertex data — so any vertex-derived
-   *    pivot orbited the whole mesh (and, since the label anchors to that
-   *    same mesh, the label with it).
-   *  - `mesh.setPivotPoint()` fixes the orbit mathematically (verified by
-   *    hand), but the badge's position tracking (Babylon GUI's
-   *    `linkWithMesh`) projects the mesh's *local* bounding-sphere centre
-   *    through `getWorldMatrix()` each frame — an interaction with the pivot
-   *    matrix I could not fully rule out without a browser, and empirically
-   *    it made the fan (mesh AND label) disappear on "on" and never return.
-   *
-   * This version touches neither: an invisible `TransformNode` ("pivot") is
-   * planted at the mesh's true axle and the mesh is REPARENTED under it
-   * (`setParent` — a mechanism already used everywhere else in this app —
-   * adjusts the mesh's local position/rotation to compensate, so nothing
-   * visually moves at the moment of reparenting). Only `pivot.rotationQuaternion`
-   * is ever touched afterwards; the mesh's OWN transform, pivot matrix and
-   * bounding info stay exactly what they always were, so the badge (and
-   * everything else that reads the mesh directly) can't be affected.
-   *
-   * The axle itself: average the vertices in the TOP slice of the fixture —
-   * along whichever LOCAL axis currently reads as world-vertical, see
-   * FAN_AXIS_TOP_SLICE — since the ceiling mount/canopy is reliably round and
-   * centred exactly on the true axle, unlike the whole fixture's bounding box
-   * (which assumes the blade assembly is perfectly symmetric; it usually
-   * isn't quite).
-   */
-  private setupFanRig(
-    meshes: AbstractMesh[],
-  ): { mesh: AbstractMesh; pivot: TransformNode; axisLocal: Vector3 }[] {
-    const rig: { mesh: AbstractMesh; pivot: TransformNode; axisLocal: Vector3 }[] = [];
-    for (const m of meshes) {
-      const positions = m.getVerticesData(VertexBuffer.PositionKind);
-      if (!positions || positions.length < 3) continue;
-      m.computeWorldMatrix(true);
 
-      // The LOCAL (pre-rotation) direction that currently reads as
-      // world-vertical — NOT necessarily local Y: these fixtures import with
-      // a baked axis-conversion rotation (SweetHome's Z-up -> glTF's Y-up),
-      // so the mesh's own un-rotated vertex data has "up" on a different
-      // axis. Deriving it (rather than assuming Y or Z) keeps this correct
-      // regardless of how any given model happens to be authored/exported.
-      const invWorld = Matrix.Invert(m.getWorldMatrix());
-      const axisInMeshSpace = Vector3.TransformNormal(Vector3.Up(), invWorld);
-      axisInMeshSpace.normalize();
 
-      // Project every vertex onto that axis to find the fixture's "height"
-      // range, then average the positions in its top slice — in the mesh's
-      // OWN local/object space, the same space getVerticesData returns, so
-      // no world-matrix round-trip is needed for this part.
-      const v = Vector3.Zero();
-      let hMin = Infinity, hMax = -Infinity;
-      for (let i = 0; i < positions.length; i += 3) {
-        v.set(positions[i], positions[i + 1], positions[i + 2]);
-        const h = Vector3.Dot(v, axisInMeshSpace);
-        if (h < hMin) hMin = h;
-        if (h > hMax) hMax = h;
-      }
-      const topThreshold = hMax - (hMax - hMin) * FAN_AXIS_TOP_SLICE;
-      const sum = Vector3.Zero();
-      let sampled = 0;
-      for (let i = 0; i < positions.length; i += 3) {
-        v.set(positions[i], positions[i + 1], positions[i + 2]);
-        if (Vector3.Dot(v, axisInMeshSpace) >= topThreshold) { sum.addInPlace(v); sampled++; }
-      }
-      // Fall back to the plain local bbox midpoint if the top slice somehow
-      // caught too little geometry to average reliably (e.g. a sparse mount).
-      const bb = m.getBoundingInfo().boundingBox;
-      const axleLocal = sampled >= 20 ? sum.scale(1 / sampled) : bb.minimum.add(bb.maximum).scale(0.5);
-      if (!Number.isFinite(axleLocal.x) || !Number.isFinite(axleLocal.y) || !Number.isFinite(axleLocal.z)) continue;
-
-      const axleWorld = Vector3.TransformCoordinates(axleLocal, m.getWorldMatrix());
-      const parent = m.parent;
-      const parentWorld = parent?.getWorldMatrix?.();
-      const pivot = new TransformNode(`fanPivot_${m.uniqueId}`, this.scene);
-      pivot.parent = parent;
-      pivot.position = parentWorld
-        ? Vector3.TransformCoordinates(axleWorld, Matrix.Invert(parentWorld))
-        : axleWorld;
-
-      // Reparent the mesh under the pivot — setParent adjusts the mesh's own
-      // local position/rotation so its WORLD transform (and therefore its
-      // on-screen appearance) is unchanged by this move.
-      m.setParent(pivot);
-
-      // The axis the PIVOT itself rotates around, in ITS parent's local space
-      // (the shared original parent — pivot has no rotation of its own
-      // besides the spin animateFans applies, so this is just world-up
-      // projected through that parent's own orientation).
-      const axisLocal = parentWorld
-        ? Vector3.TransformNormal(Vector3.Up(), Matrix.Invert(parentWorld)).normalize()
-        : Vector3.Up();
-
-      rig.push({ mesh: m, pivot, axisLocal });
-    }
-    return rig;
-  }
-
-  /**
-   * The label anchor is parented to the entity's first mesh (see
-   * buildLabelAnchors — it inherits enabled/floor state that way), which is
-   * exactly why the badge was STILL orbiting after 2.23.1's mesh-pivot fix:
-   * `setupFanRig` reparents that same mesh under the spin `pivot`, so the
-   * anchor — a grandchild of `pivot` via the mesh — got dragged into the
-   * rotating subtree too, even though the mesh's own transform relative to
-   * its new parent never changes. Move it back OUT, onto the pivot's own
-   * (non-rotating) parent — `setParent` preserves its current world
-   * position, so the badge stays exactly where it already was, just no
-   * longer inside anything that spins.
-   *
-   * This intentionally breaks the anchor's OWN parent chain as a source of
-   * floor enabled-state/floorIndex (the pivot's parent is a shared container
-   * FloorManager never touches) — cullLabels() compensates by reading those
-   * straight off the entity's bound mesh instead of the anchor's parent, so
-   * the fan's badge still correctly disappears on the other floor.
-   */
-  private detachFanLabelAnchor(
-    entityId: string,
-    rig: { mesh: AbstractMesh; pivot: TransformNode; axisLocal: Vector3 }[],
-  ): void {
-    const anchor = this.labelAnchors.get(entityId);
-    const primary = rig[0];
-    if (!anchor || !primary || anchor.parent !== primary.mesh) return;
-    anchor.setParent(primary.pivot.parent);
-  }
-
-  private animateFans(dtMs: number): void {
-    if (this.spinningFans.size === 0) return;
-    const dt = dtMs / 1000;
-    let spun = false;
-    for (const [id, speed] of this.spinningFans) {
-      const rig = this.fanRigs.get(id);
-      if (!rig || !rig.length) continue;
-      // Only spin (and keep rendering) while the fan's storey is being viewed —
-      // floors above the active one are hidden, so their fans needn't drive
-      // continuous frames. (Cumulative floors: <= active are visible.)
-      const floorIdx = (rig[0].mesh.metadata as { floorIndex?: number } | null)?.floorIndex;
-      if (floorIdx !== undefined && floorIdx > this.activeFloor) continue;
-
-      // The TOTAL angle, wrapped — every frame recomputes rotation fresh from
-      // this absolute value (never accumulated), so there is nothing for
-      // floating-point error to drift.
-      const angle = ((this.fanAngles.get(id) ?? 0) + speed * dt) % (Math.PI * 2);
-      this.fanAngles.set(id, angle);
-      for (const { pivot, axisLocal } of rig) {
-        // Write THROUGH the existing quaternion rather than replacing it: a
-        // ceiling fan left on is the normal state in a villa, and this runs
-        // every frame forever for each of its blade rigs (animateFans re-arms
-        // the render loop below), so allocating one per rig per frame is a
-        // permanent garbage stream. Created once on first use.
-        if (!pivot.rotationQuaternion) {
-          pivot.rotationQuaternion = Quaternion.RotationAxis(axisLocal, angle);
-        } else {
-          Quaternion.RotationAxisToRef(axisLocal, angle, pivot.rotationQuaternion);
-        }
-      }
-      spun = true;
-    }
-    if (spun) this.requestAnimationRender();
-  }
 }

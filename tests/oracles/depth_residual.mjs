@@ -21,6 +21,7 @@
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 const { viewBasis, projectToView, VIEW_BASIS_STEPS } = await import("@/babylon/badgeProjection");
+const { depthPull } = await import("@/babylon/badgeLayout");
 
 let fail = 0;
 const eq = (name, got, want) => {
@@ -51,9 +52,10 @@ eq("...while pd separates near from far", far.pd > near.pd, true);
 eq("pd is zero at the projection origin", Math.abs(proj({ x: 0, y: 0, z: 0 }).pd) < 1e-9, true);
 
 console.log("\n  and the depth ratio is what a badge's extents must be inflated by:");
-// The correction EntityVisuals.placementItems applies, restated here so the
-// number is pinned rather than described.
-const pull = (pd) => Math.max(1, (REF + pd) / REF);
+// The correction placement applies — the REAL one (badgeLayout.depthPull). It
+// used to be restated here by hand, which pinned a copy of the formula, not
+// the code that runs: a change to the shipped rule would have left this green.
+const pull = (pd) => depthPull(REF, pd);
 eq("a badge at the reference depth is untouched", pull(0), 1);
 // ⚠️ ONE-SIDED. A badge NEARER than the reference draws FURTHER apart than the
 // plane predicted; shrinking its claim on that basis would group it late,

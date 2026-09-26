@@ -1,22 +1,27 @@
 // src/components/panels/Sparkline.tsx
 // Dependency-free SVG line chart for one numeric series over ~24h. Now with
-// recessive X/Y axes and a crosshair + tooltip on hover/touch (the value and
-// time of the nearest datapoint). Width is measured (1 SVG unit = 1px) so axis
+// recessive X/Y axes and a crosshair + tooltip on hover/touch (the reading in
+// force under the pointer, and when it was taken). Width is measured (1 SVG unit = 1px) so axis
 // text stays crisp instead of being stretched by preserveAspectRatio="none".
 
 import { useCallback, useMemo, useState } from "react";
 import type { HistoryPoint, HistoryGap } from "@/types/ha.types";
-import { splitAtGaps, gapBand } from "@/utils/historyGaps";
-import { stepped } from "@/utils/stepSeries";
+import { chartWindow, type TimeWindow } from "@/utils/lineChart";
+import { chartGeometry } from "@/utils/chartGeometry";
 import { STATUS_COLOR } from "@/utils/stateColors";
 import { useElementWidth } from "@/hooks/useElementWidth";
-import { fmtChartValue, fmtChartTime, fmtChartStamp, nearestIndexByX } from "./chartUtils";
+import { fmtChartValue, fmtChartTick } from "./chartUtils";
+import ChartTip from "./ChartTip";
 
 interface Props {
   data: HistoryPoint[];
   /** Stretches in which the entity reported nothing usable. Shaded, and the
    *  line is broken across them — see utils/historyGaps for why both. */
   gaps?: HistoryGap[];
+  /** The span that was asked for (HistorySeries.window). Drawn as the x-axis,
+   *  so an outage running to now reaches the right edge — see lineChart.ts.
+   *  Omitted, the chart spans its own readings, as it always did. */
+  window?: TimeWindow;
   color?: string;
   height?: number;
   unit?: string;
@@ -27,48 +32,29 @@ interface Props {
 
 const M = { top: 8, right: 10, bottom: 18, left: 38 };
 
-export default function Sparkline({ data, gaps = [], color = "var(--accent-teal)", height = 110, unit = "", loading }: Props) {
-  // Span of the data itself: this chart scales its x-axis to what it was given.
-  const spanHours = data.length > 1
-    ? (data[data.length - 1].t - data[0].t) / 3_600_000 : 0;
+export default function Sparkline({ data, gaps = [], window, color = "var(--accent-teal)", height = 110, unit = "", loading }: Props) {
   const [ref, W] = useElementWidth<HTMLDivElement>(320);
-  const [hover, setHover] = useState<number | null>(null);
+  const [hoverT, setHoverT] = useState<number | null>(null);
 
+  // Scales, the line (stepped, held to the window's end, split at outages),
+  // the bands, the ticks and the hover answer: utils/chartGeometry, the one
+  // module every history chart draws from.
   const geom = useMemo(() => {
-    if (data.length < 2) return null;
-    const xs = data.map((d) => d.t);
-    const ys = data.map((d) => d.v);
-    const minX = Math.min(...xs), maxX = Math.max(...xs);
-    const minY = Math.min(...ys), maxY = Math.max(...ys);
-    const spanX = maxX - minX || 1;
-    const spanY = maxY - minY || 1;
-    const plotW = Math.max(1, W - M.left - M.right);
-    const plotH = Math.max(1, height - M.top - M.bottom);
-    const sx = (t: number) => M.left + ((t - minX) / spanX) * plotW;
-    const sy = (v: number) => M.top + (1 - (v - minY) / spanY) * plotH;
-    const pts = data.map((d) => ({ x: sx(d.t), y: sy(d.v), t: d.t, v: d.v }));
-    const right = M.left + plotW;
-    // One band per outage, already clamped to the plot — a gap that runs to
-    // `now` routinely extends past the last plotted reading.
-    const bands = gaps
-      .map((g) => gapBand(g, sx, M.left, right))
-      .filter((b): b is { x: number; w: number } => b !== null);
-    // ⚠️ THE LINE IS STEPPED AND THEN SPLIT, IN THAT ORDER. A reading holds
-    // until it changes (utils/stepSeries), and the runs are what survives the
-    // outages (utils/historyGaps) — two different truths about the same
-    // series, and the second must be applied to the first. `pts` stays the
-    // real readings: it is what hover reports, and a hover on a flat stretch
-    // must not name a measurement nobody took.
-    const linePts = stepped(data).map((d) => ({ x: sx(d.t), y: sy(d.v), t: d.t }));
-    return { pts, minX, maxX, minY, maxY, sx, sy, bands,
-             runs: splitAtGaps(linePts, gaps) };
-  }, [data, gaps, W, height]);
+    // ONE reading is a line when the window is known: a sensor that held one
+    // value all day (no rain: 0 mm since midnight) comes back from the recorder
+    // as a single row, and it HOLDS to the window's end (lineRuns). It read
+    // "Not enough history" — about a gauge that had reported all day.
+    if (data.length === 0 || (data.length < 2 && !(window && window.to > window.from))) return null;
+    const w = chartWindow(window, data);
+    if (!w) return null;
+    return chartGeometry(w, [{ pts: data, gaps }],
+      { left: M.left, right: Math.max(M.left + 1, W - M.right), top: M.top, bottom: Math.max(M.top + 1, height - M.bottom) });
+  }, [data, gaps, window, W, height]);
 
   const onMove = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
     if (!geom) return;
     const rect = e.currentTarget.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * W;
-    setHover(nearestIndexByX(geom.pts, x));
+    setHoverT(geom.tAt(((e.clientX - rect.left) / rect.width) * W));
   }, [geom, W]);
 
   if (!geom) {
@@ -77,30 +63,25 @@ export default function Sparkline({ data, gaps = [], color = "var(--accent-teal)
       : <div ref={ref} className="muted body-text">Not enough history yet.</div>;
   }
 
-  const polylines = geom.runs
-    .filter((r) => r.length >= 2)
-    .map((r) => r.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" "));
-  const hp = hover != null ? geom.pts[hover] : null;
-  const yTicks = [geom.maxY, (geom.maxY + geom.minY) / 2, geom.minY];
-  const xTicks = [geom.minX, (geom.minX + geom.maxX) / 2, geom.maxX];
+  const line = geom.series[0];
+  const hover = hoverT === null ? null : geom.hover(hoverT);
+  const hp = hover?.readings[0] ?? null;
+  const yTicks = [line.hi, (line.hi + line.lo) / 2, line.lo];
 
   return (
     <div ref={ref} className="spark-wrap">
       <svg
         className="sparkline" width={W} height={height} style={{ height, touchAction: "none" }}
-        onPointerMove={onMove} onPointerDown={onMove} onPointerLeave={() => setHover(null)}
+        onPointerMove={onMove} onPointerDown={onMove} onPointerLeave={() => setHoverT(null)}
       >
         {/* ⚠️ FIRST IN THE SVG, so the band is BEHIND the grid and the line.
             SVG has no z-index — paint order is document order — so moving this
             below the polyline would hide the data behind the shading. */}
-        {geom.bands.map((b, i) => (
-          <rect
-            key={`gap${i}`} x={b.x} y={M.top} width={b.w} height={Math.max(1, height - M.top - M.bottom)}
-            fill={STATUS_COLOR.unavailable} opacity={0.18}
-          />
+        {line.bands.map((b, i) => (
+          <rect key={`gap${i}`} x={b.x} y={b.y} width={b.w} height={b.h} fill={STATUS_COLOR.unavailable} opacity={0.18} />
         ))}
         {yTicks.map((v, i) => {
-          const y = geom.sy(v);
+          const y = line.sy(v);
           return (
             <g key={`y${i}`}>
               <line x1={M.left} y1={y} x2={W - M.right} y2={y} className="spark-grid" />
@@ -110,35 +91,29 @@ export default function Sparkline({ data, gaps = [], color = "var(--accent-teal)
             </g>
           );
         })}
-        {xTicks.map((t, i) => (
+        {geom.ticks.map((t, i) => (
           <text
             key={`x${i}`} x={geom.sx(t)} y={height - 4}
-            textAnchor={i === 0 ? "start" : i === xTicks.length - 1 ? "end" : "middle"}
+            textAnchor={i === 0 ? "start" : i === geom.ticks.length - 1 ? "end" : "middle"}
             className="spark-axis"
           >
-            {fmtChartTime(t)}
+            {fmtChartTick(t, geom.spanHours)}
           </text>
         ))}
-        {polylines.map((pl, i) => (
-          <polyline key={`run${i}`} points={pl} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+        {line.runs.map((r, i) => (
+          <polyline key={`run${i}`} points={r.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")}
+            fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
         ))}
-        {hp && (
+        {hover && hp && (
           <g>
-            <line x1={hp.x} y1={M.top} x2={hp.x} y2={height - M.bottom} className="spark-crosshair" />
+            <line x1={hover.x} y1={M.top} x2={hover.x} y2={height - M.bottom} className="spark-crosshair" />
             <circle cx={hp.x} cy={hp.y} r={3.5} fill={color} stroke="var(--bg-panel)" strokeWidth={1.5} />
           </g>
         )}
       </svg>
-      {hp && (
-        <div
-          className="spark-tip"
-          style={{ left: hp.x, top: M.top, transform: `translateX(${hp.x > W / 2 ? "-100%" : "0"})` }}
-        >
-          <strong>{fmtChartValue(hp.v)}{unit ? ` ${unit}` : ""}</strong>
-          {/* The tooltip earns the day when the window spans more than one;
-              the axis ticks below stay bare, where the day would not fit. */}
-          <span>{fmtChartStamp(hp.t, spanHours)}</span>
-        </div>
+      {hover && hp && (
+        <ChartTip left={hover.x} top={M.top} flip={hover.x > W / 2} t={hover.t} spanHours={geom.spanHours}
+          rows={[{ key: "v", text: `${fmtChartValue(hp.v)}${unit ? ` ${unit}` : ""}` }]} />
       )}
     </div>
   );

@@ -7,6 +7,7 @@
 // There's no HA URL/token here anymore: the kiosk always reaches Home Assistant
 // token-less through the add-on's Supervisor proxy, so there's nothing to enter.
 
+import { eyeHeightOf } from "@/babylon/walkerSpawn";
 import { useState } from "react";
 import ModalFooter from "@/components/common/ModalFooter";
 import UnsavedChanges from "@/components/common/UnsavedChanges";
@@ -113,7 +114,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
       pending.cancel(SETTINGS_DRAFT_KEY);
       update(baseline);
       setSiteTitle(baseline.siteTitle ?? "");
-      setEyeHeight(baseline.eyeHeight ?? 1.7);
+      setEyeHeight(eyeHeightOf(baseline.eyeHeight));
       setWalkSpeed(baseline.walkSpeed ?? 1);
       setRender(baseline.render ?? DEFAULT_RENDER);
       if (baseline.render) manager?.setRenderConfig(baseline.render);
@@ -134,7 +135,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
   const dialogRef = useModalA11y(closeModal);
 
   const [siteTitle, setSiteTitle] = useState(config.siteTitle);
-  const [eyeHeight, setEyeHeight] = useState(config.eyeHeight ?? 1.7);
+  const [eyeHeight, setEyeHeight] = useState(eyeHeightOf(config.eyeHeight));
   const [walkSpeed, setWalkSpeed] = useState(config.walkSpeed ?? 1);
   const [render, setRender] = useState<RenderConfig>(config.render ?? DEFAULT_RENDER);
 

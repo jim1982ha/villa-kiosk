@@ -164,7 +164,11 @@ export interface StatisticIdInfo {
 export interface StatisticPeriod {
   start: number;
   end: number;
-  change: number | null;
+  change?: number | null;
+  /** Present when asked for (types: mean/min/max) — a measurement's bucket. */
+  mean?: number | null;
+  min?: number | null;
+  max?: number | null;
 }
 
 export type EntityDomain =
@@ -204,6 +208,9 @@ export interface HistoryGap {
 export interface HistorySeries {
   points: HistoryPoint[];
   gaps: HistoryGap[];
+  /** The span that was ASKED for (epoch ms). A chart draws this, not the span
+   *  of whatever readings came back — see utils/lineChart.ts. */
+  window: { from: number; to: number };
 }
 
 /** A single state-change point (for StateTimeline) — the RAW state string, no

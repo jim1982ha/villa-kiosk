@@ -41,6 +41,7 @@
 import type { Scene } from "@babylonjs/core/scene";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { BaseTexture } from "@babylonjs/core/Materials/Textures/baseTexture";
+import { lampGlowFor } from "./lampGlow";
 
 /** Frames timed per condition. Enough for a stable median at 60fps without the
  *  whole run outlasting the user's patience — six conditions at 60 frames is
@@ -142,6 +143,17 @@ function buildConditions(scene: Scene, guiLayers: readonly { rootContainer: { is
         if (on.length === 0) return null;
         for (const l of on) l.setEnabled(false);
         return () => { for (const l of on) l.setEnabled(true); };
+      },
+    },
+    {
+      // The bulbs' light on the lightmapped structure (lampGlow.ts): a loop
+      // over the pools that are on, per structure pixel. Its lamp count is a
+      // UNIFORM, so unlike the row above this ablates cleanly — no recompile.
+      // Skipped when nothing is on, which is when it costs nothing anyway.
+      name: "no lamp glow",
+      apply: () => {
+        const glow = lampGlowFor(scene);
+        return glow.count > 0 ? glow.suspend() : null;
       },
     },
     {

@@ -17,6 +17,7 @@ import { Constants } from "@babylonjs/core/Engines/constants";
 import type { Scene } from "@babylonjs/core/scene";
 import type { RenderConfig } from "@/config/AppConfig";
 import { devLog } from "@/utils/devLog";
+import type { SceneLook } from "./sceneLook";
 
 const TONE_MAP: Record<string, number> = {
   standard: ImageProcessingConfiguration.TONEMAPPING_STANDARD,
@@ -26,6 +27,8 @@ const TONE_MAP: Record<string, number> = {
 
 export class RenderEnhancements {
   private scene: Scene;
+  /** The one writer of exposure and environment intensity — see sceneLook.ts. */
+  private look: SceneLook;
 
   private ssao: SSAO2RenderingPipeline | null = null;
   private ssaoAttached = false;
@@ -34,8 +37,9 @@ export class RenderEnhancements {
   private cfg: RenderConfig | null = null;
   private baked = false;
 
-  constructor(scene: Scene) {
+  constructor(scene: Scene, look: SceneLook) {
     this.scene = scene;
+    this.look = look;
   }
 
   /**
@@ -63,6 +67,9 @@ export class RenderEnhancements {
   apply(cfg: RenderConfig): void {
     this.cfg = cfg;
     this.applyToneMapping(cfg);
+    // Exposure and the IBL's strength are INPUTS to the look, not writes: the
+    // night pass scales both, and resolveLook combines them whichever runs first.
+    this.look.setRender(cfg);
     // NB: the hemispheric fill light's intensity/warmth is owned by SunController
     // (it varies with day/night). renderFx must not also write it or the two
     // fight and the night fill flickers between values depending on call order.
@@ -73,7 +80,6 @@ export class RenderEnhancements {
   // ── 1. Tone mapping + exposure / contrast ────────────────────────────────
   private applyToneMapping(cfg: RenderConfig): void {
     const ip = this.scene.imageProcessingConfiguration;
-    ip.exposure = cfg.exposure;
     ip.contrast = cfg.contrast;
     if (cfg.toneMapping === "none") {
       ip.toneMappingEnabled = false;
@@ -119,7 +125,6 @@ export class RenderEnhancements {
     if (cfg.ibl) {
       if (!this.env) this.env = this.buildGradientEnv();
       this.scene.environmentTexture = this.env;
-      this.scene.environmentIntensity = cfg.environmentIntensity;
     } else if (this.scene.environmentTexture && this.scene.environmentTexture === this.env) {
       this.scene.environmentTexture = null;
     }

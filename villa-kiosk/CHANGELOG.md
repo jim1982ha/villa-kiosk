@@ -1,3 +1,714 @@
+## 2.496.102
+
+### Changed
+- **The whole camera shot for a tapped room is now worked out in one tested
+  place**: how much of the screen the room fills, and how close the camera
+  needs to be for its devices. Nothing changes on screen.
+## 2.496.101
+
+### Changed
+- **Spinning ceiling fans are handled by one tested part.** Nothing changes on
+  screen: only ceiling fans spin (a bathroom extractor does not), they turn in
+  place around their mount, their badge does not spin with them, and a fan on
+  a hidden floor does not keep the screen redrawing. Closing the villa now
+  tidies fans up the same careful way reloading it always did.
+## 2.496.100
+
+### Changed
+- **The badge layout self-check (`?debug=place`) is now a separate part with
+  its own tests.** Nothing changes on screen. It used to be impossible to show
+  that it could catch a problem anywhere except on the wall tablet. It is now
+  checked against layouts that break each of its rules.
+## 2.496.99
+
+### Changed
+- **How badges are grouped into cards and rooms into chips is now a separate,
+  tested part.** Nothing changes on screen. Five rules that each needed a fix
+  in the past are now checked:
+  - "Other" is never drawn as a room.
+  - Every room chip records why it appeared.
+  - A card that loses one of its rooms keeps or frees its other devices,
+    rather than collapsing more rooms.
+  - A card with nowhere to stand becomes its room's chip.
+  - A room you tapped is never collapsed.
+## 2.496.98
+
+### Fixed — walking mode
+- **Your eye height setting now applies to the room viewpoints.** They were
+  always placed at 1.7 m, whatever you had set.
+- **Switching to walking mode inside a room you picked puts you on that room's
+  real floor.** In a room a step or two up, you used to start at the height of
+  the floor underneath it.
+
+### Changed
+- **Where you land in walking mode is worked out by a separate, tested part:**
+  the choice of room, whether a person fits there, and the foot of the stairs.
+## 2.496.97
+
+### Fixed
+- **The "Motion detected" notice only announces motion sensors.** A sensor
+  that Home Assistant says is something else (a door contact, say) is no
+  longer announced as motion just because its name contains a word like "pir".
+  A sensor with no type in Home Assistant is still recognised by its name.
+
+### Changed
+- **One definition of a motion sensor** is shared by the motion notice and the
+  device categories.
+## 2.496.96
+
+### Fixed — the 3D map
+- **A lock no longer flashes red while it is locking or unlocking.** Its 3D
+  model now shows what its badge shows: green when locked or on its way,
+  red only when it is really unlocked or jammed.
+- **Motion and presence sensors no longer pulse red when they see someone.**
+  A sensor's 3D model pulses only when its badge shows an alert: a leak or
+  smoke sensor that triggers, a connection sensor that goes offline, or
+  whatever you set as the alert in Advanced Settings.
+- **A media player glows while buffering too**, like its badge.
+## 2.496.95
+
+### Changed
+- **How long a tapped room stays "opened" is decided by a separate, tested
+  part.** Nothing changes on screen. The two rules, each fixed after a report,
+  are now checked: zooming in never closes the room you asked for, and the
+  other rooms go back to normal as soon as you zoom in past where you started.
+## 2.496.94
+
+### Changed
+- **The camera shot for a tapped room is worked out by a separate, tested
+  part.** Nothing changes on screen. The rules that were each fixed after a
+  wrong release are now checked: frame the room, not just its devices; keep
+  every device on screen, measured along both the width and the height of the
+  screen; and devices stacked at one spot are still framed.
+## 2.496.93
+
+### Changed
+- **The way the villa chooses its drawing resolution is now a separate,
+  tested part.** Nothing changes on screen. The rules are the same: give back
+  sharpness on a device that measured slow, take one step up to full
+  sharpness on one that can afford it, and draw the still picture at full
+  sharpness. They are now checked against the frame times measured on the
+  iPad, iPhone, Android phone and MacBook.
+## 2.496.92
+
+### Fixed — lights
+- **A light that is already on when the villa loads casts its wall shadow**
+  straight away, on villas without baked lighting. It used to cast none until
+  it was switched off and on again.
+- **Turning a light on no longer fails on a villa without baked lighting.**
+  The shadow a lamp casts there needed a part of the 3D engine that was never
+  loaded, so creating it failed. This villa's lighting is baked and was not
+  affected.
+
+### Changed
+- **Everything a light fixture shows is decided in one place**: its glow, its
+  see-through look while off, its light, its floor pools and its shadow.
+## 2.496.91
+
+### Changed — the villa's rooms and storeys
+- **One room plan, shared by everything.** Which room and which storey a point
+  is in is now answered by one object for the walking camera's room banner,
+  the room highlights, the device badges and the light pools, instead of five
+  separate copies of the rooms.
+- **The foot of the staircase is found on the ground STOREY**, as the floor
+  plan defines it, rather than "within 30 cm of the lowest floor". A ground
+  floor room a step or two up now counts as ground floor when first-person
+  mode looks for somewhere to put you at the bottom of the stairs.
+## 2.496.90
+
+### Fixed — history charts
+- **A sensor that was offline is shaded on every chart, not just the first
+  line's.** On a Weather chart with two lines (outside and inside), an outage
+  of the second sensor broke its line with no grey band. Each line's outages
+  now have their own band, in its half of the chart, the way the device panels
+  already showed two sensors.
+- **The tooltip never shows a reading from outside the moment you point at.**
+  Inside one sensor's outage it used to show that sensor's last value from
+  before the outage, under the other sensor's time. Now that sensor's row is
+  left out, and every row holds at the time shown.
+- **A 7-day or 30-day chart's axis shows dates**, not times of day, on the
+  device panels as well as in the Weather window.
+
+### Changed
+- **One chart module draws every history chart** (device panels and the
+  Weather window): the same scales, bands, tooltip and axis labels.
+## 2.496.89
+
+### Fixed — the Weather window
+- **"No rain" is said only when the gauge reported no rain.** If the rain
+  history could not be loaded, or the recorder had nothing for the gauge, the
+  chart said "No rain in the last 24 h" and the figure said 0.0 mm. It now says
+  "Couldn't load this history", or "No rain readings", and the figure shows a
+  dash. A stretch the gauge did not report is shaded, like on every other chart.
+- **A chart whose history failed to load says so**, instead of "Not enough
+  history yet".
+
+### Changed
+- **One history source behind every chart.** The device panels and the Weather
+  window read history the same way, and the Weather window's range buttons
+  are the same buttons as the device panels' (12h · 24h · 7d · 30d).
+## 2.496.88
+
+### Improved — the Weather window
+- **Tooltips on the history charts.** Moving the mouse over a chart — or
+  touching it — now shows a line at that moment and the value of each line
+  there, with its time. On the rain chart it shows that hour's or that day's
+  rain.
+- **History and trends opens at the top**, instead of wherever the first screen
+  had been scrolled to.
+- **The "History and trends" button is in the window's footer**, next to Close,
+  so it is always visible — the same button style as "Advanced Settings" in
+  Settings.
+## 2.496.87
+
+### Changed — a new Weather window
+The Weather window has been redesigned, as agreed on the design canvas.
+
+- **Now** — how the air feels in one line ("Warm, very humid and still"), a
+  comfort scale showing outside and inside, and three pieces of advice: whether
+  to open the windows, whether laundry will dry outside, and whether it is a
+  good time to be outdoors. Below them, six instruments: a wind compass, a
+  barometer, temperature bars (outside, feels-like, dew point, inside),
+  humidity outside and inside, a rain gauge, and sun and UV.
+- **History and trends** — opened from the link at the bottom and closed with
+  the arrow in its title: the temperature range, strongest gust, rain and
+  highest UV for the chosen period, and charts of temperature, humidity, wind,
+  rain, pressure, and sun and UV over 12 hours, 24 hours, 7 days or 30 days.
+
+The advice comes from fixed rules applied to the station's own readings — no
+forecast and nothing from the internet — so the same readings always give the
+same advice. The window is now the same width as the other windows the bottom
+bar opens. If the station stops reporting for a while, the charts show a shaded gap there
+rather than drawing a line across it. The longer ranges load quickly, because they use the summaries Home
+Assistant already keeps rather than every single reading.
+## 2.496.86
+
+### Fixed — the Weather charts stopped following the time range
+In the Weather window, switching the time range worked until 7 days was chosen,
+then the charts stopped changing, and the rain chart never finished loading.
+The window was re-requesting all its history several times a second — every
+time anything in the villa changed — and each request cancelled the one before,
+so the longer 7-day request never completed. It now requests history only when
+the range or the station's sensors change.
+
+### Fixed — a chart of a value that did not change showed nothing
+A reading that stayed the same all day, such as 0 mm of rain, showed "Not
+enough history yet" or an empty box. It now shows a flat line at that value.
+## 2.496.85
+
+### New — a Weather card replaces the Pool card
+The Pool card in the bottom bar is gone: it only counted pool switches that the
+map already shows. In its place, a Weather card shows the outdoor temperature
+from the villa's own weather station, and a tap opens a Weather window:
+
+- **Now** — temperature, feels-like, humidity and dew point, with one plain
+  sentence on how the air feels and whether opening up would help; wind (speed,
+  strength on the Beaufort scale, direction, gusts and today's peak), rain
+  (right now, today, this month and year), UV index with its advice, pressure
+  and whether it is rising or falling over the last three hours, and indoor
+  against outdoor.
+- **Trends** — temperature, pressure, wind and rain over 6 hours to 30 days.
+- **Station** — every sensor on the station and when it last reported.
+
+It uses only the station's own readings and Home Assistant's history — no
+forecast, nothing from the internet. The station is recognised by what it
+measures (wind, rain, sunlight), so the card appears on any villa that has one,
+and not at all on a villa without one.
+## 2.496.84
+
+### Changed — the lamp-light formula is written once and checked by number
+The formula that lights furniture now lives in one place: the shader is
+generated from it, and the tests calculate the same formula to check the
+results that went wrong this week — a table top under a light is lit, while
+the far side of a wall, the room above and the floor (which has its own glow)
+are not. Nothing looks different: a render of the villa is identical, pixel for
+pixel, to the previous version.
+## 2.496.83
+
+### Changed — which lights a villa gets is decided in one place
+Whether a villa gets floor glows, the furniture light and per-lamp shadows now
+comes from one table, chosen once from the kind of 3D model it is, instead of
+from two separate settings that were never checked against each other. Nothing
+should look different. The diagnostic line that said "dynamic light simulation
+disabled" — which had not been true for a long time — now says which lights the
+model actually gets.
+## 2.496.82
+
+### Changed — one module owns everything about a light bulb
+A bulb's brightness, position, on/off and strip handling were decided in about
+fifteen places, which did not always agree. They are now decided in one place.
+
+### Fixed — a light on a hidden floor kept lighting through the ceiling
+With the ground floor shown, a light that was on upstairs could still light the
+rooms below through the ceiling: its floor glow switched off with the hidden
+floor, but its light did not. Both now switch off together, and come back when
+the floor is shown again.
+## 2.496.81
+
+### Changed — one module decides which storey a room or a light is on
+Which storey a room, a light or a device is on used to be guessed from heights,
+in several places with different rules. A room's floor height is measured at
+the centre of the room, and the centre of a staircase is a step, so the
+staircase kept being mistaken for a storey of its own. That caused the last two
+lighting regressions.
+
+VESTA now uses the storey each room already has in your floor plan, and a
+storey's floor is the height most of its rooms share. One thing this fixes
+right away: a ground-floor ceiling light could be placed in no room at all,
+because the staircase's step was taken for its storey. It is now in the room
+it hangs in. Nothing else should look different.
+## 2.496.80
+
+### Fixed — furniture dark again after 2.496.79
+2.496.79 stopped each light at the floor of the storey above, so it could not
+shine through a ceiling. But it took the staircase for "the storey above": a
+room's floor height is measured at the centre of the room, and the centre of
+the staircase is a step, about 0.85 m up. So every ground-floor light stopped
+at about that height, and the table and everything taller went dark again.
+
+A storey above must now be at least 2 m higher, and its floor is the height
+most of its rooms share, so a staircase or a raised terrace no longer counts.
+Lights still stay in their own storey, and furniture is lit again.
+## 2.496.79
+
+### Fixed — light glowing on the outside of the walls
+2.496.78 made the lights wrap round rounded surfaces such as the pouf. That
+also lit surfaces facing away from a bulb, and the outside of a wall is exactly
+that, so the outside of the living room's walls glowed when seen from above.
+The wrap is removed: a surface facing away from a bulb gets none of its light.
+
+### Fixed — a ground-floor light could light the room above it
+Checked from above with the upper floor showing, a ground-floor light also lit
+the walls of the room above it, through the ceiling. A light now stops at the
+floor of the storey above its own.
+## 2.496.78
+
+### Fixed — a flat "disc" of light across the pouf and the sofa
+With the ceiling spots on, the pouf and the sofa were lit on top and dark
+below, with a hard line between — which read as a flat disc of light at seat
+height. The light from 2.496.77 only reached surfaces facing a bulb, so it
+stopped dead wherever a surface turned side-on to the ceiling. The light now
+wraps round rounded and side-on surfaces the way bounced light does in a real
+room: tops stay brightest, sides get a softer share, and there is no edge.
+
+### Fixed — curtains, doors, the TV and other devices stayed dark
+2.496.77 lit the furniture that is part of the building. An audit of the whole
+3D model found 280 more surfaces — curtains, door leaves, the TV, fans and the
+other devices — still lit the old, much weaker way, so the curtains beside a
+lit table stayed dark. Every lit surface now uses the same light. Only the
+lights themselves and glass are left out, on purpose.
+## 2.496.77
+
+### Fixed — the table, chairs and sofa stayed dark under a light that was on
+With the living room's ceiling spots on, the floor around the dining table and
+the sofa lit up, but the table, the chairs, the sofa and the pouf stayed dark.
+
+Two causes, found on the villa's own 3D model:
+
+- In this model the furniture is part of the building, whose lighting is
+  pre-painted — by night, the dark version. VESTA was multiplying a bulb's
+  light on it by that dark paint, so almost nothing showed. Until 2.496.72 the
+  table only looked lit because the floor glow wrongly floated at table height
+  (the disc you saw at the pouf's height).
+- The nine ceiling spots are one light. VESTA split that light nine ways for
+  the furniture, but gave each floor glow the whole of it.
+
+Now each bulb lights what stands near it — table tops, seats, the sofa, and
+the walls facing it — with the same strength as its glow on the floor, from
+where the bulb actually is. The floor glow itself is unchanged, and the
+"Light effect strength" slider scales both together.
+
+The earlier attempts (2.496.73–2.496.75, reverted in 2.496.76) are not
+reinstated as they were: this one was checked by rendering the villa's own
+model from four viewpoints before release.
+## 2.496.76
+
+### Reverted — 2.496.73, 2.496.74 and 2.496.75
+The three previous lighting changes are undone: the extra lamp light on
+furniture, the smaller glow for the stair step lights, and the change to where
+an LED strip's light comes from. None of them fixed what was reported, so the
+lighting is back exactly as it was in 2.496.72, while the actual cause is worked
+out first.
+## 2.496.75
+
+### Fixed — a lamp's light shone from chair height instead of from the lamp
+With only the sofa's ceiling LED on, the walking view showed a band of light at
+the height of the sofa seat and the pouf, rather than light falling from above
+onto the sofa and the floor.
+
+The lamp light added in 2.496.73 was coming from the wrong place. VESTA treats
+an LED strip's light as a single point, moved down from the ceiling so it does
+not print a bright spot on the ceiling above it. Over the sofa that point ended
+up about 1.2 m up, just above the seat, and the sofa was lit from there.
+
+The lamp light now comes from where the lamp actually is: an LED strip shines
+from its centre and both ends at its real height (2.2 m for the sofa's), sharing
+its brightness between them, so one strip is still one lamp's worth of light.
+Checked on the villa's own 3D model: the sofa's light now comes from twelve
+points around the sofa at 2.2 m, instead of one point 1.2 m above the seat.
+The floor glow is unchanged. If the sofa now looks too dim, the "Light effect
+strength" slider raises it.
+## 2.496.74
+
+### Fixed — floating light discs around the staircase in the walking view
+In the walking view, discs of light hung in the air near the living room stairs,
+and the walls around them showed a hard line: lit above, dark below.
+
+The stair's step lights each cast their glow on their own step — correctly — but
+that glow was as wide as a ceiling lamp's (1.8 m across the room), limited only
+by the staircase's outline, which runs the whole flight. So each step's glow
+spread flat over the steps below it: six discs at 0.1 m, 0.5 m, 0.8 m, 1.1 m,
+1.4 m and 1.8 m over one staircase, visible through its open shelving. Measured
+on the villa's own 3D model with its real room plan.
+
+A light mounted right at the surface it lights (a step light) now lights a
+patch about the size of a step. And the lamp light added in 2.496.73 now starts
+from the room's floor rather than the step's height, which removes the hard line
+on the walls. Nothing else changes, and this costs nothing.
+## 2.496.73
+
+### Fixed — furniture under a lamp stayed dark at night
+After 2.496.72 put the lamps' floor glow back on the floor, the dining table,
+chairs and counters under a lamp went dark at night. 2.496.72's note said they
+were "still lit by the lamp itself" — that was wrong, and this is the fix.
+
+On this kind of 3D model the table and chairs are part of the building itself,
+which carries its lighting pre-painted — by night, the dark version. VESTA was
+lighting them with each lamp and then multiplying the result by that dark
+paint, so almost nothing reached the screen. They only looked lit before
+because the floating glow happened to sit at table height.
+
+A lamp that is on now adds its light on top of the painted lighting instead:
+table tops, seats, counters and the walls facing the lamp brighten around it,
+fading with distance, and the floor keeps its own glow as before. The
+"Light effect strength" slider scales it like the rest.
+
+Performance: the lamps' full lighting is no longer computed for the building,
+where it was thrown away; the much lighter glow replaces it. To check on the
+iPad, run Settings → Advanced → Device telemetry → Probe with some lights on
+— it now reports a "no lamp glow" row, the glow's own cost per frame.
+## 2.496.72
+
+### Fixed — light pools floating at table height in the walking view
+In the walking view, the soft glow a lamp casts on the floor sometimes hung in
+the air instead — at about table height (0.75 m) in the living and dining area,
+reading as a bright haze over the table and chairs.
+
+To avoid slowing things down, VESTA works out the floor height once per room and
+reuses it for every lamp in that room. In an open-plan room, the first lamp it
+measured was the kitchen light, which really does sit over a counter at 0.75 m —
+and every other lamp in the room was then given the counter's height instead of
+the floor's. Measured against the villa's own 3D model: 60 of 112 light pools
+were affected before this fix, and 2 remain (two corridor lights over the
+upstairs stairwell, a separate case).
+
+A light pool now always lies on its room's own floor. The table, counter or bed
+under a lamp is still lit by the lamp itself, as before. This costs nothing —
+no extra checks run, and nothing runs while you walk.
+
+## 2.496.71
+
+### Fixed — the history bar said "Off" under a pill saying "No leak"
+Hovering a sensor's "Last 24 hours" bar showed the raw state — "Off", "On" —
+while the pill right above it used the sensor's own wording, such as "No leak".
+The bar now uses the same wording as the pill: a leak sensor reads "No leak" or
+"Leak detected", a motion sensor "Motion detected", a door "Open", and so on for
+every kind of sensor. Other devices keep their readable state ("Unlocked",
+"Open"). A sensor that has stopped reporting always reads "Unavailable", never
+"No leak".
+
+## 2.496.70
+
+**Nothing you should see changed.** Room labels appear, merge and colour
+exactly as before.
+
+Behind that: the part that decides which devices a room label stands for — and
+what two labels become when they are too close and merge (which rooms, which
+devices, where it sits, whether its ring is red) — now has a home of its own
+with automatic checks. The previous check of the merge used its own copy of that
+rule, so the rule that actually ran was never tested.
+
+This is the first part of a larger piece of work: how rooms decide to collapse
+into a label in the first place is still inside the main drawing code.
+
+## 2.496.69
+
+### Fixed — a Facility entry could vanish from the screen right after logging it
+If you logged a completion, a cost or a fault report at the very moment the
+Facility workspace was refreshing itself in the background, the entry could
+disappear from your screen a moment later. It had been saved, and it came back
+on the next refresh (up to a few minutes later), but for that time it looked as
+if it hadn't been recorded. The refresh was fetching an older copy, and applied
+it on top of the entry you had just made.
+
+The Facility workspace and the shared device settings now follow the same rule
+before applying anything they fetch: never on top of something this device has
+just changed and the add-on may not have yet.
+
+## 2.496.68
+
+**Nothing you should see changed.** Badges size and group exactly as before as
+you zoom.
+
+Behind that: how big the villa is on screen at a given zoom, and how much the
+badges shrink when you zoom far out, was worked out by six small pieces of code
+and copied once more by the part that frames a room when you tap it. Five
+earlier faults came from those copies drifting apart — the same zoom giving two
+different layouts, or a tapped room's devices collapsing as you zoomed in. The
+rules now live in one place that every part asks, with automatic checks for each
+of those faults.
+
+## 2.496.67
+
+**Nothing you should see changed.** Walls, stairs and ceilings behave exactly as
+before: ceilings are there while you walk and lifted away in the bird's-eye
+view.
+
+Behind that: ceilings have been the most-changed subject in VESTA's 3D code, and
+the list of them was looked after in five different places — including the one
+that, when it once forgot, leaked 35 MB of memory every time the villa reloaded.
+All of it now lives in one place that finds the ceilings, shows or hides them,
+checks what is over your head, and forgets them on unload, with automatic checks
+that build a small test villa and confirm each of those.
+
+## 2.496.66
+
+**Nothing you should see changed.** VESTA starts, loads the villa and lands in
+the bird's-eye view exactly as before.
+
+Behind that: the screen code listened for "the villa is loaded" and "the rooms
+have been fitted" in three different places, each written its own way, and a
+fourth told the 3D view to switch to the bird's-eye view it had already started
+in. The order these things happen at startup has caused two faults before. They
+now come from one place, and the screen asks it once. Two unused parts of the 3D
+view were also removed.
+
+## 2.496.65
+
+### Fixed — walking view: badges behind walls could be wrong after a floor switch
+In the walking view, VESTA hides the badge of a device that is behind a wall
+from where you stand. It only re-checked that when you took a step. So if you
+switched floors — or a device's badge appeared — while standing still, the old
+answers stayed until you moved: a badge could show through a wall that was now
+in the way, or stay hidden when it was in plain sight, sometimes taking a whole
+room's label with it.
+
+It now re-checks the moment the floor changes or the set of badges on screen
+changes, even if you haven't moved. Everything else is as before: nothing is
+checked while you are walking (so walking stays smooth), and the check starts a
+quarter of a second after you stop.
+
+## 2.496.64
+
+### Fixed — a camera's viewing cone could vanish behind a window
+The coloured cone that shows where a camera is looking could disappear where
+it passed behind a window pane, depending on where you were looking from: orbit
+the villa and it came and went. It was the same kind of fault as the light pools
+fixed in 2.496.53 — the 3D engine decided which see-through thing to draw
+first by distance, and when it drew the window first, the glass hid the cone
+behind it. Reproduced before the fix: from about half of the outside viewpoints
+tested, the cone was cut off.
+
+Every see-through layer in the villa — the red presence overlay, the light
+pools, and now the camera cones — takes its place from one fixed order, so the
+camera angle no longer decides. A cone standing in front of a window may now
+look very slightly tinted by the glass behind it, instead of ever being cut off.
+
+## 2.496.63
+
+### Fixed — the summary bar and the readiness report disagreed about a lock
+A door lock that had stopped reporting read **"1 Unknown"** on the summary bar,
+and **"1 not locked"** in the Facility readiness report — the report was saying
+a door was open when nothing had said so. Both now read their counts from one
+place. The report still warns about such a lock (a door nobody can confirm
+isn't a secured door), but now says what it knows: for example
+"1 unlocked, 1 not reporting".
+
+### Changed — the AC tile counts only this villa's air-conditioning units
+The AC tile used to count every climate device Home Assistant knew about,
+including ones you had removed from VESTA's device list; the readiness report
+already counted only the villa's own. They now agree. The Energy and Pool tiles
+deliberately still count every power sensor and pool switch, because a pump's
+or a plug's power reading usually belongs to that device rather than being a
+device of its own, and leaving it out would under-report the villa's draw.
+
+## 2.496.62
+
+### Fixed — a sensor that is offline right now showed no outage on its chart
+When a sensor stops reporting, its trend chart shades the time it was silent.
+That worked for an outage that had ended — but for one still going on, the
+most important case, the chart showed nothing: no shading, and a line that
+simply stopped. The chart stretched its time axis only from the first to the
+last reading it received, so an outage that began after the last reading fell
+off its right-hand edge.
+
+Charts now always show the whole period you picked (the last hour, day or week),
+right up to now. An ongoing outage is shaded to the right-hand edge, one at the
+very start of the period is shaded from the left, and a sensor that simply
+hasn't changed holds its last value to the present instead of stopping short.
+
+### Fixed — "Last day before …" showed the wrong stretch of time
+For a device offline longer than the period you picked, the history bar is
+titled "Last 24 hours before <date>" and is meant to show the day before it
+went quiet. The bar was still drawing the last 24 hours up to now, so the day
+it was actually given lay off its edge. It now draws the period the title names,
+starting with the state the device was in at the beginning of it.
+
+## 2.496.61
+
+**Nothing you should see changed.** Badges are placed and drawn exactly as
+before.
+
+Behind that: most of the badge layout's own arithmetic already had automatic
+checks, but the faults of recent releases kept landing in the joins between
+those pieces — icons drawn blurry because their picture was prepared at the
+wrong size, badges judged by where their anchor was rather than where they are
+actually drawn, and badges on the far side of the villa overlapping because
+distance shrinks them on screen. That joining code for a single badge now has a
+home of its own, and the checks call it directly — so those three faults are
+tested as the code that runs, not as a copy of it.
+
+This is the first part of this work, not all of it: how badges are grouped into
+cards and room labels is still inside the larger drawing code.
+
+## 2.496.60
+
+**Nothing you should see changed.** Day, night and the overview backdrop look
+exactly as before.
+
+Behind that: the villa's overall brightness, how strongly the sky lights it, and
+the background colour behind it were each set by two or three different parts of
+VESTA — one applying your Render settings, another dimming them for night, a
+third for the overview. The result was only right as long as they always ran in
+the same order, and a change that ran them the other way round would have shown
+the villa at daytime brightness all night. That is also why the sky reflections
+tried in 2.496.47 had to be withdrawn.
+
+Those three are now set in exactly one place, which combines the settings, the
+time of day and the view together, so the order no longer matters. It also
+notes, each time the villa loads, how many surfaces a change to the sky's
+lighting would actually reach — the number that would have shown in advance why
+sky reflections couldn't work on this model.
+
+## 2.496.59
+
+**Nothing you should see changed.** The villa redraws exactly as before —
+sharp when still, full speed while you move, and a gentler pace for things like
+a spinning fan.
+
+Behind that: deciding when to draw the next picture of the villa, and how
+sharply, is the most regression-prone rule in VESTA — earlier releases had
+state updates blurring a settled picture, and a single fan left on keeping the
+whole villa soft. That rule lived inside the drawing loop, reached in three
+different ways by the parts of the app that ask for a redraw, one of which could
+quietly lose the speed limit on animations. It now lives in one place that every
+part asks the same way, with automatic checks that replay those past
+regressions before each release.
+
+## 2.496.58
+
+**Nothing you should see changed.** Light pools on the floor look exactly as
+they did in 2.496.53.
+
+Behind that: the soft pools of light under each lamp were looked after in eight
+different places in the part of VESTA that draws the villa — one to create them,
+another to try again for a lamp whose floor wasn't found at first, another to fit
+each pool to its room once the floor plan is known, several more to switch them
+on and off. Every light-pool fault of recent releases (a lamp that never got a
+pool, pools on the wrong floor of the house, a pool stuck to the ceiling) came
+from how those places fitted together.
+
+They now live in one place with automatic checks of their own, which replay each
+of those past faults against an imaginary villa before every release — so none
+of them can quietly come back.
+
+## 2.496.57
+
+**Nothing you should see changed** — the camera opens exactly as in 2.496.52.
+Two small things behave better:
+
+* **Switching between cameras** no longer sends one wasted request to the camera
+  you just left before starting the new one.
+* **A camera opened while the connection to Home Assistant was down** now starts
+  by itself when the connection comes back, instead of staying on the spinner
+  until you closed and reopened it.
+
+Behind that: the four ways the panel tries to reach a camera (WebRTC, then HLS,
+then a motion-JPEG stream, then still pictures) and the rules for giving up on
+each were tangled into the screen's own code, alongside the swiping, zooming and
+buttons. They now live in their own piece with automatic checks of their own,
+so a change to how cameras are reached can be tested before it reaches the
+wall.
+
+## 2.496.56
+
+### Improved — the pointer shows the hand over everything you can click
+With a mouse, the pointer turned into a hand over a device's badge but stayed an
+arrow over a group card or a room label — even though clicking either one does
+something. It now shows the hand over anything a click would open.
+
+Behind that: deciding what your finger or pointer is on — a card, a badge, a
+room label, or the villa itself — was written out separately for a tap, a
+press-and-hold, a double-tap, the hover label and the pointer shape. Two of
+those copies had already drifted apart in earlier releases, and the pointer's
+copy was the one that had fallen behind. There is now one answer that all five
+use, so they can no longer disagree about what is under your finger.
+
+## 2.496.55
+
+**Nothing you can see changed.** The rules for what each profile may do now
+live in one place.
+
+The add-on checks every request against the profile it came from — Owner,
+Facility Manager or Guest — before passing it to Home Assistant. Those rules
+were written out wherever they were needed: "a guest may not view cameras" once
+for ordinary requests and again for the live connection, the owner's
+exemptions in three places, and five other screens with their own lists of who
+may use them. Adding a profile, or changing what one may do, meant finding
+about a dozen places and hoping none was missed.
+
+They are now one table. Every check asks it, and the automatic checks before
+each release now confirm that both ways into Home Assistant give every profile
+the same answers, and that the table agrees with what the kiosk shows each
+profile. What each profile may do is exactly as before.
+
+## 2.496.54
+
+**Nothing you can see changed.** A safeguard on how the add-on recognises you.
+
+When you open VESTA from Home Assistant's own sidebar, the add-on knows it is
+you — the owner — from a marker that its web server attaches to every request
+it passes on. That marker can only be trusted because the web server always
+replaces whatever the browser sent with its own. It did so correctly, but the
+instruction was written out by hand in nine separate places, one per kind of
+request. A tenth place added one day without that line would have passed the
+browser's own marker through, and anyone who knew to send it would have been
+treated as the owner.
+
+The instruction now lives in one shared file that all nine places use, and the
+automatic checks that run before every release now refuse any place that
+forwards requests without it.
+
+## 2.496.53
+
+### Fixed — lights disappeared from a floor that was red for presence
+With four lights on over the 2F patio, all four pools of light showed on the
+floor while the patio was empty. As soon as someone was detected there and the
+floor turned red, the pools came and went with the camera: one from straight
+above, two from one angle, all four from another. The lights never changed —
+only the way you were looking at them.
+
+The red presence overlay and the light pools are both see-through layers lying
+on the floor at exactly the same height, and nothing said which to draw first.
+The 3D engine then decides by distance to the camera — and it measures the red
+overlay from the middle of the room, each light pool from its own lamp. Tilting
+the view reshuffled that order lamp by lamp, and whenever the red was drawn
+first it blocked the pool underneath it completely.
+
+The red overlay is now always drawn first and the light on top of it, from any
+angle, and neither layer can block anything any more. Where two lamps' pools
+overlap, the light now adds up, as real light does.
+
 ## 2.496.52
 
 ### Fixed — a camera opened as a slideshow in the wrong shape

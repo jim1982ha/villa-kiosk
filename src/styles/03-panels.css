@@ -502,3 +502,162 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .camera-hls-wrap { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+
+/* ── Weather (WeatherPanel.tsx) ─────────────────────────────────────────
+   Two views, from the owner-approved canvas (2026-09-26): "now" (how it
+   feels, advice, six instruments) and "history and trends" (four figures,
+   six charts). The window's width is `summary-group-modal`'s, like every
+   other window the bottom bar opens. Every colour is a theme token: outside
+   = --accent, inside = --accent-warm, water = --cat-energy. Values in tabular
+   figures: digits that shift width as a reading updates read as flicker. */
+.weather-modal .panel-icon:has(.weather-back) { background: var(--bg-input); padding: 0; }
+.weather-back { width: 44px; height: 44px; border: 0; border-radius: 12px; background: transparent; color: var(--text-primary); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.weather-live { font-size: var(--text-sm); color: var(--text-secondary); white-space: nowrap; }
+.weather-ranges { flex: 0 1 auto; }
+.weather-ranges button { padding: 0 12px; min-height: 36px; font-size: var(--text-sm); }
+
+.weather-now, .weather-history { display: flex; flex-direction: column; gap: 18px; padding-top: 8px; }
+.weather-eyebrow { font-size: var(--text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.09em; color: var(--text-secondary); }
+.weather-feels { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
+.weather-headline { font-family: var(--font-display); font-size: var(--text-2xl); font-weight: 500; line-height: 1.15; margin-top: 6px; }
+.weather-big { font-family: var(--font-display); font-size: var(--text-display); font-weight: 500; line-height: 1; font-variant-numeric: tabular-nums; }
+
+.weather-comfort { display: flex; flex-direction: column; gap: 8px; }
+.weather-comfort-bar { position: relative; height: 14px; border-radius: 7px; background: var(--bg-input); display: flex; }
+.weather-band { flex: 1 1 0; }
+.weather-band.b0 { border-radius: 7px 0 0 7px; background: color-mix(in srgb, var(--cat-energy) 34%, transparent); }
+.weather-band.b1 { background: color-mix(in srgb, var(--accent) 40%, transparent); }
+.weather-band.b2 { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.weather-band.b3 { background: color-mix(in srgb, var(--accent-warm) 40%, transparent); }
+.weather-band.b4 { border-radius: 0 7px 7px 0; background: color-mix(in srgb, var(--status-danger) 34%, transparent); }
+.weather-mark { position: absolute; top: -3px; width: 20px; height: 20px; margin-left: -10px; border-radius: 10px; border: 3px solid var(--bg-modal); box-sizing: border-box; }
+.weather-mark.out, .dot.out { background: var(--accent); }
+.weather-mark.in, .dot.in { background: var(--accent-warm); }
+.weather-comfort-labels { display: flex; justify-content: space-between; font-size: var(--text-xs); color: var(--text-secondary); }
+.weather-comfort-legend { display: flex; gap: 22px; flex-wrap: wrap; font-size: var(--text-sm); color: var(--text-primary); }
+.weather-comfort-legend .dot { display: inline-block; width: 10px; height: 10px; border-radius: 5px; margin-right: 6px; }
+
+.weather-advice { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.weather-advice-card { background: var(--bg-input); border-radius: 18px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
+.weather-advice-title { display: flex; align-items: center; gap: 8px; font-size: var(--text-base); font-weight: 600; }
+.weather-advice-mark { width: 26px; height: 26px; flex: 0 0 auto; border-radius: 13px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: var(--text-sm); }
+.tone-good .weather-advice-mark { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); }
+.tone-caution .weather-advice-mark { background: color-mix(in srgb, var(--status-warning) 22%, transparent); color: var(--status-warning); }
+.tone-bad .weather-advice-mark { background: color-mix(in srgb, var(--status-danger) 22%, transparent); color: var(--status-danger); }
+.tone-neutral .weather-advice-mark { background: var(--bg-card); color: var(--text-secondary); }
+.weather-advice-detail { font-size: var(--text-sm); color: var(--text-secondary); line-height: 1.45; }
+
+.weather-instruments { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.weather-tile { background: var(--bg-input); border-radius: 20px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between; gap: 10px; min-width: 0; min-height: 280px; }
+.weather-tile.center { align-items: center; }
+.weather-tile.center > .weather-eyebrow { align-self: flex-start; }
+.weather-tile-foot { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; font-size: var(--text-sm); color: var(--text-secondary); text-align: center; }
+.weather-tile-foot b { color: var(--text-primary); font-weight: 600; }
+.weather-tile-foot.spread { justify-content: space-between; }
+
+.weather-dial { width: 100%; max-width: 206px; height: auto; }
+.dial-ring { fill: none; stroke: var(--hairline-strong); stroke-width: 2; }
+.dial-ring.faint { stroke: var(--hairline); stroke-width: 1; }
+.dial-ticks line { stroke: var(--text-dim); stroke-width: 2; }
+.dial-letters text { font: 700 15px var(--font-ui); fill: var(--text-secondary); text-anchor: middle; }
+.dial-arrow { fill: var(--accent); }
+.dial-value { font: 500 44px var(--font-display); fill: var(--text-primary); text-anchor: middle; }
+.dial-value.small { font-size: 34px; }
+.dial-unit { font: 14px var(--font-ui); fill: var(--text-secondary); text-anchor: middle; }
+.baro-track { fill: none; stroke: var(--hairline-strong); stroke-width: 14; stroke-linecap: round; }
+.baro-zone { fill: none; stroke-width: 14; stroke-linecap: round; opacity: 0.55; }
+.baro-zone.rain { stroke: var(--cat-energy); }
+.baro-zone.fair { stroke: var(--accent-warm); }
+.baro-words text { font: 12px var(--font-ui); fill: var(--text-secondary); }
+.baro-needle { stroke: var(--text-primary); stroke-width: 3; stroke-linecap: round; }
+.baro-hub { fill: var(--text-primary); }
+
+.weather-bars { display: flex; align-items: flex-end; justify-content: space-around; flex: 1 1 auto; min-height: 190px; }
+.weather-bar { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.weather-bar-v { font-size: var(--text-base); font-weight: 600; font-variant-numeric: tabular-nums; }
+.weather-bar-track { width: 22px; height: 140px; border-radius: 11px; background: var(--bg-card); display: flex; align-items: flex-end; overflow: hidden; }
+.weather-bar-fill { width: 100%; border-radius: 11px; }
+.weather-bar-fill.out { background: var(--accent); }
+.weather-bar-fill.feels { background: color-mix(in srgb, var(--accent) 60%, var(--text-primary)); }
+.weather-bar-fill.water { background: var(--cat-energy); }
+.weather-bar-fill.in { background: var(--accent-warm); }
+.weather-bar-l { font-size: var(--text-xs); color: var(--text-secondary); }
+
+.weather-rings { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: space-around; gap: 12px; }
+.weather-ring-row { display: flex; align-items: center; gap: 16px; }
+.weather-ring { width: 104px; height: 104px; flex: 0 0 auto; }
+.ring-track { fill: none; stroke: var(--bg-card); stroke-width: 12; }
+.ring-fill { fill: none; stroke-width: 12; stroke-linecap: round; }
+.ring-fill.water { stroke: var(--cat-energy); }
+.ring-fill.in { stroke: var(--accent-warm); }
+.ring-value { font: 500 28px var(--font-display); fill: var(--text-primary); text-anchor: middle; }
+.weather-ring-l { font-size: var(--text-base); font-weight: 600; }
+.weather-ring-s { font-size: var(--text-sm); color: var(--text-secondary); }
+
+.weather-gauge { flex: 1 1 auto; display: flex; align-items: stretch; gap: 20px; min-height: 230px; }
+.weather-tube { width: 92px; height: 100%; min-height: 230px; flex: 0 0 auto; }
+.tube-scale text { font: 12px var(--font-ui); fill: var(--text-secondary); text-anchor: end; }
+.tube-ticks line { stroke: var(--hairline-strong); stroke-width: 1.5; }
+.tube-glass { fill: var(--bg-card); stroke: var(--hairline-strong); stroke-width: 2.5; }
+.tube-water { fill: var(--cat-energy); }
+.tube-unit { font: 11px var(--font-ui); fill: var(--text-secondary); text-anchor: middle; }
+.weather-gauge-read { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: space-between; padding: 6px 0; }
+.weather-gauge-read div { display: flex; flex-direction: column; gap: 2px; }
+.weather-gauge-read span { font-size: var(--text-xs); color: var(--text-secondary); }
+.weather-gauge-read b { font-size: var(--text-lg); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.weather-sun { width: 100%; height: auto; max-height: 150px; }
+.sun-path { fill: none; stroke: var(--hairline-strong); stroke-width: 3; stroke-dasharray: 4 6; }
+.sun-dot { fill: var(--text-dim); }
+.sun-dot.day { fill: var(--accent-warm); }
+.sun-value { font: 500 30px var(--font-display); fill: var(--text-primary); text-anchor: middle; }
+
+
+.weather-figures { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.weather-figure { background: var(--bg-input); border-radius: 16px; padding: 12px 14px; }
+.weather-figure-l { font-size: var(--text-xs); color: var(--text-secondary); }
+.weather-figure-v { font-size: var(--text-lg); font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 2px; }
+.weather-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.weather-tile.chart { min-height: 220px; justify-content: flex-start; }
+.weather-chart-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.weather-legend { display: flex; gap: 12px; font-size: var(--text-xs); color: var(--text-secondary); }
+.weather-legend .key { display: inline-block; width: 14px; height: 3px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
+.weather-legend .key.area { height: 8px; opacity: 0.45; }
+.key.out { background: var(--accent); }
+.key.in { background: var(--accent-warm); }
+.key.water { background: var(--cat-energy); }
+.key.warm { background: var(--accent-warm); }
+.key.ink { background: var(--text-primary); }
+.weather-chart { width: 100%; height: 150px; flex: 1 1 auto; }
+.weather-chart-wrap { flex: 1 1 auto; display: flex; }
+/* The shared chart tip (spark-tip), one row a line, each with its colour. */
+.chart-tip strong { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+.chart-tip .key { display: inline-block; width: 8px; height: 8px; border-radius: 4px; flex: 0 0 auto; }
+.weather-chart-empty { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; }
+.chart-grid line { stroke: var(--hairline); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.chart-line { fill: none; stroke-width: 2.4; stroke-linejoin: round; }
+.chart-line.out { stroke: var(--accent); }
+.chart-line.in { stroke: var(--accent-warm); }
+.chart-line.water { stroke: var(--cat-energy); }
+.chart-line.warm { stroke: var(--accent-warm); }
+.chart-line.ink { stroke: var(--text-primary); opacity: 0.8; }
+.chart-line.thin { stroke-width: 1.6; }
+.chart-line.dashed { stroke-dasharray: 5 4; }
+.chart-area { stroke: none; }
+.chart-area.out { fill: color-mix(in srgb, var(--accent) 28%, transparent); }
+.chart-area.warm { fill: color-mix(in srgb, var(--accent-warm) 26%, transparent); }
+.chart-bar { fill: var(--cat-energy); }
+.chart-empty-note { font: 14px var(--font-ui); fill: var(--text-secondary); text-anchor: middle; }
+.weather-axis { display: flex; justify-content: space-between; font-size: var(--text-xs); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+
+/* A phone: one column of advice, two of instruments, one of charts. */
+@media (max-width: 720px) {
+  .weather-advice { grid-template-columns: 1fr; }
+  .weather-instruments { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .weather-figures { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .weather-charts { grid-template-columns: 1fr; }
+}
+@media (max-width: 480px) {
+  .weather-instruments { grid-template-columns: 1fr; }
+  .weather-big { font-size: var(--text-display-sm); }
+}

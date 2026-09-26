@@ -1,10 +1,9 @@
 // src/babylon/LightPools.ts
-// Baked-lighting villas render their structure UNLIT (see ModelLoader's
-// BAKED_MATERIAL_PREFIX) — the walls/floor/ceiling ignore every dynamic
-// light by design (that's what makes the baked look crisp and cheap), so a
-// real PointLight is never even created for them (see EntityVisuals'
-// bakedMode branch) and turning an HA light on never visibly brightens the
-// room around it — only the fixture's own emissive glow shows.
+// A baked villa's structure carries its lighting in the bake — the walls and
+// floor do not answer to a runtime light (albedo-baked: unlit; lightmapped:
+// multiplied by the bake, see lampGlow.ts), so turning an HA light on would
+// never visibly brighten the floor around it; only the fixture's own emissive
+// would show. Which villas get pools is lightingMode.ts.
 //
 // This fakes it: a soft, warm, ADDITIVE-blended radial "pool" laid flat on
 // the floor under each fixture, sized from the light's range and
@@ -24,6 +23,7 @@ import type { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { Scene } from "@babylonjs/core/scene";
 
 import { earClipTriangulate, regularPolygon, type Pt2 } from "@/utils/geometry";
+import { LIGHT_POOL_ALPHA_INDEX } from "./seeThroughOrder";
 
 const POOL_TEXTURE_SIZE = 128;
 /** Sides of the pool's own footprint when it is not clipped to a room. Eight
@@ -67,10 +67,22 @@ let sharedTexture: DynamicTexture | null = null;
  *  identical on every engine, so there's nothing left for any browser to add
  *  noise to.
  */
-const POOL_ALPHA_STOPS: ReadonlyArray<readonly [number, number]> = [
+export const POOL_ALPHA_STOPS: ReadonlyArray<readonly [number, number]> = [
   [0, 0.9], [0.45, 0.35], [1, 0],
 ];
-function poolAlphaAt(normalisedDist: number): number {
+/** How strongly a pool shows a light — its material alpha, which in ADDITIVE
+ *  blending is its brightness. The one copy: the lamp glow (lampGlow.ts)
+ *  lights furniture by the same amount, so a bulb can no longer light the
+ *  floor under it and the table under it by different rules.
+ *
+ *  ⚠️ Not a clamp, though it reads as one: the floor applies to
+ *  intensityFrac BEFORE the scale, and the ceiling to the product. Flooring
+ *  the result instead would let a zeroed intensityScale still paint a pool. */
+export function poolStrength(intensityFrac: number, intensityScale: number): number {
+  return Math.min(2, Math.max(0.15, intensityFrac) * intensityScale);
+}
+
+export function poolAlphaAt(normalisedDist: number): number {
   for (let i = 0; i < POOL_ALPHA_STOPS.length - 1; i++) {
     const [t0, a0] = POOL_ALPHA_STOPS[i];
     const [t1, a1] = POOL_ALPHA_STOPS[i + 1];
@@ -132,8 +144,8 @@ export class LightPool {
   readonly mesh: Mesh;
   /** Per-pool brightness multiplier applied on top of the live intensity. 1 for
    *  a normal single-fixture pool; <1 for a strip's END pools (a light "sitting
-   *  in" for the corner where two adjoining strips meet) — see EntityVisuals'
-   *  light-creation block, where an elongated strip gets a full-intensity pool
+   *  in" for the corner where two adjoining strips meet) — see
+   *  LightPoolSet.addFixture, where an elongated strip gets a full-intensity pool
    *  at its centre plus two half-intensity pools at its ends, so two adjoining
    *  strips' end-pools sum to roughly the centre's brightness at the shared
    *  corner instead of leaving it dark (or, if both ends were left at 1,
@@ -141,14 +153,17 @@ export class LightPool {
   intensityScale = 1;
   /** The Y the floor probe was cast FROM (the fixture's own height), kept so
    *  the pool can be re-probed later without the caller having to remember
-   *  where its fixture was — see EntityVisuals.reshapeLightPools, which re-asks
+   *  where its fixture was — see LightPoolSet.setRooms, which re-asks
    *  once calibration lets the probe answer per room instead of per 4m cell. */
   probeFromY = 0;
+  /** The world radius its falloff is drawn across — the lamp glow projects
+   *  the same falloff onto what stands under it. */
+  radius = 0;
   private material: StandardMaterial;
 
   /** `floorPosition` — where the pool sits (the caller has already found the
    *  floor below the fixture, e.g. by raycast, and offset it clear of
-   *  z-fighting — see EntityVisuals' light-creation block for that logic,
+   *  z-fighting — see LightPoolSet.build for that logic,
    *  shared with the strip-drop placement). `radius` — the pool's
    *  world-space radius. `shape` — the world-space XZ polygon the pool should
    *  cover, normally its room clipped to its own footprint; omitted (the load
@@ -156,6 +171,7 @@ export class LightPool {
    *  the plain footprint, which is what every pool looked like before 2.300.0. */
   constructor(scene: Scene, name: string, floorPosition: Vector3, radius: number, shape?: Pt2[]) {
     this.mesh = new Mesh(`lightPool_${name}`, scene);
+    this.radius = radius;
     this.mesh.position.copyFrom(floorPosition);
     this.applyShape(shape, radius);
     this.mesh.isPickable = false;
@@ -163,6 +179,8 @@ export class LightPool {
     // Excluded from shadow casters / IBL surfaces exactly as the room glow's
     // meshes are — it is a marker, not villa geometry.
     this.mesh.metadata = { isMarker: true };
+    // After the presence glow, whatever the camera does — seeThroughOrder.ts.
+    this.mesh.alphaIndex = LIGHT_POOL_ALPHA_INDEX;
 
     this.material = new StandardMaterial(`lightPoolMat_${name}`, scene);
     this.material.diffuseTexture = poolTexture(scene);
@@ -176,13 +194,16 @@ export class LightPool {
     // whole point, since a normal alpha-blend decal would just paint a flat
     // circle over the (unlit) floor rather than reading as "lit".
     this.material.alphaMode = Constants.ALPHA_ADD;
+    // Light adds to a floor; it never hides anything. Two overlapping pools
+    // now both add, where a depth write let the first reject the second.
+    this.material.disableDepthWrite = true;
     this.mesh.material = this.material;
     this.mesh.setEnabled(false);
   }
 
   /**
    * Rebuild the pool's footprint in place. Called once per pool after the
-   * plan→world calibration lands (EntityVisuals.reshapeLightPools), never on a
+   * plan→world calibration lands (LightPoolSet.setRooms), never on a
    * state change — see `setState`, which is what a tap actually runs.
    *
    * `floorY` moves the pool onto its room's real floor at the same time,
@@ -192,6 +213,7 @@ export class LightPool {
    * shape and wrong in height.
    */
   reshape(shape: Pt2[] | undefined, radius: number, floorY?: number): void {
+    this.radius = radius;
     if (floorY !== undefined) this.mesh.position.y = floorY;
     this.applyShape(shape, radius);
   }
@@ -252,10 +274,7 @@ export class LightPool {
     this.mesh.setEnabled(on);
     if (!on) return;
     this.material.emissiveColor = colour;
-    // ⚠️ Not a clamp, though it reads as one: the floor applies to
-    // intensityFrac BEFORE the scale, and the ceiling to the product. Flooring
-    // the result instead would let a zeroed intensityScale still paint a pool.
-    this.material.alpha = Math.min(2, Math.max(0.15, intensityFrac) * this.intensityScale);
+    this.material.alpha = poolStrength(intensityFrac, this.intensityScale);
   }
 
   dispose(): void {

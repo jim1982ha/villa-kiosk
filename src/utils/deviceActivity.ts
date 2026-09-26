@@ -171,3 +171,52 @@ export function classifyDeviceActivity({ type, entity: s, alertState }: DeviceRe
     default:              return s.state === "on" ? "on" : "off"; // light/fan/switch/input_boolean
   }
 }
+
+/**
+ * How a device's own 3D MESH shows its reading — derived from the SAME
+ * classification the badge is painted from, never from a second reading of
+ * the state.
+ *
+ * ⚠️ THE MESH HAD ITS OWN COPY AND ONLY THE BADGE WAS FIXED (to 2.496.95).
+ * EntityVisuals.applyToMesh tested the raw state itself: a lock was green when
+ * `locked` and red otherwise, so it flashed red for the second a motorised
+ * lock reports `locking` — the exact alarm the badge's TRANSITIONAL_STATES rule
+ * had removed; a binary_sensor pulsed red on `on` whatever its device_class, so
+ * every motion PIR pulsed like a leak while a `connectivity` sensor that went
+ * OFF — its real alert — never did; a media_player glowed on `on` but not on
+ * `buffering`. Now the mesh asks classifyDeviceActivity, as the badge does.
+ *
+ *   * `tint` — a lock's whole-mesh colour: secure, alert, or unavailable;
+ *   * `pulse` — an alerting sensor's red pulse;
+ *   * `glow` — an active switch/player's soft glow;
+ *   * `dark` — no emissive at all (the baked marker glow must not show);
+ *   * `none` — nothing to paint here (lights: BulbSet; covers: their pose).
+ */
+export type MeshLook =
+  | { kind: "none" }
+  | { kind: "dark" }
+  | { kind: "glow"; on: boolean }
+  | { kind: "pulse"; on: boolean; unavailable: boolean }
+  | { kind: "tint"; tone: "secure" | "alert" | "unavailable" };
+
+export function meshLookFor(r: DeviceReading): MeshLook {
+  const kind = badgeKindFor({ ...r, linkedOn: false });
+  switch (r.type) {
+    case "light":
+    case "cover":
+      return { kind: "none" };
+    case "lock":
+      return { kind: "tint", tone: kind === "unavailable" ? "unavailable" : kind === "alert" ? "alert" : "secure" };
+    case "binary_sensor":
+      return { kind: "pulse", on: kind === "alert", unavailable: kind === "unavailable" };
+    case "switch":
+    case "media_player":
+      return { kind: "glow", on: kind === "on" };
+    case "fan":
+    case "sensor":
+    case "climate":
+      return { kind: "dark" };
+    default:
+      return { kind: "none" };
+  }
+}

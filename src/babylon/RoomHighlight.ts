@@ -24,11 +24,13 @@ import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import type { Scene } from "@babylonjs/core/scene";
-import { clipPolygonToConvex, earClipTriangulate, pointInPolygon, regularPolygon, type Pt2 } from "@/utils/geometry";
+import { clipPolygonToConvex, earClipTriangulate, regularPolygon, type Pt2 } from "@/utils/geometry";
 import type { FloorProbe } from "./floorProbe";
+import type { FrameRequests } from "./frameScheduler";
 import { roomKey } from "@/config/roomKey";
-import { nearestFloorRoom } from "./roomStorey";
+import { Storeys } from "./storeys";
 import { ALERT_RED } from "./colors";
+import { ROOM_GLOW_ALPHA_INDEX } from "./seeThroughOrder";
 
 // Same red as a running climate device's mesh outline / the badge alert ring
 // — see colors.ts. Was its own slightly-off Color3 before.
@@ -71,6 +73,15 @@ interface RoomEntry {
   material: StandardMaterial;
 }
 
+/** A calibrated room as the highlight draws it: its outline on its floor, or
+ *  a stepped room's surface-hugging mesh. */
+export interface HighlightRoom {
+  name: string;
+  pts: Pt2[];
+  floorY: number;
+  conform?: { positions: number[]; indices: number[] };
+}
+
 export class RoomHighlight {
   private scene: Scene;
   private requestRender: () => void;
@@ -86,28 +97,31 @@ export class RoomHighlight {
   /** performance.now() of the last glow step — see animate(). */
   private readonly clock = new FrameClock();
 
-  /** The room polygons `setRooms` last received, kept ONLY so a point-room's
-   *  synthetic circle can be clipped to whichever room contains it — same fix,
-   *  same reason, as the light pool's (see setPointRooms). Not a second source
-   *  of truth: it is overwritten wholesale on every re-fit, from the same
-   *  argument the meshes are built from. */
-  private roomShapes: { pts: Pt2[]; floorY: number }[] = [];
+  /** The villa plan `setRooms` last received (storeys.ts), kept so a
+   *  point-room's synthetic circle can be clipped to whichever room contains
+   *  it — same fix, same reason, as the light pool's (see setPointRooms). The
+   *  SAME object every other reader holds, not a copy of its rooms. */
+  private plan = new Storeys<HighlightRoom>([]);
+  /** Shared with EntityVisuals and SceneManager — see floorProbe.ts. Was
+   *  three private raycasts with three predicates before 2.300.0. A plain
+   *  field, not a parameter property: Node's type stripping cannot run the
+   *  shorthand, and tests/oracles/floor_overlay_order.mjs loads this class. */
+  private probe: FloorProbe;
 
   constructor(
     scene: Scene,
-    requestRender: () => void,
-    /** Shared with EntityVisuals and SceneManager — see floorProbe.ts. Was
-     *  three private raycasts with three predicates before 2.300.0. */
-    private probe: FloorProbe,
-    /** Rate-capped re-arm for the glow PULSE specifically — a highlight can
-     *  stay up indefinitely (a room flagged for overdue maintenance is the
-     *  normal case), so its pulse is a permanent animation, not a transition.
-     *  Falls back to requestRender when not supplied. */
-    requestAnimationRender?: () => void,
+    /** Repaint after a toggle, and a rate-capped frame for the glow PULSE — a
+     *  highlight can stay up indefinitely (a room flagged for overdue
+     *  maintenance is the normal case), so its pulse is a permanent animation,
+     *  not a transition. One object: the capped half used to be an optional
+     *  argument that fell back to the uncapped one. See frameScheduler.ts. */
+    frames: FrameRequests,
+    probe: FloorProbe,
   ) {
     this.scene = scene;
-    this.requestRender = requestRender;
-    this.requestAnimationRender = requestAnimationRender ?? requestRender;
+    this.probe = probe;
+    this.requestRender = () => frames.repaint();
+    this.requestAnimationRender = () => frames.animate();
     scene.registerBeforeRender(() => this.animate());
   }
 
@@ -130,8 +144,22 @@ export class RoomHighlight {
     material.emissiveColor = GLOW_COLOR;
     material.alpha = 0;
     material.backFaceCulling = false;
+    // A film on the floor, never an occluder — see seeThroughOrder.ts. It
+    // wrote depth at the light pools' own height, which is what hid them.
+    material.disableDepthWrite = true;
     if (isDecal) material.zOffset = -2;
     return material;
+  }
+
+  /** What every glow mesh is, whichever of the three builders made it. */
+  private adopt(key: string, mesh: Mesh, isDecal: boolean): RoomEntry {
+    const material = this.makeGlowMaterial(key, isDecal);
+    mesh.material = material;
+    mesh.isPickable = false;
+    mesh.metadata = { isMarker: true }; // exclude from shadow casters/IBL surfaces, same as markers
+    // Drawn before the light pools whatever the camera does — seeThroughOrder.ts.
+    mesh.alphaIndex = ROOM_GLOW_ALPHA_INDEX;
+    return { mesh, material };
   }
 
   private buildMesh(key: string, pts: Pt2[], y: number): RoomEntry | null {
@@ -156,13 +184,7 @@ export class RoomHighlight {
     vd.indices = indices;
     vd.normals = normals;
     vd.applyToMesh(mesh);
-
-    const material = this.makeGlowMaterial(key, false);
-    mesh.material = material;
-    mesh.isPickable = false;
-    mesh.metadata = { isMarker: true }; // exclude from shadow casters/IBL surfaces, same as markers
-
-    return { mesh, material };
+    return this.adopt(key, mesh, false);
   }
 
   /**
@@ -190,11 +212,7 @@ export class RoomHighlight {
         mesh.dispose();
         return null;
       }
-      const material = this.makeGlowMaterial(key, true);
-      mesh.material = material;
-      mesh.isPickable = false;
-      mesh.metadata = { isMarker: true };
-      return { mesh, material };
+      return this.adopt(key, mesh, true);
     } catch {
       // Decals have real limitations (e.g. no morph-target meshes) — fall
       // back to the flat circle rather than let a rare bad case crash setup.
@@ -216,11 +234,10 @@ export class RoomHighlight {
    *  shows on the ground floor": every room used to render at this same
    *  fixed ground-level Y regardless of its real storey.
    */
-  setRooms(polys: { name: string; pts: Pt2[]; floorY?: number; conform?: { positions: number[]; indices: number[] } }[]): void {
+  setRooms(plan: Storeys<HighlightRoom>): void {
     this.disposeMap(this.polyRooms);
-    this.roomShapes = polys.filter((p) => p.pts.length >= 3)
-      .map((p) => ({ pts: p.pts, floorY: p.floorY ?? 0 }));
-    for (const room of polys) {
+    this.plan = plan;
+    for (const room of plan.rooms) {
       const key = RoomHighlight.normalise(room.name);
       // A stepped room (staircase) ships a surface-hugging vertex mesh from
       // SceneManager.buildRoomConform; a flat room just gets its polygon patch.
@@ -244,11 +261,7 @@ export class RoomHighlight {
     vd.indices = indices;
     vd.normals = normals;
     vd.applyToMesh(mesh);
-    const material = this.makeGlowMaterial(key, false);
-    mesh.material = material;
-    mesh.isPickable = false;
-    mesh.metadata = { isMarker: true };
-    return { mesh, material };
+    return this.adopt(key, mesh, false);
   }
 
   /** (Re)build a synthetic glow for each named TeleportMenu point that ISN'T
@@ -281,7 +294,7 @@ export class RoomHighlight {
    * it. A horizontal circle passes straight through the base of a vertical
    * wall, so a landing sitting within POINT_ROOM_RADIUS of one painted its glow
    * on BOTH sides — the identical defect the light pool had, in the second
-   * place a flat floor marker is drawn (see EntityVisuals.reshapeLightPools).
+   * place a flat floor marker is drawn (see LightPoolSet.setRooms).
    *
    * Circle = the convex CLIP, room = the possibly-L-shaped SUBJECT; that order
    * is what makes the clip correct (see clipPolygonToConvex). Unclipped when
@@ -296,9 +309,8 @@ export class RoomHighlight {
     // 2F landing's glow to the outline of a ground-floor room — found by
     // rolling this rule out across what it APPLIES to rather than where it was
     // reported. `floorY` here IS a floor (the anchor's own), so this is the
-    // nearest-floor question, not the fixture one — see nearestFloorRoom.
-    const room = nearestFloorRoom(
-      this.roomShapes, floorY, (r) => pointInPolygon(x, z, r.pts));
+    // nearest-floor question, not the fixture one — see Storeys.roomStandingOn.
+    const room = this.plan.roomStandingOn(x, floorY, z);
     if (!room) return circle;
     const clipped = clipPolygonToConvex(room.pts, circle);
     return clipped.length >= 3 ? clipped : circle;

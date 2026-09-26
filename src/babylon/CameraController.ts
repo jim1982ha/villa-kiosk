@@ -4,6 +4,7 @@
 // handled via moveWithCollisions each frame. Look-around uses Babylon's built-in
 // touch/mouse rotation.
 
+import { eyeHeightOf } from "./walkerSpawn";
 import { FrameClock } from "./frameClock";
 import { UniversalCamera } from "@babylonjs/core/Cameras/universalCamera";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
@@ -17,7 +18,7 @@ import type { AppConfig } from "@/config/AppConfig";
 import { roomKey } from "@/config/roomKey";
 import type { TeleportPoint } from "@/types/scene.types";
 import { clamp, pointInPolygon, type Pt2 } from "@/utils/geometry";
-import { nearestFloorRoom } from "./roomStorey";
+import { Storeys } from "./storeys";
 import { rayTargets } from "./meshRoles";
 import { TapRecognizer } from "./TapRecognizer";
 // Babylon prototype patches this module depends on — see babylonSideEffects.
@@ -51,9 +52,9 @@ export class CameraController {
   private moveX = 0; // strafe, -1..1
   private moveY = 0; // forward, -1..1
   private roomAnchors: RoomAnchor[] = [];
-  /** Normalised by setRoomPolygons — `floorY` is always present here, because
-   *  the per-frame storey test must not have to default it. */
-  private roomPolygons: Array<{ name: string; pts: Pt2[]; floorY: number }> = [];
+  /** The villa plan SceneManager built (storeys.ts) — the same object the
+   *  badges, highlights and pools read, so "which room am I in" has one answer. */
+  private plan = new Storeys<{ name: string; pts: Pt2[]; floorY: number }>([]);
   private currentRoom: string | null = null;
   /**
    * What `followFloor`'s raycasts cost, since the last read — the instrument for
@@ -81,14 +82,6 @@ export class CameraController {
    * `floorRays=0` reads as "cheap" when it means "not asked".
    */
   readonly floorProbeCost = { rays: 0, ms: 0, still: 0, flat: false, cand: 0 };
-  /** Scratch for `roomHitTest` — see updateRoom. */
-  private hitX = 0;
-  private hitZ = 0;
-  /** Allocated ONCE. `nearestFloorRoom` takes a predicate so a caller need not
-   *  build a filtered array per frame; handing it a fresh arrow each frame
-   *  would have given back the allocation it was designed to save. */
-  private roomHitTest = (r: { pts: Pt2[] }): boolean =>
-    pointInPolygon(this.hitX, this.hitZ, r.pts);
   private animating = false;
   private eyeHeight: number;
   private walkSpeed: number;
@@ -105,7 +98,7 @@ export class CameraController {
     this.config = config;
     this.cb = cb;
     this.canvas = canvas;
-    this.eyeHeight = config.eyeHeight ?? 1.7;
+    this.eyeHeight = eyeHeightOf(config.eyeHeight);
     this.walkSpeed = config.walkSpeed ?? 1;
 
     this.camera = new UniversalCamera("villaCamera", new Vector3(0, this.eyeHeight, 0), scene);
@@ -345,11 +338,11 @@ export class CameraController {
    * is ignored so you don't end up stuck outside.
    */
   walkTo(x: number, z: number): void {
-    if (this.roomPolygons.length > 0) {
+    if (this.plan.rooms.length > 0) {
       // EVERY storey's outline, deliberately — unlike updateRoom below. The
       // question here is "is this spot inside the house at all", and a point
       // under an upper-storey room is inside the house by any reading.
-      const inside = this.roomPolygons.some((r) => pointInPolygon(x, z, r.pts));
+      const inside = this.plan.rooms.some((r) => pointInPolygon(x, z, r.pts));
       if (!inside) return; // clicked outside the rooms — ignore
     }
     this.autoTarget = { x, z };
@@ -920,11 +913,9 @@ export class CameraController {
     this.updateRoom();
   }
 
-  /** Set the (model-space) room polygons used for point-in-polygon labelling.
-   *  `floorY` is defaulted HERE rather than at each read: `updateRoom` runs on
-   *  every frame of a walk and must not allocate a normalised copy per frame. */
-  setRoomPolygons(polys: Array<{ name: string; pts: Pt2[]; floorY?: number }>): void {
-    this.roomPolygons = polys.map((p) => ({ ...p, floorY: p.floorY ?? 0 }));
+  /** The calibrated villa plan (world space), for room labelling and framing. */
+  setPlan(plan: Storeys<{ name: string; pts: Pt2[]; floorY: number }>): void {
+    this.plan = plan;
   }
 
   /** World-space XZ bounding box (plus the room's floor height) of a real
@@ -952,7 +943,7 @@ export class CameraController {
     // in RoomHighlight's two maps, in `roomClustered`, in `resolvedRooms` and
     // in the teleport points. Changing it is a design change to what a room IS.
     // Fix it the day a plan with duplicate room names is reported, not before.
-    const poly = this.roomPolygons.find((r) => roomKey(r.name) === key);
+    const poly = this.plan.rooms.find((r) => roomKey(r.name) === key);
     if (!poly || poly.pts.length === 0) return null;
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
     for (const p of poly.pts) {
@@ -974,12 +965,12 @@ export class CameraController {
     // over the lower one's and a bare containment test answers with whichever
     // was listed first — the load order of `.rooms.json`. Standing in the
     // ground-floor kitchen, the walk-in banner read "Tearrace 2F". Same defect,
-    // same fix as the light pools (see roomStorey.ts); this reader was missed
+    // same fix as the light pools (see storeys.ts); this reader was missed
     // when that rule was rolled out, which is what the dry-audit skill exists
     // to catch.
     //
     // ⚠️ AND VIA THE FEET, not the eye-and-clearance rule a FIXTURE needs —
-    // see `nearestFloorRoom`. Reusing the fixture rule here cost a release: a
+    // see `Storeys.roomStandingOn`. Reusing the fixture rule here cost a release: a
     // walker knows exactly which floor it is on (its feet are on it), while
     // that rule has to guess from a mounting height and so works from "the
     // highest floor a clearance BELOW the point". This villa reports three
@@ -987,15 +978,11 @@ export class CameraController {
     // that test, every ground-floor room was filtered out, and the banner
     // showed NOTHING AT ALL. Nearest-floor always returns one of the rooms
     // that contain the point, so this reader can never lose a name it had.
-    if (this.roomPolygons.length > 0) {
-      const px = this.camera.position.x;
-      const pz = this.camera.position.z;
-      // The predicate is a FIELD, not an arrow written here: this runs on every
-      // frame of a walk, and a closure per frame is the kind of steady-state
-      // garbage the rest of this app pools specifically to avoid.
-      this.hitX = px;
-      this.hitZ = pz;
-      room = nearestFloorRoom(this.roomPolygons, this.getFeetY(), this.roomHitTest)?.name ?? null;
+    if (this.plan.rooms.length > 0) {
+      // Allocation-free (Storeys.roomStandingOn): this runs on every frame of
+      // a walk, and a closure per frame is the kind of steady-state garbage
+      // the rest of this app pools specifically to avoid.
+      room = this.plan.roomStandingOn(this.camera.position.x, this.getFeetY(), this.camera.position.z)?.name ?? null;
     } else if (this.roomAnchors.length > 0) {
       // Fallback: nearest anchor within ~3.5 m.
       let best = Infinity;

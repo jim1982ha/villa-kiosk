@@ -1,8 +1,17 @@
 // src/ha/HAHistoryAPI.ts
-// Fetch recent entity history via the REST API for panel sparklines/timelines.
+// Every history a panel draws, from either of Home Assistant's two recorder
+// paths, returned in ONE shape (HistorySeries: points, gaps, window):
+//   * STATES over REST — each change the entity reported (fetchHistory,
+//     fetchStateHistory): the device panels' sparklines and timelines;
+//   * STATISTICS over the websocket — the recorder's 5-minute / hourly / daily
+//     buckets (fetchStatistics): the Weather window, whose station reports
+//     every 16 s — 30 days of raw wind would be ~160,000 rows.
+// Which one a chart reads is the adapter's business; the gaps travel with the
+// points on both (utils/statisticsSeries.ts for why that was not always so).
 
 import { gapsFrom } from "@/utils/historyGaps";
-import type { StateHistoryPoint, HistorySeries } from "@/types/ha.types";
+import { statisticsSeries, type StatisticField, type StatisticsPeriod } from "@/utils/statisticsSeries";
+import type { StateHistoryPoint, HistorySeries, StatisticPeriod } from "@/types/ha.types";
 import { ingressApiBase } from "./ingress";
 
 interface RawHistoryState {
@@ -11,7 +20,9 @@ interface RawHistoryState {
   last_updated?: string;
 }
 
-async function fetchRaw(entityId: string, hours: number): Promise<RawHistoryState[]> {
+async function fetchRaw(
+  entityId: string, hours: number,
+): Promise<{ rows: RawHistoryState[]; window: { from: number; to: number } }> {
   // The add-on's Supervisor proxy injects the token server-side, so we hit it
   // token-less (session cookie carries the browser's authorization).
   const apiBase = ingressApiBase();
@@ -31,7 +42,7 @@ async function fetchRaw(entityId: string, hours: number): Promise<RawHistoryStat
   const res = await fetch(url);
   if (!res.ok) throw new Error(`History request failed: ${res.status}`);
   const data = (await res.json()) as RawHistoryState[][];
-  return data[0] ?? [];
+  return { rows: data[0] ?? [], window: { from: now - hours * 3600 * 1000, to: now } };
 }
 
 /** A history row's numeric value, or NaN when there was no reading at all.
@@ -57,7 +68,7 @@ export function numericState(raw: unknown): number {
  * overload that hands back points alone.
  */
 export async function fetchHistory(entityId: string, hours = 24): Promise<HistorySeries> {
-  const series = await fetchRaw(entityId, hours);
+  const { rows: series, window } = await fetchRaw(entityId, hours);
   const rows = series
     // ⚠️ A MISSING READING MUST BECOME NaN, NEVER 0. `Number(null)` is 0 and so
     // is `Number("")`, and both are `Number.isFinite`, so the filter below —
@@ -69,10 +80,12 @@ export async function fetchHistory(entityId: string, hours = 24): Promise<Histor
     .map((s) => ({ t: new Date(s.last_changed).getTime(), v: numericState(s.state) }));
   return {
     points: rows.filter((p) => Number.isFinite(p.v)),
-    // `Date.now()` rather than the last row's stamp: an entity that is
-    // unavailable NOW has an outage that has not ended. The chart clamps the
-    // band to its own plot, so an end beyond the last point is safe here.
-    gaps: gapsFrom(rows, Date.now()),
+    // The window's end rather than the last row's stamp: an entity that is
+    // unavailable NOW has an outage that has not ended. That was "safe" only in
+    // a comment until 2.496.62 — the charts scaled to their last finite point,
+    // so the band fell off the plot. They draw `window` now (lineChart.ts).
+    gaps: gapsFrom(rows, window.to),
+    window,
   };
 }
 
@@ -113,7 +126,7 @@ export async function fetchStateHistory(
   // opt-out or were broken by not passing it. Colour is not this module's
   // business — `stateColors.historyStateColor` already maps these to the amber
   // the Map colours legend documents.
-  const series = await fetchRaw(entityId, hours);
+  const { rows: series } = await fetchRaw(entityId, hours);
   const points = series
     // ⚠️ COERCED AT THE DOOR, alongside the guard in `statusKeyFor`. Home
     // Assistant sends a null `state` on a freshly added entity's early rows
@@ -130,6 +143,37 @@ export async function fetchStateHistory(
   const out: StateHistoryPoint[] = [];
   for (const p of points) {
     if (out.length === 0 || out[out.length - 1].state !== p.state) out.push(p);
+  }
+  return out;
+}
+
+/** What the statistics adapter needs from the socket — the one call. */
+export interface StatisticsPort {
+  getStatisticsDuringPeriod(
+    ids: string[], start: string, period: StatisticsPeriod, end?: string,
+    types?: ReadonlyArray<StatisticField>,
+  ): Promise<Record<string, StatisticPeriod[]>>;
+}
+
+/**
+ * The last `hours` of the recorder's statistics for `ids`, one HistorySeries
+ * per id per field asked for — gaps included, and an id the recorder has
+ * nothing for is an outage the width of the window, never an empty "zero".
+ * A failed request REJECTS; the caller's status says "failed", not "no data".
+ */
+export async function fetchStatistics<F extends StatisticField>(
+  port: StatisticsPort, ids: readonly string[], hours: number, period: StatisticsPeriod, fields: readonly F[],
+  since?: number,
+): Promise<Record<string, Record<F, HistorySeries>>> {
+  const to = Date.now();
+  const window = { from: since ?? to - hours * 3600 * 1000, to };
+  if (ids.length === 0) return {};
+  const res = await port.getStatisticsDuringPeriod(
+    [...ids], new Date(window.from).toISOString(), period, undefined, fields);
+  const out: Record<string, Record<F, HistorySeries>> = {};
+  for (const id of ids) {
+    const rows = res[id];
+    out[id] = Object.fromEntries(fields.map((f) => [f, statisticsSeries(rows, f, period, window)])) as Record<F, HistorySeries>;
   }
   return out;
 }

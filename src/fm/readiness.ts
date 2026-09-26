@@ -11,10 +11,10 @@
 // performance clauses exist to protect, whatever they happen to say.
 
 import type { HassEntity } from "@/types/ha.types";
-import { OFF_STATES } from "@/utils/entityState";
 import { isUnavailable } from "@/utils/stateColors";
 import type { VillaDevices } from "@/config/deviceGroups";
 import { isTicketOpen, scheduleStatus } from "./fmEngine";
+import { lockFacts, lightFacts, climateFacts } from "@/config/villaSummary";
 import type { FmData } from "./fmTypes";
 
 export type CheckState = "pass" | "warn" | "fail";
@@ -37,12 +37,8 @@ export interface ReadinessReport {
   overall: CheckState;
 }
 
-// ⚠️ OFF_STATES, not a fourth copy. This was `new Set(["off", "unavailable",
-// "unknown", ""])` — byte-identical to entityState's, which is the set every
-// other surface counts "on" against. A readiness check that disagreed with the
-// HUD about what "off" means would put a number in the owner's report that no
-// screen backs up.
-const OFF_LIKE = OFF_STATES;
+// "Off" is OFF_STATES, through villaSummary — the same set every other surface
+// counts "on" against, so this report cannot disagree with the HUD.
 
 /**
  * Build the readiness checks.
@@ -96,45 +92,55 @@ export function buildReadiness(
   // `lock.*` entities only — see summaryGroups.locksGroup's docstring for why
   // this isn't extended to switches that merely look like a door/gate relay
   // by name (tried once, misfired on every "outdoor" light switch — reverted).
-  const locks = byDomain("lock");
-  const unlocked = locks.filter((l) => l.state !== "locked");
-  if (locks.length) {
+  //
+  // ⚠️ THE SAME FACTS AS THE SUMMARY TILE (villaSummary.lockFacts). This used
+  // `state !== "locked"` and reported an unavailable or jammed lock as "not
+  // locked" while the tile, for the same lock, said "Unknown". Still a warning
+  // — a door nobody can confirm is not a secured door — but named for what it
+  // is, so the report never claims a door is open when nothing said so.
+  const locks = lockFacts(entities, devices);
+  if (locks) {
+    const notLocked = [...locks.unlocked, ...locks.unknown];
+    const parts = [
+      locks.unlocked.length ? `${locks.unlocked.length} unlocked` : "",
+      locks.unknown.length ? `${locks.unknown.length} not reporting` : "",
+    ].filter(Boolean);
     checks.push({
       id: "locks",
       label: "Doors locked",
-      state: unlocked.length === 0 ? "pass" : "warn",
-      detail: unlocked.length === 0
-        ? `All ${locks.length} lock${locks.length === 1 ? "" : "s"} secured.`
-        : `${unlocked.length} not locked.`,
-      entityIds: unlocked.map((l) => l.entity_id),
+      state: notLocked.length === 0 ? "pass" : "warn",
+      detail: notLocked.length === 0
+        ? `All ${locks.ids.length} lock${locks.ids.length === 1 ? "" : "s"} secured.`
+        : `${parts.join(", ")}.`,
+      entityIds: notLocked,
     });
   }
 
   // ── Lights off (a lit empty villa is burned Direct Expense) ──────────────
-  const lights = byDomain("light");
-  const litCount = lights.filter((l) => !OFF_LIKE.has(l.state)).length;
-  if (lights.length) {
+  const lights = lightFacts(entities, devices);
+  if (lights) {
+    const lit = lights.on.length;
     checks.push({
       id: "lights",
       label: "Lights off before arrival",
-      state: litCount === 0 ? "pass" : "warn",
-      detail: litCount === 0 ? "All lights off." : `${litCount} still on.`,
-      entityIds: lights.filter((l) => !OFF_LIKE.has(l.state)).map((l) => l.entity_id),
+      state: lit === 0 ? "pass" : "warn",
+      detail: lit === 0 ? "All lights off." : `${lit} still on.`,
+      entityIds: lights.on,
     });
   }
 
   // ── Climate reachable ────────────────────────────────────────────────────
-  const climates = byDomain("climate");
-  if (climates.length) {
-    const broken = climates.filter((c) => isUnavailable(c));
+  const climate = climateFacts(entities, devices);
+  if (climate) {
+    const broken = climate.unreachable;
     checks.push({
       id: "climate",
       label: "Air conditioning reachable",
       state: broken.length === 0 ? "pass" : "fail",
       detail: broken.length === 0
-        ? `${climates.length} unit${climates.length === 1 ? "" : "s"} responding.`
+        ? `${climate.ids.length} unit${climate.ids.length === 1 ? "" : "s"} responding.`
         : `${broken.length} not responding — cannot pre-cool.`,
-      entityIds: broken.map((c) => c.entity_id),
+      entityIds: broken,
     });
   }
 

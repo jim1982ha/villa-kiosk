@@ -2,7 +2,7 @@
 // which nothing has ever run.
 //
 // ⚠️ SEVEN FILES CLAIMED THIS WAS ALREADY COVERED. `badgeMetrics`, `badgeCard`,
-// `badgeProjection`, `roomStorey` and `EntityVisuals` all cite
+// `badgeProjection`, `roomStorey` (now storeys) and `EntityVisuals` all cite
 // `npm run test:placement` or `test:geometry` as live coverage. Neither script
 // has ever existed on this branch — they pointed at files that were not here
 // and were deleted in 2.496.23. One of them goes further and claims a pin
@@ -17,8 +17,6 @@ register("../consistency/alias-hook.mjs", import.meta.url);
 const { arrange, cardStruts, gridCells, MAX_GRID_CHIPS, MAX_TOTAL_CHIPS } =
   await import("@/babylon/badgeCard");
 const { chipWidthPx, fitChipLabel } = await import("@/babylon/labelLayout");
-const { onStorey, storeyFloorYAt, nearestFloorRoom, STOREY_MATCH_M } =
-  await import("@/babylon/roomStorey");
 const { snapToZoomLattice, badgeMetricsFor } = await import("@/babylon/badgeMetrics");
 const { viewBasis, projectToView } = await import("@/babylon/badgeProjection");
 
@@ -92,14 +90,8 @@ ck("  ...and the merged-rooms marker survives the cut", withSuffix.endsWith("+2"
 ck("a label that already fits is left alone", fitChipLabel("Hall", "", m, 200) === "Hall");
 
 /* ── storey picking ────────────────────────────────────────────────────── */
-console.log("\n  which storey a room is on:");
-ck("a room at the storey's own height is on it", onStorey(0, 0));
-ck("just inside the tolerance is on it", onStorey(STOREY_MATCH_M * 0.9, 0));
-ck("just outside is not", !onStorey(STOREY_MATCH_M * 1.1, 0));
-ck("the test is symmetric", onStorey(0, STOREY_MATCH_M * 0.9) === onStorey(STOREY_MATCH_M * 0.9, 0));
-const rooms = [{ name: "g", floorY: 0 }, { name: "first", floorY: 3 }];
-ck("a point at ground picks the ground room",
-   storeyFloorYAt(rooms, 0.1) === 0 || nearestFloorRoom(rooms, 0.1)?.name === "g");
+// Which storey a room is on, and which room a point stands in, are
+// tests/oracles/storeys.mjs's now (2.496.81; one villa plan, 2.496.91).
 
 /* ── the zoom lattice ──────────────────────────────────────────────────── */
 // Badges resize in discrete steps so they do not shimmer while the camera

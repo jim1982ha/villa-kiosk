@@ -4,7 +4,6 @@
 
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
-import type { Scene } from "@babylonjs/core/scene";
 import type { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
 import type { LightingSystem } from "./LightingSystem";
 import type { SkyDome } from "./SkyDome";
@@ -13,21 +12,22 @@ import { tapDebug } from "@/utils/tapDebug";
 import { type AppConfig, DEFAULT_RENDER } from "@/config/AppConfig";
 import { getSunPosition, getMoonPosition, getMoonIllumination } from "@/utils/sunCalc";
 import type { NightSky } from "./NightSky";
+import type { FrameRequests } from "./frameScheduler";
+import type { SceneLook } from "./sceneLook";
 
 export class SunController {
-  private scene: Scene;
   private lighting: LightingSystem;
   private hemi: HemisphericLight;
   private sky: SkyDome | null;
   /** Only set when `?skySpeed` is running the sky fast — see startSkySim. */
   private simTimer: ReturnType<typeof setInterval> | null = null;
   private config: AppConfig;
-  private requestRender: () => void = () => {};
-  // When set (overview mode), this fixed backdrop wins over the day/night sky
-  // colour so the bird's-eye view always reads on a calm, eye-friendly dark
-  // ground instead of the bright daytime sky blue. Cleared (null) in
-  // first-person so the real sky shows through the windows again.
-  private bgOverride: Color4 | null = null;
+  /** Repaints after a sun/sky change. A constructor argument rather than a
+   *  setter with a no-op default: a sky that changed and silently drew
+   *  nothing was that default's failure mode. */
+  private frames: FrameRequests;
+  /** The one writer of exposure, IBL strength and background — see sceneLook.ts. */
+  private look: SceneLook;
   private baked = false;
   // Crossfade hook for dual-atlas baked GLBs (pipeline ≥2.1.0): 0 = day
   // atlas, 1 = the sun-free night atlas. Provided by ModelLoader when the
@@ -43,13 +43,15 @@ export class SunController {
   private glassDim: ((t: number) => void) | null = null;
 
   constructor(
-    scene: Scene,
     lighting: LightingSystem,
     hemi: HemisphericLight,
     config: AppConfig,
-    sky: SkyDome | null = null,
+    sky: SkyDome | null,
+    frames: FrameRequests,
+    look: SceneLook,
   ) {
-    this.scene = scene;
+    this.frames = frames;
+    this.look = look;
     this.lighting = lighting;
     this.hemi = hemi;
     this.sky = sky;
@@ -79,7 +81,7 @@ export class SunController {
     if (every <= 0) return;
     this.simTimer = setInterval(() => {
       this.applyRealSun();
-      this.requestRender?.();
+      this.frames.repaint();
     }, every);
   }
 
@@ -88,10 +90,6 @@ export class SunController {
    *  scene would keep re-lighting a disposed one. */
   dispose(): void {
     if (this.simTimer !== null) { clearInterval(this.simTimer); this.simTimer = null; }
-  }
-
-  setRenderHook(fn: () => void): void {
-    this.requestRender = fn;
   }
 
   /**
@@ -112,6 +110,7 @@ export class SunController {
     this.baked = baked;
     this.nightBlend = nightBlend ?? null;
     this.glassDim = glassDim ?? null;
+    this.look.setBaked(baked, !!nightBlend);
     this.applyRealSun();
   }
 
@@ -122,10 +121,9 @@ export class SunController {
    * views never relights the model.
    */
   setBackgroundOverride(color: Color4 | null): void {
-    this.bgOverride = color;
+    this.look.setBackdrop(color);
     if (color) {
-      this.scene.clearColor = color;
-      this.requestRender();
+      this.frames.repaint();
     } else {
       this.applyRealSun(); // recompute the day/night sky colour for right now
     }
@@ -362,7 +360,9 @@ export class SunController {
     // Left at full strength it dumps a cold blue-grey ambient onto every wall at
     // night — another source of the grey look. Scale its contribution down after
     // dark. (renderFx owns whether the texture exists; we own how much it counts.)
-    if (r.ibl) this.scene.environmentIntensity = r.environmentIntensity * (isDay ? 1 : lerp(0.4, 0.12));
+    // (renderFx owns whether the texture exists; the look owns how much it
+    // counts at night — see resolveLook.)
+    this.look.setDay(isDay);
 
     // Baked mode, two flavours:
     // • Dual-atlas / lightmap GLB (pipeline ≥2.1.0): the structure crossfades
@@ -378,16 +378,11 @@ export class SunController {
     // • Single-atlas GLB: the texture is a fixed daytime render, so the only
     //   way to sell "night" is post-processing — scale the user's exposure down
     //   after dark, deepening with nightDimming.
-    // Either way this runs AFTER renderFx.applyToneMapping wrote cfg.exposure
-    // (all call paths order renderFx.apply() before the sun pass), so this
-    // write is the final word on exposure.
+    // The exposure itself is resolveLook's (sceneLook.ts), from the day/night
+    // and baked inputs reported here — it no longer depends on this pass
+    // running after renderFx.
     if (this.baked) {
       if (this.nightBlend) this.nightBlend(nightT);
-      // nightBlend present → atlas already dark, so only ADD dimming (floor
-      // 0.5); single-atlas → the full day→0.45 range sells night by itself.
-      const nightExposure = this.nightBlend ? lerp(1, 0.5) : lerp(1, 0.45);
-      this.scene.imageProcessingConfiguration.exposure =
-        r.exposure * (isDay ? 1 : nightExposure);
     }
     // Window panes dim on the same twilight ramp (see the field's comment) —
     // in every mode, since no bake, lightmap or scene light drives them.
@@ -399,12 +394,7 @@ export class SunController {
     // for scene lighting. clearColor is kept as a fallback for when the sky
     // dome is absent.
     this.sky?.update(skyDir, isDay);
-    // In overview mode bgOverride pins a calm dark backdrop; otherwise the empty
-    // space tracks the day/night sky colour.
-    this.scene.clearColor = this.bgOverride ?? (isDay
-      ? new Color4(0.53, 0.67, 0.84, 1)
-      : new Color4(0.03, 0.03, 0.05, 1));
-    this.requestRender();
+    this.frames.repaint();
   }
 
 }

@@ -57,6 +57,7 @@
 // request entirely for other roles) — shared state is exactly what a guest
 // must not be able to rewrite for the whole house.
 
+import { decidePull } from "@/utils/pullDecision";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useConfig } from "./ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
@@ -220,13 +221,25 @@ export default function DeviceConfigSync() {
 
   const pull = useCallback(async () => {
     const result = await fetchSharedConfig();
-    if (result === null) {
+    // The facts, then ONE decision — utils/pullDecision, shared with the
+    // Facility store. Each branch below keeps its own reasoning.
+    const server = result?.config ?? {};
+    const priorBaseline = serverJsonRef.current;
+    const fromServer = result ? mergeSharedConfig(configRef.current, server) : null;
+    const merged = fromServer ? { ...localRef.current, ...fromServer } as SharedDeviceConfig : null;
+    const action = decidePull({
+      writeInFlight: false,                       // pushes are debounced, not tracked in flight
+      reached: result !== null,
+      serverEmpty: Object.keys(server).length === 0,
+      localAhead: priorBaseline !== null && JSON.stringify(localRef.current) !== priorBaseline,
+      wouldChange: !!merged && JSON.stringify(merged) !== JSON.stringify(localRef.current),
+    });
+    if (action === "unreachable" || !result || !merged || !fromServer) {
       reportSync({ op: "pull", aborted: "unreachable" });
       return; // couldn't reach it — keep what we have
     }
-    const { config: server, rev } = result;
-    const keys = Object.keys(server);
-    if (keys.length === 0) {
+    const { rev } = result;
+    if (action === "seed") {
       // Nothing stored yet (fresh install, or first run after upgrading from
       // the localStorage-only versions). Record the baseline as EMPTY — which
       // is the truth — rather than as this device's local slice. Recording
@@ -262,8 +275,7 @@ export default function DeviceConfigSync() {
     // deliberately left alone so the push gate still sees a difference and
     // sends this client's edit; the next pull then reconciles normally.
     // Losing a beat of remote changes is fine, losing the user's edit is not.
-    const priorBaseline = serverJsonRef.current;
-    if (priorBaseline !== null && JSON.stringify(localRef.current) !== priorBaseline) {
+    if (action === "repush") {
       // Aborting the pull is only half the answer: the reason we're aborting
       // is that this device holds an edit the server hasn't got. If that
       // edit's own push already failed (a flaky phone connection is the
@@ -294,9 +306,6 @@ export default function DeviceConfigSync() {
     // missing this device's DERIVED items (see pickSharedConfig's pair), and a
     // plain overwrite would drop the fitted rooms out of config until the next
     // calibration happened to put them back.
-    const fromServer = mergeSharedConfig(configRef.current, server);
-    const merged = { ...localRef.current, ...fromServer } as SharedDeviceConfig;
-    const mergedJson = JSON.stringify(merged);
     // `merged` decides what local CONFIG becomes; the BASELINE is what the
     // server actually holds. They are not the same object and conflating them
     // is what stranded dismissedEntityIds on one device — see
@@ -328,7 +337,7 @@ export default function DeviceConfigSync() {
     // covers/locks snapping back to their hardcoded default pose mid-rebuild,
     // and the multi-second freeze the rebuild itself costs — on literally
     // every focus regain, whether or not anything had actually changed.
-    if (mergedJson === JSON.stringify(localRef.current)) return;
+    if (action === "noop") return;
 
     update(fromServer);
   }, [update, role, pushOwnDiff, reportSync]);

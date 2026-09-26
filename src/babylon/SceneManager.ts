@@ -14,10 +14,7 @@ import { SceneInstrumentation } from "@babylonjs/core/Instrumentation/sceneInstr
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
-import { Material } from "@babylonjs/core/Materials/material";
-import { PBRMaterial } from "@babylonjs/core/Materials/PBR/pbrMaterial";
 import { Ray } from "@babylonjs/core/Culling/ray";
-import { VertexBuffer } from "@babylonjs/core/Buffers/buffer";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import { roomKey } from "@/config/roomKey";
@@ -31,10 +28,18 @@ import { NightSky } from "./NightSky";
 import { FloorManager } from "./FloorManager";
 import { PickHandler } from "./PickHandler";
 import { EntityVisuals } from "./EntityVisuals";
+import { resolveHit, type HitPickers } from "./hitResolution";
+import { FrameScheduler } from "./frameScheduler";
+import { ResolutionGovernor, startingScale, VALVE_SAMPLE_MIN } from "./resolutionGovernor";
+import { SceneLook } from "./sceneLook";
+import { StructureSet } from "./structureSet";
+import { Storeys, isStairwell } from "./storeys";
+import { eyeHeightOf, pickSpawn, roomSpawn, stairFoot, flightBottom, type SpawnWorld } from "./walkerSpawn";
+import { ScenePhases, type ScenePhase } from "./scenePhases";
 import { RenderEnhancements } from "./RenderEnhancements";
 import { loadModelInto } from "./ModelLoader";
 import { resetLightPoolTextureCache } from "./LightPools";
-import { resolveMeshToMapping, inferTypeFromEntityId } from "@/config/EntityMap";
+import { resolveMeshToMapping } from "@/config/EntityMap";
 import { isIOS as detectIOS } from "@/utils/diagnostics";
 import { report as reportTelemetry } from "@/utils/telemetry";
 import { beginSpan } from "@/utils/perfSpans";
@@ -42,10 +47,10 @@ import { runPerfProbe, type ProbeRow } from "./perfProbe";
 import { axisWorldScale } from "./meshUnits";
 import { ENTITY_CALIBRATION_CM, ROOM_POLYGONS_CM, polygonCentroid } from "@/config/Sh3dCalibration";
 import { solvePlanToWorld, planAngleToDir } from "./roomCalibration";
-import { isCeilingMesh, structureRole, rayTargets, isHelperMesh } from "./meshRoles";
+import { rayTargets } from "./meshRoles";
 import type { PlanWorldPair } from "@/utils/affineFit";
 import { pointInPolygon, type Pt2 } from "@/utils/geometry";
-import { devLog, debugFlagEnabled } from "@/utils/devLog";
+import { devLog } from "@/utils/devLog";
 import { tapDebug } from "@/utils/tapDebug";
 import { loadOverviewView, saveOverviewView } from "@/utils/storage";
 import type { AppConfig, RenderConfig } from "@/config/AppConfig";
@@ -53,8 +58,8 @@ import type { HassEntity } from "@/types/ha.types";
 import type { TeleportPoint } from "@/types/scene.types";
 import { entityMapDelta } from "./entityMapDiff";
 import { ModelKeyedStore } from "./modelStore";
-import { exactViewBasis, projectToView, type ProjectedPoint } from "./badgeProjection";
 import { cameraFrame } from "./cameraFrame";
+import { roomWallFit, MIN_ROOM_FIT_RADIUS } from "./roomZoomSolver";
 // Babylon prototype patches this module depends on — see babylonSideEffects.
 import "./babylonSideEffects";
 
@@ -81,80 +86,19 @@ const SHARPEN_STILL_MS = 350;
  *  points built in calibrateRooms for why the precision has to be dropped. */
 const mm = (v: number): number => Math.round(v * 1000) / 1000;
 
-/**
- * How far above the lowest room floor a room may sit and still count as
- * "ground level" when locating the foot of a staircase (see stairFoot).
- *
- * A real floor varies by a few centimetres across a villa — probes differ, and
- * plans carry thresholds and split levels — while a stair TREAD is at least one
- * riser up, and a riser is ~0.17 m. 0.30 m sits between the two, and is the same
- * clearance `roomStorey.ts` uses for the same shape of question (STOREY_MIN_MOUNT,
- * where the SIGN of the comparison cost a release).
- */
-const STAIR_FOOT_TOLERANCE = 0.30;
-
-/**
- * A room the PLAN calls a staircase. Hoisted because it had been written out
- * three times and a fourth was about to be added — and the fourth is the one
- * that matters, so the copies would have drifted exactly where correctness
- * depends on them agreeing. Multilingual for the same reason every other room
- * matcher here is: the plan is authored in the owner's language.
- */
-const STAIR_ROOM_RE = /stair|escalier|escalera|scala|treppe|stufe|trap\b|steps?\b/i;
-
-/**
- * The tallest structure rise that counts as SOMETHING TO STAND ON rather than
- * something in the way — a step, a threshold, a plinth, or the surface of a
- * raised room whose slab the floor probe reported from underneath.
- *
- * 0.70 m: a domestic step is ~0.17 m and a split-level change is a few of them;
- * a person's torso starts well above this, so nothing at head height can hide
- * under it. Deliberately larger than CameraController.STEP_CLEAR (0.55), which
- * answers a different question — what the collision capsule may climb WHILE
- * WALKING, rather than what a spawn may be placed on top of.
- */
-const STAND_STEP_MAX = 0.70;
 
 
-// ── Frame-time sampling (see sampleFrame) ───────────────────────────────────
-// A gap above this is the render loop RESUMING — the app went idle, the tab
-// was throttled, a modal held the thread — not one frame that took a second.
-// Well clear of even a 10fps frame, so a genuinely terrible frame is still
-// recorded as the bad news it is rather than filtered out as a resume.
-const FRAME_GAP_MAX_MS = 400;
-// ~10s of interaction at 60fps. Bounds both the array and, with the report
-// cap, how much a pathological session can send.
-const FRAME_SAMPLE_MAX = 600;
+
+
+// ── Frame-time telemetry (the sampling and the valve: resolutionGovernor.ts) ─
 // Below this a "burst" is a tap or a one-frame nudge, and its percentiles
 // would be noise quoted to one decimal place.
 const FRAME_SAMPLE_MIN = 45;
-/** Frames the RESOLUTION VALVE needs before it may act — see flushFrameSamples
- *  for why this is separate from, and lower than, the telemetry minimum. About
- *  a third of a second at 60fps and over a second at 13fps, which is enough to
- *  be sure of a device's frame budget and short enough that a single pan on a
- *  struggling tablet is sufficient. */
-const VALVE_SAMPLE_MIN = 20;
 // Telemetry is a fixed-size ring in /data shared with every other device; a
 // long session orbiting the villa must not evict the load and sync records
 // this is meant to be read ALONGSIDE. The first few bursts answer the
 // question; the hundredth adds nothing.
 const FRAME_REPORT_MAX = 8;
-// Below ~25fps interaction stops feeling like direct manipulation — that is
-// the point at which supersampling is no longer worth what it costs.
-const FRAME_SLOW_MS = 40;
-// What easeResolution aims for once it has decided to act (~45fps). Not 60:
-// overshooting to the resolution floor on one marginal burst would spend the
-// whole quality budget to chase frames the display may not even present.
-const FRAME_TARGET_MS = 22;
-// 1.0 = one backbuffer pixel per CSS pixel. Never coarser than this — see
-// easeResolution for the rainbow-speckle regression that sets this floor.
-const HW_SCALE_FLOOR = 1;
-// The starting cap: up to 2x CSS, whatever the panel claims. On a DPR-3 phone
-// that is TWO THIRDS of native pixel density, and the compositor upscales the
-// finished frame by 1.5x on its way to the screen. Icon strokes and hairline
-// rings are the highest-frequency thing this app draws, so they are where that
-// shows first — reported as "the glyphs look very pixelised", correctly.
-const HW_START_CAP = 2;
 
 // How far to push the horizon down in OVERVIEW, in the sky dome's own world
 // units (its radius is 500 — see SkyDome.setHorizonDrop for why this is not an
@@ -173,39 +117,6 @@ const HW_START_CAP = 2;
 // at eye level, and anything else puts the sea's edge below the terrace floor.
 const OVERVIEW_HORIZON_DROP = 700;
 
-// ── Zoom-to-room framing (see computeRoomOverviewPose) ──────────────────────
-// How much of the BINDING SCREEN AXIS the room's own footprint should occupy.
-//
-// ── A ROOM IS SHOWN WITH ITS SURROUNDINGS, NOT EDGE TO EDGE (2.426.0) ───────
-// This was a margin — 0.18, i.e. the footprint filled 85% of the axis — and it
-// was reported as bad UX with four screenshots: the pool filled the glass
-// corner to corner with no context at all, and the living room cropped its own
-// curtains off the sides. The user then dragged to the shot they wanted and the
-// log recorded it, twice: rung 271.223 -> ~152, and rung 170.860 -> ~117. Both
-// asked for 1.5-1.8x more room around the subject.
-//
-// Restated as a FRACTION because that is the decision actually being made —
-// "how much of the frame is the room" — and because it is then the same
-// vocabulary as CHIP_MAX_VIEWPORT_FRACTION and CARD_MAX_VIEWPORT_FRACTION,
-// which answer the same shape of question for the other two composite objects.
-//
-// ⚠️ It is applied AFTER the per-axis max, so it is a property of whichever
-// axis binds — which is what makes one number behave identically on a portrait
-// phone, a landscape laptop and a tablet either way. A margin expressed against
-// one axis, or against the footprint's diagonal, is the 2.362.0 bug: the same
-// room wanted radius 36 at one aspect and 51 at another.
-//
-// The entity-bounds fallback takes a SMALLER fraction (a wider shot), because
-// device anchors sit inside the room rather than at its walls, so their box
-// under-states it and the shot has to cover what the box does not describe.
-const ROOM_FIT_VIEWPORT_FRACTION = 0.6;
-const ROOM_FIT_VIEWPORT_FRACTION_ENTITIES = 0.45;
-// Floor under the fitted radius, for a "room" that measures as a point (a
-// single device, or a one-entity teleport spot) and would otherwise ask the
-// camera to fly arbitrarily close. Expressed in world units = metres.
-const MIN_ROOM_FIT_RADIUS = 1.5;
-// NOTE for anyone tempted to add a tuning constant back here: two used to
-// live at this spot and both are gone (2.209.0).
 //   * DECLUTTER_RADIUS_MARGIN (0.85) padded the declutter zoom so it would
 //     still clear groupBadges' QUANTISED step. That is arithmetic, not a
 //     margin — solveRoomZoomRadius (which is what minPxPerWorldToDeclutterRoom
@@ -252,136 +163,6 @@ interface ConformData { positions: number[]; indices: number[] }
 /** FNV-1a over the polygon, quantised to millimetres. A hash rather than the
  *  raw point list because this becomes a localStorage key and a 40-vertex
  *  outdoor polygon would otherwise write a kilobyte of key per entry. */
-/**
- * SweetHome bleeds alpha onto surfaces that are meant to be solid, so anything
- * still MOSTLY opaque is treated as a bleed and forced fully opaque; anything
- * at or under half is taken as deliberate (glass, a curtain sheer) and left
- * alone.
- *
- * A free function rather than an inline block at the bottom of applyStructure's
- * loop because the ceiling branch `continue`s before reaching that bottom, and
- * for two releases nobody noticed the ceiling was the ONE surface the rule was
- * not reaching — the surface where a bled alpha means you look through it at
- * the sky. A rule that must apply to a mesh classified early has to be callable
- * from where that classification happens.
- */
-/**
- * The area a mesh's triangles actually COVER, projected onto the ground plane,
- * in m². Not its bounding box.
- *
- * ⚠️ THE BOUNDING BOX LIED, AND IT LIED BY AN ORDER OF MAGNITUDE (2.456.0).
- * `ceiling geometry: foot=649.5m2 (51.3% of villa)` was a sum of bounding boxes,
- * and the per-mesh dump showed why that is not a coverage figure at all:
- * `Structure_Ceiling_L0_primitive8` reports a 27.7 x 13.7 m box — 379 m² — from
- * **20 vertices**, i.e. at most five small quads scattered far apart. A box
- * around scattered panels is the size of the SCATTER, not of the panels.
- *
- * That mattered because the whole "drawn but unseen" conclusion rested on it:
- * half the villa appearing to be covered ruled out "there is simply no ceiling
- * here", and it should not have. Projected triangle area cannot make that
- * mistake — it is the number that says whether there is anything overhead.
- */
-function projectedAreaXZ(m: AbstractMesh): number {
-  const pos = m.getVerticesData(VertexBuffer.PositionKind);
-  const idx = m.getIndices();
-  if (!pos || !idx) return 0;
-  const w = m.computeWorldMatrix(true);
-  const a = Vector3.Zero(); const b = Vector3.Zero(); const c = Vector3.Zero();
-  let area = 0;
-  for (let i = 0; i + 2 < idx.length; i += 3) {
-    for (const [j, v] of [[idx[i], a], [idx[i + 1], b], [idx[i + 2], c]] as const) {
-      Vector3.TransformCoordinatesFromFloatsToRef(
-        pos[j * 3], pos[j * 3 + 1], pos[j * 3 + 2], w, v);
-    }
-    // Half the cross product's Y component — the triangle's own area projected
-    // straight down, which is what "covers the floor below" means. Absolute,
-    // so a downward-facing ceiling counts the same as an upward-facing one.
-    area += Math.abs((b.x - a.x) * (c.z - a.z) - (c.x - a.x) * (b.z - a.z)) / 2;
-  }
-  return area;
-}
-
-/**
- * Horizontal triangle area in a height band, split by which way it FACES.
- *
- * ⚠️ THIS IS THE TEST THAT SEPARATES "the pipeline dropped the ceiling" FROM
- * "SweetHome never exported one" (2.462.0), and it is the question the owner
- * asked directly: their room settings have "Display ceiling" checked, so where
- * did it go?
- *
- * blender_pipeline `_split_for_bake` peels a storey's ceiling off the fused
- * Structure by taking **DOWN-FACING** horizontal faces in a band around the
- * storey boundary (`_ceiling_face_mask(..., facing=-1)`), with a 1.2 m² minimum
- * component area. Anything it does not take stays fused inside `Structure` —
- * where the app can still see it, because by then Draco is decoded. So:
- *
- *   down ≈ 0 and up ≈ 0  → the OBJ has no ceiling here. Model/export problem.
- *   down ≈ 0 and up LARGE → the faces EXIST and point the wrong way, so the
- *                           peel's `facing=-1` filter skipped them. That also
- *                           explains why a ceiling had to be forced
- *                           double-sided in 2.449.0 — SweetHome slabs carry
- *                           inverted normals, and the same inversion defeats
- *                           the peel. FIX: the pipeline, not the app.
- *   down LARGE            → the peel's band or area threshold is too tight.
- *
- * Debug-flag gated and bbox-prefiltered: `Structure` is ~1.4M triangles across
- * ~190 primitives, and this walks index data, so it must not run on a normal
- * boot.
- */
-function horizontalAreaInBand(
-  m: AbstractMesh, loY: number, hiY: number,
-): { down: number; up: number; byHeight: Map<number, number> } {
-  const out = { down: 0, up: 0, byHeight: new Map<number, number>() };
-  const bb = m.getBoundingInfo().boundingBox;
-  if (bb.maximumWorld.y < loY || bb.minimumWorld.y > hiY) return out;
-  const pos = m.getVerticesData(VertexBuffer.PositionKind);
-  const idx = m.getIndices();
-  if (!pos || !idx) return out;
-  const w = m.computeWorldMatrix(true);
-  const a = Vector3.Zero(); const b = Vector3.Zero(); const c = Vector3.Zero();
-  for (let i = 0; i + 2 < idx.length; i += 3) {
-    for (const [j, v] of [[idx[i], a], [idx[i + 1], b], [idx[i + 2], c]] as const) {
-      Vector3.TransformCoordinatesFromFloatsToRef(
-        pos[j * 3], pos[j * 3 + 1], pos[j * 3 + 2], w, v);
-    }
-    const cy = (a.y + b.y + c.y) / 3;
-    if (cy < loY || cy > hiY) continue;
-    // Cross product of the two edges: its Y component is the projected area
-    // (signed by facing), its length is twice the true area.
-    const ux = b.x - a.x, uy = b.y - a.y, uz = b.z - a.z;
-    const vx = c.x - a.x, vy = c.y - a.y, vz = c.z - a.z;
-    const nx = uy * vz - uz * vy;
-    const ny = uz * vx - ux * vz;
-    const nz = ux * vy - uy * vx;
-    const len = Math.hypot(nx, ny, nz);
-    if (len === 0) continue;
-    // Same 0.85 threshold the pipeline's own mask uses, so the two answers are
-    // comparable rather than merely similar.
-    if (Math.abs(ny) / len <= 0.85) continue;
-    if (ny < 0) out.down += len / 2; else out.up += len / 2;
-    // Which HEIGHTS the unpeeled area sits at, in 10 cm buckets. This is the
-    // number the pipeline's band has to be set from: its lower edge is
-    // `base + 0.80 * storeyHeight`, and a room with a dropped ceiling (a
-    // bathroom, a laundry) sits below that and is silently excluded. A total
-    // says the peel is wrong; a histogram says what to change it to.
-    if (ny < 0) {
-      const k = Math.round(cy * 10) / 10;
-      out.byHeight.set(k, (out.byHeight.get(k) ?? 0) + len / 2);
-    }
-  }
-  return out;
-}
-
-function forceOpaque(m: AbstractMesh): void {
-  const mat = m.material;
-  if (!mat || mat.alpha <= 0.5) return;
-  mat.alpha = 1;
-  mat.transparencyMode = Material.MATERIAL_OPAQUE;
-  if (mat instanceof PBRMaterial) {
-    mat.useAlphaFromAlbedoTexture = false;
-    if (mat.albedoTexture) mat.albedoTexture.hasAlpha = false;
-  }
-}
 
 function polygonKey(pts: Pt2[], floor: number): string {
   let h = 0x811c9dc5;
@@ -395,10 +176,21 @@ function polygonKey(pts: Pt2[], floor: number): string {
   return `f${floor}:${(h >>> 0).toString(36)}:${pts.length}`;
 }
 
+/** A calibrated room in world space — what the plan (storeys.ts) holds. */
+export interface WorldRoom {
+  name: string;
+  pts: Pt2[];
+  floorY: number;
+  /** The plan's storey number for it. */
+  storey: number;
+  /** A stepped room's surface-hugging highlight mesh, built after first paint. */
+  conform?: { positions: number[]; indices: number[] };
+}
+
 export class SceneManager {
   readonly engine: Engine;
   readonly scene: Scene;
-  /** Per-frame draw-call and evaluation-time counters — see sampleFrame. */
+  /** Per-frame draw-call and evaluation-time counters — see flushFrameSamples. */
   private instrumentation: SceneInstrumentation | null = null;
   readonly camera: CameraController;
   readonly overview: OverviewController;
@@ -409,6 +201,8 @@ export class SceneManager {
   readonly pick: PickHandler;
   readonly visuals: EntityVisuals;
   readonly renderFx: RenderEnhancements;
+  /** Exposure, IBL strength and background — see sceneLook.ts. */
+  private readonly look: SceneLook;
   private nightSky: NightSky;
 
   private config: AppConfig;
@@ -422,41 +216,36 @@ export class SceneManager {
    *  is the signal rather than config.theme. */
   private themeObserver: MutationObserver | null = null;
   private ready = false;
-  private readyCallbacks = new Set<() => void>();
-  private calibrateCallbacks = new Set<() => void>();
-  private keepRenderingUntil = 0;
-  private forceContinuous = 0; // ref count for animations/streams
-  /** Budget for frames driven ONLY by a continuous animation — see
-   *  requestAnimationRender / ANIMATION_FRAME_MS. */
-  private animateUntil = 0;
-  private lastAnimFrameAt = 0;
-  /** Frame-time samples for the `frames` telemetry record — see sampleFrame. */
-  private frameSamples: number[] = [];
-  /** Cost of the scene.render() call itself, paired with frameSamples. */
-  private renderSamples: number[] = [];
-  private lastFrameAt = 0;
+  /** The scene's phases — see scenePhases.ts and onScene. */
+  private readonly phases = new ScenePhases();
+  /** "Draw a frame now?" — see frameScheduler.ts. Every module that asks for
+   *  frames holds this object (as FrameRequests); the render loop asks it. */
+  private readonly frames = new FrameScheduler({
+    stillMs: SHARPEN_STILL_MS,
+    animationFrameMs: ANIMATION_FRAME_MS,
+    onDemand: () => this.config.renderOnDemand,
+  });
+  /** Which resolution the engine draws at — the valve and the sharp idle
+   *  frame, from this device's own frames (resolutionGovernor.ts). It is also
+   *  the scheduler's ResolutionPort. Built in the constructor, on the engine. */
+  private readonly governor: ResolutionGovernor;
   private frameReportsSent = 0;
   /** performance.now() of the last WebGL context loss, 0 when not lost — used
    *  to report how long the view was actually dead. */
   private contextLostAt = 0;
   private loadedMeshes: AbstractMesh[] = [];
-  /** Ceiling/roof meshes, as classified by applyStructure. Kept as a list so
-   *  the view toggle can show them while walking and hide them for the
-   *  bird's-eye cut-away, without re-running the classification or re-deriving
-   *  it from names. Empty on a GLB whose pipeline already dropped the ceiling
-   *  in Blender — which is the common case, and is reported by ?debug rather
-   *  than left looking like a broken feature. */
-  private ceilingMeshes: AbstractMesh[] = [];
-  /** Reused by the ceiling-overhead probe — see setCeilingState. */
-  private readonly ceilingRay = new Ray(Vector3.Zero(), new Vector3(0, 1, 0), 10);
+  /** Walls, stairs, collisions, opacity — and the ceilings, which it owns:
+   *  classified by `apply`, shown only by `setView`, probed, reported and
+   *  cleared there. See structureSet.ts. */
+  private readonly structure = new StructureSet({
+    requestRender: () => this.requestRender(),
+    worldExtents: () => this.worldExtends(this.loadedMeshes),
+    eyeHeight: () => this.config.eyeHeight,
+  });
   private calibratedPoints: TeleportPoint[] | null = null;
   /** Bumped by every calibration, so a cosmetic tail still yielding between
    *  frames can tell that a newer fit has superseded the geometry it holds. */
   private calibGeneration = 0;
-  /** Scratch for computeRoomOverviewPose's four-corner footprint projection.
-   *  Runs once per room tap, but projectToView writes into a caller-owned
-   *  point by contract and this keeps that contract honest. */
-  private fitScratch: ProjectedPoint = { px: 0, py: 0, pz: 0, pd: 0 };
 
   /**
    * The stair rooms' surface-hugging glow, carried across loads.
@@ -488,10 +277,11 @@ export class SceneManager {
    *  used to exclude them when deriving RoomHighlight's point-only "rooms"
    *  from config.teleportPoints (a real room polygon always wins). */
   private lastRoomPolyNames = new Set<string>();
-  /** World-space room outlines with their own floor heights, kept so the spawn
-   *  logic can ask "is this spot on a GROUND-LEVEL room floor" — see stairFoot.
-   *  Everything else consumes them through camera/visuals. */
-  private worldRoomPolys: Array<{ name: string; pts: Pt2[]; floorY: number }> = [];
+  /** THE VILLA PLAN (storeys.ts): the world-space room outlines with their
+   *  floors and storeys, built ONCE per calibration and handed, as this same
+   *  object, to the camera and the visuals (room highlight, badges, pools).
+   *  The spawn asks it for the ground rooms and the stairwells. */
+  private plan = new Storeys<WorldRoom>([]);
 
   /** Kept so handlePageShow can ask "is this canvas still on screen?" — the
    *  test that distinguishes a real React unmount from an iOS
@@ -564,7 +354,20 @@ export class SceneManager {
     // Where that is too much for the device, calibrateResolution measures it
     // shortly after the reveal and the valve backs it off — per device, from
     // its own frame times, with nothing for anyone to configure.
-    this.engine.setHardwareScalingLevel(1 / Math.min(window.devicePixelRatio, HW_START_CAP));
+    this.engine.setHardwareScalingLevel(startingScale(window.devicePixelRatio));
+    this.governor = new ResolutionGovernor({
+      get: () => this.engine.getHardwareScalingLevel(),
+      // Badge geometry is authored in CSS px and converted through this exact
+      // value (EntityVisuals.cssToGui): every change must reach the layer, or
+      // badges — and their collision boxes — keep a size for a resolution the
+      // engine has stopped rendering at.
+      set: (level, loud) => {
+        this.engine.setHardwareScalingLevel(level);
+        this.visuals.notifyRenderScaleChanged(loud);
+        if (loud) this.requestRender();
+      },
+      dpr: () => window.devicePixelRatio,
+    });
 
     this.scene = new Scene(this.engine);
     // Two clock reads and a counter reset per frame, against frames measured at
@@ -573,7 +376,9 @@ export class SceneManager {
     // count would accumulate for the life of the session and mean nothing.
     this.instrumentation = new SceneInstrumentation(this.scene);
     this.instrumentation.captureActiveMeshesEvaluationTime = true;
-    this.scene.clearColor = new Color4(0.7, 0.85, 1.0, 1);
+    // The one writer of exposure, IBL strength and the background — the sun
+    // and the render pass only report their inputs to it (sceneLook.ts).
+    this.look = new SceneLook(this.scene);
     this.scene.collisionsEnabled = true;
     this.scene.gravity = new Vector3(0, -0.6, 0);
 
@@ -593,7 +398,7 @@ export class SceneManager {
     this.lighting = new LightingSystem(this.scene);
     // Procedural sky shown through the windows; driven by the same sun below.
     this.sky = new SkyDome(this.scene);
-    this.sun = new SunController(this.scene, this.lighting, this.hemi, opts.config, this.sky);
+    this.sun = new SunController(this.lighting, this.hemi, opts.config, this.sky, this.frames, this.look);
     // Moon + stars. Entirely optional to the rest of the scene, and computed
     // from date/lat/lng — an install without HA's opt-in Moon integration gets
     // exactly the same night sky, which is the requirement.
@@ -604,115 +409,48 @@ export class SceneManager {
     // leave the moon a frame behind the sun in a sky they are meant to share.
     this.sky.setFramingHook(() => this.nightSky?.reframe());
 
-    this.sun.setRenderHook(() => this.requestRender());
-    this.visuals = new EntityVisuals(
-      this.scene, opts.config,
-      () => this.requestRender(),
-      () => this.requestAnimationRender(),
-    );
+    this.visuals = new EntityVisuals(this.scene, opts.config, this.frames);
 
-    // A tap/long-press checks state-badge hit-testing FIRST, falling through
-    // to PickHandler's 3D raycast only when no badge was hit. Badges resolve
-    // through this same gesture pipeline that already reliably handles 3D
-    // meshes, rather than Babylon GUI's own per-control pointer observables —
+    // A tap/long-press asks the GUI tiers FIRST (group card, badge, room chip —
+    // resolveHit, which owns that order for all four gestures), falling through
+    // to PickHandler's 3D raycast only when none of them answered. Badges
+    // resolve through this same gesture pipeline that already reliably handles
+    // 3D meshes, rather than Babylon GUI's own per-control pointer observables —
     // see EntityVisuals.pickBadgeAt()'s docstring for why that was dropped.
     const handleTap = (x: number, y: number) => {
       tapDebug(`TAP client(${x.toFixed(0)},${y.toFixed(0)})`);
-      // Entity groups (tier 4) first, and before badges:
-      // a group's members are hidden exactly while it is drawn, so it cannot
-      // steal a tap from a badge anyone can see. Unlike a room chip, a TAP
-      // opens the device list rather than navigating — you are already looking
-      // at the room, so "which of these did you mean" is the only question
-      // left, and it is the same list the room chip's long-press opens.
-      const eGroup = this.visuals.pickEntityGroupAt(x, y);
-      if (eGroup) {
-        // A CARD's cell opens that device directly — the same panel its own
-        // badge would have opened, one tap, no list in between.
-        if (eGroup.entityId) { opts.onEntityPicked(eGroup.entityId, x, y); return; }
-        // ── NO CELL: LOOK FOR A BADGE BEFORE FALLING BACK TO THE LIST ─────
-        // A group's own members are hidden while it draws, which used to make
-        // "the group cannot steal a tap from a badge anyone can see" true by
-        // construction. It stopped being true when a card grew past one badge
-        // box: a card is anchored bottom-edge-on-anchor, so a 2x2 one reaches
-        // two badge-heights straight up, while `placeEntityGroups` still tests
-        // it against badges as a disc of half a box — deliberately, because
-        // measuring at the full card would send groups to their room's chip
-        // that a count would have seated. A card can therefore cover a badge
-        // belonging to another pile entirely.
-        //
-        // So a tap that landed on the card but in no cell — a count badge, or
-        // the empty bottom-right of a three-member grid — asks the badges
-        // first. A tap that lands on something visible belongs to that thing.
-        const under = this.visuals.pickBadgeAt(x, y, true);
-        if (under) { opts.onEntityPicked(under, x, y); return; }
-        if (opts.onClusterPicked) {
-          opts.onClusterPicked(eGroup.room, eGroup.entityIds, []);
-          return;
-        }
+      const hit = resolveHit(this.hitPickers(true), x, y);
+      // A device — a card's cell or a badge — opens as that device.
+      if (hit.kind === "device") { opts.onEntityPicked(hit.entityId, x, y); return; }
+      // A group card at a point naming no device opens its device list: you
+      // are already looking at the room, so "which of these did you mean" is
+      // the only question left — the same list a room chip's long-press opens.
+      if (hit.kind === "group" && opts.onClusterPicked) {
+        opts.onClusterPicked(hit.room, hit.entityIds, []);
+        return;
       }
-      const badgeEntity = this.visuals.pickBadgeAt(x, y, true);
-      if (badgeEntity) { opts.onEntityPicked(badgeEntity, x, y); return; }
-      // ── ROOM CHIPS LAST AMONG THE GUI TIERS (2.430.0) ─────────────────────
-      // This ran FIRST, on the premise that "a chip only exists while its room
-      // is too crowded to show individual badges, so this can never take a tap
-      // away from a badge the user can actually see". That premise is false
-      // whenever a room is FOCUSED: the chip belongs to room A while room B's
-      // exempt badges and pair-cards draw on top of it, so the chip was taking
-      // taps from devices the user could see — and painting over them too.
-      //
-      // Asking it last is the same rule this function already states two tiers
-      // up: a tap that lands on something visible belongs to that thing. Safe
-      // because pickBadgeAt tests the DRAWN controls (Control.contains) with no
-      // slop ring of its own, so it can only pre-empt the chip where a badge is
-      // genuinely painted. Paired with `container.zIndex = -1` on the chip in
-      // EntityVisuals.ensureCluster — paint order and hit order must agree.
-      const cluster = this.visuals.pickClusterAt(x, y);
-      if (cluster && opts.onClusterTapped) {
-        opts.onClusterTapped(cluster.room, cluster.entityIds, cluster.roomNames);
+      // A room chip's TAP navigates to the room.
+      if (hit.kind === "room" && opts.onClusterTapped) {
+        opts.onClusterTapped(hit.room, hit.entityIds, hit.roomNames);
         return;
       }
       this.pick.pickAtScreen(x, y);
     };
     const handleLongPress = (x: number, y: number) => {
       tapDebug(`LONGPRESS client(${x.toFixed(0)},${y.toFixed(0)})`);
-      // Entity groups first, and the CELL ANSWERS FIRST — exactly as it does in
-      // handleTap, because a cell IS that device's badge. A summary of 2-6
-      // draws one badge box per member and hides the badges themselves, so a
-      // cell is not a shorthand for the group: it is the only representation
-      // that device has on screen while the card is drawn. Both gestures must
-      // therefore mean on a cell what they mean on a lone badge — tap toggles,
-      // press-and-hold opens the details — or press-and-hold silently loses
-      // the one thing it exists for at exactly the moment two identical icons
-      // (two lights, say) make telling them apart matter most. It used to open
-      // the group list here on the argument that a long press is the "show me
-      // all of them" gesture; that argument holds for a ROOM CHIP, which
-      // represents a room and never a device, and for a COUNT badge, which
-      // names no device either. Both still open the list, below and above.
-      const eGroup = this.visuals.pickEntityGroupAt(x, y);
-      if (eGroup) {
-        if (eGroup.entityId) { opts.onEntityLongPressed(eGroup.entityId, x, y); return; }
-        // NO CELL — a count badge, or the empty bottom-right of a three-member
-        // grid, or the gap between two cards. Same exception as the tap path:
-        // a card can cover a badge belonging to another pile entirely (see
-        // handleTap), so ask the badges before answering for something the
-        // card merely happens to be drawn over.
-        const under = this.visuals.pickBadgeAt(x, y, true);
-        if (under) { opts.onEntityLongPressed(under, x, y); return; }
-        if (opts.onClusterPicked) {
-          opts.onClusterPicked(eGroup.room, eGroup.entityIds, []);
-          return;
-        }
+      const hit = resolveHit(this.hitPickers(true), x, y);
+      // A device means on a cell what it means on a lone badge — press-and-
+      // hold opens its details. A cell IS that device's badge while the card
+      // draws, and two identical icons (two lights, say) are exactly when
+      // telling them apart matters most. It used to open the group list here.
+      if (hit.kind === "device") { opts.onEntityLongPressed(hit.entityId, x, y); return; }
+      // A group card or a room chip names no device, so both open the list.
+      if (hit.kind === "group" && opts.onClusterPicked) {
+        opts.onClusterPicked(hit.room, hit.entityIds, []);
+        return;
       }
-      const badgeEntity = this.visuals.pickBadgeAt(x, y, true);
-      if (badgeEntity) { opts.onEntityLongPressed(badgeEntity, x, y); return; }
-      // Room chips LAST, for the reason handleTap spells out: a chip paints
-      // BEHIND badges and cards (zIndex -1), so it must not answer for a pixel
-      // one of them is drawn on. Both gestures moved together — a tap and a
-      // press-and-hold resolving to different objects at one point is worse
-      // than either order.
-      const cluster = this.visuals.pickClusterAt(x, y);
-      if (cluster && opts.onClusterPicked) {
-        opts.onClusterPicked(cluster.room, cluster.entityIds, cluster.roomNames);
+      if (hit.kind === "room" && opts.onClusterPicked) {
+        opts.onClusterPicked(hit.room, hit.entityIds, hit.roomNames);
         return;
       }
       this.pick.pickAtScreen(x, y, true);
@@ -724,11 +462,9 @@ export class SceneManager {
      * "Empty" is the whole of the condition. This fires on the second press's
      * DOWN, by which time the first tap has already released and done its own
      * job — so a double tap on a light has already toggled it once, and zooming
-     * as well would make a mis-tap move the camera. The test is the same
-     * cascade `handleTap` resolves through, in the same order (chip, summary,
-     * badge, 3D mesh), asked as a question instead of as an action: if any of
-     * them would have answered, this was not empty map and there is nothing to
-     * do here.
+     * as well would make a mis-tap move the camera. "Empty" is the same answer
+     * `handleTap` resolves through — no GUI tier and no 3D device — asked as a
+     * question instead of as an action.
      *
      * Overview only. The first-person camera has had double-tap-to-walk since
      * long before this, and it means something else there; the shared piece is
@@ -736,9 +472,7 @@ export class SceneManager {
      */
     const handleDoubleTap = (x: number, y: number) => {
       if (this.viewMode !== "overview") return;
-      if (this.visuals.pickClusterAt(x, y)) return;
-      if (this.visuals.pickEntityGroupAt(x, y)) return;
-      if (this.visuals.pickBadgeAt(x, y)) return;
+      if (resolveHit(this.hitPickers(false), x, y).kind !== "none") return;
       if (this.pick.entityAtScreen(x, y)) return;
       tapDebug(`DOUBLETAP zoom at (${x.toFixed(0)},${y.toFixed(0)})`);
       // Pull toward the ground point under the finger, when there is one — the
@@ -748,8 +482,14 @@ export class SceneManager {
 
     this.camera = new CameraController(this.scene, canvas, opts.config, {
       onRoomChange: opts.onRoomChange,
-      // MOTION — both camera controllers route every pose change here.
-      onActivity: () => { this.motionPending = true; this.requestRender(); },
+      // MOTION — every first-person pose change routes here. ⚠️ The OVERVIEW
+      // controller's does NOT: its onActivity (below) only asks for a repaint,
+      // and its drags and wheel reach motion through the scene's pointer
+      // observable instead — so a PROGRAMMATIC overview move (fit, fly-to, the
+      // double-tap zoom glide) renders sharp rather than at motion resolution.
+      // That asymmetry is long-standing and unmeasured; this line used to claim
+      // both controllers came here, which is how it went unnoticed.
+      onActivity: () => this.frames.motion(),
       // Tap-to-pick is detected in the camera (sole owner of the pointer
       // pipeline) and dispatched to the picker — reliable on touch & mouse.
       onTap: handleTap,
@@ -775,7 +515,10 @@ export class SceneManager {
     this.pick = new PickHandler(
       this.scene, opts.onEntityPicked, opts.config.entityMap, opts.config.meshBindings,
       opts.onEntityLongPressed,
-      (x, y) => !!this.visuals.pickBadgeAt(x, y),
+      // The hand cursor: over ANY tier a tap would answer, not just a badge —
+      // it asked pickBadgeAt alone, so a group card or a room chip (both
+      // tappable) showed the plain arrow. The fifth copy of the order.
+      (x, y) => resolveHit(this.hitPickers(false), x, y).kind !== "none",
       // The picker must read the SAME category the badge is drawn under —
       // only EntityVisuals holds the live device_class that decides it.
       (id, type) => this.visuals.categoryOf(id, type),
@@ -823,67 +566,24 @@ export class SceneManager {
     // why every previous ceiling report was taken in the one view that hides
     // them. `active` is read from the meshes the last frame actually submitted,
     // which is the only one of the three that Babylon owns rather than us.
-    this.visuals.setCeilingState(() => {
-      const active = new Set(this.scene.getActiveMeshes().data);
-      let enabled = 0; let visible = 0; let drawn = 0;
-      for (const m of this.ceilingMeshes) {
-        if (m.isEnabled()) enabled += 1;
-        if (m.isVisible) visible += 1;
-        if (active.has(m)) drawn += 1;
-      }
-      // ⚠️ THE ONE QUESTION SIX ROUNDS NEVER ASKED: is there a ceiling above the
-      // walker's head RIGHT NOW? Every counter so far has been about the SET of
-      // ceiling meshes — how many exist, are enabled, are visible, are lit, are
-      // opaque — and all of them can read perfectly while the room the person is
-      // standing in has nothing over it. One ray straight up from the eye
-      // answers it and cannot be argued with: a height means the geometry is
-      // there and the fault is in rendering it; `none` means the GLB does not
-      // ship a ceiling over this spot and no amount of app-side work will
-      // conjure one. 11 meshes, once per `walk:` line, so the cost is nil.
-      const eye = this.camera.camera.position;
-      this.ceilingRay.origin.copyFrom(eye);
-      this.ceilingRay.direction.set(0, 1, 0);
-      this.ceilingRay.length = 10;
-      let above: number | null = null;
-      for (const m of this.ceilingMeshes) {
-        if (!m.isEnabled() || !m.isVisible) continue;
-        const info = this.ceilingRay.intersectsMesh(m, false);
-        if (!info.hit || !info.pickedPoint) continue;
-        if (above === null || info.pickedPoint.y < above) above = info.pickedPoint.y;
-      }
-      // ⚠️ WHERE THE WALKER IS, AND HOW FAR THE NEAREST CEILING IS. `above=none`
-      // was uninterpretable without these: it could mean "the model has no
-      // ceiling in this wing" or "there is one 40 cm away and the alignment is
-      // off", and those are opposite conclusions. `near=` is the horizontal
-      // distance to the closest ceiling panel's centre — metres means absent,
-      // centimetres means misplaced.
-      let near = Infinity;
-      for (const m of this.ceilingMeshes) {
-        const c = m.getBoundingInfo().boundingBox.centerWorld;
-        near = Math.min(near, Math.hypot(c.x - eye.x, c.z - eye.z));
-      }
-      return {
-        enabled, visible, active: drawn, above,
-        at: { x: eye.x, y: eye.y, z: eye.z },
-        near: Number.isFinite(near) ? near : null,
-      };
-    });
+    // The ceiling's state while WALKING — see StructureSet.ceilingState.
+    this.visuals.setCeilingState(() =>
+      this.structure.ceilingState(this.camera.camera.position, this.scene.getActiveMeshes().data));
 
     // Render-quality stack (tone mapping, SSAO, shadows, IBL, light balance).
     // Created after both cameras exist so SSAO can attach to all of them; the
     // initial apply() pushes config.render onto the freshly-built scene.
-    this.renderFx = new RenderEnhancements(this.scene);
+    this.renderFx = new RenderEnhancements(this.scene, this.look);
     this.renderFx.apply(this.deviceRenderConfig(opts.config.render));
-    // renderFx.apply() sets the *base* IBL intensity and builds the env texture.
-    // Re-run the sun pass now so SunController gets the final word on the values
-    // it owns (fill light + day/night-scaled IBL) with the texture in place.
+    // The sun pass sets the fill light it owns; exposure and IBL strength are
+    // resolved by the look from both passes' inputs, in whatever order they run.
     this.sun.applyRealSun();
 
     // Any pointer activity on the canvas (look-around drag, wheel, tap) wakes the
     // on-demand render loop so the view stays smooth.
     // The second (and last) motion entry point — a finger on the glass is
     // motion whether or not the camera has decided to move yet.
-    this.scene.onPointerObservable.add(() => { this.motionPending = true; this.requestRender(); });
+    this.scene.onPointerObservable.add(() => this.frames.motion());
 
     // Land on the bird's-eye OVERVIEW camera from the very first rendered frame.
     // Before the model finishes loading the active camera used to be the
@@ -1075,239 +775,38 @@ export class SceneManager {
       if (document.hidden) return;
       const now = performance.now();
 
-      // ── ONE RULE DECIDES RESOLUTION: HOW LONG SINCE THE CAMERA MOVED ──────
-      // Not "which branch of the loop are we in", which is what it was until
-      // 2.329.0 and is why the glyphs could sit blurred indefinitely: sharpening
-      // only ever happened in the IDLE branch, and there are two ordinary states
-      // in which the loop never reaches it. A single animation anywhere — one
-      // fan left on, which requestAnimationRender's own docstring calls "the
-      // single most common state a kiosk is in" — parks it in the animation
-      // branch forever, and `renderOnDemand: false` parks it in the interactive
-      // one. Both were permanently soft on the iPad, and the picture came back
-      // only when the fan happened to stop, which is the "few dozen seconds"
-      // that was reported. Sharpness is a property of the CAMERA, so it is
-      // computed once here and every branch obeys it.
-      //
-      // ⚠️ MOTION IS SPENT HERE, INSIDE rAF — NEVER IN A POINTER HANDLER.
-      // 2.322.0 called unsharpen() straight from the pointer observable, and it
-      // changes the hardware scaling level, i.e. it resizes the drawing buffer
-      // synchronously during input dispatch on the very element that has just
-      // taken setPointerCapture. Reported on iPad as a badge tap doing nothing
-      // followed by a one-finger drag tilting the camera — both faces of one
-      // lost pointerup (see OverviewController's dropLostPointers).
-      if (this.motionPending) {
-        this.motionPending = false;
-        this.lastMotionAt = now;
-        this.unsharpen();
-      }
-      // The same tail requestRender() uses by default, so a plain orbit
-      // sharpens at exactly the moment it always has.
-      const still = now - this.lastMotionAt >= SHARPEN_STILL_MS;
-
-      // Interaction, transitions and real state changes always render at the
-      // display's own rate — responsiveness is never throttled.
-      if (
-        this.forceContinuous > 0 ||
-        now < this.keepRenderingUntil ||
-        !this.config.renderOnDemand
-      ) {
-        if (still) this.sharpen();
-        // ── A frame drawn while the image is SHARP is a repaint ─────────────
-        // The camera is still, so this frame is an HA state push, a sun tick, a
-        // floor swap, a return from background. Those need the picture
-        // REDRAWN, not down-rezzed — until 2.322.0 they got the full
-        // interactive treatment, so every state change on a live villa dropped
-        // the settled image back to motion resolution for 350ms and let it
-        // re-sharpen afterwards, reported as the glyphs "updating again" a
-        // second or two after the camera had already settled.
-        //
-        // Never sampled: the sharp frame is deliberately the expensive one and
-        // feeding it to the valve would have the device ease itself down for
-        // having drawn a better picture. Rate-capped for that same expense,
-        // exactly as the animation branch is.
-        if (this.sharpened) {
-          if (now - this.lastAnimFrameAt >= ANIMATION_FRAME_MS) {
-            this.lastAnimFrameAt = now;
-            this.scene.render();
-          }
-          return;
-        }
-        this.sampleFrame(now);
-        this.lastAnimFrameAt = now;
-        // Timed, because the split between "the frame cost is inside this call"
-        // and "the frame cost is somewhere else entirely" is the open question.
-        const t0 = performance.now();
-        this.scene.render();
-        // Bounded here rather than in flushFrameSamples: sampleFrame drops the
-        // first frame of a burst and any gap over FRAME_GAP_MAX_MS, so this
-        // array runs slightly ahead of frameSamples and cannot rely on that
-        // cap firing. Both are percentiles over the same burst either way.
-        if (this.renderSamples.length < FRAME_SAMPLE_MAX) {
-          this.renderSamples.push(performance.now() - t0);
-        }
-        return;
-      }
-      // The interaction burst just ended — that's the natural boundary to
-      // summarise it on, and the only one an always-continuous kiosk never
-      // reaches (sampleFrame flushes on its own sample cap for that case).
-      this.flushFrameSamples();
-      // Everything else is a frame asked for purely by a continuous animation
-      // (see requestAnimationRender), and is rate-capped.
-      if (now < this.animateUntil) {
-        // A continuous animation is running (a fan, a pulsing alert). It obeys
-        // the SAME rule: a turning fan is not a moving camera, and a villa with
-        // one fan on is not a villa whose badges may be unreadable. The frame
-        // costs more at native resolution — on the slowest device the capped
-        // 30fps becomes nearer 10 — and that is the honest trade, because a
-        // decorative animation being choppier while nobody is touching the
-        // screen is worth less than every glyph on the screen being legible.
-        // The instant a finger lands, motionPending un-sharpens and the
-        // animation is back at full rate.
-        if (still) this.sharpen();
-        if (now - this.lastAnimFrameAt >= ANIMATION_FRAME_MS) {
-          this.lastAnimFrameAt = now;
-          this.scene.render();
-        }
-        return;
-      }
-      // Nothing is moving and nothing has asked for a frame. `sharpen` reports
-      // whether it actually changed anything, so the one extra frame is drawn
-      // exactly when there is a sharper picture to draw and never on the idle
-      // ticks that follow.
-      if (this.sharpen()) this.scene.render();
+      // Whether to draw, at which resolution, and whether to time it is ONE
+      // rule — FrameScheduler.tick, which carries its history (2.322.0 and
+      // 2.329.0 among it). This loop only carries the decision out.
+      const d = this.frames.tick(now, this.governor);
+      if (d.flush) this.flushFrameSamples();
+      if (!d.render) return;
+      if (!d.sample) { this.scene.render(); return; }
+      this.governor.sample(now);
+      if (this.governor.full) this.flushFrameSamples();
+      // Timed, because the split between "the frame cost is inside this call"
+      // and "the frame cost is somewhere else entirely" is the open question.
+      const t0 = performance.now();
+      this.scene.render();
+      this.governor.sampleRender(performance.now() - t0);
     });
   }
 
   /**
-   * Measure how long INTERACTIVE frames actually take, and report a summary.
-   *
-   * ── Why this exists (2.221.0) ────────────────────────────────────────────
-   * "Safari on the MacBook is very laggy, I can barely orbit or walk" was
-   * unanswerable from the telemetry, because nothing in this app has ever
-   * measured a frame. The load record covers getting TO the first frame and
-   * stops there; `freeze` covers a main thread blocked long enough to notice
-   * as a hang. A steady low frame rate is neither — it is every frame costing
-   * 40ms instead of 8 — and it was invisible.
-   *
-   * That gap is worst exactly where it hurts. The long-task observer behind
-   * `freeze` is Chromium-only; Safari falls back to a timer watchdog
-   * (bootTimeline.installFreezeWatchdog) which detects blocks but not slow
-   * frames. Safari duly reported no freezes at all in the field dump — which
-   * is not "Safari is fine", it is "Safari is slow in the one way we cannot
-   * see". Guessing a cause from there is the failure mode this codebase has
-   * already paid for repeatedly, so: measure first.
-   *
-   * Only INTERACTIVE frames are sampled — the branch above that renders at
-   * the display's rate. Animation-only frames are deliberately rate-capped to
-   * ANIMATION_FRAME_MS, so including them would report the cap as if it were
-   * a performance ceiling. A gap longer than FRAME_GAP_MAX_MS is the loop
-   * resuming after idle rather than one slow frame, and is dropped.
-   *
-   * The record carries what a frame's cost is a function of — active meshes,
-   * active indices, backbuffer size, hardware scaling, and whether the two
-   * optional render passes are on — so the next question can be answered from
-   * the data instead of from another hypothesis.
-   *
-   * ── What renderMs / drawCalls / evalMs are for, and what they answered ───
-   * Three numbers, each falsifying a different family of cause. All three have
-   * reported, and between them plus the ablation probe (babylon/perfProbe.ts)
-   * the question is CLOSED — do not re-derive any of this from scratch:
-   *
-   *   evalMs is ~2ms on every engine        -> culling is not the cost
-   *   drawCalls/activeMeshes has been 1.00
-   *     since 2.265.0                       -> multi-pass lighting is not it
-   *   identical triangle counts either side  -> geometry is not the gap
-   *   an EMPTY scene costs the iPad 67ms at
-   *     3.4Mpx and 19ms at a quarter of that,
-   *     while both Chrome engines pay the
-   *     same at either                       -> on WebKit it is PIXELS, and
-   *                                             almost nothing else
-   *
-   * Two readings that look like answers and are not. "us per draw call" is
-   * renderMs/drawCalls — an average that divides a large fixed cost by the
-   * draw count, so it falls as draws rise whether or not draws cost anything;
-   * it is what made "the only lever is fewer draw calls" look true for a
-   * release. And merging meshes to reduce draws would save nothing here
-   * anyway: the villa's 204 mergeable meshes carry 204 distinct materials.
-   *
-   * Keep these three fields. They are how any future change gets checked, and
-   * they are what calibrateResolution's decision is visible in.
+   * A burst of interactive frames ended: the governor runs the resolution
+   * valve on it (resolutionGovernor.ts — why only interactive frames are
+   * sampled, and what renderMs / drawCalls / evalMs answered), and the first
+   * few bursts of a session are reported as a `frames` telemetry record.
    */
-  private sampleFrame(now: number): void {
-    const prev = this.lastFrameAt;
-    this.lastFrameAt = now;
-    if (prev === 0) return;
-    const dt = now - prev;
-    if (dt > FRAME_GAP_MAX_MS) return;
-    this.frameSamples.push(dt);
-    if (this.frameSamples.length >= FRAME_SAMPLE_MAX) this.flushFrameSamples();
-  }
-
   private flushFrameSamples(): void {
-    const s = this.frameSamples;
-    if (s.length === 0) {
-      // Stops the two arrays drifting apart in the case sampleFrame kept none
-      // of the burst's gaps. The length check keeps the idle path (this runs on
-      // every non-interactive tick) down to a comparison.
-      if (this.renderSamples.length > 0) this.renderSamples = [];
-      return;
-    }
-    this.frameSamples = [];
-    const r = this.renderSamples;
-    this.renderSamples = [];
-    // Not enough of a burst to say anything (a tap, a one-frame nudge). Reset
-    // the clock too, so the next burst never measures across the gap.
-    this.lastFrameAt = 0;
-
-    s.sort((a, b) => a - b);
+    const burst = this.governor.flush();
+    if (!burst) return;
+    const s = burst.gaps, r = burst.renders;
     const at = (q: number) => s[Math.min(s.length - 1, Math.floor(s.length * q))];
-
-    // ── THE RESOLUTION VALVE RUNS FIRST, AND ON ITS OWN TERMS ──────────────
-    // It used to sit below the telemetry gate, which meant a *reporting* rule
-    // decided whether the device was allowed to protect its own frame rate:
-    // FRAME_REPORT_MAX caps the dump at 8 records per session, so after eight
-    // bursts the valve stopped working for the rest of the session, and the
-    // 45-frame minimum meant a device running at 13fps had to be dragged
-    // CONTINUOUSLY for three and a half seconds before it could react at all.
-    //
-    // The iPad is the case that exposed it: not one `frames` record in any
-    // field dump, so the valve had never opened on it — and the frame-cost
-    // probe then measured that same iPad at 76ms a frame, of which 67ms was an
-    // EMPTY scene at 3.4 megapixels. On WebKit that floor is per-pixel (a
-    // quarter of the pixels took it 67ms -> 19ms), so resolution is exactly
-    // the lever, and the thing holding it shut was a telemetry counter.
-    //
-    // Its own minimum is lower because it is answering an easier question than
-    // the telemetry is: "is this device comfortably missing frame budget",
-    // not "characterise this burst". Still monotonic, still floored at 1x CSS.
-    if (s.length >= VALVE_SAMPLE_MIN) {
-      // Down first, then up. Their guards are mutually exclusive (one needs a
-      // slow p50, the other a fast one), so the order is documentation rather
-      // than logic — but stating it means a future edit to either guard cannot
-      // quietly make both fire on one sample.
-      this.easeResolution(at(0.5));
-      // ⚠️ The UPWARD step reads RENDER time, not the frame gap. `at(0.5)` is
-      // the median gap BETWEEN frames, and on any device holding vsync that is
-      // the refresh period and nothing else: this phone reports p50 16.7ms at
-      // 60Hz and 8.4ms at 120Hz while its render cost is 4-9ms either way. A
-      // gate fed that number would refuse to sharpen an idle GPU because its
-      // display happened to be running at 60Hz, and would read a 120Hz panel
-      // as twice as capable as the same silicon behind a 60Hz one.
-      // `renderSamples` is the work actually done per frame, which is the only
-      // thing that scales with pixel count.
-      if (r.length >= VALVE_SAMPLE_MIN) {
-        // Sorted in place: the telemetry block below sorts it again anyway, so
-        // this costs a nearly-sorted re-sort and no allocation.
-        r.sort((a, b) => a - b);
-        this.raiseResolution(r[Math.floor(r.length * 0.5)]);
-      }
-    }
-
     if (s.length < FRAME_SAMPLE_MIN || this.frameReportsSent >= FRAME_REPORT_MAX) return;
     this.frameReportsSent += 1;
 
     const ms = (x: number) => Math.round(x * 10) / 10;
-    r.sort((a, b) => a - b);
     const render = this.deviceRenderConfig(this.config.render);
     reportTelemetry("frames", {
       n: s.length,
@@ -1356,118 +855,6 @@ export class SceneManager {
   }
 
   /**
-   * Give back supersampling when the measured frame rate cannot afford it.
-   *
-   * ── The measurement this exists because of (2.222.0) ──────────────────────
-   * Safari on a MacBook reported 7-19 fps in first person (p50 54-136ms). The
-   * frames records ruled out geometry outright: the FASTEST burst had the MOST
-   * on screen (428 meshes / 1.9M triangles at 54ms) and the slowest had half
-   * that (209 / 1.2M at 136ms). Cost that does not track object count is
-   * per-PIXEL, and the two per-pixel costs here are fill — 2880x1476, i.e.
-   * 4.25 megapixels of 2x supersampling with MSAA — and up to
-   * MAX_SIMULTANEOUS_LIGHTS lights per fragment.
-   *
-   * This addresses the first and DISCRIMINATES them. Frame cost is linear in
-   * pixels and pixels go as 1/scale², so the scale that would hit the target
-   * is a closed form — one step, not a slow crawl. If the next frames records
-   * show hw at 1.0 with fps up roughly 4x, it was fill. If fps barely moves,
-   * fill is eliminated and the lights are the remaining candidate (`lights`
-   * and `litOn` are in the record for exactly that reading).
-   *
-   * Deliberate limits:
-   * - **Never below 1x CSS.** The old iOS tier rendered under CSS resolution
-   *   and its single-sample minification of tile textures showed as rainbow
-   *   speckle around lit floors — reported, and removed. 1.0 is the floor.
-   * - **Monotonic.** Scaling only ever gets coarser, never finer again. A
-   *   controller that could go both ways would hunt around the threshold and
-   *   the resolution would visibly pulse; giving up supersampling once, on a
-   *   device that has demonstrated it cannot pay for it, does not.
-   * - **Only on a device that measured slow.** A machine holding 60fps never
-   *   reaches this and keeps the full 2x. Nothing to configure: the setting
-   *   the user asked for ("as nice as possible by default") is still the
-   *   default, and 7fps is not "nice" by any reading of it.
-   */
-  /**
-   * The one chance a device gets to render at its panel's real resolution.
-   *
-   * The engine starts at HW_START_CAP (2x CSS), which is native on a DPR-2
-   * screen and two thirds of native on a DPR-3 one. Every modern phone is
-   * DPR 3, so the default ships a 1.5x upscale to every one of them.
-   *
-   * ── Why this is safe to attempt, and why it is measured rather than
-   *    detected ────────────────────────────────────────────────────────────
-   * Resolution is free on ANGLE and IS the frame cost on WebKit: measured with
-   * an empty scene and one draw call, Android Chrome paid 2.8ms at full
-   * resolution and 2.8ms at a quarter of it, while the iPad paid 67ms and
-   * 19ms. Sniffing which of those a device is would be a heuristic, and this
-   * file has no business owning one.
-   *
-   * So the gate is a WORST-CASE PREDICTION instead: assume the frame is
-   * entirely per-pixel — the WebKit case — and require that the measured
-   * RENDER time, multiplied by the exact pixel-count increase the change would
-   * cause, still lands inside FRAME_TARGET_MS. A device where resolution is
-   * actually free clears that easily and gets sharpened; one where it is not
-   * cannot clear it even in principle. No device string is read.
-   *
-   * Against the four devices in the field dump, at their measured render times
-   * and a DPR-3 phone's 2.25x pixel increase:
-   *
-   *   Android Chrome  ~7ms  -> 15.8  UPGRADES   (ANGLE: resolution is free)
-   *   iPhone Safari  ~11.5ms -> 25.9  refused
-   *   iPad (HA app)    ~28ms -> 63    refused
-   *   Mac (DPR 1.6/2)               never reaches the test — already native
-   *
-   * ── And why it cannot hunt ───────────────────────────────────────────────
-   * easeResolution is deliberately monotonic ("never finer again") because a
-   * two-way controller oscillates around its threshold and the resolution
-   * visibly pulses. This is not a controller: it is ONE step, taken at most
-   * once per session, guarded by a flag. Afterwards the ordinary downward
-   * valve keeps sampling and can back the device off again if the prediction
-   * was wrong — so a bad guess costs a few seconds, not the session, and the
-   * monotonic invariant holds from that point on exactly as before.
-   */
-  private resolutionRaised = false;
-  private raiseResolution(p50: number): void {
-    if (this.resolutionRaised) return;
-    // Never decide from the sharp idle frame's scaling — that is a temporary
-    // override, not this device's measured operating point.
-    if (this.sharpened) return;
-    const cur = this.engine.getHardwareScalingLevel();
-    const native = 1 / Math.max(1, window.devicePixelRatio || 1);
-    // Already at (or finer than) the panel — nothing to win. This is every
-    // DPR<=2 device, so they never reach the prediction below at all.
-    if (cur <= native + 1e-6) return;
-    // Pixel count scales with the SQUARE of the linear scaling change.
-    const costRatio = (cur / native) ** 2;
-    if (p50 * costRatio > FRAME_TARGET_MS) return;
-    this.resolutionRaised = true;
-    this.engine.setHardwareScalingLevel(native);
-    // Same obligation easeResolution has: badge geometry is authored in CSS px
-    // and converted through this exact value, so the layer has to be told or
-    // every badge keeps the size it had for a resolution that no longer
-    // exists — and its collision boxes keep measuring it at that size too.
-    this.visuals.notifyRenderScaleChanged();
-    this.requestRender();
-  }
-
-  private easeResolution(p50: number): void {
-    if (p50 <= FRAME_SLOW_MS) return;
-    if (this.sharpened) return;   // see raiseResolution
-    const cur = this.engine.getHardwareScalingLevel();
-    if (cur >= HW_SCALE_FLOOR) return;
-    const next = Math.min(HW_SCALE_FLOOR, cur * Math.sqrt(p50 / FRAME_TARGET_MS));
-    if (next <= cur) return;
-    this.engine.setHardwareScalingLevel(next);
-    // Badge geometry is authored in CSS px and converted through this exact
-    // value (EntityVisuals.cssToGui), so changing it here silently resizes
-    // every badge. Tell the layer, or badges keep the size they had for a
-    // resolution the engine has stopped rendering at — and the collision
-    // boxes keep measuring them at it too.
-    this.visuals.notifyRenderScaleChanged();
-    this.requestRender();
-  }
-
-  /**
    * Measure this device once, just after the villa becomes visible, and let the
    * resolution valve act on the result.
    *
@@ -1484,7 +871,7 @@ export class SceneManager {
    * rule would be wrong for the iPhone, which measured 10-14ms and does not
    * need the help — it would just make its picture softer for nothing.
    *
-   * easeResolution already decides this correctly, from measured frame time,
+   * The governor's valve already decides this correctly, from measured frame time,
    * per device. Its only problem was never getting to run: it feeds on frame
    * samples, and those only exist during a burst of continuous interaction. A
    * wall-mounted kiosk that nobody touches never produces one, which is why no
@@ -1492,7 +879,7 @@ export class SceneManager {
    * iPad sat at 13fps indefinitely.
    *
    * So: produce one burst deliberately. Pinning continuous rendering for a
-   * couple of seconds is all it takes — sampleFrame collects, the unpin ends
+   * couple of seconds is all it takes — the governor samples, the unpin ends
    * the burst, flushFrameSamples runs the valve. No new mechanism, no user
    * decision, and a device that is comfortably fast is left alone because the
    * valve's own threshold says so.
@@ -1504,8 +891,8 @@ export class SceneManager {
    * The first version pinned for a flat two seconds and did nothing at all.
    * The reason is in the load record next to it: `paintMs` is 8.6 SECONDS on
    * the iPad — the frames immediately after the reveal are compiling shaders
-   * for 855 materials, and their gaps run to whole seconds. sampleFrame drops
-   * anything over FRAME_GAP_MAX_MS as a resume rather than a slow frame, and
+   * for 855 materials, and their gaps run to whole seconds. The governor drops
+   * anything over its resume gap (400 ms) as a resume rather than a slow frame, and
    * rightly so. So a two-second window opened and closed entirely inside the
    * compile storm, collected almost nothing it was allowed to keep, never
    * reached VALVE_SAMPLE_MIN, and the valve never ran.
@@ -1531,110 +918,16 @@ export class SceneManager {
     };
     const check = () => {
       if (this.disposed) { unpin(); return; }
-      if (this.frameSamples.length >= VALVE_SAMPLE_MIN) { finish(); return; }
+      if (this.governor.sampleCount >= VALVE_SAMPLE_MIN) { finish(); return; }
       if (performance.now() - started > maxWaitMs) { finish(); return; }
       setTimeout(check, 250);
     };
     setTimeout(check, 250);
   }
 
-  /**
-   * Draw the settled image once at the device's NATIVE resolution.
-   *
-   * ── Why this is worth a frame ────────────────────────────────────────────
-   * The resolution valve holds a slow device below its panel's real pixel
-   * density because it cannot shade that many fragments at an interactive
-   * rate — measured, and true: the iPad renders 1180px wide on a 2360px panel
-   * and still only manages 22fps, and Safari on the MacBook is 4-8x Chrome's
-   * render cost on identical hardware. That is the right call WHILE THE CAMERA
-   * IS MOVING, and it is the wrong one the instant it stops, which is when
-   * someone is actually reading a badge. Reported as the entity glyphs looking
-   * low-resolution on iPad, correctly, and chased through the bake twice
-   * before the canvas turned out to be the thing that was short of pixels.
-   *
-   * This scene renders ON DEMAND, so "nothing is moving" is not a guess — it
-   * is the branch the loop already takes when the interaction burst has ended
-   * and no animation is pending. One expensive frame lands there, with nothing
-   * animating to judge it against, and every frame after it is free because
-   * nothing asks for one.
-   *
-   * ⚠️ NOT SAMPLED, and it must never be. The sharp frame is deliberately
-   * more expensive than an interactive one; feeding it to the valve would have
-   * the device conclude it is slow and ease itself down — a loop where making
-   * the picture better makes the picture worse. It is drawn from the idle
-   * branch, which does not sample, and `unsharpen` runs before the interactive
-   * branch measures anything.
-   *
-   * Cheap to leave and cheap to undo: since 2.321.0 the badge bake targets the
-   * best-case resolution, so both directions cost a container re-scale and no
-   * re-bake.
-   */
-  private sharpMotionHw = 0;
-  private sharpened = false;
-  /** Set by the motion entry points, spent by the render loop — see unsharpen. */
-  private motionPending = false;
-  /** When the camera last moved. THE input to the sharpness rule. */
-  private lastMotionAt = 0;
-  /**
-   * Raise to the panel's own resolution. Draws NOTHING — every caller is about
-   * to render anyway, and the idle branch renders on the `true` return.
-   *
-   * ⚠️ `sharpened` means "we are currently OVERRIDING the scaling", and only
-   * that. Until 2.329.0 it latched even when the device was already at native
-   * and there was nothing to override, which quietly disabled the whole
-   * resolution valve on every DPR<=2 machine: `easeResolution` and
-   * `raiseResolution` both bail while sharpened, so a flag set on the first
-   * idle tick and never cleared meant the valve could not act for the rest of
-   * the session. Latching only on a real change keeps the flag honest and costs
-   * two float comparisons per idle tick.
-   */
-  private sharpen(): boolean {
-    if (this.sharpened) return false;
-    const cur = this.engine.getHardwareScalingLevel();
-    const native = 1 / Math.max(1, window.devicePixelRatio || 1);
-    if (cur <= native + 1e-6) return false;
-    this.sharpMotionHw = cur;
-    this.sharpened = true;
-    this.engine.setHardwareScalingLevel(native);
-    // Quiet: the caller's render IS the redraw, and asking for another would
-    // re-arm the interactive branch for no reason.
-    this.visuals.notifyRenderScaleChanged(false);
-    return true;
-  }
-
-  /**
-   * Put the motion resolution back. Idempotent; safe to call every frame — the
-   * flag check is the whole cost when there is nothing to undo.
-   *
-   * ⚠️ ONE CALLER, AT THE TOP OF THE RENDER LOOP, AND THAT IS THE DESIGN.
-   * Since 2.329.0 the only thing that un-sharpens is the camera moving, so
-   * this is called in exactly one place — where `motionPending` is spent —
-   * and never again. Two independent reasons it must stay there:
-   *
-   *   * `sharpened` means "the scaling is currently overridden", and the
-   *     interactive branch reads it to tell a repaint from motion. Widen the
-   *     caller list and every HA state push starts dropping the settled
-   *     picture back to motion resolution (2.322.0's fix), and
-   *   * this RESIZES THE DRAWING BUFFER, so calling it from an event handler
-   *     mutates the canvas during input dispatch (2.322.0's regression).
-   *
-   * Motion signals intent by setting `motionPending`; the loop spends it.
-   */
-  private unsharpen(): void {
-    if (!this.sharpened) return;
-    this.sharpened = false;
-    if (this.sharpMotionHw <= 0) return;
-    const back = this.sharpMotionHw;
-    this.sharpMotionHw = 0;
-    if (this.engine.getHardwareScalingLevel() === back) return;
-    this.engine.setHardwareScalingLevel(back);
-    // Quiet for the same reason: both callers run immediately before a render.
-    this.visuals.notifyRenderScaleChanged(false);
-  }
-
   /** Keep rendering for a short window (covers input latency + transitions). */
   requestRender(durationMs = 350): void {
-    this.keepRenderingUntil = Math.max(this.keepRenderingUntil, performance.now() + durationMs);
+    this.frames.repaint(durationMs);
   }
 
   /**
@@ -1662,16 +955,12 @@ export class SceneManager {
    * registerBeforeRender and RoomHighlight.animate.
    */
   requestAnimationRender(durationMs = 350): void {
-    this.animateUntil = Math.max(this.animateUntil, performance.now() + durationMs);
+    this.frames.animate(durationMs);
   }
 
   /** Pin continuous rendering (e.g. while a camera stream panel is open). */
   pinContinuous(): () => void {
-    this.forceContinuous++;
-    this.requestRender();
-    return () => {
-      this.forceContinuous = Math.max(0, this.forceContinuous - 1);
-    };
+    return this.frames.pin();
   }
 
   private handleResize = () => {
@@ -1815,7 +1104,7 @@ export class SceneManager {
     // for both directions: the ceiling is a lid the overview must not have and
     // the walker must, and badge wall-occlusion only makes sense from inside
     // the villa (see EntityVisuals.setFirstPerson).
-    this.applyCeilingVisibility();
+    this.structure.setView(this.viewMode);
     this.visuals.setFirstPerson(mode === "first-person");
     if (mode === "overview") {
       this.camera.setMovement(0, 0); // stop any in-flight walk
@@ -1865,7 +1154,7 @@ export class SceneManager {
       this.floors.setFirstPerson(true); // walking now — feet elevation drives the storey
       // Where to drop the walker: INTO the room the user picked in overview if
       // there is one (so "select a room, switch to first-person" lands there),
-      // else the default staircase spawn. Either way switch to that floor FIRST
+      // else the default ground-floor spawn (walkerSpawn.pickSpawn). Either way switch to that floor FIRST
       // so grounding settles on the right storey, and face open space (not a wall).
       if (this.loadedMeshes.length) {
         const spawn = this.lastNavigatedRoom
@@ -1890,112 +1179,68 @@ export class SceneManager {
   /**
    * The entity under this screen point, or null — for the hover tooltip.
    *
-   * Reuses the SAME hit-tests a TAP goes through, in the same order, because
-   * the promise this method makes is that what a pointer names and what a tap
-   * opens can never be two different devices.
-   *
-   * ── WHY THE GROUP CARD IS ASKED FIRST (2.293.0) ─────────────────────────
-   * It used to ask `pickBadgeAt` alone, which knows individual badges and
-   * nothing about a summary's cells — so hovering a card named nothing at all.
-   * That was survivable while a summary drew a count, and stopped being so the
-   * moment it started drawing its members' pictograms: a card of two lights is
-   * two identical icons, and identical icons with no name are not two devices,
-   * they are one device drawn twice. The tap path has resolved a cell to its
-   * own device since the card gained cells; only the pointer was left guessing.
-   *
-   * Order mirrors `handleTap` exactly — the card's cell first, then the
-   * badges — including the fallback: a point on the card but in NO cell (a
-   * count, the empty corner of a three-member grid, the gap between two cards
-   * of a split) asks the badges, because a card can be drawn over a badge from
-   * another pile entirely and a pointer over something visible belongs to that
-   * thing.
-   *
-   * Room chips are deliberately NOT asked. A chip already prints its own room
-   * name and stands for a whole room rather than a device, so there is no
-   * label a tooltip could add that the chip is not already showing.
+   * The SAME resolveHit a tap goes through, because the promise this method
+   * makes is that what a pointer names and what a tap opens can never be two
+   * different devices (2.293.0: hovering a card used to name nothing). Only a
+   * DEVICE is named: a group card with no cell and a room chip already print
+   * what they stand for, so there is no label a tooltip could add.
    */
   hoverBadgeAt(clientX: number, clientY: number): string | null {
-    const eGroup = this.visuals.pickEntityGroupAt(clientX, clientY);
-    if (eGroup?.entityId) return eGroup.entityId;
-    return this.visuals.pickBadgeAt(clientX, clientY);
+    const hit = resolveHit(this.hitPickers(false), clientX, clientY);
+    return hit.kind === "device" ? hit.entityId : null;
+  }
+
+  /** EntityVisuals as the adapter at resolveHit's seam. `verbose` logs the
+   *  badge lookup — for a genuine tap or long-press only; hover runs on every
+   *  pointermove (see pickBadgeAt). */
+  private hitPickers(verbose: boolean): HitPickers {
+    return {
+      entityGroupAt: (x, y) => this.visuals.pickEntityGroupAt(x, y),
+      badgeAt: (x, y) => this.visuals.pickBadgeAt(x, y, verbose),
+      clusterAt: (x, y) => this.visuals.pickClusterAt(x, y),
+    };
   }
 
   getViewMode(): "first-person" | "overview" {
     return this.viewMode;
   }
 
-  /** The default first-person landing pose. Always on the GROUND FLOOR: the foot
-   *  of the staircase if we can locate it, else a ground-floor living/entry room,
-   *  else the first ground-floor room, else the origin. Never a 2F room.
+  /** The eye height — the config's, or the one default (walkerSpawn.ts). */
+  private eyeHeight(): number { return eyeHeightOf(this.config.eyeHeight); }
+
+  /** The villa as the walker spawn needs it (walkerSpawn.ts): floor probes,
+   *  structure rays up, the plan's stairwells and ground rooms, and the
+   *  openest direction to face.
    *
-   *  NOT precomputed at load any more (removed 2.112.0's `ensureFirstPersonSpawn`,
-   *  which teleported the inactive walker camera to this pose right after the
-   *  reveal, costing 16+ `pickWithRay` probes — 700-790ms typical, up to 5.9s
-   *  field-observed — on every single load, for every user, whether or not
-   *  first-person is ever used). `setViewMode("first-person")` below already
-   *  computes this fresh on every actual switch and never reused the
-   *  precomputed value, so the eager pass was pure waste — worse, its
-   *  raycasts ran from a callback registered on the same `onAfterRenderObservable`
-   *  notification as the load-telemetry timestamp, ahead of it in registration
-   *  order, so they very likely inflated the `paintMs` figure reported for
-   *  years of load telemetry. */
-  private firstPersonSpawn(): TeleportPoint {
-    const eye = this.config.eyeHeight ?? 1.7;
-    const ground = (p: TeleportPoint) => p.floor === 1;
-    // ⚠️ EVERY CANDIDATE IS VALIDATED, AND THE CHAIN FALLS THROUGH ON FAILURE
-    // (2.459.0). The staircase spawn has now put the walker somewhere unstandable
-    // twice — mid-flight, then in the crawlspace under the steps — and both times
-    // it was the ONLY candidate consulted, because the chain took the first
-    // non-null answer rather than the first WORKABLE one. A spawn that cannot be
-    // stood in is not an answer, so it no longer counts as one.
-    const ok = (p: TeleportPoint): boolean =>
-      this.standable(p.position.x, p.position.z, p.floor);
-    const named = this.calibratedPoints?.find(
-      (p) => ground(p) && /main|living|salon|séjour|sejour|hall|entr/i.test(p.name));
-    const stairs = this.staircaseSpawn();
-    // ⚠️ THE STAIRCASE IS LAST NOW, AND THAT IS THE OWNER'S CALL (2.460.0).
-    // It was first for years, on the reasoning that a stairwell is a legible
-    // place to arrive. Four consecutive releases could not make it produce a
-    // spot a person can stand in — mid-flight, then the crawlspace beneath,
-    // then between the open risers — because a staircase is, definitionally,
-    // the one part of a villa that is neither one storey nor the next. The
-    // owner has asked three times to arrive on the ground floor.
-    //
-    // A ROOM's centroid is open floor by construction, which is the property
-    // that was being approximated the hard way. `standable` still validates
-    // whichever wins, so this is a change of preference, not of guarantee.
-    const candidates: Array<[string, TeleportPoint | null | undefined]> = [
-      ["namedRoom", named],
-      ["groundRoom", this.calibratedPoints?.find(ground)],
-      ["stairFoot", stairs],
-      ["anyPoint", this.calibratedPoints?.[0]],
-    ];
-    for (const [why, p] of candidates) {
-      if (!p) continue;
-      if (!ok(p)) {
-        tapDebug(`spawn: REJECTED ${why} "${p.name}" — ${this.lastStandableWhy || "not standable"}`);
-        continue;
-      }
-      // Place the eye on the surface `standable` actually validated. The point's
-      // own `position.y` was built from `estimateFloorY`, which on a split level
-      // reports the slab UNDER a raised room — spawning from it drops the walker
-      // through the floor that was just approved.
-      const eyeY = this.lastStandY + eye;
-      const probed = this.estimateFloorY(p.position.x, p.position.z, p.floor);
-      tapDebug(
-        `spawn: ${why} "${p.name}" floor=${p.floor}`
-        + ` at=${p.position.x.toFixed(1)},${p.position.z.toFixed(1)}`
-        + ` floorY=${probed.toFixed(2)} standY=${this.lastStandY.toFixed(2)}`,
-      );
-      return { ...p, position: { ...p.position, y: eyeY } };
-    }
-    // Nothing validated. Say so — silently falling back to the origin is how a
-    // spawn bug reads as "the villa loaded somewhere strange".
-    const fallback = this.calibratedPoints?.find(ground) ?? this.calibratedPoints?.[0];
-    tapDebug(`spawn: NO standable candidate — using ${fallback ? `"${fallback.name}"` : "origin"}`);
-    return fallback ?? {
-      name: "Start", floor: 1, position: { x: 0, y: eye, z: 0 }, target: { x: 0, y: 1.6, z: 2 },
+   *  NOT precomputed at load (2.112.0 removed `ensureFirstPersonSpawn`, 16+
+   *  `pickWithRay` probes — 700-790 ms, up to 5.9 s — on every load whether or
+   *  not first person was ever used). Built on each switch. */
+  private spawnWorld(): SpawnWorld {
+    // `visible: false` on purpose — `applyStructure` hides structure per view,
+    // and a wall you cannot see still stops you standing there.
+    const structure = rayTargets({ visible: false, structural: true });
+    return {
+      eyeHeight: this.eyeHeight(),
+      floorAt: (x, z, floor) => this.estimateFloorY(x, z, floor),
+      castUp: (x, y, z, len) => {
+        const hit = this.scene.pickWithRay(new Ray(new Vector3(x, y, z), new Vector3(0, 1, 0), len), structure);
+        return hit?.hit && hit.pickedPoint ? { y: hit.pickedPoint.y, mesh: hit.pickedMesh?.name ?? "?" } : null;
+      },
+      stairwellAt: (x, z) => this.plan.stairwellAt(x, z),
+      groundRooms: () => this.plan.groundRooms(),
+      openestFacing: (x, y, z) => this.bestFacing(x, z, y),
     };
+  }
+
+  /** The default first-person landing — walkerSpawn.pickSpawn. */
+  private firstPersonSpawn(): TeleportPoint {
+    const w = this.spawnWorld();
+    return pickSpawn(w, this.calibratedPoints, () => this.staircaseSpawn(w), (l) => tapDebug(l));
+  }
+
+  /** Into the room picked in overview — walkerSpawn.roomSpawn. */
+  private roomSpawn(room: TeleportPoint): TeleportPoint {
+    return roomSpawn(this.spawnWorld(), room);
   }
 
   /** A horizontal look-target facing the MOST OPEN direction from (x,z): probe
@@ -2018,194 +1263,6 @@ export class SceneManager {
     return { x: x + Math.cos(bestAng) * 3, y, z: z + Math.sin(bestAng) * 3 };
   }
 
-  /** Ground a room's calibrated centre on its own storey and face open space —
-   *  used when switching overview → first-person into a selected room. */
-  private roomSpawn(room: TeleportPoint): TeleportPoint {
-    const eye = this.config.eyeHeight ?? 1.7;
-    const x = room.position.x;
-    const z = room.position.z;
-    const y = this.estimateFloorY(x, z, room.floor) + eye;
-    return { name: room.name, floor: room.floor, position: { x, y, z }, target: this.bestFacing(x, z, y - 0.1) };
-  }
-
-  /**
-   * Can a PERSON STAND HERE? Floor at the storey's own level, and headroom above
-   * it.
-   *
-   * ⚠️ HEADROOM IS THE HALF THAT WAS MISSING, AND IT IS WHY 2.458.0'S SPAWN FIX
-   * MADE THINGS WORSE (2.459.0). "On the ground floor" was tested as a floor
-   * height alone — and the floor UNDER A STAIRCASE is at ground level, so the
-   * search happily returned the crawlspace beneath the stairs. The walker
-   * spawned inside the stair structure, with its collision capsule jammed under
-   * the treads: reported as landing "across the wall asset" and walking being
-   * "very buggy, like something was blocking the path", with a screenshot
-   * looking at the underside of the steps.
-   *
-   * ⚠️ The headroom ray must test STRUCTURE, not collidables. Stairs are
-   * deliberately `checkCollisions = false` (a collidable staircase is how you
-   * get wedged mid-flight — see CameraController's ellipsoid note), so a
-   * collision-based test is blind to exactly the obstruction that caused this.
-   * Structure geometry contains the baked stairs, which is what floorProbe uses
-   * and for the same reason.
-   */
-  private standable(x: number, z: number, floor: number): boolean {
-    const floorY = this.estimateFloorY(x, z, floor);
-    // ⚠️ NO GLOBAL "IS THIS THE LOWEST FLOOR IN THE VILLA" TEST HERE (2.463.0).
-    // It was here, and it rejected the Living Room and Bedroom 1 outright, which
-    // sent the spawn back to the staircase this whole exercise exists to leave:
-    //
-    //   spawn: REJECTED namedRoom "Living Room" — not standable
-    //   spawn: REJECTED groundRoom "Bedroom 1" — not standable
-    //   spawn: stairFoot "Staircase" ...
-    //
-    // This villa has THREE distinct room floor heights (see roomStorey.ts, where
-    // the same fact blanked the walk-in room banner), so "within 30 cm of the
-    // LOWEST floor in the model" is false for most of a split-level ground
-    // storey. The test was never about the villa's lowest floor anyway — it was
-    // about not landing on a stair tread, and the stairwell polygon test below
-    // answers that directly and exactly. `stairFoot` keeps the ground-level
-    // requirement, because THERE it means "come down off the stairs", which is
-    // a different question from "can a person stand here".
-    //
-    // ⚠️ NEVER INSIDE A STAIRWELL, and this is the test that actually holds
-    // (2.460.0). The headroom ray below was defeated by the geometry it exists
-    // to detect: this villa's staircase is OPEN-RISER, so a single vertical ray
-    // between two treads reaches the sky and reports 1.85 m of clear headroom
-    // while a person standing there is inside the stairs. The plan already
-    // knows where the staircase is — asking it is exact, free, and cannot be
-    // threaded. `onGround` in stairFoot excludes stair rooms from the list of
-    // places to LAND; this excludes them as places to STAND, which is not the
-    // same thing, because another room's polygon routinely overlaps a stairwell.
-    const inStairwell = this.worldRoomPolys.find(
-      (r) => STAIR_ROOM_RE.test(r.name) && pointInPolygon(x, z, r.pts));
-    if (inStairwell) { this.lastStandableWhy = `inside stairwell "${inStairwell.name}"`; return false; }
-    const need = (this.config.eyeHeight ?? 1.7) + 0.15;
-    const R = 0.3;
-    // `visible: false` on purpose — `applyStructure` hides structure per view,
-    // and a wall you cannot see still stops you standing there.
-    const blocks = rayTargets({ visible: false, structural: true });
-
-    // ⚠️ THE PROBED FLOOR IS NOT ALWAYS THE SURFACE YOU STAND ON (2.464.0).
-    // `estimateFloorY` -> `floorProbe.storeyFloorY` deliberately takes the
-    // LOWEST hit in the column, so an overhead beam can never be mistaken for
-    // the floor. On a SPLIT-LEVEL villa — this one has three ground-storey
-    // floor heights — the lowest hit under a raised room is the slab BENEATH
-    // it, and the headroom ray then started below the real floor and hit it
-    // from underneath. That is what the named blockers were:
-    //
-    //   REJECTED "Bedroom 1"   — blocked 0.08m up by "Structure_primitive72"
-    //   REJECTED "Living Room" — blocked 0.55m up by "Structure_primitive21"
-    //
-    // 8 cm and 55 cm are floors, not obstructions. So walk UP: a structure
-    // surface within one step of the probe IS the walking surface here, and
-    // standing on it is the whole point. Bounded, because each pass is a ray.
-    let standY = floorY;
-    for (let i = 0; i < 4; i++) {
-      const step = this.scene.pickWithRay(
-        new Ray(new Vector3(x, standY + 0.02, z), new Vector3(0, 1, 0), STAND_STEP_MAX),
-        blocks);
-      if (!step?.hit || step.pickedPoint === null) break;
-      standY = step.pickedPoint.y;
-    }
-
-    // Head-and-torso room only: anything under one step of the surface you are
-    // standing on is a step, a threshold or a plinth, and none of those stop a
-    // person. SAMPLED ACROSS THE BODY'S WIDTH rather than down one line, for the
-    // open-riser reason above — a ray is a measure-zero object and real
-    // obstructions have gaps in them. The offsets are the collision capsule's
-    // own radius, so this asks about the volume that will actually be moved
-    // through.
-    for (const [dx, dz] of [[0, 0], [R, 0], [-R, 0], [0, R], [0, -R]] as const) {
-      const hit = this.scene.pickWithRay(
-        new Ray(new Vector3(x + dx, standY + STAND_STEP_MAX, z + dz),
-          new Vector3(0, 1, 0), need - STAND_STEP_MAX),
-        blocks);
-      if (hit?.hit) {
-        // ⚠️ NAME THE BLOCKER. Three releases were spent on a spawn that
-        // reported only pass/fail, and "not standable" is not a diagnosis — it
-        // is the same silence that made `undrawable=0` mean "not measured".
-        this.lastStandableWhy =
-          `blocked ${(standY + STAND_STEP_MAX + (hit.distance ?? 0) - floorY).toFixed(2)}m`
-          + ` above floor by "${hit.pickedMesh?.name ?? "?"}"`
-          + (standY !== floorY ? ` (stood up to ${(standY - floorY).toFixed(2)}m)` : "");
-        return false;
-      }
-    }
-    this.lastStandableWhy = "";
-    this.lastStandY = standY;
-    return true;
-  }
-
-  /** Why the last `standable()` said no — see its blocker note. */
-  private lastStandableWhy = "";
-  /** The surface the last successful `standable()` resolved as the one you
-   *  actually stand on, which is NOT `estimateFloorY` on a split level — see
-   *  the walk-up note there. The spawn places the eye from this, or it drops
-   *  the walker below the floor it just validated. */
-  private lastStandY = 0;
-
-  /**
-   * The nearest spot to (x, z) that stands on a GROUND-LEVEL room floor.
-   *
-   * ⚠️ THIS IS WHAT "AT THE FOOT OF THE STAIRCASE" ACTUALLY REQUIRES, and the
-   * method below promised it for many releases without delivering it (2.457.0).
-   * It grounded at the stair room's CENTROID, and the centroid of a stairwell is
-   * mid-flight — so `estimateFloorY` there returns the height of a TREAD, and
-   * entering first-person dropped the walker halfway up the stairs, between
-   * storeys, which is exactly where a villa has neither a floor to stand on nor
-   * a ceiling overhead. Reported by the owner from a screenshot.
-   *
-   * Everything here is derived from the plan, so it holds for any villa:
-   * "ground level" is the LOWEST room floor in the model rather than any fixed
-   * elevation (a villa may sit at any height and may be split-level), and the
-   * search is a spiral outward from the stairwell for the first point inside a
-   * room whose own floor sits at that level. Stair-named rooms are excluded for
-   * the same reason they are special-cased at the polygon build above: their
-   * `floorY` is a tread, not a floor.
-   *
-   * Falls through unchanged when there are no polygons yet (calibration has not
-   * run), so a pre-calibration spawn behaves exactly as it did.
-   */
-  private stairFoot(x: number, z: number): { x: number; z: number } {
-    if (!this.worldRoomPolys.length) return { x, z };
-    let groundY = Infinity;
-    for (const r of this.worldRoomPolys) groundY = Math.min(groundY, r.floorY);
-    const onGround = this.worldRoomPolys.filter(
-      (r) => r.floorY <= groundY + STAIR_FOOT_TOLERANCE
-        && !STAIR_ROOM_RE.test(r.name));
-    if (!onGround.length) return { x, z };
-    // ⚠️ THE TEST IS THE SURFACE HEIGHT, NOT POLYGON CONTAINMENT (2.458.0).
-    // The first cut asked "is this point inside a ground-level room outline",
-    // and a stairwell's XZ sits inside the outline of whatever room surrounds
-    // it — so the answer was yes at the very first sample, the search returned
-    // immediately, and the walker still landed mid-flight. Containment says
-    // WHICH ROOM you are over; it says nothing about what you would be standing
-    // ON, which is the entire question when the obstruction is a staircase
-    // inside a room. Probe the floor instead: a tread reads a riser or more
-    // above the storey's own level, and a floor does not.
-    const atGroundLevel = (px: number, pz: number): boolean =>
-      // `standable` carries the floor-height test AND the headroom one. The
-      // headroom half is not optional: the floor beneath a staircase is at
-      // ground level, so height alone accepts the crawlspace under the stairs.
-      this.standable(px, pz, 1)
-      && onGround.some((r) => pointInPolygon(px, pz, r.pts));
-    if (atGroundLevel(x, z)) return { x, z };
-    // Outward in rings. The first hit is the nearest spot that is both indoors
-    // and genuinely at floor level — the foot of the stairs by construction
-    // rather than by an offset that would be particular to one villa. Bounded
-    // at 8 m and 12 directions because each sample is a floor probe; the probes
-    // are memoised (floorProbe) and this runs once per view switch.
-    for (let radius = 1; radius <= 8; radius += 1) {
-      for (let i = 0; i < 12; i++) {
-        const a = (i / 12) * Math.PI * 2;
-        const px = x + Math.cos(a) * radius;
-        const pz = z + Math.sin(a) * radius;
-        if (atGroundLevel(px, pz)) return { x: px, z: pz };
-      }
-    }
-    return { x, z };
-  }
-
   /**
    * A spawn at the FOOT of the staircase on the ground floor. In this pipeline
    * stairs are baked into the fused `Structure` mesh, so there's no stair mesh to
@@ -2214,30 +1271,29 @@ export class SceneManager {
    * it on floor 1 → the 1F spot beneath/beside the stairwell. Falls back to real
    * stair GEOMETRY (split-structure GLBs) and finally null.
    */
-  private staircaseSpawn(): TeleportPoint | null {
-    const eye = this.config.eyeHeight ?? 1.7;
+  private staircaseSpawn(w: SpawnWorld): TeleportPoint | null {
+    const eye = w.eyeHeight;
     const groundAt = (x: number, z: number): TeleportPoint => {
       const y = this.estimateFloorY(x, z, 1) + eye;
       return { name: "Staircase", floor: 1, position: { x, y, z }, target: this.bestFacing(x, z, y - 0.1) };
     };
 
     // 1. A room the plan names as a staircase.
-    const namedRoom = this.calibratedPoints?.find((p) =>
-      STAIR_ROOM_RE.test(p.name));
+    const namedRoom = this.calibratedPoints?.find((p) => isStairwell(p.name));
     if (namedRoom) {
       // stairFoot, NOT the centroid — the centroid of a stairwell is mid-flight.
-      const foot = this.stairFoot(namedRoom.position.x, namedRoom.position.z);
+      const foot = stairFoot(w, namedRoom.position.x, namedRoom.position.z);
       return groundAt(foot.x, foot.z);
     }
 
-    // 2. A stair-named entity/structure mesh marks the stairwell's plan XZ.
-    const stairMesh =
-      this.loadedMeshes.find((m) => /staircase|escalier/i.test(m.name)) ??
-      this.loadedMeshes.find((m) => /\bstairs?\b|_stair/i.test(m.name));
+    // 2. A stair-named entity/structure mesh marks the stairwell's plan XZ —
+    //    named by the plan's own stair words (storeys.isStairwell), not a
+    //    second, shorter list of them.
+    const stairMesh = this.loadedMeshes.find((m) => isStairwell(m.name));
     if (stairMesh) {
       stairMesh.computeWorldMatrix(true);
       const c = stairMesh.getBoundingInfo().boundingBox.centerWorld;
-      const foot = this.stairFoot(c.x, c.z);
+      const foot = stairFoot(w, c.x, c.z);
       return groundAt(foot.x, foot.z);
     }
 
@@ -2268,8 +1324,7 @@ export class SceneManager {
     };
     const loY = surfaceY(loEnd + span * 0.1);
     const hiY = surfaceY(hiEnd - span * 0.1);
-    const bottom = loY <= hiY ? loEnd : hiEnd;
-    const dir = Math.sign((loY <= hiY ? hiEnd : loEnd) - bottom) || 1;
+    const { bottom, up: dir } = flightBottom(loEnd, hiEnd, loY, hiY);
     const standAlong = bottom - dir * 1.2;
     const px = alongX ? standAlong : crossC;
     const pz = alongX ? crossC : standAlong;
@@ -2461,15 +1516,8 @@ export class SceneManager {
       } : { ...b };
     }
     if (!bounds) return null;
-    // Entity anchors mark devices, not walls, so their box under-states the
-    // room — give that fallback more headroom than a true polygon needs.
-    const fitFrac = allReal
-      ? ROOM_FIT_VIEWPORT_FRACTION
-      : ROOM_FIT_VIEWPORT_FRACTION_ENTITIES;
-
-    const cx = (bounds.minX + bounds.maxX) / 2;
-    const cz = (bounds.minZ + bounds.maxZ) / 2;
-
+    // (Entity anchors mark devices, not walls, so their box under-states the
+    // room: roomWallFit gives that fallback more headroom — `allReal`.)
     const cam = this.overview.camera;
     // Which of the two angles `fov` actually is belongs to cameraFrame.ts —
     // this file used to assume it was the vertical one, as three other readers
@@ -2477,7 +1525,6 @@ export class SceneManager {
     const { vHalf, hHalf } = cameraFrame(this.scene, cam);
     const vFov = 2 * vHalf;
     const hFov = 2 * hHalf;
-
     // ── The shot is ZENITHAL, whatever the camera was doing before ──────────
     // A floor plan seen from straight above is the view that shows a room's
     // devices best, and it is the same view every time — tapping two rooms in
@@ -2493,62 +1540,11 @@ export class SceneManager {
     // It is computed HERE, above the fit, because the fit is measured through
     // it — see the anisotropy note below.
     const destBeta = this.overview.camera.lowerBetaLimit ?? 0.05;
-    // Babylon puts an ArcRotateCamera at target + r(cos α sin β, cos β,
-    // sin α sin β), so the direction it LOOKS is the negated unit offset. At
-    // destBeta this is very nearly straight down, which is the whole point —
-    // and it is what the badge ladder below has to measure through.
-    const sb = Math.sin(destBeta);
-    const destDir = {
-      x: -Math.cos(cam.alpha) * sb,
-      y: -Math.cos(destBeta),
-      z: -Math.sin(cam.alpha) * sb,
-    };
-
-    // ── Fit the room's footprint AS PROJECTED, per screen axis ─────────────
-    // This used to fit a bounding SPHERE (half the footprint diagonal) inside
-    // the TIGHTER of the two field-of-view angles. Both halves of that are
-    // rotation-invariant, and on a portrait phone they compound into a shot
-    // that is dramatically too far out: the horizontal FOV is the tight one, so
-    // the room was pushed back until its DIAGONAL fitted the screen's SHORT
-    // axis, and the tall axis — most of the glass — was left empty.
-    //
-    // Measured, not argued (v2.362.0 telemetry): the same Living Room reports a
-    // bounding sphere of 7.157 m on a 704x845 tablet, 7.151 m on a 932x616
-    // tablet and 7.157 m on a 475x661 phone — the room is identical, and every
-    // difference in the resulting shot was the formula. Swimming Pool wanted
-    // radius 36.05 at aspect 0.719 and 51.13 at aspect 0.495: 42% further out
-    // on the iPhone for the same room, which is the "zoom level is too low"
-    // that was reported from it.
-    //
-    // The destination pose is known exactly by this point, so there is nothing
-    // to be invariant to. Project the footprint's four corners onto the view
-    // plane and fit each screen axis against its OWN half-angle. `tan`, not
-    // `sin`: a floor seen from above is a plane facing the camera, and the
-    // distance at which a plane's half-extent subtends a half-angle is
-    // extent/tan. `sin` is the tangent-sphere form, and is the more
-    // conservative of the two by 1/cos — small next to the anisotropy, but it
-    // was wrong in the same direction.
-    const frame = exactViewBasis(destDir.x, destDir.y, destDir.z, "plane");
-    let halfW = 0;
-    let halfH = 0;
-    for (const px of [bounds.minX, bounds.maxX]) {
-      for (const pz of [bounds.minZ, bounds.maxZ]) {
-        // Relative to the orbit centre, which is what the frame is centred on.
-        // The projection is linear, so the projected corners bound the whole
-        // footprint exactly — no corner can escape a frame that holds all four.
-        const p = projectToView(frame, px - cx, 0, pz - cz, this.fitScratch);
-        halfW = Math.max(halfW, Math.abs(p.px));
-        halfH = Math.max(halfH, Math.abs(p.py));
-      }
-    }
-    // Per axis against its OWN half-angle, THEN the context fraction — see
-    // ROOM_FIT_VIEWPORT_FRACTION for why that order is what makes one number
-    // correct on every aspect ratio.
-    let radius = Math.max(
-      halfW / Math.tan(hFov / 2),
-      halfH / Math.tan(vFov / 2),
-      MIN_ROOM_FIT_RADIUS,
-    ) / fitFrac;
+    // The footprint fitted per screen axis, through the destination's own
+    // view — roomZoomSolver.roomWallFit, beside the rung ladder it bounds.
+    const fit = roomWallFit(bounds, allReal, { alpha: cam.alpha, beta: destBeta, vFov, hFov });
+    const { cx, cz, destDir, frame, halfW, halfH } = fit;
+    let radius = fit.radius;
 
     // ── Now ask the badges, by TESTING rather than deriving ───────────────
     // The wall fit above frames the ROOM. It says nothing about whether the
@@ -2960,19 +1956,24 @@ export class SceneManager {
     this.loadedMeshes = result.meshes;
 
     // Baked-lighting GLB (blender_pipeline --bake): the structure carries its
-    // full Cycles-rendered lighting in its texture and renders unlit, so every
-    // dynamic-light system stands down. Order matters: visuals BEFORE its
-    // indexMeshes below (that's where per-entity PointLights would be created),
-    // and renderFx BEFORE sun (SunController's exposure write must be the
-    // final word — all its call paths run after renderFx.apply()).
+    // Cycles-rendered lighting. WHICH lights the villa then gets is one table
+    // (lightingMode.ts). Order matters: visuals BEFORE its indexMeshes below,
+    // which is where the bulbs are built for that mode.
+    // renderFx and the sun no longer have an order between them: the night
+    // exposure they used to fight over is resolved by the look (sceneLook.ts).
     if (result.baked) {
-      devLog("[SceneManager] baked mode ON — dynamic lighting disabled" +
+      devLog(`[SceneManager] ${result.lighting.describe}` +
         (result.lightmapped ? " (LIGHTMAP flavour: original textures × baked light)" : "") +
         (result.nightBlend ? "; night atlas present (day/night crossfade)" : ""));
     }
-    this.visuals.setBakedMode(result.baked);
+    this.visuals.setLightingMode(result.lighting);
     this.renderFx.setBakedMode(result.baked);
     this.sun.setBakedMode(result.baked, result.nightBlend, result.glassDim);
+    // How many materials an environment change can actually reach on this
+    // model. 2.496.47 built sky reflections, released and reverted them because
+    // the answer was "nearly none" — a question this line now asks every load.
+    { const { reach, total } = this.look.environmentReach();
+      tapDebug(`look: the environment reaches ${reach} of ${total} materials`); }
 
     // --- Critical path: everything needed for a correct, navigable first paint.
     this.normalizeScale(result.meshes); // bring to metres BEFORE recentring
@@ -3001,7 +2002,7 @@ export class SceneManager {
     // magnitude more than the step it was protecting. The yield above, ahead of
     // the genuinely heavy indexMeshes, is kept.
     if (this.disposed) return { importMs: result.importMs, postMs: performance.now() - tPostStart };
-    this.applyStructure(result.meshes); // solid walls + collisions + view-scoped ceilings
+    this.structure.apply(result.meshes, this.viewMode); // solid walls + collisions + view-scoped ceilings
     // AFTER applyStructure, which is what stamps `isStair`/`isMarker` — the
     // floor follower resolves its candidate set once here instead of walking
     // every mesh on every ray (see CameraController.floorCandidates).
@@ -3154,7 +2155,7 @@ export class SceneManager {
     tapDebug(`calibration: ${solution.strategy}`);
 
     // Transform each room polygon to model space; centroid → teleport point.
-    const worldPolys: Array<{ name: string; pts: Pt2[]; floorY: number; conform?: { positions: number[]; indices: number[] } }> = [];
+    const worldPolys: WorldRoom[] = [];
     const points: TeleportPoint[] = [];
     /** Stair rooms whose surface-hugging glow is built after the block ends. */
     const stairJobs: Array<{ index: number; pts: Pt2[]; floor: number }> = [];
@@ -3178,9 +2179,11 @@ export class SceneManager {
       // TWO stair rooms — a third of a block that runs after first paint, for a
       // glow that is only ever seen once a stair room is highlighted. The room
       // ships with its flat patch now and is upgraded a few frames later.
-      const isStairRoom = STAIR_ROOM_RE.test(room.name);
+      const isStairRoom = isStairwell(room.name);
       if (isStairRoom) stairJobs.push({ index: worldPolys.length, pts, floor });
-      worldPolys.push({ name: room.name, pts, floorY });
+      // The plan's storey travels with the room — Storeys (storeys.ts) needs
+      // it, and re-deriving it from a centroid height is what went wrong.
+      worldPolys.push({ name: room.name, pts, floorY, storey: floor });
       // QUANTISED TO MILLIMETRES, and that is not cosmetic — it is what stops
       // this data pushing itself to the server on every single boot.
       //
@@ -3200,8 +2203,11 @@ export class SceneManager {
       points.push({
         name: room.name,
         floor,
-        position: { x: mm(wc.x), y: mm(floorY + 1.7), z: mm(wc.z) },
-        target: { x: mm(wc.x), y: mm(floorY + 1.6), z: mm(wc.z + 1.5) },
+        // The configured eye height — it was a literal 1.7 here, so a villa
+        // with its own eye height had every room viewpoint at the wrong one,
+        // and syncRoomPoints (floorY = y − eyeHeight) read the floor wrong.
+        position: { x: mm(wc.x), y: mm(floorY + this.eyeHeight()), z: mm(wc.z) },
+        target: { x: mm(wc.x), y: mm(floorY + this.eyeHeight() - 0.1), z: mm(wc.z + 1.5) },
         // DERIVED — never synced. See TeleportPoint.fitted.
         fitted: true,
       });
@@ -3209,11 +2215,15 @@ export class SceneManager {
 
     this.calibratedPoints = points;
     this.camera.setTeleportPoints(points);
-    this.camera.setRoomPolygons(worldPolys);
-    // Synchronously runs roomHighlight.setRooms AND reshapeLightPools — the
+    // ONE plan per calibration, the same object for every reader. A polygon
+    // of fewer than three points contains nothing and has no floor to vote.
+    const plan = new Storeys(worldPolys.filter((p) => p.pts.length >= 3));
+    this.plan = plan;
+    this.camera.setPlan(plan);
+    // Synchronously runs roomHighlight.setRooms AND LightPoolSet.setRooms — the
     // top suspect for the residual, since the latter re-probes every light
-    // pool's floor. reshapeLightPools reports itself as `calibPools`.
-    this.visuals.setRoomPolygons(worldPolys);
+    // pool's floor. The pools report themselves as `calibPools`.
+    this.visuals.setPlan(plan);
     devLog(`[Villa] ${worldPolys.length} room polygons registered`);
 
     // Point-only "rooms" (named TeleportMenu viewpoints with no real polygon,
@@ -3222,15 +2232,14 @@ export class SceneManager {
     // later once Dashboard's onCalibrated handler adopts the freshly-fitted
     // points (see updateConfig's teleportPoints diff below).
     this.lastRoomPolyNames = new Set(worldPolys.map((r) => roomKey(r.name)));
-    this.worldRoomPolys = worldPolys;
     // ⚠️ HERE, NOT IN applyStructure (2.461.0). The coverage report was called
-    // from the ceiling block at load, and `worldRoomPolys` is not filled until
+    // from the ceiling block at load, and the room plan is not built until
     // calibration — which runs AFTER applyStructure — so it hit its own
     // early-return on every boot and never printed once. Four captures were
     // read waiting for a line that could not exist. The instrument has to live
     // where its inputs do, which is the same mistake in a new place: measuring
     // at the point that was convenient rather than the point that has the data.
-    this.reportCeilingCoverage();
+    this.structure.reportCoverage(plan);
     this.syncRoomPoints();
 
     // Camera motion-beam directions: each camera's sh3d plan `angle` (yaw)
@@ -3306,11 +2315,11 @@ export class SceneManager {
 
     // Notify listeners (Dashboard) so the teleport grid + room labels re-adopt
     // these freshly-fitted points — e.g. right after a manual mirror toggle.
-    this.calibrateCallbacks.forEach((cb) => cb());
+    this.phases.calibrated();
 
     // Everything COSMETIC, off the block. Not awaited: the villa is already
     // correct and interactive without any of it.
-    void this.finishCalibrationCosmetics(gen, worldPolys, stairJobs, cameraDirections);
+    void this.finishCalibrationCosmetics(gen, worldPolys, plan, stairJobs, cameraDirections);
   }
 
   /**
@@ -3331,7 +2340,10 @@ export class SceneManager {
    */
   private async finishCalibrationCosmetics(
     gen: number,
-    worldPolys: Array<{ name: string; pts: Pt2[]; floorY: number; conform?: { positions: number[]; indices: number[] } }>,
+    worldPolys: WorldRoom[],
+    /** The plan built from `worldPolys` — the same room objects, so a conform
+     *  mesh written onto one below is in the plan the readers hold. */
+    plan: Storeys<WorldRoom>,
     stairJobs: Array<{ index: number; pts: Pt2[]; floor: number }>,
     cameraDirections: Map<string, { x: number; y: number; z: number }>,
   ): Promise<void> {
@@ -3381,8 +2393,8 @@ export class SceneManager {
       if (built) {
         await this.yieldFrame();
         if (stale()) return;
-        this.camera.setRoomPolygons(worldPolys);
-        this.visuals.setRoomPolygons(worldPolys);
+        this.camera.setPlan(plan);
+        this.visuals.setPlan(plan);
       }
     }
 
@@ -3406,7 +2418,7 @@ export class SceneManager {
     // anchored well above the recentred floor's y≈0, so the glow patch must
     // use ITS OWN local floor height, not the flat offset real room polygons
     // use, or it renders buried inside the stairs/slab below and never shows.
-    const eyeHeight = this.config.eyeHeight ?? 1.7;
+    const eyeHeight = this.eyeHeight();
     const extras = this.config.teleportPoints
       .filter((p) => !this.lastRoomPolyNames.has(roomKey(p.name)))
       .map((p) => ({ name: p.name, x: p.position.x, z: p.position.z, floorY: p.position.y - eyeHeight }));
@@ -3416,12 +2428,6 @@ export class SceneManager {
   /** Model-space teleport points fitted on load, or null (use config defaults). */
   getCalibratedTeleportPoints(): TeleportPoint[] | null {
     return this.calibratedPoints;
-  }
-
-  /** The model's meshes, for read-only inspection. A readonly view so a caller
-   *  cannot reorder the array the floor index and highlight passes walk. */
-  getLoadedMeshes(): readonly AbstractMesh[] {
-    return this.loadedMeshes;
   }
 
   /**
@@ -3520,10 +2526,16 @@ export class SceneManager {
     return this.visuals.mappedEntityIds();
   }
 
-  /** Subscribe to re-calibration (load + every mirror-toggle re-fit). */
-  onCalibrated(cb: () => void): () => void {
-    this.calibrateCallbacks.add(cb);
-    return () => this.calibrateCallbacks.delete(cb);
+  /**
+   * The scene's phases, as ONE subscription: "shown" once the model is on
+   * screen, "calibrated" after every plan→world fit (the load's, and each
+   * mirror-toggle re-fit). A subscriber that arrives after the model is shown
+   * is told so at once (`replay`, on by default) — every caller used to
+   * restate that as `if (isReady()) cb(); onReady(cb); onCalibrated(cb)`, three
+   * calls and two unsubscribes, and Dashboard did it three times over.
+   */
+  onScene(cb: (phase: ScenePhase) => void, replay = true): () => void {
+    return this.phases.subscribe(cb, replay);
   }
 
   /**
@@ -3541,617 +2553,6 @@ export class SceneManager {
     return [...seen].sort();
   }
 
-  /** Re-apply entityMap + meshBindings live (after the user edits a binding). */
-  reindex(config: AppConfig): void {
-    this.config = config;
-    this.pick.setMaps(config.entityMap, config.meshBindings, config.deniedTypes, config.hiddenCategories);
-    this.visuals.updateConfig(config);
-    this.visuals.indexMeshes(this.loadedMeshes);
-    this.requestRender();
-  }
-
-  /**
-   * Enforce solid (opaque) walls and wall collisions, per config. SweetHome
-   * exports sometimes carry a low wall alpha; we force structural surfaces
-   * opaque while leaving genuinely transparent things (glass/windows/curtains)
-   * alone, and turn on collision for vertical barriers.
-   */
-  private applyStructure(meshes: AbstractMesh[]): void {
-    const endSpan = beginSpan("applyStructure");
-    try {
-      this.applyStructureInner(meshes);
-    } finally {
-      endSpan();
-    }
-  }
-
-  private applyStructureInner(meshes: AbstractMesh[]): void {
-    // Rebuilt from scratch on every load — these are meshes of the model being
-    // replaced, and a stale entry is a disposed mesh the view toggle would
-    // still try to write to.
-    this.ceilingMeshes = [];
-    // Name patterns that are explicitly collidable (walls, railings, glass
-    // barriers). Still NAME-based, and deliberately so for now: unlike the
-    // pipeline's own structure groups, these are individual SweetHome catalog
-    // pieces the pipeline never classified, so there is no metadata to read —
-    // this is a best-effort heuristic over whatever the plan's author named
-    // them, and it degrades gracefully (a miss just means that piece is not
-    // force-opaqued / not collidable, never a broken load). See meshRoles.ts
-    // for the parts that DO have real metadata, and the note in that file
-    // about not adding new behaviour to word lists like this one.
-    const structuralByName =
-      /wall|partition|cloison|railing|balustrade|banister|newel|column|pillar|fence|window|glass|slid|baie|vitr/i;
-    // Stairs/steps in several languages — these must NEVER collide (you walk up
-    // them via floor-following) and are tagged so the camera can climb them.
-    const stairPat = /stair|step|escalier|marche|scala|treppe|stufe|trap\b/i;
-    // Never block movement through these (floors, outdoor terrain, helpers, stairs).
-    const neverCollide =
-      /ground|floor|room_|terrain|grass|lawn|water|pool|sky|__root__|ceiling|plafond|toit|ramp|slope/i;
-
-
-    for (const m of meshes) {
-      const name = m.name;
-      if (isHelperMesh(m)) continue;
-
-      // HA entity fixtures (light.*, cover.*, fan.*, …) are owned entirely by
-      // EntityVisuals — the structural pass must never hide or collide them.
-      // The mesh name IS the entity_id (domain prefix before the first dot, even
-      // with a Blender ".001" instance suffix), so a known domain marks it as an
-      // entity. Without this skip, the ceiling-hide regex below matched any light
-      // whose entity_id legitimately contains an architectural word and set it
-      // invisible — e.g. light.bedroom_1_…_ceiling_b1 and
-      // light.living_room_ceiling_led_… vanished while a sibling like
-      // light.…_wallswicth_center (no "ceiling") stayed visible. Honors the
-      // "only objects named by the HA convention" rule without hardcoding names.
-      if (inferTypeFromEntityId(name)) continue;
-
-      m.computeWorldMatrix(true);
-      const bb = m.getBoundingInfo().boundingBox;
-      const meshH = bb.maximumWorld.y - bb.minimumWorld.y;
-      const meshMinY = bb.minimumWorld.y;
-      // Horizontal footprint — a single wall is tall but THIN in one axis; a
-      // whole-house "fused" wall mesh is tall and LARGE in both axes; furniture
-      // is tall but medium-bulky in both. So treat thin-or-large as wall-like.
-      const footX = bb.maximumWorld.x - bb.minimumWorld.x;
-      const footZ = bb.maximumWorld.z - bb.minimumWorld.z;
-      const footMin = Math.min(footX, footZ);
-      const footMax = Math.max(footX, footZ);
-
-      // --- Tag stairs so the camera's floor-follower knows it may climb them ---
-      const isStair = stairPat.test(name);
-      m.metadata = { ...(m.metadata ?? {}), isStair };
-
-      // --- Hide ceiling/roof meshes (named OR floating high above floor level) ---
-      // "Above floor level" = bounding box bottom is above 2.5 m and the mesh
-      // is flat (height < 0.3 m). This removes outdoor "roofs" and ceilings without
-      // hiding Floor 2 elements (whose FLOOR sits at ≈ 3 m but has height > 0.3 m).
-      // Pipeline-split structure groups are EXEMPT from the height heuristic:
-      // blender_pipeline (≥2.6.0) already drops the top ceiling/roof in Blender,
-      // and Babylon splits Structure_L1 into one child mesh per material — so a
-      // thin upper-storey slab (a 1 cm SweetHome "Box" floor patch at 2.56 m)
-      // is a flat lone primitive that this heuristic ate, leaving a see-through
-      // hole in the 2F floor. Name-matched ceilings are still hidden.
-      // Classified from the mesh's own pipeline metadata, not its name —
-      // see meshRoles.ts (name matching survives only as a legacy fallback).
-      const role = structureRole(m);
-      const isPipelineStructure = role.isStructure;
-      // Tag the load-bearing shell (floor slabs + walls + baked stairs) so the
-      // camera can ground on the real FLOOR and never on furniture: these fused
-      // meshes contain no furniture, so a downward ray against them alone finds
-      // the walking surface even when a table/bed sits directly overhead.
-      m.metadata = { ...(m.metadata ?? {}), isStructure: isPipelineStructure };
-      // `role.isCeiling` FIRST, because it is the only one of the three that is
-      // a FACT rather than a guess: pipeline ≥2.23.0 ships each non-top storey's
-      // ceiling as its own object stamped `vk_role: "ceiling"` (before that the
-      // app borrowed the storey-above's floor slab, which is why the 1F ceiling
-      // wore the 2F floor's texture). The name pattern and the height heuristic
-      // stay for every GLB built before that — see meshRoles.ts on why a new
-      // structural fact becomes a `vk_*` key and never another word list.
-      // `isCeilingMesh` owns the stamp AND the name list (see meshRoles) — the
-      // same predicate ModelLoader lights them by, which is the disagreement
-      // 2.448.0 closed. The HEIGHT heuristic stays here because it needs a
-      // computed world bounding box.
-      // ⚠️ A DEGENERATE MESH IS NOT A CEILING (2.456.0). The per-mesh dump
-      // caught the height heuristic classifying `BAKED_LightmapCarrier` and
-      // `BAKED_LightmapCarrier_Night` — 4-vertex, 0.0 x 0.0 m holders for the
-      // day/night lightmap textures, which sit at 2.79 m and are flat, so they
-      // satisfy every term of it. They were then counted in `ceilings: 11`, had
-      // their `isVisible` driven by the view toggle, and made a fifth of the
-      // ceiling census meaningless. A ceiling has AREA; these have none, and
-      // `BAKED_` is the pipeline's own prefix for its carriers.
-      const degenerate = footMax < 0.01 || m.name.startsWith("BAKED_");
-      const byHeight = !isPipelineStructure && !degenerate
-        && meshMinY > 2.5 && meshH < 0.35;
-      if (!degenerate && (isCeilingMesh(m) || byHeight)) {
-        // HIDDEN IN OVERVIEW, SHOWN WHILE WALKING (2.434.0). A ceiling exists to
-        // be under, and the two cameras want opposite things from it: the
-        // bird's-eye view is a cut-away and a lid over it shows nothing but the
-        // lid, while standing inside a room with open sky overhead is the one
-        // thing that never reads as "indoors". So the decision moves from load
-        // time to the view toggle — `applyCeilingVisibility`, driven by
-        // setViewMode, which is also the only thing that may write `isVisible`
-        // on these meshes from here on.
-        //
-        // Collisions stay OFF regardless: the walker climbs stairs by
-        // floor-following and CameraController deliberately keeps the space
-        // overhead clear (see its ellipsoid note) — a collidable ceiling is how
-        // you get wedged mid-staircase.
-        m.metadata = { ...(m.metadata ?? {}), isCeiling: true };
-        this.ceilingMeshes.push(m);
-        m.isVisible = this.viewMode === "first-person";
-        m.checkCollisions = false;
-        // ⚠️ THIS `continue` SKIPS THE REST OF THE LOOP, AND THE OPACITY
-        // NORMALISATION AT THE BOTTOM OF IT IS ONE OF THE THINGS IT SKIPPED
-        // (2.454.0). Exactly the shape of 2.450.0, where the same early exit
-        // put the ceiling ahead of the UV2 gate: a decision made here is made
-        // BEFORE every later rule, so each later rule has to be asked for
-        // explicitly or it silently does not apply.
-        //
-        // SweetHome bleeds alpha onto flat slabs, and a ceiling is the one
-        // surface where that is not cosmetic: you look straight up through it
-        // at the sky, which is precisely the "no ceiling in first-person"
-        // report that four fixes chased. Everything else in the villa got
-        // forced opaque at the bottom of this loop and the ceiling did not.
-        forceOpaque(m);
-        continue;
-      }
-
-      // --- Collisions ---
-      // Collide only with things that are genuinely walls/barriers, so the camera
-      // doesn't snag on furniture (a tall wardrobe/fridge is bulky, not a wall):
-      // 1) Explicit name match (wall_XXX, railing, glass …)
-      // 2) Tall AND (thin in one axis = a single wall/partition, OR large in both
-      //    axes = a fused whole-house wall mesh). Excludes bulky furniture
-      //    (wardrobe/fridge) so you no longer snag on it. (Babylon collides
-      //    against real triangles, so a fused wall mesh still blocks correctly.)
-      // ⚠️ THE NAME TEST CANNOT MATCH FUSED GEOMETRY, AND THE MATERIAL IS THE
-      // SURVIVING IDENTITY. The word list above was written for individual
-      // SweetHome catalog pieces, but the pipeline FUSES everything into
-      // Structure* and Babylon then names one child mesh per glTF primitive —
-      // so every structural mesh in this villa is called
-      // `Structure_L1_primitiveN`, and the list matches NONE of them: 0 of 344.
-      // The same list matches the MATERIAL of 34 of those 344, because glTF
-      // splits a fused object by material and SweetHome's material names are
-      // the original object's ("Glass_2_2_2_774", "wall_1_2").
-      //
-      // Found from an owner report of walking straight through a 2F glass
-      // balcony railing and falling a storey. Its tap read
-      // `collides=n h=0.66 foot=19.21x8.94`: a 0.66 m band of glass, under the
-      // 1.2 m "tall enough to be a wall" bar, with a name that could never
-      // match. Both tests failed and nothing else was left to catch it.
-      //
-      // ⚠️ A material match RELAXES THE HEIGHT BAR, it does not grant collision
-      // outright — `footMax > 3.0` still has to hold, so a barrier has to span
-      // a real run. That is deliberate: the list contains `glassBowl`, and a
-      // decorative bowl must not become a wall. Height alone is the wrong test
-      // for a balustrade (they are waist-high by definition); spanning nineteen
-      // metres is the thing that makes it a barrier.
-      const barrierMaterial = structuralByName.test(m.material?.name ?? "");
-      const isWallShaped = (meshH > 1.2 && (footMin < 0.5 || footMax > 3.0))
-        || (barrierMaterial && footMax > 3.0);
-      const isExplicit = structuralByName.test(name);
-      const isExcluded = neverCollide.test(name) || isStair;
-      // Wall collisions are always on (the toggle was removed — you should
-      // never walk through a wall); only shape/exclusion decides.
-      m.checkCollisions = !isExcluded && (isExplicit || isWallShaped);
-
-      // --- Raycast/collision acceleration ---
-      // CameraController.followFloor() raycasts straight down against this
-      // same structural geometry on EVERY frame while walking (plus a second
-      // fallback raycast when the first misses), and Babylon's own built-in
-      // moveWithCollisions does an equivalent ray/triangle test for every
-      // collidable mesh — both against exactly the geometry
-      // EntityVisuals.surfaceBelowCache's own docstring measured as "a linear
-      // scan over a 1.4-million-triangle structure mesh with no picking
-      // octree", ~950ms worth at load time. That path gets away with it by
-      // caching each answer (a light fixture's position never moves); a
-      // walking camera can't cache a raycast whose answer changes every
-      // step, so the fix has to be the mesh's own acceleration structure
-      // instead — this is what was actually freezing the UI the instant
-      // first-person movement started (pure look-around never raycasts at
-      // all, which is why only walking hung). A submesh octree only helps a
-      // mesh with enough submeshes to spatially partition; on one with too
-      // few it is a no-op octree build at load and changes nothing at
-      // runtime, so it's safe to request unconditionally on every
-      // structural/collidable mesh above a trivial size rather than trying
-      // to guess which ones actually benefit.
-      if ((isPipelineStructure || m.checkCollisions) && m.getTotalVertices() > 1500) {
-        m.useOctreeForPicking = true;
-        m.useOctreeForCollisions = true;
-        m.createOrUpdateSubmeshesOctree();
-      }
-
-      // --- Opacity --- (see forceOpaque; the ceiling branch above calls it too)
-      forceOpaque(m);
-    }
-    // The one field that separates "this villa has no ceiling geometry" from
-    // "the ceiling feature is broken". A pipeline ≥2.6.0 DROPS the top
-    // ceiling/roof in Blender, so zero here is the expected answer on a
-    // freshly-baked villa and means the GLB, not this code, is what has to
-    // change. Reported once per load rather than per mesh.
-    // ⚠️ A LOW NUMBER HERE IS NOT "the rest is covered by something else" any
-    // more. The storey-above slab stood in for a missing ceiling from 2.435.0
-    // to 2.443.0 and is GONE (2.444.0) — it wore the 2F floor's texture, and it
-    // could never roof the TOP storey, the one storey whose ceiling the pipeline
-    // deliberately drops. So this count is now the whole of what roofs a walker.
-    // `stamped` separates the two eras: a pipeline ≥2.23.0 GLB reports real
-    // ceiling OBJECTS, so a low number is now a finding rather than the norm.
-    // ⚠️ DELIBERATELY NOT `isResolvedCeiling` — /dry-audit will re-flag these
-    // otherwise. Every other consumer asks "IS this a ceiling"; these two ask
-    // "which ROUTE classified it", which is the entire purpose of the line: a
-    // capture reading `11 shown` beside an invisible ceiling was a true
-    // statement that hid the fault, and splitting stamped / by-name / by-height
-    // is what made "this GLB ships none" distinguishable from "the feature is
-    // broken". Collapsing them onto the resolved answer would delete the
-    // distinction and put that blind spot back.
-    const stamped = this.ceilingMeshes.filter((m) => structureRole(m).isCeiling).length;
-    const named = this.ceilingMeshes.filter(
-      (m) => !structureRole(m).isCeiling && isCeilingMesh(m)).length;
-    // `enabled=` is the field that separates the two ways a "shown" ceiling can
-    // still be absent: the floor filter disabled it (FloorManager runs BEFORE
-    // this), or it is drawn and you cannot see it (orientation, lighting). The
-    // line said "11 shown" for two releases while they were back-face culled —
-    // true, and useless, which is the failure mode this project keeps paying for.
-    const enabled = this.ceilingMeshes.filter((m) => m.isEnabled(false)).length;
-    tapDebug(
-      `ceilings: ${this.ceilingMeshes.length} mesh(es) shown in first-person`
-      + ` (${enabled} enabled on the active floor)`
-      + ` (${stamped} stamped vk_role=ceiling, ${named} by name,`
-      + ` ${this.ceilingMeshes.length - stamped - named} by height)`
-      + (stamped + named === 0 && this.ceilingMeshes.length === 0
-        ? " — NONE: this GLB ships no ceiling geometry"
-        : ""),
-    );
-    this.reportCeilingGeometry();
-    this.reportUnpeeledCeiling(meshes);
-    this.requestRender();
-  }
-
-  /**
-   * WHERE the ceilings are, in world units — the diagnostic that four fixes
-   * were shipped without.
-   *
-   * Every previous ceiling report answered a question about the CODE ("is it
-   * enabled", "is it visible", "did it get a lightmap", "is it double-sided")
-   * and all four came back healthy while nothing was on screen. Each of those
-   * fixes was real, and none of them could ever have answered the remaining
-   * possibility, which is about the GEOMETRY: that these meshes are not over
-   * anywhere a person stands. The pipeline peel found a 1.79 m lintel and zero
-   * stamped objects, which is the shape of "SweetHome emitted a few strays" —
-   * so the two hypotheses left are "nothing is above the walker" and "it is
-   * drawn and unseen", and they are separated by three numbers.
-   *
-   *   `y=` the world Y band the ceilings occupy. Under ~2 m and this is trim,
-   *         a lintel or a soffit, not a lid — no lighting fix can help it.
-   *   `foot=` their combined XZ footprint as a FRACTION of the villa's own.
-   *         A few percent is "some rooms only"; near zero is "strays".
-   *   `eye=` the walker's eye height, so the band can be read against the head
-   *         it is meant to be above without a second lookup.
-   *
-   * On `tapDebug`, never `devLog`, for the reason the lighting line is: three
-   * rounds of this were diagnosed from owner-pasted kiosk logs, where anything
-   * stripped outside DEV is invisible.
-   */
-  private reportCeilingGeometry(): void {
-    if (!this.ceilingMeshes.length) return;
-    // ⚠️ THE GATE SKIPS THE WORK, NOT JUST THE LINE (2.480.0, /dry-audit).
-    // `projectedAreaXZ` walks every triangle of every ceiling mesh, twice —
-    // once for the total and once per mesh — and that is pure waste on a boot
-    // nobody is debugging. Same rule the placement tier already follows.
-    if (!debugFlagEnabled()) return;
-    let minY = Infinity; let maxY = -Infinity; let foot = 0; let area = 0;
-    for (const m of this.ceilingMeshes) {
-      m.computeWorldMatrix(true);
-      const bb = m.getBoundingInfo().boundingBox;
-      minY = Math.min(minY, bb.minimumWorld.y);
-      maxY = Math.max(maxY, bb.maximumWorld.y);
-      // Bounding-box footprint, summed per mesh rather than unioned: it
-      // over-counts overlap and that is the safe direction here — the finding
-      // this is looking for is a number far too SMALL to be a villa's ceiling.
-      foot += (bb.maximumWorld.x - bb.minimumWorld.x)
-        * (bb.maximumWorld.z - bb.minimumWorld.z);
-      area += projectedAreaXZ(m);
-    }
-    const ext = this.worldExtends(this.loadedMeshes);
-    const villaFoot = Math.max(1e-6, (ext.max.x - ext.min.x) * (ext.max.z - ext.min.z));
-    // ⚠️ `alpha=` is the field the first geometry line was missing, and the one
-    // that turned "drawn but unseen" from a category into a mechanism: an owner
-    // screenshot looking up from the ground floor showed SKY through translucent
-    // planes overhead. A ceiling you can see through is not a lighting bug and
-    // not a visibility bug, which is why four fixes aimed at those missed it.
-    // `see-through=` counts the ones still under 1 AFTER forceOpaque has run,
-    // so a non-zero value means a ceiling is deliberately transparent in the
-    // GLB (alpha ≤ 0.5) rather than bleeding — a different finding, and one
-    // this app must not silently paper over.
-    let minAlpha = 1;
-    let seeThrough = 0;
-    for (const m of this.ceilingMeshes) {
-      const a = m.material?.alpha ?? 1;
-      minAlpha = Math.min(minAlpha, a);
-      if (a < 1) seeThrough += 1;
-    }
-    tapDebug(
-      `ceiling geometry: y=${minY.toFixed(2)}..${maxY.toFixed(2)}m`
-      + ` bbox=${foot.toFixed(1)}m2`
-      // ⚠️ READ `area=`, NOT `bbox=`. See projectedAreaXZ: the box figure is the
-      // size of the SCATTER between panels, not of the panels, and reading it as
-      // coverage is what made "half the villa is covered" look like a fact.
-      + ` area=${area.toFixed(1)}m2 (${(100 * area / villaFoot).toFixed(1)}% of villa)`
-      + ` eye=${(this.config.eyeHeight ?? 1.7).toFixed(2)}m`
-      + ` alpha=${minAlpha.toFixed(2)} see-through=${seeThrough}/${this.ceilingMeshes.length}`
-      + (maxY < (this.config.eyeHeight ?? 1.7)
-        ? " — ENTIRELY BELOW EYE LEVEL: this is trim, not a lid"
-        : ""),
-    );
-    // ⚠️ PER MESH, because every aggregate so far has been a true statement that
-    // hid the fault. `foot=` is a SUM of bounding boxes and deliberately
-    // over-counts overlap, so 51% of the villa is consistent with two big
-    // overlapping slabs covering one wing and nothing over the room the walker
-    // is standing in. Names and centres are what separate those, and a name is
-    // also the only thing that can be taken back to the pipeline: `0 stamped
-    // vk_role=ceiling` means SweetHome emitted these as ordinary objects, so
-    // which objects they are is the question the GLB has to answer.
-    for (const m of this.ceilingMeshes) {
-      const bb = m.getBoundingInfo().boundingBox;
-      tapDebug(
-        `  ceiling "${m.name}"`
-        + ` y=${bb.minimumWorld.y.toFixed(2)}..${bb.maximumWorld.y.toFixed(2)}`
-        + ` xz=${bb.centerWorld.x.toFixed(1)},${bb.centerWorld.z.toFixed(1)}`
-        + ` bbox=${(bb.maximumWorld.x - bb.minimumWorld.x).toFixed(1)}x`
-        + `${(bb.maximumWorld.z - bb.minimumWorld.z).toFixed(1)}m`
-        + ` area=${projectedAreaXZ(m).toFixed(1)}m2`
-        + ` floor=${(m.metadata as { floorIndex?: number } | null)?.floorIndex ?? "-"}`
-        + ` verts=${m.getTotalVertices()}`
-        // ⚠️ `visibility` is NOT `isVisible`. Babylon has both: the boolean gates
-        // submission, this is a 0..1 alpha multiplier applied when drawing. A
-        // mesh at visibility 0 is enabled, isVisible, in the active list and
-        // draws nothing — every counter this feature has would read healthy.
-        // Never checked in six rounds, so it is printed rather than assumed.
-        + ` vis=${m.visibility.toFixed(2)}`,
-      );
-    }
-  }
-
-  /**
-   * Is there ceiling geometry still FUSED INTO `Structure` that the pipeline's
-   * peel did not take? See `horizontalAreaInBand` for the full reasoning and
-   * for how to read the two numbers.
-   *
-   * Reported against what WAS peeled, so the line is self-contained: if the
-   * unpeeled down-facing area dwarfs `Structure_Ceiling_L0`'s, the peel's band
-   * or threshold is wrong; if the UP-facing area dwarfs both, SweetHome's
-   * ceiling faces are inverted and the peel's down-facing filter is skipping
-   * them; if both are ~0, the export genuinely contains no more ceiling.
-   */
-  private reportUnpeeledCeiling(meshes: AbstractMesh[]): void {
-    if (!debugFlagEnabled() || !this.ceilingMeshes.length) return;
-    // The band the pipeline searches, in world metres: 80% of the storey up to
-    // 15% past its boundary. Taken from the drawn ceilings rather than assumed,
-    // so this holds for a villa with any storey height.
-    let loY = Infinity; let hiY = -Infinity;
-    for (const m of this.ceilingMeshes) {
-      const bb = m.getBoundingInfo().boundingBox;
-      loY = Math.min(loY, bb.minimumWorld.y);
-      hiY = Math.max(hiY, bb.maximumWorld.y);
-    }
-    loY -= 0.5; hiY += 0.5;
-    const ceilingSet = new Set(this.ceilingMeshes);
-    let down = 0; let up = 0; let scanned = 0;
-    /** The down-facing subset in meshes actually enabled on this storey. */
-    let downHere = 0;
-    const byHeight = new Map<number, number>();
-    const byMesh = new Map<string, number>();
-    const byMeshHeight = new Map<string, Map<number, number>>();
-    for (const m of meshes) {
-      if (ceilingSet.has(m) || m.getTotalVertices() === 0) continue;
-      if (m.metadata?.isStructure !== true) continue;
-      const r = horizontalAreaInBand(m, loY, hiY);
-      if (r.down || r.up) scanned += 1;
-      down += r.down; up += r.up;
-      // ⚠️ ONLY WHAT IS DRAWABLE HERE CAN BE "LEFT BEHIND" (2.482.0). `down`
-      // counts every structure mesh, including the storey ABOVE — which is
-      // disabled while you walk below it and whose floor slab the peel is right
-      // to leave alone. Judging the verdict on the raw total made it shout
-      // "PEEL TOO NARROW" at 339 m² of upper-storey slab while the line
-      // directly beneath it correctly called that "a floor slab". An instrument
-      // that keeps printing after its question closes does not go neutral, it
-      // starts lying — so the verdict now reads the enabled subset and the raw
-      // total stays visible beside it.
-      if (m.isEnabled()) downHere += r.down;
-      for (const [k, v] of r.byHeight) byHeight.set(k, (byHeight.get(k) ?? 0) + v);
-      // ⚠️ WHICH OBJECT the area belongs to, and whether that object is even
-      // DRAWN on this storey. Without this the previous verdict ("PEEL TOO
-      // NARROW — fix the pipeline") could not be told from its opposite: the
-      // scan accepts every `isStructure` mesh, which includes `Structure_L1`,
-      // and the upper storey is DISABLED while you walk the lower one. Area
-      // sitting in a hidden mesh is the storey-above SLAB — the thing the lid
-      // fallback exists to show — not ceiling the peel forgot. Same number,
-      // opposite owner, and I nearly sent the owner to edit their pipeline on
-      // the strength of it.
-      const stem = m.name.replace(/_primitive\d+$/, "");
-      const key = `${stem}${m.isEnabled() ? "" : " [DISABLED here]"}`;
-      byMesh.set(key, (byMesh.get(key) ?? 0) + r.down);
-      // ⚠️ PER OBJECT **AND** PER HEIGHT, because the aggregate is ambiguous in
-      // exactly the way that made me retract a correct finding (2.468.0). Seeing
-      // 473 m2 sitting in `Structure_L1` I concluded "that is the upper storey's
-      // floor slab" and called the pipeline correct. The owner then said they
-      // had set "Display ceiling" on the INTERIOR rooms and NOT on the patio or
-      // onsen — the exact inverse of what the app reports as covered — which
-      // means the 9 peeled objects are the patio/onsen ROOFS, and their real
-      // ceilings are somewhere else.
-      //
-      // A floor slab sits at ONE height, the storey boundary. Room ceilings sit
-      // at the two or three heights the rooms were drawn with. So the SHAPE of
-      // this histogram, per object, tells them apart — and blender_pipeline's
-      // own v2.24.0 note records this precise failure ("Structure_L1 reached
-      // DOWN to 2.25 m while Structure topped out at 2.51 m"), which it believed
-      // it had fixed by peeling before the level split.
-      let hm = byMeshHeight.get(key);
-      if (!hm) { hm = new Map(); byMeshHeight.set(key, hm); }
-      for (const [k, v] of r.byHeight) hm.set(k, (hm.get(k) ?? 0) + v);
-    }
-    let peeled = 0;
-    for (const m of this.ceilingMeshes) peeled += projectedAreaXZ(m);
-    tapDebug(
-      `unpeeled ceiling: down=${down.toFixed(1)}m2 up=${up.toFixed(1)}m2`
-      + ` still fused in ${scanned} structure mesh(es), band ${loY.toFixed(2)}..${hiY.toFixed(2)}m`
-      + ` (peeled=${peeled.toFixed(1)}m2)`
-      + ` here=${downHere.toFixed(1)}m2`
-      + (downHere > peeled
-        ? " — PEEL TOO NARROW: down-facing ceiling was left behind on THIS storey"
-        : up > 4 * Math.max(down, peeled)
-          ? " — INVERTED NORMALS: faces exist but point UP, so the peel's"
-            + " down-facing filter skips them (pipeline fix)"
-          : " — the remainder is the storey above's slab, correctly left"),
-    );
-    // Descending by area: the top few buckets are the heights the pipeline's
-    // band must cover, and comparing them against the peeled ceilings' own
-    // 2.44-2.74 m says whether the band is too high, too low, or too thin.
-    const top = [...byHeight].filter(([, v]) => v >= 1).sort((a, b) => b[1] - a[1]).slice(0, 10);
-    if (top.length) {
-      tapDebug(`  unpeeled down-facing by height: `
-        + top.map(([k, v]) => `${k.toFixed(1)}m=${v.toFixed(0)}m2`).join(" "));
-    }
-    const tops = [...byMesh].filter(([, v]) => v >= 1).sort((a, b) => b[1] - a[1]).slice(0, 8);
-    if (tops.length) {
-      tapDebug(`  unpeeled down-facing by object: `
-        + tops.map(([k, v]) => `${k}=${v.toFixed(0)}m2`).join(" "));
-    }
-    for (const [k] of tops.slice(0, 3)) {
-      const hm = byMeshHeight.get(k);
-      if (!hm) continue;
-      const hs = [...hm].filter(([, v]) => v >= 1).sort((a, b) => b[1] - a[1]).slice(0, 6);
-      if (hs.length) {
-        tapDebug(`    ${k}: `
-          + hs.map(([h, v]) => `${h.toFixed(1)}m=${v.toFixed(0)}m2`).join(" ")
-          // ONE height means a slab; several means room lids.
-          + (hs.length >= 2 && hs[1][1] > 0.25 * hs[0][1]
-            ? " — SEVERAL HEIGHTS: room ceilings, not one floor slab"
-            : " — single height: a floor slab"));
-      }
-    }
-    // Where each structure group actually SITS. The pipeline's own v2.24.0 note
-    // diagnosed this bug from exactly these two numbers.
-    const groups = new Map<string, { lo: number; hi: number }>();
-    for (const m of meshes) {
-      if (m.metadata?.isStructure !== true || m.getTotalVertices() === 0) continue;
-      const stem = m.name.replace(/_primitive\d+$/, "");
-      const bb = m.getBoundingInfo().boundingBox;
-      const g = groups.get(stem) ?? { lo: Infinity, hi: -Infinity };
-      g.lo = Math.min(g.lo, bb.minimumWorld.y);
-      g.hi = Math.max(g.hi, bb.maximumWorld.y);
-      groups.set(stem, g);
-    }
-    tapDebug(`  structure groups: `
-      + [...groups].map(([k, g]) => `${k}=${g.lo.toFixed(2)}..${g.hi.toFixed(2)}m`).join(" "));
-  }
-
-  /**
-   * WHICH ROOMS HAVE A CEILING OVER THEM, BY NAME — the instrument every
-   * previous ceiling report was missing (2.458.0).
-   *
-   * Six rounds measured the ceiling as a SET (how many exist, are enabled,
-   * visible, lit, opaque, submitted) and one round measured its total area. Not
-   * one of them could answer the question the owner keeps actually asking,
-   * which is about a PLACE: "I am standing here and there is no ceiling above
-   * me." `above=` answers it for one point; this answers it for the whole plan,
-   * and names the rooms, which is the only form of the answer that is
-   * ACTIONABLE — an uncovered room is a room to switch "Display ceiling" on for
-   * in SweetHome, and the app cannot fix it at all.
-   *
-   * ⚠️ It also replaces a denominator that was wrong. `ceiling geometry`'s
-   * percentage divides by the world extents, which include the terrain and the
-   * palm trees, so it understates coverage of the HOUSE by however much garden
-   * the model ships. Room polygons are the honest denominator: they are the
-   * floor area a person can stand on.
-   *
-   * Samples a grid inside each ground-level room rather than its centroid,
-   * because a room with a ceiling over half of it is a different finding from
-   * one with none, and a centroid cannot tell them apart.
-   */
-  private reportCeilingCoverage(): void {
-    if (!this.ceilingMeshes.length || !this.worldRoomPolys.length) return;
-    // ⚠️ THE MOST EXPENSIVE DIAGNOSTIC IN THE APP, AND IT WAS UNGATED
-    // (2.480.0, /dry-audit). Up to 14 ground rooms x 25 grid samples x 16
-    // ceiling meshes is ~5,600 ray/mesh intersections, run on EVERY boot to
-    // print a line only a debugging session reads.
-    if (!debugFlagEnabled()) return;
-    let groundY = Infinity;
-    for (const r of this.worldRoomPolys) groundY = Math.min(groundY, r.floorY);
-    const rooms = this.worldRoomPolys.filter(
-      (r) => r.floorY <= groundY + STAIR_FOOT_TOLERANCE);
-    if (!rooms.length) return;
-
-    const ray = new Ray(Vector3.Zero(), new Vector3(0, 1, 0), 12);
-    const covered: string[] = [];
-    const bare: string[] = [];
-    let totalArea = 0;
-    let coveredArea = 0;
-    for (const r of rooms) {
-      let minX = Infinity; let maxX = -Infinity; let minZ = Infinity; let maxZ = -Infinity;
-      for (const p of r.pts) {
-        minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
-        minZ = Math.min(minZ, p.z); maxZ = Math.max(maxZ, p.z);
-      }
-      const N = 5;
-      let inside = 0; let hit = 0;
-      for (let i = 0; i < N; i++) {
-        for (let j = 0; j < N; j++) {
-          const px = minX + ((i + 0.5) / N) * (maxX - minX);
-          const pz = minZ + ((j + 0.5) / N) * (maxZ - minZ);
-          if (!pointInPolygon(px, pz, r.pts)) continue;
-          inside += 1;
-          ray.origin.set(px, r.floorY + 1.0, pz);
-          ray.direction.set(0, 1, 0);
-          ray.length = 12;
-          if (this.ceilingMeshes.some((m) => ray.intersectsMesh(m, true).hit)) hit += 1;
-        }
-      }
-      if (!inside) continue;
-      // The polygon's own area, so a big bare room outweighs a small covered one
-      // in the summary rather than counting once each.
-      let a2 = 0;
-      for (let i = 0; i < r.pts.length; i++) {
-        const p = r.pts[i]; const q = r.pts[(i + 1) % r.pts.length];
-        a2 += p.x * q.z - q.x * p.z;
-      }
-      const area = Math.abs(a2) / 2;
-      totalArea += area;
-      coveredArea += area * (hit / inside);
-      (hit / inside >= 0.5 ? covered : bare).push(
-        `${r.name}${hit ? ` (${Math.round(100 * hit / inside)}%)` : ""}`);
-    }
-    tapDebug(
-      `ceiling coverage: ${covered.length}/${covered.length + bare.length} ground rooms`
-      + ` — ${(100 * coveredArea / Math.max(1e-6, totalArea)).toFixed(0)}% of ${totalArea.toFixed(0)}m2 floor area`,
-    );
-    if (bare.length) tapDebug(`  NO ceiling over: ${bare.join(", ")}`);
-    if (covered.length) tapDebug(`  ceiling over: ${covered.join(", ")}`);
-  }
-
-  /**
-   * Show ceiling/roof meshes while walking, hide them in the bird's-eye view.
-   *
-   * The overview is a CUT-AWAY: it looks down into rooms, and a lid over them
-   * hides everything the view exists to show — which is why these meshes were
-   * hidden unconditionally at load until 2.434.0. First-person has the opposite
-   * requirement: standing in a room with open sky overhead never reads as being
-   * indoors. Same meshes, opposite answers, so the answer belongs to the view
-   * toggle rather than to the load path.
-   *
-   * ⚠️ `isVisible`, never `setEnabled` — FloorManager owns setEnabled for the
-   * per-storey cut and the two must not stomp each other (see its header). That
-   * also means this cannot resurrect a ceiling belonging to a hidden storey:
-   * FloorManager has already disabled it, and a disabled mesh does not render
-   * however visible it claims to be. Walking on 1F therefore gets 1F's ceiling
-   * and not 2F's, with no storey logic here at all.
-   */
-  private applyCeilingVisibility(): void {
-    const show = this.viewMode === "first-person";
-    for (const m of this.ceilingMeshes) {
-      if (m.isVisible !== show) m.isVisible = show;
-    }
-  }
 
   /**
    * Mark every mesh bound to an entity with a blue outline so it reads as
@@ -4256,18 +2657,13 @@ export class SceneManager {
 
   private markReady() {
     this.ready = true;
-    this.readyCallbacks.forEach((cb) => cb());
-    this.readyCallbacks.clear();
+    this.phases.shown();
   }
 
   isReady(): boolean {
     return this.ready;
   }
 
-  onReady(cb: () => void): () => void {
-    this.readyCallbacks.add(cb);
-    return () => this.readyCallbacks.delete(cb);
-  }
 
   /**
    * Live-apply render-quality settings while the Settings sliders are dragged.
@@ -4378,10 +2774,9 @@ export class SceneManager {
       meshBindingsChanged ||
       sh3dChanged;
 
-    // renderFx first (sets base IBL + builds/clears the env texture), THEN the
-    // sun pass so SunController has the final word on the fill light + day/night
-    // IBL scaling it owns. Same ordering as setRenderConfig() — keeping the two
-    // call sites consistent is what stops the night fill from flickering.
+    // Each pass owns what it writes (renderFx: tone mapping, SSAO, the IBL
+    // texture; the sun: key, ambient and fill lights) and reports its share of
+    // exposure and IBL strength to the look, so neither needs the other first.
     if (renderChanged) {
       this.renderFx.apply(this.deviceRenderConfig(config.render));
       this.sun.updateConfig(config);
@@ -4443,7 +2838,7 @@ export class SceneManager {
 
       await this.yieldFrame();
       if (this.disposed || this.config !== config) return structuralChanged;
-      this.applyStructure(this.loadedMeshes);
+      this.structure.apply(this.loadedMeshes, this.viewMode);
 
       const prevEntityCount = Object.keys(prev.entityMap).length;
       const newEntityCount  = Object.keys(config.entityMap).length;
@@ -4591,19 +2986,17 @@ export class SceneManager {
     // retains the whole scene graph through mesh._scene, which is the 35 MB-per-
     // remount leak 2.231.0 priced. leakWatch still reports retained shells, and
     // they are only "empty" if every collection here is cleared.
-    this.ceilingMeshes = [];
-    this.worldRoomPolys = [];
+    this.structure.clear();
+    this.plan = new Storeys<WorldRoom>([]);
     this.highlightedMeshes = [];
     this.calibratedPoints = null;
     this.lastNavigatedRoom = null;
     this.lastRoomPolyNames.clear();
-    this.frameSamples = [];
-    this.renderSamples = [];
+    this.governor.reset();
     // Callbacks registered by React components — a ready/calibrate handler
     // closes over the component that registered it, so an uncleared set keeps
     // that component's whole closure scope alive too.
-    this.readyCallbacks.clear();
-    this.calibrateCallbacks.clear();
+    this.phases.clear();
 
     // ── AND THE SUBSYSTEMS, THE SCENE AND THE ENGINE ────────────────────
     // 2.231.0 stopped at the arrays above and claimed the result was "a few

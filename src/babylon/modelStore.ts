@@ -41,7 +41,14 @@ export class ModelKeyedStore<T> {
   /** `sweepPattern` must match every key this store has ever used, including
    *  retired prefixes, so an old naming scheme is evicted rather than orphaned
    *  forever in a storage area nobody looks at. */
-  constructor(private prefix: StorePrefix, private sweepPattern: RegExp) {}
+  // Plain fields, not parameter properties: Node's type stripping cannot run
+  // the shorthand, and the oracles load CameraBeams, which imports this.
+  private prefix: StorePrefix;
+  private sweepPattern: RegExp;
+  constructor(prefix: StorePrefix, sweepPattern: RegExp) {
+    this.prefix = prefix;
+    this.sweepPattern = sweepPattern;
+  }
 
   /** `key` is the versioned model URL; null disables persistence entirely (and
    *  is the honest state before a model is known, rather than a guess). */

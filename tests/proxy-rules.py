@@ -311,7 +311,7 @@ with tempfile.TemporaryDirectory() as tmp:
 # The guest refusal named `camera/stream` alone, which was every way into a
 # camera's picture only while HLS was the only way. WebRTC added four more.
 print("\n  the websocket gate:")
-refuse = proxy._ws_type_refusal
+refuse = lambda role, t, **kw: proxy._ws_frame_refusal(role, {"type": t, **kw})
 cams = sorted(proxy.CAMERA_WS_TYPES)
 ck("every camera command is on the allowlist",
    proxy.CAMERA_WS_TYPES <= proxy.ALLOWED_WS_TYPES)
@@ -329,6 +329,77 @@ ck("  ...and for guest",
    refuse("guest", "render_template") is not None)
 ck("guest keeps what is not a camera",
    refuse("guest", "get_states") is None)
+# The call_service decision used to live inline in the relay loop, reachable
+# only by searching the source text. It is the frame that operates the doors.
+ck("a guest may unlock a door over the websocket (by design)",
+   refuse("guest", "call_service", domain="lock", service="unlock") is None)
+ck("a guest may NOT restart Home Assistant over the websocket",
+   refuse("guest", "call_service", domain="homeassistant", service="restart") is not None)
+ck("  ...nor run a script",
+   refuse("ops", "call_service", domain="script", service="turn_on") is not None)
+
+# ── one policy, two doors ────────────────────────────────────────────────
+# REST and the websocket are two ways to ask Core the same things. Each used
+# to carry its own `role == ...` copy of the rules; both now ask the one
+# ROLE_CAPABILITIES table, and this holds them to the same answer per role.
+print("\n  the two doors agree:")
+SERVICE_CASES = [("lock", "unlock"), ("light", "turn_on"), ("homeassistant", "toggle"),
+                 ("homeassistant", "restart"), ("script", "turn_on"), ("hassio", "addon_stop")]
+disagree = []
+for role in proxy.AUTH_ROLES:
+    rest_cam = proxy._rest_call_allowed(role, "camera_proxy/camera.any")
+    rest_mjpeg = proxy._rest_call_allowed(role, "camera_proxy_stream/camera.any")
+    ws_cam = refuse(role, "camera/stream") is None
+    if not (rest_cam == rest_mjpeg == ws_cam):
+        disagree.append(f"{role}: cameras rest={rest_cam}/{rest_mjpeg} ws={ws_cam}")
+    for d, sv in SERVICE_CASES:
+        rest = proxy._rest_call_allowed(role, f"services/{d}/{sv}")
+        ws = refuse(role, "call_service", domain=d, service=sv) is None
+        if rest != ws:
+            disagree.append(f"{role}: {d}.{sv} rest={rest} ws={ws}")
+    print(f"      {role:>5}: cameras {'yes' if ws_cam else 'no ':>3} · services "
+          + " ".join(f"{d}.{sv}={'y' if proxy._rest_call_allowed(role, f'services/{d}/{sv}') else 'n'}"
+                     for d, sv in SERVICE_CASES))
+ck("every role gets the same answer through both doors", not disagree)
+for line in disagree:
+    print(f"          {line}")
+ck("guest cannot fetch a camera image over REST",
+   not proxy._rest_call_allowed("guest", "camera_proxy/camera.any"))
+ck("guest can still read history (the charts)",
+   proxy._rest_call_allowed("guest", "history/period/2026-01-01T00:00:00+08:00"))
+
+# ── the proxy's table and the kiosk's agree ──────────────────────────────
+# permissions.ts decides what each profile is SHOWN; ROLE_CAPABILITIES what it
+# may DO. Two halves of one rule, so the names they share must mean the same
+# thing for every role, or the kiosk offers a button the proxy refuses (or
+# hides one the proxy would allow).
+print("\n  the proxy's roles and the kiosk's:")
+PERMS = ROOT / "src" / "auth" / "permissions.ts"
+pt = PERMS.read_text()
+matrix = pt[pt.index("const PERMISSION_MATRIX"):]
+client = {}
+for role in proxy.AUTH_ROLES:
+    m = re.search(rf"\b{role}:\s*\{{(.*?)\n  \}}", matrix, re.S)
+    body = m.group(1) if m else ""
+    caps = re.search(r"capabilities:\s*\[(.*?)\]", body, re.S)
+    denied = re.search(r"deniedTypes:\s*\[(.*?)\]", body, re.S)
+    client[role] = (set(re.findall(r'"(\w+)"', caps.group(1))) if caps else set(),
+                    set(re.findall(r'"(\w+)"', denied.group(1))) if denied else set())
+ck("the kiosk's matrix was read for every role",
+   all(client[r][0] for r in proxy.AUTH_ROLES))
+SHARED = ("editConfig", "manageModel", "manageFacility", "reportFault")
+mismatch = [f"{r}.{c}" for r in proxy.AUTH_ROLES for c in SHARED
+            if (c in client[r][0]) != proxy._may(r, c)]
+ck("every shared capability means the same thing on both sides", not mismatch)
+if mismatch:
+    print(f"          the proxy and permissions.ts disagree on: {', '.join(mismatch)}")
+cam_mismatch = [r for r in proxy.AUTH_ROLES
+                if ("camera" not in client[r][1]) != proxy._may(r, "viewCameras")]
+ck("viewCameras is exactly the roles the kiosk shows cameras to", not cam_mismatch)
+if cam_mismatch:
+    print(f"          disagree for: {', '.join(cam_mismatch)}")
+ck("an unknown role holds nothing",
+   not any(proxy._may("intruder", c) for caps in proxy.ROLE_CAPABILITIES.values() for c in caps))
 
 print()
 print("✅ the proxy's pure rules hold" if FAIL == 0

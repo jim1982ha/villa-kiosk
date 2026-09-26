@@ -8,18 +8,12 @@
 
 import { useCallback, useMemo, useState } from "react";
 import type { HistoryPoint, HistoryGap } from "@/types/ha.types";
-import { splitAtGaps, gapBand } from "@/utils/historyGaps";
-import { stepped } from "@/utils/stepSeries";
+import { chartWindow, type TimeWindow } from "@/utils/lineChart";
+import { chartGeometry } from "@/utils/chartGeometry";
 import { STATUS_COLOR } from "@/utils/stateColors";
 import { useElementWidth } from "@/hooks/useElementWidth";
-import { fmtChartValue, fmtChartTime, fmtChartStamp, nearestIndexByX } from "./chartUtils";
-
-/** Hours the plotted data actually covers — this chart scales its x-axis to
- *  what it was given, so the span is the data's own, not a fixed window. */
-function spanHoursOf(...series: HistoryPoint[][]): number {
-  const ts = series.flat().map((d) => d.t);
-  return ts.length > 1 ? (Math.max(...ts) - Math.min(...ts)) / 3_600_000 : 0;
-}
+import { fmtChartValue, fmtChartTick } from "./chartUtils";
+import ChartTip from "./ChartTip";
 
 interface Series {
   data: HistoryPoint[];
@@ -33,134 +27,95 @@ interface Series {
 interface Props {
   a: Series;
   b: Series;
+  /** The span that was asked for — the shared x-axis. See lineChart.ts. */
+  window?: TimeWindow;
   height?: number;
 }
 
 const M = { top: 8, right: 40, bottom: 18, left: 40 };
 
-export default function DualSparkline({ a, b, height = 120 }: Props) {
+export default function DualSparkline({ a, b, window, height = 120 }: Props) {
   const [ref, W] = useElementWidth<HTMLDivElement>(320);
-  const [hover, setHover] = useState<number | null>(null);
+  const [hoverT, setHoverT] = useState<number | null>(null);
 
+  // Each series on its OWN y-scale ("own"), both on the window's x-axis — and
+  // ⚠️ A BAND PER SERIES, IN ITS OWN HALF, NOT ONE FULL-HEIGHT BAND: a band
+  // spanning the full height could not say WHICH of the two reported nothing.
+  // Half-height bands inherit the left/right reading the axes already
+  // establish; both out at once fills the height. chartGeometry slices the
+  // plot per series for every chart, so the Weather charts now say it too.
   const geom = useMemo(() => {
     if (a.data.length < 2 && b.data.length < 2) return null;
-    const allT = [...a.data, ...b.data].map((d) => d.t);
-    const minX = Math.min(...allT), maxX = Math.max(...allT);
-    const spanX = maxX - minX || 1;
-    const plotW = Math.max(1, W - M.left - M.right);
-    const plotH = Math.max(1, height - M.top - M.bottom);
-    const sx = (t: number) => M.left + ((t - minX) / spanX) * plotW;
-
-    const scaleOf = (data: HistoryPoint[]) => {
-      const ys = data.map((d) => d.v);
-      const minY = ys.length ? Math.min(...ys) : 0;
-      const maxY = ys.length ? Math.max(...ys) : 1;
-      const spanY = maxY - minY || 1;
-      return {
-        minY, maxY,
-        sy: (v: number) => M.top + (1 - (v - minY) / spanY) * plotH,
-      };
-    };
-    const sa = scaleOf(a.data);
-    const sb = scaleOf(b.data);
-    const ptsA = a.data.map((d) => ({ x: sx(d.t), y: sa.sy(d.v), t: d.t, v: d.v }));
-    const ptsB = b.data.map((d) => ({ x: sx(d.t), y: sb.sy(d.v), t: d.t, v: d.v }));
-    // The crosshair rides the denser series' x positions.
-    // ⚠️ STEPPED, THEN SPLIT — see the note in Sparkline. Both series, because
-    // half a rollout is the defect this repository keeps paying for.
-    const lineA = stepped(a.data).map((d) => ({ x: sx(d.t), y: sa.sy(d.v), t: d.t }));
-    const lineB = stepped(b.data).map((d) => ({ x: sx(d.t), y: sb.sy(d.v), t: d.t }));
-    const railPts = ptsA.length >= ptsB.length ? ptsA : ptsB;
-
-    // ⚠️ A BAND PER SERIES, IN ITS OWN HALF — NOT ONE FULL-HEIGHT BAND. Two
-    // series share this plot and each has its own axis (a on the left, b on the
-    // right), so a band spanning the full height could not say WHICH of them
-    // reported nothing. Half-height bands inherit the same left/right reading
-    // the axes already establish; both out at once fills the height, which is
-    // the unambiguous case anyway.
-    const right = M.left + plotW;
-    const bandsOf = (gaps: readonly HistoryGap[] | undefined) =>
-      (gaps ?? [])
-        .map((g) => gapBand(g, sx, M.left, right))
-        .filter((bb): bb is { x: number; w: number } => bb !== null);
-
-    return {
-      minX, maxX, sx, sa, sb, ptsA, ptsB, railPts, plotH,
-      bandsA: bandsOf(a.gaps), bandsB: bandsOf(b.gaps),
-      runsA: splitAtGaps(lineA, a.gaps ?? []), runsB: splitAtGaps(lineB, b.gaps ?? []),
-    };
-  }, [a.data, a.gaps, b.data, b.gaps, W, height]);
+    const w = chartWindow(window, a.data, b.data);
+    if (!w) return null;
+    return chartGeometry(w, [
+      { pts: a.data, gaps: a.gaps ?? [], scale: "own" },
+      { pts: b.data, gaps: b.gaps ?? [], scale: "own" },
+    ], { left: M.left, right: Math.max(M.left + 1, W - M.right), top: M.top, bottom: Math.max(M.top + 1, height - M.bottom) });
+  }, [a.data, a.gaps, b.data, b.gaps, window, W, height]);
 
   const onMove = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
-    if (!geom || !geom.railPts.length) return;
+    if (!geom) return;
     const rect = e.currentTarget.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * W;
-    setHover(nearestIndexByX(geom.railPts, x));
+    setHoverT(geom.tAt(((e.clientX - rect.left) / rect.width) * W));
   }, [geom, W]);
 
   if (!geom) return <div ref={ref} className="muted body-text">Not enough history yet.</div>;
 
+  const [ga, gb] = geom.series;
   const toStr = (pts: { x: number; y: number }[]) =>
     pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
-  const xTicks = [geom.minX, (geom.minX + geom.maxX) / 2, geom.maxX];
-
-  const railX = hover != null ? geom.railPts[hover]?.x : undefined;
-  const nearInSeries = (pts: { x: number; y: number; v: number; t: number }[]) =>
-    railX != null && pts.length ? pts[nearestIndexByX(pts, railX)] : undefined;
-  const hpA = nearInSeries(geom.ptsA);
-  const hpB = nearInSeries(geom.ptsB);
+  // The reading in force in EACH series at the pointer — none inside that
+  // series' own outage — under one stamp (chartGeometry.hover).
+  const hover = hoverT === null ? null : geom.hover(hoverT);
+  const [hpA, hpB] = hover ? hover.readings : [null, null];
 
   return (
     <div ref={ref} className="spark-wrap">
       <svg
         className="sparkline" width={W} height={height} style={{ height, touchAction: "none" }}
-        onPointerMove={onMove} onPointerDown={onMove} onPointerLeave={() => setHover(null)}
+        onPointerMove={onMove} onPointerDown={onMove} onPointerLeave={() => setHoverT(null)}
       >
         {/* Left Y axis (series a) */}
-        {a.data.length >= 2 && [geom.sa.maxY, geom.sa.minY].map((v, i) => (
-          <text key={`ya${i}`} x={M.left - 5} y={geom.sa.sy(v)} textAnchor="end" dominantBaseline="middle"
+        {a.data.length >= 2 && [ga.hi, ga.lo].map((v, i) => (
+          <text key={`ya${i}`} x={M.left - 5} y={ga.sy(v)} textAnchor="end" dominantBaseline="middle"
             className="spark-axis" style={{ fill: a.color }}>{fmtChartValue(v)}</text>
         ))}
         {/* Right Y axis (series b) */}
-        {b.data.length >= 2 && [geom.sb.maxY, geom.sb.minY].map((v, i) => (
-          <text key={`yb${i}`} x={W - M.right + 5} y={geom.sb.sy(v)} textAnchor="start" dominantBaseline="middle"
+        {b.data.length >= 2 && [gb.hi, gb.lo].map((v, i) => (
+          <text key={`yb${i}`} x={W - M.right + 5} y={gb.sy(v)} textAnchor="start" dominantBaseline="middle"
             className="spark-axis" style={{ fill: b.color }}>{fmtChartValue(v)}</text>
         ))}
         {/* ⚠️ FIRST IN THE SVG so the shading sits BEHIND the grid and both
             lines — SVG paints in document order and has no z-index. */}
-        {geom.bandsA.map((bd, i) => (
-          <rect key={`ga${i}`} x={bd.x} y={M.top} width={bd.w} height={Math.max(1, geom.plotH / 2)}
-            fill={STATUS_COLOR.unavailable} opacity={0.18} />
+        {[...ga.bands, ...gb.bands].map((bd, i) => (
+          <rect key={`g${i}`} x={bd.x} y={bd.y} width={bd.w} height={bd.h} fill={STATUS_COLOR.unavailable} opacity={0.18} />
         ))}
-        {geom.bandsB.map((bd, i) => (
-          <rect key={`gb${i}`} x={bd.x} y={M.top + geom.plotH / 2} width={bd.w} height={Math.max(1, geom.plotH / 2)}
-            fill={STATUS_COLOR.unavailable} opacity={0.18} />
-        ))}
-        {xTicks.map((t, i) => (
+        {geom.ticks.map((t, i) => (
           <text key={`x${i}`} x={geom.sx(t)} y={height - 4}
-            textAnchor={i === 0 ? "start" : i === xTicks.length - 1 ? "end" : "middle"}
-            className="spark-axis">{fmtChartTime(t)}</text>
+            textAnchor={i === 0 ? "start" : i === geom.ticks.length - 1 ? "end" : "middle"}
+            className="spark-axis">{fmtChartTick(t, geom.spanHours)}</text>
         ))}
-        {geom.runsA.filter((r) => r.length >= 2).map((r, i) => (
+        {ga.runs.map((r, i) => (
           <polyline key={`ra${i}`} points={toStr(r)} fill="none" stroke={a.color} strokeWidth={2} strokeLinejoin="round" />
         ))}
-        {geom.runsB.filter((r) => r.length >= 2).map((r, i) => (
+        {gb.runs.map((r, i) => (
           <polyline key={`rb${i}`} points={toStr(r)} fill="none" stroke={b.color} strokeWidth={2} strokeLinejoin="round" strokeDasharray="4 3" />
         ))}
-        {railX != null && (
+        {hover && (
           <g>
-            <line x1={railX} y1={M.top} x2={railX} y2={height - M.bottom} className="spark-crosshair" />
+            <line x1={hover.x} y1={M.top} x2={hover.x} y2={height - M.bottom} className="spark-crosshair" />
             {hpA && <circle cx={hpA.x} cy={hpA.y} r={3.5} fill={a.color} stroke="var(--bg-panel)" strokeWidth={1.5} />}
             {hpB && <circle cx={hpB.x} cy={hpB.y} r={3.5} fill={b.color} stroke="var(--bg-panel)" strokeWidth={1.5} />}
           </g>
         )}
       </svg>
-      {railX != null && (
-        <div className="spark-tip" style={{ left: railX, top: M.top, transform: `translateX(${railX > W / 2 ? "-100%" : "0"})` }}>
-          {hpA && <span><span style={{ color: a.color }}>●</span> {fmtChartValue(hpA.v)}{a.unit ? ` ${a.unit}` : ""}</span>}
-          {hpB && <span><span style={{ color: b.color }}>┄</span> {fmtChartValue(hpB.v)}{b.unit ? ` ${b.unit}` : ""}</span>}
-          <span className="spark-tip-time">{fmtChartStamp((hpA ?? hpB)!.t, spanHoursOf(a.data, b.data))}</span>
-        </div>
+      {hover && (
+        <ChartTip left={hover.x} top={M.top} flip={hover.x > W / 2} t={hover.t} spanHours={geom.spanHours}
+          rows={[
+            ...(hpA ? [{ key: "a", marker: <span style={{ color: a.color }}>●</span>, text: `${fmtChartValue(hpA.v)}${a.unit ? ` ${a.unit}` : ""}` }] : []),
+            ...(hpB ? [{ key: "b", marker: <span style={{ color: b.color }}>┄</span>, text: `${fmtChartValue(hpB.v)}${b.unit ? ` ${b.unit}` : ""}` }] : []),
+          ]} />
       )}
     </div>
   );

@@ -103,10 +103,17 @@ const walk = (d, out = []) => {
 };
 const SRC = resolve(dirname(fileURLToPath(import.meta.url)), "../../src");
 const FILES = walk(SRC);
-const lineCharts = FILES.filter((f) => /<polyline/.test(readFileSync(f, "utf8")));
+// A history chart is a file drawing a <polyline> or a bar (chart-bar): the
+// rain bars escaped this scan while it looked for polylines only (2.496.89).
+const lineCharts = FILES.filter((f) => /<polyline|className="chart-bar"/.test(readFileSync(f, "utf8")));
 const blind = lineCharts.filter((f) => {
   const src = readFileSync(f, "utf8");
-  return !/splitAtGaps/.test(src) || !/gapBand/.test(src) || !/STATUS_COLOR\.unavailable/.test(src);
+  // Either the primitives, lineChart.ts's wrappers around them (2.496.62:
+  // lineRuns splits, outageBands bands — both against the requested window),
+  // or chartGeometry, which owns both for every chart (2.496.90).
+  const geometry = /\bchartGeometry\(/.test(src);
+  return (!geometry && (!/splitAtGaps|lineRuns/.test(src) || !/gapBand|outageBands/.test(src)))
+    || !/STATUS_COLOR\.unavailable/.test(src);
 }).map((f) => f.slice(SRC.length + 1));
 console.log(`\n  scanned ${FILES.length} source files · ${lineCharts.length} draw a numeric line`);
 for (const f of lineCharts) console.log(`     ${f.slice(SRC.length + 1)}`);

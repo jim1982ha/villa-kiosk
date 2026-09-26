@@ -38,6 +38,10 @@ interface Props {
    *  header instead of buried in the body: a panel's one or two most-used
    *  actions belong where they're always visible, not scrolled past. */
   headerActions?: ReactNode;
+  /** The footer's leading action — Settings' "Advanced Settings" pattern
+   *  (ModalFooter's `leading`): a way elsewhere that must stay visible
+   *  however far the body scrolls. The Weather window's "History and trends". */
+  footerLeading?: ReactNode;
   /** Opt OUT of the automatic history section at the end of the body. Pass
    *  false only when the panel renders a history view of its own that this
    *  one cannot express — a numeric sparkline (SensorPanel), two series on
@@ -49,7 +53,7 @@ interface Props {
   children: ReactNode;
 }
 
-export default function BasePanel({ title, entityId, icon, className, headerActions, history, onClose, children }: Props) {
+export default function BasePanel({ title, entityId, icon, className, headerActions, footerLeading, history, onClose, children }: Props) {
   const { onEdit, onReportFault, badge, onSetBadgeColor, linked, motion } = usePanelActions();
   const { resolvedRooms } = useConfig();
   const room = entityId ? resolvedRooms[entityId] : undefined;
@@ -193,8 +197,9 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
           {history !== false && entityId && <LastDayTimeline entityId={entityId} />}
         </div>
         <div className="panel-footer"
-          style={{ justifyContent: onEdit || onReportFault ? "space-between" : "flex-end" }}>
+          style={{ justifyContent: onEdit || onReportFault || footerLeading ? "space-between" : "flex-end" }}>
           <div className="panel-footer-left">
+            {footerLeading}
             {onEdit && <button className="btn ghost" onClick={onEdit}>Edit</button>}
             {/* Icon-only, sitting beside Edit: this is a shortcut for a
                 device you are already looking at, not a primary action, and

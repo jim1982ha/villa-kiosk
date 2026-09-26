@@ -92,6 +92,28 @@ missing_dev = sorted(asked - dev - {"/model"})
 ck("the dev server forwards everything the app requests", not missing_dev,
    f"`npm run dev` would 404: {', '.join(missing_dev)}")
 
+# ── the owner credential every forwarded request carries ─────────────────
+# `_is_ingress` trusts `X-VK-Ingress: 1` as the owner, which is only safe
+# because nginx OVERWRITES the client's value — per location, since a location
+# with any proxy_set_header of its own inherits none. One snippet sets it; each
+# location reaching the proxy must include that snippet, and none may set the
+# header by hand (a hand-written copy is the thing that drifts).
+SNIPPET = NGINX.parent / "snippets" / "backend-proxy.conf"
+INCLUDE = "include /etc/nginx/snippets/backend-proxy.conf;"
+sn = SNIPPET.read_text() if SNIPPET.exists() else ""
+ck("the backend snippet overwrites X-VK-Ingress from the trusted variable",
+   re.search(r"^\s*proxy_set_header\s+X-VK-Ingress\s+\$vk_ingress;", sn, re.M) is not None)
+to_backend = [(m.group(2), m.group(3)) for m in
+              re.finditer(r"location\s+(=\s*)?(\S+)\s*\{([^}]*)\}", ng)
+              if "127.0.0.1:8100" in m.group(3)]
+missing = [loc for loc, body in to_backend if INCLUDE not in body]
+ck(f"all {len(to_backend)} locations reaching the proxy include the snippet",
+   bool(to_backend) and not missing,
+   f"forwards the CLIENT's X-VK-Ingress (owner access): {', '.join(missing)}")
+by_hand = [loc for loc, body in to_backend if "X-VK-Ingress" in body]
+ck("no location sets X-VK-Ingress by hand", not by_hand,
+   f"a hand-written copy: {', '.join(by_hand)}")
+
 print()
 print("✅ the four path lists agree" if FAIL == 0 else "❌ THE PATH LISTS DISAGREE")
 sys.exit(1 if FAIL else 0)
