@@ -1,3 +1,15 @@
+## 2.496.109
+
+### Improved — the Energy window
+- **"Where today's energy went" has tooltips.** Hover or tap a band to see
+  the device's kWh and share of the day, its live power, and every device
+  inside it with its kWh, plus what none of them accounts for.
+## 2.496.108
+
+### Improved
+- **The observation cards fill their row.** When the Energy window (or the
+  Weather window) has two cards to show, they now share the full width
+  instead of leaving an empty third column. On a phone they still stack.
 ## 2.496.107
 
 ### Improved — the Energy window
