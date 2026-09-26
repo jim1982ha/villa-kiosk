@@ -1,3 +1,15 @@
+## 2.496.164
+
+### Fixed — switches in device panels
+- **A lock or a cover used as a device's "linked entity" now works.** Its
+  switch read "Off" when the lock was unlocked (or the cover open), and
+  flipping it sent a command a lock does not accept. It now reads the real
+  position, locks/unlocks or opens/closes, and shows "Unavailable" — with no
+  switch to flip — when Home Assistant has lost the device. Its red ring on
+  the map follows the same rule.
+- **A TV that is on but idle shows "On"** on its panel's power button (it
+  said "Off"); a paused one already did.
+
 ## 2.496.163
 
 ### Internal — settings and Facility names
