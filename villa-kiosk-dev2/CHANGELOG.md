@@ -1,3 +1,10 @@
+## 2.496.168
+
+### Behind the scenes
+- A new check makes sure every live-data address the add-on answers stays
+  out of the app's offline cache, so a new one can never be served stale.
+  Nothing changes on screen.
+
 ## 2.496.167
 
 ### Fixed — Settings → Telemetry
