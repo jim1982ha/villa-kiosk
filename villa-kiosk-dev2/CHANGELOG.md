@@ -1,3 +1,11 @@
+## 2.496.128
+
+### Fixed — "Where today's energy went" on a phone
+- **Each meter is followed by the devices inside it.** Pool Pump appeared
+  under Main Power Phase A although it belongs to Phase C.
+- **Every bar starts at the same left edge.** Only the name is indented to
+  show what is inside what. The rows now look like the "Every device" list:
+  name, kWh and share on one line, the bar under it.
 ## 2.496.127
 
 ### Improved — the Energy window's "Every device"
