@@ -102,8 +102,8 @@ eq("the migrations have no other caller",
 console.log("\n  no screen reaches past the engine for the cap:");
 const screens = ["src/components/fm/SpendTab.tsx", "src/components/fm/TodayTab.tsx"];
 for (const f of screens) {
-  eq(`${f.split("/").pop()} reads budgetStatus().capIdr`,
-     /MINOR_MAINTENANCE_CAP_IDR/.test(code(f)), false);
+  eq(`${f.split("/").pop()} reads budgetStatus().cap`,
+     /MINOR_MAINTENANCE_CAP/.test(code(f)), false);
 }
 // ⚠️ THE WHOLE OF src/fm/, NOT THE ONE FILE THE LAST DEFECT WAS IN. This read
 // only fmEngine.ts and matched only `toLocaleString(` — so fmReport.ts's
@@ -122,7 +122,7 @@ const baked = FM.filter((f) => {
 eq("no currency or locale is baked into any money or date the owner reads",
    baked.length ? baked : "none", "none");
 // SpendTab printed "of IDR 0" on an unconfigured install: it read the raw
-// constant where every neighbouring line reads b.capIdr and gates on > 0.
+// constant where every neighbouring line reads b.cap and gates on > 0.
 
 console.log(`\n${fail ? `❌ ${fail} failed` : "✅ the shell is wired as described"}`);
 process.exit(fail ? 1 : 0);

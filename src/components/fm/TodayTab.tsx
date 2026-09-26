@@ -87,7 +87,7 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
               matching the literal the formatter used to hardcode: correct
               exactly while the currency could never be anything else, and
               silently wrong the moment it can. Asking for none says it. */}
-          {formatMoney(budgetStatus(data.costs).minorIdr, "")}</span>
+          {formatMoney(budgetStatus(data.costs).minorSpend, "")}</span>
           <span className="l">spent this month</span>
         </div>
       </div>
@@ -168,7 +168,7 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
 
 /** The completion form. Cost is optional and defaults to Minor — but the moment
  *  it would take the month past the configured Minor Maintenance cap (see
- *  fmEngine's budgetStatus().capIdr), the operator is told BEFORE
+ *  fmEngine's budgetStatus().cap), the operator is told BEFORE
  *  saving, because that is when the minor-vs-major decision is still theirs
  *  to make. No-op with no cap configured — wouldExceedCap is never true then. */
 function LogCompletion({
@@ -218,7 +218,7 @@ function LogCompletion({
 
       {willExceed && (
         <div className="fm-banner warn">
-          This takes the month past the {formatMoney(budgetStatus(data.costs).capIdr)} Minor
+          This takes the month past the {formatMoney(budgetStatus(data.costs).cap)} Minor
           Maintenance cap. Spend beyond it is Major maintenance — record it as that
           category instead if that's what your own agreement calls for.
         </div>

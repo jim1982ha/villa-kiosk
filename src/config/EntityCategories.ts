@@ -288,11 +288,6 @@ function legacyDefaultCategory(type: EntityType): Category {
   return LEGACY_DEFAULT_CATEGORY_BY_TYPE[type] ?? "others";
 }
 
-/** Per-entity_id exceptions, checked BEFORE everything below — for specific
- *  devices that shouldn't follow their domain's default. */
-const CATEGORY_EXCEPTIONS: Partial<Record<string, Category>> = {
-};
-
 // device_class sets that redirect a generic domain to a specific category.
 const COMFORT_SENSOR_DC = new Set(["temperature", "humidity"]);
 
@@ -335,9 +330,10 @@ export const SWITCH_PURPOSE_HINTS: ReadonlyArray<readonly [RegExp, Category, str
  *  state) makes the sensor/binary_sensor splits precise; when it isn't known
  *  yet the entity_id hints cover the common cases. */
 function categoryForEntity(entityId: string, type: EntityType, deviceClass?: string): Category {
-  const exception = CATEGORY_EXCEPTIONS[entityId];
-  if (exception) return exception;
-
+  // (A per-entity exception table stood here, empty: its only possible
+  // content was one villa's devices, which the hard rule forbids. A device
+  // that should not follow its domain's default is PICKED per device in
+  // Advanced Settings — EntityMapping.category + categoryPicked.)
   const dc = (deviceClass ?? "").toLowerCase();
   const id = entityId.toLowerCase();
 

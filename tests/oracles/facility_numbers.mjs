@@ -70,7 +70,7 @@ eq("a completion today is on schedule",
 
 console.log("\n  an unconfigured cap is not a cap of zero:");
 // ⚠️ THE "of 0" DEFECT, THIRD AND FOURTH READERS. budgetStatus reports
-// capIdr <= 0 as "not configured" — state ok, fraction 0 — and the two report
+// cap <= 0 as "not configured" — state ok, fraction 0 — and the two report
 // documents printed the unset value anyway: "0 of the 0 monthly cap (0%)".
 // SpendTab and TodayTab were corrected in 2.496.31; the pin written with them
 // named only those two files, which is how fmReport survived it.

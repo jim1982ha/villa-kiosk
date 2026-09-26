@@ -1,3 +1,10 @@
+## 2.496.163
+
+### Internal — settings and Facility names
+- No visible change. A device deleted in Advanced Settings can no longer be
+  brought back by the app's built-in defaults on reload, by construction; and
+  the Facility Manager's code no longer names one currency.
+
 ## 2.496.162
 
 ### Fixed — loading the 3D model

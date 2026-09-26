@@ -42,7 +42,7 @@ export interface ReportInput {
  * documents an owner receives could describe one month's money two ways.
  *
  * ⚠️ AND THE CAP LINE WAS THE "of 0" DEFECT AGAIN. budgetStatus treats
- * capIdr <= 0 as "no cap configured yet" and reports state "ok" with fraction
+ * cap <= 0 as "no cap configured yet" and reports state "ok" with fraction
  * 0; this line printed the unset value regardless, so an unconfigured villa
  * read "0 of the 0 monthly cap (0%)" in the document it keeps as a record.
  * SpendTab and TodayTab were corrected in 2.496.31 — the pin written alongside
@@ -52,14 +52,14 @@ export interface ReportInput {
  */
 export function spendSummary(b: BudgetStatus): string[] {
   const out: string[] = [
-    b.capIdr > 0
-      ? `- **Minor Maintenance this month:** ${formatMoney(b.minorIdr)} of the `
-        + `${formatMoney(b.capIdr)} monthly cap (${Math.round(b.fraction * 100)}%)`
-      : `- **Minor Maintenance this month:** ${formatMoney(b.minorIdr)} `
+    b.cap > 0
+      ? `- **Minor Maintenance this month:** ${formatMoney(b.minorSpend)} of the `
+        + `${formatMoney(b.cap)} monthly cap (${Math.round(b.fraction * 100)}%)`
+      : `- **Minor Maintenance this month:** ${formatMoney(b.minorSpend)} `
         + `(no monthly cap configured)`,
   ];
-  if (b.majorIdr > 0) {
-    out.push(`- **Major maintenance (Owner's account):** ${formatMoney(b.majorIdr)}`);
+  if (b.majorSpend > 0) {
+    out.push(`- **Major maintenance (Owner's account):** ${formatMoney(b.majorSpend)}`);
   }
   if (b.state === "exceeded") {
     out.push(`- ⚠️ The Minor Maintenance cap was reached. Spend beyond it is Major `

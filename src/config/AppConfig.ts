@@ -428,11 +428,17 @@ export function loadConfig(): AppConfig {
     return normaliseConfig({
       ...DEFAULT_CONFIG,
       ...stored,
-      entityMap: { ...DEFAULT_CONFIG.entityMap, ...(stored.entityMap ?? {}) },
-      meshBindings: { ...DEFAULT_CONFIG.meshBindings, ...(stored.meshBindings ?? {}) },
-      alertThresholds: { ...DEFAULT_CONFIG.alertThresholds, ...(stored.alertThresholds ?? {}) },
+      // ⚠️ THE USER'S OWN SLICES ARE TAKEN AS STORED — nothing spread under
+      // them (round 10, 2.496.163). The seeds (ENTITY_MAP, DEFAULT_THRESHOLDS,
+      // TELEPORT_POINTS) are empty, so the spread merged nothing; but it was
+      // the very path by which a seeded entry resurrected itself after being
+      // deleted ("stale entities I can't get rid of", CLAUDE.md). Gone, rather
+      // than relying on the seeds staying empty.
+      entityMap: stored.entityMap ?? {},
+      meshBindings: stored.meshBindings ?? {},
+      alertThresholds: stored.alertThresholds ?? {},
       render: adoptRenderLookDefaults({ ...DEFAULT_CONFIG.render, ...(stored.render ?? {}) }),
-      teleportPoints: stored.teleportPoints?.length ? stored.teleportPoints : DEFAULT_CONFIG.teleportPoints,
+      teleportPoints: stored.teleportPoints ?? [],
     });
   } catch (err) {
     console.warn("[AppConfig] failed to load, using defaults", err);

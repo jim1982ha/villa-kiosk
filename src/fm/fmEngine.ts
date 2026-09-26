@@ -8,7 +8,7 @@
 // threshold here traces to a clause; see fmTypes.ts for the citations.
 
 import {
-  MINOR_MAINTENANCE_CAP_IDR,
+  MINOR_MAINTENANCE_CAP,
   MONEY_CURRENCY,
   type FmCompletion, type FmCost, type FmData, type FmSchedule, type FmTicket,
 } from "./fmTypes";
@@ -115,11 +115,11 @@ export function monthKey(at: string | number | Date): string {
 export interface BudgetStatus {
   month: string;
   /** Minor-category spend this month — what the configured cap applies to. */
-  minorIdr: number;
+  minorSpend: number;
   /** Major spend, tracked separately: it is the Owner's account and
    *  explicitly NOT part of the cap. */
-  majorIdr: number;
-  capIdr: number;
+  majorSpend: number;
+  cap: number;
   /** 0–1+ against the cap; can exceed 1. */
   fraction: number;
   state: "ok" | "approaching" | "exceeded";
@@ -128,40 +128,40 @@ export interface BudgetStatus {
 
 /**
  * Where this month's maintenance spend sits against the configured Minor
- * Maintenance cap (0 = not configured — see MINOR_MAINTENANCE_CAP_IDR).
+ * Maintenance cap (0 = not configured — see MINOR_MAINTENANCE_CAP).
  *
  * "approaching" at 80% exists because the decision a cap forces — do this as
  * shared Minor Maintenance, or raise it as Major — has to be made BEFORE the
  * money is spent. A warning that only arrives at 100% arrives after the
- * choice is gone. With no cap configured (capIdr <= 0) that decision doesn't
+ * choice is gone. With no cap configured (cap <= 0) that decision doesn't
  * apply yet, so spend is tracked as "ok" regardless of amount rather than
  * reading as permanently "exceeded" against a zero cap.
  */
 export function budgetStatus(
   costs: readonly FmCost[], month = monthKey(Date.now()),
-  capIdr = MINOR_MAINTENANCE_CAP_IDR,
+  cap = MINOR_MAINTENANCE_CAP,
 ): BudgetStatus {
   const entries = costs.filter((c) => monthKey(c.at) === month);
-  const minorIdr = entries.filter((c) => c.category === "minor")
+  const minorSpend = entries.filter((c) => c.category === "minor")
     .reduce((s, c) => s + c.amountIdr, 0);
-  const majorIdr = entries.filter((c) => c.category === "major")
+  const majorSpend = entries.filter((c) => c.category === "major")
     .reduce((s, c) => s + c.amountIdr, 0);
-  const fraction = capIdr > 0 ? minorIdr / capIdr : 0;
+  const fraction = cap > 0 ? minorSpend / cap : 0;
   return {
-    month, minorIdr, majorIdr, capIdr, fraction,
-    state: capIdr <= 0 ? "ok" : minorIdr >= capIdr ? "exceeded" : fraction >= 0.8 ? "approaching" : "ok",
+    month, minorSpend, majorSpend, cap, fraction,
+    state: cap <= 0 ? "ok" : minorSpend >= cap ? "exceeded" : fraction >= 0.8 ? "approaching" : "ok",
     entries,
   };
 }
 
 /** What a new minor expense of `amountIdr` would do to the cap — used to warn
  *  before it is committed rather than after. Never true with no cap
- *  configured (capIdr <= 0). */
+ *  configured (cap <= 0). */
 export function wouldExceedCap(
   costs: readonly FmCost[], amountIdr: number,
-  month = monthKey(Date.now()), capIdr = MINOR_MAINTENANCE_CAP_IDR,
+  month = monthKey(Date.now()), cap = MINOR_MAINTENANCE_CAP,
 ): boolean {
-  return capIdr > 0 && budgetStatus(costs, month, capIdr).minorIdr + amountIdr >= capIdr;
+  return cap > 0 && budgetStatus(costs, month, cap).minorSpend + amountIdr >= cap;
 }
 
 export interface TicketStats {

@@ -38,5 +38,14 @@ const keys = Object.keys(A.DEFAULT_CONFIG).join("|");
 const fallbacks = walk(SRC).flatMap((f) => [...readFileSync(f, "utf8").replace(/\/\/.*$/gm, "").matchAll(new RegExp(`config\\.(${keys})\\s*\\?\\?`, "g"))].map((m) => `${f.slice(SRC.length)}: ${m[1]}`));
 ck("no reader re-defaults a setting normaliseConfig already guarantees", fallbacks.length === 0, fallbacks);
 
+// 2.496.163: loadConfig takes the user's own slices as stored — nothing is
+// spread under them, so a seeded entry can never resurrect a deleted one.
+const ac = src("config/AppConfig.ts");
+ck("loadConfig spreads no seed under the user's maps, thresholds or rooms",
+   /entityMap: stored\.entityMap \?\? \{\},/.test(ac) && /meshBindings: stored\.meshBindings \?\? \{\},/.test(ac)
+   && /alertThresholds: stored\.alertThresholds \?\? \{\},/.test(ac) && /teleportPoints: stored\.teleportPoints \?\? \[\],/.test(ac)
+   && !/\.\.\.DEFAULT_CONFIG\.(entityMap|meshBindings|alertThresholds)/.test(ac));
+ck("no per-entity category exception table (its only content could be one villa's devices)", !/CATEGORY_EXCEPTIONS/.test(src("config/EntityCategories.ts")));
+
 if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
 console.log("\n✅ every setting present and valid, decided once");
