@@ -478,8 +478,8 @@ function HistoryView({ station, range }: { station: WeatherStation; range: Histo
         {rainId && <RainTile s={data.rain} win={win} status={status} perDay={range.totalPeriod === "day"} unit={unitOf("rainToday") || "mm"} />}
         <ChartTile title="Pressure" note={p && P ? `${Math.round(p.min)} – ${Math.round(P.max)} ${unitOf("pressure")}` : undefined}
           win={win} status={status} lines={[line("pressure", { cls: "out", label: "Pressure", unit: ` ${unitOf("pressure")}` })]} />
-        <ChartTile title="Sun & UV" legend={[["Sunlight", "warm area"], ["UV", "warm"]]} win={win} status={status}
-          lines={[line("solar", { cls: "warm", area: true, ownScale: true, label: "Sunlight", unit: " W/m²" }), line("uv", { cls: "warm", ownScale: true, label: "UV", unit: "" }, "max")]} />
+        <ChartTile title="Sun & UV" legend={[["Sunlight", "warm area"], ["UV", "uv"]]} win={win} status={status}
+          lines={[line("solar", { cls: "warm", area: true, ownScale: true, label: "Sunlight", unit: " W/m²" }), line("uv", { cls: "uv", ownScale: true, label: "UV", unit: "" }, "max")]} />
       </div>
     </div>
   );
@@ -579,7 +579,9 @@ function ChartTile({ title, legend, note, lines, win, status }: {
               })} />
           )}
           </div>
-          {rightAxis && <YAxis side="right" height={CHART_PX} frame={H} unit={present[ownAt].unit.trim() || present[ownAt].label} ticks={rightAxis} />}
+          {/* The right axis is the colour of the line it measures (UV beside
+              sunlight), as the device panels' two-axis chart does. */}
+          {rightAxis && <YAxis side="right" height={CHART_PX} frame={H} unit={present[ownAt].unit.trim() || present[ownAt].label} ticks={rightAxis} cls={present[ownAt].cls.split(" ")[0]} />}
           </div>
         )}
       <Axis g={g} right={!!rightAxis} />

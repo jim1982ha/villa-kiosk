@@ -72,7 +72,6 @@ import { Image } from "@babylonjs/gui/2D/controls/image";
 import { Control } from "@babylonjs/gui/2D/controls/control";
 import type { AppConfig } from "@/config/AppConfig";
 import { roomKey, NO_ROOM_LABEL } from "@/config/roomKey";
-import { chipProportions } from "@/config/chipProportions";
 import {
   badgeMetricsFor, detectPointerClass, observePointerClass, type BadgeMetrics, type PointerClass,
   CHIP_MAX_VIEWPORT_FRACTION, CARD_MAX_VIEWPORT_FRACTION,
@@ -124,7 +123,9 @@ import { FanRigs } from "./fanRigs";
 import { PlacementPass, GROUP_OVERLAP_ALLOW_WIDTHS, type ShownLabel, type PendingEntityGroup } from "./placementPass";
 import { onGlass, glyphDrawPx, glyphBakePx } from "./badgeLayout";
 import type { FrameRequests } from "./frameScheduler";
-import { badgeImageDataUrl, BADGE_INSET_CARD, BADGE_CORNER_FRACTION } from "./badgeIcons";
+import { badgeImageDataUrl } from "./badgeIcons";
+import { badgeRing, badgeBakePx, BADGE_INSET_CARD, BADGE_CORNER_FRACTION } from "./badgeLook";
+import { DashableRectangle } from "./dashableRectangle";
 import { badgeText } from "./badgeText";
 import { badgeShadow } from "./badgeShadow";
 import { cameraFrame } from "./cameraFrame";
@@ -604,7 +605,8 @@ export interface CeilingState {
 
 export interface LabelControls {
   container: StackPanel;
-  badge: Rectangle;
+  /** Draws the card's border in EVERY state, dashed included — one mechanism. */
+  badge: DashableRectangle;
   glyph: Image;
   valueWrap: Rectangle;
   /** The card style's icon-to-value gap, as a sized control rather than padding
@@ -616,6 +618,12 @@ export interface LabelControls {
    *  `valueSpacer`. Null for the classic style. Toggled only through
    *  `setValueVisible` — see there. */
   valueTail: Rectangle | null;
+  /** The card style's two left margins: `padl` beside a value, `barePad` (the
+   *  same number as the right margin) on a bare icon — see
+   *  badgeCard.cardStruts. Toggled only through `setValueVisible`. Null for
+   *  the classic style. */
+  padL: Rectangle | null;
+  barePad: Rectangle | null;
   valueText: TextBlock;
   anchor: TransformNode;
   type: EntityType;
@@ -2883,7 +2891,6 @@ export class EntityVisuals {
       // with (see config/chipProportions). The chip's CONTROL is the card
       // minus its ring; the glyph drawn inside it is that fraction of the
       // chip, exactly as `.summary-tile-icon svg` is of `.summary-tile-icon`.
-      const chip = chipProportions();
       // CLAMPED to the worst-case inner box rather than merely documented as
       // fitting it: cardIconFraction is a design decision and ringThicknessPx
       // is a drawing constraint, and the two are tuned independently. A future
@@ -2925,9 +2932,9 @@ export class EntityVisuals {
       // card: a SOLID state-coloured rounded card (neutral by default, see
       // categorySurface) holding an icon chip + value inline (its fill/ring
       // are driven in updateLabel).
-      const badge = new Rectangle(`lbl_badge_${entityId}`);
+      const badge = new DashableRectangle(`lbl_badge_${entityId}`);
       badge.height = `${card ? m.cardHeightPx : m.badgeDiameterPx}px`;
-      badge.cornerRadius = (card ? m.cardHeightPx : m.badgeDiameterPx) * chip.radius;
+      badge.cornerRadius = (card ? m.cardHeightPx : m.badgeDiameterPx) * BADGE_CORNER_FRACTION;
       badge.thickness = 0;
       // Apply the style's resting fill NOW, not only in updateLabel: an entity
       // that has never reported (or is UNAVAILABLE and so never pushed a state
@@ -3005,6 +3012,8 @@ export class EntityVisuals {
       // classic keeps the glyph as the badge's full fill and the value in a
       // separate pill below.
       const row = card ? new StackPanel(`lbl_row_${entityId}`) : null;
+      let barePad: Rectangle | null = null;
+      let padL: Rectangle | null = null;
       if (row) {
         row.isVertical = false;
         // ONE height for everything inside the card, and it is the glyph's
@@ -3062,10 +3071,18 @@ export class EntityVisuals {
       if (row) {
         // The LEFT margin is short by the baked ink the chip already contributes,
         // so the two VISIBLE margins match: visL = padL + ink, visR = padR.
-        // Unrounded, like the two on the value's side (2.454.0): these are
-        // PRE-scale CSS px and rounding 0.65 to 1 is a 35% error on the very
-        // quantity the `visL/gap/visR` readout exists to make checkable.
-        row.addControl(strut("padl", st!.padl));
+        // Whole pixels (cardStruts, 2.496.137): Babylon floors every width, so
+        // the fractional struts this once kept "unrounded" drew a pixel short —
+        // a 0.8 left margin drew as 0 (measured on a real GUI).
+        // Two left margins, one shown at a time (setValueVisible): a bare
+        // icon's is the SAME number as its right margin, so the chip is
+        // centred whatever Babylon's whole-pixel flooring does; beside a value
+        // it is short by the ink — see cardStruts.
+        barePad = strut("barepad", st!.barepad);
+        row.addControl(barePad);
+        padL = strut("padl", st!.padl);
+        padL.isVisible = false;
+        row.addControl(padL);
       }
       (row ?? badge).addControl(glyph);
 
@@ -3142,17 +3159,16 @@ export class EntityVisuals {
         // multiple is 1.5 (it preserves the card's width) and for the six
         // attempts that were argued from the DOM twin instead of measured.
         //
-        // No Math.round, deliberately: these are PRE-scale CSS px multiplied by
-        // effectiveScale (3.2 on this capture), so rounding 3.375 to 3 is a
-        // 1.2 render-px error on a 2 px quantity — and it lands on exactly the
-        // equality the pin checks. The struts take fractional widths fine.
+        // Whole pixels, from cardStruts: Babylon floors a control's width, so a
+        // fractional strut was drawn short and never as the model said.
         valueSpacer.width = `${st!.valgap}px`;
         valueSpacer.isVisible = false;
         row!.addControl(valueSpacer);
         row!.addControl(valueWrap);
         // The value's TAIL, and it rides the value's own visibility for the
-        // same reason the gap spacer does — a bare-icon card must keep
-        // visL == visR == iconPadX (that is what makes it square), so the extra
+        // same reason the gap spacer does — a bare-icon card must keep its
+        // visible margins equal (with `bareink`, 2.496.130: this comment used to
+        // claim visL == visR here while the drawn margins were 3.0 and 5.2), so the extra
         // margin the owner's centring asks for belongs to the VALUE, not to the
         // card. With a value: visR = this + padr = 1.5·iconPadX, which is the
         // visible gap on the other side of the text. Without one: it collapses
@@ -3220,7 +3236,7 @@ export class EntityVisuals {
       valueWrap.addControl(valueText);
 
       this.labels.set(entityId, {
-        container, badge, glyph, valueWrap, valueSpacer, valueTail, valueText, anchor, type, category,
+        container, badge, glyph, valueWrap, valueSpacer, valueTail, padL, barePad, valueText, anchor, type, category,
       });
 
       // Repaint from the last known state so a rebuild (toggle on / icon edit)
@@ -3363,14 +3379,21 @@ export class EntityVisuals {
       // full state weight. That is what made a resting badge read as heavily
       // outlined rather than quiet, and it is the same rule the room chip and
       // the entity group already follow (`ringRed ? ringThicknessPx : 1`).
-      const dashed = !!surface.ringDashed;
-      lbl.badge.thickness = !surface.ring || dashed
-        ? 0
-        : surface.ringHairline ? 1 : this.metrics.ringThicknessPx;
-      lbl.badge.color = surface.ring ?? "transparent";
+      // ONE mechanism for every state's border, the dashed one included: the
+      // card's own Rectangle, which can dash (dashableRectangle). The dash was
+      // a separate baked image over the card (2.496.130) and it did not agree
+      // with the Rectangle on where the edge is — "why is there a difference
+      // in the icon shape?" (owner). Same corner, same weight, same place.
+      // The card's frame is badgeLook's — the same answer a group's chip and
+      // a room chip get (round 8).
+      const ring = badgeRing(surface, this.metrics.cardHeightPx, this.metrics);
+      lbl.badge.thickness = ring.px;
+      lbl.badge.dash = ring.dash;
+      lbl.badge.color = ring.color;
+      // Every state's chip is baked the same way: inset, with no ring of its own.
       lbl.glyph.source = badgeImageDataUrl(
         lbl.category, iconKey, state, override,
-        dashed ? 0 : BADGE_INSET_CARD, ringState, !dashed, this.glyphBakePx(true),
+        BADGE_INSET_CARD, ringState, true, this.glyphBakePx(true),
         // This whole branch IS the card style, so the heavier glyph weight is
         // unconditional here — see ICON_STROKE_VIEWBOX_BOLD.
         true);
@@ -3384,6 +3407,7 @@ export class EntityVisuals {
       // transparent hit-target, not a second ring drawn on top of the baked one.
       lbl.badge.background = "transparent";
       lbl.badge.thickness = 0;
+      lbl.badge.dash = null;
       lbl.badge.color = "transparent";
       lbl.glyph.source = badgeImageDataUrl(
         lbl.category, iconKey, state, override, 0, ringState, false, this.glyphBakePx(false));
@@ -4189,6 +4213,9 @@ export class EntityVisuals {
     // pays for space around text it is not drawing — the same dead-width bug
     // the gap spacer above was written to avoid, on the other side.
     if (lbl.valueTail) lbl.valueTail.isVisible = on;
+    // …and the left margin: `padl` beside a value, `barePad` without one.
+    if (lbl.padL) lbl.padL.isVisible = on;
+    if (lbl.barePad) lbl.barePad.isVisible = !on;
   }
 
   /**
@@ -5331,7 +5358,6 @@ export class EntityVisuals {
       const rest = categorySurface("others", "off");
       const alert = categorySurface("others", "alert");
       const surface = rest.fill;
-      const sm = this.summaryMetrics();
       for (const g of groups) {
         // A summary whose every member is behind a wall is behind it too — the
         // same rule the room chip applies below, at the same tier (the render
@@ -5400,7 +5426,7 @@ export class EntityVisuals {
           sub.height = `${src.height}px`;
           sub.left = `${src.left}px`;
           sub.top = `${src.top}px`;
-          sub.cornerRadius = sm.size * BADGE_CORNER_FRACTION;
+          sub.cornerRadius = lay.pitch * BADGE_CORNER_FRACTION;
           // WAS `shadowOffsetY = 2` — a directional skirt on a control drawn
           // beside badges that have none. See badgeShadow.ts.
           badgeShadow(sub, "surface");
@@ -5442,14 +5468,21 @@ export class EntityVisuals {
               // effectiveScale(), so the bitmap has to be baked at the painted
               // size. iconZoomScale is excluded for the same reason — see
               // glyphBakePx.
-              0, ring, false, lay.chip * this.iconUserScale * this.bestCssToGui(),
+              0, ring, false, badgeBakePx(lay.chip, this.iconUserScale, this.bestCssToGui()),
               // A summary card's cells are Card-style badges by definition —
               // they ARE the card. They bake through this call rather than
               // updateLabel's, which is why the Card style's heavier glyph did
               // not reach them in 2.375.0 and the change looked like a no-op on
               // a screen showing a two-cell card. Gated on the setting so the
               // Icon style stays a clean control to compare against.
-              this.isCardStyle());
+              this.isCardStyle(),
+              // A card-style chip rings like the lone card beside it (badgeLook,
+              // in proportion to its size) — it baked the classic style's
+              // fractions, ≈1.3 px beside a card drawn at 3 (round 8).
+              this.isCardStyle()
+                ? badgeRing(categorySurfaceRinged(s2.lbl.category, face, ring, this.config.entityMap[s2.id]?.badgeColor),
+                    lay.chip, this.metrics).px / Math.max(1e-6, lay.chip)
+                : undefined);
           }
         }
         // ── A SUMMARY'S RING NEVER REPEATS A MEMBER'S OWN SIGNAL ────────────
@@ -5495,11 +5528,10 @@ export class EntityVisuals {
         // one card or two with real space between them. `thickness` must be 0
         // as well as the background empty: a Rectangle insets its children by
         // its border, so a host with one would shift every pixel offset below.
-        const stroke = ringRed ? this.metrics.ringThicknessPx : 1;
-        const strokeColor = (ringRed ? alert.ring : rest.ring) ?? "transparent";
+        const frame = badgeRing(ringRed ? alert : rest, this.metrics.cardHeightPx, this.metrics);
         for (const sub of c.cards) {
-          sub.thickness = stroke;
-          sub.color = strokeColor;
+          sub.thickness = frame.px;
+          sub.color = frame.color;
           sub.background = surface;
         }
         c.container.scaleX = scale;
@@ -5963,8 +5995,9 @@ export class EntityVisuals {
       // (BADGE_RING): red when at least one member is "on" or "alert",
       // otherwise no ring — the only attention signal available once the
       // individual badges are gone.
-      c.container.thickness = chip.ringRed ? this.metrics.ringThicknessPx : 1;
-      c.container.color = (chip.ringRed ? chipAlert.ring : chipRest.ring) ?? "transparent";
+      const frame = badgeRing(chip.ringRed ? chipAlert : chipRest, this.metrics.cardHeightPx, this.metrics);
+      c.container.thickness = frame.px;
+      c.container.color = frame.color;
       // The count pill itself carries the room's REPORTING status — red if
       // at least one member is unavailable (HA has lost contact with it),
       // the same "available" green everywhere else otherwise. Separate
@@ -6329,9 +6362,11 @@ export class EntityVisuals {
   private clampToLabelWidth(text: string): string {
     const m = this.metrics;
     const card = this.isCardStyle();
-    const fixed = card
-      ? m.cardPadLeftPx + m.cardHeightPx + m.cardValuePadPx
-      : m.pillValuePadPx;
+    // A card's fixed part is cardStruts' — the one width model; the older
+    // `cardPadLeftPx + cardHeightPx + cardValuePadPx` it retired survived here
+    // alone (round 8).
+    const st = card ? cardStruts(m.cardHeightPx, this.glyphPxFor(true), 1) : null;
+    const fixed = st ? st.width - st.value : m.pillValuePadPx;
     const charPx = card ? m.cardValueCharPx : m.pillValueCharPx;
     if (!(charPx > 0)) return text;
     const max = Math.max(1, Math.floor((m.labelMaxWidthPx - fixed) / charPx));

@@ -34,6 +34,8 @@
 /** The most device pictograms ONE card may show: a 2x2 grid.
  *
  *  Three columns would put each cell's tap zone under a badge's own box. */
+import { BADGE_INSET_CARD, CARD_VALUE_MARGIN_OF_ICON_PAD } from "./badgeLook";
+
 export const MAX_GRID_CHIPS = 4;
 
 /**
@@ -173,8 +175,18 @@ export function arrange(
    *  ahead of `maxWidth` would have silently handed the width budget to this. */
   perCard = MAX_GRID_CHIPS,
 ): CardArrangement {
+  // ── WHOLE PIXELS, AND A MARGIN THAT SPLITS EVENLY ───────────────────────
+  // Babylon floors every control's measure (`| 0`), each one separately. A
+  // half-pixel unit (the fine metrics scale to 20.5) floored the card's
+  // centred top up a pixel and the chip's down one — every chip of a group
+  // card sat 3 px from its card's top and 1 px from its bottom (2.496.138).
+  // An odd `unit - chip` did the same by half a pixel. So the unit and the
+  // gap are whole pixels, and the chip is the unit less TWO equal whole
+  // margins: every offset below is then an integer before Babylon sees it.
+  unit = Math.max(1, Math.round(unit));
+  gap = Math.round(gap);
   const cells = gridCells(n, max);
-  const chip = Math.max(4, Math.round(unit * iconFraction));
+  const chip = Math.max(4, unit - 2 * Math.round((unit - unit * iconFraction) / 2));
   const cards: SubCard[] = [];
 
   // Greedy fill: a full card, then whatever is left.
@@ -216,14 +228,17 @@ export function arrange(
 
   let rowTop = -height / 2;
   rows.forEach((row, ri) => {
-    let cursor = -rowW[ri] / 2;
+    // Edges from the arrangement's top-left, rounded: a short row centred
+    // under a wider one would otherwise start on a half pixel.
+    let cursor = Math.round((totalW - rowW[ri]) / 2) - totalW / 2;
     for (const sh of row) {
       const w = sh.cols * unit;
+      const h = sh.rows * unit;
       cards.push({
         left: cursor + w / 2,
-        top: rowTop + rowH[ri] / 2,
+        top: rowTop + Math.round((rowH[ri] - h) / 2) + h / 2,
         width: w,
-        height: sh.rows * unit,
+        height: h,
         cols: sh.cols,
         rows: sh.rows,
         first: sh.first,
@@ -261,16 +276,18 @@ export function arrange(
   };
 }
 
-//: The value's clear space, as a multiple of the icon's own padding. Mirrors
-//: `badgeMetrics.CARD_VALUE_MARGIN_OF_ICON_PAD`; kept here so this module stays
-//: import-free and therefore runnable under a bare `node`.
-const VALUE_MARGIN_OF_ICON_PAD = 1.5;
-//: The transparent margin the icon bakes around its own squircle — mirrors
-//: `badgeIcons.BADGE_INSET_CARD`, for the same reason.
-const INK_INSET_FRACTION = 0.10;
+// The value's clear space and the chip's baked ink inset are badgeLook's — one
+// owner (they were mirrored here as literals no check compared, round 8).
+const VALUE_MARGIN_OF_ICON_PAD = CARD_VALUE_MARGIN_OF_ICON_PAD;
+const INK_INSET_FRACTION = BADGE_INSET_CARD;
 
 /** The six struts a card badge's row is built from, in order, and their sum. */
 export interface CardStruts {
+  /** A BARE icon's left margin, shown INSTEAD of `padl` when there is no
+   *  value: the very same number as `padr`, so the chip is centred (2.496.130). */
+  barepad: number;
+  /** The left margin beside a VALUE: short by the ink, so the visible margins
+   *  either side of the row match. Hidden on a bare icon. */
   padl: number;
   glyph: number;
   /** Zero-width and hidden when the badge shows no value. */
@@ -320,13 +337,28 @@ export function cardStruts(
   // renderer builds them once and toggles their VISIBILITY with the value —
   // a badge with no value must not carry a gap to nothing. `width` is what the
   // row measures given what is actually shown.
-  const padl = iconPadX - inkInset;
-  const valgap = Math.max(0, VALUE_MARGIN_OF_ICON_PAD * iconPadX - inkInset);
-  const valtail = (VALUE_MARGIN_OF_ICON_PAD - 1) * iconPadX;
-  const padr = iconPadX;
-  const shown = valueWidthPx > 0 ? valgap + valueWidthPx + valtail : 0;
-  return {
-    padl, glyph: glyphPx, valgap, value: valueWidthPx, valtail, padr,
-    width: padl + glyphPx + shown + padr,
-  };
+  // ⚠️ A BARE ICON SAT LEFT OF CENTRE, TWICE OVER (2.496.130). `padl` is
+  // short by the ink so a card WITH a value reads pad | chip | value with
+  // matching visible margins; on a bare icon that left L = padl + ink =
+  // iconPadX against R = ink + padr = iconPadX + ink (coarse: 3.0 vs 5.2 px),
+  // on a card 25.8 wide by 28 tall. And Babylon GUI FLOORS a control's width
+  // to whole pixels — measured on a real GUI: padl's 0.8 drew as 0, the glyph
+  // flush on the card's left edge. So a bare icon's left margin is not "padl
+  // plus the ink back" (2.2 floors to 2: still a pixel off) but the SAME
+  // number as its right margin — which floors the same way on both sides.
+  // ⚠️ WHOLE PIXELS (round 8, 2.496.137). Babylon FLOORS every control's
+  // width (control.js `|0`), so a fractional strut lost up to a pixel: a
+  // value card's `padl` of 0.8 drew as 0 — its chip flush on the card's left
+  // edge — and the model summed widths the screen never drew. Rounded here,
+  // each strut is drawn exactly as wide as this says.
+  const px = Math.round;
+  const padl = px(iconPadX - inkInset);
+  const barepad = px(iconPadX);
+  const valgap = Math.max(0, px(VALUE_MARGIN_OF_ICON_PAD * iconPadX - inkInset));
+  const valtail = px((VALUE_MARGIN_OF_ICON_PAD - 1) * iconPadX);
+  const padr = px(iconPadX);
+  const width = valueWidthPx > 0
+    ? padl + glyphPx + valgap + valueWidthPx + valtail + padr
+    : barepad + glyphPx + padr;
+  return { barepad, padl, glyph: glyphPx, valgap, value: valueWidthPx, valtail, padr, width };
 }

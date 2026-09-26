@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """The two hard rules, checked against EVERYTHING THAT SHIPS.
 
-⚠️ THE SCOPE IS THE FIX. The equivalent guard on the `dev` branch greps `src/`
-only — so the CSP in `rootfs/etc/nginx/nginx.conf` granting `fonts.googleapis.com`
+⚠️ THE SCOPE IS THE FIX. An earlier guard grepped `src/` only — so the CSP in `rootfs/etc/nginx/nginx.conf` granting `fonts.googleapis.com`
 sat in shipped configuration for eight versions with a check running on every
 push that could not see it. A guard scoped to where the last defect was found,
 rather than to everything the rule applies to, is the "audit the applicable set"

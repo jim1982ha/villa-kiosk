@@ -1,3 +1,71 @@
+## 2.496.138
+
+### Fixed — group cards
+- **The icons in a card of two (or more) devices are centred again.** On
+  some screens they sat lower than the card's middle, with more space
+  above them than below. The card's size fell between two pixels, and the
+  card and its icons were rounded in opposite directions; every size is
+  now a whole pixel, with the same margin above, below and beside each icon.
+
+## 2.496.137
+
+### Fixed — badges that show a value
+- **The icon in a badge with a value (such as "100%") no longer touches the
+  badge's left edge.** Its margins were fractions of a pixel, which the
+  display rounds down, so the left one disappeared. They are now whole
+  pixels, drawn exactly as intended.
+## 2.496.136
+
+### Improved — badges on the map look the same wherever they appear
+- **A device inside a group now has the same border as a device on its own.**
+  An alerting or active device in a group card had a thin outline next to the
+  bolder one of a standalone badge. Borders, their weight and their corner
+  rounding now follow one rule for every card-style badge: alone, in a group,
+  and room labels.
+## 2.496.135
+
+### Improved — device icons on the map
+- **An unavailable device's dashed border has more, shorter dashes**, so it
+  reads as a dashed outline rather than a few heavy blocks.
+- **Icons look centred in their badge.** A lock was centred by its outline
+  but looked low, because its heavy body sits under a thin shackle. Every
+  icon is now placed by where its weight sits as well as by its outline, so
+  it looks centred. This applies to every badge style and to badges inside a
+  group.
+## 2.496.134
+
+### Improved — the Weather window's "Sun & UV" chart
+- **UV has its own colour.** Sunlight and UV were the same tan. UV is now
+  the red of the UV scale, on its line, its legend, its tooltip and the
+  numbers of its axis on the right, so the two read apart.
+## 2.496.133
+
+**Nothing you should see changed.** References to the retired development
+channels are removed from the add-on's history notes and build files.
+## 2.496.132
+
+### Fixed — the Weather window's rain chart
+- **The first bar no longer always says "No reading".** It stood for an hour
+  (or day) that began just before the chosen range, which Home Assistant
+  never returns. The chart now starts at the first bucket inside the range.
+- **A dry period's axis reads 0 / 0.5 / 1** instead of "0, 0, 0".
+## 2.496.131
+
+### Fixed — device icons on the map
+- **An unavailable device's dashed border now has the same shape, corners,
+  position and weight as every other border.** It was drawn by a separate
+  image laid over the badge and came out misaligned, dashed on two sides
+  only. Every state's border is now drawn the same way.
+## 2.496.130
+
+### Fixed — device icons on the map
+- **A single device icon is centred in its badge, and the badge is
+  square.** The icon sat against the left edge of a badge slightly narrower
+  than it was tall. Badges with several icons, which lay their icons out
+  differently, were not affected.
+- **An unavailable device's dashed border lies on the badge's edge.** It was
+  drawn around the icon inside the badge, so the badge showed a solid edge
+  with a dashed ring floating inside it.
 ## 2.496.129
 
 ### Improved — "Where today's energy went"
@@ -2017,20 +2085,17 @@ exactly like a fix that did not work.
 
 ## 2.496.5
 
-### Added — a third add-on, "VESTA (dev2)", for trying a fix before it is released
-Until now there were two: the released **VESTA**, and **VESTA (dev)**, which
-carries the assistant features. Fixes for the released version had nowhere to be
-tried — they went straight onto the release and you saw them for the first time
-there.
+### Added — a second add-on, "VESTA (dev2)", for trying a fix before it is released
+Fixes for the released version had nowhere to be tried — they went straight
+onto the release and you saw them for the first time there.
 
 **VESTA (dev2)** is that missing middle. It is the released version plus the
-fixes being prepared for the next release, and nothing else — none of the
-assistant features from VESTA (dev). It installs alongside the other two, so you
-can put a fix on the wall tablet, look at it, and only then decide it is ready.
+fixes being prepared for the next release, and nothing else. It installs
+alongside VESTA, so you can put a fix on the wall tablet, look at it, and only
+then decide it is ready.
 
-Nothing about the released VESTA changes in this release, and nothing about
-VESTA (dev) changes either. All three keep their own version number, their own
-settings and their own place in the add-on list.
+Nothing about the released VESTA changes in this release. Both keep their own
+version number, their own settings and their own place in the add-on list.
 
 ## 2.496.4
 

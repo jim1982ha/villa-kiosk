@@ -26,7 +26,7 @@
 import { cssVar } from "./EntityCategories";
 
 /** The stylesheet's own values, and the fallback if a token is unreadable. */
-const FALLBACK = { size: 46, glyph: 24, gap: 13, radius: 13 } as const;
+const FALLBACK = { size: 46, glyph: 28, gap: 13, radius: 13 } as const;
 
 function token(name: string, fallback: number): number {
   const raw = cssVar(name);

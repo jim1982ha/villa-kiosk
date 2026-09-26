@@ -272,7 +272,6 @@ export interface BadgeMetrics {
 
   // ── Card style (config.badgeStyle === "card") ────────────────────────────
   cardHeightPx: number;
-  cardPadLeftPx: number;
   cardValueFontPx: number;
 
   // ── Collision box, relative to the anchor ────────────────────────────────
@@ -294,7 +293,6 @@ export interface BadgeMetrics {
   pillValueCharPx: number;
   pillValuePadPx: number;
   cardValueCharPx: number;
-  cardValuePadPx: number;
   /**
    * The room chip's own text inset, on ONE side. Its right padding is this
    * plus the count overlay's full diameter, which is how the count reserves
@@ -461,7 +459,7 @@ export interface BadgeMetrics {
  * measured to that edge is measured from a boundary nobody can see. That
  * subtraction is what made three earlier attempts look right on paper.
  */
-export const CARD_VALUE_MARGIN_OF_ICON_PAD = 1.5;
+export { CARD_VALUE_MARGIN_OF_ICON_PAD } from "./badgeLook";
 
 /**
  * The value text, as a fraction of the CHIP it sits beside.
@@ -535,7 +533,6 @@ const COARSE: BadgeMetrics = {
   // style's), so this hugs the art instead of padding a second squircle
   // inside it: 28 = 22px of icon + the 3px ring each side.
   cardHeightPx: 28,
-  cardPadLeftPx: 4,
   cardValueFontPx: Math.round(28 * (22 / 28) * VALUE_FONT_OF_CHIP),
 
   classicHalfHPx: 20,
@@ -545,7 +542,6 @@ const COARSE: BadgeMetrics = {
   pillValueCharPx: Math.round(18 * VALUE_FONT_OF_PILL) * VALUE_CHAR_ADVANCE,
   pillValuePadPx: 24,
   cardValueCharPx: Math.round(28 * (22 / 28) * VALUE_FONT_OF_CHIP) * VALUE_CHAR_ADVANCE,
-  cardValuePadPx: 8,
   chipTextPadPx: 12,
   labelMaxWidthPx: 180,
 
@@ -644,7 +640,6 @@ function scaleGeometry(base: BadgeMetrics, k: number): BadgeMetrics {
     pillValueFontPx: Math.max(MIN_VALUE_FONT_PX, px(base.pillValueFontPx)),
 
     cardHeightPx: px(base.cardHeightPx),
-    cardPadLeftPx: px(base.cardPadLeftPx),
     cardValueFontPx: Math.max(MIN_VALUE_FONT_PX, px(base.cardValueFontPx)),
 
     classicHalfHPx: px(base.classicHalfHPx),
@@ -659,7 +654,6 @@ function scaleGeometry(base: BadgeMetrics, k: number): BadgeMetrics {
     pillValuePadPx: px(base.pillValuePadPx),
     cardValueCharPx: base.cardValueCharPx
       * (Math.max(MIN_VALUE_FONT_PX, px(base.cardValueFontPx)) / base.cardValueFontPx),
-    cardValuePadPx: px(base.cardValuePadPx),
     chipTextPadPx: px(base.chipTextPadPx),
     labelMaxWidthPx: px(base.labelMaxWidthPx),
 

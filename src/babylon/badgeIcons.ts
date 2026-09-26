@@ -96,8 +96,11 @@ const ICON_STROKE_VIEWBOX_BOLD = 2.5;
  *  Approximates --radius-badge (12px) at the classic badge's typical ~40-44px
  *  on-screen size; a fraction (not a fixed px) so it still looks right when
  *  the label-size stepper scales the badge up or down. */
-export const BADGE_CORNER_FRACTION = 0.28;
-// Ring stroke as a fraction of the badge. RING_FRACTION lands on the
+// The corner fraction, the inset and the dash are badgeLook's (one owner).
+export { BADGE_CORNER_FRACTION, BADGE_INSET_CARD, RING_DASH } from "./badgeLook";
+import { BADGE_CORNER_FRACTION, RING_DASH } from "./badgeLook";
+// The CLASSIC style's ring, as a fraction of the badge (a card-style badge's
+// ring is badgeLook.badgeRing, passed in as `ringOfSize`). RING_FRACTION lands on the
 // guidelines' 1.5px state ring at the 44px on-screen badge size
 // (44 × 0.035 ≈ 1.5); HAIRLINE_FRACTION lands on its 1px idle hairline.
 // Fractions, not fixed px, so both stay proportional when the label-size
@@ -107,6 +110,7 @@ const HAIRLINE_FRACTION = 0.023;
 // The unavailable state's heavier dash (≈ 2.6px at 44).
 const BOLD_RING_FRACTION = 0.06;
 
+
 function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -115,6 +119,64 @@ function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: n
   ctx.arcTo(x, y + h, x, y, r);
   ctx.arcTo(x, y, x + w, y, r);
   ctx.closePath();
+}
+
+/**
+ * OPTICAL CENTRING — how far to move a glyph so it LOOKS centred.
+ *
+ * ⚠️ A GLYPH CENTRED BY ITS BOX CAN LOOK OFF-CENTRE (owner, 2026-09-26: "the
+ * vertical alignment is still not right", the lock in its red ring). Measured
+ * on the owner's screenshot, the lock's ink BOX was centred in its ring to half
+ * a pixel — and its ink MASS sat 1.8 px lower: a thin shackle over a heavy
+ * body. The fan beside it: mass and box within 0.3 px, and it read as centred.
+ * The eye judges the mass. So a glyph is placed with the point OPTICAL_CORRECTION
+ * of the way from its ink box's centre to its ink mass's centre on the chip's
+ * centre — half: the box alone reads low, the mass alone over-corrects (the
+ * shackle then crowds the top). Measured from the ink, not the viewBox, so a
+ * drawing whose box is itself off-centre in lucide's 24-unit frame (droplets)
+ * is centred too.
+ *
+ * Pure over an alpha raster (its centre is the chip's), so tests/oracles drive
+ * it without a canvas. Returns the nudge in raster pixels.
+ */
+export const OPTICAL_CORRECTION = 0.5;
+export function inkNudge(alpha: ArrayLike<number>, size: number, correction = OPTICAL_CORRECTION): { dx: number; dy: number } {
+  let x0 = size, x1 = -1, y0 = size, y1 = -1, sum = 0, sx = 0, sy = 0;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const a = alpha[y * size + x];
+      if (a <= 0) continue;
+      sum += a; sx += a * x; sy += a * y;
+      if (a > 127) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    }
+  }
+  if (sum === 0 || x1 < 0) return { dx: 0, dy: 0 };
+  const c = (size - 1) / 2;
+  const at = (box: number, mass: number) => box + correction * (mass - box);
+  return { dx: c - at((x0 + x1) / 2, sx / sum), dy: c - at((y0 + y1) / 2, sy / sum) };
+}
+
+const NUDGE_RASTER = 96;
+const nudgeCache = new Map<string, { dx: number; dy: number }>();
+/** An icon's optical nudge in VIEWBOX units, measured once from its own ink. */
+function opticalNudge(iconKey: string): { dx: number; dy: number } {
+  const cached = nudgeCache.get(iconKey);
+  if (cached) return cached;
+  let out = { dx: 0, dy: 0 };
+  const c = typeof document !== "undefined" ? document.createElement("canvas") : null;
+  const ctx = c?.getContext("2d");
+  if (c && ctx) {
+    c.width = c.height = NUDGE_RASTER;
+    const k = NUDGE_RASTER / ICON_VIEWBOX;
+    drawIcon(ctx, ICON_NODES[iconKey] ?? ICON_NODES.gauge, k, 0, "#000");
+    const data = ctx.getImageData(0, 0, NUDGE_RASTER, NUDGE_RASTER).data;
+    const alpha = new Uint8ClampedArray(NUDGE_RASTER * NUDGE_RASTER);
+    for (let i = 0; i < alpha.length; i++) alpha[i] = data[i * 4 + 3];
+    const px = inkNudge(alpha, NUDGE_RASTER);
+    out = { dx: px.dx / k, dy: px.dy / k };
+  }
+  nudgeCache.set(iconKey, out);
+  return out;
 }
 
 function drawIcon(
@@ -133,9 +195,11 @@ function drawIcon(
    * single ones. One style, one weight: that is the whole job of this factor.
    */
   strokeScale = 1,
+  /** The optical-centring nudge, in viewBox units (opticalNudge). */
+  nudge: { dx: number; dy: number } = { dx: 0, dy: 0 },
 ): void {
   ctx.save();
-  ctx.translate(offset, offset);
+  ctx.translate(offset + nudge.dx * scale, offset + nudge.dy * scale);
   ctx.scale(scale, scale);
   ctx.strokeStyle = strokeStyle;
   // ctx is already scaled by `scale`, so a viewBox-unit width renders
@@ -206,7 +270,6 @@ function evictOldest(): void {
 // outer edge closer to the icon (a shorter, less chunky badge). The
 // horizontal breathing room is restored separately via the badge's own left
 // padding + the value's right padding, so left/right stay roomy.
-export const BADGE_INSET_CARD = 0.10;
 
 /** Render (and cache) the composited squircle badge for a category + glyph +
  *  live state — the single source of the app's badge icon squares (top bar,
@@ -255,6 +318,12 @@ export function badgeImageDataUrl(
    * complete description of the picture it returns.
    */
   boldGlyph = false,
+  /**
+   * The ring's weight as a fraction of the squircle — a CARD-style badge's
+   * (badgeLook.badgeRing ÷ its size), so a group's chip rings like the lone
+   * card beside it. Omitted: the classic style's own fractions.
+   */
+  ringOfSize?: number,
 ): string {
   const theme = typeof document !== "undefined" ? document.documentElement.getAttribute("data-theme") ?? "" : "";
   // ringState is part of the key: two badges alike in every other respect but
@@ -268,7 +337,7 @@ export function badgeImageDataUrl(
   // Weight is part of the key for the same reason size is: the two weights are
   // two different pictures, and a cache that conflated them would serve
   // whichever style happened to bake first to both of them.
-  const cacheKey = `${category}:${iconKey}:${state}:${ring}:${colorOverride ?? ""}:${inset}:${suppressRing}:${theme}:${px}:${boldGlyph}`;
+  const cacheKey = `${category}:${iconKey}:${state}:${ring}:${colorOverride ?? ""}:${inset}:${suppressRing}:${theme}:${px}:${boldGlyph}:${ringOfSize ?? ""}`;
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
@@ -300,14 +369,16 @@ export function badgeImageDataUrl(
       // would bind on every badge below 57px and thicken every ring in the app
       // by up to 68%. At 1 the rendered result is identical to what shipped
       // before: 48 × 0.035 = 1.68px either way.
-      const ringPx = surface.ringHairline
-        ? Math.max(1, size * HAIRLINE_FRACTION)
-        : Math.max(1, size * (surface.ringBold ? BOLD_RING_FRACTION : RING_FRACTION));
+      const ringPx = ringOfSize !== undefined
+        ? Math.max(1, size * ringOfSize)
+        : surface.ringHairline
+          ? Math.max(1, size * HAIRLINE_FRACTION)
+          : Math.max(1, size * (surface.ringBold ? BOLD_RING_FRACTION : RING_FRACTION));
       ctx.save();
       roundRectPath(ctx, m + ringPx / 2, m + ringPx / 2, size - ringPx, size - ringPx, Math.max(0, corner - ringPx / 2));
       ctx.lineWidth = ringPx;
       ctx.strokeStyle = surface.ring;
-      if (surface.ringDashed) ctx.setLineDash([ringPx * 2.2, ringPx * 1.8]);
+      if (surface.ringDashed) ctx.setLineDash([ringPx * RING_DASH[0], ringPx * RING_DASH[1]]);
       ctx.stroke();
       ctx.restore();
     }
@@ -319,7 +390,7 @@ export function badgeImageDataUrl(
     // them and makes the inset ones agree with them — see drawIcon's
     // strokeScale.
     drawIcon(ctx, ICON_NODES[iconKey] ?? ICON_NODES.gauge, iconScale, offset, surface.glyph,
-      boldGlyph, size > 0 ? px / size : 1);
+      boldGlyph, size > 0 ? px / size : 1, opticalNudge(iconKey));
 
     url = canvas.toDataURL("image/png");
   }
@@ -327,3 +398,4 @@ export function badgeImageDataUrl(
   evictOldest();
   return url;
 }
+

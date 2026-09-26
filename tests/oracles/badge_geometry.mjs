@@ -44,6 +44,31 @@ ck("every cell lands in some card",
 const wrapped = arrange(9, 28, 0.8, 2, MAX_TOTAL_CHIPS, 120, MAX_GRID_CHIPS);
 ck("a width budget is respected rather than overrun", wrapped.width <= 120);
 
+// ⚠️ BABYLON FLOORS EACH CONTROL'S MEASURE ON ITS OWN. A 20.5 px unit (the
+// fine metrics) floored a group card's top one way and its chips' the other:
+// 3 px of card above every chip, 1 px below (2.496.138). Every edge must be a
+// whole pixel, and a chip's margin the same above as below, at any unit.
+{
+  let whole = true, even = true;
+  for (const u of [20.5, 21, 27.5, 28, 33]) for (const f of [22 / 28, 0.8]) for (const n of [2, 3, 4, 6]) {
+    const a = arrange(n, u, f, 2.5, MAX_TOTAL_CHIPS, 0, 2);
+    const W = a.width, H = a.height;
+    for (const c of a.cards) {
+      const top = H / 2 + c.top - c.height / 2, left = W / 2 + c.left - c.width / 2;
+      if (![W, H, c.width, c.height, top, left, a.chip].every(Number.isInteger)) whole = false;
+      for (let k = c.first; k < c.first + c.cells; k++) {
+        const ct = H / 2 + a.cellTop(k) - a.chip / 2, cl = W / 2 + a.cellLeft(k) - a.chip / 2;
+        const row = Math.floor((k - c.first) / c.cols), col = (k - c.first) % c.cols;
+        const above = ct - (top + row * a.pitch), below = top + (row + 1) * a.pitch - ct - a.chip;
+        const beside = cl - (left + col * a.pitch);
+        if (!Number.isInteger(ct) || !Number.isInteger(cl) || above !== below || beside !== above) even = false;
+      }
+    }
+  }
+  ck("every card and chip edge is a whole pixel, at a half-pixel unit too", whole);
+  ck("a chip's margin in its cell is the same above, below and beside", even);
+}
+
 ck("a non-finite count is zero cells, not NaN", gridCells(Number.NaN) === 0);
 ck("a negative count is zero cells", gridCells(-3) === 0);
 
@@ -58,8 +83,16 @@ console.log("\n  a card's width:");
 const bare = cardStruts(28, 22, 0);
 const val = cardStruts(28, 22, 12);
 console.log(`      bare ${bare.width.toFixed(2)}  ·  with a value ${val.width.toFixed(2)}`);
-ck("a bare card is its three visible struts",
-   Math.abs(bare.padl + bare.glyph + bare.padr - bare.width) < 1e-9);
+ck("a bare card is its three visible struts: its own left margin, the glyph, the right",
+   Math.abs(bare.barepad + bare.glyph + bare.padr - bare.width) < 1e-9);
+// ⚠️ A BARE ICON SAT LEFT OF CENTRE (owner's screenshots, 2.496.130): its
+// left margin was `padl`, short by the ink, so the visible margins were 3.0
+// and 5.2 px and the card 25.8 by 28 — and Babylon floors a width to whole
+// pixels (measured on a real GUI: padl's 0.8 drew as 0, the glyph flush left).
+ck("a bare icon is CENTRED: its left margin is the same number as its right (so both floor alike)", bare.barepad === bare.padr);
+ck("  ...and its card is SQUARE", Math.abs(bare.width - 28) < 1e-9, bare.width);
+ck("  ...the visible margin round the chip is the same on all four sides",
+   Math.abs((bare.barepad + 0.1 * 22) - (bare.padr + 0.1 * 22)) < 1e-9 && Math.abs((bare.padr + 0.1 * 22) - ((28 - 22) / 2 + 0.1 * 22)) < 1e-9);
 ck("a valued card is all six",
    Math.abs(val.padl + val.glyph + val.valgap + val.value + val.valtail + val.padr
             - val.width) < 1e-9);
@@ -67,10 +100,85 @@ ck("a value makes the card wider", val.width > bare.width);
 ck("the value's own struts are reported even when nothing is shown",
    bare.valgap > 0 && bare.valtail > 0);
 ck("  ...but do not count toward a bare card's width",
-   bare.width < bare.padl + bare.glyph + bare.padr + bare.valgap);
-ck("the left margin is short by the ink the icon insets",
-   bare.padl < bare.padr);
+   bare.width < bare.barepad + bare.glyph + bare.padr + bare.valgap);
+// ⚠️ WHOLE PIXELS (2.496.137): Babylon floors a control's width, so a
+// fractional strut drew short — a value card's padl of 0.8 drew as 0, its chip
+// flush on the card's left edge.
+for (const [nm, s] of [["coarse", cardStruts(28, 22, 12)], ["fine", cardStruts(20.5, 16, 12)]]) {
+  ck(`${nm}: every strut is a whole pixel — drawn exactly as wide as the model says`,
+     [s.barepad, s.padl, s.valgap, s.valtail, s.padr].every(Number.isInteger), s);
+}
+ck("a value card's chip is off its left edge (padl was 0.8 → drawn 0)", val.padl >= 1, val.padl);
+ck("  ...its visible left margin within half a pixel of the icon's own padding",
+   Math.abs((val.padl + 0.1 * 22) - (28 - 22) / 2) <= 0.5, val.padl + 0.1 * 22);
+ck("beside a VALUE the left margin is short by the ink the icon insets",
+   val.padl < val.padr);
+{
+  const { readFileSync } = await import("node:fs");
+  const ev = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
+  ck("the renderer shows ONE left margin at a time: padl beside a value, barePad without",
+     /if \(lbl\.padL\) lbl\.padL\.isVisible = on;/.test(ev) && /if \(lbl\.barePad\) lbl\.barePad\.isVisible = !on;/.test(ev) && /padL\.isVisible = false;/.test(ev));
+  ck("ONE mechanism for every card border, dashed included: the card's own DashableRectangle (owner: 'why is there a difference in the icon shape?')",
+     /badge: DashableRectangle;/.test(ev) && /new DashableRectangle\(`lbl_badge_/.test(ev)
+       && /const ring = badgeRing\(surface, this\.metrics\.cardHeightPx, this\.metrics\);\s*lbl\.badge\.thickness = ring\.px;\s*lbl\.badge\.dash = ring\.dash;/.test(ev)
+       && /BADGE_INSET_CARD, ringState, true, this\.glyphBakePx\(true\)/.test(ev) && !/cardRing|badgeRingDataUrl/.test(ev));
+  // The dash is set around Rectangle's own drawing and nowhere else: drive the
+  // real _localDraw against a context that records what it is asked to do.
+  globalThis.OffscreenCanvas ??= class { constructor(w, h) { this.width = w; this.height = h; } getContext() { return new Proxy({}, { get: () => () => ({}) }); } };
+  const { DashableRectangle } = await import("@/babylon/dashableRectangle");
+  const log = [];
+  let dash = [];
+  const ctx = new Proxy({}, {
+    get: (_t, k) => k === "setLineDash" ? (d) => { dash = d; log.push(`dash ${d.join(",")}`); }
+      : k === "save" ? () => log.push("save") : k === "restore" ? () => { log.push("restore"); }
+      : k === "stroke" || k === "strokeRect" ? () => log.push(`stroke with dash [${dash.join(",")}]`)
+      : () => {},
+    set: () => true,
+  });
+  const r = new DashableRectangle("t");
+  r.thickness = 3; r.color = "#b8862e"; r.cornerRadius = 7;
+  Object.assign(r._currentMeasure, { left: 0, top: 0, width: 28, height: 28 });
+  r.dash = [6.6, 5.4];
+  r._localDraw(ctx);
+  ck("  ...a dashed border STROKES with the dash", log.some((l) => l === "stroke with dash [6.6,5.4]"), log);
+  ck("  ...and the dash is set inside a save/restore of its own, so nothing drawn after it inherits it",
+     log[0] === "save" && log[1] === "dash 6.6,5.4" && log[log.length - 1] === "restore", log);
+  const solid = []; dash = [];
+  const r2 = new DashableRectangle("u"); r2.thickness = 3; Object.assign(r2._currentMeasure, { left: 0, top: 0, width: 28, height: 28 });
+  const ctx2 = new Proxy({}, { get: (_t, k) => k === "setLineDash" ? () => solid.push("dash") : () => {}, set: () => true });
+  r2._localDraw(ctx2);
+  ck("  ...a solid border sets no dash at all", solid.length === 0);
+}
 ck("a taller card pads more", cardStruts(40, 22, 0).padr > bare.padr);
+
+/* ── optical centring (2.496.135) ─────────────────────────────────────── */
+// The owner's screenshot: the lock's ink BOX was centred in its ring to half a
+// pixel, its ink MASS 1.8 px low (thin shackle, heavy body) — and it read as
+// sitting low, where the fan beside it (mass ≈ box) did not.
+console.log("\n  optical centring:");
+{
+  globalThis.OffscreenCanvas ??= class { constructor(w, h) { this.width = w; this.height = h; } getContext() { return new Proxy({}, { get: () => () => ({}) }); } };
+  const { inkNudge, OPTICAL_CORRECTION, RING_DASH } = await import("@/babylon/badgeIcons");
+  const N = 40, c = (N - 1) / 2;
+  const raster = (fill) => { const a = new Uint8ClampedArray(N * N); for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (fill(x, y)) a[y * N + x] = 255; return a; };
+  // A "lock": a 2-px shackle across rows 10–11, a solid body rows 20–29. Box 10..29, centred.
+  const lock = raster((x, y) => (x >= 12 && x <= 27) && ((y >= 10 && y <= 11) || (y >= 20 && y <= 29)));
+  const n = inkNudge(lock, N);
+  let sum = 0, sy = 0; for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { const v = lock[y * N + x]; sum += v; sy += v * y; }
+  const mass = sy / sum, box = (10 + 29) / 2;
+  ck("a bottom-heavy glyph with a centred box moves UP", n.dy < 0, n);
+  ck("  ...by half the gap between its box and its mass (not all of it)", Math.abs(n.dy - (c - (box + OPTICAL_CORRECTION * (mass - box)))) < 1e-9 && OPTICAL_CORRECTION === 0.5, n.dy);
+  ck("  ...and not sideways", Math.abs(n.dx) < 1e-9);
+  const sym = raster((x, y) => x >= 12 && x <= 27 && y >= 12 && y <= 27);
+  ck("a symmetric glyph does not move", Math.abs(inkNudge(sym, N).dx) < 1e-9 && Math.abs(inkNudge(sym, N).dy) < 1e-9);
+  const off = raster((x, y) => x >= 12 && x <= 27 && y >= 16 && y <= 31);
+  ck("a symmetric glyph drawn off-centre in its frame is brought back to the centre", Math.abs(inkNudge(off, N).dy - (c - 23.5)) < 1e-9, inkNudge(off, N));
+  ck("nothing to draw: no nudge", inkNudge(new Uint8ClampedArray(N * N), N).dy === 0);
+  ck("the dash is short — about twice the dashes round a badge (owner, 2026-09-26)", RING_DASH[0] === 1.1 && RING_DASH[1] === 0.9);
+  const { readFileSync } = await import("node:fs");
+  const icons = readFileSync(new URL("../../src/babylon/badgeIcons.ts", import.meta.url), "utf8");
+  ck("every baked badge is optically centred (the one bake every badge style uses)", /boldGlyph, size > 0 \? px \/ size : 1, opticalNudge\(iconKey\)\);/.test(icons));
+}
 
 /* ── the chip width model ──────────────────────────────────────────────── */
 console.log("\n  the chip width model:");
