@@ -1,3 +1,12 @@
+## 2.496.152
+
+### Fixed — signing out
+- **A kiosk whose session has ended goes back to the profile screen.**
+  After "Log out everywhere", or once a session expired, the villa stayed on
+  screen saying "connecting" and "couldn't reach" indefinitely. It now shows
+  the profile screen, so someone can sign in again. A kiosk that simply
+  cannot reach the add-on (no network) stays signed in.
+
 ## 2.496.151
 
 ### Fixed — what guests and staff can do
