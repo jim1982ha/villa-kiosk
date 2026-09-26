@@ -41,6 +41,9 @@ ck("the socket reports the proxy's 4401 close", /if \(ev\.code === 4401\) report
 const pc = src("auth/ProfileContext.tsx");
 ck("ProfileContext answers it: confirms with the server, decides by sessionLostDecision, signs out locally",
    /onSessionLost\(/.test(pc) && /serverSession\(\)/.test(pc) && /sessionLostDecision\(role, server\) !== "sign-out"/.test(pc) && /setRole\(null\)/.test(pc));
+ck("  ...and its telemetry waits for the NEXT sign-in (the proxy refuses telemetry from the dead session it reports)",
+   /localStorage\.setItem\(PENDING_LOST_KEY/.test(pc) && /const pending = localStorage\.getItem\(PENDING_LOST_KEY\);/.test(pc)
+     && !/onSessionLost\([\s\S]{0,600}reportTelemetry\(/.test(pc));
 ck("serverSession answers in three: a role, none, unknown (a failed request is never 'none')",
    /if \(!resp\.ok\) return "unknown";/.test(src("auth/PinVerifier.ts")) && /\} catch \{\s*return "unknown";/.test(src("auth/PinVerifier.ts")));
 const SRC = new URL("../../src/", import.meta.url).pathname;
