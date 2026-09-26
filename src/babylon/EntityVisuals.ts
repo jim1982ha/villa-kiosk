@@ -3071,9 +3071,9 @@ export class EntityVisuals {
       if (row) {
         // The LEFT margin is short by the baked ink the chip already contributes,
         // so the two VISIBLE margins match: visL = padL + ink, visR = padR.
-        // Unrounded, like the two on the value's side (2.454.0): these are
-        // PRE-scale CSS px and rounding 0.65 to 1 is a 35% error on the very
-        // quantity the `visL/gap/visR` readout exists to make checkable.
+        // Whole pixels (cardStruts, 2.496.137): Babylon floors every width, so
+        // the fractional struts this once kept "unrounded" drew a pixel short —
+        // a 0.8 left margin drew as 0 (measured on a real GUI).
         // Two left margins, one shown at a time (setValueVisible): a bare
         // icon's is the SAME number as its right margin, so the chip is
         // centred whatever Babylon's whole-pixel flooring does; beside a value
@@ -3159,10 +3159,8 @@ export class EntityVisuals {
         // multiple is 1.5 (it preserves the card's width) and for the six
         // attempts that were argued from the DOM twin instead of measured.
         //
-        // No Math.round, deliberately: these are PRE-scale CSS px multiplied by
-        // effectiveScale (3.2 on this capture), so rounding 3.375 to 3 is a
-        // 1.2 render-px error on a 2 px quantity — and it lands on exactly the
-        // equality the pin checks. The struts take fractional widths fine.
+        // Whole pixels, from cardStruts: Babylon floors a control's width, so a
+        // fractional strut was drawn short and never as the model said.
         valueSpacer.width = `${st!.valgap}px`;
         valueSpacer.isVisible = false;
         row!.addControl(valueSpacer);
@@ -6365,9 +6363,11 @@ export class EntityVisuals {
   private clampToLabelWidth(text: string): string {
     const m = this.metrics;
     const card = this.isCardStyle();
-    const fixed = card
-      ? m.cardPadLeftPx + m.cardHeightPx + m.cardValuePadPx
-      : m.pillValuePadPx;
+    // A card's fixed part is cardStruts' — the one width model; the older
+    // `cardPadLeftPx + cardHeightPx + cardValuePadPx` it retired survived here
+    // alone (round 8).
+    const st = card ? cardStruts(m.cardHeightPx, this.glyphPxFor(true), 1) : null;
+    const fixed = st ? st.width - st.value : m.pillValuePadPx;
     const charPx = card ? m.cardValueCharPx : m.pillValueCharPx;
     if (!(charPx > 0)) return text;
     const max = Math.max(1, Math.floor((m.labelMaxWidthPx - fixed) / charPx));

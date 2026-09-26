@@ -333,11 +333,17 @@ export function cardStruts(
   // flush on the card's left edge. So a bare icon's left margin is not "padl
   // plus the ink back" (2.2 floors to 2: still a pixel off) but the SAME
   // number as its right margin — which floors the same way on both sides.
-  const padl = iconPadX - inkInset;
-  const barepad = iconPadX;
-  const valgap = Math.max(0, VALUE_MARGIN_OF_ICON_PAD * iconPadX - inkInset);
-  const valtail = (VALUE_MARGIN_OF_ICON_PAD - 1) * iconPadX;
-  const padr = iconPadX;
+  // ⚠️ WHOLE PIXELS (round 8, 2.496.137). Babylon FLOORS every control's
+  // width (control.js `|0`), so a fractional strut lost up to a pixel: a
+  // value card's `padl` of 0.8 drew as 0 — its chip flush on the card's left
+  // edge — and the model summed widths the screen never drew. Rounded here,
+  // each strut is drawn exactly as wide as this says.
+  const px = Math.round;
+  const padl = px(iconPadX - inkInset);
+  const barepad = px(iconPadX);
+  const valgap = Math.max(0, px(VALUE_MARGIN_OF_ICON_PAD * iconPadX - inkInset));
+  const valtail = px((VALUE_MARGIN_OF_ICON_PAD - 1) * iconPadX);
+  const padr = px(iconPadX);
   const width = valueWidthPx > 0
     ? padl + glyphPx + valgap + valueWidthPx + valtail + padr
     : barepad + glyphPx + padr;

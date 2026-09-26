@@ -75,7 +75,17 @@ ck("a value makes the card wider", val.width > bare.width);
 ck("the value's own struts are reported even when nothing is shown",
    bare.valgap > 0 && bare.valtail > 0);
 ck("  ...but do not count toward a bare card's width",
-   bare.width < bare.padl + bare.glyph + bare.padr + bare.valgap);
+   bare.width < bare.barepad + bare.glyph + bare.padr + bare.valgap);
+// ⚠️ WHOLE PIXELS (2.496.137): Babylon floors a control's width, so a
+// fractional strut drew short — a value card's padl of 0.8 drew as 0, its chip
+// flush on the card's left edge.
+for (const [nm, s] of [["coarse", cardStruts(28, 22, 12)], ["fine", cardStruts(20.5, 16, 12)]]) {
+  ck(`${nm}: every strut is a whole pixel — drawn exactly as wide as the model says`,
+     [s.barepad, s.padl, s.valgap, s.valtail, s.padr].every(Number.isInteger), s);
+}
+ck("a value card's chip is off its left edge (padl was 0.8 → drawn 0)", val.padl >= 1, val.padl);
+ck("  ...its visible left margin within half a pixel of the icon's own padding",
+   Math.abs((val.padl + 0.1 * 22) - (28 - 22) / 2) <= 0.5, val.padl + 0.1 * 22);
 ck("beside a VALUE the left margin is short by the ink the icon insets",
    val.padl < val.padr);
 {
