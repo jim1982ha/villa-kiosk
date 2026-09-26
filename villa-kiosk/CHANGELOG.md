@@ -1,3 +1,11 @@
+## 2.496.101
+
+### Changed
+- **Spinning ceiling fans are handled by one tested part.** Nothing changes on
+  screen: only ceiling fans spin (a bathroom extractor does not), they turn in
+  place around their mount, their badge does not spin with them, and a fan on
+  a hidden floor does not keep the screen redrawing. Closing the villa now
+  tidies fans up the same careful way reloading it always did.
 ## 2.496.100
 
 ### Changed

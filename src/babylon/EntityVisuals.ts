@@ -51,7 +51,7 @@ import { Color3 } from "@babylonjs/core/Maths/math.color";
 import { sliceChanged } from "./entityMapDiff";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { PBRMaterial } from "@babylonjs/core/Materials/PBR/pbrMaterial";
-import { Vector3, Matrix, Quaternion } from "@babylonjs/core/Maths/math.vector";
+import { Vector3, Matrix } from "@babylonjs/core/Maths/math.vector";
 import type { Viewport } from "@babylonjs/core/Maths/math.viewport";
 // Type-only: annotates the viewport cullLabels already computes and passes to
 // Vector3.ProjectToRef. A `import type` adds no runtime import, so it cannot
@@ -120,6 +120,7 @@ import { rungAt, referenceDepthAt, iconZoomAt, viewportPx } from "./badgeScale";
 import { solveRoomZoom } from "./roomZoomSolver";
 import { RoomFocus } from "./roomFocus";
 import { PlacementCheck, type ScreenBox } from "./placementCheck";
+import { FanRigs } from "./fanRigs";
 import { PlacementPass, GROUP_OVERLAP_ALLOW_WIDTHS, type ShownLabel, type PendingEntityGroup } from "./placementPass";
 import { onGlass, glyphDrawPx, glyphBakePx } from "./badgeLayout";
 import type { FrameRequests } from "./frameScheduler";
@@ -583,21 +584,6 @@ const CLUSTER_BG_COLOR = "#475569"; // fallback only — see --chip-surface
 // a 60 Hz tablet and a 120 Hz phone.
 const PULSE_RAD_PER_SEC = 3.6;
 
-// Ceiling-fan spin: angular speed (rad/s) at full fan percentage. A whole-mesh
-// spin reads as "blades turning" at kiosk distance; ~1 rev/s is lively without
-// strobing. Scaled down by the fan's percentage (min 15%) when reported.
-const FAN_MAX_RAD_PER_SEC = 6.2;
-// A ceiling fan is exported as ONE fused mesh (mount + motor + blades all one
-// piece, one material — no separate "blade" sub-object to isolate), so the
-// whole thing has to spin together; see updateFanSpin/computeFanSpin. The top
-// fraction of its height (the ceiling mount/canopy) is reliably the one part
-// that's round and centred exactly on the true axle, so its own vertices —
-// not the whole mesh's bounding box — decide WHERE that axle sits. Get this
-// right and the mount+pole (rotationally symmetric) reads as motionless even
-// though it's technically rotating with the blades; get it wrong (the old
-// plain bbox-midpoint) and the pole visibly orbits in a small circle instead
-// of spinning in place.
-const FAN_AXIS_TOP_SLICE = 0.25;
 
 /** Bucket name for badges whose entity has no room configured — they still
  *  cluster together rather than each becoming its own singleton chip. */
@@ -793,19 +779,6 @@ export class EntityVisuals {
   private markLayoutDirty(): void {
     this.layoutDirty = true;
   }
-  /** entity_id → angular speed (rad/s) for a CEILING fan currently spinning. */
-  private spinningFans = new Map<string, number>();
-  /** entity_id → total accumulated spin angle (radians, wrapped to 2π) — the
-   *  rotation is recomputed FRESH from this absolute angle every frame (never
-   *  accumulated incrementally), so there is no possible drift. */
-  private fanAngles = new Map<string, number>();
-  /** entity_id → per-mesh spin rig, set up once (lazily, on first "on") via
-   *  setupFanRig: `pivot` is an invisible TransformNode sitting at the mesh's
-   *  own true axle (see setupFanRig) that the mesh got REPARENTED under —
-   *  animateFans only ever rotates `pivot`, never the mesh's own transform,
-   *  so the mesh's local bounding info / pivot matrix (which the badge's
-   *  linkWithMesh tracking reads) stay exactly what they always were. */
-  private fanRigs = new Map<string, { mesh: AbstractMesh; pivot: TransformNode; axisLocal: Vector3 }[]>();
   private pulseT = 0;
   /** Scratch for animatePulse — see its comment. */
   private pulseColor = new Color3(0, 0, 0);
@@ -864,6 +837,8 @@ export class EntityVisuals {
   /** Entities the owner removed as "no longer in HA" — see badgeEligible. */
   /** The `?debug=place` self-check over what a pass painted — placementCheck.ts. */
   private readonly placementCheck = new PlacementCheck();
+  /** Ceiling fans that spin — the rig, the turn, the teardown: fanRigs.ts. */
+  private readonly fans: FanRigs;
   /** Room-cluster chips, keyed by roomKey(). Built lazily the first time a
    *  room clusters; disposed with everything else in rebuildLabels. */
   private clusters = new Map<string, ClusterControls>();
@@ -1010,6 +985,7 @@ export class EntityVisuals {
     this.roomHighlight = new RoomHighlight(scene, frames, this.probe);
     // Every baked-mode floor pool — see lightPoolSet.ts. The probe is its floor
     // port; the readings callback lets it repaint a pool it creates late.
+    this.fans = new FanRigs(scene, (id) => this.labelAnchors.get(id), () => this.requestRender());
     this.bulbs = new BulbSet(scene, this.probe, () => this.bulbReadings(), tapDebug, () => this.shadowCasters);
     this.beams = new CameraBeams(scene);
     // ⚠️ KEPT SO `dispose()` CAN DETACH THEM. Both observers below used to be
@@ -1024,7 +1000,7 @@ export class EntityVisuals {
       // engine.getDeltaTime() cannot answer this.
       const dtMs = this.animClock.step(performance.now());
       this.animatePulse(dtMs);
-      this.animateFans(dtMs);
+      if (this.fans.animate(dtMs, this.activeFloor)) this.requestAnimationRender();
       this.cullLabels();
       this.bulbs.syncGlow();
     };
@@ -1397,24 +1373,8 @@ export class EntityVisuals {
     this.disposeLabelAnchors();
     this.beams.dispose();
     this.pulsing.clear();
-    this.spinningFans.clear();
-    // TransformNode.dispose() with no args is RECURSIVE — it disposes the
-    // whole descendant hierarchy, not just the node itself. Each fan mesh is
-    // a child of its pivot (see setupFanRig's `m.setParent(pivot)`), so
-    // disposing the pivot outright silently destroyed the fan mesh forever
-    // on every structural re-index after the fan had ever been spun (any
-    // Advanced Settings edit that touches entityMap triggers one). The mesh
-    // must be moved back out onto the pivot's original parent FIRST — same
-    // world-preserving setParent() used to rig it — so only the now-childless
-    // pivot gets disposed.
-    for (const rig of this.fanRigs.values()) {
-      for (const r of rig) {
-        r.mesh.setParent(r.pivot.parent);
-        r.pivot.dispose();
-      }
-    }
-    this.fanRigs.clear();
-    this.fanAngles.clear();
+    // Fan meshes back out of their pivots, pivots disposed — fanRigs.ts.
+    this.fans.clear();
     this.byEntity.clear();
     this.mapping.clear();
     this.meshVariants.clear();
@@ -1916,12 +1876,8 @@ export class EntityVisuals {
     this.disposeLabelAnchors();
     this.beams.dispose();
     this.roomHighlight.dispose();
-    for (const rig of this.fanRigs.values()) {
-      for (const r of rig) r.pivot.dispose();
-    }
-    this.fanRigs.clear();
+    this.fans.clear();
     this.pulsing.clear();
-    this.spinningFans.clear();
     this.labels.clear();
     this.labelsNewestFirst.length = 0;
     this.lastState.clear();
@@ -2385,7 +2341,7 @@ export class EntityVisuals {
     }
     for (const mesh of meshes) this.applyToMesh(mesh, map, entity);
     if (map.type === "light") this.bulbs.show(meshes, this.lightReading(entity, map));
-    if (map.type === "fan") this.updateFanSpin(entity, meshes);
+    if (map.type === "fan") this.fans.show(entity, meshes);
     // Pose selection — ONE call, no type branch at all. A cover, a lock, a
     // switch, a sensor and any future type all resolve their pose the same
     // way (see desiredVariantWord). A pure no-op for the overwhelming common
@@ -6537,197 +6493,7 @@ export class EntityVisuals {
     this.requestAnimationRender();
   }
 
-  /** Start/stop a fan's spin from its on/off (+ percentage) state. Only true
-   *  CEILING fans spin — VMC/exhaust `fan.*` entities (bathroom vents) must not. */
-  private updateFanSpin(entity: HassEntity, meshes: AbstractMesh[]): void {
-    const id = entity.entity_id;
-    // ⚠️ Unanchored on purpose, and safe only because of the `map.type === "fan"`
-    // gate at the call site — without it this would match `light.x_ceiling_fan_light`
-    // and spin a lamp. /dry-audit re-flags this shape (the documented trap is
-    // `door` matching inside `outdoor`); anchoring to (^|[._])…([._]|$) would
-    // not change the verdict for any realistic id, since the ambiguous cases
-    // (`fan.bathroom_ceiling_fan`, a ceiling-mounted extractor) match either way.
-    if (!/ceiling[_-]?fan/i.test(id)) return; // e.g. fan.ceiling_fan_* only
-    if (entity.state === "on") {
-      const pct = entity.attributes.percentage as number | undefined;
-      const frac = typeof pct === "number" ? Math.max(0.15, Math.min(1, pct / 100)) : 0.6;
-      if (!this.fanRigs.has(id)) {
-        const rig = this.setupFanRig(meshes);
-        this.fanRigs.set(id, rig);
-        this.detachFanLabelAnchor(id, rig);
-      }
-      this.spinningFans.set(id, FAN_MAX_RAD_PER_SEC * frac);
-      this.requestRender(); // wake the loop so animateFans starts turning it
-    } else {
-      this.spinningFans.delete(id);
-    }
-  }
 
-  /**
-   * Rig each of the fan's meshes to spin in place around its TRUE axle.
-   *
-   * Two earlier approaches both broke on this exact mesh shape:
-   *  - `rotateAround` re-derives its pivot offset from the mesh's CURRENT
-   *    `.position` every call (`point - this.position`), so it only spins in
-   *    place when the pivot is *exactly* that position. These fan meshes
-   *    import with `.position` at the parent-local origin (0,0,0) — the real
-   *    placement is baked entirely into vertex data — so any vertex-derived
-   *    pivot orbited the whole mesh (and, since the label anchors to that
-   *    same mesh, the label with it).
-   *  - `mesh.setPivotPoint()` fixes the orbit mathematically (verified by
-   *    hand), but the badge's position tracking (Babylon GUI's
-   *    `linkWithMesh`) projects the mesh's *local* bounding-sphere centre
-   *    through `getWorldMatrix()` each frame — an interaction with the pivot
-   *    matrix I could not fully rule out without a browser, and empirically
-   *    it made the fan (mesh AND label) disappear on "on" and never return.
-   *
-   * This version touches neither: an invisible `TransformNode` ("pivot") is
-   * planted at the mesh's true axle and the mesh is REPARENTED under it
-   * (`setParent` — a mechanism already used everywhere else in this app —
-   * adjusts the mesh's local position/rotation to compensate, so nothing
-   * visually moves at the moment of reparenting). Only `pivot.rotationQuaternion`
-   * is ever touched afterwards; the mesh's OWN transform, pivot matrix and
-   * bounding info stay exactly what they always were, so the badge (and
-   * everything else that reads the mesh directly) can't be affected.
-   *
-   * The axle itself: average the vertices in the TOP slice of the fixture —
-   * along whichever LOCAL axis currently reads as world-vertical, see
-   * FAN_AXIS_TOP_SLICE — since the ceiling mount/canopy is reliably round and
-   * centred exactly on the true axle, unlike the whole fixture's bounding box
-   * (which assumes the blade assembly is perfectly symmetric; it usually
-   * isn't quite).
-   */
-  private setupFanRig(
-    meshes: AbstractMesh[],
-  ): { mesh: AbstractMesh; pivot: TransformNode; axisLocal: Vector3 }[] {
-    const rig: { mesh: AbstractMesh; pivot: TransformNode; axisLocal: Vector3 }[] = [];
-    for (const m of meshes) {
-      const positions = m.getVerticesData(VertexBuffer.PositionKind);
-      if (!positions || positions.length < 3) continue;
-      m.computeWorldMatrix(true);
 
-      // The LOCAL (pre-rotation) direction that currently reads as
-      // world-vertical — NOT necessarily local Y: these fixtures import with
-      // a baked axis-conversion rotation (SweetHome's Z-up -> glTF's Y-up),
-      // so the mesh's own un-rotated vertex data has "up" on a different
-      // axis. Deriving it (rather than assuming Y or Z) keeps this correct
-      // regardless of how any given model happens to be authored/exported.
-      const invWorld = Matrix.Invert(m.getWorldMatrix());
-      const axisInMeshSpace = Vector3.TransformNormal(Vector3.Up(), invWorld);
-      axisInMeshSpace.normalize();
 
-      // Project every vertex onto that axis to find the fixture's "height"
-      // range, then average the positions in its top slice — in the mesh's
-      // OWN local/object space, the same space getVerticesData returns, so
-      // no world-matrix round-trip is needed for this part.
-      const v = Vector3.Zero();
-      let hMin = Infinity, hMax = -Infinity;
-      for (let i = 0; i < positions.length; i += 3) {
-        v.set(positions[i], positions[i + 1], positions[i + 2]);
-        const h = Vector3.Dot(v, axisInMeshSpace);
-        if (h < hMin) hMin = h;
-        if (h > hMax) hMax = h;
-      }
-      const topThreshold = hMax - (hMax - hMin) * FAN_AXIS_TOP_SLICE;
-      const sum = Vector3.Zero();
-      let sampled = 0;
-      for (let i = 0; i < positions.length; i += 3) {
-        v.set(positions[i], positions[i + 1], positions[i + 2]);
-        if (Vector3.Dot(v, axisInMeshSpace) >= topThreshold) { sum.addInPlace(v); sampled++; }
-      }
-      // Fall back to the plain local bbox midpoint if the top slice somehow
-      // caught too little geometry to average reliably (e.g. a sparse mount).
-      const bb = m.getBoundingInfo().boundingBox;
-      const axleLocal = sampled >= 20 ? sum.scale(1 / sampled) : bb.minimum.add(bb.maximum).scale(0.5);
-      if (!Number.isFinite(axleLocal.x) || !Number.isFinite(axleLocal.y) || !Number.isFinite(axleLocal.z)) continue;
-
-      const axleWorld = Vector3.TransformCoordinates(axleLocal, m.getWorldMatrix());
-      const parent = m.parent;
-      const parentWorld = parent?.getWorldMatrix?.();
-      const pivot = new TransformNode(`fanPivot_${m.uniqueId}`, this.scene);
-      pivot.parent = parent;
-      pivot.position = parentWorld
-        ? Vector3.TransformCoordinates(axleWorld, Matrix.Invert(parentWorld))
-        : axleWorld;
-
-      // Reparent the mesh under the pivot — setParent adjusts the mesh's own
-      // local position/rotation so its WORLD transform (and therefore its
-      // on-screen appearance) is unchanged by this move.
-      m.setParent(pivot);
-
-      // The axis the PIVOT itself rotates around, in ITS parent's local space
-      // (the shared original parent — pivot has no rotation of its own
-      // besides the spin animateFans applies, so this is just world-up
-      // projected through that parent's own orientation).
-      const axisLocal = parentWorld
-        ? Vector3.TransformNormal(Vector3.Up(), Matrix.Invert(parentWorld)).normalize()
-        : Vector3.Up();
-
-      rig.push({ mesh: m, pivot, axisLocal });
-    }
-    return rig;
-  }
-
-  /**
-   * The label anchor is parented to the entity's first mesh (see
-   * buildLabelAnchors — it inherits enabled/floor state that way), which is
-   * exactly why the badge was STILL orbiting after 2.23.1's mesh-pivot fix:
-   * `setupFanRig` reparents that same mesh under the spin `pivot`, so the
-   * anchor — a grandchild of `pivot` via the mesh — got dragged into the
-   * rotating subtree too, even though the mesh's own transform relative to
-   * its new parent never changes. Move it back OUT, onto the pivot's own
-   * (non-rotating) parent — `setParent` preserves its current world
-   * position, so the badge stays exactly where it already was, just no
-   * longer inside anything that spins.
-   *
-   * This intentionally breaks the anchor's OWN parent chain as a source of
-   * floor enabled-state/floorIndex (the pivot's parent is a shared container
-   * FloorManager never touches) — cullLabels() compensates by reading those
-   * straight off the entity's bound mesh instead of the anchor's parent, so
-   * the fan's badge still correctly disappears on the other floor.
-   */
-  private detachFanLabelAnchor(
-    entityId: string,
-    rig: { mesh: AbstractMesh; pivot: TransformNode; axisLocal: Vector3 }[],
-  ): void {
-    const anchor = this.labelAnchors.get(entityId);
-    const primary = rig[0];
-    if (!anchor || !primary || anchor.parent !== primary.mesh) return;
-    anchor.setParent(primary.pivot.parent);
-  }
-
-  private animateFans(dtMs: number): void {
-    if (this.spinningFans.size === 0) return;
-    const dt = dtMs / 1000;
-    let spun = false;
-    for (const [id, speed] of this.spinningFans) {
-      const rig = this.fanRigs.get(id);
-      if (!rig || !rig.length) continue;
-      // Only spin (and keep rendering) while the fan's storey is being viewed —
-      // floors above the active one are hidden, so their fans needn't drive
-      // continuous frames. (Cumulative floors: <= active are visible.)
-      const floorIdx = (rig[0].mesh.metadata as { floorIndex?: number } | null)?.floorIndex;
-      if (floorIdx !== undefined && floorIdx > this.activeFloor) continue;
-
-      // The TOTAL angle, wrapped — every frame recomputes rotation fresh from
-      // this absolute value (never accumulated), so there is nothing for
-      // floating-point error to drift.
-      const angle = ((this.fanAngles.get(id) ?? 0) + speed * dt) % (Math.PI * 2);
-      this.fanAngles.set(id, angle);
-      for (const { pivot, axisLocal } of rig) {
-        // Write THROUGH the existing quaternion rather than replacing it: a
-        // ceiling fan left on is the normal state in a villa, and this runs
-        // every frame forever for each of its blade rigs (animateFans re-arms
-        // the render loop below), so allocating one per rig per frame is a
-        // permanent garbage stream. Created once on first use.
-        if (!pivot.rotationQuaternion) {
-          pivot.rotationQuaternion = Quaternion.RotationAxis(axisLocal, angle);
-        } else {
-          Quaternion.RotationAxisToRef(axisLocal, angle, pivot.rotationQuaternion);
-        }
-      }
-      spun = true;
-    }
-    if (spun) this.requestAnimationRender();
-  }
 }
