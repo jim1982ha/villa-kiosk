@@ -1,3 +1,11 @@
+## 2.496.116
+
+### Fixed — light on the stairs
+- **A light over the staircase no longer spills a flat block of light over
+  the lower steps.** Its floor glow was drawn at the height of one step and
+  floated over every lower one, so it looked as if light was pouring through
+  the living room's wall onto the stairs. Lights over a staircase now light
+  the steps themselves, and draw no glowing patch.
 ## 2.496.115
 
 ### Improved — chart axes
