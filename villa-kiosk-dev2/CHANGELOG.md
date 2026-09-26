@@ -1,3 +1,8 @@
+## 2.496.125
+
+**Nothing you should see changed.** The Energy window's headline,
+observation cards and history figures are now worked out in one place with
+automatic checks, instead of inside the window's layout.
 ## 2.496.124
 
 **Nothing you should see changed.** The Energy window's Day, Week, Month
