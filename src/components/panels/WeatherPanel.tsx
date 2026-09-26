@@ -17,7 +17,9 @@
 
 import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import { ChevronLeft, CloudSun, LineChart } from "lucide-react";
-import { fmtChartValue, fmtChartTick, fmtChartTime } from "./chartUtils";
+import { fmtChartValue, fmtChartTick, fmtChartTime, fmtChartStamp } from "./chartUtils";
+import BarChart from "./BarChart";
+import { barNote, seriesBuckets } from "@/utils/barChart";
 import ChartTip from "./ChartTip";
 import { chartGeometry, niceTicks, type ChartGeometry, type SeriesGeometry } from "@/utils/chartGeometry";
 import YAxis, { type AxisTick } from "./ChartAxis";
@@ -617,54 +619,33 @@ function ChartTile({ title, legend, note, lines, win, status }: {
 function RainTile({ s, win, status, perDay, unit }: {
   s: HistorySeries | undefined; win: { from: number; to: number }; status: HistoryStatus; perDay: boolean; unit: string;
 }) {
-  const bars = s?.points ?? [];
-  // Bars from zero, in the one geometry — a missing bucket is an outage band,
-  // never a dry hour (utils/statisticsSeries).
-  const g = s && (bars.length > 0 || status === "ready") ? chartGeometry(win, [{ pts: bars, gaps: s.gaps, scale: "fromZero" }], PLOT) : null;
-  const { t, handlers } = useHoverTime(g);
-  const hover = g && t !== null ? g.hover(t) : null;
-  const bar = hover?.readings[0] ?? null;
-  const max = Math.max(...bars.map((b) => b.v), 0);
+  // One bar a bucket, from zero, in the app's one bar chart (utils/barChart):
+  // a bucket the recorder has no reading for is an outage band, never a dry
+  // hour (utils/statisticsSeries).
   const slot = perDay ? 86_400_000 : 3_600_000;
-  const bw = Math.max(1.5, (slot / Math.max(1, win.to - win.from)) * W * 0.72);
+  const buckets = s && (s.points.length > 0 || status === "ready")
+    ? seriesBuckets({ points: s.points, window: win }, slot, { key: "rain", label: "Rain", cls: "water" })
+    : [];
   const spanH = (win.to - win.from) / 3600_000;
   const span = spanH > 48 ? `${Math.round(spanH / 24)} days` : `${Math.round(spanH)} h`;
+  // "No rain" only when the gauge REPORTED zero; an empty record is not a dry
+  // day — it is no record (the bands say so).
+  const note = barNote(buckets, `No rain readings in the last ${span}`, `No rain in the last ${span}`);
+  const n = buckets.length;
   return (
     <div className="weather-tile chart">
       <div className="weather-chart-head">
         <div className="weather-eyebrow">Rain</div>
         <div className="weather-legend">per {perDay ? "day" : "hour"} · {unit}</div>
       </div>
-      {!g
+      {n === 0
         ? <ChartEmpty status={status} />
         : (
-          <div className="chart-with-axis has-unit">
-          <YAxis height={CHART_PX} unit={unit} ticks={axisOf(g.series[0])} />
-          <div className="spark-wrap weather-chart-wrap">
-          <svg className="weather-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="Rain history"
-            style={{ touchAction: "none" }} {...handlers}>
-            <Grid ticks={axisOf(g.series[0])} />
-            <Bands g={g} />
-            {bars.map((b) => {
-              const h = max > 0 ? Math.max(2, BOT - g.series[0].sy(b.v)) : 2;
-              return <rect key={b.t} x={g.sx(b.t).toFixed(1)} y={(BOT - h).toFixed(1)} width={bw.toFixed(1)} height={h.toFixed(1)} rx="1" className="chart-bar" />;
-            })}
-            {/* "No rain" only when the gauge REPORTED zero; an empty record is
-                not a dry day — it is no record (the band says so). */}
-            {bars.length === 0
-              ? <text x={W / 2} y={H / 2} className="chart-empty-note">{`No rain readings in the last ${span}`}</text>
-              : max === 0 && <text x={W / 2} y={H / 2} className="chart-empty-note">{`No rain in the last ${span}`}</text>}
-            {hover && bar && <line x1={bar.x + bw / 2} y1={TOP} x2={bar.x + bw / 2} y2={BOT} className="spark-crosshair" vectorEffect="non-scaling-stroke" />}
-          </svg>
-          {hover && bar && (
-            <ChartTip left={`${((bar.x + bw / 2) / W) * 100}%`} top={TOP} flip={bar.x > W / 2} t={bar.t} spanHours={g.spanHours}
-              stampPrefix={perDay ? "day of " : "hour from "}
-              rows={[{ key: "rain", marker: <i className="key water" />, text: `${fmtChartValue(bar.v)} ${unit}` }]} />
-          )}
-          </div>
-          </div>
+          <BarChart label="Rain history" buckets={buckets} height={CHART_PX} unit={unit} note={note}
+            fmt={(v) => `${fmtChartValue(v)} ${unit}`}
+            stamp={(t) => `${perDay ? "day of " : "hour from "}${fmtChartStamp(t, spanH)}`}
+            ticks={[{ i: 0, label: fmtChartTick(buckets[0].t, spanH) }, { i: Math.floor(n / 2), label: fmtChartTick(buckets[Math.floor(n / 2)].t, spanH) }, { i: n - 1, label: "now" }]} />
         )}
-      <Axis g={g} />
     </div>
   );
 }

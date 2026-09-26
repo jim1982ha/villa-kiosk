@@ -33,6 +33,10 @@ export const PERIOD_MS: Record<StatisticsPeriod, number> = {
   month: 31 * 86_400_000,
 };
 
+/** How long after a bucket ends HA's recorder may take to compile it: until
+ *  then, "no row" means "not yet", not "no reading". */
+export const COMPILE_GRACE_MS = 15 * 60_000;
+
 /** One statistic's rows, one field of them, over the window asked for. */
 export function statisticsSeries(
   rows: readonly StatisticPeriod[] | undefined,

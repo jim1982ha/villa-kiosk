@@ -15,6 +15,7 @@
 // tests/oracles/energy_model.mjs drives it with the villa's measured week.
 
 import { localMidnight, localMonthStart } from "@/utils/localDay";
+import { COMPILE_GRACE_MS } from "@/utils/statisticsSeries";
 
 /** One `energy/get_prefs` device-consumption entry. */
 export interface EnergyDevicePref {
@@ -199,8 +200,7 @@ export function risers(
 // bucket is `ready` (a source reported it), `pending` (it has not ended long
 // enough ago for HA to have compiled it — the current hour) or `missing`.
 
-/** How long after a bucket ends HA's recorder may take to compile it. */
-export const COMPILE_GRACE_MS = 15 * 60_000;
+export { COMPILE_GRACE_MS };
 
 /** The setup with HA's cost statistics (HAEnergyAPI.fetchEnergySetup). */
 export interface EnergyCostSetup extends EnergySetup {

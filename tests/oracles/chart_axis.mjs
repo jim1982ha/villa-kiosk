@@ -34,15 +34,17 @@ ck("0.2 → 0.2, 50 → 50, 2.5 → 2.5 — no trailing zeros", G.fmtAxis(0.2) =
 console.log("\n  the callers:");
 const read = (p) => readFileSync(new URL(p, import.meta.url), "utf8");
 const energy = read("../../src/components/panels/EnergyPanel.tsx");
-ck("the Energy bars scale to the axis' round top and draw it",
-   /const axis = niceTicks\(0, peak\);\s*const max = axis\.top;/.test(energy) && /<YAxis unit=\{unit\} height=\{height\}/.test(energy));
-const bars = energy.match(/<Bars\b[^]*?\/>/g) ?? [];
-ck("  ...every Energy bar chart names its unit", bars.length >= 4 && bars.every((b) => /\bunit=/.test(b)), bars.filter((b) => !/\bunit=/.test(b)));
+ck("the Energy bars are the app's BarChart, which draws the axis over the round top (bar_chart.mjs)",
+   !/function Bars\(/.test(energy) && (energy.match(/<BarChart /g) ?? []).length === 4);
+const bars = energy.match(/<BarChart\b[^]*?\/>/g) ?? [];
+ck("  ...every Energy bar chart names its unit", bars.length === 4 && bars.every((b) => /\bunit=/.test(b)), bars.filter((b) => !/\bunit=/.test(b)));
+const barComp = read("../../src/components/panels/BarChart.tsx");
+ck("  ...and BarChart draws the YAxis from its layout's ticks", /<YAxis unit=\{unit\} height=\{height\} ticks=\{L\.ticks\} \/>/.test(barComp));
 const weather = read("../../src/components/panels/WeatherPanel.tsx");
 ck("each Weather line chart has a left axis, and a right one for a line on its own scale",
    /<YAxis height=\{CHART_PX\} unit=\{present\[0\]\?\.unit\.trim\(\)\} ticks=\{leftAxis\} \/>/.test(weather)
      && /\{rightAxis && <YAxis side="right"/.test(weather));
-ck("the rain chart has its axis", /<YAxis height=\{CHART_PX\} unit=\{unit\} ticks=\{axisOf\(g\.series\[0\]\)\} \/>/.test(weather));
+ck("the rain chart is a BarChart with its unit (so it has the axis)", /<BarChart label="Rain history" buckets=\{buckets\} height=\{CHART_PX\} unit=\{unit\}/.test(weather));
 const css = read("../../src/styles/03-panels.css");
 ck("the axis keeps its column at every width (no phone rule hides it)", !/\.chart-yaxis[^{]*\{[^}]*display:\s*none/.test(css));
 ck("the unit sits clear above the top tick", /\.chart-yaxis-unit \{[^}]*top: -2em;/.test(css) && /\.chart-with-axis\.has-unit \{ margin-top: 1\.6em; \}/.test(css));

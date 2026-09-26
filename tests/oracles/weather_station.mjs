@@ -199,8 +199,8 @@ console.log("\n  the window: the approved boards 6 and 7");
   ck("  ...and BasePanel's footer renders that slot", /<div className="panel-footer-left">\s*\{footerLeading\}/.test(base));
   ck("each screen opens at its top (the body scrolls back on every switch)",
      /useEffect\(\(\) => \{ topRef\.current\?\.closest\("\.panel-body"\)\?\.scrollTo\(\{ top: 0 \}\); \}, \[view\]\);/.test(panel));
-  ck("every history chart has the app's hover tooltip — the lines and the rain bars",
-     (panel.match(/<ChartTip /g) ?? []).length === 2 && (panel.match(/\{\.\.\.handlers\}/g) ?? []).length === 2);
+  ck("every history chart has the app's hover tooltip — the lines (ChartTip) and the rain bars (BarChart's)",
+     (panel.match(/<ChartTip /g) ?? []).length === 1 && (panel.match(/\{\.\.\.handlers\}/g) ?? []).length === 1 && /<BarChart label="Rain history"/.test(panel));
   ck("the three advice cards are the rules above, fed the live readings",
      /windowAdvice\(\{/.test(panel) && /laundryAdvice\(\{/.test(panel) && /outdoorsAdvice\(\{/.test(panel));
 }

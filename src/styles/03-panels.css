@@ -689,8 +689,6 @@ input[type="range"]::-moz-range-thumb {
 .chart-area { stroke: none; }
 .chart-area.out { fill: color-mix(in srgb, var(--accent) 28%, transparent); }
 .chart-area.warm { fill: color-mix(in srgb, var(--accent-warm) 26%, transparent); }
-.chart-bar { fill: var(--cat-energy); }
-.chart-empty-note { font: 14px var(--font-ui); fill: var(--text-secondary); text-anchor: middle; }
 .weather-axis { display: flex; justify-content: space-between; font-size: var(--text-xs); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 
 /* The y-axis every Weather and Energy history chart draws (ChartAxis). */
@@ -712,13 +710,26 @@ input[type="range"]::-moz-range-thumb {
 .energy-hero { display: flex; flex-direction: column; align-items: flex-end; }
 .energy-hero-sub { font-size: var(--text-sm); color: var(--text-secondary); white-space: nowrap; }
 .weather-tile.energy-wide { min-height: 0; justify-content: flex-start; }
-.energy-bars-wrap { display: flex; flex-direction: column; gap: 6px; }
-.energy-bars { position: relative; display: flex; align-items: flex-end; gap: 4px; }
-.energy-bar { flex: 1 1 0; height: 100%; display: flex; flex-direction: column-reverse; border-radius: 4px 4px 0 0; overflow: hidden; }
-.energy-bar.hover { outline: 2px solid var(--hairline-strong); outline-offset: 1px; }
-.energy-seg { flex: 0 0 auto; }
-.energy-seg.e-none { height: 3px; background: var(--bg-card); }
-.energy-typical { position: absolute; left: 0; right: 0; border-top: 2px dashed var(--hairline-strong); pointer-events: none; }
+/* The app's bar chart (BarChart.tsx, utils/barChart): every bucket an equal
+   slot, so the bucket under the pointer and its centre are exact fractions;
+   the gap between bars is the slot's padding, not a flex gap. */
+.bar-chart-wrap { display: flex; flex-direction: column; gap: 6px; }
+.bar-chart { position: relative; display: flex; align-items: stretch; }
+.bar-slot { position: relative; flex: 1 1 0; min-width: 0; display: flex; padding: 0 2px; }
+.bar-stack { flex: 1 1 auto; display: flex; flex-direction: column-reverse; border-radius: 4px 4px 0 0; overflow: hidden; }
+.bar-slot.hover .bar-stack { outline: 2px solid var(--hairline-strong); outline-offset: 1px; }
+.bar-seg { flex: 0 0 auto; }
+.bar-seg.none { height: 3px; background: var(--bg-card); }
+.bar-seg.zero { height: 2px; }
+.bar-seg.water { background: var(--cat-energy); }
+/* No reading: the outage band every history chart draws, the slot's full width. */
+.bar-band { position: absolute; inset: 0; opacity: 0.18; }
+.bar-chart-typical { position: absolute; left: 0; right: 0; border-top: 2px dashed var(--hairline-strong); pointer-events: none; }
+.bar-chart-note { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: var(--text-sm); color: var(--text-secondary); pointer-events: none; }
+.bar-chart-axis { position: relative; height: 1.4em; font-size: var(--text-xs); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.bar-chart-axis span { position: absolute; top: 0; white-space: nowrap; }
+.bar-chart-axis span.middle { transform: translateX(-50%); }
+.bar-chart-axis span.end { transform: translateX(-100%); }
 .e-used { background: color-mix(in srgb, var(--accent) 55%, transparent); }
 .e-standout { background: color-mix(in srgb, var(--status-danger) 55%, transparent); }
 .e-untracked { background: color-mix(in srgb, var(--text-secondary) 30%, transparent); fill: color-mix(in srgb, var(--text-secondary) 30%, transparent); }

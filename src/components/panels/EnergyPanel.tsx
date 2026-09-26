@@ -12,12 +12,12 @@
 // here the next time the window opens. The words: config/energyModel.ts.
 // No Energy dashboard in HA: the bar's old device list opens instead.
 
-import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronLeft, LineChart, Zap } from "lucide-react";
 import BasePanel from "./BasePanel";
 import ChartTip from "./ChartTip";
-import YAxis from "./ChartAxis";
-import { niceTicks } from "@/utils/chartGeometry";
+import BarChart from "./BarChart";
+import type { BarSeg } from "@/utils/barChart";
 import { fmtChartTime } from "./chartUtils";
 import { useHA } from "@/ha/HAStateStore";
 import { useHistory } from "@/hooks/useHistory";
@@ -196,10 +196,10 @@ function NowView({ setup, costUnit }: { setup: EnergyWindowSetup; costUnit: stri
 
       <div className="weather-tile chart energy-wide">
         <div className="weather-chart-head"><div className="weather-eyebrow">Today, hour by hour</div><div className="weather-legend">kWh per hour</div></div>
-        <Bars
+        <BarChart label="Energy used today, hour by hour" fmt={kwh} unit="kWh"
           buckets={todayP.buckets.map((b) => ({ t: b.t, segs: segsOf(b, () => [{ key: "used", label: "Used", v: b.split!.used, cls: "e-used" }]) }))}
-          stamp={(t) => `${fmtChartTime(t)}–${fmtChartTime(t + 3_600_000)}`} unit="kWh"
-          ticks={["00:00", "06:00", "12:00", "18:00", "24:00"]}
+          stamp={(t) => `${fmtChartTime(t)}–${fmtChartTime(t + 3_600_000)}`}
+          ticks={[0, 6, 12, 18, 23].map((i) => ({ i, label: fmtChartTime(hours[i]) }))}
         />
       </div>
 
@@ -208,10 +208,10 @@ function NowView({ setup, costUnit }: { setup: EnergyWindowSetup; costUnit: stri
           <div className="weather-eyebrow">Last 7 days</div>
           <div className="weather-legend">{fmtKwh(daily.reduce<number>((a, v) => a + (v ?? 0), 0))} kWh{typical ? ` · typical day ${fmtKwh(typical)}` : ""}</div>
         </div>
-        <Bars
+        <BarChart label="Energy used, the last seven days" fmt={kwh} unit="kWh"
           buckets={weekP.buckets.map((b, i) => ({ t: b.t, segs: segsOf(b, () => [{ key: "used", label: "Used", v: b.split!.used, cls: standout?.index === i ? "e-standout" : "e-used" }]) }))}
           stamp={(t) => new Date(t).toLocaleDateString([], { weekday: "long", day: "numeric", month: "short" })}
-          ticks={days.map(weekday)} typical={typical} unit="kWh"
+          ticks={days.map((t, i) => ({ i, label: weekday(t) }))} typical={typical}
         />
       </div>
 
@@ -334,61 +334,13 @@ function Flow({ split, rateKw }: { split: EnergySplit; rateKw: (id: string | nul
   );
 }
 
-/** A bucket's bar: its segments once ready; nothing yet while pending; and,
- *  for a bucket the recorder has no reading for, nothing either — never a
- *  bar of 0 (energyModel.energyPeriod). */
-function segsOf(b: EnergyBucket, ready: () => BarSeg[]): BarSeg[] {
-  return b.state === "ready" ? ready() : [];
+/** A bucket's bar: its segments once ready; nothing yet while pending; and an
+ *  outage band where the recorder has no reading — never a bar of 0
+ *  (energyModel.energyPeriod, utils/barChart). */
+function segsOf(b: EnergyBucket, ready: () => BarSeg[]): BarSeg[] | null {
+  return b.state === "ready" ? ready() : b.state === "pending" ? [] : null;
 }
-type BarSeg = { key: string; label: string; v: number; cls: string };
-
-/** Stacked bars over buckets, with the app's tooltip. `typical` draws a line. */
-function Bars({ buckets, stamp, ticks, typical, height = 150, unit }: {
-  buckets: { t: number; segs: { key: string; label: string; v: number; cls: string }[] }[];
-  stamp: (t: number) => string; ticks: string[]; typical?: number; height?: number;
-  /** The y-axis unit, printed over it (kWh, IDR). */
-  unit?: string;
-}) {
-  const [hover, setHover] = useState<number | null>(null);
-  // Scaled to a ROUND top, so the axis reads in whole steps (niceTicks).
-  const peak = Math.max(1e-6, typical ?? 0, ...buckets.map((b) => b.segs.reduce((a, s) => a + s.v, 0)));
-  const axis = niceTicks(0, peak);
-  const max = axis.top;
-  const at = (e: PointerEvent<HTMLDivElement>) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    setHover(Math.min(buckets.length - 1, Math.max(0, Math.floor(((e.clientX - r.left) / Math.max(1, r.width)) * buckets.length))));
-  };
-  const hb = hover === null ? null : buckets[hover];
-  return (
-    <div className={`chart-with-axis${unit ? " has-unit" : ""}`}>
-    <YAxis unit={unit} height={height} ticks={axis.ticks.map((v) => ({ v, at: v / max }))} />
-    <div className="spark-wrap energy-bars-wrap">
-      <div className="energy-bars" style={{ height, touchAction: "none" }}
-        onPointerMove={at} onPointerDown={at} onPointerLeave={() => setHover(null)}>
-        {axis.ticks.map((v) => <div key={`g${v}`} className="chart-gridline" style={{ bottom: `${(v / max) * 100}%` }} />)}
-        {typical !== undefined && <div className="energy-typical" style={{ bottom: `${(typical / max) * 100}%` }} />}
-        {buckets.map((b, i) => (
-          <div key={b.t} className={`energy-bar${hover === i ? " hover" : ""}`}>
-            {b.segs.length === 0
-              ? <div className="energy-seg e-none" />
-              : b.segs.map((s) => <div key={s.key} className={`energy-seg ${s.cls}`} style={{ height: `${(s.v / max) * 100}%` }} />)}
-          </div>
-        ))}
-      </div>
-      {hb && hb.segs.length > 0 && (
-        <ChartTip left={`${((hover! + 0.5) / buckets.length) * 100}%`} top={0} flip={hover! > buckets.length / 2}
-          t={hb.t} spanHours={0} stampPrefix=""
-          rows={[
-            ...(hb.segs.length > 1 ? [{ key: "_t", text: `${fmtKwh(hb.segs.reduce((a, s) => a + s.v, 0))} kWh` }] : []),
-            ...hb.segs.filter((s) => s.v > 0.005).map((s) => ({ key: s.key, marker: <i className={`key ${s.cls}`} />, text: `${s.label} ${fmtKwh(s.v)} kWh` })),
-          ]}
-          stamp={stamp(hb.t)} />
-      )}
-      <div className="weather-axis">{ticks.map((t, i) => <span key={`${t}${i}`}>{t}</span>)}</div>
-    </div>
-    </div>
-  );
-}
+const kwh = (v: number) => `${fmtKwh(v)} kWh`;
 
 // ── History and trends ───────────────────────────────────────────────────
 
@@ -457,7 +409,7 @@ function HistoryView({ setup, costUnit }: { setup: EnergyWindowSetup; costUnit: 
           <div className="weather-eyebrow">Energy used, by device</div>
           <div className="weather-legend">{series.map((s) => <span key={s.id}><i className={`key ${s.cls}`} />{s.label}</span>)}</div>
         </div>
-        <Bars height={220}
+        <BarChart label="Energy used, by device" height={220} fmt={kwh} unit="kWh"
           buckets={p.buckets.map((b) => ({
             t: b.t,
             segs: segsOf(b, () => [
@@ -468,15 +420,15 @@ function HistoryView({ setup, costUnit }: { setup: EnergyWindowSetup; costUnit: 
               { key: "_u", label: "Untracked", v: b.split!.untracked, cls: "e-untracked" },
             ]),
           }))}
-          stamp={(t) => label(t)} ticks={tickIdx.map((i) => label(starts[i]))} unit="kWh" />
+          stamp={(t) => label(t)} ticks={tickIdx.map((i) => ({ i, label: label(starts[i]) }))} />
       </div>
 
       {hasCost && (
         <div className="weather-tile chart energy-wide">
           <div className="weather-chart-head"><div className="weather-eyebrow">Cost per {unit}</div><div className="weather-legend">{fmtMoney(costTotal, costUnit)}</div></div>
-          <Bars height={120}
-            buckets={p.buckets.map((b, i) => ({ t: b.t, segs: costs[i] === undefined ? [] : [{ key: "cost", label: "Cost", v: costs[i]!, cls: "e-used" }] }))}
-            stamp={(t) => `${label(t)} · ${fmtMoney(costs[starts.indexOf(t)] ?? 0, costUnit)}`} ticks={tickIdx.map((i) => label(starts[i]))} unit={costUnit} />
+          <BarChart label={`Cost per ${unit}`} height={120} fmt={(v) => fmtMoney(v, costUnit)} unit={costUnit}
+            buckets={p.buckets.map((b, i) => ({ t: b.t, segs: b.state === "pending" ? [] : costs[i] === undefined ? null : [{ key: "cost", label: "Cost", v: costs[i]!, cls: "e-used" }] }))}
+            stamp={(t) => label(t)} ticks={tickIdx.map((i) => ({ i, label: label(starts[i]) }))} />
         </div>
       )}
 
