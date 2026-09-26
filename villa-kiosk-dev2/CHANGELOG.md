@@ -1,3 +1,15 @@
+## 2.496.114
+
+### Fixed — the Energy and Weather windows' bar charts
+- **The cost chart's tooltip shows money.** It read "Cost 45,000 kWh"; it now
+  shows the amount in your currency.
+- **The rain chart's scale always reaches its tallest bar.** Its top value
+  could sit below the wettest hour.
+- **An hour or day with no reading is drawn as a grey band**, as the line
+  charts already do, and its tooltip says "No reading". A dry hour is a
+  hairline, not an empty slot.
+- The bar under your finger or pointer is now exactly the one highlighted,
+  and the date labels sit under their own bars.
 ## 2.496.113
 
 ### Fixed — the Energy window
