@@ -28,3 +28,10 @@ export const UNAVAILABLE_AMBER = new Color3(0.72, 0.5, 0.12);
 // A Babylon GUI control can't consume a CSS custom property, so this is a
 // static match to the light-theme value rather than a live read.
 export const AVAILABLE_GREEN_HEX = "#34845A";
+
+// A 3D lock mesh that is SECURE (locked, or on its way to a rest state) — the
+// green it has always been drawn in, named here beside the other status
+// colours rather than written as a literal in EntityVisuals.applyToMesh.
+export const SECURE_GREEN = new Color3(0.2, 0.75, 0.3);
+// A switch or media player that is ON: a soft glow on its own mesh.
+export const ACTIVE_GLOW = new Color3(0.1, 0.35, 0.4);

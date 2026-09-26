@@ -1,3 +1,14 @@
+## 2.496.96
+
+### Fixed — the 3D map
+- **A lock no longer flashes red while it is locking or unlocking.** Its 3D
+  model now shows what its badge shows: green when locked or on its way,
+  red only when it is really unlocked or jammed.
+- **Motion and presence sensors no longer pulse red when they see someone.**
+  A sensor's 3D model pulses only when its badge shows an alert: a leak or
+  smoke sensor that triggers, a connection sensor that goes offline, or
+  whatever you set as the alert in Advanced Settings.
+- **A media player glows while buffering too**, like its badge.
 ## 2.496.95
 
 ### Changed

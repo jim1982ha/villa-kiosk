@@ -96,11 +96,10 @@ import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 import { resolveMeshToMapping, extractVariantSuffix, hasVariantSuffix, inferTypeFromEntityId } from "@/config/EntityMap";
 import { groupMemberIds, groupForPrimary } from "@/config/deviceGroups";
 import { effectiveCategory, subjectOf, categorySurface, categorySurfaceRinged } from "@/config/EntityCategories";
-import { badgeKindFor, badgeFaceAndRing, type DeviceReading } from "@/utils/deviceActivity";
+import { badgeKindFor, badgeFaceAndRing, meshLookFor, type DeviceReading } from "@/utils/deviceActivity";
 import { alertStateFor } from "@/config/BinarySensorClasses";
 import type { BadgeKind } from "@/utils/deviceActivity";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
-import { isUnavailable, UNKNOWN_STATES } from "@/utils/stateColors";
 import { compactValue, VALUE_CAPABLE_TYPES } from "@/utils/entityValue";
 import { mergeOverlapping } from "./boxMerge";
 import { phantomEntity } from "@/utils/phantomEntity";
@@ -132,7 +131,7 @@ import {
   type CardArrangement,
 } from "./badgeCard";
 import { iconKeyFor } from "./badgeIconKeys";
-import { ALERT_RED, ALERT_RED_HEX, UNAVAILABLE_AMBER, AVAILABLE_GREEN_HEX } from "./colors";
+import { ALERT_RED, ALERT_RED_HEX, UNAVAILABLE_AMBER, AVAILABLE_GREEN_HEX, SECURE_GREEN, ACTIVE_GLOW } from "./colors";
 import { COSMETIC_MAPPING_FIELDS, entityMapDelta } from "./entityMapDiff";
 // Pose-word resolution (which "__<word>" mesh variant a live state asks for)
 // — pure logic, extracted to keep this file to the things that actually touch
@@ -8211,134 +8210,63 @@ export class EntityVisuals {
     const setEmissive = this.emissiveOf(mesh);
     const setDiffuse = this.diffuseOf(mesh);
 
-    switch (map.type) {
-      case "light":
-        // Everything a light fixture shows — its own glow and off-state
-        // transparency, its light, pools, furniture light and shadow map — is
-        // the entity's, shown once for all its bulbs by BulbSet.show (apply()
-        // and the first paint both call it).
+    // What the mesh shows is utils/deviceActivity's meshLookFor — the SAME
+    // classification the badge is painted from (device_class, the villa's
+    // alert override, in-between states). Only the painting is here.
+    const look = meshLookFor(this.reading(map.type, state, false));
+    // A device authored as POSE meshes (lock.foo__locked / __unlocked, a
+    // door "__open"/"__closed") shows its state by which pose is visible
+    // (applyMeshVariant); tinting or pulsing that same mesh on top is
+    // redundant, and paints a real door leaf flat green/red. Checked against
+    // THIS entity's registered poses, not a word list.
+    const poseWord = extractVariantSuffix(mesh.name);
+    const isPose = !!poseWord && !!this.meshVariants.get(state.entity_id)?.has(poseWord);
+
+    switch (look.kind) {
+      case "none":
+        // Lights: BulbSet.show owns their whole look. Covers: never deformed
+        // to fake motion — position is a whole-mesh SWAP between pre-posed
+        // meshes (applyMeshVariant), an entity-level decision made in apply().
         break;
 
-      case "lock": {
-        // A lock authored as POSE meshes (lock.foo__locked / __unlocked — a
-        // door leaf that visibly swings open/closed) communicates its state
-        // through which pose is shown (see applyMeshVariant), so the
-        // red/green diffuse+emissive tint is both redundant AND ugly: it
-        // paints the whole door leaf flat green/red. Skip ALL colour
-        // treatment for a named pose mesh and let it keep its real door
-        // material; the state is already legible from the open/closed pose.
-        // A plain, single-mesh lock (lock.foo, no "__word" suffix) has no
-        // pose to read, so it still relies on the tint below — that's the
-        // one that stays coloured. Checked against THIS entity's own
-        // registered poses (meshVariants), not a fixed word list: there is no
-        // per-type vocabulary any more, so "is this mesh actually one of its
-        // poses" is both the only question that still makes sense and a
-        // strictly tighter test than the old list (an unrelated "__x" suffix
-        // that never grouped as a pose can't match).
-        const poseWord = extractVariantSuffix(mesh.name);
-        if (poseWord && this.meshVariants.get(state.entity_id)?.has(poseWord)) break;
-
-        // unavailable MUST win over the locked/unlocked colouring below —
-        // colouring the mesh confirmed-red for a lock HA has actually lost
-        // contact with asserts an "unlocked" reading that was never taken
-        // (the bug this fixed: a lock reporting "unavailable" rendered, on
-        // the map AND in its panel, exactly like a confirmed open door).
-        if (isUnavailable(state)) {
-          setDiffuse?.(UNAVAILABLE_AMBER);
-          setEmissive?.(UNAVAILABLE_AMBER.scale(0.25));
-          break;
-        }
-        const locked = state.state === "locked";
-        setDiffuse?.(locked ? new Color3(0.2, 0.75, 0.3) : new Color3(0.9, 0.2, 0.2));
-        setEmissive?.(locked ? new Color3(0.0, 0.15, 0.05) : new Color3(0.25, 0, 0));
+      case "tint": {
+        if (isPose) break;
+        // Unavailable is amber, never red: a lock HA has lost contact with
+        // asserts no "unlocked" reading (see colors.ts).
+        const c = look.tone === "unavailable" ? UNAVAILABLE_AMBER : look.tone === "alert" ? ALERT_RED : SECURE_GREEN;
+        setDiffuse?.(c);
+        setEmissive?.(c.scale(look.tone === "unavailable" ? 0.25 : 0.2));
         break;
       }
 
-      case "binary_sensor": {
-        // Same reasoning as lock's pose meshes: a binary_sensor authored
-        // with alternate poses (e.g. "__on"/"__off", or a door/window
-        // "__open"/"__closed") already shows its state by which pose is
-        // visible, so pulsing/tinting that same mesh red on top would be
-        // redundant (and, for a triggered-but-informational class, actively
-        // misleading — it'd read as an alert the device_class says it
-        // isn't). Checked against THIS entity's actually-registered pose
-        // words (meshVariants), not a fixed list — binary_sensor has no
-        // fixed vocabulary any more, so "is this mesh
-        // really one of ITS poses" is the only question that still makes
-        // sense. The plain, single-mesh case (the overwhelming majority of
-        // binary_sensors — leak/motion/smoke/… — never authored with poses)
-        // is completely unaffected and still pulses exactly as before.
-        const poseWord = extractVariantSuffix(mesh.name);
-        if (poseWord && this.meshVariants.get(state.entity_id)?.has(poseWord)) {
-          this.pulsing.delete(mesh);
-          break;
-        }
-
-        // Same reasoning as lock above: silently reading "unavailable" as
-        // "not triggered" makes an offline leak/smoke sensor look exactly
-        // like a safe, monitored one — flag it instead of going quiet.
-        if (isUnavailable(state)) {
+      case "pulse":
+        if (isPose) { this.pulsing.delete(mesh); break; }
+        if (look.unavailable) {
+          // An offline leak/smoke sensor must not look like a safe, monitored
+          // one — flag it instead of going quiet.
           this.pulsing.delete(mesh);
           setEmissive?.(UNAVAILABLE_AMBER.scale(0.4));
-          break;
-        }
-        const alert = state.state === "on"; // "on" = triggered (e.g. leak)
-        if (alert) this.pulsing.add(mesh);
-        else {
+        } else if (look.on) {
+          this.pulsing.add(mesh);
+        } else {
           this.pulsing.delete(mesh);
           setEmissive?.(Color3.Black());
         }
         break;
-      }
 
-      // No emissive tint for on/off — a spinning ceiling fan (see updateFanSpin)
-      // already reads as "on" by itself; a glow was redundant and, per product
-      // decision, unwanted.
-      case "fan":
+      case "glow":
+        setEmissive?.(look.on ? ACTIVE_GLOW : Color3.Black());
+        break;
+
+      case "dark":
+        // Fans read as on by spinning (updateFanSpin) — a glow was unwanted.
+        // Sensors and climate are informational, and a geometry-less one falls
+        // back to a placeholder sharing the lights' warm marker material,
+        // whose baked glow must be overridden or it reads "lit like a light".
         setEmissive?.(Color3.Black());
-        break;
-
-      case "switch":
-      case "media_player": {
-        const on = state.state === "on" || state.state === "playing";
-        setEmissive?.(on ? new Color3(0.1, 0.35, 0.4) : Color3.Black());
-        break;
-      }
-
-      // No per-mesh material/colour treatment for covers — a single curtain
-      // mesh is never deformed/scaled to fake motion (fabric doesn't behave
-      // like a rigid body, and there's no reliable way to infer a gather
-      // pivot from arbitrary SweetHome3D geometry). Position IS reflected
-      // now, but as a whole-mesh SWAP between up to 3 alternate, pre-posed
-      // meshes (see applyMeshVariant) — that's an
-      // entity-level decision (which mesh to show), not a per-mesh one, so
-      // it happens once in apply(), not here. Kept as an explicit case (not
-      // falling to default) so a cover doesn't get treated as something else.
-      case "cover":
-        break;
-
-      // Purely informational domains — never meant to glow. Explicit (not
-      // `default`) because a geometry-less sensor/climate device falls back
-      // to a placeholder sphere sharing the SAME warm-emissive marker
-      // material lights use (see blender_pipeline's _light_marker_material:
-      // "the app overrides its emissive from live HA state ... the baked
-      // baseline only makes an UNWIRED marker visible"). Every other domain
-      // above does override it; sensor/climate never did, so a sensor that
-      // fell back to a placeholder (e.g. its real geometry got matched to a
-      // nearby entity instead — see compute_group_instance_map) stayed at
-      // that baked-in glow forever, reading as "lit like a light fixture".
-      case "sensor":
-        setEmissive?.(Color3.Black());
-        break;
-
-      case "climate": {
-        setEmissive?.(Color3.Black());
-        const running = state.state !== "off" && !UNKNOWN_STATES.has(state.state);
-        this.applyClimateOutline(mesh, running);
-        break;
-      }
-
-      default:
+        if (map.type === "climate") {
+          this.applyClimateOutline(mesh, badgeKindFor(this.reading("climate", state, false)) === "on");
+        }
         break;
     }
   }
