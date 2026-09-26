@@ -748,20 +748,22 @@ input[type="range"]::-moz-range-thumb {
 .e-s4 { background: color-mix(in srgb, var(--accent-warm) 30%, transparent); fill: color-mix(in srgb, var(--accent-warm) 30%, transparent); }
 .e-s5 { background: color-mix(in srgb, var(--cat-energy) 28%, transparent); fill: color-mix(in srgb, var(--cat-energy) 28%, transparent); }
 /* The energy flow's and pie's colours: the house, "Other", and twelve slots
-   for the devices below the top level — theme tokens mixed, never hex. */
+   for the devices below the top level — theme tokens mixed, never hex. The
+   slots open on hues the top-level devices (e-s0..5) do not use: the first
+   device inside a meter was the first meter's tan (2.496.127). */
 .e-house { background: var(--accent); fill: var(--accent); }
 .e-other { background: color-mix(in srgb, var(--text-secondary) 45%, transparent); fill: color-mix(in srgb, var(--text-secondary) 45%, transparent); }
-.e-p0 { background: color-mix(in srgb, var(--accent-warm) 70%, transparent); fill: color-mix(in srgb, var(--accent-warm) 70%, transparent); }
-.e-p1 { background: color-mix(in srgb, var(--cat-energy) 65%, transparent); fill: color-mix(in srgb, var(--cat-energy) 65%, transparent); }
-.e-p2 { background: color-mix(in srgb, var(--status-danger) 55%, transparent); fill: color-mix(in srgb, var(--status-danger) 55%, transparent); }
-.e-p3 { background: color-mix(in srgb, var(--accent-teal) 65%, transparent); fill: color-mix(in srgb, var(--accent-teal) 65%, transparent); }
-.e-p4 { background: color-mix(in srgb, var(--status-warning) 65%, transparent); fill: color-mix(in srgb, var(--status-warning) 65%, transparent); }
-.e-p5 { background: color-mix(in srgb, var(--accent) 60%, transparent); fill: color-mix(in srgb, var(--accent) 60%, transparent); }
-.e-p6 { background: color-mix(in srgb, color-mix(in srgb, var(--accent-warm) 50%, var(--status-danger)) 70%, transparent); fill: color-mix(in srgb, color-mix(in srgb, var(--accent-warm) 50%, var(--status-danger)) 70%, transparent); }
-.e-p7 { background: color-mix(in srgb, color-mix(in srgb, var(--cat-energy) 50%, var(--accent-teal)) 70%, transparent); fill: color-mix(in srgb, color-mix(in srgb, var(--cat-energy) 50%, var(--accent-teal)) 70%, transparent); }
-.e-p8 { background: color-mix(in srgb, color-mix(in srgb, var(--status-warning) 50%, var(--accent)) 70%, transparent); fill: color-mix(in srgb, color-mix(in srgb, var(--status-warning) 50%, var(--accent)) 70%, transparent); }
-.e-p9 { background: color-mix(in srgb, color-mix(in srgb, var(--status-danger) 50%, var(--cat-energy)) 70%, transparent); fill: color-mix(in srgb, color-mix(in srgb, var(--status-danger) 50%, var(--cat-energy)) 70%, transparent); }
-.e-p10 { background: color-mix(in srgb, color-mix(in srgb, var(--accent-teal) 50%, var(--accent-warm)) 70%, transparent); fill: color-mix(in srgb, color-mix(in srgb, var(--accent-teal) 50%, var(--accent-warm)) 70%, transparent); }
+.e-p0 { background: color-mix(in srgb, var(--accent-teal) 65%, transparent); fill: color-mix(in srgb, var(--accent-teal) 65%, transparent); }
+.e-p1 { background: color-mix(in srgb, var(--status-warning) 65%, transparent); fill: color-mix(in srgb, var(--status-warning) 65%, transparent); }
+.e-p2 { background: color-mix(in srgb, color-mix(in srgb, var(--accent-warm) 50%, var(--status-danger)) 70%, transparent); fill: color-mix(in srgb, color-mix(in srgb, var(--accent-warm) 50%, var(--status-danger)) 70%, transparent); }
+.e-p3 { background: color-mix(in srgb, color-mix(in srgb, var(--cat-energy) 50%, var(--accent-teal)) 70%, transparent); fill: color-mix(in srgb, color-mix(in srgb, var(--cat-energy) 50%, var(--accent-teal)) 70%, transparent); }
+.e-p4 { background: color-mix(in srgb, color-mix(in srgb, var(--status-warning) 50%, var(--accent)) 70%, transparent); fill: color-mix(in srgb, color-mix(in srgb, var(--status-warning) 50%, var(--accent)) 70%, transparent); }
+.e-p5 { background: color-mix(in srgb, color-mix(in srgb, var(--status-danger) 50%, var(--cat-energy)) 70%, transparent); fill: color-mix(in srgb, color-mix(in srgb, var(--status-danger) 50%, var(--cat-energy)) 70%, transparent); }
+.e-p6 { background: color-mix(in srgb, color-mix(in srgb, var(--accent-teal) 50%, var(--accent-warm)) 70%, transparent); fill: color-mix(in srgb, color-mix(in srgb, var(--accent-teal) 50%, var(--accent-warm)) 70%, transparent); }
+.e-p7 { background: color-mix(in srgb, var(--accent) 60%, transparent); fill: color-mix(in srgb, var(--accent) 60%, transparent); }
+.e-p8 { background: color-mix(in srgb, var(--accent-warm) 70%, transparent); fill: color-mix(in srgb, var(--accent-warm) 70%, transparent); }
+.e-p9 { background: color-mix(in srgb, var(--cat-energy) 65%, transparent); fill: color-mix(in srgb, var(--cat-energy) 65%, transparent); }
+.e-p10 { background: color-mix(in srgb, var(--status-danger) 55%, transparent); fill: color-mix(in srgb, var(--status-danger) 55%, transparent); }
 .e-p11 { background: color-mix(in srgb, var(--text-secondary) 45%, transparent); fill: color-mix(in srgb, var(--text-secondary) 45%, transparent); }
 /* Every device as a pie (HA's "Individual devices"): the ring, its total, a legend. */
 .energy-rank-tools { display: flex; align-items: center; gap: 10px; }
@@ -775,8 +777,6 @@ input[type="range"]::-moz-range-thumb {
 .energy-pie-total-v { font: 600 17px var(--font-ui); fill: var(--text-primary); text-anchor: middle; }
 .energy-pie-side { flex: 1 1 280px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .energy-pie-legend { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px 16px; font-size: var(--text-sm); }
-.energy-pie-pages { display: flex; align-items: center; justify-content: flex-end; gap: 8px; font-size: var(--text-sm); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
-.energy-pie-pages .btn { padding: 4px 8px; min-height: 0; }
 .energy-pie-legend span { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 2px 4px; border-radius: 6px; }
 .energy-pie-legend span.hover { background: var(--bg-input); }
 .energy-pie-legend b { margin-left: auto; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -794,12 +794,18 @@ input[type="range"]::-moz-range-thumb {
 .energy-flow-sub { font: 13px var(--font-ui); fill: var(--text-secondary); }
 .energy-flow-list { display: none; }
 .energy-note { font-size: var(--text-sm); color: var(--text-secondary); line-height: 1.45; }
-.energy-rank { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 2fr) auto 3.2em; gap: 8px 12px; align-items: center; font-size: var(--text-sm); }
-.energy-rank b { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.energy-rank .muted { color: var(--text-secondary); text-align: right; }
-.energy-rank > span:first-child, .energy-rank > span:nth-child(4n+1) { text-align: left; }
-.energy-rank-bar { height: 8px; border-radius: 4px; background: var(--bg-card); overflow: hidden; }
-.energy-rank-bar i { display: block; height: 100%; background: color-mix(in srgb, var(--cat-energy) 55%, transparent); }
+/* Every device as a list: one grid row a device — name, bar (in the device's
+   colour class), kWh, share. A phone moves the bar under the name. */
+.energy-rank { display: flex; flex-direction: column; gap: 8px; font-size: var(--text-sm); }
+.energy-rank-row { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 2fr) auto 3.2em; grid-template-areas: "name bar kwh pct"; gap: 4px 12px; align-items: center; }
+.energy-rank-name { grid-area: name; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.energy-rank-name.muted { color: var(--text-secondary); }
+.energy-rank-row b { grid-area: kwh; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.energy-rank-pct { grid-area: pct; text-align: right; color: var(--text-secondary); }
+.energy-rank-bar { grid-area: bar; height: 8px; border-radius: 4px; background: var(--bg-card); overflow: hidden; }
+.energy-rank-bar i { display: block; height: 100%; }
+.window-pager { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 10px; font-size: var(--text-sm); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.window-pager .btn { padding: 4px 8px; min-height: 0; }
 
 /* A phone: one column of advice, two of instruments, one of charts. */
 @media (max-width: 720px) {
@@ -837,8 +843,8 @@ input[type="range"]::-moz-range-thumb {
   .weather-headline { font-size: var(--text-xl); }
   .energy-flow-wrap { display: none; }
   .energy-flow-list { display: flex; flex-direction: column; gap: 10px; }
-  .energy-rank { grid-template-columns: minmax(0, 1fr) auto 2.8em; }
-  .energy-rank-bar { display: none; }
+  .energy-rank { gap: 10px; }
+  .energy-rank-row { grid-template-columns: minmax(0, 1fr) auto 2.8em; grid-template-areas: "name kwh pct" "bar bar bar"; }
 }
 .energy-flow-row { position: relative; display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 8px 10px; border-radius: 10px; overflow: hidden; font-size: var(--text-sm); }
 .energy-flow-row > i { position: absolute; left: 0; top: 0; bottom: 0; opacity: 0.55; }

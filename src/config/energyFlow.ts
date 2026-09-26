@@ -170,14 +170,3 @@ export function sliceTurns(values: readonly number[]): { from: number; to: numbe
     return { from, to: at };
   });
 }
-
-/** The pie's legend shows this many devices a page (owner, 2026-09-26). */
-export const LEGEND_PAGE = 10;
-
-/** One page of a legend of `total` rows: which rows, and how many pages. A
- *  page past the end (the period changed and has fewer devices) is the last. */
-export function legendPage(total: number, page: number, size = LEGEND_PAGE): { from: number; to: number; page: number; pages: number } {
-  const pages = Math.max(1, Math.ceil(total / size));
-  const p = Math.min(Math.max(0, page), pages - 1);
-  return { from: p * size, to: Math.min(total, (p + 1) * size), page: p, pages };
-}

@@ -1,3 +1,14 @@
+## 2.496.127
+
+### Improved — the Energy window's "Every device"
+- **Each device's bar is in its pie colour**, so the list and the pie read
+  the same.
+- **Ten devices at a time**, with the same pager as the pie's legend
+  ("1–10 of 20" and arrows).
+- **On a phone the bars are back**, under each device's name with its kWh
+  and share beside the name. The bars had been hidden to save width.
+- A device inside a meter no longer starts with the meter's own colour
+  (Pool Pump was nearly the same tan as Main Power Phase C).
 ## 2.496.126
 
 **Nothing you should see changed.** The villa renders pixel-for-pixel as

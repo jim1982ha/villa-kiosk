@@ -13,10 +13,10 @@
 // No Energy dashboard in HA: the bar's old device list opens instead.
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ChevronLeft, ChevronRight, LineChart, Zap } from "lucide-react";
+import { ChevronLeft, LineChart, Zap } from "lucide-react";
 import BasePanel from "./BasePanel";
 import { List, PieChart } from "lucide-react";
-import { flowTree, flowLayout, energySlices, sliceTurns, legendPage, deviceColours, UNTRACKED_CLS, type FlowNode } from "@/config/energyFlow";
+import { flowTree, flowLayout, energySlices, sliceTurns, deviceColours, UNTRACKED_CLS, type FlowNode } from "@/config/energyFlow";
 import { useConfig } from "@/config/ConfigContext";
 import { resolveSiteTitle } from "@/config/AppConfig";
 import { useSegmentedChoice } from "./historyRange";
@@ -25,6 +25,8 @@ import BarChart from "./BarChart";
 import { energyToday, historyFigures, overlapShows, share } from "@/config/energyObservations";
 import { ENERGY_RANGES, energyRange, type EnergyRangeKey } from "./energyRanges";
 import { Figure, ObservationCards } from "./WindowPieces";
+// Ten a page, with the app's one pager (the settings logs use it too).
+import { usePaged, Pager, PAGE_CARDS } from "@/components/common/Paged";
 import type { BarSeg } from "@/utils/barChart";
 import { fmtChartTime } from "./chartUtils";
 import { useHA } from "@/ha/HAStateStore";
@@ -35,7 +37,7 @@ import { PERIOD_MS } from "@/utils/statisticsSeries";
 import { localMidnight } from "@/utils/localDay";
 import {
   energyPeriod, periodStarts, deviceRanking, fmtKwh, fmtMoney, fmtPower, powerKw,
-  type EnergyBucket, type EnergySplit, type NodeUse,
+  type EnergyBucket, type EnergySplit,
 } from "@/config/energyModel";
 
 type View = "now" | "history";
@@ -265,8 +267,9 @@ export function Flow({ split, rateKw, house, colourOf }: { split: EnergySplit; r
  *  for — slices that add up to what was used (config/energyFlow). */
 export function DevicePie({ split, colourOf }: { split: EnergySplit; colourOf: (id: string) => string }) {
   const [hover, setHover] = useState<number | null>(null);
-  const [page, setPage] = useState(0);
   const slices = energySlices(split, colourOf);
+  // Before any early return: a hook runs on every render or none.
+  const paged = usePaged(slices, PAGE_CARDS);
   const total = slices.reduce((a, s) => a + s.kwh, 0);
   if (!slices.length) return <div className="muted body-text">Nothing recorded.</div>;
   const turns = sliceTurns(slices.map((s) => s.kwh));
@@ -280,7 +283,6 @@ export function DevicePie({ split, colourOf }: { split: EnergySplit; colourOf: (
     const big = to - from > 0.5 ? 1 : 0;
     return `M${x0} ${y0} A${R1} ${R1} 0 ${big} 1 ${x1} ${y1} L${x2} ${y2} A${R0} ${R0} 0 ${big} 0 ${x3} ${y3} Z`;
   };
-  const pg = legendPage(slices.length, page);
   const hs = hover === null ? null : slices[hover];
   const mid = hover === null ? 0 : (turns[hover].from + turns[hover].to) / 2;
   const [tx, ty] = pt(mid, R1);
@@ -298,11 +300,11 @@ export function DevicePie({ split, colourOf }: { split: EnergySplit; colourOf: (
         {hs && <ChartTip x={tx / 200} y={ty / 200} rows={[{ key: "s", marker: <i className={`key ${cls(hover!)}`} />, text: `${hs.label} · ${fmtKwh(hs.kwh)} kWh` }]}
           stamp={`${share(hs.kwh, total)}% of ${fmtKwh(total)} kWh`} />}
       </div>
-      {/* Ten devices a page (legendPage); the pie keeps every slice. */}
+      {/* Ten devices a page (usePaged, the app's one pager); the ring keeps every slice. */}
       <div className="energy-pie-side">
         <div className="energy-pie-legend">
-          {slices.slice(pg.from, pg.to).map((s, k) => {
-            const i = pg.from + k;
+          {paged.page.map((s, k) => {
+            const i = paged.first - 1 + k;
             return (
               <span key={s.id} className={hover === i ? "hover" : ""} onPointerEnter={() => setHover(i)} onPointerLeave={() => setHover(null)}>
                 <i className={`key ${cls(i)}`} />{s.label}<b>{fmtKwh(s.kwh)} kWh</b>
@@ -310,13 +312,7 @@ export function DevicePie({ split, colourOf }: { split: EnergySplit; colourOf: (
             );
           })}
         </div>
-        {pg.pages > 1 && (
-          <div className="energy-pie-pages">
-            <button type="button" className="btn ghost" disabled={pg.page === 0} onClick={() => setPage(pg.page - 1)} aria-label="Previous devices"><ChevronLeft size={18} /></button>
-            <span>{pg.from + 1}–{pg.to} of {slices.length}</span>
-            <button type="button" className="btn ghost" disabled={pg.page === pg.pages - 1} onClick={() => setPage(pg.page + 1)} aria-label="Next devices"><ChevronRight size={18} /></button>
-          </div>
-        )}
+        <Pager paged={paged} unit="device" />
       </div>
     </div>
   );
@@ -368,7 +364,7 @@ function HistoryView({ setup, costUnit, range: rangeKey, colourOf }: { setup: En
   const tickIdx = range.ticks(starts.length);
   const roots = whole.roots.filter((r) => r.kwh > 0.005);
   const series = [...roots.map((r) => ({ id: r.node.id, label: r.node.name, cls: colourOf(r.node.id) })), { id: "_u", label: "Untracked", cls: UNTRACKED_CLS }];
-  const rank = deviceRanking(whole).filter((u) => u.kwh > 0.005);
+
 
   return (
     <div className="weather-history">
@@ -413,24 +409,45 @@ function HistoryView({ setup, costUnit, range: rangeKey, colourOf }: { setup: En
         {shape === "pie"
           ? <DevicePie split={whole} colourOf={colourOf} />
           : (
-            <div className="energy-rank">
-              {rank.map((u) => <RankRow key={u.node.id} u={u} of={Math.max(whole.used, rank[0]?.kwh ?? 0)} used={whole.used} />)}
-              {whole.untracked > 0.005 && <RankRow u={null} kwh={whole.untracked} of={Math.max(whole.used, rank[0]?.kwh ?? 0)} used={whole.used} />}
-            </div>
+            // Ten a page, as the pie's legend (the shared Pager); each bar in
+            // the device's own colour — the pie's (energyFlow.deviceColours).
+            <DeviceList whole={whole} colourOf={colourOf} />
           )}
       </div>
     </div>
   );
 }
 
-function RankRow({ u, kwh, of, used }: { u: NodeUse | null; kwh?: number; of: number; used: number }) {
-  const v = u ? u.kwh : kwh ?? 0;
+/** Every device as a list, largest first, ten a page — each bar in the
+ *  device's own colour, the pie's (energyFlow.deviceColours). */
+export function DeviceList({ whole, colourOf }: { whole: EnergySplit; colourOf: (id: string) => string }) {
+  const rows = [
+    ...deviceRanking(whole).filter((u) => u.kwh > 0.005).map((u) => ({ id: u.node.id, label: u.node.name, kwh: u.kwh, cls: colourOf(u.node.id) })),
+    ...(whole.untracked > 0.005 ? [{ id: "_u", label: "Untracked", kwh: whole.untracked, cls: UNTRACKED_CLS }] : []),
+  ];
+  const paged = usePaged(rows, PAGE_CARDS);
+  const of = Math.max(whole.used, rows[0]?.kwh ?? 0);
   return (
     <>
-      <span className={u ? "" : "muted"}>{u ? u.node.name : "Untracked"}</span>
-      <span className="energy-rank-bar"><i style={{ width: `${Math.max(1, (v / Math.max(1e-6, of)) * 100)}%` }} className={u ? "" : UNTRACKED_CLS} /></span>
-      <b>{fmtKwh(v)} kWh</b>
-      <span className="muted">{used > 0 ? `${share(v, used)}%` : ""}</span>
+      <div className="energy-rank">
+        {paged.page.map((r) => (
+          <RankRow key={r.id} label={r.label} kwh={r.kwh} of={of} used={whole.used} cls={r.cls} muted={r.id === "_u"} />
+        ))}
+      </div>
+      <Pager paged={paged} unit="device" />
     </>
+  );
+}
+
+/** One device in the list: its name, a bar in its colour, its kWh and share.
+ *  One grid row, so a phone can put the bar UNDER the name (styles). */
+function RankRow({ label, kwh, of, used, cls, muted }: { label: string; kwh: number; of: number; used: number; cls: string; muted: boolean }) {
+  return (
+    <div className="energy-rank-row">
+      <span className={`energy-rank-name${muted ? " muted" : ""}`}>{label}</span>
+      <span className="energy-rank-bar"><i style={{ width: `${Math.max(1, (kwh / Math.max(1e-6, of)) * 100)}%` }} className={cls} /></span>
+      <b>{fmtKwh(kwh)} kWh</b>
+      <span className="energy-rank-pct">{used > 0 ? `${share(kwh, used)}%` : ""}</span>
+    </div>
   );
 }

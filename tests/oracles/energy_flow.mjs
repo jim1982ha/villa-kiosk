@@ -84,13 +84,15 @@ console.log("\n  one colour a device, everywhere (round 7):");
   ck("the colour does not follow the kWh: Phase A leading the day keeps e-s1", F.flowTree(other, "H", colourOf).children[0].label === "Phase A" && F.flowTree(other, "H", colourOf).children[0].cls === "e-s1");
 }
 
-console.log("\n  the pie's legend, ten a page (owner, 2026-09-26):");
+console.log("\n  every device, ten a page — the app's one pager (owner, 2026-09-26):");
 {
-  const p0 = F.legendPage(20, 0), p1 = F.legendPage(20, 1);
-  ck("twenty devices: 1–10, then 11–20", p0.from === 0 && p0.to === 10 && p1.from === 10 && p1.to === 20 && p0.pages === 2, [p0, p1]);
-  ck("seventeen: the second page holds 11–17", F.legendPage(17, 1).to === 17);
-  ck("a page past the end (a shorter period picked) is the last page, never an empty legend", F.legendPage(17, 5).page === 1 && F.legendPage(17, 5).from === 10);
-  ck("ten or fewer: one page, no pager", F.legendPage(10, 0).pages === 1 && F.legendPage(0, 0).pages === 1);
+  const { pageOf, clampPage, PAGE_CARDS } = await import("@/components/common/paging");
+  const rows = Array.from({ length: 20 }, (_, i) => i);
+  ck("ten a page", PAGE_CARDS === 10);
+  const p0 = pageOf(rows, PAGE_CARDS, 0), p1 = pageOf(rows, PAGE_CARDS, 1);
+  ck("twenty devices: 1–10, then 11–20", p0.first === 1 && p0.page.length === 10 && p1.first === 11 && p1.page[9] === 19, [p0.first, p1.first]);
+  ck("seventeen: the second page holds 11–17", pageOf(rows.slice(0, 17), PAGE_CARDS, 1).page.length === 7);
+  ck("a page past the end (a shorter period picked) is the last page, never an empty list", clampPage(5, 17, PAGE_CARDS) === 1);
 }
 
 console.log("\n  the callers:");
@@ -98,7 +100,13 @@ const panel = readFileSync(new URL("../../src/components/panels/EnergyPanel.tsx"
 ck("the flow starts at the house the kiosk's title names (never a name in the code)", /const house = resolveSiteTitle\(config, haConfig\?\.location_name\);/.test(panel) && /<Flow split=\{split\} rateKw=\{rateKw\} house=\{house\} colourOf=\{colourOf\} \/>/.test(panel));
 ck("the window decides colour in ONE place: no e-s/e-p slot is computed in the panel",
    !/`e-[sp]\$\{/.test(panel) && /const colourOf = useMemo\(\(\) => \(setup \? deviceColours\(setup\)/.test(panel));
-ck("the legend shows one page, the pie every slice", /slices\.slice\(pg\.from, pg\.to\)\.map/.test(panel) && /const pg = legendPage\(slices\.length, page\);/.test(panel) && /\{slices\.map\(\(s, i\) => \(\s*<path/.test(panel));
+ck("the pie's legend shows one page, the ring every slice", /const paged = usePaged\(slices, PAGE_CARDS\);/.test(panel) && /\{paged\.page\.map\(\(s, k\) => \{/.test(panel) && /\{slices\.map\(\(s, i\) => \(\s*<path/.test(panel));
+ck("  ...its pager hook runs BEFORE the early return (a hook on every render or none)", panel.indexOf("const paged = usePaged(slices, PAGE_CARDS);") < panel.indexOf("if (!slices.length) return"));
+ck("the device list: ten a page with the same pager, each bar in the device's colour (the pie's)",
+   /function DeviceList\(/.test(panel) && /const paged = usePaged\(rows, PAGE_CARDS\);/.test(panel) && /cls: colourOf\(u\.node\.id\)/.test(panel) && /<Pager paged=\{paged\} unit="device" \/>/.test(panel)
+     && !/legendPage/.test(panel));
+const css = readFileSync(new URL("../../src/styles/03-panels.css", import.meta.url), "utf8");
+ck("on a phone the bar stays, under the name (it was hidden)", /grid-template-areas: "name kwh pct" "bar bar bar";/.test(css) && !/\.energy-rank-bar \{ display: none; \}/.test(css));
 ck("'Every device' switches between the list and the pie", /shape === "pie"\s*\? <DevicePie split=\{whole\} colourOf=\{colourOf\} \/>/.test(panel) && /useSegmentedChoice\(SHAPES, "list"/.test(panel));
 ck("the period picker is in the header, the Weather window's control", /headerActions=\{view === "now" \? <span className="weather-live">Home Assistant Energy<\/span> : picker\}/.test(panel)
    && /useSegmentedChoice\(RANGE_OPTIONS, "week", "Period", "weather-ranges"\)/.test(panel) && !/energy-history-head/.test(panel));
