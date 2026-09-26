@@ -72,7 +72,6 @@ import { Image } from "@babylonjs/gui/2D/controls/image";
 import { Control } from "@babylonjs/gui/2D/controls/control";
 import type { AppConfig } from "@/config/AppConfig";
 import { roomKey, NO_ROOM_LABEL } from "@/config/roomKey";
-import { chipProportions } from "@/config/chipProportions";
 import {
   badgeMetricsFor, detectPointerClass, observePointerClass, type BadgeMetrics, type PointerClass,
   CHIP_MAX_VIEWPORT_FRACTION, CARD_MAX_VIEWPORT_FRACTION,
@@ -124,7 +123,8 @@ import { FanRigs } from "./fanRigs";
 import { PlacementPass, GROUP_OVERLAP_ALLOW_WIDTHS, type ShownLabel, type PendingEntityGroup } from "./placementPass";
 import { onGlass, glyphDrawPx, glyphBakePx } from "./badgeLayout";
 import type { FrameRequests } from "./frameScheduler";
-import { badgeImageDataUrl, BADGE_INSET_CARD, BADGE_CORNER_FRACTION, RING_DASH } from "./badgeIcons";
+import { badgeImageDataUrl } from "./badgeIcons";
+import { badgeRing, badgeBakePx, BADGE_INSET_CARD, BADGE_CORNER_FRACTION } from "./badgeLook";
 import { DashableRectangle } from "./dashableRectangle";
 import { badgeText } from "./badgeText";
 import { badgeShadow } from "./badgeShadow";
@@ -2891,7 +2891,6 @@ export class EntityVisuals {
       // with (see config/chipProportions). The chip's CONTROL is the card
       // minus its ring; the glyph drawn inside it is that fraction of the
       // chip, exactly as `.summary-tile-icon svg` is of `.summary-tile-icon`.
-      const chip = chipProportions();
       // CLAMPED to the worst-case inner box rather than merely documented as
       // fitting it: cardIconFraction is a design decision and ringThicknessPx
       // is a drawing constraint, and the two are tuned independently. A future
@@ -2935,7 +2934,7 @@ export class EntityVisuals {
       // are driven in updateLabel).
       const badge = new DashableRectangle(`lbl_badge_${entityId}`);
       badge.height = `${card ? m.cardHeightPx : m.badgeDiameterPx}px`;
-      badge.cornerRadius = (card ? m.cardHeightPx : m.badgeDiameterPx) * chip.radius;
+      badge.cornerRadius = (card ? m.cardHeightPx : m.badgeDiameterPx) * BADGE_CORNER_FRACTION;
       badge.thickness = 0;
       // Apply the style's resting fill NOW, not only in updateLabel: an entity
       // that has never reported (or is UNAVAILABLE and so never pushed a state
@@ -3387,11 +3386,12 @@ export class EntityVisuals {
       // a separate baked image over the card (2.496.130) and it did not agree
       // with the Rectangle on where the edge is — "why is there a difference
       // in the icon shape?" (owner). Same corner, same weight, same place.
-      const dashed = !!surface.ringDashed;
-      const ringW = !surface.ring ? 0 : surface.ringHairline ? 1 : this.metrics.ringThicknessPx;
-      lbl.badge.thickness = ringW;
-      lbl.badge.dash = dashed && ringW > 0 ? [ringW * RING_DASH[0], ringW * RING_DASH[1]] : null;
-      lbl.badge.color = surface.ring ?? "transparent";
+      // The card's frame is badgeLook's — the same answer a group's chip and
+      // a room chip get (round 8).
+      const ring = badgeRing(surface, this.metrics.cardHeightPx, this.metrics);
+      lbl.badge.thickness = ring.px;
+      lbl.badge.dash = ring.dash;
+      lbl.badge.color = ring.color;
       // Every state's chip is baked the same way: inset, with no ring of its own.
       lbl.glyph.source = badgeImageDataUrl(
         lbl.category, iconKey, state, override,
@@ -5471,14 +5471,21 @@ export class EntityVisuals {
               // effectiveScale(), so the bitmap has to be baked at the painted
               // size. iconZoomScale is excluded for the same reason — see
               // glyphBakePx.
-              0, ring, false, lay.chip * this.iconUserScale * this.bestCssToGui(),
+              0, ring, false, badgeBakePx(lay.chip, this.iconUserScale, this.bestCssToGui()),
               // A summary card's cells are Card-style badges by definition —
               // they ARE the card. They bake through this call rather than
               // updateLabel's, which is why the Card style's heavier glyph did
               // not reach them in 2.375.0 and the change looked like a no-op on
               // a screen showing a two-cell card. Gated on the setting so the
               // Icon style stays a clean control to compare against.
-              this.isCardStyle());
+              this.isCardStyle(),
+              // A card-style chip rings like the lone card beside it (badgeLook,
+              // in proportion to its size) — it baked the classic style's
+              // fractions, ≈1.3 px beside a card drawn at 3 (round 8).
+              this.isCardStyle()
+                ? badgeRing(categorySurfaceRinged(s2.lbl.category, face, ring, this.config.entityMap[s2.id]?.badgeColor),
+                    lay.chip, this.metrics).px / Math.max(1e-6, lay.chip)
+                : undefined);
           }
         }
         // ── A SUMMARY'S RING NEVER REPEATS A MEMBER'S OWN SIGNAL ────────────
@@ -5524,11 +5531,10 @@ export class EntityVisuals {
         // one card or two with real space between them. `thickness` must be 0
         // as well as the background empty: a Rectangle insets its children by
         // its border, so a host with one would shift every pixel offset below.
-        const stroke = ringRed ? this.metrics.ringThicknessPx : 1;
-        const strokeColor = (ringRed ? alert.ring : rest.ring) ?? "transparent";
+        const frame = badgeRing(ringRed ? alert : rest, this.metrics.cardHeightPx, this.metrics);
         for (const sub of c.cards) {
-          sub.thickness = stroke;
-          sub.color = strokeColor;
+          sub.thickness = frame.px;
+          sub.color = frame.color;
           sub.background = surface;
         }
         c.container.scaleX = scale;
@@ -5992,8 +5998,9 @@ export class EntityVisuals {
       // (BADGE_RING): red when at least one member is "on" or "alert",
       // otherwise no ring — the only attention signal available once the
       // individual badges are gone.
-      c.container.thickness = chip.ringRed ? this.metrics.ringThicknessPx : 1;
-      c.container.color = (chip.ringRed ? chipAlert.ring : chipRest.ring) ?? "transparent";
+      const frame = badgeRing(chip.ringRed ? chipAlert : chipRest, this.metrics.cardHeightPx, this.metrics);
+      c.container.thickness = frame.px;
+      c.container.color = frame.color;
       // The count pill itself carries the room's REPORTING status — red if
       // at least one member is unavailable (HA has lost contact with it),
       // the same "available" green everywhere else otherwise. Separate

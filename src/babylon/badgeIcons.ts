@@ -96,8 +96,11 @@ const ICON_STROKE_VIEWBOX_BOLD = 2.5;
  *  Approximates --radius-badge (12px) at the classic badge's typical ~40-44px
  *  on-screen size; a fraction (not a fixed px) so it still looks right when
  *  the label-size stepper scales the badge up or down. */
-export const BADGE_CORNER_FRACTION = 0.28;
-// Ring stroke as a fraction of the badge. RING_FRACTION lands on the
+// The corner fraction, the inset and the dash are badgeLook's (one owner).
+export { BADGE_CORNER_FRACTION, BADGE_INSET_CARD, RING_DASH } from "./badgeLook";
+import { BADGE_CORNER_FRACTION, RING_DASH } from "./badgeLook";
+// The CLASSIC style's ring, as a fraction of the badge (a card-style badge's
+// ring is badgeLook.badgeRing, passed in as `ringOfSize`). RING_FRACTION lands on the
 // guidelines' 1.5px state ring at the 44px on-screen badge size
 // (44 × 0.035 ≈ 1.5); HAIRLINE_FRACTION lands on its 1px idle hairline.
 // Fractions, not fixed px, so both stay proportional when the label-size
@@ -106,11 +109,7 @@ const RING_FRACTION = 0.035;
 const HAIRLINE_FRACTION = 0.023;
 // The unavailable state's heavier dash (≈ 2.6px at 44).
 const BOLD_RING_FRACTION = 0.06;
-/** The dashed (unavailable) ring's pattern, as multiples of its weight — ONE
- *  pattern for the classic badge's baked ring and the card's Rectangle
- *  (dashableRectangle). Short dashes, so a badge carries about twice as many
- *  round its edge — 2.2/1.8 read as a few heavy blocks (owner, 2026-09-26). */
-export const RING_DASH: readonly [number, number] = [1.1, 0.9];
+
 
 function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
   ctx.beginPath();
@@ -271,7 +270,6 @@ function evictOldest(): void {
 // outer edge closer to the icon (a shorter, less chunky badge). The
 // horizontal breathing room is restored separately via the badge's own left
 // padding + the value's right padding, so left/right stay roomy.
-export const BADGE_INSET_CARD = 0.10;
 
 /** Render (and cache) the composited squircle badge for a category + glyph +
  *  live state — the single source of the app's badge icon squares (top bar,
@@ -320,6 +318,12 @@ export function badgeImageDataUrl(
    * complete description of the picture it returns.
    */
   boldGlyph = false,
+  /**
+   * The ring's weight as a fraction of the squircle — a CARD-style badge's
+   * (badgeLook.badgeRing ÷ its size), so a group's chip rings like the lone
+   * card beside it. Omitted: the classic style's own fractions.
+   */
+  ringOfSize?: number,
 ): string {
   const theme = typeof document !== "undefined" ? document.documentElement.getAttribute("data-theme") ?? "" : "";
   // ringState is part of the key: two badges alike in every other respect but
@@ -333,7 +337,7 @@ export function badgeImageDataUrl(
   // Weight is part of the key for the same reason size is: the two weights are
   // two different pictures, and a cache that conflated them would serve
   // whichever style happened to bake first to both of them.
-  const cacheKey = `${category}:${iconKey}:${state}:${ring}:${colorOverride ?? ""}:${inset}:${suppressRing}:${theme}:${px}:${boldGlyph}`;
+  const cacheKey = `${category}:${iconKey}:${state}:${ring}:${colorOverride ?? ""}:${inset}:${suppressRing}:${theme}:${px}:${boldGlyph}:${ringOfSize ?? ""}`;
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
@@ -365,9 +369,11 @@ export function badgeImageDataUrl(
       // would bind on every badge below 57px and thicken every ring in the app
       // by up to 68%. At 1 the rendered result is identical to what shipped
       // before: 48 × 0.035 = 1.68px either way.
-      const ringPx = surface.ringHairline
-        ? Math.max(1, size * HAIRLINE_FRACTION)
-        : Math.max(1, size * (surface.ringBold ? BOLD_RING_FRACTION : RING_FRACTION));
+      const ringPx = ringOfSize !== undefined
+        ? Math.max(1, size * ringOfSize)
+        : surface.ringHairline
+          ? Math.max(1, size * HAIRLINE_FRACTION)
+          : Math.max(1, size * (surface.ringBold ? BOLD_RING_FRACTION : RING_FRACTION));
       ctx.save();
       roundRectPath(ctx, m + ringPx / 2, m + ringPx / 2, size - ringPx, size - ringPx, Math.max(0, corner - ringPx / 2));
       ctx.lineWidth = ringPx;

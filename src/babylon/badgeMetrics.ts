@@ -461,7 +461,7 @@ export interface BadgeMetrics {
  * measured to that edge is measured from a boundary nobody can see. That
  * subtraction is what made three earlier attempts look right on paper.
  */
-export const CARD_VALUE_MARGIN_OF_ICON_PAD = 1.5;
+export { CARD_VALUE_MARGIN_OF_ICON_PAD } from "./badgeLook";
 
 /**
  * The value text, as a fraction of the CHIP it sits beside.

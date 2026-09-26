@@ -34,6 +34,8 @@
 /** The most device pictograms ONE card may show: a 2x2 grid.
  *
  *  Three columns would put each cell's tap zone under a badge's own box. */
+import { BADGE_INSET_CARD, CARD_VALUE_MARGIN_OF_ICON_PAD } from "./badgeLook";
+
 export const MAX_GRID_CHIPS = 4;
 
 /**
@@ -261,13 +263,10 @@ export function arrange(
   };
 }
 
-//: The value's clear space, as a multiple of the icon's own padding. Mirrors
-//: `badgeMetrics.CARD_VALUE_MARGIN_OF_ICON_PAD`; kept here so this module stays
-//: import-free and therefore runnable under a bare `node`.
-const VALUE_MARGIN_OF_ICON_PAD = 1.5;
-//: The transparent margin the icon bakes around its own squircle — mirrors
-//: `badgeIcons.BADGE_INSET_CARD`, for the same reason.
-const INK_INSET_FRACTION = 0.10;
+// The value's clear space and the chip's baked ink inset are badgeLook's — one
+// owner (they were mirrored here as literals no check compared, round 8).
+const VALUE_MARGIN_OF_ICON_PAD = CARD_VALUE_MARGIN_OF_ICON_PAD;
+const INK_INSET_FRACTION = BADGE_INSET_CARD;
 
 /** The six struts a card badge's row is built from, in order, and their sum. */
 export interface CardStruts {

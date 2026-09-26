@@ -18,6 +18,8 @@ import { projectToView, type ViewBasis } from "./badgeProjection";
 import type { BadgeMetrics } from "./badgeMetrics";
 
 /** What one pass measures with — see EntityVisuals.screenClearance. */
+import { badgeBakePx } from "./badgeLook";
+
 export interface GlassClearance {
   /** The rung's quantised pixels per world unit. */
   pxPerWorld: number;
@@ -105,5 +107,5 @@ export function glyphDrawPx(m: BadgeMetrics, card: boolean): number {
  * continuously and is capped at 1, so leaving it out can only bake larger.
  */
 export function glyphBakePx(m: BadgeMetrics, card: boolean, userScale: number, cssToGui: number): number {
-  return glyphDrawPx(m, card) * userScale * cssToGui;
+  return badgeBakePx(glyphDrawPx(m, card), userScale, cssToGui);
 }

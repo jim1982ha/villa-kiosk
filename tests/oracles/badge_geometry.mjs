@@ -85,7 +85,7 @@ ck("beside a VALUE the left margin is short by the ink the icon insets",
      /if \(lbl\.padL\) lbl\.padL\.isVisible = on;/.test(ev) && /if \(lbl\.barePad\) lbl\.barePad\.isVisible = !on;/.test(ev) && /padL\.isVisible = false;/.test(ev));
   ck("ONE mechanism for every card border, dashed included: the card's own DashableRectangle (owner: 'why is there a difference in the icon shape?')",
      /badge: DashableRectangle;/.test(ev) && /new DashableRectangle\(`lbl_badge_/.test(ev)
-       && /lbl\.badge\.dash = dashed && ringW > 0 \? \[ringW \* RING_DASH\[0\], ringW \* RING_DASH\[1\]\] : null;/.test(ev)
+       && /const ring = badgeRing\(surface, this\.metrics\.cardHeightPx, this\.metrics\);\s*lbl\.badge\.thickness = ring\.px;\s*lbl\.badge\.dash = ring\.dash;/.test(ev)
        && /BADGE_INSET_CARD, ringState, true, this\.glyphBakePx\(true\)/.test(ev) && !/cardRing|badgeRingDataUrl/.test(ev));
   // The dash is set around Rectangle's own drawing and nowhere else: drive the
   // real _localDraw against a context that records what it is asked to do.
