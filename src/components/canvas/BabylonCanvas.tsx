@@ -13,6 +13,7 @@ import { useHA } from "@/ha/HAStateStore";
 import { loadModelFromIndexedDB, getModelMeta, clearStoredModel } from "@/utils/localModel";
 import { fetchAddonConfig, versionedModelUrl, roomsPathFor } from "@/utils/centralModel";
 import { modelBytes } from "@/utils/modelPrefetch";
+import { acquireModel } from "@/utils/modelSource";
 import { setLoadedModelInfo, sha256Hex } from "@/utils/modelInfo";
 import { parseRoomData } from "@/utils/sh3dParser";
 import { report as reportTelemetry } from "@/utils/telemetry";
@@ -319,71 +320,41 @@ export default function BabylonCanvas({
         // run in the shadow of the GLB's own multi-second import instead of
         // adding to the critical path serially after it.
         const roomsSyncPromise = addonCfg.model_path ? fetchRoomsSync(addonCfg.model_path) : null;
-        let data: ArrayBuffer | null = null;
-        /** Whether the profile screen's background download was reusable. */
-        let usedPrefetch = false;
-        let fromAddon = false;
-        let loadedSource = "(per-browser IndexedDB upload)";
         const tFetchStart = performance.now();
-
-        if (addonCfg.model_path) {
-          // ── Central mode: ONLY use the add-on's centrally-stored model. ────
-          // No IndexedDB fallback — once a central model exists (uploaded into
-          // the add-on's /data store, reported by /addon-config), that is the
-          // authoritative source and per-browser uploads are irrelevant.
-          // Version-stamped URL → the service worker serves it from cache on
-          // repeat opens (cache-first), so only the first load hits the network.
-          noteModel({ path: addonCfg.model_path });
-          noteLoadPhase("fetch-model");
-          const modelUrl = await versionedModelUrl(addonCfg.model_path);
-          loadedSource = modelUrl;
-          // The bytes: the profile screen's background download when it is for
-          // this exact URL, else a fresh fetch with the same retries — one
-          // call (utils/modelPrefetch.modelBytes). A network blip (dropped
-          // connection, DNS — common on the standalone hostname's public hop)
-          // is ridden through with a "reconnecting" notice; an HTTP error
-          // status comes back at once, unretried: a real "nothing there".
-          const got = await modelBytes(
-            modelUrl,
-            (f) => {
-              if (cancelled) return;
-              setProgress(f);
-              // Real bytes flowing again (f > 0, not the 0 a retry resets to)
-              // means the blip is over — drop the reconnecting notice.
-              if (f > 0) setReconnecting(false);
-            },
-            () => { if (!cancelled) setReconnecting(true); },
-          );
-          if (!got.ok) {
-            setAddonError(true);
-            loadErrorCode = `MODEL_FETCH_HTTP_${got.status}`;
-            throw new Error(
-              `Central model not found at ${modelUrl} (HTTP ${got.status}).\n` +
-              "Re-upload it from Settings → Advanced Settings (Owner profile).",
-            );
-          }
-          usedPrefetch = got.prefetched;
-          data = got.data;
-          noteModel({ bytes: data.byteLength });
-          fromAddon = true;
-        } else {
-          // ── Standalone / dev mode: per-browser IndexedDB upload. ──────────
-          data = await loadModelFromIndexedDB();
-          // Reconcile a stale meta record: the browser can evict the (large) GLB
-          // from IndexedDB while keeping the tiny localStorage meta, leaving the
-          // app claiming a "stored model" that no longer exists. Clear it so the
-          // no-model overlay and Settings agree with what actually loads.
-          if (!data && getModelMeta()) await clearStoredModel();
+        // WHICH model, and what a failure means — utils/modelSource. A network
+        // blip is ridden through with a "reconnecting" notice; an HTTP status
+        // comes back at once, unretried: a real "nothing there".
+        const got = await acquireModel(addonCfg.model_path, {
+          versionedModelUrl, modelBytes,
+          fromIndexedDB: loadModelFromIndexedDB,
+          hasStoredMeta: () => !!getModelMeta(),
+          clearStoredModel,
+        }, {
+          onCentral: (path) => { noteModel({ path }); noteLoadPhase("fetch-model"); },
+          onProgress: (f) => {
+            if (cancelled) return;
+            setProgress(f);
+            // Real bytes flowing again (f > 0, not the 0 a retry resets to)
+            // means the blip is over — drop the reconnecting notice.
+            if (f > 0) setReconnecting(false);
+          },
+          onRetrying: () => { if (!cancelled) setReconnecting(true); },
+        });
+        if (!got.ok && got.reason === "http") {
+          setAddonError(true);
+          loadErrorCode = got.code;
+          throw new Error(got.message);
         }
-
         if (cancelled) return; // StrictMode unmounted us mid-load
-        if (!data) {
+        if (!got.ok) {
           // No GLB available (empty IndexedDB in standalone, or model_path unset
           // in the add-on). Show an explanatory overlay instead of silently
           // popping Settings open over a blank blue scene.
           setStatus("no-model");
           return;
         }
+        const { data, fromAddon, source: loadedSource, prefetched: usedPrefetch } = got;
+        if (fromAddon) noteModel({ bytes: data.byteLength });
         // Bytes are in hand — clear any lingering reconnecting notice even if
         // the successful fetch happened to report no progress fractions (a
         // cache hit / no Content-Length skips readWithProgress's onProgress).

@@ -52,7 +52,12 @@ const { readFileSync } = await import("node:fs");
 const mp = readFileSync(new URL("../../src/utils/modelPrefetch.ts", import.meta.url), "utf8").replace(/\/\/.*$|\/\*[\s\S]*?\*\//gm, "");
 ck("ONE fetch strategy: the background download uses fetchModelWithRetry, never a bare fetch", /e\.promise = fetchModelWithRetry\(/.test(mp) && !/\bfetch\(/.test(mp));
 const bc = readFileSync(new URL("../../src/components/canvas/BabylonCanvas.tsx", import.meta.url), "utf8");
-ck("the canvas makes one call for the bytes", /await modelBytes\(/.test(bc) && !/claimPrefetch|fetchModelWithRetry\(/.test(bc));
+// Through utils/modelSource since 2.496.172: the canvas hands it modelBytes,
+// and modelSource makes the one call.
+const ms = readFileSync(new URL("../../src/utils/modelSource.ts", import.meta.url), "utf8");
+ck("the canvas makes one call for the bytes (through modelSource)",
+   /versionedModelUrl, modelBytes,/.test(bc) && (ms.match(/deps\.modelBytes\(/g) ?? []).length === 1
+   && !/claimPrefetch|fetchModelWithRetry\(/.test(bc + ms));
 
 if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
 console.log("\n✅ one way to the model's bytes");
