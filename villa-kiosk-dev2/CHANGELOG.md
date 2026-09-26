@@ -1,3 +1,12 @@
+## 2.496.140
+
+### Changed — which floor a device is on
+- **Devices are placed on floors by your floor plan.** Which badges,
+  outlines and turning fans show on each floor was decided by a fixed 2.8 m
+  height, with at most two floors. It now follows the storeys of your room
+  plan, so a house with a low upper floor or a third storey shows each
+  device on the right one. Houses without a plan behave as before.
+
 ## 2.496.139
 
 ### Fixed — upstairs, where no room is drawn
