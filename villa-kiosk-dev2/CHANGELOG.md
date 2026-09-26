@@ -1,3 +1,12 @@
+## 2.496.122
+
+### Fixed — the Energy window
+- **Each device has one colour everywhere.** Phase A was pink in "Where
+  today's energy went" and blue in the history chart and its legend. The
+  flow, the history chart, the legend and the pie now agree. A device also
+  keeps its colour whatever the period or how much it used; the part of a
+  meter no device accounts for takes that meter's colour in the pie, as in
+  Home Assistant.
 ## 2.496.121
 
 ### Improved — the Energy window
