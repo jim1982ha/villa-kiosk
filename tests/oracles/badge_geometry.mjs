@@ -58,8 +58,16 @@ console.log("\n  a card's width:");
 const bare = cardStruts(28, 22, 0);
 const val = cardStruts(28, 22, 12);
 console.log(`      bare ${bare.width.toFixed(2)}  ·  with a value ${val.width.toFixed(2)}`);
-ck("a bare card is its three visible struts",
-   Math.abs(bare.padl + bare.glyph + bare.padr - bare.width) < 1e-9);
+ck("a bare card is its three visible struts: its own left margin, the glyph, the right",
+   Math.abs(bare.barepad + bare.glyph + bare.padr - bare.width) < 1e-9);
+// ⚠️ A BARE ICON SAT LEFT OF CENTRE (owner's screenshots, 2.496.130): its
+// left margin was `padl`, short by the ink, so the visible margins were 3.0
+// and 5.2 px and the card 25.8 by 28 — and Babylon floors a width to whole
+// pixels (measured on a real GUI: padl's 0.8 drew as 0, the glyph flush left).
+ck("a bare icon is CENTRED: its left margin is the same number as its right (so both floor alike)", bare.barepad === bare.padr);
+ck("  ...and its card is SQUARE", Math.abs(bare.width - 28) < 1e-9, bare.width);
+ck("  ...the visible margin round the chip is the same on all four sides",
+   Math.abs((bare.barepad + 0.1 * 22) - (bare.padr + 0.1 * 22)) < 1e-9 && Math.abs((bare.padr + 0.1 * 22) - ((28 - 22) / 2 + 0.1 * 22)) < 1e-9);
 ck("a valued card is all six",
    Math.abs(val.padl + val.glyph + val.valgap + val.value + val.valtail + val.padr
             - val.width) < 1e-9);
@@ -68,8 +76,16 @@ ck("the value's own struts are reported even when nothing is shown",
    bare.valgap > 0 && bare.valtail > 0);
 ck("  ...but do not count toward a bare card's width",
    bare.width < bare.padl + bare.glyph + bare.padr + bare.valgap);
-ck("the left margin is short by the ink the icon insets",
-   bare.padl < bare.padr);
+ck("beside a VALUE the left margin is short by the ink the icon insets",
+   val.padl < val.padr);
+{
+  const { readFileSync } = await import("node:fs");
+  const ev = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
+  ck("the renderer shows ONE left margin at a time: padl beside a value, barePad without",
+     /if \(lbl\.padL\) lbl\.padL\.isVisible = on;/.test(ev) && /if \(lbl\.barePad\) lbl\.barePad\.isVisible = !on;/.test(ev) && /padL\.isVisible = false;/.test(ev));
+  ck("the dashed ring lies on the CARD's edge (its own image), not baked round the chip inside it",
+     /lbl\.cardRing\.isVisible = dashed;/.test(ev) && /BADGE_INSET_CARD, ringState, true, this\.glyphBakePx\(true\)/.test(ev) && !/dashed \? 0 : BADGE_INSET_CARD/.test(ev));
+}
 ck("a taller card pads more", cardStruts(40, 22, 0).padr > bare.padr);
 
 /* ── the chip width model ──────────────────────────────────────────────── */

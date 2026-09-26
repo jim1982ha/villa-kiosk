@@ -124,7 +124,7 @@ import { FanRigs } from "./fanRigs";
 import { PlacementPass, GROUP_OVERLAP_ALLOW_WIDTHS, type ShownLabel, type PendingEntityGroup } from "./placementPass";
 import { onGlass, glyphDrawPx, glyphBakePx } from "./badgeLayout";
 import type { FrameRequests } from "./frameScheduler";
-import { badgeImageDataUrl, BADGE_INSET_CARD, BADGE_CORNER_FRACTION } from "./badgeIcons";
+import { badgeImageDataUrl, badgeRingDataUrl, BADGE_INSET_CARD, BADGE_CORNER_FRACTION, BADGE_DASHED_RING_FRACTION } from "./badgeIcons";
 import { badgeText } from "./badgeText";
 import { badgeShadow } from "./badgeShadow";
 import { cameraFrame } from "./cameraFrame";
@@ -616,6 +616,15 @@ export interface LabelControls {
    *  `valueSpacer`. Null for the classic style. Toggled only through
    *  `setValueVisible` — see there. */
   valueTail: Rectangle | null;
+  /** The card style's two left margins: `padl` beside a value, `barePad` (the
+   *  same number as the right margin) on a bare icon — see
+   *  badgeCard.cardStruts. Toggled only through `setValueVisible`. Null for
+   *  the classic style. */
+  padL: Rectangle | null;
+  barePad: Rectangle | null;
+  /** The card style's dashed ring, over the card's edge (the `unavailable`
+   *  state; Babylon GUI has no dashed border). Null for the classic style. */
+  cardRing: Image | null;
   valueText: TextBlock;
   anchor: TransformNode;
   type: EntityType;
@@ -3005,6 +3014,9 @@ export class EntityVisuals {
       // classic keeps the glyph as the badge's full fill and the value in a
       // separate pill below.
       const row = card ? new StackPanel(`lbl_row_${entityId}`) : null;
+      let barePad: Rectangle | null = null;
+      let padL: Rectangle | null = null;
+      let cardRing: Image | null = null;
       if (row) {
         row.isVertical = false;
         // ONE height for everything inside the card, and it is the glyph's
@@ -3017,6 +3029,16 @@ export class EntityVisuals {
         row.height = `${glyphPx}px`;
         row.adaptWidthToChildren = true;
         badge.addControl(row);
+        // The dashed ring, over the card's own edge — shown only for it (see
+        // updateLabel). A bare card is square (cardStruts' `bareink`), and an
+        // unavailable badge never shows a value, so one square image fits.
+        cardRing = new Image(`lbl_ring_${entityId}`);
+        cardRing.width = `${m.cardHeightPx}px`;
+        cardRing.height = `${m.cardHeightPx}px`;
+        cardRing.stretch = Image.STRETCH_FILL;
+        cardRing.isPointerBlocker = false;
+        cardRing.isVisible = false;
+        badge.addControl(cardRing);
       }
 
       // BOTH styles use the SAME baked squircle image (badgeImageDataUrl) at
@@ -3065,7 +3087,15 @@ export class EntityVisuals {
         // Unrounded, like the two on the value's side (2.454.0): these are
         // PRE-scale CSS px and rounding 0.65 to 1 is a 35% error on the very
         // quantity the `visL/gap/visR` readout exists to make checkable.
-        row.addControl(strut("padl", st!.padl));
+        // Two left margins, one shown at a time (setValueVisible): a bare
+        // icon's is the SAME number as its right margin, so the chip is
+        // centred whatever Babylon's whole-pixel flooring does; beside a value
+        // it is short by the ink — see cardStruts.
+        barePad = strut("barepad", st!.barepad);
+        row.addControl(barePad);
+        padL = strut("padl", st!.padl);
+        padL.isVisible = false;
+        row.addControl(padL);
       }
       (row ?? badge).addControl(glyph);
 
@@ -3151,8 +3181,9 @@ export class EntityVisuals {
         row!.addControl(valueSpacer);
         row!.addControl(valueWrap);
         // The value's TAIL, and it rides the value's own visibility for the
-        // same reason the gap spacer does — a bare-icon card must keep
-        // visL == visR == iconPadX (that is what makes it square), so the extra
+        // same reason the gap spacer does — a bare-icon card must keep its
+        // visible margins equal (with `bareink`, 2.496.130: this comment used to
+        // claim visL == visR here while the drawn margins were 3.0 and 5.2), so the extra
         // margin the owner's centring asks for belongs to the VALUE, not to the
         // card. With a value: visR = this + padr = 1.5·iconPadX, which is the
         // visible gap on the other side of the text. Without one: it collapses
@@ -3220,7 +3251,7 @@ export class EntityVisuals {
       valueWrap.addControl(valueText);
 
       this.labels.set(entityId, {
-        container, badge, glyph, valueWrap, valueSpacer, valueTail, valueText, anchor, type, category,
+        container, badge, glyph, valueWrap, valueSpacer, valueTail, padL, barePad, cardRing, valueText, anchor, type, category,
       });
 
       // Repaint from the last known state so a rebuild (toggle on / icon edit)
@@ -3368,12 +3399,25 @@ export class EntityVisuals {
         ? 0
         : surface.ringHairline ? 1 : this.metrics.ringThicknessPx;
       lbl.badge.color = surface.ring ?? "transparent";
+      // Every state's chip is baked the same way — inset, no ring of its own.
+      // The dashed ring used to be baked INTO the chip (inset 0), which drew it
+      // round the chip inside the card instead of on the card's edge (2.496.130);
+      // it is now its own image over the card, like every other state's
+      // Rectangle border.
       lbl.glyph.source = badgeImageDataUrl(
         lbl.category, iconKey, state, override,
-        dashed ? 0 : BADGE_INSET_CARD, ringState, !dashed, this.glyphBakePx(true),
+        BADGE_INSET_CARD, ringState, true, this.glyphBakePx(true),
         // This whole branch IS the card style, so the heavier glyph weight is
         // unconditional here — see ICON_STROKE_VIEWBOX_BOLD.
         true);
+      if (lbl.cardRing) {
+        lbl.cardRing.isVisible = dashed;
+        if (dashed && surface.ring) {
+          lbl.cardRing.source = badgeRingDataUrl(surface.ring,
+            this.glyphBakePx(true) * (this.metrics.cardHeightPx / this.glyphPxFor(true)),
+            chipProportions().radius, BADGE_DASHED_RING_FRACTION, true);
+        }
+      }
       // Neutral ink, on a now-neutral card — the bottom bar's value is
       // `--text-primary` beside a coloured chip, not the chip's own hue. The
       // state is carried by the chip and the ring; the number is just a number.
@@ -4189,6 +4233,9 @@ export class EntityVisuals {
     // pays for space around text it is not drawing — the same dead-width bug
     // the gap spacer above was written to avoid, on the other side.
     if (lbl.valueTail) lbl.valueTail.isVisible = on;
+    // …and the left margin: `padl` beside a value, `barePad` without one.
+    if (lbl.padL) lbl.padL.isVisible = on;
+    if (lbl.barePad) lbl.barePad.isVisible = !on;
   }
 
   /**

@@ -106,6 +106,9 @@ const RING_FRACTION = 0.035;
 const HAIRLINE_FRACTION = 0.023;
 // The unavailable state's heavier dash (≈ 2.6px at 44).
 const BOLD_RING_FRACTION = 0.06;
+/** The dashed (unavailable) ring's weight, of the card it lies on — the bold
+ *  ring the chip used to bake it at, now at the card's edge. */
+export const BADGE_DASHED_RING_FRACTION = BOLD_RING_FRACTION;
 
 function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
   ctx.beginPath();
@@ -321,6 +324,44 @@ export function badgeImageDataUrl(
     drawIcon(ctx, ICON_NODES[iconKey] ?? ICON_NODES.gauge, iconScale, offset, surface.glyph,
       boldGlyph, size > 0 ? px / size : 1);
 
+    url = canvas.toDataURL("image/png");
+  }
+  cache.set(cacheKey, url);
+  evictOldest();
+  return url;
+}
+
+/**
+ * A CARD's ring alone — no fill, no glyph — baked at the card's own size, to
+ * lie over the card's edge. For the one ring Babylon GUI cannot stroke: the
+ * dashed `unavailable` ring (a Rectangle has no dash).
+ *
+ * ⚠️ THE DASH WAS BAKED INTO THE CHIP, NOT THE CARD (fixed 2.496.130). The
+ * chip image is the glyph's control, inset inside the card, so the dash was
+ * drawn round the chip with the card's own fill showing outside it — a white
+ * card with a dashed ring floating inside it (the owner's lock badge). Here
+ * `cornerFraction` is the card's (the chip radius token) and `ringFraction`
+ * the weight it was always drawn at (BADGE_DASHED_RING_FRACTION), so the
+ * ring IS the card's edge.
+ */
+export function badgeRingDataUrl(color: string, pxHint: number, cornerFraction: number, ringFraction: number, dashed: boolean): string {
+  const px = bakeSizeFor(pxHint);
+  const cacheKey = `ring:${color}:${px}:${cornerFraction}:${ringFraction}:${dashed}`;
+  const cached = cache.get(cacheKey);
+  if (cached) return cached;
+  const canvas = document.createElement("canvas");
+  canvas.width = px;
+  canvas.height = px;
+  const ctx = canvas.getContext("2d");
+  let url = "";
+  if (ctx) {
+    const ringPx = Math.max(1, px * ringFraction);
+    const corner = px * cornerFraction;
+    roundRectPath(ctx, ringPx / 2, ringPx / 2, px - ringPx, px - ringPx, Math.max(0, corner - ringPx / 2));
+    ctx.lineWidth = ringPx;
+    ctx.strokeStyle = color;
+    if (dashed) ctx.setLineDash([ringPx * 2.2, ringPx * 1.8]);
+    ctx.stroke();
     url = canvas.toDataURL("image/png");
   }
   cache.set(cacheKey, url);

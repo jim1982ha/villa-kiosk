@@ -1,3 +1,13 @@
+## 2.496.130
+
+### Fixed — device icons on the map
+- **A single device icon is centred in its badge, and the badge is
+  square.** The icon sat against the left edge of a badge slightly narrower
+  than it was tall. Badges with several icons, which lay their icons out
+  differently, were not affected.
+- **An unavailable device's dashed border lies on the badge's edge.** It was
+  drawn around the icon inside the badge, so the badge showed a solid edge
+  with a dashed ring floating inside it.
 ## 2.496.129
 
 ### Improved — "Where today's energy went"

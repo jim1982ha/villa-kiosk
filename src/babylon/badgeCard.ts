@@ -271,6 +271,11 @@ const INK_INSET_FRACTION = 0.10;
 
 /** The six struts a card badge's row is built from, in order, and their sum. */
 export interface CardStruts {
+  /** A BARE icon's left margin, shown INSTEAD of `padl` when there is no
+   *  value: the very same number as `padr`, so the chip is centred (2.496.130). */
+  barepad: number;
+  /** The left margin beside a VALUE: short by the ink, so the visible margins
+   *  either side of the row match. Hidden on a bare icon. */
   padl: number;
   glyph: number;
   /** Zero-width and hidden when the badge shows no value. */
@@ -320,13 +325,22 @@ export function cardStruts(
   // renderer builds them once and toggles their VISIBILITY with the value —
   // a badge with no value must not carry a gap to nothing. `width` is what the
   // row measures given what is actually shown.
+  // ⚠️ A BARE ICON SAT LEFT OF CENTRE, TWICE OVER (2.496.130). `padl` is
+  // short by the ink so a card WITH a value reads pad | chip | value with
+  // matching visible margins; on a bare icon that left L = padl + ink =
+  // iconPadX against R = ink + padr = iconPadX + ink (coarse: 3.0 vs 5.2 px),
+  // on a card 25.8 wide by 28 tall. And Babylon GUI FLOORS a control's width
+  // to whole pixels — measured on a real GUI: padl's 0.8 drew as 0, the glyph
+  // flush on the card's left edge. So a bare icon's left margin is not "padl
+  // plus the ink back" (2.2 floors to 2: still a pixel off) but the SAME
+  // number as its right margin — which floors the same way on both sides.
   const padl = iconPadX - inkInset;
+  const barepad = iconPadX;
   const valgap = Math.max(0, VALUE_MARGIN_OF_ICON_PAD * iconPadX - inkInset);
   const valtail = (VALUE_MARGIN_OF_ICON_PAD - 1) * iconPadX;
   const padr = iconPadX;
-  const shown = valueWidthPx > 0 ? valgap + valueWidthPx + valtail : 0;
-  return {
-    padl, glyph: glyphPx, valgap, value: valueWidthPx, valtail, padr,
-    width: padl + glyphPx + shown + padr,
-  };
+  const width = valueWidthPx > 0
+    ? padl + glyphPx + valgap + valueWidthPx + valtail + padr
+    : barepad + glyphPx + padr;
+  return { barepad, padl, glyph: glyphPx, valgap, value: valueWidthPx, valtail, padr, width };
 }
