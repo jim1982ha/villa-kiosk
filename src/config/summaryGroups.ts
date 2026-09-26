@@ -9,70 +9,57 @@
 // the bottom-bar tile for the same category — this is the single source both
 // now read from.
 
-import { DoorClosed, DoorOpen, Lightbulb } from "lucide-react";
+import type { ComponentType } from "react";
+import { DoorClosed, DoorOpen, Lightbulb, Lock } from "lucide-react";
 import { displayLabelFor } from "@/config/EntityMap";
 import type { HassEntity } from "@/types/ha.types";
 import type { EntityMapping } from "@/types/scene.types";
-import type { SummaryGroup } from "@/components/panels/SummaryGroupPanel";
+import type { LockFacts, OnOffFacts } from "./villaSummary";
+
+/** A device group a summary opens (SummaryGroupPanel). Defined here, beside
+ *  the groups, so this config module no longer imports from a screen. */
+export interface SummaryGroup {
+  title: string;
+  icon: ComponentType<{ size?: number | string }>;
+  entityIds: string[];
+}
 
 // Same label the map badge, Advanced Settings and every device list show —
 // displayLabelFor is THE rule (a user's stored label wins over HA's
-// friendly_name, raw slugs get prettified). Deriving it here from
-// friendly_name alone meant a device the owner had renamed kept its old HA
-// name on this one tile while reading correctly everywhere else.
-const friendly = (e: HassEntity, entityMap: Record<string, EntityMapping>) =>
-  displayLabelFor(e.entity_id, entityMap[e.entity_id]?.label, e.attributes.friendly_name);
+// friendly_name, raw slugs get prettified).
+const friendly = (e: HassEntity | undefined, id: string, entityMap: Record<string, EntityMapping>) =>
+  displayLabelFor(id, entityMap[id]?.label, e?.attributes.friendly_name);
 
-/** Every `lock.*` entity — see SummaryBar's own docstring for why this is
- *  domain-only and NOT extended to switches that merely read as door/gate
- *  relays by name: a name-substring heuristic tried here once (matching
- *  "door" as a bare substring) misfired on every "outdoor" light switch in
- *  the villa. There's no reliable automatic signal for "this switch is a
- *  door lock" that doesn't risk exactly that kind of false positive — an
- *  explicit per-entity opt-in would be the honest way to add one, not a name
- *  match. Returns null (no group, no tile) when there are no locks at all. */
+/**
+ * Every lock of the villa, as ONE group — built from villaSummary's LockFacts
+ * (round 10, 2.496.157), the same facts the tile's words and the readiness
+ * report read. It re-selected `lock.*` itself with an OPTIONAL villa scope (the
+ * forgotten-argument shape the villa_devices oracle warns about), and chose its
+ * icon by "every lock locked, else an open door" — so a lock that could not be
+ * read showed an OPEN DOOR beside "1 Unknown", the exact "lie about a door"
+ * villaSummary exists to stop. The icon now follows the facts: a closed door
+ * when all are locked, an open door only when one IS unlocked, a plain lock
+ * when one cannot be read. `lock.*` only — a switch that merely looks like a
+ * door relay by name is not a lock (a "door" substring once matched every
+ * "outdoor" light switch). Null: no locks.
+ */
 export function locksGroup(
+  facts: LockFacts | null,
   entities: Record<string, HassEntity>,
   entityMap: Record<string, EntityMapping> = {},
-  /** The villa's own devices — see `lightsGroup` for why this exists and why
-   *  it is optional. */
-  /** Only `.has` is ever called, so `villaDevices(...)` satisfies this
-   *  directly and so does a plain Set. */
-  allowed?: { has(entityId: string): boolean },
 ): SummaryGroup | null {
-  const locks = Object.values(entities).filter(
-    (e) => e.entity_id.startsWith("lock.") && (!allowed || allowed.has(e.entity_id)));
-  if (locks.length === 0) return null;
-  const allLocked = locks.every((l) => l.state === "locked");
+  if (!facts || facts.ids.length === 0) return null;
+  const single = facts.ids.length === 1;
   return {
-    title: locks.length === 1 ? friendly(locks[0], entityMap) : "Locks",
-    icon: allLocked ? DoorClosed : DoorOpen,
-    entityIds: locks.map((l) => l.entity_id),
+    title: single ? friendly(entities[facts.ids[0]], facts.ids[0], entityMap) : "Locks",
+    icon: facts.unlocked.length > 0 ? DoorOpen : facts.unknown.length > 0 ? Lock : DoorClosed,
+    entityIds: facts.ids.slice(),
   };
 }
 
-/** Every `light.*` entity. Returns null (no group, no tile) when there are
- *  no lights at all. */
-/**
- * ⚠️ THE DOMAIN PREFIX IS NOT THE VILLA. This filtered on `light.` alone, so
- * every light Home Assistant knows about was counted as one of the villa's —
- * a helper light, a neighbouring integration, a light in another building.
- * Invisible on a tidy instance and wrong on a busy one: the summary tile then
- * reports "3 of 11 on" for a villa that has six lights.
- *
- * `allowed` is the villa's own device set (`selectableDeviceIds`), and it is
- * OPTIONAL on purpose: a caller that passes nothing keeps the old behaviour,
- * so this could be corrected without auditing every call site in one release.
- * Every caller in this build does pass it.
- */
-export function lightsGroup(
-  entities: Record<string, HassEntity>,
-  /** Only `.has` is ever called, so `villaDevices(...)` satisfies this
-   *  directly and so does a plain Set. */
-  allowed?: { has(entityId: string): boolean },
-): SummaryGroup | null {
-  const lights = Object.values(entities).filter(
-    (e) => e.entity_id.startsWith("light.") && (!allowed || allowed.has(e.entity_id)));
-  if (lights.length === 0) return null;
-  return { title: "Lights", icon: Lightbulb, entityIds: lights.map((e) => e.entity_id) };
+/** Every light of the villa, from villaSummary's facts (scoped to the villa's
+ *  own devices there — a helper light or a neighbour's is not one). */
+export function lightsGroup(facts: OnOffFacts | null): SummaryGroup | null {
+  if (!facts || facts.ids.length === 0) return null;
+  return { title: "Lights", icon: Lightbulb, entityIds: facts.ids.slice() };
 }

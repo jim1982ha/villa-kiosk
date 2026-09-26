@@ -98,6 +98,12 @@ export function climateFacts(entities: Record<string, HassEntity>, allowed?: All
   };
 }
 
+/** The AC tile's temperature: in Home Assistant's own unit when it is known
+ *  ("24°C", "75°F"), a bare degree otherwise — never an assumed Celsius. */
+export function fmtClimateTemp(avg: number, unit?: string): string {
+  return unit ? `${avg}${unit}` : `${avg}°`;
+}
+
 export function powerFacts(
   entities: Record<string, HassEntity>, thresholds: Record<string, Threshold>,
 ): PowerFacts | null {

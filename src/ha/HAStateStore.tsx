@@ -21,6 +21,8 @@ export interface HAConfig {
   latitude: number;
   longitude: number;
   location_name: string;
+  /** Home Assistant's units — every climate/temperature state is in these. */
+  unit_system?: { temperature?: string };
 }
 
 interface HAStateContextType {

@@ -30,7 +30,7 @@ import { CATEGORY_ORDER, categorySurface, type DeviceSurfaceState } from "@/conf
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import type { HaSceneInfo } from "@/config/haScenes";
 import { locksGroup, lightsGroup } from "@/config/summaryGroups";
-import { villaSummary } from "@/config/villaSummary";
+import { villaSummary, fmtClimateTemp } from "@/config/villaSummary";
 import { formatUnitValue, formatSensorParts } from "@/utils/entityValue";
 import { findWeatherStation } from "@/config/weatherStation";
 import WeatherPanel from "@/components/panels/WeatherPanel";
@@ -76,6 +76,8 @@ function deriveTiles(
    *  tile counts and the list a tap opens must come from one set, or the tile
    *  says "3 On" and the panel shows four rows. Only `.has` is called. */
   allowed?: { has(entityId: string): boolean },
+  /** Home Assistant's temperature unit ("°C", "°F"), when known. */
+  tempUnit?: string,
 ): SummaryTile[] {
   const tiles: SummaryTile[] = [];
   // The FACTS are villaSummary's — shared with the readiness report, so the
@@ -92,7 +94,7 @@ function deriveTiles(
   // an unanchored "door" substring — reverted). Shared with the Facility
   // Readiness tab's "View doors" shortcut (see summaryGroups.ts) so both
   // open the identical group, not two independently-derived lists.
-  const locksG = locksGroup(entities, entityMap, allowed);
+  const locksG = locksGroup(facts.locks, entities, entityMap);
   if (locksG && facts.locks) {
     const f = facts.locks;
     const locks = f.ids.map((id) => entities[id]).filter((e): e is HassEntity => !!e);
@@ -156,7 +158,7 @@ function deriveTiles(
   // Shared with the Facility Readiness tab's "View lights" shortcut (see
   // summaryGroups.ts) so both open the identical full list of lights, not
   // just the ones a readiness check happens to flag as still lit.
-  const lightsG = lightsGroup(entities, allowed);
+  const lightsG = lightsGroup(facts.lights);
   if (lightsG && facts.lights) {
     const n = facts.lights.on.length;
     tiles.push({
@@ -182,8 +184,10 @@ function deriveTiles(
       // anything is running and actually reporting one; otherwise defer to
       // the shared phrasing so "All Off" here matches "All Off" on the Lights
       // tile beside it (and "3 On" with no reading reads the same way too).
+      // In Home Assistant's own unit (its unit_system) — the readings are in
+      // it; this said "°C" on every install, a °F one included.
       value: active.length && avg !== null
-        ? `${avg}°C`
+        ? fmtClimateTemp(avg, tempUnit)
         : onOffSummary(active.length, f.ids.length),
       tone: active.length ? "on" : "off", category: "comfort",
       entityIds: f.ids, title: "Climate", canControl: can("comfort"),
@@ -395,7 +399,7 @@ function SceneMenu({ scenes, canRun, apply }: {
 }
 
 export default function SummaryBar({ onOpenEntity, mappedEntityIds, scenes }: Props) {
-  const { entities, suppressedEntityIds, entityDeviceIds } = useHA();
+  const { entities, suppressedEntityIds, entityDeviceIds, haConfig } = useHA();
   const { ask: askScene, dialog: sceneDialog } = useSceneConfirm();
   const { role } = useProfile();
   const { config, resolvedRooms } = useConfig();
@@ -442,7 +446,7 @@ export default function SummaryBar({ onOpenEntity, mappedEntityIds, scenes }: Pr
   const station = useMemo(() => found, [stationKey]);
 
   const deviceTiles = useMemo(
-    () => deriveTiles(visibleEntities, config.entityMap, resolvedRooms, (c) => (role ? isCategoryAllowed(role, c) : false), config.alertThresholds, entityDeviceIds, villaDeviceSet),
+    () => deriveTiles(visibleEntities, config.entityMap, resolvedRooms, (c) => (role ? isCategoryAllowed(role, c) : false), config.alertThresholds, entityDeviceIds, villaDeviceSet, haConfig?.unit_system?.temperature),
     // ⚠️ villaDeviceSet, NOT villaDevices. This read `villaDevices` — the
     // imported FUNCTION, a module constant that never changes — so the two
     // inputs unique to the set above (mappedEntityIds, entityDeviceIds) could

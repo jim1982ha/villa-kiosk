@@ -30,6 +30,7 @@ import { useFmData, useFacilityLiveView } from "@/fm/FmDataContext";
 import { buildReadiness, type ReadinessCheck } from "@/fm/readiness";
 import { villaDevices } from "@/config/deviceGroups";
 import { locksGroup, lightsGroup } from "@/config/summaryGroups";
+import { lockFacts, lightFacts } from "@/config/villaSummary";
 import SummaryGroupPanel, { type SummaryGroup } from "@/components/panels/SummaryGroupPanel";
 import CockpitModal from "@/components/cockpit/CockpitModal";
 import { buildDeviceOptions } from "./DeviceSearchPicker";
@@ -115,8 +116,8 @@ export default function FacilityModal({
 
   const [checkPanelGroup, setCheckPanelGroup] = useState<SummaryGroup | null>(null);
   const openCheckDevices = (check: ReadinessCheck) => {
-    const group = check.id === "locks" ? locksGroup(entities, config.entityMap, devices)
-      : check.id === "lights" ? lightsGroup(entities, devices)
+    const group = check.id === "locks" ? locksGroup(lockFacts(entities, devices), entities, config.entityMap)
+      : check.id === "lights" ? lightsGroup(lightFacts(entities, devices))
       : null;
     if (group) setCheckPanelGroup(group);
   };

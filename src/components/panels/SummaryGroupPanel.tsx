@@ -8,7 +8,7 @@
 // Built on the shared BasePanel (same modal chrome/header/close as every other
 // panel) and the shared gradient badge (badgeImage) so it feels native.
 
-import { useState, type ComponentType } from "react";
+import { useState } from "react";
 import { deviceRowText } from "@/utils/entityValue";
 import { ChevronRight, Sparkles, Power, PowerOff, EyeOff } from "lucide-react";
 import BasePanel from "./BasePanel";
@@ -33,11 +33,9 @@ import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityType } from "@/types/scene.types";
 import { NO_ROOM_LABEL } from "@/config/roomKey";
 
-export interface SummaryGroup {
-  title: string;
-  icon: ComponentType<{ size?: number | string }>;
-  entityIds: string[];
-}
+// The group's shape is config/summaryGroups' (this screen only draws one).
+export type { SummaryGroup } from "@/config/summaryGroups";
+import type { SummaryGroup } from "@/config/summaryGroups";
 
 interface Props {
   group: SummaryGroup;
