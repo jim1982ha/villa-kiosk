@@ -1,3 +1,12 @@
+## 2.496.156
+
+### Changed — Advanced Settings
+- **Both device tables edit a device the same way.** The bound-objects list
+  and the entity table showed the same fields built twice; they now share
+  one editor. A label is saved half a second after you stop typing, or as
+  soon as you leave the field, in both. The linked-entity hint now says what
+  it does everywhere: it adds the red ring and an on/off switch.
+
 ## 2.496.155
 
 ### Fixed — settings
