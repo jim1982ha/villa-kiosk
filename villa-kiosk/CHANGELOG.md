@@ -1,3 +1,11 @@
+## 2.496.169
+
+### Changed
+- **A refused request always explains itself.** Signing every device out
+  from a non-owner profile, or opening a fault photo from a guest profile,
+  now says who may do it, like every other refusal (it said only
+  "forbidden").
+
 ## 2.496.168
 
 ### Behind the scenes

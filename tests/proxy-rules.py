@@ -426,6 +426,35 @@ if cam_mismatch:
 ck("an unknown role holds nothing",
    not any(proxy._may("intruder", c) for caps in proxy.ROLE_CAPABILITIES.values() for c in caps))
 
+# ── every route is gated, or public on purpose (round 11, 2.496.169) ──────
+# The gate was written out by hand at twelve handlers and had drifted into two
+# 403 shapes; it is one call now (_refuse). A NEW handler that forgets it is an
+# open endpoint with every other check green — so each routed handler must
+# call _refuse (or the model gate, which adds the public_model_access option),
+# or be named here with the reason it answers without a session.
+PUBLIC_HANDLERS = {
+    "auth_roles_handler": "the profile screen lists the roles before anyone signs in",
+    "auth_session_handler": "answers 'is there a session' — to anyone, by design",
+    "auth_verify_handler": "the sign-in itself (rate-limited)",
+    "auth_logout_handler": "clears the caller's own cookie",
+}
+routed = re.findall(r'app\.router\.add_\w+\(\s*(?:"[A-Z*]+"\s*,\s*)?"[^"]+"\s*,\s*(\w+)',
+                    PROXY.read_text())
+ungated = sorted({h for h in routed if h not in PUBLIC_HANDLERS
+                  and not re.search(r"\b_refuse\(request|\b_model_authorized\(request",
+                                    inspect.getsource(getattr(proxy, h)))})
+ck(f"all {len(set(routed))} routed handlers are gated (_refuse), or named public with a reason",
+   len(routed) > 10 and not ungated)
+if ungated:
+    print(f"          answer without a session: {', '.join(ungated)}")
+stale_public = sorted(h for h in PUBLIC_HANDLERS if h not in routed)
+ck("  ...and every handler named public is still routed", not stale_public)
+hand = [n for n, f in vars(proxy).items() if n.endswith("_handler") and callable(f)
+        and re.search(r"if not _authorized\(request\)", inspect.getsource(f))]
+ck("  ...no handler writes the gate out by hand again", not hand)
+if hand:
+    print(f"          by hand: {', '.join(hand)}")
+
 # ── A chunked upload survives a re-sent piece (round 11, 2.496.166) ──────────
 # Driven through the real handler with a fake request: the client re-sends a
 # piece whose reply it never got, so the server must accept the same offset
