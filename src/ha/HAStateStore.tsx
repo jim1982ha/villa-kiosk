@@ -11,7 +11,7 @@ import { HAWebSocket, type ConnectionState } from "./HAWebSocket";
 import { devLog } from "@/utils/devLog";
 import { report as reportTelemetry } from "@/utils/telemetry";
 import { hasBootMark } from "@/utils/bootTimeline";
-import { resolveEntityFloor } from "@/config/EntityMap";
+import { entityPlaces, entityRegistryFacts } from "./registryResolve";
 import type { HassEntity, HassServiceTarget } from "@/types/ha.types";
 
 type EntityCallback = (entity: HassEntity) => void;
@@ -257,68 +257,38 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
         ms: Math.round(performance.now() - tReg),
         preLogin: !hasBootMark("scene"),
       });
-      setSuppressedEntityIds(new Set(
-        rows
-          .filter((r) => r.hidden_by != null || r.entity_category === "config" || r.entity_category === "diagnostic")
-          .map((r) => r.entity_id),
-      ));
-      setHiddenInHaEntityIds(new Set(
-        rows.filter((r) => r.hidden_by != null).map((r) => r.entity_id),
-      ));
-      // device_id sits directly on the entity registry row — no extra fetch
-      // needed, and it works even when the device/area registry calls below
-      // fail (a profile that can read entities but not devices still gets
-      // this). The authoritative "these entities are really one physical
-      // device" signal — see suggestDeviceGroups.
-      const deviceIds: Record<string, string> = {};
-      for (const r of rows) if (r.device_id) deviceIds[r.entity_id] = r.device_id;
-      setEntityDeviceIds(deviceIds);
-      // Resolve each entity's Area NAME: its own area_id, falling back to its
-      // device's (HA's own inheritance rule — most entities carry no area_id
-      // of their own and get it from the device they belong to). All three
-      // registry fetches are separate best-effort steps so a profile that can
-      // read entities but not devices/areas/floors still gets whatever
-      // resolves rather than losing the whole feature.
+      // What the rows say, and where each entity is — ha/registryResolve.
+      const facts = entityRegistryFacts(rows);
+      setSuppressedEntityIds(facts.suppressed);
+      setHiddenInHaEntityIds(facts.hiddenInHa);
+      setEntityDeviceIds(facts.deviceIds);
+      // The other three registries are separate best-effort steps, so a
+      // profile that can read entities but not devices/areas/floors still
+      // gets whatever resolves rather than losing the whole feature.
       const [devices, areas, floors] = await Promise.all([
         ws.getDeviceRegistry().catch(() => []),
         ws.getAreaRegistry().catch(() => []),
         ws.getFloorRegistry().catch(() => []),
       ]);
       if (devices.length === 0 && areas.length === 0) return;
-      const areaNameById = new Map(areas.map((a) => [a.area_id, a.name]));
-      const deviceAreaById = new Map(devices.map((d) => [d.id, d.area_id]));
-      const resolved: Record<string, string> = {};
-      for (const r of rows) {
-        const areaId = r.area_id ?? (r.device_id ? deviceAreaById.get(r.device_id) : null);
-        const name = areaId ? areaNameById.get(areaId) : null;
-        if (name) resolved[r.entity_id] = name;
-      }
-      setEntityAreaNames(resolved);
-      // Same inheritance chain, one hop further: entity -> area -> Floor.
-      // See HassAreaRegistryEntry/HassFloorRegistryEntry and
-      // EntityMap.ts's resolveEntityFloor for why `name` is preferred over
-      // HA's own optional `level`.
-      const areaById = new Map(areas.map((a) => [a.area_id, a]));
-      const floorById = new Map(floors.map((f) => [f.floor_id, f]));
-      const resolvedFloors: Record<string, number> = {};
-      for (const r of rows) {
-        const areaId = r.area_id ?? (r.device_id ? deviceAreaById.get(r.device_id) : null);
-        const floorId = areaId ? areaById.get(areaId)?.floor_id : null;
-        const floor = floorId ? floorById.get(floorId) : null;
-        if (floor) {
-          const num = resolveEntityFloor(floor.name, floor.level, null);
-          if (num != null) resolvedFloors[r.entity_id] = num;
-        }
-      }
-      setEntityFloorNumbers(resolvedFloors);
+      const places = entityPlaces(rows, devices, areas, floors);
+      setEntityAreaNames(places.areaNames);
+      setEntityFloorNumbers(places.floorNumbers);
     } catch (err) {
       devLog("[HA] entity_registry/list failed (hidden filter + area names skipped)", err);
     }
   }, [ws]);
 
+  /** Settles once connect()'s subscriptions are registered — what the
+   *  on-connected pass waits for, so the snapshot is taken AFTER the
+   *  subscription and no state change can fall between them. */
+  const subscribedRef = useRef<Promise<void>>(Promise.resolve());
+
   const connect = useCallback(
     async () => {
       setLastError(null);
+      let subscribed: () => void = () => {};
+      subscribedRef.current = new Promise<void>((r) => { subscribed = r; });
       try {
         await ws.connect();
         await ws.subscribeEvents("state_changed", (event) => {
@@ -358,26 +328,41 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
           ws.subscribeEvents(eventType, onRegistryChanged)
             .catch((err) => devLog(`[HA] subscribe ${eventType} failed`, err));
         }
-        await hydrate();
-        // Pull the instance's location + name so onboarding can auto-fill the
-        // map coordinates and the dashboard title without manual entry.
-        ws.sendMessage<HAConfig>("get_config")
-          .then((cfg) => setHaConfig(cfg))
-          .catch((err) => devLog("[HA] get_config failed (onboarding auto-fill skipped)", err));
-        void refreshRegistryData();
+        // The states, the config and the registry are loaded by the ONE
+        // on-connected pass below — on this first connect as on every
+        // automatic reconnect.
       } catch (err) {
         const msg = (err as Error).message;
         setLastError(msg);
         throw err;
+      } finally {
+        subscribed();
       }
     },
-    [ws, hydrate, notify, refreshRegistryData],
+    [ws, notify, refreshRegistryData],
   );
 
-  // Re-hydrate after an automatic reconnect.
+  // ── EVERY (RE)CONNECT, ONE PASS (round 10, 2.496.160) ──────────────────
+  // The first connect loaded the states TWICE (connect() awaited hydrate, and
+  // this effect fired on the same "connected"), and an automatic reconnect
+  // re-read only the states: the registry (room names, areas, hidden devices)
+  // and get_config were never re-read, so a room renamed while the socket was
+  // down stayed stale until the next registry event. One pass now, after the
+  // subscriptions are in place (HAWebSocket re-sends them itself on reconnect,
+  // before this effect can run; on the first connect subscribedRef waits).
   useEffect(() => {
-    if (connection === "connected") hydrate().catch(() => {});
-  }, [connection, hydrate]);
+    if (connection !== "connected") return;
+    void (async () => {
+      await subscribedRef.current;
+      await hydrate().catch(() => {});
+      // The instance's location + name — onboarding auto-fills the map
+      // coordinates and the title from it — and its unit system.
+      ws.sendMessage<HAConfig>("get_config")
+        .then((cfg) => setHaConfig(cfg))
+        .catch((err) => devLog("[HA] get_config failed (onboarding auto-fill skipped)", err));
+      void refreshRegistryData();
+    })();
+  }, [connection, hydrate, ws, refreshRegistryData]);
 
   const subscribe = useCallback((entityId: string, cb: EntityCallback) => {
     let set = perEntity.current.get(entityId);
