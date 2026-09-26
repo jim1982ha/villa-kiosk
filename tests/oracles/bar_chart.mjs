@@ -25,6 +25,9 @@ ck("the typical line sits at its value", Math.abs(L.typicalAt - 0.2989) < 1e-9);
 const rain = [0.2, 3.7, 0.5].map((v, i) => ({ t: i, segs: [seg(v)] }));
 ck("rain's 3.7 mm hour: the top tick is ABOVE it (the line rule put it below)", B.barLayout(rain).top >= 3.7, B.barLayout(rain).top);
 
+const dry = B.barLayout([{ t: 0, segs: [seg(0)] }, { t: 1, segs: [seg(0)] }]);
+ck("nothing above zero scales to ONE unit — a dry day's axis read '0, 0, 0'", dry.top === 1 && dry.ticks.map((t) => t.v).join() === "0,0.5,1", dry.ticks);
+
 console.log("\n  three kinds of bucket:");
 const mixed = B.barLayout([{ t: 0, segs: [seg(2)] }, { t: 1, segs: null }, { t: 2, segs: [] }]);
 ck("no reading is an outage band, not a bar of 0", mixed.bars[1].missing === true && mixed.bars[1].segs.length === 0);
@@ -63,10 +66,14 @@ console.log("\n  a second measure over the bars (the cost over the energy):");
 console.log("\n  a totals series as buckets (the rain gauge):");
 {
   const H = 3_600_000, t0 = Date.UTC(2026, 8, 26, 0);
-  const win = { from: t0 + 30 * 60_000, to: t0 + 6 * H + 5 * 60_000 };          // 00:30 → 06:05
-  const pts = [{ t: t0, v: 0 }, { t: t0 + H, v: 1.2 }, { t: t0 + 3 * H, v: 0 }, { t: t0 + 4 * H, v: 0.4 }];
+  // The window opens at 00:30, mid-bucket: the recorder, asked from 00:30,
+  // returns the buckets that START from then on — 01:00 first.
+  const win = { from: t0 + 30 * 60_000, to: t0 + 7 * H + 5 * 60_000 };          // 00:30 → 07:05
+  const pts = [{ t: t0 + H, v: 0 }, { t: t0 + 2 * H, v: 1.2 }, { t: t0 + 4 * H, v: 0 }, { t: t0 + 5 * H, v: 0.4 }];
   const bs = B.seriesBuckets({ points: pts, window: win }, H, { key: "rain", label: "Rain", cls: "water" });
-  ck("one bucket an hour, on the recorder's own hour starts", bs.length === 7 && bs[0].t === t0 && bs[6].t === t0 + 6 * H, bs.map((b) => b.t));
+  ck("one bucket an hour, on the recorder's own hour starts, the first STARTING INSIDE the window (01:00, not 00:00)",
+     bs.length === 7 && bs[0].t === t0 + H && bs[6].t === t0 + 7 * H, bs.map((b) => b.t));
+  ck("  ...so the first bar is a reading, not 'No reading' (the bucket straddling the start is never returned — owner's screenshot)", bs[0].segs?.length === 1, bs[0]);
   ck("a reported dry hour is 0 mm, a reading", bs[0].segs?.[0].v === 0);
   ck("an hour the recorder has nothing for is NO READING, not a dry hour", bs[2].segs === null, bs[2]);
   ck("the hour just ended is still within HA's compile grace: nothing yet", bs[5].segs?.length === 0, bs[5]);

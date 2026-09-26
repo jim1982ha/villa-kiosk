@@ -39,7 +39,11 @@ export interface BarLayout {
 export const bucketTotal = (b: BarBucket) => (b.segs ?? []).reduce((a, s) => a + s.v, 0);
 
 export function barLayout(buckets: readonly BarBucket[], typical?: number): BarLayout {
-  const peak = Math.max(1e-6, typical ?? 0, ...buckets.map(bucketTotal));
+  // ⚠️ NOTHING ABOVE ZERO SCALES TO ONE UNIT. A dry day's rain chart scaled
+  // to a top of 10⁻⁶ and labelled its axis "0, 0, 0" (owner's screenshot,
+  // 2.496.132). One unit (0 / 0.5 / 1) says what a zero reads against.
+  const top0 = Math.max(typical ?? 0, ...buckets.map(bucketTotal));
+  const peak = top0 > 1e-9 ? top0 : 1;
   const axis = niceTicks(0, peak);
   const top = axis.top;
   return {
@@ -149,9 +153,13 @@ export function seriesBuckets(
   const { from, to } = s.window;
   if (!(slotMs > 0) || !(to > from)) return [];
   const anchor = s.points[0]?.t ?? Math.floor(from / slotMs) * slotMs;
-  const k0 = Math.floor((from - anchor) / slotMs);
+  // ⚠️ ONLY BUCKETS THAT START INSIDE THE WINDOW. The one straddling its start
+  // began before the time the recorder was asked from, so the recorder never
+  // returns it — every range's first bar read "No reading" (owner's
+  // screenshot, 2.496.132).
+  const k0 = Math.ceil((from - anchor) / slotMs);
   const starts: number[] = [];
-  for (let t = anchor + k0 * slotMs; t < to; t += slotMs) if (t + slotMs > from) starts.push(t);
+  for (let t = anchor + k0 * slotMs; t < to; t += slotMs) starts.push(t);
   // A reading goes to the nearest start: a 23- or 25-hour day (daylight
   // saving) still lands in its own day.
   const byIdx = new Map<number, number>();

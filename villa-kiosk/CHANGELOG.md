@@ -1,3 +1,10 @@
+## 2.496.132
+
+### Fixed — the Weather window's rain chart
+- **The first bar no longer always says "No reading".** It stood for an hour
+  (or day) that began just before the chosen range, which Home Assistant
+  never returns. The chart now starts at the first bucket inside the range.
+- **A dry period's axis reads 0 / 0.5 / 1** instead of "0, 0, 0".
 ## 2.496.131
 
 ### Fixed — device icons on the map
