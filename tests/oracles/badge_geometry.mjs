@@ -116,6 +116,35 @@ ck("beside a VALUE the left margin is short by the ink the icon insets",
 }
 ck("a taller card pads more", cardStruts(40, 22, 0).padr > bare.padr);
 
+/* ── optical centring (2.496.135) ─────────────────────────────────────── */
+// The owner's screenshot: the lock's ink BOX was centred in its ring to half a
+// pixel, its ink MASS 1.8 px low (thin shackle, heavy body) — and it read as
+// sitting low, where the fan beside it (mass ≈ box) did not.
+console.log("\n  optical centring:");
+{
+  globalThis.OffscreenCanvas ??= class { constructor(w, h) { this.width = w; this.height = h; } getContext() { return new Proxy({}, { get: () => () => ({}) }); } };
+  const { inkNudge, OPTICAL_CORRECTION, RING_DASH } = await import("@/babylon/badgeIcons");
+  const N = 40, c = (N - 1) / 2;
+  const raster = (fill) => { const a = new Uint8ClampedArray(N * N); for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (fill(x, y)) a[y * N + x] = 255; return a; };
+  // A "lock": a 2-px shackle across rows 10–11, a solid body rows 20–29. Box 10..29, centred.
+  const lock = raster((x, y) => (x >= 12 && x <= 27) && ((y >= 10 && y <= 11) || (y >= 20 && y <= 29)));
+  const n = inkNudge(lock, N);
+  let sum = 0, sy = 0; for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { const v = lock[y * N + x]; sum += v; sy += v * y; }
+  const mass = sy / sum, box = (10 + 29) / 2;
+  ck("a bottom-heavy glyph with a centred box moves UP", n.dy < 0, n);
+  ck("  ...by half the gap between its box and its mass (not all of it)", Math.abs(n.dy - (c - (box + OPTICAL_CORRECTION * (mass - box)))) < 1e-9 && OPTICAL_CORRECTION === 0.5, n.dy);
+  ck("  ...and not sideways", Math.abs(n.dx) < 1e-9);
+  const sym = raster((x, y) => x >= 12 && x <= 27 && y >= 12 && y <= 27);
+  ck("a symmetric glyph does not move", Math.abs(inkNudge(sym, N).dx) < 1e-9 && Math.abs(inkNudge(sym, N).dy) < 1e-9);
+  const off = raster((x, y) => x >= 12 && x <= 27 && y >= 16 && y <= 31);
+  ck("a symmetric glyph drawn off-centre in its frame is brought back to the centre", Math.abs(inkNudge(off, N).dy - (c - 23.5)) < 1e-9, inkNudge(off, N));
+  ck("nothing to draw: no nudge", inkNudge(new Uint8ClampedArray(N * N), N).dy === 0);
+  ck("the dash is short — about twice the dashes round a badge (owner, 2026-09-26)", RING_DASH[0] === 1.1 && RING_DASH[1] === 0.9);
+  const { readFileSync } = await import("node:fs");
+  const icons = readFileSync(new URL("../../src/babylon/badgeIcons.ts", import.meta.url), "utf8");
+  ck("every baked badge is optically centred (the one bake every badge style uses)", /boldGlyph, size > 0 \? px \/ size : 1, opticalNudge\(iconKey\)\);/.test(icons));
+}
+
 /* ── the chip width model ──────────────────────────────────────────────── */
 console.log("\n  the chip width model:");
 const m = { charPx: 6, padPx: 10 };

@@ -1,3 +1,13 @@
+## 2.496.135
+
+### Improved — device icons on the map
+- **An unavailable device's dashed border has more, shorter dashes**, so it
+  reads as a dashed outline rather than a few heavy blocks.
+- **Icons look centred in their badge.** A lock was centred by its outline
+  but looked low, because its heavy body sits under a thin shackle. Every
+  icon is now placed by where its weight sits as well as by its outline, so
+  it looks centred. This applies to every badge style and to badges inside a
+  group.
 ## 2.496.134
 
 ### Improved — the Weather window's "Sun & UV" chart
