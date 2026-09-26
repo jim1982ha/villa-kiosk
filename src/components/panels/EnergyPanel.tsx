@@ -13,10 +13,10 @@
 // No Energy dashboard in HA: the bar's old device list opens instead.
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ChevronLeft, LineChart, Zap } from "lucide-react";
+import { ChevronLeft, ChevronRight, LineChart, Zap } from "lucide-react";
 import BasePanel from "./BasePanel";
 import { List, PieChart } from "lucide-react";
-import { flowTree, flowLayout, energySlices, sliceTurns, type FlowNode } from "@/config/energyFlow";
+import { flowTree, flowLayout, energySlices, sliceTurns, legendPage, type FlowNode } from "@/config/energyFlow";
 import { useConfig } from "@/config/ConfigContext";
 import { resolveSiteTitle } from "@/config/AppConfig";
 import { useSegmentedChoice } from "./historyRange";
@@ -309,6 +309,7 @@ export function Flow({ split, rateKw, house }: { split: EnergySplit; rateKw: (id
  *  for — slices that add up to what was used (config/energyFlow). */
 export function DevicePie({ split }: { split: EnergySplit }) {
   const [hover, setHover] = useState<number | null>(null);
+  const [page, setPage] = useState(0);
   const slices = energySlices(split);
   const total = slices.reduce((a, s) => a + s.kwh, 0);
   if (!slices.length) return <div className="muted body-text">Nothing recorded.</div>;
@@ -323,6 +324,7 @@ export function DevicePie({ split }: { split: EnergySplit }) {
     const big = to - from > 0.5 ? 1 : 0;
     return `M${x0} ${y0} A${R1} ${R1} 0 ${big} 1 ${x1} ${y1} L${x2} ${y2} A${R0} ${R0} 0 ${big} 0 ${x3} ${y3} Z`;
   };
+  const pg = legendPage(slices.length, page);
   const hs = hover === null ? null : slices[hover];
   const mid = hover === null ? 0 : (turns[hover].from + turns[hover].to) / 2;
   const [tx, ty] = pt(mid, R1);
@@ -340,12 +342,25 @@ export function DevicePie({ split }: { split: EnergySplit }) {
         {hs && <ChartTip x={tx / 200} y={ty / 200} rows={[{ key: "s", marker: <i className={`key ${cls(hover!)}`} />, text: `${hs.label} · ${fmtKwh(hs.kwh)} kWh` }]}
           stamp={`${total > 0 ? Math.round((hs.kwh / total) * 100) : 0}% of ${fmtKwh(total)} kWh`} />}
       </div>
-      <div className="energy-pie-legend">
-        {slices.map((s, i) => (
-          <span key={s.id} className={hover === i ? "hover" : ""} onPointerEnter={() => setHover(i)} onPointerLeave={() => setHover(null)}>
-            <i className={`key ${cls(i)}`} />{s.label}<b>{fmtKwh(s.kwh)} kWh</b>
-          </span>
-        ))}
+      {/* Ten devices a page (legendPage); the pie keeps every slice. */}
+      <div className="energy-pie-side">
+        <div className="energy-pie-legend">
+          {slices.slice(pg.from, pg.to).map((s, k) => {
+            const i = pg.from + k;
+            return (
+              <span key={s.id} className={hover === i ? "hover" : ""} onPointerEnter={() => setHover(i)} onPointerLeave={() => setHover(null)}>
+                <i className={`key ${cls(i)}`} />{s.label}<b>{fmtKwh(s.kwh)} kWh</b>
+              </span>
+            );
+          })}
+        </div>
+        {pg.pages > 1 && (
+          <div className="energy-pie-pages">
+            <button type="button" className="btn ghost" disabled={pg.page === 0} onClick={() => setPage(pg.page - 1)} aria-label="Previous devices"><ChevronLeft size={18} /></button>
+            <span>{pg.from + 1}–{pg.to} of {slices.length}</span>
+            <button type="button" className="btn ghost" disabled={pg.page === pg.pages - 1} onClick={() => setPage(pg.page + 1)} aria-label="Next devices"><ChevronRight size={18} /></button>
+          </div>
+        )}
       </div>
     </div>
   );

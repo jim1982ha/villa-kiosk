@@ -68,9 +68,19 @@ ck("no zero slices", slices.every((x) => x.kwh > 0.005));
 const turns = F.sliceTurns(slices.map((x) => x.kwh));
 ck("the slices go once round, from the top, without gaps", turns[0].from === 0 && near(turns[turns.length - 1].to, 1) && turns.every((t, i) => i === 0 || near(t.from, turns[i - 1].to)));
 
+console.log("\n  the pie's legend, ten a page (owner, 2026-09-26):");
+{
+  const p0 = F.legendPage(20, 0), p1 = F.legendPage(20, 1);
+  ck("twenty devices: 1–10, then 11–20", p0.from === 0 && p0.to === 10 && p1.from === 10 && p1.to === 20 && p0.pages === 2, [p0, p1]);
+  ck("seventeen: the second page holds 11–17", F.legendPage(17, 1).to === 17);
+  ck("a page past the end (a shorter period picked) is the last page, never an empty legend", F.legendPage(17, 5).page === 1 && F.legendPage(17, 5).from === 10);
+  ck("ten or fewer: one page, no pager", F.legendPage(10, 0).pages === 1 && F.legendPage(0, 0).pages === 1);
+}
+
 console.log("\n  the callers:");
 const panel = readFileSync(new URL("../../src/components/panels/EnergyPanel.tsx", import.meta.url), "utf8");
 ck("the flow starts at the house the kiosk's title names (never a name in the code)", /const house = resolveSiteTitle\(config, haConfig\?\.location_name\);/.test(panel) && /<Flow split=\{split\} rateKw=\{rateKw\} house=\{house\} \/>/.test(panel));
+ck("the legend shows one page, the pie every slice", /slices\.slice\(pg\.from, pg\.to\)\.map/.test(panel) && /const pg = legendPage\(slices\.length, page\);/.test(panel) && /\{slices\.map\(\(s, i\) => \(\s*<path/.test(panel));
 ck("'Every device' switches between the list and the pie", /shape === "pie"\s*\? <DevicePie split=\{whole\} \/>/.test(panel) && /useSegmentedChoice\(SHAPES, "list"/.test(panel));
 ck("the period picker is in the header, the Weather window's control", /headerActions=\{view === "now" \? <span className="weather-live">Home Assistant Energy<\/span> : picker\}/.test(panel)
    && /useSegmentedChoice\(RANGE_OPTIONS, "week", "Period", "weather-ranges"\)/.test(panel) && !/energy-history-head/.test(panel));

@@ -1,3 +1,8 @@
+## 2.496.121
+
+### Improved — the Energy window
+- **The pie's legend shows ten devices at a time.** Arrows under it page
+  through the rest ("1–10 of 20"). The pie itself still shows every device.
 ## 2.496.120
 
 ### Improved — the Energy window
