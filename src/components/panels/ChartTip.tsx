@@ -11,7 +11,7 @@ export interface ChartTipRow { key: string; text: string; marker?: ReactNode }
 /** `left` is where the crosshair is (px, or a CSS length); past the middle
  *  of the plot the tip hangs to the left of it, so it never leaves the chart. */
 export default function ChartTip({ left, top, flip, rows, t, spanHours, stampPrefix = "", stamp }: {
-  left: number | string; top: number; flip: boolean; rows: ChartTipRow[];
+  left: number | string; top: number | string; flip: boolean; rows: ChartTipRow[];
   t: number; spanHours: number; stampPrefix?: string;
   /** A stamp worded by the chart itself (a bucket: "Friday 25 Sep"). */
   stamp?: string;
