@@ -4,9 +4,9 @@
 // axis, a slot a bucket (a bar, a stub for "nothing yet", or an outage band
 // for "no reading"), the typical line, the tooltip and the x labels.
 
-import { useState, type PointerEvent } from "react";
 import ChartTip from "./ChartTip";
 import YAxis from "./ChartAxis";
+import { useChartPointer } from "./useChartPointer";
 import { STATUS_COLOR } from "@/utils/stateColors";
 import { barLayout, barAt, barCentre, barTick, barTipRows, type BarBucket } from "@/utils/barChart";
 
@@ -27,13 +27,10 @@ export default function BarChart({ buckets, fmt, unit, stamp, ticks, typical, he
   note?: string;
   label: string;
 }) {
-  const [hover, setHover] = useState<number | null>(null);
   const n = buckets.length;
   const L = barLayout(buckets, typical);
-  const at = (e: PointerEvent<HTMLDivElement>) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    setHover(barAt((e.clientX - r.left) / Math.max(1, r.width), n));
-  };
+  const { frac, handlers } = useChartPointer<HTMLDivElement>();
+  const hover = frac === null ? null : barAt(frac, n);
   const hb = hover === null ? null : buckets[hover];
   const rows = hb ? barTipRows(hb, fmt) : [];
   return (
@@ -41,7 +38,7 @@ export default function BarChart({ buckets, fmt, unit, stamp, ticks, typical, he
       <YAxis unit={unit} height={height} frame={1} ticks={L.ticks} />
       <div className="spark-wrap bar-chart-wrap">
         <div className="bar-chart" style={{ height, touchAction: "none" }} role="img" aria-label={label}
-          onPointerMove={at} onPointerDown={at} onPointerLeave={() => setHover(null)}>
+          {...handlers}>
           {L.ticks.map((t) => <div key={`g${t.v}`} className="chart-gridline" style={{ bottom: `${(1 - t.y) * 100}%` }} />)}
           {L.bars.map((b, i) => (
             <div key={b.t} className={`bar-slot${hover === i ? " hover" : ""}`}>
@@ -64,8 +61,7 @@ export default function BarChart({ buckets, fmt, unit, stamp, ticks, typical, he
           {note && <div className="bar-chart-note">{note}</div>}
         </div>
         {hb && rows.length > 0 && (
-          <ChartTip left={`${barCentre(hover!, n) * 100}%`} top={0} flip={hover! >= n / 2}
-            t={hb.t} spanHours={0} stamp={stamp(hb.t)}
+          <ChartTip x={barCentre(hover!, n)} y={0} stamp={stamp(hb.t)}
             rows={rows.map((r) => ({ key: r.key, marker: r.cls ? <i className={`key ${r.cls}`} /> : undefined, text: r.text }))} />
         )}
         <div className="bar-chart-axis">

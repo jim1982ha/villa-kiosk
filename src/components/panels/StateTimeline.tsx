@@ -8,9 +8,11 @@
 // line, are the whole point. Hover/touch shows the state + time at the pointer
 // (the discrete-history counterpart of the numeric charts' crosshair tooltip).
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { StateHistoryPoint } from "@/types/ha.types";
 import { fmtChartTime, fmtChartStamp } from "./chartUtils";
+import ChartTip from "./ChartTip";
+import { useChartPointer } from "./useChartPointer";
 // ⚠️ NOT A LOCAL COPY. This file carried its own `prettyState` — same two
 // operations, and already disagreeing with the owner on the empty string (it
 // returned the raw input, the owner returns ""). It feeds every tooltip in
@@ -143,7 +145,9 @@ export default function StateTimeline({
   data, hours, end, colorFor, labelFor = prettyState, height, legend, loading, vertical, bucketMinutes,
   baselineStates,
 }: Props) {
-  const [hover, setHover] = useState<{ x: number; cell: Cell } | null>(null);
+  // Where the pointer is along the bar, as a fraction (the app's one rule:
+  // useChartPointer) — along whichever axis the bar runs.
+  const { frac, handlers } = useChartPointer<HTMLDivElement>(vertical ? "y" : "x");
 
   const bucketMs = (bucketMinutes ?? 0) * 60_000;
   // Joined so the memo below has a stable primitive dep rather than a new
@@ -244,20 +248,13 @@ export default function StateTimeline({
     return <div className="muted body-text">Not enough history yet.</div>;
   }
 
-  const onMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    // Read whichever axis the bar actually runs along.
-    const frac = vertical
-      ? Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height))
-      : Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-    const pct = frac * 100;
-    // No "?? last cell" fallback: falling back reported the most RECENT
-    // detection while the pointer was over an earlier, empty slice — the
-    // tooltip claiming motion at a time nothing had happened.
-    const cell = cells.find((c) => pct >= c.left && pct <= c.left + c.width);
-    if (!cell) { setHover(null); return; }
-    setHover({ x: vertical ? e.clientY - rect.top : e.clientX - rect.left, cell });
-  };
+  // No "?? last cell" fallback: falling back reported the most RECENT
+  // detection while the pointer was over an earlier, empty slice — the
+  // tooltip claiming motion at a time nothing had happened.
+  const pct = frac === null ? null : frac * 100;
+  const cell = pct === null ? null : cells.find((c) => pct >= c.left && pct <= c.left + c.width) ?? null;
+  const hover = cell && frac !== null ? { frac, cell } : null;
+  const dot = (st: string) => <span style={{ color: colorFor(st), marginRight: 4 }}>●</span>;
 
   return (
     <>
@@ -265,9 +262,7 @@ export default function StateTimeline({
         <div
           className={`state-timeline${vertical ? " state-timeline-vertical" : ""}`}
           style={{ ...(height && !vertical ? { height } : undefined), touchAction: "none" }}
-          onPointerMove={onMove}
-          onPointerDown={onMove}
-          onPointerLeave={() => setHover(null)}
+          {...handlers}
         >
           {cells.map((c, i) => {
             // The minimum width is only needed where cells do NOT tile: in
@@ -305,74 +300,32 @@ export default function StateTimeline({
           {hover && (
             <div
               className="state-timeline-cursor"
-              style={vertical ? { top: hover.x } : { left: hover.x }}
+              style={vertical ? { top: `${hover.frac * 100}%` } : { left: `${hover.frac * 100}%` }}
             />
           )}
         </div>
         {hover && (
-          <div
-            className="spark-tip"
-            // vertical: hover.x is a Y-offset (see onMove) — the horizontal
-            // styling below (left: hover.x, bottom: 100%) misused that as an
-            // X-offset AND anchored the tip's bottom edge to the wrap's own
-            // top edge, which for a tall, narrow rail (the camera panel's
-            // phone-landscape side bar) put the tooltip at the extreme top
-            // of the rail regardless of where the touch actually was.
-            // Opening rightward off the rail's edge with top pinned to the
-            // real touch offset (centred on it, so it never depends on a
-            // width/height guess the way the horizontal flip threshold does)
-            // fixes both at once.
-            style={{
-              ...(vertical
-                ? { top: hover.x, left: "100%", marginLeft: 6, transform: "translateY(-50%)" }
-                : { left: hover.x, bottom: "100%", marginBottom: 6, transform: `translateX(${hover.x > 160 ? "-100%" : "0"})` }),
-              // Deliberately NOT capped with overflow: .spark-tip is
-              // pointer-events:none, so a scroll area could never be scrolled
-              // and a max-height would just silently truncate the event list
-              // this mode exists to show in full.
-            }}
-          >
-            {bucketMs ? (
-              <>
-                <strong>{fmtChartStamp(hover.cell.from, hours)} – {fmtChartTime(hover.cell.to)}</strong>
-                {hover.cell.states.length === 0 ? (
-                  // Only the resting state here. The state alone IS the answer —
-                  // an added "nothing detected" only restates that no events are
-                  // listed beneath it.
-                  <span className="spark-tip-event">
-                    <span style={{ color: colorFor(hover.cell.baseline ?? "") }}>●</span>
-                    {" "}{labelFor(hover.cell.baseline ?? "")}
-                  </span>
-                ) : hover.cell.events.length === 0 ? (
-                  // No transition landed here, so nothing "happened" — the bar
-                  // is coloured because a state was already in force throughout.
-                  // That used to be spelled out as "(ongoing)", which the time
-                  // range above already says: a state shown against a span, with
-                  // no event listed under it, held for the whole span. The word
-                  // restated the layout rather than adding to it.
-                  hover.cell.states.map((st) => (
-                    <span className="spark-tip-event" key={st}>
-                      <span style={{ color: colorFor(st) }}>●</span> {labelFor(st)}
-                    </span>
-                  ))
-                ) : (
-                  hover.cell.events.map((ev, k) => (
-                    <span className="spark-tip-event" key={k}>
-                      <span style={{ color: colorFor(ev.state) }}>●</span> {labelFor(ev.state)}
-                      {" · "}{fmtChartStamp(ev.t, hours)}
-                    </span>
-                  ))
-                )}
-              </>
-            ) : (
-              <>
-                <strong>
-                  <span style={{ color: colorFor(hover.cell.states[0]) }}>●</span> {labelFor(hover.cell.states[0])}
-                </strong>
-                <span>{fmtChartStamp(hover.cell.from, hours)}</span>
-              </>
-            )}
-          </div>
+          // The app's tooltip (ChartTip): beside a vertical rail, under a
+          // horizontal bar — never over the cells being pointed at.
+          <ChartTip x={vertical ? 1 : hover.frac} y={vertical ? hover.frac : 1}
+            {...(bucketMs
+              ? {
+                  rows: [
+                    { key: "_range", text: `${fmtChartStamp(hover.cell.from, hours)} – ${fmtChartTime(hover.cell.to)}` },
+                    // Only the resting state here: the state alone IS the answer.
+                    ...(hover.cell.states.length === 0
+                      ? [{ key: "_base", event: true, marker: dot(hover.cell.baseline ?? ""), text: labelFor(hover.cell.baseline ?? "") }]
+                      // No transition landed here: a state in force throughout
+                      // the span (the time range above already says so).
+                      : hover.cell.events.length === 0
+                        ? hover.cell.states.map((st) => ({ key: st, event: true, marker: dot(st), text: labelFor(st) }))
+                        : hover.cell.events.map((ev, k) => ({ key: `e${k}`, event: true, marker: dot(ev.state), text: `${labelFor(ev.state)} · ${fmtChartStamp(ev.t, hours)}` }))),
+                  ],
+                }
+              : {
+                  rows: [{ key: "_s", marker: dot(hover.cell.states[0]), text: labelFor(hover.cell.states[0]) }],
+                  stamp: fmtChartStamp(hover.cell.from, hours),
+                })} />
         )}
       </div>
       {legend && legend.length > 1 && (

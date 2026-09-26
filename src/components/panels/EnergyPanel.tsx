@@ -325,8 +325,7 @@ function Flow({ split, rateKw }: { split: EnergySplit; rateKw: (id: string | nul
         ...(!u ? [{ key: "x", text: "no device meter in Home Assistant accounts for it" }] : []),
       ];
       return (
-        <ChartTip left={`${(366 / W) * 100}%`} top={`${((b.dy + Math.max(b.h, SLOT)) / H) * 100}%`} flip={false}
-          t={0} spanHours={0} stamp="today so far" rows={rows} />
+        <ChartTip x={366 / W} y={(b.dy + Math.max(b.h, SLOT)) / H} stamp="today so far" rows={rows} />
       );
     })()}
     </div>

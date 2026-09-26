@@ -1,3 +1,11 @@
+## 2.496.117
+
+### Improved — chart tooltips
+- **Every chart's tooltip behaves the same way.** On the right half of a
+  chart it opens to the left; near the bottom of the screen it opens upward;
+  it always stays on screen. The state timelines (a door's or a motion
+  sensor's day) now use the same tooltip as every other chart, shown under
+  the bar instead of over it.
 ## 2.496.116
 
 ### Fixed — light on the stairs

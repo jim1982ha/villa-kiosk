@@ -15,10 +15,11 @@
 // Width: the same as every other window the bottom bar opens
 // (`summary-group-modal`, 780 px) — the owner asked for them to match.
 
-import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronLeft, CloudSun, LineChart } from "lucide-react";
 import { fmtChartValue, fmtChartTick, fmtChartTime, fmtChartStamp } from "./chartUtils";
 import BarChart from "./BarChart";
+import { useChartPointer } from "./useChartPointer";
 import { barNote, seriesBuckets } from "@/utils/barChart";
 import ChartTip from "./ChartTip";
 import { chartGeometry, type ChartGeometry } from "@/utils/chartGeometry";
@@ -522,17 +523,6 @@ function ChartEmpty({ status }: { status: HistoryStatus }) {
   return <div className="muted body-text weather-chart-empty">{status === "failed" ? "Couldn't load this history." : "Not enough history yet."}</div>;
 }
 
-/** The time under the pointer, as chartGeometry reads it (the SVG is W wide). */
-function useHoverTime(g: ChartGeometry | null) {
-  const [t, setT] = useState<number | null>(null);
-  const on = (e: PointerEvent<SVGSVGElement>) => {
-    if (!g) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    setT(g.tAt(((e.clientX - rect.left) / Math.max(1, rect.width)) * W));
-  };
-  return { t, handlers: { onPointerMove: on, onPointerDown: on, onPointerLeave: () => setT(null) } };
-}
-
 function Bands({ g }: { g: ChartGeometry }) {
   // A band per line, in its own slice of the plot: which sensor was out is
   // part of the fact (an indoor sensor down used to break its line unshaded).
@@ -559,8 +549,9 @@ function ChartTile({ title, legend, note, lines, win, status }: {
   const leftAxis = g ? g.series[0].ticks : [];
   const ownAt = present.findIndex((l, i) => i > 0 && l.ownScale);
   const rightAxis = g && ownAt > 0 ? g.series[ownAt].ticks : null;
-  const { t, handlers } = useHoverTime(g);
-  const hover = g && t !== null ? g.hover(t) : null;
+  // The pointer's fraction across the plot, as a time in chartGeometry's window.
+  const { frac, handlers } = useChartPointer<SVGSVGElement>();
+  const hover = g && frac !== null ? g.hover(g.tAt(frac * W)) : null;
   return (
     <div className="weather-tile chart">
       <div className="weather-chart-head">
@@ -594,7 +585,7 @@ function ChartTile({ title, legend, note, lines, win, status }: {
             {hover && <line x1={hover.x} y1={TOP} x2={hover.x} y2={BOT} className="spark-crosshair" vectorEffect="non-scaling-stroke" />}
           </svg>
           {hover && (
-            <ChartTip left={`${(hover.x / W) * 100}%`} top={TOP} flip={hover.x > W / 2} t={hover.t} spanHours={g.spanHours}
+            <ChartTip x={hover.x / W} y={TOP / H} stamp={fmtChartStamp(hover.t, g.spanHours)}
               rows={present.flatMap((l, i) => {
                 const r = hover.readings[i];
                 return r ? [{ key: l.label, marker: <i className={`key ${l.cls.split(" ")[0]}`} />, text: `${l.label} ${fmtChartValue(r.v)}${l.unit}` }] : [];

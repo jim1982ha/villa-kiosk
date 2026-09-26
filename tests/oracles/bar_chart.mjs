@@ -80,7 +80,7 @@ const weather = read("../../src/components/panels/WeatherPanel.tsx");
 ck("the rain chart builds its buckets from the series", /seriesBuckets\(\{ points: s\.points, window: win \}, slot,/.test(weather));
 const comp = read("../../src/components/panels/BarChart.tsx");
 ck("BarChart draws what barLayout says, and its tooltip rows are barTipRows'",
-   /const L = barLayout\(buckets, typical\);/.test(comp) && /barTipRows\(hb, fmt\)/.test(comp) && /barAt\(\(e\.clientX - r\.left\) \/ Math\.max\(1, r\.width\), n\)/.test(comp));
+   /const L = barLayout\(buckets, typical\);/.test(comp) && /barTipRows\(hb, fmt\)/.test(comp) && /const hover = frac === null \? null : barAt\(frac, n\);/.test(comp));
 
 if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
 console.log("\n✅ one bar chart, every value in its own unit");
