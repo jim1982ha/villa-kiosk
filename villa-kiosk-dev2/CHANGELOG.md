@@ -1,3 +1,12 @@
+## 2.496.150
+
+### Fixed — history charts
+- **The line stops at every "unavailable" band.** 2.496.149 made short
+  outages visible as bands, but the line still ran straight across them,
+  saying "unavailable" and showing a value in the same place. The line now
+  breaks for the width of each band — the same stretch the tooltip reports
+  as unavailable.
+
 ## 2.496.149
 
 ### Fixed — history charts
