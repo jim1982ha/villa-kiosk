@@ -14,7 +14,7 @@
 import { useState, type ReactNode } from "react";
 import { Wrench } from "lucide-react";
 import { usePanelActions } from "./PanelActionsContext";
-import { badgeImageDataUrl } from "@/babylon/badgeIcons";
+import { badgeImage } from "@/babylon/badgeIcons";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import { useConfig } from "@/config/ConfigContext";
 import { categorySurface } from "@/config/EntityCategories";
@@ -75,7 +75,7 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
   const badgeImg = badge && (
     <img
       className="panel-badge-img"
-      src={badgeImageDataUrl(badge.category, badge.iconKey, badge.state, badge.color, 0, badge.ringState)}
+      src={badgeImage({ category: badge.category, iconKey: badge.iconKey, state: badge.state, color: badge.color, ringState: badge.ringState })}
       key={theme}
       alt=""
       draggable={false}

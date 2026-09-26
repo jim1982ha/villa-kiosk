@@ -1,3 +1,9 @@
+## 2.496.146
+
+### Internal — map badges
+- No visible change. Every badge's border and picture is now described and
+  applied in one place, instead of each kind of badge setting them its own way.
+
 ## 2.496.145
 
 ### Internal — the Weather and Energy windows

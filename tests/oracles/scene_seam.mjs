@@ -129,12 +129,14 @@ ck("EntityVisuals detaches what it registers", registers && detaches);
 // The bake-size argument is in RENDER pixels while every other number in the
 // pipeline is unscaled CSS px, so the unit lives in a private method rather
 // than in the callee's signature. Two of three in-scene callers got it wrong.
-const bakes = [...ev.matchAll(/badgeImageDataUrl\(([\s\S]{0,420}?)\)\)?;/g)]
+const bakes = [...ev.matchAll(/badgeImage\(\{([\s\S]{0,1200}?)\}\)\)?;/g)]
   .map((m) => m[1]);
-const cssPxBake = ev.includes("undefined, card, glyphPx, card)");
+// Every in-scene bake names its size, and none hands it the CSS-px glyphPx.
+const cssPxBake = /bakePx: glyphPx\b/.test(ev) || bakes.some((b) => !/bakePx: /.test(b));
 const rebakesOnStep = /iconUserScale = wantScale;[\s\S]{0,1600}?repaintGlyphs\(\)/.test(ev);
-const oneBakeOwner = (ev.match(/glyph\.source = badgeImageDataUrl\(/g) ?? []).length;
-console.log(`  badgeImageDataUrl call sites: ${bakes.length}`);
+const oneBakeOwner = (ev.match(/glyph\.source = badgeImage\(/g) ?? []).length;
+console.log(`  badgeImage call sites: ${bakes.length}`);
+ck("the in-scene bakes are found (lone badge first bake, card, classic, group chip)", bakes.length === 4, bakes.length);
 ck("no bake is handed the UNSCALED size", !cssPxBake);
 ck("changing the badge size re-bakes the glyphs", rebakesOnStep);
 ck("a glyph's source has one owner", oneBakeOwner <= 2);

@@ -41,13 +41,26 @@ ck("badgeIcons and badgeMetrics re-export them rather than define them",
    /export \{ BADGE_CORNER_FRACTION, BADGE_INSET_CARD, RING_DASH \} from "\.\/badgeLook";/.test(src("badgeIcons.ts"))
      && /export \{ CARD_VALUE_MARGIN_OF_ICON_PAD \} from "\.\/badgeLook";/.test(src("badgeMetrics.ts")));
 
+console.log("\n  applying a frame (round 9, 2.496.146):");
+{
+  const dashed = { thickness: 0, color: "", cornerRadius: 0, dash: null };
+  L.applyBadgeFrame(dashed, { px: 3, dash: [3.3, 2.7], color: "#c90" }, 46);
+  ck("weight, colour, dash and the badge corner at its size, on a dashable control",
+     dashed.thickness === 3 && dashed.color === "#c90" && dashed.dash.join() === "3.3,2.7" && Math.abs(dashed.cornerRadius - 13) < 1e-9, dashed);
+  const plain = { thickness: 5, color: "x", cornerRadius: 0 };
+  L.applyBadgeFrame(plain, L.NO_RING, 28);
+  ck("a plain Rectangle gets no dash field; NO_RING clears the ring", !("dash" in plain) && plain.thickness === 0 && plain.color === "transparent");
+}
+
 console.log("\n  every card-style path draws from it:");
 const ev = src("EntityVisuals.ts");
-ck("the lone card", /const ring = badgeRing\(surface, this\.metrics\.cardHeightPx, this\.metrics\);/.test(ev));
+ck("the lone card", /applyBadgeFrame\(lbl\.badge, badgeRing\(surface, this\.metrics\.cardHeightPx, this\.metrics\), this\.metrics\.cardHeightPx\);/.test(ev));
 ck("a group's sub-cards", /const frame = badgeRing\(ringRed \? alert : rest, this\.metrics\.cardHeightPx, this\.metrics\);/.test(ev));
 ck("a room chip", /const frame = badgeRing\(chip\.ringRed \? chipAlert : chipRest, this\.metrics\.cardHeightPx, this\.metrics\);/.test(ev));
 ck("a group's chips: the same ring (in proportion) and the one bake size",
    /badgeRing\(categorySurfaceRinged\(s2\.lbl\.category, face, ring,/.test(ev) && /badgeBakePx\(lay\.chip, this\.iconUserScale, this\.bestCssToGui\(\)\)/.test(ev));
+ck("every path APPLIES its frame through applyBadgeFrame — no ring field written by hand",
+   (ev.match(/applyBadgeFrame\(/g) ?? []).length === 4 && !/\.thickness = (ring|frame)\.px|\.dash = ring\.dash|sub\.cornerRadius =/.test(ev));
 ck("no path writes its own ring weight or corner any more",
    !/ringRed \? this\.metrics\.ringThicknessPx : 1/.test(ev) && !/chip\.radius/.test(ev) && !/RING_DASH\[0\]/.test(ev));
 

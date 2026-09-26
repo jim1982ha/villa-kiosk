@@ -271,6 +271,41 @@ function evictOldest(): void {
 // horizontal breathing room is restored separately via the badge's own left
 // padding + the value's right padding, so left/right stay roomy.
 
+/**
+ * WHAT A BADGE PICTURE IS, BY NAME (round 9, 2.496.146). It was ten positional
+ * arguments — (category, icon, state, colour, inset, ringState, suppressRing,
+ * bakePx, bold, ringOfSize) — that four call sites each assembled their own
+ * way, with `undefined` placeholders to reach the later ones and a boolean
+ * and a fraction both deciding the ring.
+ */
+export interface BakeSpec {
+  category: Category;
+  iconKey: string;
+  /** The face's state. */
+  state: DeviceSurfaceState;
+  /** The ring's, when it differs (categorySurfaceRinged). Default: `state`. */
+  ringState?: DeviceSurfaceState;
+  /** A per-entity badge colour (#rrggbb) for the category's hue. */
+  color?: string;
+  /** A transparent margin, as a fraction of the picture (BADGE_INSET_CARD). */
+  inset?: number;
+  /** The ring: baked at the classic style's fractions ("baked", the default),
+   *  none — the caller strokes it ("none") — or baked at this fraction of the
+   *  squircle (a card-style chip: badgeLook.badgeRing ÷ its size). */
+  ring?: "baked" | "none" | number;
+  /** The size it is DRAWN at, in render px (badgeLook.badgeBakePx); 0: unknown. */
+  bakePx?: number;
+  /** The card style's heavier glyph (ICON_STROKE_VIEWBOX_BOLD). */
+  bold?: boolean;
+}
+
+/** The badge picture a BakeSpec describes, as a data URL (cached). */
+export function badgeImage(s: BakeSpec): string {
+  return badgeImageDataUrl(
+    s.category, s.iconKey, s.state, s.color, s.inset ?? 0, s.ringState,
+    s.ring === "none", s.bakePx ?? 0, s.bold ?? false, typeof s.ring === "number" ? s.ring : undefined);
+}
+
 /** Render (and cache) the composited squircle badge for a category + glyph +
  *  live state — the single source of the app's badge icon squares (top bar,
  *  bottom bar and both badge styles all resolve to this same look, via
@@ -280,7 +315,7 @@ function evictOldest(): void {
  *  padded inside a larger control (see BADGE_INSET_CARD). Cache key includes
  *  the current theme — fill/glyph/ring are resolved CSS custom properties
  *  (see categorySurface), so a light/dark/night switch must re-bake. */
-export function badgeImageDataUrl(
+function badgeImageDataUrl(
   category: Category, iconKey: string, state: DeviceSurfaceState, colorOverride?: string, inset = 0,
   /** Draw the RING for a different state than the face — see
    *  categorySurfaceRinged. Defaults to `state`, i.e. the ordinary badge. */

@@ -6,7 +6,7 @@
 // badge tap opens) — so nothing here re-implements rich control; it reuses it.
 //
 // Built on the shared BasePanel (same modal chrome/header/close as every other
-// panel) and the shared gradient badge (badgeImageDataUrl) so it feels native.
+// panel) and the shared gradient badge (badgeImage) so it feels native.
 
 import { useState, type ComponentType } from "react";
 import { deviceRowText } from "@/utils/entityValue";
@@ -18,7 +18,7 @@ import { useConfig } from "@/config/ConfigContext";
 import { useSceneConfirm } from "@/hooks/useSceneConfirm";
 import { useProfile } from "@/auth/ProfileContext";
 import type { HaSceneInfo } from "@/config/haScenes";
-import { badgeImageDataUrl } from "@/babylon/badgeIcons";
+import { badgeImage } from "@/babylon/badgeIcons";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
 import { effectiveCategory, subjectOf } from "@/config/EntityCategories";
@@ -378,8 +378,7 @@ export default function SummaryGroupPanel({
         >
           <img
             className="summary-entity-badge"
-            src={badgeImageDataUrl(
-              cat, iconKeyFor(type, e), badge.face, config.entityMap[id]?.badgeColor, 0, badge.ring)}
+            src={badgeImage({ category: cat, iconKey: iconKeyFor(type, e), state: badge.face, color: config.entityMap[id]?.badgeColor, ringState: badge.ring })}
             key={theme}
             alt=""
             draggable={false}

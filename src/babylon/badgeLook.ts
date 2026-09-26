@@ -63,6 +63,26 @@ export function badgeRing(
   };
 }
 
+/** A control that shows no ring (the classic style's hit target). */
+export const NO_RING: BadgeRing = { px: 0, dash: null, color: "transparent" };
+
+/** A control a badge frame is applied to: a Babylon Rectangle, or a
+ *  DashableRectangle, which also takes the dash. */
+export interface FrameTarget { thickness: number; color: string; cornerRadius: number; dash?: number[] | null }
+
+/**
+ * Put a frame on a control `sizePx` tall: its ring's weight, dash and colour,
+ * and the badge corner at that size. ONE place for all three card-style paths
+ * (the lone card, a group's sub-cards, a room chip) — they each wrote these
+ * fields themselves, each with its own corner basis (round 9, 2.496.146).
+ */
+export function applyBadgeFrame(c: FrameTarget, ring: BadgeRing, sizePx: number): void {
+  c.thickness = ring.px;
+  c.color = ring.color;
+  c.cornerRadius = sizePx * BADGE_CORNER_FRACTION;
+  if (c.dash !== undefined) c.dash = ring.dash;
+}
+
 /**
  * The size a badge bitmap must be BAKED at, in render px, for one DRAWN at
  * `drawnPx` CSS px: every control is built in base CSS px and its container

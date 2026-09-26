@@ -123,8 +123,8 @@ import { FanRigs } from "./fanRigs";
 import { PlacementPass, GROUP_OVERLAP_ALLOW_WIDTHS, type ShownLabel, type PendingEntityGroup } from "./placementPass";
 import { onGlass, glyphDrawPx, glyphBakePx } from "./badgeLayout";
 import type { FrameRequests } from "./frameScheduler";
-import { badgeImageDataUrl } from "./badgeIcons";
-import { badgeRing, badgeBakePx, BADGE_INSET_CARD, BADGE_CORNER_FRACTION } from "./badgeLook";
+import { badgeImage } from "./badgeIcons";
+import { applyBadgeFrame, badgeRing, badgeBakePx, BADGE_INSET_CARD, BADGE_CORNER_FRACTION, NO_RING } from "./badgeLook";
 import { DashableRectangle } from "./dashableRectangle";
 import { badgeText } from "./badgeText";
 import { badgeShadow } from "./badgeShadow";
@@ -3040,20 +3040,21 @@ export class EntityVisuals {
         // border made a second frame redundant — but the reference the design
         // was always measured against has the chip, and without it the art had
         // no padding of its own and sat flush on the border.
-        badgeImageDataUrl(category, iconKeyFor(type, this.lastState.get(entityId)), "off",
-          this.config.entityMap[entityId]?.badgeColor, card ? BADGE_INSET_CARD : 0,
+        badgeImage({
+          category, iconKey: iconKeyFor(type, this.lastState.get(entityId)), state: "off",
+          color: this.config.entityMap[entityId]?.badgeColor, inset: card ? BADGE_INSET_CARD : 0,
           // Card: the Rectangle above strokes the edge, so the chip bakes no
           // ring of its own — see updateLabel for the doubled outline this
           // stops. Classic: the image IS the badge and carries its own.
           // Card only: the glyph is bolder there — see ICON_STROKE_VIEWBOX_BOLD.
-          // ⚠️ `glyphBakePx`, NOT `glyphPx`. This argument is the bake size in
-          // RENDER pixels; every other number here is unscaled CSS px. Passing
-          // the CSS one baked the first version of every badge at the wrong
-          // rung — the exact mistake `glyphBakePx`'s own docstring was written
-          // to describe ("true of the two NUMBERS, and false of the pixels").
-          // It self-healed on the badge's first state change, so the one badge
-          // it stayed wrong for was a device that had never reported.
-          undefined, card, this.glyphBakePx(card), card));
+          ring: card ? "none" : "baked", bold: card,
+          // ⚠️ `glyphBakePx`, NOT `glyphPx`: the bake size is in RENDER pixels;
+          // every other number here is unscaled CSS px. The CSS one baked the
+          // first version of every badge at the wrong rung — it self-healed on
+          // the first state change, so it stayed wrong only for a device that
+          // had never reported.
+          bakePx: this.glyphBakePx(card),
+        }));
 
       glyph.width = `${glyphPx}px`;
       glyph.height = `${glyphPx}px`;
@@ -3387,17 +3388,13 @@ export class EntityVisuals {
       // in the icon shape?" (owner). Same corner, same weight, same place.
       // The card's frame is badgeLook's — the same answer a group's chip and
       // a room chip get (round 8).
-      const ring = badgeRing(surface, this.metrics.cardHeightPx, this.metrics);
-      lbl.badge.thickness = ring.px;
-      lbl.badge.dash = ring.dash;
-      lbl.badge.color = ring.color;
-      // Every state's chip is baked the same way: inset, with no ring of its own.
-      lbl.glyph.source = badgeImageDataUrl(
-        lbl.category, iconKey, state, override,
-        BADGE_INSET_CARD, ringState, true, this.glyphBakePx(true),
-        // This whole branch IS the card style, so the heavier glyph weight is
-        // unconditional here — see ICON_STROKE_VIEWBOX_BOLD.
-        true);
+      applyBadgeFrame(lbl.badge, badgeRing(surface, this.metrics.cardHeightPx, this.metrics), this.metrics.cardHeightPx);
+      // Every state's chip is baked the same way: inset, with no ring of its
+      // own, at the card style's heavier glyph weight.
+      lbl.glyph.source = badgeImage({
+        category: lbl.category, iconKey, state, ringState, color: override,
+        inset: BADGE_INSET_CARD, ring: "none", bakePx: this.glyphBakePx(true), bold: true,
+      });
       // Neutral ink, on a now-neutral card — the bottom bar's value is
       // `--text-primary` beside a coloured chip, not the chip's own hue. The
       // state is carried by the chip and the ring; the number is just a number.
@@ -3407,11 +3404,10 @@ export class EntityVisuals {
       // (see badgeIcons.ts) — the wrapping Rectangle stays a plain
       // transparent hit-target, not a second ring drawn on top of the baked one.
       lbl.badge.background = "transparent";
-      lbl.badge.thickness = 0;
-      lbl.badge.dash = null;
-      lbl.badge.color = "transparent";
-      lbl.glyph.source = badgeImageDataUrl(
-        lbl.category, iconKey, state, override, 0, ringState, false, this.glyphBakePx(false));
+      applyBadgeFrame(lbl.badge, NO_RING, this.metrics.badgeDiameterPx);
+      lbl.glyph.source = badgeImage({
+        category: lbl.category, iconKey, state, ringState, color: override, ring: "baked", bakePx: this.glyphBakePx(false),
+      });
     }
     lbl.badge.alpha = 1;
     // The value pill is never shown for an unavailable entity anyway
@@ -5425,7 +5421,6 @@ export class EntityVisuals {
           sub.height = `${src.height}px`;
           sub.left = `${src.left}px`;
           sub.top = `${src.top}px`;
-          sub.cornerRadius = lay.pitch * BADGE_CORNER_FRACTION;
           // WAS `shadowOffsetY = 2` — a directional skirt on a control drawn
           // beside badges that have none. See badgeShadow.ts.
           badgeShadow(sub, "surface");
@@ -5455,33 +5450,24 @@ export class EntityVisuals {
             const st = this.lastState.get(s2.id) ?? phantomEntity(s2.id);
             const { face, ring } = badgeFaceAndRing(
               this.reading(s2.lbl.type, st, this.linkActiveIds.has(s2.id)));
-            c.chips[k].source = badgeImageDataUrl(
-              s2.lbl.category, iconKeyFor(s2.lbl.type, st), face,
-              this.config.entityMap[s2.id]?.badgeColor,
-              // Inset 0: this chip IS the badge here, exactly as the classic
-              // style's is. The card behind it is the group's own surface, not
-              // a second frame — see updateLabel for the doubled ring that
-              // insetting inside a bordered card produced.
-              // Same correction as the lone badge's: `lay.chip` is in the
-              // arrangement's unscaled units and the group container carries
-              // effectiveScale(), so the bitmap has to be baked at the painted
-              // size. iconZoomScale is excluded for the same reason — see
-              // glyphBakePx.
-              0, ring, false, badgeBakePx(lay.chip, this.iconUserScale, this.bestCssToGui()),
-              // A summary card's cells are Card-style badges by definition —
-              // they ARE the card. They bake through this call rather than
-              // updateLabel's, which is why the Card style's heavier glyph did
-              // not reach them in 2.375.0 and the change looked like a no-op on
-              // a screen showing a two-cell card. Gated on the setting so the
-              // Icon style stays a clean control to compare against.
-              this.isCardStyle(),
-              // A card-style chip rings like the lone card beside it (badgeLook,
-              // in proportion to its size) — it baked the classic style's
-              // fractions, ≈1.3 px beside a card drawn at 3 (round 8).
-              this.isCardStyle()
-                ? badgeRing(categorySurfaceRinged(s2.lbl.category, face, ring, this.config.entityMap[s2.id]?.badgeColor),
-                    lay.chip, this.metrics).px / Math.max(1e-6, lay.chip)
-                : undefined);
+            const color = this.config.entityMap[s2.id]?.badgeColor;
+            c.chips[k].source = badgeImage({
+              category: s2.lbl.category, iconKey: iconKeyFor(s2.lbl.type, st), state: face, ringState: ring, color,
+              // Inset 0: this chip IS the badge here, as the classic style's is;
+              // the card behind it is the group's surface, not a second frame.
+              // Baked at the PAINTED size: `lay.chip` is unscaled and the group
+              // container carries effectiveScale() (see glyphBakePx).
+              bakePx: badgeBakePx(lay.chip, this.iconUserScale, this.bestCssToGui()),
+              // A summary card's cells are card-style badges by definition: the
+              // heavier glyph (it missed them in 2.375.0), and a ring in
+              // proportion to the lone card beside it (badgeLook, round 8) —
+              // it baked the classic fractions, ≈1.3 px beside a card at 3.
+              // Gated on the setting so the Icon style stays a clean control.
+              bold: this.isCardStyle(),
+              ring: this.isCardStyle()
+                ? badgeRing(categorySurfaceRinged(s2.lbl.category, face, ring, color), lay.chip, this.metrics).px / Math.max(1e-6, lay.chip)
+                : "baked",
+            });
           }
         }
         // ── A SUMMARY'S RING NEVER REPEATS A MEMBER'S OWN SIGNAL ────────────
@@ -5506,8 +5492,7 @@ export class EntityVisuals {
         // its border, so a host with one would shift every pixel offset below.
         const frame = badgeRing(ringRed ? alert : rest, this.metrics.cardHeightPx, this.metrics);
         for (const sub of c.cards) {
-          sub.thickness = frame.px;
-          sub.color = frame.color;
+          applyBadgeFrame(sub, frame, lay.pitch);
           sub.background = surface;
         }
         c.container.scaleX = scale;
@@ -5972,8 +5957,7 @@ export class EntityVisuals {
       // otherwise no ring — the only attention signal available once the
       // individual badges are gone.
       const frame = badgeRing(chip.ringRed ? chipAlert : chipRest, this.metrics.cardHeightPx, this.metrics);
-      c.container.thickness = frame.px;
-      c.container.color = frame.color;
+      applyBadgeFrame(c.container, frame, this.summaryMetrics().size);
       // The count pill itself carries the room's REPORTING status — red if
       // at least one member is unavailable (HA has lost contact with it),
       // the same "available" green everywhere else otherwise. Separate
