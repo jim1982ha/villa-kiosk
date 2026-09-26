@@ -105,6 +105,42 @@ console.log("\n  every device, ten a page — the app's one pager (owner, 2026-0
   ck("a page past the end (a shorter period picked) is the last page, never an empty list", clampPage(5, 17, PAGE_CARDS) === 1);
 }
 
+console.log("\n  the window's rules, out of the view (round 9, 2.496.142):");
+{
+  ck("one 'worth showing' threshold: above what 0.00 kWh rounds away", F.shows(0.006) && !F.shows(0.005) && F.SHOWN_KWH === 0.005);
+  const zero = E.energySplit(setup, (id) => (id === "sensor.phase_b" ? 0.004 : kwh[id]));
+  const series = F.deviceSeries(zero, colourOf);
+  ck("the history series: each top-level device worth showing in HA's order, then Untracked",
+     series.map((x) => x.label).join() === "Phase C,Phase A,Untracked" && series[2].id === F.UNTRACKED_ID, series.map((x) => x.label));
+  const segs = F.seriesSegs(series, split);
+  ck("  ...a bucket's segments, one per series (0 for a device silent in it; untracked is the bucket's)",
+     segs.length === 3 && near(segs[0].v, 26.16) && segs[0].cls === colourOf("sensor.phase_c") && near(segs[2].v, split.untracked)
+     && F.seriesSegs(F.deviceSeries(split, colourOf), zero).find((x) => x.key === "sensor.phase_b").v === 0.004, segs.map((x) => x.v));
+  const rows = F.rankRows(split, colourOf);
+  ck("every device ranked (a meter and what is inside it), then Untracked, flagged",
+     rows[0].label === "Phase C" && rows.some((r) => r.label === "Pool Pump") && !rows.some((r) => r.label === "Spa Pump")
+     && rows.filter((r) => r.untracked).length === (F.shows(split.untracked) ? 1 : 0), rows.map((r) => r.label));
+  const rate = (id) => ({ "p.c": 1.5, "p.a": 0.25 })[id];
+  const withRates = { ...split, roots: split.roots.map((r, i) => ({ ...r, node: { ...r.node, rateId: ["p.c", "p.a", null][i] } })) };
+  ck("the house's power now: its top-level devices' sum; none known → none", near(F.houseKw(withRates, rate), 1.75) && F.houseKw(split, () => undefined) === undefined);
+  const t2 = F.flowTree(withRates, "H", colourOf);
+  ck("  ...'now' on the house and on a device with power; nothing on untracked",
+     F.flowNow(t2, withRates, rate) === `${E.fmtPower(1.75)} now` && F.flowNow(t2.children[0], withRates, rate) === `${E.fmtPower(1.5)} now`
+     && F.flowNow(t2.children[0].children.find((n) => n.kind === "untracked"), withRates, rate) === "");
+  const tip = F.flowTipRows(t2.children[1], t2, "0.25 kW now");
+  ck("the flow's tooltip: name, share of the day, now, then up to eight members and 'N more'",
+     tip[0].text.startsWith("Phase A · ") && /% of the 43\.9\d? kWh used$/.test(tip[1].text) && tip[2].text === "0.25 kW now" && tip.every((r) => r.key !== "x"), tip.map((r) => r.text));
+  ck("  ...the house has no share; untracked says what it means",
+     !F.flowTipRows(t2, t2, "").some((r) => r.key === "p") && F.flowTipRows(t2.children[0].children.find((n) => n.kind === "untracked"), t2, "").some((r) => r.key === "x"));
+  const big = { ...t2.children[1], members: Array.from({ length: 11 }, (_, i) => ({ label: `m${i}`, kwh: 1 })) };
+  ck("  ...eleven members: eight named and '↳ 3 more'", (() => { const m = F.flowTipRows(big, t2, "").filter((r) => r.text.startsWith("↳")).map((r) => r.text); return m.length === 9 && m.at(-1) === "↳ 3 more"; })());
+  ck("the pie's ring: a whole turn is two halves; a quarter is one arc, the short way", F.ringArc(0, 1, 58, 92, 100).split("M").length === 3 && / 0 0 1 /.test(F.ringArc(0, 0.25, 58, 92, 100)) && / 0 1 1 /.test(F.ringArc(0, 0.75, 58, 92, 100)));
+  ck("  ...a point a quarter turn round is to the right of the centre", F.ringPoint(0.25, 92, 100).map((v) => Math.round(v)).join() === "192,100");
+  const cs = { ...setup, costOf: { "sensor.grid_in": "sensor.grid_cost" } };
+  ck("the cost's currency is the grid meter's cost statistic's unit; none without one",
+     E.costUnitOf(cs, (id) => (id === "sensor.grid_cost" ? "IDR" : undefined)) === "IDR" && E.costUnitOf({ ...setup, costOf: {} }, () => "IDR") === undefined);
+}
+
 console.log("\n  the callers:");
 const panel = readFileSync(new URL("../../src/components/panels/EnergyPanel.tsx", import.meta.url), "utf8");
 ck("the flow starts at the house the kiosk's title names (never a name in the code)", /const house = resolveSiteTitle\(config, haConfig\?\.location_name\);/.test(panel) && /<Flow split=\{split\} rateKw=\{rateKw\} house=\{house\} colourOf=\{colourOf\} \/>/.test(panel));
@@ -113,8 +149,10 @@ ck("the window decides colour in ONE place: no e-s/e-p slot is computed in the p
 ck("the pie's legend shows one page, the ring every slice", /const paged = usePaged\(slices, PAGE_CARDS\);/.test(panel) && /\{paged\.page\.map\(\(s, k\) => \{/.test(panel) && /\{slices\.map\(\(s, i\) => \(\s*<path/.test(panel));
 ck("  ...its pager hook runs BEFORE the early return (a hook on every render or none)", panel.indexOf("const paged = usePaged(slices, PAGE_CARDS);") < panel.indexOf("if (!slices.length) return"));
 ck("the device list: ten a page with the same pager, each bar in the device's colour (the pie's)",
-   /function DeviceList\(/.test(panel) && /const paged = usePaged\(rows, PAGE_CARDS\);/.test(panel) && /cls: colourOf\(u\.node\.id\)/.test(panel) && /<Pager paged=\{paged\} unit="device" \/>/.test(panel)
+   /function DeviceList\(/.test(panel) && /const paged = usePaged\(rows, PAGE_CARDS\);/.test(panel) && /const rows = rankRows\(whole, colourOf\);/.test(panel) && /<Pager paged=\{paged\} unit="device" \/>/.test(panel)
      && !/legendPage/.test(panel));
+ck("the panel keeps no threshold, series, tooltip, arc or currency rule of its own",
+   !/0\.005|"_u"|\.reduce<number \| undefined>|Math\.PI|costOf\[/.test(panel) && /seriesSegs\(series, b\.split!\)/.test(panel) && /flowTipRows\(hb\.node, tree, nowOf\(hb\.node\)\)/.test(panel));
 const css = readFileSync(new URL("../../src/styles/03-panels.css", import.meta.url), "utf8");
 ck("the phone's flow rows are the Every-device row: reading order, bars on one left edge, only the name indented",
    /\{flowRows\(tree\)\.filter\(\(r\) => r\.depth > 0\)\.map\(\(\{ node: n, depth \}\) => \(\s*<RankRow /.test(panel) && !/marginLeft: b\.depth/.test(panel));

@@ -16,14 +16,17 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, LineChart, Zap } from "lucide-react";
 import BasePanel from "./BasePanel";
 import { List, PieChart } from "lucide-react";
-import { flowTree, flowLayout, flowRows, energySlices, sliceTurns, deviceColours, UNTRACKED_CLS, type FlowNode } from "@/config/energyFlow";
+import {
+  flowTree, flowLayout, flowRows, flowNow, flowTipRows, energySlices, sliceTurns, ringArc, ringPoint,
+  deviceColours, deviceSeries, seriesSegs, rankRows, UNTRACKED_CLS, type FlowNode,
+} from "@/config/energyFlow";
 import { useConfig } from "@/config/ConfigContext";
 import { resolveSiteTitle } from "@/config/AppConfig";
 import { useSegmentedChoice } from "./historyRange";
 import ChartTip from "./ChartTip";
 import BarChart from "./BarChart";
 import { energyToday, historyFigures, overlapShows, share } from "@/config/energyObservations";
-import { ENERGY_RANGES, energyRange, type EnergyRangeKey } from "./energyRanges";
+import { ENERGY_RANGES, energyRange, weekdayShort, type EnergyRangeKey } from "./energyRanges";
 import { Figure, ObservationCards } from "./WindowPieces";
 // Ten a page, with the app's one pager (the settings logs use it too).
 import { usePaged, Pager, PAGE_CARDS } from "@/components/common/Paged";
@@ -36,13 +39,11 @@ import type { HistorySeries } from "@/types/ha.types";
 import { PERIOD_MS } from "@/utils/statisticsSeries";
 import { localMidnight } from "@/utils/localDay";
 import {
-  energyPeriod, periodStarts, deviceRanking, fmtKwh, fmtMoney, fmtPower, powerKw,
+  energyPeriod, periodStarts, costUnitOf, fmtKwh, fmtMoney, powerKw,
   type EnergyBucket, type EnergySplit,
 } from "@/config/energyModel";
 
 type View = "now" | "history";
-
-const weekday = (t: number) => new Date(t).toLocaleDateString([], { weekday: "short" });
 
 export default function EnergyPanel({ onClose, fallback }: { onClose: () => void; fallback: () => ReactNode }) {
   const { ws, entities, haConfig } = useHA();
@@ -64,8 +65,9 @@ export default function EnergyPanel({ onClose, fallback }: { onClose: () => void
   // Every device's colour, once, from HA's setup (energyFlow.deviceColours).
   const colourOf = useMemo(() => (setup ? deviceColours(setup) : () => UNTRACKED_CLS), [setup]);
   if (status === "ready" && setup === null) return <>{fallback()}</>;
-  const costUnit = setup?.gridIn.map((id) => setup.costOf[id]).filter(Boolean)
-    .map((c) => String(entities[c]?.attributes.unit_of_measurement ?? ""))[0];
+  const costUnit = setup
+    ? costUnitOf(setup, (c) => entities[c]?.attributes.unit_of_measurement as string | undefined)
+    : undefined;
 
   const back = (
     <button type="button" className="weather-back" onClick={() => setView("now")} aria-label="Back to Energy">
@@ -172,7 +174,7 @@ function NowView({ setup, costUnit, house, colourOf }: { setup: EnergyWindowSetu
         <BarChart label="Energy used, the last seven days" fmt={kwh} unit="kWh"
           buckets={weekP.buckets.map((b, i) => ({ t: b.t, segs: segsOf(b, () => [{ key: "used", label: "Used", v: b.split!.used, cls: standout?.index === i ? "e-standout" : "e-used" }]) }))}
           stamp={(t) => new Date(t).toLocaleDateString([], { weekday: "long", day: "numeric", month: "short" })}
-          ticks={days.map((t, i) => ({ i, label: weekday(t) }))} typical={typical}
+          ticks={days.map((t, i) => ({ i, label: weekdayShort(t) }))} typical={typical}
         />
       </div>
 
@@ -201,11 +203,7 @@ export function Flow({ split, rateKw, house, colourOf }: { split: EnergySplit; r
   const L = flowLayout(tree);
   const { W, H, nodeW } = L;
   const colRight = (d: number) => Math.min(W, ...L.boxes.filter((b) => b.depth === d + 1).map((b) => b.x), W);
-  const now = (id: string | null) => { const kw = rateKw(id); return kw === undefined ? "" : `${fmtPower(kw)} now`; };
-  const nowKw = split.roots.reduce<number | undefined>((a, r) => {
-    const k = rateKw(r.node.rateId); return k === undefined ? a : (a ?? 0) + k;
-  }, undefined);
-  const nowOf = (n: FlowNode) => (n.kind === "house" ? (nowKw === undefined ? "" : `${fmtPower(nowKw)} now`) : n.kind === "device" ? now(n.rateId) : "");
+  const nowOf = (n: FlowNode) => flowNow(n, split, rateKw);
   const hb = hover === null ? null : L.boxes[hover];
   return (
     <>
@@ -245,20 +243,8 @@ export function Flow({ split, rateKw, house, colourOf }: { split: EnergySplit; r
         );
       })}
     </svg>
-    {hb && (() => {
-      const n = hb.node;
-      const pct = share(n.kwh, tree.kwh);
-      const sub = nowOf(n);
-      const rows = [
-        { key: "t", text: `${n.label} · ${fmtKwh(n.kwh)} kWh` },
-        ...(n.kind !== "house" ? [{ key: "p", text: `${pct}% of the ${fmtKwh(tree.kwh)} kWh used` }] : []),
-        ...(sub ? [{ key: "n", text: sub }] : []),
-        ...n.members.slice(0, 8).map((m, k) => ({ key: `m${k}`, text: `↳ ${m.label} ${fmtKwh(m.kwh)} kWh` })),
-        ...(n.members.length > 8 ? [{ key: "more", text: `↳ ${n.members.length - 8} more` }] : []),
-        ...(n.kind === "untracked" ? [{ key: "x", text: "no device meter in Home Assistant accounts for it" }] : []),
-      ];
-      return <ChartTip x={(hb.x + nodeW + 8) / W} y={(hb.y + Math.max(hb.h, 20)) / H} stamp="today so far" rows={rows} />;
-    })()}
+    {hb && <ChartTip x={(hb.x + nodeW + 8) / W} y={(hb.y + Math.max(hb.h, 20)) / H} stamp="today so far"
+      rows={flowTipRows(hb.node, tree, nowOf(hb.node))} />}
     </div>
     </>
   );
@@ -277,23 +263,15 @@ export function DevicePie({ split, colourOf }: { split: EnergySplit; colourOf: (
   const turns = sliceTurns(slices.map((s) => s.kwh));
   const cls = (i: number) => slices[i].cls;
   const R0 = 58, R1 = 92, C = 100;
-  const pt = (f: number, r: number) => { const a = f * 2 * Math.PI - Math.PI / 2; return [C + r * Math.cos(a), C + r * Math.sin(a)]; };
-  const arc = (from: number, to: number): string => {
-    // A single slice is the whole ring: two halves, since one arc cannot close.
-    if (to - from >= 0.9999) return `${arc(0, 0.5)} ${arc(0.5, 1)}`;
-    const [x0, y0] = pt(from, R1), [x1, y1] = pt(to, R1), [x2, y2] = pt(to, R0), [x3, y3] = pt(from, R0);
-    const big = to - from > 0.5 ? 1 : 0;
-    return `M${x0} ${y0} A${R1} ${R1} 0 ${big} 1 ${x1} ${y1} L${x2} ${y2} A${R0} ${R0} 0 ${big} 0 ${x3} ${y3} Z`;
-  };
   const hs = hover === null ? null : slices[hover];
   const mid = hover === null ? 0 : (turns[hover].from + turns[hover].to) / 2;
-  const [tx, ty] = pt(mid, R1);
+  const [tx, ty] = ringPoint(mid, R1, C);
   return (
     <div className="energy-pie">
       <div className="spark-wrap energy-pie-wrap" onPointerLeave={() => setHover(null)}>
         <svg className="energy-pie-svg" viewBox="0 0 200 200" role="img" aria-label="Every device's share">
           {slices.map((s, i) => (
-            <path key={s.id} d={arc(turns[i].from, turns[i].to)} className={`energy-slice ${cls(i)}${hover === i ? " hover" : ""}`}
+            <path key={s.id} d={ringArc(turns[i].from, turns[i].to, R0, R1, C)} className={`energy-slice ${cls(i)}${hover === i ? " hover" : ""}`}
               onPointerEnter={() => setHover(i)} onPointerDown={() => setHover(i)} />
           ))}
           <text x={C} y={C - 4} className="energy-pie-total-l">Total</text>
@@ -364,9 +342,7 @@ function HistoryView({ setup, costUnit, range: rangeKey, colourOf }: { setup: En
   const unit = range.unit;
   const label = range.bucketLabel;
   const tickIdx = range.ticks(starts.length);
-  const roots = whole.roots.filter((r) => r.kwh > 0.005);
-  const series = [...roots.map((r) => ({ id: r.node.id, label: r.node.name, cls: colourOf(r.node.id) })), { id: "_u", label: "Untracked", cls: UNTRACKED_CLS }];
-
+  const series = deviceSeries(whole, colourOf);
 
   return (
     <div className="weather-history">
@@ -389,13 +365,7 @@ function HistoryView({ setup, costUnit, range: rangeKey, colourOf }: { setup: En
           line={hasCost ? { values: p.buckets.map((b, i) => (b.state === "pending" ? undefined : costs[i])), label: "Cost", cls: "cost", unit: costUnit, fmt: (v) => fmtMoney(v, costUnit) } : undefined}
           buckets={p.buckets.map((b) => ({
             t: b.t,
-            segs: segsOf(b, () => [
-              ...roots.map((r) => {
-                const u = b.split!.roots.find((x) => x.node.id === r.node.id);
-                return { key: r.node.id, label: r.node.name, v: u?.kwh ?? 0, cls: colourOf(r.node.id) };
-              }),
-              { key: "_u", label: "Untracked", v: b.split!.untracked, cls: UNTRACKED_CLS },
-            ]),
+            segs: segsOf(b, () => seriesSegs(series, b.split!)),
           }))}
           stamp={(t) => label(t)} ticks={tickIdx.map((i) => ({ i, label: label(starts[i]) }))} />
       </div>
@@ -423,17 +393,14 @@ function HistoryView({ setup, costUnit, range: rangeKey, colourOf }: { setup: En
 /** Every device as a list, largest first, ten a page — each bar in the
  *  device's own colour, the pie's (energyFlow.deviceColours). */
 export function DeviceList({ whole, colourOf }: { whole: EnergySplit; colourOf: (id: string) => string }) {
-  const rows = [
-    ...deviceRanking(whole).filter((u) => u.kwh > 0.005).map((u) => ({ id: u.node.id, label: u.node.name, kwh: u.kwh, cls: colourOf(u.node.id) })),
-    ...(whole.untracked > 0.005 ? [{ id: "_u", label: "Untracked", kwh: whole.untracked, cls: UNTRACKED_CLS }] : []),
-  ];
+  const rows = rankRows(whole, colourOf);
   const paged = usePaged(rows, PAGE_CARDS);
   const of = Math.max(whole.used, rows[0]?.kwh ?? 0);
   return (
     <>
       <div className="energy-rank">
         {paged.page.map((r) => (
-          <RankRow key={r.id} label={r.label} kwh={r.kwh} of={of} used={whole.used} cls={r.cls} muted={r.id === "_u"} />
+          <RankRow key={r.id} label={r.label} kwh={r.kwh} of={of} used={whole.used} cls={r.cls} muted={r.untracked} />
         ))}
       </div>
       <Pager paged={paged} unit="device" />

@@ -1,3 +1,11 @@
+## 2.496.142
+
+### Internal — the Energy window's rules
+- No visible change. What the Energy window shows and hides (devices too
+  small to list, the "Untracked" row, the power now, the flow's tooltip, the
+  pie's slices and the currency) is now decided in one tested place instead
+  of inside the screen.
+
 ## 2.496.141
 
 ### Internal — group card ring

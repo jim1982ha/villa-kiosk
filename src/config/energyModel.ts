@@ -209,6 +209,12 @@ export interface EnergyCostSetup extends EnergySetup {
   costOf: Record<string, string>;
 }
 
+/** The currency HA prices the grid in: the unit of the first grid meter's
+ *  cost statistic, if it has one. */
+export function costUnitOf(setup: EnergyCostSetup, unitOf: (entityId: string) => string | undefined): string | undefined {
+  return setup.gridIn.map((id) => setup.costOf[id]).filter(Boolean).map((c) => unitOf(c) ?? "")[0];
+}
+
 /** A statistic's per-bucket values: what the recorder returned (the
  *  HistorySeries shape — only `points` is read here). */
 export interface EnergySeries { points: readonly { t: number; v: number }[] }
