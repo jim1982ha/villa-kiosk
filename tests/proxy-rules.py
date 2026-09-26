@@ -20,6 +20,7 @@ Run: python3 tests/proxy-rules.py   (also `npm run test:proxy`)
 from __future__ import annotations
 
 import importlib.util
+import inspect
 import re
 import sys
 from pathlib import Path
@@ -323,6 +324,30 @@ ck("ops may open every camera command",
    not any(refuse("ops", t) for t in cams))
 ck("owner is exempt, even from the allowlist",
    refuse("owner", "config/entity_registry/update") is None)
+
+# ── one table for what the kiosk sends (round 10, 2.496.151) ──────────────
+# The allow-lists were the proxy's own copy, "kept in sync" by a comment; the
+# Energy window's energy/info, scene.turn_on and input_boolean.toggle were all
+# refused for non-owners while the app offered them.
+print("\n  what the kiosk sends — one table:")
+import json as _json  # noqa: E402
+_table = _json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",
+                                      "rootfs", "usr", "share", "vesta", "ha-commands.json"), encoding="utf-8"))
+ck("the proxy's lists ARE the table's (websocket + camera, domains, homeassistant services)",
+   proxy.ALLOWED_WS_TYPES == frozenset(_table["websocket"]) | frozenset(_table["camera"])
+   and proxy.CAMERA_WS_TYPES == frozenset(_table["camera"])
+   and proxy.ALLOWED_SERVICE_DOMAINS == frozenset(_table["serviceDomains"])
+   and proxy.ALLOWED_HOMEASSISTANT_SERVICES == frozenset(_table["homeassistantServices"]))
+ck("a guest's Energy window may read its cost (energy/info)", refuse("guest", "energy/info") is None)
+ck("a guest may run a scene and toggle an input_boolean (the app offers both)",
+   refuse("guest", "call_service", domain="scene", service="turn_on") is None
+   and refuse("guest", "call_service", domain="input_boolean", service="toggle") is None)
+ck("  ...still never a system service or a write frame",
+   refuse("guest", "call_service", domain="homeassistant", service="restart") is not None
+   and refuse("guest", "call_service", domain="script", service="turn_on") is not None
+   and refuse("guest", "fire_event") is not None)
+ck("an unreadable table fails CLOSED (no non-owner access), never open",
+   'return {}' in inspect.getsource(proxy._load_ha_commands) and 'HA_COMMANDS.get("websocket", ())' in inspect.getsource(proxy))
 ck("an unlisted command is refused for ops",
    refuse("ops", "config/entity_registry/update") is not None)
 ck("  ...and for guest",

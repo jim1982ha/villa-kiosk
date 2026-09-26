@@ -1,0 +1,21 @@
+{
+  "_what": "Everything the kiosk sends Home Assistant, declared ONCE. The proxy (rootfs/usr/bin/supervisor-proxy.py) builds its non-owner allow-lists from this file; the app (src/ha/haCommands.ts) imports it; tests/oracles/ha_commands.mjs fails when the app sends a type or domain not listed here. A new command is added HERE, and nowhere else.",
+  "websocket": [
+    "auth", "ping", "pong",
+    "subscribe_events", "unsubscribe_events",
+    "get_states", "call_service", "get_config",
+    "config/entity_registry/list", "config/device_registry/list", "config/area_registry/list", "config/floor_registry/list",
+    "energy/get_prefs", "energy/info",
+    "recorder/list_statistic_ids", "recorder/statistics_during_period",
+    "logbook/get_events"
+  ],
+  "_camera": "Every command that opens a camera's picture; each also needs the viewCameras capability.",
+  "camera": [
+    "camera/stream", "camera/capabilities",
+    "camera/webrtc/get_client_config", "camera/webrtc/offer", "camera/webrtc/candidate"
+  ],
+  "_serviceDomains": "The domains a kiosk button calls a service in (light.turn_on, scene.turn_on, …).",
+  "serviceDomains": ["light", "climate", "lock", "cover", "fan", "switch", "media_player", "scene", "input_boolean"],
+  "_homeassistantServices": "homeassistant.* also holds system services (restart, stop, set_location…); only these.",
+  "homeassistantServices": ["toggle"]
+}

@@ -328,18 +328,38 @@ def _may(role: str, capability: str) -> bool:
     return capability in ROLE_CAPABILITIES.get(role, frozenset())
 
 
-# The exact (domain, service) surface the kiosk's own UI ever calls — see
-# src/ha/HAServiceCalls.ts and the one generic callService() use in
-# SwitchPanel.tsx (homeassistant.toggle). Anything outside this reaching
-# call_service/services/* from a non-owner session did not come from a kiosk
-# button. Keep this in sync if a new panel starts calling a new domain —
-# the failure mode of forgetting is a clear "service not permitted" error on
-# that panel's very first click, not a silent gap.
-ALLOWED_SERVICE_DOMAINS = {"light", "climate", "lock", "cover", "fan", "switch", "media_player"}
+# ── WHAT THE KIOSK SENDS HOME ASSISTANT: ONE TABLE, READ HERE AND BY THE APP ─
+# /usr/share/vesta/ha-commands.json (rootfs/usr/share/vesta/ in the repo) lists
+# every websocket type, camera command, service domain and homeassistant.*
+# service the kiosk's own UI sends. This file used to keep its own copy "in
+# sync" by a comment, and it drifted: the Energy window's `energy/info` (added
+# client-side in 2.496.105), scene.turn_on and input_boolean.toggle were all
+# refused for every non-owner profile while the app offered them (round 10,
+# 2.496.151). tests/oracles/ha_commands.mjs now fails when the app sends
+# something the table does not list.
+#
+# FAIL CLOSED: an unreadable table allows nothing beyond the owner's
+# exemption — never everything.
+def _load_ha_commands() -> dict:
+    here = os.path.dirname(os.path.abspath(__file__))
+    for path in ("/usr/share/vesta/ha-commands.json",
+                 os.path.join(here, "..", "share", "vesta", "ha-commands.json")):
+        try:
+            with open(path, encoding="utf-8") as f:
+                return json.load(f)
+        except (OSError, ValueError):
+            continue
+    print("[proxy] ha-commands.json unreadable: non-owner Home Assistant access refused", flush=True)
+    return {}
+
+
+HA_COMMANDS = _load_ha_commands()
+# Anything outside these reaching call_service/services/* from a non-owner
+# session did not come from a kiosk button.
+ALLOWED_SERVICE_DOMAINS = frozenset(HA_COMMANDS.get("serviceDomains", ()))
 # homeassistant.* also holds system-level services (restart, stop,
-# reload_core_config, set_location, ...) — only the generic toggle
-# SwitchPanel actually uses is let through.
-ALLOWED_HOMEASSISTANT_SERVICES = {"toggle"}
+# reload_core_config, set_location, ...) — only the generic toggle.
+ALLOWED_HOMEASSISTANT_SERVICES = frozenset(HA_COMMANDS.get("homeassistantServices", ()))
 
 
 def _service_call_allowed(role: str, domain: str, service: str) -> bool:
@@ -596,24 +616,10 @@ _NON_OWNER_REST_PREFIXES = ("history/period/", "camera_proxy/", "camera_proxy_st
 # four more commands (capabilities, client config, offer, candidate), and a
 # guest who could send `camera/webrtc/offer` would watch the same feed the
 # HLS refusal exists to withhold.
-CAMERA_WS_TYPES = frozenset({
-    "camera/stream",
-    "camera/capabilities",
-    "camera/webrtc/get_client_config",
-    "camera/webrtc/offer",
-    "camera/webrtc/candidate",
-})
+CAMERA_WS_TYPES = frozenset(HA_COMMANDS.get("camera", ()))
 
-ALLOWED_WS_TYPES = frozenset({
-    "auth", "ping", "pong",
-    "subscribe_events", "unsubscribe_events",
-    "get_states", "call_service", *CAMERA_WS_TYPES,
-    "get_config",
-    "config/entity_registry/list", "config/device_registry/list", "config/area_registry/list",
-    "config/floor_registry/list",
-    "energy/get_prefs", "recorder/list_statistic_ids", "recorder/statistics_during_period",
-    "logbook/get_events",
-})
+# Read from the one table (see _load_ha_commands above).
+ALLOWED_WS_TYPES = frozenset({*HA_COMMANDS.get("websocket", ()), *CAMERA_WS_TYPES})
 
 
 def _ws_frame_refusal(role: str, obj: dict) -> str | None:

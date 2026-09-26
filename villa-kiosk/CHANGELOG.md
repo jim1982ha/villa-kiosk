@@ -1,3 +1,12 @@
+## 2.496.151
+
+### Fixed — what guests and staff can do
+- **Scenes and on/off helpers work for every profile the app shows them
+  to.** Tapping a scene or an input_boolean switch was refused for anyone
+  but the owner, although the app offered it.
+- **The Energy window shows its cost for every profile.** It silently had
+  none for anyone but the owner.
+
 ## 2.496.150
 
 ### Fixed — history charts
