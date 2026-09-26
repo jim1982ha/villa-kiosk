@@ -537,7 +537,10 @@ input[type="range"]::-moz-range-thumb {
 .weather-comfort-legend { display: flex; gap: 22px; flex-wrap: wrap; font-size: var(--text-sm); color: var(--text-primary); }
 .weather-comfort-legend .dot { display: inline-block; width: 10px; height: 10px; border-radius: 5px; margin-right: 6px; }
 
-.weather-advice { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+/* As many equal columns as there are cards (owner, 2026-09-26: the Energy
+   window's two cards sat in a row of three, the third column empty). The
+   Weather window filters its advice the same way, so both share the rule. */
+.weather-advice { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 12px; }
 .weather-advice-card { background: var(--bg-input); border-radius: 18px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
 .weather-advice-title { display: flex; align-items: center; gap: 8px; font-size: var(--text-base); font-weight: 600; }
 .weather-advice-mark { width: 26px; height: 26px; flex: 0 0 auto; border-radius: 13px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: var(--text-sm); }
@@ -725,7 +728,7 @@ input[type="range"]::-moz-range-thumb {
 
 /* A phone: one column of advice, two of instruments, one of charts. */
 @media (max-width: 720px) {
-  .weather-advice { grid-template-columns: 1fr; }
+  .weather-advice { grid-auto-flow: row; grid-template-columns: 1fr; }
   .weather-instruments { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .weather-figures { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .weather-charts { grid-template-columns: 1fr; }

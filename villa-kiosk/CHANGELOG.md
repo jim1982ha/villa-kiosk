@@ -1,3 +1,9 @@
+## 2.496.108
+
+### Improved
+- **The observation cards fill their row.** When the Energy window (or the
+  Weather window) has two cards to show, they now share the full width
+  instead of leaving an empty third column. On a phone they still stack.
 ## 2.496.107
 
 ### Improved — the Energy window
