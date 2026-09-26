@@ -1,3 +1,10 @@
+## 2.496.137
+
+### Fixed — badges that show a value
+- **The icon in a badge with a value (such as "100%") no longer touches the
+  badge's left edge.** Its margins were fractions of a pixel, which the
+  display rounds down, so the left one disappeared. They are now whole
+  pixels, drawn exactly as intended.
 ## 2.496.136
 
 ### Improved — badges on the map look the same wherever they appear
