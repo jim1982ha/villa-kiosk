@@ -91,6 +91,20 @@ export function flowTree(split: EnergySplit, house: string, colourOf: (id: strin
   return { id: "_house", label: house, kwh: total, kind: "house", cls: "e-house", rateId: null, members: children.map((c) => ({ label: c.label, kwh: c.kwh })), children };
 }
 
+/**
+ * The tree as rows, in READING order — each device followed by what is inside
+ * it — for a phone, where the diagram's text would be 7 px. The layout's
+ * boxes are in COLUMN order (every top-level device, then everything inside
+ * any of them), which on a phone put the pool pump under phase A when it is
+ * inside phase C (owner's screenshot, 2026-09-26).
+ */
+export function flowRows(tree: FlowNode): { node: FlowNode; depth: number }[] {
+  const out: { node: FlowNode; depth: number }[] = [];
+  const walk = (n: FlowNode, depth: number) => { out.push({ node: n, depth }); n.children.forEach((c) => walk(c, depth + 1)); };
+  walk(tree, 0);
+  return out;
+}
+
 export interface FlowBox { node: FlowNode; depth: number; x: number; y: number; h: number }
 export interface FlowLink { from: FlowBox; to: FlowBox; sy: number; dy: number; w: number }
 export interface FlowLayout { W: number; H: number; boxes: FlowBox[]; links: FlowLink[]; nodeW: number }

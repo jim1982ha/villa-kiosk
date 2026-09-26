@@ -16,7 +16,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChevronLeft, LineChart, Zap } from "lucide-react";
 import BasePanel from "./BasePanel";
 import { List, PieChart } from "lucide-react";
-import { flowTree, flowLayout, energySlices, sliceTurns, deviceColours, UNTRACKED_CLS, type FlowNode } from "@/config/energyFlow";
+import { flowTree, flowLayout, flowRows, energySlices, sliceTurns, deviceColours, UNTRACKED_CLS, type FlowNode } from "@/config/energyFlow";
 import { useConfig } from "@/config/ConfigContext";
 import { resolveSiteTitle } from "@/config/AppConfig";
 import { useSegmentedChoice } from "./historyRange";
@@ -210,13 +210,13 @@ export function Flow({ split, rateKw, house, colourOf }: { split: EnergySplit; r
   const hb = hover === null ? null : L.boxes[hover];
   return (
     <>
-    <div className="energy-flow-list">
-      {L.boxes.map((b) => (
-        <div key={`r${b.node.id}`} className={`energy-flow-row${b.depth === 0 ? " grid" : ""}`} style={{ marginLeft: b.depth * 12 }}>
-          {b.depth > 0 && <i className={b.node.cls} style={{ width: `${Math.max(2, (b.node.kwh / tree.kwh) * 100)}%` }} />}
-          <b>{b.node.label}</b>
-          <span>{fmtKwh(b.node.kwh)} kWh{nowOf(b.node) ? ` · ${nowOf(b.node)}` : ""}</span>
-        </div>
+    {/* A phone: the same tree as rows in reading order, drawn as "Every
+        device" draws its rows — every bar starting at the same left edge;
+        only the NAME is indented to show what is inside what. */}
+    <div className="energy-flow-list energy-rank">
+      {flowRows(tree).map(({ node: n, depth }) => (
+        <RankRow key={`r${n.id}`} label={n.label} kwh={n.kwh} of={tree.kwh} used={tree.kwh} cls={n.cls}
+          muted={n.kind === "untracked" || n.kind === "other"} depth={depth} note={nowOf(n)} />
       ))}
     </div>
     <div className="spark-wrap energy-flow-wrap" onPointerLeave={() => setHover(null)}>
@@ -441,10 +441,18 @@ export function DeviceList({ whole, colourOf }: { whole: EnergySplit; colourOf: 
 
 /** One device in the list: its name, a bar in its colour, its kWh and share.
  *  One grid row, so a phone can put the bar UNDER the name (styles). */
-function RankRow({ label, kwh, of, used, cls, muted }: { label: string; kwh: number; of: number; used: number; cls: string; muted: boolean }) {
+function RankRow({ label, kwh, of, used, cls, muted, depth = 0, note }: {
+  label: string; kwh: number; of: number; used: number; cls: string; muted: boolean;
+  /** How deep in HA's hierarchy — indents the NAME only, never the bar. */
+  depth?: number;
+  /** A short muted aside after the name (the power now). */
+  note?: string;
+}) {
   return (
     <div className="energy-rank-row">
-      <span className={`energy-rank-name${muted ? " muted" : ""}`}>{label}</span>
+      <span className={`energy-rank-name${muted ? " muted" : ""}`} style={depth ? { paddingLeft: depth * 14 } : undefined}>
+        {label}{note ? <small className="energy-rank-note"> · {note}</small> : null}
+      </span>
       <span className="energy-rank-bar"><i style={{ width: `${Math.max(1, (kwh / Math.max(1e-6, of)) * 100)}%` }} className={cls} /></span>
       <b>{fmtKwh(kwh)} kWh</b>
       <span className="energy-rank-pct">{used > 0 ? `${share(kwh, used)}%` : ""}</span>

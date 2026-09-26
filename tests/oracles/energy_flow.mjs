@@ -44,6 +44,16 @@ ck("  ...and nothing is lost: A's children add up to A", near(a.children.reduce(
 ck("one small device alone keeps its name (nothing to fold it with)",
    F.flowTree(E.energySplit(setup, (id) => (aKids.includes(id) ? (id === aKids[0] ? 0.1 : 0) : kwh[id])), "H", colourOf).children[1].children.some((n) => n.label === "Device 0"));
 
+console.log("\n  on a phone, the tree as rows in READING order:");
+{
+  const rows = F.flowRows(tree);
+  const names = rows.map((r) => r.node.label);
+  ck("each device is followed by what is inside it: C, its pool pump and remainder, then A, then B",
+     names.slice(0, 4).join() === "The House,Phase C,Pool Pump,Untracked" && names.indexOf("Phase A") < names.indexOf("Device 0") && names.indexOf("Device 0") < names.indexOf("Phase B"), names);
+  ck("  ...the pool pump never under phase A (the column order put it there)", names.indexOf("Pool Pump") < names.indexOf("Phase A"));
+  ck("  ...with each row's depth in HA's hierarchy", rows[0].depth === 0 && rows[1].depth === 1 && rows[2].depth === 2);
+}
+
 console.log("\n  the layout:");
 const L = F.flowLayout(tree);
 const box = (n) => L.boxes.find((x) => x.node === n);
@@ -106,6 +116,8 @@ ck("the device list: ten a page with the same pager, each bar in the device's co
    /function DeviceList\(/.test(panel) && /const paged = usePaged\(rows, PAGE_CARDS\);/.test(panel) && /cls: colourOf\(u\.node\.id\)/.test(panel) && /<Pager paged=\{paged\} unit="device" \/>/.test(panel)
      && !/legendPage/.test(panel));
 const css = readFileSync(new URL("../../src/styles/03-panels.css", import.meta.url), "utf8");
+ck("the phone's flow rows are the Every-device row: reading order, bars on one left edge, only the name indented",
+   /\{flowRows\(tree\)\.map\(\(\{ node: n, depth \}\) => \(\s*<RankRow /.test(panel) && !/marginLeft: b\.depth/.test(panel) && /style=\{depth \? \{ paddingLeft: depth \* 14 \} : undefined\}/.test(panel));
 ck("on a phone the bar stays, under the name (it was hidden)", /grid-template-areas: "name kwh pct" "bar bar bar";/.test(css) && !/\.energy-rank-bar \{ display: none; \}/.test(css));
 ck("'Every device' switches between the list and the pie", /shape === "pie"\s*\? <DevicePie split=\{whole\} colourOf=\{colourOf\} \/>/.test(panel) && /useSegmentedChoice\(SHAPES, "list"/.test(panel));
 ck("the period picker is in the header, the Weather window's control", /headerActions=\{view === "now" \? <span className="weather-live">Home Assistant Energy<\/span> : picker\}/.test(panel)
