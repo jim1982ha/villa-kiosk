@@ -1,3 +1,10 @@
+## 2.496.141
+
+### Internal — group card ring
+- No visible change. The rule that decides when a group card's border turns
+  red (only when every device in it is alerting; or, when it shows a
+  number, when any device is on or alerting) now lives in one tested place.
+
 ## 2.496.140
 
 ### Changed — which floor a device is on

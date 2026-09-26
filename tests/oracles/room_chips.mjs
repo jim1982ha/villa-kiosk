@@ -7,7 +7,7 @@
 // runs the real bucketing and the real combine, inside the real merge loop.
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
-const { bucketRoomChips, combineChips, chipSuffixOf } = await import("@/babylon/roomChips");
+const { bucketRoomChips, combineChips, chipSuffixOf, summaryRingRed } = await import("@/babylon/roomChips");
 const { mergeOverlapping } = await import("@/babylon/boxMerge");
 
 let fail = 0;
@@ -48,6 +48,22 @@ console.log("\n  merging:");
   ck("inside the real merge loop, crowded chips become one holding every badge",
      out.length === 1 && [...out[0].ids].sort().join() === "a,b,c,c2", out.map((c) => c.ids));
   ck("  ...named for every room it covers", [...out[0].roomNames].sort().join() === "A,B,C" && out[0].rooms === 3);
+}
+
+console.log("\n  a summary's ring (2.496.141 — was inline in EntityVisuals, unchecked):");
+{
+  const alert = { ring: "alert" }, linked = { ring: "linked" }, on = { kind: "on" }, off = { kind: "off" }, na = { kind: "unavailable" };
+  ck("showing its devices: red only when EVERY member alerts", summaryRingRed([alert, alert], true) && !summaryRingRed([alert, linked], true));
+  ck("  ...three merely-connected cameras (kind 'on', ring not alert) do not ring the card",
+     !summaryRingRed([{ kind: "on", ring: "linked" }, { kind: "on", ring: "linked" }, { kind: "on", ring: "linked" }], true));
+  ck("  ...a member HA has not reported is not alerting", !summaryRingRed([alert, null], true));
+  ck("drawing a count: red when ANY member is on or alerting", summaryRingRed([off, on], false) && summaryRingRed([{ kind: "alert" }], false));
+  ck("  ...not for unavailable (dimming is its signal), off, or unreported", !summaryRingRed([na, off, null], false));
+  ck("the room chip keeps the count rule", bucketRoomChips([M("a", "r", 0, "on"), M("b", "r", 1, "off")], () => true, (k) => k)[0].ringRed
+     && !bucketRoomChips([M("a", "r", 0, "unavailable")], () => true, (k) => k)[0].ringRed);
+  const ev = (await import("node:fs")).readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
+  ck("the group card asks summaryRingRed and keeps no rule of its own",
+     /summaryRingRed\(g\.members\.map/.test(ev) && !/ringRed = true;|if \(ring !== "alert"\) ringRed = false/.test(ev));
 }
 
 console.log(fail ? `\n❌ ${fail} failed` : "\n✅ a room chip says who is in it, merged or not");

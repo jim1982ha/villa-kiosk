@@ -114,7 +114,7 @@ import { FloorProbe } from "./floorProbe";
 import { axisWorldScale } from "./meshUnits";
 import type { LightReading } from "./lightPoolSet";
 import { OcclusionSweep } from "./occlusionSweep";
-import { bucketRoomChips, combineChips, chipSuffixOf, type RoomChip } from "./roomChips";
+import { bucketRoomChips, combineChips, chipSuffixOf, summaryRingRed, type RoomChip } from "./roomChips";
 import { rungAt, referenceDepthAt, iconZoomAt, viewportPx } from "./badgeScale";
 import { solveRoomZoom } from "./roomZoomSolver";
 import { RoomFocus } from "./roomFocus";
@@ -5485,40 +5485,17 @@ export class EntityVisuals {
           }
         }
         // ── A SUMMARY'S RING NEVER REPEATS A MEMBER'S OWN SIGNAL ────────────
-        // Two cases, because the ring means two different things depending on
-        // whether the summary can show what it stands for:
-        //
-        //   SHOWING ITS DEVICES  every chip already carries its own ring, so
-        //     the card's ring is only allowed to say something true of the
-        //     WHOLE set: red iff every member is red. A card that went red
-        //     because ONE of two devices was armed claimed the pair was armed,
-        //     and the other chip sitting there un-ringed said otherwise —
-        //     reported with exactly that pair on screen.
-        //
-        //   DRAWING A COUNT  nothing inside says anything, so the ring is the
-        //     only channel there is and it keeps the room chip's rule: red if
-        //     ANY member is on or alerting. Same rule as its sibling control,
-        //     for the same reason.
-        //
-        // And when it does show devices it reads the CHIPS' own vocabulary —
-        // `badgeFaceAndRing`'s ring, the linked/alert signal — not `badgeKind`,
-        // which folds in plain "on". Those disagree: a camera that is merely
-        // connected classifies as "on" (see classifyDeviceActivity), so three
-        // idle cameras drew three purple-ringed chips inside a red-ringed card
-        // that was claiming motion nobody had detected.
-        let ringRed = drawn >= 2;
-        for (const i of g.members) {
+        // Red iff every member alerts when the card shows its devices, iff any
+        // member rings when it draws a count — roomChips.summaryRingRed, which
+        // carries the reasons. This only reads the members.
+        const showingDevices = drawn >= 2;
+        const ringRed = summaryRingRed(g.members.map((i) => {
           const st = this.lastState.get(shown[i].id);
-          if (!st) { if (drawn >= 2) ringRed = false; continue; }
-          if (drawn >= 2) {
-            const { ring } = badgeFaceAndRing(
-              this.reading(shown[i].lbl.type, st, this.linkActiveIds.has(shown[i].id)));
-            if (ring !== "alert") ringRed = false;
-          } else {
-            const kind = this.badgeKind(shown[i].lbl.type, st);
-            if (kind === "on" || kind === "alert") ringRed = true;
-          }
-        }
+          if (!st) return null;
+          return showingDevices
+            ? { ring: badgeFaceAndRing(this.reading(shown[i].lbl.type, st, this.linkActiveIds.has(shown[i].id))).ring }
+            : { kind: this.badgeKind(shown[i].lbl.type, st) };
+        }), showingDevices);
         // A badge is never ringless — even at rest it carries the hairline
         // the brand guidelines give the idle state, which is what keeps it a
         // deliberate object rather than a shape on the floor. Same here.
