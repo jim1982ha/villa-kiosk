@@ -1,3 +1,16 @@
+## 2.496.144
+
+### Fixed — chart axes
+- **A chart's y-axis labels are exact.** An axis stepping by 2.5 read
+  "28, 25, 23, 20" where the lines were at 27.5, 25, 22.5 and 20; it now
+  shows those values. This affected the Weather charts.
+
+### Changed — device history charts
+- **A device's history chart is drawn like the Weather window's.** The
+  temperature, humidity and other sensor charts in a device's panel now use
+  the same chart: the unit above the axis, "now" at the right end, and the
+  same tooltip and "no data" wording.
+
 ## 2.496.143
 
 ### Internal — the Weather window's rules
