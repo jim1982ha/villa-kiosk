@@ -1,3 +1,8 @@
+## 2.496.124
+
+**Nothing you should see changed.** The Energy window's Day, Week, Month
+and Year are now each described in one place (their buckets, labels and
+axis marks), so they cannot drift apart.
 ## 2.496.123
 
 ### Fixed — the Energy window
