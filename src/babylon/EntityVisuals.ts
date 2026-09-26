@@ -124,7 +124,8 @@ import { FanRigs } from "./fanRigs";
 import { PlacementPass, GROUP_OVERLAP_ALLOW_WIDTHS, type ShownLabel, type PendingEntityGroup } from "./placementPass";
 import { onGlass, glyphDrawPx, glyphBakePx } from "./badgeLayout";
 import type { FrameRequests } from "./frameScheduler";
-import { badgeImageDataUrl, badgeRingDataUrl, BADGE_INSET_CARD, BADGE_CORNER_FRACTION, BADGE_DASHED_RING_FRACTION } from "./badgeIcons";
+import { badgeImageDataUrl, BADGE_INSET_CARD, BADGE_CORNER_FRACTION, RING_DASH } from "./badgeIcons";
+import { DashableRectangle } from "./dashableRectangle";
 import { badgeText } from "./badgeText";
 import { badgeShadow } from "./badgeShadow";
 import { cameraFrame } from "./cameraFrame";
@@ -604,7 +605,8 @@ export interface CeilingState {
 
 export interface LabelControls {
   container: StackPanel;
-  badge: Rectangle;
+  /** Draws the card's border in EVERY state, dashed included — one mechanism. */
+  badge: DashableRectangle;
   glyph: Image;
   valueWrap: Rectangle;
   /** The card style's icon-to-value gap, as a sized control rather than padding
@@ -622,9 +624,6 @@ export interface LabelControls {
    *  the classic style. */
   padL: Rectangle | null;
   barePad: Rectangle | null;
-  /** The card style's dashed ring, over the card's edge (the `unavailable`
-   *  state; Babylon GUI has no dashed border). Null for the classic style. */
-  cardRing: Image | null;
   valueText: TextBlock;
   anchor: TransformNode;
   type: EntityType;
@@ -2934,7 +2933,7 @@ export class EntityVisuals {
       // card: a SOLID state-coloured rounded card (neutral by default, see
       // categorySurface) holding an icon chip + value inline (its fill/ring
       // are driven in updateLabel).
-      const badge = new Rectangle(`lbl_badge_${entityId}`);
+      const badge = new DashableRectangle(`lbl_badge_${entityId}`);
       badge.height = `${card ? m.cardHeightPx : m.badgeDiameterPx}px`;
       badge.cornerRadius = (card ? m.cardHeightPx : m.badgeDiameterPx) * chip.radius;
       badge.thickness = 0;
@@ -3016,7 +3015,6 @@ export class EntityVisuals {
       const row = card ? new StackPanel(`lbl_row_${entityId}`) : null;
       let barePad: Rectangle | null = null;
       let padL: Rectangle | null = null;
-      let cardRing: Image | null = null;
       if (row) {
         row.isVertical = false;
         // ONE height for everything inside the card, and it is the glyph's
@@ -3029,16 +3027,6 @@ export class EntityVisuals {
         row.height = `${glyphPx}px`;
         row.adaptWidthToChildren = true;
         badge.addControl(row);
-        // The dashed ring, over the card's own edge — shown only for it (see
-        // updateLabel). A bare card is square (cardStruts' `bareink`), and an
-        // unavailable badge never shows a value, so one square image fits.
-        cardRing = new Image(`lbl_ring_${entityId}`);
-        cardRing.width = `${m.cardHeightPx}px`;
-        cardRing.height = `${m.cardHeightPx}px`;
-        cardRing.stretch = Image.STRETCH_FILL;
-        cardRing.isPointerBlocker = false;
-        cardRing.isVisible = false;
-        badge.addControl(cardRing);
       }
 
       // BOTH styles use the SAME baked squircle image (badgeImageDataUrl) at
@@ -3251,7 +3239,7 @@ export class EntityVisuals {
       valueWrap.addControl(valueText);
 
       this.labels.set(entityId, {
-        container, badge, glyph, valueWrap, valueSpacer, valueTail, padL, barePad, cardRing, valueText, anchor, type, category,
+        container, badge, glyph, valueWrap, valueSpacer, valueTail, padL, barePad, valueText, anchor, type, category,
       });
 
       // Repaint from the last known state so a rebuild (toggle on / icon edit)
@@ -3394,30 +3382,23 @@ export class EntityVisuals {
       // full state weight. That is what made a resting badge read as heavily
       // outlined rather than quiet, and it is the same rule the room chip and
       // the entity group already follow (`ringRed ? ringThicknessPx : 1`).
+      // ONE mechanism for every state's border, the dashed one included: the
+      // card's own Rectangle, which can dash (dashableRectangle). The dash was
+      // a separate baked image over the card (2.496.130) and it did not agree
+      // with the Rectangle on where the edge is — "why is there a difference
+      // in the icon shape?" (owner). Same corner, same weight, same place.
       const dashed = !!surface.ringDashed;
-      lbl.badge.thickness = !surface.ring || dashed
-        ? 0
-        : surface.ringHairline ? 1 : this.metrics.ringThicknessPx;
+      const ringW = !surface.ring ? 0 : surface.ringHairline ? 1 : this.metrics.ringThicknessPx;
+      lbl.badge.thickness = ringW;
+      lbl.badge.dash = dashed && ringW > 0 ? [ringW * RING_DASH[0], ringW * RING_DASH[1]] : null;
       lbl.badge.color = surface.ring ?? "transparent";
-      // Every state's chip is baked the same way — inset, no ring of its own.
-      // The dashed ring used to be baked INTO the chip (inset 0), which drew it
-      // round the chip inside the card instead of on the card's edge (2.496.130);
-      // it is now its own image over the card, like every other state's
-      // Rectangle border.
+      // Every state's chip is baked the same way: inset, with no ring of its own.
       lbl.glyph.source = badgeImageDataUrl(
         lbl.category, iconKey, state, override,
         BADGE_INSET_CARD, ringState, true, this.glyphBakePx(true),
         // This whole branch IS the card style, so the heavier glyph weight is
         // unconditional here — see ICON_STROKE_VIEWBOX_BOLD.
         true);
-      if (lbl.cardRing) {
-        lbl.cardRing.isVisible = dashed;
-        if (dashed && surface.ring) {
-          lbl.cardRing.source = badgeRingDataUrl(surface.ring,
-            this.glyphBakePx(true) * (this.metrics.cardHeightPx / this.glyphPxFor(true)),
-            chipProportions().radius, BADGE_DASHED_RING_FRACTION, true);
-        }
-      }
       // Neutral ink, on a now-neutral card — the bottom bar's value is
       // `--text-primary` beside a coloured chip, not the chip's own hue. The
       // state is carried by the chip and the ring; the number is just a number.
@@ -3428,6 +3409,7 @@ export class EntityVisuals {
       // transparent hit-target, not a second ring drawn on top of the baked one.
       lbl.badge.background = "transparent";
       lbl.badge.thickness = 0;
+      lbl.badge.dash = null;
       lbl.badge.color = "transparent";
       lbl.glyph.source = badgeImageDataUrl(
         lbl.category, iconKey, state, override, 0, ringState, false, this.glyphBakePx(false));

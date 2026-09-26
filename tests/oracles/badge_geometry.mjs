@@ -83,8 +83,36 @@ ck("beside a VALUE the left margin is short by the ink the icon insets",
   const ev = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
   ck("the renderer shows ONE left margin at a time: padl beside a value, barePad without",
      /if \(lbl\.padL\) lbl\.padL\.isVisible = on;/.test(ev) && /if \(lbl\.barePad\) lbl\.barePad\.isVisible = !on;/.test(ev) && /padL\.isVisible = false;/.test(ev));
-  ck("the dashed ring lies on the CARD's edge (its own image), not baked round the chip inside it",
-     /lbl\.cardRing\.isVisible = dashed;/.test(ev) && /BADGE_INSET_CARD, ringState, true, this\.glyphBakePx\(true\)/.test(ev) && !/dashed \? 0 : BADGE_INSET_CARD/.test(ev));
+  ck("ONE mechanism for every card border, dashed included: the card's own DashableRectangle (owner: 'why is there a difference in the icon shape?')",
+     /badge: DashableRectangle;/.test(ev) && /new DashableRectangle\(`lbl_badge_/.test(ev)
+       && /lbl\.badge\.dash = dashed && ringW > 0 \? \[ringW \* RING_DASH\[0\], ringW \* RING_DASH\[1\]\] : null;/.test(ev)
+       && /BADGE_INSET_CARD, ringState, true, this\.glyphBakePx\(true\)/.test(ev) && !/cardRing|badgeRingDataUrl/.test(ev));
+  // The dash is set around Rectangle's own drawing and nowhere else: drive the
+  // real _localDraw against a context that records what it is asked to do.
+  globalThis.OffscreenCanvas ??= class { constructor(w, h) { this.width = w; this.height = h; } getContext() { return new Proxy({}, { get: () => () => ({}) }); } };
+  const { DashableRectangle } = await import("@/babylon/dashableRectangle");
+  const log = [];
+  let dash = [];
+  const ctx = new Proxy({}, {
+    get: (_t, k) => k === "setLineDash" ? (d) => { dash = d; log.push(`dash ${d.join(",")}`); }
+      : k === "save" ? () => log.push("save") : k === "restore" ? () => { log.push("restore"); }
+      : k === "stroke" || k === "strokeRect" ? () => log.push(`stroke with dash [${dash.join(",")}]`)
+      : () => {},
+    set: () => true,
+  });
+  const r = new DashableRectangle("t");
+  r.thickness = 3; r.color = "#b8862e"; r.cornerRadius = 7;
+  Object.assign(r._currentMeasure, { left: 0, top: 0, width: 28, height: 28 });
+  r.dash = [6.6, 5.4];
+  r._localDraw(ctx);
+  ck("  ...a dashed border STROKES with the dash", log.some((l) => l === "stroke with dash [6.6,5.4]"), log);
+  ck("  ...and the dash is set inside a save/restore of its own, so nothing drawn after it inherits it",
+     log[0] === "save" && log[1] === "dash 6.6,5.4" && log[log.length - 1] === "restore", log);
+  const solid = []; dash = [];
+  const r2 = new DashableRectangle("u"); r2.thickness = 3; Object.assign(r2._currentMeasure, { left: 0, top: 0, width: 28, height: 28 });
+  const ctx2 = new Proxy({}, { get: (_t, k) => k === "setLineDash" ? () => solid.push("dash") : () => {}, set: () => true });
+  r2._localDraw(ctx2);
+  ck("  ...a solid border sets no dash at all", solid.length === 0);
 }
 ck("a taller card pads more", cardStruts(40, 22, 0).padr > bare.padr);
 
