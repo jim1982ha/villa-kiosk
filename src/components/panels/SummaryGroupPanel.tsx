@@ -37,6 +37,7 @@ import { NO_ROOM_LABEL } from "@/config/roomKey";
 export type { SummaryGroup } from "@/config/summaryGroups";
 import type { SummaryGroup } from "@/config/summaryGroups";
 import { useVillaModel } from "@/config/VillaModel";
+import { devicePower } from "@/utils/devicePower";
 
 interface Props {
   group: SummaryGroup;
@@ -357,10 +358,11 @@ export default function SummaryGroupPanel({
     // tell "HA itself says this is hidden" from an ordinary device at a
     // glance, not just infer it silently.
     const hiddenInHa = hiddenInHaEntityIds.has(id);
-    const doToggle = () =>
-      isLock
-        ? callService("lock", e.state === "locked" ? "unlock" : "lock", {}, { entity_id: id })
-        : callService(domain, "toggle", {}, { entity_id: id });
+    // The flip is devicePower's (lock/unlock, open/close, a domain's toggle).
+    const doToggle = () => {
+      const f = devicePower(e, id).flip;
+      if (f) void callService(f.domain, f.service, {}, { entity_id: id });
+    };
 
     return (
       <div

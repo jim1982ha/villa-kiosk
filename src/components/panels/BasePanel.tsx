@@ -146,7 +146,8 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
             <div className="panel-linked-row">
               <button
                 className={`summary-entity-toggle${linked.isOn ? " on" : ""}`}
-                onClick={linked.toggle}
+                onClick={linked.known ? linked.toggle : undefined}
+                disabled={!linked.known}
                 role="switch"
                 aria-checked={linked.isOn}
                 aria-label={`${linked.label}: ${linked.isOn ? "on" : "off"}`}
@@ -157,7 +158,7 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
               <div style={{ minWidth: 0 }}>
                 <div className="panel-linked-label" title={linked.label}>{linked.label}</div>
                 <div className="muted" style={{ fontSize: "var(--text-2xs)" }}>
-                  {linked.isOn ? "On" : "Off"} · linked entity
+                  {!linked.known ? "Unavailable" : linked.isOn ? "On" : "Off"} · linked entity
                 </div>
               </div>
             </div>

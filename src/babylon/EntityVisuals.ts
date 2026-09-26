@@ -149,6 +149,7 @@ import { BulbSet, WARM_GLOW, STRIP_MIN_LENGTH, type BulbReading } from "./bulbSe
 import { lightingModeFor, type LightingMode } from "./lightingMode";
 import "./babylonSideEffects";
 import { onActiveFloor, stampedFloor } from "./floorOf";
+import { devicePower } from "@/utils/devicePower";
 
 // Baseline emissive for an UNWIRED light marker (no HA state yet). SweetHome
 // ceiling spots / LED strips export as small placeholder spheres; at the old
@@ -1723,7 +1724,7 @@ export class EntityVisuals {
     // than waiting on the next state_changed event, which may never come
     // again if the linked entity was already on before this index existed.
     for (const [linkedId, ids] of this.linkedEntityIndex) {
-      const on = this.lastState.get(linkedId)?.state === "on";
+      const on = devicePower(this.lastState.get(linkedId), linkedId).position === "on";
       for (const id of ids) {
         if (on) this.linkActiveIds.add(id);
         else this.linkActiveIds.delete(id);
@@ -2527,7 +2528,8 @@ export class EntityVisuals {
   private applyLinkedEntityRouting(entity: HassEntity): void {
     const linkedIds = this.linkedEntityIndex.get(entity.entity_id);
     if (!linkedIds) return;
-    const on = entity.state === "on";
+    // A linked lock rings when UNLOCKED, a cover when open (devicePower).
+    const on = devicePower(entity).position === "on";
     for (const id of linkedIds) {
       if (on) this.linkActiveIds.add(id);
       else this.linkActiveIds.delete(id);

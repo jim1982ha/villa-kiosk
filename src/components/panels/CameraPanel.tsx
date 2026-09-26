@@ -694,7 +694,8 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
           {linked && (
             <button
               className={`icon-btn camera-linked-btn${linked.isOn ? " on" : ""}`}
-              onClick={linked.toggle}
+              onClick={linked.known ? linked.toggle : undefined}
+              disabled={!linked.known}
               role="switch"
               aria-checked={linked.isOn}
               aria-label={`${linked.label}: ${linked.isOn ? "on" : "off"}`}

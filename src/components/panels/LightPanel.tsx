@@ -9,11 +9,12 @@ import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { brightnessToPct } from "@/utils/colorUtils";
 import { isUnavailable } from "@/utils/stateColors";
+import { devicePower } from "@/utils/devicePower";
 
 export default function LightPanel({ entity, mapping, onClose }: PanelProps) {
   const { ws } = useHA();
   const unavailable = isUnavailable(entity);
-  const on = entity?.state === "on";
+  const on = devicePower(entity, mapping.entityId).position === "on";
   const modes = (entity?.attributes.supported_color_modes ?? []) as string[];
   const supportsBrightness = modes.some((m) => ["brightness", "color_temp", "hs", "rgb", "rgbw", "xy"].includes(m));
   const supportsTemp = modes.includes("color_temp");
@@ -25,7 +26,7 @@ export default function LightPanel({ entity, mapping, onClose }: PanelProps) {
     <BasePanel title={mapping.label} entityId={mapping.entityId} icon={<Lightbulb size={22} />} onClose={onClose}>
       {unavailable ? <UnavailableNotice device="light" /> : (
         <PowerToggle
-          on={on} onClick={() => HAServices.toggleLight(ws, mapping.entityId)}
+          on={on} onClick={() => HAServices.power(ws, entity, mapping.entityId)}
           label={mapping.label} requireConfirm={mapping.requireConfirm}
         />
       )}

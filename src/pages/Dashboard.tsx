@@ -44,6 +44,7 @@ import type { SceneManager } from "@/babylon/SceneManager";
 import type { ActivePanel } from "@/types/panel.types";
 import type { Category, TeleportPoint } from "@/types/scene.types";
 import { VillaModelProvider } from "@/config/VillaModel";
+import { devicePower } from "@/utils/devicePower";
 
 
 export default function Dashboard() {
@@ -301,7 +302,7 @@ export default function Dashboard() {
       // action a "confirm before acting" gate would otherwise provide.
       const entity = entities[entityId];
       if (isQuickToggle(mapping, entity)) {
-        HAServices.toggleEntity(ws, entityId);
+        HAServices.power(ws, entity, entityId);
         // No panel opens for this path, so nothing on screen changes until
         // HA's real state_changed round-trip lands — spawn a tap ripple right
         // at the tap point so the gesture itself reads as acknowledged. See
@@ -406,12 +407,15 @@ export default function Dashboard() {
   const linkedEntityId = activePanel
     ? (config.entityMap[activePanel.entityId] ?? activePanel.mapping).linkedEntityId
     : undefined;
+  // Its power is devicePower's: a linked LOCK is "on" when unlocked and is
+  // flipped with lock/unlock (it has no toggle); unknown when HA lost it.
+  const linkedPower = linkedEntityId ? devicePower(entities[linkedEntityId], linkedEntityId) : null;
   const linkedSend = useCallback(() => {
-    if (linkedEntityId) HAServices.toggleEntity(ws, linkedEntityId);
-  }, [ws, linkedEntityId]);
+    if (linkedEntityId) HAServices.power(ws, entities[linkedEntityId], linkedEntityId);
+  }, [ws, linkedEntityId, entities]);
   const linkedToggle = useOptimisticToggle(
     linkedEntityId,
-    linkedEntityId ? entities[linkedEntityId]?.state === "on" : false,
+    linkedPower?.position === "on",
     linkedSend,
   );
 
@@ -906,6 +910,7 @@ export default function Dashboard() {
                     linkedEntityId, config.entityMap[linkedEntityId]?.label,
                     entities[linkedEntityId]?.attributes.friendly_name),
                   isOn: linkedToggle.isOn,
+                  known: linkedPower?.position !== "unknown",
                   toggle: linkedToggle.toggle,
                 }
               : undefined,

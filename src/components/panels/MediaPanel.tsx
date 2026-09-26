@@ -7,11 +7,13 @@ import type { PanelProps } from "@/types/panel.types";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { isUnavailable } from "@/utils/stateColors";
+import { devicePower } from "@/utils/devicePower";
 
 export default function MediaPanel({ entity, mapping, onClose }: PanelProps) {
   const { ws } = useHA();
   const unavailable = isUnavailable(entity);
-  const on = entity?.state === "on" || entity?.state === "playing" || entity?.state === "paused";
+  // POWER, not activity: a paused or idle TV is on (devicePower).
+  const on = devicePower(entity, mapping.entityId).position === "on";
   const title = entity?.attributes.media_title as string | undefined;
 
   return (
@@ -19,7 +21,7 @@ export default function MediaPanel({ entity, mapping, onClose }: PanelProps) {
       {unavailable ? <UnavailableNotice device="media player" /> : (
         <>
           <PowerToggle
-            on={on} onClick={() => HAServices.toggleMedia(ws, mapping.entityId)}
+            on={on} onClick={() => HAServices.power(ws, entity, mapping.entityId)}
             label={mapping.label} requireConfirm={mapping.requireConfirm}
           />
 

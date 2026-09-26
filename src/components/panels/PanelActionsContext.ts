@@ -62,6 +62,9 @@ export interface PanelActions {
     label: string;
     /** Live state — drives both the switch position and the header ring. */
     isOn: boolean;
+    /** False when HA cannot say (unavailable, a lock in motion): the switch
+     *  is shown "Unavailable" and cannot be thrown (utils/devicePower). */
+    known: boolean;
     toggle: () => void;
   };
   /** The open camera's MOTION sensor (EntityMapping.motionEntityId), when one

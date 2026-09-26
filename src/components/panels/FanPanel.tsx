@@ -7,6 +7,7 @@ import type { PanelProps } from "@/types/panel.types";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { isUnavailable } from "@/utils/stateColors";
+import { devicePower } from "@/utils/devicePower";
 
 // Named labels for the common discrete-speed-count cases (matches how HA's
 // own more-info dialog reads a fan with a small, fixed number of steps —
@@ -23,7 +24,7 @@ const SPEED_LABELS: Record<number, string[]> = {
 export default function FanPanel({ entity, mapping, onClose }: PanelProps) {
   const { ws } = useHA();
   const unavailable = isUnavailable(entity);
-  const on = entity?.state === "on";
+  const on = devicePower(entity, mapping.entityId).position === "on";
   const presets = (entity?.attributes.preset_modes ?? []) as string[];
   const currentPreset = entity?.attributes.preset_mode;
 
@@ -53,7 +54,7 @@ export default function FanPanel({ entity, mapping, onClose }: PanelProps) {
     <BasePanel title={mapping.label} entityId={mapping.entityId} icon={<Fan size={22} />} onClose={onClose}>
       {unavailable ? <UnavailableNotice device="fan" /> : (
         <PowerToggle
-          on={on} onClick={() => HAServices.toggleFan(ws, mapping.entityId)}
+          on={on} onClick={() => HAServices.power(ws, entity, mapping.entityId)}
           label={mapping.label} requireConfirm={mapping.requireConfirm}
         />
       )}

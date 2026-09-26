@@ -42,7 +42,7 @@ for (const { f, src } of files) {
   for (const m of src.matchAll(/\bcallService\(\s*"([a-z_]+)"\s*,\s*"([a-z_]+)"/g)) calls.set(`${m[1]}.${m[2]}`, f);
 }
 console.log(`  services the app calls by name: ${[...calls.keys()].sort().join(", ")}`);
-ck("found the service calls", calls.has("light.toggle") && calls.has("scene.turn_on"), [...calls.keys()]);
+ck("found the service calls (the power flips are devicePower's — held to this table by device_power.mjs)", calls.has("light.turn_on") && calls.has("scene.turn_on"), [...calls.keys()]);
 const badCalls = [...calls].filter(([c]) => {
   const [d, s] = c.split(".");
   return d === "homeassistant" ? !table.homeassistantServices.includes(s) : !domains.has(d);

@@ -9,13 +9,14 @@ import type { PanelProps } from "@/types/panel.types";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { isUnavailable } from "@/utils/stateColors";
+import { devicePower } from "@/utils/devicePower";
 
 export default function SwitchPanel({ entity, mapping, onClose }: PanelProps) {
   const { ws } = useHA();
   const unavailable = isUnavailable(entity);
-  const on = entity?.state === "on";
+  const on = devicePower(entity, mapping.entityId).position === "on";
 
-  const toggle = () => HAServices.toggleEntity(ws, mapping.entityId);
+  const toggle = () => HAServices.power(ws, entity, mapping.entityId);
 
   return (
     <BasePanel title={mapping.label} entityId={mapping.entityId} icon={<ToggleLeft size={22} />} onClose={onClose}>
