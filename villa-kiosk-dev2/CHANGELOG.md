@@ -1,3 +1,11 @@
+## 2.496.136
+
+### Improved — badges on the map look the same wherever they appear
+- **A device inside a group now has the same border as a device on its own.**
+  An alerting or active device in a group card had a thin outline next to the
+  bolder one of a standalone badge. Borders, their weight and their corner
+  rounding now follow one rule for every card-style badge: alone, in a group,
+  and room labels.
 ## 2.496.135
 
 ### Improved — device icons on the map
