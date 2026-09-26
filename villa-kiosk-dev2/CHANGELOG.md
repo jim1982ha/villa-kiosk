@@ -1,3 +1,11 @@
+## 2.496.155
+
+### Fixed — settings
+- **Settings shows the badge size actually used.** A stored size of 0 read
+  "0.00×" in Settings while the map used the smallest size; every setting is
+  now completed and kept within its limits in one place, so every screen
+  reads the same value.
+
 ## 2.496.154
 
 ### Fixed — settings shared between devices
