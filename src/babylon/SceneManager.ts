@@ -34,6 +34,7 @@ import { ResolutionGovernor, startingScale, VALVE_SAMPLE_MIN } from "./resolutio
 import { SceneLook } from "./sceneLook";
 import { StructureSet } from "./structureSet";
 import { Storeys, isStairwell } from "./storeys";
+import { eyeHeightOf, pickSpawn, roomSpawn, stairFoot, flightBottom, type SpawnWorld } from "./walkerSpawn";
 import { ScenePhases, type ScenePhase } from "./scenePhases";
 import { RenderEnhancements } from "./RenderEnhancements";
 import { loadModelInto } from "./ModelLoader";
@@ -87,18 +88,6 @@ const mm = (v: number): number => Math.round(v * 1000) / 1000;
 
 
 
-/**
- * The tallest structure rise that counts as SOMETHING TO STAND ON rather than
- * something in the way — a step, a threshold, a plinth, or the surface of a
- * raised room whose slab the floor probe reported from underneath.
- *
- * 0.70 m: a domestic step is ~0.17 m and a split-level change is a few of them;
- * a person's torso starts well above this, so nothing at head height can hide
- * under it. Deliberately larger than CameraController.STEP_CLEAR (0.55), which
- * answers a different question — what the collision capsule may climb WHILE
- * WALKING, rather than what a spawn may be placed on top of.
- */
-const STAND_STEP_MAX = 0.70;
 
 
 // ── Frame-time telemetry (the sampling and the valve: resolutionGovernor.ts) ─
@@ -1202,7 +1191,7 @@ export class SceneManager {
       this.floors.setFirstPerson(true); // walking now — feet elevation drives the storey
       // Where to drop the walker: INTO the room the user picked in overview if
       // there is one (so "select a room, switch to first-person" lands there),
-      // else the default staircase spawn. Either way switch to that floor FIRST
+      // else the default ground-floor spawn (walkerSpawn.pickSpawn). Either way switch to that floor FIRST
       // so grounding settles on the right storey, and face open space (not a wall).
       if (this.loadedMeshes.length) {
         const spawn = this.lastNavigatedRoom
@@ -1253,78 +1242,42 @@ export class SceneManager {
     return this.viewMode;
   }
 
-  /** The default first-person landing pose. Always on the GROUND FLOOR: the foot
-   *  of the staircase if we can locate it, else a ground-floor living/entry room,
-   *  else the first ground-floor room, else the origin. Never a 2F room.
+  /** The eye height — the config's, or the one default (walkerSpawn.ts). */
+  private eyeHeight(): number { return eyeHeightOf(this.config.eyeHeight); }
+
+  /** The villa as the walker spawn needs it (walkerSpawn.ts): floor probes,
+   *  structure rays up, the plan's stairwells and ground rooms, and the
+   *  openest direction to face.
    *
-   *  NOT precomputed at load any more (removed 2.112.0's `ensureFirstPersonSpawn`,
-   *  which teleported the inactive walker camera to this pose right after the
-   *  reveal, costing 16+ `pickWithRay` probes — 700-790ms typical, up to 5.9s
-   *  field-observed — on every single load, for every user, whether or not
-   *  first-person is ever used). `setViewMode("first-person")` below already
-   *  computes this fresh on every actual switch and never reused the
-   *  precomputed value, so the eager pass was pure waste — worse, its
-   *  raycasts ran from a callback registered on the same `onAfterRenderObservable`
-   *  notification as the load-telemetry timestamp, ahead of it in registration
-   *  order, so they very likely inflated the `paintMs` figure reported for
-   *  years of load telemetry. */
-  private firstPersonSpawn(): TeleportPoint {
-    const eye = this.config.eyeHeight ?? 1.7;
-    const ground = (p: TeleportPoint) => p.floor === 1;
-    // ⚠️ EVERY CANDIDATE IS VALIDATED, AND THE CHAIN FALLS THROUGH ON FAILURE
-    // (2.459.0). The staircase spawn has now put the walker somewhere unstandable
-    // twice — mid-flight, then in the crawlspace under the steps — and both times
-    // it was the ONLY candidate consulted, because the chain took the first
-    // non-null answer rather than the first WORKABLE one. A spawn that cannot be
-    // stood in is not an answer, so it no longer counts as one.
-    const ok = (p: TeleportPoint): boolean =>
-      this.standable(p.position.x, p.position.z, p.floor);
-    const named = this.calibratedPoints?.find(
-      (p) => ground(p) && /main|living|salon|séjour|sejour|hall|entr/i.test(p.name));
-    const stairs = this.staircaseSpawn();
-    // ⚠️ THE STAIRCASE IS LAST NOW, AND THAT IS THE OWNER'S CALL (2.460.0).
-    // It was first for years, on the reasoning that a stairwell is a legible
-    // place to arrive. Four consecutive releases could not make it produce a
-    // spot a person can stand in — mid-flight, then the crawlspace beneath,
-    // then between the open risers — because a staircase is, definitionally,
-    // the one part of a villa that is neither one storey nor the next. The
-    // owner has asked three times to arrive on the ground floor.
-    //
-    // A ROOM's centroid is open floor by construction, which is the property
-    // that was being approximated the hard way. `standable` still validates
-    // whichever wins, so this is a change of preference, not of guarantee.
-    const candidates: Array<[string, TeleportPoint | null | undefined]> = [
-      ["namedRoom", named],
-      ["groundRoom", this.calibratedPoints?.find(ground)],
-      ["stairFoot", stairs],
-      ["anyPoint", this.calibratedPoints?.[0]],
-    ];
-    for (const [why, p] of candidates) {
-      if (!p) continue;
-      if (!ok(p)) {
-        tapDebug(`spawn: REJECTED ${why} "${p.name}" — ${this.lastStandableWhy || "not standable"}`);
-        continue;
-      }
-      // Place the eye on the surface `standable` actually validated. The point's
-      // own `position.y` was built from `estimateFloorY`, which on a split level
-      // reports the slab UNDER a raised room — spawning from it drops the walker
-      // through the floor that was just approved.
-      const eyeY = this.lastStandY + eye;
-      const probed = this.estimateFloorY(p.position.x, p.position.z, p.floor);
-      tapDebug(
-        `spawn: ${why} "${p.name}" floor=${p.floor}`
-        + ` at=${p.position.x.toFixed(1)},${p.position.z.toFixed(1)}`
-        + ` floorY=${probed.toFixed(2)} standY=${this.lastStandY.toFixed(2)}`,
-      );
-      return { ...p, position: { ...p.position, y: eyeY } };
-    }
-    // Nothing validated. Say so — silently falling back to the origin is how a
-    // spawn bug reads as "the villa loaded somewhere strange".
-    const fallback = this.calibratedPoints?.find(ground) ?? this.calibratedPoints?.[0];
-    tapDebug(`spawn: NO standable candidate — using ${fallback ? `"${fallback.name}"` : "origin"}`);
-    return fallback ?? {
-      name: "Start", floor: 1, position: { x: 0, y: eye, z: 0 }, target: { x: 0, y: 1.6, z: 2 },
+   *  NOT precomputed at load (2.112.0 removed `ensureFirstPersonSpawn`, 16+
+   *  `pickWithRay` probes — 700-790 ms, up to 5.9 s — on every load whether or
+   *  not first person was ever used). Built on each switch. */
+  private spawnWorld(): SpawnWorld {
+    // `visible: false` on purpose — `applyStructure` hides structure per view,
+    // and a wall you cannot see still stops you standing there.
+    const structure = rayTargets({ visible: false, structural: true });
+    return {
+      eyeHeight: this.eyeHeight(),
+      floorAt: (x, z, floor) => this.estimateFloorY(x, z, floor),
+      castUp: (x, y, z, len) => {
+        const hit = this.scene.pickWithRay(new Ray(new Vector3(x, y, z), new Vector3(0, 1, 0), len), structure);
+        return hit?.hit && hit.pickedPoint ? { y: hit.pickedPoint.y, mesh: hit.pickedMesh?.name ?? "?" } : null;
+      },
+      stairwellAt: (x, z) => this.plan.stairwellAt(x, z),
+      groundRooms: () => this.plan.groundRooms(),
+      openestFacing: (x, y, z) => this.bestFacing(x, z, y),
     };
+  }
+
+  /** The default first-person landing — walkerSpawn.pickSpawn. */
+  private firstPersonSpawn(): TeleportPoint {
+    const w = this.spawnWorld();
+    return pickSpawn(w, this.calibratedPoints, () => this.staircaseSpawn(w), (l) => tapDebug(l));
+  }
+
+  /** Into the room picked in overview — walkerSpawn.roomSpawn. */
+  private roomSpawn(room: TeleportPoint): TeleportPoint {
+    return roomSpawn(this.spawnWorld(), room);
   }
 
   /** A horizontal look-target facing the MOST OPEN direction from (x,z): probe
@@ -1347,189 +1300,6 @@ export class SceneManager {
     return { x: x + Math.cos(bestAng) * 3, y, z: z + Math.sin(bestAng) * 3 };
   }
 
-  /** Ground a room's calibrated centre on its own storey and face open space —
-   *  used when switching overview → first-person into a selected room. */
-  private roomSpawn(room: TeleportPoint): TeleportPoint {
-    const eye = this.config.eyeHeight ?? 1.7;
-    const x = room.position.x;
-    const z = room.position.z;
-    const y = this.estimateFloorY(x, z, room.floor) + eye;
-    return { name: room.name, floor: room.floor, position: { x, y, z }, target: this.bestFacing(x, z, y - 0.1) };
-  }
-
-  /**
-   * Can a PERSON STAND HERE? Floor at the storey's own level, and headroom above
-   * it.
-   *
-   * ⚠️ HEADROOM IS THE HALF THAT WAS MISSING, AND IT IS WHY 2.458.0'S SPAWN FIX
-   * MADE THINGS WORSE (2.459.0). "On the ground floor" was tested as a floor
-   * height alone — and the floor UNDER A STAIRCASE is at ground level, so the
-   * search happily returned the crawlspace beneath the stairs. The walker
-   * spawned inside the stair structure, with its collision capsule jammed under
-   * the treads: reported as landing "across the wall asset" and walking being
-   * "very buggy, like something was blocking the path", with a screenshot
-   * looking at the underside of the steps.
-   *
-   * ⚠️ The headroom ray must test STRUCTURE, not collidables. Stairs are
-   * deliberately `checkCollisions = false` (a collidable staircase is how you
-   * get wedged mid-flight — see CameraController's ellipsoid note), so a
-   * collision-based test is blind to exactly the obstruction that caused this.
-   * Structure geometry contains the baked stairs, which is what floorProbe uses
-   * and for the same reason.
-   */
-  private standable(x: number, z: number, floor: number): boolean {
-    const floorY = this.estimateFloorY(x, z, floor);
-    // ⚠️ NO GLOBAL "IS THIS THE LOWEST FLOOR IN THE VILLA" TEST HERE (2.463.0).
-    // It was here, and it rejected the Living Room and Bedroom 1 outright, which
-    // sent the spawn back to the staircase this whole exercise exists to leave:
-    //
-    //   spawn: REJECTED namedRoom "Living Room" — not standable
-    //   spawn: REJECTED groundRoom "Bedroom 1" — not standable
-    //   spawn: stairFoot "Staircase" ...
-    //
-    // This villa has THREE distinct room floor heights (see storeys.ts, where
-    // the same fact blanked the walk-in room banner), so "within 30 cm of the
-    // LOWEST floor in the model" is false for most of a split-level ground
-    // storey. The test was never about the villa's lowest floor anyway — it was
-    // about not landing on a stair tread, and the stairwell polygon test below
-    // answers that directly and exactly. `stairFoot` keeps the ground-level
-    // requirement, because THERE it means "come down off the stairs", which is
-    // a different question from "can a person stand here".
-    //
-    // ⚠️ NEVER INSIDE A STAIRWELL, and this is the test that actually holds
-    // (2.460.0). The headroom ray below was defeated by the geometry it exists
-    // to detect: this villa's staircase is OPEN-RISER, so a single vertical ray
-    // between two treads reaches the sky and reports 1.85 m of clear headroom
-    // while a person standing there is inside the stairs. The plan already
-    // knows where the staircase is — asking it is exact, free, and cannot be
-    // threaded. `onGround` in stairFoot excludes stair rooms from the list of
-    // places to LAND; this excludes them as places to STAND, which is not the
-    // same thing, because another room's polygon routinely overlaps a stairwell.
-    const inStairwell = this.plan.stairwellAt(x, z);
-    if (inStairwell) { this.lastStandableWhy = `inside stairwell "${inStairwell.name}"`; return false; }
-    const need = (this.config.eyeHeight ?? 1.7) + 0.15;
-    const R = 0.3;
-    // `visible: false` on purpose — `applyStructure` hides structure per view,
-    // and a wall you cannot see still stops you standing there.
-    const blocks = rayTargets({ visible: false, structural: true });
-
-    // ⚠️ THE PROBED FLOOR IS NOT ALWAYS THE SURFACE YOU STAND ON (2.464.0).
-    // `estimateFloorY` -> `floorProbe.storeyFloorY` deliberately takes the
-    // LOWEST hit in the column, so an overhead beam can never be mistaken for
-    // the floor. On a SPLIT-LEVEL villa — this one has three ground-storey
-    // floor heights — the lowest hit under a raised room is the slab BENEATH
-    // it, and the headroom ray then started below the real floor and hit it
-    // from underneath. That is what the named blockers were:
-    //
-    //   REJECTED "Bedroom 1"   — blocked 0.08m up by "Structure_primitive72"
-    //   REJECTED "Living Room" — blocked 0.55m up by "Structure_primitive21"
-    //
-    // 8 cm and 55 cm are floors, not obstructions. So walk UP: a structure
-    // surface within one step of the probe IS the walking surface here, and
-    // standing on it is the whole point. Bounded, because each pass is a ray.
-    let standY = floorY;
-    for (let i = 0; i < 4; i++) {
-      const step = this.scene.pickWithRay(
-        new Ray(new Vector3(x, standY + 0.02, z), new Vector3(0, 1, 0), STAND_STEP_MAX),
-        blocks);
-      if (!step?.hit || step.pickedPoint === null) break;
-      standY = step.pickedPoint.y;
-    }
-
-    // Head-and-torso room only: anything under one step of the surface you are
-    // standing on is a step, a threshold or a plinth, and none of those stop a
-    // person. SAMPLED ACROSS THE BODY'S WIDTH rather than down one line, for the
-    // open-riser reason above — a ray is a measure-zero object and real
-    // obstructions have gaps in them. The offsets are the collision capsule's
-    // own radius, so this asks about the volume that will actually be moved
-    // through.
-    for (const [dx, dz] of [[0, 0], [R, 0], [-R, 0], [0, R], [0, -R]] as const) {
-      const hit = this.scene.pickWithRay(
-        new Ray(new Vector3(x + dx, standY + STAND_STEP_MAX, z + dz),
-          new Vector3(0, 1, 0), need - STAND_STEP_MAX),
-        blocks);
-      if (hit?.hit) {
-        // ⚠️ NAME THE BLOCKER. Three releases were spent on a spawn that
-        // reported only pass/fail, and "not standable" is not a diagnosis — it
-        // is the same silence that made `undrawable=0` mean "not measured".
-        this.lastStandableWhy =
-          `blocked ${(standY + STAND_STEP_MAX + (hit.distance ?? 0) - floorY).toFixed(2)}m`
-          + ` above floor by "${hit.pickedMesh?.name ?? "?"}"`
-          + (standY !== floorY ? ` (stood up to ${(standY - floorY).toFixed(2)}m)` : "");
-        return false;
-      }
-    }
-    this.lastStandableWhy = "";
-    this.lastStandY = standY;
-    return true;
-  }
-
-  /** Why the last `standable()` said no — see its blocker note. */
-  private lastStandableWhy = "";
-  /** The surface the last successful `standable()` resolved as the one you
-   *  actually stand on, which is NOT `estimateFloorY` on a split level — see
-   *  the walk-up note there. The spawn places the eye from this, or it drops
-   *  the walker below the floor it just validated. */
-  private lastStandY = 0;
-
-  /**
-   * The nearest spot to (x, z) that stands on a GROUND-LEVEL room floor.
-   *
-   * ⚠️ THIS IS WHAT "AT THE FOOT OF THE STAIRCASE" ACTUALLY REQUIRES, and the
-   * method below promised it for many releases without delivering it (2.457.0).
-   * It grounded at the stair room's CENTROID, and the centroid of a stairwell is
-   * mid-flight — so `estimateFloorY` there returns the height of a TREAD, and
-   * entering first-person dropped the walker halfway up the stairs, between
-   * storeys, which is exactly where a villa has neither a floor to stand on nor
-   * a ceiling overhead. Reported by the owner from a screenshot.
-   *
-   * Everything here is derived from the plan, so it holds for any villa:
-   * "ground level" is the plan's lowest STOREY (Storeys.groundRooms) rather
-   * than any fixed elevation — and no longer "within 0.30 m of the lowest room
-   * floor", a height rule that dropped a split-level ground room. The search
-   * is a spiral outward from the stairwell for the first standable point in a
-   * ground room. Stairwells are excluded by the plan: their `floorY` is a
-   * tread, not a floor.
-   *
-   * Falls through unchanged when there are no polygons yet (calibration has not
-   * run), so a pre-calibration spawn behaves exactly as it did.
-   */
-  private stairFoot(x: number, z: number): { x: number; z: number } {
-    if (!this.plan.rooms.length) return { x, z };
-    const onGround = this.plan.groundRooms();
-    if (!onGround.length) return { x, z };
-    // ⚠️ THE TEST IS THE SURFACE HEIGHT, NOT POLYGON CONTAINMENT (2.458.0).
-    // The first cut asked "is this point inside a ground-level room outline",
-    // and a stairwell's XZ sits inside the outline of whatever room surrounds
-    // it — so the answer was yes at the very first sample, the search returned
-    // immediately, and the walker still landed mid-flight. Containment says
-    // WHICH ROOM you are over; it says nothing about what you would be standing
-    // ON, which is the entire question when the obstruction is a staircase
-    // inside a room. Probe the floor instead: a tread reads a riser or more
-    // above the storey's own level, and a floor does not.
-    const atGroundLevel = (px: number, pz: number): boolean =>
-      // `standable` carries the floor-height test AND the headroom one. The
-      // headroom half is not optional: the floor beneath a staircase is at
-      // ground level, so height alone accepts the crawlspace under the stairs.
-      this.standable(px, pz, 1)
-      && onGround.some((r) => pointInPolygon(px, pz, r.pts));
-    if (atGroundLevel(x, z)) return { x, z };
-    // Outward in rings. The first hit is the nearest spot that is both indoors
-    // and genuinely at floor level — the foot of the stairs by construction
-    // rather than by an offset that would be particular to one villa. Bounded
-    // at 8 m and 12 directions because each sample is a floor probe; the probes
-    // are memoised (floorProbe) and this runs once per view switch.
-    for (let radius = 1; radius <= 8; radius += 1) {
-      for (let i = 0; i < 12; i++) {
-        const a = (i / 12) * Math.PI * 2;
-        const px = x + Math.cos(a) * radius;
-        const pz = z + Math.sin(a) * radius;
-        if (atGroundLevel(px, pz)) return { x: px, z: pz };
-      }
-    }
-    return { x, z };
-  }
-
   /**
    * A spawn at the FOOT of the staircase on the ground floor. In this pipeline
    * stairs are baked into the fused `Structure` mesh, so there's no stair mesh to
@@ -1538,8 +1308,8 @@ export class SceneManager {
    * it on floor 1 → the 1F spot beneath/beside the stairwell. Falls back to real
    * stair GEOMETRY (split-structure GLBs) and finally null.
    */
-  private staircaseSpawn(): TeleportPoint | null {
-    const eye = this.config.eyeHeight ?? 1.7;
+  private staircaseSpawn(w: SpawnWorld): TeleportPoint | null {
+    const eye = w.eyeHeight;
     const groundAt = (x: number, z: number): TeleportPoint => {
       const y = this.estimateFloorY(x, z, 1) + eye;
       return { name: "Staircase", floor: 1, position: { x, y, z }, target: this.bestFacing(x, z, y - 0.1) };
@@ -1549,18 +1319,18 @@ export class SceneManager {
     const namedRoom = this.calibratedPoints?.find((p) => isStairwell(p.name));
     if (namedRoom) {
       // stairFoot, NOT the centroid — the centroid of a stairwell is mid-flight.
-      const foot = this.stairFoot(namedRoom.position.x, namedRoom.position.z);
+      const foot = stairFoot(w, namedRoom.position.x, namedRoom.position.z);
       return groundAt(foot.x, foot.z);
     }
 
-    // 2. A stair-named entity/structure mesh marks the stairwell's plan XZ.
-    const stairMesh =
-      this.loadedMeshes.find((m) => /staircase|escalier/i.test(m.name)) ??
-      this.loadedMeshes.find((m) => /\bstairs?\b|_stair/i.test(m.name));
+    // 2. A stair-named entity/structure mesh marks the stairwell's plan XZ —
+    //    named by the plan's own stair words (storeys.isStairwell), not a
+    //    second, shorter list of them.
+    const stairMesh = this.loadedMeshes.find((m) => isStairwell(m.name));
     if (stairMesh) {
       stairMesh.computeWorldMatrix(true);
       const c = stairMesh.getBoundingInfo().boundingBox.centerWorld;
-      const foot = this.stairFoot(c.x, c.z);
+      const foot = stairFoot(w, c.x, c.z);
       return groundAt(foot.x, foot.z);
     }
 
@@ -1591,8 +1361,7 @@ export class SceneManager {
     };
     const loY = surfaceY(loEnd + span * 0.1);
     const hiY = surfaceY(hiEnd - span * 0.1);
-    const bottom = loY <= hiY ? loEnd : hiEnd;
-    const dir = Math.sign((loY <= hiY ? hiEnd : loEnd) - bottom) || 1;
+    const { bottom, up: dir } = flightBottom(loEnd, hiEnd, loY, hiY);
     const standAlong = bottom - dir * 1.2;
     const px = alongX ? standAlong : crossC;
     const pz = alongX ? crossC : standAlong;
@@ -2530,8 +2299,11 @@ export class SceneManager {
       points.push({
         name: room.name,
         floor,
-        position: { x: mm(wc.x), y: mm(floorY + 1.7), z: mm(wc.z) },
-        target: { x: mm(wc.x), y: mm(floorY + 1.6), z: mm(wc.z + 1.5) },
+        // The configured eye height — it was a literal 1.7 here, so a villa
+        // with its own eye height had every room viewpoint at the wrong one,
+        // and syncRoomPoints (floorY = y − eyeHeight) read the floor wrong.
+        position: { x: mm(wc.x), y: mm(floorY + this.eyeHeight()), z: mm(wc.z) },
+        target: { x: mm(wc.x), y: mm(floorY + this.eyeHeight() - 0.1), z: mm(wc.z + 1.5) },
         // DERIVED — never synced. See TeleportPoint.fitted.
         fitted: true,
       });
@@ -2742,7 +2514,7 @@ export class SceneManager {
     // anchored well above the recentred floor's y≈0, so the glow patch must
     // use ITS OWN local floor height, not the flat offset real room polygons
     // use, or it renders buried inside the stairs/slab below and never shows.
-    const eyeHeight = this.config.eyeHeight ?? 1.7;
+    const eyeHeight = this.eyeHeight();
     const extras = this.config.teleportPoints
       .filter((p) => !this.lastRoomPolyNames.has(roomKey(p.name)))
       .map((p) => ({ name: p.name, x: p.position.x, z: p.position.z, floorY: p.position.y - eyeHeight }));

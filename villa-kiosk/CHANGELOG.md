@@ -1,3 +1,15 @@
+## 2.496.98
+
+### Fixed — walking mode
+- **Your eye height setting now applies to the room viewpoints.** They were
+  always placed at 1.7 m, whatever you had set.
+- **Switching to walking mode inside a room you picked puts you on that room's
+  real floor.** In a room a step or two up, you used to start at the height of
+  the floor underneath it.
+
+### Changed
+- **Where you land in walking mode is worked out by a separate, tested part:**
+  the choice of room, whether a person fits there, and the foot of the stairs.
 ## 2.496.97
 
 ### Fixed

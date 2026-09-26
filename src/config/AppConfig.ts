@@ -6,6 +6,7 @@ import { hasVariantSuffix } from "./EntityMap";
 import { ENTITY_MAP } from "./EntityMap";
 import { TELEPORT_POINTS } from "./TeleportPoints";
 import { DEFAULT_THRESHOLDS, type Threshold } from "./ThresholdConfig";
+import { DEFAULT_EYE_HEIGHT } from "@/babylon/walkerSpawn";
 
 const CONFIG_KEY = "villa-kiosk:config:v2";
 
@@ -304,7 +305,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   dismissedEntityIds: [],
   teleportPoints: TELEPORT_POINTS,
   alertThresholds: DEFAULT_THRESHOLDS,
-  eyeHeight: 1.7,
+  eyeHeight: DEFAULT_EYE_HEIGHT,
   walkSpeed: 1,
   renderOnDemand: true,
   hiddenCategories: [],

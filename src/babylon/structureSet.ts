@@ -14,6 +14,7 @@
 // in the comments that came with them. tests/oracles/structure_set.mjs builds
 // slabs in a NullEngine scene and checks what each view and each probe sees.
 
+import { eyeHeightOf } from "./walkerSpawn";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import { Ray } from "@babylonjs/core/Culling/ray";
 // Babylon prototype patches this module depends on (the picking octree its
@@ -579,9 +580,9 @@ export class StructureSet {
       // size of the SCATTER between panels, not of the panels, and reading it as
       // coverage is what made "half the villa is covered" look like a fact.
       + ` area=${area.toFixed(1)}m2 (${(100 * area / villaFoot).toFixed(1)}% of villa)`
-      + ` eye=${(this.deps.eyeHeight() ?? 1.7).toFixed(2)}m`
+      + ` eye=${eyeHeightOf(this.deps.eyeHeight()).toFixed(2)}m`
       + ` alpha=${minAlpha.toFixed(2)} see-through=${seeThrough}/${this.ceilingMeshes.length}`
-      + (maxY < (this.deps.eyeHeight() ?? 1.7)
+      + (maxY < eyeHeightOf(this.deps.eyeHeight())
         ? " — ENTIRELY BELOW EYE LEVEL: this is trim, not a lid"
         : ""),
     );

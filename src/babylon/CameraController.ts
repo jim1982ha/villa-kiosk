@@ -4,6 +4,7 @@
 // handled via moveWithCollisions each frame. Look-around uses Babylon's built-in
 // touch/mouse rotation.
 
+import { eyeHeightOf } from "./walkerSpawn";
 import { FrameClock } from "./frameClock";
 import { UniversalCamera } from "@babylonjs/core/Cameras/universalCamera";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
@@ -97,7 +98,7 @@ export class CameraController {
     this.config = config;
     this.cb = cb;
     this.canvas = canvas;
-    this.eyeHeight = config.eyeHeight ?? 1.7;
+    this.eyeHeight = eyeHeightOf(config.eyeHeight);
     this.walkSpeed = config.walkSpeed ?? 1;
 
     this.camera = new UniversalCamera("villaCamera", new Vector3(0, this.eyeHeight, 0), scene);

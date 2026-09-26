@@ -95,7 +95,9 @@ console.log("\n  one plan, held once:");
   ck("  ...and SceneManager hands the same plan to the camera and the visuals",
      (sm.match(/this\.camera\.setPlan\(plan\);/g) ?? []).length === 2 && (sm.match(/this\.visuals\.setPlan\(plan\);/g) ?? []).length === 2);
   ck("the stair foot and the coverage report read the plan's ground rooms",
-     /const onGround = this\.plan\.groundRooms\(\);/.test(sm) && /this\.structure\.reportCoverage\(plan\);/.test(sm));
+     /groundRooms: \(\) => this\.plan\.groundRooms\(\),/.test(sm) && /this\.structure\.reportCoverage\(plan\);/.test(sm));
+  // (The stair foot itself moved to walkerSpawn.ts in 2.496.98; it reads the
+  //  plan's ground rooms through SpawnWorld — tests/oracles/walker_spawn.mjs.)
 }
 
 console.log("\n  the edges:");
