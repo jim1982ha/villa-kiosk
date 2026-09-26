@@ -1,3 +1,10 @@
+## 2.496.100
+
+### Changed
+- **The badge layout self-check (`?debug=place`) is now a separate part with
+  its own tests.** Nothing changes on screen. It used to be impossible to show
+  that it could catch a problem anywhere except on the wall tablet. It is now
+  checked against layouts that break each of its rules.
 ## 2.496.99
 
 ### Changed
