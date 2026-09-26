@@ -22,34 +22,13 @@ import { Constants } from "@babylonjs/core/Engines/constants";
 import type { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { Scene } from "@babylonjs/core/scene";
 
-import { earClipTriangulate, regularPolygon, type Pt2 } from "@/utils/geometry";
+import { earClipTriangulate, type Pt2 } from "@/utils/geometry";
+import { poolFootprint } from "./lightPlacement";
 import { LIGHT_POOL_ALPHA_INDEX } from "./seeThroughOrder";
 
 const POOL_TEXTURE_SIZE = 128;
-/** Sides of the pool's own footprint when it is not clipped to a room. Eight
- *  bounds a disc far more tightly than a square while staying convex — which
- *  `clipPolygonToConvex` requires of the CLIP argument (see geometry.ts). The
- *  corners it leaves outside the disc land where the gradient is already fully
- *  transparent, so they cost a few transparent fragments and nothing else. */
-const POOL_FOOTPRINT_SIDES = 8;
-
-/**
- * The pool's own footprint, as a CONVEX polygon — the clip region to intersect
- * a room with (`clipPolygonToConvex` requires the CLIP to be convex; the room,
- * which may be L-shaped, is the subject).
- *
- * Sized by its INSCRIBED circle rather than its circumscribed one: at
- * circumradius `radius` an octagon's edge midpoints fall at 0.92·radius, where
- * the gradient still carries ~5% alpha, and that would print the octagon's
- * straight edges faintly onto the floor. Inflating by 1/cos(π/n) puts the whole
- * disc strictly inside, so the falloff reaches 0 before the boundary and the
- * polygon is never visible as a shape. The extra area is transparent
- * fragments — still far less than the old disc's full bounding square.
- */
-export function poolFootprint(cx: number, cz: number, radius: number): Pt2[] {
-  const circum = radius / Math.cos(Math.PI / POOL_FOOTPRINT_SIDES);
-  return regularPolygon(cx, cz, circum, POOL_FOOTPRINT_SIDES);
-}
+// The pool's convex footprint is placement's (lightPlacement.poolFootprint):
+// the same shape clips it to its room and draws it when it has none.
 
 /** Soft radial-alpha gradient, white fading to transparent — shared by every
  *  pool (each pool recolours it via its own material's emissive/alpha, not

@@ -122,7 +122,9 @@ export class BulbSet {
    *  (two bedside lamps, a strip's markers) has a light. A merged strip
    *  entity stores the SAME light under several keys. */
   private readonly lights = new Map<number, PointLight>();
-  readonly pools: LightPoolSet;
+  // Private: BulbSet's interface is the test surface — tests reached through
+  // it into the pools (round 7). What the bulbs give the glow is `lamps()`.
+  private readonly pools: LightPoolSet;
   private strength = 1;
   private glowMeshes: AbstractMesh[] = [];
   private glowVersion = -1;
@@ -239,21 +241,28 @@ export class BulbSet {
   /** One light entity's state: every output of every bulb it has — its own
    *  glow and transparency, its light, its pools and its shadow map. */
   show(meshes: readonly AbstractMesh[], r: LightReading): void {
-    const share = new Set(meshes.map((m) => this.lights.get(m.uniqueId)).filter(Boolean)).size || 1;
     for (const mesh of meshes) {
       this.showFixture(mesh, r);
+      this.pools.setLight(mesh.uniqueId, { on: r.on && mesh.isEnabled(), colour: r.colour, frac: r.frac });
+    }
+    this.paintLights(meshes, r);
+    this.castShadow(meshes, r.on);
+  }
+
+  /** One entity's PointLights: colour, and its brightness divided among its
+   *  bulbs × the strength setting. */
+  private paintLights(meshes: readonly AbstractMesh[], r: LightReading): void {
+    const share = new Set(meshes.map((m) => this.lights.get(m.uniqueId)).filter(Boolean)).size || 1;
+    for (const mesh of meshes) {
       const on = r.on && mesh.isEnabled();
       const light = this.lights.get(mesh.uniqueId);
-      if (light) {
-        light.diffuse = r.colour;
-        light.intensity = on ? (MAX_LIGHT_INTENSITY * r.frac * this.strength) / share : 0;
-        // Off lights leave every shader's light loop entirely — an all-off villa
-        // pays nothing for them.
-        light.setEnabled(on);
-      }
-      this.pools.setLight(mesh.uniqueId, { on, colour: r.colour, frac: r.frac });
+      if (!light) continue;
+      light.diffuse = r.colour;
+      light.intensity = on ? (MAX_LIGHT_INTENSITY * r.frac * this.strength) / share : 0;
+      // Off lights leave every shader's light loop entirely — an all-off villa
+      // pays nothing for them.
+      light.setEnabled(on);
     }
-    this.castShadow(meshes, r.on);
   }
 
   /** Re-render every live shadow map ONCE on the next frame — the set of
@@ -268,8 +277,12 @@ export class BulbSet {
   setStrength(value: number): boolean {
     if (value === this.strength) return false;
     this.strength = value;
+    // Strength is brightness only: the pools repaint themselves (once), the
+    // PointLights here. It used to resync everything — the pools a second
+    // time, every fixture's look, and every shadow map, which a light's
+    // brightness cannot change (see invalidateShadows).
     this.pools.setStrength(value);
-    this.resync();
+    for (const { meshes, reading } of this.readings()) this.paintLights(meshes, reading);
     return true;
   }
 
@@ -286,6 +299,10 @@ export class BulbSet {
   /** The calibrated villa plan: the pools take their rooms' shapes and floors. */
   setRooms(plan: Storeys<PoolRoom>): void { this.pools.setRooms(plan); }
 
+  /** The light the bulbs that are on give the furniture light (lampGlow):
+   *  one lamp per pool, where its placement says it stands. */
+  lamps(): ReturnType<LightPoolSet["glowLamps"]> { return this.pools.glowLamps(); }
+
   /** Before a frame: write the pools that are on to the furniture light —
    *  when a pool changed, or every frame while more are on than it holds
    *  (then the nearest to the eye win). */
@@ -293,7 +310,7 @@ export class BulbSet {
     if (this.pools.version === this.glowVersion && !this.glowOverflow) return;
     if (!this.glowMeshes.length) return;
     this.glowVersion = this.pools.version;
-    const lamps = this.pools.glowLamps();
+    const lamps = this.lamps();
     this.glowOverflow = lamps.length > LAMP_GLOW_MAX;
     const eye = this.scene.activeCamera?.globalPosition ?? Vector3.ZeroReadOnly;
     lampGlowFor(this.scene).set(lamps, eye);

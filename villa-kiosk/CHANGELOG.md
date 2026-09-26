@@ -1,3 +1,10 @@
+## 2.496.126
+
+**Nothing you should see changed.** The villa renders pixel-for-pixel as
+before. Behind that, where each light stands (its floor, room and storey,
+and how far its glow reaches) is now worked out in one place with automatic
+checks. The "Light effect strength" slider no longer redraws every light
+twice and every shadow each time it moves.
 ## 2.496.125
 
 **Nothing you should see changed.** The Energy window's headline,

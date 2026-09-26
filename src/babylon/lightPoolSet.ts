@@ -24,27 +24,15 @@ import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { Color3 } from "@babylonjs/core/Maths/math.color";
 import type { Scene } from "@babylonjs/core/scene";
-import { LightPool, poolFootprint, poolStrength } from "./LightPools";
-import { clipPolygonToConvex, distanceToPolygonBoundary, type Pt2 } from "@/utils/geometry";
-import { Storeys, isStairwell } from "./storeys";
+import { LightPool, poolStrength } from "./LightPools";
+import type { Pt2 } from "@/utils/geometry";
+import { Storeys } from "./storeys";
+import { placeLight, LIGHT_POOL_RADIUS, POOL_FLOOR_LIFT, type LightPlacement } from "./lightPlacement";
 
-/** A pool's radius on open floor. A separate knob from the PointLights'
- *  reach (bulbSet.ts). */
-export const LIGHT_POOL_RADIUS = 1.8;
-/** Floor for the radius of a pool that belongs to NO room polygon and so is
- *  bounded by the nearest room's edge instead. Without a floor, a fixture on a
- *  boundary would shrink to nothing and read as an unlit lamp. */
-const POOL_MIN_RADIUS = 0.4;
-/** Closer than this to its own fixture, a pool is not on a floor — it is on the
- *  ceiling the fixture hangs from. Below any real mounting height, far above
- *  the few centimetres a ceiling lamp clears its slab by. */
-const POOL_AIRBORNE_M = 0.5;
-/** How far a pool sits above the floor it was probed onto — clear of
- *  z-fighting, and still reading as lying ON it. */
-export const POOL_FLOOR_LIFT = 0.02;
-/** A pool whose floor answer stands this far above its room's own floor is put
- *  ON the room's floor. Above a stair tread's rise; below any table or counter. */
-const POOL_RAISED_M = 0.3;
+// Where each light stands — its floor, room, storey, the glow's floor and
+// ceiling, the pool's reach — is lightPlacement's, one answer per pool that
+// the pool AND the glow read. Its constants are re-exported for the callers.
+export { LIGHT_POOL_RADIUS, POOL_FLOOR_LIFT } from "./lightPlacement";
 
 /** What the pools need from the floor below them. FloorProbe is the adapter. */
 export interface PoolFloorProbe {
@@ -81,9 +69,9 @@ export class LightPoolSet {
   private pending = new Map<number, PendingSpot[]>();
   /** Every storey question about `rooms` (storeys.ts). */
   private storeys = new Storeys<PoolRoom>([]);
-  /** Each pool's ROOM floor, which for a step light is not the tread its
-   *  pool lies on — the height the lamp glow is held back below. */
-  private roomFloors = new Map<LightPool, number>();
+  /** Where each pool's light stands (lightPlacement) — read by the pool and
+   *  by the glow alike. */
+  private placements = new Map<LightPool, LightPlacement<PoolRoom>>();
   /** Bumped by anything that changes what `glowLamps` would answer. */
   version = 0;
   private strength = 1;
@@ -201,8 +189,10 @@ export class LightPoolSet {
           r: r.colour.r, g: r.colour.g, b: r.colour.b,
           amount: poolStrength(r.frac * this.strength, pool.intensityScale),
           radius: pool.radius,
-          floorY: this.roomFloors.get(pool) ?? p.y - POOL_FLOOR_LIFT,
-          ceilingY: this.storeys.floorAbove(this.storeys.storeyStandingOn(this.roomFloors.get(pool) ?? p.y - POOL_FLOOR_LIFT)),
+          // The glow's floor and ceiling are the placement's — never rebuilt
+          // here from pool fields. Before calibration: the pool's own floor.
+          floorY: this.placements.get(pool)?.glowFloorY ?? p.y - POOL_FLOOR_LIFT,
+          ceilingY: this.placements.get(pool)?.ceilingY ?? Infinity,
         });
       }
     }
@@ -229,7 +219,7 @@ export class LightPoolSet {
   clear(): void {
     this.pools.forEach((arr) => arr.forEach((p) => p.dispose()));
     this.pools.clear();
-    this.roomFloors.clear();
+    this.placements.clear();
     this.version++;
     // Holds mesh references from the outgoing model — a reload's calibration
     // must not retry spots belonging to a scene that no longer exists.
@@ -268,85 +258,12 @@ export class LightPoolSet {
   }
 
   private reshapeOne(pool: LightPool, n: Record<string, number>): void {
-    const x = pool.mesh.position.x, z = pool.mesh.position.z;
-    // PROBE FIRST, then resolve the room — the order is the correctness
-    // argument. A ceiling lamp hangs within centimetres of the slab overhead,
-    // the very height that slab reports as the next storey's floor, so a
-    // storey read off the FIXTURE is ambiguous exactly where lights live. A
-    // downward ray answers "which floor is physically under it" by touching it.
-    let surfaceY = this.probe.below(x, pool.probeFromY, z);
-    if (surfaceY === null) n.nofloor++;
-    else if (pool.probeFromY - surfaceY < POOL_AIRBORNE_M) {
-      // Within half a metre of its own fixture: either stuck to the ceiling it
-      // hangs from (a neighbour under a soffit answered the room-and-height
-      // bucket first), or genuinely mounted close to what it lights — a stair
-      // light, a plinth strip. Opposite responses, so ask again uncached and
-      // let the fresh answer win.
-      const fresh = this.probe.describeBelow(x, pool.probeFromY, z);
-      if (fresh && Math.abs(fresh.y - surfaceY) > 2 * POOL_FLOOR_LIFT) { surfaceY = fresh.y; n.corrected++; }
-      else n.nearFixture++;
-    } else {
-      // ⚠️ A DISC FLOATING AT TABLE HEIGHT (reproduced 2026-09-25 on the villa
-      // GLB: 60 of 112 pools through this module, nine of them the living and
-      // dining lamps at 0.75 m over a floor at 0). The probe's memo is keyed
-      // `room | round(height)`, so every lamp mounted at ~2 m in an open-plan
-      // room shared the FIRST answer — the kitchen light's, correctly over a
-      // 0.75 m counter. The airborne rule above cannot see it: 0.75 m is well
-      // clear of a 2.2 m fixture.
-      //
-      // A pool is a glow ON THE FLOOR; what stands under a lamp — the table,
-      // the counter — is lit by the furniture light (lampGlow.ts). So an answer
-      // well above the room's own floor is replaced BY that floor. No ray: the
-      // room's floor height is already known (fitted once from the plan), and
-      // re-asking the probe was measured at ~20 ms a pool, a hitch on every
-      // load. Deterministic too — it cannot depend on what the memo held.
-      // Step and stair lights never reach here: the airborne branch above
-      // keeps a pool mounted close to what it lights.
-      const roomFloor = this.storeys.floorUnder(x, surfaceY, z);
-      if (roomFloor !== null && surfaceY - roomFloor > POOL_RAISED_M) { surfaceY = roomFloor; n.lowered++; }
-    }
-    // ⚠️ TWO RULES, AND WHAT WE KNOW PICKS ONE (2.477.0). A probed surface is
-    // a floor being stood ON — nearest-floor. A fixture height is an unknown
-    // distance ABOVE one — clearance. Asking the clearance rule about a floor
-    // the pool stands on names the storey below, so every upper-storey pool
-    // found no room and washed through its walls.
-    const room = surfaceY !== null
-      ? this.storeys.roomStandingOn(x, surfaceY, z)
-      : this.storeys.roomAt(x, pool.probeFromY, z);
-    // ⚠️ A STAIRCASE HAS NO FLOOR TO LAY A POOL ON. Its "floor" is the tread
-    // measured at its centre (0.85 m on the villa), so the disc floated over
-    // the lower half of the flight and lit it from the air. No disc there;
-    // the lamp's light is the furniture light's alone, held back only below
-    // the STOREY's floor, so every tread it reaches is lit by one rule.
-    pool.floorless = !!room && isStairwell(room.name);
-    if (pool.floorless) pool.mesh.setEnabled(false);
-    const storeyOfRoom = room ? this.storeys.storeyOf(room) : null;
-    const roomFloor = pool.floorless && storeyOfRoom !== null
-      ? this.storeys.floorOf(storeyOfRoom)
-      : surfaceY !== null ? this.storeys.floorUnder(x, surfaceY, z) : null;
-    if (roomFloor !== null) this.roomFloors.set(pool, roomFloor); else this.roomFloors.delete(pool);
-    let radius = LIGHT_POOL_RADIUS;
-    let shape: Pt2[] | undefined;
-    if (room) {
-      // Room = SUBJECT (may be L-shaped), footprint = CLIP (convex).
-      const cut = clipPolygonToConvex(room.pts, poolFootprint(x, z, radius));
-      if (cut.length >= 3) { shape = cut; n.clipped++; } else n.whole++;
-    } else {
-      // Outside every polygon on this storey: bound the radius by the nearest
-      // SAME-STOREY room boundary, so it still cannot cross a wall. Measuring
-      // against every storey let a bedroom wall one floor up crush a terrace
-      // pool to POOL_MIN_RADIUS.
-      const storey = surfaceY !== null
-        ? this.storeys.storeyStandingOn(surfaceY)
-        : this.storeys.storeyAt(pool.probeFromY);
-      let nearest = Infinity;
-      for (const r of this.storeys.roomsOn(storey)) {
-        nearest = Math.min(nearest, distanceToPolygonBoundary(x, z, r.pts));
-      }
-      if (Number.isFinite(nearest)) radius = Math.min(radius, Math.max(POOL_MIN_RADIUS, nearest));
-      n.bounded++;
-      if (radius <= POOL_MIN_RADIUS + 1e-3) n.crushed++;
-    }
-    pool.reshape(shape, radius, surfaceY === null ? undefined : surfaceY + POOL_FLOOR_LIFT);
+    const at = placeLight(pool.mesh.position.x, pool.mesh.position.z, pool.probeFromY,
+      pool.mesh.position.y - POOL_FLOOR_LIFT, this.probe, this.storeys);
+    for (const k of at.notes) n[k] = (n[k] ?? 0) + 1;
+    this.placements.set(pool, at);
+    pool.floorless = at.floorless;
+    if (at.floorless) pool.mesh.setEnabled(false);
+    pool.reshape(at.shape, at.radius, at.surfaceY === null ? undefined : at.surfaceY + POOL_FLOOR_LIFT);
   }
 }
