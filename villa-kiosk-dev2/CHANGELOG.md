@@ -1,3 +1,12 @@
+## 2.496.129
+
+### Improved — "Where today's energy went"
+- **The confusing "kWh today · now" note is gone.** Each row already says
+  its kWh (today since midnight) and, where there is a live reading, its
+  power "now".
+- **On a phone, the house's own row is gone**: the title already names it
+  and its total. Each device inside a meter starts with a chevron (›), so
+  what is grouped under what is clear at a glance.
 ## 2.496.128
 
 ### Fixed — "Where today's energy went" on a phone
