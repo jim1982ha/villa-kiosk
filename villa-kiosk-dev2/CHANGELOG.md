@@ -1,3 +1,18 @@
+## 2.496.165
+
+### Fixed — device panels
+- **A light's brightness and colour sliders follow the light.** If it was
+  changed elsewhere (a switch on the wall, an automation) while its panel was
+  open, the sliders kept the old value and a drag started from there.
+- **The air-conditioner panel uses Home Assistant's temperature unit** (it
+  always said °C), and a thermostat with 0.1° steps no longer shows
+  "22.900000000000002".
+- **A cover, a lock or any other device that Home Assistant has lost** shows
+  the same "Unavailable" notice as every other panel, with its explanation on
+  hover.
+- **The lock panel no longer says "Auto-lock reminder: check the door in 5
+  minutes"** — nothing ever sent that reminder.
+
 ## 2.496.164
 
 ### Fixed — switches in device panels
