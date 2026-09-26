@@ -1,3 +1,12 @@
+## 2.496.154
+
+### Fixed — settings shared between devices
+- **An Advanced Settings change no longer flicks back for a moment.** If a
+  device refreshed its shared settings at the same moment it was saving a
+  change, the older copy could briefly replace the change on that device.
+  The Facility Manager records were already protected from this; the device
+  settings now are too.
+
 ## 2.496.153
 
 ### Internal — diagnostics

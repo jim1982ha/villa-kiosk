@@ -9,7 +9,6 @@
 // — the only thing that can disagree is a second device edited concurrently,
 // and re-opening the panel re-reads the store.
 
-import { decidePull } from "@/utils/pullDecision";
 import {
   createContext, useCallback, useContext, useEffect, useRef, useState,
   type ReactNode,
@@ -18,7 +17,7 @@ import { isTicketOpen, isTicketResolved } from "./fmEngine";
 import {
   fetchFmData, saveFmData, fmId, diffFmData, fmDiffIsEmpty, applyFmDiff,
 } from "./fmApi";
-import { pushWithRebase } from "@/utils/keyedSync";
+import { SyncedDocument } from "@/utils/syncedDocument";
 import { useStoreRefresh, STORE_ACTIVE_MS, STORE_HEARTBEAT_MS } from "@/hooks/useStoreRefresh";
 import { useSyncReporter } from "@/utils/syncTelemetry";
 import {
@@ -98,19 +97,20 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
   const ref = useRef(data);
   ref.current = data;
 
-  /** What the server is known to hold, so a write can send only what THIS
-   *  device changed (see utils/keyedSync.ts). Empty until the first read —
-   *  which is the truth, and makes the first write push everything local. */
-  const baseline = useRef<FmData>(EMPTY_FM_DATA);
-
-  /** Writes this device has started but not yet had confirmed. */
-  const inFlight = useRef(0);
-  /** A write that FAILED and is still only on this device. */
-  const unsaved = useRef(false);
-  /** Writes STARTED, ever — so a refresh can tell that one began while its
-   *  fetch was in flight, which the in-flight count alone cannot (that write
-   *  may already have finished by the time the stale copy arrives). */
-  const writes = useRef(0);
+  /** The sync state machine — utils/syncedDocument, the SAME one the device-
+   *  config store runs (round 10, 2.496.154): the baseline the server is known
+   *  to hold (EMPTY until the first read — the truth, so the first write
+   *  pushes everything local), its revision, writes in flight, writes started
+   *  during a fetch, a failed write still only on this device. */
+  const doc = useRef(new SyncedDocument({
+    fetch: fetchFmData,
+    save: (next: FmData, rev: string, carryOver: Record<string, unknown>) => saveFmData(next, rev, carryOver),
+    diff: diffFmData,
+    isEmpty: fmDiffIsEmpty,
+    apply: applyFmDiff,
+    rebase: (_base: FmData, fresh: FmData) => fresh,
+    empty: EMPTY_FM_DATA,
+  }, EMPTY_FM_DATA)).current;
   /** Retries a failed write. Assigned below, because `mutate` and `reload`
    *  refer to each other: a refresh that finds unsent work re-pushes it. */
   const retryRef = useRef<(() => Promise<void>) | null>(null);
@@ -121,67 +121,45 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
   const reportSync = useSyncReporter("fm");
 
   const reload = useCallback(async () => {
-    // NEVER clobber a change this device hasn't got onto the server yet.
-    // `mutate` applies locally first and pushes after, so between those two
-    // moments local legitimately differs from the server — and a refresh
-    // landing right then would wipe a completion somebody just walked across
-    // the villa to log. Losing a beat of remote changes is fine, losing the
-    // operator's entry is not.
-    if (inFlight.current > 0) {
-      reportSync({ op: "pull", skipped: "write-in-flight" });
-      return;
+    // NEVER clobber a change this device hasn't got onto the server — a write
+    // in flight, one that failed, or one started while this read was out (a
+    // completion somebody just walked across the villa to log). The document
+    // decides (utils/syncedDocument); losing a beat of remote changes is fine,
+    // losing the operator's entry is not.
+    const baselineBefore = doc.baseline;
+    const r = await doc.pull(
+      () => ref.current,
+      (f) => JSON.stringify(f.doc) !== JSON.stringify(baselineBefore),
+    );
+    switch (r.action) {
+      case "wait":
+        reportSync({ op: "pull", skipped: "write-in-flight" });
+        return;
+      case "repush":
+        // A write that FAILED used to be a dead end (this device stopped
+        // accepting remote changes, silently); re-pushing both saves the work
+        // and returns the merged document.
+        reportSync({ op: "pull", deferred: "retrying-unsaved-write" });
+        await retryRef.current?.();
+        return;
+      case "unreachable":
+        reportSync({ op: "pull", aborted: "unreachable" });
+        setReady(true);
+        return;
     }
-    // A write that already FAILED is different, and used to be a dead end:
-    // local stayed ahead of the baseline forever, so this device silently
-    // stopped accepting remote changes for the rest of the session while
-    // showing no reason for it. Re-push instead — that both saves the work
-    // and clears the block, and the push returns the merged document so the
-    // remote changes arrive in the same step.
-    if (unsaved.current) {
-      reportSync({ op: "pull", deferred: "retrying-unsaved-write" });
-      await retryRef.current?.();
-      return;
-    }
-    const writesBefore = writes.current;
-    const fresh = await fetchFmData();
-    // ⚠️ ASKED AGAIN AFTER THE FETCH — see utils/pullDecision. A completion
-    // logged while this request was in flight, whose save finished first, left
-    // `inFlight` back at 0, and the stale copy then overwrote it on screen.
-    const changed = !!fresh && JSON.stringify(fresh.doc) !== JSON.stringify(baseline.current);
-    const action = decidePull({
-      writeInFlight: inFlight.current > 0,
-      reached: !!fresh,
-      serverEmpty: false,                         // an empty FM store is just an empty document
-      localAhead: unsaved.current || writes.current !== writesBefore,
-      wouldChange: changed,
-    });
-    if (action === "wait" || action === "repush") {
-      reportSync({ op: "pull", skipped: action === "wait" ? "write-in-flight" : "write-during-fetch" });
-      // A write that FAILED during the fetch is retried; one that SUCCEEDED
-      // already set this device to the newer merged document.
-      if (unsaved.current) await retryRef.current?.();
-      return;
-    }
-    if (action === "unreachable") {
-      reportSync({ op: "pull", aborted: "unreachable" });
-      setReady(true);
-      return;
-    }
-    if (action === "apply") {
-      setData(fresh!.doc);
-      baseline.current = fresh!.doc;
-    }
+    const fresh = r.fetched;
+    if (r.action === "apply") setData(fresh.doc);
     setReady(true);
     reportSync({
       op: "pull",
-      rev: fresh!.rev,
-      changed,
-      tickets: fresh!.doc.tickets.length,
-      openTickets: fresh!.doc.tickets.filter(isTicketOpen).length,
-      costs: fresh!.doc.costs.length,
-      completions: fresh!.doc.completions.length,
+      rev: fresh.rev,
+      changed: r.action === "apply",
+      tickets: fresh.doc.tickets.length,
+      openTickets: fresh.doc.tickets.filter(isTicketOpen).length,
+      costs: fresh.doc.costs.length,
+      completions: fresh.doc.completions.length,
     });
-  }, [reportSync]);
+  }, [doc, reportSync]);
 
   // Re-read on mount, on focus/visibility, and on a heartbeat — the SAME
   // triggers the device-config store uses. The heartbeat speeds up while the
@@ -207,26 +185,13 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
     const next = fn(before);
     setData(next);
     setSaveError(null);
-    inFlight.current += 1;
-    writes.current += 1;
     // Send ONLY what this action changed, replayed onto the server's freshest
-    // copy under the revision it came at. This used to PUT the whole document
-    // with no revision, so two people working the villa at once — which is the
-    // normal case, the owner and the facility manager both hold
-    // manageFacility — silently overwrote each other's records.
-    const outcome = await pushWithRebase({
-      diff: diffFmData(baseline.current, next),
-      isEmpty: fmDiffIsEmpty,
-      baseline: baseline.current,
-      fetchFresh: fetchFmData,
-      rebase: (_base, fresh) => fresh,
-      apply: applyFmDiff,
-      save: (doc, rev, carryOver) => saveFmData(doc, rev, carryOver, elevation),
-    });
-    inFlight.current -= 1;
+    // copy under the revision it came at (utils/syncedDocument). This used to
+    // PUT the whole document with no revision, so two people working the villa
+    // at once — the owner and the facility manager both hold manageFacility —
+    // silently overwrote each other's records.
+    const outcome = await doc.push(next, (d, rev, carryOver) => saveFmData(d, rev, carryOver, elevation));
     if (outcome.ok) {
-      baseline.current = outcome.next;
-      unsaved.current = false;
       // Fold in whatever another device contributed in the meantime, so this
       // screen reflects the merged truth rather than only its own edit.
       setData(outcome.next);
@@ -238,7 +203,7 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
       });
       return;
     }
-    if (outcome.reason === "nothing-to-push") { unsaved.current = false; return; }
+    if (outcome.reason === "nothing-to-push" || outcome.reason === "not-allowed" || outcome.reason === "not-pulled") return;
     reportSync({ op: "push", ok: false, reason: outcome.reason, elevated: Boolean(elevation) });
     // A rejected DELETE is the one failure that must not be left showing as
     // applied: the record still exists on the server, and every other device
@@ -249,12 +214,10 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
       setSaveError("The delete was refused by the add-on — nothing was removed.");
       return;
     }
-    // Local is now ahead of the server. Flagged rather than merely inferred
-    // from a deep-compare, so the next refresh knows to RETRY this write
-    // instead of skipping forever (see reload).
-    unsaved.current = true;
+    // Local is now ahead of the server; the document has flagged it, so the
+    // next refresh RETRIES this write instead of skipping forever (reload).
     setSaveError("Couldn't save to the add-on — the change is only on this device.");
-  }, [reportSync]);
+  }, [doc, reportSync]);
 
   // Re-pushing is just an identity mutation: the diff is still computed
   // against the un-advanced baseline, so it carries exactly the work that

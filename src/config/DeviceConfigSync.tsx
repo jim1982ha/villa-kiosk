@@ -57,12 +57,11 @@
 // request entirely for other roles) — shared state is exactly what a guest
 // must not be able to rewrite for the whole house.
 
-import { decidePull } from "@/utils/pullDecision";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useConfig } from "./ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { useSyncReporter } from "@/utils/syncTelemetry";
-import { pushWithRebase } from "@/utils/keyedSync";
+import { SyncedDocument } from "@/utils/syncedDocument";
 import { useStoreRefresh } from "@/hooks/useStoreRefresh";
 import {
   fetchSharedConfig, saveSharedConfig, pickSharedConfig, SHARED_CONFIG_KEYS,
@@ -105,9 +104,9 @@ export default function DeviceConfigSync() {
   // (which would re-register the focus listener on every single config edit).
   const localRef = useRef(local);
   localRef.current = local;
-  /** Read by pushOwnDiff's gate. A ref rather than the closed-over `role` so a
-   *  push already scheduled when the profile changes is judged by the role that
-   *  holds when it RUNS, not the one that held when it was queued. */
+  /** Read by the document's write gate. A ref rather than the closed-over
+   *  `role` so a push already scheduled when the profile changes is judged by
+   *  the role that holds when it RUNS, not the one that held when it was queued. */
   const roleRef = useRef(role);
   roleRef.current = role;
   /** The FULL config, not the shared slice. mergeSharedConfig needs it: the
@@ -117,230 +116,128 @@ export default function DeviceConfigSync() {
   const configRef = useRef(config);
   configRef.current = config;
 
-  /** The full shared-config object THIS device is known to be in sync with —
-   *  both the server's own last-seen state (pull) and, once a push succeeds,
-   *  what was just written. This is what a push diffs local against (rule 4)
-   *  and what a pull uses to detect a still-pending local edit (rule 3). null
-   *  until the first successful pull. */
-  // Seeded from the PERSISTED baseline (see deviceConfig's loadSyncBaseline)
-  // rather than starting null, so an edit whose push hadn't landed when the
-  // page reloaded is still recognised as pending and gets re-pushed instead
-  // of being silently overwritten by the next pull.
-  const baselineRef = useRef<SharedDeviceConfig | null>(loadSyncBaseline());
-  /** Serialised form of baselineRef, kept in lockstep — cheap string-compare
-   *  gate for rules 2 and 3 without re-stringifying on every check. */
-  const serverJsonRef = useRef<string | null>(
-    baselineRef.current === null ? null : JSON.stringify(baselineRef.current),
-  );
-
-  /** Advance the baseline — the ONE place it moves, so the in-memory pair and
-   *  the persisted copy can never drift apart. */
-  const commitBaseline = useCallback((next: SharedDeviceConfig, json?: string) => {
-    baselineRef.current = next;
-    serverJsonRef.current = json ?? JSON.stringify(next);
-    saveSyncBaseline(next);
-  }, []);
-  /** Optimistic-concurrency revision last confirmed from the server (see
-   *  supervisor-proxy.py's _store_revision) — sent with the next write so a
-   *  write that's gone stale gets rejected instead of silently overwriting a
-   *  different device's newer one. */
-  const revRef = useRef<string>("0");
-  const pushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** The serialised confirmed baseline — the push effect's cheap gate for
+   *  rules 1 and 2. Moves with the document's baseline (onBaseline). */
+  const serverJsonRef = useRef<string | null>(null);
 
   // Reports this store's pulls/pushes, deduped, tagged `store:"config"` so a
   // dump can never be mistaken for the Facility store's. See syncTelemetry.
   const reportSync = useSyncReporter("config");
 
-  // RULE 4: diff this device's local edits against the baseline it last
-  // synced against, replay ONLY that diff onto the server's freshest copy,
-  // and write it back under optimistic concurrency — retrying against a
-  // fresher copy if another device's write lands in the gap. See the file
-  // header for why a whole-object PUT of `local` can't be used here.
-  const pushOwnDiff = useCallback(async () => {
-    // ⚠️ THE ROLE GATE LIVES HERE, NOT AT THE CALL SITES. It used to be only on
-    // the push effect below, so the pull's "pending-local-edit" abort branch —
-    // which retries the push to unwedge a device holding an unsent edit — ran it
-    // for EVERY role. A non-owner whose local slice had drifted from a baseline
-    // persisted on that browser then re-ran the whole fetch-rebase-write loop on
-    // every focus, visibilitychange and heartbeat tick, forever: the server 403s,
-    // saveSharedConfig maps that to {ok:false, conflict:false}, and nothing ever
-    // clears the divergence. One gate, at the one place that writes.
-    if (roleRef.current !== "owner") return;
-    const baseline = baselineRef.current;
-    if (!baseline) return; // rule 1: no pull yet
-
-    // The fetch-rebase-write-retry protocol itself lives in utils/keyedSync —
-    // the SAME loop the Facility Manager store uses. Only what a "diff" means
-    // for this document, and what to report, belong here.
-    const ownDiff = diffSharedConfig(baseline, localRef.current);
-    // WHICH keys are being sent, by item count. See describeSharedConfigDiff:
-    // without this a push driven by a key that churns on its own is
-    // indistinguishable in a dump from a push driven by a real edit.
-    const changed = describeSharedConfigDiff(ownDiff);
-
-    const outcome = await pushWithRebase({
-      diff: ownDiff,
-      isEmpty: isSharedConfigDiffEmpty,
-      baseline,
-      fetchFresh: async () => {
-        const fresh = await fetchSharedConfig();
-        return fresh === null
-          ? null
-          : { doc: baselineFromServer(fresh.config), rev: fresh.rev, raw: fresh.raw };
+  /** The sync state machine — utils/syncedDocument, the SAME one the Facility
+   *  store runs (round 10, 2.496.154). It owns the baseline this device is
+   *  known to be in sync with, its revision and the writes in flight; this
+   *  component keeps only the config store's own policy: the debounce, the
+   *  derived rows (mergeSharedConfig), the persisted baseline — seeded from it,
+   *  so an edit whose push hadn't landed before a reload is still recognised
+   *  as pending — and owner-only writes. */
+  const doc = useMemo(() => {
+    const initial = loadSyncBaseline();
+    serverJsonRef.current = initial === null ? null : JSON.stringify(initial);
+    return new SyncedDocument({
+      fetch: async () => {
+        const f = await fetchSharedConfig();
+        return f === null ? null : { doc: baselineFromServer(f.config), rev: f.rev, raw: f.raw, config: f.config };
       },
+      save: saveSharedConfig,
+      diff: diffSharedConfig,
+      isEmpty: isSharedConfigDiffEmpty,
+      apply: applySharedConfigDiff,
       // Keys the server omits fall back to this device's baseline rather than
       // to empty, so a push can never blank a field just because the server
       // hasn't got it yet — the diff is what decides changes, not the base.
-      rebase: (base, fresh) => ({ ...base, ...fresh }),
-      apply: applySharedConfigDiff,
-      save: saveSharedConfig,
+      rebase: (base: SharedDeviceConfig, fresh: SharedDeviceConfig) => ({ ...base, ...fresh }),
+      // Nothing stored yet (fresh install): the baseline is EMPTY — the truth —
+      // so the debounced push then seeds the store through the one write path
+      // that has CAS, retries and telemetry.
+      serverEmpty: (f) => Object.keys(f.config).length === 0,
+      empty: baselineFromServer({}),
+      // ⚠️ THE ROLE GATE LIVES IN THE ONE PLACE THAT WRITES, judged when the
+      // push RUNS: a pull's re-push used to run for every role (67c32ccb).
+      canWrite: () => roleRef.current === "owner",
+      onBaseline: (b) => { serverJsonRef.current = JSON.stringify(b); saveSyncBaseline(b); },
       maxAttempts: MAX_PUSH_ATTEMPTS,
-    });
+    }, initial);
+  }, []);
 
+  // RULE 4: this device's own diff, replayed onto the server's freshest copy
+  // under optimistic concurrency (utils/syncedDocument → keyedSync).
+  const pushOwnDiff = useCallback(async () => {
+    const baseline = doc.baseline;
+    // WHICH keys are being sent, by item count. See describeSharedConfigDiff:
+    // without this a push driven by a key that churns on its own is
+    // indistinguishable in a dump from a push driven by a real edit.
+    const changed = baseline ? describeSharedConfigDiff(diffSharedConfig(baseline, localRef.current)) : undefined;
+    const outcome = await doc.push(localRef.current);
     if (outcome.ok) {
-      commitBaseline(outcome.next);
-      revRef.current = outcome.rev;
       reportSync({
         op: "push", ok: true, attempts: outcome.attempts, rev: outcome.rev,
         changed,
         dismissed: outcome.next.dismissedEntityIds.length,
         entities: Object.keys(outcome.next.entityMap).length,
       });
-      // Fold in whatever another device contributed, so this client's view
-      // reflects it immediately rather than waiting for its next pull. Through
-      // mergeSharedConfig for the same reason the pull is: `outcome.next` is
-      // the SHARED slice, which by construction carries no derived items, and
+      // Fold in whatever another device contributed, through mergeSharedConfig:
+      // `outcome.next` is the SHARED slice, which carries no derived items, and
       // handing it straight to update() would empty the fitted rooms out of
       // config on every successful push.
       update(mergeSharedConfig(configRef.current, outcome.next));
       return;
     }
-    if (outcome.reason === "nothing-to-push") return;
+    if (outcome.reason === "nothing-to-push" || outcome.reason === "not-allowed" || outcome.reason === "not-pulled") return;
     reportSync({ op: "push", ok: false, reason: outcome.reason, changed });
-  }, [update, reportSync, commitBaseline]);
+  }, [doc, update, reportSync]);
 
   const pull = useCallback(async () => {
-    const result = await fetchSharedConfig();
-    // The facts, then ONE decision — utils/pullDecision, shared with the
-    // Facility store. Each branch below keeps its own reasoning.
-    const server = result?.config ?? {};
-    const priorBaseline = serverJsonRef.current;
-    const fromServer = result ? mergeSharedConfig(configRef.current, server) : null;
-    const merged = fromServer ? { ...localRef.current, ...fromServer } as SharedDeviceConfig : null;
-    const action = decidePull({
-      writeInFlight: false,                       // pushes are debounced, not tracked in flight
-      reached: result !== null,
-      serverEmpty: Object.keys(server).length === 0,
-      localAhead: priorBaseline !== null && JSON.stringify(localRef.current) !== priorBaseline,
-      wouldChange: !!merged && JSON.stringify(merged) !== JSON.stringify(localRef.current),
-    });
-    if (action === "unreachable" || !result || !merged || !fromServer) {
-      reportSync({ op: "pull", aborted: "unreachable" });
-      return; // couldn't reach it — keep what we have
+    // What applying the server's copy would make the local slice: server wins
+    // for every field it carries; fields it omits keep their local value; this
+    // device's DERIVED rows survive (mergeSharedConfig).
+    const mergedOf = (config: Partial<SharedDeviceConfig>) =>
+      ({ ...localRef.current, ...mergeSharedConfig(configRef.current, config) }) as SharedDeviceConfig;
+    const r = await doc.pull(
+      () => localRef.current,
+      (f) => JSON.stringify(mergedOf(f.config)) !== JSON.stringify(localRef.current),
+    );
+    switch (r.action) {
+      case "wait":
+        reportSync({ op: "pull", skipped: "write-in-flight" });
+        return;
+      case "unreachable":
+        reportSync({ op: "pull", aborted: "unreachable" });
+        return;
+      case "repush":
+        // RULE 3: a pull never clobbers an unpushed local edit — and aborting
+        // is only half of it: if that edit's own push failed, nothing else
+        // would retry it (the push effect only fires when the slice CHANGES),
+        // so the pull is what unwedges it. Also the answer when a write
+        // started while this pull's fetch was out: the fetched copy is older.
+        reportSync({
+          op: "pull", aborted: "pending-local-edit",
+          dismissed: localRef.current.dismissedEntityIds.length,
+          entities: Object.keys(localRef.current.entityMap).length,
+        });
+        void pushOwnDiff();
+        return;
+      case "seed":
+        reportSync({
+          op: "pull", seededEmptyStore: true, rev: r.fetched.rev,
+          dismissed: localRef.current.dismissedEntityIds.length,
+        });
+        return;
     }
-    const { rev } = result;
-    if (action === "seed") {
-      // Nothing stored yet (fresh install, or first run after upgrading from
-      // the localStorage-only versions). Record the baseline as EMPTY — which
-      // is the truth — rather than as this device's local slice. Recording
-      // local here would claim it was already synced, so the push gate would
-      // see no change and the seed would never actually be written; the old
-      // code papered over that with its own un-awaited save, whose failure
-      // nothing could detect or retry. With an honest empty baseline the
-      // normal debounced push does the seeding through the one write path
-      // that has CAS, retries and telemetry.
-      commitBaseline(baselineFromServer({}));
-      revRef.current = rev;
-      reportSync({
-        op: "pull", seededEmptyStore: true, rev,
-        dismissed: localRef.current.dismissedEntityIds.length,
-      });
-      return;
-    }
-    // RULE 3: A PULL MUST NEVER CLOBBER AN UNPUSHED LOCAL EDIT.
-    //
-    // Checked FIRST, and against the baseline as it stood BEFORE this pull —
-    // if the local slice has drifted from what the server was last known to
-    // hold, this client is mid-edit and its own push is still in the debounce
-    // window. Pushes wait PUSH_DEBOUNCE_MS but pull() runs on every focus and
-    // visibilitychange, and on several platforms interacting with a native
-    // <select> blurs then refocuses the window — so picking a room in
-    // Advanced Settings fired a pull while that very edit was still pending,
-    // fetched the server's older copy, and wrote it back over the change.
-    // Reported from the field as "I set the room, and seconds later it
-    // reverts".
-    //
-    // Compared after the await, since the edit may have landed while the
-    // request was in flight — precisely the window at risk. baselineRef is
-    // deliberately left alone so the push gate still sees a difference and
-    // sends this client's edit; the next pull then reconciles normally.
-    // Losing a beat of remote changes is fine, losing the user's edit is not.
-    if (action === "repush") {
-      // Aborting the pull is only half the answer: the reason we're aborting
-      // is that this device holds an edit the server hasn't got. If that
-      // edit's own push already failed (a flaky phone connection is the
-      // normal case), nothing would ever retry it — the push effect only
-      // re-fires when the local slice CHANGES — so the device would sit here
-      // refusing every pull for an edit it never sends, permanently out of
-      // sync in both directions until the user happened to edit something
-      // else. Retry the push instead, so a focus/heartbeat pull is what
-      // unwedges it.
-      // The single most diagnostic line here: this device is holding an edit
-      // the server hasn't got. If a phone logs this repeatedly while a desktop
-      // logs clean pulls, the divergence is a stuck local edit, not a bad read.
-      reportSync({
-        op: "pull", aborted: "pending-local-edit",
-        dismissed: localRef.current.dismissedEntityIds.length,
-        entities: Object.keys(localRef.current.entityMap).length,
-      });
-      void pushOwnDiff();
-      return;
-    }
-
-    // Server wins for every field it actually carries; fields it omits keep
-    // their current local value (an older store, or one written before a field
-    // existed, must not blank that field). The baseline is that MERGED result,
-    // which is what the local slice will equal once `update` commits — so the
-    // push effect sees no change and the pull can't bounce straight back.
-    // mergeSharedConfig, not a bare spread: the server's copy of a key may be
-    // missing this device's DERIVED items (see pickSharedConfig's pair), and a
-    // plain overwrite would drop the fitted rooms out of config until the next
-    // calibration happened to put them back.
-    // `merged` decides what local CONFIG becomes; the BASELINE is what the
-    // server actually holds. They are not the same object and conflating them
-    // is what stranded dismissedEntityIds on one device — see
-    // baselineFromServer's docstring.
-    commitBaseline(baselineFromServer(server));
-    revRef.current = rev;
-    // What the server actually handed this device. `dismissed` is the number
-    // that matters when "Remove" works on one device and not another: if the
-    // desktop shows a count here and the phone shows 0, the write never
-    // reached the store; if both show the same count, the divergence is on
-    // the rendering side, not the sync side.
+    const merged = mergedOf(r.fetched.config);
     reportSync({
-      op: "pull", rev,
+      op: "pull", rev: r.fetched.rev,
       dismissed: merged.dismissedEntityIds.length,
       entities: Object.keys(merged.entityMap).length,
-      serverHadDismissed: Array.isArray(server.dismissedEntityIds),
+      serverHadDismissed: Array.isArray(r.fetched.config.dismissedEntityIds),
     });
-    // Skip the update entirely when the server genuinely has nothing new for
-    // us. `pull()` runs on every mount AND every window focus/visibilitychange
-    // (below) — so on a kiosk that's just been minimised and restored, or a
-    // phone brought back from the background, this fires constantly with
-    // data that hasn't moved an inch. update() still hands React (and from
-    // there, SceneManager) a BRAND NEW object reference for every field in
-    // `server` on every call, even when its content is byte-identical to what
-    // config already holds — a fresh JSON parse can never be `===` the
-    // existing object. SceneManager's structural-change gate content-diffs
-    // entityMap (entityMapDelta) but compares meshBindings by REFERENCE, so
-    // an unconditional update() here forced a full mesh re-index — visible as
-    // covers/locks snapping back to their hardcoded default pose mid-rebuild,
-    // and the multi-second freeze the rebuild itself costs — on literally
-    // every focus regain, whether or not anything had actually changed.
-    if (action === "noop") return;
-
-    update(fromServer);
-  }, [update, role, pushOwnDiff, reportSync]);
+    // Skip the update when nothing moved: update() hands SceneManager brand-new
+    // objects for every field even when byte-identical, and meshBindings is
+    // compared by reference there — an unconditional update forced a full mesh
+    // re-index (and its freeze) on every focus regain.
+    if (r.action === "noop") return;
+    update(mergeSharedConfig(configRef.current, r.fetched.config));
+  }, [doc, update, pushOwnDiff, reportSync]);
 
   // Mount + focus/visibility + a slow visible-only heartbeat, via the shared
   // hook — the SAME triggers the Facility Manager store uses, so "how fresh is
@@ -348,6 +245,7 @@ export default function DeviceConfigSync() {
   useStoreRefresh(useCallback(() => { void pull(); }, [pull]));
 
   // Push local edits up, debounced. Gated on rules 1 and 2 above.
+  const pushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (role !== "owner") return;                 // non-owners never write
     const known = serverJsonRef.current;
