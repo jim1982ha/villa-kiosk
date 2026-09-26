@@ -15,15 +15,14 @@
 // Width: the same as every other window the bottom bar opens
 // (`summary-group-modal`, 780 px) — the owner asked for them to match.
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ChevronLeft, CloudSun, LineChart as LineChartIcon } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { CloudSun } from "lucide-react";
 import { fmtChartValue, fmtChartTick, fmtChartTime, fmtChartStamp } from "./chartUtils";
 import BarChart from "./BarChart";
-import { Figure, ObservationCards } from "./WindowPieces";
+import { DataWindow, Figure, LiveNote, ObservationCards } from "./WindowPieces";
 import { localMidnight } from "@/utils/localDay";
 import { barNote, seriesBuckets } from "@/utils/barChart";
 import LineChart, { ChartEmpty } from "./LineChart";
-import BasePanel from "./BasePanel";
 import { useHA } from "@/ha/HAStateStore";
 import { fetchHistory, fetchStatistics } from "@/ha/HAHistoryAPI";
 import { useHistory } from "@/hooks/useHistory";
@@ -38,7 +37,6 @@ import {
   type Advice, type WeatherRole, type WeatherStation,
 } from "@/config/weatherStation";
 
-type View = "now" | "history";
 
 /** "16 s ago", "3 min ago", "2 h ago". */
 function ago(iso: string | undefined, now: number): string {
@@ -71,44 +69,15 @@ function useReadings(station: WeatherStation) {
 type Readings = ReturnType<typeof useReadings>;
 
 export default function WeatherPanel({ station, onClose }: { station: WeatherStation; onClose: () => void }) {
-  const [view, setView] = useState<View>("now");
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 10_000); return () => clearInterval(t); }, []);
   const r = useReadings(station);
   const { range, picker } = useHistoryRange(WEATHER_RANGES, "weather-ranges");
-  // Each screen opens at its TOP: the body is one scroll area shared by both,
-  // so History used to open wherever Now had been scrolled to.
-  const topRef = useRef<HTMLDivElement>(null);
-  useEffect(() => { topRef.current?.closest(".panel-body")?.scrollTo({ top: 0 }); }, [view]);
-
-  const back = (
-    <button type="button" className="weather-back" onClick={() => setView("now")} aria-label="Back to Weather">
-      <ChevronLeft size={22} />
-    </button>
-  );
   return (
-    <BasePanel
-      title={view === "now" ? "Weather" : "History and trends"}
-      icon={view === "now" ? <CloudSun size={22} /> : back}
-      className="summary-group-modal weather-modal"
-      history={false}
-      onClose={onClose}
-      headerActions={view === "now"
-        ? (r.updated && <span className="weather-live">live · {ago(r.updated, now)}</span>)
-        : picker}
-      // In the footer, so it is visible however far the body scrolls — and in
-      // Settings' "Advanced Settings" style: the same button, the same place.
-      footerLeading={view === "now" && (
-        <button type="button" className="btn ghost" onClick={() => setView("history")}>
-          <LineChartIcon size={18} /> History and trends
-        </button>
-      )}
-    >
-      <div ref={topRef} />
-      {view === "now"
-        ? <NowView station={station} r={r} />
-        : <HistoryView station={station} range={range} />}
-    </BasePanel>
+    <DataWindow title="Weather" icon={<CloudSun size={22} />} onClose={onClose}
+      live={r.updated && <LiveNote>live · {ago(r.updated, now)}</LiveNote>} picker={picker}
+      now={() => <NowView station={station} r={r} />}
+      history={() => <HistoryView station={station} range={range} />} />
   );
 }
 

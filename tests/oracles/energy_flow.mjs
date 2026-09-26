@@ -161,7 +161,7 @@ ck("  ...without the house's own row (the title names it), a chevron before ever
 ck("the flow's head has no 'kWh today · now' (each row says kWh, and 'now' where it is power)", !/kWh today · now/.test(panel));
 ck("on a phone the bar stays, under the name (it was hidden)", /grid-template-areas: "name kwh pct" "bar bar bar";/.test(css) && !/\.energy-rank-bar \{ display: none; \}/.test(css));
 ck("'Every device' switches between the list and the pie", /shape === "pie"\s*\? <DevicePie split=\{whole\} colourOf=\{colourOf\} \/>/.test(panel) && /useSegmentedChoice\(SHAPES, "list"/.test(panel));
-ck("the period picker is in the header, the Weather window's control", /headerActions=\{view === "now" \? <span className="weather-live">Home Assistant Energy<\/span> : picker\}/.test(panel)
+ck("the period picker is in the header, the Weather window's control", /live=\{<LiveNote>Home Assistant Energy<\/LiveNote>\} picker=\{picker\}/.test(panel)
    && /useSegmentedChoice\(RANGE_OPTIONS, "week", "Period", "weather-ranges"\)/.test(panel) && !/energy-history-head/.test(panel));
 const hr = readFileSync(new URL("../../src/components/panels/historyRange.tsx", import.meta.url), "utf8");
 ck("  ...and the Weather/device range picker is the same control", /const \{ key, picker \} = useSegmentedChoice\(RANGES\.filter/.test(hr));

@@ -189,16 +189,21 @@ console.log("\n  the Sun & UV tile — the WHO scale (2026-09-26)");
 console.log("\n  the window: the approved boards 6 and 7");
 {
   const panel = readFileSync(new URL("../../src/components/panels/WeatherPanel.tsx", import.meta.url), "utf8");
-  ck("the same width as every other bottom-bar window", /className="summary-group-modal weather-modal"/.test(panel));
+  const wp = readFileSync(new URL("../../src/components/panels/WindowPieces.tsx", import.meta.url), "utf8");
+  const energyP = readFileSync(new URL("../../src/components/panels/EnergyPanel.tsx", import.meta.url), "utf8");
+  ck("both windows are the one DataWindow (round 9, 2.496.145), which keeps no copy of its shell in either",
+     /<DataWindow title="Weather"/.test(panel) && /<DataWindow title="Energy"/.test(energyP)
+     && ![panel, energyP].some((s) => /<BasePanel|topRef|setView\(/.test(s)));
+  ck("the same width as every other bottom-bar window", /className=\{`summary-group-modal data-window\$\{/.test(wp));
   ck("history reads the recorder's STATISTICS (5-minute / hourly), not raw history",
      /fetchStatistics\(ws, ids, range\.hours, range\.period, \["mean", "min", "max"\]/.test(panel));
-  ck("the history view goes back from its title's arrow, with no second 'back' link", /aria-label="Back to Weather"/.test(panel) && !/Back to now/.test(panel));
+  ck("the history view goes back from its title's arrow, with no second 'back' link", /aria-label=\{`Back to \$\{title\}`\}/.test(wp) && !/Back to now/.test(panel + wp));
   ck("'History and trends' is in the FOOTER, Settings' 'Advanced Settings' style (btn ghost, in the leading slot)",
-     /footerLeading=\{view === "now" && \([\s\S]{0,120}className="btn ghost"[\s\S]{0,120}History and trends/.test(panel) && !/weather-link/.test(panel));
+     /footerLeading=\{view === "now" && \([\s\S]{0,120}className="btn ghost"[\s\S]{0,120}History and trends/.test(wp) && !/weather-link/.test(panel));
   const base = readFileSync(new URL("../../src/components/panels/BasePanel.tsx", import.meta.url), "utf8");
   ck("  ...and BasePanel's footer renders that slot", /<div className="panel-footer-left">\s*\{footerLeading\}/.test(base));
   ck("each screen opens at its top (the body scrolls back on every switch)",
-     /useEffect\(\(\) => \{ topRef\.current\?\.closest\("\.panel-body"\)\?\.scrollTo\(\{ top: 0 \}\); \}, \[view\]\);/.test(panel));
+     /useEffect\(\(\) => \{ topRef\.current\?\.closest\("\.panel-body"\)\?\.scrollTo\(\{ top: 0 \}\); \}, \[view\]\);/.test(wp));
   ck("every history chart has the app's hover tooltip — the lines (ChartTip) and the rain bars (BarChart's)",
      /<LineChart label=/.test(panel) && !/<ChartTip /.test(panel) && /<BarChart label="Rain history"/.test(panel)
      && /<ChartTip /.test(readFileSync(new URL("../../src/components/panels/LineChart.tsx", import.meta.url), "utf8")));

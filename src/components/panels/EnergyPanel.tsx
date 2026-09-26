@@ -12,9 +12,8 @@
 // here the next time the window opens. The words: config/energyModel.ts.
 // No Energy dashboard in HA: the bar's old device list opens instead.
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ChevronLeft, ChevronRight, LineChart as LineChartIcon, Zap } from "lucide-react";
-import BasePanel from "./BasePanel";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { ChevronRight, Zap } from "lucide-react";
 import { List, PieChart } from "lucide-react";
 import {
   flowTree, flowLayout, flowRows, flowNow, flowTipRows, energySlices, sliceTurns, ringArc, ringPoint,
@@ -27,7 +26,7 @@ import ChartTip from "./ChartTip";
 import BarChart from "./BarChart";
 import { energyToday, historyFigures, overlapShows, share } from "@/config/energyObservations";
 import { ENERGY_RANGES, energyRange, weekdayShort, type EnergyRangeKey } from "./energyRanges";
-import { Figure, ObservationCards } from "./WindowPieces";
+import { DataWindow, Figure, LiveNote, ObservationCards } from "./WindowPieces";
 // Ten a page, with the app's one pager (the settings logs use it too).
 import { usePaged, Pager, PAGE_CARDS } from "@/components/common/Paged";
 import type { BarSeg } from "@/utils/barChart";
@@ -43,19 +42,15 @@ import {
   type EnergyBucket, type EnergySplit,
 } from "@/config/energyModel";
 
-type View = "now" | "history";
 
 export default function EnergyPanel({ onClose, fallback }: { onClose: () => void; fallback: () => ReactNode }) {
   const { ws, entities, haConfig } = useHA();
   const { config } = useConfig();
   // The house the flow starts from: the name the kiosk's own title shows.
   const house = resolveSiteTitle(config, haConfig?.location_name);
-  const [view, setView] = useState<View>("now");
   // The period picker lives in the HEADER on the history screen, as the
   // Weather window's does — the same control (useSegmentedChoice).
   const { key: range, picker } = useSegmentedChoice(RANGE_OPTIONS, "week", "Period", "weather-ranges");
-  const topRef = useRef<HTMLDivElement>(null);
-  useEffect(() => { topRef.current?.closest(".panel-body")?.scrollTo({ top: 0 }); }, [view]);
   // A statistic's name: the device's own name in HA's Energy settings, else its
   // entity's, without the trailing "energy" every one of them carries.
   const nameOf = (id: string) =>
@@ -69,32 +64,12 @@ export default function EnergyPanel({ onClose, fallback }: { onClose: () => void
     ? costUnitOf(setup, (c) => entities[c]?.attributes.unit_of_measurement as string | undefined)
     : undefined;
 
-  const back = (
-    <button type="button" className="weather-back" onClick={() => setView("now")} aria-label="Back to Energy">
-      <ChevronLeft size={22} />
-    </button>
-  );
+  const loading = <div className="state-timeline-skeleton weather-chart" />;
   return (
-    <BasePanel
-      title={view === "now" ? "Energy" : "History and trends"}
-      icon={view === "now" ? <Zap size={22} /> : back}
-      className="summary-group-modal weather-modal energy-modal"
-      history={false}
-      onClose={onClose}
-      headerActions={view === "now" ? <span className="weather-live">Home Assistant Energy</span> : picker}
-      footerLeading={view === "now" && (
-        <button type="button" className="btn ghost" onClick={() => setView("history")}>
-          <LineChartIcon size={18} /> History and trends
-        </button>
-      )}
-    >
-      <div ref={topRef} />
-      {!setup
-        ? <div className="state-timeline-skeleton weather-chart" />
-        : view === "now"
-          ? <NowView setup={setup} costUnit={costUnit} house={house} colourOf={colourOf} />
-          : <HistoryView setup={setup} costUnit={costUnit} range={range} colourOf={colourOf} />}
-    </BasePanel>
+    <DataWindow title="Energy" icon={<Zap size={22} />} className="energy-modal" onClose={onClose}
+      live={<LiveNote>Home Assistant Energy</LiveNote>} picker={picker}
+      now={() => (setup ? <NowView setup={setup} costUnit={costUnit} house={house} colourOf={colourOf} /> : loading)}
+      history={() => (setup ? <HistoryView setup={setup} costUnit={costUnit} range={range} colourOf={colourOf} /> : loading)} />
   );
 }
 

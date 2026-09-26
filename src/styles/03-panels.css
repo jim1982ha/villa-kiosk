@@ -510,9 +510,9 @@ input[type="range"]::-moz-range-thumb {
    other window the bottom bar opens. Every colour is a theme token: outside
    = --accent, inside = --accent-warm, water = --cat-energy. Values in tabular
    figures: digits that shift width as a reading updates read as flicker. */
-.weather-modal .panel-icon:has(.weather-back) { background: var(--bg-input); padding: 0; }
-.weather-back { width: 44px; height: 44px; border: 0; border-radius: 12px; background: transparent; color: var(--text-primary); display: flex; align-items: center; justify-content: center; cursor: pointer; }
-.weather-live { font-size: var(--text-sm); color: var(--text-secondary); white-space: nowrap; }
+.data-window .panel-icon:has(.data-window-back) { background: var(--bg-input); padding: 0; }
+.data-window-back { width: 44px; height: 44px; border: 0; border-radius: 12px; background: transparent; color: var(--text-primary); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.data-window-live { font-size: var(--text-sm); color: var(--text-secondary); white-space: nowrap; }
 .weather-ranges { flex: 0 1 auto; }
 .weather-ranges button { padding: 0 12px; min-height: 36px; font-size: var(--text-sm); }
 

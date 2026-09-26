@@ -1,3 +1,10 @@
+## 2.496.145
+
+### Internal — the Weather and Energy windows
+- No visible change. The two windows now share one frame (the Now and
+  History screens, the back arrow, the header, the "History and trends"
+  button) instead of each carrying its own copy.
+
 ## 2.496.144
 
 ### Fixed — chart axes
