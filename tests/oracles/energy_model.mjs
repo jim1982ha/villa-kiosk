@@ -79,6 +79,10 @@ ck("the window reads that setup, and falls back to the device list when HA has n
 ck("the flow sits BELOW the last-7-days trend (owner, 2026-09-26)", panel.indexOf("Last 7 days") < panel.indexOf("Where today&apos;s"));
 ck("the flow has the app's tooltip: each band's row answers the pointer and the finger",
    /onPointerEnter=\{\(\) => setHover\(b\.i\)\} onPointerDown=\{\(\) => setHover\(b\.i\)\}/.test(panel) && /<ChartTip left=\{`\$\{\(366 \/ W\) \* 100\}%`\}/.test(panel));
+ck("  ...a low row's tip opens UPWARD, inside the tile — hung below, the window cut it off (owner's screenshot, 2026-09-26)",
+   /const lift = b\.dy \+ Math\.max\(b\.h, SLOT\) \/ 2 > H \/ 2;/.test(panel) && /top=\{`\$\{\(\(lift \? b\.dy : b\.dy \+ Math\.max\(b\.h, SLOT\)\) \/ H\) \* 100\}%`\}/.test(panel)
+     && /lift=\{lift\}/.test(panel)
+     && /translate\(\$\{flip \? "-100%" : "0"\}, \$\{lift \? "-100%" : "0"\}\)/.test(readFileSync(new URL("../../src/components/panels/ChartTip.tsx", import.meta.url), "utf8")));
 ck("  ...at half its first height: a 150-unit bar, one line a device", /const BAR = 150, SLOT = 22, GAP = 4;/.test(panel));
 const css = readFileSync(new URL("../../src/styles/03-panels.css", import.meta.url), "utf8");
 ck("the observation cards share the row however many there are (two cards, no empty third column)",

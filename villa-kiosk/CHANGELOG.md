@@ -1,3 +1,10 @@
+## 2.496.111
+
+### Fixed — the Energy window
+- **The "Where today's energy went" tooltip is no longer cut off.** For a row
+  in the lower half of the chart, the tooltip now opens upward from the row,
+  inside the tile. It used to hang below the row, run past the tile and be
+  clipped at the bottom of the window, hiding the rows beneath it.
 ## 2.496.110
 
 ### Improved — the Energy and Weather windows

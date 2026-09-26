@@ -10,14 +10,17 @@ export interface ChartTipRow { key: string; text: string; marker?: ReactNode }
 
 /** `left` is where the crosshair is (px, or a CSS length); past the middle
  *  of the plot the tip hangs to the left of it, so it never leaves the chart. */
-export default function ChartTip({ left, top, flip, rows, t, spanHours, stampPrefix = "", stamp }: {
+export default function ChartTip({ left, top, flip, lift = false, rows, t, spanHours, stampPrefix = "", stamp }: {
   left: number | string; top: number | string; flip: boolean; rows: ChartTipRow[];
+  /** Hang ABOVE `top` instead of below it — for a point low in its chart,
+   *  where a tip hanging down would leave the tile and be cut off. */
+  lift?: boolean;
   t: number; spanHours: number; stampPrefix?: string;
   /** A stamp worded by the chart itself (a bucket: "Friday 25 Sep"). */
   stamp?: string;
 }) {
   return (
-    <div className="spark-tip chart-tip" style={{ left, top, transform: `translateX(${flip ? "-100%" : "0"})` }}>
+    <div className="spark-tip chart-tip" style={{ left, top, transform: `translate(${flip ? "-100%" : "0"}, ${lift ? "-100%" : "0"})` }}>
       {rows.map((r) => <strong key={r.key}>{r.marker}{r.text}</strong>)}
       <span className="spark-tip-time">{stamp ?? `${stampPrefix}${fmtChartStamp(t, spanHours)}`}</span>
     </div>
