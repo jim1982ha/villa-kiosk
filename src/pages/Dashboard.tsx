@@ -24,11 +24,11 @@ import { roomKey } from "@/config/roomKey";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import RoomChoiceSheet, { type RoomChoice } from "@/components/hud/RoomChoiceSheet";
 import { useProfile } from "@/auth/ProfileContext";
-import { hasCapability, isMappingAllowed } from "@/auth/permissions";
+import { hasCapability, isMappingAllowed, panelMapping } from "@/auth/permissions";
 import FacilityModal from "@/components/fm/FacilityModal";
 import GuestReportModal from "@/components/fm/GuestReportModal";
 import { useHA } from "@/ha/HAStateStore";
-import { mappingForEntityId, displayLabelFor, resolveEntityRoom } from "@/config/EntityMap";
+import { displayLabelFor, resolveEntityRoom } from "@/config/EntityMap";
 import { deriveHaScenes, scenesForRoom } from "@/config/haScenes";
 import { effectiveCategory, subjectOf, categoryColor, CATEGORY_ICONS, CATEGORY_LABELS } from "@/config/EntityCategories";
 import { badgeFaceAndRing } from "@/utils/deviceActivity";
@@ -289,13 +289,10 @@ export default function Dashboard() {
 
   const onEntityPicked = useCallback(
     (entityId: string, clientX: number, clientY: number) => {
-      // mappingForEntityId handles type-upgrade for stored "sensor" fallbacks
-      // (e.g. input_boolean entities bound before that domain was recognized).
-      const mapping = mappingForEntityId(entityId, config.entityMap);
-      if (!mapping) return;
       // RBAC: the scene already hides badges for denied entities, but the raw
-      // 3D mesh is still tappable — enforce the permission here too.
-      if (!canControl || !role || !isMappingAllowed(role, entityId, mapping, entities[entityId])) return;
+      // 3D mesh is still tappable — the one panel gate (permissions.panelMapping).
+      const mapping = panelMapping(entityId, config.entityMap, role, entities[entityId], { control: true });
+      if (!mapping) return;
 
       // Simple on/off entities act in-world without the panel: a tap toggles
       // instantly. A long-press always opens the full panel instead (see
@@ -315,7 +312,7 @@ export default function Dashboard() {
       // Rich entities (sliders, streams, info) open their control panel as before.
       setActivePanel({ entityId, mapping });
     },
-    [config.entityMap, entities, ws, role, canControl, spawnRipple],
+    [config.entityMap, entities, ws, role, spawnRipple],
   );
 
   // Long-press always opens the full control panel — even for quick-toggle
@@ -323,9 +320,8 @@ export default function Dashboard() {
   // panel popping up on every casual tap.
   const onEntityLongPressed = useCallback(
     (entityId: string, clientX: number, clientY: number) => {
-      const mapping = mappingForEntityId(entityId, config.entityMap);
+      const mapping = panelMapping(entityId, config.entityMap, role, entities[entityId], { control: true });
       if (!mapping) return;
-      if (!canControl || !role || !isMappingAllowed(role, entityId, mapping, entities[entityId])) return;
       // Acknowledge the HOLD itself, the moment it's recognised (the gesture
       // now fires mid-press, not on release — see TapRecognizer). Every
       // long-press gets this, on desktop mouse as much as on touch: the ripple
@@ -346,7 +342,9 @@ export default function Dashboard() {
       // reasoning.
       setActivePanel({ entityId, mapping, detail: mapping.type === "camera" });
     },
-    [config.entityMap, role, canControl, spawnRipple],
+    // `entities` is read (the category — and so the permission — can depend
+    // on a device's device_class); it was missing, so this judged a stale one.
+    [config.entityMap, entities, role, spawnRipple],
   );
 
   // Announce motion the moment it's detected, wherever it happens: a brief
@@ -388,14 +386,14 @@ export default function Dashboard() {
   }, [subscribeAll]);
 
   // Open an entity's control panel from a SummaryBar tile (a lock/climate
-  // "open" tile). The tile already gates on category permission before calling
-  // this; the panel's own controls enforce RBAC for any action taken inside.
+  // "open" tile) — to LOOK: the category decides (the same gate, without
+  // control); the panel's own controls enforce RBAC for any action inside.
   const openEntityPanel = useCallback(
     (entityId: string) => {
-      const mapping = mappingForEntityId(entityId, config.entityMap);
+      const mapping = panelMapping(entityId, config.entityMap, role, entities[entityId], { control: false });
       if (mapping) setActivePanel({ entityId, mapping });
     },
-    [config.entityMap],
+    [config.entityMap, entities, role],
   );
 
   // The open panel's LINKED entity (EntityMapping.linkedEntityId) — resolved

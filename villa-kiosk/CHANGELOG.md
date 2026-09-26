@@ -1,3 +1,11 @@
+## 2.496.159
+
+### Internal — device panels and Facility records
+- No visible change. Whether a device's panel may open is decided in one
+  place for a tap, a long press and a bottom-bar tile; and how a Facility
+  record changes (logging work, resolving a fault, erasing a cost) is now
+  checked automatically.
+
 ## 2.496.158
 
 ### Internal — 3D scene

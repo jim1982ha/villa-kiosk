@@ -300,3 +300,97 @@ export function monthLabel(month: string): string {
   if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) return month;
   return new Date(y, m - 1, 1).toLocaleDateString([], { month: "long", year: "numeric" });
 }
+
+// ── How a record changes (round 10, 2.496.159) ──────────────────────────────
+// These lived inside FmDataContext's React mutators, where no check could
+// reach them — and each carries a rule someone's report depends on. Pure: the
+// clock and the id maker are passed in (FmDataContext passes the real ones;
+// tests/oracles/fm_changes.mjs passes fixed ones).
+
+/** "Now" and a fresh id for a record of `prefix` — the only impure inputs. */
+export interface FmStamp { now: string; id: (prefix: string) => string }
+
+/** Log a completion, with what it cost in the same action: the cost inherits
+ *  the completion's photos and date — one event, and the report lines them up. */
+export function withCompletion(
+  d: FmData, c: Omit<FmCompletion, "id" | "costId">, cost: Omit<FmCost, "id" | "at" | "photoIds"> | undefined, k: FmStamp,
+): FmData {
+  const costId = cost ? k.id("co") : undefined;
+  return {
+    ...d,
+    completions: [...d.completions, { ...c, id: k.id("cp"), costId }],
+    costs: cost ? [...d.costs, { ...cost, id: costId!, at: c.at, photoIds: c.photoIds }] : d.costs,
+  };
+}
+
+/** Erase a spend entry. A completion pointing at it keeps the work but loses
+ *  the link — a job "with an unknown price" otherwise. */
+export function withoutCost(d: FmData, id: string): FmData {
+  return {
+    ...d,
+    costs: d.costs.filter((c) => c.id !== id),
+    completions: d.completions.map((c) => (c.costId === id ? { ...c, costId: undefined } : c)),
+  };
+}
+
+/** Erase a completion AND the cost logged with it — one event; money left
+ *  behind would be attributed to work with no record. */
+export function withoutCompletion(d: FmData, id: string): FmData {
+  const gone = d.completions.find((c) => c.id === id);
+  return {
+    ...d,
+    completions: d.completions.filter((c) => c.id !== id),
+    costs: gone?.costId ? d.costs.filter((c) => c.id !== gone.costId) : d.costs,
+  };
+}
+
+/** Patch a fault. The resolution time is stamped when — and only when — the
+ *  status becomes resolved (the operator marks it done, the app records WHEN:
+ *  the mean-time-to-resolution evidence rests on it). */
+export function withTicketPatch(d: FmData, id: string, patch: Partial<FmTicket>, k: Pick<FmStamp, "now">): FmData {
+  return {
+    ...d,
+    tickets: d.tickets.map((t) => {
+      if (t.id !== id) return t;
+      const next = { ...t, ...patch };
+      if (isTicketResolved(patch) && !next.resolvedAt) next.resolvedAt = k.now;
+      return next;
+    }),
+  };
+}
+
+/**
+ * Move a fault to its next stage and record the proof. The resolution time is
+ * stamped on the way IN to resolved and cleared on reopening (a stale one
+ * corrupts every MTTR figure); the step's photos join the fault's own; and
+ * only a RESOLUTION files a completion (with its cost) — picking a fault up is
+ * a step, not work done, and counting it would inflate every "work done" figure.
+ */
+export function withTicketAdvanced(
+  d: FmData, id: string, to: FmTicket["status"],
+  step: { by?: string; note?: string; photoIds: string[] },
+  cost: Omit<FmCost, "id" | "at" | "photoIds"> | undefined, k: FmStamp,
+): FmData {
+  if (!d.tickets.some((t) => t.id === id)) return d;
+  const at = k.now;
+  const resolving = to === "resolved";
+  const costId = resolving && cost ? k.id("co") : undefined;
+  return {
+    ...d,
+    tickets: d.tickets.map((t) => (t.id !== id ? t : {
+      ...t,
+      status: to,
+      resolvedAt: resolving ? at : undefined,
+      photoIds: [...t.photoIds, ...step.photoIds],
+      costId: costId ?? t.costId,
+      updates: [...(t.updates ?? []), { at, status: to, ...step }],
+    })),
+    completions: resolving
+      ? [...d.completions, {
+          id: k.id("cp"), scheduleId: "", ticketId: id, at,
+          by: step.by ?? "—", note: step.note, photoIds: step.photoIds, costId,
+        }]
+      : d.completions,
+    costs: costId ? [...d.costs, { ...cost!, id: costId, at, photoIds: step.photoIds }] : d.costs,
+  };
+}

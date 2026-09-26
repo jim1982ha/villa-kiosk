@@ -13,7 +13,12 @@ import {
   createContext, useCallback, useContext, useEffect, useRef, useState,
   type ReactNode,
 } from "react";
-import { isTicketOpen, isTicketResolved } from "./fmEngine";
+import {
+  isTicketOpen, withCompletion, withoutCost, withoutCompletion, withTicketPatch, withTicketAdvanced, type FmStamp,
+} from "./fmEngine";
+
+/** The real clock and id maker the record changes are stamped with (fmEngine). */
+const stamp = (): FmStamp => ({ now: new Date().toISOString(), id: fmId });
 import {
   fetchFmData, saveFmData, fmId, diffFmData, fmDiffIsEmpty, applyFmDiff,
 } from "./fmApi";
@@ -244,16 +249,7 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
   const logCompletion = useCallback((
     c: Omit<FmCompletion, "id" | "costId">,
     cost?: Omit<FmCost, "id" | "at" | "photoIds">,
-  ) => mutate((d) => {
-    const costId = cost ? fmId("co") : undefined;
-    const completion: FmCompletion = { ...c, id: fmId("cp"), costId };
-    const costs = cost
-      // The cost inherits the completion's photos and date: it is the same
-      // event, and the report needs them to line up.
-      ? [...d.costs, { ...cost, id: costId!, at: c.at, photoIds: c.photoIds }]
-      : d.costs;
-    return { ...d, completions: [...d.completions, completion], costs };
-  }), [mutate]);
+  ) => mutate((d) => withCompletion(d, c, cost, stamp())), [mutate]);
 
   const addCost = useCallback((c: Omit<FmCost, "id">) =>
     mutate((d) => ({ ...d, costs: [...d.costs, { ...c, id: fmId("co") }] })), [mutate]);
@@ -272,30 +268,13 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
     })), [mutate]);
 
   const removeCost = useCallback((id: string, elevation: string) =>
-    mutate((d) => ({
-      ...d,
-      costs: d.costs.filter((c) => c.id !== id),
-      // A completion pointing at a cost that no longer exists would render as
-      // a job with an unknown price. Drop the link, keep the completion —
-      // the work still happened.
-      completions: d.completions.map((c) => (c.costId === id ? { ...c, costId: undefined } : c)),
-    }), elevation), [mutate]);
+    mutate((d) => withoutCost(d, id), elevation), [mutate]);
 
   const removeTicket = useCallback((id: string, elevation: string) =>
     mutate((d) => ({ ...d, tickets: d.tickets.filter((t) => t.id !== id) }), elevation), [mutate]);
 
   const removeCompletion = useCallback((id: string, elevation: string) =>
-    mutate((d) => {
-      const gone = d.completions.find((c) => c.id === id);
-      return {
-        ...d,
-        completions: d.completions.filter((c) => c.id !== id),
-        // The cost was logged as part of this completion — one event, so
-        // erasing it erases both. Leaving the spend behind would leave money
-        // in the accounts attributed to work with no record.
-        costs: gone?.costId ? d.costs.filter((c) => c.id !== gone.costId) : d.costs,
-      };
-    }, elevation), [mutate]);
+    mutate((d) => withoutCompletion(d, id), elevation), [mutate]);
 
   const addTicket = useCallback((t: Omit<FmTicket, "id" | "openedAt" | "status">) =>
     mutate((d) => ({
@@ -306,66 +285,14 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
     })), [mutate]);
 
   const updateTicket = useCallback((id: string, patch: Partial<FmTicket>) =>
-    mutate((d) => ({
-      ...d,
-      tickets: d.tickets.map((t) => {
-        if (t.id !== id) return t;
-        const next = { ...t, ...patch };
-        // Stamp the resolution time automatically — the operator marks it done,
-        // the app records WHEN, which is what the MTTR evidence rests on.
-        // The WRITE side of the same rule — stamp a resolution time when, and
-        // only when, the status actually becomes resolved.
-        if (isTicketResolved(patch) && !next.resolvedAt) {
-          next.resolvedAt = new Date().toISOString();
-        }
-        return next;
-      }),
-    })), [mutate]);
+    mutate((d) => withTicketPatch(d, id, patch, stamp())), [mutate]);
 
   const advanceTicket = useCallback((
     id: string,
     to: FmTicketStatus,
     step: { by?: string; note?: string; photoIds: string[] },
     cost?: Omit<FmCost, "id" | "at" | "photoIds">,
-  ) => mutate((d) => {
-    const ticket = d.tickets.find((t) => t.id === id);
-    if (!ticket) return d;
-    const at = new Date().toISOString();
-    const resolving = to === "resolved";
-    const costId = resolving && cost ? fmId("co") : undefined;
-    return {
-      ...d,
-      tickets: d.tickets.map((t) => {
-        if (t.id !== id) return t;
-        return {
-          ...t,
-          status: to,
-          // Stamped only on the way IN to resolved, and cleared if the fault
-          // is later reopened — a stale resolution time would silently
-          // corrupt every mean-time-to-resolution figure derived from it.
-          resolvedAt: resolving ? at : undefined,
-          // Evidence gathered at the moment of the step belongs on the fault
-          // itself too: that is the record anyone later opens to see what
-          // actually happened, without walking the timeline.
-          photoIds: [...t.photoIds, ...step.photoIds],
-          costId: costId ?? t.costId,
-          updates: [...(t.updates ?? []), { at, status: to, ...step }],
-        };
-      }),
-      // Only a resolution produces WORK. Picking a fault up is a step in its
-      // life, not a maintenance completion, and logging one for it would
-      // inflate every "work done" count in the record.
-      completions: resolving
-        ? [...d.completions, {
-            id: fmId("cp"), scheduleId: "", ticketId: id, at,
-            by: step.by ?? "—", note: step.note, photoIds: step.photoIds, costId,
-          }]
-        : d.completions,
-      costs: costId
-        ? [...d.costs, { ...cost!, id: costId, at, photoIds: step.photoIds }]
-        : d.costs,
-    };
-  }), [mutate]);
+  ) => mutate((d) => withTicketAdvanced(d, id, to, step, cost, stamp())), [mutate]);
 
   const saveDocument = useCallback((doc: Omit<FmSavedDocument, "id" | "generatedAt">) =>
     mutate((d) => ({

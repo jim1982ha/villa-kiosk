@@ -14,6 +14,7 @@
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 import type { AppConfig } from "@/config/AppConfig";
 import { CATEGORY_ORDER, effectiveCategory, subjectOf } from "@/config/EntityCategories";
+import { mappingForEntityId } from "@/config/EntityMap";
 import type { Role } from "./roles";
 
 /** Things a profile can DO (beyond seeing devices). */
@@ -161,6 +162,31 @@ export function isMappingAllowed(
 ): boolean {
   const category = effectiveCategory(subjectOf(entityId, mapping, entity));
   return isEntityAllowed(role, mapping.type, category);
+}
+
+/**
+ * The mapping whose panel this profile may open for `entityId`, or null — the
+ * ONE gate for every way a device panel opens (round 10, 2.496.159). The 3D
+ * tap and long-press each repeated mappingForEntityId + isMappingAllowed (the
+ * long-press against a stale entity snapshot), and the summary tile's opener
+ * checked nothing at all, relying on the tile having checked first.
+ *
+ * `control`: opening from the 3D model is an ACTION on the device (a tap may
+ * toggle it), so it needs the controlEntities capability too; a summary tile
+ * opens the panel to LOOK, which the category alone decides — the panel's own
+ * controls enforce control rights for anything done inside it.
+ */
+export function panelMapping(
+  entityId: string,
+  map: Record<string, EntityMapping>,
+  role: Role | null,
+  entity: { attributes?: { device_class?: unknown } } | undefined,
+  opts: { control: boolean },
+): EntityMapping | null {
+  const mapping = mappingForEntityId(entityId, map);
+  if (!mapping || !role) return null;
+  if (opts.control && !hasCapability(role, "controlEntities")) return null;
+  return isMappingAllowed(role, entityId, mapping, entity) ? mapping : null;
 }
 
 /**
