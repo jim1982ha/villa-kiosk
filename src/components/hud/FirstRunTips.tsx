@@ -1,6 +1,6 @@
 // src/components/hud/FirstRunTips.tsx
 // One-time orientation card for a kiosk's first-ever login (see
-// utils/storage.ts's hasSeenFirstRunTips for the per-device "seen" gate).
+// utils/viewPrefs.ts's hasSeenFirstRunTips for the per-device "seen" gate).
 // Addresses two related gaps at once rather than as separate, competing
 // overlays: the HUD's icon-only chrome has no text labels to learn from, and
 // several controls' long-press actions had no discovery path beyond a hover
@@ -9,7 +9,7 @@
 // this device either way.
 
 import { Armchair, Compass, Info } from "lucide-react";
-import { markFirstRunTipsSeen } from "@/utils/storage";
+import { markFirstRunTipsSeen } from "@/utils/viewPrefs";
 import { useModalA11y } from "@/hooks/useModalA11y";
 
 export default function FirstRunTips({ onClose }: { onClose: () => void }) {

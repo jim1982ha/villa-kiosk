@@ -23,5 +23,7 @@ export function debugFlagEnabled(): boolean {
 }
 
 export function devLog(...args: unknown[]): void {
-  if (import.meta.env.DEV && debugFlagEnabled()) console.log(...args);
+  // `?.`: absent under Node, where the oracles drive modules that log from
+  // their retry paths (it threw there, turning every retry into a failure).
+  if (import.meta.env?.DEV && debugFlagEnabled()) console.log(...args);
 }

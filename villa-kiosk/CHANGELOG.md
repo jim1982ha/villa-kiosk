@@ -1,3 +1,11 @@
+## 2.496.162
+
+### Fixed — loading the 3D model
+- **A network blip while the profile screen is showing no longer costs a
+  second download.** The model's background download gave up on the first
+  dropped connection, and the villa then downloaded it again from scratch;
+  it now retries the way the main download does, and the villa uses it.
+
 ## 2.496.161
 
 ### Internal — the villa's device list

@@ -30,7 +30,7 @@ import dracoFallbackUrl from "@babylonjs/core/assets/Draco/draco_decoder_gltf.js
 import ktx2DecoderUrl from "babylonjs-ktx2decoder/babylon.ktx2Decoder.js?url";
 import mscTranscoderJsUrl from "@/assets/ktx2/msc_basis_transcoder.js?url";
 import mscTranscoderWasmUrl from "@/assets/ktx2/msc_basis_transcoder.wasm?url";
-import { saveModelToIndexedDB } from "@/utils/storage";
+import { saveModelToIndexedDB } from "@/utils/localModel";
 import { devLog } from "@/utils/devLog";
 import { tapDebug } from "@/utils/tapDebug";
 import { isCeilingMesh, isStructureMesh, structureRole } from "./meshRoles";

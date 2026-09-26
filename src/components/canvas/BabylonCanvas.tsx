@@ -10,9 +10,9 @@ import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { filterConfigForRole, hasCapability } from "@/auth/permissions";
 import { useHA } from "@/ha/HAStateStore";
-import { loadModelFromIndexedDB, fetchAddonConfig, getModelMeta, clearStoredModel, versionedModelUrl, roomsPathFor } from "@/utils/storage";
-import { claimPrefetch } from "@/utils/modelPrefetch";
-import { fetchModelWithRetry } from "@/utils/fetchProgress";
+import { loadModelFromIndexedDB, getModelMeta, clearStoredModel } from "@/utils/localModel";
+import { fetchAddonConfig, versionedModelUrl, roomsPathFor } from "@/utils/centralModel";
+import { modelBytes } from "@/utils/modelPrefetch";
 import { setLoadedModelInfo, sha256Hex } from "@/utils/modelInfo";
 import { parseRoomData } from "@/utils/sh3dParser";
 import { report as reportTelemetry } from "@/utils/telemetry";
@@ -337,53 +337,33 @@ export default function BabylonCanvas({
           noteLoadPhase("fetch-model");
           const modelUrl = await versionedModelUrl(addonCfg.model_path);
           loadedSource = modelUrl;
-          // ProfileGate started downloading this exact URL in the background
-          // as soon as the profile-select/PIN screen appeared (see
-          // utils/modelPrefetch.ts) — reuse it instead of fetching again from
-          // scratch. Falls back to a normal fetch below if nothing matches
-          // (prefetch never started, targeted a different/stale URL, or
-          // failed) so behaviour is identical to before whenever it can't help.
-          const claimed = claimPrefetch(modelUrl);
-          usedPrefetch = claimed !== null;
-          if (claimed) {
-            const unsubscribe = claimed.onProgress((f) => { if (!cancelled) setProgress(f); });
-            try {
-              data = await claimed.promise;
-            } catch {
-              data = null; // prefetch failed — fall through to a normal fetch
-            } finally {
-              unsubscribe();
-            }
-          }
-          if (!data) {
-            // fetchModelWithRetry absorbs a transient NETWORK failure (dropped
-            // connection, DNS blip) with a couple of quick retries — common on
-            // the standalone hostname's public Cloudflare hop, rare on the HA
-            // sidebar's local Ingress path, which is why the same GLB could
-            // fail here and not there. An HTTP error status still surfaces
-            // immediately below, unretried — that's a real "nothing there"
-            // failure, not a blip.
-            const { resp, data: fetched } = await fetchModelWithRetry(
-              modelUrl,
-              (f) => {
-                if (cancelled) return;
-                setProgress(f);
-                // Real bytes flowing again (f > 0, not the 0 a retry resets to)
-                // means the blip is over — drop the reconnecting notice.
-                if (f > 0) setReconnecting(false);
-              },
-              () => { if (!cancelled) setReconnecting(true); },
+          // The bytes: the profile screen's background download when it is for
+          // this exact URL, else a fresh fetch with the same retries — one
+          // call (utils/modelPrefetch.modelBytes). A network blip (dropped
+          // connection, DNS — common on the standalone hostname's public hop)
+          // is ridden through with a "reconnecting" notice; an HTTP error
+          // status comes back at once, unretried: a real "nothing there".
+          const got = await modelBytes(
+            modelUrl,
+            (f) => {
+              if (cancelled) return;
+              setProgress(f);
+              // Real bytes flowing again (f > 0, not the 0 a retry resets to)
+              // means the blip is over — drop the reconnecting notice.
+              if (f > 0) setReconnecting(false);
+            },
+            () => { if (!cancelled) setReconnecting(true); },
+          );
+          if (!got.ok) {
+            setAddonError(true);
+            loadErrorCode = `MODEL_FETCH_HTTP_${got.status}`;
+            throw new Error(
+              `Central model not found at ${modelUrl} (HTTP ${got.status}).\n` +
+              "Re-upload it from Settings → Advanced Settings (Owner profile).",
             );
-            if (!resp.ok) {
-              setAddonError(true);
-              loadErrorCode = `MODEL_FETCH_HTTP_${resp.status}`;
-              throw new Error(
-                `Central model not found at ${modelUrl} (HTTP ${resp.status}).\n` +
-                "Re-upload it from Settings → Advanced Settings (Owner profile).",
-              );
-            }
-            data = fetched;
           }
+          usedPrefetch = got.prefetched;
+          data = got.data;
           noteModel({ bytes: data.byteLength });
           fromAddon = true;
         } else {

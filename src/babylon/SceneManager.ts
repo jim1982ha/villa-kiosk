@@ -51,7 +51,7 @@ import type { PlanWorldPair } from "@/utils/affineFit";
 import { pointInPolygon, type Pt2 } from "@/utils/geometry";
 import { devLog } from "@/utils/devLog";
 import { tapDebug } from "@/utils/tapDebug";
-import { loadOverviewView, saveOverviewView } from "@/utils/storage";
+import { loadOverviewView, saveOverviewView } from "@/utils/viewPrefs";
 import type { AppConfig, RenderConfig } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
 import type { TeleportPoint } from "@/types/scene.types";
@@ -1355,7 +1355,7 @@ export class SceneManager {
    * Persist the overview camera's CURRENT angle/tilt/zoom/pan as this
    * device's default framing, applied every time the app lands in overview
    * mode from now on (fresh load, model reload, or manually switching back).
-   * Per-device (localStorage — see utils/storage.ts), never synced or
+   * Per-device (localStorage — see utils/viewPrefs.ts), never synced or
    * exported: a wall tablet and a phone need different framing for the same
    * villa, which is exactly why the plain auto-fit isn't always right. Only
    * meaningful while already in overview mode.

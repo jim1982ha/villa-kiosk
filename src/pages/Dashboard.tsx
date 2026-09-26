@@ -13,7 +13,7 @@ import AppNotice from "@/components/hud/AppNotice";
 import FirstRunTips from "@/components/hud/FirstRunTips";
 import SummaryBar from "@/components/hud/SummaryBar";
 import TapRipple, { RIPPLE_LIFETIME_MS, type Ripple } from "@/components/hud/TapRipple";
-import { hasSeenFirstRunTips } from "@/utils/storage";
+import { hasSeenFirstRunTips } from "@/utils/viewPrefs";
 import TeleportMenu from "@/components/teleport/TeleportMenu";
 import PanelRouter from "@/components/panels/PanelRouter";
 import { PanelActionsProvider } from "@/components/panels/PanelActionsContext";
@@ -209,7 +209,7 @@ export default function Dashboard() {
   // replaces a native alert() that used to break out of the kiosk's own
   // dark/light chrome entirely. See AppNotice.
   const [notice, setNotice] = useState<string | null>(null);
-  // First-ever login on this device — see FirstRunTips/utils/storage's
+  // First-ever login on this device — see FirstRunTips/utils/viewPrefs'
   // hasSeenFirstRunTips docstring. Checked once, lazily, so it reflects
   // whatever was in localStorage when this component first mounted rather
   // than being re-evaluated (and potentially flipping on) on every render.

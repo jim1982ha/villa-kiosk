@@ -6,7 +6,7 @@
 
 import { Info } from "lucide-react";
 import type { getLoadedModelInfo } from "@/utils/modelInfo";
-import type { AddonConfig } from "@/utils/storage";
+import type { AddonConfig } from "@/utils/centralModel";
 
 export default function CentralModelInfo({
   addonCfg, loadedModel, editable,
