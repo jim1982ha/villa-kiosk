@@ -1,3 +1,19 @@
+## 2.496.120
+
+### Improved — the Energy window
+- **Energy and cost in one chart.** History and trends shows the devices'
+  kWh as stacked bars with the cost plotted over them, on its own axis on the
+  right. Hovering a bar shows the total, the cost and each device in one
+  tooltip.
+- **"Where today's energy went" is drawn like Home Assistant's energy
+  flow.** It starts from the house, then each main meter, then the devices
+  inside each, with each level's untracked share. Devices too small to label
+  are grouped as "Other"; hover it to see which.
+- **"Every device" can be shown as a pie**, like HA's "Individual devices".
+  A button switches between the list and the pie; the pie's slices add up to
+  what the house used.
+- **The Day / Week / Month / Year picker is in the window's header**, as the
+  Weather window's is.
 ## 2.496.119
 
 ### Fixed — the Energy window
