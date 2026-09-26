@@ -270,8 +270,18 @@ export class LightPool {
    *  slider has real range. Not clamped to 1: in ADDITIVE blending a value
    *  above 1 genuinely brightens/saturates the pool further rather than just
    *  "more opaque", so the slider keeps working past that point. */
+  /**
+   * A pool over a STAIRCASE draws no disc (LightPoolSet.reshapeOne): a flight
+   * has no one floor, and a flat disc at the height of the tread under the
+   * lamp floated over every lower step and lit them from the air — a bright
+   * block on the stairs next to the living room that read as light pouring
+   * through the wall (owner's screenshot, 2026-09-26). Its light still reaches
+   * the treads through the furniture light (lampGlow.ts), which follows them.
+   */
+  floorless = false;
+
   setState(on: boolean, colour: Color3, intensityFrac: number): void {
-    this.mesh.setEnabled(on);
+    this.mesh.setEnabled(on && !this.floorless);
     if (!on) return;
     this.material.emissiveColor = colour;
     this.material.alpha = poolStrength(intensityFrac, this.intensityScale);

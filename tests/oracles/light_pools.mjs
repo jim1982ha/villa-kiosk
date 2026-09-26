@@ -206,6 +206,29 @@ console.log("\n  the same light, for what stands under it (lampGlow.ts):");
   ck("  ...and a staircase alone is no storey: no limit at all", r2.set.glowLamps()[0]?.ceilingY === Infinity, r2.set.glowLamps()[0]?.ceilingY);
 }
 
+{
+  // THE VILLA'S STAIRS (owner's screenshot, 2026-09-26): a lamp over the
+  // staircase laid a flat disc at the tread under it (0.85 m), which floated
+  // over every lower step and lit them from the air — a block of light beside
+  // the living room that read as light through its wall.
+  const lamp = fixture("stairwell");
+  const r = rig(probe({ below: () => 0.85 }), () => [[lamp.uniqueId, { on: true, colour: { r: 1, g: 1, b: 1 }, frac: 1 }]]);
+  r.set.addFixture(lamp, box(7, 7.1, 0, 0.1, 5.1), false);
+  r.set.setRooms(new Storeys([room("Living Room", 0, -5, 10, -5, 5), room("Staircase", 0.85, 6, 8, -5, 5), room("Corridor", 2.56, -5, 10, -5, 5)]));
+  r.set.setLight(lamp.uniqueId, { on: true, colour: Color3.White(), frac: 1 });
+  const m = r.pools(lamp)[0];
+  ck("a pool over a staircase draws NO disc, even with its light on", !!m && !m.isEnabled(), m?.isEnabled());
+  const g = r.set.glowLamps()[0];
+  ck("  ...its light is the furniture light's, from the STOREY's floor (every tread above it), not the mid-flight tread",
+     g?.floorY === 0 && g?.ceilingY === 2.56, g && { floorY: g.floorY, ceilingY: g.ceilingY });
+  const lamp2 = fixture("beside");
+  const r2 = rig(probe({ below: () => 0 }), () => [[lamp2.uniqueId, on]]);
+  r2.set.addFixture(lamp2, box(0, 0.1, 0, 0.1, 2.3), false);
+  r2.set.setRooms(new Storeys([room("Living Room", 0, -5, 10, -5, 5), room("Staircase", 0.85, 6, 8, -5, 5)]));
+  r2.set.setLight(lamp2.uniqueId, on);
+  ck("  ...while a lamp in the room beside it keeps its pool", r2.pools(lamp2)[0]?.isEnabled() === true);
+}
+
 console.log("\n  state:");
 {
   const lamp = fixture("state");

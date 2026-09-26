@@ -26,7 +26,7 @@ import type { Color3 } from "@babylonjs/core/Maths/math.color";
 import type { Scene } from "@babylonjs/core/scene";
 import { LightPool, poolFootprint, poolStrength } from "./LightPools";
 import { clipPolygonToConvex, distanceToPolygonBoundary, type Pt2 } from "@/utils/geometry";
-import { Storeys } from "./storeys";
+import { Storeys, isStairwell } from "./storeys";
 
 /** A pool's radius on open floor. A separate knob from the PointLights'
  *  reach (bulbSet.ts). */
@@ -313,7 +313,17 @@ export class LightPoolSet {
     const room = surfaceY !== null
       ? this.storeys.roomStandingOn(x, surfaceY, z)
       : this.storeys.roomAt(x, pool.probeFromY, z);
-    const roomFloor = surfaceY !== null ? this.storeys.floorUnder(x, surfaceY, z) : null;
+    // ⚠️ A STAIRCASE HAS NO FLOOR TO LAY A POOL ON. Its "floor" is the tread
+    // measured at its centre (0.85 m on the villa), so the disc floated over
+    // the lower half of the flight and lit it from the air. No disc there;
+    // the lamp's light is the furniture light's alone, held back only below
+    // the STOREY's floor, so every tread it reaches is lit by one rule.
+    pool.floorless = !!room && isStairwell(room.name);
+    if (pool.floorless) pool.mesh.setEnabled(false);
+    const storeyOfRoom = room ? this.storeys.storeyOf(room) : null;
+    const roomFloor = pool.floorless && storeyOfRoom !== null
+      ? this.storeys.floorOf(storeyOfRoom)
+      : surfaceY !== null ? this.storeys.floorUnder(x, surfaceY, z) : null;
     if (roomFloor !== null) this.roomFloors.set(pool, roomFloor); else this.roomFloors.delete(pool);
     let radius = LIGHT_POOL_RADIUS;
     let shape: Pt2[] | undefined;
