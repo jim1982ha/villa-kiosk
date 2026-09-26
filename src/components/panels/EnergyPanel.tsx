@@ -22,6 +22,7 @@ import { resolveSiteTitle } from "@/config/AppConfig";
 import { useSegmentedChoice } from "./historyRange";
 import ChartTip from "./ChartTip";
 import BarChart from "./BarChart";
+import { ENERGY_RANGES, energyRange, type EnergyRangeKey } from "./energyRanges";
 import { Figure, ObservationCards, type ObservationCard } from "./WindowPieces";
 import type { BarSeg } from "@/utils/barChart";
 import { fmtChartTime } from "./chartUtils";
@@ -29,11 +30,11 @@ import { useHA } from "@/ha/HAStateStore";
 import { useHistory } from "@/hooks/useHistory";
 import { fetchEnergySetup, fetchEnergyPeriod, type EnergyWindowSetup } from "@/ha/HAEnergyAPI";
 import type { HistorySeries } from "@/types/ha.types";
-import { PERIOD_MS, type StatisticsPeriod } from "@/utils/statisticsSeries";
+import { PERIOD_MS } from "@/utils/statisticsSeries";
 import { localMidnight } from "@/utils/localDay";
 import {
   energyPeriod, periodStarts, deviceRanking, typicalDay, todayHeadline, standoutDay, risers, fmtKwh, fmtMoney, fmtPower, powerKw,
-  type EnergyBucket, type EnergyPeriodKind, type EnergySplit, type NodeUse,
+  type EnergyBucket, type EnergySplit, type NodeUse,
 } from "@/config/energyModel";
 
 type View = "now" | "history";
@@ -200,7 +201,7 @@ function NowView({ setup, costUnit, house, colourOf }: { setup: EnergyWindowSetu
         <BarChart label="Energy used today, hour by hour" fmt={kwh} unit="kWh"
           buckets={todayP.buckets.map((b) => ({ t: b.t, segs: segsOf(b, () => [{ key: "used", label: "Used", v: b.split!.used, cls: "e-used" }]) }))}
           stamp={(t) => `${fmtChartTime(t)}–${fmtChartTime(t + 3_600_000)}`}
-          ticks={[0, 6, 12, 18, 23].map((i) => ({ i, label: fmtChartTime(hours[i]) }))}
+          ticks={energyRange("day").ticks(hours.length).map((i) => ({ i, label: energyRange("day").bucketLabel(hours[i]) }))}
         />
       </div>
 
@@ -374,31 +375,23 @@ const kwh = (v: number) => `${fmtKwh(v)} kWh`;
 
 // ── History and trends ───────────────────────────────────────────────────
 
-type RangeKey = "day" | "week" | "month" | "year";
-const RANGES: Record<RangeKey, { label: string; period: StatisticsPeriod }> = {
-  day: { label: "Day", period: "hour" },
-  week: { label: "Week", period: "day" },
-  month: { label: "Month", period: "day" },
-  year: { label: "Year", period: "month" },
-};
-const RANGE_OPTIONS = (Object.keys(RANGES) as RangeKey[]).map((key) => ({ key, label: RANGES[key].label }));
-/** The buckets each range shows (energyModel.periodStarts). */
-const KIND: Record<RangeKey, EnergyPeriodKind> = { day: "hoursToday", week: "last7", month: "last30", year: "last12Months" };
+const RANGE_OPTIONS = ENERGY_RANGES.map((r) => ({ key: r.key, label: r.label }));
 
 const SHAPES = [
   { key: "list" as const, label: <List size={16} />, title: "As a list" },
   { key: "pie" as const, label: <PieChart size={16} />, title: "As a pie" },
 ];
 
-function HistoryView({ setup, costUnit, range, colourOf }: { setup: EnergyWindowSetup; costUnit: string | undefined; range: RangeKey; colourOf: (id: string) => string }) {
+function HistoryView({ setup, costUnit, range: rangeKey, colourOf }: { setup: EnergyWindowSetup; costUnit: string | undefined; range: EnergyRangeKey; colourOf: (id: string) => string }) {
+  const range = energyRange(rangeKey);
   const { ws } = useHA();
   // Every device as a list or as HA's pie — the app's one segmented control.
   const { key: shape, picker: shapePicker } = useSegmentedChoice(SHAPES, "list", "Show every device as", "energy-shape");
   const now = Date.now();
-  const starts = periodStarts(KIND[range], now);
+  const starts = periodStarts(range.kind, now);
   const { data, status } = useHistory<Record<string, HistorySeries> | null>(
-    `energy-history|${range}|${starts[0]}`,
-    () => fetchEnergyPeriod(ws, setup, starts[0], RANGES[range].period),
+    `energy-history|${range.key}|${starts[0]}`,
+    () => fetchEnergyPeriod(ws, setup, starts[0], range.period),
     null,
   );
   if (!data) {
@@ -408,17 +401,15 @@ function HistoryView({ setup, costUnit, range, colourOf }: { setup: EnergyWindow
       </div>
     );
   }
-  const p = energyPeriod(setup, data, starts, PERIOD_MS[RANGES[range].period], now);
+  const p = energyPeriod(setup, data, starts, PERIOD_MS[range.period], now);
   const whole = p.whole;
   const costs = p.buckets.map((b) => b.cost);
   const hasCost = p.cost !== undefined;
   const costTotal = p.cost ?? 0;
   const busiest = p.busiest;
-  const unit = range === "day" ? "hour" : range === "year" ? "month" : "day";
-  const label = (t: number) => range === "day" ? fmtChartTime(t)
-    : range === "year" ? new Date(t).toLocaleDateString([], { month: "short" })
-    : new Date(t).toLocaleDateString([], { weekday: "short", day: "numeric" });
-  const tickIdx = range === "day" ? [0, 6, 12, 18, 23] : range === "month" ? [0, 7, 14, 21, 29] : starts.map((_, i) => i);
+  const unit = range.unit;
+  const label = range.bucketLabel;
+  const tickIdx = range.ticks(starts.length);
   const roots = whole.roots.filter((r) => r.kwh > 0.005);
   const series = [...roots.map((r) => ({ id: r.node.id, label: r.node.name, cls: colourOf(r.node.id) })), { id: "_u", label: "Untracked", cls: UNTRACKED_CLS }];
   const rank = deviceRanking(whole).filter((u) => u.kwh > 0.005);
