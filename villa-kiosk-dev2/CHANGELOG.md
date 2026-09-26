@@ -1,3 +1,9 @@
+## 2.496.102
+
+### Changed
+- **The whole camera shot for a tapped room is now worked out in one tested
+  place**: how much of the screen the room fills, and how close the camera
+  needs to be for its devices. Nothing changes on screen.
 ## 2.496.101
 
 ### Changed
