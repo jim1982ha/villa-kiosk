@@ -13,7 +13,7 @@
 import type { ComponentType } from "react";
 import { Armchair, Lightbulb, Wifi, Zap, ShieldCheck, Puzzle } from "lucide-react";
 import type { Category, EntityType } from "@/types/scene.types";
-import { OPENING_DEVICE_CLASSES } from "./BinarySensorClasses";
+import { OPENING_DEVICE_CLASSES, MOTION_DEVICE_CLASSES, MOTION_ID_HINT, OPENING_ID_HINT } from "./BinarySensorClasses";
 
 /** Fixed display order for the HUD filter buttons and Config Editor dropdown. */
 export const CATEGORY_ORDER: Category[] = [
@@ -295,7 +295,6 @@ const CATEGORY_EXCEPTIONS: Partial<Record<string, Category>> = {
 
 // device_class sets that redirect a generic domain to a specific category.
 const COMFORT_SENSOR_DC = new Set(["temperature", "humidity"]);
-const ACCESS_BINARY_DC = new Set(["motion", "presence", "occupancy", "moving"]);
 
 /**
  * What a generic `switch.*` / `input_boolean.*` is actually FOR, inferred from
@@ -357,8 +356,8 @@ function categoryForEntity(entityId: string, type: EntityType, deviceClass?: str
     // OPENING_DEVICE_CLASSES — the SAME set the door/window pose-swap gate
     // (EntityVisuals) already trusts to mean "this is a physical opening" —
     // instead of a second, possibly-drifting list of device_classes.
-    if (ACCESS_BINARY_DC.has(dc) || OPENING_DEVICE_CLASSES.has(dc)
-        || /(^|[._])(motion|presence|occupancy|pir|door|window|gate)([._]|$)/.test(id)) {
+    if (MOTION_DEVICE_CLASSES.has(dc) || OPENING_DEVICE_CLASSES.has(dc)
+        || MOTION_ID_HINT.test(id) || OPENING_ID_HINT.test(id)) {
       return "access_control";
     }
   }

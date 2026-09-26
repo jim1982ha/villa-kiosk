@@ -1,3 +1,14 @@
+## 2.496.97
+
+### Fixed
+- **The "Motion detected" notice only announces motion sensors.** A sensor
+  that Home Assistant says is something else (a door contact, say) is no
+  longer announced as motion just because its name contains a word like "pir".
+  A sensor with no type in Home Assistant is still recognised by its name.
+
+### Changed
+- **One definition of a motion sensor** is shared by the motion notice and the
+  device categories.
 ## 2.496.96
 
 ### Fixed — the 3D map

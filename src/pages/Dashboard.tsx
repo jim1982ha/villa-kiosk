@@ -32,7 +32,7 @@ import { mappingForEntityId, displayLabelFor, resolveEntityRoom } from "@/config
 import { deriveHaScenes, scenesForRoom } from "@/config/haScenes";
 import { effectiveCategory, subjectOf, categoryColor, CATEGORY_ICONS, CATEGORY_LABELS } from "@/config/EntityCategories";
 import { badgeFaceAndRing } from "@/utils/deviceActivity";
-import { alertStateFor } from "@/config/BinarySensorClasses";
+import { alertStateFor, isMotionSensor } from "@/config/BinarySensorClasses";
 import { dismissedEntitySet } from "@/config/dismissedEntities";
 import { phantomEntity } from "@/utils/phantomEntity";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
@@ -44,10 +44,6 @@ import type { SceneManager } from "@/babylon/SceneManager";
 import type { ActivePanel } from "@/types/panel.types";
 import type { Category, TeleportPoint } from "@/types/scene.types";
 
-/** binary_sensor device_classes that mean "someone/something moved" — the
- *  motion toast below announces these. Mirrors the ACCESS_BINARY_DC set
- *  EntityCategories uses to bucket the same sensors. */
-const MOTION_DEVICE_CLASSES = new Set(["motion", "presence", "occupancy", "moving"]);
 
 export default function Dashboard() {
   const { config, update, resolvedRooms, setResolvedRooms } = useConfig();
@@ -362,14 +358,10 @@ export default function Dashboard() {
     const wasOn = new Map<string, boolean>();
     return subscribeAll((e) => {
       const id = e.entity_id;
-      if (!id.startsWith("binary_sensor.")) return;
+      // A motion/presence detector — BinarySensorClasses.isMotionSensor, the
+      // one rule (device_class, or its id when HA reports none).
+      if (!isMotionSensor(id, e.attributes?.device_class as string | undefined)) return;
       const map = configRef.current.entityMap[id];
-      const deviceClass = e.attributes?.device_class as string | undefined;
-      // A motion/presence detector, by device_class or (when HA doesn't report
-      // one) by the same id hints categoryForEntity uses.
-      const isMotion = MOTION_DEVICE_CLASSES.has(deviceClass ?? "")
-        || /(^|[._])(motion|presence|occupancy|pir)([._]|$)/.test(id);
-      if (!isMotion) return;
       // Only announce a sensor actually configured somewhere in the app —
       // real geometry in the model, or another mapping's Linked entity /
       // Motion sensor field (see effectiveMappedEntityIds above). Without

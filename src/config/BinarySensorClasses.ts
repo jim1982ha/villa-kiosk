@@ -141,3 +141,25 @@ export function alertStateFor(
 export const OPENING_DEVICE_CLASSES: ReadonlySet<string> = new Set([
   "door", "garage_door", "window", "opening",
 ]);
+
+/** binary_sensor device_classes whose "on" means someone or something MOVED.
+ *  ⚠️ ONE LIST. Dashboard's motion toast and EntityCategories' access bucket
+ *  each carried their own copy, and the toast's comment claimed its id hints
+ *  were "the same id hints categoryForEntity uses" — they were not. */
+export const MOTION_DEVICE_CLASSES: ReadonlySet<string> = new Set([
+  "motion", "presence", "occupancy", "moving",
+]);
+/** The id words that name a motion detector when HA reports no device_class.
+ *  Anchored on "." / "_" / the ends ("_" is a word character, so `\b` would
+ *  match "motion" inside "promotion_x"). */
+export const MOTION_ID_HINT = /(^|[._])(motion|presence|occupancy|pir)([._]|$)/;
+/** The id words that name a door/window/gate contact with no device_class. */
+export const OPENING_ID_HINT = /(^|[._])(door|window|gate)([._]|$)/;
+
+/** Is this binary_sensor a motion/presence detector: by its device_class,
+ *  or — only when HA reports none — by its id. */
+export function isMotionSensor(entityId: string, deviceClass: string | undefined): boolean {
+  if (!entityId.startsWith("binary_sensor.")) return false;
+  if (deviceClass) return MOTION_DEVICE_CLASSES.has(deviceClass);
+  return MOTION_ID_HINT.test(entityId);
+}
