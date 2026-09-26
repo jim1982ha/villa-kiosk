@@ -1,3 +1,9 @@
+## 2.496.118
+
+**Nothing you should see changed.** The automatic checks that make sure every
+chart shows gaps in its data (and uses the shared tooltip) had quietly
+stopped looking at three of the six charts. They now cover all of them, and
+fail if one is added or removed without them noticing.
 ## 2.496.117
 
 ### Improved — chart tooltips
