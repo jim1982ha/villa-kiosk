@@ -1,3 +1,10 @@
+## 2.496.161
+
+### Internal — the villa's device list
+- No visible change. The list of the villa's devices, and what needs
+  attention, are now worked out once for every screen instead of separately
+  by the bottom bar, the Facility Manager and the Cockpit.
+
 ## 2.496.160
 
 ### Fixed — reconnecting to Home Assistant
