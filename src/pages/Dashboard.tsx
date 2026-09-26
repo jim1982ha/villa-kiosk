@@ -43,6 +43,7 @@ import { installDailyAutoReload } from "@/utils/autoReload";
 import type { SceneManager } from "@/babylon/SceneManager";
 import type { ActivePanel } from "@/types/panel.types";
 import type { Category, TeleportPoint } from "@/types/scene.types";
+import { VillaModelProvider } from "@/config/VillaModel";
 
 
 export default function Dashboard() {
@@ -742,7 +743,7 @@ export default function Dashboard() {
   }, [manager]);
 
   return (
-    <>
+    <VillaModelProvider mappedEntityIds={effectiveMappedEntityIds}>
       <BabylonCanvas
         key={modelKey}
         onManager={setManager}
@@ -786,7 +787,6 @@ export default function Dashboard() {
         hasOverviewDefault={hasOverviewDefault}
         onApplyOverviewDefault={applyOverviewDefault}
         onSaveOverviewDefault={saveOverviewDefault}
-        mappedEntityIds={effectiveMappedEntityIds}
         onOpenEntity={openEntityPanel}
         onOpenFacility={canManageFacility ? () => setFacilityOpen(true) : undefined}
         onOpenCategory={setCategoryGroup}
@@ -797,7 +797,6 @@ export default function Dashboard() {
           bottom bar's corner controls (view toggle / joystick). */}
       <SummaryBar
         onOpenEntity={openEntityPanel}
-        mappedEntityIds={effectiveMappedEntityIds}
         scenes={haScenes}
       />
 
@@ -958,7 +957,6 @@ export default function Dashboard() {
         <SummaryGroupPanel
           group={{ title: clusterGroup.room, icon: Layers, entityIds: clusterGroup.entityIds }}
           canControl={canControl}
-          mappedEntityIds={effectiveMappedEntityIds}
           onClose={() => setClusterGroup(null)}
           onOpenEntity={(id) => { setClusterGroup(null); openEntityPanel(id); }}
           roomScenes={scenesForRoom(haScenes, clusterGroup.room)}
@@ -978,7 +976,6 @@ export default function Dashboard() {
         <SummaryGroupPanel
           group={{ title: CATEGORY_LABELS[categoryGroup], icon: CATEGORY_ICONS[categoryGroup], entityIds: categoryGroupEntityIds }}
           canControl={canControl}
-          mappedEntityIds={effectiveMappedEntityIds}
           onClose={() => setCategoryGroup(null)}
           onOpenEntity={(id) => { setCategoryGroup(null); openEntityPanel(id); }}
           // categoryGroupEntityIds has ALREADY applied the precise
@@ -1003,7 +1000,6 @@ export default function Dashboard() {
       {facilityOpen && canManageFacility && (
         <FacilityModal
           onClose={() => { setFacilityOpen(false); setFaultForEntity(null); }}
-          mappedEntityIds={effectiveMappedEntityIds}
           onOpenEntity={(id) => { setFacilityOpen(false); openEntityPanel(id); }}
           reportFaultFor={faultForEntity ?? undefined}
           onFaultFormOpened={() => setFaultForEntity(null)}
@@ -1050,6 +1046,6 @@ export default function Dashboard() {
           onModelChanged={() => setModelKey((k) => k + 1)}
         />
       )}
-    </>
+    </VillaModelProvider>
   );
 }

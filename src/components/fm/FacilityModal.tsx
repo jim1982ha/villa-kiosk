@@ -28,7 +28,6 @@ import { useProfile } from "@/auth/ProfileContext";
 import { hasCapability } from "@/auth/permissions";
 import { useFmData, useFacilityLiveView } from "@/fm/FmDataContext";
 import { buildReadiness, type ReadinessCheck } from "@/fm/readiness";
-import { villaDevices } from "@/config/deviceGroups";
 import { locksGroup, lightsGroup } from "@/config/summaryGroups";
 import { lockFacts, lightFacts } from "@/config/villaSummary";
 import SummaryGroupPanel, { type SummaryGroup } from "@/components/panels/SummaryGroupPanel";
@@ -40,6 +39,7 @@ import FaultsTab from "./FaultsTab";
 import SpendTab from "./SpendTab";
 import ReportTab from "./ReportTab";
 import ScheduleEditor from "./ScheduleEditor";
+import { useVillaModel } from "@/config/VillaModel";
 
 type Tab = "today" | "readiness" | "faults" | "spend" | "schedule" | "report";
 
@@ -56,10 +56,9 @@ const TABS: ModalTab<Tab>[] = [
 ];
 
 export default function FacilityModal({
-  onClose, mappedEntityIds, onOpenEntity, reportFaultFor, onFaultFormOpened,
+  onClose, onOpenEntity, reportFaultFor, onFaultFormOpened,
 }: {
   onClose: () => void;
-  mappedEntityIds: Set<string>;
   /** Open on Faults with a blank fault already pointed at this device — set
    *  when the operator came here from a device panel's fault shortcut. */
   reportFaultFor?: string;
@@ -76,7 +75,7 @@ export default function FacilityModal({
   // Landing on Faults rather than Today when the operator arrived by tapping
   // "report a fault" on a device: they have already said what they want.
   const [tab, setTab] = useState<Tab>(reportFaultFor ? "faults" : "today");
-  const { entities, entityDeviceIds } = useHA();
+  const { entities } = useHA();
   const { config, resolvedRooms } = useConfig();
   const { role } = useProfile();
   const { data, ready, saveError } = useFmData();
@@ -103,15 +102,7 @@ export default function FacilityModal({
   // picker and the offline list — four dependency arrays that had to stay in
   // step, plus a third argument ORDER inside buildReadiness. One value now,
   // handed to everything that needs it.
-  const devices = useMemo(
-    () => villaDevices({
-      entityMap: config.entityMap, deviceGroups: config.deviceGroups,
-      dismissedEntityIds: config.dismissedEntityIds,
-      mappedEntityIds, entities, entityDeviceIds,
-    }),
-    [config.entityMap, config.deviceGroups, config.dismissedEntityIds,
-     mappedEntityIds, entities, entityDeviceIds],
-  );
+  const { devices } = useVillaModel();
   const totalDeviceCount = devices.ids.length;
 
   const [checkPanelGroup, setCheckPanelGroup] = useState<SummaryGroup | null>(null);
@@ -237,7 +228,6 @@ export default function FacilityModal({
 
       {cockpitOpen && (
         <CockpitModal
-          mappedEntityIds={mappedEntityIds}
           onClose={() => setCockpitOpen(false)}
           onOpenEntity={(id) => { setCockpitOpen(false); onOpenEntity(id); }}
         />
@@ -247,7 +237,6 @@ export default function FacilityModal({
         <SummaryGroupPanel
           group={checkPanelGroup}
           canControl={canControl}
-          mappedEntityIds={mappedEntityIds}
           onClose={() => setCheckPanelGroup(null)}
           onOpenEntity={(id) => { setCheckPanelGroup(null); onOpenEntity(id); }}
         />

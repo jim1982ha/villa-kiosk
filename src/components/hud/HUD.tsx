@@ -83,10 +83,6 @@ interface Props {
    *  overview camera's current angle/tilt/zoom/pan. Returns false when not
    *  currently in overview (nothing to capture). */
   onSaveOverviewDefault: () => boolean;
-  /** Entities with real geometry in the loaded model (see
-   *  manager.mappedEntityIds) — same set SummaryBar uses, for the
-   *  unavailable-devices list's "not on the map" section. */
-  mappedEntityIds: Set<string>;
   /** Drill into an entity's full panel from the unavailable-devices list —
    *  wired to Dashboard's setActivePanel, same callback SummaryBar uses. */
   onOpenEntity: (entityId: string) => void;
@@ -113,7 +109,7 @@ export default function HUD({
   onOpenSettings, canOpenSettings, onMove,
   viewMode, onToggleViewMode,
   hasOverviewDefault, onApplyOverviewDefault, onSaveOverviewDefault,
-  mappedEntityIds, onOpenEntity, onOpenFacility, onOpenCategory,
+  onOpenEntity, onOpenFacility, onOpenCategory,
 }: Props) {
   const { connection, haConfig } = useHA();
   const { config, update } = useConfig();
@@ -130,7 +126,7 @@ export default function HUD({
   // alone, computed separately here from before Needs Attention was
   // unified — reported as "the button says 4, the modal says 5 things need
   // attention" once the two definitions had quietly drifted apart.
-  const { attentionItems, health } = useVillaAttention(mappedEntityIds);
+  const { attentionItems, health } = useVillaAttention();
   // Opens Cockpit (the villa-wide status report), not the bare unavailable-
   // devices list directly any more — that list is now a drill-down INSIDE
   // Cockpit's Needs Attention section (see CockpitModal), reached the same
@@ -800,7 +796,6 @@ export default function HUD({
 
       {cockpitOpen && (
         <CockpitModal
-          mappedEntityIds={mappedEntityIds}
           onClose={() => setCockpitOpen(false)}
           onOpenEntity={(id) => { setCockpitOpen(false); onOpenEntity(id); }}
         />

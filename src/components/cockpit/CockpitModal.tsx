@@ -43,7 +43,6 @@ import {
 
 export interface CockpitModalProps {
   onClose: () => void;
-  mappedEntityIds: Set<string>;
   onOpenEntity: (entityId: string) => void;
 }
 
@@ -54,7 +53,7 @@ const ATTENTION_ICON: Record<AttentionKind, typeof TriangleAlert> = {
   alarm: TriangleAlert,
 };
 
-export default function CockpitModal({ onClose, mappedEntityIds, onOpenEntity }: CockpitModalProps) {
+export default function CockpitModal({ onClose, onOpenEntity }: CockpitModalProps) {
   const { entities, ws, entityFloorNumbers } = useHA();
   const { config, resolvedRooms } = useConfig();
   const { role } = useProfile();
@@ -72,7 +71,7 @@ export default function CockpitModal({ onClose, mappedEntityIds, onOpenEntity }:
   // Shared with HUD's own top-bar alert icon/overflow-menu badge — see
   // useVillaAttention's own docstring for why that sharing is load-bearing,
   // not just tidiness (the two used to disagree).
-  const { selectableIds, attentionItems, health } = useVillaAttention(mappedEntityIds);
+  const { selectableIds, attentionItems, health } = useVillaAttention();
   const categoryTiles = useMemo(
     () => buildCategoryTiles(selectableIds, entities, config.entityMap),
     [selectableIds, entities, config.entityMap],
@@ -320,7 +319,6 @@ export default function CockpitModal({ onClose, mappedEntityIds, onOpenEntity }:
       <SummaryGroupPanel
         group={{ title: pivotDrill.label, icon: pivot === "room" ? MapPin : Building2, entityIds: pivotDrill.entityIds }}
         canControl={canControl}
-        mappedEntityIds={mappedEntityIds}
         onClose={() => setPivotDrill(null)}
         onOpenEntity={(id) => { setPivotDrill(null); onOpenEntity(id); }}
       />

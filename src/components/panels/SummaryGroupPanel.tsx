@@ -36,15 +36,12 @@ import { NO_ROOM_LABEL } from "@/config/roomKey";
 // The group's shape is config/summaryGroups' (this screen only draws one).
 export type { SummaryGroup } from "@/config/summaryGroups";
 import type { SummaryGroup } from "@/config/summaryGroups";
+import { useVillaModel } from "@/config/VillaModel";
 
 interface Props {
   group: SummaryGroup;
   /** Whether the profile may control these devices (else the modal is read-only). */
   canControl: boolean;
-  /** Entities with real geometry in the loaded model. Anything NOT in here
-   *  exists only in Home Assistant — it's listed last and tinted, so it's
-   *  obvious it can't be found on the 3D map. */
-  mappedEntityIds: Set<string>;
   onClose: () => void;
   /** Drill into an entity's full type panel (PanelRouter) — wired to
    *  Dashboard's setActivePanel, so it opens the exact same rich panel a 3D
@@ -105,9 +102,12 @@ function groupByRoom(
 }
 
 export default function SummaryGroupPanel({
-  group, canControl, mappedEntityIds, onClose, onOpenEntity, hideBulkToggle,
+  group, canControl, onClose, onOpenEntity, hideBulkToggle,
   filterSuppressed = true, roomScenes,
 }: Props) {
+  // Entities on the 3D map; anything else exists only in Home Assistant and
+  // is listed last and tinted (config/VillaModel).
+  const { mappedEntityIds } = useVillaModel();
   const { entities, suppressedEntityIds, hiddenInHaEntityIds, callService } = useHA();
   const { config, resolvedRooms } = useConfig();
   // Each row's badge is a PNG baked from the theme's tokens — see the hook.

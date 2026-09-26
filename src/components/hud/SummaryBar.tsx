@@ -34,7 +34,6 @@ import { villaSummary, fmtClimateTemp } from "@/config/villaSummary";
 import { formatUnitValue, formatSensorParts } from "@/utils/entityValue";
 import { findWeatherStation } from "@/config/weatherStation";
 import WeatherPanel from "@/components/panels/WeatherPanel";
-import { villaDevices } from "@/config/deviceGroups";
 import { onOffSummary } from "@/utils/entityState";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import EnergyPanel from "@/components/panels/EnergyPanel";
@@ -42,6 +41,7 @@ import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping } from "@/types/scene.types";
 import { useBackToClose } from "@/hooks/useBackToClose";
 import { useSceneConfirm } from "@/hooks/useSceneConfirm";
+import { useVillaModel } from "@/config/VillaModel";
 
 type IconType = ComponentType<{ size?: number | string }>;
 
@@ -236,9 +236,6 @@ function deriveTiles(
 interface Props {
   /** Open an entity's full control panel (wired to Dashboard's setActivePanel). */
   onOpenEntity: (entityId: string) => void;
-  /** Entities with real geometry in the loaded model — everything else is
-   *  flagged "not on the map" in the group modal. */
-  mappedEntityIds: Set<string>;
   /** Live HA scenes (config/haScenes.ts) — computed once in Dashboard since
    *  the room-cluster panel needs the exact same derivation. */
   scenes: HaSceneInfo[];
@@ -398,7 +395,7 @@ function SceneMenu({ scenes, canRun, apply }: {
   );
 }
 
-export default function SummaryBar({ onOpenEntity, mappedEntityIds, scenes }: Props) {
+export default function SummaryBar({ onOpenEntity, scenes }: Props) {
   const { entities, suppressedEntityIds, entityDeviceIds, haConfig } = useHA();
   const { ask: askScene, dialog: sceneDialog } = useSceneConfirm();
   const { role } = useProfile();
@@ -423,15 +420,7 @@ export default function SummaryBar({ onOpenEntity, mappedEntityIds, scenes }: Pr
   // got wrong.
   // `visibleEntities`, not the raw store: this bar counts what the profile can
   // actually see. The set is the value's own now — no caller builds one.
-  const villaDeviceSet = useMemo(
-    () => villaDevices({
-      entityMap: config.entityMap, deviceGroups: config.deviceGroups,
-      dismissedEntityIds: config.dismissedEntityIds,
-      mappedEntityIds, entities: visibleEntities, entityDeviceIds,
-    }),
-    [config.entityMap, config.deviceGroups, config.dismissedEntityIds,
-     mappedEntityIds, visibleEntities, entityDeviceIds],
-  );
+  const { visibleDevices: villaDeviceSet } = useVillaModel();
 
   // The station the Weather tile opens — the same derivation the tile used.
   // ⚠️ STABLE WHILE THE STATION IS THE SAME. `visibleEntities` changes on every
@@ -491,7 +480,6 @@ export default function SummaryBar({ onOpenEntity, mappedEntityIds, scenes }: Pr
           <SummaryGroupPanel
             group={{ title: openGroup.title, icon: openGroup.icon, entityIds: openGroup.entityIds }}
             canControl={openGroup.canControl}
-            mappedEntityIds={mappedEntityIds}
             onClose={() => setOpenGroup(null)}
             onOpenEntity={onOpenEntity}
           />
@@ -501,7 +489,6 @@ export default function SummaryBar({ onOpenEntity, mappedEntityIds, scenes }: Pr
         <SummaryGroupPanel
           group={{ title: openGroup.title, icon: openGroup.icon, entityIds: openGroup.entityIds }}
           canControl={openGroup.canControl}
-          mappedEntityIds={mappedEntityIds}
           onClose={() => setOpenGroup(null)}
           // Deliberately DON'T close the group when drilling into one of its
           // rows — leave this modal mounted underneath. Both this panel and
