@@ -77,7 +77,7 @@ const DIR = new URL("../../src/components/panels/", import.meta.url);
 const sites = [];
 for (const f of readdirSync(DIR).filter((n) => n.endsWith(".tsx"))) {
   const src = readFileSync(new URL(f, DIR), "utf8");
-  for (const m of src.matchAll(/<(Sparkline|DualSparkline)\b[\s\S]*?\/>/g)) sites.push({ f, tag: m[1], ok: /\bwindow=\{/.test(m[0]) });
+  for (const m of src.matchAll(/<(LineChart)\b[\s\S]*?\/>/g)) sites.push({ f, tag: m[1], ok: /\bwindow=\{/.test(m[0]) });
 }
 ck(`found the chart call sites (${sites.length})`, sites.length >= 3, sites);
 const missing = sites.filter((x) => !x.ok).map((x) => `${x.f}:${x.tag}`);

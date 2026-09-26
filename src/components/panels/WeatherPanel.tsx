@@ -16,23 +16,20 @@
 // (`summary-group-modal`, 780 px) — the owner asked for them to match.
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ChevronLeft, CloudSun, LineChart } from "lucide-react";
+import { ChevronLeft, CloudSun, LineChart as LineChartIcon } from "lucide-react";
 import { fmtChartValue, fmtChartTick, fmtChartTime, fmtChartStamp } from "./chartUtils";
 import BarChart from "./BarChart";
 import { Figure, ObservationCards } from "./WindowPieces";
 import { localMidnight } from "@/utils/localDay";
-import { useChartPointer } from "./useChartPointer";
 import { barNote, seriesBuckets } from "@/utils/barChart";
-import ChartTip from "./ChartTip";
-import { chartGeometry, type ChartGeometry } from "@/utils/chartGeometry";
-import YAxis, { type AxisTick } from "./ChartAxis";
+import LineChart, { ChartEmpty } from "./LineChart";
 import BasePanel from "./BasePanel";
 import { useHA } from "@/ha/HAStateStore";
 import { fetchHistory, fetchStatistics } from "@/ha/HAHistoryAPI";
 import { useHistory } from "@/hooks/useHistory";
 import { useHistoryRange, WEATHER_RANGES, type HistoryRange } from "./historyRange";
 import { peakOf, seriesExtent, seriesTotal, type HistoryStatus } from "@/utils/statisticsSeries";
-import { isUnavailable, STATUS_COLOR } from "@/utils/stateColors";
+import { isUnavailable } from "@/utils/stateColors";
 import type { HassEntity, HistorySeries } from "@/types/ha.types";
 import {
   beaufort, compass, pressureTendency, uvBand, stationReadings, barometerAngle, thermometerFraction, rainTubeTop,
@@ -103,7 +100,7 @@ export default function WeatherPanel({ station, onClose }: { station: WeatherSta
       // Settings' "Advanced Settings" style: the same button, the same place.
       footerLeading={view === "now" && (
         <button type="button" className="btn ghost" onClick={() => setView("history")}>
-          <LineChart size={18} /> History and trends
+          <LineChartIcon size={18} /> History and trends
         </button>
       )}
     >
@@ -466,60 +463,17 @@ function HistoryView({ station, range }: { station: WeatherStation; range: Histo
   );
 }
 
-/** The window's start, middle and "now" — chartGeometry's ticks, labelled by
- *  the app's one tick labeller. */
-function Axis({ g, right }: { g: ChartGeometry | null; right?: boolean }) {
-  if (!g) return <div className="weather-axis"><span>&nbsp;</span></div>;
-  // Under the PLOT, not under the y-axis beside it.
-  return (
-    <div className={`weather-axis under-yaxis${right ? " right" : ""}`}>
-      <span>{fmtChartTick(g.ticks[0], g.spanHours)}</span><span>{fmtChartTick(g.ticks[1], g.spanHours)}</span><span>now</span>
-    </div>
-  );
-}
-
 interface Line { s: HistorySeries | undefined; cls: string; label: string; unit: string; area?: boolean; ownScale?: boolean }
-const W = 320, H = 150, TOP = 12, BOT = 138;
-/** The chart's height on screen (px): the SVG (whose viewBox is H tall) and
- *  its y-axis are both set to it here, so they cannot disagree. */
+/** Every Weather chart's height on screen (px) — the line charts' and the rain bars'. */
 const CHART_PX = 150;
-const PLOT = { left: 0, right: W, top: TOP, bottom: BOT };
 
-/** What a chart says when it has nothing to draw — three different facts. */
-function ChartEmpty({ status }: { status: HistoryStatus }) {
-  if (status === "loading") return <div className="state-timeline-skeleton weather-chart" />;
-  return <div className="muted body-text weather-chart-empty">{status === "failed" ? "Couldn't load this history." : "Not enough history yet."}</div>;
-}
-
-function Bands({ g }: { g: ChartGeometry }) {
-  // A band per line, in its own slice of the plot: which sensor was out is
-  // part of the fact (an indoor sensor down used to break its line unshaded).
-  return <>{g.series.flatMap((s, i) => s.bands.map((b, j) => (
-    <rect key={`gap${i}-${j}`} x={b.x} y={b.y} width={b.w} height={b.h} fill={STATUS_COLOR.unavailable} opacity={0.18} />
-  )))}</>;
-}
-
-/** Gridlines at the left axis' ticks (the plot's own lines, in its units). */
-const Grid = ({ ticks }: { ticks: readonly AxisTick[] }) => (
-  <g className="chart-grid">{ticks.map((t) => <line key={t.v} x1="0" y1={t.y} x2={W} y2={t.y} />)}</g>
-);
-
+/** A Weather chart: its head, then the app's one line chart (LineChart). */
 function ChartTile({ title, legend, note, lines, win, status }: {
   title: string; legend?: [string, string][]; note?: string; lines: Line[]; win: { from: number; to: number }; status: HistoryStatus;
 }) {
   // Every line the station has a sensor for — one with no readings still has
   // its outage, and its band says so.
   const present = lines.filter((l): l is Line & { s: HistorySeries } => !!l.s);
-  const any = present.some((l) => l.s.points.length > 0);
-  const g = any ? chartGeometry(win, present.map((l) => ({ pts: l.s.points, gaps: l.s.gaps, scale: l.ownScale ? "fromZero" as const : "shared" as const })), PLOT, 0.08) : null;
-  // The left axis is the first line's scale; a later line on its OWN scale
-  // (sunlight in W/m², UV beside it) gets a right axis of its own.
-  const leftAxis = g ? g.series[0].ticks : [];
-  const ownAt = present.findIndex((l, i) => i > 0 && l.ownScale);
-  const rightAxis = g && ownAt > 0 ? g.series[ownAt].ticks : null;
-  // The pointer's fraction across the plot, as a time in chartGeometry's window.
-  const { frac, handlers } = useChartPointer<SVGSVGElement>();
-  const hover = g && frac !== null ? g.hover(g.tAt(frac * W)) : null;
   return (
     <div className="weather-tile chart">
       <div className="weather-chart-head">
@@ -527,45 +481,11 @@ function ChartTile({ title, legend, note, lines, win, status }: {
         {legend && <div className="weather-legend">{legend.map(([n, c]) => <span key={n}><i className={`key ${c}`} />{n}</span>)}</div>}
         {note && <div className="weather-legend">{note}</div>}
       </div>
-      {!g
-        ? <ChartEmpty status={status} />
-        : (
-          <div className="chart-with-axis has-unit">
-          <YAxis height={CHART_PX} frame={H} unit={present[0]?.unit.trim()} ticks={leftAxis} />
-          <div className="spark-wrap weather-chart-wrap">
-          <svg className="weather-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={`${title} history`}
-            style={{ height: CHART_PX, touchAction: "none" }} {...handlers}>
-            <Grid ticks={leftAxis} />
-            <Bands g={g} />
-            {g.series.map((sg, i) => (
-              <g key={i}>
-                {sg.runs.map((run, j) => {
-                  const pts = run.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`);
-                  return (
-                    <g key={j}>
-                      {present[i].area && <path d={`M${run[0].x.toFixed(1)},${BOT} L${pts.join(" L")} L${run[run.length - 1].x.toFixed(1)},${BOT} Z`} className={`chart-area ${present[i].cls}`} />}
-                      <polyline points={pts.join(" ")} className={`chart-line ${present[i].cls}`} vectorEffect="non-scaling-stroke" />
-                    </g>
-                  );
-                })}
-              </g>
-            ))}
-            {hover && <line x1={hover.x} y1={TOP} x2={hover.x} y2={BOT} className="spark-crosshair" vectorEffect="non-scaling-stroke" />}
-          </svg>
-          {hover && (
-            <ChartTip x={hover.x / W} y={TOP / H} stamp={fmtChartStamp(hover.t, g.spanHours)}
-              rows={present.flatMap((l, i) => {
-                const r = hover.readings[i];
-                return r ? [{ key: l.label, marker: <i className={`key ${l.cls.split(" ")[0]}`} />, text: `${l.label} ${fmtChartValue(r.v)}${l.unit}` }] : [];
-              })} />
-          )}
-          </div>
-          {/* The right axis is the colour of the line it measures (UV beside
-              sunlight), as the device panels' two-axis chart does. */}
-          {rightAxis && <YAxis side="right" height={CHART_PX} frame={H} unit={present[ownAt].unit.trim() || present[ownAt].label} ticks={rightAxis} cls={present[ownAt].cls.split(" ")[0]} />}
-          </div>
-        )}
-      <Axis g={g} right={!!rightAxis} />
+      <LineChart label={`${title} history`} height={CHART_PX} status={status} window={win.to > win.from ? win : undefined}
+        lines={present.map((l) => ({
+          pts: l.s.points, gaps: l.s.gaps, label: l.label, unit: l.unit, cls: l.cls, area: l.area,
+          scale: l.ownScale ? "fromZero" as const : "shared" as const,
+        }))} />
     </div>
   );
 }

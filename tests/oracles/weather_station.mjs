@@ -200,7 +200,8 @@ console.log("\n  the window: the approved boards 6 and 7");
   ck("each screen opens at its top (the body scrolls back on every switch)",
      /useEffect\(\(\) => \{ topRef\.current\?\.closest\("\.panel-body"\)\?\.scrollTo\(\{ top: 0 \}\); \}, \[view\]\);/.test(panel));
   ck("every history chart has the app's hover tooltip — the lines (ChartTip) and the rain bars (BarChart's)",
-     (panel.match(/<ChartTip /g) ?? []).length === 1 && (panel.match(/\{\.\.\.handlers\}/g) ?? []).length === 1 && /<BarChart label="Rain history"/.test(panel));
+     /<LineChart label=/.test(panel) && !/<ChartTip /.test(panel) && /<BarChart label="Rain history"/.test(panel)
+     && /<ChartTip /.test(readFileSync(new URL("../../src/components/panels/LineChart.tsx", import.meta.url), "utf8")));
   ck("the three advice cards are the rules above, fed the live readings",
      /windowAdvice\(\{/.test(panel) && /laundryAdvice\(\{/.test(panel) && /outdoorsAdvice\(\{/.test(panel));
 }
@@ -223,9 +224,11 @@ console.log("\n  the charts do not re-fetch on every state push (2.496.86)");
      /const station = useMemo\(\(\) => found, \[stationKey\]\);/.test(bar));
   ck("the history fetch is keyed by the sensors' ids and the range, not the station object",
      /useHistory<WeatherHistory>\(\s*`\$\{ids\.join\("\|"\)\}#\$\{rainId \?\? ""\}\|\$\{range\.hours\}`/.test(panel) && !/\], \[station\]\);/.test(panel));
-  const spark = readFileSync(new URL("../../src/components/panels/Sparkline.tsx", import.meta.url), "utf8");
+  const { drawableWindow } = await import("@/utils/lineChart");
+  const one = [{ t: 5, v: 0 }], win = { from: 0, to: 10 };
   ck("one reading over a known window is a line (0 mm all day), not 'not enough history'",
-     /data\.length === 0 \|\| \(data\.length < 2 && !\(window && window\.to > window\.from\)\)/.test(spark));
+     drawableWindow(win, one) === win && drawableWindow(undefined, one) === null
+     && drawableWindow(win, [], []) === null && drawableWindow(undefined, [], [{ t: 1, v: 1 }, { t: 2, v: 1 }])?.to === 2);
 }
 
 console.log("\n  the window's rules, out of the view (round 9, 2.496.143):");

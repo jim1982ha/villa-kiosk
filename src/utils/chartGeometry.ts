@@ -159,9 +159,20 @@ export function niceTicks(lo: number, hi: number, n = 3): { ticks: number[]; bot
 }
 
 /** An axis label: no trailing zeros, thousands as k and millions as M. */
-export function fmtAxis(v: number): string {
+export function fmtAxis(v: number, step?: number): string {
   const a = Math.abs(v);
   const trim = (x: number, d: number) => String(Number(x.toFixed(d)));
+  // ⚠️ WITH THE AXIS' STEP, EXACTLY (2.496.144): a 2.5 step labelled
+  // 27.5 / 25 / 22.5 / 20 as "28, 25, 23, 20" — the ≥ 10 rule's whole
+  // numbers rounded half the ticks. As many decimals as the step needs, in
+  // the same k / M the value takes.
+  if (step !== undefined && step > 0) {
+    const div = a >= 1e6 ? 1e6 : a >= 1e3 ? 1e3 : 1;
+    const s = step / div;
+    let d = 0;
+    while (d < 3 && Math.abs(s * 10 ** d - Math.round(s * 10 ** d)) > 1e-9) d++;
+    return `${trim(v / div, d)}${div === 1e6 ? "M" : div === 1e3 ? "k" : ""}`;
+  }
   if (a >= 1e6) return `${trim(v / 1e6, 1)}M`;
   if (a >= 1e4) return `${trim(v / 1e3, 0)}k`;
   if (a >= 1e3) return `${trim(v / 1e3, 1)}k`;

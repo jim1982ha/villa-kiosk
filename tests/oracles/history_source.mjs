@@ -88,7 +88,9 @@ console.log("\n  the callers:");
   ck("the Rain figure is a dash, not '0.0 mm', when there is nothing to sum",
      (await import("@/config/weatherStation")).weatherHistoryFigures({ gustUnit: "", rainUnit: "mm" }).find((f) => f.label === "Rain").value === "—"
      && /const rainTotal = seriesTotal\(data\.rain\);/.test(panel) && /weatherHistoryFigures\(\{[\s\S]*?rainTotal,/.test(panel));
-  ck("a failed history says it could not load", /status === "failed" \? "Couldn't load this history\."/.test(panel));
+  const lcSrc = readFileSync(new URL("../../src/components/panels/LineChart.tsx", import.meta.url), "utf8");
+  ck("a failed history says it could not load (LineChart's ChartEmpty, which the rain tile uses too)",
+     /status === "failed" \? "Couldn't load this history\."/.test(lcSrc) && /import LineChart, \{ ChartEmpty \} from "\.\/LineChart";/.test(panel));
 }
 
 console.log(fail ? `\n❌ ${fail} failed` : "\n✅ one history source; absent is never zero");

@@ -9,8 +9,7 @@
 import { formatSensorParts } from "@/utils/entityValue";
 import { Layers } from "lucide-react";
 import BasePanel from "./BasePanel";
-import Sparkline from "./Sparkline";
-import DualSparkline from "./DualSparkline";
+import LineChart from "./LineChart";
 import UnavailableNotice from "./UnavailableNotice";
 import { useHA } from "@/ha/HAStateStore";
 import { fetchHistory } from "@/ha/HAHistoryAPI";
@@ -120,11 +119,14 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
       {numericRows.length === 2 ? (
         <div className="field">
           <HistoryHeader title={range.title} picker={picker} />
-          <DualSparkline
-            a={{ data: history[numericRows[0].id]?.points ?? [], gaps: history[numericRows[0].id]?.gaps ?? [], color: SERIES_COLORS[0], unit: numericRows[0].unit, label: numericRows[0].label }}
-            b={{ data: history[numericRows[1].id]?.points ?? [], gaps: history[numericRows[1].id]?.gaps ?? [], color: SERIES_COLORS[1], unit: numericRows[1].unit, label: numericRows[1].label }}
+          {/* Two readings of one device, each on its OWN scale (left and
+              right axes in their line's colour), the second dashed. */}
+          <LineChart label={`${numericRows[0].label} and ${numericRows[1].label} history`} height={120}
             window={history[numericRows[0].id]?.window}
-          />
+            lines={numericRows.slice(0, 2).map((r, i) => ({
+              pts: history[r.id]?.points ?? [], gaps: history[r.id]?.gaps ?? [], label: r.label,
+              unit: r.unit ? ` ${r.unit}` : "", color: SERIES_COLORS[i], dashed: i === 1, scale: "own" as const,
+            }))} />
           <div className="row" style={{ gap: 16, marginTop: 8, fontSize: "var(--text-xs)" }}>
             <span className="muted">
               <span style={{ color: SERIES_COLORS[0] }}>●</span> {numericRows[0].label}
@@ -143,7 +145,8 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
             {i === 0
               ? <HistoryHeader title={`${r.label} — ${range.title.toLowerCase()}`} picker={picker} />
               : <label className="entity-label">{r.label} — {range.title.toLowerCase()}</label>}
-            <Sparkline data={history[r.id]?.points ?? []} gaps={history[r.id]?.gaps ?? []} window={history[r.id]?.window} color={SERIES_COLORS[i % SERIES_COLORS.length]} unit={r.unit} />
+            <LineChart label={`${r.label} history`} height={110} window={history[r.id]?.window}
+              lines={[{ pts: history[r.id]?.points ?? [], gaps: history[r.id]?.gaps ?? [], label: r.label, unit: r.unit ? ` ${r.unit}` : "", color: SERIES_COLORS[i % SERIES_COLORS.length] }]} />
           </div>
         ))
       )}

@@ -95,9 +95,9 @@ console.log("\n  the callers:");
   // a chart added or dropped fails here until this list is updated.
   const PRIMITIVE = /<polyline|className="bar-chart"|className="state-timeline-seg"|className="energy-flow"|className="chart-bar"/;
   const CHARTS = {
-    "components/panels/Sparkline.tsx": "line",
-    "components/panels/DualSparkline.tsx": "line",
-    "components/panels/WeatherPanel.tsx": "line",
+    // ONE line chart since 2.496.144 (Sparkline, DualSparkline and the
+    // Weather tiles drew their own before).
+    "components/panels/LineChart.tsx": "line",
     "components/panels/BarChart.tsx": "bars",
     "components/panels/StateTimeline.tsx": "timeline",
     "components/panels/EnergyPanel.tsx": "flow",
@@ -109,6 +109,9 @@ console.log("\n  the callers:");
   ck("every file that draws a chart is a known chart module", unknown.length === 0, unknown);
   const missing = Object.keys(CHARTS).filter((f) => !charts.map(rel).includes(f));
   ck(`  ...and all ${Object.keys(CHARTS).length} still draw one — the scan cannot shrink unseen`, missing.length === 0, missing);
+  const lineUsers = files.filter((f) => /<LineChart\b/.test(src(f))).map(rel).sort();
+  ck("every history line is drawn by LineChart: the Weather window and both device panels",
+     lineUsers.join() === "components/panels/DeviceGroupPanel.tsx,components/panels/SensorPanel.tsx,components/panels/WeatherPanel.tsx", lineUsers);
   const byKind = (k) => charts.filter((f) => CHARTS[rel(f)] === k);
   const own = byKind("line").filter((f) => !/\bchartGeometry\(/.test(src(f))).map(rel);
   ck("every line chart draws from chartGeometry", own.length === 0, own);

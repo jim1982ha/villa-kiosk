@@ -14,16 +14,20 @@ export interface AxisTick { v: number; y: number }
 /** `frame` is the drawing's height in the ticks' units (an SVG's viewBox
  *  height; 1 for fractions); `height` is what that drawing measures on
  *  screen (px) — the axis stands beside it at the same size. */
-export default function YAxis({ ticks, frame, side = "left", unit, height, cls }: {
+export default function YAxis({ ticks, frame, side = "left", unit, height, cls, color }: {
   ticks: readonly AxisTick[]; frame: number; side?: "left" | "right"; unit?: string; height: number;
   /** The series' colour class, for an axis that belongs to ONE line. */
   cls?: string;
+  /** Or its colour itself (a line drawn in a CSS colour, not a class). */
+  color?: string;
 }) {
+  // The ticks' own step, so every label is exact (fmtAxis).
+  const step = ticks.length > 1 ? Math.abs(ticks[1].v - ticks[0].v) : undefined;
   return (
-    <div className={`chart-yaxis ${side}${cls ? ` tint-${cls}` : ""}`} style={{ height }} aria-hidden="true">
+    <div className={`chart-yaxis ${side}${cls ? ` tint-${cls}` : ""}`} style={{ height, ...(color ? { color } : {}) }} aria-hidden="true">
       {unit && <span className="chart-yaxis-unit">{unit}</span>}
       {ticks.map((t) => (
-        <span key={t.v} className="chart-yaxis-tick" style={{ bottom: `${(1 - t.y / frame) * 100}%` }}>{fmtAxis(t.v)}</span>
+        <span key={t.v} className="chart-yaxis-tick" style={{ bottom: `${(1 - t.y / frame) * 100}%` }}>{fmtAxis(t.v, step)}</span>
       ))}
     </div>
   );

@@ -31,6 +31,17 @@ export function chartWindow(window: TimeWindow | undefined, ...series: readonly 
   return { from: Math.min(...ts), to: Math.max(...ts) };
 }
 
+/**
+ * The window a line chart can draw, or null for "Not enough history": there
+ * must be a reading, and a window — the one asked for, or two readings' span.
+ * ONE reading over a known window IS a line: a gauge that held one value all
+ * day (0 mm since midnight) comes back as a single row and holds to the end.
+ * (The device panels' two charts had this rule two ways, round 9.)
+ */
+export function drawableWindow(window: TimeWindow | undefined, ...series: readonly (readonly Reading[])[]): TimeWindow | null {
+  return series.some((s) => s.length > 0) ? chartWindow(window, ...series) : null;
+}
+
 /** Time → x across [left, right]. */
 export function timeScale(w: TimeWindow, left: number, right: number): (t: number) => number {
   const span = w.to - w.from || 1;

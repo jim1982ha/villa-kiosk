@@ -28,6 +28,14 @@ ck("every tick is a whole multiple of the step (no 0.30000000000000004)",
 
 console.log("\n  short labels (they sit in a 2.6em column on a phone):");
 ck("128281 → 128k", G.fmtAxis(128281) === "128k", G.fmtAxis(128281));
+ck("with its step, every tick exact: a 2.5 step reads 27.5 / 25 / 22.5 / 20 (it read 28 / 25 / 23 / 20)",
+   [27.5, 25, 22.5, 20].map((v) => G.fmtAxis(v, 2.5)).join() === "27.5,25,22.5,20", [27.5, 25, 22.5, 20].map((v) => G.fmtAxis(v, 2.5)));
+ck("  ...whole steps stay whole, and k / M keep the step's precision (0.25 kWh, 1.25k, 2k)",
+   G.fmtAxis(30, 10) === "30" && G.fmtAxis(0.25, 0.25) === "0.25" && G.fmtAxis(1250, 250) === "1.25k" && G.fmtAxis(2000, 250) === "2k" && G.fmtAxis(1.5e6, 5e5) === "1.5M");
+{
+  const ax = readFileSync(new URL("../../src/components/panels/ChartAxis.tsx", import.meta.url), "utf8");
+  ck("  ...and the one y-axis passes its ticks' step", /const step = ticks\.length > 1 \? Math\.abs\(ticks\[1\]\.v - ticks\[0\]\.v\) : undefined;/.test(ax) && /fmtAxis\(t\.v, step\)/.test(ax));
+}
 ck("2500 → 2.5k, 1200000 → 1.2M", G.fmtAxis(2500) === "2.5k" && G.fmtAxis(1200000) === "1.2M");
 ck("0.2 → 0.2, 50 → 50, 2.5 → 2.5 — no trailing zeros", G.fmtAxis(0.2) === "0.2" && G.fmtAxis(50) === "50" && G.fmtAxis(2.5) === "2.5");
 
@@ -41,10 +49,10 @@ console.log("\n  one tick rule for every line chart — the geometry's:");
   const own = G.chartGeometry(w, [{ pts: [{ t: 0, v: 20 }], gaps: [] }, { pts: [{ t: 0, v: 0 }, { t: 5, v: 900 }], gaps: [], scale: "fromZero" }], { left: 0, right: 100, top: 0, bottom: 100 });
   ck("a series on its own scale has its own ticks (sunlight 0 / 250 / 500 / 750)", own.series[1].ticks.map((t) => t.v).join() === "0,250,500,750", own.series[1].ticks);
 }
-const spark = readFileSync(new URL("../../src/components/panels/Sparkline.tsx", import.meta.url), "utf8"), dual = readFileSync(new URL("../../src/components/panels/DualSparkline.tsx", import.meta.url), "utf8");
-ck("the device panels' sparklines draw the geometry's ticks with the one label (fmtAxis) — no hi/mid/lo of their own",
-   /line\.ticks\.map/.test(spark) && /fmtAxis\(tk\.v\)/.test(spark) && !/yTicks/.test(spark)
-     && /ga\.ticks\.map/.test(dual) && /gb\.ticks\.map/.test(dual) && !/\[ga\.hi, ga\.lo\]/.test(dual));
+const lc = readFileSync(new URL("../../src/components/panels/LineChart.tsx", import.meta.url), "utf8");
+ck("the app's one line chart draws the geometry's ticks through the one axis (YAxis) — no hi/mid/lo of its own",
+   /const leftAxis: readonly AxisTick\[\] = g\.series\[0\]\.ticks;/.test(lc) && /<YAxis height=\{H\} frame=\{H\}/.test(lc)
+     && /ticks=\{g\.series\[ownAt\]\.ticks\}/.test(lc) && !/yTicks|\[ga\.hi, ga\.lo\]/.test(lc));
 
 console.log("\n  the callers:");
 const read = (p) => readFileSync(new URL(p, import.meta.url), "utf8");
@@ -56,11 +64,10 @@ ck("  ...every Energy bar chart names its unit (the energy-and-cost one both: kW
 const barComp = read("../../src/components/panels/BarChart.tsx");
 ck("  ...and BarChart draws the YAxis from its layout's ticks", /<YAxis unit=\{unit\} height=\{height\} frame=\{1\} ticks=\{L\.ticks\} \/>/.test(barComp));
 const weather = read("../../src/components/panels/WeatherPanel.tsx");
-ck("each Weather line chart has a left axis, and a right one for a line on its own scale — the GEOMETRY's ticks",
-   /const leftAxis = g \? g\.series\[0\]\.ticks : \[\];/.test(weather) && /<YAxis height=\{CHART_PX\} frame=\{H\} unit=\{present\[0\]\?\.unit\.trim\(\)\} ticks=\{leftAxis\} \/>/.test(weather)
-     && /\{rightAxis && <YAxis side="right" height=\{CHART_PX\} frame=\{H\}/.test(weather) && !/function axisOf/.test(weather));
-ck("  ...and the SVG is set to the same CHART_PX as its axis (they agreed with a CSS 150px by coincidence)",
-   /style=\{\{ height: CHART_PX, touchAction: "none" \}\}/.test(weather));
+ck("each Weather line chart is the app's LineChart, at the rain chart's CHART_PX (a right axis for a line on its own scale is LineChart's)",
+   /<LineChart label=\{`\$\{title\} history`\} height=\{CHART_PX\}/.test(weather) && /scale: l\.ownScale \? "fromZero" as const : "shared" as const/.test(weather)
+     && !/<YAxis|<svg className="weather-chart"/.test(weather));
+ck("  ...and LineChart sets its SVG to the same height as its axis", /style=\{\{ height: H, touchAction: "none" \}\}/.test(lc));
 ck("the rain chart is a BarChart with its unit (so it has the axis)", /<BarChart label="Rain history" buckets=\{buckets\} height=\{CHART_PX\} unit=\{unit\}/.test(weather));
 const css = read("../../src/styles/03-panels.css");
 ck("the axis keeps its column at every width (no phone rule hides it)", !/\.chart-yaxis[^{]*\{[^}]*display:\s*none/.test(css));
@@ -71,7 +78,8 @@ ck("Sun & UV: the two lines have DIFFERENT colours (owner, 2026-09-26: tell sunl
    !!sunUv && sunUv[1].split(" ")[0] !== sunUv[2].split(" ")[0], sunUv && [sunUv[1], sunUv[2]]);
 ck("  ...the legend says the same, and UV's colour has a line, a key and an axis tint",
    /\["UV", "uv"\]/.test(weather) && /\.chart-line\.uv \{/.test(css) && /\.key\.uv \{/.test(css) && /\.chart-yaxis\.tint-uv \{/.test(css));
-ck("  ...and the right axis wears its line's colour", /ticks=\{rightAxis\} cls=\{present\[ownAt\]\.cls\.split\(" "\)\[0\]\} \/>/.test(weather));
+ck("  ...and the right axis wears its line's colour (its class, or its CSS colour)",
+   /ticks=\{g\.series\[ownAt\]\.ticks\}\s*cls=\{right\.cls\?\.split\(" "\)\[0\]\} color=\{right\.color\} \/>/.test(lc));
 
 if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
 console.log("\n✅ every chart says what its values are");

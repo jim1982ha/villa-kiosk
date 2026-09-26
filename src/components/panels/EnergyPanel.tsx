@@ -13,7 +13,7 @@
 // No Energy dashboard in HA: the bar's old device list opens instead.
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ChevronLeft, ChevronRight, LineChart, Zap } from "lucide-react";
+import { ChevronLeft, ChevronRight, LineChart as LineChartIcon, Zap } from "lucide-react";
 import BasePanel from "./BasePanel";
 import { List, PieChart } from "lucide-react";
 import {
@@ -84,7 +84,7 @@ export default function EnergyPanel({ onClose, fallback }: { onClose: () => void
       headerActions={view === "now" ? <span className="weather-live">Home Assistant Energy</span> : picker}
       footerLeading={view === "now" && (
         <button type="button" className="btn ghost" onClick={() => setView("history")}>
-          <LineChart size={18} /> History and trends
+          <LineChartIcon size={18} /> History and trends
         </button>
       )}
     >

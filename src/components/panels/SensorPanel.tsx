@@ -7,7 +7,7 @@
 import { formatSensorParts } from "@/utils/entityValue";
 import { Activity, AlertTriangle } from "lucide-react";
 import BasePanel from "./BasePanel";
-import Sparkline from "./Sparkline";
+import LineChart from "./LineChart";
 import StateTimeline from "./StateTimeline";
 import type { PanelProps } from "@/types/panel.types";
 import type { HistorySeries, StateHistoryPoint } from "@/types/ha.types";
@@ -163,7 +163,8 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
                 bucketMinutes={range.bucketMinutes}
               />
             ) : (
-              <Sparkline data={history.points} gaps={history.gaps} window={history.window} color={LEVEL_COLOR[level]} unit={unit} loading={historyLoading} />
+              <LineChart label="History" height={110} window={history.window} status={historyLoading ? "loading" : "ready"}
+                lines={[{ pts: history.points, gaps: history.gaps, label: "Reading", unit: unit ? ` ${unit}` : "", color: LEVEL_COLOR[level] }]} />
             )}
           </div>
         </>
