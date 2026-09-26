@@ -5358,7 +5358,6 @@ export class EntityVisuals {
       const rest = categorySurface("others", "off");
       const alert = categorySurface("others", "alert");
       const surface = rest.fill;
-      const sm = this.summaryMetrics();
       for (const g of groups) {
         // A summary whose every member is behind a wall is behind it too — the
         // same rule the room chip applies below, at the same tier (the render
@@ -5427,7 +5426,7 @@ export class EntityVisuals {
           sub.height = `${src.height}px`;
           sub.left = `${src.left}px`;
           sub.top = `${src.top}px`;
-          sub.cornerRadius = sm.size * BADGE_CORNER_FRACTION;
+          sub.cornerRadius = lay.pitch * BADGE_CORNER_FRACTION;
           // WAS `shadowOffsetY = 2` — a directional skirt on a control drawn
           // beside badges that have none. See badgeShadow.ts.
           badgeShadow(sub, "surface");

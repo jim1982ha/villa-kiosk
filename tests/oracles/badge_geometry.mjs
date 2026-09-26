@@ -44,6 +44,31 @@ ck("every cell lands in some card",
 const wrapped = arrange(9, 28, 0.8, 2, MAX_TOTAL_CHIPS, 120, MAX_GRID_CHIPS);
 ck("a width budget is respected rather than overrun", wrapped.width <= 120);
 
+// ⚠️ BABYLON FLOORS EACH CONTROL'S MEASURE ON ITS OWN. A 20.5 px unit (the
+// fine metrics) floored a group card's top one way and its chips' the other:
+// 3 px of card above every chip, 1 px below (2.496.138). Every edge must be a
+// whole pixel, and a chip's margin the same above as below, at any unit.
+{
+  let whole = true, even = true;
+  for (const u of [20.5, 21, 27.5, 28, 33]) for (const f of [22 / 28, 0.8]) for (const n of [2, 3, 4, 6]) {
+    const a = arrange(n, u, f, 2.5, MAX_TOTAL_CHIPS, 0, 2);
+    const W = a.width, H = a.height;
+    for (const c of a.cards) {
+      const top = H / 2 + c.top - c.height / 2, left = W / 2 + c.left - c.width / 2;
+      if (![W, H, c.width, c.height, top, left, a.chip].every(Number.isInteger)) whole = false;
+      for (let k = c.first; k < c.first + c.cells; k++) {
+        const ct = H / 2 + a.cellTop(k) - a.chip / 2, cl = W / 2 + a.cellLeft(k) - a.chip / 2;
+        const row = Math.floor((k - c.first) / c.cols), col = (k - c.first) % c.cols;
+        const above = ct - (top + row * a.pitch), below = top + (row + 1) * a.pitch - ct - a.chip;
+        const beside = cl - (left + col * a.pitch);
+        if (!Number.isInteger(ct) || !Number.isInteger(cl) || above !== below || beside !== above) even = false;
+      }
+    }
+  }
+  ck("every card and chip edge is a whole pixel, at a half-pixel unit too", whole);
+  ck("a chip's margin in its cell is the same above, below and beside", even);
+}
+
 ck("a non-finite count is zero cells, not NaN", gridCells(Number.NaN) === 0);
 ck("a negative count is zero cells", gridCells(-3) === 0);
 

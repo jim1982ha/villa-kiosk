@@ -175,8 +175,18 @@ export function arrange(
    *  ahead of `maxWidth` would have silently handed the width budget to this. */
   perCard = MAX_GRID_CHIPS,
 ): CardArrangement {
+  // ── WHOLE PIXELS, AND A MARGIN THAT SPLITS EVENLY ───────────────────────
+  // Babylon floors every control's measure (`| 0`), each one separately. A
+  // half-pixel unit (the fine metrics scale to 20.5) floored the card's
+  // centred top up a pixel and the chip's down one — every chip of a group
+  // card sat 3 px from its card's top and 1 px from its bottom (2.496.138).
+  // An odd `unit - chip` did the same by half a pixel. So the unit and the
+  // gap are whole pixels, and the chip is the unit less TWO equal whole
+  // margins: every offset below is then an integer before Babylon sees it.
+  unit = Math.max(1, Math.round(unit));
+  gap = Math.round(gap);
   const cells = gridCells(n, max);
-  const chip = Math.max(4, Math.round(unit * iconFraction));
+  const chip = Math.max(4, unit - 2 * Math.round((unit - unit * iconFraction) / 2));
   const cards: SubCard[] = [];
 
   // Greedy fill: a full card, then whatever is left.
@@ -218,14 +228,17 @@ export function arrange(
 
   let rowTop = -height / 2;
   rows.forEach((row, ri) => {
-    let cursor = -rowW[ri] / 2;
+    // Edges from the arrangement's top-left, rounded: a short row centred
+    // under a wider one would otherwise start on a half pixel.
+    let cursor = Math.round((totalW - rowW[ri]) / 2) - totalW / 2;
     for (const sh of row) {
       const w = sh.cols * unit;
+      const h = sh.rows * unit;
       cards.push({
         left: cursor + w / 2,
-        top: rowTop + rowH[ri] / 2,
+        top: rowTop + Math.round((rowH[ri] - h) / 2) + h / 2,
         width: w,
-        height: sh.rows * unit,
+        height: h,
         cols: sh.cols,
         rows: sh.rows,
         first: sh.first,
