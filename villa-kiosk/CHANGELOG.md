@@ -1,3 +1,9 @@
+## 2.496.123
+
+### Fixed — the Energy window
+- **Live power is read with the app's own unit rules.** A power sensor
+  reporting in milliwatts (mW) was read as megawatts. A unit the window
+  cannot interpret now shows no live power instead of a wrong one.
 ## 2.496.122
 
 ### Fixed — the Energy window

@@ -16,6 +16,7 @@
 
 import { localMidnight, localMonthStart } from "@/utils/localDay";
 import { COMPILE_GRACE_MS } from "@/utils/statisticsSeries";
+import { toBaseUnit } from "./SensorClasses";
 
 /** One `energy/get_prefs` device-consumption entry. */
 export interface EnergyDevicePref {
@@ -312,6 +313,17 @@ export function periodStarts(kind: EnergyPeriodKind, now: number): number[] {
     case "last30": return Array.from({ length: 30 }, (_, i) => localMidnight(now, i - 29));
     case "last12Months": return Array.from({ length: 12 }, (_, i) => localMonthStart(now, i - 11));
   }
+}
+
+/**
+ * A power statistic's live reading in kW — through the app's ONE unit table
+ * (SensorClasses.toBaseUnit), or undefined when it cannot be said. The
+ * Energy window folded units itself: lower-cased, so a milliwatt ("mW") read
+ * as a megawatt, the 10⁹ error that table exists to refuse (round 7).
+ */
+export function powerKw(state: unknown, unit: string | undefined): number | undefined {
+  const w = toBaseUnit(state, unit ?? "W");
+  return w === null ? undefined : w / 1000;
 }
 
 /** Live power, from kW: watts below 1 kW ("948 W"), else kW ("3.08 kW").

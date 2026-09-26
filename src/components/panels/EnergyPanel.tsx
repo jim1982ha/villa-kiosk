@@ -32,7 +32,7 @@ import type { HistorySeries } from "@/types/ha.types";
 import { PERIOD_MS, type StatisticsPeriod } from "@/utils/statisticsSeries";
 import { localMidnight } from "@/utils/localDay";
 import {
-  energyPeriod, periodStarts, deviceRanking, typicalDay, todayHeadline, standoutDay, risers, fmtKwh, fmtMoney, fmtPower,
+  energyPeriod, periodStarts, deviceRanking, typicalDay, todayHeadline, standoutDay, risers, fmtKwh, fmtMoney, fmtPower, powerKw,
   type EnergyBucket, type EnergyPeriodKind, type EnergySplit, type NodeUse,
 } from "@/config/energyModel";
 
@@ -99,12 +99,8 @@ export default function EnergyPanel({ onClose, fallback }: { onClose: () => void
 function useRateKw() {
   const { entities } = useHA();
   return (rateId: string | null): number | undefined => {
-    if (!rateId) return undefined;
-    const e = entities[rateId];
-    const v = e ? Number(e.state) : NaN;
-    if (!Number.isFinite(v)) return undefined;
-    const u = String(e?.attributes.unit_of_measurement ?? "W").toLowerCase();
-    return u === "kw" ? v : u === "mw" ? v * 1000 : v / 1000;
+    const e = rateId ? entities[rateId] : undefined;
+    return e ? powerKw(e.state, e.attributes.unit_of_measurement as string | undefined) : undefined;
   };
 }
 
