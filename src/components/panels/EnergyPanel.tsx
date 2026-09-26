@@ -13,7 +13,7 @@
 // No Energy dashboard in HA: the bar's old device list opens instead.
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ChevronLeft, LineChart, Zap } from "lucide-react";
+import { ChevronLeft, ChevronRight, LineChart, Zap } from "lucide-react";
 import BasePanel from "./BasePanel";
 import { List, PieChart } from "lucide-react";
 import { flowTree, flowLayout, flowRows, energySlices, sliceTurns, deviceColours, UNTRACKED_CLS, type FlowNode } from "@/config/energyFlow";
@@ -179,7 +179,6 @@ function NowView({ setup, costUnit, house, colourOf }: { setup: EnergyWindowSetu
       <div className="weather-tile chart energy-wide">
         <div className="weather-chart-head">
           <div className="weather-eyebrow">Where today&apos;s {fmtKwh(split.used)} kWh went</div>
-          <div className="weather-legend">kWh today · now</div>
         </div>
         <Flow split={split} rateKw={rateKw} house={house} colourOf={colourOf} />
         {overlapShows(split) && (
@@ -214,9 +213,12 @@ export function Flow({ split, rateKw, house, colourOf }: { split: EnergySplit; r
         device" draws its rows — every bar starting at the same left edge;
         only the NAME is indented to show what is inside what. */}
     <div className="energy-flow-list energy-rank">
-      {flowRows(tree).map(({ node: n, depth }) => (
+      {/* Without the house's own row: the window's title already names it and
+          its total (owner, 2026-09-26). A device inside a meter carries a
+          chevron, so the grouping reads at a glance. */}
+      {flowRows(tree).filter((r) => r.depth > 0).map(({ node: n, depth }) => (
         <RankRow key={`r${n.id}`} label={n.label} kwh={n.kwh} of={tree.kwh} used={tree.kwh} cls={n.cls}
-          muted={n.kind === "untracked" || n.kind === "other"} depth={depth} note={nowOf(n)} />
+          muted={n.kind === "untracked" || n.kind === "other"} depth={depth - 1} note={nowOf(n)} />
       ))}
     </div>
     <div className="spark-wrap energy-flow-wrap" onPointerLeave={() => setHover(null)}>
@@ -450,7 +452,8 @@ function RankRow({ label, kwh, of, used, cls, muted, depth = 0, note }: {
 }) {
   return (
     <div className="energy-rank-row">
-      <span className={`energy-rank-name${muted ? " muted" : ""}`} style={depth ? { paddingLeft: depth * 14 } : undefined}>
+      <span className={`energy-rank-name${muted ? " muted" : ""}`} style={depth > 1 ? { paddingLeft: (depth - 1) * 14 } : undefined}>
+        {depth > 0 && <ChevronRight size={14} className="energy-rank-chevron" aria-hidden="true" />}
         {label}{note ? <small className="energy-rank-note"> · {note}</small> : null}
       </span>
       <span className="energy-rank-bar"><i style={{ width: `${Math.max(1, (kwh / Math.max(1e-6, of)) * 100)}%` }} className={cls} /></span>

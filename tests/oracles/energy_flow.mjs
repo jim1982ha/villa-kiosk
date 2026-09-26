@@ -117,7 +117,10 @@ ck("the device list: ten a page with the same pager, each bar in the device's co
      && !/legendPage/.test(panel));
 const css = readFileSync(new URL("../../src/styles/03-panels.css", import.meta.url), "utf8");
 ck("the phone's flow rows are the Every-device row: reading order, bars on one left edge, only the name indented",
-   /\{flowRows\(tree\)\.map\(\(\{ node: n, depth \}\) => \(\s*<RankRow /.test(panel) && !/marginLeft: b\.depth/.test(panel) && /style=\{depth \? \{ paddingLeft: depth \* 14 \} : undefined\}/.test(panel));
+   /\{flowRows\(tree\)\.filter\(\(r\) => r\.depth > 0\)\.map\(\(\{ node: n, depth \}\) => \(\s*<RankRow /.test(panel) && !/marginLeft: b\.depth/.test(panel));
+ck("  ...without the house's own row (the title names it), a chevron before every device inside a meter",
+   /depth=\{depth - 1\}/.test(panel) && /\{depth > 0 && <ChevronRight size=\{14\} className="energy-rank-chevron"/.test(panel));
+ck("the flow's head has no 'kWh today · now' (each row says kWh, and 'now' where it is power)", !/kWh today · now/.test(panel));
 ck("on a phone the bar stays, under the name (it was hidden)", /grid-template-areas: "name kwh pct" "bar bar bar";/.test(css) && !/\.energy-rank-bar \{ display: none; \}/.test(css));
 ck("'Every device' switches between the list and the pie", /shape === "pie"\s*\? <DevicePie split=\{whole\} colourOf=\{colourOf\} \/>/.test(panel) && /useSegmentedChoice\(SHAPES, "list"/.test(panel));
 ck("the period picker is in the header, the Weather window's control", /headerActions=\{view === "now" \? <span className="weather-live">Home Assistant Energy<\/span> : picker\}/.test(panel)

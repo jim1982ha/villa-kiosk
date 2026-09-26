@@ -802,6 +802,7 @@ input[type="range"]::-moz-range-thumb {
 .energy-rank-name { grid-area: name; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .energy-rank-name.muted { color: var(--text-secondary); }
 .energy-rank-note { color: var(--text-secondary); font-size: var(--text-xs); }
+.energy-rank-chevron { color: var(--text-secondary); vertical-align: -2px; margin-right: 4px; }
 .energy-rank-row b { grid-area: kwh; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .energy-rank-pct { grid-area: pct; text-align: right; color: var(--text-secondary); }
 .energy-rank-bar { grid-area: bar; height: 8px; border-radius: 4px; background: var(--bg-card); overflow: hidden; }
