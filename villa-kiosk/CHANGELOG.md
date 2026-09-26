@@ -1,3 +1,8 @@
+## 2.496.107
+
+### Improved — the Energy window
+- **"Where today's energy went" is half as tall.** Each device's name, kWh
+  and live power sit on one line beside its band.
 ## 2.496.106
 
 ### Improved — the Weather window

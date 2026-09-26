@@ -259,9 +259,11 @@ function Flow({ split, rateKw }: { split: EnergySplit; rateKw: (id: string | nul
   const rows = [...split.roots.filter((r) => r.kwh > 0.005), ...(split.untracked > 0.005 ? [null] : [])];
   if (!rows.length) return <div className="muted body-text">Nothing recorded yet today.</div>;
   const scaleTo = Math.max(split.used, split.roots.reduce((a, r) => a + r.kwh, 0) + split.untracked, 1e-6);
-  const BAR = 300, SLOT = 44, GAP = 8;
+  // Half the height it was first drawn at (owner, 2026-09-26): one line of
+  // text a device, the bands scaled to match.
+  const BAR = 150, SLOT = 22, GAP = 4;
   const px = (kwh: number) => (kwh / scaleTo) * BAR;
-  const W = 716;
+  const W = 800; // room for a one-line label (name · kWh · now · inside)
   let srcY = 10, dstY = 4;
   const bands = rows.map((r, i) => {
     const kwh = r ? r.kwh : split.untracked;
@@ -271,7 +273,7 @@ function Flow({ split, rateKw }: { split: EnergySplit; rateKw: (id: string | nul
     dstY += Math.max(h, SLOT) + GAP;
     return band;
   });
-  const H = Math.max(dstY, BAR + 20);
+  const H = Math.max(dstY, BAR + 16);
   const gridH = px(split.used);
   const nowKw = split.roots.reduce<number | undefined>((a, r) => {
     const k = rateKw(r.node.rateId); return k === undefined ? a : (a ?? 0) + k;
@@ -302,9 +304,9 @@ function Flow({ split, rateKw }: { split: EnergySplit; rateKw: (id: string | nul
           d={`M${x0} ${sy0} C 250 ${sy0}, 250 ${dy0}, ${x1} ${dy0} L ${x1} ${dy1} C 250 ${dy1}, 250 ${sy1}, ${x0} ${sy1} Z`} />;
       })}
       <rect x="116" y="10" width="34" height={Math.max(3, gridH)} rx="6" className="energy-grid" />
-      <text x="102" y={10 + gridH / 2 - 10} textAnchor="end" className="energy-flow-name">Grid</text>
-      <text x="102" y={10 + gridH / 2 + 10} textAnchor="end" className="energy-flow-sub">{fmtKwh(split.used)} kWh</text>
-      {nowKw !== undefined && <text x="102" y={10 + gridH / 2 + 28} textAnchor="end" className="energy-flow-sub">{nowKw.toFixed(2)} kW now</text>}
+      <text x="102" y={10 + gridH / 2 - 12} textAnchor="end" className="energy-flow-name">Grid</text>
+      <text x="102" y={10 + gridH / 2 + 6} textAnchor="end" className="energy-flow-sub">{fmtKwh(split.used)} kWh</text>
+      {nowKw !== undefined && <text x="102" y={10 + gridH / 2 + 22} textAnchor="end" className="energy-flow-sub">{nowKw.toFixed(2)} kW now</text>}
       {bands.map((b) => {
         const kw = b.r ? rateKw(b.r.node.rateId) : undefined;
         const inside = b.r?.children.filter((c) => c.kwh > 0.005) ?? [];
@@ -315,8 +317,10 @@ function Flow({ split, rateKw }: { split: EnergySplit; rateKw: (id: string | nul
         return (
           <g key={`l${b.i}`}>
             <rect x="340" y={b.dy} width="14" height={b.h} rx="3" className={b.r ? `energy-node e-s${b.i % 6}` : "energy-node e-untracked"} />
-            <text x="366" y={b.dy + 15} className="energy-flow-name">{b.r ? b.r.node.name : "Untracked"} · {fmtKwh(b.kwh)} kWh</text>
-            {(sub || !b.r) && <text x="366" y={b.dy + 34} className="energy-flow-sub">{b.r ? sub : "no device meter in HA"}</text>}
+            <text x="366" y={b.dy + Math.min(b.h, SLOT) / 2 + 5}>
+              <tspan className="energy-flow-name">{b.r ? b.r.node.name : "Untracked"} · {fmtKwh(b.kwh)} kWh</tspan>
+              <tspan className="energy-flow-sub" dx="8">{b.r ? sub : "no device meter in HA"}</tspan>
+            </text>
           </g>
         );
       })}
