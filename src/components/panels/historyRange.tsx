@@ -51,29 +51,36 @@ export function historyRange(key: RangeKey): HistoryRange {
   return RANGES.find((r) => r.key === key)!;
 }
 
-/** Returns the active range plus a ready-rendered picker for it. */
-export function useHistoryRange(
-  offered: readonly RangeKey[] = DEVICE_RANGES, className = "timeline-ranges",
-): { range: HistoryRange; picker: ReactNode } {
-  const [key, setKey] = useState<RangeKey>(DEFAULT_KEY);
-  const range = historyRange(offered.includes(key) ? key : DEFAULT_KEY);
+/**
+ * A segmented choice — the pill row of the history pickers — and the choice
+ * it holds. ONE control for every "which period" in the app: the device
+ * panels' and the Weather window's rolling ranges (useHistoryRange) and the
+ * Energy window's calendar ones; both windows put it in their header.
+ */
+export function useSegmentedChoice<K extends string>(
+  options: readonly { key: K; label: ReactNode; title?: string }[], initial: K, ariaLabel: string, className: string,
+): { key: K; picker: ReactNode } {
+  const [picked, setPicked] = useState<K>(initial);
+  const key = options.some((o) => o.key === picked) ? picked : initial;
   const picker = (
-    <div className={`segmented ${className}`} role="group" aria-label="History range">
-      {RANGES.filter((r) => offered.includes(r.key)).map((r) => (
-        <button
-          key={r.key}
-          type="button"
-          className={r.key === key ? "active" : ""}
-          onClick={() => setKey(r.key)}
-          aria-pressed={r.key === key}
-          title={r.title}
-        >
-          {r.label}
+    <div className={`segmented ${className}`} role="group" aria-label={ariaLabel}>
+      {options.map((o) => (
+        <button key={o.key} type="button" className={o.key === key ? "active" : ""}
+          onClick={() => setPicked(o.key)} aria-pressed={o.key === key} title={o.title} aria-label={o.title}>
+          {o.label}
         </button>
       ))}
     </div>
   );
-  return { range, picker };
+  return { key, picker };
+}
+
+/** Returns the active range plus a ready-rendered picker for it. */
+export function useHistoryRange(
+  offered: readonly RangeKey[] = DEVICE_RANGES, className = "timeline-ranges",
+): { range: HistoryRange; picker: ReactNode } {
+  const { key, picker } = useSegmentedChoice(RANGES.filter((r) => offered.includes(r.key)), DEFAULT_KEY, "History range", className);
+  return { range: historyRange(key), picker };
 }
 
 /** The heading row every history section uses: its title on the left, the

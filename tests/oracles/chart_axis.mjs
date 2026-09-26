@@ -50,9 +50,9 @@ console.log("\n  the callers:");
 const read = (p) => readFileSync(new URL(p, import.meta.url), "utf8");
 const energy = read("../../src/components/panels/EnergyPanel.tsx");
 ck("the Energy bars are the app's BarChart, which draws the axis over the round top (bar_chart.mjs)",
-   !/function Bars\(/.test(energy) && (energy.match(/<BarChart /g) ?? []).length === 4);
+   !/function Bars\(/.test(energy) && (energy.match(/<BarChart /g) ?? []).length === 3);
 const bars = energy.match(/<BarChart\b[^]*?\/>/g) ?? [];
-ck("  ...every Energy bar chart names its unit", bars.length === 4 && bars.every((b) => /\bunit=/.test(b)), bars.filter((b) => !/\bunit=/.test(b)));
+ck("  ...every Energy bar chart names its unit (the energy-and-cost one both: kWh left, the currency right)", bars.length === 3 && bars.every((b) => /\bunit=/.test(b)), bars.filter((b) => !/\bunit=/.test(b)));
 const barComp = read("../../src/components/panels/BarChart.tsx");
 ck("  ...and BarChart draws the YAxis from its layout's ticks", /<YAxis unit=\{unit\} height=\{height\} frame=\{1\} ticks=\{L\.ticks\} \/>/.test(barComp));
 const weather = read("../../src/components/panels/WeatherPanel.tsx");

@@ -54,6 +54,33 @@ export function barLayout(buckets: readonly BarBucket[], typical?: number): BarL
   };
 }
 
+/**
+ * A second measure plotted OVER the bars on its own scale — the cost over
+ * the energy it paid for (owner, 2026-09-26: one chart, "the IDR Y axis on
+ * the right"). 0 to its own round top; a point per bucket at the bucket's
+ * centre (`y` down from the top, 0–1); none where the value is missing, so
+ * the line breaks there rather than dropping to 0.
+ */
+export interface LineLayout {
+  top: number;
+  ticks: { v: number; y: number }[];
+  /** Runs of consecutive points: a missing value breaks the line. */
+  runs: { i: number; y: number }[][];
+}
+export function lineLayout(values: readonly (number | undefined)[]): LineLayout {
+  const peak = Math.max(1e-6, ...values.map((v) => v ?? 0));
+  const axis = niceTicks(0, peak);
+  const top = axis.top;
+  const runs: { i: number; y: number }[][] = [];
+  let run: { i: number; y: number }[] = [];
+  values.forEach((v, i) => {
+    if (v === undefined) { if (run.length) runs.push(run); run = []; return; }
+    run.push({ i, y: 1 - Math.max(0, v) / top });
+  });
+  if (run.length) runs.push(run);
+  return { top, ticks: axis.ticks.map((v) => ({ v, y: 1 - v / top })), runs };
+}
+
 /** The bucket under a pointer `frac` of the way across the plot. */
 export function barAt(frac: number, n: number): number {
   return Math.min(n - 1, Math.max(0, Math.floor(frac * n)));
@@ -78,13 +105,19 @@ export interface BarTipRow { key: string; cls?: string; text: string }
  * that is not zero (all of them zero: the first, so "0 mm" is still said).
  * No reading says so; nothing yet says nothing.
  */
-export function barTipRows(b: BarBucket, fmt: (v: number) => string): BarTipRow[] {
-  if (b.segs === null) return [{ key: "_none", text: "No reading" }];
-  if (b.segs.length === 0) return [];
+export function barTipRows(
+  b: BarBucket, fmt: (v: number) => string,
+  /** The plotted line's value in this bucket, in ITS unit — one tooltip for both. */
+  line?: { label: string; cls: string; v: number | undefined; fmt: (v: number) => string },
+): BarTipRow[] {
+  const lineRow = line && line.v !== undefined ? [{ key: "_line", cls: line.cls, text: `${line.label} ${line.fmt(line.v)}` }] : [];
+  if (b.segs === null) return [{ key: "_none", text: "No reading" }, ...lineRow];
+  if (b.segs.length === 0) return lineRow;
   const nonZero = b.segs.filter((s) => Math.abs(s.v) > 1e-9);
   const shown = nonZero.length ? nonZero : b.segs.slice(0, 1);
   return [
     ...(b.segs.length > 1 ? [{ key: "_total", text: `Total ${fmt(bucketTotal(b))}` }] : []),
+    ...lineRow,
     ...shown.map((s) => ({ key: s.key, cls: s.cls, text: `${s.label} ${fmt(s.v)}` })),
   ];
 }

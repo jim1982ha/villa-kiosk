@@ -49,6 +49,17 @@ ck("a dry hour still says 0", B.barTipRows({ t: 0, segs: [seg(0)] }, (v) => `${v
 ck("no reading says so", B.barTipRows({ t: 0, segs: null }, kwh)[0].text === "No reading");
 ck("nothing yet says nothing", B.barTipRows({ t: 0, segs: [] }, kwh).length === 0);
 
+console.log("\n  a second measure over the bars (the cost over the energy):");
+{
+  const LL = B.lineLayout([1700, 2550, undefined, 3400, 12800]);
+  ck("its own round top: 12.8k scales to 15k", LL.top === 15000 && LL.ticks.map((t) => t.v).join() === "0,5000,10000,15000", LL);
+  ck("a missing value BREAKS the line — never a drop to 0", LL.runs.length === 2 && LL.runs[0].length === 2 && LL.runs[1][0].i === 3, LL.runs);
+  ck("  ...each point at its value (y down from the top)", Math.abs(LL.runs[1][1].y - (1 - 12800 / 15000)) < 1e-9);
+  const rows = B.barTipRows({ t: 0, segs: [seg(2, "a"), seg(1, "b")] }, (v) => `${v} kWh`, { label: "Cost", cls: "cost", v: 7500, fmt: (v) => `IDR ${v}` });
+  ck("ONE tooltip: the total, the cost, then each device", rows.map((r) => r.key).join() === "_total,_line,a,b" && rows[1].text === "Cost IDR 7500", rows);
+  ck("  ...no cost in the bucket: no cost row", B.barTipRows({ t: 0, segs: [seg(2)] }, (v) => `${v}`, { label: "Cost", cls: "cost", v: undefined, fmt: String }).every((r) => r.key !== "_line"));
+}
+
 console.log("\n  a totals series as buckets (the rain gauge):");
 {
   const H = 3_600_000, t0 = Date.UTC(2026, 8, 26, 0);
@@ -73,14 +84,18 @@ console.log("\n  a totals series as buckets (the rain gauge):");
 console.log("\n  the callers:");
 const read = (p) => readFileSync(new URL(p, import.meta.url), "utf8");
 const energy = read("../../src/components/panels/EnergyPanel.tsx");
-ck("the cost chart writes money with the cost statistic's currency", /<BarChart label=\{`Cost per \$\{unit\}`\} height=\{120\} fmt=\{\(v\) => fmtMoney\(v, costUnit\)\}/.test(energy));
+ck("the cost is plotted OVER the energy bars, in money, on its own right axis (owner, 2026-09-26: one chart)",
+   /line=\{hasCost \? \{ values: p\.buckets\.map\(\(b, i\) => \(b\.state === "pending" \? undefined : costs\[i\]\)\), label: "Cost", cls: "cost", unit: costUnit, fmt: \(v\) => fmtMoney\(v, costUnit\) \} : undefined\}/.test(energy)
+     && !/Cost per \{unit\}<\/div>/.test(energy));
 ck("an Energy bucket with no reading is a band (null), pending is a stub ([])",
    /return b\.state === "ready" \? ready\(\) : b\.state === "pending" \? \[\] : null;/.test(energy));
 const weather = read("../../src/components/panels/WeatherPanel.tsx");
 ck("the rain chart builds its buckets from the series", /seriesBuckets\(\{ points: s\.points, window: win \}, slot,/.test(weather));
 const comp = read("../../src/components/panels/BarChart.tsx");
 ck("BarChart draws what barLayout says, and its tooltip rows are barTipRows'",
-   /const L = barLayout\(buckets, typical\);/.test(comp) && /barTipRows\(hb, fmt\)/.test(comp) && /const hover = frac === null \? null : barAt\(frac, n\);/.test(comp));
+   /const L = barLayout\(buckets, typical\);/.test(comp) && /barTipRows\(hb, fmt, line && \{ label: line\.label, cls: line\.cls, v: line\.values\[hover!\], fmt: line\.fmt \}\)/.test(comp)
+     && /const hover = frac === null \? null : barAt\(frac, n\);/.test(comp)
+     && /\{LL && <YAxis side="right" unit=\{line!\.unit\} height=\{height\} frame=\{1\} ticks=\{LL\.ticks\} \/>\}/.test(comp));
 
 if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
 console.log("\n✅ one bar chart, every value in its own unit");

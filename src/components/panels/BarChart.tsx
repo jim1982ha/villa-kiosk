@@ -8,9 +8,19 @@ import ChartTip from "./ChartTip";
 import YAxis from "./ChartAxis";
 import { useChartPointer } from "./useChartPointer";
 import { STATUS_COLOR } from "@/utils/stateColors";
-import { barLayout, barAt, barCentre, barTick, barTipRows, type BarBucket } from "@/utils/barChart";
+import { barLayout, lineLayout, barAt, barCentre, barTick, barTipRows, type BarBucket } from "@/utils/barChart";
 
-export default function BarChart({ buckets, fmt, unit, stamp, ticks, typical, height = 150, note, label }: {
+/** A second measure plotted over the bars, on its own right-hand axis. */
+export interface BarChartLine {
+  values: (number | undefined)[];
+  label: string;
+  /** Its colour (a `.key` class), for the line, its dots and its tooltip row. */
+  cls: string;
+  unit?: string;
+  fmt: (v: number) => string;
+}
+
+export default function BarChart({ buckets, fmt, unit, stamp, ticks, typical, height = 150, note, label, line }: {
   buckets: BarBucket[];
   /** A value in the chart's unit, as the tooltip writes it ("1.20 kWh", "Rp 45.000"). */
   fmt: (v: number) => string;
@@ -26,15 +36,18 @@ export default function BarChart({ buckets, fmt, unit, stamp, ticks, typical, he
   /** A sentence over the plot ("No rain in the last 24 h"). */
   note?: string;
   label: string;
+  /** A second measure over the bars (the cost over the energy). */
+  line?: BarChartLine;
 }) {
   const n = buckets.length;
   const L = barLayout(buckets, typical);
+  const LL = line ? lineLayout(line.values) : null;
   const { frac, handlers } = useChartPointer<HTMLDivElement>();
   const hover = frac === null ? null : barAt(frac, n);
   const hb = hover === null ? null : buckets[hover];
-  const rows = hb ? barTipRows(hb, fmt) : [];
+  const rows = hb ? barTipRows(hb, fmt, line && { label: line.label, cls: line.cls, v: line.values[hover!], fmt: line.fmt }) : [];
   return (
-    <div className={`chart-with-axis${unit ? " has-unit" : ""}`}>
+    <div className={`chart-with-axis${unit || line?.unit ? " has-unit" : ""}`}>
       <YAxis unit={unit} height={height} frame={1} ticks={L.ticks} />
       <div className="spark-wrap bar-chart-wrap">
         <div className="bar-chart" style={{ height, touchAction: "none" }} role="img" aria-label={label}
@@ -58,6 +71,21 @@ export default function BarChart({ buckets, fmt, unit, stamp, ticks, typical, he
             </div>
           ))}
           {L.typicalAt !== undefined && <div className="bar-chart-typical" style={{ bottom: `${L.typicalAt * 100}%` }} />}
+          {LL && (
+            // The plotted measure: a line through each bucket's centre, broken
+            // where it has no value, and a dot on each point.
+            <>
+              <svg className={`bar-chart-line ${line!.cls}`} viewBox={`0 0 ${n} 1`} preserveAspectRatio="none" aria-hidden="true">
+                {LL.runs.map((r, k) => (
+                  <polyline key={k} points={r.map((p) => `${p.i + 0.5},${p.y}`).join(" ")} vectorEffect="non-scaling-stroke" />
+                ))}
+              </svg>
+              {LL.runs.flat().map((p) => (
+                <i key={`d${p.i}`} className={`bar-chart-dot ${line!.cls}${hover === p.i ? " hover" : ""}`}
+                  style={{ left: `${barCentre(p.i, n) * 100}%`, top: `${p.y * 100}%` }} />
+              ))}
+            </>
+          )}
           {note && <div className="bar-chart-note">{note}</div>}
         </div>
         {hb && rows.length > 0 && (
@@ -71,6 +99,7 @@ export default function BarChart({ buckets, fmt, unit, stamp, ticks, typical, he
           })}
         </div>
       </div>
+      {LL && <YAxis side="right" unit={line!.unit} height={height} frame={1} ticks={LL.ticks} />}
     </div>
   );
 }
