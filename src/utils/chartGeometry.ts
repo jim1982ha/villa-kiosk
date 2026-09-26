@@ -48,6 +48,10 @@ export interface SeriesGeometry {
   lo: number;
   hi: number;
   sy: (v: number) => number;
+  /** The y-axis: round values (niceTicks) inside [lo, hi], each at its pixel
+   *  y. ONE tick rule for every line chart (2.496.115) — the sparklines drew
+   *  hi/mid/lo, the dual one hi/lo, the Weather charts these. */
+  ticks: { v: number; y: number }[];
   /** The line in pixels: stepped, held, split at this series' outages. */
   runs: { x: number; y: number }[][];
   /** This series' outages, each in the series' own horizontal slice of the
@@ -110,7 +114,13 @@ export function chartGeometry(
       .map((r) => r.map((p) => ({ x: sx(p.t), y: sy(p.v) })));
     const bands = outageBands(s.gaps, sx, plot.left, plot.right)
       .map((b) => ({ ...b, y: plot.top + i * slice, h: Math.max(1, slice) }));
-    return { lo, hi, sy, runs, bands };
+    // About four steps: a line keeps its own range (a bar chart rounds its
+    // top up instead), so only the ticks INSIDE it are drawn — three steps
+    // left a 0–900 W/m² line with two labels.
+    const ticks = niceTicks(lo, hi, 4).ticks
+      .filter((v) => v >= lo - 1e-9 && v <= hi + 1e-9)
+      .map((v) => ({ v, y: sy(v) }));
+    return { lo, hi, sy, ticks, runs, bands };
   });
   const hover = (t: number): ChartHover | null => {
     const readings = input.map((s, i) => {

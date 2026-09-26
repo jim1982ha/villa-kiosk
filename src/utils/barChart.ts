@@ -26,9 +26,10 @@ export interface BarSeg { key: string; label: string; v: number; cls: string }
 export interface BarBucket { t: number; segs: BarSeg[] | null }
 
 export interface BarLayout {
-  /** The scale's round top, and the axis ticks (0 = bottom, 1 = top). */
+  /** The scale's round top, and the axis ticks: `y` down from the top of
+   *  the plot, as a fraction of its height (ChartAxis' frame of 1). */
   top: number;
-  ticks: { v: number; at: number }[];
+  ticks: { v: number; y: number }[];
   bars: { t: number; missing: boolean; segs: { key: string; cls: string; h: number }[] }[];
   /** Where the typical-value line sits (0–1), if one was given. */
   typicalAt?: number;
@@ -43,7 +44,7 @@ export function barLayout(buckets: readonly BarBucket[], typical?: number): BarL
   const top = axis.top;
   return {
     top,
-    ticks: axis.ticks.map((v) => ({ v, at: v / top })),
+    ticks: axis.ticks.map((v) => ({ v, y: 1 - v / top })),
     bars: buckets.map((b) => ({
       t: b.t,
       missing: b.segs === null,

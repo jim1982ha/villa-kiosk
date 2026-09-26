@@ -21,7 +21,7 @@ import { fmtChartValue, fmtChartTick, fmtChartTime, fmtChartStamp } from "./char
 import BarChart from "./BarChart";
 import { barNote, seriesBuckets } from "@/utils/barChart";
 import ChartTip from "./ChartTip";
-import { chartGeometry, niceTicks, type ChartGeometry, type SeriesGeometry } from "@/utils/chartGeometry";
+import { chartGeometry, type ChartGeometry } from "@/utils/chartGeometry";
 import YAxis, { type AxisTick } from "./ChartAxis";
 import BasePanel from "./BasePanel";
 import { useHA } from "@/ha/HAStateStore";
@@ -511,7 +511,8 @@ function Axis({ g, right }: { g: ChartGeometry | null; right?: boolean }) {
 
 interface Line { s: HistorySeries | undefined; cls: string; label: string; unit: string; area?: boolean; ownScale?: boolean }
 const W = 320, H = 150, TOP = 12, BOT = 138;
-/** The plot's drawn height (px) — .weather-chart's CSS height; the y-axis is sized to it. */
+/** The chart's height on screen (px): the SVG (whose viewBox is H tall) and
+ *  its y-axis are both set to it here, so they cannot disagree. */
 const CHART_PX = 150;
 const PLOT = { left: 0, right: W, top: TOP, bottom: BOT };
 
@@ -540,17 +541,9 @@ function Bands({ g }: { g: ChartGeometry }) {
   )))}</>;
 }
 
-/** The y-axis ticks of one series' scale that fall inside it, and where
- *  each sits (0 = the plot's bottom edge, 1 = its top) — ChartAxis. */
-function axisOf(sg: SeriesGeometry): AxisTick[] {
-  return niceTicks(sg.lo, sg.hi).ticks
-    .filter((v) => v >= sg.lo - 1e-9 && v <= sg.hi + 1e-9)
-    .map((v) => ({ v, at: 1 - sg.sy(v) / H }));
-}
-
 /** Gridlines at the left axis' ticks (the plot's own lines, in its units). */
-const Grid = ({ ticks }: { ticks: AxisTick[] }) => (
-  <g className="chart-grid">{ticks.map((t) => <line key={t.v} x1="0" y1={(1 - t.at) * H} x2={W} y2={(1 - t.at) * H} />)}</g>
+const Grid = ({ ticks }: { ticks: readonly AxisTick[] }) => (
+  <g className="chart-grid">{ticks.map((t) => <line key={t.v} x1="0" y1={t.y} x2={W} y2={t.y} />)}</g>
 );
 
 function ChartTile({ title, legend, note, lines, win, status }: {
@@ -563,9 +556,9 @@ function ChartTile({ title, legend, note, lines, win, status }: {
   const g = any ? chartGeometry(win, present.map((l) => ({ pts: l.s.points, gaps: l.s.gaps, scale: l.ownScale ? "fromZero" as const : "shared" as const })), PLOT, 0.08) : null;
   // The left axis is the first line's scale; a later line on its OWN scale
   // (sunlight in W/m², UV beside it) gets a right axis of its own.
-  const leftAxis = g ? axisOf(g.series[0]) : [];
+  const leftAxis = g ? g.series[0].ticks : [];
   const ownAt = present.findIndex((l, i) => i > 0 && l.ownScale);
-  const rightAxis = g && ownAt > 0 ? axisOf(g.series[ownAt]) : null;
+  const rightAxis = g && ownAt > 0 ? g.series[ownAt].ticks : null;
   const { t, handlers } = useHoverTime(g);
   const hover = g && t !== null ? g.hover(t) : null;
   return (
@@ -579,10 +572,10 @@ function ChartTile({ title, legend, note, lines, win, status }: {
         ? <ChartEmpty status={status} />
         : (
           <div className="chart-with-axis has-unit">
-          <YAxis height={CHART_PX} unit={present[0]?.unit.trim()} ticks={leftAxis} />
+          <YAxis height={CHART_PX} frame={H} unit={present[0]?.unit.trim()} ticks={leftAxis} />
           <div className="spark-wrap weather-chart-wrap">
           <svg className="weather-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={`${title} history`}
-            style={{ touchAction: "none" }} {...handlers}>
+            style={{ height: CHART_PX, touchAction: "none" }} {...handlers}>
             <Grid ticks={leftAxis} />
             <Bands g={g} />
             {g.series.map((sg, i) => (
@@ -608,7 +601,7 @@ function ChartTile({ title, legend, note, lines, win, status }: {
               })} />
           )}
           </div>
-          {rightAxis && <YAxis side="right" height={CHART_PX} unit={present[ownAt].unit.trim() || present[ownAt].label} ticks={rightAxis} />}
+          {rightAxis && <YAxis side="right" height={CHART_PX} frame={H} unit={present[ownAt].unit.trim() || present[ownAt].label} ticks={rightAxis} />}
           </div>
         )}
       <Axis g={g} right={!!rightAxis} />

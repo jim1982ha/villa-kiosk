@@ -38,11 +38,11 @@ export default function BarChart({ buckets, fmt, unit, stamp, ticks, typical, he
   const rows = hb ? barTipRows(hb, fmt) : [];
   return (
     <div className={`chart-with-axis${unit ? " has-unit" : ""}`}>
-      <YAxis unit={unit} height={height} ticks={L.ticks} />
+      <YAxis unit={unit} height={height} frame={1} ticks={L.ticks} />
       <div className="spark-wrap bar-chart-wrap">
         <div className="bar-chart" style={{ height, touchAction: "none" }} role="img" aria-label={label}
           onPointerMove={at} onPointerDown={at} onPointerLeave={() => setHover(null)}>
-          {L.ticks.map((t) => <div key={`g${t.v}`} className="chart-gridline" style={{ bottom: `${t.at * 100}%` }} />)}
+          {L.ticks.map((t) => <div key={`g${t.v}`} className="chart-gridline" style={{ bottom: `${(1 - t.y) * 100}%` }} />)}
           {L.bars.map((b, i) => (
             <div key={b.t} className={`bar-slot${hover === i ? " hover" : ""}`}>
               {b.missing

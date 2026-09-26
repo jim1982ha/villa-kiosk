@@ -9,7 +9,7 @@
 import { useCallback, useMemo, useState } from "react";
 import type { HistoryPoint, HistoryGap } from "@/types/ha.types";
 import { chartWindow, type TimeWindow } from "@/utils/lineChart";
-import { chartGeometry } from "@/utils/chartGeometry";
+import { chartGeometry, fmtAxis } from "@/utils/chartGeometry";
 import { STATUS_COLOR } from "@/utils/stateColors";
 import { useElementWidth } from "@/hooks/useElementWidth";
 import { fmtChartValue, fmtChartTick } from "./chartUtils";
@@ -77,14 +77,15 @@ export default function DualSparkline({ a, b, window, height = 120 }: Props) {
         onPointerMove={onMove} onPointerDown={onMove} onPointerLeave={() => setHoverT(null)}
       >
         {/* Left Y axis (series a) */}
-        {a.data.length >= 2 && [ga.hi, ga.lo].map((v, i) => (
-          <text key={`ya${i}`} x={M.left - 5} y={ga.sy(v)} textAnchor="end" dominantBaseline="middle"
-            className="spark-axis" style={{ fill: a.color }}>{fmtChartValue(v)}</text>
+        {/* Each axis: its series' round ticks (chartGeometry), the app's one label. */}
+        {a.data.length >= 2 && ga.ticks.map((tk) => (
+          <text key={`ya${tk.v}`} x={M.left - 5} y={tk.y} textAnchor="end" dominantBaseline="middle"
+            className="spark-axis" style={{ fill: a.color }}>{fmtAxis(tk.v)}</text>
         ))}
         {/* Right Y axis (series b) */}
-        {b.data.length >= 2 && [gb.hi, gb.lo].map((v, i) => (
-          <text key={`yb${i}`} x={W - M.right + 5} y={gb.sy(v)} textAnchor="start" dominantBaseline="middle"
-            className="spark-axis" style={{ fill: b.color }}>{fmtChartValue(v)}</text>
+        {b.data.length >= 2 && gb.ticks.map((tk) => (
+          <text key={`yb${tk.v}`} x={W - M.right + 5} y={tk.y} textAnchor="start" dominantBaseline="middle"
+            className="spark-axis" style={{ fill: b.color }}>{fmtAxis(tk.v)}</text>
         ))}
         {/* ⚠️ FIRST IN THE SVG so the shading sits BEHIND the grid and both
             lines — SVG paints in document order and has no z-index. */}

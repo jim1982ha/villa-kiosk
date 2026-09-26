@@ -3,20 +3,25 @@
 // (owner, 2026-09-26: "always show the Y-axis details, so the user knows the
 // value displayed"). Labels are placed by fraction of the plot's height, so
 // the same axis stands beside an SVG plot and a column of HTML bars; the
-// ticks themselves are chartGeometry.niceTicks'.
+// ticks themselves are chartGeometry's (a line chart's series.ticks) or
+// barChart's (barLayout.ticks) — one rule, niceTicks, and one label, fmtAxis.
 
 import { fmtAxis } from "@/utils/chartGeometry";
 
-export interface AxisTick { v: number; /** 0 = bottom of the plot, 1 = top. */ at: number }
+/** A tick in its drawing's own units: `y` down from the top, as SVG counts. */
+export interface AxisTick { v: number; y: number }
 
-/** `height` is the PLOT's height (px), so the ticks line up with it and not
- *  with the time labels under it. */
-export default function YAxis({ ticks, side = "left", unit, height }: { ticks: AxisTick[]; side?: "left" | "right"; unit?: string; height: number }) {
+/** `frame` is the drawing's height in the ticks' units (an SVG's viewBox
+ *  height; 1 for fractions); `height` is what that drawing measures on
+ *  screen (px) — the axis stands beside it at the same size. */
+export default function YAxis({ ticks, frame, side = "left", unit, height }: {
+  ticks: readonly AxisTick[]; frame: number; side?: "left" | "right"; unit?: string; height: number;
+}) {
   return (
     <div className={`chart-yaxis ${side}`} style={{ height }} aria-hidden="true">
       {unit && <span className="chart-yaxis-unit">{unit}</span>}
       {ticks.map((t) => (
-        <span key={t.v} className="chart-yaxis-tick" style={{ bottom: `${t.at * 100}%` }}>{fmtAxis(t.v)}</span>
+        <span key={t.v} className="chart-yaxis-tick" style={{ bottom: `${(1 - t.y / frame) * 100}%` }}>{fmtAxis(t.v)}</span>
       ))}
     </div>
   );
