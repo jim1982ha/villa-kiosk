@@ -130,5 +130,34 @@ console.log("\n  the callers:");
   ck("every chart's tooltip is ChartTip", tips.length === 0, tips);
 }
 
+console.log("\n  an outage you can SEE and POINT AT (2.496.149 — a pump's 3-min drop-outs were hairlines, its 2-s blips nothing):");
+{
+  const { MIN_BAND_OF_PLOT } = await import("@/utils/chartGeometry");
+  const { fmtOutage, fmtDuration } = await import("@/components/panels/chartUtils");
+  const H = 3_600_000, t0 = 1_800_000_000_000, win = { from: t0, to: t0 + 24 * H };
+  const blip = { from: t0 + 3 * H, to: t0 + 3 * H + 2_000 };            // 2 s
+  const drop = { from: t0 + 5 * H, to: t0 + 5 * H + 3 * 60_000 };        // 3 min
+  const pts = [0, 1, 2, 3, 4, 5, 6, 8, 12, 20].map((h) => ({ t: t0 + h * H + 60_000, v: h < 6 ? 0 : 750 }));
+  const plot = { left: 0, right: 320, top: 0, bottom: 100 };
+  const g = chartGeometry(win, [{ pts, gaps: [blip, drop] }], plot);
+  const b = g.series[0].bands;
+  ck("every outage is drawn at least MIN_BAND_OF_PLOT wide — the 2-second blip too (it was 1 unit: nothing on screen)",
+     b.length === 2 && b.every((x) => x.w >= 320 * MIN_BAND_OF_PLOT - 1e-9), b.map((x) => x.w));
+  ck("  ...centred on its outage", Math.abs((b[1].x + b[1].w / 2) - g.sx((drop.from + drop.to) / 2)) < 1e-6);
+  // The pointer where the owner's was: at the band's edge, a whole pointer step
+  // from the outage's own minutes — the tooltip read the reading after it.
+  const edge = g.tAt(b[1].x + b[1].w - 0.1);
+  const h1 = g.hover(edge);
+  ck("hovering anywhere on the drawn band reports the outage, and no reading for that line",
+     !!h1 && h1.outages[0] === drop && h1.readings[0] === null, h1 && { out: h1.outages[0], r: h1.readings[0] });
+  ck("  ...even where no line has a reading at all (it returned no tooltip)", !!g.hover(drop.from + 60_000));
+  ck("  ...and just clear of it, the reading again", g.hover(g.tAt(b[1].x + b[1].w + 2))?.outages[0] === null);
+  ck("the tooltip says what and how long: 'Unavailable · from–to (3 min)', a 2-s blip in seconds, a running one 'since'",
+     /^Unavailable · .+–.+ \(3 min\)$/.test(fmtOutage(drop, win.to)) && fmtDuration(2_000) === "2 s" && fmtDuration(80 * 60_000) === "1 h 20 min"
+     && /^Unavailable since .+ \(2 h\)$/.test(fmtOutage({ from: win.to - 2 * H, to: Infinity }, win.to)), fmtOutage(drop, win.to));
+  const lc = readFileSync(new URL("../../src/components/panels/LineChart.tsx", import.meta.url), "utf8");
+  ck("LineChart prints the outage row the geometry reports", /if \(out\) return \[\{ key: `\$\{i\}`, marker: keyOf\(l\), text: `\$\{who\}\$\{fmtOutage\(out, g\.window\.to\)\}` \}\];/.test(lc));
+}
+
 console.log(fail ? `\n❌ ${fail} failed` : "\n✅ one chart geometry; an outage is never a reading");
 process.exit(fail ? 1 : 0);

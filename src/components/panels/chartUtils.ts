@@ -14,6 +14,25 @@ export function fmtChartTime(t: number): string {
   return new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+/** A duration, as a person says it: "2 s", "3 min", "1 h 20 min", "2 d 3 h". */
+export function fmtDuration(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return `${Math.max(1, s)} s`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60), rm = m % 60;
+  if (h < 24) return rm ? `${h} h ${rm} min` : `${h} h`;
+  const d = Math.floor(h / 24), rh = h % 24;
+  return rh ? `${d} d ${rh} h` : `${d} d`;
+}
+
+/** An outage in a chart's tooltip: "Unavailable · 05:21–05:24 (3 min)", or
+ *  "Unavailable since 05:21" for one still running at `now` (the window's end). */
+export function fmtOutage(g: { from: number; to: number }, now: number): string {
+  if (!Number.isFinite(g.to) || g.to >= now) return `Unavailable since ${fmtChartTime(g.from)} (${fmtDuration(now - g.from)})`;
+  return `Unavailable · ${fmtChartTime(g.from)}–${fmtChartTime(g.to)} (${fmtDuration(g.to - g.from)})`;
+}
+
 /** An x-axis tick: the time of day while the window is two days or less,
  *  the date beyond — a "14:20" under a 7-day chart names no day at all. One
  *  labeller for every chart; the Weather charts had a second. */

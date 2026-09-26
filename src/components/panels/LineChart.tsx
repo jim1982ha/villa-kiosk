@@ -18,7 +18,7 @@ import { drawableWindow, type TimeWindow } from "@/utils/lineChart";
 import { chartGeometry, type ChartGeometry } from "@/utils/chartGeometry";
 import type { HistoryStatus } from "@/utils/statisticsSeries";
 import { STATUS_COLOR } from "@/utils/stateColors";
-import { fmtChartValue, fmtChartTick, fmtChartStamp } from "./chartUtils";
+import { fmtChartValue, fmtChartTick, fmtChartStamp, fmtOutage } from "./chartUtils";
 import { useChartPointer } from "./useChartPointer";
 import ChartTip from "./ChartTip";
 import YAxis, { type AxisTick } from "./ChartAxis";
@@ -128,8 +128,11 @@ export default function LineChart({ lines, window, height = 150, status = "ready
           {hover && (
             <ChartTip x={hover.x / W} y={TOP / H} stamp={fmtChartStamp(hover.t, g.spanHours)}
               rows={lines.flatMap((l, i) => {
-                const r = hover.readings[i];
-                return r ? [{ key: `${i}`, marker: keyOf(l), text: `${lines.length > 1 ? `${l.label} ` : ""}${fmtChartValue(r.v)}${l.unit ?? ""}` }] : [];
+                const r = hover.readings[i], out = hover.outages[i];
+                const who = lines.length > 1 ? `${l.label} ` : "";
+                // An outage under the pointer says so — its span and length.
+                if (out) return [{ key: `${i}`, marker: keyOf(l), text: `${who}${fmtOutage(out, g.window.to)}` }];
+                return r ? [{ key: `${i}`, marker: keyOf(l), text: `${who}${fmtChartValue(r.v)}${l.unit ?? ""}` }] : [];
               })} />
           )}
         </div>

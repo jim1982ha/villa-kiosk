@@ -1,3 +1,16 @@
+## 2.496.149
+
+### Fixed — history charts
+- **A chart's line no longer has gaps where nothing was unavailable.** A
+  reading that held steady right up to a moment the device was unavailable
+  was cut back to when it was last reported, so a steady hour could vanish
+  before a two-second drop-out. The line now runs right up to each outage.
+- **Every moment a device was unavailable is visible.** A short outage was
+  drawn as wide as it lasted — a hairline, or nothing at all for a few
+  seconds on a 24-hour chart. Each is now a visible band.
+- **Pointing at an outage says so.** The tooltip reads "Unavailable ·
+  05:21–05:24 (3 min)" over any outage band, instead of the reading beside it.
+
 ## 2.496.148
 
 ### Internal — badge checks

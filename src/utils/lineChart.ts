@@ -68,6 +68,25 @@ export function lineRuns(data: readonly Reading[], gaps: readonly HistoryGap[], 
   let holdUntil = w.to;
   for (const g of gaps) if (g.from >= last.t) holdUntil = Math.min(holdUntil, g.from);
   if (holdUntil > last.t) line.push({ t: holdUntil, v: last.v });
+  // ⚠️ THE SAME HOLD BEFORE EVERY OUTAGE, NOT ONLY AFTER THE LAST READING
+  // (2.496.149). splitAtGaps ends a run at the last POINT before an outage, so
+  // a value held steady up to it was cut back to its reading: the pool pump,
+  // at 0 W for an hour before a two-second blip, lost that whole hour — a gap
+  // in the line with no band anywhere near it ("line cuts" with nothing
+  // unavailable, owner, 2026-09-27). Each outage now gets a point at its start
+  // carrying the value in force.
+  const holds: Reading[] = [];
+  for (const g of gaps) {
+    if (g.from <= data[0].t || g.from >= last.t) continue;   // before the first reading, or handled above
+    let lo = 0, hi = data.length - 1, at = -1;
+    while (lo <= hi) { const mid = (lo + hi) >> 1; if (data[mid].t <= g.from) { at = mid; lo = mid + 1; } else hi = mid - 1; }
+    if (at >= 0 && data[at].t < g.from) holds.push({ t: g.from, v: data[at].v });
+  }
+  if (holds.length) {
+    line.push(...holds);
+    // Stable by time; a hold sorts BEFORE a point at the same instant.
+    line.sort((p, q) => p.t - q.t);
+  }
   return splitAtGaps(line, gaps);
 }
 

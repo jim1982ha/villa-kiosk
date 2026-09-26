@@ -16,7 +16,8 @@
 // series, the ticks and the hover answer. Pure; tests/oracles/chart_geometry.mjs
 // drives it.
 
-import { lineRuns, outageBands, timeScale, type TimeWindow } from "./lineChart";
+import { lineRuns, timeScale, type TimeWindow } from "./lineChart";
+import { gapBand } from "./historyGaps";
 import type { Reading } from "./stepSeries";
 import type { HistoryGap } from "@/types/ha.types";
 
@@ -42,7 +43,25 @@ export interface ChartHover {
   /** Per series, in input order: the reading in force, or null where that
    *  series has none — before its first reading, or inside its outage. */
   readings: (HoverReading | null)[];
+  /** Per series: the outage under the pointer — its DRAWN band, which is
+   *  never narrower than MIN_BAND_OF_PLOT — or null. Where one is, that
+   *  series has no reading: what is drawn as unavailable reads as it. */
+  outages: (HistoryGap | null)[];
 }
+
+/**
+ * The narrowest an outage band is drawn, as a fraction of the plot's width.
+ *
+ * ⚠️ AN OUTAGE WAS DRAWN AS WIDE AS IT LASTED (2.496.149). On a 24-hour chart
+ * 320 units wide a unit is 4.5 minutes, so the pool pump's three 3-minute
+ * drop-outs were hairlines and its 1–3 second blips nothing at all — while the
+ * line was still broken at each one (owner: "why do I see line cuts … I expect
+ * an unavailable background"). And a pointer step covers the same 4.5 minutes,
+ * so hovering the hairline landed beside it: the tooltip showed the reading
+ * after the outage, never the outage. Every band is now at least this wide,
+ * centred on its outage, and the hover reads the band as drawn.
+ */
+export const MIN_BAND_OF_PLOT = 1 / 120;
 
 export interface SeriesGeometry {
   lo: number;
@@ -55,8 +74,9 @@ export interface SeriesGeometry {
   /** The line in pixels: stepped, held, split at this series' outages. */
   runs: { x: number; y: number }[][];
   /** This series' outages, each in the series' own horizontal slice of the
-   *  plot (one series: the full height; two: a half each). */
-  bands: { x: number; w: number; y: number; h: number }[];
+   *  plot (one series: the full height; two: a half each), never narrower than
+   *  MIN_BAND_OF_PLOT, with the outage it draws. */
+  bands: { x: number; w: number; y: number; h: number; gap: HistoryGap }[];
 }
 
 export interface ChartGeometry {
@@ -112,8 +132,15 @@ export function chartGeometry(
     const runs = lineRuns(s.pts, s.gaps, window)
       .filter((r) => r.length >= 2)
       .map((r) => r.map((p) => ({ x: sx(p.t), y: sy(p.v) })));
-    const bands = outageBands(s.gaps, sx, plot.left, plot.right)
-      .map((b) => ({ ...b, y: plot.top + i * slice, h: Math.max(1, slice) }));
+    const minW = (plot.right - plot.left) * MIN_BAND_OF_PLOT;
+    const bands = s.gaps.flatMap((gap) => {
+      if (!gapBand(gap, sx, plot.left, plot.right)) return [];   // outside the plot
+      const clamp = (v: number) => Math.max(plot.left, Math.min(plot.right, v));
+      const x0 = clamp(sx(gap.from)), x1 = clamp(sx(gap.to));
+      const w = Math.max(x1 - x0, minW);
+      const x = Math.max(plot.left, Math.min(plot.right - w, (x0 + x1) / 2 - w / 2));
+      return [{ x, w, y: plot.top + i * slice, h: Math.max(1, slice), gap }];
+    });
     // About four steps: a line keeps its own range (a bar chart rounds its
     // top up instead), so only the ticks INSIDE it are drawn — three steps
     // left a 0–900 W/m² line with two labels.
@@ -123,14 +150,19 @@ export function chartGeometry(
     return { lo, hi, sy, ticks, runs, bands };
   });
   const hover = (t: number): ChartHover | null => {
+    const px = sx(t);
+    const outages = series.map((sg) => sg.bands.find((b) => px >= b.x && px <= b.x + b.w)?.gap ?? null);
     const readings = input.map((s, i) => {
+      if (outages[i]) return null;
       const r = readingAt(s.pts, s.gaps, t);
       return r ? { t: r.t, v: r.v, x: sx(r.t), y: series[i].sy(r.v) } : null;
     });
     const shown = readings.filter((r): r is HoverReading => r !== null);
-    if (shown.length === 0) return null;
+    // Over nothing but an outage: the crosshair stays at the pointer and the
+    // tooltip says so (it returned null here — no tooltip at all).
+    if (shown.length === 0) return outages.some(Boolean) ? { t, x: px, readings, outages } : null;
     const at = Math.max(...shown.map((r) => r.t));
-    return { t: at, x: sx(at), readings };
+    return { t: at, x: sx(at), readings, outages };
   };
   return {
     window, spanHours: span / 3_600_000, sx, tAt, series,
