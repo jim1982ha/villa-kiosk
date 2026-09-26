@@ -22,21 +22,10 @@ import { memo, type RefObject } from "react";
 import { Pencil, Trash2, Check, X, ChevronDown, ChevronRight } from "lucide-react";
 import EntityPicker from "./EntityPicker";
 import { useDraftCommit } from "@/hooks/useDraftCommit";
-import { CATEGORY_ORDER, CATEGORY_LABELS, effectiveCategory, subjectOf } from "@/config/EntityCategories";
-import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
+import type { EntityMapping } from "@/types/scene.types";
 import type { HassEntity } from "@/types/ha.types";
-import { CONFIRM_GATE_TYPES } from "@/utils/quickAction";
+import MappingFields from "./MappingFields";
 
-const TYPES: EntityType[] = [
-  "light", "climate", "lock", "camera", "cover", "fan",
-  "binary_sensor", "sensor", "media_player", "switch", "input_boolean",
-  "assist_satellite",
-];
-
-// Types whose panel actually uses PowerToggle (see EntityMapping.
-// requireConfirm) — a type: "lock" doesn't need this option at all, it
-// already never quick-toggles and already has its own two-step Unlock
-// confirm, so the checkbox isn't shown there rather than offering a no-op.
 
 interface Props {
   entryKey: string;
@@ -78,8 +67,8 @@ function EntityMapRow({
   // instance per mounted row, keyed internally by a constant since there's
   // only ever one "self" to draft for) — see useDraftCommit's docstring for
   // the general instant-echo/debounced-commit pattern this follows.
-  const label = useDraftCommit<string>((_k, value) => onPatch(entryKey, { label: value }), 500);
-  const intensity = useDraftCommit<number>((_k, ratio) => onPatch(entryKey, { lightIntensityRatio: ratio }), 500);
+  // The show-in-3D toggle is this row's own field; every other field is
+  // MappingFields', shared with the bound-objects table.
   const field = useDraftCommit<Partial<EntityMapping>>((_k, change) => onPatch(entryKey, change));
   const draftField = (change: Partial<EntityMapping>) =>
     field.draft("v", { ...field.drafts.v, ...change });
@@ -176,101 +165,12 @@ function EntityMapRow({
       )}
 
       {expanded && !editing && (
-        <>
-          <td data-label="Type">
-            <select
-              value={m.type}
-              onChange={(e) => draftField({ type: e.target.value as EntityType })}
-            >
-              {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </td>
-          <td data-label="Category">
-            <select
-              value={effectiveCategory(subjectOf(m.entityId, m, entity))}
-              // `categoryPicked` records that this was CHOSEN. Without it the pick
-              // round-trips through the legacy-default discard and the dropdown
-              // snaps straight back — six of the options were unselectable.
-              onChange={(e) => draftField({ category: e.target.value as Category, categoryPicked: true })}
-              title="Which map filter group this device belongs to"
-            >
-              {CATEGORY_ORDER.map((c) => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
-            </select>
-          </td>
-          <td data-label="Label">
-            <input
-              value={label.drafts.v ?? m.label}
-              onChange={(e) => label.draft("v", e.target.value)}
-              onBlur={() => label.flush("v")}
-            />
-          </td>
-          {CONFIRM_GATE_TYPES.has(m.type) && (
-            <td data-label="Confirm before toggling">
-              <label className="row" style={{ gap: 6, fontSize: "var(--text-xs)", cursor: "pointer" }}>
-                <input
-                  type="checkbox"
-                  checked={!!m.requireConfirm}
-                  onChange={(e) => draftField({ requireConfirm: e.target.checked })}
-                  title="Ask before toggling — a tap on this device's map badge opens its panel instead of acting instantly, and its panel's own on/off button asks 'Turn on/off?' first. For a device where an accidental toggle has a real physical consequence, e.g. a door release or gate motor modelled as a plain switch."
-                />
-                Confirm before toggling
-              </label>
-            </td>
-          )}
-          {m.type === "light" && (() => {
-            const ratio = intensity.drafts.v ?? m.lightIntensityRatio ?? 0;
-            const pct = Math.round(ratio * 100);
-            return (
-              <td data-label="Intensity">
-                <div className="row" style={{ gap: 8, width: "100%" }}>
-                  <input
-                    type="range" min={-100} max={100} step={5}
-                    value={pct}
-                    onChange={(e) => intensity.draft("v", Number(e.target.value) / 100)}
-                    onMouseUp={() => intensity.flush("v")}
-                    onTouchEnd={() => intensity.flush("v")}
-                    style={{ flex: 1 }}
-                    title="Per-light brightness override on top of this light's live Home Assistant brightness and the global Light effect strength setting. 0% = no change."
-                    aria-label={`Intensity override for ${m.entityId}`}
-                  />
-                  <span className="muted" style={{ fontSize: "var(--text-xs)", minWidth: 40, textAlign: "right" }}>
-                    {pct > 0 ? "+" : ""}{pct}%
-                  </span>
-                </div>
-              </td>
-            );
-          })()}
-          {/* Two DISTINCT links — see EntityMapping. Linked entity = what the
-              user toggles (drives the red badge ring, and gets an on/off
-              switch in this device's panel); Motion sensor = what HA reports
-              (drives the map's detection beam / room glow) and is meaningful
-              ONLY for a camera — nothing else has a beam — so it isn't
-              rendered at all for other types rather than showing a dead "—".
-              config-cell-pair puts the two side by side on tablet/desktop. */}
-          <td data-label="Linked entity" className="config-cell-pair" style={{ minWidth: 180 }}>
-            <EntityPicker
-              value={m.linkedEntityId}
-              onChange={(id) => draftField({ linkedEntityId: id })}
-              onClear={() => draftField({ linkedEntityId: undefined })}
-              allowCustom
-              hideCurrentLabel
-              placeholder="Adds an on/off switch…"
-            />
-          </td>
-          {m.type === "camera" && (
-            <td data-label="Motion sensor" className="config-cell-pair" style={{ minWidth: 180 }}>
-              <EntityPicker
-                value={m.motionEntityId}
-                onChange={(id) => draftField({ motionEntityId: id })}
-                onClear={() => draftField({ motionEntityId: undefined })}
-                domains={["binary_sensor"]}
-                allowCustom
-                hideCurrentLabel
-                placeholder="Detection beam on the map…"
-              />
-            </td>
-          )}
-        </>
+        <MappingFields entityId={m.entityId} mapping={m} entity={entity}
+          onPatch={(change) => onPatch(entryKey, change)}
+          cell={(key, label, field, opts) => (
+            <td key={key} data-label={label} className={opts?.pair ? "config-cell-pair" : undefined}
+              style={opts?.pair ? { minWidth: 180 } : undefined}>{field}</td>
+          )} />
       )}
     </tr>
   );

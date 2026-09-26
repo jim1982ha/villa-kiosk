@@ -15,6 +15,7 @@
 // to one villa belongs in shipped code; see the tables' own comments.
 
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
+import { ENTITY_DOMAINS } from "@/types/ha.types";
 
 export type { EntityMapping, EntityType };
 
@@ -53,12 +54,7 @@ const MESH_ALIASES: Record<string, string> = {};
 /** Infer a panel/entity type from an entity_id domain prefix. */
 export function inferTypeFromEntityId(entityId: string): EntityType | null {
   const domain = entityId.split(".")[0];
-  const known: EntityType[] = [
-    "light", "climate", "lock", "camera", "cover", "fan",
-    "binary_sensor", "sensor", "media_player", "switch", "input_boolean",
-    "assist_satellite",
-  ];
-  return (known as string[]).includes(domain) ? (domain as EntityType) : null;
+  return (ENTITY_DOMAINS as readonly string[]).includes(domain) ? (domain as EntityType) : null;
 }
 
 /** Collapse an immediately-repeated leading word-group — "master bedroom

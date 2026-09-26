@@ -177,19 +177,21 @@ export interface StatisticPeriod {
   max?: number | null;
 }
 
-export type EntityDomain =
-  | "light"
-  | "climate"
-  | "lock"
-  | "camera"
-  | "cover"
-  | "fan"
-  | "binary_sensor"
-  | "sensor"
-  | "media_player"
-  | "switch"
-  | "input_boolean"
-  | "assist_satellite";
+/**
+ * Every device type the kiosk knows, in the order Advanced Settings lists
+ * them — the ONE list (round 10, 2.496.156). It was written out three more
+ * times (both Advanced Settings row editors and inferTypeFromEntityId), each
+ * checked against nothing; the type is now derived from this array, so a new
+ * type is added here and every picker, the inference and badgePriority's
+ * exhaustive Record follow (or fail to compile).
+ */
+export const ENTITY_DOMAINS = [
+  "light", "climate", "lock", "camera", "cover", "fan",
+  "binary_sensor", "sensor", "media_player", "switch", "input_boolean",
+  "assist_satellite",
+] as const;
+
+export type EntityDomain = (typeof ENTITY_DOMAINS)[number];
 
 /** A single point of a sensor history series (for sparklines). */
 export interface HistoryPoint {
