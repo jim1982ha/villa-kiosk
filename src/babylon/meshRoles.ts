@@ -255,6 +255,59 @@ export function isCeilingMesh(mesh: AbstractMesh): boolean {
   return CEILING_NAME_RE.test(normaliseMeshName(mesh.name));
 }
 
+/**
+ * THE ceiling rule, from facts about one mesh — pure, value-tested
+ * (tests/oracles/mesh_roles_rules.mjs).
+ *
+ * ⚠️ IT WAS HALF IN meshRoles AND HALF INLINE IN structureSet (round 11,
+ * 2.496.170): the stamp and the name here (`isCeilingMesh`), the height
+ * heuristic and the degenerate-carrier exclusion inside StructureSet.apply's
+ * loop, where no test could reach them without building a scene.
+ *
+ * `named` is isCeilingMesh (the pipeline stamp or the legacy name). The
+ * height guess applies only to a mesh that is NOT pipeline structure (a
+ * pipeline slab is thin and high by design — the 2F floor hole). A mesh
+ * with no area, or the pipeline's own BAKED_ carrier, is never a ceiling.
+ * Heights are METRES — the scene after normalizeScale.
+ *
+ * ModelLoader asks only `named`, on purpose: it runs BEFORE normalizeScale,
+ * in the GLB's own units, so the height guess cannot be asked there — and
+ * the two ceiling branches it has (the lightmap exemption, CEILING_TONE) act
+ * on pipeline-stamped ceilings, which a height-guessed mesh never is.
+ */
+export function ceilingVerdict(f: {
+  named: boolean;
+  pipelineStructure: boolean;
+  name: string;
+  /** Larger horizontal side of the world bounding box, metres. */
+  footMax: number;
+  minY: number;
+  height: number;
+}): boolean {
+  if (f.footMax < 0.01 || f.name.startsWith("BAKED_")) return false;
+  return f.named || (!f.pipelineStructure && f.minY > 2.5 && f.height < 0.35);
+}
+
+/**
+ * Whether a mesh the glass rules did not take LOOKS like a window pane — two
+ * large sides and one thin — for the load record's "pane candidates" list.
+ * `size` is the mesh's bounding box in the GLB's OWN units and `modelHeight`
+ * the whole model's, since this runs before normalizeScale.
+ *
+ * ⚠️ IT SAID `> 40` (round 11, 2.496.170): forty CENTIMETRES on a SweetHome
+ * export, forty METRES on a GLB authored in metres — where the list could
+ * then never name anything. The unit is inferred from the model's height as
+ * a power of ten (a building is under 60 m tall): a pane is at least 40 cm
+ * on both large sides.
+ */
+export function looksLikePane(size: readonly [number, number, number], modelHeight: number): boolean {
+  let unitsPerMetre = 1;
+  while (modelHeight / unitsPerMetre > 60) unitsPerMetre *= 10;
+  const [thin, mid, big] = [...size].sort((a, b) => a - b);
+  const min = 0.4 * unitsPerMetre;
+  return big > min && mid > min && thin < mid * 0.2;
+}
+
 /** Convenience: is this mesh part of the villa's structure at all? */
 export function isStructureMesh(mesh: AbstractMesh): boolean {
   return structureRole(mesh).isStructure;

@@ -33,7 +33,7 @@ import mscTranscoderWasmUrl from "@/assets/ktx2/msc_basis_transcoder.wasm?url";
 import { saveModelToIndexedDB } from "@/utils/localModel";
 import { devLog } from "@/utils/devLog";
 import { tapDebug } from "@/utils/tapDebug";
-import { isCeilingMesh, isStructureMesh, structureRole } from "./meshRoles";
+import { isCeilingMesh, isStructureMesh, looksLikePane, structureRole } from "./meshRoles";
 // Babylon prototype patches this module depends on — see babylonSideEffects.
 import { attachLampGlow } from "./lampGlow";
 import { flavourOf, lightingModeFor, type LightingMode } from "./lightingMode";
@@ -1026,17 +1026,26 @@ export async function loadModelInto(
     // entry off this list and we add that material to GLASS_NAME_HINTS for good.
     const NON_GLASS_RE = /wall|floor|ceiling|roof|ground|room|stair|door/i;
     const panes: { mesh: string; material: string; size: string }[] = [];
+    // The model's height in its own units — looksLikePane infers the unit
+    // from it (this runs before normalizeScale).
+    let yLo = Infinity, yHi = -Infinity;
+    for (const m of result.meshes) {
+      if (m.getTotalVertices() === 0) continue;
+      const bb = m.getBoundingInfo().boundingBox;
+      yLo = Math.min(yLo, bb.minimumWorld.y); yHi = Math.max(yHi, bb.maximumWorld.y);
+    }
     for (const m of result.meshes) {
       if (m.getTotalVertices() === 0) continue;
       const mat = m.material as { name?: string } | null;
       const matName = mat?.name ?? "(none)";
-      if (looksLikeGlass([matName, m.name], glassHints)) continue; // already see-through
+      // Already see-through — by name, OR by alpha (2.496.170: a pane taken
+      // on alpha alone was listed here as "NOT treated as glass").
+      if (looksLikeGlass([matName, m.name], glassHints) || alphaGlass.has(m.material)) continue;
       if (NON_GLASS_RE.test(matName) || NON_GLASS_RE.test(m.name)) continue;
       const ext = m.getBoundingInfo().boundingBox.extendSizeWorld; // half-extents
       const dims = [ext.x * 2, ext.y * 2, ext.z * 2].sort((a, b) => a - b);
       const [thin, mid, big] = dims;
-      // Pane = two large dimensions, one much smaller (flat), and not tiny overall.
-      if (big > 40 && mid > 40 && thin < mid * 0.2) {
+      if (looksLikePane([thin, mid, big], yHi - yLo)) {
         panes.push({
           mesh: m.name,
           material: matName,
