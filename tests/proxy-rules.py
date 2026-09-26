@@ -426,6 +426,70 @@ if cam_mismatch:
 ck("an unknown role holds nothing",
    not any(proxy._may("intruder", c) for caps in proxy.ROLE_CAPABILITIES.values() for c in caps))
 
+# ── A chunked upload survives a re-sent piece (round 11, 2.496.166) ──────────
+# Driven through the real handler with a fake request: the client re-sends a
+# piece whose reply it never got, so the server must accept the same offset
+# twice — after the piece landed in full, and after the connection dropped
+# half-way through it — and assemble exactly the file.
+import asyncio  # noqa: E402
+import os  # noqa: E402
+import tempfile  # noqa: E402
+
+
+class _Body:
+    def __init__(self, data: bytes, drop_after: int | None = None):
+        self.data, self.drop_after = data, drop_after
+
+    async def iter_chunked(self, _n):
+        if self.drop_after is None:
+            yield self.data
+            return
+        yield self.data[: self.drop_after]
+        raise ConnectionResetError("client went away")
+
+
+class _Req:
+    def __init__(self, query: dict, body: _Body):
+        self.query, self.content = query, body
+
+
+def _piece(dest, uid, offset, data, last=False, drop_after=None):
+    q = {"offset": str(offset)}
+    if last:
+        q["last"] = "1"
+    try:
+        r = asyncio.run(proxy._chunked_upload(_Req(q, _Body(data, drop_after)), "glb", dest, uid))
+        return r.status
+    except ConnectionResetError:
+        return "dropped"
+
+
+with tempfile.TemporaryDirectory() as d:
+    dest = os.path.join(d, "villa.glb")
+    uid = "retrytest01"
+    a, b, c = proxy.UPLOAD_MAGIC["glb"][0] + b"A" * 60, b"B" * 64, b"C" * 64
+    st = [_piece(dest, uid, 0, a),
+          _piece(dest, uid, 64, b),
+          _piece(dest, uid, 64, b),                     # its reply was lost: sent again
+          _piece(dest, uid, 128, c, drop_after=20),     # dropped half-way…
+          _piece(dest, uid, 128, c, last=True)]         # …and re-sent
+    got = open(dest, "rb").read() if os.path.exists(dest) else b""
+    ck("a re-sent piece is accepted — landed in full, or dropped half-way",
+       st == [200, 200, 200, "dropped", 200])
+    if st != [200, 200, 200, "dropped", 200]:
+        print(f"          statuses: {st}")
+    ck("  ...and the file is exactly the three pieces, once each", got == a + b + c)
+    ck("  ...a MISSING piece is still refused (409)",
+       _piece(dest, "retrytest02", 0, a) == 200 and _piece(dest, "retrytest02", 128, c) == 409)
+    try:
+        _piece(dest, "retrytest03", 0, a)
+        _piece(dest, "retrytest03", 64, b"")            # refused: an empty piece
+        refused = False
+    except proxy.web.HTTPException:
+        refused = True
+    ck("  ...a REFUSED piece ends the upload — its pieces go with it",
+       refused and _piece(dest, "retrytest03", 64, b) == 409)
+
 print()
 print("✅ the proxy's pure rules hold" if FAIL == 0
       else "❌ A PROXY RULE IS BROKEN")

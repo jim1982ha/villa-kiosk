@@ -1643,15 +1643,23 @@ async def _chunked_upload(request: web.Request, kind: str, dest: str,
     if offset == 0:
         _sweep_stale_parts(os.path.dirname(dest))
     else:
-        # The offset doubles as a sequence check: a dropped or duplicated
-        # piece shows up as a size mismatch and the client restarts cleanly
+        # The offset doubles as a sequence check: a MISSING piece (the server
+        # holds less than the offset) is refused and the client restarts
         # instead of assembling a corrupt file.
+        #
+        # ⚠️ HOLDING MORE IS A RETRY, NOT AN ERROR (round 11, 2.496.166). The
+        # client re-sends a piece whose reply it never got (postUploadRequest)
+        # — the piece may have landed in full, or in part before the
+        # connection dropped. This required `have == offset` and appended, so
+        # every such retry was a 409 and the upload failed on the very case
+        # the retry exists for. The piece is written AT its offset instead:
+        # the file is cut back to it first, so re-sending is idempotent.
         try:
             have = os.path.getsize(part)
         except OSError:
             return web.json_response(
                 {"error": "unknown upload_id — restart the upload"}, status=409)
-        if have != offset:
+        if have < offset:
             return web.json_response(
                 {"error": f"offset mismatch (server has {have}, client sent "
                           f"{offset}) — restart the upload"}, status=409)
@@ -1663,15 +1671,18 @@ async def _chunked_upload(request: web.Request, kind: str, dest: str,
     # it cannot express a file whose content arrives over minutes. The atomicity
     # guarantee is kept by hand and is the same one: all chunks land in `.part`,
     # never at `dest`, and only the final chunk chmods and os.replace()s it into
-    # place, with `os.unlink(part)` on any exception. A reader therefore sees the
-    # old file or the new one, never a half-assembled GLB.
+    # place. A reader therefore sees the old file or the new one, never a
+    # half-assembled GLB.
     #
     # Recorded here because a bare `open(..., "ab")` in this file reads exactly
     # like a missed atomic_write, and an audit that re-flags it every time
     # eventually gets someone to "fix" it into something that cannot work.
     # (/dry-audit: adjudicated — this token is what keeps the sweep quiet here.)
     try:
-        with open(part, "wb" if offset == 0 else "ab") as out:
+        with open(part, "wb" if offset == 0 else "r+b") as out:
+            if offset:
+                out.seek(offset)
+                out.truncate()
             n = await _stream_upload_body(
                 request, out, kind, check_magic=(offset == 0), base=offset)
         if n == 0:
@@ -1681,12 +1692,18 @@ async def _chunked_upload(request: web.Request, kind: str, dest: str,
         # See the single-shot handler for why 0644 before the atomic replace.
         os.chmod(part, 0o644)
         os.replace(part, dest)
-    except BaseException:
+    except web.HTTPException:
+        # REFUSED (not a GLB, over the size cap, an empty piece): the upload
+        # is over, and its pieces go with it.
         try:
             os.unlink(part)
         except OSError:
             pass
         raise
+    # Anything else — the connection dropped mid-piece — keeps the pieces
+    # already received: the client's retry re-writes this one at its offset.
+    # (Deleting them here turned that retry into "unknown upload_id".) A
+    # .part nobody finishes is swept after a day (_sweep_stale_parts).
 
     _write_upload_sidecar(request, dest)
     rel = os.path.relpath(dest, os.path.realpath(DATA_ROOT))

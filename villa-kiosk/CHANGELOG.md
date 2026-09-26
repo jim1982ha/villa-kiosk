@@ -1,3 +1,12 @@
+## 2.496.166
+
+### Fixed — uploading a large 3D model
+- **A big model upload no longer fails when the connection hiccups.** A large
+  file goes up in pieces, and a piece that stalled was re-sent — but the
+  add-on then refused it ("offset mismatch" or "unknown upload"), so the whole
+  upload failed on exactly the blip the retry was there for. A re-sent piece
+  is now accepted and the file is assembled correctly.
+
 ## 2.496.165
 
 ### Fixed — device panels

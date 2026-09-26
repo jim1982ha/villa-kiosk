@@ -203,11 +203,17 @@ async function postUploadOnce(
  * One chunk, retried through a stalled connection.
  *
  * Retrying is SAFE because the chunk protocol is idempotent: the server keys a
- * partial upload by `upload_id` and writes each piece at its own `offset`, so
- * re-sending the same piece overwrites the same bytes. That is what makes this
- * a retry rather than a corruption risk, and it is why the wrapper lives here —
- * around the request that carries those two parameters — rather than around the
- * whole file.
+ * partial upload by `upload_id` and writes each piece at its own `offset`
+ * (cutting the file back to it first), so re-sending the same piece — whether
+ * it had landed in full or the connection dropped half-way — overwrites the
+ * same bytes. That is what makes this a retry rather than a corruption risk,
+ * and it is why the wrapper lives here — around the request that carries those
+ * two parameters — rather than around the whole file.
+ *
+ * ⚠️ UNTIL 2.496.166 THIS PARAGRAPH WAS NOT TRUE. The server APPENDED and
+ * required its size to equal the offset exactly, and deleted the pieces on a
+ * dropped connection — so a retry of any piece after the first was a 409.
+ * tests/proxy-rules.py now drives the handler through both retries.
  */
 async function postUploadRequest(
   query: string,
