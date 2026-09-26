@@ -14,6 +14,12 @@
 //   * albedo-baked — only what is not structure (the structure is unlit);
 //   * lightmapped  — only what the furniture light leaves out: glass, the
 //                    fixtures themselves, non-PBR materials (bulbSet.ts).
+//
+// ⚠️ TWO MORE COLUMNS (round 11, 2.496.171). `baked` was still fanned out
+// beside this table as two flags — RenderEnhancements' (SSAO off, re-asked
+// by the load and frames records and Settings) and SunController's (the
+// night atlas, the exposure drop) — each a copy of "not unbaked". They are
+// the `ssao` and `structureUnlit` columns now, read from here.
 // Pure: tests/oracles/lighting_mode.mjs.
 
 export type ModelFlavour = "unbaked" | "albedo-baked" | "lightmapped";
@@ -29,21 +35,29 @@ export interface LightingMode {
   /** One cube shadow map per lit entity, so a lamp does not light the next
    *  room: only where the walls' shadows are not already in a bake. */
   lightShadows: boolean;
+  /** The structure carries its own baked light and renders UNLIT: the sun
+   *  and fill do not reach it, so night is its night atlas or an exposure
+   *  drop (sceneLook), and Settings offers the day/night look control. */
+  structureUnlit: boolean;
+  /** Screen-space ambient occlusion may run: a bake already darkened every
+   *  corner, and SSAO on top darkens them twice — whatever the quality
+   *  preset says. */
+  ssao: boolean;
   /** One line for the load capture: why the villa is lit the way it is. */
   describe: string;
 }
 
 const MODES: Record<ModelFlavour, Omit<LightingMode, "flavour">> = {
   unbaked: {
-    pools: false, furnitureLight: false, lightShadows: true,
+    pools: false, furnitureLight: false, lightShadows: true, structureUnlit: false, ssao: true,
     describe: "UNBAKED — every bulb's PointLight lights its room, with wall shadows",
   },
   "albedo-baked": {
-    pools: true, furnitureLight: false, lightShadows: false,
+    pools: true, furnitureLight: false, lightShadows: false, structureUnlit: true, ssao: false,
     describe: "BAKED (albedo) — structure unlit; floor pools; PointLights light free furniture only",
   },
   lightmapped: {
-    pools: true, furnitureLight: true, lightShadows: false,
+    pools: true, furnitureLight: true, lightShadows: false, structureUnlit: true, ssao: false,
     describe: "BAKED (lightmap) — floor pools + the furniture light on every lit surface; "
       + "PointLights light glass and the fixtures only",
   },

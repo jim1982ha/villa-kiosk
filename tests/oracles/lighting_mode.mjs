@@ -24,6 +24,8 @@ ck("albedo-baked: pools, no furniture light, no shadow maps (the bake has them)"
 ck("lightmapped: pools AND the furniture light, no shadow maps",
    l.pools && l.furnitureLight && !l.lightShadows, l);
 ck("every mode says why, for the load capture", [u, a, l].every((m) => m.describe.length > 20));
+ck("SSAO runs only unbaked (a bake already darkened the corners) — 2.496.171", u.ssao && !a.ssao && !l.ssao);
+ck("the structure is unlit exactly when the model is baked", !u.structureUnlit && a.structureUnlit && l.structureUnlit);
 
 console.log("\n  the callers read the table, and nothing else decides");
 {
@@ -36,6 +38,17 @@ console.log("\n  the callers read the table, and nothing else decides");
   ck("the visuals read pools, the furniture light and shadows from it — no bakedMode left",
      /this\.lighting\.pools/.test(ev) && /this\.lighting\.furnitureLight/.test(ev) && /this\.bulbs\.setCastShadows\(mode\.lightShadows\)/.test(ev) && !/bakedMode/.test(ev));
   ck("BulbSet no longer infers lightmapping from a material", !/some\(\(m\) => hasLampGlow/.test(bs));
+  const rf = src("RenderEnhancements.ts"), sun = src("SunController.ts");
+  const settings = readFileSync(new URL("../../src/components/settings/SettingsModal.tsx", import.meta.url), "utf8");
+  ck("renderFx and the sun take the MODE — no `baked` flag of their own",
+     /this\.renderFx\.setLightingMode\(result\.lighting\)/.test(sm) && /this\.sun\.setLightingMode\(result\.lighting,/.test(sm)
+     && !/private baked\b/.test(rf) && !/private baked\b/.test(sun) && !/setBakedMode|isBaked\(/.test(sm + rf + sun + settings));
+  ck("SSAO is decided once (ssaoOn: the preset AND the mode), and both records report that",
+     /return cfg\.ssao && this\.mode\.ssao;/.test(rf) && /if \(this\.ssaoOn\(cfg\)\)/.test(rf)
+     && (sm.match(/ssao: this\.renderFx\.ssaoOn\(render\)/g) ?? []).length === 2);
+  ck("the sun's night branch and Settings' day/night control read structureUnlit",
+     /this\.structureUnlit = mode\.structureUnlit/.test(sun) && /if \(this\.structureUnlit\)/.test(sun)
+     && (settings.match(/lightingMode\(\)\.structureUnlit/g) ?? []).length === 2);
 }
 
 if (fail) { console.log(`  ${fail} FAILED`); process.exit(1); }

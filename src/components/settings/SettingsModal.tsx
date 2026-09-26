@@ -321,7 +321,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
               onChange={(e) => applyRender({ nightDimming: Number(e.target.value) })}
             />
           </div>
-          {(manager?.renderFx.isBaked() ?? false) && (
+          {(manager?.lightingMode().structureUnlit ?? false) && (
             // Sizing lives entirely in .daynight-segmented (styles.css), not
             // an inline style — a narrow-screen media query needs to override
             // it (full-width once it wraps onto its own line below the
@@ -365,7 +365,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
         </div>
         <p className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-2xs)" }}>
           Overall scene exposure, and how much extra dimming applies at night — both update live.
-          {(manager?.renderFx.isBaked() ?? false) && " Villa lighting forces this villa's baked day or night look, or follows the real cycle on Auto — it relights the 3D model, unlike the Interface theme in the header, which only recolours the panels."}
+          {(manager?.lightingMode().structureUnlit ?? false) && " Villa lighting forces this villa's baked day or night look, or follows the real cycle on Auto — it relights the 3D model, unlike the Interface theme in the header, which only recolours the panels."}
         </p>
 
         {/* Light effect strength scales a lit fixture's room illumination in

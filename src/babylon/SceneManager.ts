@@ -36,6 +36,8 @@ import { Storeys, isStairwell } from "./storeys";
 import { eyeHeightOf, pickSpawn, roomSpawn, stairFoot, flightBottom, type SpawnWorld } from "./walkerSpawn";
 import { ScenePhases, type ScenePhase } from "./scenePhases";
 import { RenderEnhancements } from "./RenderEnhancements";
+import { lightingModeFor, type LightingMode } from "./lightingMode";
+import { BETA_MIN } from "./overviewPose";
 import { loadModelInto } from "./ModelLoader";
 import { resetLightPoolTextureCache } from "./LightPools";
 import { resolveMeshToMapping } from "@/config/EntityMap";
@@ -201,6 +203,10 @@ export class SceneManager {
   readonly pick: PickHandler;
   readonly visuals: EntityVisuals;
   readonly renderFx: RenderEnhancements;
+  /** The loaded model's lighting mode (lightingMode.ts) — unbaked until one
+   *  loads. Settings reads its `structureUnlit` for the day/night control. */
+  private lightingModeNow: LightingMode = lightingModeFor("unbaked");
+  lightingMode(): LightingMode { return this.lightingModeNow; }
   /** Exposure, IBL strength and background — see sceneLook.ts. */
   private readonly look: SceneLook;
   private nightSky: NightSky;
@@ -850,7 +856,7 @@ export class SceneManager {
       // comparing Safari's "Apple GPU" against Chrome's ANGLE/Metal path.
       gpu: String(this.engine.getGlInfo()?.renderer ?? "").slice(0, 96),
       ibl: render.ibl,
-      ssao: render.ssao && !this.renderFx.isBaked(),
+      ssao: this.renderFx.ssaoOn(render),
     });
   }
 
@@ -1455,7 +1461,7 @@ export class SceneManager {
         + ` solved=${framed.solved} declutters=${framed.declutters}`
         + ` real=${framed.real} halfW=${framed.halfW.toFixed(2)}`
         + ` halfH=${framed.halfH.toFixed(2)}`
-        + ` minRadius=${(this.overview.camera.lowerRadiusLimit ?? 0).toFixed(2)}`,
+        + ` minRadius=${this.overview.getRadiusLimits().lo.toFixed(2)}`,
         "seat",
       );
     }
@@ -1533,13 +1539,13 @@ export class SceneManager {
     // room does not also spin under the user, and the villa keeps the
     // orientation they built their sense of it from.
     //
-    // The camera's OWN limit rather than a constant of ours (`lowerBetaLimit`
-    // is written from OverviewController.BETA_MIN), so "as far over as this
-    // camera goes" cannot drift from what the camera actually allows.
+    // The camera's own tilt limit (overviewPose.BETA_MIN, which is what it is
+    // set to), so "as far over as this camera goes" cannot drift from what
+    // the camera actually allows.
     //
     // It is computed HERE, above the fit, because the fit is measured through
     // it — see the anisotropy note below.
-    const destBeta = this.overview.camera.lowerBetaLimit ?? 0.05;
+    const destBeta = BETA_MIN;
     // The footprint fitted per screen axis, through the destination's own
     // view — roomZoomSolver.roomWallFit, beside the rung ladder it bounds.
     const fit = roomWallFit(bounds, allReal, { alpha: cam.alpha, beta: destBeta, vFov, hFov });
@@ -1580,11 +1586,11 @@ export class SceneManager {
       frame,
       cx, cy: bounds.floorY, cz,
       dir: destDir,
-      minRadius: this.overview.camera.lowerRadiusLimit ?? 2,
+      minRadius: this.overview.getRadiusLimits().lo,
       // The wall fit is the widest shot worth considering: past it the room no
       // longer fills the frame, and nothing about badges improves by backing
       // further away.
-      maxRadius: Math.max(radius, this.overview.camera.lowerRadiusLimit ?? 2),
+      maxRadius: Math.max(radius, this.overview.getRadiusLimits().lo),
     }) : null;
     const wallFit = radius;
     let declutters = true;
@@ -1967,8 +1973,9 @@ export class SceneManager {
         (result.nightBlend ? "; night atlas present (day/night crossfade)" : ""));
     }
     this.visuals.setLightingMode(result.lighting);
-    this.renderFx.setBakedMode(result.baked);
-    this.sun.setBakedMode(result.baked, result.nightBlend, result.glassDim);
+    this.lightingModeNow = result.lighting;
+    this.renderFx.setLightingMode(result.lighting);
+    this.sun.setLightingMode(result.lighting, result.nightBlend, result.glassDim);
     // How many materials an environment change can actually reach on this
     // model. 2.496.47 built sky reflections, released and reverted them because
     // the answer was "nearly none" — a question this line now asks every load.
@@ -2465,7 +2472,7 @@ export class SceneManager {
       // Render tier — an iPhone runs with IBL off, which is exactly the kind
       // of difference that turns a comparison into a wrong conclusion.
       ibl: render.ibl,
-      ssao: render.ssao && !this.renderFx.isBaked(),
+      ssao: this.renderFx.ssaoOn(render),
       ...this.msaaState(),
     };
   }
