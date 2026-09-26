@@ -1,3 +1,39 @@
+## 2.496.112
+
+### Fixed — every chart's tooltip
+- **Tooltips float above the window instead of pushing it.** A tall tooltip,
+  like the one on "Where today's energy went" listing the devices inside a
+  meter, used to stretch the window's scroll area, so the window shifted and
+  the tip was cut off at the footer. The tooltip shared by every chart now
+  floats above everything, stays on screen, and opens upward when there is no
+  room below. This replaces the one-off fix in 2.496.111.
+## 2.496.111
+
+### Fixed — the Energy window
+- **The "Where today's energy went" tooltip is no longer cut off.** For a row
+  in the lower half of the chart, the tooltip now opens upward from the row,
+  inside the tile. It used to hang below the row, run past the tile and be
+  clipped at the bottom of the window, hiding the rows beneath it.
+## 2.496.110
+
+### Improved — the Energy and Weather windows
+- **Every chart has a y-axis.** Round steps (0 / 50 / 100 kWh; 0 / 50k /
+  100k / 150k IDR) with their unit above, and faint gridlines at each step.
+  The bar charts now scale to the axis' round top. In Weather, a line on its
+  own scale (UV beside sunshine) gets a second axis on the right. The axis
+  keeps its narrow column on a phone, too.
+## 2.496.109
+
+### Improved — the Energy window
+- **"Where today's energy went" has tooltips.** Hover or tap a band to see
+  the device's kWh and share of the day, its live power, and every device
+  inside it with its kWh, plus what none of them accounts for.
+## 2.496.108
+
+### Improved
+- **The observation cards fill their row.** When the Energy window (or the
+  Weather window) has two cards to show, they now share the full width
+  instead of leaving an empty third column. On a phone they still stack.
 ## 2.496.107
 
 ### Improved — the Energy window

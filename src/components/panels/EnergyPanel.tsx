@@ -16,6 +16,8 @@ import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "
 import { ChevronLeft, LineChart, Zap } from "lucide-react";
 import BasePanel from "./BasePanel";
 import ChartTip from "./ChartTip";
+import YAxis from "./ChartAxis";
+import { niceTicks } from "@/utils/chartGeometry";
 import { fmtChartTime } from "./chartUtils";
 import { useHA } from "@/ha/HAStateStore";
 import { useHistory } from "@/hooks/useHistory";
@@ -221,7 +223,7 @@ function NowView({ setup, costUnit }: { setup: EnergyWindowSetup; costUnit: stri
         <div className="weather-chart-head"><div className="weather-eyebrow">Today, hour by hour</div><div className="weather-legend">kWh per hour</div></div>
         <Bars
           buckets={hours.map((t, i) => ({ t, segs: hourly[i] === undefined ? [] : [{ key: "used", label: "Used", v: hourly[i]!, cls: "e-used" }] }))}
-          stamp={(t) => `${fmtChartTime(t)}–${fmtChartTime(t + 3_600_000)}`}
+          stamp={(t) => `${fmtChartTime(t)}–${fmtChartTime(t + 3_600_000)}`} unit="kWh"
           ticks={["00:00", "06:00", "12:00", "18:00", "24:00"]}
         />
       </div>
@@ -234,7 +236,7 @@ function NowView({ setup, costUnit }: { setup: EnergyWindowSetup; costUnit: stri
         <Bars
           buckets={days.map((t, i) => ({ t, segs: [{ key: "used", label: "Used", v: daily[i], cls: standout?.index === i ? "e-standout" : "e-used" }] }))}
           stamp={(t) => new Date(t).toLocaleDateString([], { weekday: "long", day: "numeric", month: "short" })}
-          ticks={days.map(weekday)} typical={typical}
+          ticks={days.map(weekday)} typical={typical} unit="kWh"
         />
       </div>
 
@@ -256,6 +258,9 @@ function NowView({ setup, costUnit }: { setup: EnergyWindowSetup; costUnit: stri
  *  solar) on the left, each top-level device a band sized by its kWh, what it
  *  contains named beside it, and what no device accounts for. */
 function Flow({ split, rateKw }: { split: EnergySplit; rateKw: (id: string | null) => number | undefined }) {
+  // The band under the pointer (or the finger) — its tooltip says what the
+  // one line of text beside it cannot: its share, and what is inside it.
+  const [hover, setHover] = useState<number | null>(null);
   const rows = [...split.roots.filter((r) => r.kwh > 0.005), ...(split.untracked > 0.005 ? [null] : [])];
   if (!rows.length) return <div className="muted body-text">Nothing recorded yet today.</div>;
   const scaleTo = Math.max(split.used, split.roots.reduce((a, r) => a + r.kwh, 0) + split.untracked, 1e-6);
@@ -297,10 +302,12 @@ function Flow({ split, rateKw }: { split: EnergySplit; rateKw: (id: string | nul
   return (
     <>
     {list}
+    <div className="spark-wrap energy-flow-wrap" onPointerLeave={() => setHover(null)}>
     <svg className="energy-flow" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Where the energy went: the grid, then each device">
       {bands.map((b) => {
         const x0 = 150, x1 = 340, sy0 = b.sy, sy1 = b.sy + b.h, dy0 = b.dy, dy1 = b.dy + b.h;
-        return <path key={`b${b.i}`} className={`energy-band ${b.r ? `e-s${b.i % 6}` : "e-untracked"}`}
+        return <path key={`b${b.i}`} className={`energy-band ${b.r ? `e-s${b.i % 6}` : "e-untracked"}${hover === b.i ? " hover" : ""}`}
+          onPointerEnter={() => setHover(b.i)} onPointerDown={() => setHover(b.i)}
           d={`M${x0} ${sy0} C 250 ${sy0}, 250 ${dy0}, ${x1} ${dy0} L ${x1} ${dy1} C 250 ${dy1}, 250 ${sy1}, ${x0} ${sy1} Z`} />;
       })}
       <rect x="116" y="10" width="34" height={Math.max(3, gridH)} rx="6" className="energy-grid" />
@@ -315,7 +322,9 @@ function Flow({ split, rateKw }: { split: EnergySplit; rateKw: (id: string | nul
           inside.length ? `${inside.length === 1 ? inside[0].node.name : `${inside.length} devices`} ${fmtKwh(inside.reduce((a, c) => a + c.kwh, 0))}` : "",
         ].filter(Boolean).join(" · ");
         return (
-          <g key={`l${b.i}`}>
+          <g key={`l${b.i}`} onPointerEnter={() => setHover(b.i)} onPointerDown={() => setHover(b.i)}>
+            {/* The whole row answers the pointer, not only the thin band. */}
+            <rect x="340" y={b.dy} width={W - 340} height={Math.max(b.h, SLOT)} className="energy-hit" />
             <rect x="340" y={b.dy} width="14" height={b.h} rx="3" className={b.r ? `energy-node e-s${b.i % 6}` : "energy-node e-untracked"} />
             <text x="366" y={b.dy + Math.min(b.h, SLOT) / 2 + 5}>
               <tspan className="energy-flow-name">{b.r ? b.r.node.name : "Untracked"} · {fmtKwh(b.kwh)} kWh</tspan>
@@ -325,26 +334,55 @@ function Flow({ split, rateKw }: { split: EnergySplit; rateKw: (id: string | nul
         );
       })}
     </svg>
+    {hover !== null && bands[hover] && (() => {
+      const b = bands[hover];
+      const u = b.r;
+      const kw = u ? rateKw(u.node.rateId) : undefined;
+      const inside = u?.children.filter((c) => c.kwh > 0.005) ?? [];
+      const pct = split.used > 0 ? Math.round((b.kwh / split.used) * 100) : 0;
+      const rows = [
+        { key: "t", text: `${u ? u.node.name : "Untracked"} · ${fmtKwh(b.kwh)} kWh` },
+        { key: "p", text: `${pct}% of the ${fmtKwh(split.used)} kWh used` },
+        ...(kw !== undefined ? [{ key: "n", text: `${kw < 1 ? `${Math.round(kw * 1000)} W` : `${kw.toFixed(2)} kW`} now` }] : []),
+        ...inside.slice(0, 6).map((c) => ({ key: c.node.id, text: `↳ ${c.node.name} ${fmtKwh(c.kwh)} kWh` })),
+        ...(inside.length > 6 ? [{ key: "more", text: `↳ ${inside.length - 6} more ${fmtKwh(inside.slice(6).reduce((a, c) => a + c.kwh, 0))} kWh` }] : []),
+        ...(u && inside.length && u.untracked > 0.005 ? [{ key: "u", text: `↳ not metered ${fmtKwh(u.untracked)} kWh` }] : []),
+        ...(!u ? [{ key: "x", text: "no device meter in Home Assistant accounts for it" }] : []),
+      ];
+      return (
+        <ChartTip left={`${(366 / W) * 100}%`} top={`${((b.dy + Math.max(b.h, SLOT)) / H) * 100}%`} flip={false}
+          t={0} spanHours={0} stamp="today so far" rows={rows} />
+      );
+    })()}
+    </div>
     </>
   );
 }
 
 /** Stacked bars over buckets, with the app's tooltip. `typical` draws a line. */
-function Bars({ buckets, stamp, ticks, typical, height = 150 }: {
+function Bars({ buckets, stamp, ticks, typical, height = 150, unit }: {
   buckets: { t: number; segs: { key: string; label: string; v: number; cls: string }[] }[];
   stamp: (t: number) => string; ticks: string[]; typical?: number; height?: number;
+  /** The y-axis unit, printed over it (kWh, IDR). */
+  unit?: string;
 }) {
   const [hover, setHover] = useState<number | null>(null);
-  const max = Math.max(1e-6, typical ?? 0, ...buckets.map((b) => b.segs.reduce((a, s) => a + s.v, 0)));
+  // Scaled to a ROUND top, so the axis reads in whole steps (niceTicks).
+  const peak = Math.max(1e-6, typical ?? 0, ...buckets.map((b) => b.segs.reduce((a, s) => a + s.v, 0)));
+  const axis = niceTicks(0, peak);
+  const max = axis.top;
   const at = (e: PointerEvent<HTMLDivElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
     setHover(Math.min(buckets.length - 1, Math.max(0, Math.floor(((e.clientX - r.left) / Math.max(1, r.width)) * buckets.length))));
   };
   const hb = hover === null ? null : buckets[hover];
   return (
+    <div className={`chart-with-axis${unit ? " has-unit" : ""}`}>
+    <YAxis unit={unit} height={height} ticks={axis.ticks.map((v) => ({ v, at: v / max }))} />
     <div className="spark-wrap energy-bars-wrap">
       <div className="energy-bars" style={{ height, touchAction: "none" }}
         onPointerMove={at} onPointerDown={at} onPointerLeave={() => setHover(null)}>
+        {axis.ticks.map((v) => <div key={`g${v}`} className="chart-gridline" style={{ bottom: `${(v / max) * 100}%` }} />)}
         {typical !== undefined && <div className="energy-typical" style={{ bottom: `${(typical / max) * 100}%` }} />}
         {buckets.map((b, i) => (
           <div key={b.t} className={`energy-bar${hover === i ? " hover" : ""}`}>
@@ -364,6 +402,7 @@ function Bars({ buckets, stamp, ticks, typical, height = 150 }: {
           stamp={stamp(hb.t)} />
       )}
       <div className="weather-axis">{ticks.map((t, i) => <span key={`${t}${i}`}>{t}</span>)}</div>
+    </div>
     </div>
   );
 }
@@ -457,7 +496,7 @@ function HistoryView({ setup, costUnit }: { setup: EnergyWindowSetup; costUnit: 
               { key: "_u", label: "Untracked", v: perBucket[i].untracked, cls: "e-untracked" },
             ],
           }))}
-          stamp={(t) => label(t)} ticks={tickIdx.map((i) => label(starts[i]))} />
+          stamp={(t) => label(t)} ticks={tickIdx.map((i) => label(starts[i]))} unit="kWh" />
       </div>
 
       {hasCost && (
@@ -465,7 +504,7 @@ function HistoryView({ setup, costUnit }: { setup: EnergyWindowSetup; costUnit: 
           <div className="weather-chart-head"><div className="weather-eyebrow">Cost per {unit}</div><div className="weather-legend">{fmtMoney(costTotal, costUnit)}</div></div>
           <Bars height={120}
             buckets={starts.map((t, i) => ({ t, segs: [{ key: "cost", label: "Cost", v: costs[i], cls: "e-used" }] }))}
-            stamp={(t) => `${label(t)} · ${fmtMoney(costs[starts.indexOf(t)] ?? 0, costUnit)}`} ticks={tickIdx.map((i) => label(starts[i]))} />
+            stamp={(t) => `${label(t)} · ${fmtMoney(costs[starts.indexOf(t)] ?? 0, costUnit)}`} ticks={tickIdx.map((i) => label(starts[i]))} unit={costUnit} />
         </div>
       )}
 

@@ -77,7 +77,17 @@ const panel = readFileSync(new URL("../../src/components/panels/EnergyPanel.tsx"
 ck("the window reads that setup, and falls back to the device list when HA has none",
    /fetchEnergySetup\(ws, nameOf\)/.test(panel) && /if \(status === "ready" && setup === null\) return <>\{fallback\(\)\}<\/>;/.test(panel));
 ck("the flow sits BELOW the last-7-days trend (owner, 2026-09-26)", panel.indexOf("Last 7 days") < panel.indexOf("Where today&apos;s"));
+ck("the flow has the app's tooltip: each band's row answers the pointer and the finger",
+   /onPointerEnter=\{\(\) => setHover\(b\.i\)\} onPointerDown=\{\(\) => setHover\(b\.i\)\}/.test(panel) && /<ChartTip left=\{`\$\{\(366 \/ W\) \* 100\}%`\}/.test(panel));
+const tipSrc = readFileSync(new URL("../../src/components/panels/ChartTip.tsx", import.meta.url), "utf8");
+ck("  ...and every chart's tip floats ABOVE the window, never inside its layout — inside, a tall one shifted the window and was cut off (owner, 2026-09-26)",
+   /createPortal\(\s*<div ref=\{tip\} className="spark-tip chart-tip"\s*style=\{\{ position: "fixed"/.test(tipSrc) && /document\.body,/.test(tipSrc)
+     && /r\.top \+ h > vh - EDGE \? r\.top - h : r\.top/.test(tipSrc)
+     && /\.chart-tip \{ z-index: 300; \}/.test(readFileSync(new URL("../../src/styles/03-panels.css", import.meta.url), "utf8")));
 ck("  ...at half its first height: a 150-unit bar, one line a device", /const BAR = 150, SLOT = 22, GAP = 4;/.test(panel));
+const css = readFileSync(new URL("../../src/styles/03-panels.css", import.meta.url), "utf8");
+ck("the observation cards share the row however many there are (two cards, no empty third column)",
+   /\.weather-advice \{ display: grid; grid-auto-flow: column; grid-auto-columns: minmax\(0, 1fr\);/.test(css) && !/\.weather-advice \{[^}]*repeat\(3/.test(css));
 const cfg = readFileSync(new URL("../../src/config/AppConfig.ts", import.meta.url), "utf8");
 ck("nothing about energy is stored in VESTA's config", !/energy(Sources|Devices|Tariff)/i.test(cfg));
 const bar = readFileSync(new URL("../../src/components/hud/SummaryBar.tsx", import.meta.url), "utf8");

@@ -537,7 +537,10 @@ input[type="range"]::-moz-range-thumb {
 .weather-comfort-legend { display: flex; gap: 22px; flex-wrap: wrap; font-size: var(--text-sm); color: var(--text-primary); }
 .weather-comfort-legend .dot { display: inline-block; width: 10px; height: 10px; border-radius: 5px; margin-right: 6px; }
 
-.weather-advice { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+/* As many equal columns as there are cards (owner, 2026-09-26: the Energy
+   window's two cards sat in a row of three, the third column empty). The
+   Weather window filters its advice the same way, so both share the rule. */
+.weather-advice { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 12px; }
 .weather-advice-card { background: var(--bg-input); border-radius: 18px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
 .weather-advice-title { display: flex; align-items: center; gap: 8px; font-size: var(--text-base); font-weight: 600; }
 .weather-advice-mark { width: 26px; height: 26px; flex: 0 0 auto; border-radius: 13px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: var(--text-sm); }
@@ -666,6 +669,11 @@ input[type="range"]::-moz-range-thumb {
 .weather-chart { width: 100%; height: 150px; flex: 1 1 auto; }
 .weather-chart-wrap { flex: 1 1 auto; display: flex; }
 /* The shared chart tip (spark-tip), one row a line, each with its colour. */
+/* ChartTip floats above every layer (portalled to <body>, fixed): above the
+   modals (z-index 200), and never part of the chart's layout. The anchor is
+   the zero-size point the chart positions, which ChartTip measures. */
+.chart-tip { z-index: 300; }
+.chart-tip-anchor { position: absolute; width: 0; height: 0; pointer-events: none; }
 .chart-tip strong { display: flex; align-items: center; gap: 6px; font-weight: 600; }
 .chart-tip .key { display: inline-block; width: 8px; height: 8px; border-radius: 4px; flex: 0 0 auto; }
 .weather-chart-empty { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; }
@@ -684,6 +692,19 @@ input[type="range"]::-moz-range-thumb {
 .chart-bar { fill: var(--cat-energy); }
 .chart-empty-note { font: 14px var(--font-ui); fill: var(--text-secondary); text-anchor: middle; }
 .weather-axis { display: flex; justify-content: space-between; font-size: var(--text-xs); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+
+/* The y-axis every Weather and Energy history chart draws (ChartAxis). */
+.chart-with-axis { display: flex; align-items: flex-start; gap: 6px; min-width: 0; }
+.chart-with-axis > .spark-wrap { flex: 1 1 auto; min-width: 0; }
+.chart-yaxis { position: relative; flex: 0 0 2.6em; font-size: var(--text-2xs, 11px); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.chart-yaxis.left { text-align: right; }
+.chart-yaxis.right { text-align: left; }
+.chart-yaxis-tick { position: absolute; left: 0; right: 0; transform: translateY(50%); line-height: 1; white-space: nowrap; }
+.chart-yaxis-unit { position: absolute; left: 0; right: 0; top: -2em; line-height: 1; opacity: 0.8; white-space: nowrap; }
+.weather-axis.under-yaxis { margin-left: calc(2.6em + 6px); }
+.weather-axis.under-yaxis.right { margin-right: calc(2.6em + 6px); }
+.chart-with-axis.has-unit { margin-top: 1.6em; }
+.chart-gridline { position: absolute; left: 0; right: 0; border-top: 1px solid var(--hairline); pointer-events: none; }
 
 /* ── Energy (EnergyPanel): the Weather window's layout, Home Assistant
    Energy's numbers. Series colours are the Weather palette, in rotation for
@@ -709,7 +730,10 @@ input[type="range"]::-moz-range-thumb {
 .e-s5 { background: color-mix(in srgb, var(--cat-energy) 28%, transparent); fill: color-mix(in srgb, var(--cat-energy) 28%, transparent); }
 .weather-legend .key.e-used, .weather-legend .key[class*="e-s"], .weather-legend .key.e-untracked { height: 8px; }
 .energy-flow { width: 100%; height: auto; }
-.energy-band { opacity: 0.55; }
+.energy-band { opacity: 0.55; transition: opacity 120ms; }
+.energy-band.hover { opacity: 0.85; }
+.energy-hit { fill: transparent; }
+.energy-flow-wrap { position: relative; }
 .energy-grid { fill: var(--accent); }
 .energy-flow-name { font: 600 15px var(--font-ui); fill: var(--text-primary); }
 .energy-flow-sub { font: 13px var(--font-ui); fill: var(--text-secondary); }
@@ -725,7 +749,7 @@ input[type="range"]::-moz-range-thumb {
 
 /* A phone: one column of advice, two of instruments, one of charts. */
 @media (max-width: 720px) {
-  .weather-advice { grid-template-columns: 1fr; }
+  .weather-advice { grid-auto-flow: row; grid-template-columns: 1fr; }
   .weather-instruments { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .weather-figures { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .weather-charts { grid-template-columns: 1fr; }
@@ -757,7 +781,7 @@ input[type="range"]::-moz-range-thumb {
   .weather-advice-card { padding: 12px 14px; }
   .weather-big { font-size: var(--text-display-sm); }
   .weather-headline { font-size: var(--text-xl); }
-  .energy-flow { display: none; }
+  .energy-flow-wrap { display: none; }
   .energy-flow-list { display: flex; flex-direction: column; gap: 10px; }
   .energy-rank { grid-template-columns: minmax(0, 1fr) auto 2.8em; }
   .energy-rank-bar { display: none; }

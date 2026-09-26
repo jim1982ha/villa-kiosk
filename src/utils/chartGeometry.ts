@@ -128,3 +128,33 @@ export function chartGeometry(
     hover,
   };
 }
+
+/**
+ * Round y-axis ticks over [lo, hi]: a 1-2-2.5-5 step ×10ⁿ giving about `n`
+ * intervals, ticks on its multiples. `top`/`bottom` are the rounded ends a
+ * bar chart scales to; a line chart keeps its own range and shows only the
+ * ticks inside it (owner, 2026-09-26: "always show the Y-axis, so the value
+ * the chart shows can be read").
+ */
+export function niceTicks(lo: number, hi: number, n = 3): { ticks: number[]; bottom: number; top: number; step: number } {
+  if (!(hi > lo)) hi = lo + 1;
+  const raw = (hi - lo) / Math.max(1, n);
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw * 0.999) ?? 10 * mag;
+  const bottom = Math.floor(lo / step + 1e-9) * step;
+  const top = Math.ceil(hi / step - 1e-9) * step;
+  const ticks: number[] = [];
+  for (let v = bottom; v <= top + step * 1e-6; v += step) ticks.push(Math.round(v / step) * step);
+  return { ticks, bottom, top, step };
+}
+
+/** An axis label: no trailing zeros, thousands as k and millions as M. */
+export function fmtAxis(v: number): string {
+  const a = Math.abs(v);
+  const trim = (x: number, d: number) => String(Number(x.toFixed(d)));
+  if (a >= 1e6) return `${trim(v / 1e6, 1)}M`;
+  if (a >= 1e4) return `${trim(v / 1e3, 0)}k`;
+  if (a >= 1e3) return `${trim(v / 1e3, 1)}k`;
+  if (a >= 10 || Number.isInteger(v)) return trim(v, 0);
+  return trim(v, a >= 1 ? 1 : 2);
+}

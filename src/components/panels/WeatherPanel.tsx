@@ -19,7 +19,8 @@ import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "
 import { ChevronLeft, CloudSun, LineChart } from "lucide-react";
 import { fmtChartValue, fmtChartTick, fmtChartTime } from "./chartUtils";
 import ChartTip from "./ChartTip";
-import { chartGeometry, type ChartGeometry } from "@/utils/chartGeometry";
+import { chartGeometry, niceTicks, type ChartGeometry, type SeriesGeometry } from "@/utils/chartGeometry";
+import YAxis, { type AxisTick } from "./ChartAxis";
 import BasePanel from "./BasePanel";
 import { useHA } from "@/ha/HAStateStore";
 import { fetchHistory, fetchStatistics } from "@/ha/HAHistoryAPI";
@@ -496,10 +497,11 @@ function Figure({ label, value }: { label: string; value: string }) {
 
 /** The window's start, middle and "now" — chartGeometry's ticks, labelled by
  *  the app's one tick labeller. */
-function Axis({ g }: { g: ChartGeometry | null }) {
+function Axis({ g, right }: { g: ChartGeometry | null; right?: boolean }) {
   if (!g) return <div className="weather-axis"><span>&nbsp;</span></div>;
+  // Under the PLOT, not under the y-axis beside it.
   return (
-    <div className="weather-axis">
+    <div className={`weather-axis under-yaxis${right ? " right" : ""}`}>
       <span>{fmtChartTick(g.ticks[0], g.spanHours)}</span><span>{fmtChartTick(g.ticks[1], g.spanHours)}</span><span>now</span>
     </div>
   );
@@ -507,6 +509,8 @@ function Axis({ g }: { g: ChartGeometry | null }) {
 
 interface Line { s: HistorySeries | undefined; cls: string; label: string; unit: string; area?: boolean; ownScale?: boolean }
 const W = 320, H = 150, TOP = 12, BOT = 138;
+/** The plot's drawn height (px) — .weather-chart's CSS height; the y-axis is sized to it. */
+const CHART_PX = 150;
 const PLOT = { left: 0, right: W, top: TOP, bottom: BOT };
 
 /** What a chart says when it has nothing to draw — three different facts. */
@@ -534,8 +538,17 @@ function Bands({ g }: { g: ChartGeometry }) {
   )))}</>;
 }
 
-const Grid = () => (
-  <g className="chart-grid"><line x1="0" y1={TOP} x2={W} y2={TOP} /><line x1="0" y1={(TOP + BOT) / 2} x2={W} y2={(TOP + BOT) / 2} /><line x1="0" y1={BOT} x2={W} y2={BOT} /></g>
+/** The y-axis ticks of one series' scale that fall inside it, and where
+ *  each sits (0 = the plot's bottom edge, 1 = its top) — ChartAxis. */
+function axisOf(sg: SeriesGeometry): AxisTick[] {
+  return niceTicks(sg.lo, sg.hi).ticks
+    .filter((v) => v >= sg.lo - 1e-9 && v <= sg.hi + 1e-9)
+    .map((v) => ({ v, at: 1 - sg.sy(v) / H }));
+}
+
+/** Gridlines at the left axis' ticks (the plot's own lines, in its units). */
+const Grid = ({ ticks }: { ticks: AxisTick[] }) => (
+  <g className="chart-grid">{ticks.map((t) => <line key={t.v} x1="0" y1={(1 - t.at) * H} x2={W} y2={(1 - t.at) * H} />)}</g>
 );
 
 function ChartTile({ title, legend, note, lines, win, status }: {
@@ -546,6 +559,11 @@ function ChartTile({ title, legend, note, lines, win, status }: {
   const present = lines.filter((l): l is Line & { s: HistorySeries } => !!l.s);
   const any = present.some((l) => l.s.points.length > 0);
   const g = any ? chartGeometry(win, present.map((l) => ({ pts: l.s.points, gaps: l.s.gaps, scale: l.ownScale ? "fromZero" as const : "shared" as const })), PLOT, 0.08) : null;
+  // The left axis is the first line's scale; a later line on its OWN scale
+  // (sunlight in W/m², UV beside it) gets a right axis of its own.
+  const leftAxis = g ? axisOf(g.series[0]) : [];
+  const ownAt = present.findIndex((l, i) => i > 0 && l.ownScale);
+  const rightAxis = g && ownAt > 0 ? axisOf(g.series[ownAt]) : null;
   const { t, handlers } = useHoverTime(g);
   const hover = g && t !== null ? g.hover(t) : null;
   return (
@@ -558,10 +576,12 @@ function ChartTile({ title, legend, note, lines, win, status }: {
       {!g
         ? <ChartEmpty status={status} />
         : (
+          <div className="chart-with-axis has-unit">
+          <YAxis height={CHART_PX} unit={present[0]?.unit.trim()} ticks={leftAxis} />
           <div className="spark-wrap weather-chart-wrap">
           <svg className="weather-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={`${title} history`}
             style={{ touchAction: "none" }} {...handlers}>
-            <Grid />
+            <Grid ticks={leftAxis} />
             <Bands g={g} />
             {g.series.map((sg, i) => (
               <g key={i}>
@@ -586,8 +606,10 @@ function ChartTile({ title, legend, note, lines, win, status }: {
               })} />
           )}
           </div>
+          {rightAxis && <YAxis side="right" height={CHART_PX} unit={present[ownAt].unit.trim() || present[ownAt].label} ticks={rightAxis} />}
+          </div>
         )}
-      <Axis g={g} />
+      <Axis g={g} right={!!rightAxis} />
     </div>
   );
 }
@@ -616,10 +638,12 @@ function RainTile({ s, win, status, perDay, unit }: {
       {!g
         ? <ChartEmpty status={status} />
         : (
+          <div className="chart-with-axis has-unit">
+          <YAxis height={CHART_PX} unit={unit} ticks={axisOf(g.series[0])} />
           <div className="spark-wrap weather-chart-wrap">
           <svg className="weather-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="Rain history"
             style={{ touchAction: "none" }} {...handlers}>
-            <Grid />
+            <Grid ticks={axisOf(g.series[0])} />
             <Bands g={g} />
             {bars.map((b) => {
               const h = max > 0 ? Math.max(2, BOT - g.series[0].sy(b.v)) : 2;
@@ -637,6 +661,7 @@ function RainTile({ s, win, status, perDay, unit }: {
               stampPrefix={perDay ? "day of " : "hour from "}
               rows={[{ key: "rain", marker: <i className="key water" />, text: `${fmtChartValue(bar.v)} ${unit}` }]} />
           )}
+          </div>
           </div>
         )}
       <Axis g={g} />
