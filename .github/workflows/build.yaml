@@ -134,13 +134,12 @@ jobs:
   # the stable one's schema, options or translations: it IS the stable one,
   # with five values changed and the host port removed.
   #
-  # It touches `villa-kiosk-dev2/` only. The stable add-on's files and the dev
-  # channel's `villa-kiosk-dev/` are never written by this job.
+  # It touches `villa-kiosk-dev2/` only. The stable add-on's files are never
+  # written by this job.
   #
   # ⚠️ THIS COMMITS TO main, AND THAT IS THE ONLY WAY HA CAN SEE THE CHANNEL.
-  # Identical in kind to the `chore(dev-channel):` commits the dev branch has
-  # been making since 2026-08. It is additive and path-scoped; it is not a
-  # release and it does not touch `villa-kiosk/`.
+  # It is additive and path-scoped; it is not a release and it does not touch
+  # `villa-kiosk/`.
   sync-dev2-manifest:
     if: github.ref_name == 'dev2'
     needs: build
@@ -214,10 +213,9 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "chore(dev2-channel): publish VESTA (dev2) ${version}"
-          # main may have moved (a real release, or the dev channel's own sync)
-          # between checkout and push. Rebase rather than force: this job's
-          # commit is additive and touches only villa-kiosk-dev2/, so it can
-          # never conflict with a release or with the dev channel's manifest.
+          # main may have moved (a real release) between checkout and push.
+          # Rebase rather than force: this job's commit is additive and touches
+          # only villa-kiosk-dev2/, so it can never conflict with a release.
           for attempt in 1 2 3; do
             if git push origin main; then exit 0; fi
             echo "push rejected (attempt ${attempt}) — rebasing onto main"
