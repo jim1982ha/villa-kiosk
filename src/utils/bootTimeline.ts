@@ -112,7 +112,7 @@ export function scheduleSpanCensus(): void {
     // began underneath this timer (so the counters describe that one), and an
     // "(empty)" census says the counters were cleared rather than never filled.
     report("spans", {
-      at: CENSUS_DELAY_MS,
+      atMs: CENSUS_DELAY_MS,
       seq,
       nowSeq: loadSeq,
       census: spanCensus() || "(empty)",

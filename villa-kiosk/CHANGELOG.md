@@ -1,3 +1,12 @@
+## 2.496.167
+
+### Fixed — Settings → Telemetry
+- **A lost sign-in now has its own readable row** ("session lost (guest) ·
+  2 min before this sign-in") and names the profile that was actually
+  signed in — it used to show whoever signed in afterwards.
+- **The load-census rows say how far into the load they were taken** — they
+  read "? into load".
+
 ## 2.496.166
 
 ### Fixed — uploading a large 3D model

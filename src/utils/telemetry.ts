@@ -68,10 +68,31 @@ export type TelemetryKind =
   // with no way to read them. They print on the debug channel now (focusRooms),
   // which is the instrument the owner has to hand.
 
+/**
+ * The fields every event carries that its caller does NOT choose: the server
+ * stamps `at`/`ua`/`role` over whatever arrives (supervisor-proxy.py's
+ * telemetry_post_handler), and report() stamps the rest below.
+ *
+ * ⚠️ ONE SCHEMA, NOT TWO LAYERS GUESSING (round 11, 2.496.167). An event's own
+ * data was spread over these, and the server's stamps over that, with nothing
+ * saying which names were taken — so two events lost a field silently: the
+ * `spans` census's `at` (ms into the load) became the server's clock and the
+ * panel read "? into load"; the lost-session report's `role` (the profile
+ * that WAS signed in) became the role that signed in afterwards. The type
+ * below makes a reserved name a compile error at the caller;
+ * tests/oracles/telemetry_schema.mjs pins the server's three to this list.
+ */
+export const RESERVED_TELEMETRY_FIELDS = [
+  "kind", "at", "ua", "role",
+  "v", "vw", "vh", "scrw", "scrh", "shellH", "dpr", "standalone", "mem",
+] as const;
+type Reserved = (typeof RESERVED_TELEMETRY_FIELDS)[number];
+export type TelemetryData = Record<string, unknown> & { [K in Reserved]?: never };
+
 let disabled = false;
 
 /** Report one event. Never awaited, never throws. */
-export function report(kind: TelemetryKind, data: Record<string, unknown> = {}): void {
+export function report(kind: TelemetryKind, data: TelemetryData = {}): void {
   if (disabled) return;
   const body = JSON.stringify({
     kind,
@@ -152,7 +173,7 @@ export function report(kind: TelemetryKind, data: Record<string, unknown> = {}):
  * Below this it is a tab switch, and a tab switch is the single noisiest event
  * the app can emit: `visibilitychange` fires on every app switch, every screen
  * lock and every notification pull-down, and the server ring holds only the
- * newest 500 events ACROSS ALL DEVICES. Reporting each one meant a phone in a
+ * newest 500 events (the add-on's telemetry_max_events default) ACROSS ALL DEVICES. Reporting each one meant a phone in a
  * pocket could evict a whole fleet's load, freeze and frame history — the very
  * records anything is diagnosed from — with a list of times it was picked up.
  * The sync store solved the same problem with a dedupe for the same reason.

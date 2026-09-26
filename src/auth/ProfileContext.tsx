@@ -119,7 +119,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       if (pending) {
         localStorage.removeItem(PENDING_LOST_KEY);
         const p = JSON.parse(pending) as { source?: string; role?: string; at?: number };
-        reportTelemetry("session", { phase: "lost", source: p.source, role: p.role, agoMs: p.at ? Date.now() - p.at : undefined });
+        reportTelemetry("session", { phase: "lost", source: p.source, lostRole: p.role, agoMs: p.at ? Date.now() - p.at : undefined });
       }
     } catch { /* unreadable — nothing to report */ }
     try {
