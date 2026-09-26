@@ -1,3 +1,12 @@
+## 2.496.170
+
+### Behind the scenes
+- The rule that decides which parts of the 3D model are ceilings now lives in
+  one place, with tests. The model looks exactly the same.
+- The load report's list of "surfaces that look like a window but are not
+  treated as glass" no longer lists glass that already is see-through, and
+  works for a model drawn in metres as well as in centimetres.
+
 ## 2.496.169
 
 ### Changed
