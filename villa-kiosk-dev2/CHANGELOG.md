@@ -1,3 +1,10 @@
+## 2.496.148
+
+### Internal — badge checks
+- No visible change. The automatic checks now build the map's badges with
+  the real display controls and measure where each icon lands, so an
+  off-centre icon is caught before a release instead of on the wall.
+
 ## 2.496.147
 
 ### Internal — chart colours
