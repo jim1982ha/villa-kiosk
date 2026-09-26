@@ -35,7 +35,7 @@ ck("no unit fold of its own in the Energy window (toBaseUnit is the table)", !/t
 ck("the W / kW rule: fmtPower only", having(/Math\.round\(kw \* 1000\)/).join() === "config/energyModel.ts", having(/Math\.round\(kw \* 1000\)/));
 ck("the observation cards' markup: WindowPieces only", having(/className="weather-advice"/).join() === "components/panels/WindowPieces.tsx", having(/className="weather-advice"/));
 ck("the figure: WindowPieces only", having(/function Figure\(/).join() === "components/panels/WindowPieces.tsx", having(/function Figure\(/));
-ck("both windows use them", ["components/panels/WeatherPanel.tsx", "components/panels/EnergyPanel.tsx"].every((f) => having(/<ObservationCards cards=/).includes(f) && having(/<Figure label=/).includes(f)));
+ck("both windows use them", ["components/panels/WeatherPanel.tsx", "components/panels/EnergyPanel.tsx"].every((f) => having(/<ObservationCards cards=/).includes(f) && having(/<Figure\b[^>]*\blabel=/).includes(f)));
 
 if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
 console.log("\n✅ the windows' shared pieces, once each");
