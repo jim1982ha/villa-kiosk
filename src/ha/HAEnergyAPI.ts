@@ -19,6 +19,10 @@
 // working one.
 
 import type { HAWebSocket } from "./HAWebSocket";
+import { energySetup, type EnergySetup } from "@/config/energyModel";
+import { fetchStatistics } from "./HAHistoryAPI";
+import type { HistorySeries } from "@/types/ha.types";
+import type { StatisticsPeriod } from "@/utils/statisticsSeries";
 
 export interface EnergyToday {
   /** Sum of every resolvable grid source's consumption since local midnight. */
@@ -63,4 +67,47 @@ export async function fetchEnergyToday(ws: HAWebSocket): Promise<EnergyToday | n
     }
   }
   return sawAny ? { kwh } : null;
+}
+
+// ── The Energy window (2.496.105) ─────────────────────────────────────────
+// Everything it shows is Home Assistant's Energy dashboard's own: its setup
+// (energy/get_prefs), where it computes cost (energy/info), and the recorder's
+// per-period `change` for each statistic. Read on EVERY open — never copied
+// into VESTA's config — so a change made in HA's Energy settings is on screen
+// the next time the window opens. The rules on top: config/energyModel.ts.
+
+
+/** The setup, plus each energy statistic's cost statistic (HA's own). */
+export interface EnergyWindowSetup extends EnergySetup {
+  /** energy statistic → its cost statistic, where HA computes one. */
+  costOf: Record<string, string>;
+}
+
+/** Null when HA has no Energy dashboard with a grid or solar source. */
+export async function fetchEnergySetup(
+  ws: HAWebSocket, nameOf: (statId: string) => string,
+): Promise<EnergyWindowSetup | null> {
+  const prefs = await ws.getEnergyPrefs();
+  const setup = energySetup(prefs, nameOf);
+  if (setup.gridIn.length === 0 && setup.solar.length === 0) return null;
+  // No cost is a real answer (no tariff set): the window then shows kWh only.
+  const info = await ws.getEnergyInfo().catch(() => ({ cost_sensors: {} }));
+  return { ...setup, costOf: info.cost_sensors ?? {} };
+}
+
+/** Every statistic the window reads, energy and cost. */
+export function energyStatIds(s: EnergyWindowSetup): string[] {
+  const ids = new Set<string>([...s.gridIn, ...s.gridOut, ...s.solar, ...s.devices.map((d) => d.id)]);
+  for (const id of s.gridIn) if (s.costOf[id]) ids.add(s.costOf[id]);
+  return [...ids];
+}
+
+/** Each statistic's `change` per bucket since `since` — the same buckets HA's
+ *  dashboard draws. A statistic the recorder has nothing for is an empty
+ *  series with its outage (statisticsSeries), never a zero. */
+export async function fetchEnergyPeriod(
+  ws: HAWebSocket, s: EnergyWindowSetup, since: number, period: StatisticsPeriod,
+): Promise<Record<string, HistorySeries>> {
+  const out = await fetchStatistics(ws, energyStatIds(s), 0, period, ["change"] as const, since);
+  return Object.fromEntries(Object.entries(out).map(([id, f]) => [id, f.change]));
 }

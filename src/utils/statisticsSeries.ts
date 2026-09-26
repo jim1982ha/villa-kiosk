@@ -22,12 +22,15 @@ import type { HistorySeries, StatisticPeriod } from "@/types/ha.types";
 
 /** A measurement's bucket (mean/min/max) or a total's (change). */
 export type StatisticField = "mean" | "min" | "max" | "change";
-export type StatisticsPeriod = "5minute" | "hour" | "day";
+export type StatisticsPeriod = "5minute" | "hour" | "day" | "month";
 
 export const PERIOD_MS: Record<StatisticsPeriod, number> = {
   "5minute": 300_000,
   hour: 3_600_000,
   day: 86_400_000,
+  // A calendar month is 28–31 days; the gap rule allows 1.5 buckets, so a
+  // nominal 31 keeps every real month-to-month step inside it.
+  month: 31 * 86_400_000,
 };
 
 /** One statistic's rows, one field of them, over the window asked for. */
@@ -64,4 +67,13 @@ export function seriesExtent(s: HistorySeries | undefined): { min: number; max: 
   let min = Infinity, max = -Infinity;
   for (const p of s.points) { if (p.v < min) min = p.v; if (p.v > max) max = p.v; }
   return { min, max };
+}
+
+/** The highest reading and when, or null with none — today's UV peak. The
+ *  first of equal maxima: the moment it was first reached. */
+export function peakOf(s: HistorySeries | undefined): { v: number; t: number } | null {
+  if (!s || s.points.length === 0) return null;
+  let best = s.points[0];
+  for (const p of s.points) if (p.v > best.v) best = p;
+  return { v: best.v, t: best.t };
 }

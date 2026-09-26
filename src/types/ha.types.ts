@@ -146,8 +146,14 @@ export interface RawLogbookEntry {
  *  HAWebSocket.getStatisticsDuringPeriod for those). Both arrays are empty,
  *  not absent, on an install with no Energy Dashboard configured at all. */
 export interface EnergyPrefs {
-  energy_sources: { type: string; stat_energy_from?: string }[];
-  device_consumption: { stat_consumption: string }[];
+  energy_sources: { type: string; stat_energy_from?: string | null; stat_energy_to?: string | null }[];
+  device_consumption: { stat_consumption: string; stat_rate?: string | null; included_in_stat?: string | null; name?: string | null }[];
+}
+
+/** `energy/info`: which statistic HA computes each source's COST into
+ *  (keyed by the energy statistic). */
+export interface EnergyInfo {
+  cost_sensors: Record<string, string>;
 }
 
 /** One row of `recorder/list_statistic_ids` — which statistic IDs actually

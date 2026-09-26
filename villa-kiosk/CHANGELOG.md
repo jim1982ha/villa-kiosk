@@ -1,3 +1,56 @@
+## 2.496.107
+
+### Improved — the Energy window
+- **"Where today's energy went" is half as tall.** Each device's name, kWh
+  and live power sit on one line beside its band.
+## 2.496.106
+
+### Improved — the Weather window
+- **The rain gauge opens the same way as Sun & UV**: today's rain as the big
+  number, and beside it whether it is raining ("Dry — not raining now", or
+  light, moderate, heavy or violent rain with its rate). This month and this
+  year stay beside the tube.
+## 2.496.105
+
+### New — the Energy window
+- **The Energy tile opens a real Energy window**, laid out like the Weather
+  one, built entirely from Home Assistant's Energy dashboard:
+  - today so far against a typical day, in kWh and in money;
+  - three observations: a day that stood out, the device that leads, and
+    whether the devices add up;
+  - today hour by hour, and the last seven days against a typical day;
+  - where today's energy went, from the grid to each device as Home
+    Assistant arranges them, with live power where it has it.
+- **History and trends** (in the footer) shows a day, week, month or year:
+  energy by device, cost, and every device ranked.
+- **Nothing is set up in VESTA.** The window reads Home Assistant's Energy
+  settings each time it opens, so adding a device, changing the tariff, or
+  setting which meter a device belongs to shows up here straight away. On a
+  home without an Energy dashboard, the tile opens the device list as before.
+
+### Improved — the Weather window on a phone
+- **The tiles no longer waste space.** The wind and barometer dials sit side
+  by side, the temperature bars are shorter, the rain readings are two by
+  two, and each tile is only as tall as its content.
+- **The two humidity rings sit side by side** wherever their tile is wide
+  enough.
+- **The barometer no longer says "CHANGE"** over its dial.
+## 2.496.104
+
+### Improved — the Weather window
+- **The UV gauge is vertical, in the same colours as "How it feels".** The
+  five UV bands run from Low at the bottom to Extreme at the top, each named
+  with its range beside it and the current one in bold. The reading is a dot
+  on the bar, like the dew-point marker.
+## 2.496.103
+
+### Improved — the Weather window
+- **The Sun & UV tile now shows what it means.** The UV index is drawn on
+  the standard WHO colour scale (green Low → violet Extreme) with a marker at
+  the current reading, the band and its advice in words, today's peak UV and
+  when it happened, and how much sunshine there is against a clear sky at noon.
+  The arc with a sun on it is gone: the sun only ever sat at the top when it
+  was day, whatever the time, so it said nothing.
 ## 2.496.102
 
 ### Changed
