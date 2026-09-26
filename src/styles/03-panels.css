@@ -531,8 +531,19 @@ input[type="range"]::-moz-range-thumb {
 .weather-band.b3 { background: color-mix(in srgb, var(--accent-warm) 40%, transparent); }
 .weather-band.b4 { border-radius: 0 7px 7px 0; background: color-mix(in srgb, var(--status-danger) 34%, transparent); }
 .weather-mark { position: absolute; top: -3px; width: 20px; height: 20px; margin-left: -10px; border-radius: 10px; border: 3px solid var(--bg-modal); box-sizing: border-box; }
-.weather-mark.out, .dot.out { background: var(--accent); }
-.weather-mark.in, .dot.in { background: var(--accent-warm); }
+/* ── SERIES COLOURS, ONCE (round 9, 2.496.147) ─────────────────────────────
+   Each series class names its colour as --series, for every chart piece that
+   carries it; each piece paints with var(--series). The colours were restated
+   per piece — "out" was var(--accent) six times — and editing one left the
+   others. (The area fills keep their own strengths below.) */
+:is(.key, .chart-line, .weather-bar-fill, .ring-fill, .weather-mark, .dot, .bar-seg, .bar-chart-dot).out { --series: var(--accent); }
+:is(.key, .chart-line, .weather-bar-fill, .ring-fill, .weather-mark, .dot, .bar-seg, .bar-chart-dot).in { --series: var(--accent-warm); }
+:is(.key, .chart-line, .weather-bar-fill, .ring-fill, .weather-mark, .dot, .bar-seg, .bar-chart-dot).water { --series: var(--cat-energy); }
+:is(.key, .chart-line, .weather-bar-fill, .ring-fill, .weather-mark, .dot, .bar-seg, .bar-chart-dot).warm { --series: var(--accent-warm); }
+:is(.key, .chart-line, .weather-bar-fill, .ring-fill, .weather-mark, .dot, .bar-seg, .bar-chart-dot).uv { --series: var(--status-danger); }
+:is(.key, .chart-line, .weather-bar-fill, .ring-fill, .weather-mark, .dot, .bar-seg, .bar-chart-dot):is(.ink, .cost) { --series: var(--text-primary); }
+:is(.key, .chart-line, .weather-bar-fill, .ring-fill, .weather-mark, .dot, .bar-seg, .bar-chart-dot).feels { --series: color-mix(in srgb, var(--accent) 60%, var(--text-primary)); }
+:is(.weather-mark, .dot):is(.out, .in) { background: var(--series); }
 .weather-comfort-labels { display: flex; justify-content: space-between; font-size: var(--text-xs); color: var(--text-secondary); }
 .weather-comfort-legend { display: flex; gap: 22px; flex-wrap: wrap; font-size: var(--text-sm); color: var(--text-primary); }
 .weather-comfort-legend .dot { display: inline-block; width: 10px; height: 10px; border-radius: 5px; margin-right: 6px; }
@@ -580,10 +591,7 @@ input[type="range"]::-moz-range-thumb {
 .weather-bar-v { font-size: var(--text-base); font-weight: 600; font-variant-numeric: tabular-nums; }
 .weather-bar-track { width: 22px; height: 140px; border-radius: 11px; background: var(--bg-card); display: flex; align-items: flex-end; overflow: hidden; }
 .weather-bar-fill { width: 100%; border-radius: 11px; }
-.weather-bar-fill.out { background: var(--accent); }
-.weather-bar-fill.feels { background: color-mix(in srgb, var(--accent) 60%, var(--text-primary)); }
-.weather-bar-fill.water { background: var(--cat-energy); }
-.weather-bar-fill.in { background: var(--accent-warm); }
+.weather-bar-fill:is(.out, .feels, .water, .in) { background: var(--series); }
 .weather-bar-l { font-size: var(--text-xs); color: var(--text-secondary); }
 
 .weather-rings { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: space-around; gap: 12px; }
@@ -600,8 +608,7 @@ input[type="range"]::-moz-range-thumb {
 }
 .ring-track { fill: none; stroke: var(--bg-card); stroke-width: 12; }
 .ring-fill { fill: none; stroke-width: 12; stroke-linecap: round; }
-.ring-fill.water { stroke: var(--cat-energy); }
-.ring-fill.in { stroke: var(--accent-warm); }
+.ring-fill:is(.water, .in) { stroke: var(--series); }
 .ring-value { font: 500 28px var(--font-display); fill: var(--text-primary); text-anchor: middle; }
 .weather-ring-l { font-size: var(--text-base); font-weight: 600; }
 .weather-ring-s { font-size: var(--text-sm); color: var(--text-secondary); }
@@ -661,11 +668,7 @@ input[type="range"]::-moz-range-thumb {
 .weather-legend { display: flex; gap: 12px; font-size: var(--text-xs); color: var(--text-secondary); }
 .weather-legend .key { display: inline-block; width: 14px; height: 3px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
 .weather-legend .key.area { height: 8px; opacity: 0.45; }
-.key.out { background: var(--accent); }
-.key.in { background: var(--accent-warm); }
-.key.water { background: var(--cat-energy); }
-.key.warm { background: var(--accent-warm); }
-.key.ink { background: var(--text-primary); }
+.key:is(.out, .in, .water, .warm, .ink, .uv) { background: var(--series); }
 .weather-chart { width: 100%; height: 150px; flex: 1 1 auto; }
 .weather-chart-wrap { flex: 1 1 auto; display: flex; }
 /* The shared chart tip (spark-tip), one row a line, each with its colour. */
@@ -679,16 +682,12 @@ input[type="range"]::-moz-range-thumb {
 .weather-chart-empty { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; }
 .chart-grid line { stroke: var(--hairline); stroke-width: 1; vector-effect: non-scaling-stroke; }
 .chart-line { fill: none; stroke-width: 2.4; stroke-linejoin: round; }
-.chart-line.out { stroke: var(--accent); }
-.chart-line.in { stroke: var(--accent-warm); }
-.chart-line.water { stroke: var(--cat-energy); }
-.chart-line.warm { stroke: var(--accent-warm); }
+.chart-line:is(.out, .in, .water, .warm, .uv, .ink) { stroke: var(--series); }
 /* UV: the UV scale's own high end, so it reads apart from the sunlight beside
    it (owner, 2026-09-26) — line, legend key, tooltip marker and its axis. */
-.chart-line.uv { stroke: var(--status-danger); }
-.key.uv { background: var(--status-danger); }
+
 .chart-yaxis.tint-uv { color: var(--status-danger); }
-.chart-line.ink { stroke: var(--text-primary); opacity: 0.8; }
+.chart-line.ink { opacity: 0.8; }
 .chart-line.thin { stroke-width: 1.6; }
 .chart-line.dashed { stroke-dasharray: 5 4; }
 .chart-area { stroke: none; }
@@ -726,7 +725,7 @@ input[type="range"]::-moz-range-thumb {
 .bar-seg { flex: 0 0 auto; }
 .bar-seg.none { height: 3px; background: var(--bg-card); }
 .bar-seg.zero { height: 2px; }
-.bar-seg.water { background: var(--cat-energy); }
+.bar-seg.water { background: var(--series); }
 /* No reading: the outage band every history chart draws, the slot's full width. */
 .bar-band { position: absolute; inset: 0; opacity: 0.18; }
 .bar-chart-typical { position: absolute; left: 0; right: 0; border-top: 2px dashed var(--hairline-strong); pointer-events: none; }
@@ -736,40 +735,45 @@ input[type="range"]::-moz-range-thumb {
 .bar-chart-line.cost polyline { stroke: var(--text-primary); }
 .bar-chart-dot { position: absolute; width: 7px; height: 7px; border-radius: 50%; transform: translate(-50%, -50%); border: 1.5px solid var(--bg-panel); pointer-events: none; }
 .bar-chart-dot.hover { width: 11px; height: 11px; }
-.bar-chart-dot.cost, .key.cost { background: var(--text-primary); }
+.bar-chart-dot.cost, .key.cost { background: var(--series); }
 .weather-legend .key.line { height: 3px; border-radius: 2px; }
 .bar-chart-note { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: var(--text-sm); color: var(--text-secondary); pointer-events: none; }
 .bar-chart-axis { position: relative; height: 1.4em; font-size: var(--text-xs); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .bar-chart-axis span { position: absolute; top: 0; white-space: nowrap; }
 .bar-chart-axis span.middle { transform: translateX(-50%); }
 .bar-chart-axis span.end { transform: translateX(-100%); }
-.e-used { background: color-mix(in srgb, var(--accent) 55%, transparent); }
-.e-standout { background: color-mix(in srgb, var(--status-danger) 55%, transparent); }
-.e-untracked { background: color-mix(in srgb, var(--text-secondary) 30%, transparent); fill: color-mix(in srgb, var(--text-secondary) 30%, transparent); }
-.e-s0 { background: color-mix(in srgb, var(--accent-warm) 60%, transparent); fill: color-mix(in srgb, var(--accent-warm) 60%, transparent); }
-.e-s1 { background: color-mix(in srgb, var(--cat-energy) 55%, transparent); fill: color-mix(in srgb, var(--cat-energy) 55%, transparent); }
-.e-s2 { background: color-mix(in srgb, var(--status-danger) 45%, transparent); fill: color-mix(in srgb, var(--status-danger) 45%, transparent); }
-.e-s3 { background: color-mix(in srgb, var(--accent) 55%, transparent); fill: color-mix(in srgb, var(--accent) 55%, transparent); }
-.e-s4 { background: color-mix(in srgb, var(--accent-warm) 30%, transparent); fill: color-mix(in srgb, var(--accent-warm) 30%, transparent); }
-.e-s5 { background: color-mix(in srgb, var(--cat-energy) 28%, transparent); fill: color-mix(in srgb, var(--cat-energy) 28%, transparent); }
+/* Every Energy colour slot states its colour ONCE, as --e; this paints a
+   bar (background) and a pie slice or flow node (fill) with it (round 9);
+   the two bar-only slots paint only a bar. */
+:is(.e-used, .e-standout) { background: var(--e); }
+:is(.e-untracked, .e-other, .e-s0, .e-s1, .e-s2, .e-s3, .e-s4, .e-s5, .e-p0, .e-p1, .e-p2, .e-p3, .e-p4, .e-p5, .e-p6, .e-p7, .e-p8, .e-p9, .e-p10, .e-p11) { background: var(--e); fill: var(--e); }
+.e-used { --e: color-mix(in srgb, var(--accent) 55%, transparent); }
+.e-standout { --e: color-mix(in srgb, var(--status-danger) 55%, transparent); }
+.e-untracked { --e: color-mix(in srgb, var(--text-secondary) 30%, transparent); }
+.e-s0 { --e: color-mix(in srgb, var(--accent-warm) 60%, transparent); }
+.e-s1 { --e: color-mix(in srgb, var(--cat-energy) 55%, transparent); }
+.e-s2 { --e: color-mix(in srgb, var(--status-danger) 45%, transparent); }
+.e-s3 { --e: color-mix(in srgb, var(--accent) 55%, transparent); }
+.e-s4 { --e: color-mix(in srgb, var(--accent-warm) 30%, transparent); }
+.e-s5 { --e: color-mix(in srgb, var(--cat-energy) 28%, transparent); }
 /* The energy flow's and pie's colours: the house, "Other", and twelve slots
    for the devices below the top level — theme tokens mixed, never hex. The
    slots open on hues the top-level devices (e-s0..5) do not use: the first
    device inside a meter was the first meter's tan (2.496.127). */
 .e-house { background: var(--accent); fill: var(--accent); }
-.e-other { background: color-mix(in srgb, var(--text-secondary) 45%, transparent); fill: color-mix(in srgb, var(--text-secondary) 45%, transparent); }
-.e-p0 { background: color-mix(in srgb, var(--accent-teal) 65%, transparent); fill: color-mix(in srgb, var(--accent-teal) 65%, transparent); }
-.e-p1 { background: color-mix(in srgb, var(--status-warning) 65%, transparent); fill: color-mix(in srgb, var(--status-warning) 65%, transparent); }
-.e-p2 { background: color-mix(in srgb, color-mix(in srgb, var(--accent-warm) 50%, var(--status-danger)) 70%, transparent); fill: color-mix(in srgb, color-mix(in srgb, var(--accent-warm) 50%, var(--status-danger)) 70%, transparent); }
-.e-p3 { background: color-mix(in srgb, color-mix(in srgb, var(--cat-energy) 50%, var(--accent-teal)) 70%, transparent); fill: color-mix(in srgb, color-mix(in srgb, var(--cat-energy) 50%, var(--accent-teal)) 70%, transparent); }
-.e-p4 { background: color-mix(in srgb, color-mix(in srgb, var(--status-warning) 50%, var(--accent)) 70%, transparent); fill: color-mix(in srgb, color-mix(in srgb, var(--status-warning) 50%, var(--accent)) 70%, transparent); }
-.e-p5 { background: color-mix(in srgb, color-mix(in srgb, var(--status-danger) 50%, var(--cat-energy)) 70%, transparent); fill: color-mix(in srgb, color-mix(in srgb, var(--status-danger) 50%, var(--cat-energy)) 70%, transparent); }
-.e-p6 { background: color-mix(in srgb, color-mix(in srgb, var(--accent-teal) 50%, var(--accent-warm)) 70%, transparent); fill: color-mix(in srgb, color-mix(in srgb, var(--accent-teal) 50%, var(--accent-warm)) 70%, transparent); }
-.e-p7 { background: color-mix(in srgb, var(--accent) 60%, transparent); fill: color-mix(in srgb, var(--accent) 60%, transparent); }
-.e-p8 { background: color-mix(in srgb, var(--accent-warm) 70%, transparent); fill: color-mix(in srgb, var(--accent-warm) 70%, transparent); }
-.e-p9 { background: color-mix(in srgb, var(--cat-energy) 65%, transparent); fill: color-mix(in srgb, var(--cat-energy) 65%, transparent); }
-.e-p10 { background: color-mix(in srgb, var(--status-danger) 55%, transparent); fill: color-mix(in srgb, var(--status-danger) 55%, transparent); }
-.e-p11 { background: color-mix(in srgb, var(--text-secondary) 45%, transparent); fill: color-mix(in srgb, var(--text-secondary) 45%, transparent); }
+.e-other { --e: color-mix(in srgb, var(--text-secondary) 45%, transparent); }
+.e-p0 { --e: color-mix(in srgb, var(--accent-teal) 65%, transparent); }
+.e-p1 { --e: color-mix(in srgb, var(--status-warning) 65%, transparent); }
+.e-p2 { --e: color-mix(in srgb, color-mix(in srgb, var(--accent-warm) 50%, var(--status-danger)) 70%, transparent); }
+.e-p3 { --e: color-mix(in srgb, color-mix(in srgb, var(--cat-energy) 50%, var(--accent-teal)) 70%, transparent); }
+.e-p4 { --e: color-mix(in srgb, color-mix(in srgb, var(--status-warning) 50%, var(--accent)) 70%, transparent); }
+.e-p5 { --e: color-mix(in srgb, color-mix(in srgb, var(--status-danger) 50%, var(--cat-energy)) 70%, transparent); }
+.e-p6 { --e: color-mix(in srgb, color-mix(in srgb, var(--accent-teal) 50%, var(--accent-warm)) 70%, transparent); }
+.e-p7 { --e: color-mix(in srgb, var(--accent) 60%, transparent); }
+.e-p8 { --e: color-mix(in srgb, var(--accent-warm) 70%, transparent); }
+.e-p9 { --e: color-mix(in srgb, var(--cat-energy) 65%, transparent); }
+.e-p10 { --e: color-mix(in srgb, var(--status-danger) 55%, transparent); }
+.e-p11 { --e: color-mix(in srgb, var(--text-secondary) 45%, transparent); }
 /* Every device as a pie (HA's "Individual devices"): the ring, its total, a legend. */
 .energy-rank-tools { display: flex; align-items: center; gap: 10px; }
 .energy-shape button { padding: 4px 10px; display: inline-flex; align-items: center; }

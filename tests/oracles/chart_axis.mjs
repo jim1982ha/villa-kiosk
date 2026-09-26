@@ -77,7 +77,9 @@ const sunUv = weather.match(/line\("solar", \{ cls: "([^"]+)"[^)]*\), line\("uv"
 ck("Sun & UV: the two lines have DIFFERENT colours (owner, 2026-09-26: tell sunlight from UV)",
    !!sunUv && sunUv[1].split(" ")[0] !== sunUv[2].split(" ")[0], sunUv && [sunUv[1], sunUv[2]]);
 ck("  ...the legend says the same, and UV's colour has a line, a key and an axis tint",
-   /\["UV", "uv"\]/.test(weather) && /\.chart-line\.uv \{/.test(css) && /\.key\.uv \{/.test(css) && /\.chart-yaxis\.tint-uv \{/.test(css));
+   /\["UV", "uv"\]/.test(weather) && /\)\.uv \{ --series: var\(--status-danger\); \}/.test(css)
+     && /\.chart-line:is\([^)]*\.uv[^)]*\) \{ stroke: var\(--series\); \}/.test(css) && /\.key:is\([^)]*\.uv[^)]*\) \{ background: var\(--series\); \}/.test(css)
+     && /\.chart-yaxis\.tint-uv \{/.test(css));
 ck("  ...and the right axis wears its line's colour (its class, or its CSS colour)",
    /ticks=\{g\.series\[ownAt\]\.ticks\}\s*cls=\{right\.cls\?\.split\(" "\)\[0\]\} color=\{right\.color\} \/>/.test(lc));
 
