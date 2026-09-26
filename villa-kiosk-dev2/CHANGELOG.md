@@ -1,3 +1,10 @@
+## 2.496.153
+
+### Internal — diagnostics
+- No visible change. When a kiosk is returned to the profile screen because
+  its session ended, that is now recorded in the diagnostics log after the
+  next sign-in (the log refuses a signed-out device).
+
 ## 2.496.152
 
 ### Fixed — signing out
