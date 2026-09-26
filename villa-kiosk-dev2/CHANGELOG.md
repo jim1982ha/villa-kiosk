@@ -1,3 +1,10 @@
+## 2.496.131
+
+### Fixed — device icons on the map
+- **An unavailable device's dashed border now has the same shape, corners,
+  position and weight as every other border.** It was drawn by a separate
+  image laid over the badge and came out misaligned, dashed on two sides
+  only. Every state's border is now drawn the same way.
 ## 2.496.130
 
 ### Fixed — device icons on the map
