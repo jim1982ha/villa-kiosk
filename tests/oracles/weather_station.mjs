@@ -175,6 +175,12 @@ console.log("\n  the Sun & UV tile — the WHO scale (2026-09-26)");
   ck("the tile draws the band table, the reading's mark, the peak and the sunshine bar — and no decorative sun",
      /UV_BANDS\.map\(\(x, i\) =>/.test(panel) && /uvScalePosition\(r\.uv\)/.test(panel) && /Peak today/.test(panel)
        && /sunshineFraction\(r\.solar\)/.test(panel) && !/sun-dot|sun-path/.test(panel));
+  ck("rain words: 0 dry; 2.4 light, 2.5 moderate, 7.6 heavy, 50 violent (the meteorological bands)",
+     W.rainBand(0).band === "Dry" && W.rainBand(2.4).band === "Light rain" && W.rainBand(2.5).band === "Moderate rain"
+       && W.rainBand(7.6).band === "Heavy rain" && W.rainBand(50).band === "Violent rain" && W.rainBand(4.2).detail === "4.2 mm/h now");
+  ck("the rain gauge opens with the Sun & UV head: today's rain, and whether it is raining",
+     /<div className="weather-rain">\s*<div className="weather-uv-head">/.test(panel) && /rainBand\(toMmPerHour\(r\.rate, r\.rateUnit\)\)/.test(panel));
+  ck("the barometer carries no 'CHANGE' label", !/>CHANGE</.test(panel));
   const css = readFileSync(new URL("../../src/styles/03-panels.css", import.meta.url), "utf8");
   ck("the gauge is VERTICAL (the reading's height from the bottom) in the 'How it feels' palette — no WHO hexes",
      /bottom: `\$\{uvScalePosition\(r\.uv\) \* 100\}%`/.test(panel) && /\.uv-seg\.low \{ background: color-mix\(in srgb, var\(--accent\) 40%/.test(css) && !/\.uv-seg\.[\w-]+ \{ background: #/.test(css));

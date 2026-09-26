@@ -186,6 +186,15 @@ export const UV_BANDS: readonly { from: number; band: string; advice: string; ke
   { from: 8, band: "Very high", advice: "avoid midday sun", key: "very-high" },
   { from: 11, band: "Extreme", advice: "stay indoors at midday", key: "extreme" },
 ];
+/** Rain intensity, the meteorological bands (mm/h): under 2.5 light, under
+ *  7.6 moderate, under 50 heavy, then violent. The rain gauge's words, the
+ *  way UV_BANDS are the Sun & UV tile's. Zero is dry. */
+export function rainBand(mmPerHour: number): { band: string; detail: string } {
+  if (!(mmPerHour > 0)) return { band: "Dry", detail: "not raining now" };
+  const band = mmPerHour < 2.5 ? "Light rain" : mmPerHour < 7.6 ? "Moderate rain" : mmPerHour < 50 ? "Heavy rain" : "Violent rain";
+  return { band, detail: `${mmPerHour.toFixed(1)} mm/h now` };
+}
+
 /** Where the drawn UV scale ends. The index has no ceiling, but 11+ is one band;
  *  two units of it are enough to show a reading sits inside it. */
 export const UV_SCALE_TOP = 13;

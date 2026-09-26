@@ -30,7 +30,7 @@ import { isUnavailable, STATUS_COLOR } from "@/utils/stateColors";
 import type { HassEntity, HistorySeries } from "@/types/ha.types";
 import {
   beaufort, compass, pressureTendency, toCelsius, toKmh, toHpa, uvBand,
-  UV_BANDS, UV_SCALE_TOP, uvScalePosition, sunshineFraction,
+  UV_BANDS, UV_SCALE_TOP, uvScalePosition, sunshineFraction, rainBand,
   comfortHeadline, comfortPosition, COMFORT_BANDS, windowAdvice, laundryAdvice, outdoorsAdvice,
   type Advice, type WeatherRole, type WeatherStation,
 } from "@/config/weatherStation";
@@ -72,7 +72,7 @@ function useReadings(station: WeatherStation) {
     inT: c("indoorTemperature"), inDew: c("indoorDewPoint"),
     hum: raw("humidity"), inHum: raw("indoorHumidity"),
     wind: k("windSpeed"), gust: k("windGust"), gustToday: k("windGustToday"), dir: raw("windDirection"),
-    rate, raining: rate === undefined ? undefined : rate > 0,
+    rate, rateUnit: unit("rainRate"), raining: rate === undefined ? undefined : rate > 0,
     rainToday: raw("rainToday"), rainMonth: raw("rainMonth"), rainYear: raw("rainYear"),
     rainUnit: unit("rainToday") || "mm",
     pressure: raw("pressure"), pressureUnit: unit("pressure") || "hPa",
@@ -311,13 +311,26 @@ function Ring({ pct, cls, label, sub }: { pct: number; cls: string; label: strin
 }
 
 /** A rain tube for today, scaled 0–20 mm (or the next 10 above today). */
+/** A rain rate in mm/h, from the sensor's own unit (in/h is converted). */
+function toMmPerHour(v: number, unit: string): number {
+  return /in/i.test(unit) ? v * 25.4 : v;
+}
+
 function RainGauge({ r }: { r: Readings }) {
   const today = r.rainToday ?? 0;
   const top = Math.max(20, Math.ceil(today / 10) * 10);
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((q) => ({ v: Math.round(top * q), y: 248 - q * 224 }));
   const fillH = Math.max(3, (today / top) * 232);
   const u = r.rainUnit;
+  // The same head as Sun & UV (owner, 2026-09-26): the number, and beside it
+  // what it means — here today's rain, and whether and how hard it is raining.
+  const now = r.rate === undefined ? null : rainBand(toMmPerHour(r.rate, r.rateUnit));
   return (
+    <div className="weather-rain">
+    <div className="weather-uv-head">
+      <div className="weather-uv-value"><b>{f1(today)}</b><span>{u} today</span></div>
+      {now && <div><div className="weather-uv-band">{now.band}</div><div className="weather-uv-advice">{now.detail}</div></div>}
+    </div>
     <div className="weather-gauge">
       <svg className="weather-tube" viewBox="0 0 92 260" preserveAspectRatio="xMidYMid meet" role="img" aria-label={`Rain today ${f1(today)} ${u}`}>
         <g className="tube-scale">{ticks.map((t) => <text key={t.v} x="26" y={t.y + 4}>{t.v}</text>)}</g>
@@ -327,11 +340,10 @@ function RainGauge({ r }: { r: Readings }) {
         <text x="66" y="8" className="tube-unit">{u}</text>
       </svg>
       <div className="weather-gauge-read">
-        <div><span>Now</span><b>{r.rate === undefined ? "—" : r.rate > 0 ? `${f1(r.rate)} ${u}/h` : "Dry"}</b></div>
-        <div><span>Today</span><b>{f1(r.rainToday)} {u}</b></div>
-        {r.rainMonth !== undefined && <div><span>Month</span><b>{f1(r.rainMonth)} {u}</b></div>}
-        {r.rainYear !== undefined && <div><span>Year</span><b>{f1(r.rainYear)} {u}</b></div>}
+        {r.rainMonth !== undefined && <div><span>This month</span><b>{f1(r.rainMonth)} {u}</b></div>}
+        {r.rainYear !== undefined && <div><span>This year</span><b>{f1(r.rainYear)} {u}</b></div>}
       </div>
+    </div>
     </div>
   );
 }

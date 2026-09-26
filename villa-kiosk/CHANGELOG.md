@@ -1,3 +1,10 @@
+## 2.496.106
+
+### Improved — the Weather window
+- **The rain gauge opens the same way as Sun & UV**: today's rain as the big
+  number, and beside it whether it is raining ("Dry — not raining now", or
+  light, moderate, heavy or violent rain with its rate). This month and this
+  year stay beside the tube.
 ## 2.496.105
 
 ### New — the Energy window
