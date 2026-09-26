@@ -8,6 +8,7 @@ import { HAServices } from "@/ha/HAServiceCalls";
 import { usePendingAck } from "@/hooks/usePendingAck";
 import { isUnavailable, statusKeyFor, STATUS_PILL_CLASS } from "@/utils/stateColors";
 import { tapFeedback, successFeedback } from "@/utils/haptics";
+import UnavailableNotice from "./UnavailableNotice";
 
 export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
   const { ws } = useHA();
@@ -54,6 +55,9 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
       icon={locked ? <Lock size={22} /> : <Unlock size={22} />}
       onClose={onClose}
     >
+      {/* The shared notice when HA has lost the lock (ab0ffb46 routed Lock
+          through it in a comment only); its state pill otherwise. */}
+      {unavailable ? <UnavailableNotice device="lock" /> : (
       <div className="center" style={{ margin: "8px 0 20px" }}>
         <span className={`status-pill ${STATUS_PILL_CLASS[lockStatus]}`}>
           {/* The open padlock is reserved for a lock that is genuinely NOT
@@ -66,10 +70,7 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
           {(entity?.state ?? "unknown").replace(/_/g, " ").toUpperCase()}
         </span>
       </div>
-
-      {/* The UNAVAILABLE pill above says it; the explanatory paragraph that
-          used to sit here is now the pill's hover/assistive text, so every
-          panel presents an offline device identically (UnavailableNotice). */}
+      )}
       {unavailable ? null : locked ? (
         <button
           className={`big-toggle${pending ? " pending" : ""}`}
@@ -109,12 +110,6 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
         </div>
       )}
 
-
-      {!unavailable && !locked && (
-        <p className="muted body-text mt">
-          ⏱ Auto-lock reminder: check the door in 5 minutes.
-        </p>
-      )}
     </BasePanel>
   );
 }

@@ -94,6 +94,8 @@
 
 .row-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
 .row-buttons.scroll { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
+/* A panel's controls while Home Assistant has lost the device. */
+.row-buttons.is-unavailable, .temp-stepper.is-unavailable { opacity: 0.5; pointer-events: none; }
 .field { margin: 18px 0; }
 .field > label { display: block; margin-bottom: var(--field-label-gap); }
 

@@ -8,7 +8,8 @@ import StateTimeline from "./StateTimeline";
 import { useHistoryRange, HistoryHeader } from "./historyRange";
 import type { PanelProps } from "@/types/panel.types";
 import { useStateHistory } from "@/hooks/useStateHistory";
-import { paletteColorFor } from "@/utils/stateColors";
+import { isUnavailable, paletteColorFor } from "@/utils/stateColors";
+import UnavailableNotice from "./UnavailableNotice";
 
 export default function GenericPanel({ entity, mapping, onClose }: PanelProps) {
   const { range, picker } = useHistoryRange();
@@ -19,9 +20,11 @@ export default function GenericPanel({ entity, mapping, onClose }: PanelProps) {
 
   return (
     <BasePanel title={mapping.label} entityId={mapping.entityId} icon={<Info size={22} />} history={false} onClose={onClose}>
-      <div className="center" style={{ margin: "8px 0 16px" }}>
-        <span className="value-large">{entity?.state ?? "unknown"}</span>
-      </div>
+      {isUnavailable(entity) ? <UnavailableNotice /> : (
+        <div className="center" style={{ margin: "8px 0 16px" }}>
+          <span className="value-large">{entity?.state ?? "unknown"}</span>
+        </div>
+      )}
       <div className="field">
         <label className="entity-label">Entity</label>
         <div className="body-text muted">{mapping.entityId}</div>

@@ -8,18 +8,11 @@ import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { isUnavailable } from "@/utils/stateColors";
 import { devicePower } from "@/utils/devicePower";
+import { fanLevels, nearestLevel } from "@/utils/panelRules";
 
 // Named labels for the common discrete-speed-count cases (matches how HA's
 // own more-info dialog reads a fan with a small, fixed number of steps —
 // see percentage_step). Anything else falls back to a plain "{pct}%" label.
-const SPEED_LABELS: Record<number, string[]> = {
-  1: ["On"],
-  2: ["Low", "High"],
-  3: ["Low", "Medium", "High"],
-  4: ["Low", "Medium", "High", "Max"],
-  5: ["Low", "Med-Low", "Medium", "Med-High", "High"],
-  6: ["1", "2", "3", "4", "5", "6"],
-};
 
 export default function FanPanel({ entity, mapping, onClose }: PanelProps) {
   const { ws } = useHA();
@@ -36,19 +29,8 @@ export default function FanPanel({ entity, mapping, onClose }: PanelProps) {
   // integration (Tuya/template fans often stringify it); coerce so a 5-speed
   // fan reporting "20" doesn't fail the type check and collapse to the preset
   // list (which is what made a 5-speed fan show only 3 buttons).
-  const stepRaw = entity?.attributes.percentage_step;
-  const step = typeof stepRaw === "number" ? stepRaw : Number(stepRaw);
-  const levelCount = Number.isFinite(step) && step > 0 ? Math.round(100 / step) : 0;
-  const levels = levelCount > 0
-    ? Array.from({ length: levelCount }, (_, i) => {
-      const value = Math.round(((i + 1) / levelCount) * 100);
-      const label = SPEED_LABELS[levelCount]?.[i] ?? `${value}%`;
-      return { value, label };
-    })
-    : [];
-  const closestLevel = typeof pct === "number" && levels.length
-    ? levels.reduce((a, b) => (Math.abs(b.value - pct) < Math.abs(a.value - pct) ? b : a))
-    : undefined;
+  const levels = fanLevels(entity?.attributes.percentage_step);
+  const closestLevel = nearestLevel(levels, pct);
 
   return (
     <BasePanel title={mapping.label} entityId={mapping.entityId} icon={<Fan size={22} />} onClose={onClose}>

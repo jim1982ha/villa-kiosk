@@ -1,5 +1,4 @@
 // src/components/panels/ACPanel.tsx
-import { useState, useEffect } from "react";
 import { Snowflake, Minus, Plus } from "lucide-react";
 import BasePanel from "./BasePanel";
 import type { PanelProps } from "@/types/panel.types";
@@ -9,6 +8,8 @@ import { climateLimits } from "@/auth/permissions";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { isUnavailable } from "@/utils/stateColors";
 import UnavailableNotice from "./UnavailableNotice";
+import { climateRange, climateStep, fmtTemp } from "@/utils/panelRules";
+import { useLiveDraft } from "@/hooks/useLiveDraft";
 
 const MODE_LABELS: Record<string, string> = {
   cool: "Cool", heat: "Heat", fan_only: "Fan", auto: "Auto", off: "Off",
@@ -16,7 +17,9 @@ const MODE_LABELS: Record<string, string> = {
 };
 
 export default function ACPanel({ entity, mapping, onClose }: PanelProps) {
-  const { ws } = useHA();
+  const { ws, haConfig } = useHA();
+  // Home Assistant's own unit — the readings are in it (it said "°C" always).
+  const unit = haConfig?.unit_system?.temperature;
   const { role } = useProfile();
   const unavailable = isUnavailable(entity);
   const a = entity?.attributes;
@@ -24,18 +27,15 @@ export default function ACPanel({ entity, mapping, onClose }: PanelProps) {
   // RBAC bounded controls: a profile with a climate range (guests) gets the
   // device limits narrowed to it — the stepper simply can't leave the band.
   const limits = role ? climateLimits(role) : null;
-  const min = Math.max(a?.min_temp ?? 16, limits?.climateMin ?? -Infinity);
-  const max = Math.min(a?.max_temp ?? 30, limits?.climateMax ?? Infinity);
-
-  const [target, setTarget] = useState<number>(a?.temperature ?? 24);
-  useEffect(() => {
-    if (a?.temperature !== undefined) setTarget(a.temperature);
-  }, [a?.temperature]);
-
-  const commit = (t: number) => {
-    const clamped = Math.min(max, Math.max(min, t));
-    setTarget(clamped);
-    HAServices.setTemperature(ws, mapping.entityId, clamped);
+  const range = climateRange(a, limits);
+  const { min, max } = range;
+  // The target FOLLOWS the device (useLiveDraft); a step is clamped and
+  // rounded to the step's precision (panelRules.climateStep).
+  const target = useLiveDraft<number>(a?.temperature as number | undefined, 24);
+  const commit = (dir: 1 | -1) => {
+    const next = climateStep(target.value, dir, step, range);
+    target.set(next);
+    HAServices.setTemperature(ws, mapping.entityId, next);
   };
 
   const hvacModes = (a?.hvac_modes ?? ["cool", "fan_only", "auto", "off"]) as string[];
@@ -47,17 +47,17 @@ export default function ACPanel({ entity, mapping, onClose }: PanelProps) {
 
       <div className="temp-display">
         <span className="value-unit">Current</span>
-        <div className="big">{unavailable ? "--" : a?.current_temperature ?? "--"}°C</div>
+        <div className="big">{fmtTemp(unavailable ? null : a?.current_temperature, unit)}</div>
       </div>
 
-      <div className="temp-stepper" style={unavailable ? { opacity: 0.5, pointerEvents: "none" } : undefined}>
-        <button onClick={() => commit(target - step)} aria-label="Lower target temperature" disabled={unavailable}><Minus size={26} /></button>
-        <div className="target">{unavailable ? "--" : target}°C</div>
-        <button onClick={() => commit(target + step)} aria-label="Raise target temperature" disabled={unavailable}><Plus size={26} /></button>
+      <div className={`temp-stepper${unavailable ? " is-unavailable" : ""}`}>
+        <button onClick={() => commit(-1)} aria-label="Lower target temperature" disabled={unavailable}><Minus size={26} /></button>
+        <div className="target">{fmtTemp(unavailable ? null : target.value, unit)}</div>
+        <button onClick={() => commit(1)} aria-label="Raise target temperature" disabled={unavailable}><Plus size={26} /></button>
       </div>
       {limits && !unavailable && (
         <div className="muted" style={{ textAlign: "center", fontSize: "var(--text-sm)" }}>
-          Adjustable between {min}–{max} °C
+          Adjustable between {fmtTemp(min, unit)} and {fmtTemp(max, unit)}
         </div>
       )}
 
