@@ -9,6 +9,7 @@ import type {
 import { ingressWsUrl } from "./ingress";
 import { captureError } from "@/utils/diagnostics";
 import { report as reportTelemetry } from "@/utils/telemetry";
+import { reportSessionLost } from "@/auth/sessionLost";
 
 type Resolver = (result: unknown) => void;
 type Rejecter = (err: Error) => void;
@@ -291,6 +292,10 @@ export class HAWebSocket {
           byPong: this.pongTimedOut,
           attempts: this.reconnectAttempts,
         });
+        // The proxy ends a socket whose session it no longer honours with
+        // 4401 (2.496.24). Reconnecting cannot fix that; the profile's owner
+        // (auth/sessionLost → ProfileContext) confirms it and signs out.
+        if (ev.code === 4401) reportSessionLost("socket 4401");
         this.connectedAt = 0;
         this.pongTimedOut = false;
         this.stopHeartbeat();

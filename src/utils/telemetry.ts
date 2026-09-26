@@ -38,6 +38,7 @@ export type TelemetryKind =
   // the long-task observer behind `freeze` does not exist at all.
   | "frames"
   | "lifecycle"       // pagehide / pageshow / visibility transitions
+  | "session"         // the server stopped honouring this device's session (auth/sessionLost)
   | "recovered"       // we auto-reloaded after a restore onto a dead scene
   | "sync"            // shared-config pull/push outcome (see DeviceConfigSync)
   // Home Assistant's initial connect + hydrate. This runs while the PROFILE

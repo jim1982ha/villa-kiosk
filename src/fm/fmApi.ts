@@ -6,6 +6,7 @@
 
 import { ingressPath } from "@/ha/ingress";
 import { EMPTY_FM_DATA, type FmData } from "./fmTypes";
+import { backendFetch } from "@/auth/sessionLost";
 import {
   keyBy, diffKeyed, applyKeyed, keyedDiffIsEmpty,
   type KeyedDiff, type StoreFetch, type StoreSaveResult,
@@ -39,7 +40,7 @@ function parseFmData(raw: unknown): FmData {
  *  carry-over exactly like the device-config store. See utils/keyedSync.ts. */
 export async function fetchFmData(): Promise<StoreFetch<FmData> | null> {
   try {
-    const r = await fetch(ingressPath("fm-data"), { credentials: "same-origin" });
+    const r = await backendFetch(ingressPath("fm-data"), { credentials: "same-origin" });
     if (!r.ok) return null;
     const d = (await r.json()) as { data?: unknown; rev?: unknown };
     const raw = d.data && typeof d.data === "object"
@@ -77,7 +78,7 @@ export async function saveFmData(
 ): Promise<StoreSaveResult> {
   try {
     const merged = { ...carryOver, ...data };
-    const r = await fetch(ingressPath("fm-data"), {
+    const r = await backendFetch(ingressPath("fm-data"), {
       method: "PUT",
       credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
@@ -169,7 +170,7 @@ async function downscaleToJpeg(file: Blob): Promise<Blob> {
 export async function uploadEvidence(file: Blob): Promise<string> {
   const jpeg = await downscaleToJpeg(file);
   const id = fmId("ph");
-  const r = await fetch(`${ingressPath("fm-evidence")}?id=${encodeURIComponent(id)}`, {
+  const r = await backendFetch(`${ingressPath("fm-evidence")}?id=${encodeURIComponent(id)}`, {
     method: "POST",
     credentials: "same-origin",
     headers: { "Content-Type": "image/jpeg" },

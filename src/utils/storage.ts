@@ -3,6 +3,7 @@
 
 import { ingressPath } from "@/ha/ingress";
 import { devLog } from "@/utils/devLog";
+import { backendFetch } from "@/auth/sessionLost";
 
 const DB_NAME = "villa-kiosk-db";
 const STORE = "models";
@@ -287,7 +288,7 @@ async function postUploadOnce(
   const timer = setTimeout(() => ctl.abort(), timeoutMs);
   let resp: Response;
   try {
-    resp = await fetch(ingressPath(`model-upload?${query}`), {
+    resp = await backendFetch(ingressPath(`model-upload?${query}`), {
       method: "POST",
       headers: { "Content-Type": "application/octet-stream" },
       body,
@@ -435,7 +436,7 @@ export async function fetchAddonConfig(): Promise<AddonConfig> {
       const tid = setTimeout(() => ctrl.abort(), 3000);
       let resp: Response;
       try {
-        resp = await fetch(ingressPath("addon-config"), { signal: ctrl.signal });
+        resp = await backendFetch(ingressPath("addon-config"), { signal: ctrl.signal });
       } finally {
         clearTimeout(tid);
       }

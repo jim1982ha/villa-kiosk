@@ -16,6 +16,7 @@ import { ingressPath } from "@/ha/ingress";
 import { buildReport, captureError } from "@/utils/diagnostics";
 import { runRegisteredProbe, probeAvailable, formatProbe } from "@/babylon/perfProbe";
 import type { TelemetryKind } from "@/utils/telemetry";
+import { backendFetch } from "@/auth/sessionLost";
 
 interface TelemetryEvent {
   // ⚠️ `string`, not TelemetryKind, and deliberately (2.427.0): these events are
@@ -306,7 +307,7 @@ export default function TelemetryPanel() {
     setBusy(true);
     setError(null);
     try {
-      const r = await fetch(ingressPath(`telemetry${clear ? "?clear=1" : ""}`),
+      const r = await backendFetch(ingressPath(`telemetry${clear ? "?clear=1" : ""}`),
         { credentials: "same-origin" });
       if (r.status === 404) { setError("This add-on build has no telemetry endpoint yet."); setEvents([]); return; }
       if (r.status === 403) { setError("Owner profile required to read telemetry."); setEvents([]); return; }

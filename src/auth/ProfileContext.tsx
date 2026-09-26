@@ -10,7 +10,9 @@ import {
   createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode,
 } from "react";
 import { isRole, type Role } from "./roles";
-import { currentSession } from "./PinVerifier";
+import { currentSession, serverSession } from "./PinVerifier";
+import { onSessionLost, sessionLostDecision } from "./sessionLost";
+import { report as reportTelemetry } from "@/utils/telemetry";
 import { ingressPath } from "@/ha/ingress";
 import { markBoot } from "@/utils/bootTimeline";
 
@@ -139,6 +141,27 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     setRole(null);
     setSwitching(false);
   }, []);
+
+  // ── A SESSION THE SERVER STOPPED HONOURING ENDS HERE (2.496.152) ────────
+  // A 401 from the add-on or the socket's 4401 (sessionLost) is confirmed with
+  // the server — one question in flight at a time — and only a definite "no
+  // session" signs out: locally, since the server has already ended it. The
+  // gate then shows the profile screen instead of a villa stuck "connecting".
+  useEffect(() => {
+    let asking = false;
+    return onSessionLost((source) => {
+      if (asking || role === null) return;
+      asking = true;
+      void serverSession().then((server) => {
+        asking = false;
+        if (sessionLostDecision(role, server) !== "sign-out") return;
+        reportTelemetry("session", { phase: "lost", source, role });
+        try { sessionStorage.removeItem(SESSION_KEY); } catch { /* ignore */ }
+        setRole(null);
+        setSwitching(false);
+      });
+    });
+  }, [role]);
 
   const logoutAll = useCallback(async () => {
     try {

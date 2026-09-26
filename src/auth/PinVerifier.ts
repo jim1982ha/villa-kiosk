@@ -10,6 +10,7 @@
 
 import { ingressPath } from "@/ha/ingress";
 import { ROLE_ORDER, isRole, type Role } from "./roles";
+import type { ServerSession } from "./sessionLost";
 
 export interface VerifyResult {
   ok: boolean;
@@ -42,13 +43,21 @@ export async function pinRequired(): Promise<Record<Role, boolean>> {
  *  payload) resolves to null, which simply means "show the profile picker" —
  *  the pre-existing behaviour, so a stale add-on degrades instead of breaking. */
 export async function currentSession(): Promise<Role | null> {
+  const s = await serverSession();
+  return typeof s === "object" ? (s.role as Role) : null;
+}
+
+/** The same question, answered in three (sessionLost.ServerSession): a role,
+ *  definitely none (the server answered and named no role), or unknown (it
+ *  could not be asked). Signing out needs "none" — see sessionLostDecision. */
+export async function serverSession(): Promise<ServerSession> {
   try {
     const resp = await fetch(ingressPath("auth/session"), { credentials: "same-origin" });
-    if (!resp.ok) return null;
+    if (!resp.ok) return "unknown";
     const data = (await resp.json()) as { role?: unknown };
-    return isRole(data.role) ? data.role : null;
+    return isRole(data.role) ? { role: data.role } : "none";
   } catch {
-    return null;
+    return "unknown";
   }
 }
 
