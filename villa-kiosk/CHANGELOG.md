@@ -1,3 +1,15 @@
+## 2.496.99
+
+### Changed
+- **How badges are grouped into cards and rooms into chips is now a separate,
+  tested part.** Nothing changes on screen. Five rules that each needed a fix
+  in the past are now checked:
+  - "Other" is never drawn as a room.
+  - Every room chip records why it appeared.
+  - A card that loses one of its rooms keeps or frees its other devices,
+    rather than collapsing more rooms.
+  - A card with nowhere to stand becomes its room's chip.
+  - A room you tapped is never collapsed.
 ## 2.496.98
 
 ### Fixed — walking mode
