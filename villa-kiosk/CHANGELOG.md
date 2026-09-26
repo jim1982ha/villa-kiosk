@@ -1,3 +1,12 @@
+## 2.496.139
+
+### Fixed — upstairs, where no room is drawn
+- **A light upstairs over a spot with no upstairs room (a balcony, a
+  landing) no longer takes the shape of the room one floor down.** Its pool
+  of light was cut to the outline of the ground-floor room below, and its
+  glow could disappear altogether. The room banner and a landing's glow
+  also named the room one floor down there; they now name none.
+
 ## 2.496.138
 
 ### Fixed — group cards

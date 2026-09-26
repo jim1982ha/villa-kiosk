@@ -71,6 +71,15 @@ console.log("\n  the plan's other answers (one villa plan, 2.496.91):");
   ck("standing on 2.56 over the living room: the gym above it; on 0.1: the living room",
      s.roomStandingOn(5, 2.56, 5)?.name === "Gym Room" && s.roomStandingOn(5, 0.1, 5)?.name === "Living Room");
   ck("standing outside every room: none", s.roomStandingOn(50, 0, 50) === null);
+  // ⚠️ OUTLINES ARE FLAT; THE STOREY ABOVE IS A SLAB (2.496.139). Upstairs over
+  // the lounge, where the plan draws no upstairs room, the lounge was the only
+  // outline containing the point — and it was returned.
+  ck("standing on 2.56 where only a GROUND room's outline is drawn: no room, not the room below",
+     s.roomStandingOn(17, 2.56, 5) === null, s.roomStandingOn(17, 2.56, 5)?.name);
+  ck("  ...and no floor under it but its own storey's (was the lounge's 0.4)", s.floorUnder(17, 2.6, 5) === null, s.floorUnder(17, 2.6, 5));
+  ck("  ...while the same point on the ground is the lounge, and on its 0.85 tread the staircase",
+     s.roomStandingOn(17, 0.4, 5)?.name === "Lounge" && s.floorUnder(17, 1.5, 5) === 0.4 && s.roomStandingOn(-3, 0.85, 8)?.name === "Staircase");
+  ck("  ...and the terrace at 2.21, under the storey's 2.56, is still upstairs's own", s.roomStandingOn(12, 2.21, 5)?.name === "Tearrace 2F");
   const tie = new Storeys([{ name: "first", floorY: 0, pts: sq(0, 5, 0, 5) }, { name: "second", floorY: 0, pts: sq(0, 5, 0, 5) }]);
   ck("two rooms on one floor over one point: the FIRST listed (as a single-storey villa always did)", tie.roomStandingOn(1, 0, 1)?.name === "first");
   ck("no rooms: no ground rooms", new Storeys([]).groundRooms().length === 0);

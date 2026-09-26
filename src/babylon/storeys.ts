@@ -90,6 +90,9 @@ export class Storeys<R extends StoreyRoomIn = StoreyRoomIn> {
   private readonly order: number[];
   private readonly floor = new Map<number, number>();
   private readonly of = new Map<R, number>();
+  /** Each room's ceiling: the floor of the storey above its own (Infinity at
+   *  the top). Nothing standing at or above it is IN that room. */
+  private readonly ceiling = new Map<R, number>();
 
   constructor(rooms: readonly R[]) {
     this.rooms = rooms;
@@ -121,6 +124,22 @@ export class Storeys<R extends StoreyRoomIn = StoreyRoomIn> {
       this.floor.set(s, Math.min(...ys.filter((y) => Math.round(y * 10) === best)));
     }
     this.order = [...this.floor.keys()].sort((a, b) => this.floor.get(a)! - this.floor.get(b)!);
+    for (const [r, s] of this.of) this.ceiling.set(r, this.floorAbove(s));
+  }
+
+  /**
+   * Whether a floor at `y` is under the storey above `room` rather than in it.
+   * ⚠️ ROOM OUTLINES ARE FLAT AND THE STOREYS' LIE OVER EACH OTHER (2.496.139).
+   * Standing upstairs where the plan draws no upstairs room — a balcony, a
+   * landing added by hand — the only outline containing the point was the
+   * ground-floor room beneath it, and "nearest floor of the rooms containing
+   * it" named that room: an upstairs lamp's pool was clipped to the living
+   * room's outline and its glow cut off at a ceiling BELOW the lamp, and the
+   * walk-in banner named the room one floor down. The next storey's floor is
+   * a slab between the two, so a room is never the answer from above it.
+   */
+  private aboveCeiling(room: R, y: number): boolean {
+    return y >= (this.ceiling.get(room) ?? Infinity) - FLOOR_SLACK_M;
   }
 
   /** How many storeys there are. */
@@ -178,8 +197,8 @@ export class Storeys<R extends StoreyRoomIn = StoreyRoomIn> {
   }
 
   /**
-   * The room a point STANDING on `floorY` is in: of the rooms containing it, the
-   * one whose own floor is NEAREST — for the callers that already know which
+   * The room a point STANDING on `floorY` is in: of the rooms containing it and
+   * not under the storey above (see aboveCeiling), the one whose own floor is NEAREST — for the callers that already know which
    * floor they are on (the walker's feet, a landing anchor, a probed floor),
    * rather than guessing from a fixture's mounting height.
    *
@@ -207,7 +226,7 @@ export class Storeys<R extends StoreyRoomIn = StoreyRoomIn> {
   roomStandingOn(x: number, floorY: number, z: number): R | null {
     let best: R | null = null, d = Infinity;
     for (const r of this.rooms) {
-      if (!pointInPolygon(x, z, r.pts)) continue;
+      if (!pointInPolygon(x, z, r.pts) || this.aboveCeiling(r, floorY)) continue;
       const e = Math.abs(r.floorY - floorY);
       if (e < d) { d = e; best = r; }
     }
@@ -228,11 +247,12 @@ export class Storeys<R extends StoreyRoomIn = StoreyRoomIn> {
   }
 
   /** The floor of the room a point stands in or above: of the rooms
-   *  containing it, the highest floor not above it. Null outside every room. */
+   *  containing it on its own storey, the highest floor not above it. Null
+   *  outside every room. */
   floorUnder(x: number, y: number, z: number): number | null {
     let best: number | null = null;
     for (const r of this.rooms) {
-      if (r.floorY > y + FLOOR_SLACK_M || !pointInPolygon(x, z, r.pts)) continue;
+      if (r.floorY > y + FLOOR_SLACK_M || this.aboveCeiling(r, y) || !pointInPolygon(x, z, r.pts)) continue;
       if (best === null || r.floorY > best) best = r.floorY;
     }
     return best;

@@ -58,6 +58,14 @@ console.log("\n  outside every room:");
      over.room === null && over.radius === P.LIGHT_POOL_RADIUS, { room: over.room?.name, radius: over.radius });
 }
 {
+  // ⚠️ 2.496.139: over the porch's outline, upstairs, on a slab the plan draws
+  // no room for. The porch was the only outline there and was named its room.
+  const at = P.placeLight(5, 7, 5.0, 2.56, probe(() => 2.56), plan);
+  ck("an upstairs lamp over a ground-floor room's outline is not in that room", at.room === null && at.notes.includes("bounded"), at.room?.name);
+  ck("  ...its glow held back at ITS floor, not the porch's, and nothing above stops it (it was cut at 2.56, below the lamp)",
+     at.glowFloorY === 2.56 && at.ceilingY === Infinity, { glowFloorY: at.glowFloorY, ceilingY: at.ceilingY });
+}
+{
   const at = P.placeLight(0, 0, 2.3, 0.02, probe(() => null), plan);
   ck("no floor found: the room by the lamp's height, the glow on the pool's first floor", at.surfaceY === null && at.room?.name === "Living Room" && at.glowFloorY === 0.02 && at.notes.includes("nofloor"), at);
 }
