@@ -1,3 +1,15 @@
+## 2.496.171
+
+### Behind the scenes
+- How a baked villa is lit (no ambient-occlusion pass, its own day and night
+  look) is read from one table instead of three separate switches.
+- The sun's position and the day/night light levels are computed in one
+  tested place, and "Night dimming" follows a single rule for the lights and
+  the exposure — every number unchanged, checked over hundreds of sun
+  positions.
+- The bird's-eye camera's framing and its zoom, tilt and pan limits are
+  computed in one tested place instead of eight. Nothing changes on screen.
+
 ## 2.496.170
 
 ### Behind the scenes
