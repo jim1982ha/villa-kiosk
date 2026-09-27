@@ -37,6 +37,7 @@ import type { Scene } from "@babylonjs/core/scene";
 import { Animation } from "@babylonjs/core/Animations/animation";
 import { CubicEase, EasingFunction } from "@babylonjs/core/Animations/easing";
 import { TapRecognizer } from "./TapRecognizer";
+import { PointerRoster } from "./pointerRoster";
 import { cameraFrame } from "./cameraFrame";
 import { BETA_MAX, BETA_MIN, clampBeta, clampPose, clampRadius, clampTarget, fitFrame, type PanBounds, type RadiusLimits } from "./overviewPose";
 // Babylon prototype patches this module depends on — see babylonSideEffects.
@@ -108,6 +109,7 @@ export class OverviewController {
   constructor(scene: Scene, canvas: HTMLCanvasElement, cb: OverviewCallbacks) {
     this.scene = scene;
     this.canvas = canvas;
+    this.pointers = new PointerRoster(canvas);
     this.cb = cb;
 
     this.camera = new ArcRotateCamera(
@@ -262,7 +264,10 @@ export class OverviewController {
   dispose(): void { this.disable(); }
 
   // ── Pointer state ──────────────────────────────────────────────────────────
-  private pointers = new Map<number, { x: number; y: number; type: string; captured: boolean }>();
+  // The tracked pointers, with the self-heal for one the browser dropped
+  // silently (2.323.0) — shared with the walk controller since 2.496.195
+  // (pointerRoster.ts, where the why lives).
+  private readonly pointers: PointerRoster;
 
   // Two-finger gesture snapshot. `a*/b*` are the two fingers' positions from the
   // PREVIOUS pointermove (for incremental zoom/rotate/tilt deltas); `start*` are
@@ -285,10 +290,9 @@ export class OverviewController {
   private zooming = false;
 
   private onPointerDown = (e: PointerEvent): void => {
-    this.dropLostPointers();
-    let captured = true;
-    try { this.canvas.setPointerCapture(e.pointerId); } catch { captured = false; }
-    this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, type: e.pointerType, captured });
+    if (this.pointers.down(e.pointerId, e.clientX, e.clientY, e.pointerType) > 0 && this.pointers.size <= 1) {
+      this.touchBase = null;
+    }
 
     if (this.pointers.size === 1) {
       this.tap.begin(e.clientX, e.clientY);
@@ -308,14 +312,9 @@ export class OverviewController {
   };
 
   private onPointerMove = (e: PointerEvent): void => {
-    const prev = this.pointers.get(e.pointerId);
-    if (!prev) return;
-    const oldX = prev.x;
-    const oldY = prev.y;
-    const dx = e.clientX - oldX;
-    const dy = e.clientY - oldY;
-    prev.x = e.clientX;
-    prev.y = e.clientY;
+    const moved = this.pointers.move(e.pointerId, e.clientX, e.clientY);
+    if (!moved) return;
+    const { oldX, oldY, dx, dy } = moved;
     e.preventDefault();
 
     // A modifier-drag (rotate/zoom) is never a tap; otherwise drift cancels it.
@@ -344,45 +343,8 @@ export class OverviewController {
     this.cb.onActivity();
   };
 
-  /**
-   * Forget pointers the browser has stopped telling us about.
-   *
-   * ── Why this has to exist (2.323.0) ──────────────────────────────────────
-   * EVERY gesture decision here is a count: `size === 1` arms the tap and pans,
-   * `size >= 2` rotates and tilts, and `size === 0` is what actually FIRES the
-   * tap. So one entry that never gets its `pointerup` breaks two things at
-   * once, and they were reported together — an aggregated room badge that does
-   * nothing when tapped, and a one-finger drag that tilts the camera "as if
-   * ctrl were held". Both are the same stale entry: the tap never arms and
-   * never fires because the count is never 1 and never 0, and the drag reads as
-   * the second finger of a two-finger gesture.
-   *
-   * A missed `pointerup` is not a hypothetical. `pointercancel` is handled, but
-   * WebKit does not always send one — a drawing-buffer resize during an active
-   * touch is one way to lose the sequence, which is why SceneManager no longer
-   * changes resolution inside a pointer handler.
-   *
-   * `hasPointerCapture` is the exact question to ask, because this handler
-   * captures every pointer it tracks: losing capture without an up or a cancel
-   * means the browser ended that pointer and did not say so. Only entries we
-   * KNOW we captured are eligible — if `setPointerCapture` threw, absent
-   * capture proves nothing, and pruning on it would turn a live two-finger
-   * gesture into a pan mid-stroke.
-   */
-  private dropLostPointers(): void {
-    if (this.pointers.size === 0) return;
-    for (const [id, p] of this.pointers) {
-      if (!p.captured) continue;
-      let live = true;
-      try { live = this.canvas.hasPointerCapture(id); } catch { live = false; }
-      if (!live) this.pointers.delete(id);
-    }
-    if (this.pointers.size === 0) this.touchBase = null;
-  }
-
   private onPointerUp = (e: PointerEvent): void => {
-    this.pointers.delete(e.pointerId);
-    try { this.canvas.releasePointerCapture(e.pointerId); } catch { /**/ }
+    this.pointers.up(e.pointerId);
 
     if (this.pointers.size < 2) {
       // Fewer than 2 fingers left — reset the two-finger baseline.
@@ -403,14 +365,14 @@ export class OverviewController {
 
   // ── Two-finger touch: pinch→zoom, twist→rotate, centroid-Y→tilt ───────────
   private seedTouchBase(): void {
-    const pts = [...this.pointers.values()];
+    const pts = this.pointers.values();
     if (pts.length < 2) return;
     const [a, b] = pts;
     this.touchBase = { ax: a.x, ay: a.y, bx: b.x, by: b.y, startAy: a.y, startBy: b.y };
   }
 
   private handleTwoFingerTouch(): void {
-    const pts = [...this.pointers.values()];
+    const pts = this.pointers.values();
     if (pts.length < 2) return;
     const [a, b] = pts;
 

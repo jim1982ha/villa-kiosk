@@ -20,7 +20,6 @@ import { roomKey } from "@/config/roomKey";
 
 import { CameraController } from "./CameraController";
 import { OverviewController, ZOOM_STEP_FACTOR } from "./OverviewController";
-import { LightingSystem } from "./LightingSystem";
 import { SunController } from "./SunController";
 import { SkyDome } from "./SkyDome";
 import { NightSky } from "./NightSky";
@@ -196,7 +195,6 @@ export class SceneManager {
   private instrumentation: SceneInstrumentation | null = null;
   readonly camera: CameraController;
   readonly overview: OverviewController;
-  readonly lighting: LightingSystem;
   readonly sun: SunController;
   readonly sky: SkyDome;
   readonly floors: FloorManager;
@@ -401,10 +399,9 @@ export class SceneManager {
     hemi.specular = new Color3(0.1, 0.1, 0.1);
     this.hemi = hemi;
 
-    this.lighting = new LightingSystem(this.scene);
     // Procedural sky shown through the windows; driven by the same sun below.
     this.sky = new SkyDome(this.scene);
-    this.sun = new SunController(this.lighting, this.hemi, opts.config, this.sky, this.frames, this.look);
+    this.sun = new SunController(this.scene, this.hemi, opts.config, this.sky, this.frames, this.look);
     // Moon + stars. Entirely optional to the rest of the scene, and computed
     // from date/lat/lng — an install without HA's opt-in Moon integration gets
     // exactly the same night sky, which is the requirement.
@@ -2937,7 +2934,6 @@ export class SceneManager {
     shell.scene = null;
     shell.camera = null;
     shell.overview = null;
-    shell.lighting = null;
     shell.sun = null;
     shell.sky = null;
     shell.floors = null;

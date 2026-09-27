@@ -21,6 +21,7 @@ import { clamp, pointInPolygon, type Pt2 } from "@/utils/geometry";
 import { Storeys } from "./storeys";
 import { rayTargets } from "./meshRoles";
 import { TapRecognizer } from "./TapRecognizer";
+import { PointerRoster } from "./pointerRoster";
 // Babylon prototype patches this module depends on — see babylonSideEffects.
 import "./babylonSideEffects";
 import { keyLook, PITCH_LIMIT } from "./keyLook";
@@ -100,6 +101,7 @@ export class CameraController {
     this.config = config;
     this.cb = cb;
     this.canvas = canvas;
+    this.pointers = new PointerRoster(canvas);
     this.eyeHeight = eyeHeightOf(config.eyeHeight);
     this.walkSpeed = config.walkSpeed;
 
@@ -203,7 +205,9 @@ export class CameraController {
   }
 
   // ── Unified pointer look / two-finger walk + pinch-zoom / double-tap ────────
-  private pointers = new Map<number, { x: number; y: number; type: string }>();
+  // The tracked pointers, with the self-heal for one the browser dropped
+  // silently — shared with the bird's-eye controller (pointerRoster.ts).
+  private readonly pointers: PointerRoster;
   private pinchDist = 0; // current separation between two touch pointers (px)
   private static readonly LOOK_SENS = 0.004; // rad per px
 
@@ -214,8 +218,7 @@ export class CameraController {
   private readonly tap = new TapRecognizer((x, y) => this.cb.onLongPress?.(x, y));
 
   private onPointerDown = (e: PointerEvent): void => {
-    this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, type: e.pointerType });
-    try { this.canvas.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
+    if (this.pointers.down(e.pointerId, e.clientX, e.clientY, e.pointerType) > 0) this.pinchDist = 0;
 
     // Begin a tap candidate on the first pointer; a second pointer (multi-touch
     // gesture) cancels it so a pinch/two-finger walk never fires a pick.
@@ -224,7 +227,7 @@ export class CameraController {
 
     // Double-tap / double-click → walk to the tapped spot. Only on a fresh touch
     // (first finger) or a mouse press, so a two-finger walk doesn't trigger it.
-    const touches = this.touchCount();
+    const touches = this.pointers.touchCount();
     if ((e.pointerType !== "touch" || touches === 1)
       && this.tap.isDoublePress(e.clientX, e.clientY)) {
       this.walkToScreen(e.clientX, e.clientY);
@@ -233,22 +236,19 @@ export class CameraController {
   };
 
   private onPointerMove = (e: PointerEvent): void => {
-    const prev = this.pointers.get(e.pointerId);
-    if (!prev) return; // mouse moving with no button held → ignore (look only on drag)
-    const dx = e.clientX - prev.x;
-    const dy = e.clientY - prev.y;
-    prev.x = e.clientX;
-    prev.y = e.clientY;
+    const moved = this.pointers.move(e.pointerId, e.clientX, e.clientY);
+    if (!moved) return; // mouse moving with no button held → ignore (look only on drag)
+    const { dx, dy } = moved;
     e.preventDefault();
 
     // Moving past the tolerance turns the gesture into a look/drag, not a tap.
     this.tap.moved(e.clientX, e.clientY);
 
-    if (this.touchCount() >= 2) {
+    if (this.pointers.touchCount() >= 2) {
       // ── Pinch-to-zoom: change in finger separation = forward / back movement.
-      // Detect AFTER updating prev (so pointers map holds current positions).
-      const touches = [...this.pointers.values()].filter((p) => p.type === "touch");
-      if (touches.length === 2) {
+      // Detect AFTER updating prev (so the roster holds current positions).
+      const touches = this.pointers.touchPair();
+      if (touches) {
         const dist = Math.hypot(touches[1].x - touches[0].x, touches[1].y - touches[0].y);
         if (this.pinchDist > 0) {
           const pinchDelta = dist - this.pinchDist; // +ve = spread = walk forward
@@ -274,10 +274,9 @@ export class CameraController {
   };
 
   private onPointerUp = (e: PointerEvent): void => {
-    this.pointers.delete(e.pointerId);
-    try { this.canvas.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+    this.pointers.up(e.pointerId);
     // Reset pinch baseline when we're back to 0 or 1 touch fingers.
-    if (this.touchCount() < 2) this.pinchDist = 0;
+    if (this.pointers.touchCount() < 2) this.pinchDist = 0;
 
     // Fire a tap (→ entity pick) only if this was the last pointer up and the
     // gesture stayed a brief, stationary tap. pointercancel/leave also route
@@ -290,12 +289,6 @@ export class CameraController {
       if (this.tap.complete(e) === "tap") this.cb.onTap?.(e.clientX, e.clientY);
     }
   };
-
-  private touchCount(): number {
-    let n = 0;
-    for (const p of this.pointers.values()) if (p.type === "touch") n++;
-    return n;
-  }
 
   /** Pick the floor under a screen (client) point and walk there. */
   private walkToScreen(clientX: number, clientY: number): void {

@@ -1,3 +1,17 @@
+## 2.496.195
+
+### Fixed
+- **Walking mode recovers from a lost touch.** When the browser silently
+  ended a finger (it happens on iPad), the walk camera kept counting it, so
+  the next one-finger drag behaved like a two-finger gesture and taps on
+  devices did nothing until the page was reloaded. The bird's-eye view has
+  had this recovery since 2.323.0; both views now share it.
+
+### Behind the scenes
+- The camera's field-of-view rule (sky, framing, zoom, badges) is under test;
+  a 31-line pass-through class for the sun light was folded into its one
+  caller.
+
 ## 2.496.194
 
 ### Fixed
