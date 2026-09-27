@@ -4,39 +4,18 @@
    same visual language. .panel-modal only adds what's specific to it: a
    readable width and its own internal scroll (content can be taller than a
    preset/high climate or camera-motion panel comfortably fits). */
-/* Same 3-section layout as the Settings modal (.settings-header/.settings-body/
-   .settings-footer): the HEADER and FOOTER stay put and only the BODY scrolls.
-   It used to scroll as one block (overflow-y on the modal itself), so the
-   device name/badge scrolled away on a long panel — inconsistent with
-   Settings, which pins its header. */
 .modal.panel-modal {
   max-width: 460px; overflow: hidden; overscroll-behavior: contain;
 }
-.panel-header { flex: 0 0 auto; }
-.panel-body { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; padding-top: 4px; }
-/* Edit/Close live in .panel-footer, not here (see BasePanel) — the header is
-   ONLY the icon/title/room/entity-id, so a long device name always gets the
-   full row width to wrap into instead of fighting two buttons for room
-   (the bug report this fixes: the buttons got pushed off-screen). */
-.panel-header { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 20px; }
-.panel-header .title { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1 1 auto; }
-/* A panel's one or two most-used actions (e.g. SummaryGroupPanel's "Turn all
-   on/off") — same idea as Settings' theme buttons living in ITS header. Top-
-   aligned with the close button, which .panel-header already is via
-   align-items:flex-start above. */
-.panel-header-actions { flex: 0 0 auto; }
-/* Single line, truncated with an ellipsis, instead of wrapping a long device
-   name onto a second line. */
-.panel-header .title h2 {
-  /* Smaller than a typical modal heading on purpose — this is the ONE spot
-     that echoes an arbitrary, unbounded device name (every other modal's
-     title is a short fixed string), so it gets more of the row before
-     truncating instead of the same size as e.g. Settings' fixed heading. */
-  margin: 0; font-family: var(--font-display); font-weight: 600; font-size: var(--text-lg);
-  letter-spacing: -0.015em;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
-}
-.panel-header .room { font-size: var(--text-xs); color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.08em; }
+/* The header, body and footer are THE modal sections (04-modals.css) — the
+   device panel, Energy and Weather use them exactly as Settings does. Only the
+   title row's device-specific parts are here. */
+.modal-header .title { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1 1 auto; }
+.modal-header-actions { flex: 0 0 auto; }
+/* A device name is unbounded: single line, truncated with an ellipsis. Same
+   size and weight as every modal title (.modal h2). */
+.modal-header .title h2 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.modal-header .room { font-size: var(--text-xs); color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.08em; }
 .panel-icon { width: 44px; height: 44px; border-radius: 12px; background: var(--bg-card); display: flex; align-items: center; justify-content: center; color: var(--accent); flex-shrink: 0; }
 /* Real map badge shown in the panel header. As a button it's a colour editor. */
 .panel-icon .panel-badge-img, .panel-badge-btn .panel-badge-img { width: 44px; height: 44px; display: block; border-radius: 12px; }
@@ -63,35 +42,6 @@
   font-size: var(--text-sm); box-shadow: none; border: 1px solid var(--hairline);
 }
 .badge-swatch.custom input[type="color"] { width: 26px; height: 26px; border: none; background: none; padding: 0; cursor: pointer; }
-/* Text-labelled button(s), right-aligned, no separator above (see
-   .settings-footer for the same rule applied to the other modal family).
-   Unlike .settings-footer this sits INSIDE the modal's own padding
-   (.panel-modal has no separate header/body/footer padding of their own,
-   see .modal:not(.settings-modal)), so it's inset like the rest of the
-   content rather than bleeding to the card edge. */
-.panel-footer {
-  flex: 0 0 auto;
-  display: flex; align-items: center; justify-content: flex-end; gap: 10px;
-  margin-top: 20px;
-}
-/* Secondary actions in a panel footer (Edit…) read as a soft "ghost" pill
-   rather than a default-looking bordered box — the boxy outline was the
-   single most old-fashioned thing left in these dialogs. */
-.panel-footer .btn {
-  border: none;
-  background: var(--bg-input);
-  border-radius: 999px;
-  padding: 10px 20px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  transition: background 0.15s ease, color 0.15s ease;
-}
-.panel-footer .btn:hover {
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
-  color: var(--accent);
-}
-.panel-footer .btn.primary { background: var(--accent); color: var(--text-on-accent); }
-
 .row-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
 .row-buttons.scroll { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
 /* A panel's controls while Home Assistant has lost the device. */

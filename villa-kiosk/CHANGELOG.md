@@ -1,3 +1,17 @@
+## 2.496.175
+
+### Changed — every window looks the same
+- **All windows now share one frame**: Settings, Energy, Weather, the device
+  windows, the Facility dialogs and the small questions all have the same
+  header height, the same thin line under the title, the same footer and the
+  same title size.
+- **Footer buttons use the soft rounded style** of the Energy window's
+  "History and trends" button everywhere — e.g. Settings' "Advanced Settings"
+  is no longer an outlined box.
+- **The Facility "report a problem" and fault-update dialogs** close from a
+  button in the footer like every other window, instead of a small ✕ in the
+  corner.
+
 ## 2.496.174
 
 ### Fixed — icons while walking

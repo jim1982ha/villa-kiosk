@@ -73,10 +73,15 @@
 .modal input:focus, .modal select:focus { border-color: var(--accent); outline: none; }
 .modal-actions { display: flex; gap: 12px; margin-top: 24px; justify-content: flex-end; }
 
-/* Plain (non-settings) modals — onboarding, bind, marker — pad their own
-   content. The settings modal instead pads its header/body/footer sections, so
-   it's excluded here. (Mobile overrides this in the media query below.) */
-.modal:not(.settings-modal) { padding: 24px 28px; }
+/* ── THE MODAL SHELL: header · body · footer ─────────────────────────────
+   ⚠️ ONE DEFINITION FOR EVERY DIALOG (2.496.175). There were three: the
+   settings family (.settings-header/-body/-footer, padded sections), the panel
+   family (.panel-header/-body/-footer inside a padded card — device panels,
+   Energy, Weather, the group modal, the prompts) and two Facility dialogs using
+   .modal-header/.modal-body with no rules at all. Side by side they differed in
+   header height, footer height, separators, title size and the footer's left
+   button (an outlined box in Settings, a soft pill in Energy). The card carries
+   no padding; the sections do, the same everywhere. */
 
 /* Settings modal — scrollable body, sticky footer. 50% wider than a plain
    modal (520 → 780) so the 3-across device-icon grid and the two-column
@@ -92,7 +97,7 @@
    shrinks to content, so switching tabs visibly resized the whole dialog
    around the user — jarring, and inconsistent with every other modal, which
    only ever shows one view so this never showed up there. Composes with
-   `.modal`'s existing flex column + `.settings-body`'s own
+   `.modal`'s existing flex column + `.modal-body`'s own
    `flex:1 1 auto; overflow-y:auto`: giving the CARD a real height (not just a
    ceiling) is what makes that flex-basis resolve to a stable size, so the
    body — not the dialog — is the only thing that scrolls. Mobile is
@@ -105,7 +110,10 @@
   .modal-fixed-height { height: min(680px, 90vh); }
 }
 /* Header is a row: title left, the icon-only theme selector right. */
-.settings-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 24px 28px 16px; border-bottom: 1px solid var(--hairline); flex: 0 0 auto; }
+/* min-height: the tallest thing a header holds (a 44px device icon) plus the
+   padding, so every header is the same height whether it carries an icon, the
+   theme selector or only a title. */
+.modal-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 24px 28px 16px; min-height: 84px; box-sizing: border-box; border-bottom: 1px solid var(--hairline); flex: 0 0 auto; }
 /* Matches .segmented-icons' own rendered height exactly (34px button +
    3px×2 padding = 40px) — the default .icon-btn (48px) sat visibly taller
    than the theme selector right next to it in this same header row. */
@@ -116,7 +124,7 @@
    icons right), so opening rightward would push it off the modal/viewport.
    Anchor from the right edge instead (opens leftward) whenever it's in a
    header row. */
-.settings-header .info-tip .info-pop { left: auto; right: 0; }
+.modal-header .info-tip .info-pop { left: auto; right: 0; }
 /* The header's theme control now carries a written word. Two icon-only
    sun/moon triplets on one screen (this and Villa lighting) were reported as
    reading like the same duplicated control — see SettingsModal's note. The
@@ -133,17 +141,35 @@
    .info-pop tooltip on a narrow phone) put a horizontal scrollbar on the
    whole Advanced Settings body. Nothing in the body legitimately needs
    horizontal scroll (wide tables card-stack on mobile already). */
-.settings-body { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; padding: 8px 28px 12px; }
-.settings-body label {
+.modal-body { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; padding: 8px 28px 12px; }
+.modal-body label {
   display: block; color: var(--text-secondary);
   font-size: var(--field-label-size); margin: 14px 0 var(--field-label-gap);
 }
-.settings-body label.toggle { display: flex; align-items: center; gap: 12px; margin-top: 12px; cursor: pointer; font-size: var(--text-md); color: var(--text-primary); }
-/* No separator above this footer, same reasoning as .panel-footer (device
+.modal-body label.toggle { display: flex; align-items: center; gap: 12px; margin-top: 12px; cursor: pointer; font-size: var(--text-md); color: var(--text-primary); }
+/* No separator above this footer, same reasoning as .modal-footer (device
    panels) — the same visual rule applied once here since this ONE class
    already backs every settings-style modal (Settings, Advanced Settings,
    Facility, Legend, First-run tips), rather than a per-modal exception. */
-.settings-footer { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 28px; background: var(--bg-overlay); }
+.modal-footer { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 28px; background: var(--bg-overlay); }
+/* The footer is ALWAYS two slots, space-between: the left one (a control that
+   leaves or a hint — or an empty <span /> spacer) and the right one (the
+   answer). Several buttons in one slot sit in a group. */
+.modal-footer-group { display: flex; align-items: center; gap: 8px; }
+/* Every footer button is a soft pill — the look the Energy/Weather footer had
+   and the owner chose for all of them (Settings' "Advanced Settings" was an
+   outlined box). The primary action keeps the accent. */
+.modal-footer .btn {
+  border: none; background: var(--bg-input); border-radius: 999px;
+  padding: 10px 20px; font-weight: 500; color: var(--text-secondary);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.modal-footer .btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent);
+}
+.modal-footer .btn.primary { background: var(--accent); color: var(--text-on-accent); }
+.modal-footer .btn.danger { background: var(--status-danger); color: #fff; }
+.modal-footer .btn.primary:hover:not(:disabled) { background: var(--accent); color: var(--text-on-accent); filter: brightness(1.06); }
 
 /* Section headings inside Settings — quiet, uppercase group labels. */
 .settings-section-title { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: var(--tracking-eyebrow); color: var(--text-secondary); margin: 24px 0 12px; font-weight: 600; }
@@ -349,7 +375,7 @@
      fix that: once content is taller than the room actually available above
      the button, part of the box renders above y=0 of the viewport, which is
      a hard clip no scroll container can reveal. Downward has the entire rest
-     of .settings-body's scrollable area to grow into instead.
+     of .modal-body's scrollable area to grow into instead.
      Anchored from the LEFT (opens rightward): the (i) button sits at the
      LEFT edge of its row, so right: 0 (opening leftward) pushed the whole
      popover off the left edge of the modal/viewport.

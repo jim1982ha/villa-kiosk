@@ -14,7 +14,7 @@ import type { Observation } from "@/config/observation";
  * HISTORY AND TRENDS screen. The window owns what both copied — which screen
  * is shown, opening each at its top (the body is one scroll area, so History
  * opened wherever Now had been scrolled to), the back arrow, the header's
- * live note or period picker, and the footer button (in Settings' "Advanced
+ * live note or period picker, and the footer button (the modal shell's footer pill, as "Advanced
  * Settings" style, visible however far the body scrolls). Each window passes
  * only its content; each screen mounts only while shown.
  */
@@ -32,7 +32,7 @@ export function DataWindow({ title, icon, live, picker, className, onClose, now,
 }) {
   const [view, setView] = useState<"now" | "history">("now");
   const topRef = useRef<HTMLDivElement>(null);
-  useEffect(() => { topRef.current?.closest(".panel-body")?.scrollTo({ top: 0 }); }, [view]);
+  useEffect(() => { topRef.current?.closest(".modal-body")?.scrollTo({ top: 0 }); }, [view]);
   const back = (
     <button type="button" className="data-window-back" onClick={() => setView("now")} aria-label={`Back to ${title}`}>
       <ChevronLeft size={22} />

@@ -176,7 +176,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
         aria-modal="true"
         aria-label="Settings"
       >
-        <div className="settings-header">
+        <div className="modal-header">
           <h2>Settings</h2>
           {/* Theme selector lives in the header, icon-only + right-aligned —
               self-explanatory glyphs, no Save step (applies and persists
@@ -233,7 +233,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             </div>
           )}
         </div>
-        <div className="settings-body">
+        <div className="modal-body">
 
         {/* RBAC: shared branding — administration, not personal taste. */}
         {can("editConfig") && (
@@ -523,7 +523,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
         </>
         )}
 
-        </div>{/* end settings-body */}
+        </div>{/* end modal-body */}
 
         {/* ⚠️ THE FOOTER OWNS THE CLOSE QUESTION for its own button; this file
             owns it for Escape and the backdrop. Both raise the SAME

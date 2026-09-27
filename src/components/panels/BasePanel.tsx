@@ -8,7 +8,7 @@
 // instead" chrome every other modal in the app uses (Settings, Advanced
 // Settings, Facility, Legend…), so this is the ONE shared place that
 // convention comes from — title truncates with an ellipsis (see
-// .panel-header .title h2 in styles.css) instead of fighting a footer button
+// .modal-header .title h2 in styles.css) instead of fighting a footer button
 // for room.
 
 import { useState, type ReactNode } from "react";
@@ -125,7 +125,7 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
         aria-modal="true"
         aria-label={room ? `${title}, ${room}` : title}
       >
-        <div className="panel-header">
+        <div className="modal-header">
           <div className="title">
             {headerIcon}
             <div style={{ minWidth: 0 }}>
@@ -133,9 +133,9 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
               {room && <div className="room">{room}</div>}
             </div>
           </div>
-          {headerActions && <div className="panel-header-actions">{headerActions}</div>}
+          {headerActions && <div className="modal-header-actions">{headerActions}</div>}
         </div>
-        <div className="panel-body">
+        <div className="modal-body">
           {/* The device's linked entity, if one is configured (Advanced
               Settings). Rendered HERE, in the shared chrome, so every panel
               type gets it identically the moment that field is set — this is
@@ -193,9 +193,10 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
               structural rather than fixed twice. */}
           {history !== false && entityId && <LastDayTimeline entityId={entityId} />}
         </div>
-        <div className="panel-footer"
-          style={{ justifyContent: onEdit || onReportFault || footerLeading ? "space-between" : "flex-end" }}>
-          <div className="panel-footer-left">
+        {/* The modal shell's footer (04-modals.css) — the left group is always
+            there, empty or not, so Close sits right as in every dialog. */}
+        <div className="modal-footer">
+          <div className="modal-footer-group">
             {footerLeading}
             {onEdit && <button className="btn ghost" onClick={onEdit}>Edit</button>}
             {/* Icon-only, sitting beside Edit: this is a shortcut for a

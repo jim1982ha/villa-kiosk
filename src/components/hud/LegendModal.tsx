@@ -58,7 +58,7 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
   return (
     // Same shell as every other full modal (Settings, Config Editor, group
     // panels) — .settings-modal's 780px width, not the narrow device-panel
-    // card. It already reuses .settings-header/-body/-footer below; sharing
+    // card. It already reuses .modal-header/-body/-footer below; sharing
     // the outer width too means this is a genuine "same modal, different
     // content" reuse instead of its own one-off sizing.
     <div className="modal-backdrop" onClick={onClose}>
@@ -71,10 +71,10 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
         aria-modal="true"
         aria-label="Map colours"
       >
-        <div className="settings-header">
+        <div className="modal-header">
           <h2>Map colours</h2>
         </div>
-        <div className="settings-body">
+        <div className="modal-body">
           <div className="settings-section-title">Device category (badge colour when active)</div>
           <p className="muted body-text" style={{ marginTop: 4 }}>
             A device's badge is plain and neutral at rest — its category
@@ -136,7 +136,7 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
             ))}
           </div>
         </div>
-        <div className="settings-footer">
+        <div className="modal-footer">
           <span />
           <button className="btn primary" onClick={onClose}>Close</button>
         </div>

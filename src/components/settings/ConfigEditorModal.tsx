@@ -161,7 +161,7 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
         aria-modal="true"
         aria-label="Advanced settings"
       >
-        <div className="settings-header">
+        <div className="modal-header">
           {/* tabIndex={-1} + data-autofocus: useModalA11y's default (the
               FIRST focusable descendant) would otherwise land here on the
               (i) model-info button — the very next element — whose tooltip
@@ -204,7 +204,7 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
           )}
         </div>
 
-        {/* ⚠️ OUTSIDE `.settings-body`, LIKE FACILITY'S. The strip is chrome and
+        {/* ⚠️ OUTSIDE `.modal-body`, LIKE FACILITY'S. The strip is chrome and
             the body scrolls; putting the tabs inside would scroll them out of
             reach on the long tabs — the entity table is hundreds of rows. */}
         <ModalTabs
@@ -214,7 +214,7 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
           label="Settings sections"
         />
 
-        <div className="settings-body">
+        <div className="modal-body">
           {glbUpload.uploadMsg && (
             <div className={`test-result ${glbUpload.uploadMsg.ok ? "ok" : "fail"}`} style={{ marginTop: 0 }}>
               {glbUpload.uploadMsg.text}
@@ -277,7 +277,7 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
         {/* No Save: every tab here applies LIVE to the 3D scene through
             `ConfigContext`, which is why the strip above is passed no `commit`
             and a tab switch can lose nothing. */}
-        <div className="settings-footer" style={{ justifyContent: "space-between" }}>
+        <div className="modal-footer">
           <span className="muted body-text" style={{ fontSize: "var(--text-xs)" }}>v{__APP_VERSION__}</span>
           <button className="btn primary" onClick={onBack}>Close</button>
         </div>

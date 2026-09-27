@@ -55,11 +55,11 @@ export default function BadgeColorModal({ current, categoryColor, onChange, onCl
         aria-modal="true"
         aria-label="Badge colour"
       >
-        <div className="panel-header">
+        <div className="modal-header">
           <div className="title"><h2>Icon colour</h2></div>
         </div>
 
-        <div className="panel-body">
+        <div className="modal-body">
           <div className="badge-swatch-grid">
             {SWATCHES.map((hex) => (
               <button
@@ -89,7 +89,8 @@ export default function BadgeColorModal({ current, categoryColor, onChange, onCl
           </div>
         </div>
 
-        <div className="panel-footer">
+        <div className="modal-footer">
+          <span />
           <button className="btn primary" onClick={onClose}>Close</button>
         </div>
       </div>

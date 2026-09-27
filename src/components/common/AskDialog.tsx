@@ -111,8 +111,8 @@ export default function AskDialog({
         aria-modal="true"
         aria-label={title}
       >
-        <div className="panel-header"><div className="title"><h2>{title}</h2></div></div>
-        <div className="panel-body">
+        <div className="modal-header"><div className="title"><h2>{title}</h2></div></div>
+        <div className="modal-body">
           {message && <p style={{ margin: input ? "0 0 14px" : 0 }}>{message}</p>}
           {input && (
             <div className="field" style={{ margin: 0 }}>
@@ -144,7 +144,9 @@ export default function AskDialog({
             </p>
           )}
         </div>
-        <div className="panel-footer">
+        <div className="modal-footer">
+          <span />
+          <div className="modal-footer-group">
           {cancelLabel !== null && (
             <button className="btn ghost" onClick={onCancel}>
               {CancelIcon && <CancelIcon size={16} aria-hidden />}
@@ -161,6 +163,7 @@ export default function AskDialog({
             {ConfirmIcon && <ConfirmIcon size={16} aria-hidden />}
             {confirmLabel}
           </button>
+          </div>
         </div>
       </div>
     </div>

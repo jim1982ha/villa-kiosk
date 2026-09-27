@@ -156,11 +156,11 @@ export default function CockpitModal({ onClose, onOpenEntity }: CockpitModalProp
         aria-modal="true"
         aria-label="Villa Cockpit"
       >
-        <div className="settings-header">
+        <div className="modal-header">
           <h2>Cockpit</h2>
         </div>
 
-        <div className="settings-body">
+        <div className="modal-body">
           {/* ── Villa health headline ──────────────────────────────── */}
           <div className={`cockpit-health cockpit-health-${health.level}`}>
             {health.level === "ok" ? <CheckCircle2 size={22} /> : <TriangleAlert size={22} />}
@@ -302,14 +302,8 @@ export default function CockpitModal({ onClose, onOpenEntity }: CockpitModalProp
           )}
         </div>
 
-        <div className="settings-footer">
-          {/* .settings-footer is `justify-content: space-between` for the
-              common case of TWO children (a left-side action + the primary
-              button on the right) — every other single-button footer in the
-              app (SettingsModal, LegendModal, FirstRunTips) pairs the button
-              with an empty spacer as its first child so space-between still
-              pushes it to the right; this one was missing that spacer,
-              which is why it rendered on the left instead. */}
+        <div className="modal-footer">
+          {/* Two slots, space-between (see .modal-footer): an empty left one. */}
           <span />
           <button className="btn primary" onClick={onClose}>Close</button>
         </div>

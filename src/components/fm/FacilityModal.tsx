@@ -170,7 +170,7 @@ export default function FacilityModal({
           aria-modal="true"
           aria-label="Facility workspace"
         >
-          <div className="settings-header">
+          <div className="modal-header">
             <h2>Facility</h2>
           </div>
 
@@ -187,7 +187,7 @@ export default function FacilityModal({
             label="Facility sections"
           />
 
-          <div className="settings-body">
+          <div className="modal-body">
             {saveError && <div className="fm-banner warn">{saveError}</div>}
             {!ready && <p className="muted body-text">Loading the maintenance record…</p>}
             {ready && tab === "today" && <TodayTab onOpenEntity={onOpenEntity} />}
@@ -217,7 +217,7 @@ export default function FacilityModal({
             )}
           </div>
 
-          <div className="settings-footer" style={{ justifyContent: "space-between" }}>
+          <div className="modal-footer">
             <span className="muted body-text" style={{ fontSize: "var(--text-xs)" }}>
               Maintenance intervals and the spend cap are set in the Schedule tab
             </span>

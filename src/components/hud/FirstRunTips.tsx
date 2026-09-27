@@ -45,10 +45,10 @@ export default function FirstRunTips({ onClose }: { onClose: () => void }) {
     // big empty area below instead of centered like every other popup.
     <div className="modal-backdrop panel-modal-backdrop first-run-backdrop" onClick={dismiss}>
       <div ref={dialogRef} className="modal panel-modal first-run-tips" role="dialog" aria-modal="true" aria-label="Quick tips" onClick={(e) => e.stopPropagation()}>
-        <div className="settings-header">
+        <div className="modal-header">
           <h2>Quick tips</h2>
         </div>
-        <div className="settings-body">
+        <div className="modal-body">
           <ul className="first-run-tip-list">
             <li>
               <Armchair size={18} />
@@ -64,7 +64,7 @@ export default function FirstRunTips({ onClose }: { onClose: () => void }) {
             </li>
           </ul>
         </div>
-        <div className="settings-footer">
+        <div className="modal-footer">
           <span />
           <button className="btn primary" onClick={dismiss}>Got it, thanks</button>
         </div>

@@ -6299,7 +6299,7 @@ export class EntityVisuals {
 
   /** Distil any entity's live state into one of the colour-coded badge kinds.
    *  The per-type "on" vocabulary lives in utils/deviceActivity's
-   *  classifyDeviceActivity — shared with Dashboard.tsx's panel-header badge
+   *  classifyDeviceActivity — shared with Dashboard.tsx's modal-header badge
    *  and SummaryGroupPanel's device list, so all three read a device's
    *  activity identically. Only the linkActiveIds overlay below is specific
    *  to the map (a Babylon-side, confirmed-state-only signal). */

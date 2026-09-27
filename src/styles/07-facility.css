@@ -130,7 +130,6 @@
   padding: 0; width: var(--touch-min); min-width: var(--touch-min);
   justify-content: center;
 }
-.panel-footer-left { display: flex; align-items: center; gap: 8px; }
 
 /* The shared free-text field (see NotesField). Vertical resize stays available
    on desktop as an escape hatch, but the box auto-grows so it is rarely

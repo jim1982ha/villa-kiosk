@@ -102,7 +102,7 @@ export default function ModalFooter({
   const discardAndClose = () => { commit?.discard?.(); onClose(); };
 
   return (
-    <div className="settings-footer">
+    <div className="modal-footer">
       {commit?.error
         ? <span className="body-text sev-warning" role="alert">{commit.error}</span>
         : leading !== undefined
@@ -111,7 +111,7 @@ export default function ModalFooter({
           ? <span className="muted body-text" style={{ fontSize: "var(--text-xs)" }}>
               {note}
             </span>
-          // ⚠️ THE EMPTY SPACER IS LOAD-BEARING. `.settings-footer` is
+          // ⚠️ THE EMPTY SPACER IS LOAD-BEARING. `.modal-footer` is
           // `space-between`, so the group renders on the LEFT without a first
           // child to push against — a bug CockpitModal shipped and every other
           // single-button footer worked around by hand.
