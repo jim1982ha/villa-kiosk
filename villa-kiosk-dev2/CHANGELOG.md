@@ -1,3 +1,17 @@
+## 2.496.182
+
+### Fixed — privacy of the Facility record
+- **A guest's device no longer downloads the Facility record.** Every cost,
+  note, fault and piece of completed work used to reach any signed-in
+  device, including a guest's phone. A guest now receives none of it; they
+  can still report a problem, and their report is added to the full record
+  on the add-on.
+
+### Changed
+- The Spend tab's two categories are now named "Minor — routine
+  maintenance" and "Major — larger works". They used to cite one contract's
+  clause numbers, which do not belong in an add-on used by any villa.
+
 ## 2.496.181
 
 ### Fixed — a room you tapped stays open
