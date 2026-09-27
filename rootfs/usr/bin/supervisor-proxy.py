@@ -418,11 +418,23 @@ def _refuse(request: web.Request, capability: str | None = None,
     two 403 shapes — `_forbidden(message)` at most, a bare {"error":
     "forbidden"} at two. tests/proxy-rules.py requires every routed handler
     to call this (or to be named there as public, with its reason)."""
+    if request.method not in ("GET", "HEAD", "OPTIONS") and _cross_site(request):
+        return _forbidden("cross-site request refused")
     if not _authorized(request):
         return _unauthorized()
     if capability is not None and not _may(_role_for(request), capability):
         return _forbidden(message)
     return None
+
+
+def _cross_site(request: web.Request) -> bool:
+    """A write the browser itself says came from another site. Defence in
+    depth behind the cookie's SameSite=Lax: that attribute is what stops a
+    hostile page from riding a signed-in session, and this is the second
+    layer that holds if it ever regresses. Only the browser's own verdict is
+    used, and only a definite one — the header is absent on older WebKit and
+    may be dropped by a gateway, and absence must never lock the kiosk out."""
+    return request.headers.get("Sec-Fetch-Site", "").strip().lower() == "cross-site"
 # Safety cap on a single upload (the GLB is the big one, ~tens of MB).
 MAX_UPLOAD_BYTES = 200 * 1024 * 1024
 # Leading bytes the upload must start with for its declared kind: a binary
@@ -1031,19 +1043,27 @@ def _auth_lockout_seconds() -> int:
 
 
 def _client_ip(request: web.Request) -> str:
-    """Best-effort source address for rate-limiting.
+    """The key of a caller's lockout bucket: `<peer>` or `<peer>|<last hop>`.
 
-    Behind Cloudflare + nginx the socket peer is always 127.0.0.1, so the
-    forwarded header is what distinguishes callers. It is client-controllable,
-    which is precisely why it is used ONLY to make the limiter finer-grained
-    and never to grant anything: a forged header can at worst give the forger
-    their own bucket, and the global tier still bounds the total. Falls back to
-    the peer address when the header is absent."""
+    The peer is X-VK-Peer, which nginx sets from the socket it accepted (and
+    overwrites, like X-VK-Ingress — see snippets/backend-proxy.conf); the last
+    hop is the LAST address in X-Forwarded-For, which the gateway in front of
+    us APPENDS: Home Assistant's Ingress appends the browser it authed,
+    Cloudflare's edge appends the true client. Both parts are written by
+    something the caller is not.
+
+    ⚠️ IT USED TO BE THE FIRST FORWARDED HOP — the one address in the request
+    that the caller writes. The docstring reasoned that a forged header "at
+    worst gives the forger their own bucket"; it missed that the forger could
+    pick someone ELSE's: five wrong passcodes with the owner's address in the
+    header locked the owner's device out, repeatably, and a fresh address per
+    attempt minted a fresh bucket, leaving only the global tier to bound
+    guessing (2.496.206). Now a forged header can only fill buckets under the
+    forger's OWN peer — which is the property the old text claimed."""
+    peer = (request.headers.get("X-VK-Peer") or str(request.remote or "?")).strip()[:45]
     fwd = request.headers.get("X-Forwarded-For", "")
-    if fwd:
-        return fwd.split(",")[0].strip()[:64]
-    peer = request.remote or "?"
-    return str(peer)[:64]
+    last = fwd.rsplit(",", 1)[-1].strip()[:45] if fwd else ""
+    return f"{peer}|{last}" if last else peer
 
 
 def _prune_auth_failures(now: float) -> None:

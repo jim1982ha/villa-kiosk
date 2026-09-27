@@ -570,6 +570,52 @@ ck("a store PUT writes OFF the event loop, inside its lock",
 ck("  ...and so does the telemetry append, under ONE lock", "async with _telemetry_lock:" in src
    and "await asyncio.to_thread(\n            _telemetry_append" in src)
 
+# ── the lockout bucket is keyed by what the caller CANNOT write ───────────
+# _client_ip used to take the FIRST X-Forwarded-For hop — the one address in
+# the request the caller writes — so five wrong passcodes "from" the owner's
+# address locked the owner out, and a fresh address per attempt minted a fresh
+# bucket (2.496.206). The key is now nginx's X-VK-Peer plus the LAST hop, which
+# the gateway in front of us appends.
+print("\n  the lockout key:")
+
+
+class _HReq:
+    def __init__(self, headers: dict, remote: str = "127.0.0.1", method: str = "POST"):
+        self.headers, self.remote, self.method, self.cookies = headers, remote, method, {}
+
+
+key = proxy._client_ip
+ck("the peer nginx accepted is the key", key(_HReq({"X-VK-Peer": "10.0.0.5"})) == "10.0.0.5")
+ck("  ...falling back to the socket peer without it", key(_HReq({}, remote="10.0.0.9")) == "10.0.0.9")
+ck("a forwarded chain contributes its LAST hop, the one the gateway appended",
+   key(_HReq({"X-VK-Peer": "10.0.0.5", "X-Forwarded-For": "1.2.3.4, 5.6.7.8"})) == "10.0.0.5|5.6.7.8")
+victim = key(_HReq({"X-VK-Peer": "10.0.0.7"}))
+forged = [key(_HReq({"X-VK-Peer": "10.0.0.5", "X-Forwarded-For": h})) for h in ("10.0.0.7", "10.0.0.7, 10.0.0.7", "")]
+ck("no header a LAN forger writes reaches another peer's bucket", victim not in forged and len(set(forged)) <= 2)
+ck("  ...and through a gateway the appended hop, not the forged one, names them",
+   key(_HReq({"X-VK-Peer": "172.30.32.2", "X-Forwarded-For": "10.0.0.7, 10.0.0.5"}))
+   != key(_HReq({"X-VK-Peer": "172.30.32.2", "X-Forwarded-For": "10.0.0.7"})))
+ck("a monstrous header cannot bloat the table", len(key(_HReq({"X-VK-Peer": "x" * 500, "X-Forwarded-For": "y" * 500}))) <= 91)
+snippet = (ROOT / "rootfs" / "etc" / "nginx" / "snippets" / "backend-proxy.conf").read_text()
+ck("nginx writes X-VK-Peer from the socket, in the snippet every location includes",
+   "proxy_set_header X-VK-Peer $remote_addr;" in snippet)
+
+# ── the session cookie's attributes, and the browser's cross-site verdict ──
+print("\n  the cookie and cross-site writes:")
+proxy._session_secret_cache = b"t" * 32
+resp = proxy.web.Response()
+proxy._set_session_cookie(resp, "guest")
+c = resp.cookies[proxy.SESSION_COOKIE]
+ck("HttpOnly, Secure, SameSite=Lax, Path=/ — asserted, not assumed",
+   bool(c["httponly"]) and bool(c["secure"]) and c["samesite"] == "Lax" and c["path"] == "/")
+ck("the browser saying 'cross-site' is refused on a write, before any auth",
+   proxy._cross_site(_HReq({"Sec-Fetch-Site": "cross-site"}))
+   and proxy._refuse(_HReq({"Sec-Fetch-Site": "Cross-Site"})).status == 403)
+ck("  ...but not on a read (Lax already sends the cookie there, nothing to gain)",
+   proxy._refuse(_HReq({"Sec-Fetch-Site": "cross-site"}, method="GET")).status == 401)
+ck("  ...and same-origin, same-site, none or ABSENT (older WebKit) all pass this gate",
+   all(not proxy._cross_site(_HReq(h)) for h in ({"Sec-Fetch-Site": "same-origin"}, {"Sec-Fetch-Site": "same-site"}, {"Sec-Fetch-Site": "none"}, {})))
+
 print()
 print("✅ the proxy's pure rules hold" if FAIL == 0
       else "❌ A PROXY RULE IS BROKEN")

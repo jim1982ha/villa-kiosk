@@ -50,6 +50,21 @@ export interface ReportInput {
  * fourth readers survived the sweep meant to catch them. Roll a shared rule out
  * by what it APPLIES to, not by the call sites you happen to have open.
  */
+/**
+ * One free-text cell of a markdown table — every title, label, clause, name,
+ * note and detail these documents print goes through here.
+ *
+ * A guest types ticket titles. A pipe would end the CELL; a line break would
+ * end the ROW, and whatever followed it — "## Paid in full", "_no faults this
+ * month_" — would be laid out as a heading or a notice in the owner's report,
+ * authored by the guest. Before 2.496.206 the pipe was replaced in five
+ * hand-written copies and the line break nowhere; the check labels had neither.
+ */
+export function cell(v: string, max = 200): string {
+  const flat = v.replace(/[\r\n\u2028\u2029\u0085]+/g, " ").replace(/\|/g, "/").trim();
+  return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
+}
+
 export function spendSummary(b: BudgetStatus): string[] {
   const out: string[] = [
     b.cap > 0
@@ -75,7 +90,6 @@ export function spendSummary(b: BudgetStatus): string[] {
  *  rendering the table, and the fix that followed escaped some columns and not
  *  others. Anything an operator typed gets the same treatment here. */
 export function spendTable(b: BudgetStatus): string[] {
-  const cell = (v: string) => v.replace(/\|/g, "/");
   return [
     `| Date | Item | Category | Amount |`,
     `|---|---|---|---|`,
@@ -123,9 +137,8 @@ export function buildMonthlyReport(input: ReportInput): string {
     L.push(`| Date | Task | Clause | By | Evidence | Note |`);
     L.push(`|---|---|---|---|---|---|`);
     for (const { completion: c, schedule: s } of done) {
-      const esc = (v: string) => v.replace(/\|/g, "/");
-      L.push(`| ${shortDate(c.at)} | ${esc(s?.title ?? "(removed task)")} | ${esc(s?.clause ?? "—")} `
-        + `| ${esc(c.by || "—")} | ${c.photoIds.length} photo(s) | ${esc(c.note ?? "")} |`);
+      L.push(`| ${shortDate(c.at)} | ${cell(s?.title ?? "(removed task)")} | ${cell(s?.clause ?? "—")} `
+        + `| ${cell(c.by || "—")} | ${c.photoIds.length} photo(s) | ${cell(c.note ?? "")} |`);
     }
   }
   L.push("");
@@ -149,7 +162,7 @@ export function buildMonthlyReport(input: ReportInput): string {
       // every other table in this file, was never pipe-escaped — a task
       // title containing "|" silently split into extra table columns. Caught
       // by rendering this output as an actual table instead of raw text.
-      L.push(`| ${s.title.replace(/\|/g, "/")} | ${s.everyDays} days | `
+      L.push(`| ${cell(s.title)} | ${s.everyDays} days | `
         + `${st.last ? shortDate(st.last.at) : "—"} | ${status} |`);
     }
   }
@@ -185,7 +198,7 @@ export function buildMonthlyReport(input: ReportInput): string {
     L.push(`| Opened | Fault | Status | Resolved | Evidence |`);
     L.push(`|---|---|---|---|---|`);
     for (const t of inMonth.sort((x, y) => Date.parse(x.openedAt) - Date.parse(y.openedAt))) {
-      L.push(`| ${shortDate(t.openedAt)} | ${t.title.replace(/\|/g, "/")} `
+      L.push(`| ${shortDate(t.openedAt)} | ${cell(t.title)} `
         + `| ${t.status.replace("_", " ")} | ${t.resolvedAt ? shortDate(t.resolvedAt) : "—"} `
         + `| ${t.photoIds.length} photo(s) |`);
     }
@@ -213,7 +226,7 @@ export function buildMonthlyReport(input: ReportInput): string {
     L.push(`|---|---|---|`);
     for (const c of readiness.checks) {
       const icon = c.state === "pass" ? "Pass" : c.state === "warn" ? "Attention" : "**Fail**";
-      L.push(`| ${c.label} | ${icon} | ${c.detail.replace(/\|/g, "/")} |`);
+      L.push(`| ${cell(c.label)} | ${icon} | ${cell(c.detail)} |`);
     }
     L.push("");
   }
@@ -281,8 +294,7 @@ export function buildReadinessSnapshot(report: ReadinessReport, villaName: strin
   ];
   for (const c of report.checks) {
     const state = c.state === "pass" ? "Pass" : c.state === "warn" ? "Warning" : "Fail";
-    // Pipes inside a finding would break the table row.
-    lines.push(`| ${c.label} | ${state} | ${c.detail.replace(/\|/g, "/")} |`);
+    lines.push(`| ${cell(c.label)} | ${state} | ${cell(c.detail)} |`);
   }
   lines.push("", "_Computed from live device state at the moment shown above._");
   return lines.join("\n");
