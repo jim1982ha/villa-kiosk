@@ -62,13 +62,27 @@ export interface VillaSummary {
   power: PowerFacts | null;
 }
 
-const ofDomain = (entities: Record<string, HassEntity>, d: string, allowed?: Allowed) =>
-  Object.values(entities).filter((e) => e.entity_id.startsWith(`${d}.`) && (!allowed || allowed.has(e.entity_id)));
+/** Every entity, by domain — ONE pass over the store. The four fact
+ *  functions each scanned every entity for their own domain (2.496.197). */
+export type DomainIndex = ReadonlyMap<string, readonly HassEntity[]>;
+export function domainIndex(entities: Record<string, HassEntity>): DomainIndex {
+  const out = new Map<string, HassEntity[]>();
+  for (const e of Object.values(entities)) {
+    const d = e.entity_id.slice(0, e.entity_id.indexOf("."));
+    const list = out.get(d);
+    if (list) list.push(e); else out.set(d, [e]);
+  }
+  return out;
+}
+const ofDomain = (entities: Record<string, HassEntity>, d: string, allowed?: Allowed, index?: DomainIndex) => {
+  const all = index ? (index.get(d) ?? []) : Object.values(entities).filter((e) => e.entity_id.startsWith(`${d}.`));
+  return allowed ? all.filter((e) => allowed.has(e.entity_id)) : [...all];
+};
 const idsOf = (es: readonly HassEntity[]) => es.map((e) => e.entity_id);
 const isOn = (e: HassEntity) => !OFF_STATES.has(e.state);
 
-export function lockFacts(entities: Record<string, HassEntity>, allowed?: Allowed): LockFacts | null {
-  const locks = ofDomain(entities, "lock", allowed);
+export function lockFacts(entities: Record<string, HassEntity>, allowed?: Allowed, index?: DomainIndex): LockFacts | null {
+  const locks = ofDomain(entities, "lock", allowed, index);
   if (!locks.length) return null;
   return {
     ids: idsOf(locks),
@@ -78,13 +92,13 @@ export function lockFacts(entities: Record<string, HassEntity>, allowed?: Allowe
   };
 }
 
-export function lightFacts(entities: Record<string, HassEntity>, allowed?: Allowed): OnOffFacts | null {
-  const lights = ofDomain(entities, "light", allowed);
+export function lightFacts(entities: Record<string, HassEntity>, allowed?: Allowed, index?: DomainIndex): OnOffFacts | null {
+  const lights = ofDomain(entities, "light", allowed, index);
   return lights.length ? { ids: idsOf(lights), on: idsOf(lights.filter(isOn)) } : null;
 }
 
-export function climateFacts(entities: Record<string, HassEntity>, allowed?: Allowed): ClimateFacts | null {
-  const units = ofDomain(entities, "climate", allowed);
+export function climateFacts(entities: Record<string, HassEntity>, allowed?: Allowed, index?: DomainIndex): ClimateFacts | null {
+  const units = ofDomain(entities, "climate", allowed, index);
   if (!units.length) return null;
   const active = units.filter((e) => e.state !== "off" && !OFF_STATES.has(e.state));
   const temps = active
@@ -105,10 +119,10 @@ export function fmtClimateTemp(avg: number, unit?: string): string {
 }
 
 export function powerFacts(
-  entities: Record<string, HassEntity>, thresholds: Record<string, Threshold>,
+  entities: Record<string, HassEntity>, thresholds: Record<string, Threshold>, index?: DomainIndex,
 ): PowerFacts | null {
   // By CLASS, not a regex over the unit — "kW" is power too (SensorClasses).
-  const sensors = ofDomain(entities, "sensor").filter(
+  const sensors = ofDomain(entities, "sensor", undefined, index).filter(
     (e) => effectiveSensorClass(e.attributes.device_class as string | undefined,
                                 e.attributes.unit_of_measurement as string | undefined) === "power");
   if (!sensors.length) return null;
@@ -131,10 +145,11 @@ export function villaSummary(input: {
   thresholds: Record<string, Threshold>;
 }): VillaSummary {
   const { entities, devices } = input;
+  const index = domainIndex(entities);
   return {
-    locks: lockFacts(entities, devices),
-    lights: lightFacts(entities, devices),
-    climate: climateFacts(entities, devices),
-    power: powerFacts(entities, input.thresholds),
+    locks: lockFacts(entities, devices, index),
+    lights: lightFacts(entities, devices, index),
+    climate: climateFacts(entities, devices, index),
+    power: powerFacts(entities, input.thresholds, index),
   };
 }

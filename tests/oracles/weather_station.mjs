@@ -214,7 +214,7 @@ console.log("\n  the window: the approved boards 6 and 7");
 console.log("\n  the bar");
 {
   const bar = readFileSync(new URL("../../src/components/hud/SummaryBar.tsx", import.meta.url), "utf8");
-  ck("the Weather tile is there, from the one station rule", /id: "__weather"/.test(bar) && /findWeatherStation\(entities, entityDeviceIds\)/.test(bar));
+  ck("the Weather tile is there, from the one station rule", /id: "__weather"/.test(bar) && /useMemo\(\(\) => findWeatherStation\(visibleEntities, entityDeviceIds\)/.test(bar) && /station: WeatherStation \| null,/.test(bar));
   ck("  ...and opens the Weather modal", /<WeatherPanel station=\{station\}/.test(bar));
   ck("the Pool tile is gone", !/"__pool"|label: "Pool"|Waves/.test(bar));
   const vs = readFileSync(new URL("../../src/config/villaSummary.ts", import.meta.url), "utf8");

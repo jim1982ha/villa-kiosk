@@ -3,6 +3,7 @@
 // Babylon scene registers imperative callbacks here (NOT React re-renders) so
 // the 3D canvas never re-renders on a state_changed event. (Key 3Dash pattern.)
 
+import { PushBatch } from "@/utils/pushBatch";
 import {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
   type ReactNode,
@@ -118,6 +119,10 @@ interface StateChangedEvent {
   data: { entity_id: string; new_state: HassEntity | null; old_state: HassEntity | null };
 }
 
+/** How long React may lag the socket. Four drains a second is faster than
+ *  anyone reads a panel; the badges do not wait at all (notify). */
+const PUSH_WINDOW_MS = 250;
+
 export function HAStateProvider({ children }: { children: ReactNode }) {
   const wsRef = useRef<HAWebSocket>();
   if (!wsRef.current) wsRef.current = new HAWebSocket();
@@ -143,7 +148,21 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
       return value;
     });
   }, []);
-  const getEntitiesSnapshot = useCallback(() => entitiesRef.current, []);
+  // Live events reach React in ONE batch per window — utils/pushBatch. The
+  // snapshot lays the pending events over the last drained map, so an
+  // imperative reader between two drains is never behind the socket.
+  const batchRef = useRef<PushBatch<HassEntity>>();
+  if (!batchRef.current) {
+    batchRef.current = new PushBatch<HassEntity>(PUSH_WINDOW_MS, (batch) => {
+      setEntities((prev) => {
+        const next = { ...prev };
+        for (const [id, e] of batch) next[id] = e;
+        return next;
+      });
+    });
+  }
+  const getEntitiesSnapshot = useCallback(() => batchRef.current!.overlay(entitiesRef.current), []);
+  useEffect(() => () => batchRef.current?.dispose(), []);
   const [connection, setConnection] = useState<ConnectionState>("disconnected");
   const [haConfig, setHaConfig] = useState<HAConfig | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
@@ -191,6 +210,8 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
     const prev = entitiesRef.current;
     const map: Record<string, HassEntity> = {};
     for (const e of all) map[e.entity_id] = e;
+    // A full fetch supersedes anything still batched (it is at least as new).
+    batchRef.current?.dispose();
     setEntities(map);
     // ── Why this pushes only what CHANGED (2.202.0) ──────────────────────
     // hydrate() runs on the first connect AND on every automatic reconnect
@@ -303,8 +324,8 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
           const { data } = event as StateChangedEvent;
           if (!data?.new_state) return;
           const ns = data.new_state;
-          setEntities((prev) => ({ ...prev, [ns.entity_id]: ns }));
-          notify(ns);
+          batchRef.current?.push(ns);   // React, once per window
+          notify(ns);                   // the 3D layer, now
         });
         // Live room/hidden/device-group data: a rename, a new Area
         // assignment, or a device moved between areas in HA reaches every

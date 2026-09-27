@@ -1,3 +1,15 @@
+## 2.496.197
+
+### Improved
+- **The screen does much less work while Home Assistant is busy.** Every
+  state change used to re-render the whole interface (top bar, summary
+  tiles, Cockpit counts) — several times a second in a villa this size.
+  Changes now reach the interface four times a second at most; the 3D
+  devices, lights and fans still react instantly.
+- **Each of those refreshes is cheaper**: the summary tiles read the device
+  list once instead of four times, look for the weather station once instead
+  of twice, and no longer re-derive device grouping on every change.
+
 ## 2.496.196
 
 ### Fixed

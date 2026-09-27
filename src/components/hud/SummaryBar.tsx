@@ -32,7 +32,7 @@ import type { HaSceneInfo } from "@/config/haScenes";
 import { locksGroup, lightsGroup } from "@/config/summaryGroups";
 import { villaSummary, fmtClimateTemp } from "@/config/villaSummary";
 import { formatUnitValue, formatSensorParts } from "@/utils/entityValue";
-import { findWeatherStation } from "@/config/weatherStation";
+import { findWeatherStation, type WeatherStation } from "@/config/weatherStation";
 import WeatherPanel from "@/components/panels/WeatherPanel";
 import { onOffSummary } from "@/utils/entityState";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
@@ -71,7 +71,9 @@ function deriveTiles(
   thresholds: Record<string, Threshold>,
   /** HA's device registry (entity_id → device_id) — how the weather station's
    *  sensors are grouped into one station. */
-  entityDeviceIds: Record<string, string>,
+  /** The villa's weather station, found ONCE by the caller (it is O(entities
+   *  × devices) and used to be searched twice per render). */
+  station: WeatherStation | null,
   /** The villa's own devices. ⚠️ THREADED THROUGH RATHER THAN RECOMPUTED: the
    *  tile counts and the list a tap opens must come from one set, or the tile
    *  says "3 On" and the panel shows four rows. Only `.has` is called. */
@@ -142,7 +144,6 @@ function deriveTiles(
   // shows. What the station IS is config/weatherStation.ts's — found by what
   // only a weather station reports, never by a name — and the tile opens the
   // Weather modal rather than a group list. Read-only: nothing to control.
-  const station = findWeatherStation(entities, entityDeviceIds);
   if (station?.roles.temperature) {
     const t = entities[station.roles.temperature];
     const p = t ? formatSensorParts(t) : { value: "", unit: "" };
@@ -434,19 +435,19 @@ export default function SummaryBar({ onOpenEntity, scenes }: Props) {
   // their history on each one, cancelling the last: a 7-day request never
   // finished (the owner's "the range stops changing", the add-on log full of
   // the same six history requests). Keyed by what the station IS instead.
-  const found = findWeatherStation(visibleEntities, entityDeviceIds);
+  const found = useMemo(() => findWeatherStation(visibleEntities, entityDeviceIds), [visibleEntities, entityDeviceIds]);
   const stationKey = found ? JSON.stringify(found) : "";
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const station = useMemo(() => found, [stationKey]);
 
   const deviceTiles = useMemo(
-    () => deriveTiles(visibleEntities, config.entityMap, resolvedRooms, (c) => (role ? isCategoryAllowed(role, c) : false), config.alertThresholds, entityDeviceIds, villaDeviceSet, haConfig?.unit_system?.temperature),
+    () => deriveTiles(visibleEntities, config.entityMap, resolvedRooms, (c) => (role ? isCategoryAllowed(role, c) : false), config.alertThresholds, station, villaDeviceSet, haConfig?.unit_system?.temperature),
     // ⚠️ villaDeviceSet, NOT villaDevices. This read `villaDevices` — the
     // imported FUNCTION, a module constant that never changes — so the two
     // inputs unique to the set above (mappedEntityIds, entityDeviceIds) could
     // not invalidate the tiles. mappedEntityIds arrives late, when the GLB
     // finishes loading, which is exactly the moment the counts must move.
-    [visibleEntities, config.entityMap, resolvedRooms, role, config.alertThresholds, entityDeviceIds, villaDeviceSet],
+    [visibleEntities, config.entityMap, resolvedRooms, role, config.alertThresholds, station, villaDeviceSet],
   );
 
   // A scene spans categories — allow running one if the profile may control ANY.

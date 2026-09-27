@@ -183,14 +183,12 @@ export function suggestDeviceGroups(
  */
 function selectableDeviceIds(
   entityMap: Record<string, EntityMapping>,
-  deviceGroups: DeviceGroup[],
   mappedEntityIds: ReadonlySet<string>,
   entities: Record<string, HassEntity>,
   dismissedEntityIds: readonly string[],
-  entityDeviceIds: Record<string, string>,
+  repOf: ReadonlyMap<string, string>,
 ): string[] {
   const dismissed = dismissedEntitySet(dismissedEntityIds, entities);
-  const repOf = primaryByMember(entityMap, deviceGroups, entityDeviceIds);
   const reps = new Set<string>();
   for (const id of new Set([...mappedEntityIds, ...Object.keys(entityMap)])) {
     if (entityMap[id]?.disabled) continue;
@@ -204,9 +202,9 @@ function selectableDeviceIds(
 /** member entity_id → the entity_id that REPRESENTS it on the map. Covers
  *  both explicit groups and the ones only suggested so far, so a device folds
  *  identically whether or not the owner has confirmed the grouping. */
-function primaryByMember(
+export function deviceFolding(
   entityMap: Record<string, EntityMapping>,
-  deviceGroups: DeviceGroup[],
+  deviceGroups: readonly DeviceGroup[],
   entityDeviceIds: Record<string, string>,
 ): Map<string, string> {
   const repOf = new Map<string, string>();
@@ -222,7 +220,7 @@ function primaryByMember(
   // but whose entities do not match that pair was ONE device in Settings and
   // TWO in the offline count: exactly the drift `unavailableDeviceIds`'
   // docstring claims was paid for and ended.
-  for (const s of suggestDeviceGroups(entityMap, deviceGroups, entityDeviceIds)) {
+  for (const s of suggestDeviceGroups(entityMap, [...deviceGroups], entityDeviceIds)) {
     if (!repOf.has(s.memberEntityId)) repOf.set(s.memberEntityId, s.primaryEntityId);
   }
   return repOf;
@@ -259,6 +257,10 @@ export interface VillaDeviceInput {
    *  AUTHORITATIVE folding signal: it needs no naming convention and covers
    *  however many entities one physical device exposes. */
   entityDeviceIds: Record<string, string>;
+  /** deviceFolding(entityMap, deviceGroups, entityDeviceIds), when the caller
+   *  holds it. It depends on CONFIG only, never on a state push, and the
+   *  villa model asked for it twice per push (2.496.197). */
+  folding?: ReadonlyMap<string, string>;
 }
 
 export interface VillaDevices {
@@ -275,8 +277,8 @@ export interface VillaDevices {
 
 export function villaDevices(input: VillaDeviceInput): VillaDevices {
   const ids = selectableDeviceIds(
-    input.entityMap, [...input.deviceGroups], input.mappedEntityIds,
-    input.entities, input.dismissedEntityIds, input.entityDeviceIds);
+    input.entityMap, input.mappedEntityIds, input.entities, input.dismissedEntityIds,
+    input.folding ?? deviceFolding(input.entityMap, input.deviceGroups, input.entityDeviceIds));
   const set = new Set(ids);
   return {
     ids,
