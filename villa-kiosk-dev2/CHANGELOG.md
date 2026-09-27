@@ -1,3 +1,11 @@
+## 2.496.210
+
+### Changed
+- **The Guest profile no longer sees energy or motion anywhere.** Guests were already kept away from energy devices and motion sensors in the 3D view, but four places still showed them: the **Energy** tile on the summary bar (and the Energy window it opens), **"Energy today"** in the Cockpit, the **"Motion detected"** pop-up, and the **motion glow** on rooms. All four are now hidden for guests. The owner and Facility Manager profiles are unchanged.
+
+### Build
+- The Docker build tools move to their current versions (no more "Node.js 20 is deprecated" warning in the build). Nothing changes on the tablet.
+
 ## 2.496.209
 
 ### Build
