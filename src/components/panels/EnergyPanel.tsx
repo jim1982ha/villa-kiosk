@@ -24,6 +24,7 @@ import { resolveSiteTitle } from "@/config/AppConfig";
 import { useSegmentedChoice } from "./historyRange";
 import ChartTip from "./ChartTip";
 import BarChart from "./BarChart";
+import { ChartEmpty } from "./LineChart";
 import { energyToday, historyFigures, overlapShows, share } from "@/config/energyObservations";
 import { ENERGY_RANGES, energyRange, weekdayShort, type EnergyRangeKey } from "./energyRanges";
 import { DataWindow, Figure, LiveNote, ObservationCards } from "./WindowPieces";
@@ -64,7 +65,9 @@ export default function EnergyPanel({ onClose, fallback }: { onClose: () => void
     ? costUnitOf(setup, (c) => entities[c]?.attributes.unit_of_measurement as string | undefined)
     : undefined;
 
-  const loading = <div className="state-timeline-skeleton weather-chart" />;
+  // Until HA's Energy setup arrives there is nothing to draw — and if it
+  // FAILED, saying so: this was a skeleton forever (2.496.188).
+  const loading = <ChartEmpty status={status === "failed" ? "failed" : "loading"} />;
   return (
     <DataWindow title="Energy" icon={<Zap size={22} />} className="energy-modal" onClose={onClose}
       live={<LiveNote>Home Assistant Energy</LiveNote>} picker={picker}

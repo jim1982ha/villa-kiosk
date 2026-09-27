@@ -77,7 +77,7 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
   // different windows would invite exactly the wrong comparison.
   const { range, picker } = useHistoryRange();
 
-  const { data: history } = useHistory<Record<string, HistorySeries>>(
+  const { data: history, status: historyStatus } = useHistory<Record<string, HistorySeries>>(
     numericIds ? `${numericIds}|${range.hours}` : null,
     async () => Object.fromEntries(await Promise.all(
       numericIds.split(",").map((id) => fetchTrend(id, range.hours).then((h) => [id, h] as const)))),
@@ -125,7 +125,7 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
           {/* Two readings of one device, each on its OWN scale (left and
               right axes in their line's colour), the second dashed. */}
           <LineChart label={`${numericRows[0].label} and ${numericRows[1].label} history`} height={120}
-            window={history[numericRows[0].id]?.window}
+            window={history[numericRows[0].id]?.window} status={historyStatus}
             lines={numericRows.slice(0, 2).map((r, i) => ({
               pts: history[r.id]?.points ?? [], gaps: history[r.id]?.gaps ?? [], label: r.label,
               unit: r.unit ? ` ${r.unit}` : "", color: SERIES_COLORS[i], dashed: i === 1, scale: "own" as const,
@@ -148,7 +148,7 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
             {i === 0
               ? <HistoryHeader title={`${r.label} — ${range.title.toLowerCase()}`} picker={picker} />
               : <label className="entity-label">{r.label} — {range.title.toLowerCase()}</label>}
-            <LineChart label={`${r.label} history`} height={110} window={history[r.id]?.window}
+            <LineChart label={`${r.label} history`} height={110} window={history[r.id]?.window} status={historyStatus}
               lines={[{ pts: history[r.id]?.points ?? [], gaps: history[r.id]?.gaps ?? [], label: r.label, unit: r.unit ? ` ${r.unit}` : "", color: SERIES_COLORS[i % SERIES_COLORS.length] }]} />
           </div>
         ))

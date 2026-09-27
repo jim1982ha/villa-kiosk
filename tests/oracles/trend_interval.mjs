@@ -51,7 +51,7 @@ ck("the timeline has ONE interval (no bucketMinutes anywhere) and paints through
    /const bucketMs = TREND_INTERVAL_MS;/.test(st) && /const colorFor = useMemo\(\(\) => paintState\(ownColour\)/.test(st)
    && !["components/panels/historyRange.tsx", "components/panels/SensorPanel.tsx", "components/panels/GenericPanel.tsx", "components/panels/LastDayTimeline.tsx", "components/panels/CameraPanel.tsx"].some((f) => /bucketMinutes/.test(src(f))));
 ck("numeric device charts (sensor, pumps, device groups) draw the five-minute trend, not raw points",
-   /series: await fetchTrend\(mapping\.entityId, range\.hours\)/.test(src("components/panels/SensorPanel.tsx")) && /fetchTrend\(id, range\.hours\)/.test(src("components/panels/DeviceGroupPanel.tsx"))
+   /\(\) => fetchTrend\(mapping\.entityId, range\.hours\)/.test(src("components/panels/SensorPanel.tsx")) && /fetchTrend\(id, range\.hours\)/.test(src("components/panels/DeviceGroupPanel.tsx"))
    && /return fiveMinuteSeries\(await fetchHistory\(entityId, hours\)\);/.test(src("ha/HAHistoryAPI.ts")));
 ck("a device-group member that is unavailable NOW still gets its chart", /r\.numeric !== undefined \|\| \(r\.unavailable && r\.unit !== ""\)/.test(src("components/panels/DeviceGroupPanel.tsx")));
 ck("the camera bar paints a lost motion sensor as unavailable, not 'online'",

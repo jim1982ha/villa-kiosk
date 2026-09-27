@@ -21,6 +21,8 @@ import { useChartPointer } from "./useChartPointer";
 import { prettyState } from "@/utils/entityValue";
 import { paintState } from "@/utils/stateColors";
 import { TREND_INTERVAL_MS } from "@/utils/trendInterval";
+import type { HistoryStatus } from "@/utils/statisticsSeries";
+import { ChartEmpty } from "./LineChart";
 
 export interface TimelineLegendEntry {
   state: string;
@@ -56,11 +58,10 @@ interface Props {
    *  plain on/off device, whose current-state pill above already says which
    *  colour means what. */
   legend?: TimelineLegendEntry[];
-  /** True while the history fetch is still in flight — distinguishes "still
-   *  loading" from "HA genuinely has no history for this entity" (both used
-   *  to render as the same empty state, so a slow network looked identical
-   *  to a device that's never reported). */
-  loading?: boolean;
+  /** Where the fetch stands (useHistory's own status) — "still loading",
+   *  "HA has no history" and "the request failed" are three different facts,
+   *  and this used to take a `loading` flag that could say only the first. */
+  status: HistoryStatus;
   /** Run top-to-bottom instead of left-to-right (the camera panel's side rail
    *  on a phone in landscape). Segments are laid out on the other axis and the
    *  pointer read switches axis with them, so this is a genuinely vertical
@@ -126,7 +127,7 @@ function cellBackground(states: string[], colorFor: (s: string) => string): stri
 
 
 export default function StateTimeline({
-  data, hours, end, colorFor: ownColour, labelFor = prettyState, height, legend, loading, vertical,
+  data, hours, end, colorFor: ownColour, labelFor = prettyState, height, legend, status, vertical,
   baselineStates,
 }: Props) {
   // Unavailable/unknown are the legend's colour on EVERY timeline, whatever
@@ -217,14 +218,7 @@ export default function StateTimeline({
     return out;
   }, [cells, colorFor]);
 
-  if (data.length === 0) {
-    return loading
-      ? <div className="state-timeline-skeleton" style={height ? { height } : undefined} />
-      : <div className="muted body-text">Not enough history yet.</div>;
-  }
-  if (cells.length === 0) {
-    return <div className="muted body-text">Not enough history yet.</div>;
-  }
+  if (data.length === 0 || cells.length === 0) return <ChartEmpty status={status} height={height} bar />;
 
   // No "?? last cell" fallback: falling back reported the most RECENT
   // detection while the pointer was over an earlier, empty slice — the

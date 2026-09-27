@@ -32,7 +32,9 @@ const sites = [];
 for (const f of readdirSync(DIR).filter((n) => n.endsWith(".tsx") && n !== "StateTimeline.tsx" && n !== "CameraPanel.tsx")) {
   for (const m of strip(readFileSync(new URL(f, DIR), "utf8")).matchAll(/<StateTimeline\b[\s\S]*?\/>/g)) sites.push({ f, ok: /labelFor=\{/.test(m[0]) });
 }
-eq(`every entity history bar was found (${sites.length})`, sites.length >= 4, true);
+// One site since 2.496.188: every panel that charts states goes through
+// LastDayTimeline (history_section.mjs holds that rule).
+eq(`every entity history bar was found (${sites.length})`, sites.length >= 1, true);
 const missing = sites.filter((s) => !s.ok).map((s) => s.f);
 eq("  ...and each is handed the entity's wording", missing.join(), "");
 

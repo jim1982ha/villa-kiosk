@@ -8,17 +8,17 @@ import { formatSensorParts } from "@/utils/entityValue";
 import { Activity, AlertTriangle } from "lucide-react";
 import BasePanel from "./BasePanel";
 import LineChart from "./LineChart";
-import StateTimeline from "./StateTimeline";
+import LastDayTimeline from "./LastDayTimeline";
 import type { PanelProps } from "@/types/panel.types";
-import type { HistorySeries, StateHistoryPoint } from "@/types/ha.types";
+import type { HistorySeries } from "@/types/ha.types";
 import { useConfig } from "@/config/ConfigContext";
-import { fetchTrend, fetchStateHistory } from "@/ha/HAHistoryAPI";
+import { fetchTrend } from "@/ha/HAHistoryAPI";
 import { useHistoryRange, HistoryHeader } from "./historyRange";
 import { useHistory } from "@/hooks/useHistory";
 import { levelForValue, type AlertLevel } from "@/config/ThresholdConfig";
 import { stateLabelFor, binarySensorClassInfo, alertStateFor } from "@/config/BinarySensorClasses";
 import { effectiveSensorClass, SENSOR_CLASS_ICON } from "@/config/SensorClasses";
-import { binarySensorColor, paletteColorFor, isUnavailable } from "@/utils/stateColors";
+import { binarySensorColor, isUnavailable } from "@/utils/stateColors";
 
 const LEVEL_COLOR: Record<AlertLevel, string> = {
   normal: "var(--status-on)",
@@ -27,12 +27,11 @@ const LEVEL_COLOR: Record<AlertLevel, string> = {
 };
 
 const EMPTY_SERIES: HistorySeries = { points: [], gaps: [], window: { from: 0, to: 0 } };
-const NO_STATES: StateHistoryPoint[] = [];
 
 export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
   const { config } = useConfig();
-  // Shared range control — the enum timeline and the numeric sparkline below
-  // both read it, so a sensor that shows either always offers the same window.
+  // The numeric chart's range control (the state timelines carry their own,
+  // inside LastDayTimeline — the same shared control).
   const { range, picker } = useHistoryRange();
 
   const isBinary = mapping.type === "binary_sensor";
@@ -72,19 +71,15 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
   const binaryPillTone = level === "danger" ? "danger" : entity?.state === "on" ? "on" : "off";
 
   // ONE of two history shapes, by what the sensor reports: raw states for a
-  // binary or text sensor (a numeric parse would drop every row), numbers
-  // with their gaps for the rest. `loading` tells "still fetching" from "HA
-  // has no history yet" — see useHistory.
+  // binary or text sensor (a numeric parse would drop every row) — the shared
+  // state section, with its look-back for a sensor that is down for the whole
+  // window — and numbers with their gaps for the rest, fetched here.
   const asStates = isBinary || isEnum;
-  const { data: fetched, loading: historyLoading } = useHistory<{ series?: HistorySeries; states?: StateHistoryPoint[] }>(
-    `${mapping.entityId}|${asStates ? "states" : "numeric"}|${range.hours}`,
-    async () => asStates
-      ? { states: await fetchStateHistory(mapping.entityId, range.hours) }
-      : { series: await fetchTrend(mapping.entityId, range.hours) },
-    {},
+  const { data: history, status: historyStatus } = useHistory<HistorySeries>(
+    asStates ? null : `${mapping.entityId}|${range.hours}`,
+    () => fetchTrend(mapping.entityId, range.hours),
+    EMPTY_SERIES,
   );
-  const history = fetched.series ?? EMPTY_SERIES;
-  const stateHistory = fetched.states ?? NO_STATES;
 
   const BinaryIcon = classInfo.icon;
   // Same resolution the 3D badge uses (babylon/badgeIconKeys.ts) — device_class,
@@ -97,8 +92,6 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
     : undefined;
   const SensorIcon = (sensorClass && SENSOR_CLASS_ICON[sensorClass]) || Activity;
   const icon = isBinary ? <BinaryIcon size={22} /> : <SensorIcon size={22} />;
-  const enumPalette = isEnum ? paletteColorFor(stateHistory.map((p) => p.state)) : undefined;
-  const enumDistinctStates = isEnum ? [...new Set(stateHistory.map((p) => p.state))] : [];
 
   return (
     <BasePanel title={mapping.label} entityId={mapping.entityId} icon={icon} history={false} onClose={onClose}>
@@ -121,16 +114,7 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
                 : level === "danger" ? binaryStateText.toUpperCase() : binaryStateText}
             </div>
           </div>
-          <div className="field">
-            <HistoryHeader title={range.title} picker={picker} />
-            <StateTimeline
-              data={stateHistory}
-              colorFor={(s) => binarySensorColor(s, alertState)}
-              labelFor={labelFor}
-              hours={range.hours}
-              loading={historyLoading}
-            />
-          </div>
+          <LastDayTimeline entityId={mapping.entityId} colorFor={(s) => binarySensorColor(s, alertState)} />
         </>
       ) : (
         <>
@@ -150,22 +134,13 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
             </span>{" "}
             {!unavailable && formatted.unit && <span className="value-unit">{formatted.unit}</span>}
           </div>
-          <div className="field">
-            <HistoryHeader title={range.title} picker={picker} />
-            {isEnum ? (
-              <StateTimeline
-                data={stateHistory}
-                colorFor={enumPalette!}
-                labelFor={labelFor}
-                legend={enumDistinctStates.map((s) => ({ state: s, color: enumPalette!(s) }))}
-                loading={historyLoading}
-                hours={range.hours}
-              />
-            ) : (
-              <LineChart label="History" height={110} window={history.window} status={historyLoading ? "loading" : "ready"}
+          {isEnum ? <LastDayTimeline entityId={mapping.entityId} legend /> : (
+            <div className="field">
+              <HistoryHeader title={range.title} picker={picker} />
+              <LineChart label="History" height={110} window={history.window} status={historyStatus}
                 lines={[{ pts: history.points, gaps: history.gaps, label: "Reading", unit: unit ? ` ${unit}` : "", color: LEVEL_COLOR[level] }]} />
-            )}
-          </div>
+            </div>
+          )}
         </>
       )}
     </BasePanel>

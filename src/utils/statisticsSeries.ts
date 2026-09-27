@@ -58,6 +58,16 @@ export function statisticsSeries(
  *  readings") — collapsing both into `[]` is what drew the phantom 0 mm. */
 export type HistoryStatus = "loading" | "ready" | "failed";
 
+/** What EVERY chart says when it has nothing to draw: null while loading (the
+ *  caller draws its skeleton), else one of two different facts. The line
+ *  charts said "Couldn't load" and the state timelines could not — they took
+ *  a `loading` flag, so a failed request read "Not enough history yet", and a
+ *  device group said it while still loading (2.496.188). */
+export function emptyHistoryText(status: HistoryStatus): string | null {
+  if (status === "loading") return null;
+  return status === "failed" ? "Couldn't load this history." : "Not enough history yet.";
+}
+
 /** Sum of a totals series (rain, energy) — or undefined when there is
  *  nothing to sum, which is not the same as zero. */
 export function seriesTotal(s: HistorySeries | undefined): number | undefined {
