@@ -1,3 +1,17 @@
+## 2.496.191
+
+### Fixed
+- **On the Guest profile, the Cockpit's alert count only counts devices the
+  guest can actually open.** It could show a number larger than the list
+  behind it (a camera or a sensor the guest cannot see).
+- **On the Guest profile, a summary tile's count matches the list it opens**
+  (it could count devices that are not on the 3D map and that the list
+  leaves out).
+
+### Behind the scenes
+- Who may do what (edit settings, upload the model, see waiting updates) is
+  now read from one permission table everywhere.
+
 ## 2.496.190
 
 ### Fixed
