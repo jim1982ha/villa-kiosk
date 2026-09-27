@@ -1,3 +1,16 @@
+## 2.496.190
+
+### Fixed
+- **A chart's tooltip now shows above the window it belongs to.** In the
+  Energy and Weather windows and device panels it could be drawn behind the
+  window itself.
+- **The Energy window's loading placeholder is the height of the chart** it
+  stands for, instead of half of it.
+
+### Behind the scenes
+- The styles every chart shares now live in one place; rules for a chart
+  that no longer exists were removed.
+
 ## 2.496.189
 
 ### Behind the scenes
