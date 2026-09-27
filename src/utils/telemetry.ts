@@ -59,7 +59,8 @@ export type TelemetryKind =
   // across one block; they cannot say whether that block ran twice, which is
   // the open question about `calibrateRooms`. See perfSpans' census notes —
   // this kind goes away with them.
-  | "spans";
+  | "spans"
+  | "csp";            // a Content-Security-Policy violation the BROWSER posted (csp.conf report-uri)
   // "roomzoom" lived here from 2.361.0 and is GONE (2.427.0). It asked whether a
   // room shot was the WALL fit or a tighter badge-spread, and it got its answer:
   // 0.53x for a long thin room, ~1.0 once 2.426.0 stopped the declutter search

@@ -40,9 +40,9 @@ jobs:
     name: kiosk
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           # ⚠️ 24, BECAUSE THE ORACLES IMPORT THE SHIPPED TYPESCRIPT DIRECTLY.
           # They run under plain `node` with type stripping and the repo's own
@@ -61,6 +61,13 @@ jobs:
         # Matching the Dockerfile is also the point: one resolver on both paths
         # means a green build here says something about the image's build stage.
         run: npm install --no-audit --no-fund
+
+      - name: Lockfile unchanged
+        # What `npm ci` would have guaranteed, without the runner-only failure
+        # above: `npm install` resolves from the committed lockfile, and if it
+        # had to CHANGE the lockfile to do so, the build is not the one the
+        # lockfile describes — fail here rather than ship whatever it picked.
+        run: git diff --exit-code -- package-lock.json
 
       - name: Types and bundle
         # The gate that already existed, hoisted out of the image so it fails

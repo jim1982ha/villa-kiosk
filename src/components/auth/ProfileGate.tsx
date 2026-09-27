@@ -10,7 +10,7 @@ import { useConfig } from "@/config/ConfigContext";
 import { resolveSiteTitle } from "@/config/AppConfig";
 import { useProfile } from "@/auth/ProfileContext";
 import { ROLE_ORDER, ROLE_LABELS, ROLE_DESCRIPTIONS, type Role } from "@/auth/roles";
-import { pinRequired as fetchPinRequired, verify, openSession } from "@/auth/PinVerifier";
+import { profileAccess, verify, openSession, type ProfileAccess } from "@/auth/PinVerifier";
 import { startModelPrefetch } from "@/utils/modelPrefetch";
 import { markBoot } from "@/utils/bootTimeline";
 import VestaMark from "@/components/VestaMark";
@@ -26,7 +26,7 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
   const { role, login, switching, cancelSwitch, resolving } = useProfile();
   const { config } = useConfig();
   const [pending, setPending] = useState<Role | null>(null);
-  const [pinRequired, setPinRequired] = useState<Record<Role, boolean> | null>(null);
+  const [access, setAccess] = useState<Record<Role, ProfileAccess> | null>(null);
   const [gateError, setGateError] = useState<string | null>(null);
 
   // Kick off the (large) central GLB's background BYTE download as early as
@@ -52,11 +52,12 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (role && !switching) return; // already signed in and not switching, nothing to fetch
     let cancelled = false;
-    fetchPinRequired()
-      .then((req) => { if (!cancelled) setPinRequired(req); })
+    profileAccess()
+      .then((req) => { if (!cancelled) setAccess(req); })
       .catch(() => {
         if (!cancelled) {
-          setPinRequired({ guest: true, owner: true, ops: true });
+          const gated = { pin: true, enabled: true };
+          setAccess({ guest: gated, owner: gated, ops: gated });
           setGateError("Couldn't load the passcode settings — a passcode will be asked for every profile.");
         }
       });
@@ -80,7 +81,7 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
 
   const choose = (r: Role) => {
     setGateError(null);
-    if (pinRequired && !pinRequired[r]) {
+    if (access && !access[r].pin) {
       // Un-gated profile: one tap and in — but still establish a server session
       // first, so direct/Cloudflare access is authorized (the cookie, not this
       // click, is what unlocks /core and /model).
@@ -162,21 +163,27 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
               <div className="profile-cards">
                 {ROLE_ORDER.map((r) => {
                   const Icon = ROLE_ICONS[r];
+                  // A profile the server will not open from here (no passcode
+                  // set) is shown, greyed, with the reason — not a working
+                  // tile that fails on tap.
+                  const closed = !!access && !access[r].enabled;
                   return (
                     <button
                       key={r}
                       className="profile-card"
                       onClick={() => choose(r)}
-                      disabled={!pinRequired}
+                      disabled={!access || closed}
                     >
                       <Icon size={34} aria-hidden="true" />
                       <span className="profile-card-name">{ROLE_LABELS[r]}</span>
-                      <span className="profile-card-desc">{ROLE_DESCRIPTIONS[r]}</span>
+                      <span className="profile-card-desc">
+                        {closed ? "No passcode set — not available from here." : ROLE_DESCRIPTIONS[r]}
+                      </span>
                     </button>
                   );
                 })}
               </div>
-              {!pinRequired && !gateError && <div className="muted">Loading profiles…</div>}
+              {!access && !gateError && <div className="muted">Loading profiles…</div>}
               {cancel && (
                 <button className="btn ghost mt" onClick={cancel}>Cancel</button>
               )}

@@ -20,14 +20,28 @@ export interface VerifyResult {
 
 const PIN_SHAPE = /^[0-9]{4}$/;
 
-/** Which roles are gated behind a PIN at all. */
-export async function pinRequired(): Promise<Record<Role, boolean>> {
+/** What the picker needs to know about a profile: whether it asks for a
+ *  passcode, and whether it can be entered from here at all. A profile with
+ *  no passcode is unavailable — except Guest from inside Home Assistant, where
+ *  the person is already signed in (the server decides; see _profile_enabled). */
+export interface ProfileAccess { pin: boolean; enabled: boolean }
+
+export function parseProfileAccess(data: unknown): Record<Role, ProfileAccess> {
+  const roles = (data as { roles?: Record<string, { pinRequired?: unknown; enabled?: unknown }> } | null)?.roles ?? {};
+  const out = {} as Record<Role, ProfileAccess>;
+  for (const r of ROLE_ORDER) {
+    const e = roles[r] ?? {};
+    const pin = e.pinRequired === true;
+    out[r] = { pin, enabled: typeof e.enabled === "boolean" ? e.enabled : pin };
+  }
+  return out;
+}
+
+/** Ask the add-on which profiles can be entered from here, and how. */
+export async function profileAccess(): Promise<Record<Role, ProfileAccess>> {
   const resp = await fetch(ingressPath("auth/roles"));
   if (!resp.ok) throw new Error(`auth service unavailable (HTTP ${resp.status})`);
-  const data = (await resp.json()) as { roles?: Record<string, { pinRequired?: boolean }> };
-  const out = {} as Record<Role, boolean>;
-  for (const r of ROLE_ORDER) out[r] = Boolean(data.roles?.[r]?.pinRequired);
-  return out;
+  return parseProfileAccess(await resp.json());
 }
 
 /** Which profile the server's own session cookie already authorizes, if any.

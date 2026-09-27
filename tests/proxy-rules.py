@@ -616,6 +616,77 @@ ck("  ...but not on a read (Lax already sends the cookie there, nothing to gain)
 ck("  ...and same-origin, same-site, none or ABSENT (older WebKit) all pass this gate",
    all(not proxy._cross_site(_HReq(h)) for h in ({"Sec-Fetch-Site": "same-origin"}, {"Sec-Fetch-Site": "same-site"}, {"Sec-Fetch-Site": "none"}, {})))
 
+# ── a passcode-less profile is closed, except Guest inside Home Assistant ──
+# With guest_pin empty, ANY caller reaching the direct port or the tunnel used
+# to be handed a guest session — doors included (2.496.207).
+print("\n  passcode-less profiles:")
+
+
+class _JReq(_HReq):
+    def __init__(self, body: dict, headers: dict | None = None):
+        super().__init__(headers or {})
+        self._body = body
+
+    async def json(self):
+        return self._body
+
+
+proxy._read_options = lambda: {}  # no PIN configured for any profile
+ck("no passcode: Guest opens only from Ingress",
+   proxy._profile_enabled("guest", True) and not proxy._profile_enabled("guest", False))
+ck("  ...owner and ops open nowhere", not any(proxy._profile_enabled(r, i) for r in ("owner", "ops") for i in (True, False)))
+proxy._read_options = lambda: {"guest_pin": "1234"}
+ck("a passcode opens the profile from anywhere", proxy._profile_enabled("guest", False))
+proxy._read_options = lambda: {}
+roles = _json.loads(asyncio.run(proxy.auth_roles_handler(_HReq({}, method="GET"))).text)["roles"]
+ingress_roles = _json.loads(asyncio.run(proxy.auth_roles_handler(_HReq({"X-VK-Ingress": "1"}, method="GET"))).text)["roles"]
+ck("/auth/roles says which profiles are ENABLED from here, not just which ask for a passcode",
+   roles["guest"] == {"pinRequired": False, "enabled": False} and ingress_roles["guest"]["enabled"] is True
+   and roles["owner"]["enabled"] is False)
+direct = asyncio.run(proxy.auth_verify_handler(_JReq({"role": "guest"})))
+via_ha = asyncio.run(proxy.auth_verify_handler(_JReq({"role": "guest"}, {"X-VK-Ingress": "1"})))
+ck("a passcode-less guest is refused on the direct port (403, and it says why)",
+   direct.status == 403 and "Home Assistant" in _json.loads(direct.text)["error"])
+ck("  ...and granted a session through Ingress",
+   via_ha.status == 200 and proxy.SESSION_COOKIE in via_ha.cookies)
+ck("  ...while a passcode-less OWNER is refused on both", all(
+   asyncio.run(proxy.auth_verify_handler(_JReq({"role": "owner"}, h))).status == 403 for h in ({}, {"X-VK-Ingress": "1"})))
+
+# ── CSP violations reach the telemetry ring ───────────────────────────────
+print("\n  CSP reports:")
+csp = (ROOT / "rootfs" / "etc" / "nginx" / "snippets" / "csp.conf").read_text()
+ck("the policy reports to the RELATIVE telemetry path (Ingress prefix and direct port alike)",
+   "; report-uri telemetry\"" in csp)
+ev = proxy._csp_event({"effective-directive": "script-src", "blocked-uri": "blob:e.js",
+                       "source-file": "/assets/app.js", "line-number": 12, "document-uri": "/",
+                       "original-policy": "x" * 5000, "sample": "<script>"})
+ck("a report becomes a `csp` event with what was blocked and where, nothing else",
+   ev == {"kind": "csp", "directive": "script-src", "blocked": "blob:e.js",
+          "source": "/assets/app.js", "line": 12, "document": "/"})
+ck("  ...values capped, a non-numeric line dropped, the older directive key honoured",
+   len(proxy._csp_event({"blocked-uri": "x" * 900})["blocked"]) == 300
+   and proxy._csp_event({"line-number": "12"})["line"] is None
+   and proxy._csp_event({"violated-directive": "img-src"})["directive"] == "img-src")
+ck("the telemetry POST recognises a browser's report body",
+   'if isinstance(body.get("csp-report"), dict):\n        body = _csp_event(body["csp-report"])' in PROXY.read_text())
+
+# ── signing every device out also replaces the signing key ────────────────
+print("\n  the signing key:")
+with tempfile.TemporaryDirectory() as d:
+    proxy.SESSION_SECRET_FILE = os.path.join(d, ".session_secret")
+    proxy.SESSION_EPOCH_FILE = os.path.join(d, "session-epoch")
+    proxy._session_secret_cache = None
+    token = proxy._make_session_token("owner")
+    ck("a fresh token verifies", proxy._session_role(token) == "owner")
+    before = open(proxy.SESSION_SECRET_FILE, "rb").read()
+    proxy._rotate_session_secret()
+    ck("after a rotation it does not, and the key on disk is new (0600)",
+       proxy._session_role(token) is None and open(proxy.SESSION_SECRET_FILE, "rb").read() != before
+       and (os.stat(proxy.SESSION_SECRET_FILE).st_mode & 0o777) == 0o600)
+    ck("  ...and a token issued afterwards does", proxy._session_role(proxy._make_session_token("ops")) == "ops")
+ck("sign-every-device-out rotates the key after bumping the epoch",
+   "    epoch = _bump_session_epoch()\n    try:\n        _rotate_session_secret()" in PROXY.read_text())
+
 print()
 print("✅ the proxy's pure rules hold" if FAIL == 0
       else "❌ A PROXY RULE IS BROKEN")

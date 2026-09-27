@@ -1,3 +1,11 @@
+## 2.496.207
+
+### Security
+- **A Guest profile with no passcode is no longer open to anyone who reaches the hostname.** Leaving the guest passcode empty now opens the Guest profile only from inside Home Assistant (the sidebar); on the direct port or a tunnel the profile shows greyed with "No passcode set — not available from here". The option's help text says so.
+- **"Sign every device out" now also replaces the session signing key**, so nothing copied from the add-on's data folder before that moment can be used to sign in.
+- **Content-Security-Policy violations are now collected.** The policy is still report-only, but each violation a browser sees is stored as a `csp` event in Settings › Telemetry — so enforcing it can be decided from evidence instead of a console nobody watches.
+- **Build pipeline pinned:** every GitHub Action the build uses is fixed to an exact commit, and the build fails if installing dependencies had to change the lockfile.
+
 ## 2.496.206
 
 ### Security

@@ -186,6 +186,18 @@ def _session_secret() -> bytes:
     return fresh
 
 
+def _rotate_session_secret() -> None:
+    """A NEW signing key: every token ever issued stops verifying, whoever holds
+    it. Sign-every-device-out used to bump only the epoch, which invalidates
+    tokens but leaves the key itself standing — so a copy of /data taken
+    before the sign-out could still mint valid sessions afterwards (2.496.207).
+    Raises OSError when /data cannot be written; the caller decides."""
+    global _session_secret_cache
+    fresh = secrets.token_hex(32).encode()
+    atomic_write(SESSION_SECRET_FILE, lambda out: out.write(fresh), mode=0o600)
+    _session_secret_cache = fresh
+
+
 #: (mtime_ns, epoch) — see `_session_epoch`. Invalidated by the file changing,
 #: which `_bump_session_epoch`'s atomic replace always does.
 _EPOCH_CACHE = None
@@ -1155,11 +1167,34 @@ def _lockout_remaining(role: str, ip: str) -> int:
     return max(worst, _global_locked_for(role, now))
 
 
+def _profile_enabled(role: str, ingress: bool) -> bool:
+    """Whether a profile can be entered from where the caller stands.
+
+    A passcode enables a profile anywhere. Without one, only the Guest profile
+    is open — and only through Home Assistant's own sign-in (Ingress), where
+    the person has already proved who they are. On the direct port and the
+    tunnel an empty guest passcode used to mean "anyone who finds the hostname
+    may open the doors" (2.496.207). The option text said so; it was still the
+    wrong default for a hostname that is one guess away."""
+    if _configured_pin(role):
+        return True
+    return role == "guest" and ingress
+
+
+def _profile_disabled_text(role: str) -> str:
+    if role == "guest":
+        return ("The Guest profile has no passcode set, so it can only be opened "
+                "from inside Home Assistant.")
+    return f"the {role} profile has no PIN configured"
+
+
 async def auth_roles_handler(request: web.Request) -> web.Response:
-    """Report which profiles require a passcode — booleans only, no secrets."""
-    return web.json_response(
-        {"roles": {r: {"pinRequired": bool(_configured_pin(r))} for r in AUTH_ROLES}},
-    )
+    """Report which profiles require a passcode and which can be entered from
+    here at all — booleans only, no secrets."""
+    ingress = _is_ingress(request)
+    return web.json_response({"roles": {
+        r: {"pinRequired": bool(_configured_pin(r)), "enabled": _profile_enabled(r, ingress)}
+        for r in AUTH_ROLES}})
 
 
 async def auth_session_handler(request: web.Request) -> web.Response:
@@ -1541,20 +1576,15 @@ async def auth_verify_handler(request: web.Request) -> web.Response:
 
     configured = _configured_pin(role)
     if not configured:
-        if role != "guest":
-            # owner/ops are privileged roles — an unset PIN must mean "this
-            # profile isn't available on this path", never "open to anyone
-            # who asks". Only "guest" may be intentionally left PIN-less (a
-            # villa that wants a no-PIN "just look around" mode); config.yaml
-            # ships all three PINs empty by default, and before this check an
-            # unconfigured owner/ops PIN silently minted a full-access session
-            # for ANY caller who reached this endpoint — see the module
-            # docstring's Access control section.
-            return web.json_response(
-                {"error": f"the {role} profile has no PIN configured"}, status=403,
-            )
-        # Un-PIN'd guest profile: grant a session without touching the rate
-        # limiter or requiring a pin. (A pin sent anyway is simply ignored.)
+        # An unset PIN means "this profile isn't available on this path",
+        # never "open to anyone who asks" — config.yaml ships all three PINs
+        # empty, and before this check an unconfigured owner/ops PIN minted a
+        # full-access session for ANY caller. The one exception, a PIN-less
+        # guest inside Home Assistant, is _profile_enabled's to make.
+        if not _profile_enabled(role, _is_ingress(request)):
+            return web.json_response({"error": _profile_disabled_text(role)}, status=403)
+        # Grant the session without touching the rate limiter or requiring a
+        # pin. (A pin sent anyway is simply ignored.)
         resp = web.json_response({"ok": True})
         _set_session_cookie(resp, role)
         return resp
@@ -1604,12 +1634,18 @@ async def auth_logout_all_handler(request: web.Request) -> web.Response:
     """Invalidate every outstanding session on this install (owner-only).
 
     Bumps the session epoch, which is mixed into every signature, so all
-    previously issued cookies stop verifying — including the caller's own.
-    This is the answer to "a device was lost / a PIN was seen"."""
+    previously issued cookies stop verifying — including the caller's own —
+    and replaces the signing key, so nothing copied from /data before this
+    moment can sign a session either. This is the answer to "a device was
+    lost / a PIN was seen"."""
     if (refused := _refuse(request, "administer",
                            "Only the owner profile may sign every device out.")) is not None:
         return refused
     epoch = _bump_session_epoch()
+    try:
+        _rotate_session_secret()
+    except OSError as err:  # the epoch bump above already ended every session
+        print(f"[supervisor-proxy] could not rotate the session secret: {err}", flush=True)
     resp = web.json_response({"ok": True, "epoch": epoch})
     resp.del_cookie(SESSION_COOKIE, path="/")
     return resp
@@ -2216,6 +2252,26 @@ def _telemetry_append(body: dict, max_events: int, max_bytes: int) -> int:
     return len(events)
 
 
+def _csp_event(r: dict) -> dict:
+    """A browser's Content-Security-Policy violation report, as a telemetry
+    event. The policy ships Report-Only (snippets/csp.conf) and until 2.496.207
+    reported to nowhere; `report-uri telemetry` now sends each violation here.
+    Only the fields that say what was blocked and where are kept, each capped
+    — the report body is written by the browser, but its values (the blocked
+    URL, the document) are whatever the page held."""
+    def text(key: str, cap: int) -> str:
+        return str(r.get(key) or "")[:cap]
+    line = r.get("line-number")
+    return {
+        "kind": "csp",
+        "directive": text("effective-directive", 120) or text("violated-directive", 120),
+        "blocked": text("blocked-uri", 300),
+        "source": text("source-file", 300),
+        "line": line if isinstance(line, int) and not isinstance(line, bool) else None,
+        "document": text("document-uri", 300),
+    }
+
+
 async def telemetry_post_handler(request: web.Request) -> web.Response:
     """Append one client event. Open to ANY authorized session (a guest's
     iPhone failing is exactly the case worth capturing), unlike the owner-only
@@ -2228,6 +2284,8 @@ async def telemetry_post_handler(request: web.Request) -> web.Response:
         return web.json_response({"error": "invalid JSON"}, status=400)
     if not isinstance(body, dict):
         return web.json_response({"error": "event must be an object"}, status=400)
+    if isinstance(body.get("csp-report"), dict):
+        body = _csp_event(body["csp-report"])
     if len(json.dumps(body).encode("utf-8")) > TELEMETRY_MAX_BODY:
         return web.json_response({"error": "event too large"}, status=413)
 

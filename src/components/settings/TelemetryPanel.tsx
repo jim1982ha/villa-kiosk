@@ -134,6 +134,9 @@ function summarise(e: TelemetryEvent): string {
     }
     case "error":
       return `${e.code}: ${String(e.message ?? "").slice(0, 120)}`;
+    case "csp":
+      // What the policy WOULD have blocked, were it enforced (it is Report-Only).
+      return `${e.directive} would block ${e.blocked}${e.source ? ` · ${e.source}:${e.line ?? "?"}` : ""}`;
     case "session":
       // `lostRole` is the profile that WAS signed in; the row's own role is
       // whoever signed in afterwards, when the report could be sent.
@@ -288,6 +291,7 @@ const TONE: Record<string, string> = {
   "context-lost": "var(--status-danger)",
   "context-restored": "var(--status-warning)",
   recovered: "var(--status-warning)",
+  csp: "var(--status-warning)",
 };
 
 /** The table only ever RENDERS this many rows (newest first) — the add-on
