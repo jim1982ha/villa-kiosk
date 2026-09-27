@@ -1,3 +1,17 @@
+## 2.496.184
+
+### Fixed — Facility saves tell the truth
+- **A guest who reports a problem only sees "Thank you — that's been
+  reported" when it really was.** If it could not be sent, the dialog stays
+  open and says so, so they can try again.
+- **Moving a fault to its next step closes the dialog only once it is
+  saved**; otherwise it stays open with the reason.
+- **"Saved" on a report, a spend statement or a readiness snapshot now only
+  appears when it was saved.**
+- **A change the add-on refuses is undone right away, with its reason**,
+  instead of being retried on every refresh — which also stopped that device
+  from receiving anyone else's updates.
+
 ## 2.496.183
 
 ### Fixed — Facility
