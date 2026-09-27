@@ -4946,7 +4946,8 @@ export class EntityVisuals {
     // they only came back a rung or two later once the badges genuinely fitted
     // — entities, chip, entities, going one direction. Reproduces only where
     // dpr > HW_START_CAP, which is why a dpr-1.6 laptop never showed it.
-    const vpH = viewportPx(engine.getRenderHeight(), engine.getHardwareScalingLevel(), cssPixels);
+    const vpH = viewportPx(engine.getRenderHeight(), engine.getHardwareScalingLevel(), cssPixels,
+      engine.getRenderingCanvas()?.clientHeight);
     // Not `cam.fov` directly: whether that is the vertical or the horizontal
     // angle is cameraFrame.ts's question, and this reader was one of four that
     // each answered it separately. Its `|| 0.8` fallback lived on there too.
