@@ -1,3 +1,21 @@
+## 2.496.178
+
+### New — move the bird's-eye view with the keyboard
+- **Hold a key to move**, the same four ways a finger does on the touch
+  screen:
+  - arrow keys or W A S D — pan
+  - Shift + ← → (or Q / E) — rotate
+  - Shift + ↑ ↓ — tilt
+  - + / − (or Page Up / Page Down) — zoom
+- **The Natural Scroll setting applies**: with it on, the villa moves the way
+  the arrow points (like a swipe); with it off, the view moves that way.
+- The **?** window (now "Map colours & keys") lists the keys for your
+  current setting, and the walking keys.
+
+### Fixed
+- Arrow keys pressed while typing in a text field no longer move the
+  camera in walk mode.
+
 ## 2.496.177
 
 ### Fixed — room badges while walking
