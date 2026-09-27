@@ -8,6 +8,8 @@
 
 import { roleCan } from "@/auth/permissions";
 import { useState } from "react";
+import { useDraftCommit } from "@/hooks/useDraftCommit";
+import type { AppConfig } from "@/config/AppConfig";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import { Boxes, Home, LogOut, Upload, Wrench } from "lucide-react";
 import ModalTabs, { type ModalTab } from "@/components/common/ModalTabs";
@@ -55,43 +57,37 @@ interface Props {
  *  briefly producing NaN mid-edit. */
 function VillaCoordinates() {
   const { config, update } = useConfig();
-  const [lat, setLat] = useState(String(config.latitude));
-  const [lng, setLng] = useState(String(config.longitude));
-
-  const commitLat = () => {
-    const n = Number(lat);
-    if (Number.isFinite(n)) update({ latitude: n });
-    else setLat(String(config.latitude));
-  };
-  const commitLng = () => {
-    const n = Number(lng);
-    if (Number.isFinite(n)) update({ longitude: n });
-    else setLng(String(config.longitude));
-  };
-
+  // The SAME drafted-field seam every other Settings field uses (2.496.194):
+  // the input shows the draft while one exists and the LIVE value otherwise.
+  // This held its own `useState(String(config.latitude))`, never resynced —
+  // Dashboard adopts Home Assistant's location once, asynchronously, and when
+  // that landed with this dialog open the field kept the old number and a
+  // blur wrote it back over the adopted one. A half-typed number ("-8.")
+  // commits nothing; the draft simply lapses to the stored value.
+  const field = useDraftCommit<string>((key, text) => {
+    const n = Number(text);
+    if (Number.isFinite(n) && text.trim() !== "") update({ [key]: n } as Partial<AppConfig>);
+  }, COORD_COMMIT_MS);
+  const coord = (key: "latitude" | "longitude", id: string, label: string) => (
+    <div>
+      <label htmlFor={id}>{label}</label>
+      <input
+        id={id} inputMode="decimal" value={field.drafts[key] ?? String(config[key])}
+        onChange={(e) => field.draft(key, e.target.value)}
+        onBlur={() => field.flush(key)}
+        onKeyDown={(e) => e.key === "Enter" && field.flush(key)}
+      />
+    </div>
+  );
   return (
     <div className="coord-grid">
-      <div>
-        <label htmlFor="villa-lat">Latitude</label>
-        <input
-          id="villa-lat" inputMode="decimal" value={lat}
-          onChange={(e) => setLat(e.target.value)}
-          onBlur={commitLat}
-          onKeyDown={(e) => e.key === "Enter" && commitLat()}
-        />
-      </div>
-      <div>
-        <label htmlFor="villa-lng">Longitude</label>
-        <input
-          id="villa-lng" inputMode="decimal" value={lng}
-          onChange={(e) => setLng(e.target.value)}
-          onBlur={commitLng}
-          onKeyDown={(e) => e.key === "Enter" && commitLng()}
-        />
-      </div>
+      {coord("latitude", "villa-lat", "Latitude")}
+      {coord("longitude", "villa-lng", "Longitude")}
     </div>
   );
 }
+/** Long enough to finish typing a coordinate; blur/Enter commit at once. */
+const COORD_COMMIT_MS = 1500;
 
 /** Immediately signs every device out — a lost tablet, a PIN someone saw.
  *  Two-tap confirm, same idiom as Facility's "Delete all" buttons: this

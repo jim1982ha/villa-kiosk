@@ -603,7 +603,7 @@ export default function Dashboard() {
       manager.navigateTo(point);
       setTeleportOpen(false);
     },
-    [manager, viewMode, currentFloor, onFloorChange],
+    [manager, currentFloor, onFloorChange],
   );
 
   // Tapping a room-cluster chip on the map does the SAME thing tapping that

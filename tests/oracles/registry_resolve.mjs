@@ -35,7 +35,7 @@ ck("connect() opens and subscribes, and loads nothing itself (the first connect 
 ck("every (re)connect runs ONE pass — after the subscriptions — loading the states, the config AND the registry (a reconnect re-read only the states)",
    /if \(connection !== "connected"\) return;/.test(pass) && /await subscribedRef\.current;/.test(pass)
    && pass.indexOf("await subscribedRef.current") < pass.indexOf("hydrate()") && /"get_config"/.test(pass) && /refreshRegistryData\(\)/.test(pass));
-ck("the provider resolves nothing itself", /entityRegistryFacts\(rows\)/.test(st) && /entityPlaces\(rows, devices, areas, floors\)/.test(st) && !/deviceAreaById/.test(st));
+ck("the provider resolves nothing itself", /entityRegistryFacts\(rows\)/.test(st) && /placesAfterRefresh\(prev, rows, \{ devices, areas, floors \}\)/.test(st) && !/deviceAreaById/.test(st));
 
 if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
 console.log("\n✅ the registries, resolved once and re-read on every reconnect");

@@ -11,7 +11,7 @@ import { HAWebSocket, type ConnectionState } from "./HAWebSocket";
 import { devLog } from "@/utils/devLog";
 import { report as reportTelemetry } from "@/utils/telemetry";
 import { hasBootMark } from "@/utils/bootTimeline";
-import { entityPlaces, entityRegistryFacts } from "./registryResolve";
+import { placesAfterRefresh, entityRegistryFacts } from "./registryResolve";
 import type { HassEntity, HassServiceTarget } from "@/types/ha.types";
 
 type EntityCallback = (entity: HassEntity) => void;
@@ -128,6 +128,10 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
   const [hiddenInHaEntityIds, setHiddenInHaEntityIds] = useState<Set<string>>(new Set());
   const [entityAreaNames, setEntityAreaNames] = useState<Record<string, string>>({});
   const [entityFloorNumbers, setEntityFloorNumbers] = useState<Record<string, number>>({});
+  // The refresh reads the CURRENT maps to keep them through a failed fetch;
+  // refs, so the callback needs no dependency on state it also sets.
+  const areaNamesRef = useRef(entityAreaNames); areaNamesRef.current = entityAreaNames;
+  const floorNumbersRef = useRef(entityFloorNumbers); floorNumbersRef.current = entityFloorNumbers;
   const [entityDeviceIds, setEntityDeviceIds] = useState<Record<string, string>>({});
   // Mirrors `entities` synchronously (no extra render/effect lag) so
   // getEntitiesSnapshot() below is never stale — see its docstring.
@@ -264,14 +268,18 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
       setEntityDeviceIds(facts.deviceIds);
       // The other three registries are separate best-effort steps, so a
       // profile that can read entities but not devices/areas/floors still
-      // gets whatever resolves rather than losing the whole feature.
+      // gets whatever resolves rather than losing the whole feature — and a
+      // registry whose request FAILED keeps what it had (placesAfterRefresh;
+      // one failed area fetch used to blank every room name).
+      const failed = () => null;
       const [devices, areas, floors] = await Promise.all([
-        ws.getDeviceRegistry().catch(() => []),
-        ws.getAreaRegistry().catch(() => []),
-        ws.getFloorRegistry().catch(() => []),
+        ws.getDeviceRegistry().catch(failed),
+        ws.getAreaRegistry().catch(failed),
+        ws.getFloorRegistry().catch(failed),
       ]);
-      if (devices.length === 0 && areas.length === 0) return;
-      const places = entityPlaces(rows, devices, areas, floors);
+      const prev = { areaNames: areaNamesRef.current, floorNumbers: floorNumbersRef.current };
+      const places = placesAfterRefresh(prev, rows, { devices, areas, floors });
+      if (places === prev) return;
       setEntityAreaNames(places.areaNames);
       setEntityFloorNumbers(places.floorNumbers);
     } catch (err) {

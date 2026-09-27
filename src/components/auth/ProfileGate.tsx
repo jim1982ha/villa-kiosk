@@ -3,6 +3,7 @@
 // is configured), then the children render. Minimum-click funnel: a profile
 // without a configured PIN signs in with a single tap.
 
+import { authErrorText } from "@/auth/authErrorText";
 import { useEffect, useState, type ReactNode } from "react";
 import { UserRound, KeyRound, Wrench } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
@@ -92,11 +93,7 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
             login(r);
           } else setGateError("Couldn't start a session — please try again.");
         })
-        .catch((err) => setGateError(
-          err instanceof Error && err.message && !err.message.startsWith("auth service unavailable")
-            ? err.message
-            : "Couldn't reach the kiosk service — please try again.",
-        ));
+        .catch((err) => setGateError(authErrorText(err, "Couldn't reach the kiosk service — please try again.")));
     } else {
       setPending(r);
     }

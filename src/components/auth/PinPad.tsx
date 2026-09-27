@@ -10,6 +10,7 @@
 // is a prop, so the keypad behaviour, lockout countdown and keyboard handling
 // stay identical in both.
 
+import { authErrorText } from "@/auth/authErrorText";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, Delete } from "lucide-react";
 
@@ -79,10 +80,10 @@ export default function PinPad({
         setError("Incorrect code — try again.");
         setFailCount((c) => c + 1);
       }
-    } catch {
+    } catch (err) {
       if (!mounted.current) return;
       setDigits("");
-      setError("Couldn't reach the passcode service. Check the connection and try again.");
+      setError(authErrorText(err, "Couldn't reach the passcode service. Check the connection and try again."));
     } finally {
       if (mounted.current) setBusy(false);
     }

@@ -1,3 +1,17 @@
+## 2.496.194
+
+### Fixed
+- **Room names and floors no longer vanish after one failed Home Assistant
+  registry request.** If the area list alone failed to load (a transient
+  hiccup), every device's room and floor went blank until the next registry
+  change. A registry that fails to answer now keeps what it had.
+- **The passcode screen shows the real reason a sign-in was refused** (e.g.
+  an Owner profile with no passcode configured) instead of always saying
+  "Check the connection".
+- **Advanced Settings › Latitude / Longitude follow the live value.** When the
+  kiosk adopted Home Assistant's location while that screen was open, the
+  fields kept the old number and a tap out of the field wrote it back.
+
 ## 2.496.193
 
 ### Behind the scenes
