@@ -1,11 +1,10 @@
 // What a state timeline draws, driven by value (utils/timelineCells).
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 import { readFileSync } from "node:fs";
 const { timelineCells, timelineRuns, cellBackground } = await import("@/utils/timelineCells");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 
 const B = 300_000, now = 1_000 * B;             // bucket-aligned "now"
 const at = (k) => now - k * B;                  // k buckets ago
@@ -39,5 +38,5 @@ ck("a window that ended at a sighting is drawn up to it, not to now",
 const st = readFileSync(new URL("../../src/components/panels/StateTimeline.tsx", import.meta.url), "utf8");
 ck("StateTimeline draws exactly these", /timelineCells\(data, end \?\? \(timeKey \+ 1\) \* bucketMs, hours, bucketMs,/.test(st) && /timelineRuns\(cells, colorFor\)/.test(st));
 
-console.log(fail ? `\n❌ ${fail} failed` : "\n✅ the timeline's cells, by value");
-process.exit(fail ? 1 : 0);
+done("✅ the timeline's cells, by value");
+

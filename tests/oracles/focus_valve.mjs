@@ -8,12 +8,11 @@
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const { rungAt, viewportPx } = await import("@/babylon/badgeScale");
 const { PHONE_MAX_CSS_WIDTH } = await import("@/babylon/badgeMetrics");
 const { RoomFocus } = await import("@/babylon/roomFocus");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const tan = Math.tan(0.4);
 // The render height as Babylon sets it: truncated.
 const zoomAt = (cssH, hw, dist, withCanvas) => rungAt(viewportPx(Math.trunc(cssH / hw), hw, true, withCanvas ? cssH : undefined), tan, dist);
@@ -51,5 +50,4 @@ ck("the layout gives the rung the canvas's CSS height", /viewportPx\(engine\.get
 }
 ck("the phone test reads the canvas's CSS width the same way", /const cssWidth = viewportPx\(engine\.getRenderWidth\(\), engine\.getHardwareScalingLevel\(\), true,\s*engine\.getRenderingCanvas\(\)\?\.clientWidth\);/.test(ev));
 
-if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
-console.log("\n✅ a tapped room stays open when the pointer moves");
+done("✅ a tapped room stays open when the pointer moves");

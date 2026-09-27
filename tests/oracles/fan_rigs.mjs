@@ -7,6 +7,7 @@
 // had spun. And to 2.496.100 the full-dispose path still did exactly that.
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const { NullEngine } = await import("@babylonjs/core/Engines/nullEngine.js");
 const { Scene } = await import("@babylonjs/core/scene.js");
 const { Vector3 } = await import("@babylonjs/core/Maths/math.vector.js");
@@ -15,8 +16,6 @@ const { CreateBox } = await import("@babylonjs/core/Meshes/Builders/boxBuilder.j
 const { VertexBuffer } = await import("@babylonjs/core/Buffers/buffer.js");
 const { FanRigs, isCeilingFan } = await import("@/babylon/fanRigs");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const near = (a, b, t = 1e-3) => Math.abs(a - b) <= t;
 
 function rig() {
@@ -110,5 +109,5 @@ console.log("\n  teardown:");
   ck("EntityVisuals has one fan teardown, through FanRigs", (ev.match(/this\.fans\.clear\(\);/g) ?? []).length === 2 && !/private (fanRigs|spinningFans|fanAngles)\b|setupFanRig\(/.test(ev));
 }
 
-console.log(fail ? `\n❌ ${fail} failed` : "\n✅ fans spin in place, and come apart cleanly");
-process.exit(fail ? 1 : 0);
+done("✅ fans spin in place, and come apart cleanly");
+

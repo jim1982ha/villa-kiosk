@@ -7,12 +7,11 @@
 // menu or the Rooms dial; the last three also ignored Back.
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 const { overlayOpen } = await import("@/hooks/useBackToClose");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 
 ck("nothing registered: nothing open", overlayOpen() === false);
 
@@ -32,5 +31,5 @@ const dash = read(join(SRC, "pages/Dashboard.tsx"));
 ck("the auto-reload asks the stack, and keeps no list of its own",
    /installDailyAutoReload\(\(\) =>\s*!overlayOpen\(\) &&/.test(dash) && !/modalOpenRef/.test(dash));
 
-console.log(fail ? `\n❌ ${fail} failed` : "\n✅ one list of what is open");
-process.exit(fail ? 1 : 0);
+done("✅ one list of what is open");
+

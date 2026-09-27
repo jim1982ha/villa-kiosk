@@ -31,6 +31,7 @@
 // when false the view moves opposite (traditional). Applied to pan, tilt and zoom
 // so the in-app toggle matches user expectation regardless of the OS setting.
 
+import { wrapAngle } from "@/utils/geometry";
 import { ArcRotateCamera } from "@babylonjs/core/Cameras/arcRotateCamera";
 import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { Scene } from "@babylonjs/core/scene";
@@ -390,9 +391,7 @@ export class OverviewController {
     const baseAngle = Math.atan2(base.by - base.ay, base.bx - base.ax);
 
     // ── Rotation: incremental twist angle (always) ────────────────────────────
-    let dAngle = angle - baseAngle;
-    if (dAngle >  Math.PI) dAngle -= 2 * Math.PI;
-    if (dAngle < -Math.PI) dAngle += 2 * Math.PI;
+    const dAngle = wrapAngle(angle - baseAngle);
     this.camera.alpha += dAngle;
 
     // ── Classify the gesture: TILT vs ZOOM ────────────────────────────────────

@@ -5,6 +5,7 @@
 // Driven against a fake add-on.
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 
 const noop = () => {};
 globalThis.window = { location: { origin: "http://localhost", pathname: "/", protocol: "http:", host: "localhost" }, addEventListener: noop, removeEventListener: noop };
@@ -26,8 +27,6 @@ globalThis.fetch = async (url, init = {}) => {
 const P = await import("@/utils/modelPrefetch");
 const { versionedModelUrl } = await import("@/utils/centralModel");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const until = async (pred, ms = 8000) => { const t0 = Date.now(); while (!pred() && Date.now() - t0 < ms) await new Promise((r) => setTimeout(r, 20)); return pred(); };
 
 // The profile screen starts the download; it hits a network blip first.
@@ -59,6 +58,4 @@ ck("the canvas makes one call for the bytes (through modelSource)",
    /versionedModelUrl, modelBytes,/.test(bc) && (ms.match(/deps\.modelBytes\(/g) ?? []).length === 1
    && !/claimPrefetch|fetchModelWithRetry\(/.test(bc + ms));
 
-if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
-console.log("\n✅ one way to the model's bytes");
-process.exit(0);
+done("✅ one way to the model's bytes");

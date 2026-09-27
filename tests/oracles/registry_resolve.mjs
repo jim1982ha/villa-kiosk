@@ -4,10 +4,9 @@
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const R = await import("@/ha/registryResolve");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const rows = [
   { entity_id: "light.own_area", area_id: "a_up", device_id: "d1" },
   { entity_id: "light.from_device", area_id: null, device_id: "d1" },
@@ -37,5 +36,4 @@ ck("every (re)connect runs ONE pass — after the subscriptions — loading the 
    && pass.indexOf("await subscribedRef.current") < pass.indexOf("hydrate()") && /"get_config"/.test(pass) && /refreshRegistryData\(\)/.test(pass));
 ck("the provider resolves nothing itself", /entityRegistryFacts\(rows\)/.test(st) && /placesAfterRefresh\(prev, rows, \{ devices, areas, floors \}\)/.test(st) && !/deviceAreaById/.test(st));
 
-if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
-console.log("\n✅ the registries, resolved once and re-read on every reconnect");
+done("✅ the registries, resolved once and re-read on every reconnect");

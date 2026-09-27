@@ -12,13 +12,12 @@
 //   * a room chip far down the corridor from a badge still "collided" with it.
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const { PlacementPass, groundOf } = await import("@/babylon/placementPass");
 const { RoomFocus } = await import("@/babylon/roomFocus");
 const { arrange } = await import("@/babylon/badgeCard");
 const { NO_ROOM_LABEL, roomKey } = await import("@/config/roomKey");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 
 const PX = 10;
 // Walk projection stub: x across, y up (screen down is +sy, so -y), z along.
@@ -131,5 +130,5 @@ console.log("\n  a room chip down the corridor from a badge:");
   ck("  ...and on top of it, it is (the test still bites)", chipped(pass2).includes(roomKey("Living")), chipped(pass2));
 }
 
-console.log(fail ? `\n❌ ${fail} failed` : "\n✅ the walk camera measures ground distance everywhere");
-process.exit(fail ? 1 : 0);
+done("✅ the walk camera measures ground distance everywhere");
+

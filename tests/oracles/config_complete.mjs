@@ -10,10 +10,9 @@ import { register } from "node:module";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const A = await import("@/config/AppConfig");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 
 const stored = { ...A.DEFAULT_CONFIG, walkSpeed: null, naturalScrolling: null, badgeStyle: undefined, showSummaryBar: undefined,
   cameraBeamPitchDeg: undefined, entityIconScale: 0, northOffsetDeg: null };
@@ -47,5 +46,4 @@ ck("loadConfig spreads no seed under the user's maps, thresholds or rooms",
    && !/\.\.\.DEFAULT_CONFIG\.(entityMap|meshBindings|alertThresholds)/.test(ac));
 ck("no per-entity category exception table (its only content could be one villa's devices)", !/CATEGORY_EXCEPTIONS/.test(src("config/EntityCategories.ts")));
 
-if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
-console.log("\n✅ every setting present and valid, decided once");
+done("✅ every setting present and valid, decided once");

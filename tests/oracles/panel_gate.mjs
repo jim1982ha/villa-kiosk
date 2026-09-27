@@ -6,10 +6,9 @@
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const { panelMapping } = await import("@/auth/permissions");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const map = {
   "light.a": { entityId: "light.a", type: "light", label: "A" },
   "sensor.power": { entityId: "sensor.power", type: "sensor", label: "Power", category: "energy", categoryPicked: true },
@@ -21,7 +20,12 @@ ck("a guest may NOT open an energy device's panel, from the model or from a tile
    panelMapping("sensor.power", map, "guest", power, { control: true }) === null && panelMapping("sensor.power", map, "guest", power, { control: false }) === null);
 ck("the owner may", panelMapping("sensor.power", map, "owner", power, { control: true }) !== null);
 ck("nobody signed in, or a device of a type the kiosk does not know: no panel", panelMapping("light.a", map, null, undefined, { control: false }) === null && panelMapping("vacuum.zzz", map, "owner", undefined, { control: true }) === null);
-ck("a mapping stored as 'sensor' before its domain was known opens as its real type", panelMapping("input_boolean.x", map, "owner", undefined, { control: true })?.type === "input_boolean");
+// The stale-"sensor" upgrade is a LOAD-TIME migration since 2.496.200
+// (AppConfig.upgradeStaleTypes, driven in code_dry.mjs): the gate sees the
+// config as every other reader does, already upgraded.
+const { upgradeStaleTypes, DEFAULT_CONFIG } = await import("@/config/AppConfig");
+const loaded = upgradeStaleTypes({ ...DEFAULT_CONFIG, entityMap: map }).entityMap;
+ck("a mapping stored as 'sensor' before its domain was known opens as its real type (upgraded at load)", panelMapping("input_boolean.x", loaded, "owner", undefined, { control: true })?.type === "input_boolean");
 
 const perms = readFileSync(new URL("../../src/auth/permissions.ts", import.meta.url), "utf8");
 ck("from the model, control is required too (a tap may toggle)", /if \(opts\.control && !hasCapability\(role, "controlEntities"\)\) return null;/.test(perms));
@@ -33,5 +37,4 @@ ck("tap and long-press ask the gate with control; a tile asks it without",
 const longPress = d.slice(d.indexOf("const onEntityLongPressed"), d.indexOf("// Announce motion"));
 ck("the long-press re-judges with the CURRENT entity (its hook depends on `entities`)", /\[config\.entityMap, entities, role, spawnRipple\]/.test(longPress));
 
-if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
-console.log("\n✅ one gate for every way a panel opens");
+done("✅ one gate for every way a panel opens");

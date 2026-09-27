@@ -4,10 +4,9 @@
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const { readSceneMirror } = await import("@/pages/sceneMirror");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const scene = (floor, view = "overview", def = false) => ({ getViewMode: () => view, hasOverviewDefault: () => def, floors: { getCurrentFloor: () => floor } });
 
 const before = readSceneMirror(scene(2, "first-person", true));
@@ -20,5 +19,4 @@ ck("Dashboard sets the floor, the view and the default from ONE read of each new
    /const m = readSceneMirror\(manager\);\s*setViewMode\(m\.viewMode\);\s*setHasOverviewDefault\(m\.hasOverviewDefault\);\s*setCurrentFloor\(m\.floor\);\s*\}, \[manager\]\);/.test(dash));
 ck("  ...and no second effect re-reads part of it on its own", (dash.match(/manager\.getViewMode\(\)\)/g) ?? []).length === 0 && !/setHasOverviewDefault\(manager\?\.hasOverviewDefault\(\)/.test(dash));
 
-if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
-console.log("\n✅ the scene's state is read from the scene");
+done("✅ the scene's state is read from the scene");

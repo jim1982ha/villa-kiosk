@@ -7,13 +7,12 @@
 // devices the list it opened left out.
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 const { roleCan, listedDevices, hasCapability } = await import("@/auth/permissions");
 const { attentionFor } = await import("@/components/cockpit/cockpitData");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 
 console.log("  the table:");
 ck("no profile chosen: no rights", !roleCan(null, "controlEntities") && !roleCan(undefined, "reportFault"));
@@ -66,5 +65,5 @@ console.log("\n  who asks:");
      && /isMappingAllowed\(role, id, m, entities\[id\]\)/.test(src("components/cockpit/useVillaAttention.ts")));
 }
 
-console.log(fail ? `\n❌ ${fail} failed` : "\n✅ one table answers every role question; counts match their lists");
-process.exit(fail ? 1 : 0);
+done("✅ one table answers every role question; counts match their lists");
+

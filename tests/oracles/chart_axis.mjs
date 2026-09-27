@@ -7,10 +7,9 @@
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const G = await import("@/utils/chartGeometry");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 
 console.log("  round ticks, over the chart's own range:");
 const wk = G.niceTicks(0, 75.46);                       // a week's peak day, kWh
@@ -83,5 +82,4 @@ ck("  ...the legend says the same, and UV's colour has a line, a key and an axis
 ck("  ...and the right axis wears its line's colour (its class, or its CSS colour)",
    /ticks=\{g\.series\[ownAt\]\.ticks\}\s*cls=\{right\.cls\?\.split\(" "\)\[0\]\} color=\{right\.color\} \/>/.test(lc));
 
-if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
-console.log("\n✅ every chart says what its values are");
+done("✅ every chart says what its values are");

@@ -12,6 +12,7 @@
 // testing from a desktop browser), where the console's native scrollback,
 // search and copy beat a custom on-screen div.
 
+import { clamp } from "./geometry";
 import { readJson, writeJson } from "./storedJson";
 import { debugFlagEnabled } from "@/utils/devLog";
 
@@ -112,8 +113,8 @@ function clampIntoView(el: HTMLDivElement): void {
   const r = el.getBoundingClientRect();
   const maxLeft = Math.max(0, window.innerWidth - Math.min(r.width, window.innerWidth));
   const maxTop = Math.max(0, window.innerHeight - 40); // a header's worth stays grabbable
-  el.style.left = `${Math.min(Math.max(0, r.left), maxLeft)}px`;
-  el.style.top = `${Math.min(Math.max(0, r.top), maxTop)}px`;
+  el.style.left = `${clamp(r.left, 0, maxLeft)}px`;
+  el.style.top = `${clamp(r.top, 0, maxTop)}px`;
 }
 
 /** Drag the panel by its header. Pointer events (not mouse) so it works with

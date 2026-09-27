@@ -9,10 +9,9 @@
 import { register } from "node:module";
 import { readFileSync, readdirSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const H = await import("@/utils/chartHover");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 
 console.log("  in — the pointer, as a fraction across the plot:");
 ck("a quarter of the way across a 400 px chart at x=100 is 0.25", H.pointerFraction(200, 100, 400) === 0.25);
@@ -49,5 +48,4 @@ for (const f of ["LineChart.tsx", "BarChart.tsx", "StateTimeline.tsx"]) {
 }
 ck("  LineChart reads it as a time in the geometry", /const hover = frac !== null \? g\.hover\(g\.tAt\(frac \* W\)\) : null;/.test(read("LineChart.tsx")));
 
-if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
-console.log("\n✅ one hover: pointer in, tip out");
+done("✅ one hover: pointer in, tip out");

@@ -1,6 +1,7 @@
 // src/utils/colorUtils.ts
 // Colour helpers (HS -> RGB for Hue-style lights), adapted from the 3Dash pattern.
 
+import { clamp } from "./geometry";
 export interface RGB {
   r: number; // 0-1
   g: number;
@@ -26,7 +27,7 @@ export function hsToRgb(hue: number, sat: number): RGB {
 
 /** Approximate colour temperature (Kelvin) to RGB in 0-1. */
 export function kelvinToRgb(kelvin: number): RGB {
-  const t = Math.min(Math.max(kelvin, 1000), 40000) / 100;
+  const t = clamp(kelvin, 1000, 40000) / 100;
   let r: number, g: number, b: number;
   if (t <= 66) {
     r = 255;
@@ -42,7 +43,7 @@ export function kelvinToRgb(kelvin: number): RGB {
   // this does something else — it clamps to a byte AND normalises to 0-1. A
   // local shadow with different semantics is how a reader comes to believe the
   // shared rule is being applied when it is not.
-  const channel = (v: number) => Math.min(Math.max(v, 0), 255) / 255;
+  const channel = (v: number) => clamp(v, 0, 255) / 255;
   return { r: channel(r), g: channel(g), b: channel(b) };
 }
 

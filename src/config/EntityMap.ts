@@ -252,20 +252,11 @@ export function mappingForEntityId(
   entityId: string,
   map: Record<string, EntityMapping>,
 ): EntityMapping | null {
-  if (map[entityId]) {
-    const m = map[entityId];
-    // Transparently upgrade entries that were stored with the old "sensor"
-    // fallback before a domain (e.g. input_boolean) was added to the known list.
-    if (
-      m.type === "sensor" &&
-      !entityId.startsWith("sensor.") &&
-      !entityId.startsWith("binary_sensor.")
-    ) {
-      const upgraded = inferTypeFromEntityId(entityId);
-      if (upgraded) return { ...m, type: upgraded };
-    }
-    return m;
-  }
+  // A stored mapping is returned AS STORED: the stale-"sensor" type upgrade
+  // this used to apply is a load-time migration now (AppConfig
+  // .upgradeStaleTypes), so every reader — the eleven raw `entityMap[id]`
+  // reads in the 3D layer included — sees the same type.
+  if (map[entityId]) return map[entityId];
   const inferred = inferTypeFromEntityId(entityId);
   if (!inferred) return null;
   return createDefaultMapping(entityId, { type: inferred });

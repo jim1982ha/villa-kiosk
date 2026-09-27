@@ -8,10 +8,9 @@
 //     used to listen for a different two of the three.
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 import { readFileSync } from "node:fs";
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 
 // A localStorage stub that can be corrupted, disabled, or full.
 const store = new Map(); let disabled = false, full = false;
@@ -70,5 +69,5 @@ console.log("\n  the wake signal:");
      && !/addEventListener\("(visibilitychange|focus|online)"/.test(ws + sr));
 }
 
-console.log(fail ? `\n❌ ${fail} failed` : "\n✅ one stored-JSON seam; one wake signal");
-process.exit(fail ? 1 : 0);
+done("✅ one stored-JSON seam; one wake signal");
+

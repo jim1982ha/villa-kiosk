@@ -2,6 +2,13 @@
 
 export const clamp = (v: number, min: number, max: number): number => Math.min(max, Math.max(min, v));
 
+/** a → b at t (0..1). Four files wrote `a + (b - a) * t` (2.496.200). */
+export const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
+
+/** An angle folded into -π..π — the signed shortest difference between two
+ *  bearings. SkyDome and OverviewController each had their own formula. */
+export const wrapAngle = (a: number): number => a - Math.PI * 2 * Math.round(a / (Math.PI * 2));
+
 export interface Pt2 {
   x: number;
   z: number;

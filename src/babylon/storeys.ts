@@ -32,6 +32,7 @@
 //
 // Pure: tests/oracles/storeys.mjs drives it with the villa's measured rooms.
 
+import { STAIR_NAME_RE } from "./meshRoles";
 import { pointInPolygon, type Pt2 } from "@/utils/geometry";
 
 /**
@@ -69,8 +70,7 @@ export const STOREY_MIN_MOUNT = 0.30;
 /** A plan room that is a staircase, by the name the plan gives it. Its
  *  measured floor is a TREAD (0.85 m and 1.11 m on the villa GLB), so it is
  *  never a place to stand or land. */
-const STAIR_ROOM_RE = /stair|escalier|escalera|scala|treppe|stufe|trap\b|steps?\b/i;
-export function isStairwell(name: string): boolean { return STAIR_ROOM_RE.test(name); }
+export function isStairwell(name: string): boolean { return STAIR_NAME_RE.test(name); }
 
 /** A room as the storeys need it. `storey` is the plan's number for it —
  *  absent when the room list has none. */

@@ -7,13 +7,12 @@
 // re-derived device folding (a function of config only) twice per push.
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 import { readFileSync } from "node:fs";
 const { PushBatch } = await import("@/utils/pushBatch");
 const { villaSummary, domainIndex } = await import("@/config/villaSummary");
 const { villaDevices, deviceFolding } = await import("@/config/deviceGroups");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 
 console.log("  the batch:");
 {
@@ -75,5 +74,5 @@ console.log("\n  the callers:");
   ck("the summary bar finds the station once and hands it to the tiles", (sb.match(/findWeatherStation\(/g) ?? []).length === 1 && /useMemo\(\(\) => findWeatherStation\(visibleEntities, entityDeviceIds\)/.test(sb));
 }
 
-console.log(fail ? `\n❌ ${fail} failed` : "\n✅ React sees the socket once per window; each render scans once");
-process.exit(fail ? 1 : 0);
+done("✅ React sees the socket once per window; each render scans once");
+

@@ -13,6 +13,7 @@
 // from the app's own modules.
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 globalThis.OffscreenCanvas ??= class {
   constructor(w, h) { this.width = w; this.height = h; }
   // Layout needs no pixels; a value's width is measured, at 7 px a character.
@@ -39,8 +40,6 @@ const { badgeMetricsFor } = await import("@/babylon/badgeMetrics");
 const { glyphDrawPx } = await import("@/babylon/badgeLayout");
 const { badgeRing, applyBadgeFrame } = await import("@/babylon/badgeLook");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 
 const engine = new NullEngine({ renderWidth: 1600, renderHeight: 1200 });
 // A font's vertical metrics come from a DOM span; fixed ones stand in.
@@ -135,5 +134,4 @@ for (const b of built) {
   }
 }
 
-if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
-console.log("\n✅ every badge draws centred, as Babylon lays it out");
+done("✅ every badge draws centred, as Babylon lays it out");

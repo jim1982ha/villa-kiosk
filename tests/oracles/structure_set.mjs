@@ -8,6 +8,7 @@
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 globalThis.OffscreenCanvas ??= class { constructor(w, h) { this.width = w; this.height = h; } getContext() { return { createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }), putImageData() {} }; } };
 const { NullEngine } = await import("@babylonjs/core/Engines/nullEngine.js");
 const { Scene } = await import("@babylonjs/core/scene.js");
@@ -16,8 +17,6 @@ const { MeshBuilder } = await import("@babylonjs/core/Meshes/meshBuilder.js");
 const { StandardMaterial } = await import("@babylonjs/core/Materials/standardMaterial.js");
 const { StructureSet } = await import("@/babylon/structureSet");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const scene = new Scene(new NullEngine());
 const box = (name, w, h, d, x, y, z) => {
   const m = MeshBuilder.CreateBox(name, { width: w, height: h, depth: d }, scene);
@@ -70,5 +69,5 @@ const dispose = sm.slice(sm.indexOf("  dispose(): void {"), sm.indexOf("\n  }\n"
 ck("SceneManager's dispose clears it (the 35 MB leak)", /this\.structure\.clear\(\)/.test(dispose));
 ck("  ...and keeps no ceiling list of its own", !/ceilingMeshes/.test(sm.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "")));
 
-console.log(fail ? `\n❌ ${fail} failed` : "\n✅ one owner for the ceilings, from load to dispose");
-process.exit(fail ? 1 : 0);
+done("✅ one owner for the ceilings, from load to dispose");
+

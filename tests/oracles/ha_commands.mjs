@@ -12,9 +12,8 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const table = JSON.parse(readFileSync(new URL("../../rootfs/usr/share/vesta/ha-commands.json", import.meta.url), "utf8"));
 const types = new Set([...table.websocket, ...table.camera]);
 const domains = new Set(table.serviceDomains);
@@ -52,5 +51,4 @@ const { TOGGLEABLE_DOMAINS } = await import("@/utils/quickAction");
 const badToggle = [...TOGGLEABLE_DOMAINS].filter((d) => !domains.has(d));
 ck("every domain a tile toggles by variable (quickAction's toggle set) is in the table", badToggle.length === 0, badToggle);
 
-if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
-console.log("\n✅ the app sends Home Assistant only what the proxy was told about");
+done("✅ the app sends Home Assistant only what the proxy was told about");

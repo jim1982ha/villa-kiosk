@@ -4,10 +4,9 @@
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const K = await import("@/babylon/overviewKeys");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const near = (a, b) => Math.abs(a - b) < 1e-9;
 const A = (code, key = "", shift = false) => K.overviewKeyAction(code, key, shift);
 
@@ -53,5 +52,4 @@ ck("  ...and moves through the gestures' own primitives, with the Natural Scroll
 ck("walking shares the guard (arrow keys in a field no longer walk the villa)", /if \(!keyIsForCamera\(e\.target\) && e\.type === "keydown"\) return;/.test(cc));
 ck("the ? window lists the keys for the CURRENT setting", /overviewKeyHelp\(config\.naturalScrolling\)/.test(lg));
 
-if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
-console.log("\n✅ the bird's-eye view from the keyboard");
+done("✅ the bird's-eye view from the keyboard");

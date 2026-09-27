@@ -10,6 +10,7 @@
 //   3. SSAO2                             — darkens corners/contacts (depth).
 //   4. IBL (procedural gradient cube)    — soft sky/ground ambient for PBR.
 
+import { lerp } from "@/utils/geometry";
 import { ImageProcessingConfiguration } from "@babylonjs/core/Materials/imageProcessingConfiguration";
 import { SSAO2RenderingPipeline } from "@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/ssao2RenderingPipeline";
 import { RawCubeTexture } from "@babylonjs/core/Materials/Textures/rawCubeTexture";
@@ -166,7 +167,6 @@ export class RenderEnhancements {
     const sky: [number, number, number] = [120, 158, 210];
     const horizon: [number, number, number] = [178, 178, 182];
     const ground: [number, number, number] = [120, 110, 98];
-    const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
     // Direction for a given cube face + uv (Babylon face order: +X,-X,+Y,-Y,+Z,-Z).
     const dirFor = (face: number, u: number, v: number): number => {

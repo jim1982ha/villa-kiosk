@@ -4374,7 +4374,7 @@ export class EntityVisuals {
     // camera class. The walk camera keeps the pre-2.287.0 metric because the
     // plane one discards its depth axis entirely — projectToView has the
     // worked case.
-    const orbit = typeof (cam as unknown as { radius?: number }).radius === "number";
+    const orbit = this.orbitCamera();
     const mode: ProjectionMode = VIEW_METRIC === "plane" && orbit ? "plane" : "world3d";
     return viewBasis(f.x / len, f.y / len, f.z / len, VIEW_BASIS_STEPS, mode);
   }
@@ -4894,8 +4894,7 @@ export class EntityVisuals {
     const fov = 2 * cameraFrame(this.scene, cam).vHalf;
     // Duck-typed rather than instanceof-checked so this file needs no import
     // of the concrete camera classes: only ArcRotateCamera exposes `radius`.
-    const orbitRadius = (cam as unknown as { radius?: number }).radius;
-    let dist = typeof orbitRadius === "number" ? orbitRadius : 0;
+    let dist = this.orbitCamera() ? (cam as unknown as { radius: number }).radius : 0;
     if (!(dist > 0)) {
       if (shown.length === 0) return 0;
       // Pooled: this runs on EVERY camera-moving frame in first person, and a

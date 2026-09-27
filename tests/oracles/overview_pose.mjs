@@ -6,10 +6,9 @@
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const P = await import("@/babylon/overviewPose");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const eq = (a, b) => Math.abs(a - b) < 1e-12;
 
 // ── the 2.496.170 fitTo arithmetic ──
@@ -47,5 +46,4 @@ ck("OverviewController clamps only through overviewPose (no clamp(), no `?? 2`/`
 ck("SceneManager reads the controller's limits, with no fallback of its own",
    !/lowerRadiusLimit \?\?|lowerBetaLimit \?\?/.test(sm) && /getRadiusLimits\(\)\.lo/.test(sm));
 
-if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
-console.log("\n✅ the overview camera's fit and clamps, one module");
+done("✅ the overview camera's fit and clamps, one module");

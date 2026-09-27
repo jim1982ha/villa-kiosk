@@ -7,11 +7,10 @@
 // runs the real bucketing and the real combine, inside the real merge loop.
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const { bucketRoomChips, combineChips, chipSuffixOf, summaryRingRed } = await import("@/babylon/roomChips");
 const { mergeOverlapping } = await import("@/babylon/boxMerge");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const M = (id, room, x, kind) => ({ id, room, pos: { x, y: 1, z: 0 }, kind });
 const members = [
   M("light.k1", "kitchen", 0, "on"), M("light.k2", "kitchen", 2, "off"),
@@ -66,5 +65,5 @@ console.log("\n  a summary's ring (2.496.141 — was inline in EntityVisuals, un
      /summaryRingRed\(g\.members\.map/.test(ev) && !/ringRed = true;|if \(ring !== "alert"\) ringRed = false/.test(ev));
 }
 
-console.log(fail ? `\n❌ ${fail} failed` : "\n✅ a room chip says who is in it, merged or not");
-process.exit(fail ? 1 : 0);
+done("✅ a room chip says who is in it, merged or not");
+

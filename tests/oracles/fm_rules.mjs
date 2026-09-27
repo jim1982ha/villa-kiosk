@@ -4,12 +4,11 @@
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const E = await import("@/fm/fmEngine");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
 const R = await import("@/fm/fmReport");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 
 ck("a fault goes open → in progress → resolved, and resolved is final on the Faults tab",
    E.TICKET_NEXT.open === "in_progress" && E.TICKET_NEXT.in_progress === "resolved" && E.TICKET_NEXT.resolved === null);
@@ -59,5 +58,4 @@ ck("no screen parses an amount or ranks/moves a fault by itself",
    && /ticketRank\(a\)/.test(src("components/fm/FaultsTab.tsx")) && !/const NEXT:/.test(src("components/fm/FaultsTab.tsx")));
 ck("the store erases a fault through withoutTicket", /mutate\(\(d\) => withoutTicket\(d, id\), elevation\)/.test(src("fm/FmDataContext.tsx")));
 
-if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
-console.log("\n✅ the Facility rules, in the engine");
+done("✅ the Facility rules, in the engine");

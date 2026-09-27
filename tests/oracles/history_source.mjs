@@ -12,11 +12,10 @@ import { register } from "node:module";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const { statisticsSeries, seriesTotal, seriesExtent, PERIOD_MS } = await import("@/utils/statisticsSeries");
 const { fetchStatistics } = await import("@/ha/HAHistoryAPI");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const Hr = PERIOD_MS.hour, t0 = 1_700_000_000_000;
 const win = { from: t0, to: t0 + 24 * Hr };
 const hourly = (n, f) => Array.from({ length: n }, (_, i) => ({ start: t0 + i * Hr, end: t0 + (i + 1) * Hr, ...f(i) }));
@@ -98,5 +97,5 @@ console.log("\n  the callers:");
      && /import LineChart, \{ ChartEmpty \} from "\.\/LineChart";/.test(panel));
 }
 
-console.log(fail ? `\n❌ ${fail} failed` : "\n✅ one history source; absent is never zero");
-process.exit(fail ? 1 : 0);
+done("✅ one history source; absent is never zero");
+

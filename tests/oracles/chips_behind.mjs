@@ -7,13 +7,12 @@
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const { NullEngine } = await import("@babylonjs/core/Engines/nullEngine.js");
 const { Scene } = await import("@babylonjs/core/scene.js");
 const { FreeCamera } = await import("@babylonjs/core/Cameras/freeCamera.js");
 const { Vector3, Matrix } = await import("@babylonjs/core/Maths/math.vector.js");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const engine = new NullEngine({ renderWidth: 2000, renderHeight: 960, textureSize: 64, deterministicLockstep: false, lockstepMaxSteps: 1 });
 const scene = new Scene(engine);
 const cam = new FreeCamera("walk", new Vector3(0, 1.6, 0), scene); cam.fov = 0.8; cam.minZ = 0.05;
@@ -36,5 +35,4 @@ const gui = readFileSync(new URL("../../node_modules/@babylonjs/gui/2D/advancedD
 ck("  ...and a chip left behind is not drawn: the GUI skips a linked control outside the depth range",
    /projectedPosition\.z < 0 \|\| projectedPosition\.z > 1\)\s*\{\s*control\.notRenderable = true;/.test(gui));
 
-if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
-console.log("\n✅ a room behind the walker lends no chip its name");
+done("✅ a room behind the walker lends no chip its name");

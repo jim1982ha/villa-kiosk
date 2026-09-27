@@ -22,7 +22,7 @@ import { Constants } from "@babylonjs/core/Engines/constants";
 import type { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { Scene } from "@babylonjs/core/scene";
 
-import { earClipTriangulate, type Pt2 } from "@/utils/geometry";
+import { earClipTriangulate, lerp, type Pt2 } from "@/utils/geometry";
 import { poolFootprint } from "./lightPlacement";
 import { LIGHT_POOL_ALPHA_INDEX } from "./seeThroughOrder";
 
@@ -72,7 +72,7 @@ export function poolAlphaAt(normalisedDist: number): number {
     const [t1, a1] = POOL_ALPHA_STOPS[i + 1];
     if (normalisedDist <= t1) {
       const t = t1 === t0 ? 0 : (normalisedDist - t0) / (t1 - t0);
-      return a0 + (a1 - a0) * t;
+      return lerp(a0, a1, t);
     }
   }
   return 0;

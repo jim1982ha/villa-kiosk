@@ -14,12 +14,11 @@
 globalThis.window = { location: { origin: "", pathname: "/" } };
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 import { readFileSync, readdirSync } from "node:fs";
 const { loadStateWindow, historyTitle } = await import("@/hooks/useStateHistory");
 const { emptyHistoryText } = await import("@/utils/statisticsSeries");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 
 console.log("  what an empty chart says:");
 ck("loading draws the skeleton (no text)", emptyHistoryText("loading") === null);
@@ -62,5 +61,5 @@ console.log("\n  who charts states, and how:");
      /<ChartEmpty status=\{status === "failed" \? "failed" : "loading"\} \/>/.test(src("EnergyPanel.tsx")));
 }
 
-console.log(fail ? `\n❌ ${fail} failed` : "\n✅ one history section: one look-back, three honest empty states");
-process.exit(fail ? 1 : 0);
+done("✅ one history section: one look-back, three honest empty states");
+

@@ -6,11 +6,10 @@
 // held its own never-resynced draft (see ConfigEditorModal.VillaCoordinates).
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 import { readFileSync } from "node:fs";
 const { authErrorText } = await import("@/auth/authErrorText");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 
 const F = "Check the connection.";
 ck("the server's own reason is shown", authErrorText(new Error("this profile is not available"), F) === "this profile is not available");
@@ -25,5 +24,5 @@ const cem = src("components/settings/ConfigEditorModal.tsx").replace(/\/\*[\s\S]
 ck("villa coordinates are a drafted field showing the LIVE value when no draft exists",
    /value=\{field\.drafts\[key\] \?\? String\(config\[key\]\)\}/.test(cem.replace(/\s+/g, " ")) && !/useState\(String\(config\.latitude\)\)/.test(cem));
 
-console.log(fail ? `\n❌ ${fail} failed` : "\n✅ one sign-in wording rule; coordinates follow the live config");
-process.exit(fail ? 1 : 0);
+done("✅ one sign-in wording rule; coordinates follow the live config");
+

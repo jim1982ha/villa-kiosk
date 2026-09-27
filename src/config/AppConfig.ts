@@ -2,7 +2,7 @@
 // Config schema + defaults + load/save (localStorage). All runtime-editable.
 
 import type { Category, EntityMapping, EntityType, TeleportPoint } from "@/types/scene.types";
-import { hasVariantSuffix } from "./EntityMap";
+import { hasVariantSuffix, inferTypeFromEntityId } from "./EntityMap";
 import { ENTITY_MAP } from "./EntityMap";
 import { TELEPORT_POINTS } from "./TeleportPoints";
 import { DEFAULT_THRESHOLDS, type Threshold } from "./ThresholdConfig";
@@ -400,7 +400,27 @@ function migrateMotionEntityId(config: AppConfig): AppConfig {
  */
 export function normaliseConfig(config: AppConfig, opts: { maps?: boolean } = {}): AppConfig {
   const complete = completeConfig(config);
-  return opts.maps === false ? complete : migrateMotionEntityId(stripStaleVariantEntities(complete));
+  return opts.maps === false ? complete : migrateMotionEntityId(stripStaleVariantEntities(upgradeStaleTypes(complete)));
+}
+
+/**
+ * A mapping stored with the old "sensor" fallback before its domain (e.g.
+ * input_boolean) was known takes the domain's type. ONE migration, here,
+ * where every config enters memory — it used to be a branch inside
+ * mappingForEntityId, which the eleven `entityMap[id]` reads in the 3D layer
+ * bypassed, so a badge's compact value could format an input_boolean as a
+ * sensor (2.496.200).
+ */
+export function upgradeStaleTypes(config: AppConfig): AppConfig {
+  let entityMap: Record<string, EntityMapping> | null = null;
+  for (const [id, m] of Object.entries(config.entityMap)) {
+    if (m.type !== "sensor" || id.startsWith("sensor.") || id.startsWith("binary_sensor.")) continue;
+    const upgraded = inferTypeFromEntityId(id);
+    if (!upgraded) continue;
+    entityMap ??= { ...config.entityMap };
+    entityMap[id] = { ...m, type: upgraded };
+  }
+  return entityMap ? { ...config, entityMap } : config;
 }
 
 /**

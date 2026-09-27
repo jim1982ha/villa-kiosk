@@ -4,10 +4,9 @@
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const { keyLook, KEY_TURN_RAD_PER_S, PITCH_LIMIT } = await import("@/babylon/keyLook");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const second = (hz) => { let r = { x: 0, y: 0 }; for (let i = 0; i < hz; i++) r = keyLook(r, 1, 0, 60 / hz); return r.y; };
 
 ck("one second held turns the same at 30, 60 and 120 Hz", [30, 60, 120].every((hz) => Math.abs(second(hz) - 1.8) < 1e-9), [30, 60, 120].map(second));
@@ -22,5 +21,4 @@ ck("the frame factor is read ONCE per step (the clock advances when read) and sh
    (cc.match(/this\.frameFactor\(\)/g) ?? []).length === 1 && /this\.stepFrames = this\.frameFactor\(\);/.test(cc)
    && (cc.match(/\* this\.stepFrames;/g) ?? []).length === 2);
 
-if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
-console.log("\n✅ keyboard turning is per second");
+done("✅ keyboard turning is per second");

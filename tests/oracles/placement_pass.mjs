@@ -12,13 +12,12 @@
 //   * a focused room's card never escalates.
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const { PlacementPass, roomSpanLabel } = await import("@/babylon/placementPass");
 const { RoomFocus } = await import("@/babylon/roomFocus");
 const { arrange, cardLift } = await import("@/babylon/badgeCard");
 const { roomKey, NO_ROOM_LABEL } = await import("@/config/roomKey");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 
 function rig(rooms) {
   const focus = new RoomFocus();
@@ -148,5 +147,5 @@ console.log("\n  the caller:");
   ck("  ...and keeps none of its state or steps", !/private (roomClustered|entityGrouped|chipWhyCount|seatLog)\b|private (placeEntityGroups|pairFocusedRoom|settleChips|dropEscalatedGroups|chipRoom)\(/.test(ev));
 }
 
-console.log(fail ? `\n❌ ${fail} failed` : "\n✅ one placement pass, its rules driven");
-process.exit(fail ? 1 : 0);
+done("✅ one placement pass, its rules driven");
+

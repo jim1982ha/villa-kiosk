@@ -9,10 +9,9 @@
 // (2.329.0), and a gate that must read RENDER time, never the frame gap.
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const { ResolutionGovernor, startingScale, VALVE_SAMPLE_MIN } = await import("@/babylon/resolutionGovernor");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const near = (a, b) => Math.abs(a - b) < 1e-9;
 /** A device: its DPR and current level; `sets` records each engine write. */
 function device(dpr, level = startingScale(dpr)) {
@@ -109,5 +108,5 @@ console.log("\n  the caller:");
   ck("no valve rule is left in SceneManager", !/easeResolution|raiseResolution|FRAME_TARGET_MS|HW_SCALE_FLOOR|private sharpen/.test(sm));
 }
 
-console.log(fail ? `\n❌ ${fail} failed` : "\n✅ the resolution governor, replayed");
-process.exit(fail ? 1 : 0);
+done("✅ the resolution governor, replayed");
+

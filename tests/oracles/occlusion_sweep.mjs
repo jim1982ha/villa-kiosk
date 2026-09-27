@@ -10,10 +10,9 @@
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const { OcclusionSweep } = await import("@/babylon/occlusionSweep");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 function rig() {
   let t = 1000;
   const walls = new Set();                    // badge ids a wall currently hides
@@ -115,5 +114,5 @@ console.log("\n  the building does not move:");
   ck("the walk camera's per-frame step returns at once under the other camera", /private step\(\): void \{[\s\S]{0,300}if \(this\.scene\.activeCamera !== this\.camera\) return;/.test(src("CameraController.ts")));
 }
 
-console.log(fail ? `\n❌ ${fail} failed` : "\n✅ a stale wall never hides, or shows, a badge");
-process.exit(fail ? 1 : 0);
+done("✅ a stale wall never hides, or shows, a badge");
+

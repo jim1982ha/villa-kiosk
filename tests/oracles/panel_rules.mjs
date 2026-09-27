@@ -4,10 +4,9 @@
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const R = await import("@/utils/panelRules");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const band = { min: 16, max: 30 };
 
 // Thermostat
@@ -49,5 +48,5 @@ ck("the light's sliders and the cover's follow the device (useLiveDraft, held wh
 for (const f of ["CoverPanel.tsx", "LockPanel.tsx", "GenericPanel.tsx", "ACPanel.tsx"])
   ck(`${f} shows the shared UnavailableNotice`, /<UnavailableNotice\b/.test(src(f)));
 
-console.log(fail ? `\n❌ ${fail} failed` : "\n✅ panel rules hold");
-process.exit(fail ? 1 : 0);
+done("✅ panel rules hold");
+

@@ -6,11 +6,10 @@
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const E = await import("@/config/energyModel");
 const F = await import("@/config/energyFlow");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const near = (a, b, t = 1e-6) => Math.abs(a - b) <= t;
 
 const small = [0.55, 0.48, 0.43, 0.37, 0.35, 0.23, 0.12, 0.08, 0.05, 0.03, 0.02, 0.01, 0.01];
@@ -173,5 +172,4 @@ ck("the period picker is in the header, the Weather window's control", /live=\{<
 const hr = readFileSync(new URL("../../src/components/panels/historyRange.tsx", import.meta.url), "utf8");
 ck("  ...and the Weather/device range picker is the same control", /const \{ key, picker \} = useSegmentedChoice\(RANGES\.filter/.test(hr));
 
-if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
-console.log("\n✅ HA's flow and pie, laid out");
+done("✅ HA's flow and pie, laid out");

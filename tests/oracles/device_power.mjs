@@ -6,10 +6,9 @@
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const { devicePower, POWER_DOMAINS } = await import("@/utils/devicePower");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const e = (id, state) => ({ entity_id: id, state, attributes: {} });
 const p = (id, state) => devicePower(e(id, state));
 const flip = (x) => (x.flip ? `${x.flip.domain}.${x.flip.service}` : null);
@@ -41,5 +40,4 @@ ck("the map's linked ring and the device-list rows ask it",
    (src("babylon/EntityVisuals.ts").match(/devicePower\(/g) ?? []).length >= 2 && /devicePower\(e, id\)\.flip/.test(src("components/panels/SummaryGroupPanel.tsx")));
 ck("HAServices keeps no per-domain toggle of its own", !/toggle(Light|Fan|Switch|Entity|Media)\b/.test(src("ha/HAServiceCalls.ts")));
 
-if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
-console.log("\n✅ a device's power, decided once");
+done("✅ a device's power, decided once");

@@ -5,11 +5,10 @@
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const P = await import("@/babylon/lightPlacement");
 const { Storeys } = await import("@/babylon/storeys");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const room = (name, floorY, x0, x1, z0, z1) => ({ name, floorY, pts: [{ x: x0, z: z0 }, { x: x1, z: z0 }, { x: x1, z: z1 }, { x: x0, z: z1 }] });
 const probe = (below, fresh = () => null) => ({ below, describeBelow: fresh });
 // The villa's shape: a ground floor whose living room CONTAINS the stairwell
@@ -85,5 +84,4 @@ ck("BulbSet's pools are its own: tests go through lamps()", /private readonly po
 ck("the strength slider repaints the lights once — no second pool repaint, no shadow re-render",
    /this\.pools\.setStrength\(value\);\s*for \(const \{ meshes, reading \} of this\.readings\(\)\) this\.paintLights\(meshes, reading\);/.test(bulbs));
 
-if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
-console.log("\n✅ where a light stands, answered once");
+done("✅ where a light stands, answered once");

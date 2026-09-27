@@ -6,11 +6,10 @@ import { register } from "node:module";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const { fmtPower, powerKw } = await import("@/config/energyModel");
 const { localMidnight, localMonthStart } = await import("@/utils/localDay");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 
 console.log("  the rules:");
 ck("power under 1 kW is in watts; the grid's 0.948 kW reads '948 W', like a device's", fmtPower(0.948) === "948 W" && fmtPower(3.084) === "3.08 kW" && fmtPower(1) === "1.00 kW");
@@ -37,5 +36,4 @@ ck("the observation cards' markup: WindowPieces only", having(/className="weathe
 ck("the figure: WindowPieces only", having(/function Figure\(/).join() === "components/panels/WindowPieces.tsx", having(/function Figure\(/));
 ck("both windows use them", ["components/panels/WeatherPanel.tsx", "components/panels/EnergyPanel.tsx"].every((f) => having(/<ObservationCards cards=/).includes(f) && having(/<Figure\b[^>]*\blabel=/).includes(f)));
 
-if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
-console.log("\n✅ the windows' shared pieces, once each");
+done("✅ the windows' shared pieces, once each");

@@ -10,6 +10,7 @@
 // the module builds (Babylon NullEngine, as floor_overlay_order.mjs does).
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 globalThis.OffscreenCanvas ??= class {
   constructor(w, h) { this.width = w; this.height = h; }
   getContext() { return { createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }), putImageData() {} }; }
@@ -20,8 +21,6 @@ const { Color3 } = await import("@babylonjs/core/Maths/math.color.js");
 const { LightPoolSet, LIGHT_POOL_RADIUS } = await import("@/babylon/lightPoolSet");
 const { Storeys } = await import("@/babylon/storeys");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const near = (a, b, tol = 1e-3) => Math.abs(a - b) <= tol;
 
 /** A floor probe the test scripts: `below` from a function, `fresh` for the uncached re-ask. */
@@ -277,5 +276,5 @@ ck("the open-floor radius is still 1.8m", LIGHT_POOL_RADIUS === 1.8);
   ck("the pool set asks the pool (setFloorless), never flips its mesh itself", /pool\.setFloorless\(at\.floorless\)/.test(src) && !/pool\.mesh\.setEnabled/.test(src));
 }
 
-console.log(fail ? `\n❌ ${fail} failed` : "\n✅ every pool lands where its light is");
-process.exit(fail ? 1 : 0);
+done("✅ every pool lands where its light is");
+

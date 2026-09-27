@@ -5,11 +5,10 @@
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const { sceneConfigPlan, RETELEPORT_ENTITY_DELTA } = await import("@/babylon/sceneConfigPlan");
 const { DEFAULT_CONFIG } = await import("@/config/AppConfig");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const clone = (x) => (x === undefined ? undefined : JSON.parse(JSON.stringify(x)));
 const base = { ...DEFAULT_CONFIG, entityMap: { "light.a": { entityId: "light.a", type: "light", label: "A" } },
   meshBindings: { m1: "light.a" }, teleportPoints: [{ name: "Hall", position: { x: 0, y: 1.7, z: 0 } }], hiddenCategories: [] };
@@ -37,5 +36,4 @@ const body = sm.slice(sm.indexOf("async updateConfig("), sm.indexOf("getAutoDete
 ck("SceneManager runs the plan and decides nothing itself",
    /const plan = sceneConfigPlan\(prev, config\);/.test(body) && !/sliceChanged\(|entityMapDelta\(|\.join\(\) !==|entityDelta/.test(body));
 
-if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
-console.log("\n✅ what a config change asks of the scene, decided once");
+done("✅ what a config change asks of the scene, decided once");

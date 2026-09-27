@@ -4,10 +4,9 @@
 // only one of the two used to guard — a write started DURING a pull's fetch.
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const { SyncedDocument } = await import("@/utils/syncedDocument");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 
 /** A store of {key: value} with a revision, and hooks to hold a fetch open. */
 function store(initial = {}) {
@@ -109,5 +108,4 @@ console.log("\n  the rest of the decision:");
   ck("every baseline move is reported (the config store persists it)", seen.length === 1 && seen[0].a === 1);
 }
 
-if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
-console.log("\n✅ one sync machine for every shared store");
+done("✅ one sync machine for every shared store");

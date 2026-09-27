@@ -6,12 +6,11 @@
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const T = await import("@/utils/trendInterval");
 const { paintState, paletteColorFor, STATUS_COLOR } = await import("@/utils/stateColors");
 const { fmtOutage } = await import("@/components/panels/chartUtils");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const near = (a, b) => Math.abs(a - b) < 1e-9;
 const M = 60_000, t0 = Date.UTC(2026, 8, 27, 10, 0);
 
@@ -57,5 +56,4 @@ ck("a device-group member that is unavailable NOW still gets its chart", /r\.num
 ck("the camera bar paints a lost motion sensor as unavailable, not 'online'",
    /return "motion-unavailable";/.test(src("components/panels/CameraPanel.tsx")) && /s === "offline" \|\| s === "motion-unavailable" \? STATUS_COLOR\.unavailable/.test(src("components/panels/CameraPanel.tsx")));
 
-if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
-console.log("\n✅ one five-minute interval, one unavailable colour");
+done("✅ one five-minute interval, one unavailable colour");

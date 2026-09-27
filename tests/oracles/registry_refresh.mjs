@@ -8,11 +8,10 @@
 // until the next registry event. The resolver was tested; its caller was not.
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 import { readFileSync } from "node:fs";
 const { placesAfterRefresh } = await import("@/ha/registryResolve");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 
 const rows = [{ entity_id: "light.a", device_id: "d1", area_id: null }, { entity_id: "sensor.b", device_id: null, area_id: "a2" }];
 const devices = [{ id: "d1", area_id: "a1" }];
@@ -37,5 +36,5 @@ ck("the provider maps a failed fetch to null and asks placesAfterRefresh over wh
    && /placesAfterRefresh\(prev, rows, \{ devices, areas, floors \}\)/.test(st) && /if \(places === prev\) return;/.test(st)
    && !/devices\.length === 0 && areas\.length === 0/.test(st));
 
-console.log(fail ? `\n❌ ${fail} failed` : "\n✅ a failed registry keeps the rooms it had");
-process.exit(fail ? 1 : 0);
+done("✅ a failed registry keeps the rooms it had");
+

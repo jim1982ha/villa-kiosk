@@ -5,13 +5,12 @@
 // fired and a one-finger drag read as two.
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 import { readFileSync } from "node:fs";
 const { PointerRoster } = await import("@/babylon/pointerRoster");
 const { cameraFrame } = await import("@/babylon/cameraFrame");
 const { Camera } = await import("@babylonjs/core/Cameras/camera.js");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 
 function surface() {
   const held = new Set();
@@ -67,5 +66,5 @@ console.log("\n  the camera's frame (cameraFrame — one fov→angle rule for sk
   ck("a non-positive fov falls back to Babylon's 0.8; a zero aspect to 1", cameraFrame(scene(0), { fov: 0, fovMode: Camera.FOVMODE_VERTICAL_FIXED }).vHalf === 0.4 && cameraFrame(scene(0), { fov: 1, fovMode: 0 }).aspect === 1);
 }
 
-console.log(fail ? `\n❌ ${fail} failed` : "\n✅ one pointer roster; the camera frame under test");
-process.exit(fail ? 1 : 0);
+done("✅ one pointer roster; the camera frame under test");
+

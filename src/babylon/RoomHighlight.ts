@@ -24,7 +24,7 @@ import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import type { Scene } from "@babylonjs/core/scene";
-import { clipPolygonToConvex, earClipTriangulate, regularPolygon, type Pt2 } from "@/utils/geometry";
+import { clipPolygonToConvex, earClipTriangulate, lerp, regularPolygon, type Pt2 } from "@/utils/geometry";
 import type { FloorProbe } from "./floorProbe";
 import type { FrameRequests } from "./frameScheduler";
 import { roomKey } from "@/config/roomKey";
@@ -343,7 +343,7 @@ export class RoomHighlight {
     const dtMs = this.clock.step(performance.now());
     this.pulseT += (dtMs / 1000) * PULSE_RAD_PER_SEC;
     const t = (Math.sin(this.pulseT) + 1) / 2; // 0..1
-    const alpha = BASE_ALPHA + (PULSE_ALPHA - BASE_ALPHA) * t;
+    const alpha = lerp(BASE_ALPHA, PULSE_ALPHA, t);
     for (const key of this.active) {
       const entry = this.polyRooms.get(key) ?? this.pointRooms.get(key);
       if (entry) entry.material.alpha = alpha;

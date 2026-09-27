@@ -8,11 +8,10 @@
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const { pxPerWorldAt, rungAt, referenceDepthAt, iconZoomAt, viewportPx } = await import("@/babylon/badgeScale");
 const { ICON_ZOOM_MIN_SCALE } = await import("@/babylon/badgeMetrics");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const H = 1800, T = Math.tan(0.4), FIT = 30;
 
 console.log("  the rung:");
@@ -58,5 +57,5 @@ ck("no inline copy of pixels-per-metre is left", !/vpH\s*\/\s*\(2\s*\*/.test(ev)
 const zs = readFileSync(new URL("../../src/babylon/roomZoomSolver.ts", import.meta.url), "utf8");
 ck("the room-zoom solver walks the lattice with rungAt", /rungAt\(view\.vpH, tanV, radius\)/.test(zs) && !/vpH\s*\/\s*\(2\s*\*/.test(zs));
 
-console.log(fail ? `\n❌ ${fail} failed` : "\n✅ one scale, one rung, one zoom");
-process.exit(fail ? 1 : 0);
+done("✅ one scale, one rung, one zoom");
+

@@ -4,14 +4,13 @@
 // them), useInterval (5 tickers) — pinned at their callers.
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 // ⚠️ Node strips types, not JSX, so a .tsx component cannot be imported here;
 // the two components are pinned by SOURCE (what they render), the hooks by
 // their callers (no hand-rolled copy left).
 const srcOf = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 
 console.log("  the segmented group:");
 {
@@ -47,5 +46,5 @@ console.log("\n  no copies left:");
   const css = ["03-panels", "07-facility"].map((n) => readFileSync(join(SRC, `styles/${n}.css`), "utf8")).join("\n");
   ck("chip scrims over media are tokens, not literals", !/background: rgba\(0, ?0, ?0, ?(0?\.45|0?\.5|0?\.6|0?\.65|0?\.7|0?\.88)\)/.test(css) && (css.match(/var\(--chip-scrim/g) ?? []).length === 7);
 }
-console.log(fail ? `\n❌ ${fail} failed` : "\n✅ one segmented group, one save button, one outside-close, one ticker");
-process.exit(fail ? 1 : 0);
+done("✅ one segmented group, one save button, one outside-close, one ticker");
+
