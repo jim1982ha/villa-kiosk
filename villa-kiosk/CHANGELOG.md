@@ -1,3 +1,15 @@
+## 2.496.174
+
+### Fixed — icons while walking
+- **Icons stay put when you look around.** In walk mode, turning on the spot
+  made devices join and leave shared cards, so the icons jumped to new places
+  depending on which way you faced. Now, wherever you stand, the icons are
+  grouped the same way whichever direction you look.
+- **Cards sit closer to the devices they stand for**, and fewer devices are
+  bundled into a card at all: devices near you, which are well apart on
+  screen, now keep their own icon instead of sharing one that floated
+  between them.
+
 ## 2.496.173
 
 ### Fixed

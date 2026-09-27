@@ -28,6 +28,19 @@ export interface GlassClearance {
   basis: ViewBasis;
   /** The rung's reference depth, 0 when unknown (no correction then). */
   refDepth: number;
+  /**
+   * The WALK camera's eye. Present only in walk mode, where the positions
+   * handed to onGlass have been moved onto the reference depth around it
+   * (badgeProjection.atReferenceDepth) — so no depth correction applies.
+   *
+   * ⚠️ WITHOUT IT, WALK DEPTH WAS MEASURED FROM THE WORLD ORIGIN (2.496.174).
+   * `pd` is the along-view coordinate from the projection's origin: right for
+   * the orbit camera (the model is recentred on it and the camera orbits it),
+   * wrong for a walker standing metres from it — every badge's claimed room
+   * changed with the HEADING. Measured on the villa's own model: 8–9
+   * different groupings over one turn on the spot.
+   */
+  eye?: { x: number; y: number; z: number };
 }
 
 /** A badge's drawn box, from labelBoxes: half extents and how far above its
@@ -78,7 +91,9 @@ export function onGlass(
   out.sx = p.px * k;
   out.sy = p.py * k + box.cy;
   out.sz = p.pz * k;
-  const pull = depthPull(c.refDepth, p.pd);
+  // The walk camera's positions arrive already AT the reference depth
+  // (badgeProjection.atReferenceDepth), so there is no depth left to pay for.
+  const pull = c.eye ? 1 : depthPull(c.refDepth, p.pd);
   out.reach = box.halfW * c.allow * pull;
   out.reachY = box.halfH * c.allow * pull;
   return out;

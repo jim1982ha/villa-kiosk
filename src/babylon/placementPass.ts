@@ -23,7 +23,7 @@
 import { roomKey, NO_ROOM_LABEL } from "@/config/roomKey";
 import type { LabelControls } from "./EntityVisuals";
 import { type BadgeMetrics } from "./badgeMetrics";
-import { type ViewBasis } from "./badgeProjection";
+import type { MeasureFrame } from "./badgeProjection";
 import { mergeCollidingPiles, buildCliques, type PlacementItem } from "./badgePlacement";
 import { channelEnabled } from "@/utils/tapDebug";
 import { type RoomChip } from "./roomChips";
@@ -270,7 +270,7 @@ export interface PendingEntityGroup {
 export interface PlacementHost {
   roomOf(entityId: string): string;
   layoutOf(g: PendingEntityGroup, memberCount: number): CardArrangement;
-  planeOf(clearance: { pxPerWorld: number; basis: ViewBasis }, x: number, y: number, z: number): { sx: number; sy: number; sz: number };
+  planeOf(clearance: MeasureFrame, x: number, y: number, z: number): { sx: number; sy: number; sz: number };
   drawnDistance(ax: number, ay: number, az: number, bx: number, by: number, bz: number): number;
   summaryMetrics(): { size: number; font: number; countSize: number; countFont: number };
   sortCardMembers(shown: ShownLabel[], members: number[]): number[];
@@ -449,7 +449,7 @@ export class PlacementPass {
     /** This pass's own clearance — passed in rather than re-derived, so the
      *  absorb sweep re-projects a moved centroid through exactly the basis and
      *  rung the members were projected with. */
-    clearance: { pxPerWorld: number; basis: ViewBasis },
+    clearance: MeasureFrame,
   ): void {
     if (pending.length === 0) return;
     const pxPerWorld = clearance.pxPerWorld;
@@ -829,9 +829,17 @@ export class PlacementPass {
           const dx = Math.abs(g.sx - shown[j].sx);
           const dy = Math.abs(inkY - shown[j].sy);
           const dz = Math.abs(g.sz - shown[j].sz);
-          if (dx < reach + boxes[j].halfW + gapPx
-            && dy < reach + boxes[j].halfH + gapPx
-            && dz < reach + halfOf(j) + gapPx) take.push(j);
+          // ⚠️ THE WALK CAMERA'S TWO GROUND AXES ARE ONE DISTANCE (2.496.174).
+          // `sz` is 0 under the orbit camera, so this was the exact box test
+          // there; on the walk camera sx and sz are across/along the HEADING,
+          // and testing them separately made a SQUARE on the floor that turned
+          // with the walker — measured on the villa's model as a card taking
+          // in a device at 0°/90°/180°/270° and not in between. Ground
+          // distance against width, as `conflicts` has always done.
+          const ground = planar ? dx < reach + boxes[j].halfW + gapPx
+            : Math.hypot(dx, dz) < reach + boxes[j].halfW + gapPx;
+          if (ground && dy < reach + boxes[j].halfH + gapPx
+            && (planar ? dz < reach + halfOf(j) + gapPx : true)) take.push(j);
         }
         if (take.length === 0) break;
         for (const j of take) {
@@ -1103,7 +1111,7 @@ export class PlacementPass {
   pairFocusedRoom(
     shown: ShownLabel[],
     items: readonly PlacementItem[],
-    clearance: { gap: number; minSep: number; pxPerWorld: number; basis: ViewBasis },
+    clearance: MeasureFrame & { gap: number; minSep: number },
     pending: PendingEntityGroup[],
   ): void {
     const focus = this.host.focus().rooms;
@@ -1362,7 +1370,7 @@ export class PlacementPass {
     shown: ShownLabel[],
     boxes: { halfW: number; halfH: number; cy: number }[],
     pending: PendingEntityGroup[],
-    clearance: { pxPerWorld: number; basis: ViewBasis } | null,
+    clearance: MeasureFrame | null,
   ): RoomChip[] {
     // UNMERGED inside the loop — see CHIP_COLLISION. The merge is a function of
     // where the camera stands, so a merged obstacle set would hand the one test

@@ -679,10 +679,17 @@ export function solvePlacement(
       const cliques = buildCliques(items, order, gap, minSeparation, drawableMax);
       // Fold singletons nearest-first, in canonical order so the outcome is a
       // function of geometry and rank like everything else here.
+      // ⚠️ ALL THREE AXES (2.496.174). `sz` is the walk camera's along-view
+      // axis (badgeProjection, "world3d"); it is 0 under the orbit camera, so
+      // leaving it out here changed nothing there — and in walk mode made
+      // this distance rotate with the HEADING, so a pile too big for one card
+      // split differently as you turned on the spot (tests/oracles/
+      // walk_placement.mjs: 7 placements over one turn without it).
+      // `conflicts` always had it; this and buildCliques did not.
       const cent = cliques.map((c) => {
-        let cx = 0, cy = 0;
-        for (const i of c) { cx += items[i].sx; cy += items[i].sy; }
-        return { cx: cx / c.length, cy: cy / c.length };
+        let cx = 0, cy = 0, cz = 0;
+        for (const i of c) { cx += items[i].sx; cy += items[i].sy; cz += items[i].sz; }
+        return { cx: cx / c.length, cy: cy / c.length, cz: cz / c.length };
       });
       for (let si = 0; si < cliques.length; si++) {
         if (cliques[si].length !== 1) continue;
@@ -712,13 +719,15 @@ export function solvePlacement(
           }
           if (!touches) continue;
           const dx = items[lone].sx - cent[ci].cx, dy = items[lone].sy - cent[ci].cy;
-          const d2 = dx * dx + dy * dy;
+          const dz = items[lone].sz - cent[ci].cz;
+          const d2 = dx * dx + dy * dy + dz * dz;
           if (d2 < bestD2) { best = ci; bestD2 = d2; }
         }
         if (best < 0) continue; // stays a singleton — step 7's degenerate rule
         const c = cliques[best];
         cent[best].cx = (cent[best].cx * c.length + items[lone].sx) / (c.length + 1);
         cent[best].cy = (cent[best].cy * c.length + items[lone].sy) / (c.length + 1);
+        cent[best].cz = (cent[best].cz * c.length + items[lone].sz) / (c.length + 1);
         c.push(lone);
         cliques[si].length = 0;
       }
@@ -1120,7 +1129,8 @@ export function buildCliques(
     if (taken[seed]) continue;
     taken[seed] = 1;
     const pile = [seed];
-    let cx = items[seed].sx, cy = items[seed].sy;
+    // All three axes — see the singleton fold's note (2.496.174).
+    let cx = items[seed].sx, cy = items[seed].sy, cz = items[seed].sz;
     // The "about equally close" band the category preference lives inside.
     // Taken from the SEED so it cannot drift as the pile grows, and floored at
     // 1px so a degenerate reach cannot divide by zero.
@@ -1146,10 +1156,10 @@ export function buildCliques(
           if (!conflicts(items[cand], items[m], gap, minSep)) { all = false; break; }
         }
         if (!all) continue;
-        const dx = items[cand].sx - cx, dy = items[cand].sy - cy;
+        const dx = items[cand].sx - cx, dy = items[cand].sy - cy, dz = items[cand].sz - cz;
         // Quantised to the band so the category tiebreak can actually fire —
         // raw distances tie only by accident.
-        const bucket = Math.floor(Math.hypot(dx, dy) / band);
+        const bucket = Math.floor(Math.hypot(dx, dy, dz) / band);
         const cat = items[cand].category === seedCat ? 0 : 1;
         const s = seq[cand];
         if (best < 0 || bucket < bestBucket
@@ -1162,6 +1172,7 @@ export function buildCliques(
       taken[best] = 1;
       cx = (cx * pile.length + items[best].sx) / (pile.length + 1);
       cy = (cy * pile.length + items[best].sy) / (pile.length + 1);
+      cz = (cz * pile.length + items[best].sz) / (pile.length + 1);
       pile.push(best);
     }
     piles.push(pile);

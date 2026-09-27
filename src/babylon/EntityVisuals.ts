@@ -83,6 +83,7 @@ import { badgeRank } from "./badgePriority";
 import {
   viewBasis, projectToView, VIEW_BASIS_STEPS,
   type ViewBasis, type ProjectedPoint, type ProjectionMode,
+  atReferenceDepth, type MeasureFrame,
 } from "./badgeProjection";
 import {
   solvePlacement, markContacts, createPlacementScratch,
@@ -502,6 +503,12 @@ const BADGE_PLACEMENT = "priority" as "priority" | "legacy";
  * of the union reachable to the type checker. Do not "clean it up".
  */
 const VIEW_METRIC = "plane" as ProjectionMode;
+
+/** The nearest a device is taken to be when the walk camera measures it at
+ *  the reference depth (atReferenceDepth), in world units (metres): a device
+ *  at the walker's feet would otherwise be flung to infinity. Half a metre is
+ *  inside arm's reach — nothing is viewed from closer. */
+const WALK_MIN_MEASURE_DIST = 0.5;
 /** Reused, because getDirectionToRef takes the local axis by reference. */
 const CAMERA_LOCAL_FORWARD = new Vector3(0, 0, 1);
 /*
@@ -4447,7 +4454,7 @@ export class EntityVisuals {
   private screenClearance(
     shown: ShownLabel[],
   ): { pxPerWorld: number; gap: number; minSep: number; allow: number; basis: ViewBasis;
-       refDepth: number } | null {
+       refDepth: number; eye?: { x: number; y: number; z: number } } | null {
     const pxPerWorld = this.quantisedPixelsPerWorldUnit(shown);
     if (!(pxPerWorld > 0)) return null;
     const scale = this.effectiveScale();
@@ -4469,8 +4476,36 @@ export class EntityVisuals {
       allow: 1 - GROUP_OVERLAP_ALLOW_WIDTHS,
       basis: this.currentViewBasis(),
       refDepth: this.rungReferenceDepth(pxPerWorld),
+      // Walk mode measures from the walker's eye (atReferenceDepth); the
+      // orbit camera keeps the plane's own depth correction.
+      eye: this.orbitCamera() ? undefined : this.walkEye(),
     };
   }
+
+  /** Whether the active camera is the orbit (bird's-eye) one — duck-typed, as
+   *  quantisedPixelsPerWorldUnit and currentViewBasis are. */
+  private orbitCamera(): boolean {
+    return typeof (this.scene.activeCamera as unknown as { radius?: number } | null)?.radius === "number";
+  }
+
+  private walkEye(): { x: number; y: number; z: number } | undefined {
+    const cam = this.scene.activeCamera;
+    return cam ? { x: cam.globalPosition.x, y: cam.globalPosition.y, z: cam.globalPosition.z } : undefined;
+  }
+
+  /** The point placement measures a world position at: itself for the orbit
+   *  camera, moved onto the reference depth around the walker's eye for the
+   *  walk camera (badgeProjection.atReferenceDepth). The ONE place that
+   *  choice is made — badges (placementItems) and cards (planeOf) both. */
+  private measuredAt(
+    c: { refDepth?: number; eye?: { x: number; y: number; z: number } },
+    x: number, y: number, z: number,
+  ): { x: number; y: number; z: number } {
+    const o = this.measureTmp;
+    if (!c.eye || !(c.refDepth && c.refDepth > 0)) { o.x = x; o.y = y; o.z = z; return o; }
+    return atReferenceDepth(c.eye, c.refDepth, WALK_MIN_MEASURE_DIST, x, y, z, o);
+  }
+  private readonly measureTmp = { x: 0, y: 0, z: 0 };
 
   /**
    * Convert this pass's badges into solver input, into a grow-only pool.
@@ -4502,7 +4537,7 @@ export class EntityVisuals {
   private placementItems(
     shown: ShownLabel[],
     boxes: { halfW: number; halfH: number; cy: number }[],
-    clearance: { pxPerWorld: number; allow: number; basis: ViewBasis; refDepth: number },
+    clearance: { pxPerWorld: number; allow: number; basis: ViewBasis; refDepth: number; eye?: { x: number; y: number; z: number } },
   ): PlacementItem[] {
     const pool = this.placeItems;
     const focus = this.focus.rooms;
@@ -4519,7 +4554,8 @@ export class EntityVisuals {
       // carries both rules and their history. Written back onto the
       // ShownLabel too: placeEntityGroups needs the same plane coordinates,
       // and projecting twice is how two spaces drift apart.
-      onGlass(clearance, s.wx, s.wy, s.wz, boxes[i], p, it);
+      const m = this.measuredAt(clearance, s.wx, s.wy, s.wz);
+      onGlass(clearance, m.x, m.y, m.z, boxes[i], p, it);
       s.sx = it.sx; s.sy = it.sy; s.sz = it.sz;
       it.rank = badgeRank(s.lbl.type, s.lbl.category);
       it.sortKey = s.id;
@@ -4544,10 +4580,13 @@ export class EntityVisuals {
    * ones; that is two computations that can drift where there should be one.
    */
   private planeOf(
-    clearance: { pxPerWorld: number; basis: ViewBasis },
+    clearance: MeasureFrame,
     x: number, y: number, z: number,
   ): { sx: number; sy: number; sz: number } {
-    const p = projectToView(clearance.basis, x, y, z, this.projPlane);
+    // Measured where the card is DRAWN from the walker's eye, as its badges
+    // are (measuredAt).
+    const m = this.measuredAt(clearance, x, y, z);
+    const p = projectToView(clearance.basis, m.x, m.y, m.z, this.projPlane);
     const k = clearance.pxPerWorld;
     return { sx: p.px * k, sy: p.py * k, sz: p.pz * k };
   }
