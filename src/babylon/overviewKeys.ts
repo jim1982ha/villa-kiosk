@@ -2,7 +2,7 @@
 // The bird's-eye view from the keyboard — the same four movements the touch
 // screen has, as keys held down (owner, 2026-09-27):
 //
-//   Arrows / W A S D     pan          (a one-finger drag)
+//   Arrows / W A S D     pan          (a one-finger drag; ↑/↓ inverted — see dragY)
 //   Shift + ← →, Q / E   rotate       (a two-finger twist)
 //   Shift + ↑ ↓          tilt         (a two-finger vertical drag)
 //   + / −  (PgUp / PgDn) zoom         (a pinch)
@@ -69,7 +69,10 @@ export function overviewKeyStep(
   return {
     // A swipe right is dx > 0; the pointer path hands the pan dx·s.
     dragX: (on("right") - on("left")) * px * s,
-    dragY: (on("down") - on("up")) * px * s,
+    // ↑/↓ INVERTED against the swipe (owner, 2.496.180, "for the sake of
+    // clarity"): with Natural Scroll on, ↑ moves the view FORWARD — towards
+    // the far side of the screen — where a swipe up would pull it back.
+    dragY: (on("up") - on("down")) * px * s,
     rotate: (on("rotateLeft") - on("rotateRight")) * KEY_ROTATE_RAD_PER_S * dtSec,
     // As the TOUCH gesture (the owner's reference), not the mouse's Shift+drag,
     // which is signed the other way on purpose: two fingers moving UP push the
@@ -82,7 +85,8 @@ export function overviewKeyStep(
 /** The keys as a person reads them, for the current Natural Scroll setting. */
 export function overviewKeyHelp(natural: boolean): { keys: string; does: string }[] {
   return [
-    { keys: "← → ↑ ↓  or  W A S D", does: natural ? "Pan — the villa moves the way the arrow points" : "Pan — the view moves the way the arrow points" },
+    { keys: "← →  or  A D", does: natural ? "Pan — the villa moves the way the arrow points" : "Pan — the view moves the way the arrow points" },
+    { keys: "↑ ↓  or  W S", does: natural ? "Pan — ↑ moves the view forward, ↓ back" : "Pan — ↑ moves the view back, ↓ forward" },
     { keys: "Shift + ← →  or  Q / E", does: "Rotate" },
     { keys: "Shift + ↑ ↓", does: natural ? "Tilt — ↑ tips the far side away, towards the horizon" : "Tilt — ↑ looks more straight down" },
     { keys: "+ / −  (or Page Up / Page Down)", does: "Zoom in / out" },

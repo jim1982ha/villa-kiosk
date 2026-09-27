@@ -19,7 +19,9 @@ ck("+ and − by CHARACTER (layouts differ), and Page Up / Down", A("Equal", "="
 
 const step = (acts, natural, dt = 0.5) => K.overviewKeyStep(new Set(acts), natural, dt);
 ck("Natural Scroll ON: → is a swipe right — the drag the finger would make (dx > 0), as the pointer path signs it",
-   step(["right"], true).dragX > 0 && step(["down"], true).dragY > 0);
+   step(["right"], true).dragX > 0);
+ck("  ...↑/↓ are INVERTED against the swipe (owner): ↑ is a drag DOWN, which moves the view forward",
+   step(["up"], true).dragY > 0 && step(["down"], true).dragY < 0);
 ck("  ...OFF: the same key, the opposite drag — the view moves instead of the villa",
    near(step(["right"], false).dragX, -step(["right"], true).dragX) && near(step(["up"], false).dragY, -step(["up"], true).dragY));
 ck("tilt follows the TOUCH gesture: ↑ (fingers up) tips the far side away (beta grows) with it ON, the reverse OFF",
@@ -33,7 +35,8 @@ ck("per SECOND: two half-second steps move as far as one second (pan adds, zoom 
 ck("opposite keys cancel; no key, no motion",
    step(["left", "right"], true).dragX === 0 && (() => { const z = step([], true); return z.dragX === 0 && z.dragY === 0 && z.rotate === 0 && z.tilt === 0 && z.zoom === 1; })());
 ck("the help text says what the arrows do under each setting",
-   /villa moves/.test(K.overviewKeyHelp(true)[0].does) && /view moves/.test(K.overviewKeyHelp(false)[0].does));
+   /villa moves/.test(K.overviewKeyHelp(true)[0].does) && /view moves/.test(K.overviewKeyHelp(false)[0].does)
+   && /↑ moves the view forward/.test(K.overviewKeyHelp(true)[1].does) && /↑ moves the view back/.test(K.overviewKeyHelp(false)[1].does));
 
 const el = (tag, inModal = false, editable = false) => ({ tagName: tag, isContentEditable: editable, closest: (sel) => (inModal && /modal/.test(sel) ? {} : null) });
 ck("not while typing, nor with a dialog open; otherwise the camera's",
