@@ -14,9 +14,10 @@ configuration:
     name: Guest passcode (4 digits)
     description: >-
       Unlocks the Guest profile: comfort, lights, wifi and doors, with a
-      bounded A/C range. Leave EMPTY to let anyone in as a guest with no
-      prompt at all — since a guest can unlock doors, only do that on a villa
-      you are happy for any visitor to control.
+      bounded A/C range. Leave EMPTY to let people who are already signed in
+      to Home Assistant open the Guest profile with no prompt; on the direct
+      port or a tunnel the Guest profile then stays unavailable — since a
+      guest can unlock doors, a hostname alone must never be enough.
   owner_pin:
     name: Owner passcode (4 digits)
     description: >-

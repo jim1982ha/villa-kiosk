@@ -1,3 +1,20 @@
+## 2.496.208
+
+### Security
+- **Guest and Facility Manager sessions now receive only the kinds of entity the kiosk shows.** Home Assistant used to stream every entity in the instance to any signed-in profile — persons, phone trackers, the alarm panel, calendars — even though the kiosk never drew them. The add-on now relays only lights, climate, locks, covers, fans, sensors, media players, switches, scenes, the sun and the weather to non-owner profiles (camera states only to a profile that may view cameras), and the same rule covers live updates, history, the logbook and the entity list. The owner profile is unchanged.
+- **The add-on's service now runs as an unprivileged account** (`vesta`) instead of root, so a flaw in anything it parses cannot reach beyond its own data folder. Verified in a local container: options are read, sessions issued and stores written as that account.
+
+### Build
+- 2.496.207 never published: its new lockfile check found that installing dependencies on the build runner rewrites `package-lock.json` (it does not on a developer machine). For this release the check reports the difference instead of failing, so the lockfile can be corrected next.
+
+## 2.496.207
+
+### Security
+- **A Guest profile with no passcode is no longer open to anyone who reaches the hostname.** Leaving the guest passcode empty now opens the Guest profile only from inside Home Assistant (the sidebar); on the direct port or a tunnel the profile shows greyed with "No passcode set — not available from here". The option's help text says so.
+- **"Sign every device out" now also replaces the session signing key**, so nothing copied from the add-on's data folder before that moment can be used to sign in.
+- **Content-Security-Policy violations are now collected.** The policy is still report-only, but each violation a browser sees is stored as a `csp` event in Settings › Telemetry — so enforcing it can be decided from evidence instead of a console nobody watches.
+- **Build pipeline pinned:** every GitHub Action the build uses is fixed to an exact commit, and the build fails if installing dependencies had to change the lockfile.
+
 ## 2.496.206
 
 ### Security
