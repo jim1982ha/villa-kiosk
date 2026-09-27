@@ -110,7 +110,7 @@ import { formatCountBadge } from "@/utils/countBadge";
 import { RoomHighlight } from "./RoomHighlight";
 import { CameraBeams, type BeamSource } from "./CameraBeams";
 import { blocksCameraBeam, isResolvedCeiling, isHelperMesh } from "./meshRoles";
-import { Storeys } from "./storeys";
+import { Storeys, WALL_TOLERANCE_M } from "./storeys";
 import { FloorProbe } from "./floorProbe";
 import { axisWorldScale } from "./meshUnits";
 import type { LightReading } from "./lightPoolSet";
@@ -1975,7 +1975,10 @@ export class EntityVisuals {
     for (const room of this.plan.rooms) {
       if (pointInPolygon(p.x, p.z, room.pts)) return room.name;
     }
-    return null;
+    // Contained by nothing: a device IN a wall (a speaker, a TV, a switch)
+    // belongs to the room whose wall it is — the nearest polygon, a wall's
+    // thickness away at most (storeys.WALL_TOLERANCE_M and its story).
+    return this.plan.roomNear(p.x, p.y, p.z, WALL_TOLERANCE_M)?.name ?? null;
   }
 
   /** World-space XZ bounding box (plus a floor height) of a room's registered

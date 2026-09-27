@@ -118,6 +118,21 @@ console.log("\n  the edges:");
      d.count === 2 && d.floorAbove(d.storeyStandingOn(0)) === 2.8, d.count);
   const e = new Storeys([]);
   ck("no rooms: no storey, nothing above, no room", e.storeyAt(1) === null && e.floorAbove(e.storeyAt(1)) === Infinity && e.roomAt(0, 1, 0) === null);
+
+console.log("\n  a device in a wall (2.496.201):");
+{
+  const { WALL_TOLERANCE_M } = await import("@/babylon/storeys");
+  const s = new Storeys(villa(true));
+  ck("outside every polygon by a wall's thickness: the room behind that wall", s.roomNear(5, 1.2, -0.3, WALL_TOLERANCE_M)?.name === "Living Room");
+  // In the corner wall between Living Room (edge at z=0, listed first) and
+  // Bedroom 1 (edge at x=0): 0.35 m from the bedroom, 0.46 m from the living room.
+  ck("  ...the NEAREST room, not the first within reach", s.roomNear(-0.3, 1.2, -0.35, WALL_TOLERANCE_M)?.name === "Bedroom 1" && s.roomNear(14.3, 1.2, 5, WALL_TOLERANCE_M)?.name === "Kitchen");
+  ck("  ...on the point's own storey", s.roomNear(5, 3.9, -0.3, WALL_TOLERANCE_M)?.name === "Gym Room");
+  ck("open ground two metres from any room is still no room", s.roomNear(5, 1.2, -2, WALL_TOLERANCE_M) === null);
+  ck("the tolerance is a wall, not a garden", WALL_TOLERANCE_M >= 0.3 && WALL_TOLERANCE_M <= 1);
+  const ev = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
+  ck("roomForEntity falls through containment to the nearest wall's room", /return this\.plan\.roomNear\(p\.x, p\.y, p\.z, WALL_TOLERANCE_M\)\?\.name \?\? null;/.test(ev));
+}
 }
 
 if (fail) { console.log(`  ${fail} FAILED`); process.exit(1); }

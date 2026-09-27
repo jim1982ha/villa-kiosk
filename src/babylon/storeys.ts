@@ -33,7 +33,7 @@
 // Pure: tests/oracles/storeys.mjs drives it with the villa's measured rooms.
 
 import { STAIR_NAME_RE } from "./meshRoles";
-import { pointInPolygon, type Pt2 } from "@/utils/geometry";
+import { distanceToPolygonBoundary, pointInPolygon, type Pt2 } from "@/utils/geometry";
 
 /**
  * How far a floor must sit BELOW a world point to be the storey that point
@@ -66,6 +66,19 @@ import { pointInPolygon, type Pt2 } from "@/utils/geometry";
  * what the memo exists to avoid.
  */
 export const STOREY_MIN_MOUNT = 0.30;
+
+/**
+ * How far outside every room polygon a device may sit and still belong to the
+ * nearest one: a wall's worth. A wall-mounted speaker, TV, switch or sensor
+ * is anchored IN the wall — on its face or at its centre — and the plan's
+ * room polygons stop at the wall's inner face, so containment alone called
+ * such a device "no room" (2.496.201). A device that has no room can never
+ * fold into its room's chip: the placement pass refuses to chip the no-room
+ * bucket (nothing could represent it), so the badge stayed drawn ON TOP of
+ * the Living Room chip on the owner's phone. Generic: interior walls are
+ * 0.1–0.4 m and anchors sit within them; nothing about one villa.
+ */
+export const WALL_TOLERANCE_M = 0.6;
 
 /** A plan room that is a staircase, by the name the plan gives it. Its
  *  measured floor is a TREAD (0.85 m and 1.11 m on the villa GLB), so it is
@@ -201,6 +214,21 @@ export class Storeys<R extends StoreyRoomIn = StoreyRoomIn> {
     const s = this.storeyAt(y);
     for (const r of this.rooms) if (this.of.get(r) === s && pointInPolygon(x, z, r.pts)) return r;
     return null;
+  }
+
+  /** The room whose BOUNDARY is nearest a point that no room contains, on the
+   *  point's storey, if it is within `withinM` (WALL_TOLERANCE_M: a device in
+   *  a wall belongs to the room behind that wall). Null when every room is
+   *  farther — open ground between rooms is genuinely no room. */
+  roomNear(x: number, y: number, z: number, withinM: number): R | null {
+    const s = this.storeyAt(y);
+    let best: R | null = null, d = withinM;
+    for (const r of this.rooms) {
+      if (this.of.get(r) !== s) continue;
+      const e = distanceToPolygonBoundary(x, z, r.pts);
+      if (e <= d) { d = e; best = r; }
+    }
+    return best;
   }
 
   /**
