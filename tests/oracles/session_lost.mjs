@@ -9,10 +9,9 @@ import { register } from "node:module";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const S = await import("@/auth/sessionLost");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 
 console.log("  the decision:");
 ck("signed in, and the server confirms no session: sign out", S.sessionLostDecision("guest", "none") === "sign-out");
@@ -52,5 +51,4 @@ const raw = walk(SRC).flatMap((f) => [...readFileSync(f, "utf8").matchAll(/\bfet
   .filter((x) => !/:auth\//.test(x));
 ck("every call to the add-on's own routes goes through backendFetch (only the sign-in routes may not — their 401 means a wrong code)", raw.length === 0, raw);
 
-if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
-console.log("\n✅ a session the server ended ends on the wall too");
+done("✅ a session the server ended ends on the wall too");

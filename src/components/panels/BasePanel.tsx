@@ -44,7 +44,7 @@ interface Props {
   footerLeading?: ReactNode;
   /** Opt OUT of the automatic history section at the end of the body. Pass
    *  false only when the panel renders a history view of its own that this
-   *  one cannot express — a numeric sparkline (SensorPanel), two series on
+   *  one cannot express — a numeric line chart (SensorPanel), two series on
    *  shared axes (DeviceGroupPanel), a palette legend for unknown states
    *  (GenericPanel). Anything else should take the shared one: the default is
    *  what guarantees a new panel type can't quietly ship without history. */

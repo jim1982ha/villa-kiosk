@@ -24,7 +24,7 @@ import { useState } from "react";
 import { Camera, Check, Wrench } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
-import { useFmData } from "@/fm/FmDataContext";
+import { useFmData, fmWriteProblem } from "@/fm/FmDataContext";
 import { uploadEvidence } from "@/fm/fmApi";
 import NotesField from "./NotesField";
 import { useModalA11y } from "@/hooks/useModalA11y";
@@ -49,6 +49,7 @@ export default function GuestReportModal({
   const [busy, setBusy] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
 
   const deviceLabel = entityId ? label(entityId) : undefined;
 
@@ -69,7 +70,8 @@ export default function GuestReportModal({
 
   const send = async () => {
     setBusy(true);
-    await addTicket({
+    setSendError(null);
+    const result = await addTicket({
       title: title.trim(),
       entityId,
       deviceLabel,
@@ -79,7 +81,10 @@ export default function GuestReportModal({
       reportedBy: "guest",
     });
     setBusy(false);
-    setSent(true);
+    // "Thank you — reported" ONLY when it was (2.496.184): it was shown
+    // whatever the write did, and a guest cannot check afterwards.
+    const problem = fmWriteProblem(result);
+    if (problem) setSendError(problem); else setSent(true);
   };
 
   return (
@@ -166,6 +171,7 @@ export default function GuestReportModal({
                   )}
                 </div>
                 {photoError && <div className="fm-inline-error">{photoError}</div>}
+                {sendError && <div className="fm-inline-error" role="alert">{sendError}</div>}
               </div>
             </div>
             {/* The modal shell's footer, as every dialog's (04-modals.css). */}

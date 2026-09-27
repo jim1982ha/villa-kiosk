@@ -7,11 +7,10 @@
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const L = await import("@/babylon/badgeLook");
 const { badgeMetricsFor } = await import("@/babylon/badgeMetrics");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const near = (a, b) => Math.abs(a - b) < 1e-9;
 const m = badgeMetricsFor("coarse");
 
@@ -64,5 +63,4 @@ ck("every path APPLIES its frame through applyBadgeFrame — no ring field writt
 ck("no path writes its own ring weight or corner any more",
    !/ringRed \? this\.metrics\.ringThicknessPx : 1/.test(ev) && !/chip\.radius/.test(ev) && !/RING_DASH\[0\]/.test(ev));
 
-if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
-console.log("\n✅ one frame for every card-style badge");
+done("✅ one frame for every card-style badge");

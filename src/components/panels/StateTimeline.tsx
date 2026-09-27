@@ -1,7 +1,7 @@
 // src/components/panels/StateTimeline.tsx
 // A horizontal "last N hours" state-history bar: one coloured segment per
 // state the entity held, sized to how long it held it — the equivalent of
-// Sparkline/DualSparkline for entities whose meaningful history is discrete
+// LineChart for entities whose meaningful history is discrete
 // states (on/off, locked/unlocked, open/closed, or an arbitrary text state
 // like an access point's "connected"/"disconnected") rather than a numeric
 // series. Renders div segments (not SVG) since flat colour blocks, not a
@@ -21,6 +21,9 @@ import { useChartPointer } from "./useChartPointer";
 import { prettyState } from "@/utils/entityValue";
 import { paintState } from "@/utils/stateColors";
 import { TREND_INTERVAL_MS } from "@/utils/trendInterval";
+import { timelineCells, timelineRuns } from "@/utils/timelineCells";
+import type { HistoryStatus } from "@/utils/statisticsSeries";
+import { ChartEmpty } from "./LineChart";
 
 export interface TimelineLegendEntry {
   state: string;
@@ -56,11 +59,10 @@ interface Props {
    *  plain on/off device, whose current-state pill above already says which
    *  colour means what. */
   legend?: TimelineLegendEntry[];
-  /** True while the history fetch is still in flight — distinguishes "still
-   *  loading" from "HA genuinely has no history for this entity" (both used
-   *  to render as the same empty state, so a slow network looked identical
-   *  to a device that's never reported). */
-  loading?: boolean;
+  /** Where the fetch stands (useHistory's own status) — "still loading",
+   *  "HA has no history" and "the request failed" are three different facts,
+   *  and this used to take a `loading` flag that could say only the first. */
+  status: HistoryStatus;
   /** Run top-to-bottom instead of left-to-right (the camera panel's side rail
    *  on a phone in landscape). Segments are laid out on the other axis and the
    *  pointer read switches axis with them, so this is a genuinely vertical
@@ -96,37 +98,8 @@ interface Props {
   baselineStates?: string[];
 }
 
-/** One drawn cell — a state segment, or a time bucket. Both modes reduce to
- *  this so there is a single render path and a single tooltip. */
-interface Cell {
-  left: number;
-  width: number;
-  from: number;
-  to: number;
-  /** NOTABLE states in this cell, in order of first appearance. */
-  states: string[];
-  /** The resting state in force here, if any. Still painted — a camera that is
-   *  online and recording is active, not nothing — but never stripes and never
-   *  appears as an event. */
-  baseline?: string;
-  /** Every transition inside this cell — the tooltip lists all of them. */
-  events: StateHistoryPoint[];
-}
-
-/** Stripe a cell that saw more than one state, so "there was motion AND it
- *  dropped offline in these five minutes" is one readable cell rather than a
- *  choice between two half-truths. */
-function cellBackground(states: string[], colorFor: (s: string) => string): string {
-  if (states.length === 1) return colorFor(states[0]);
-  const w = 3;
-  const stops = states.map((s, i) => `${colorFor(s)} ${i * w}px ${(i + 1) * w}px`).join(", ");
-  return `repeating-linear-gradient(45deg, ${stops})`;
-}
-
-
-
 export default function StateTimeline({
-  data, hours, end, colorFor: ownColour, labelFor = prettyState, height, legend, loading, vertical,
+  data, hours, end, colorFor: ownColour, labelFor = prettyState, height, legend, status, vertical,
   baselineStates,
 }: Props) {
   // Unavailable/unknown are the legend's colour on EVERY timeline, whatever
@@ -146,85 +119,13 @@ export default function StateTimeline({
   // identically every time.
   const timeKey = Math.floor(Date.now() / bucketMs);
 
-  const cells = useMemo<Cell[]>(() => {
-    if (data.length === 0) return [];
-    const now = end ?? (timeKey + 1) * bucketMs;
-    const start = now - hours * 3600 * 1000;
-    const span = now - start;
+  const cells = useMemo(
+    () => timelineCells(data, end ?? (timeKey + 1) * bucketMs, hours, bucketMs, baselineKey ? baselineKey.split("\u0000") : []),
+    [data, hours, end, bucketMs, timeKey, baselineKey]);
 
-    {
-      // Anchored to absolute time, so bucket edges are the same wall-clock
-      // instants for everyone and do not drift with when the panel opened.
-      const first = Math.floor(start / bucketMs) * bucketMs;
-      const count = Math.ceil((now - first) / bucketMs);
-      const idxOf = (t: number) => Math.floor((t - first) / bucketMs);
-      const out: Cell[] = [];
-      for (let k = 0; k < count; k++) {
-        const from = first + k * bucketMs;
-        out.push({
-          left: ((from - start) / span) * 100,
-          width: (bucketMs / span) * 100,
-          from, to: from + bucketMs, states: [], events: [],
-        });
-      }
-      for (let i = 0; i < data.length; i++) {
-        const segStart = data[i].t;
-        const segEnd = i + 1 < data.length ? data[i + 1].t : now;
-        if (segEnd <= start || segStart >= now || segEnd <= segStart) continue;
-        // Every bucket this state was in force during gets marked — "at least
-        // one event in this slice" is the whole rule.
-        const a = Math.max(0, idxOf(Math.max(segStart, start)));
-        const b = Math.min(count - 1, idxOf(Math.min(segEnd, now) - 1));
-        for (let k = a; k <= b; k++) {
-          if (!out[k].states.includes(data[i].state)) out[k].states.push(data[i].state);
-        }
-        // The transition itself is an EVENT, filed under the bucket it fell in
-        // so the tooltip can list exactly what happened and when.
-        const e = idxOf(segStart);
-        if (e >= 0 && e < count) out[e].events.push(data[i]);
-      }
-      // Drop the resting state from both the paint and the event list, then
-      // discard any bucket that had nothing else in it.
-      const baseline = new Set(baselineKey ? baselineKey.split("\u0000") : []);
-      for (const c of out) {
-        c.baseline = c.states.find((st) => baseline.has(st));
-        c.states = c.states.filter((st) => !baseline.has(st));
-        const seen = new Set<string>();
-        c.events = c.events.filter((ev) => {
-          if (baseline.has(ev.state)) return false;
-          // ONE line per state per MINUTE. A sensor that trips four times in
-          // the same minute is still just "someone was there at 10:44", and
-          // listing each trip separately padded the tooltip to a full-height
-          // column of near-identical rows carrying no extra information.
-          const k = `${ev.state}|${Math.floor(ev.t / 60_000)}`;
-          if (seen.has(k)) return false;
-          seen.add(k);
-          return true;
-        });
-      }
-      return out.filter((c) => c.states.length > 0 || c.baseline !== undefined);
-    }
-  }, [data, hours, end, bucketMs, timeKey, baselineKey]);
+  const runs = useMemo(() => timelineRuns(cells, colorFor), [cells, colorFor]);
 
-  const runs = useMemo(() => {
-    const out: { left: number; width: number; bg: string }[] = [];
-    for (const c of cells) {
-      const bg = c.states.length ? cellBackground(c.states, colorFor) : colorFor(c.baseline ?? "");
-      const last = out[out.length - 1];
-      if (last && last.bg === bg && Math.abs(last.left + last.width - c.left) < 1e-6) last.width += c.width;
-      else out.push({ left: c.left, width: c.width, bg });
-    }
-    return out;
-  }, [cells, colorFor]);
-
-  if (data.length === 0) {
-    return loading
-      ? <div className="state-timeline-skeleton" style={height ? { height } : undefined} />
-      : <div className="muted body-text">Not enough history yet.</div>;
-  }
-  if (cells.length === 0) {
-    return <div className="muted body-text">Not enough history yet.</div>;
-  }
+  if (data.length === 0 || cells.length === 0) return <ChartEmpty status={status} height={height} bar />;
 
   // No "?? last cell" fallback: falling back reported the most RECENT
   // detection while the pointer was over an earlier, empty slice — the

@@ -15,7 +15,7 @@ import { ChevronDown, ChevronRight, Plus, Wrench } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useFmData } from "@/fm/FmDataContext";
-import { isTicketOpen, isTicketResolved, localStamp, ticketStats } from "@/fm/fmEngine";
+import { isTicketOpen, isTicketResolved, localStamp, ticketStats, ticketRank, TICKET_NEXT } from "@/fm/fmEngine";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
 import ErasableRow from "./ErasableRow";
@@ -23,9 +23,6 @@ import FaultStageModal from "./FaultStageModal";
 import NotesField from "./NotesField";
 import DeviceSearchPicker, { type DeviceOption } from "./DeviceSearchPicker";
 
-const NEXT: Record<FmTicketStatus, FmTicketStatus | null> = {
-  open: "in_progress", in_progress: "resolved", resolved: null,
-};
 /** Read-only evidence strips never call back — a stable identity keeps the
  *  memoised row from re-rendering on every parent update. */
 const LABEL: Record<FmTicketStatus, string> = {
@@ -86,10 +83,9 @@ export default function FaultsTab(
   };
 
   const stats = ticketStats(data.tickets);
-  const openFirst = [...data.tickets].sort((a, b) => {
-    const rank = (s: FmTicketStatus) => (s === "open" ? 0 : s === "in_progress" ? 1 : 2);
-    return rank(a.status) - rank(b.status) || Date.parse(b.openedAt) - Date.parse(a.openedAt);
-  });
+  // Rank and transitions are the engine's (fmEngine.ticketRank / TICKET_NEXT).
+  const openFirst = [...data.tickets].sort((a, b) =>
+    ticketRank(a) - ticketRank(b) || Date.parse(b.openedAt) - Date.parse(a.openedAt));
 
   // Devices HA currently reports as unavailable that don't already have an open
   // ticket — the "raise this" shortlist.
@@ -324,13 +320,13 @@ export default function FaultsTab(
             <span className={`fm-badge ${isTicketResolved(t) ? "ok" : t.status === "open" ? "overdue" : "due-soon"}`}>
               {LABEL[t.status]}
             </span>
-            {NEXT[t.status] && (
+            {TICKET_NEXT[t.status] && (
               <button className="btn ghost"
                 // Never a bare status flip any more: every transition goes
                 // through the same dialog, so the record always carries who
                 // and what behind the change.
-                onClick={(e) => { e.stopPropagation(); setStaging({ ticket: t, to: NEXT[t.status]! }); }}>
-                Mark {LABEL[NEXT[t.status]!].toLowerCase()}
+                onClick={(e) => { e.stopPropagation(); setStaging({ ticket: t, to: TICKET_NEXT[t.status]! }); }}>
+                Mark {LABEL[TICKET_NEXT[t.status]!].toLowerCase()}
               </button>
             )}
           </ErasableRow>

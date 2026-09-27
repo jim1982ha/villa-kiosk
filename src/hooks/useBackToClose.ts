@@ -148,6 +148,17 @@ function onPopState(): void {
 }
 
 /**
+ * Is ANY surface open — a dialog, a panel, a sheet or a menu? The stack every
+ * dismissable surface registers on answers it, so there is one list and not a
+ * second, hand-kept one to fall behind: the daytime auto-reload asked five
+ * named flags and reloaded over a half-written guest report, the Rooms menu
+ * and the overflow menu, none of which were among them (2.496.192).
+ */
+export function overlayOpen(): boolean {
+  return stack.length > 0;
+}
+
+/**
  * Swallow one back press to close this surface.
  *
  * Add it to any overlay that should be dismissed by Back rather than have Back

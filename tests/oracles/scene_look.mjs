@@ -9,14 +9,13 @@
 // which the two passes report no longer matters.
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const { NullEngine } = await import("@babylonjs/core/Engines/nullEngine.js");
 const { Scene } = await import("@babylonjs/core/scene.js");
 const { Color4 } = await import("@babylonjs/core/Maths/math.color.js");
 const { StandardMaterial } = await import("@babylonjs/core/Materials/standardMaterial.js");
 const { resolveLook, SceneLook } = await import("@/babylon/sceneLook");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const near = (a, b) => Math.abs(a - b) < 1e-9;
 const base = { exposure: 1.2, ibl: true, environmentIntensity: 0.8, nightDimming: 0.5,
   isDay: true, baked: false, nightAtlas: false, backdrop: null };
@@ -71,5 +70,5 @@ console.log("\n  reach:");
   ck("an unlit material is not reached by the environment", r.reach === 1 && r.total === 2, r);
 }
 
-console.log(fail ? `\n❌ ${fail} failed` : "\n✅ the look has one writer, and order no longer matters");
-process.exit(fail ? 1 : 0);
+done("✅ the look has one writer, and order no longer matters");
+

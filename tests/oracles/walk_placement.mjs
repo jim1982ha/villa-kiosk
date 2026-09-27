@@ -16,12 +16,11 @@
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const { onGlass } = await import("@/babylon/badgeLayout");
 const { viewBasis, VIEW_BASIS_STEPS, atReferenceDepth } = await import("@/babylon/badgeProjection");
 const { solvePlacement, createPlacementScratch } = await import("@/babylon/badgePlacement");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const near = (a, b, t = 1e-9) => Math.abs(a - b) < t;
 
 // ── atReferenceDepth ──
@@ -78,13 +77,12 @@ ck("turning on the spot through 36 headings gives ONE placement", sigs.size === 
 
 // ── the callers ──
 const src = (p) => readFileSync(new URL(`../../src/babylon/${p}`, import.meta.url), "utf8");
-const ev = src("EntityVisuals.ts"), pp = src("placementPass.ts");
+const ev = src("EntityVisuals.ts");
 ck("EntityVisuals gives the eye to the walk camera only, and measures badges AND cards through measuredAt",
    /eye: this\.orbitCamera\(\) \? undefined : this\.walkEye\(\)/.test(ev)
    && /const m = this\.measuredAt\(clearance, s\.wx, s\.wy, s\.wz\);\s*onGlass\(clearance, m\.x, m\.y, m\.z/.test(ev)
    && /const m = this\.measuredAt\(clearance, x, y, z\);\s*const p = projectToView\(clearance\.basis, m\.x, m\.y, m\.z/.test(ev));
-ck("the absorb test takes the walk camera's ground axes as ONE distance",
-   /Math\.hypot\(dx, dz\) < reach \+ boxes\[j\]\.halfW \+ gapPx/.test(pp));
+// The absorb test's ground metric is driven by VALUE in walk_frame.mjs (the
+// same distance in every direction) — it replaced a regex pin here.
 
-if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
-console.log("\n✅ walking: one placement at every heading, measured as drawn");
+done("✅ walking: one placement at every heading, measured as drawn");

@@ -22,7 +22,8 @@
 // quick-pick chip and this box can drive the exact same parent state without
 // a resync problem.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { useOutsideClose } from "@/hooks/useOutsideClose";
 import { Search, X } from "lucide-react";
 import type { EntityMapping } from "@/types/scene.types";
 import { displayLabelFor } from "@/config/EntityMap";
@@ -95,19 +96,7 @@ export default function DeviceSearchPicker({
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
+  useOutsideClose([containerRef], open, () => setOpen(false));
 
   const results = useMemo(() => {
     const q = value.trim().toLowerCase();

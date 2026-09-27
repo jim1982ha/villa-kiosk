@@ -15,7 +15,8 @@
 // Width: the same as every other window the bottom bar opens
 // (`summary-group-modal`, 780 px) — the owner asked for them to match.
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { useInterval } from "@/hooks/useInterval";
 import { CloudSun } from "lucide-react";
 import { fmtChartValue, fmtChartTick, fmtChartTime, fmtChartStamp } from "./chartUtils";
 import BarChart from "./BarChart";
@@ -70,7 +71,7 @@ type Readings = ReturnType<typeof useReadings>;
 
 export default function WeatherPanel({ station, onClose }: { station: WeatherStation; onClose: () => void }) {
   const [now, setNow] = useState(() => Date.now());
-  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 10_000); return () => clearInterval(t); }, []);
+  useInterval(() => setNow(Date.now()), 10_000);
   const r = useReadings(station);
   const { range, picker } = useHistoryRange(WEATHER_RANGES, "weather-ranges");
   return (

@@ -4,6 +4,7 @@
 // Assistant, with the browser globals it touches stubbed.
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 
 // ── the browser, as little of it as the socket touches ──────────────────────
 const noop = () => {};
@@ -38,8 +39,6 @@ globalThis.WebSocket = FakeSocket;
 const { HAWebSocket } = await import("@/ha/HAWebSocket");
 const { onSessionLost } = await import("@/auth/sessionLost");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const until = async (pred, ms = 5000) => { const t0 = Date.now(); while (!pred() && Date.now() - t0 < ms) await new Promise((r) => setTimeout(r, 20)); return pred(); };
 
 const ws = new HAWebSocket();
@@ -65,6 +64,4 @@ ck("the proxy's 4401 'session ended' is reported to the profile's owner", lost =
 off();
 ws.disconnect();
 
-if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
-console.log("\n✅ the socket's lifecycle, checked");
-process.exit(0);
+done("✅ the socket's lifecycle, checked");

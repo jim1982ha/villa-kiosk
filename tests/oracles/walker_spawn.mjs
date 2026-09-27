@@ -10,10 +10,9 @@
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const S = await import("@/babylon/walkerSpawn");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const sq = (x0, x1, z0, z1) => [{ x: x0, z: z0 }, { x: x1, z: z0 }, { x: x1, z: z1 }, { x: x0, z: z1 }];
 const inside = (x, z, s) => x >= s.x0 && x <= s.x1 && z >= s.z0 && z <= s.z1;
 /** A villa of horizontal slabs. floorAt is floorProbe's LOWEST hit (the ground slab). */
@@ -105,5 +104,5 @@ ck("the default is 1.7, and a setting wins", S.eyeHeightOf(undefined) === 1.7 &&
   ck("the config's default is the same constant", /eyeHeight: DEFAULT_EYE_HEIGHT,/.test(cfg));
 }
 
-console.log(fail ? `\n❌ ${fail} failed` : "\n✅ a walker lands where a person can stand");
-process.exit(fail ? 1 : 0);
+done("✅ a walker lands where a person can stand");
+

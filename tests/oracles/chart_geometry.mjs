@@ -13,10 +13,9 @@ import { register } from "node:module";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const { chartGeometry, readingAt } = await import("@/utils/chartGeometry");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const P = 300_000, H = 3_600_000, t0 = 1_700_000_000_000;
 const win = { from: t0, to: t0 + 24 * H };
 const plot = { left: 0, right: 320, top: 12, bottom: 138 };
@@ -169,5 +168,5 @@ console.log("\n  an outage you can SEE and POINT AT (2.496.149 — a pump's 3-mi
   ck("LineChart prints the outage row the geometry reports", /if \(out\) return \[\{ key: `\$\{i\}`, marker: keyOf\(l\), text: `\$\{who\}\$\{fmtOutage\(out, g\.window\.to\)\}` \}\];/.test(lc));
 }
 
-console.log(fail ? `\n❌ ${fail} failed` : "\n✅ one chart geometry; an outage is never a reading");
-process.exit(fail ? 1 : 0);
+done("✅ one chart geometry; an outage is never a reading");
+

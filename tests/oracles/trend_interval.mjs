@@ -6,12 +6,11 @@
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const T = await import("@/utils/trendInterval");
 const { paintState, paletteColorFor, STATUS_COLOR } = await import("@/utils/stateColors");
 const { fmtOutage } = await import("@/components/panels/chartUtils");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const near = (a, b) => Math.abs(a - b) < 1e-9;
 const M = 60_000, t0 = Date.UTC(2026, 8, 27, 10, 0);
 
@@ -51,11 +50,10 @@ ck("the timeline has ONE interval (no bucketMinutes anywhere) and paints through
    /const bucketMs = TREND_INTERVAL_MS;/.test(st) && /const colorFor = useMemo\(\(\) => paintState\(ownColour\)/.test(st)
    && !["components/panels/historyRange.tsx", "components/panels/SensorPanel.tsx", "components/panels/GenericPanel.tsx", "components/panels/LastDayTimeline.tsx", "components/panels/CameraPanel.tsx"].some((f) => /bucketMinutes/.test(src(f))));
 ck("numeric device charts (sensor, pumps, device groups) draw the five-minute trend, not raw points",
-   /series: await fetchTrend\(mapping\.entityId, range\.hours\)/.test(src("components/panels/SensorPanel.tsx")) && /fetchTrend\(id, range\.hours\)/.test(src("components/panels/DeviceGroupPanel.tsx"))
+   /\(\) => fetchTrend\(mapping\.entityId, range\.hours\)/.test(src("components/panels/SensorPanel.tsx")) && /fetchTrend\(id, range\.hours\)/.test(src("components/panels/DeviceGroupPanel.tsx"))
    && /return fiveMinuteSeries\(await fetchHistory\(entityId, hours\)\);/.test(src("ha/HAHistoryAPI.ts")));
 ck("a device-group member that is unavailable NOW still gets its chart", /r\.numeric !== undefined \|\| \(r\.unavailable && r\.unit !== ""\)/.test(src("components/panels/DeviceGroupPanel.tsx")));
 ck("the camera bar paints a lost motion sensor as unavailable, not 'online'",
    /return "motion-unavailable";/.test(src("components/panels/CameraPanel.tsx")) && /s === "offline" \|\| s === "motion-unavailable" \? STATUS_COLOR\.unavailable/.test(src("components/panels/CameraPanel.tsx")));
 
-if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
-console.log("\n✅ one five-minute interval, one unavailable colour");
+done("✅ one five-minute interval, one unavailable colour");

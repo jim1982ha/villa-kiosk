@@ -28,7 +28,7 @@ import { beginSpan } from "@/utils/perfSpans";
 import { debugFlagEnabled } from "@/utils/devLog";
 import { tapDebug } from "@/utils/tapDebug";
 import { inferTypeFromEntityId } from "@/config/EntityMap";
-import { ceilingVerdict, isCeilingMesh, structureRole, isHelperMesh } from "./meshRoles";
+import { ceilingVerdict, isCeilingMesh, structureRole, isHelperMesh, STAIR_NAME_RE } from "./meshRoles";
 import { pointInPolygon } from "@/utils/geometry";
 import { stampedFloor } from "./floorOf";
 
@@ -287,7 +287,6 @@ export class StructureSet {
       /wall|partition|cloison|railing|balustrade|banister|newel|column|pillar|fence|window|glass|slid|baie|vitr/i;
     // Stairs/steps in several languages — these must NEVER collide (you walk up
     // them via floor-following) and are tagged so the camera can climb them.
-    const stairPat = /stair|step|escalier|marche|scala|treppe|stufe|trap\b/i;
     // Never block movement through these (floors, outdoor terrain, helpers, stairs).
     const neverCollide =
       /ground|floor|room_|terrain|grass|lawn|water|pool|sky|__root__|ceiling|plafond|toit|ramp|slope/i;
@@ -322,7 +321,7 @@ export class StructureSet {
       const footMax = Math.max(footX, footZ);
 
       // --- Tag stairs so the camera's floor-follower knows it may climb them ---
-      const isStair = stairPat.test(name);
+      const isStair = STAIR_NAME_RE.test(name);
       m.metadata = { ...(m.metadata ?? {}), isStair };
 
       // --- Hide ceiling/roof meshes (named OR floating high above floor level) ---

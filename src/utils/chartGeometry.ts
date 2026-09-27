@@ -1,7 +1,7 @@
 // src/utils/chartGeometry.ts
 // Everything a history chart draws, between the series and the pixels — for
-// every chart in the app: the device panels' Sparkline and DualSparkline, and
-// the Weather window's line and rain charts. They only render what this says.
+// every chart in the app: LineChart (device panels, Weather) and the Weather
+// window's rain chart. They only render what this says.
 //
 // ⚠️ IT WAS WRITTEN THREE TIMES, AND THE COPIES HAD DRIFTED (2.496.88):
 //   * three hover rules — nearest reading by pixel, a "rail" on the denser of

@@ -11,7 +11,7 @@ import { binarySensorClassInfo } from "@/config/BinarySensorClasses";
 import { CATEGORY_ORDER, effectiveCategory, subjectOf } from "@/config/EntityCategories";
 import { displayLabelFor } from "@/config/EntityMap";
 import { roomKey, NO_ROOM_LABEL } from "@/config/roomKey";
-import { isTicketResolved, scheduleBoard } from "@/fm/fmEngine";
+import { fmAttention } from "@/fm/fmEngine";
 import type { FmData } from "@/fm/fmTypes";
 import { isOn } from "@/utils/entityState";
 import type { HassEntity, RawLogbookEntry } from "@/types/ha.types";
@@ -64,8 +64,8 @@ export function buildAttentionItems(opts: {
     });
   }
 
-  for (const t of fmData.tickets) {
-    if (isTicketResolved(t)) continue;
+  const fm = fmAttention(fmData);
+  for (const t of fm.openFaults) {
     items.push({
       id: `fault:${t.id}`,
       kind: "fault",
@@ -76,8 +76,7 @@ export function buildAttentionItems(opts: {
     });
   }
 
-  for (const s of scheduleBoard(fmData)) {
-    if (s.state !== "overdue" && s.state !== "never") continue;
+  for (const s of fm.lateTasks) {
     items.push({
       id: `schedule:${s.schedule.id}`,
       kind: "schedule",
@@ -125,6 +124,26 @@ export interface VillaHealth {
  *  maintenance are "needs doing, not urgent" (warn) — a schedule running a
  *  few days late shouldn't paint the whole villa red the same as a leak
  *  sensor going off. */
+/**
+ * The attention a PROFILE is shown: items about a device it may not open are
+ * left out, and the health line is re-read from what remains. The HUD badge
+ * and the Cockpit list both take this, so a guest's badge can no longer count
+ * a camera or a leak sensor their Cockpit list would refuse to open (2.496.191).
+ * Items with no device (a schedule) stand for themselves.
+ */
+export function attentionFor<T extends { unavailableIds: readonly string[]; selectableIds: readonly string[]; attentionItems: AttentionItem[] }>(
+  att: T, may: (entityId: string) => boolean,
+): T & { health: VillaHealth } {
+  const attentionItems = att.attentionItems.filter((i) => !i.entityId || may(i.entityId));
+  return {
+    ...att,
+    unavailableIds: att.unavailableIds.filter(may),
+    selectableIds: att.selectableIds.filter(may),
+    attentionItems,
+    health: villaHealthFrom(attentionItems),
+  };
+}
+
 export function villaHealthFrom(items: AttentionItem[]): VillaHealth {
   if (items.length === 0) return { level: "ok", summary: "Everything looks fine." };
   const hasDanger = items.some((i) => i.kind === "unavailable" || i.kind === "alarm");

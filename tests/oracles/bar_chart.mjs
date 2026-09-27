@@ -8,11 +8,10 @@
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const B = await import("@/utils/barChart");
 const { fmtMoney, fmtKwh } = await import("@/config/energyModel");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const seg = (v, key = "used") => ({ key, label: key === "cost" ? "Cost" : "Used", v, cls: "e-used" });
 
 console.log("  the scale — 0 to a round top, every bar under it:");
@@ -104,5 +103,4 @@ ck("BarChart draws what barLayout says, and its tooltip rows are barTipRows'",
      && /const hover = frac === null \? null : barAt\(frac, n\);/.test(comp)
      && /\{LL && <YAxis side="right" unit=\{line!\.unit\} height=\{height\} frame=\{1\} ticks=\{LL\.ticks\} \/>\}/.test(comp));
 
-if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
-console.log("\n✅ one bar chart, every value in its own unit");
+done("✅ one bar chart, every value in its own unit");

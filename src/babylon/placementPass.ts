@@ -24,11 +24,11 @@ import { roomKey, NO_ROOM_LABEL } from "@/config/roomKey";
 import type { LabelControls } from "./EntityVisuals";
 import { type BadgeMetrics } from "./badgeMetrics";
 import type { MeasureFrame } from "./badgeProjection";
-import { mergeCollidingPiles, buildCliques, type PlacementItem } from "./badgePlacement";
+import { mergeCollidingPiles, buildCliques, type PlacementItem, type DeferralBucket } from "./badgePlacement";
 import { channelEnabled } from "@/utils/tapDebug";
 import { type RoomChip } from "./roomChips";
 import { RoomFocus } from "./roomFocus";
-import { type CardArrangement } from "./badgeCard";
+import { cardLift, type CardArrangement } from "./badgeCard";
 
 /** The comparison key of the no-room bucket, normalised ONCE at module level —
  *  `roomOf` hands out the LABEL and every map here is keyed by `roomKey`, so
@@ -171,6 +171,26 @@ export const GROUP_OVERLAP_ALLOW_WIDTHS = 0;
  */
 const CHIP_COLLISION = true as boolean;
 
+/**
+ * ── THE GROUND AXIS, ON BOTH CAMERAS ─────────────────────────────────────
+ * The one thing every box test on the glass shares: the horizontal distance.
+ * `sz` is 0 under the orbit camera (projectToView zeroes it), so this is |dx|
+ * there; on the walk camera sx and sz are across/along the heading — one
+ * ground plane — and the distance has to be one number, or a test turns with
+ * the walker (2.496.174). `conflicts` folds `sz` in the same way. Until
+ * 2.496.187 `fits` used a 3-axis sphere on the walk camera and settleChips
+ * dropped `sz` entirely: three rules for one question.
+ */
+export function groundOf(dx: number, dz: number): number {
+  return Math.hypot(dx, dz);
+}
+
+/** "Living +2" — the room chip's own convention for "and others", so a card
+ *  spanning rooms reads the same way whichever tier drew it. */
+export function roomSpanLabel(primary: string, roomCount: number): string {
+  return roomCount > 1 ? `${primary} +${roomCount - 1}` : primary;
+}
+
 /** A badge that survived the per-entity culls (category / floor / enabled),
  *  with BOTH its world-space anchor and its projected screen position. */
 export interface ShownLabel {
@@ -271,7 +291,6 @@ export interface PlacementHost {
   roomOf(entityId: string): string;
   layoutOf(g: PendingEntityGroup, memberCount: number): CardArrangement;
   planeOf(clearance: MeasureFrame, x: number, y: number, z: number): { sx: number; sy: number; sz: number };
-  drawnDistance(ax: number, ay: number, az: number, bx: number, by: number, bz: number): number;
   summaryMetrics(): { size: number; font: number; countSize: number; countFont: number };
   sortCardMembers(shown: ShownLabel[], members: number[]): number[];
   cardOf(cells: number, max?: number, maxWidth?: number): CardArrangement;
@@ -474,14 +493,12 @@ export class PlacementPass {
     // the placement guard's `hits`. A /dry-audit weighed folding them into one
     // helper and the answer is no: the shared part is ONE line, while
     // everything that can actually drift — which half-extents, whose gap,
-    // whether the tap-pitch floor applies, whether the along-view residual
-    // folds in — is per tier and cannot be shared. `hits` must stay separate
+    // whether the tap-pitch floor applies — is per tier and cannot be shared.
+    // The along-view residual is NOT per tier: it folds in through `groundOf`
+    // at every instance, the one piece that is shared. `hits` must stay separate
     // outright: it is the GUARD, and measures ink on ink in true perspective
     // with no gap and no tolerance, the opposite of every other instance by
     // design. Recorded so the next audit re-reads this rather than re-deciding.
-    // The larger of the two half-extents, because a neighbour can lie in any
-    // direction and this is a radial test rather than a box overlap.
-    const halfOf = (i: number) => Math.max(boxes[i].halfW, boxes[i].halfH);
     // A group is drawn at the badge scale and at the badge size (see
     // summaryMetrics), so this measures it with the same numbers the renderer
     // uses — no second scale to keep in step. There used to be one: the group
@@ -490,25 +507,6 @@ export class PlacementPass {
     // method to reason in a scale of its own. Both went together.
     const sm = this.host.summaryMetrics();
     const squareHalf = (sm.size / 2) * scale * allow;
-    // From the SAME function that draws it — the width a group is TESTED at
-    // has to be the width it is DRAWN at, which is this file's oldest rule.
-    // ── THE CIRCUMSCRIBED RADIUS, not half the width ────────────────────
-    // This test is a DISC — it works in world distance scaled by the quantised
-    // zoom, and knowing which way a neighbour lies relative to the card would
-    // need the camera, the one dependency this subsystem is built without. A
-    // disc of half the WIDTH is honest for a card that is wider than it is
-    // tall and badly dishonest for a square one: two 2x2 cards two units apart
-    // on the diagonal would each be 1.41 units away on both axes and overlap
-    // in both, while the test called them clear. `hypot` is the smallest disc
-    // that actually contains the card.
-    //
-    // "A summary must clear other summaries" is the one thing this test still
-    // promises absolutely (see `fits`), so it is the one place that cannot be
-    // approximated downward.
-    const cardHalfOf = (g: PendingEntityGroup) => {
-      const lay = this.host.layoutOf(g, g.members.length);
-      return (Math.hypot(lay.width, lay.height) / 2) * scale * allow;
-    };
     /**
      * The plane Y where the card's INK actually is: its anchor lifted by half
      * its OWN height, exactly as updateEntityGroups sets linkOffsetYInPixels.
@@ -525,14 +523,13 @@ export class PlacementPass {
      */
     const cardCentreY = (g: PendingEntityGroup) => {
       const lay = this.host.layoutOf(g, g.members.length);
-      return g.sy - (lay.height / 2) * scale;
+      return g.sy - cardLift(lay, scale);
     };
     /**
      * The largest disc that fits INSIDE the card — "is this badge underneath
      * my ink", which is a different question from "do we clear each other".
      *
-     * It has to be the inscribed radius and not `cardHalfOf`'s circumscribed
-     * one. A 2x2 card's circumscribed disc is 1.41 units while its ink only
+     * It has to be the inscribed radius and not the circumscribed one. A 2x2 card's circumscribed disc is 1.41 units while its ink only
      * reaches 1.0 on either axis, and `fits` accepts a badge from about 1.0
      * plus a gap — so absorbing at 1.41 would swallow badges that are visibly
      * clear of the card. That is deleting devices from the map to fix a bug
@@ -548,24 +545,14 @@ export class PlacementPass {
       const lay = this.host.layoutOf(g, g.members.length);
       return (Math.min(lay.width, lay.height) / 2) * scale * allow;
     };
-    // A group is measured against OTHER GROUPS at the width it is actually
-    // DRAWN at — the file's oldest rule. Against badges it is measured at ONE
-    // badge box (`vsBadge`) instead; see `fits` for why that asymmetry is
-    // deliberate. Both of these used to branch on `drawnCells < 2` and fall
-    // back to `squareHalf` — the count badge's footprint, unreachable since
-    // 2.363.0. See the absorb block for the proof.
-    const groupHalf = (g: PendingEntityGroup) => cardHalfOf(g);
-
-    /** The same extent as `groupHalf`, kept as SEPARATE half-width and
-     *  half-height instead of collapsed into a circumscribed radius — see the
-     *  boxes-not-discs block in `fits`. */
+    /** A group against OTHER GROUPS is measured at the box it is actually
+     *  DRAWN at — the file's oldest rule — as separate half-width and
+     *  half-height, never a circumscribed radius (see the boxes-not-discs
+     *  block in `fits`). Against badges it is ONE badge box (`vsBadge`). */
     const groupBox = (g: PendingEntityGroup): { hw: number; hh: number } => {
       const lay = this.host.layoutOf(g, g.members.length);
       return { hw: (lay.width / 2) * scale * allow, hh: (lay.height / 2) * scale * allow };
     };
-    /** Only the plane metric puts both card axes on the screen's own axes;
-     *  see projectToView, which zeroes `pz` there and not in world3d. */
-    const planar = clearance.basis.mode === "plane";
 
     // Fixed order (the key is stable and total), so which of two conflicting
     // groups survives never depends on the order the solver emitted them in.
@@ -593,7 +580,6 @@ export class PlacementPass {
       `dx=${dx.toFixed(0)}/${needX.toFixed(0)}(-${(needX - dx).toFixed(0)})`
       + ` dy=${dy.toFixed(0)}/${needY.toFixed(0)}(-${(needY - dy).toFixed(0)})`;
     const fits = (g: PendingEntityGroup, others: PendingEntityGroup[]): boolean => {
-      const mineHalf = groupHalf(g);
       // ── A SUMMARY MUST CLEAR OTHER SUMMARIES; IT MAY OVERLAP A BADGE ─────
       // Against BADGES a group is measured at the count's single-badge box,
       // not at the card it draws. That is a deliberate, stated cost, and it
@@ -628,8 +614,7 @@ export class PlacementPass {
         // a chip it never needed, an escalation cascade driven by geometry
         // nobody could see. Safe to read both here: every solver decision is
         // final by the time this runs.
-        if (this.entityGrouped.has(shown[j].id)) continue;
-        if (this.roomClustered.get(roomKey(this.host.roomOf(shown[j].id)))) continue;
+        if (!this.drawnBadge(shown[j].id)) continue;
         // A FOCUSED room's badge blocks nobody — the same contract the `others`
         // loop below already honours for focused groups, and the one
         // PlacementItem.exempt states in the solver: "accepted unconditionally,
@@ -640,24 +625,17 @@ export class PlacementPass {
         // exemption exists to prevent.
         if (focus.has(roomKey(this.host.roomOf(shown[j].id)))) continue;
         // The SAME rule as everywhere else on the glass since 2.406.0: boxes,
-        // per axis, not a radius against a scalar distance — `halfOf(j)` is
-        // max(halfW, halfH), which judged a wide badge's vertical clearance by
-        // its width. Plane metric only; the walk camera keeps the 3-axis
-        // distance, as it does in the summary-vs-summary loop below.
-        if (planar) {
-          const dx = Math.abs(g.sx - shown[j].sx);
-          const dy = Math.abs(cardCentreY(g) - shown[j].sy);
-          const needX = vsBadge + boxes[j].halfW * allow + gapPx;
-          const needY = vsBadge + boxes[j].halfH * allow + gapPx;
-          if (dx < needX && dy < needY) {
-            why = `badge ${shown[j].id} ${shortfall(dx, needX, dy, needY)}`;
-            return false;
-          }
-          continue;
+        // per axis, not a radius against a scalar distance — a radius judged a
+        // wide badge's vertical clearance by its width. `ground` is the
+        // horizontal axis on BOTH cameras (see groundOf).
+        const dx = groundOf(g.sx - shown[j].sx, g.sz - shown[j].sz);
+        const dy = Math.abs(cardCentreY(g) - shown[j].sy);
+        const needX = vsBadge + boxes[j].halfW * allow + gapPx;
+        const needY = vsBadge + boxes[j].halfH * allow + gapPx;
+        if (dx < needX && dy < needY) {
+          why = `badge ${shown[j].id} ${shortfall(dx, needX, dy, needY)}`;
+          return false;
         }
-        const d = this.host.drawnDistance(
-          g.sx, cardCentreY(g), g.sz, shown[j].sx, shown[j].sy, shown[j].sz);
-        if (d < vsBadge + halfOf(j) * allow + gapPx) return false;
       }
       for (const o of others) {
         if (o === g) continue;
@@ -666,8 +644,8 @@ export class PlacementPass {
         // state and it does not get to renegotiate the rest of the map.
         if (o.focused) continue;
         // ── BOXES, NOT DISCS — the correction the CHIP tier already made ────
-        // `cardHalfOf` is `hypot(width, height) / 2`: the CIRCUMSCRIBED radius
-        // of the card. Comparing two of those against a scalar distance is a
+        // The card's CIRCUMSCRIBED radius, `hypot(width, height) / 2`, was
+        // what this used to measure. Comparing two of those against a scalar distance is a
         // disc test, and CLAUDE.md already records why that is wrong one tier
         // down — "a chip is a wide short pill, so a circumscribed disc would
         // chip half the villa, and since 2.287.0 the plane's axes ARE the
@@ -690,24 +668,20 @@ export class PlacementPass {
         // overlap — is preserved exactly and merely stops being approximated
         // from the conservative side.
         //
-        // Only in the PLANE metric, where projectToView sets `pz = 0` and the
-        // two axes ARE the screen's. The walk camera keeps the 3-axis distance
-        // for the same reason it keeps its own metric (see VIEW_METRIC).
-        if (planar) {
-          const mine = groupBox(g), theirs = groupBox(o);
-          const dx = Math.abs(g.sx - o.sx);
-          const dy = Math.abs(cardCentreY(g) - cardCentreY(o));
-          const needX = mine.hw + theirs.hw + gapPx;
-          const needY = mine.hh + theirs.hh + gapPx;
-          if (dx < needX && dy < needY) {
-            why = `card ${o.key}(${o.members.length}) ${shortfall(dx, needX, dy, needY)}`;
-            return false;
-          }
-          continue;
+        // The walk camera used to keep a 3-axis SPHERE here while the absorb
+        // sweep and `conflicts` measured a cylinder (ground distance against
+        // width, height against height). Two rules for one question: a badge
+        // in the gap between them was refused by `fits` and absorbed by
+        // nobody, so its card's rooms went to their chip (2.496.187).
+        const mine = groupBox(g), theirs = groupBox(o);
+        const dx = groundOf(g.sx - o.sx, g.sz - o.sz);
+        const dy = Math.abs(cardCentreY(g) - cardCentreY(o));
+        const needX = mine.hw + theirs.hw + gapPx;
+        const needY = mine.hh + theirs.hh + gapPx;
+        if (dx < needX && dy < needY) {
+          why = `card ${o.key}(${o.members.length}) ${shortfall(dx, needX, dy, needY)}`;
+          return false;
         }
-        const d = this.host.drawnDistance(
-          g.sx, cardCentreY(g), g.sz, o.sx, cardCentreY(o), o.sz);
-        if (d < mineHalf + groupHalf(o) + gapPx) return false;
       }
       return true;
     };
@@ -774,10 +748,8 @@ export class PlacementPass {
         const inkY = cardCentreY(g);
         const take: number[] = [];
         for (let j = 0; j < shown.length; j++) {
-          if (this.entityGrouped.has(shown[j].id)) continue;
-          const rk = roomKey(this.host.roomOf(shown[j].id));
-          if (this.roomClustered.get(rk)) continue;
-          if (focus.has(rk)) continue;
+          if (!this.drawnBadge(shown[j].id)) continue;
+          if (focus.has(roomKey(this.host.roomOf(shown[j].id)))) continue;
           // ── BOX vs BOX, ON EACH AXIS ─────────────────────────────────
           // Burial is a question about two rectangles of ink, and it has to be
           // tested as one. Two earlier shapes of this were both wrong in the
@@ -826,9 +798,8 @@ export class PlacementPass {
           // badge is either clear of a summary or a cell inside it. A
           // `seat REFUSED … blocked by badge` line is therefore now an
           // invariant violation, not a measurement.
-          const dx = Math.abs(g.sx - shown[j].sx);
+          const dx = groundOf(g.sx - shown[j].sx, g.sz - shown[j].sz);
           const dy = Math.abs(inkY - shown[j].sy);
-          const dz = Math.abs(g.sz - shown[j].sz);
           // ⚠️ THE WALK CAMERA'S TWO GROUND AXES ARE ONE DISTANCE (2.496.174).
           // `sz` is 0 under the orbit camera, so this was the exact box test
           // there; on the walk camera sx and sz are across/along the HEADING,
@@ -836,10 +807,8 @@ export class PlacementPass {
           // with the walker — measured on the villa's model as a card taking
           // in a device at 0°/90°/180°/270° and not in between. Ground
           // distance against width, as `conflicts` has always done.
-          const ground = planar ? dx < reach + boxes[j].halfW + gapPx
-            : Math.hypot(dx, dz) < reach + boxes[j].halfW + gapPx;
-          if (ground && dy < reach + boxes[j].halfH + gapPx
-            && (planar ? dz < reach + halfOf(j) + gapPx : true)) take.push(j);
+          if (dx < reach + boxes[j].halfW + gapPx
+            && dy < reach + boxes[j].halfH + gapPx) take.push(j);
         }
         if (take.length === 0) break;
         for (const j of take) {
@@ -865,7 +834,7 @@ export class PlacementPass {
         g.grid = g.members.length;
         g.roomKeys.sort();
         const primary = this.roomDisplay.get(g.roomKeys[0]) ?? g.roomKeys[0];
-        g.room = g.roomKeys.length > 1 ? `${primary} +${g.roomKeys.length - 1}` : primary;
+        g.room = roomSpanLabel(primary, g.roomKeys.length);
         let wx = 0, wy = 0, wz = 0;
         for (const i of g.members) { wx += shown[i].wx; wy += shown[i].wy; wz += shown[i].wz; }
         g.wx = wx / g.members.length;
@@ -1077,6 +1046,61 @@ export class PlacementPass {
   }
 
   /**
+   * Is this badge still DRAWN once placement has decided — not taken into a
+   * card, not behind its room's chip? THE predicate: the renderer's
+   * visibility and every "only a drawn badge can be in the way" test read it.
+   * It was written out five times, three of them as two lines that had to be
+   * kept in the same order. (`inFront` and `occluded` are render gates on top
+   * of it, and deliberately not part of it — see ShownLabel.)
+   */
+  drawnBadge(id: string): boolean {
+    return !this.entityGrouped.has(id) && !this.roomClustered.get(roomKey(this.host.roomOf(id)));
+  }
+
+  /**
+   * The solver's deferral buckets, as cards to seat. Every member leaves the
+   * badge tier (`entityGrouped`); the card stands at the members' WORLD
+   * centroid and is projected by this pass's own frame, never accumulated in
+   * the plane alongside it (see PendingEntityGroup.sx). Appends to `out`.
+   */
+  groupsFromBuckets(
+    shown: ShownLabel[], buckets: readonly DeferralBucket[], count: number,
+    clearance: MeasureFrame, out: PendingEntityGroup[],
+  ): void {
+    for (let b = 0; b < count; b++) {
+      const bucket = buckets[b];
+      let wx = 0, wy = 0, wz = 0;
+      for (const i of bucket.members) {
+        wx += shown[i].wx; wy += shown[i].wy; wz += shown[i].wz;
+        this.entityGrouped.add(shown[i].id);
+      }
+      const n = bucket.members.length;
+      out.push({
+        // Keyed by the PILE alone. It was `room|pileKey`, which was stable only
+        // while a bucket's room was — and a bucket's room can change (a
+        // cross-room pile loses a member and becomes single-room), which would
+        // have rebuilt the group's GUI controls mid-zoom and flickered.
+        // pileKey is the pile's lowest entity_id, so it is already unique.
+        key: `grp|${bucket.pileKey}`,
+        room: roomSpanLabel(this.roomDisplay.get(bucket.room) ?? bucket.room, bucket.rooms.length),
+        roomKeys: bucket.rooms.slice(),
+        // Indices into `shown`, which lives exactly as long as this pass —
+        // copied because placeEntityGroups may drop a group and the pooled
+        // bucket is about to be reused. Sorted into the cell order a card
+        // draws them in; see sortCardMembers for why that is not the order
+        // the solver hands them over in.
+        members: this.host.sortCardMembers(shown, bucket.members.slice()),
+        wx: wx / n, wy: wy / n, wz: wz / n,
+        ...this.host.planeOf(clearance, wx / n, wy / n, wz / n),
+        // Every device, always: `gridCells` turns an over-cap ask into the
+        // count badge itself, so no producer restates the cap.
+        grid: n,
+        focused: false,
+      });
+    }
+  }
+
+  /**
    * Pair up the FOCUSED room's own overlapping badges.
    *
    * ── The gap this closes ───────────────────────────────────────────────────
@@ -1240,7 +1264,7 @@ export class PlacementPass {
         // measuring them against any smaller number sizes a box the card is
         // about to overflow.
         const lay = this.host.cardOf(pile.length, pile.length, this.host.cardBudget());
-        const hh = (lay.height / 2) * scale;
+        const hh = cardLift(lay, scale);
         // Anchored bottom-edge-on-anchor exactly as the renderer draws it —
         // this file's oldest rule, and the one 2.288.0 had to restate.
         return { cx: q.sx, cy: q.sy - hh, hw: (lay.width / 2) * scale + gapPx, hh: hh + gapPx };
@@ -1395,11 +1419,11 @@ export class PlacementPass {
       // and the one 2.288.0 had to restate for badges and cards.
       const chipBoxes = chips.map((c) => {
         const q = this.host.planeOf(clearance, c.centre.x, c.centre.y, c.centre.z);
-        return { cx: q.sx, cy: q.sy - half, hw: c.halfW + gapPx, hh: half + gapPx };
+        return { cx: q.sx, cy: q.sy - half, cz: q.sz, hw: c.halfW + gapPx, hh: half + gapPx };
       });
-      const clears = (cx: number, cy: number, hw: number, hh: number) => {
+      const clears = (cx: number, cy: number, cz: number, hw: number, hh: number) => {
         for (const b of chipBoxes) {
-          if (Math.abs(cx - b.cx) < hw + b.hw && Math.abs(cy - b.cy) < hh + b.hh) return false;
+          if (groundOf(cx - b.cx, cz - b.cz) < hw + b.hw && Math.abs(cy - b.cy) < hh + b.hh) return false;
         }
         return true;
       };
@@ -1411,11 +1435,10 @@ export class PlacementPass {
       // make that room disappear.
       for (let i = 0; i < shown.length; i++) {
         const s2 = shown[i];
-        if (this.entityGrouped.has(s2.id)) continue;
+        if (!this.drawnBadge(s2.id)) continue;
         const rk = roomKey(this.host.roomOf(s2.id));
-        if (this.roomClustered.get(rk)) continue;
         if (focus.has(rk)) continue;
-        if (clears(s2.sx, s2.sy, boxes[i].halfW, boxes[i].halfH)) continue;
+        if (clears(s2.sx, s2.sy, s2.sz, boxes[i].halfW, boxes[i].halfH)) continue;
         this.chipRoom(rk, "chip-v-badge");
         escalated = true;
       }
@@ -1424,8 +1447,8 @@ export class PlacementPass {
         if (g.focused) continue;
         if (g.roomKeys.some((k) => this.roomClustered.get(k))) continue;
         const lay = this.host.layoutOf(g, g.members.length);
-        const hh = (lay.height / 2) * scale;
-        if (clears(g.sx, g.sy - hh, (lay.width / 2) * scale, hh)) continue;
+        const hh = cardLift(lay, scale);
+        if (clears(g.sx, g.sy - hh, g.sz, (lay.width / 2) * scale, hh)) continue;
         for (const k of g.roomKeys) this.chipRoom(k, "chip-v-card");
         escalated = true;
       }
@@ -1479,27 +1502,27 @@ export class PlacementPass {
     // where merging runs, and for the same reason: it must not be able to
     // change which badges are drawn. `roomClustered` gains nothing here, so
     // termination is untouched.
-    const focusBoxes: { cx: number; cy: number; hw: number; hh: number }[] = [];
+    const focusBoxes: { cx: number; cy: number; cz: number; hw: number; hh: number }[] = [];
     for (let i = 0; i < shown.length; i++) {
-      if (this.entityGrouped.has(shown[i].id)) continue;
+      if (!this.drawnBadge(shown[i].id)) continue;
       if (!focus.has(roomKey(this.host.roomOf(shown[i].id)))) continue;
       // The same box the escalation loop above measures a badge with.
       focusBoxes.push({
-        cx: shown[i].sx, cy: shown[i].sy, hw: boxes[i].halfW, hh: boxes[i].halfH,
+        cx: shown[i].sx, cy: shown[i].sy, cz: shown[i].sz, hw: boxes[i].halfW, hh: boxes[i].halfH,
       });
     }
     for (const g of pending) {
       if (!g.focused) continue;
       const lay = this.host.layoutOf(g, g.members.length);
-      const hh = (lay.height / 2) * scale;
-      focusBoxes.push({ cx: g.sx, cy: g.sy - hh, hw: (lay.width / 2) * scale, hh });
+      const hh = cardLift(lay, scale);
+      focusBoxes.push({ cx: g.sx, cy: g.sy - hh, cz: g.sz, hw: (lay.width / 2) * scale, hh });
     }
     if (focusBoxes.length === 0) return rendered;
     return rendered.filter((c) => {
       const q = this.host.planeOf(clearance, c.centre.x, c.centre.y, c.centre.z);
       const cx = q.sx, cy = q.sy - half, hw = c.halfW + gapPx, hh = half + gapPx;
       for (const b of focusBoxes) {
-        if (Math.abs(cx - b.cx) < hw + b.hw && Math.abs(cy - b.cy) < hh + b.hh) return false;
+        if (groundOf(cx - b.cx, q.sz - b.cz) < hw + b.hw && Math.abs(cy - b.cy) < hh + b.hh) return false;
       }
       return true;
     });

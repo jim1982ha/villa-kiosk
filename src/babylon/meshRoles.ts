@@ -142,6 +142,12 @@ function gltfExtras(mesh: AbstractMesh): Record<string, unknown> | null {
  * Classify a mesh. Metadata wins; the name is only consulted when the GLB
  * predates the metadata.
  */
+/** A stair, in the languages the plans and models have used. ONE list:
+ *  storeys.ts (rooms and meshes) and structureSet.ts (collision, climbing)
+ *  each had their own and they had drifted — escalera/steps in one,
+ *  step/marche in the other (2.496.200). */
+export const STAIR_NAME_RE = /stair|steps?\b|escalier|escalera|marche|scala|treppe|stufe|trap\b/i;
+
 export function structureRole(mesh: AbstractMesh): StructureRole {
   const extras = gltfExtras(mesh);
   const role = extras?.[ROLE_KEY];

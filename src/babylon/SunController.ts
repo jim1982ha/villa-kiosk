@@ -5,7 +5,8 @@
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
 import type { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
-import type { LightingSystem } from "./LightingSystem";
+import { DirectionalLight } from "@babylonjs/core/Lights/directionalLight";
+import type { Scene } from "@babylonjs/core/scene";
 import type { SkyDome } from "./SkyDome";
 import { skyNow, skyTickMs, skySimActive, skySimLabel } from "@/utils/skyClock";
 import { tapDebug } from "@/utils/tapDebug";
@@ -18,7 +19,11 @@ import type { LightingMode } from "./lightingMode";
 import { sunGeometry, sunLights } from "./sunState";
 
 export class SunController {
-  private lighting: LightingSystem;
+  /** The scene's sun — a directional light this controller alone drives.
+   *  (LightingSystem, a 31-line class whose two setters each assigned one
+   *  field for this one caller, was folded in here in 2.496.195.) */
+  readonly sunLight: DirectionalLight;
+  private readonly scene: Scene;
   private hemi: HemisphericLight;
   private sky: SkyDome | null;
   /** Only set when `?skySpeed` is running the sky fast — see startSkySim. */
@@ -46,7 +51,7 @@ export class SunController {
   private glassDim: ((t: number) => void) | null = null;
 
   constructor(
-    lighting: LightingSystem,
+    scene: Scene,
     hemi: HemisphericLight,
     config: AppConfig,
     sky: SkyDome | null,
@@ -55,7 +60,11 @@ export class SunController {
   ) {
     this.frames = frames;
     this.look = look;
-    this.lighting = lighting;
+    this.scene = scene;
+    this.sunLight = new DirectionalLight("sunLight", new Vector3(-0.4, -1, -0.6), scene);
+    this.sunLight.intensity = 1.2;
+    this.sunLight.diffuse = new Color3(1.0, 0.95, 0.8);
+    this.sunLight.specular = new Color3(0.2, 0.2, 0.2);
     this.hemi = hemi;
     this.sky = sky;
     this.config = config;
@@ -308,8 +317,10 @@ export class SunController {
     // Key, ambient and fill for day or for Settings' night dimming — warm at
     // night (the "blue kitchen" and "dead grey" history is in sunState).
     const L = sunLights(isDay, r);
-    this.lighting.setSun(dir, L.sunIntensity, new Color3(...L.sunColor));
-    this.lighting.setAmbient(new Color3(...L.ambient));
+    this.sunLight.direction = dir;
+    this.sunLight.intensity = L.sunIntensity;
+    this.sunLight.diffuse = new Color3(...L.sunColor);
+    this.scene.ambientColor = new Color3(...L.ambient);
     this.hemi.intensity = L.hemiIntensity;
     this.hemi.diffuse = new Color3(...L.hemiDiffuse);
     this.hemi.groundColor = new Color3(...L.hemiGround);

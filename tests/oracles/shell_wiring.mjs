@@ -57,7 +57,7 @@ eq("...and NOT on the imported function, which never changes",
 const DCS = read("src/config/DeviceConfigSync.tsx");
 console.log("\n  only an owner writes shared config:");
 eq("the gate is the document's own write gate (judged when a push RUNS, on every path)",
-   /canWrite: \(\) => roleRef\.current === "owner"/.test(DCS) && !/fetchSharedConfig\(\)[\s\S]{0,200}saveSharedConfig\(/.test(DCS), true);
+   /canWrite: \(\) => roleCan\(roleRef\.current, "editConfig"\)/.test(DCS) && !/fetchSharedConfig\(\)[\s\S]{0,200}saveSharedConfig\(/.test(DCS), true);
 // It used to be only on the push effect, so the pull's abort branch — which
 // retries a stuck edit — ran the whole fetch-rebase-write loop for every role,
 // forever, against a server that 403s.
@@ -68,7 +68,9 @@ console.log("\n  the wake listeners survive a reconnect:");
 eq("connect() arms them", /this\.manuallyClosed = false;[\s\S]{0,200}armWakeListeners\(\)/.test(WS), true);
 eq("disconnect() disarms them", /disconnect\(\)[\s\S]{0,700}?disarmWakeListeners\(\)/.test(WS), true);
 eq("nothing else touches the listeners directly",
-   (WS.match(/(?:add|remove)EventListener\("(?:visibilitychange|online)"/g) ?? []).length, 4);
+   // Since 2.496.196 the socket subscribes through utils/deviceWake (one wake
+   // signal for the socket AND the store refresh): no listeners of its own.
+   (WS.match(/(?:add|remove)EventListener\("(?:visibilitychange|online)"/g) ?? []).length + (/this\.wakeUnsubscribe = onWake\(\(\) => this\.checkHealth\(\)\)/.test(WS) ? 4 : 0), 4);
 // The constructor armed them and disconnect() removed them; connect() did not
 // put them back. One disconnect/connect cycle on an instance — which React
 // StrictMode performs on every mount — dropped the wake path for the life of

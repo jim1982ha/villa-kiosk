@@ -8,10 +8,9 @@
 // icons" (2.368.0). Replayed, with the old rule run first to show it lies.
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const { RoomFocus } = await import("@/babylon/roomFocus");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 
 console.log("  zooming in keeps what you asked for:");
 {
@@ -51,5 +50,5 @@ console.log("\n  the caller:");
   ck("a tap grants through it", /if \(!this\.focus\.grant\(/.test(ev));
 }
 
-console.log(fail ? `\n❌ ${fail} failed` : "\n✅ the focus lasts as long as it should");
-process.exit(fail ? 1 : 0);
+done("✅ the focus lasts as long as it should");
+

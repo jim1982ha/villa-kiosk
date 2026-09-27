@@ -7,10 +7,9 @@
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const E = await import("@/config/energyModel");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const lights = Array.from({ length: 10 }, (_, i) => `sensor.light_${i}_energy`);
 const pumps = ["sensor.pool_pump_energy", "sensor.spa_pump_energy", "sensor.jet_pump_energy", "sensor.well_pump_energy", "sensor.bath_pump_energy"];
 const prefs = {
@@ -131,5 +130,5 @@ ck("nothing about energy is stored in VESTA's config", !/energy(Sources|Devices|
 const bar = readFileSync(new URL("../../src/components/hud/SummaryBar.tsx", import.meta.url), "utf8");
 ck("the Energy tile opens the Energy window", /openGroup\?\.id === "__energy" && \(\s*<EnergyPanel/.test(bar));
 
-console.log(fail ? `\n❌ ${fail} failed` : "\n✅ HA's Energy, laid out — never re-configured");
-process.exit(fail ? 1 : 0);
+done("✅ HA's Energy, laid out — never re-configured");
+

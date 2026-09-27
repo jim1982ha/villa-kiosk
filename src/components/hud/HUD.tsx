@@ -19,6 +19,10 @@
 // labels are always shown; "Highlight clickable objects" moved to Settings.)
 // Bottom bar: bottom-right shows the first-person movement joystick only.
 
+import { useBackToClose } from "@/hooks/useBackToClose";
+import { useOutsideClose } from "@/hooks/useOutsideClose";
+import { useInterval } from "@/hooks/useInterval";
+import { fmtChartTime } from "@/components/panels/chartUtils";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   // MapIcon, not Map: the bare name shadows the global Map constructor,
@@ -45,7 +49,7 @@ import LegendModal from "./LegendModal";
 import CockpitModal from "@/components/cockpit/CockpitModal";
 import { useVillaAttention } from "@/components/cockpit/useVillaAttention";
 import { useFmData } from "@/fm/FmDataContext";
-import { isTicketOpen, scheduleBoard } from "@/fm/fmEngine";
+import { fmAttention } from "@/fm/fmEngine";
 import { formatCountBadge } from "@/utils/countBadge";
 
 // Label-size stepper (next to the category filter): each click moves
@@ -96,12 +100,9 @@ interface Props {
 }
 
 function useClock(): string {
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 1000 * 20);
-    return () => clearInterval(t);
-  }, []);
-  return now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const [now, setNow] = useState(() => Date.now());
+  useInterval(() => setNow(Date.now()), 1000 * 20);
+  return fmtChartTime(now);
 }
 
 export default function HUD({
@@ -139,12 +140,8 @@ export default function HUD({
   // that you find out you're late WITHOUT having to go looking — an operator
   // who must open a modal to discover overdue work will discover it late.
   const { data: fmData } = useFmData();
-  const facilityAttention = useMemo(() => {
-    const lateTasks = scheduleBoard(fmData).filter(
-      (s) => s.state === "overdue" || s.state === "never").length;
-    const openFaults = fmData.tickets.filter(isTicketOpen).length;
-    return lateTasks + openFaults;
-  }, [fmData]);
+  // The Facility's attention rule (fmEngine.fmAttention) — the Cockpit's too.
+  const facilityAttention = useMemo(() => fmAttention(fmData).total, [fmData]);
 
   // ── Floor buttons now do double duty, no separate Rooms button any more:
   // a normal tap/click keeps the original behaviour (switch to that floor,
@@ -162,6 +159,7 @@ export default function HUD({
   // actually held, so its screen position always matches the gesture.
   const floorBtnRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
   const [radial, setRadial] = useState<RadialState | null>(null);
+  useBackToClose(() => setRadial(null), radial !== null);
   const floorLongTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const floorLongFired = useRef(false);
 
@@ -356,21 +354,12 @@ export default function HUD({
   // the compact bar), this state only drives the dropdown. Closes on outside
   // tap and Escape, and after any action is chosen.
   const [menuOpen, setMenuOpen] = useState(false);
+  // Back closes it, as it closes every other surface (and puts it on the one
+  // list of what is open — see overlayOpen).
+  useBackToClose(() => setMenuOpen(false), menuOpen);
   const [legendOpen, setLegendOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onDown = (e: PointerEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMenuOpen(false); };
-    document.addEventListener("pointerdown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("pointerdown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [menuOpen]);
+  useOutsideClose([menuRef], menuOpen, () => setMenuOpen(false));
 
   // The view toggle + default-view anchor (and their tap-vs-hold gesture) live
   // in <ViewControls>, rendered either here or inside the SummaryBar.

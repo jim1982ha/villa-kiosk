@@ -5,6 +5,7 @@
 // villa's latitude/longitude and the time of day: blue by day, warm at dusk, deep
 // blue at night. No texture assets required (SweetHome's sky never exports to GLB).
 
+import { lerp, wrapAngle } from "@/utils/geometry";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
@@ -204,10 +205,6 @@ export class SkyDome {
     return new Vector3(Math.sin(az) * c, Math.sin(alt), Math.cos(az) * c);
   }
 
-  /** Signed difference between two bearings, in -π..π. */
-  private static wrapPi(a: number): number {
-    return a - Math.PI * 2 * Math.round(a / (Math.PI * 2));
-  }
 
   /**
    * Pull a body's BEARING toward the direction the camera is facing.
@@ -239,7 +236,7 @@ export class SkyDome {
   private static displayAzimuth(az: number): number {
     const reach = SkyDome.hHalf * SkyDome.AZ_REACH;
     if (!(reach > 0)) return az;
-    const rel = SkyDome.wrapPi(az - SkyDome.camAz);
+    const rel = wrapAngle(az - SkyDome.camAz);
     return SkyDome.camAz + reach * Math.tanh((SkyDome.AZ_WORLD * rel) / reach);
   }
 
@@ -250,7 +247,7 @@ export class SkyDome {
    */
   static azimuthFade(x: number, z: number, drop: number): number {
     if (drop <= 0) return 1;
-    const rel = Math.abs(SkyDome.wrapPi(Math.atan2(x, z) - SkyDome.camAz));
+    const rel = Math.abs(wrapAngle(Math.atan2(x, z) - SkyDome.camAz));
     return Math.max(0, Math.min(1, (Math.PI - rel) / SkyDome.AZ_FADE));
   }
 
@@ -308,7 +305,7 @@ export class SkyDome {
   private static displayAltitude(alt: number, drop: number): number {
     if (drop <= 0) return alt;
     const t = Math.max(0, Math.min(1, alt / (Math.PI / 2)));
-    const frac = SkyDome.BAND_LOW + (SkyDome.BAND_HIGH - SkyDome.BAND_LOW) * t;
+    const frac = lerp(SkyDome.BAND_LOW, SkyDome.BAND_HIGH, t);
     return -SkyDome.pitch + SkyDome.halfFov * frac;
   }
 
@@ -342,7 +339,7 @@ export class SkyDome {
     // ~0.3°: below that nothing has moved a pixel, and re-placing would repaint
     // nothing while defeating the on-demand render.
     if (Math.abs(pitch - SkyDome.pitch) < 0.005
-      && Math.abs(SkyDome.wrapPi(camAz - SkyDome.camAz)) < 0.005
+      && Math.abs(wrapAngle(camAz - SkyDome.camAz)) < 0.005
       && halfFov === SkyDome.halfFov && hHalf === SkyDome.hHalf) return;
     SkyDome.pitch = pitch;
     SkyDome.camAz = camAz;
@@ -544,7 +541,7 @@ export class SkyDome {
       return { trueDeg, drawnDeg: null, alpha: this.sunMat.alpha, frameX: null, frameY: null };
     }
     const above = this.drawnAlt + SkyDome.pitch;
-    const side = SkyDome.wrapPi(this.drawn - SkyDome.camAz);
+    const side = wrapAngle(this.drawn - SkyDome.camAz);
     return {
       trueDeg,
       drawnDeg: deg(this.drawnAlt),

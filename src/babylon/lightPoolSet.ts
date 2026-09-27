@@ -262,8 +262,7 @@ export class LightPoolSet {
       pool.mesh.position.y - POOL_FLOOR_LIFT, this.probe, this.storeys);
     for (const k of at.notes) n[k] = (n[k] ?? 0) + 1;
     this.placements.set(pool, at);
-    pool.floorless = at.floorless;
-    if (at.floorless) pool.mesh.setEnabled(false);
+    pool.setFloorless(at.floorless);   // the pool decides its visibility
     pool.reshape(at.shape, at.radius, at.surfaceY === null ? undefined : at.surfaceY + POOL_FLOOR_LIFT);
   }
 }

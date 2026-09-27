@@ -30,7 +30,7 @@
 // Pure: tests/oracles/weather_station.mjs.
 
 import type { HassEntity } from "@/types/ha.types";
-import type { Observation, ObservationTone } from "./observation";
+import type { Observation } from "./observation";
 
 export type WeatherRole =
   | "temperature" | "feelsLike" | "dewPoint" | "humidity"
@@ -254,32 +254,6 @@ export function toCelsius(value: number, unit: string): number {
   return /f/i.test(unit) ? (value - 32) * (5 / 9) : value;
 }
 
-/**
- * The one sentence a person can act on: how the air feels, and whether
- * opening up would help. Derived from readings the station already publishes —
- * no forecast, nothing fetched. Null when the readings it needs are missing.
- */
-export function comfortInsight(r: {
-  temperatureC?: number; feelsLikeC?: number; dewPointC?: number; indoorDewPointC?: number;
-}): string | null {
-  const parts: string[] = [];
-  if (r.temperatureC !== undefined && r.feelsLikeC !== undefined) {
-    const d = r.feelsLikeC - r.temperatureC;
-    if (Math.abs(d) >= 1) parts.push(`Feels ${Math.abs(d).toFixed(1)}° ${d > 0 ? "warmer" : "cooler"} than it is.`);
-  }
-  if (r.dewPointC !== undefined) {
-    parts.push(`Dew point ${r.dewPointC.toFixed(1)}° — ${dewComfort(r.dewPointC)}.`);
-    if (r.indoorDewPointC !== undefined) {
-      const diff = r.indoorDewPointC - r.dewPointC;
-      parts.push(diff >= 2 ? "Indoors is more humid than outside — airing out would help."
-        : diff <= -2 ? "Outside is more humid than indoors — keep the windows closed."
-          : "Indoors is no drier, so opening up will not help.");
-    }
-  }
-  return parts.length ? parts.join(" ") : null;
-}
-
-
 // ── The Weather window's words: the headline, the comfort scale, advice ──
 //
 // ⚠️ RULES, NOT A FORECAST, AND NOT A MODEL. Each is a fixed reading of the
@@ -305,7 +279,6 @@ const DRYING_SUN_WM2 = 200;
 const DRYING_WIND_KMH = 6;
 
 /** A piece of advice is an observation card (config/observation). */
-export type AdviceTone = ObservationTone;
 export type Advice = Observation;
 
 const f1 = (v: number) => v.toFixed(1);
@@ -439,7 +412,6 @@ export function stationReadings(read: (role: WeatherRole) => RoleReading | undef
     uv: raw("uv"), solar: raw("solar"),
   };
 }
-export type StationReadings = ReturnType<typeof stationReadings>;
 
 // ── The instruments' scales ──────────────────────────────────────────────
 

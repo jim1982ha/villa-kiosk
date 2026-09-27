@@ -38,7 +38,10 @@ export class OcclusionSweep {
   private readonly blockers = new Map<string, string>();
   private readonly live = new Set<string>();
   private from = { x: NaN, y: NaN, z: NaN };
-  private liveKey = "";
+  /** The ids of the last set swept, in order — compared in place, so "did
+   *  the shown set change" allocates nothing per walking frame (it built a
+   *  fresh string from every id, every frame, until 2.496.198). */
+  private liveIds: string[] = [];
   private dirty = false;
   private cursor = 0;
   private movingSince = -Infinity;
@@ -77,7 +80,7 @@ export class OcclusionSweep {
   reset(forget: boolean): void {
     this.swept = 0;
     this.cursor = 0;
-    this.liveKey = "";
+    this.liveIds.length = 0;
     if (forget) { this.ids.clear(); this.blockers.clear(); }
   }
 
@@ -85,16 +88,17 @@ export class OcclusionSweep {
     const now = this.now();
     const still = Math.abs(this.from.x - eye.x) <= 1e-4
       && Math.abs(this.from.y - eye.y) <= 1e-4 && Math.abs(this.from.z - eye.z) <= 1e-4;
-    let key = "";
-    for (const s of shown) key += s.id + "\u0001";
-    if (!still || key !== this.liveKey || this.dirty) {
+    let same = shown.length === this.liveIds.length;
+    for (let i = 0; same && i < shown.length; i++) same = shown[i].id === this.liveIds[i];
+    if (!still || !same || this.dirty) {
       if (!still) {
         this.from = { x: eye.x, y: eye.y, z: eye.z };
         this.movingSince = now;
       }
       this.swept = 0;
       this.dirty = false;
-      this.liveKey = key;
+      this.liveIds.length = shown.length;
+      for (let i = 0; i < shown.length; i++) this.liveIds[i] = shown[i].id;
       this.prune(shown);
     } else if (this.swept >= shown.length) {
       this.lastRays = 0;

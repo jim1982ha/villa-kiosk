@@ -350,7 +350,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // anything", which is the sensor's job — linkedEntityId only says whether
   // detection was armed (and drives the badge ring, see EntityVisuals).
   const motionId = mapping.motionEntityId;
-  const { data: statusHistory, loading: statusLoading } = useHistory<StateHistoryPoint[]>(
+  const { data: statusHistory, status: statusFetch } = useHistory<StateHistoryPoint[]>(
     `${mapping.entityId}|${motionId ?? ""}`, async () => {
     // ⚠️ THIS BAR'S SUBJECT IS REACHABILITY, so a gap is the signal, not
     // noise. Both series used to pass a `keepUnavailable` opt-out to get that;
@@ -647,7 +647,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
         <div className="camera-status-bar">
           <StateTimeline
             data={statusHistory}
-            loading={statusLoading}
+            status={statusFetch}
             height={56}
             vertical={railVertical}
             // Five-minute intervals, as every timeline (utils/trendInterval):

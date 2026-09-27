@@ -7,6 +7,7 @@
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 
 let sent = null;
 globalThis.window = { innerWidth: 1, innerHeight: 1, devicePixelRatio: 1, matchMedia: () => ({ matches: false }), location: { pathname: "/" } };
@@ -16,8 +17,6 @@ Object.defineProperty(globalThis, "navigator", { value: { sendBeacon: (_u, b) =>
 globalThis.performance ??= {};
 const { report, RESERVED_TELEMETRY_FIELDS } = await import("@/utils/telemetry");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 
 report("load", {});
 const stamped = Object.keys(JSON.parse(await sent.text()));
@@ -39,5 +38,4 @@ ck("the census reports atMs and the panel reads it", /atMs: CENSUS_DELAY_MS/.tes
 ck("the lost session reports lostRole, and the panel renders a session row",
    /lostRole: p\.role/.test(s("auth/ProfileContext.tsx")) && /case "session":[\s\S]{0,200}e\.lostRole/.test(panel));
 
-if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
-console.log("\n✅ one telemetry schema");
+done("✅ one telemetry schema");

@@ -8,11 +8,10 @@ import { register } from "node:module";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const { ENTITY_DOMAINS } = await import("@/types/ha.types");
 const { inferTypeFromEntityId } = await import("@/config/EntityMap");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 
 ck("every listed type is inferred from its entity_id domain, and nothing else is",
    ENTITY_DOMAINS.every((d) => inferTypeFromEntityId(`${d}.x`) === d) && inferTypeFromEntityId("vacuum.x") === null);
@@ -31,5 +30,4 @@ ck("the label commits one way: half a second after typing, or at once on leaving
 ck("the linked entity is described once, truthfully (ring AND an on/off switch — it was 'ring only' in one table)",
    /placeholder=\{[^}]*ring and an on\/off switch/.test(mf) && ![mf, br, er].some((x) => /placeholder=[^>]*ring only/.test(x)));
 
-if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
-console.log("\n✅ one list of device types, one editor for a device");
+done("✅ one list of device types, one editor for a device");

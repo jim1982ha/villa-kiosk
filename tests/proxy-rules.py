@@ -455,6 +455,38 @@ ck("  ...no handler writes the gate out by hand again", not hand)
 if hand:
     print(f"          by hand: {', '.join(hand)}")
 
+# ── a guest reads NOTHING of the Facility record (round 13, 2.496.182) ────
+# The GET was open to every session, so every guest phone downloaded every
+# cost, note and fault. A profile without manageFacility now reads an empty
+# record; what it writes is merged onto the real one, new reports only.
+_real_role_for = proxy._role_for
+STORED = {"schedules": [{"id": "s1"}], "completions": [{"id": "c1"}], "costs": [{"id": "k1", "amount": 9}],
+          "tickets": [{"id": "t1", "status": "open", "reportedBy": "owner"}], "savedDocuments": []}
+try:
+    proxy._role_for = lambda _r: "guest"
+    view = proxy._fm_reader_view(None, STORED)
+    ck("a guest's view of the record is EMPTY — no cost, note, fault or completion",
+       all(view[c] == [] for c in proxy.FM_RECORD_COLLECTIONS) and set(view) == set(proxy.FM_RECORD_COLLECTIONS))
+    report = {"id": "t2", "status": "open", "reportedBy": "guest", "title": "AC dripping"}
+    merged = proxy._fm_writer_merge(None, STORED, {**view, "tickets": [report]})
+    ck("  ...its write (the empty view + one report) lands on the REAL record, nothing erased",
+       merged["costs"] == STORED["costs"] and merged["tickets"] == STORED["tickets"] + [report])
+    ck("  ...and the guest rule still judges it: an open guest report passes",
+       proxy._fm_guest_write_ok(STORED, merged))
+    bad = proxy._fm_writer_merge(None, STORED, {**view, "tickets": [{**report, "status": "resolved"}]})
+    ck("  ...a pre-resolved one is still refused", not proxy._fm_guest_write_ok(STORED, bad))
+    resent = proxy._fm_writer_merge(None, STORED, {**view, "tickets": [{"id": "t1", "status": "resolved", "reportedBy": "guest"}]})
+    ck("  ...re-sending an EXISTING ticket id cannot edit it (only new ids are taken)", resent["tickets"] == STORED["tickets"])
+    proxy._role_for = lambda _r: "owner"
+    ck("the owner reads and writes the whole record, untouched",
+       proxy._fm_reader_view(None, STORED) is STORED and proxy._fm_writer_merge(None, STORED, {"x": 1}) == {"x": 1})
+finally:
+    proxy._role_for = _real_role_for
+src = PROXY.read_text()
+ck("the store applies the view to the GET AND to the 409 body (a stale write is not a way to read)",
+   "key: reader_view(request, stored) if reader_view else stored," in src and "reader_view(request, stored_now)" in src
+   and "reader_view=_fm_reader_view, writer_merge=_fm_writer_merge" in src)
+
 # ── A chunked upload survives a re-sent piece (round 11, 2.496.166) ──────────
 # Driven through the real handler with a fake request: the client re-sends a
 # piece whose reply it never got, so the server must accept the same offset
@@ -518,6 +550,187 @@ with tempfile.TemporaryDirectory() as d:
         refused = True
     ck("  ...a REFUSED piece ends the upload — its pieces go with it",
        refused and _piece(dest, "retrytest03", 64, b) == 409)
+
+# ── the telemetry ring is bounded by COUNT and by BYTES ──────────────────
+# At the count ceiling alone (5000 x 64 kB) the ring reached ~320 MB and was
+# re-read and rewritten whole on every POST, on the event loop (2.496.196).
+print("\n  the telemetry ring:")
+ring = [{"i": i, "pad": "x" * 100} for i in range(50)]
+ck("the newest N are kept", [e["i"] for e in proxy._telemetry_ring_after(ring, 10, 10**9)] == list(range(40, 50)))
+small = proxy._telemetry_ring_after(ring, 50, 2_000)
+ck("  ...and then the newest that FIT the byte cap", 0 < len(small) < 50
+   and len(proxy.json.dumps(small).encode()) <= 2_000 and small[-1]["i"] == 49)
+ck("  ...never trimming to nothing (one event always fits)", len(proxy._telemetry_ring_after(ring, 50, 1)) == 1)
+ck("the ceiling the options allow is under the byte cap by construction",
+   proxy.TELEMETRY_MAX_RING_BYTES < 5000 * proxy.TELEMETRY_MAX_BODY)
+src = PROXY.read_text()
+ck("a store PUT writes OFF the event loop, inside its lock",
+   "await _write_json_store_async(path, payload)" in src and "asyncio.to_thread(_write_json_store, path, payload)" in src
+   and "            _write_json_store(path, payload)" not in src)
+ck("  ...and so does the telemetry append, under ONE lock", "async with _telemetry_lock:" in src
+   and "await asyncio.to_thread(\n            _telemetry_append" in src)
+
+# ── the lockout bucket is keyed by what the caller CANNOT write ───────────
+# _client_ip used to take the FIRST X-Forwarded-For hop — the one address in
+# the request the caller writes — so five wrong passcodes "from" the owner's
+# address locked the owner out, and a fresh address per attempt minted a fresh
+# bucket (2.496.206). The key is now nginx's X-VK-Peer plus the LAST hop, which
+# the gateway in front of us appends.
+print("\n  the lockout key:")
+
+
+class _HReq:
+    def __init__(self, headers: dict, remote: str = "127.0.0.1", method: str = "POST"):
+        self.headers, self.remote, self.method, self.cookies = headers, remote, method, {}
+
+
+key = proxy._client_ip
+ck("the peer nginx accepted is the key", key(_HReq({"X-VK-Peer": "10.0.0.5"})) == "10.0.0.5")
+ck("  ...falling back to the socket peer without it", key(_HReq({}, remote="10.0.0.9")) == "10.0.0.9")
+ck("a forwarded chain contributes its LAST hop, the one the gateway appended",
+   key(_HReq({"X-VK-Peer": "10.0.0.5", "X-Forwarded-For": "1.2.3.4, 5.6.7.8"})) == "10.0.0.5|5.6.7.8")
+victim = key(_HReq({"X-VK-Peer": "10.0.0.7"}))
+forged = [key(_HReq({"X-VK-Peer": "10.0.0.5", "X-Forwarded-For": h})) for h in ("10.0.0.7", "10.0.0.7, 10.0.0.7", "")]
+ck("no header a LAN forger writes reaches another peer's bucket", victim not in forged and len(set(forged)) <= 2)
+ck("  ...and through a gateway the appended hop, not the forged one, names them",
+   key(_HReq({"X-VK-Peer": "172.30.32.2", "X-Forwarded-For": "10.0.0.7, 10.0.0.5"}))
+   != key(_HReq({"X-VK-Peer": "172.30.32.2", "X-Forwarded-For": "10.0.0.7"})))
+ck("a monstrous header cannot bloat the table", len(key(_HReq({"X-VK-Peer": "x" * 500, "X-Forwarded-For": "y" * 500}))) <= 91)
+snippet = (ROOT / "rootfs" / "etc" / "nginx" / "snippets" / "backend-proxy.conf").read_text()
+ck("nginx writes X-VK-Peer from the socket, in the snippet every location includes",
+   "proxy_set_header X-VK-Peer $remote_addr;" in snippet)
+
+# ── the session cookie's attributes, and the browser's cross-site verdict ──
+print("\n  the cookie and cross-site writes:")
+proxy._session_secret_cache = b"t" * 32
+resp = proxy.web.Response()
+proxy._set_session_cookie(resp, "guest")
+c = resp.cookies[proxy.SESSION_COOKIE]
+ck("HttpOnly, Secure, SameSite=Lax, Path=/ — asserted, not assumed",
+   bool(c["httponly"]) and bool(c["secure"]) and c["samesite"] == "Lax" and c["path"] == "/")
+ck("the browser saying 'cross-site' is refused on a write, before any auth",
+   proxy._cross_site(_HReq({"Sec-Fetch-Site": "cross-site"}))
+   and proxy._refuse(_HReq({"Sec-Fetch-Site": "Cross-Site"})).status == 403)
+ck("  ...but not on a read (Lax already sends the cookie there, nothing to gain)",
+   proxy._refuse(_HReq({"Sec-Fetch-Site": "cross-site"}, method="GET")).status == 401)
+ck("  ...and same-origin, same-site, none or ABSENT (older WebKit) all pass this gate",
+   all(not proxy._cross_site(_HReq(h)) for h in ({"Sec-Fetch-Site": "same-origin"}, {"Sec-Fetch-Site": "same-site"}, {"Sec-Fetch-Site": "none"}, {})))
+
+# ── a passcode-less profile is closed, except Guest inside Home Assistant ──
+# With guest_pin empty, ANY caller reaching the direct port or the tunnel used
+# to be handed a guest session — doors included (2.496.207).
+print("\n  passcode-less profiles:")
+
+
+class _JReq(_HReq):
+    def __init__(self, body: dict, headers: dict | None = None):
+        super().__init__(headers or {})
+        self._body = body
+
+    async def json(self):
+        return self._body
+
+
+proxy._read_options = lambda: {}  # no PIN configured for any profile
+ck("no passcode: Guest opens only from Ingress",
+   proxy._profile_enabled("guest", True) and not proxy._profile_enabled("guest", False))
+ck("  ...owner and ops open nowhere", not any(proxy._profile_enabled(r, i) for r in ("owner", "ops") for i in (True, False)))
+proxy._read_options = lambda: {"guest_pin": "1234"}
+ck("a passcode opens the profile from anywhere", proxy._profile_enabled("guest", False))
+proxy._read_options = lambda: {}
+roles = _json.loads(asyncio.run(proxy.auth_roles_handler(_HReq({}, method="GET"))).text)["roles"]
+ingress_roles = _json.loads(asyncio.run(proxy.auth_roles_handler(_HReq({"X-VK-Ingress": "1"}, method="GET"))).text)["roles"]
+ck("/auth/roles says which profiles are ENABLED from here, not just which ask for a passcode",
+   roles["guest"] == {"pinRequired": False, "enabled": False} and ingress_roles["guest"]["enabled"] is True
+   and roles["owner"]["enabled"] is False)
+direct = asyncio.run(proxy.auth_verify_handler(_JReq({"role": "guest"})))
+via_ha = asyncio.run(proxy.auth_verify_handler(_JReq({"role": "guest"}, {"X-VK-Ingress": "1"})))
+ck("a passcode-less guest is refused on the direct port (403, and it says why)",
+   direct.status == 403 and "Home Assistant" in _json.loads(direct.text)["error"])
+ck("  ...and granted a session through Ingress",
+   via_ha.status == 200 and proxy.SESSION_COOKIE in via_ha.cookies)
+ck("  ...while a passcode-less OWNER is refused on both", all(
+   asyncio.run(proxy.auth_verify_handler(_JReq({"role": "owner"}, h))).status == 403 for h in ({}, {"X-VK-Ingress": "1"})))
+
+# ── CSP violations reach the telemetry ring ───────────────────────────────
+print("\n  CSP reports:")
+csp = (ROOT / "rootfs" / "etc" / "nginx" / "snippets" / "csp.conf").read_text()
+ck("the policy reports to the RELATIVE telemetry path (Ingress prefix and direct port alike)",
+   "; report-uri telemetry\"" in csp)
+ev = proxy._csp_event({"effective-directive": "script-src", "blocked-uri": "blob:e.js",
+                       "source-file": "/assets/app.js", "line-number": 12, "document-uri": "/",
+                       "original-policy": "x" * 5000, "sample": "<script>"})
+ck("a report becomes a `csp` event with what was blocked and where, nothing else",
+   ev == {"kind": "csp", "directive": "script-src", "blocked": "blob:e.js",
+          "source": "/assets/app.js", "line": 12, "document": "/"})
+ck("  ...values capped, a non-numeric line dropped, the older directive key honoured",
+   len(proxy._csp_event({"blocked-uri": "x" * 900})["blocked"]) == 300
+   and proxy._csp_event({"line-number": "12"})["line"] is None
+   and proxy._csp_event({"violated-directive": "img-src"})["directive"] == "img-src")
+ck("the telemetry POST recognises a browser's report body",
+   'if isinstance(body.get("csp-report"), dict):\n        body = _csp_event(body["csp-report"])' in PROXY.read_text())
+
+# ── signing every device out also replaces the signing key ────────────────
+print("\n  the signing key:")
+with tempfile.TemporaryDirectory() as d:
+    proxy.SESSION_SECRET_FILE = os.path.join(d, ".session_secret")
+    proxy.SESSION_EPOCH_FILE = os.path.join(d, "session-epoch")
+    proxy._session_secret_cache = None
+    token = proxy._make_session_token("owner")
+    ck("a fresh token verifies", proxy._session_role(token) == "owner")
+    before = open(proxy.SESSION_SECRET_FILE, "rb").read()
+    proxy._rotate_session_secret()
+    ck("after a rotation it does not, and the key on disk is new (0600)",
+       proxy._session_role(token) is None and open(proxy.SESSION_SECRET_FILE, "rb").read() != before
+       and (os.stat(proxy.SESSION_SECRET_FILE).st_mode & 0o777) == 0o600)
+    ck("  ...and a token issued afterwards does", proxy._session_role(proxy._make_session_token("ops")) == "ops")
+ck("sign-every-device-out rotates the key after bumping the epoch",
+   "    epoch = _bump_session_epoch()\n    try:\n        _rotate_session_secret()" in PROXY.read_text())
+
+# ── what a non-owner session may READ: domains, at the relay ──────────────
+# get_states and subscribe_events used to stream every entity in the instance
+# to a guest (persons, trackers, the alarm panel); the docstring called the
+# per-entity mirror impossible, and it is — the DOMAIN line is not (2.496.208).
+print("\n  reads narrowed by domain:")
+relay = proxy._relay_to_client
+states = _json.dumps({"id": 3, "type": "result", "success": True, "result": [
+    {"entity_id": "light.pool", "state": "on"}, {"entity_id": "person.owner", "state": "home"},
+    {"entity_id": "camera.gate", "state": "idle"}, {"entity_id": "sun.sun", "state": "above_horizon"},
+    {"entity_id": "device_tracker.phone", "state": "home"}, {"entity_id": "alarm_control_panel.villa", "state": "armed"}]})
+ids = lambda text: [e["entity_id"] for e in _json.loads(text)["result"]]
+ck("a guest's get_states keeps the drawn domains and loses persons, trackers, alarms AND cameras",
+   ids(relay("guest", states, {})) == ["light.pool", "sun.sun"])
+ck("  ...ops (may view cameras) keeps the camera", ids(relay("ops", states, {})) == ["light.pool", "camera.gate", "sun.sun"])
+ck("  ...the owner's frame is passed through untouched", relay("owner", states, {}) is states)
+ev = lambda eid: _json.dumps({"type": "event", "event": {"event_type": "state_changed", "data": {"entity_id": eid, "new_state": {}}}})
+ck("a state_changed for a person is dropped, for a light forwarded",
+   relay("guest", ev("person.owner"), {}) is None and relay("guest", ev("light.pool"), {}) is not None)
+reg = _json.dumps({"type": "event", "event": {"event_type": "entity_registry_updated", "data": {"action": "update", "entity_id": "device_tracker.phone"}}})
+ck("  ...and so is a registry event naming one", relay("guest", reg, {}) is None)
+registry = _json.dumps({"id": 4, "type": "result", "result": [{"entity_id": "person.owner", "name": "Owner"}, {"entity_id": "climate.ac", "name": "AC"}]})
+ck("the entity registry listing is narrowed the same way", ids(relay("guest", registry, {})) == ["climate.ac"])
+log = _json.dumps({"id": 5, "type": "result", "result": [
+    {"when": 1, "entity_id": "lock.gate", "name": "Gate"}, {"when": 2, "entity_id": "person.owner", "name": "Owner arrived"},
+    {"when": 3, "name": "Automation ran", "message": "triggered"}]})
+pend = {5: "logbook/get_events"}
+ck("a logbook result loses the person AND the entity-less entry (a name and a message)",
+   [e["when"] for e in _json.loads(relay("guest", log, pend))["result"]] == [1] and pend == {})
+devices = _json.dumps({"id": 6, "type": "result", "result": [{"id": "d1", "name": "Hub"}, {"id": "d2"}]})
+ck("a list that names no entity (device registry) passes whole", relay("guest", devices, {}) is devices)
+ck("a frame Core did not write as JSON is dropped, not passed on trust",
+   relay("guest", "not json", {}) is None and relay("guest", "[1,2]", {}) is None)
+ck("the relay records which requests are logbook ones",
+   'elif obj.get("type") in _ENTITY_LIST_COMMANDS:\n                            pending[obj.get("id")] = obj["type"]' in PROXY.read_text()
+   and "if (out := _relay_to_client(role, msg.data, pending)) is not None:" in PROXY.read_text())
+q = proxy._rest_query_allowed
+ck("REST history: a non-owner must name entities, and only readable ones",
+   not q("guest", "history/period/2026-01-01T00:00:00Z", {}) and not q("guest", "history/period/x", {"filter_entity_id": "light.a,person.b"})
+   and q("guest", "history/period/x", {"filter_entity_id": "sensor.power"}) and q("owner", "history/period/x", {}))
+ck("  ...and the REST relay asks it", "if not _rest_query_allowed(role, tail, request.query):" in PROXY.read_text())
+table = _json.loads((ROOT / "rootfs" / "usr" / "share" / "vesta" / "ha-commands.json").read_text())
+ck("readDomains comes from the shared table, and holds the drawn domains plus sun/scene/weather",
+   proxy.READ_DOMAINS == frozenset(table["readDomains"]) and {"light", "sensor", "sun", "scene", "weather"} <= proxy.READ_DOMAINS
+   and not {"person", "device_tracker", "alarm_control_panel", "update", "calendar"} & proxy.READ_DOMAINS)
 
 print()
 print("✅ the proxy's pure rules hold" if FAIL == 0

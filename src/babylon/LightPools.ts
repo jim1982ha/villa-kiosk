@@ -22,7 +22,7 @@ import { Constants } from "@babylonjs/core/Engines/constants";
 import type { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { Scene } from "@babylonjs/core/scene";
 
-import { earClipTriangulate, type Pt2 } from "@/utils/geometry";
+import { earClipTriangulate, lerp, type Pt2 } from "@/utils/geometry";
 import { poolFootprint } from "./lightPlacement";
 import { LIGHT_POOL_ALPHA_INDEX } from "./seeThroughOrder";
 
@@ -58,6 +58,11 @@ export const POOL_ALPHA_STOPS: ReadonlyArray<readonly [number, number]> = [
  *  intensityFrac BEFORE the scale, and the ceiling to the product. Flooring
  *  the result instead would let a zeroed intensityScale still paint a pool. */
 export function poolStrength(intensityFrac: number, intensityScale: number): number {
+  // ⚠️ ZERO IS OFF (round 13, 2.496.185). A fixture turned down to −100% in
+  // Advanced Settings ("fully off", its own doc) reads frac 0: its PointLight
+  // and its emissive went dark while this floor lifted 0 to 0.15, so its pool
+  // on the floor and its light on the furniture kept shining.
+  if (!(intensityFrac > 0)) return 0;
   return Math.min(2, Math.max(0.15, intensityFrac) * intensityScale);
 }
 
@@ -67,7 +72,7 @@ export function poolAlphaAt(normalisedDist: number): number {
     const [t1, a1] = POOL_ALPHA_STOPS[i + 1];
     if (normalisedDist <= t1) {
       const t = t1 === t0 ? 0 : (normalisedDist - t0) / (t1 - t0);
-      return a0 + (a1 - a0) * t;
+      return lerp(a0, a1, t);
     }
   }
   return 0;
@@ -257,11 +262,29 @@ export class LightPool {
    * through the wall (owner's screenshot, 2026-09-26). Its light still reaches
    * the treads through the furniture light (lampGlow.ts), which follows them.
    */
-  floorless = false;
+  private floorlessNow = false;
+  get floorless(): boolean { return this.floorlessNow; }
+  /** Whether the light this pool shows is lit — remembered, so a change of
+   *  `floorless` can recompute visibility BOTH ways. */
+  private lit = false;
+
+  /**
+   * Whether there is a floor to draw on here (LightPoolSet.reshapeOne).
+   *
+   * ⚠️ VISIBILITY IS THIS CLASS'S (2.496.185). The pool set flipped
+   * `floorless` and called `mesh.setEnabled(false)` itself — only ever OFF —
+   * so a recalibration that moved a pool out of a stairwell left an ON light
+   * with a dark pool until its next state change.
+   */
+  setFloorless(v: boolean): void {
+    this.floorlessNow = v;
+    this.mesh.setEnabled(this.lit && !v);
+  }
 
   setState(on: boolean, colour: Color3, intensityFrac: number): void {
-    this.mesh.setEnabled(on && !this.floorless);
-    if (!on) return;
+    this.lit = on && poolStrength(intensityFrac, 1) > 0;
+    this.mesh.setEnabled(this.lit && !this.floorlessNow);
+    if (!this.lit) return;
     this.material.emissiveColor = colour;
     this.material.alpha = poolStrength(intensityFrac, this.intensityScale);
   }

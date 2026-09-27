@@ -3,6 +3,7 @@
 // Babylon scene registers imperative callbacks here (NOT React re-renders) so
 // the 3D canvas never re-renders on a state_changed event. (Key 3Dash pattern.)
 
+import { PushBatch } from "@/utils/pushBatch";
 import {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
   type ReactNode,
@@ -11,7 +12,7 @@ import { HAWebSocket, type ConnectionState } from "./HAWebSocket";
 import { devLog } from "@/utils/devLog";
 import { report as reportTelemetry } from "@/utils/telemetry";
 import { hasBootMark } from "@/utils/bootTimeline";
-import { entityPlaces, entityRegistryFacts } from "./registryResolve";
+import { placesAfterRefresh, entityRegistryFacts } from "./registryResolve";
 import type { HassEntity, HassServiceTarget } from "@/types/ha.types";
 
 type EntityCallback = (entity: HassEntity) => void;
@@ -118,6 +119,10 @@ interface StateChangedEvent {
   data: { entity_id: string; new_state: HassEntity | null; old_state: HassEntity | null };
 }
 
+/** How long React may lag the socket. Four drains a second is faster than
+ *  anyone reads a panel; the badges do not wait at all (notify). */
+const PUSH_WINDOW_MS = 250;
+
 export function HAStateProvider({ children }: { children: ReactNode }) {
   const wsRef = useRef<HAWebSocket>();
   if (!wsRef.current) wsRef.current = new HAWebSocket();
@@ -128,6 +133,10 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
   const [hiddenInHaEntityIds, setHiddenInHaEntityIds] = useState<Set<string>>(new Set());
   const [entityAreaNames, setEntityAreaNames] = useState<Record<string, string>>({});
   const [entityFloorNumbers, setEntityFloorNumbers] = useState<Record<string, number>>({});
+  // The refresh reads the CURRENT maps to keep them through a failed fetch;
+  // refs, so the callback needs no dependency on state it also sets.
+  const areaNamesRef = useRef(entityAreaNames); areaNamesRef.current = entityAreaNames;
+  const floorNumbersRef = useRef(entityFloorNumbers); floorNumbersRef.current = entityFloorNumbers;
   const [entityDeviceIds, setEntityDeviceIds] = useState<Record<string, string>>({});
   // Mirrors `entities` synchronously (no extra render/effect lag) so
   // getEntitiesSnapshot() below is never stale — see its docstring.
@@ -139,7 +148,21 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
       return value;
     });
   }, []);
-  const getEntitiesSnapshot = useCallback(() => entitiesRef.current, []);
+  // Live events reach React in ONE batch per window — utils/pushBatch. The
+  // snapshot lays the pending events over the last drained map, so an
+  // imperative reader between two drains is never behind the socket.
+  const batchRef = useRef<PushBatch<HassEntity>>();
+  if (!batchRef.current) {
+    batchRef.current = new PushBatch<HassEntity>(PUSH_WINDOW_MS, (batch) => {
+      setEntities((prev) => {
+        const next = { ...prev };
+        for (const [id, e] of batch) next[id] = e;
+        return next;
+      });
+    });
+  }
+  const getEntitiesSnapshot = useCallback(() => batchRef.current!.overlay(entitiesRef.current), []);
+  useEffect(() => () => batchRef.current?.dispose(), []);
   const [connection, setConnection] = useState<ConnectionState>("disconnected");
   const [haConfig, setHaConfig] = useState<HAConfig | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
@@ -187,6 +210,8 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
     const prev = entitiesRef.current;
     const map: Record<string, HassEntity> = {};
     for (const e of all) map[e.entity_id] = e;
+    // A full fetch supersedes anything still batched (it is at least as new).
+    batchRef.current?.dispose();
     setEntities(map);
     // ── Why this pushes only what CHANGED (2.202.0) ──────────────────────
     // hydrate() runs on the first connect AND on every automatic reconnect
@@ -264,14 +289,18 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
       setEntityDeviceIds(facts.deviceIds);
       // The other three registries are separate best-effort steps, so a
       // profile that can read entities but not devices/areas/floors still
-      // gets whatever resolves rather than losing the whole feature.
+      // gets whatever resolves rather than losing the whole feature — and a
+      // registry whose request FAILED keeps what it had (placesAfterRefresh;
+      // one failed area fetch used to blank every room name).
+      const failed = () => null;
       const [devices, areas, floors] = await Promise.all([
-        ws.getDeviceRegistry().catch(() => []),
-        ws.getAreaRegistry().catch(() => []),
-        ws.getFloorRegistry().catch(() => []),
+        ws.getDeviceRegistry().catch(failed),
+        ws.getAreaRegistry().catch(failed),
+        ws.getFloorRegistry().catch(failed),
       ]);
-      if (devices.length === 0 && areas.length === 0) return;
-      const places = entityPlaces(rows, devices, areas, floors);
+      const prev = { areaNames: areaNamesRef.current, floorNumbers: floorNumbersRef.current };
+      const places = placesAfterRefresh(prev, rows, { devices, areas, floors });
+      if (places === prev) return;
       setEntityAreaNames(places.areaNames);
       setEntityFloorNumbers(places.floorNumbers);
     } catch (err) {
@@ -295,8 +324,8 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
           const { data } = event as StateChangedEvent;
           if (!data?.new_state) return;
           const ns = data.new_state;
-          setEntities((prev) => ({ ...prev, [ns.entity_id]: ns }));
-          notify(ns);
+          batchRef.current?.push(ns);   // React, once per window
+          notify(ns);                   // the 3D layer, now
         });
         // Live room/hidden/device-group data: a rename, a new Area
         // assignment, or a device moved between areas in HA reaches every

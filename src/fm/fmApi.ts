@@ -89,6 +89,13 @@ export async function saveFmData(
       }),
     });
     if (r.status === 409) return { ok: false, conflict: true };
+    // The server's NO is an answer, with its reason — not a blip to retry.
+    // Not 401: an expired sign-in is re-established (sessionLost) and the
+    // change is worth sending again after it.
+    if (r.status === 400 || r.status === 403 || r.status === 413) {
+      const e = (await r.json().catch(() => ({}))) as { error?: unknown };
+      return { ok: false, conflict: false, refused: true, message: typeof e.error === "string" ? e.error : undefined };
+    }
     if (!r.ok) return { ok: false, conflict: false };
     const d = (await r.json().catch(() => ({}))) as { rev?: unknown };
     return { ok: true, rev: typeof d.rev === "string" ? d.rev : "0" };

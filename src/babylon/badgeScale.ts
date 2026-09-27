@@ -59,10 +59,26 @@ export function iconZoomAt(rung: number, vpH: number, tanHalf: number, fitRadius
   return snapToZoomLattice(Math.min(1, Math.max(ICON_ZOOM_MIN_SCALE, ratio)));
 }
 
-/** The viewport height a rung is measured in. RENDER pixels within a frame
- *  (the boxes it is compared with are render pixels too); CSS pixels for any
- *  value compared ACROSS frames, because the resolution valve moves the render
- *  height every time the camera starts and stops (c3367bcd). */
-export function viewportPx(renderHeight: number, hwScale: number, cssPixels: boolean): number {
-  return cssPixels ? renderHeight * hwScale : renderHeight;
+/** One viewport extent (height for a rung, width for "is this a phone"), in
+ *  RENDER pixels within a frame (the boxes it is compared with are render
+ *  pixels too); CSS pixels for any value compared ACROSS frames, because the
+ *  resolution valve moves the render size every time the camera starts and
+ *  stops (c3367bcd). */
+export function viewportPx(renderPx: number, hwScale: number, cssPixels: boolean, cssPx?: number): number {
+  if (!cssPixels) return renderPx;
+  // ⚠️ THE CANVAS'S OWN CSS HEIGHT WHEN THERE IS ONE (2.496.181). The render
+  // height is TRUNCATED to whole pixels (Babylon's setSize), so
+  // `renderHeight × hwScale` came back up to a pixel SHORT at some scales —
+  // and the resolution valve changes the scale whenever the pointer brings
+  // interactive frames back. Near a zoom-lattice boundary that read as one
+  // rung "farther" with the camera dead still, and a room focus (a tapped
+  // chip's devices shown individually) was dropped: the owner's "the
+  // swimming pool icons collapse as soon as I move my mouse" (desktop). 50 of
+  // 12,020 window × zoom cases did it. The CSS height does not move with the
+  // valve, and the app always has a canvas to read it from. Without one
+  // (headless), rounding UP restores it EXACTLY only while hwScale ≤ 1 (the
+  // truncation leaves it short by less than hwScale); above that it is a best
+  // effort.
+  if (cssPx !== undefined && cssPx > 0) return cssPx;
+  return Math.ceil(renderPx * hwScale - 1e-6);
 }

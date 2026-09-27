@@ -6,10 +6,9 @@ import { register } from "node:module";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const { linkedSwitchProps } = await import("@/components/panels/PanelActionsContext");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const toggle = () => {};
 const on = linkedSwitchProps({ label: "Gate", isOn: true, known: true, toggle });
 const lost = linkedSwitchProps({ label: "Gate", isOn: false, known: false, toggle });
@@ -30,5 +29,4 @@ ck("no two-step confirm is written out by hand (InlineConfirm is the one)", copi
 const users = walk(root).filter((f) => /<InlineConfirm\b/.test(readFileSync(f, "utf8")));
 ck("  ...and the five that were use it", users.length >= 5, users.length);
 
-if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
-console.log("\n✅ the panels' shared pieces, once each");
+done("✅ the panels' shared pieces, once each");

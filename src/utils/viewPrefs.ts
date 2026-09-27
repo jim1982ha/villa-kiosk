@@ -3,6 +3,7 @@
 // pose and whether the first-run tips were seen. Split out of utils/storage.ts
 // (round 10, 2.496.162).
 
+import { readJson, readString, writeJson, writeString } from "./storedJson";
 // ── Per-device overview camera default ──────────────────────────────────────
 // Deliberately NOT part of AppConfig, which is shared across devices: the
 // whole reason a saved overview pose is needed is that different devices (a
@@ -23,17 +24,18 @@
 const FIRST_RUN_TIPS_KEY = "villa-kiosk:first-run-tips-seen";
 
 export function hasSeenFirstRunTips(): boolean {
-  try {
-    return localStorage.getItem(FIRST_RUN_TIPS_KEY) === "1";
-  } catch {
-    return true; // storage disabled — don't show a tips card that can never be dismissed-and-remembered
-  }
+  // Storage disabled reads as SEEN — don't show a tips card that can never be
+  // dismissed-and-remembered. (readString is null for both absent and
+  // disabled, so the write is probed instead.)
+  return readString(FIRST_RUN_TIPS_KEY) === "1" || !storageWorks();
 }
+function storageWorks(): boolean {
+  try { localStorage.setItem(PROBE_KEY, "1"); localStorage.removeItem(PROBE_KEY); return true; } catch { return false; }
+}
+const PROBE_KEY = "villa-kiosk:storage-probe";
 
 export function markFirstRunTipsSeen(): void {
-  try {
-    localStorage.setItem(FIRST_RUN_TIPS_KEY, "1");
-  } catch { /* storage disabled */ }
+  writeString(FIRST_RUN_TIPS_KEY, "1");
 }
 
 const OVERVIEW_VIEW_KEY = "villa-kiosk:overview-view";
@@ -48,14 +50,10 @@ export interface OverviewViewSnapshot {
 }
 
 export function saveOverviewView(view: OverviewViewSnapshot): void {
-  try {
-    localStorage.setItem(OVERVIEW_VIEW_KEY, JSON.stringify(view));
-  } catch (err) {
-    console.error("[storage] failed to save overview view", err);
-  }
+  if (!writeJson(OVERVIEW_VIEW_KEY, view)) console.error("[storage] failed to save overview view");
 }
 
 export function loadOverviewView(): OverviewViewSnapshot | null {
-  const raw = localStorage.getItem(OVERVIEW_VIEW_KEY);
-  return raw ? (JSON.parse(raw) as OverviewViewSnapshot) : null;
+  return readJson<OverviewViewSnapshot>(OVERVIEW_VIEW_KEY, (v): v is OverviewViewSnapshot =>
+    typeof v === "object" && v !== null && ["alpha", "beta", "radius", "targetX", "targetY", "targetZ"].every((k) => Number.isFinite((v as Record<string, unknown>)[k])));
 }

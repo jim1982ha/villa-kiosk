@@ -11,12 +11,11 @@
 // advisory — two devices at one point never separate.
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const { solveRoomZoom, roomWallFit, ROOM_FIT_VIEWPORT_FRACTION, ROOM_FIT_VIEWPORT_FRACTION_ENTITIES, MIN_ROOM_FIT_RADIUS } = await import("@/babylon/roomZoomSolver");
 const { rungAt } = await import("@/babylon/badgeScale");
 const { GROUP_ZOOM_STEPS_PER_DOUBLING } = await import("@/babylon/badgeMetrics");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 // Looking straight down: screen x = world x, screen y = −world z.
 const down = { rx: 1, rz: 0, ax: 0, az: 1, sinPhi: 1, cosPhi: 0, mode: "plane" };
 const view = (o = {}) => ({ vpH: 1000, vpW: 1600, vFov: 0.8, frame: down, grouping: down, cx: 0, cy: 0, cz: 0, minRadius: 2, maxRadius: 20, ...o });
@@ -103,5 +102,5 @@ console.log("\n  the caller:");
      /const fit = roomWallFit\(bounds, allReal, /.test(sm) && !/Math\.tan\(hFov \/ 2\)|ROOM_FIT_VIEWPORT_FRACTION_ENTITIES/.test(sm));
 }
 
-console.log(fail ? `\n❌ ${fail} failed` : "\n✅ the room shot, replayed");
-process.exit(fail ? 1 : 0);
+done("✅ the room shot, replayed");
+

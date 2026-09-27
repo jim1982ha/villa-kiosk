@@ -5,11 +5,10 @@
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const F = await import("@/babylon/floorOf");
 const { Storeys } = await import("@/babylon/storeys");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const sq = (x0, x1, z0, z1) => [{ x: x0, z: z0 }, { x: x1, z: z0 }, { x: x1, z: z1 }, { x: x0, z: z1 }];
 const entity = { isStructure: false, level: 0 };
 
@@ -60,5 +59,4 @@ ck("the badges and outlines ask onActiveFloor; the fans ask isRenderedFloor",
    /onActiveFloor\(stampedFloor\(mesh, lbl\.anchor\)/.test(src("EntityVisuals.ts"))
    && /onActiveFloor\(stampedFloor\(m\)/.test(sm) && /isRenderedFloor\(stampedFloor\(rig\[0\]\.mesh\)/.test(src("fanRigs.ts")));
 
-if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
-console.log("\n✅ one floor authority");
+done("✅ one floor authority");

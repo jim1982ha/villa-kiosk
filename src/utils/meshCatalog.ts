@@ -2,21 +2,13 @@
 // Persist the list of bindable mesh names from the loaded GLB so the Config page
 // (a separate route, no live SceneManager) can offer them for binding.
 
+import { readJson, writeJson } from "./storedJson";
 const KEY = "villa-kiosk:mesh-catalog";
 
 export function saveMeshCatalog(names: string[]): void {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(names));
-  } catch {
-    /* ignore quota errors */
-  }
+  writeJson(KEY, names);
 }
 
 export function loadMeshCatalog(): string[] {
-  try {
-    const raw = localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as string[]) : [];
-  } catch {
-    return [];
-  }
+  return readJson<string[]>(KEY, (v): v is string[] => Array.isArray(v) && v.every((n) => typeof n === "string")) ?? [];
 }

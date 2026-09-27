@@ -1,6 +1,8 @@
 // src/pages/Dashboard.tsx
 // Main page: 3D canvas + HUD + panels + teleport + settings + onboarding.
 
+import { overlayOpen } from "@/hooks/useBackToClose";
+import { useInterval } from "@/hooks/useInterval";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BabylonCanvas from "@/components/canvas/BabylonCanvas";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
@@ -24,11 +26,11 @@ import { roomKey } from "@/config/roomKey";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import RoomChoiceSheet, { type RoomChoice } from "@/components/hud/RoomChoiceSheet";
 import { useProfile } from "@/auth/ProfileContext";
-import { hasCapability, isMappingAllowed, panelMapping } from "@/auth/permissions";
+import { hasCapability, isMappingAllowed, isTypeAllowed, panelMapping } from "@/auth/permissions";
 import FacilityModal from "@/components/fm/FacilityModal";
 import GuestReportModal from "@/components/fm/GuestReportModal";
 import { useHA } from "@/ha/HAStateStore";
-import { displayLabelFor, resolveEntityRoom } from "@/config/EntityMap";
+import { displayLabelFor, resolveRooms } from "@/config/EntityMap";
 import { deriveHaScenes, scenesForRoom } from "@/config/haScenes";
 import { effectiveCategory, subjectOf, categoryColor, CATEGORY_ICONS, CATEGORY_LABELS } from "@/config/EntityCategories";
 import { badgeFaceAndRing } from "@/utils/deviceActivity";
@@ -45,6 +47,7 @@ import type { ActivePanel } from "@/types/panel.types";
 import type { Category, TeleportPoint } from "@/types/scene.types";
 import { VillaModelProvider } from "@/config/VillaModel";
 import { devicePower } from "@/utils/devicePower";
+import { readSceneMirror } from "./sceneMirror";
 
 
 export default function Dashboard() {
@@ -69,6 +72,8 @@ export default function Dashboard() {
   // config.teleportPoints from whenever that effect last ran).
   const configRef = useRef(config);
   configRef.current = config;
+  const roleRef = useRef(role);
+  roleRef.current = role;
   // Same reasoning, for the motion-toast subscription below (deps: [subscribeAll]).
   const resolvedRoomsRef = useRef(resolvedRooms);
   resolvedRoomsRef.current = resolvedRooms;
@@ -229,13 +234,8 @@ export default function Dashboard() {
   // Once-a-day auto-reload safety net (see utils/autoReload.ts) against a slow
   // background memory drift — only fires during its quiet overnight hour AND
   // when nothing's open AND no one's touched the kiosk recently, so it never
-  // interrupts real use. Read via refs (not React deps) because the check runs
-  // on a plain setInterval outside the render cycle; the refs just mirror
-  // whatever's most recently rendered.
-  const modalOpenRef = useRef(false);
-  useEffect(() => {
-    modalOpenRef.current = !!activePanel || teleportOpen || settingsOpen || configEditorOpen || facilityOpen;
-  }, [activePanel, teleportOpen, settingsOpen, configEditorOpen, facilityOpen]);
+  // interrupts real use. "Nothing's open" is the Back stack's answer
+  // (overlayOpen) — every dismissable surface is on it.
   const lastInteractionRef = useRef(Date.now());
   useEffect(() => {
     const mark = () => { lastInteractionRef.current = Date.now(); };
@@ -249,7 +249,7 @@ export default function Dashboard() {
     };
   }, []);
   useEffect(() => installDailyAutoReload(() =>
-    !modalOpenRef.current && Date.now() - lastInteractionRef.current > 5 * 60_000,
+    !overlayOpen() && Date.now() - lastInteractionRef.current > 5 * 60_000,
   ), []);
 
   // Auto-connect on load / refresh. We always reach HA through the same-origin
@@ -285,9 +285,9 @@ export default function Dashboard() {
       return;
     }
     manager.sun.applyRealSun();
-    const t = setInterval(() => manager.sun.applyRealSun(), 1000 * 60 * 15);
-    return () => clearInterval(t);
   }, [manager, haSun]);
+  // Re-aimed every 15 minutes while no sun.sun entity drives it.
+  useInterval(() => manager?.sun.applyRealSun(), manager && !haSun ? 1000 * 60 * 15 : null);
 
   const onEntityPicked = useCallback(
     (entityId: string, clientX: number, clientY: number) => {
@@ -361,6 +361,10 @@ export default function Dashboard() {
       // A motion/presence detector — BinarySensorClasses.isMotionSensor, the
       // one rule (device_class, or its id when HA reports none).
       if (!isMotionSensor(id, e.attributes?.device_class as string | undefined)) return;
+      // A profile that may not see motion sensors (the guest's) is not told
+      // about motion either (2.496.210).
+      const who = roleRef.current;
+      if (!who || !isTypeAllowed(who, "binary_sensor")) return;
       const map = configRef.current.entityMap[id];
       // Only announce a sensor actually configured somewhere in the app —
       // real geometry in the model, or another mapping's Linked entity /
@@ -430,21 +434,16 @@ export default function Dashboard() {
     ? (config.entityMap[activePanel.entityId] ?? activePanel.mapping).motionEntityId
     : undefined;
 
-  // The app lands in the bird's-eye overview: the SCENE decides that (its
-  // constructor starts there), and this only reads it. A new SceneManager — a
-  // cold start, or a model (re)load remounting the canvas — starts in overview
-  // again, so React's copy is re-read rather than told. This used to call
-  // manager.setViewMode("overview") on ready, which returned at once because
-  // the scene was already there; only its React half ever did anything.
+  // Everything React shows of the scene's own state, read from EACH new scene
+  // (a cold start, or a model reload remounting the canvas) — the view it
+  // starts in, this device's saved default view, and its floor
+  // (pages/sceneMirror: the floor was the one left behind).
   useEffect(() => {
-    if (manager) setViewMode(manager.getViewMode());
-  }, [manager]);
-
-  // Read this device's saved-default-view flag whenever the manager changes
-  // (a model reload swaps it) so the HUD button's pressed state is correct
-  // from the start, not just after the user next saves it.
-  useEffect(() => {
-    setHasOverviewDefault(manager?.hasOverviewDefault() ?? false);
+    if (!manager) return;
+    const m = readSceneMirror(manager);
+    setViewMode(m.viewMode);
+    setHasOverviewDefault(m.hasOverviewDefault);
+    setCurrentFloor(m.floor);
   }, [manager]);
 
   // Tap the brand icon (see HUD.tsx's .hud-brand + useHomeAnchor) → jump to
@@ -568,28 +567,18 @@ export default function Dashboard() {
   useEffect(() => {
     if (!manager) return;
     const recompute = () => {
-      const resolved: Record<string, string> = {};
-      for (const id of Object.keys(config.entityMap)) {
-        resolved[id] = resolveEntityRoom(entityAreaNames[id], manager.roomForEntity(id));
-      }
-      // A linkedEntityId/motionEntityId TARGET (a camera's arm/disarm switch,
-      // its detection sensor) is never itself a key of config.entityMap —
-      // it's only ever a VALUE on some other device's mapping, the same
-      // reason effectiveMappedEntityIds above has to separately augment
-      // mappedEntityIds with it. This loop was skipping those ids entirely,
-      // so they had no resolvedRooms entry at all and fell to "Other" in
-      // every room/floor grouping regardless of what Area Home Assistant
-      // actually had them in — reported as "linked/motion entities always
-      // show up under Other". Resolved the same way as everything else:
-      // HA's own Area for that specific entity_id (roomForEntity is always
-      // null for these — they have no mesh of their own).
+      // EVERY entity on the map or stored (EntityMap.resolveRooms says why
+      // the set is the union): the model's own (a mesh bound to an entity
+      // needs no stored mapping to draw a badge), the stored mappings, and
+      // — inside effectiveMappedEntityIds — every linked/motion target,
+      // which is only ever a VALUE on another mapping and used to fall to
+      // "Other" for the same reason.
+      const ids = new Set<string>([...effectiveMappedEntityIds, ...Object.keys(config.entityMap)]);
       for (const mapping of Object.values(config.entityMap)) {
-        for (const linkedId of [mapping.linkedEntityId, mapping.motionEntityId]) {
-          if (linkedId && !(linkedId in resolved)) {
-            resolved[linkedId] = resolveEntityRoom(entityAreaNames[linkedId], manager.roomForEntity(linkedId));
-          }
-        }
+        if (mapping.linkedEntityId) ids.add(mapping.linkedEntityId);
+        if (mapping.motionEntityId) ids.add(mapping.motionEntityId);
       }
+      const resolved = resolveRooms(ids, entityAreaNames, (id) => manager.roomForEntity(id));
       manager.setResolvedRooms(resolved);
       setResolvedRooms(resolved);
     };
@@ -597,7 +586,7 @@ export default function Dashboard() {
     // no replay, since it has just run.
     recompute();
     return manager.onScene(recompute, false);
-  }, [manager, entityAreaNames, config.entityMap, setResolvedRooms]);
+  }, [manager, entityAreaNames, config.entityMap, effectiveMappedEntityIds, setResolvedRooms]);
 
   const handleTeleport = useCallback(
     (point: TeleportPoint) => {
@@ -611,7 +600,7 @@ export default function Dashboard() {
       manager.navigateTo(point);
       setTeleportOpen(false);
     },
-    [manager, viewMode, currentFloor, onFloorChange],
+    [manager, currentFloor, onFloorChange],
   );
 
   // Tapping a room-cluster chip on the map does the SAME thing tapping that

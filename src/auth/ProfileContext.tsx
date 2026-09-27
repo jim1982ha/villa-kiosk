@@ -14,6 +14,7 @@ import { currentSession, serverSession } from "./PinVerifier";
 import { onSessionLost, sessionLostDecision } from "./sessionLost";
 import { report as reportTelemetry } from "@/utils/telemetry";
 import { ingressPath } from "@/ha/ingress";
+import { purgeModelCache } from "@/utils/modelCache";
 import { markBoot } from "@/utils/bootTimeline";
 
 const SESSION_KEY = "villa-kiosk:profile:v1";
@@ -131,6 +132,23 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     setSwitching(false);
   }, []);
 
+  // Everything a signed-out device must no longer hold: this tab's session
+  // marker AND the service worker's model cache. The worker answers a model
+  // request from that cache BEFORE nginx's /model/ gate is asked, so on a
+  // shared tablet the floor plan outlived the session it was fetched under —
+  // the next person, with no passcode, was served it (2.496.206). Every way
+  // a session ends goes through here.
+  const endSession = useCallback(() => {
+    try {
+      sessionStorage.removeItem(SESSION_KEY);
+    } catch {
+      // Ignore — clearing state below is what matters.
+    }
+    void purgeModelCache();
+    setRole(null);
+    setSwitching(false);
+  }, []);
+
   const logout = useCallback(() => {
     // Tell the SERVER, not just this tab. Logging out used to clear
     // sessionStorage and React state only — the signed vk_session cookie
@@ -146,14 +164,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     void fetch(ingressPath("auth/logout"), {
       method: "POST", credentials: "include", keepalive: true,
     }).catch(() => { /* offline: local state is still cleared below */ });
-    try {
-      sessionStorage.removeItem(SESSION_KEY);
-    } catch {
-      // Ignore — clearing state below is what matters.
-    }
-    setRole(null);
-    setSwitching(false);
-  }, []);
+    endSession();
+  }, [endSession]);
 
   // ── A SESSION THE SERVER STOPPED HONOURING ENDS HERE (2.496.152) ────────
   // A 401 from the add-on or the socket's 4401 (sessionLost) is confirmed with
@@ -170,13 +182,11 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         if (sessionLostDecision(role, server) !== "sign-out") return;
         try {
           localStorage.setItem(PENDING_LOST_KEY, JSON.stringify({ source, role, at: Date.now() }));
-          sessionStorage.removeItem(SESSION_KEY);
         } catch { /* storage blocked — the sign-out below still happens */ }
-        setRole(null);
-        setSwitching(false);
+        endSession();
       });
     });
-  }, [role]);
+  }, [role, endSession]);
 
   const logoutAll = useCallback(async () => {
     try {
@@ -187,15 +197,9 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     } catch {
       return false;
     }
-    try {
-      sessionStorage.removeItem(SESSION_KEY);
-    } catch {
-      // Ignore — clearing state below is what matters.
-    }
-    setRole(null);
-    setSwitching(false);
+    endSession();
     return true;
-  }, []);
+  }, [endSession]);
 
   const beginSwitch = useCallback(() => setSwitching(true), []);
   const cancelSwitch = useCallback(() => setSwitching(false), []);

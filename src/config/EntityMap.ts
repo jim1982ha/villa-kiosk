@@ -211,6 +211,33 @@ export function resolveEntityRoom(
 }
 
 /**
+ * The room of EVERY entity the kiosk shows, by resolveEntityRoom — one pass
+ * over one id set.
+ *
+ * ⚠️ THE SET USED TO BE THE STORED MAPPINGS (2.496.202). Dashboard walked
+ * `Object.keys(config.entityMap)`, but a device reaches the map by a MESH
+ * BINDING too (resolveMeshToMapping → mappingForEntityId builds its mapping
+ * on the fly, no stored entry), and those got no room at all — "Other", the
+ * one bucket the placement pass will not fold into a chip. The owner's TV:
+ * Home Assistant had it in the Living Room (through its device), the model
+ * carried it, and its badge sat on top of the "Living Room 18" label. The
+ * caller passes every id that is on the map or stored; the answer is the
+ * same rule for each.
+ */
+export function resolveRooms(
+  ids: Iterable<string>,
+  areaNames: Record<string, string>,
+  geometricRoomFor: (entityId: string) => string | null,
+): Record<string, string> {
+  const resolved: Record<string, string> = {};
+  for (const id of ids) {
+    if (id in resolved) continue;
+    resolved[id] = resolveEntityRoom(areaNames[id], geometricRoomFor(id));
+  }
+  return resolved;
+}
+
+/**
  * Same precedence as resolveEntityRoom, for STOREY instead of room: HA's own
  * Floor (via the device's Area — see HassAreaRegistryEntry.floor_id) wins
  * whenever one is assigned; the floor-plan's own per-room `floor` value
@@ -252,20 +279,11 @@ export function mappingForEntityId(
   entityId: string,
   map: Record<string, EntityMapping>,
 ): EntityMapping | null {
-  if (map[entityId]) {
-    const m = map[entityId];
-    // Transparently upgrade entries that were stored with the old "sensor"
-    // fallback before a domain (e.g. input_boolean) was added to the known list.
-    if (
-      m.type === "sensor" &&
-      !entityId.startsWith("sensor.") &&
-      !entityId.startsWith("binary_sensor.")
-    ) {
-      const upgraded = inferTypeFromEntityId(entityId);
-      if (upgraded) return { ...m, type: upgraded };
-    }
-    return m;
-  }
+  // A stored mapping is returned AS STORED: the stale-"sensor" type upgrade
+  // this used to apply is a load-time migration now (AppConfig
+  // .upgradeStaleTypes), so every reader — the eleven raw `entityMap[id]`
+  // reads in the 3D layer included — sees the same type.
+  if (map[entityId]) return map[entityId];
   const inferred = inferTypeFromEntityId(entityId);
   if (!inferred) return null;
   return createDefaultMapping(entityId, { type: inferred });

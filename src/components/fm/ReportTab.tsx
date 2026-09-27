@@ -17,6 +17,7 @@
 // someone asked for it, not "whenever this component happened to re-render".
 
 import { useState } from "react";
+import SaveButton from "@/components/common/SaveButton";
 import { Sparkles, Download, Save } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
@@ -83,8 +84,8 @@ export default function ReportTab({
 
   const save = async () => {
     if (!markdown) return;
-    await saveDocument({ kind: "report", month, markdown });
-    setSaved(true);
+    // "Saved" only when it was; otherwise the store's banner says why.
+    if (await saveDocument({ kind: "report", month, markdown }) === "saved") setSaved(true);
   };
 
   const reopen = (doc: FmSavedDocument) => {
@@ -115,9 +116,7 @@ export default function ReportTab({
         <button className="btn primary" onClick={generate}>
           <Sparkles size={16} /> {markdown ? "Regenerate report" : "Generate report"}
         </button>
-        <button className="btn ghost" onClick={() => void save()} disabled={!markdown || saved}>
-          <Save size={16} /> {saved ? "Saved" : "Save report"}
-        </button>
+        <SaveButton saved={saved} label="Save report" icon={<Save size={16} />} onClick={() => void save()} disabled={!markdown} />
         <button className="btn ghost" onClick={download} disabled={!markdown}>
           <Download size={16} /> Download .md
         </button>

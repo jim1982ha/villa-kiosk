@@ -67,3 +67,35 @@ export function entityPlaces(
   }
   return { areaNames, floorNumbers };
 }
+
+/** The three registries a refresh asks for — `null` for one whose request
+ *  FAILED (as opposed to answering with nothing). */
+export interface RegistryAnswers {
+  devices: readonly HassDeviceRegistryEntry[] | null;
+  areas: readonly HassAreaRegistryEntry[] | null;
+  floors: readonly HassFloorRegistryEntry[] | null;
+}
+
+/**
+ * The area names and floor numbers to hold AFTER a refresh: a derived map is
+ * replaced only when every registry it derives from answered; otherwise the
+ * previous one is kept. Area names need devices + areas; floor numbers need
+ * floors as well.
+ *
+ * ⚠️ THE GUARD USED TO BE `devices.length === 0 && areas.length === 0`
+ * (2.496.194). Each fetch was "best effort" (`.catch(() => [])`), so one
+ * transient failure of the AREA registry alone — devices fine — passed the
+ * guard and re-derived every place from an empty area map: every room name
+ * and floor number in the villa blank until the next registry event
+ * happened to succeed. The pure resolver (entityPlaces) was under test; the
+ * wiring that fed it was not.
+ */
+export function placesAfterRefresh(
+  prev: { areaNames: Record<string, string>; floorNumbers: Record<string, number> },
+  rows: readonly HassEntityRegistryEntry[],
+  got: RegistryAnswers,
+): { areaNames: Record<string, string>; floorNumbers: Record<string, number> } {
+  if (got.devices === null || got.areas === null) return prev;
+  const next = entityPlaces(rows, got.devices, got.areas, got.floors ?? []);
+  return { areaNames: next.areaNames, floorNumbers: got.floors === null ? prev.floorNumbers : next.floorNumbers };
+}

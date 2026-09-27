@@ -25,10 +25,12 @@ import {
   Activity, Zap, RefreshCw, ChevronRight,
 } from "lucide-react";
 import { useModalA11y } from "@/hooks/useModalA11y";
+import SegmentedGroup from "@/components/common/SegmentedGroup";
+import { fmtChartTime } from "@/components/panels/chartUtils";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
-import { hasCapability } from "@/auth/permissions";
+import { hasCapability, isCategoryAllowed, roleCan } from "@/auth/permissions";
 import { CATEGORY_LABELS, CATEGORY_ICONS, categorySurface } from "@/config/EntityCategories";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { isUnavailable } from "@/utils/stateColors";
@@ -108,21 +110,24 @@ export default function CockpitModal({ onClose, onOpenEntity }: CockpitModalProp
   // statistic ID with no recorded data is a real, confirmed case, not a
   // theoretical one). null (not shown) either way it doesn't resolve;
   // undefined only while the fetch is in flight.
+  // Not asked at all for a profile without the energy category (the guest's).
+  const seesEnergy = role != null && isCategoryAllowed(role, "energy");
   const [energy, setEnergy] = useState<EnergyToday | null | undefined>(undefined);
   useEffect(() => {
+    if (!seesEnergy) { setEnergy(null); return; }
     let cancelled = false;
     fetchEnergyToday(ws)
       .then((r) => { if (!cancelled) setEnergy(r); })
       .catch(() => { if (!cancelled) setEnergy(null); });
     return () => { cancelled = true; };
-  }, [ws]);
+  }, [ws, seesEnergy]);
 
   // Firmware/add-on updates available — HA's own `update` domain already
   // tracks this per device AND per add-on (including this one). A small
   // Owner-only count, not a version list — this is a maintenance signal, not
   // something a guest needs to see or act on.
   const updatesAvailable = useMemo(() => {
-    if (role !== "owner") return null;
+    if (!roleCan(role, "seeUpdates")) return null;
     return Object.values(entities).filter((e) => e.entity_id.startsWith("update.") && e.state === "on").length;
   }, [entities, role]);
 
@@ -188,17 +193,11 @@ export default function CockpitModal({ onClose, onOpenEntity }: CockpitModalProp
               names whichever is showing. */}
           <div className="settings-section-title cockpit-pivot-header">
             <span>By {pivot}</span>
-            <div className="segmented" role="group" aria-label="Group by" style={{ flex: "0 0 auto" }}>
-              <button className={pivot === "room" ? "active" : ""} onClick={() => setPivot("room")} aria-pressed={pivot === "room"}>
-                <MapPin size={16} /> Room
-              </button>
-              <button className={pivot === "floor" ? "active" : ""} onClick={() => setPivot("floor")} aria-pressed={pivot === "floor"}>
-                <Building2 size={16} /> Floor
-              </button>
-              <button className={pivot === "category" ? "active" : ""} onClick={() => setPivot("category")} aria-pressed={pivot === "category"}>
-                <LayoutGrid size={16} /> Category
-              </button>
-            </div>
+            <SegmentedGroup ariaLabel="Group by" className="cockpit-pivot" active={pivot} onChange={setPivot} options={[
+              { key: "room", label: <><MapPin size={16} /> Room</> },
+              { key: "floor", label: <><Building2 size={16} /> Floor</> },
+              { key: "category", label: <><LayoutGrid size={16} /> Category</> },
+            ]} />
           </div>
           {pivot === "category" ? (
             <div className="cockpit-category-grid">
@@ -287,7 +286,7 @@ export default function CockpitModal({ onClose, onOpenEntity }: CockpitModalProp
             <div className="cockpit-activity-list">
               {villaActivity.map((e, i) => (
                 <div key={`${e.t}-${i}`} className="cockpit-activity-row">
-                  <span className="cockpit-activity-time muted">{new Date(e.t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                  <span className="cockpit-activity-time muted">{fmtChartTime(e.t)}</span>
                   <span className="cockpit-activity-text"><strong>{e.name}</strong> {e.message}</span>
                 </div>
               ))}

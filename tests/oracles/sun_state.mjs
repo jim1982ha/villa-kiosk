@@ -7,10 +7,9 @@
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const { sunGeometry, sunLights, nightLerp } = await import("@/babylon/sunState");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const close = (a, b) => a.every((v, i) => Math.abs(v - b[i]) < 1e-12);
 const norm = (x, y, z) => { const l = Math.hypot(x, y, z); return [x / l, y / l, z / l]; };
 
@@ -61,5 +60,4 @@ ck("SunController reads sunGeometry and sunLights, and keeps no lerp of its own"
    /sunGeometry\(altitude, azimuth\)/.test(sun) && /sunLights\(isDay, r\)/.test(sun) && !/const lerp =/.test(sun) && !/TWILIGHT/.test(sun));
 ck("sceneLook's exposure and IBL night use the same nightLerp", /nightLerp\(i\.isDay \? 0 : i\.nightDimming\)/.test(look) && !/Math\.min\(1, Math\.max\(0, i\.nightDimming\)\)/.test(look));
 
-if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
-console.log("\n✅ the sun and the night, one rule");
+done("✅ the sun and the night, one rule");

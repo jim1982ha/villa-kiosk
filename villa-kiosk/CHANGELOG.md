@@ -1,3 +1,330 @@
+## 2.496.210
+
+### Changed
+- **The Guest profile no longer sees energy or motion anywhere.** Guests were already kept away from energy devices and motion sensors in the 3D view, but four places still showed them: the **Energy** tile on the summary bar (and the Energy window it opens), **"Energy today"** in the Cockpit, the **"Motion detected"** pop-up, and the **motion glow** on rooms. All four are now hidden for guests. The owner and Facility Manager profiles are unchanged.
+
+### Build
+- The Docker build tools move to their current versions (no more "Node.js 20 is deprecated" warning in the build). Nothing changes on the tablet.
+
+## 2.496.209
+
+### Build
+- **The dependency lockfile is now honest, and the build refuses anything else.** The check added in 2.496.207 found that the build runner rewrote `package-lock.json` on every build — because every lockfile in this project's history was written on a machine whose npm ignored peer dependencies (`legacy-peer-deps=true` in the developer's own settings). That, not the runner, is why `npm ci` "only failed in CI" since 2.496.23. The lockfile is regenerated with peer dependencies honoured (same package versions; only how they are arranged changed), a project `.npmrc` fixes the setting for every machine, and both the build runner and the image now install with `npm ci`, which fails instead of quietly rewriting. Verified locally under two npm versions and in a local image build.
+- The two remaining GitHub Actions still targeting Node 20 (checkout, setup-node) move to their Node 24 releases, pinned by commit.
+
+## 2.496.208
+
+### Security
+- **Guest and Facility Manager sessions now receive only the kinds of entity the kiosk shows.** Home Assistant used to stream every entity in the instance to any signed-in profile — persons, phone trackers, the alarm panel, calendars — even though the kiosk never drew them. The add-on now relays only lights, climate, locks, covers, fans, sensors, media players, switches, scenes, the sun and the weather to non-owner profiles (camera states only to a profile that may view cameras), and the same rule covers live updates, history, the logbook and the entity list. The owner profile is unchanged.
+- **The add-on's service now runs as an unprivileged account** (`vesta`) instead of root, so a flaw in anything it parses cannot reach beyond its own data folder. Verified in a local container: options are read, sessions issued and stores written as that account.
+
+### Build
+- 2.496.207 never published: its new lockfile check found that installing dependencies on the build runner rewrites `package-lock.json` (it does not on a developer machine). For this release the check reports the difference instead of failing, so the lockfile can be corrected next.
+
+## 2.496.207
+
+### Security
+- **A Guest profile with no passcode is no longer open to anyone who reaches the hostname.** Leaving the guest passcode empty now opens the Guest profile only from inside Home Assistant (the sidebar); on the direct port or a tunnel the profile shows greyed with "No passcode set — not available from here". The option's help text says so.
+- **"Sign every device out" now also replaces the session signing key**, so nothing copied from the add-on's data folder before that moment can be used to sign in.
+- **Content-Security-Policy violations are now collected.** The policy is still report-only, but each violation a browser sees is stored as a `csp` event in Settings › Telemetry — so enforcing it can be decided from evidence instead of a console nobody watches.
+- **Build pipeline pinned:** every GitHub Action the build uses is fixed to an exact commit, and the build fails if installing dependencies had to change the lockfile.
+
+## 2.496.206
+
+### Security
+- **A signed-out tablet no longer keeps the floor plan.** The 3D model was served from the app's offline cache before the sign-in check ran, so after "Log out" on a shared device the next person could still open the villa without a passcode. Logging out (and a session the server ends) now clears that cache. The model is downloaded again at the next sign-in.
+- **Wrong-passcode lockouts can no longer be aimed at someone else.** The lockout counter was keyed by an address the client itself could write, so a few wrong passcodes could lock the owner's own device out. It is now keyed by the address the add-on actually accepted the connection from.
+- **Facility reports: text typed by a guest stays inside its table cell.** A line break in a fault title could turn the rest of the title into a heading or notice in the owner's monthly report. Every free-text cell is flattened in one place.
+- **Writes the browser itself flags as cross-site are refused**, a second layer behind the session cookie's own protection; and the cookie's protective attributes are now asserted by a test.
+
+## 2.496.205
+
+### Fixed
+- The diagnostics log records a given error at most once every 30 s, so a
+  single fault can no longer flood it (2.496.197–203 wrote about ten
+  copies a second of one error and pushed out everything else).
+
+## 2.496.204
+
+### Fixed
+- **Devices react to taps again, and their state shows on the map.** Since
+  2.496.197 every state change from Home Assistant hit an error inside the
+  kiosk before it reached the 3D view or the panels, so a tapped light did
+  switch in Home Assistant but nothing on screen followed, and the kiosk read
+  as dead. The same error was also reported to the diagnostics log on every
+  event (about ten a second), which is why the add-on log filled up.
+- The diagnostics log now records a given error at most once per 30 s.
+
+## 2.496.203
+
+### Behind the scenes
+- Dead code removed: a resize hook nothing used, a weather "comfort
+  insight" sentence that was never shown, an outage-band helper the charts
+  did not call, two unused type names, and two unused test helpers.
+  Nothing changes on screen.
+
+## 2.496.202
+
+### Fixed
+- **A device placed on the map by binding a mesh to it now gets its room.**
+  Only devices with a saved entry in Advanced Settings were given a room;
+  one carried by the 3D model alone had none, was filed under "Other", and
+  "Other" never folds into a room label — which is why the unavailable TV
+  stayed drawn on top of the collapsed "Living Room" label after 2.496.201.
+  It now folds into the Living Room like every other device there. Home
+  Assistant's own Area (the TV's is set on its device) is what decides.
+
+## 2.496.201
+
+### Fixed
+- **A device mounted in a wall belongs to the room behind that wall.** A
+  wall-mounted speaker, TV, switch or sensor sits just outside the room's
+  floor outline, so it counted as being in no room at all — and a device in
+  no room can never fold into its room's label, which is why an unavailable
+  media player was drawn on top of the collapsed "Living Room 18" label on
+  the phone. Such a device now takes the nearest room within a wall's
+  thickness (0.6 m), so it folds into that room's label like everything
+  else. Home Assistant's own Area assignment still wins whenever one is set.
+
+## 2.496.200
+
+### Fixed
+- **Stairs named in any of the plan's languages are recognised the same way
+  everywhere.** Two lists had drifted (one knew "escalera"/"steps", the
+  other "step"/"marche"), so a stair could be climbable but not treated as
+  a stairwell, or the reverse.
+- A device saved under an old catch-all type is upgraded once when the
+  settings load, so the 3D badges and the panels agree on what it is.
+
+### Behind the scenes
+- Shared maths helpers replace four private copies; the test suite's
+  assertion helper is one file instead of a pasted copy in 70 tests.
+
+## 2.496.199
+
+### Fixed
+- **Tapping outside a device search list now closes it on touch screens**
+  as it does with a mouse (Advanced Settings' entity picker and the
+  Facility device picker listened for mouse presses only).
+
+### Behind the scenes
+- The button groups in Settings and the Cockpit, the "Save / Saved"
+  buttons, the "close when tapping outside" behaviour, the periodic
+  refresh timers and the HH:MM clock are each one shared piece now instead
+  of several copies. Nothing else changes on screen.
+
+## 2.496.198
+
+### Improved
+- **Less work per frame in the 3D view.** The building's geometry is now
+  marked as fixed once the model has loaded (it was re-computed every
+  frame), the walking controls no longer run while the bird's-eye view is
+  showing, and the wall-occlusion check no longer allocates text every
+  frame while walking. Ceiling fans still spin.
+
+## 2.496.197
+
+### Improved
+- **The screen does much less work while Home Assistant is busy.** Every
+  state change used to re-render the whole interface (top bar, summary
+  tiles, Cockpit counts) — several times a second in a villa this size.
+  Changes now reach the interface four times a second at most; the 3D
+  devices, lights and fans still react instantly.
+- **Each of those refreshes is cheaper**: the summary tiles read the device
+  list once instead of four times, look for the weather station once instead
+  of twice, and no longer re-derive device grouping on every change.
+
+## 2.496.196
+
+### Fixed
+- **Saving a large configuration no longer delays door, cover and light
+  commands from other kiosks for the duration of the write.** The add-on
+  wrote the file on the same thread that relays commands to Home Assistant.
+- **The add-on's diagnostics log is capped by size as well as by count**, so
+  raising its event limit can no longer grow a file that is rewritten on
+  every event.
+- **A corrupt saved-model note in the browser reads as "no stored model"**
+  instead of stopping the model from loading.
+- **Settings and Facility data refresh when the network comes back**, and the
+  connection is checked when the window regains focus (each used to react to
+  only two of the three signals).
+
+## 2.496.195
+
+### Fixed
+- **Walking mode recovers from a lost touch.** When the browser silently
+  ended a finger (it happens on iPad), the walk camera kept counting it, so
+  the next one-finger drag behaved like a two-finger gesture and taps on
+  devices did nothing until the page was reloaded. The bird's-eye view has
+  had this recovery since 2.323.0; both views now share it.
+
+### Behind the scenes
+- The camera's field-of-view rule (sky, framing, zoom, badges) is under test;
+  a 31-line pass-through class for the sun light was folded into its one
+  caller.
+
+## 2.496.194
+
+### Fixed
+- **Room names and floors no longer vanish after one failed Home Assistant
+  registry request.** If the area list alone failed to load (a transient
+  hiccup), every device's room and floor went blank until the next registry
+  change. A registry that fails to answer now keeps what it had.
+- **The passcode screen shows the real reason a sign-in was refused** (e.g.
+  an Owner profile with no passcode configured) instead of always saying
+  "Check the connection".
+- **Advanced Settings › Latitude / Longitude follow the live value.** When the
+  kiosk adopted Home Assistant's location while that screen was open, the
+  fields kept the old number and a tap out of the field wrote it back.
+
+## 2.496.193
+
+### Behind the scenes
+- How a device's state history is cut into five-minute slices and painted
+  is now one tested step. Nothing changes on screen.
+
+## 2.496.192
+
+### Fixed
+- **The phone's Back button now closes the Rooms menu, the ⋯ menu and the
+  held-floor rooms dial**, like every other window, instead of leaving the app.
+- **The kiosk's once-a-day automatic refresh never happens while anything is
+  open** — it could refresh over a half-written guest fault report or an
+  open menu.
+- The Facility window no longer says the spend cap is set in the Schedule
+  tab (there is no such setting).
+
+### Behind the scenes
+- A "Pool serviced" readiness line that could never appear was removed, and
+  several outdated notes in the code were corrected.
+
+## 2.496.191
+
+### Fixed
+- **On the Guest profile, the Cockpit's alert count only counts devices the
+  guest can actually open.** It could show a number larger than the list
+  behind it (a camera or a sensor the guest cannot see).
+- **On the Guest profile, a summary tile's count matches the list it opens**
+  (it could count devices that are not on the 3D map and that the list
+  leaves out).
+
+### Behind the scenes
+- Who may do what (edit settings, upload the model, see waiting updates) is
+  now read from one permission table everywhere.
+
+## 2.496.190
+
+### Fixed
+- **A chart's tooltip now shows above the window it belongs to.** In the
+  Energy and Weather windows and device panels it could be drawn behind the
+  window itself.
+- **The Energy window's loading placeholder is the height of the chart** it
+  stands for, instead of half of it.
+
+### Behind the scenes
+- The styles every chart shares now live in one place; rules for a chart
+  that no longer exists were removed.
+
+## 2.496.189
+
+### Behind the scenes
+- Deciding which device icons stay on the map, which fold into a group card
+  and how a card is labelled ("Living +1") now lives in one tested place.
+  Nothing changes on screen — checked frame by frame on the villa's model.
+
+## 2.496.188
+
+### Fixed
+- **Device history charts say "Couldn't load this history." when Home
+  Assistant did not answer**, instead of "Not enough history yet." — and no
+  longer say "Not enough history yet." while they are still loading (device
+  groups did).
+- **An offline device's history now shows the last day it was working**,
+  labelled "… before <date>", on generic devices and on binary and text
+  sensors too (it already did on lights, switches and the like).
+- **The Energy window says so when it cannot read Home Assistant's Energy
+  settings**, instead of showing a loading placeholder forever.
+
+## 2.496.187
+
+### Fixed
+- **Walking through the villa, fewer devices vanish with no card and no room
+  label.** A device standing just beside a group card could stop that card
+  from being drawn without being taken into it, and then showed nowhere.
+  Card, device and room-label spacing are now judged the same way, so a
+  device is either inside a card or clear of it.
+- **A room label far down a corridor no longer hides the devices in front of
+  you** because it happened to line up with them on screen.
+- **Windows right at the phone width limit keep their layout while the view
+  moves**, instead of briefly switching to the phone layout.
+
+## 2.496.186
+
+### Fixed
+- **After uploading or reloading the 3D model, the floor buttons show the
+  floor you are actually on.** They kept the previous floor (e.g. 2F) while
+  the villa had gone back to 1F, and teleporting to a room upstairs then
+  skipped the floor change.
+
+## 2.496.185
+
+### Fixed — lights in the 3D villa
+- **A light turned down to −100% in Advanced Settings is fully off.** Its
+  bulb went dark, but its pool of light on the floor and its light on the
+  furniture kept shining.
+- **A light's pool on the floor comes back after the rooms are re-fitted.**
+  A pool moved away from the stairs stayed dark until the light was next
+  switched.
+
+## 2.496.184
+
+### Fixed — Facility saves tell the truth
+- **A guest who reports a problem only sees "Thank you — that's been
+  reported" when it really was.** If it could not be sent, the dialog stays
+  open and says so, so they can try again.
+- **Moving a fault to its next step closes the dialog only once it is
+  saved**; otherwise it stays open with the reason.
+- **"Saved" on a report, a spend statement or a readiness snapshot now only
+  appears when it was saved.**
+- **A change the add-on refuses is undone right away, with its reason**,
+  instead of being retried on every refresh — which also stopped that device
+  from receiving anyone else's updates.
+
+## 2.496.183
+
+### Fixed — Facility
+- **The monthly report no longer lists fault repairs as "(removed task)"**
+  under preventive maintenance; repairs stay in the faults section.
+- **Erasing a fault also erases the repair and the cost recorded for it**,
+  instead of leaving them behind as "a fault since erased".
+- **The "need attention" numbers agree everywhere.** The Today tab also
+  counted tasks that were only due soon; it now counts, like the top bar and
+  the Cockpit, tasks that are overdue or never done (labelled "tasks need
+  attention").
+- An amount typed with decimals, such as "12.50", is no longer read as 1250.
+
+## 2.496.182
+
+### Fixed — privacy of the Facility record
+- **A guest's device no longer downloads the Facility record.** Every cost,
+  note, fault and piece of completed work used to reach any signed-in
+  device, including a guest's phone. A guest now receives none of it; they
+  can still report a problem, and their report is added to the full record
+  on the add-on.
+
+### Changed
+- The Spend tab's two categories are now named "Minor — routine
+  maintenance" and "Major — larger works". They used to cite one contract's
+  clause numbers, which do not belong in an add-on used by any villa.
+
+## 2.496.181
+
+### Fixed — a room you tapped stays open
+- **After tapping a room badge (e.g. "Swimming Pool") its devices stay
+  shown when you move the mouse.** On some window sizes, simply moving the
+  pointer over the 3D view folded the room back into its badge, as if you
+  had zoomed out.
+
 ## 2.496.180
 
 ### Changed — keyboard in the bird's-eye view

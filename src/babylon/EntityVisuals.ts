@@ -110,7 +110,7 @@ import { formatCountBadge } from "@/utils/countBadge";
 import { RoomHighlight } from "./RoomHighlight";
 import { CameraBeams, type BeamSource } from "./CameraBeams";
 import { blocksCameraBeam, isResolvedCeiling, isHelperMesh } from "./meshRoles";
-import { Storeys } from "./storeys";
+import { Storeys, WALL_TOLERANCE_M } from "./storeys";
 import { FloorProbe } from "./floorProbe";
 import { axisWorldScale } from "./meshUnits";
 import type { LightReading } from "./lightPoolSet";
@@ -131,7 +131,7 @@ import { badgeText } from "./badgeText";
 import { badgeShadow } from "./badgeShadow";
 import { cameraFrame } from "./cameraFrame";
 import {
-  arrange, cardStruts, gridCells, MAX_TOTAL_CHIPS, MAX_GRID_CHIPS, PHONE_MAX_GRID_CHIPS,
+  arrange, cardLift, cardStruts, gridCells, MAX_TOTAL_CHIPS, MAX_GRID_CHIPS, PHONE_MAX_GRID_CHIPS,
   type CardArrangement,
 } from "./badgeCard";
 import { iconKeyFor } from "./badgeIconKeys";
@@ -247,9 +247,10 @@ const MIN_STRIP_THICKNESS = 0.06; // metres (6 cm) — still reads as a slim cov
 // The colour is deliberately a soft plaster-grey, NOT a dark "housing" tone:
 // a dark strip against white ceilings/walls is maximal contrast — from the
 // overview it printed as bold black frames above the beds, worse than the
-// white tube it replaced. Off-state unobtrusiveness comes from
-// STRIP_OFF_VISIBILITY below, not from the colour; the colour's only job is
-// to blend with the ceiling around it for whatever alpha remains.
+// white tube it replaced. Off-state unobtrusiveness comes from the housing
+// being faded out when the light is OFF (applyToMesh, via the tag set where
+// the strip is built), not from the colour; the colour's only job is to blend
+// with the ceiling around it for whatever alpha remains.
 const LED_HOUSING_COLOR = new Color3(0.8, 0.79, 0.77);
 // The inflated ~6cm bar is sized for the ON state, where the emissive core
 // needs several on-screen pixels to read as one continuous line. OFF, it goes
@@ -869,7 +870,6 @@ export class EntityVisuals {
     roomOf: (id) => this.roomOf(id),
     layoutOf: (g, n) => this.layoutOf(g, n),
     planeOf: (c, x, y, z) => this.planeOf(c, x, y, z),
-    drawnDistance: (ax, ay, az, bx, by, bz) => this.drawnDistance(ax, ay, az, bx, by, bz),
     summaryMetrics: () => this.summaryMetrics(),
     sortCardMembers: (shown, m) => this.sortCardMembers(shown, m),
     cardOf: (cells, max, maxWidth) => this.cardOf(cells, max, maxWidth),
@@ -1793,8 +1793,7 @@ export class EntityVisuals {
 
     // This mesh is a genuine filament we're artificially thickening — mute its
     // baked "self-lit" base colour to a ceiling-matched grey and tag it so
-    // applyToMesh can fade it out when the light is OFF (see
-    // STRIP_OFF_VISIBILITY). The dynamic on/off glow is carried entirely by
+    // applyToMesh can fade it out when the light is OFF. The dynamic on/off glow is carried entirely by
     // the emissive channel, untouched by this.
     const mat = mesh.material;
     if (mat instanceof StandardMaterial) mat.diffuseColor = LED_HOUSING_COLOR.clone();
@@ -1976,7 +1975,10 @@ export class EntityVisuals {
     for (const room of this.plan.rooms) {
       if (pointInPolygon(p.x, p.z, room.pts)) return room.name;
     }
-    return null;
+    // Contained by nothing: a device IN a wall (a speaker, a TV, a switch)
+    // belongs to the room whose wall it is — the nearest polygon, a wall's
+    // thickness away at most (storeys.WALL_TOLERANCE_M and its story).
+    return this.plan.roomNear(p.x, p.y, p.z, WALL_TOLERANCE_M)?.name ?? null;
   }
 
   /** World-space XZ bounding box (plus a floor height) of a room's registered
@@ -2500,6 +2502,9 @@ export class EntityVisuals {
    *  either). Still real, still opt-in (only fires when the camera's own
    *  Room is set), never a guess about WHERE the camera is aiming. */
   private applyMotionRouting(entity: HassEntity): void {
+    // The role-filtered config: a profile denied motion sensors (the guest's)
+    // sees no motion beam or room glow either (2.496.210).
+    if (this.config.deniedTypes?.includes("binary_sensor")) return;
     const on = entity.state === "on";
     const cameraIds = this.motionToCameraIds.get(entity.entity_id);
     if (cameraIds) {
@@ -3872,46 +3877,7 @@ export class EntityVisuals {
         }
       }
       for (const room of result.chipRooms) this.pass.chipRoom(room, "solver");
-      for (let b = 0; b < result.bucketCount; b++) {
-        const bucket = result.buckets[b];
-        let wx = 0, wy = 0, wz = 0;
-        for (const i of bucket.members) {
-          wx += shown[i].wx; wy += shown[i].wy; wz += shown[i].wz;
-          this.pass.entityGrouped.add(shown[i].id);
-        }
-        const n = bucket.members.length;
-        // Keyed by the PILE alone. It was `room|pileKey`, which was stable only
-        // while a bucket's room was — and a bucket's room can now change (a
-        // cross-room pile loses a member and becomes single-room), which would
-        // have rebuilt the group's GUI controls mid-zoom and flickered.
-        // pileKey is the pile's lowest entity_id, so it is already unique.
-        const primary = this.pass.roomDisplay.get(bucket.room) ?? bucket.room;
-        pending.push({
-          key: `grp|${bucket.pileKey}`,
-          // The room chip's own convention for "and others" (see chipLabel), so
-          // a summary spanning two rooms reads the same way whichever tier
-          // drew it.
-          room: bucket.rooms.length > 1 ? `${primary} +${bucket.rooms.length - 1}` : primary,
-          roomKeys: bucket.rooms.slice(),
-          // Members are indices into `shown`, which lives exactly as long as
-          // this pass — copied because placeEntityGroups may drop a group and
-          // the pooled bucket is about to be reused. Sorted into the cell order
-          // a card draws them in; see sortCardMembers for why that is not the
-          // order the solver hands them over in.
-          members: this.sortCardMembers(shown, bucket.members.slice()),
-          wx: wx / n, wy: wy / n, wz: wz / n,
-          // Derived from the world centroid just above, by the same projection
-          // every badge went through — never accumulated alongside it. See
-          // PendingEntityGroup.sx.
-          ...this.planeOf(clearance, wx / n, wy / n, wz / n),
-          // Every device, always: `gridCells` turns an over-cap ask into the
-          // count badge itself, so no producer restates the cap (see there —
-          // the one that did not restate it truncated its card and hid a
-          // device).
-          grid: n,
-          focused: false,
-        });
-      }
+      this.pass.groupsFromBuckets(shown, result.buckets, result.bucketCount, clearance, pending);
       this.pass.pairFocusedRoom(shown, items, clearance, pending);
     }
 
@@ -3939,8 +3905,7 @@ export class EntityVisuals {
         // grouping has already been decided, so neither can move a badge or
         // change which pile it belongs to.
         && !s.occluded
-        && !this.pass.roomClustered.get(roomKey(this.roomOf(s.id)))
-        && !this.pass.entityGrouped.has(s.id);
+        && this.pass.drawnBadge(s.id);
     }
     this.renderChips(chips);
     this.updateEntityGroups(shown, pending);
@@ -4415,28 +4380,9 @@ export class EntityVisuals {
     // camera class. The walk camera keeps the pre-2.287.0 metric because the
     // plane one discards its depth axis entirely — projectToView has the
     // worked case.
-    const orbit = typeof (cam as unknown as { radius?: number }).radius === "number";
+    const orbit = this.orbitCamera();
     const mode: ProjectionMode = VIEW_METRIC === "plane" && orbit ? "plane" : "world3d";
     return viewBasis(f.x / len, f.y / len, f.z / len, VIEW_BASIS_STEPS, mode);
-  }
-
-  /**
-   * The distance between two ALREADY-PROJECTED points — plain pixels, no
-   * conversion, because both sides are on the glass by the time they get here.
-   *
-   * THE rule, and it is applied in exactly two places. Here, for the
-   * comparisons EntityVisuals makes itself (a summary against a badge, a
-   * summary against another summary, the absorb sweep); and in
-   * `placementItems`, which projects once so that every distance the solver
-   * computes — `conflicts`, the spatial hash, the lone-deferral pull-back —
-   * inherits it without a single call site of its own having to remember.
-   * One meaning: "how far apart are these two on the glass".
-   */
-  private drawnDistance(
-    ax: number, ay: number, az: number,
-    bx: number, by: number, bz: number,
-  ): number {
-    return Math.hypot(ax - bx, ay - by, az - bz);
   }
 
   /**
@@ -4518,7 +4464,7 @@ export class EntityVisuals {
    * about a badge of a different size from the one on screen.
    *
    * The PROJECTION happens here, once per badge, and every distance the solver
-   * goes on to compute inherits it — see drawnDistance. The result is also
+   * goes on to compute inherits it — see placementPass's groundOf. The result is also
    * written back onto the ShownLabel, because placeEntityGroups needs the same
    * plane coordinates and projecting twice is how two spaces drift apart.
    *
@@ -4791,7 +4737,7 @@ export class EntityVisuals {
       };
     });
     // A card is drawn ENTIRELY ABOVE its anchor — updateEntityGroups sets
-    // linkOffsetYInPixels = -(lay.height / 2) * scale so the card's bottom
+    // linkOffsetYInPixels = -cardLift(lay, scale) so the card's bottom
     // edge lands on the anchor, exactly as a badge's does. The LAYOUT models
     // the same card as a disc centred ON the anchor (cardHalfOf), a documented
     // asymmetry; using the layout's model here would report overlaps nobody
@@ -4805,7 +4751,7 @@ export class EntityVisuals {
       Vector3.ProjectToRef(p, Matrix.IdentityReadOnly, tm, vp, p);
       if (!(p.z >= 0 && p.z <= 1)) continue;
       const hw = (lay.width / 2) * scale;
-      const hh = (lay.height / 2) * scale;
+      const hh = cardLift(lay, scale);
       // The square INSCRIBED in the card — "is this badge under my ink", the
       // question absorb exists to answer, and a different question from "do we
       // clear each other". Same distinction cardInscribedHalf draws.
@@ -4946,15 +4892,15 @@ export class EntityVisuals {
     // they only came back a rung or two later once the badges genuinely fitted
     // — entities, chip, entities, going one direction. Reproduces only where
     // dpr > HW_START_CAP, which is why a dpr-1.6 laptop never showed it.
-    const vpH = viewportPx(engine.getRenderHeight(), engine.getHardwareScalingLevel(), cssPixels);
+    const vpH = viewportPx(engine.getRenderHeight(), engine.getHardwareScalingLevel(), cssPixels,
+      engine.getRenderingCanvas()?.clientHeight);
     // Not `cam.fov` directly: whether that is the vertical or the horizontal
     // angle is cameraFrame.ts's question, and this reader was one of four that
     // each answered it separately. Its `|| 0.8` fallback lived on there too.
     const fov = 2 * cameraFrame(this.scene, cam).vHalf;
     // Duck-typed rather than instanceof-checked so this file needs no import
     // of the concrete camera classes: only ArcRotateCamera exposes `radius`.
-    const orbitRadius = (cam as unknown as { radius?: number }).radius;
-    let dist = typeof orbitRadius === "number" ? orbitRadius : 0;
+    let dist = this.orbitCamera() ? (cam as unknown as { radius: number }).radius : 0;
     if (!(dist > 0)) {
       if (shown.length === 0) return 0;
       // Pooled: this runs on EVERY camera-moving frame in first person, and a
@@ -4962,8 +4908,11 @@ export class EntityVisuals {
       // median.
       if (this.distPool.length < shown.length) this.distPool = new Float64Array(shown.length * 2);
       const ds = this.distPool;
+      // The eye the measurement and the occlusion rays use (walkEye) — not
+      // `position`, which is parent-relative (2.496.187).
+      const eye = cam.globalPosition;
       for (let i = 0; i < shown.length; i++) {
-        ds[i] = Math.hypot(shown[i].wx - cam.position.x, shown[i].wz - cam.position.z);
+        ds[i] = Math.hypot(shown[i].wx - eye.x, shown[i].wz - eye.z);
       }
       const view = ds.subarray(0, shown.length);
       view.sort();
@@ -5201,7 +5150,11 @@ export class EntityVisuals {
    */
   private isPhoneWidth(): boolean {
     const engine = this.scene.getEngine();
-    const cssWidth = engine.getRenderWidth() * engine.getHardwareScalingLevel();
+    // The canvas's own CSS width, through the SAME conversion the rung uses —
+    // render × hwScale truncates, and at a boundary width the valve's scale
+    // change flipped the answer with nothing moved (2.496.187).
+    const cssWidth = viewportPx(engine.getRenderWidth(), engine.getHardwareScalingLevel(), true,
+      engine.getRenderingCanvas()?.clientWidth);
     return cssWidth > 0 && cssWidth <= PHONE_MAX_CSS_WIDTH;
   }
 
@@ -5544,7 +5497,7 @@ export class EntityVisuals {
         // Half the card's OWN height, so its bottom edge lands on the anchor
         // exactly as a badge's does — a two-row card would otherwise sit half a
         // row too low, straddling the device it stands for.
-        c.container.linkOffsetYInPixels = -(lay.height / 2) * scale;
+        c.container.linkOffsetYInPixels = -cardLift(lay, scale);
         c.container.isVisible = true;
       }
     }

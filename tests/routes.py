@@ -213,6 +213,42 @@ INGRESS_CAP = 16 * 1000 * 1000  # HA Ingress's per-request limit (~16 MB), Super
 ck("  ...and every model-upload request fits HA Ingress's ~16 MB (single shot and each chunk)",
    max(ts.values()) < INGRESS_CAP and max(ts.values()) <= _nginx_cap("/model-upload"), str(ts))
 
+# ── what CI pulls in is named by commit, and the build is the lockfile's ──
+# A moving tag (`@v4`) lets whoever holds that tag change what runs with the
+# repository's own secrets; a commit cannot move (2.496.207). And `npm
+# install` may rewrite the lockfile to satisfy package.json — the step after
+# it fails the build if it did, which is what `npm ci` would have refused.
+print("\n  supply chain:")
+for wf in sorted((ROOT / ".github" / "workflows").glob("*.yaml")):
+    loose = [l.strip() for l in wf.read_text().splitlines()
+             if re.match(r"\s*(- )?uses: [^.]", l) and not re.search(r"@[0-9a-f]{40}\b", l)]
+    ck(f"{wf.name}: every action is pinned to a commit", not loose, "; ".join(loose))
+ci = (ROOT / ".github" / "workflows" / "ci.yaml").read_text()
+dockerfile = (ROOT / "Dockerfile").read_text()
+ck("CI and the image both install with `npm ci` (the lockfile exactly, or a failure)",
+   "run: npm ci --no-audit --no-fund" in ci and "RUN npm ci --no-audit --no-fund" in dockerfile
+   and not re.search(r"^\s*(run: |RUN )npm install\b", ci + dockerfile, re.M))
+npmrc = (ROOT / ".npmrc").read_text()
+ck("the repository fixes the resolver setting that once made every lockfile a local artefact",
+   re.search(r"^legacy-peer-deps=false$", npmrc, re.M) is not None and "COPY package.json package-lock.json .npmrc ./" in dockerfile)
+
+# ── the proxy runs unprivileged, and writes only where that user owns ──────
+print("\n  who runs the proxy:")
+run = (ROOT / "rootfs" / "etc" / "s6-overlay" / "s6-rc.d" / "supervisor-proxy" / "run").read_text()
+dockerfile = (ROOT / "Dockerfile").read_text()
+ck("the s6 run script drops to `vesta` after handing it /data",
+   run.index("chown -R vesta:vesta /data") < run.index("exec s6-setuidgid vesta python3 /usr/bin/supervisor-proxy.py"))
+ck("  ...and the image creates that account (no home, no shell)", re.search(r"adduser -D -H -s /sbin/nologin\b.* vesta\b", dockerfile) is not None)
+# Filesystem paths only: a module-level `X_FILE/_DIR/_ROOT = "/…"` constant or
+# a literal handed to open()/os.* — HTTP routes ("/auth/verify") are not files.
+src = PROXY.read_text()
+fs = set(re.findall(r'^[A-Z_]+(?:_FILE|_DIR|_ROOT) = "(/[^"]+)"', src, re.M))
+fs |= set(re.findall(r'(?:open|os\.\w+)\(\s*"(/[^"]+)"', src))
+outside = sorted(p for p in fs if not p.startswith(("/data/", "/usr/share/vesta/")))
+ck(f"every filesystem path the proxy names ({len(fs)}) is under /data or the read-only table", fs and not outside, "; ".join(outside))
+ck("an unreadable options file reads as nothing configured (closed), not a crash",
+   "except (OSError, ValueError):\n        return {}" in PROXY.read_text())
+
 print()
 print("✅ the four path lists agree" if FAIL == 0 else "❌ THE PATH LISTS DISAGREE")
 sys.exit(1 if FAIL else 0)

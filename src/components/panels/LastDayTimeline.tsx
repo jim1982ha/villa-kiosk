@@ -1,7 +1,12 @@
 // src/components/panels/LastDayTimeline.tsx
-// The state-history field every simple device panel ends with: the shared
-// range header plus a StateTimeline. Panels with extra needs (a legend, two
-// timelines) compose StateTimeline directly and use useHistoryRange themselves.
+// THE state-history section of a device panel: the shared range header, the
+// fetch with its last-sighting look-back, where that fetch stands, and the
+// StateTimeline. Every panel that charts STATES uses it — Generic and the
+// binary/text Sensor panels had their own copies, and each had lost a piece:
+// Generic drew an offline device's look-back window against "now" (its data
+// fell off the chart), and Sensor had no look-back at all (2.496.188).
+// Panels with two timelines (the camera's rail) compose StateTimeline
+// directly.
 //
 // It owns the fetch rather than receiving `data`, which is what lets the range
 // live here instead of being duplicated as state in every panel.
@@ -9,12 +14,12 @@
 import { useHA } from "@/ha/HAStateStore";
 import { stateLabelFor } from "@/config/BinarySensorClasses";
 import StateTimeline from "./StateTimeline";
-import { useStateHistory } from "@/hooks/useStateHistory";
+import { useStateHistory, historyTitle } from "@/hooks/useStateHistory";
 import { useHistoryRange, HistoryHeader } from "./historyRange";
-import { historyStateColor } from "@/utils/stateColors";
+import { historyStateColor, paletteColorFor } from "@/utils/stateColors";
 
 export default function LastDayTimeline({
-  entityId, colorFor,
+  entityId, colorFor, legend = false,
 }: {
   entityId: string;
   /** Optional — the entity's own domain rules are used by default, which is
@@ -24,28 +29,27 @@ export default function LastDayTimeline({
    *  cover uses for OPEN). Only override for a genuinely non-standard read —
    *  binary_sensor's configurable alert state is the one real case. */
   colorFor?: (state: string) => string;
+  /** States with no colour rule of their own (a text sensor, an unknown
+   *  domain): a palette over the states the window actually holds, with a
+   *  legend saying which is which. Ignored when `colorFor` is given. */
+  legend?: boolean;
 }) {
   const { range, picker } = useHistoryRange();
-  const paint = colorFor ?? historyStateColor(entityId);
-  const { data, loading, lastSeen } = useStateHistory(entityId, range.hours);
+  const { data, status, lastSeen } = useStateHistory(entityId, range.hours);
   const { entities } = useHA();
+  const palette = !colorFor && legend ? paletteColorFor(data.map((p) => p.state)) : undefined;
+  const paint = colorFor ?? palette ?? historyStateColor(entityId);
   return (
     <div className="field">
-      {/* When the window had to be moved to find data, say so — an unlabelled
-          chart of a different period is worse than no chart. */}
-      <HistoryHeader
-        title={lastSeen
-          ? `${range.title} before ${new Date(lastSeen).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`
-          : range.title}
-        picker={picker}
-      />
+      <HistoryHeader title={historyTitle(range.title, lastSeen)} picker={picker} />
       <StateTimeline
         data={data}
         colorFor={paint}
-        loading={loading}
+        status={status}
         hours={range.hours}
         end={lastSeen}
         labelFor={stateLabelFor(entityId, entities[entityId]?.attributes.device_class as string | undefined)}
+        legend={palette && [...new Set(data.map((p) => p.state))].map((s) => ({ state: s, color: palette(s) }))}
       />
     </div>
   );

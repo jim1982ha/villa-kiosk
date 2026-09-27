@@ -358,7 +358,7 @@ export class FloorProbe {
    * floor height can express and far above that noise.
    */
   /**
-   * A FRESH, uncached probe that also says WHAT it hit — debug only.
+   * A FRESH, uncached probe that also says WHAT it hit.
    *
    * ⚠️ Exists because a COUNT is not a diagnosis, and `airborne=26` has now
    * survived two fixes aimed at causes I inferred rather than observed. The
@@ -366,9 +366,11 @@ export class FloorProbe {
    * this names the mesh under each floating pool instead of tallying them.
    *
    * Deliberately bypasses both maps: a cached answer is exactly what must not
-   * be trusted here, and the whole point is to see what a ray finds today. Never
-   * called outside the debug flag — it is a full pick against the unoctree'd
-   * structure, ~21 ms, and there are 144 pools.
+   * be trusted here, and the whole point is to see what a ray finds today.
+   * ⚠️ NOT debug-only (this said it was): lightPlacement asks it for every pool
+   * that lands within half a metre of its own fixture, to tell a ceiling hit
+   * from a genuinely low-mounted light. It is a full pick against the
+   * unoctree'd structure (~21 ms), so keep that the only production caller.
    */
   describeBelow(x: number, y: number, z: number): { y: number; what: string } | null {
     const hit = this.scene.pickWithRay(

@@ -8,11 +8,11 @@
 // upstairs). This drives the real OcclusionSweep with a fake ray cast and a
 // clock that only moves when told to.
 import { register } from "node:module";
+import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const { OcclusionSweep } = await import("@/babylon/occlusionSweep");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 function rig() {
   let t = 1000;
   const walls = new Set();                    // badge ids a wall currently hides
@@ -82,10 +82,37 @@ console.log("\n  the other rules:");
 
 console.log("\n  the caller:");
 // invalidate() is only a fix if the storey switch calls it.
-import { readFileSync } from "node:fs";
 const ev = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
 const floorFn = ev.slice(ev.indexOf("  setActiveFloor("), ev.indexOf("\n  }\n", ev.indexOf("  setActiveFloor(")));
 ck("a storey switch invalidates the sweep", /this\.occlusion\.invalidate\(\)/.test(floorFn));
 
-console.log(fail ? `\n❌ ${fail} failed` : "\n✅ a stale wall never hides, or shows, a badge");
-process.exit(fail ? 1 : 0);
+console.log("\n  the shown set, compared in place (2.496.198):");
+{
+  const r = rig();
+  const a = r.badge("light.a", 0), b = r.badge("light.b", 3), c = r.badge("light.c", 6);
+  const shown = [a, b];
+  run(r, shown); r.wait(300); run(r, shown); run(r, shown);
+  const settled = r.cast.calls;
+  run(r, shown); run(r, shown);
+  ck("the same ids again: no new sweep (no rays)", r.cast.calls === settled, r.cast.calls - settled);
+  shown[1] = c;
+  run(r, shown); r.wait(300); run(r, shown);
+  ck("one id swapped (same length): a new sweep", r.cast.calls > settled);
+  const after = r.cast.calls;
+  shown.push(b);
+  run(r, shown); r.wait(300); run(r, shown);
+  ck("one id added: a new sweep", r.cast.calls > after);
+  const src = readFileSync(new URL("../../src/babylon/occlusionSweep.ts", import.meta.url), "utf8");
+  ck("  ...and no string is built to know it", !/key \+= s\.id/.test(src) && /this\.liveIds\[i\] = shown\[i\]\.id/.test(src));
+}
+
+console.log("\n  the building does not move:");
+{
+  const src = (p) => readFileSync(new URL(`../../src/babylon/${p}`, import.meta.url), "utf8");
+  ck("every GLB mesh is frozen once the extents are adopted", /adoptModelExtents\(\);\s*mark\("applyStructure"\);[\s\S]{0,900}for \(const m of this\.loadedMeshes\) m\.freezeWorldMatrix\(\);/.test(src("SceneManager.ts")));
+  ck("  ...and the one subsystem that moves a GLB mesh unfreezes what it claims", /m\.unfreezeWorldMatrix\(\);\s*m\.computeWorldMatrix\(true\);/.test(src("fanRigs.ts")));
+  ck("the walk camera's per-frame step returns at once under the other camera", /private step\(\): void \{[\s\S]{0,300}if \(this\.scene\.activeCamera !== this\.camera\) return;/.test(src("CameraController.ts")));
+}
+
+done("✅ a stale wall never hides, or shows, a badge");
+

@@ -72,16 +72,19 @@ Access control (why this proxy authenticates at all):
   switch/media_player, plus homeassistant.toggle. Anything else reaching this
   proxy from a non-owner session is either a bug or someone driving the raw
   API from devtools, and is rejected before it reaches Core.
-  This does NOT restrict what a non-owner session can READ (get_states /
-  subscribe_events still stream every entity in the whole HA instance,
-  cameras included) — the kiosk's category/type filtering
-  (permissions.ts/deniedTypes) that hides those from guest is resolved from
-  entityMap, which lives only in the browser's own localStorage and is never
-  visible to this process, so a faithful server-side mirror of THAT part of
-  the matrix isn't possible without moving entity metadata into the add-on's
-  own storage — a larger change, not attempted here. Camera images
-  specifically ARE blocked server-side for guest (see _rest_call_allowed),
-  since that one denial needs no entity metadata, just the request path.
+  What a non-owner session can READ is narrowed by DOMAIN (2.496.208):
+  get_states, state_changed events, the entity registry, the logbook and
+  REST history are filtered to ha-commands.json's `readDomains` — the
+  domains the kiosk draws or scans — by _read_allowed / _relay_to_client /
+  _rest_query_allowed. A person, a tracker, an alarm panel or a calendar
+  never leaves this process for a guest or ops session, and camera states
+  go only to a profile that may view cameras. The kiosk's finer
+  category/type filtering (permissions.ts, per mapped entity) is NOT
+  mirrored here: the effective category depends on the live device_class and
+  the mapping the browser holds, and the guest surfaces scan whole domains
+  (power sensors, the weather station), so a per-entity mirror would either
+  duplicate that rule or break those surfaces. Domain is the line this
+  process can hold on its own.
 
 Security notes:
   * Request smuggling (aiohttp CVE-2025-53643) affects only aiohttp's *pure
@@ -184,6 +187,18 @@ def _session_secret() -> bytes:
         print(f"[supervisor-proxy] could not persist session secret: {err}", flush=True)
     _session_secret_cache = fresh
     return fresh
+
+
+def _rotate_session_secret() -> None:
+    """A NEW signing key: every token ever issued stops verifying, whoever holds
+    it. Sign-every-device-out used to bump only the epoch, which invalidates
+    tokens but leaves the key itself standing — so a copy of /data taken
+    before the sign-out could still mint valid sessions afterwards (2.496.207).
+    Raises OSError when /data cannot be written; the caller decides."""
+    global _session_secret_cache
+    fresh = secrets.token_hex(32).encode()
+    atomic_write(SESSION_SECRET_FILE, lambda out: out.write(fresh), mode=0o600)
+    _session_secret_cache = fresh
 
 
 #: (mtime_ns, epoch) — see `_session_epoch`. Invalidated by the file changing,
@@ -362,6 +377,82 @@ ALLOWED_SERVICE_DOMAINS = frozenset(HA_COMMANDS.get("serviceDomains", ()))
 ALLOWED_HOMEASSISTANT_SERVICES = frozenset(HA_COMMANDS.get("homeassistantServices", ()))
 
 
+# The entity domains a non-owner session may read — see the docstring's
+# "What a non-owner session can READ". FAIL CLOSED like the rest of the table.
+READ_DOMAINS = frozenset(HA_COMMANDS.get("readDomains", ()))
+
+# Websocket commands whose result is a list of ENTITIES: the relay narrows
+# those lists, and a logbook entry that names no entity is dropped rather than
+# passed (it can still carry a name and a message).
+_ENTITY_LIST_COMMANDS = frozenset({"get_states", "config/entity_registry/list", "logbook/get_events"})
+
+
+def _read_allowed(role: str, entity_id: str) -> bool:
+    """Whether this role may see this entity at all. Owner is exempt; everyone
+    else is held to READ_DOMAINS, and to `viewCameras` for a camera."""
+    if _may(role, "administer"):
+        return True
+    domain = str(entity_id).partition(".")[0]
+    if domain not in READ_DOMAINS:
+        return False
+    return domain != "camera" or _may(role, "viewCameras")
+
+
+def _relay_to_client(role: str, text: str, pending: dict) -> str | None:
+    """The one place a Core→browser websocket frame is judged for a non-owner
+    session: the text to forward — narrowed when it lists entities — or None
+    to drop it. `pending` maps a request id to its command type, recorded by
+    the upstream side, so a logbook result is known to be one.
+
+    A state_changed event (or any event naming an entity) for an entity the
+    role may not read is dropped whole. A result that is a list of entities
+    keeps only what the role may read; a logbook result also drops entries
+    that name no entity. Anything unreadable as JSON is dropped: Core speaks
+    JSON, and a frame this process cannot judge must not pass on its say-so."""
+    if _may(role, "administer"):
+        return text
+    try:
+        obj = json.loads(text)
+    except ValueError:
+        return None
+    if not isinstance(obj, dict):
+        return None
+    kind = obj.get("type")
+    if kind == "event":
+        data = (obj.get("event") or {}).get("data") if isinstance(obj.get("event"), dict) else None
+        eid = data.get("entity_id") if isinstance(data, dict) else None
+        if eid is not None and not _read_allowed(role, str(eid)):
+            return None
+        return text
+    if kind == "result":
+        command = pending.pop(obj.get("id"), None)
+        res = obj.get("result")
+        if isinstance(res, list) and any(isinstance(e, dict) and "entity_id" in e for e in res):
+            logbook = command == "logbook/get_events"
+            obj["result"] = [
+                e for e in res
+                if not isinstance(e, dict)
+                or ("entity_id" in e and _read_allowed(role, str(e["entity_id"])))
+                or ("entity_id" not in e and not logbook)
+            ]
+            return json.dumps(obj, separators=(",", ":"))
+        return text
+    return text
+
+
+def _rest_query_allowed(role: str, tail: str, query) -> bool:
+    """The REST twin of _relay_to_client, for the one relayed read that names
+    entities in its QUERY: history/period without `filter_entity_id` returns
+    every entity's history, so a non-owner must name what it asks for, and
+    every id named must be one it may read."""
+    if _may(role, "administer"):
+        return True
+    if not tail.startswith("history/period/"):
+        return True
+    ids = [i.strip() for i in str(query.get("filter_entity_id", "")).split(",") if i.strip()]
+    return bool(ids) and all(_read_allowed(role, i) for i in ids)
+
+
 def _service_call_allowed(role: str, domain: str, service: str) -> bool:
     """Whether a call_service (WS) / services/<domain>/<service> (REST) frame
     from this role may reach Core. Owner administers the kiosk and is exempt
@@ -418,11 +509,23 @@ def _refuse(request: web.Request, capability: str | None = None,
     two 403 shapes — `_forbidden(message)` at most, a bare {"error":
     "forbidden"} at two. tests/proxy-rules.py requires every routed handler
     to call this (or to be named there as public, with its reason)."""
+    if request.method not in ("GET", "HEAD", "OPTIONS") and _cross_site(request):
+        return _forbidden("cross-site request refused")
     if not _authorized(request):
         return _unauthorized()
     if capability is not None and not _may(_role_for(request), capability):
         return _forbidden(message)
     return None
+
+
+def _cross_site(request: web.Request) -> bool:
+    """A write the browser itself says came from another site. Defence in
+    depth behind the cookie's SameSite=Lax: that attribute is what stops a
+    hostile page from riding a signed-in session, and this is the second
+    layer that holds if it ever regresses. Only the browser's own verdict is
+    used, and only a definite one — the header is absent on older WebKit and
+    may be dropped by a gateway, and absence must never lock the kiosk out."""
+    return request.headers.get("Sec-Fetch-Site", "").strip().lower() == "cross-site"
 # Safety cap on a single upload (the GLB is the big one, ~tens of MB).
 MAX_UPLOAD_BYTES = 200 * 1024 * 1024
 # Leading bytes the upload must start with for its declared kind: a binary
@@ -451,6 +554,7 @@ async def ws_handler(request: web.Request):
     if (refused := _refuse(request)) is not None:
         return refused
     role = _role_for(request)
+    pending: dict = {}  # request id -> command type, for _relay_to_client
     # ⚠️ THE SESSION IS RE-RESOLVED FOR THE LIFE OF THE SOCKET, AND IT USED NOT
     # TO BE. `role` was decided here, at the handshake, and captured into the
     # relay loop below — which never looked at the cookie again. So
@@ -525,6 +629,8 @@ async def ws_handler(request: web.Request):
                                 "error": {"code": "unauthorized", "message": refusal},
                             })
                             continue
+                        elif obj.get("type") in _ENTITY_LIST_COMMANDS:
+                            pending[obj.get("id")] = obj["type"]
                     except (ValueError, TypeError):
                         pass
                     await upstream.send_str(data)
@@ -537,7 +643,8 @@ async def ws_handler(request: web.Request):
         async def to_client() -> None:
             async for msg in upstream:
                 if msg.type == WSMsgType.TEXT:
-                    await client.send_str(msg.data)
+                    if (out := _relay_to_client(role, msg.data, pending)) is not None:
+                        await client.send_str(out)
                 elif msg.type == WSMsgType.BINARY:
                     await client.send_bytes(msg.data)
                 else:
@@ -710,6 +817,8 @@ async def rest_handler(request: web.Request) -> web.StreamResponse:
     tail = request.match_info.get("path", "")
     if not _rest_call_allowed(role, tail):
         return _forbidden("This profile may not access this endpoint.")
+    if not _rest_query_allowed(role, tail, request.query):
+        return _forbidden("This profile may not read these entities.")
     session: ClientSession = request.app["session"]
     url = f"http://{SUPERVISOR}/core/api/{tail}"
     headers = {k: v for k, v in request.headers.items() if k.lower() not in HOP_BY_HOP}
@@ -732,10 +841,16 @@ async def rest_handler(request: web.Request) -> web.StreamResponse:
 
 
 def _read_options() -> dict:
+    """The add-on's options, or {} — which every reader treats as "nothing
+    configured": no passcode verifies, no profile opens. That is the CLOSED
+    failure, and it is what an unreadable file must produce: the proxy runs
+    unprivileged (2.496.208) and the Supervisor rewrites this file as root on
+    every option save, so between a save and the restart Home Assistant asks
+    for, a read may be refused rather than merely absent."""
     try:
         with open("/data/options.json") as f:
             return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
+    except (OSError, ValueError):
         return {}
 
 
@@ -1031,19 +1146,27 @@ def _auth_lockout_seconds() -> int:
 
 
 def _client_ip(request: web.Request) -> str:
-    """Best-effort source address for rate-limiting.
+    """The key of a caller's lockout bucket: `<peer>` or `<peer>|<last hop>`.
 
-    Behind Cloudflare + nginx the socket peer is always 127.0.0.1, so the
-    forwarded header is what distinguishes callers. It is client-controllable,
-    which is precisely why it is used ONLY to make the limiter finer-grained
-    and never to grant anything: a forged header can at worst give the forger
-    their own bucket, and the global tier still bounds the total. Falls back to
-    the peer address when the header is absent."""
+    The peer is X-VK-Peer, which nginx sets from the socket it accepted (and
+    overwrites, like X-VK-Ingress — see snippets/backend-proxy.conf); the last
+    hop is the LAST address in X-Forwarded-For, which the gateway in front of
+    us APPENDS: Home Assistant's Ingress appends the browser it authed,
+    Cloudflare's edge appends the true client. Both parts are written by
+    something the caller is not.
+
+    ⚠️ IT USED TO BE THE FIRST FORWARDED HOP — the one address in the request
+    that the caller writes. The docstring reasoned that a forged header "at
+    worst gives the forger their own bucket"; it missed that the forger could
+    pick someone ELSE's: five wrong passcodes with the owner's address in the
+    header locked the owner's device out, repeatably, and a fresh address per
+    attempt minted a fresh bucket, leaving only the global tier to bound
+    guessing (2.496.206). Now a forged header can only fill buckets under the
+    forger's OWN peer — which is the property the old text claimed."""
+    peer = (request.headers.get("X-VK-Peer") or str(request.remote or "?")).strip()[:45]
     fwd = request.headers.get("X-Forwarded-For", "")
-    if fwd:
-        return fwd.split(",")[0].strip()[:64]
-    peer = request.remote or "?"
-    return str(peer)[:64]
+    last = fwd.rsplit(",", 1)[-1].strip()[:45] if fwd else ""
+    return f"{peer}|{last}" if last else peer
 
 
 def _prune_auth_failures(now: float) -> None:
@@ -1135,11 +1258,34 @@ def _lockout_remaining(role: str, ip: str) -> int:
     return max(worst, _global_locked_for(role, now))
 
 
+def _profile_enabled(role: str, ingress: bool) -> bool:
+    """Whether a profile can be entered from where the caller stands.
+
+    A passcode enables a profile anywhere. Without one, only the Guest profile
+    is open — and only through Home Assistant's own sign-in (Ingress), where
+    the person has already proved who they are. On the direct port and the
+    tunnel an empty guest passcode used to mean "anyone who finds the hostname
+    may open the doors" (2.496.207). The option text said so; it was still the
+    wrong default for a hostname that is one guess away."""
+    if _configured_pin(role):
+        return True
+    return role == "guest" and ingress
+
+
+def _profile_disabled_text(role: str) -> str:
+    if role == "guest":
+        return ("The Guest profile has no passcode set, so it can only be opened "
+                "from inside Home Assistant.")
+    return f"the {role} profile has no PIN configured"
+
+
 async def auth_roles_handler(request: web.Request) -> web.Response:
-    """Report which profiles require a passcode — booleans only, no secrets."""
-    return web.json_response(
-        {"roles": {r: {"pinRequired": bool(_configured_pin(r))} for r in AUTH_ROLES}},
-    )
+    """Report which profiles require a passcode and which can be entered from
+    here at all — booleans only, no secrets."""
+    ingress = _is_ingress(request)
+    return web.json_response({"roles": {
+        r: {"pinRequired": bool(_configured_pin(r)), "enabled": _profile_enabled(r, ingress)}
+        for r in AUTH_ROLES}})
 
 
 async def auth_session_handler(request: web.Request) -> web.Response:
@@ -1313,6 +1459,44 @@ def _fm_guest_write_ok(old, new) -> bool:
     return True
 
 
+def _fm_reader_view(request: web.Request, stored):
+    """What this session may READ of the Facility record.
+
+    ⚠️ A GUEST READ EVERYTHING (round 13, 2.496.182). The GET was open to any
+    session because a guest's device must write fault reports, and the client
+    can only write against a copy it has read — so every guest phone downloaded
+    every cost, note, fault and completion in the villa, which the guest report
+    dialog itself says a guest must not see. A profile without manageFacility
+    now reads an EMPTY record (with the real revision, so its writes still
+    carry optimistic concurrency); _fm_writer_merge files what it sends onto
+    the real one.
+    """
+    if _may(_role_for(request), "manageFacility"):
+        return stored
+    return {name: [] for name in FM_RECORD_COLLECTIONS}
+
+
+def _fm_writer_merge(request: web.Request, stored, value):
+    """A restricted session's write, merged onto the REAL record.
+
+    It read an empty view (_fm_reader_view), so what it sends is that view plus
+    its new reports — writing it as-is would erase the villa's record. Only the
+    tickets it ADDED (ids the store does not have) are taken, appended after
+    the stored ones; _fm_guest_write_ok then judges the merged document exactly
+    as before (open, reported by a guest, no cost, at most
+    FM_GUEST_MAX_NEW_TICKETS).
+    """
+    if _may(_role_for(request), "manageFacility") or not isinstance(stored, dict) \
+            or not isinstance(value, dict):
+        return value
+    have = _fm_ids(stored)["tickets"]
+    sent = value.get("tickets") if isinstance(value.get("tickets"), list) else []
+    added = [t for t in sent if isinstance(t, dict) and str(t.get("id")) not in have]
+    merged = dict(stored)
+    merged["tickets"] = list(stored.get("tickets") or []) + added
+    return merged
+
+
 def _fm_write_guard(request: web.Request, body, old, new):
     """Erasing an evidence record needs a superadmin elevation.
 
@@ -1483,20 +1667,15 @@ async def auth_verify_handler(request: web.Request) -> web.Response:
 
     configured = _configured_pin(role)
     if not configured:
-        if role != "guest":
-            # owner/ops are privileged roles — an unset PIN must mean "this
-            # profile isn't available on this path", never "open to anyone
-            # who asks". Only "guest" may be intentionally left PIN-less (a
-            # villa that wants a no-PIN "just look around" mode); config.yaml
-            # ships all three PINs empty by default, and before this check an
-            # unconfigured owner/ops PIN silently minted a full-access session
-            # for ANY caller who reached this endpoint — see the module
-            # docstring's Access control section.
-            return web.json_response(
-                {"error": f"the {role} profile has no PIN configured"}, status=403,
-            )
-        # Un-PIN'd guest profile: grant a session without touching the rate
-        # limiter or requiring a pin. (A pin sent anyway is simply ignored.)
+        # An unset PIN means "this profile isn't available on this path",
+        # never "open to anyone who asks" — config.yaml ships all three PINs
+        # empty, and before this check an unconfigured owner/ops PIN minted a
+        # full-access session for ANY caller. The one exception, a PIN-less
+        # guest inside Home Assistant, is _profile_enabled's to make.
+        if not _profile_enabled(role, _is_ingress(request)):
+            return web.json_response({"error": _profile_disabled_text(role)}, status=403)
+        # Grant the session without touching the rate limiter or requiring a
+        # pin. (A pin sent anyway is simply ignored.)
         resp = web.json_response({"ok": True})
         _set_session_cookie(resp, role)
         return resp
@@ -1546,12 +1725,18 @@ async def auth_logout_all_handler(request: web.Request) -> web.Response:
     """Invalidate every outstanding session on this install (owner-only).
 
     Bumps the session epoch, which is mixed into every signature, so all
-    previously issued cookies stop verifying — including the caller's own.
-    This is the answer to "a device was lost / a PIN was seen"."""
+    previously issued cookies stop verifying — including the caller's own —
+    and replaces the signing key, so nothing copied from /data before this
+    moment can sign a session either. This is the answer to "a device was
+    lost / a PIN was seen"."""
     if (refused := _refuse(request, "administer",
                            "Only the owner profile may sign every device out.")) is not None:
         return refused
     epoch = _bump_session_epoch()
+    try:
+        _rotate_session_secret()
+    except OSError as err:  # the epoch bump above already ended every session
+        print(f"[supervisor-proxy] could not rotate the session secret: {err}", flush=True)
     resp = web.json_response({"ok": True, "epoch": epoch})
     resp.del_cookie(SESSION_COOKIE, path="/")
     return resp
@@ -1915,10 +2100,22 @@ def _read_json_store(path: str, empty):
 def _write_json_store(path: str, payload: str) -> None:
     """Atomic overwrite (temp file + os.replace) so a partial or failed write
     can never leave the live store truncated — readers either see the whole
-    previous version or the whole new one."""
+    previous version or the whole new one. SYNCHRONOUS: request handlers use
+    _write_json_store_async, see there."""
     def _write(out):
         out.write(payload)
     atomic_write(path, _write, binary=False)
+
+
+async def _write_json_store_async(path: str, payload: str) -> None:
+    """_write_json_store on a worker thread. ⚠️ THIS PROCESS HAS ONE EVENT
+    LOOP, and it also relays every kiosk's HA websocket frames (lock, cover,
+    light). A device-config PUT may carry 8 MB and an fm-data PUT 4 MB; writing
+    that inline stalled every relay for the write's duration — "save my
+    settings" and "unlock the front door" shared a thread (2.496.196). The
+    caller's asyncio.Lock still serialises writes to one store; only the
+    blocking part leaves the loop."""
+    await asyncio.to_thread(_write_json_store, path, payload)
 
 
 def _store_revision(path: str) -> str:
@@ -1945,7 +2142,8 @@ def _store_revision(path: str) -> str:
 
 def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
                          writer_capability: str = "editConfig",
-                         write_guard=None, after_write=None):
+                         write_guard=None, after_write=None,
+                         reader_view=None, writer_merge=None):
     """Build the (GET, PUT) handler pair for one shared store.
 
     GET is open to any authorized session — a guest still has to read the
@@ -1960,6 +2158,12 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
     DELETED); `after_write(old, new, baseline_readable)` runs once the write has
     landed (used to purge evidence photos an authorised delete orphaned). Both
     are optional hooks on this one factory rather than a reason to fork it again.
+
+    `reader_view(request, stored)` is what THIS session may read — applied to
+    the GET and to the 409 body alike (a stale write must not be a way to read
+    what a GET withholds). `writer_merge(request, stored, value)` turns what a
+    restricted session sent into the document to write (run BEFORE the guard,
+    which then judges the merged result). Both default to the whole document.
 
     ⚠️ `baseline_readable` IS FALSE WHEN THE STORED DOCUMENT COULD NOT BE
     PARSED. The PUT path refuses such a write outright, so a hook should never
@@ -1999,9 +2203,8 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
     moments earlier. When `rev` is present and stale, the write is rejected
     (409) with the current value + revision instead of applied — the caller
     is expected to rebase its own change onto that fresher copy and retry
-    (see the frontend's DeviceConfigSync). Omitting `rev` keeps the old
-    unconditional-overwrite behaviour, which is what fm-data's single-writer
-    store still uses. The lock makes the read-check-write atomic against a
+    (see the frontend's DeviceConfigSync and fm/fmApi — both stores send it).
+    Omitting `rev` keeps the old unconditional-overwrite behaviour. The lock makes the read-check-write atomic against a
     second PUT landing on this same store mid-request.
     """
     lock = asyncio.Lock()
@@ -2020,8 +2223,10 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
         # never stated. no-store is explicit rather than assumed — confirmed
         # in the field as the cause of one client's shared config silently
         # disagreeing with every other client's.
+        stored_now = _read_json_store(path, empty)
         return web.json_response(
-            {key: _read_json_store(path, empty), "rev": _store_revision(path)},
+            {key: reader_view(request, stored_now) if reader_view else stored_now,
+             "rev": _store_revision(path)},
             headers={"Cache-Control": "no-store"},
         )
 
@@ -2075,13 +2280,18 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
                     # as the GET above rather than relying on 409 responses
                     # not normally being cacheable.
                     return web.json_response(
-                        {"error": "conflict", key: stored, "rev": current_rev},
+                        {"error": "conflict",
+                         key: reader_view(request, stored) if reader_view else stored,
+                         "rev": current_rev},
                         status=409, headers={"Cache-Control": "no-store"})
+            if writer_merge is not None:
+                value = writer_merge(request, stored, value)
+                payload = json.dumps(value)
             if write_guard is not None:
                 veto = write_guard(request, body, stored, value)
                 if veto is not None:
                     return veto
-            _write_json_store(path, payload)
+            await _write_json_store_async(path, payload)
             new_rev = _store_revision(path)
             if after_write is not None:
                 after_write(stored, value, readable)
@@ -2100,6 +2310,57 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
 # user-agent the browser already sends on every request.
 TELEMETRY_FILE = "/data/telemetry.json"
 TELEMETRY_MAX_BODY = 64_000
+# The ring is bounded by COUNT (telemetry_max_events, up to 5000) AND by
+# serialised size: at the count ceiling alone, 5000 x 64 kB events made a
+# ~320 MB file that every POST re-read and rewrote whole (2.496.196).
+TELEMETRY_MAX_RING_BYTES = 2_000_000
+# One writer at a time: the read-append-write below leaves the event loop
+# (a worker thread), so two POSTs could otherwise interleave and one would
+# overwrite the other's event.
+_telemetry_lock = asyncio.Lock()
+
+
+def _telemetry_ring_after(events: list, max_events: int, max_bytes: int) -> list:
+    """The ring to keep: the newest `max_events`, then the newest that fit in
+    `max_bytes` once serialised. Pure — tests/proxy-rules.py drives it."""
+    kept = events[-max_events:] if max_events > 0 else []
+    while len(kept) > 1 and len(json.dumps(kept).encode("utf-8")) > max_bytes:
+        # Halve the excess per step rather than one event per step: a ring
+        # far over the cap (a raised ceiling later lowered) trims in a few
+        # passes, not thousands of full serialisations.
+        drop = max(1, len(kept) // 8)
+        kept = kept[drop:]
+    return kept
+
+
+def _telemetry_append(body: dict, max_events: int, max_bytes: int) -> int:
+    """Read the ring, append, trim, write — on a worker thread (see
+    _write_json_store_async for why nothing here may run on the loop)."""
+    events = _read_json_store(TELEMETRY_FILE, [])
+    events.append(body)
+    events = _telemetry_ring_after(events, max_events, max_bytes)
+    _write_json_store(TELEMETRY_FILE, json.dumps(events))
+    return len(events)
+
+
+def _csp_event(r: dict) -> dict:
+    """A browser's Content-Security-Policy violation report, as a telemetry
+    event. The policy ships Report-Only (snippets/csp.conf) and until 2.496.207
+    reported to nowhere; `report-uri telemetry` now sends each violation here.
+    Only the fields that say what was blocked and where are kept, each capped
+    — the report body is written by the browser, but its values (the blocked
+    URL, the document) are whatever the page held."""
+    def text(key: str, cap: int) -> str:
+        return str(r.get(key) or "")[:cap]
+    line = r.get("line-number")
+    return {
+        "kind": "csp",
+        "directive": text("effective-directive", 120) or text("violated-directive", 120),
+        "blocked": text("blocked-uri", 300),
+        "source": text("source-file", 300),
+        "line": line if isinstance(line, int) and not isinstance(line, bool) else None,
+        "document": text("document-uri", 300),
+    }
 
 
 async def telemetry_post_handler(request: web.Request) -> web.Response:
@@ -2114,6 +2375,8 @@ async def telemetry_post_handler(request: web.Request) -> web.Response:
         return web.json_response({"error": "invalid JSON"}, status=400)
     if not isinstance(body, dict):
         return web.json_response({"error": "event must be an object"}, status=400)
+    if isinstance(body.get("csp-report"), dict):
+        body = _csp_event(body["csp-report"])
     if len(json.dumps(body).encode("utf-8")) > TELEMETRY_MAX_BODY:
         return web.json_response({"error": "event too large"}, status=413)
 
@@ -2123,11 +2386,10 @@ async def telemetry_post_handler(request: web.Request) -> web.Response:
     body["ua"] = request.headers.get("User-Agent", "")[:300]
     body["role"] = _role_for(request)
 
-    events = _read_json_store(TELEMETRY_FILE, [])
-    events.append(body)
-    del events[:-_telemetry_max_events()]       # keep only the newest N
-    _write_json_store(TELEMETRY_FILE, json.dumps(events))
-    return web.json_response({"ok": True, "stored": len(events)})
+    async with _telemetry_lock:
+        stored = await asyncio.to_thread(
+            _telemetry_append, body, _telemetry_max_events(), TELEMETRY_MAX_RING_BYTES)
+    return web.json_response({"ok": True, "stored": stored})
 
 
 async def telemetry_get_handler(request: web.Request) -> web.Response:
@@ -2136,9 +2398,10 @@ async def telemetry_get_handler(request: web.Request) -> web.Response:
     if (refused := _refuse(request, "administer",
                            "Only the owner profile may read telemetry.")) is not None:
         return refused
-    events = _read_json_store(TELEMETRY_FILE, [])
-    if request.query.get("clear") == "1":
-        _write_json_store(TELEMETRY_FILE, json.dumps([]))
+    async with _telemetry_lock:
+        events = await asyncio.to_thread(_read_json_store, TELEMETRY_FILE, [])
+        if request.query.get("clear") == "1":
+            await _write_json_store_async(TELEMETRY_FILE, json.dumps([]))
     return web.json_response(
         {"events": events, "count": len(events)}, headers={"Cache-Control": "no-store"})
 
@@ -2233,7 +2496,7 @@ async def fm_evidence_post_handler(request: web.Request) -> web.Response:
     # orphaned the .part in /data permanently. atomic_write has none of those
     # (fresh mkstemp name, cleanup on every failure path) and is the same
     # primitive the model upload and the JSON stores use.
-    atomic_write(dest, lambda out: out.write(body))
+    await asyncio.to_thread(atomic_write, dest, lambda out: out.write(body))
     pruned = _prune_fm_evidence()
     return web.json_response({"ok": True, "id": photo_id, "bytes": len(body), "pruned": pruned})
 
@@ -2278,7 +2541,8 @@ fm_data_get_handler, fm_data_put_handler = _json_store_handlers(
     # alone would be far too broad. Everything else about the maintenance
     # record stays owner/ops.
     writer_capability="reportFault",
-    write_guard=_fm_write_guard, after_write=_fm_after_write)
+    write_guard=_fm_write_guard, after_write=_fm_after_write,
+    reader_view=_fm_reader_view, writer_merge=_fm_writer_merge)
 
 
 def main() -> None:

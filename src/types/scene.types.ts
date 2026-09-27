@@ -87,7 +87,8 @@ export interface EntityMapping {
    *  change, -1 = fully off, +1 = double. Lets one light be tuned brighter or
    *  dimmer than its HA dimmer level alone would produce (e.g. a fixture
    *  whose room reads darker than the others) without affecting every other
-   *  light (see EntityVisuals' effectiveFrac). */
+   *  light (EntityVisuals.lightReading's `frac`; at −1 every output is off —
+   *  LightPools.poolStrength treats 0 as off since 2.496.185). */
   lightIntensityRatio?: number;
   /** Per-entity badge background colour (#rrggbb) set from the device panel's
    *  icon. Overrides the category's preset gradient for THIS device's map badge

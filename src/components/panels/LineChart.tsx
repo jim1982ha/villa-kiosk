@@ -16,7 +16,7 @@ import type { ReactNode } from "react";
 import type { HistoryPoint, HistoryGap } from "@/types/ha.types";
 import { drawableWindow, type TimeWindow } from "@/utils/lineChart";
 import { chartGeometry, type ChartGeometry } from "@/utils/chartGeometry";
-import type { HistoryStatus } from "@/utils/statisticsSeries";
+import { emptyHistoryText, type HistoryStatus } from "@/utils/statisticsSeries";
 import { STATUS_COLOR } from "@/utils/stateColors";
 import { fmtChartValue, fmtChartTick, fmtChartStamp, fmtOutage } from "./chartUtils";
 import { useChartPointer } from "./useChartPointer";
@@ -44,10 +44,14 @@ export interface LineSpec {
 /** The drawing's own units: the SVG stretches to the tile's width. */
 const W = 320, TOP = 12;
 
-/** What a chart says when it has nothing to draw — three different facts. */
-export function ChartEmpty({ status, height }: { status: HistoryStatus; height?: number }) {
-  if (status === "loading") return <div className="state-timeline-skeleton weather-chart" style={height ? { height } : undefined} />;
-  return <div className="muted body-text weather-chart-empty">{status === "failed" ? "Couldn't load this history." : "Not enough history yet."}</div>;
+/** What a chart says when it has nothing to draw — three different facts
+ *  (emptyHistoryText). `bar` is the state timeline's slim skeleton. */
+export function ChartEmpty({ status, height, bar }: { status: HistoryStatus; height?: number; bar?: boolean }) {
+  const text = emptyHistoryText(status);
+  if (text === null) {
+    return <div className={bar ? "state-timeline-skeleton" : "state-timeline-skeleton weather-chart"} style={height ? { height } : undefined} />;
+  }
+  return <div className={bar ? "muted body-text" : "muted body-text weather-chart-empty"}>{text}</div>;
 }
 
 /** The x labels, under the PLOT: start, middle and the end — "now" when the
@@ -68,13 +72,15 @@ const keyOf = (l: LineSpec): ReactNode => (l.cls
   ? <i className={`key ${l.cls.split(" ")[0]}`} />
   : <span style={{ color: l.color }}>{l.dashed ? "┄" : "●"}</span>);
 
-export default function LineChart({ lines, window, height = 150, status = "ready", label }: {
+export default function LineChart({ lines, window, height = 150, status, label }: {
   lines: readonly LineSpec[];
   /** The span that was asked for — the x-axis. Omitted: the readings' own span. */
   window?: TimeWindow;
   /** The plot's height on screen, px. */
   height?: number;
-  status?: HistoryStatus;
+  /** REQUIRED: a chart that forgot it said "Not enough history yet" while
+   *  still loading (the device group, until 2.496.188). */
+  status: HistoryStatus;
   /** Its accessible name. */
   label: string;
 }) {

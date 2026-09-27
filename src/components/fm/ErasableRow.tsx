@@ -15,7 +15,7 @@ import type { ElevationIntent } from "@/auth/SuperadminGate";
 
 interface Props {
   intent: ElevationIntent;
-  erase: (elevation: string) => Promise<void>;
+  erase: (elevation: string) => Promise<unknown>;
   className?: string;
   /** Tapping the row opens it for editing. Optional — a row with no editor
    *  stays a plain, non-clickable record. */

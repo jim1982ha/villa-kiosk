@@ -154,6 +154,7 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    always-visible section, see CockpitModal) is wider than the 2-button one
    this row used to hold. */
 .cockpit-pivot-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; row-gap: 6px; }
+.cockpit-pivot { flex: 0 0 auto; }
 
 .cockpit-category-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-top: 4px; }
 .cockpit-category-tile { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 12px; background: var(--bg-input); }

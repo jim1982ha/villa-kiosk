@@ -40,9 +40,9 @@ jobs:
     name: kiosk
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           # ⚠️ 24, BECAUSE THE ORACLES IMPORT THE SHIPPED TYPESCRIPT DIRECTLY.
           # They run under plain `node` with type stripping and the repo's own
@@ -51,16 +51,16 @@ jobs:
           node-version: "24"
 
       - name: Install
-        # ⚠️ `npm install`, NOT `npm ci`, AND THAT IS WHY THIS FILE HAS A HISTORY
-        # OF ZERO GREEN RUNS. Every CI run since 2.496.23 created this workflow
-        # failed HERE, on `npm ci`, so not one of the seven gates below has ever
-        # executed on a runner — eleven releases shipped while this file was
-        # cited as their gate. `npm ci` succeeds in a clean local checkout of
-        # the same lockfile, so the cause is the runner, not the lockfile.
-        #
-        # Matching the Dockerfile is also the point: one resolver on both paths
-        # means a green build here says something about the image's build stage.
-        run: npm install --no-audit --no-fund
+        # `npm ci`: the committed lockfile, exactly, or a failure — never a
+        # quiet rewrite. It "failed on the runner and nowhere else" from
+        # 2.496.23 to 2.496.208 and was blamed on the runner; the cause was
+        # the lockfile, written under a developer-machine `legacy-peer-deps`
+        # setting the runner did not share (see .npmrc, which now fixes the
+        # resolver for every machine). Found by the lockfile check this step
+        # replaces, whose annotation showed the runner's rewrite (2.496.208).
+        # The Dockerfile's build stage runs the same command: one resolver on
+        # both paths, so a green run here speaks for the image.
+        run: npm ci --no-audit --no-fund
 
       - name: Types and bundle
         # The gate that already existed, hoisted out of the image so it fails

@@ -124,16 +124,6 @@ ck("pressure tendency: 0.05 steady, +1.0 rising slowly, -2 falling, +7 very rapi
 ck("compass: 357° is N, 109° is ESE", W.compass(357) === "N" && W.compass(109) === "ESE");
 ck("°F to °C", Math.abs(W.toCelsius(212, "°F") - 100) < 1e-9 && W.toCelsius(25, "°C") === 25);
 
-console.log("\n  the insight — derived from the station's own readings");
-{
-  const t = W.comfortInsight({ temperatureC: 29.8, feelsLikeC: 33, dewPointC: 22, indoorDewPointC: 21.9 });
-  ck("feels warmer, by how much", /Feels 3\.2° warmer/.test(t ?? ""), t);
-  ck("the dew point's band", /oppressive/.test(t ?? ""), t);
-  ck("indoors no drier: opening up will not help", /no drier/.test(t ?? ""), t);
-  ck("indoors more humid: airing out would help", /airing out would help/.test(W.comfortInsight({ dewPointC: 18, indoorDewPointC: 21 }) ?? ""));
-  ck("nothing to say without the readings", W.comfortInsight({}) === null);
-}
-
 console.log("\n  the window's words — fixed rules on the station's own readings");
 {
   ck("headline: 25.3°, dew 21.8°, 4 km/h → 'Warm, very humid and still.'", W.comfortHeadline(25.3, 21.8, 4) === "Warm, very humid and still.", W.comfortHeadline(25.3, 21.8, 4));
@@ -214,7 +204,7 @@ console.log("\n  the window: the approved boards 6 and 7");
 console.log("\n  the bar");
 {
   const bar = readFileSync(new URL("../../src/components/hud/SummaryBar.tsx", import.meta.url), "utf8");
-  ck("the Weather tile is there, from the one station rule", /id: "__weather"/.test(bar) && /findWeatherStation\(entities, entityDeviceIds\)/.test(bar));
+  ck("the Weather tile is there, from the one station rule", /id: "__weather"/.test(bar) && /useMemo\(\(\) => findWeatherStation\(visibleEntities, entityDeviceIds\)/.test(bar) && /station: WeatherStation \| null,/.test(bar));
   ck("  ...and opens the Weather modal", /<WeatherPanel station=\{station\}/.test(bar));
   ck("the Pool tile is gone", !/"__pool"|label: "Pool"|Waves/.test(bar));
   const vs = readFileSync(new URL("../../src/config/villaSummary.ts", import.meta.url), "utf8");

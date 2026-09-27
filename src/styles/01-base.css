@@ -267,6 +267,13 @@
   --card-scrim: rgba(23, 25, 26, 0.55);
   --shadow: rgba(23, 25, 26, 0.16);
   --ring: var(--bg-base);
+  /* Chips over MEDIA (a camera feed, an evidence photo): the same dark
+     scrim in every theme, because the thing behind them is a picture, not
+     the theme's ground. Three strengths; seven literals used to restate them
+     across 03-panels and 07-facility (2.496.199). */
+  --chip-scrim: rgba(0, 0, 0, 0.5);
+  --chip-scrim-strong: rgba(0, 0, 0, 0.65);
+  --chip-scrim-solid: rgba(0, 0, 0, 0.88);
 }
 
 /* Under HA Ingress, HA's own chrome already clears the Dynamic Island/notch

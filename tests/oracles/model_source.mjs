@@ -4,10 +4,9 @@
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const { acquireModel } = await import("@/utils/modelSource");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const bytes = new ArrayBuffer(8);
 const fake = (o = {}) => {
   const calls = { idb: 0, cleared: 0, fetched: [] };
@@ -56,5 +55,4 @@ ck("BabylonCanvas asks acquireModel, with the real dependencies, and fetches no 
 ck("  ...and an HTTP answer still sets the error code and the owner's re-upload action",
    /if \(!got\.ok && got\.reason === "http"\) \{\s*setAddonError\(true\);\s*loadErrorCode = got\.code;/.test(bc));
 
-if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
-console.log("\n✅ one answer to where the model comes from");
+done("✅ one answer to where the model comes from");

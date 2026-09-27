@@ -143,7 +143,10 @@ export class SyncedDocument<D, Diff, F extends StoreFetch<D> = StoreFetch<D>> {
     if (outcome.ok) {
       this.unsaved = false;
       this.commit(outcome.next, outcome.rev);
-    } else if (outcome.reason === "nothing-to-push") {
+    } else if (outcome.reason === "nothing-to-push" || outcome.reason === "refused") {
+      // A refusal is FINAL: re-pushing it on every pull would loop for good
+      // and keep this device from ever accepting a newer copy (2.496.184).
+      // The caller undoes its local change.
       this.unsaved = false;
     } else {
       this.unsaved = true;

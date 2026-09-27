@@ -2,7 +2,7 @@
 // Every history a panel draws, from either of Home Assistant's two recorder
 // paths, returned in ONE shape (HistorySeries: points, gaps, window):
 //   * STATES over REST — each change the entity reported (fetchHistory,
-//     fetchStateHistory): the device panels' sparklines and timelines;
+//     fetchStateHistory): the device panels' line charts and timelines;
 //   * STATISTICS over the websocket — the recorder's 5-minute / hourly / daily
 //     buckets (fetchStatistics): the Weather window, whose station reports
 //     every 16 s — 30 days of raw wind would be ~160,000 rows.
@@ -58,7 +58,7 @@ export function numericState(raw: unknown): number {
 }
 
 /**
- * Fetch the last `hours` of NUMERIC history for an entity (line sparklines),
+ * Fetch the last `hours` of NUMERIC history for an entity (line charts),
  * AND the stretches in which it reported nothing usable.
  *
  * ⚠️ THE GAPS ARE PART OF THE RETURN VALUE, NOT AN OPTION. Dropping the

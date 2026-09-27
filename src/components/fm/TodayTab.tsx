@@ -9,7 +9,7 @@
 import { useState } from "react";
 import { Check, CalendarClock, Trash2 } from "lucide-react";
 import { useFmData } from "@/fm/FmDataContext";
-import { formatMoney, isTicketOpen, localStamp, scheduleBoard, shortDate, type ScheduleStatus } from "@/fm/fmEngine";
+import { formatMoney, isTicketOpen, localStamp, scheduleBoard, shortDate, type ScheduleStatus, parseAmount, fmAttention } from "@/fm/fmEngine";
 import { budgetStatus, wouldExceedCap } from "@/fm/fmEngine";
 import { MONEY_CURRENCY } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
@@ -67,7 +67,8 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
     );
   }
 
-  const attention = board.filter((s) => s.state !== "ok");
+  // The ONE attention rule (fmEngine.fmAttention): late tasks, not due-soon.
+  const attention = fmAttention(data).lateTasks;
   const openTickets = data.tickets.filter(isTicketOpen);
 
   return (
@@ -75,7 +76,7 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
       <div className="fm-summary">
         <div className={`fm-stat ${attention.length ? "bad" : "good"}`}>
           <span className="n">{attention.length}</span>
-          <span className="l">need attention</span>
+          <span className="l">tasks need attention</span>
         </div>
         <div className={`fm-stat ${openTickets.length ? "warn" : "good"}`}>
           <span className="n">{openTickets.length}</span>
@@ -185,7 +186,7 @@ function LogCompletion({
   const [amount, setAmount] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const amountIdr = Number(amount.replace(/[^\d]/g, "")) || 0;
+  const amountIdr = parseAmount(amount);
   const willExceed = amountIdr > 0 && wouldExceedCap(data.costs, amountIdr);
 
   return (

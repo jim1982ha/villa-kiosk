@@ -4,7 +4,7 @@
 // sensor exposed as two entities). Opened instead of the primary entity's
 // normal type-based panel (see PanelRouter): every member's current value,
 // plus one dual-axis 24h graph when there are exactly two numeric series
-// (the common case) or a stacked sparkline per series otherwise.
+// (the common case) or a stacked line chart per series otherwise.
 
 import { formatSensorParts } from "@/utils/entityValue";
 import { Layers } from "lucide-react";
@@ -59,7 +59,7 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
       unit: (entity?.attributes.unit_of_measurement as string | undefined) ?? "",
       value: entity?.state ?? "—",
       // ⚠️ THE FORMATTED READING IS A SEPARATE FIELD, NOT AN OVERWRITE OF
-      // `unit`. The sparkline below plots the RAW series and labels its axis
+      // `unit`. The line chart below plots the RAW series and labels its axis
       // from `r.unit`; scaling the label to "kW" while the points stay in
       // watts would put a wrong axis on a right chart. `display` is for the
       // row's headline number only — the one that has to match the badge.
@@ -77,7 +77,7 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
   // different windows would invite exactly the wrong comparison.
   const { range, picker } = useHistoryRange();
 
-  const { data: history } = useHistory<Record<string, HistorySeries>>(
+  const { data: history, status: historyStatus } = useHistory<Record<string, HistorySeries>>(
     numericIds ? `${numericIds}|${range.hours}` : null,
     async () => Object.fromEntries(await Promise.all(
       numericIds.split(",").map((id) => fetchTrend(id, range.hours).then((h) => [id, h] as const)))),
@@ -125,7 +125,7 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
           {/* Two readings of one device, each on its OWN scale (left and
               right axes in their line's colour), the second dashed. */}
           <LineChart label={`${numericRows[0].label} and ${numericRows[1].label} history`} height={120}
-            window={history[numericRows[0].id]?.window}
+            window={history[numericRows[0].id]?.window} status={historyStatus}
             lines={numericRows.slice(0, 2).map((r, i) => ({
               pts: history[r.id]?.points ?? [], gaps: history[r.id]?.gaps ?? [], label: r.label,
               unit: r.unit ? ` ${r.unit}` : "", color: SERIES_COLORS[i], dashed: i === 1, scale: "own" as const,
@@ -148,7 +148,7 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
             {i === 0
               ? <HistoryHeader title={`${r.label} — ${range.title.toLowerCase()}`} picker={picker} />
               : <label className="entity-label">{r.label} — {range.title.toLowerCase()}</label>}
-            <LineChart label={`${r.label} history`} height={110} window={history[r.id]?.window}
+            <LineChart label={`${r.label} history`} height={110} window={history[r.id]?.window} status={historyStatus}
               lines={[{ pts: history[r.id]?.points ?? [], gaps: history[r.id]?.gaps ?? [], label: r.label, unit: r.unit ? ` ${r.unit}` : "", color: SERIES_COLORS[i % SERIES_COLORS.length] }]} />
           </div>
         ))

@@ -42,7 +42,14 @@ export type Capability =
    *  NOT manageFacility — a guest files a report and can do nothing else with
    *  it; triage, status, cost and resolution stay with owner/ops, and the
    *  add-on enforces that shape server-side (_fm_guest_write_ok). */
-  | "reportFault";
+  | "reportFault"
+  /** Lists and counts cover the villa's devices that are NOT on the 3D map
+   *  too. A guest's do not: an off-map device has no presence a guest could
+   *  see, so it is neither listed nor counted (listedDevices). */
+  | "listUnmappedDevices"
+  /** The count of firmware/add-on updates Home Assistant has waiting — a
+   *  maintenance signal for whoever administers the kiosk. */
+  | "seeUpdates";
 
 export interface RolePermissions {
   /** Device categories this profile sees on the map. "all" = every category. */
@@ -100,7 +107,7 @@ const PERMISSION_MATRIX: Record<Role, RolePermissions> = {
     deniedTypes: [],
     capabilities: [
       "controlEntities", "openSettings", "customizeAppearance", "editConfig", "manageModel",
-      "manageFacility", "reportFault",
+      "manageFacility", "reportFault", "listUnmappedDevices", "seeUpdates",
     ],
   },
   ops: {
@@ -113,6 +120,7 @@ const PERMISSION_MATRIX: Record<Role, RolePermissions> = {
     // evidences the property's own maintenance/inspection obligations.
     capabilities: [
       "controlEntities", "openSettings", "customizeAppearance", "manageFacility", "reportFault",
+      "listUnmappedDevices",
     ],
   },
 };
@@ -121,9 +129,40 @@ export function hasCapability(role: Role, cap: Capability): boolean {
   return PERMISSION_MATRIX[role].capabilities.includes(cap);
 }
 
+/** hasCapability for a profile that may not be chosen yet: no role, no
+ *  rights. EVERY role question outside this file goes through the table —
+ *  five files compared role names directly (`role === "owner"`), which a
+ *  new profile or a changed row of the matrix could not reach. */
+export function roleCan(role: Role | null | undefined, cap: Capability): boolean {
+  return role != null && hasCapability(role, cap);
+}
+
+/**
+ * The devices a profile's LISTS and COUNTS cover — ONE rule for a summary
+ * tile's count and the list the tile opens, and for the attention badge and
+ * the Cockpit list (2.496.191). They used to be decided apart: the room list
+ * dropped off-map devices for a guest while the tile still counted them
+ * ("3 On" over a list of two). A null role (no profile yet) covers nothing.
+ */
+export function listedDevices(
+  role: Role | null, devices: { has(id: string): boolean }, mapped: { has(id: string): boolean },
+): { has(id: string): boolean } {
+  if (role === null) return { has: () => false };
+  if (hasCapability(role, "listUnmappedDevices")) return devices;
+  return { has: (id) => devices.has(id) && mapped.has(id) };
+}
+
 export function isCategoryAllowed(role: Role, category: Category): boolean {
   const allowed = PERMISSION_MATRIX[role].allowedCategories;
   return allowed === "all" || allowed.includes(category);
+}
+
+/** Whether the role may see entities of this type at all (its deniedTypes).
+ *  The surfaces that are not an entity's own panel — the motion toast, the
+ *  room glow — ask this, so a guest's profile ("no motion sensors") holds
+ *  there too (2.496.210). */
+export function isTypeAllowed(role: Role, type: EntityType): boolean {
+  return !PERMISSION_MATRIX[role].deniedTypes.includes(type);
 }
 
 /** Categories the role must never see — merged into the scene's hidden set. */
@@ -133,7 +172,7 @@ function deniedCategories(role: Role): Category[] {
 
 /** Full per-entity check: category allowed AND type not denied. */
 function isEntityAllowed(role: Role, type: EntityType, category: Category): boolean {
-  return isCategoryAllowed(role, category) && !PERMISSION_MATRIX[role].deniedTypes.includes(type);
+  return isCategoryAllowed(role, category) && isTypeAllowed(role, type);
 }
 
 /** The guest-style bounded climate range, when the role has one. */

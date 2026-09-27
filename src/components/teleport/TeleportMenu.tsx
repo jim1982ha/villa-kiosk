@@ -14,6 +14,7 @@
 import { X, MapPin, Plus, Trash2 } from "lucide-react";
 import { Axis } from "@babylonjs/core/Maths/math.axis";
 import { useState } from "react";
+import { useBackToClose } from "@/hooks/useBackToClose";
 import { useConfig } from "@/config/ConfigContext";
 import AskDialog from "@/components/common/AskDialog";
 import { roomKey } from "@/config/roomKey";
@@ -33,6 +34,7 @@ export default function TeleportMenu({ manager, currentFloor, onClose, onTelepor
   /** Which in-app dialog is open, if any — see AskDialog for why these are not
    *  `prompt`/`confirm`/`alert`. `null` means none. */
   const [ask, setAsk] = useState<{ kind: "add" } | { kind: "remove"; name: string } | null>(null);
+  useBackToClose(onClose);
 
   /**
    * "Where am I standing" — captured from whichever camera is ACTUALLY

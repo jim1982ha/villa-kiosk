@@ -1,7 +1,7 @@
 // src/utils/chartHover.ts
 // A chart's hover, both ends: where the pointer is across the plot (in), and
 // where the tooltip goes on screen (out). Every chart in the app — the device
-// panels' sparklines, the state timelines, the Weather and Energy charts —
+// panels' line charts, the state timelines, the Weather and Energy charts —
 // goes through these two rules.
 //
 // ⚠️ SIX COPIES OF "IN", SIX CONVENTIONS OF "OUT" (2.496.117). The pointer was

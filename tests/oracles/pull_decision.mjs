@@ -9,10 +9,9 @@
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const { decidePull } = await import("@/utils/pullDecision");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const base = { writeInFlight: false, reached: true, serverEmpty: false, localAhead: false, wouldChange: true };
 const d = (over) => decidePull({ ...base, ...over });
 
@@ -47,5 +46,5 @@ ck("  ...counting a write that began during it", /localAhead: this\.writes !== w
 ck("the Facility store and the device-config sync are both that machine, and neither decides for itself",
    /new SyncedDocument\(/.test(fm) && /new SyncedDocument\(/.test(dc) && !/decidePull\(/.test(fm + dc) && /await doc\.pull\(/.test(fm) && /await doc\.pull\(/.test(dc));
 
-console.log(fail ? `\n❌ ${fail} failed` : "\n✅ a refresh never overwrites work this device has not saved");
-process.exit(fail ? 1 : 0);
+done("✅ a refresh never overwrites work this device has not saved");
+

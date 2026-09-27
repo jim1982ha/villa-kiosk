@@ -10,7 +10,7 @@
 import {
   MINOR_MAINTENANCE_CAP,
   MONEY_CURRENCY,
-  type FmCompletion, type FmCost, type FmData, type FmSchedule, type FmTicket,
+  type FmCompletion, type FmCost, type FmData, type FmSchedule, type FmTicket, type FmTicketStatus,
 } from "./fmTypes";
 
 const DAY_MS = 86_400_000;
@@ -393,4 +393,74 @@ export function withTicketAdvanced(
       : d.completions,
     costs: costId ? [...d.costs, { ...cost!, id: costId, at, photoIds: step.photoIds }] : d.costs,
   };
+}
+
+
+// ── Rules that lived in the screens (round 13, 2.496.183) ─────────────────
+// Each was written in a component or the store's context, where only a regex
+// could reach it, and several already disagreed with the engine or with each
+// other. tests/oracles/fm_rules.mjs drives them by value.
+
+/** Where a fault goes next from the Faults tab. Resolved is final there. */
+export const TICKET_NEXT: Readonly<Record<FmTicketStatus, FmTicketStatus | null>> = {
+  open: "in_progress", in_progress: "resolved", resolved: null,
+};
+
+/** A fault's place in the list: open, then in progress, then resolved. A
+ *  status this build does not know is treated as OPEN — the engine's own
+ *  reading (isTicketOpen) — where the list used to rank it beside resolved. */
+export function ticketRank(t: Pick<FmTicket, "status">): number {
+  if (isTicketResolved(t)) return 2;
+  return t.status === "in_progress" ? 1 : 0;
+}
+
+/**
+ * An amount typed by an operator, as a whole number of the currency's units.
+ * Grouping separators are dropped; a trailing ".xx" / ",xx" (one or two
+ * digits) is a FRACTION and is rounded, not glued on — "12.50" was 1250.
+ * Written three times before (Today, Spend, the fault resolution).
+ */
+export function parseAmount(text: string): number {
+  const t = text.replace(/\s/g, "");
+  const frac = /^(.*\d)[.,](\d{1,2})$/.exec(t);
+  const whole = Number((frac ? frac[1] : t).replace(/[^\d]/g, "")) || 0;
+  return frac ? Math.round(whole + Number(`0.${frac[2]}`)) : whole;
+}
+
+/** Erase a fault WITH its history: the completion that resolved it and the
+ *  cost logged against it — the store's own docstring promised this, and the
+ *  context only removed the ticket, leaving the rows "a fault since erased". */
+export function withoutTicket(d: FmData, id: string): FmData {
+  const t = d.tickets.find((x) => x.id === id);
+  const fromIt = d.completions.filter((c) => c.ticketId === id);
+  const costIds = new Set([t?.costId, ...fromIt.map((c) => c.costId)].filter((x): x is string => !!x));
+  return {
+    ...d,
+    tickets: d.tickets.filter((x) => x.id !== id),
+    completions: d.completions.filter((c) => c.ticketId !== id),
+    costs: d.costs.filter((c) => !costIds.has(c.id)),
+  };
+}
+
+/** What a completion answered: a scheduled task, a fault, or something since
+ *  removed — one reading for the report and the recent-work list. */
+export function completionSource(
+  d: Pick<FmData, "schedules" | "tickets">, c: Pick<FmCompletion, "scheduleId" | "ticketId">,
+): { kind: "schedule" | "fault"; title: string | undefined } {
+  if (c.ticketId) return { kind: "fault", title: d.tickets.find((t) => t.id === c.ticketId)?.title };
+  return { kind: "schedule", title: d.schedules.find((s) => s.id === c.scheduleId)?.title };
+}
+
+/**
+ * What NEEDS ATTENTION in the Facility record — ONE rule for the HUD badge,
+ * the Cockpit and the Today tab: open faults, and tasks overdue or never
+ * recorded. Due-soon is not attention (it is not late yet); Today counted it
+ * under the same words, so its number and the HUD's could differ.
+ */
+export function fmAttention(d: FmData, now = Date.now()): {
+  openFaults: FmTicket[]; lateTasks: ReturnType<typeof scheduleBoard>; total: number;
+} {
+  const openFaults = d.tickets.filter(isTicketOpen);
+  const lateTasks = scheduleBoard(d, now).filter((s) => s.state === "overdue" || s.state === "never");
+  return { openFaults, lateTasks, total: openFaults.length + lateTasks.length };
 }

@@ -10,6 +10,7 @@
 // Babylon's own transparent sort, on the real CameraBeams mesh.
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 globalThis.OffscreenCanvas ??= class { constructor(w,h){this.width=w;this.height=h} getContext(){return{createImageData:(w,h)=>({data:new Uint8ClampedArray(w*h*4)}),putImageData(){}}} };
 const { NullEngine } = await import("@babylonjs/core/Engines/nullEngine.js");
 const { Scene } = await import("@babylonjs/core/scene.js");
@@ -41,8 +42,6 @@ const cutOff = (indexOf) => cameras.filter((cam) => {
   return subs[0].getMesh() === glass;
 }).length;
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const before = cutOff(() => Number.MAX_VALUE);
 console.log(`  ${cameras.length} outside viewpoints; the OLD order cuts the cone off from ${before}`);
 ck("the old order really does let the glass cut the cone off", before > 0, before);
@@ -56,5 +55,5 @@ ck("  ...before every default-ordered transparent mesh", idx.every(([, v]) => v 
 ck("  ...and the cone comes after the floor layers it may stand over",
    order.CAMERA_BEAM_ALPHA_INDEX > order.LIGHT_POOL_ALPHA_INDEX && order.CAMERA_BEAM_ALPHA_INDEX > order.ROOM_GLOW_ALPHA_INDEX);
 
-console.log(fail ? `\n❌ ${fail} failed` : "\n✅ no see-through layer is ordered by where the camera happens to be");
-process.exit(fail ? 1 : 0);
+done("✅ no see-through layer is ordered by where the camera happens to be");
+

@@ -132,6 +132,8 @@
    the same 38px so it doesn't read as a mismatched size next to it. */
 .hud-profile .icon-btn { width: 38px; height: 38px; }
 
+/* The compact-top-bar tier — the same compound breakpoint 05-layout.css
+   uses; kept as two rules because the bodies style different screens. */
 @media (max-width: 640px), (max-height: 560px) {
   .profile-title { font-size: var(--text-display-sm); }
   .profile-cards { gap: 12px; }

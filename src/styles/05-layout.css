@@ -38,57 +38,6 @@
   will-change: transform;
 }
 
-/* Shared "last 24 hours" graph height for Sparkline/DualSparkline/
-   StateTimeline — bumped from 60px now that panels no longer spend that
-   space on a redundant "Updated …" / "Running for …" footer line (removed
-   in favour of taller, more readable graphs). */
-.sparkline { width: 100%; display: block; }
-.spark-wrap { position: relative; width: 100%; }
-/* --text-muted / --border were never defined in either theme (only
-   --text-secondary / --hairline exist as the app's actual muted-text and
-   border tokens) — an undefined custom property falls back to the SVG/CSS
-   initial value (fill: black for text/stroke), which is why the axis labels
-   were nearly invisible specifically in dark mode (black text on a dark
-   panel) and the grid/tooltip border was similarly off in both themes. */
-.spark-grid { stroke: var(--hairline); stroke-width: 1; opacity: 0.35; }
-.spark-axis { font-size: var(--text-2xs); fill: var(--text-secondary); }
-.spark-crosshair { stroke: var(--text-secondary); stroke-width: 1; opacity: 0.55; }
-.spark-tip {
-  position: absolute; z-index: 5; pointer-events: none;
-  display: flex; flex-direction: column; gap: 1px;
-  padding: 5px 8px; border-radius: 8px; white-space: nowrap;
-  background: var(--bg-overlay); backdrop-filter: blur(8px);
-  border: 1px solid var(--hairline); box-shadow: 0 4px 14px rgba(0,0,0,0.35);
-  font-size: var(--text-xs); color: var(--text-primary); line-height: 1.35;
-}
-.spark-tip strong { font-size: var(--text-sm); }
-.spark-tip .spark-tip-time, .spark-tip span:last-child { color: var(--text-secondary); font-size: var(--text-2xs); }
-/* A bucketed timeline's tip lists N events as siblings, so the generic
-   span:last-child rule above would single the final one out as if it were the
-   dimmed timestamp line of the two-line variant. Every event reads the same. */
-.spark-tip .spark-tip-event, .spark-tip span.spark-tip-event:last-child {
-  color: var(--text-primary); font-size: var(--text-xs);
-}
-.state-timeline { position: relative; width: 100%; height: 78px; border-radius: 8px; overflow: hidden; background: var(--bg-input); }
-.state-timeline-seg { position: absolute; top: 0; bottom: 0; }
-.state-timeline-cursor { position: absolute; top: 0; bottom: 0; width: 2px; background: rgba(255,255,255,0.85); box-shadow: 0 0 3px rgba(0,0,0,0.5); pointer-events: none; }
-/* Vertical variant: segments span the full WIDTH and are positioned/sized on
-   the Y axis instead (the inline styles switch axis to match — see
-   StateTimeline's `vertical`), so the two orientations share one component
-   and one set of segment maths rather than being reimplemented. */
-.state-timeline-vertical .state-timeline-seg { top: auto; bottom: auto; left: 0; right: 0; }
-.state-timeline-vertical .state-timeline-cursor { top: auto; bottom: auto; left: 0; right: 0; width: auto; height: 2px; }
-/* Loading placeholder — same footprint as the real bar, so nothing jumps
-   when history actually arrives. A soft sweep, not spinner/text, so it
-   doesn't compete with the rest of the panel while it's still settling. */
-.state-timeline-skeleton {
-  width: 100%; height: 78px; border-radius: 8px;
-  background: linear-gradient(90deg, var(--bg-input) 25%, var(--bg-panel) 50%, var(--bg-input) 75%);
-  background-size: 200% 100%;
-  animation: state-timeline-sweep 1.4s ease-in-out infinite;
-}
-@keyframes state-timeline-sweep { from { background-position: 200% 0; } to { background-position: -200% 0; } }
-
 /* --- Animations --- */
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes fadeSlide { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translate(-50%, 0); } }

@@ -3,11 +3,10 @@
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const R = await import("@/components/panels/energyRanges");
 const E = await import("@/config/energyModel");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 
 console.log("  the table:");
 ck("Day, Week, Month, Year, in the picker's order", R.ENERGY_RANGES.map((r) => r.label).join() === "Day,Week,Month,Year");
@@ -29,5 +28,4 @@ ck("no range ternary or second map left in the window", !/range === "(day|week|m
 ck("the history's cache key is the period's NAME (a row object there keyed every period '[object Object]')", /`energy-history\|\$\{range\.key\}\|\$\{starts\[0\]\}`/.test(panel));
 ck("today's hour-by-hour chart is the Day row too", /energyRange\("day"\)\.ticks\(hours\.length\)/.test(panel));
 
-if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
-console.log("\n✅ one row a period");
+done("✅ one row a period");

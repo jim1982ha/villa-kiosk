@@ -12,6 +12,8 @@
 // testing from a desktop browser), where the console's native scrollback,
 // search and copy beat a custom on-screen div.
 
+import { clamp } from "./geometry";
+import { readJson, writeJson } from "./storedJson";
 import { debugFlagEnabled } from "@/utils/devLog";
 
 // Full history for this page load, independent of the rolling on-screen
@@ -88,24 +90,19 @@ const GEOM_KEY = "villa:debug:geom";
 interface BoxGeom { left: number; top: number; w: number; h: number; }
 
 function loadGeom(): BoxGeom | null {
-  try {
-    const raw = localStorage.getItem(GEOM_KEY);
-    if (!raw) return null;
-    const g = JSON.parse(raw) as Partial<BoxGeom>;
-    if ([g.left, g.top, g.w, g.h].some((v) => typeof v !== "number" || !Number.isFinite(v))) return null;
-    return g as BoxGeom;
-  } catch {
-    return null;
-  }
+  return readJson<BoxGeom>(GEOM_KEY, (v): v is BoxGeom => {
+    const g = v as Partial<BoxGeom> | null;
+    return !!g && ![g.left, g.top, g.w, g.h].some((n) => typeof n !== "number" || !Number.isFinite(n));
+  });
 }
 
 function saveGeom(el: HTMLDivElement): void {
   try {
     const r = el.getBoundingClientRect();
-    localStorage.setItem(GEOM_KEY, JSON.stringify({
+    writeJson(GEOM_KEY, {
       left: Math.round(r.left), top: Math.round(r.top),
       w: Math.round(r.width), h: Math.round(r.height),
-    }));
+    });
   } catch { /* private mode, quota — the panel still works, it just forgets */ }
 }
 
@@ -116,8 +113,8 @@ function clampIntoView(el: HTMLDivElement): void {
   const r = el.getBoundingClientRect();
   const maxLeft = Math.max(0, window.innerWidth - Math.min(r.width, window.innerWidth));
   const maxTop = Math.max(0, window.innerHeight - 40); // a header's worth stays grabbable
-  el.style.left = `${Math.min(Math.max(0, r.left), maxLeft)}px`;
-  el.style.top = `${Math.min(Math.max(0, r.top), maxTop)}px`;
+  el.style.left = `${clamp(r.left, 0, maxLeft)}px`;
+  el.style.top = `${clamp(r.top, 0, maxTop)}px`;
 }
 
 /** Drag the panel by its header. Pointer events (not mouse) so it works with

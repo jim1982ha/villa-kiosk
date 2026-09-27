@@ -10,11 +10,10 @@
 // must say what the badge says.
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const { badgeKindFor, meshLookFor } = await import("@/utils/deviceActivity");
 const { alertStateFor } = await import("@/config/BinarySensorClasses");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const ent = (state, attrs = {}) => ({ entity_id: "x.y", state, attributes: attrs, last_changed: "", last_updated: "" });
 const read = (type, state, attrs = {}, override) => ({
   type, entity: ent(state, attrs), linkedOn: false,
@@ -76,5 +75,5 @@ console.log("\n  the caller:");
   ck("  ...nor a literal colour", !/new Color3\(0\.2, 0\.75, 0\.3\)|new Color3\(0\.9, 0\.2, 0\.2\)|new Color3\(0\.1, 0\.35, 0\.4\)/.test(ev));
 }
 
-console.log(fail ? `\n❌ ${fail} failed` : "\n✅ one reading, one look");
-process.exit(fail ? 1 : 0);
+done("✅ one reading, one look");
+

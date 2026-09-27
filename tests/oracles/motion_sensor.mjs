@@ -10,10 +10,9 @@
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const { isMotionSensor, MOTION_DEVICE_CLASSES } = await import("@/config/BinarySensorClasses");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 
 ck("by device_class: motion, presence, occupancy, moving", ["motion", "presence", "occupancy", "moving"].every((dc) => isMotionSensor("binary_sensor.x", dc)));
 ck("a door contact is not motion", !isMotionSensor("binary_sensor.front_door", "door"));
@@ -29,5 +28,5 @@ ck("the motion toast asks isMotionSensor", /if \(!isMotionSensor\(id, /.test(das
 ck("the categoriser reads the same list and hint", /MOTION_DEVICE_CLASSES\.has\(dc\)/.test(cats) && /MOTION_ID_HINT\.test\(id\)/.test(cats) && !/ACCESS_BINARY_DC/.test(cats));
 ck("the list has one definition", MOTION_DEVICE_CLASSES.size === 4);
 
-console.log(fail ? `\n❌ ${fail} failed` : "\n✅ one motion rule");
-process.exit(fail ? 1 : 0);
+done("✅ one motion rule");
+

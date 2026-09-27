@@ -9,12 +9,11 @@
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const { villaSummary, lockFacts } = await import("@/config/villaSummary");
 const { buildReadiness } = await import("@/fm/readiness");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const E = (id, state, attributes = {}) => ({ entity_id: id, state, attributes });
 const entities = Object.fromEntries([
   E("lock.front", "locked"), E("lock.back", "unlocked"), E("lock.gate", "unavailable"),
@@ -58,5 +57,5 @@ const bar = readFileSync(new URL("../../src/components/hud/SummaryBar.tsx", impo
 ck("the summary bar reads its facts from villaSummary", /villaSummary\(\{/.test(bar));
 ck("  ...and keeps no copy of the rules", !/byDomain\("(climate|sensor|switch)"\)/.test(bar) && !/POOL_WORD\s*=/.test(bar));
 
-console.log(fail ? `\n❌ ${fail} failed` : "\n✅ one answer per door, on every screen");
-process.exit(fail ? 1 : 0);
+done("✅ one answer per door, on every screen");
+

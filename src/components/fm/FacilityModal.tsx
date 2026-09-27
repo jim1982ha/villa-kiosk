@@ -219,7 +219,7 @@ export default function FacilityModal({
 
           <div className="modal-footer">
             <span className="muted body-text" style={{ fontSize: "var(--text-xs)" }}>
-              Maintenance intervals and the spend cap are set in the Schedule tab
+              Maintenance intervals are set in the Schedule tab
             </span>
             <button className="btn primary" onClick={onClose}>Close</button>
           </div>

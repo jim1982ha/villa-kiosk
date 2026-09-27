@@ -8,12 +8,13 @@
 // which is why the entry form projects the new total as you type.
 
 import { useState } from "react";
+import SaveButton from "@/components/common/SaveButton";
 import { Plus, Sparkles, Save, Download } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { resolveSiteTitle } from "@/config/AppConfig";
 import { useFmData } from "@/fm/FmDataContext";
-import { budgetStatus, formatMoney, monthKey, localStamp } from "@/fm/fmEngine";
+import { budgetStatus, formatMoney, monthKey, localStamp, parseAmount } from "@/fm/fmEngine";
 import { MONEY_CURRENCY } from "@/fm/fmTypes";
 import { buildSpendStatement } from "@/fm/fmReport";
 import type { FmCost, FmSavedDocument } from "@/fm/fmTypes";
@@ -76,7 +77,7 @@ export default function SpendTab(
   };
 
   const b = budgetStatus(data.costs, month);
-  const amountIdr = Number(amount.replace(/[^\d]/g, "")) || 0;
+  const amountIdr = parseAmount(amount);
 
   const generateStatement = () => {
     setStatement(buildSpendStatement(data, month, villaName));
@@ -93,8 +94,7 @@ export default function SpendTab(
   };
   const saveStatement = async () => {
     if (!statement) return;
-    await saveDocument({ kind: "spend", month, markdown: statement });
-    setStatementSaved(true);
+    if (await saveDocument({ kind: "spend", month, markdown: statement }) === "saved") setStatementSaved(true);
   };
   const reopenStatement = (doc: FmSavedDocument) => {
     setMonth(doc.month);
@@ -192,8 +192,10 @@ export default function SpendTab(
           <label className="fm-field">
             <span>Category</span>
             <select value={category} onChange={(e) => setCategory(e.target.value as "minor" | "major")}>
-              <option value="minor">Minor — shared Direct Expense (Cl. 3.3(i))</option>
-              <option value="major">Major — Owner&rsquo;s account (Cl. 6.2(iii))</option>
+              {/* Neutral words: which contract clause or account a category
+                  maps to is one villa's arrangement (hard-rules.py, 3b). */}
+              <option value="minor">Minor — routine maintenance</option>
+              <option value="major">Major — larger works</option>
             </select>
           </label>
 
@@ -293,9 +295,7 @@ export default function SpendTab(
         <button className="btn ghost" onClick={generateStatement}>
           <Sparkles size={16} /> {statement ? "Regenerate statement" : "Generate statement"}
         </button>
-        <button className="btn ghost" onClick={() => void saveStatement()} disabled={!statement || statementSaved}>
-          <Save size={16} /> {statementSaved ? "Saved" : "Save statement"}
-        </button>
+        <SaveButton saved={statementSaved} label="Save statement" icon={<Save size={16} />} onClick={() => void saveStatement()} disabled={!statement} />
         <button className="btn ghost" onClick={downloadStatement} disabled={!statement}>
           <Download size={16} /> Download .md
         </button>

@@ -5,11 +5,10 @@
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const E = await import("@/config/energyModel");
 const O = await import("@/config/energyObservations");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 
 const setup = { ...E.energySetup({
   energy_sources: [{ type: "grid", stat_energy_from: "sensor.grid_in" }],
@@ -73,5 +72,4 @@ ck("the overlap note and card are one rule", /\{overlapShows\(split\) && \(/.tes
 ck("no card, threshold or percent rule is left in the view", !/cards\.push/.test(panel) && !/Math\.round\(\([^)]*\) \* 100\)/.test(panel));
 ck("the history figures are historyFigures'", /historyFigures\(p, unit, label, costUnit\)\.map/.test(panel));
 
-if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
-console.log("\n✅ what the Energy window says, as rules");
+done("✅ what the Energy window says, as rules");

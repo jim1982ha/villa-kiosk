@@ -6,12 +6,11 @@
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const G = await import("@/config/summaryGroups");
 const V = await import("@/config/villaSummary");
 const { DoorClosed, DoorOpen, Lock } = await import("lucide-react");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const e = (id, state) => ({ entity_id: id, state, attributes: {} });
 const ents = (list) => Object.fromEntries(list.map((x) => [x.entity_id, x]));
 const villa = { has: (id) => !id.includes("neighbour") };
@@ -35,5 +34,4 @@ ck("the tile and the Facility shortcut build the groups from the facts", /locksG
 ck("summaryGroups selects no domain itself and imports no screen", !/startsWith\("lock\.|startsWith\("light\./.test(sg) && !/@\/components\//.test(sg));
 ck("no assumed Celsius on the AC tile", !/°C`/.test(sb) && /fmtClimateTemp\(avg, tempUnit\)/.test(sb) && /haConfig\?\.unit_system\?\.temperature/.test(sb));
 
-if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
-console.log("\n✅ a summary's icon and words come from the same facts");
+done("✅ a summary's icon and words come from the same facts");

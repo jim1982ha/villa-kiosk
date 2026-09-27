@@ -10,6 +10,7 @@
 import { eyeHeightOf } from "@/babylon/walkerSpawn";
 import { useState } from "react";
 import ModalFooter from "@/components/common/ModalFooter";
+import SegmentedGroup from "@/components/common/SegmentedGroup";
 import UnsavedChanges from "@/components/common/UnsavedChanges";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import {
@@ -212,24 +213,11 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
           {can("customizeAppearance") && (
             <div className="settings-header-control">
               <span className="settings-inline-label">Interface</span>
-            <div className="segmented segmented-icons" role="group" aria-label="Interface theme">
-              {([
-                { key: "light", label: "Light interface theme", icon: Sun },
-                { key: "dark", label: "Dark interface theme", icon: Moon },
-                { key: "auto", label: "Auto — follows the system, and dims to the night theme after dark", icon: Monitor },
-              ] as const).map(({ key, label, icon: Icon }) => (
-                <button
-                  key={key}
-                  className={config.theme === key ? "active" : ""}
-                  onClick={() => update({ theme: key })}
-                  aria-pressed={config.theme === key}
-                  title={label}
-                  aria-label={label}
-                >
-                  <Icon size={17} />
-                </button>
-              ))}
-            </div>
+            <SegmentedGroup ariaLabel="Interface theme" className="segmented-icons" active={config.theme} onChange={(theme) => update({ theme })} options={[
+              { key: "light", title: "Light interface theme", label: <Sun size={17} /> },
+              { key: "dark", title: "Dark interface theme", label: <Moon size={17} /> },
+              { key: "auto", title: "Auto — follows the system, and dims to the night theme after dark", label: <Monitor size={17} /> },
+            ]} />
             </div>
           )}
         </div>
@@ -272,26 +260,12 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             keeps them on that one line on a phone too, matching desktop,
             not just on a roomy screen. */}
         <div className="row" style={{ gap: 10, marginTop: 12, flexWrap: "wrap" }}>
-          <div className="segmented settings-row-half" role="group" aria-label="Blue glow for clickable devices">
-            <button
-              className={config.highlightInteractive ? "active" : ""}
-              onClick={() => update({ highlightInteractive: !config.highlightInteractive })}
-              aria-pressed={config.highlightInteractive}
-              title="Blue glow around clickable devices"
-            >
-              <MousePointerClick size={16} /> Clickable Glow
-            </button>
-          </div>
-          <div className="segmented settings-row-half" role="group" aria-label="Natural scrolling">
-            <button
-              className={config.naturalScrolling ? "active" : ""}
-              onClick={() => update({ naturalScrolling: !config.naturalScrolling })}
-              aria-pressed={config.naturalScrolling}
-              title="Natural scrolling in the bird's-eye view"
-            >
-              <Move size={16} /> Natural Scroll
-            </button>
-          </div>
+          <SegmentedGroup ariaLabel="Blue glow for clickable devices" className="settings-row-half"
+            active={config.highlightInteractive ? "on" : null} onChange={() => update({ highlightInteractive: !config.highlightInteractive })}
+            options={[{ key: "on", title: "Blue glow around clickable devices", label: <><MousePointerClick size={16} /> Clickable Glow</> }]} />
+          <SegmentedGroup ariaLabel="Natural scrolling" className="settings-row-half"
+            active={config.naturalScrolling ? "on" : null} onChange={() => update({ naturalScrolling: !config.naturalScrolling })}
+            options={[{ key: "on", title: "Natural scrolling in the bird's-eye view", label: <><Move size={16} /> Natural Scroll</> }]} />
         </div>
 
         {/* Brightness/Night dimming apply to every villa; the day/night
@@ -342,24 +316,12 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             // sun/moon glyph that the header control also uses.
             <div style={{ flex: "0 0 auto", minWidth: 0 }}>
             <label>Villa lighting</label>
-            <div className="segmented segmented-icons daynight-segmented" role="group" aria-label="Villa lighting">
-              {([
-                { key: "day", label: "Light the villa as daytime", icon: Sunrise },
-                { key: "night", label: "Light the villa as night", icon: Moon },
-                { key: "auto", label: "Automatic — the villa follows the real day/night cycle", icon: SunMoon },
-              ] as const).map(({ key, label, icon: Icon }) => (
-                <button
-                  key={key}
-                  className={(render.dayNightPreview ?? "auto") === key ? "active" : ""}
-                  onClick={() => applyRender({ dayNightPreview: key })}
-                  aria-pressed={(render.dayNightPreview ?? "auto") === key}
-                  title={label}
-                  aria-label={label}
-                >
-                  <Icon size={17} />
-                </button>
-              ))}
-            </div>
+            <SegmentedGroup ariaLabel="Villa lighting" className="segmented-icons daynight-segmented"
+              active={render.dayNightPreview ?? "auto"} onChange={(dayNightPreview) => applyRender({ dayNightPreview })} options={[
+              { key: "day", title: "Light the villa as daytime", label: <Sunrise size={17} /> },
+              { key: "night", title: "Light the villa as night", label: <Moon size={17} /> },
+              { key: "auto", title: "Automatic — the villa follows the real day/night cycle", label: <SunMoon size={17} /> },
+            ]} />
             </div>
           )}
         </div>
@@ -451,26 +413,10 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             halves would starve the pair while leaving Dock's half mostly
             empty; both groups instead grow to fill the row, weighted 2:1. */}
         <div className="row badge-style-row" style={{ gap: 10, marginTop: 6 }}>
-          <div className="segmented settings-row-half" role="group" aria-label="Floating badge style">
-            <button
-              className={config.badgeStyle === "classic" ? "active" : ""}
-              onClick={() => update({ badgeStyle: "classic" })}
-              aria-pressed={config.badgeStyle === "classic"}
-              title="Icon badge style — the reading sits on a small pill under the icon"
-              aria-label="Icon badge style"
-            >
-              <Circle size={16} /> <span className="badge-btn-label">Icon</span>
-            </button>
-            <button
-              className={config.badgeStyle === "card" ? "active" : ""}
-              onClick={() => update({ badgeStyle: "card" })}
-              aria-pressed={config.badgeStyle === "card"}
-              title="Card badge style — the reading sits inline beside the icon (default)"
-              aria-label="Card badge style"
-            >
-              <CreditCard size={16} /> <span className="badge-btn-label">Card</span>
-            </button>
-          </div>
+          <SegmentedGroup ariaLabel="Floating badge style" className="settings-row-half" active={config.badgeStyle} onChange={(badgeStyle) => update({ badgeStyle })} options={[
+            { key: "classic", title: "Icon badge style — the reading sits on a small pill under the icon", label: <><Circle size={16} /> <span className="badge-btn-label">Icon</span></> },
+            { key: "card", title: "Card badge style — the reading sits inline beside the icon (default)", label: <><CreditCard size={16} /> <span className="badge-btn-label">Card</span></> },
+          ]} />
           {/* Single active/inactive button, its own one-item segmented group —
               reuses the exact same pill styling as the badge-style pair above
               rather than a checkbox row, at the user's request. Shares
@@ -478,17 +424,9 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
               line even on a phone — this button's own label shortens further
               there (.settings-label-short/-full) since "Dock" leaves the
               Default/Card pair the most room. */}
-          <div className="segmented settings-row-half" role="group" aria-label="Summary bar">
-            <button
-              className={config.showSummaryBar ? "active" : ""}
-              onClick={() => update({ showSummaryBar: !config.showSummaryBar })}
-              aria-pressed={config.showSummaryBar}
-            >
-              <PanelBottom size={16} />
-              <span className="settings-label-full">Summary bar</span>
-              <span className="settings-label-short">Dock</span>
-            </button>
-          </div>
+          <SegmentedGroup ariaLabel="Summary bar" className="settings-row-half"
+            active={config.showSummaryBar ? "on" : null} onChange={() => update({ showSummaryBar: !config.showSummaryBar })}
+            options={[{ key: "on", label: <><PanelBottom size={16} /><span className="settings-label-full">Summary bar</span><span className="settings-label-short">Dock</span></> }]} />
         </div>
         <p className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-2xs)" }}>
           Classic: icon badge with a value pill. Card: coloured card with icon &amp; value inline —

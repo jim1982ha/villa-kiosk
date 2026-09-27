@@ -12,11 +12,10 @@ import { register } from "node:module";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 const { statisticsSeries, seriesTotal, seriesExtent, PERIOD_MS } = await import("@/utils/statisticsSeries");
 const { fetchStatistics } = await import("@/ha/HAHistoryAPI");
 
-let fail = 0;
-const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const Hr = PERIOD_MS.hour, t0 = 1_700_000_000_000;
 const win = { from: t0, to: t0 + 24 * Hr };
 const hourly = (n, f) => Array.from({ length: n }, (_, i) => ({ start: t0 + i * Hr, end: t0 + (i + 1) * Hr, ...f(i) }));
@@ -70,7 +69,10 @@ console.log("\n  the callers:");
   const walk = (d, out = []) => { for (const e of readdirSync(d)) { const p = join(d, e); statSync(p).isDirectory() ? walk(p, out) : /\.tsx?$/.test(p) && out.push(p); } return out; };
   const files = walk(SRC).filter((f) => /\/(components|hooks)\//.test(f));
   const fetchers = files.filter((f) => /\b(fetchHistory|fetchTrend|fetchStateHistory|fetchStatistics)\(|getStatisticsDuringPeriod\(/.test(readFileSync(f, "utf8")));
-  ck(`found the panels that read history (${fetchers.length})`, fetchers.length >= 5, fetchers.map((f) => f.slice(SRC.length)));
+  // 4 since 2.496.188: useStateHistory's loader takes its fetch as a
+  // parameter (loadStateWindow, driven in history_section.mjs), so it no
+  // longer CALLS one by name.
+  ck(`found the panels that read history (${fetchers.length})`, fetchers.length >= 4, fetchers.map((f) => f.slice(SRC.length)));
   const raw = fetchers.filter((f) => /getStatisticsDuringPeriod\(/.test(readFileSync(f, "utf8"))).map((f) => f.slice(SRC.length));
   ck("no panel reads raw statistics rows — only the adapter's series", raw.length === 0, raw);
   const handRolled = fetchers.filter((f) => !/\buseHistory\b/.test(readFileSync(f, "utf8"))).map((f) => f.slice(SRC.length));
@@ -89,9 +91,11 @@ console.log("\n  the callers:");
      (await import("@/config/weatherStation")).weatherHistoryFigures({ gustUnit: "", rainUnit: "mm" }).find((f) => f.label === "Rain").value === "—"
      && /const rainTotal = seriesTotal\(data\.rain\);/.test(panel) && /weatherHistoryFigures\(\{[\s\S]*?rainTotal,/.test(panel));
   const lcSrc = readFileSync(new URL("../../src/components/panels/LineChart.tsx", import.meta.url), "utf8");
-  ck("a failed history says it could not load (LineChart's ChartEmpty, which the rain tile uses too)",
-     /status === "failed" \? "Couldn't load this history\."/.test(lcSrc) && /import LineChart, \{ ChartEmpty \} from "\.\/LineChart";/.test(panel));
+  const { emptyHistoryText } = await import("@/utils/statisticsSeries");
+  ck("a failed history says it could not load (emptyHistoryText, through LineChart's ChartEmpty, which the rain tile uses too)",
+     emptyHistoryText("failed") === "Couldn't load this history." && /const text = emptyHistoryText\(status\);/.test(lcSrc)
+     && /import LineChart, \{ ChartEmpty \} from "\.\/LineChart";/.test(panel));
 }
 
-console.log(fail ? `\n❌ ${fail} failed` : "\n✅ one history source; absent is never zero");
-process.exit(fail ? 1 : 0);
+done("✅ one history source; absent is never zero");
+

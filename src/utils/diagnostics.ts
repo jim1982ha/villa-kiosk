@@ -113,6 +113,19 @@ export function clearCrashLoop(): void {
   write({ attempts: [] });
 }
 
+/** The same error is reported at most once per this window. ONE throwing
+ *  code path fired per Home Assistant event (2.496.197–203, ~10 a second)
+ *  and rewrote the whole telemetry ring with copies of itself, burying the
+ *  load/freeze/frames records the ring exists for. */
+export const ERROR_REPORT_WINDOW_MS = 30_000;
+const lastReported = new Map<string, number>();
+export function errorReportAllowed(message: string, now: number, seen: Map<string, number> = lastReported): boolean {
+  const last = seen.get(message);
+  if (last !== undefined && now - last < ERROR_REPORT_WINDOW_MS) return false;
+  seen.set(message, now);
+  return true;
+}
+
 export function captureError(code: string, err: unknown, source?: string): CapturedError {
   const e = err instanceof Error ? err : new Error(String(err));
   const captured: CapturedError = {
@@ -127,7 +140,9 @@ export function captureError(code: string, err: unknown, source?: string): Captu
   // reach THIS device's storage; the errors worth fixing happen on a guest's
   // phone. Stack is truncated — the server caps event size and a full stack
   // is rarely the interesting part next to code+message+source.
-  report("error", { code, message: e.message, source, stack: e.stack?.slice(0, 1200) });
+  if (errorReportAllowed(`${code}|${e.message}`, captured.at)) {
+    report("error", { code, message: e.message, source, stack: e.stack?.slice(0, 1200) });
+  }
   return captured;
 }
 

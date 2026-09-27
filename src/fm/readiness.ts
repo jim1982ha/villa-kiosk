@@ -13,7 +13,7 @@
 import type { HassEntity } from "@/types/ha.types";
 import { isUnavailable } from "@/utils/stateColors";
 import type { VillaDevices } from "@/config/deviceGroups";
-import { isTicketOpen, scheduleStatus } from "./fmEngine";
+import { isTicketOpen } from "./fmEngine";
 import { lockFacts, lightFacts, climateFacts } from "@/config/villaSummary";
 import type { FmData } from "./fmTypes";
 
@@ -56,7 +56,6 @@ export function buildReadiness(
    *  so a caller that forgot one silently resurrected dismissed devices and
    *  unfolded every combo sensor rather than failing. */
   devices: VillaDevices,
-  now = Date.now(),
 ): ReadinessReport {
   const checks: ReadinessCheck[] = [];
 
@@ -156,22 +155,6 @@ export function buildReadiness(
         ? `${cameras.length} camera${cameras.length === 1 ? "" : "s"} online.`
         : `${down.length} offline.`,
       entityIds: down.map((c) => c.entity_id),
-    });
-  }
-
-  // ── Pool serviced within its configured schedule interval ────────────────
-  const pool = fm.schedules.find((s) => s.builtinKey === "pool_landscaping" && s.enabled);
-  if (pool) {
-    const st = scheduleStatus(pool, fm.completions, now);
-    checks.push({
-      id: "pool",
-      label: "Pool serviced",
-      state: st.state === "ok" ? "pass" : st.state === "due-soon" ? "warn" : "fail",
-      detail: st.state === "never"
-        ? "No pool service recorded yet."
-        : st.state === "overdue"
-          ? `Overdue by ${Math.abs(Math.round(st.daysUntilDue ?? 0))} day(s).`
-          : `Last serviced ${Math.round(pool.everyDays - (st.daysUntilDue ?? 0))} day(s) ago.`,
     });
   }
 

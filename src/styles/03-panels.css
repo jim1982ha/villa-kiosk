@@ -186,7 +186,7 @@ input[type="range"]::-moz-range-thumb {
 }
 .camera-header .label {
   pointer-events: auto;
-  font-size: var(--text-lg); background: rgba(0,0,0,0.5); color: #fff;
+  font-size: var(--text-lg); background: var(--chip-scrim); color: #fff;
   padding: 8px 16px; border-radius: 10px; min-width: 0; display: inline-block;
 }
 /* "Reset zoom" pill, on its own line under the title — replaces a button that
@@ -196,10 +196,10 @@ input[type="range"]::-moz-range-thumb {
 .camera-zoom-pill {
   pointer-events: auto; display: flex; align-items: center; gap: 6px;
   margin-top: 8px; font-size: var(--text-sm); font-weight: 500;
-  background: rgba(0,0,0,0.5); color: #fff;
+  background: var(--chip-scrim); color: #fff;
   padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.25);
 }
-.camera-zoom-pill:active { background: rgba(0,0,0,0.65); }
+.camera-zoom-pill:active { background: var(--chip-scrim-strong); }
 /* Bottom row: status strip + control cluster (prev/next/zoom-reset/
    fullscreen/close) share one flex row so they're always the same height.
    OVERLAYS the feed (and auto-hides — see .chrome-hidden below) rather than
@@ -621,9 +621,53 @@ input[type="range"]::-moz-range-thumb {
 .weather-legend .key { display: inline-block; width: 14px; height: 3px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
 .weather-legend .key.area { height: 8px; opacity: 0.45; }
 .key:is(.out, .in, .water, .warm, .ink, .uv) { background: var(--series); }
+/* ── Charts: the parts every chart shares (LineChart, BarChart, StateTimeline,
+   ChartTip, the energy flow). ONE place, and BEFORE the per-window rules below
+   so those may override them. Until 2.496.190 these sat in 05-layout.css,
+   which loads LATER — so `.spark-tip { z-index: 5 }` beat `.chart-tip
+   { z-index: 300 }` on the same element and a chart's tooltip went BEHIND
+   the modal it belonged to (z-index 200), and the 78 px timeline skeleton
+   beat `.weather-chart`'s 150 px, so the Energy window's loading
+   placeholder was half the height of the chart it stood for. */
+.spark-wrap { position: relative; width: 100%; }
+.spark-crosshair { stroke: var(--text-secondary); stroke-width: 1; opacity: 0.55; }
+.spark-tip {
+  position: absolute; z-index: 5; pointer-events: none;
+  display: flex; flex-direction: column; gap: 1px;
+  padding: 5px 8px; border-radius: 8px; white-space: nowrap;
+  background: var(--bg-overlay); backdrop-filter: blur(8px);
+  border: 1px solid var(--hairline); box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+  font-size: var(--text-xs); color: var(--text-primary); line-height: 1.35;
+}
+.spark-tip strong { font-size: var(--text-sm); }
+.spark-tip .spark-tip-time, .spark-tip span:last-child { color: var(--text-secondary); font-size: var(--text-2xs); }
+/* A bucketed timeline's tip lists N events as siblings, so the generic
+   span:last-child rule above would single the final one out as if it were the
+   dimmed timestamp line of the two-line variant. Every event reads the same. */
+.spark-tip .spark-tip-event, .spark-tip span.spark-tip-event:last-child {
+  color: var(--text-primary); font-size: var(--text-xs);
+}
+.state-timeline { position: relative; width: 100%; height: 78px; border-radius: 8px; overflow: hidden; background: var(--bg-input); }
+.state-timeline-seg { position: absolute; top: 0; bottom: 0; }
+.state-timeline-cursor { position: absolute; top: 0; bottom: 0; width: 2px; background: rgba(255,255,255,0.85); box-shadow: 0 0 3px rgba(0,0,0,0.5); pointer-events: none; }
+/* Vertical variant: segments span the full WIDTH and are positioned/sized on
+   the Y axis instead (the inline styles switch axis to match — see
+   StateTimeline's `vertical`), so the two orientations share one component
+   and one set of segment maths rather than being reimplemented. */
+.state-timeline-vertical .state-timeline-seg { top: auto; bottom: auto; left: 0; right: 0; }
+.state-timeline-vertical .state-timeline-cursor { top: auto; bottom: auto; left: 0; right: 0; width: auto; height: 2px; }
+/* Loading placeholder — same footprint as the real bar, so nothing jumps
+   when history actually arrives. A soft sweep, not spinner/text, so it
+   doesn't compete with the rest of the panel while it's still settling. */
+.state-timeline-skeleton {
+  width: 100%; height: 78px; border-radius: 8px;
+  background: linear-gradient(90deg, var(--bg-input) 25%, var(--bg-panel) 50%, var(--bg-input) 75%);
+  background-size: 200% 100%;
+  animation: state-timeline-sweep 1.4s ease-in-out infinite;
+}
+@keyframes state-timeline-sweep { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 .weather-chart { width: 100%; height: 150px; flex: 1 1 auto; }
 .weather-chart-wrap { flex: 1 1 auto; display: flex; }
-/* The shared chart tip (spark-tip), one row a line, each with its colour. */
 /* ChartTip floats above every layer (portalled to <body>, fixed): above the
    modals (z-index 200), and never part of the chart's layout. The anchor is
    the zero-size point the chart positions, which ChartTip measures. */
