@@ -831,6 +831,9 @@ export class CameraController {
   }
 
   private step(): void {
+    // Registered once, for the scene's life; the overview camera renders most
+    // frames and this one is dormant then — nothing to step (2.496.198).
+    if (this.scene.activeCamera !== this.camera) return;
     // Evaluate last frame's progress, then reset the flag for this frame.
     this.antiStuck();
     this.requestedMove = false;

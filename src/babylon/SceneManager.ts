@@ -2021,6 +2021,15 @@ export class SceneManager {
     // in overview, the only moment anything will.
     this.adoptModelExtents();
     mark("applyStructure");
+    // ── THE BUILDING DOES NOT MOVE (2.496.198) ──────────────────────────
+    // Every GLB mesh recomputed its world matrix every frame — the 861k-tri
+    // shell included — for a transform that never changes after this point:
+    // normalizeScale and recenterModel have run, the extents are adopted.
+    // Frozen here, once. The ONE subsystem that later moves a GLB mesh
+    // (fanRigs, which reparents a ceiling fan under a spinning pivot)
+    // unfreezes what it claims. FloorManager toggles setEnabled, never a
+    // transform; badge anchors are child nodes and read the frozen matrix.
+    for (const m of this.loadedMeshes) m.freezeWorldMatrix();
 
     // The villa is correct and interactive now — reveal it. The first-person
     // spawn pose is NOT computed here, or anywhere on the load path any more

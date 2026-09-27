@@ -145,6 +145,9 @@ export class FanRigs {
     for (const m of meshes) {
       const positions = m.getVerticesData(VertexBuffer.PositionKind);
       if (!positions || positions.length < 3) continue;
+      // This mesh is about to spin: SceneManager froze every GLB mesh's
+      // world matrix after load (nothing else moves one).
+      m.unfreezeWorldMatrix();
       m.computeWorldMatrix(true);
 
       // The LOCAL (pre-rotation) direction that currently reads as

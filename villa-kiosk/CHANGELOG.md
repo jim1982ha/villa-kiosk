@@ -1,3 +1,12 @@
+## 2.496.198
+
+### Improved
+- **Less work per frame in the 3D view.** The building's geometry is now
+  marked as fixed once the model has loaded (it was re-computed every
+  frame), the walking controls no longer run while the bird's-eye view is
+  showing, and the wall-occlusion check no longer allocates text every
+  frame while walking. Ceiling fans still spin.
+
 ## 2.496.197
 
 ### Improved
