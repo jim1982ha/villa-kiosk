@@ -30,7 +30,7 @@ import { hasCapability, isMappingAllowed, panelMapping } from "@/auth/permission
 import FacilityModal from "@/components/fm/FacilityModal";
 import GuestReportModal from "@/components/fm/GuestReportModal";
 import { useHA } from "@/ha/HAStateStore";
-import { displayLabelFor, resolveEntityRoom } from "@/config/EntityMap";
+import { displayLabelFor, resolveRooms } from "@/config/EntityMap";
 import { deriveHaScenes, scenesForRoom } from "@/config/haScenes";
 import { effectiveCategory, subjectOf, categoryColor, CATEGORY_ICONS, CATEGORY_LABELS } from "@/config/EntityCategories";
 import { badgeFaceAndRing } from "@/utils/deviceActivity";
@@ -561,28 +561,18 @@ export default function Dashboard() {
   useEffect(() => {
     if (!manager) return;
     const recompute = () => {
-      const resolved: Record<string, string> = {};
-      for (const id of Object.keys(config.entityMap)) {
-        resolved[id] = resolveEntityRoom(entityAreaNames[id], manager.roomForEntity(id));
-      }
-      // A linkedEntityId/motionEntityId TARGET (a camera's arm/disarm switch,
-      // its detection sensor) is never itself a key of config.entityMap —
-      // it's only ever a VALUE on some other device's mapping, the same
-      // reason effectiveMappedEntityIds above has to separately augment
-      // mappedEntityIds with it. This loop was skipping those ids entirely,
-      // so they had no resolvedRooms entry at all and fell to "Other" in
-      // every room/floor grouping regardless of what Area Home Assistant
-      // actually had them in — reported as "linked/motion entities always
-      // show up under Other". Resolved the same way as everything else:
-      // HA's own Area for that specific entity_id (roomForEntity is always
-      // null for these — they have no mesh of their own).
+      // EVERY entity on the map or stored (EntityMap.resolveRooms says why
+      // the set is the union): the model's own (a mesh bound to an entity
+      // needs no stored mapping to draw a badge), the stored mappings, and
+      // — inside effectiveMappedEntityIds — every linked/motion target,
+      // which is only ever a VALUE on another mapping and used to fall to
+      // "Other" for the same reason.
+      const ids = new Set<string>([...effectiveMappedEntityIds, ...Object.keys(config.entityMap)]);
       for (const mapping of Object.values(config.entityMap)) {
-        for (const linkedId of [mapping.linkedEntityId, mapping.motionEntityId]) {
-          if (linkedId && !(linkedId in resolved)) {
-            resolved[linkedId] = resolveEntityRoom(entityAreaNames[linkedId], manager.roomForEntity(linkedId));
-          }
-        }
+        if (mapping.linkedEntityId) ids.add(mapping.linkedEntityId);
+        if (mapping.motionEntityId) ids.add(mapping.motionEntityId);
       }
+      const resolved = resolveRooms(ids, entityAreaNames, (id) => manager.roomForEntity(id));
       manager.setResolvedRooms(resolved);
       setResolvedRooms(resolved);
     };
@@ -590,7 +580,7 @@ export default function Dashboard() {
     // no replay, since it has just run.
     recompute();
     return manager.onScene(recompute, false);
-  }, [manager, entityAreaNames, config.entityMap, setResolvedRooms]);
+  }, [manager, entityAreaNames, config.entityMap, effectiveMappedEntityIds, setResolvedRooms]);
 
   const handleTeleport = useCallback(
     (point: TeleportPoint) => {

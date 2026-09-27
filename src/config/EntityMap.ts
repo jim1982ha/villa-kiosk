@@ -211,6 +211,33 @@ export function resolveEntityRoom(
 }
 
 /**
+ * The room of EVERY entity the kiosk shows, by resolveEntityRoom — one pass
+ * over one id set.
+ *
+ * ⚠️ THE SET USED TO BE THE STORED MAPPINGS (2.496.202). Dashboard walked
+ * `Object.keys(config.entityMap)`, but a device reaches the map by a MESH
+ * BINDING too (resolveMeshToMapping → mappingForEntityId builds its mapping
+ * on the fly, no stored entry), and those got no room at all — "Other", the
+ * one bucket the placement pass will not fold into a chip. The owner's TV:
+ * Home Assistant had it in the Living Room (through its device), the model
+ * carried it, and its badge sat on top of the "Living Room 18" label. The
+ * caller passes every id that is on the map or stored; the answer is the
+ * same rule for each.
+ */
+export function resolveRooms(
+  ids: Iterable<string>,
+  areaNames: Record<string, string>,
+  geometricRoomFor: (entityId: string) => string | null,
+): Record<string, string> {
+  const resolved: Record<string, string> = {};
+  for (const id of ids) {
+    if (id in resolved) continue;
+    resolved[id] = resolveEntityRoom(areaNames[id], geometricRoomFor(id));
+  }
+  return resolved;
+}
+
+/**
  * Same precedence as resolveEntityRoom, for STOREY instead of room: HA's own
  * Floor (via the device's Area — see HassAreaRegistryEntry.floor_id) wins
  * whenever one is assigned; the floor-plan's own per-room `floor` value

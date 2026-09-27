@@ -1,3 +1,14 @@
+## 2.496.202
+
+### Fixed
+- **A device placed on the map by binding a mesh to it now gets its room.**
+  Only devices with a saved entry in Advanced Settings were given a room;
+  one carried by the 3D model alone had none, was filed under "Other", and
+  "Other" never folds into a room label — which is why the unavailable TV
+  stayed drawn on top of the collapsed "Living Room" label after 2.496.201.
+  It now folds into the Living Room like every other device there. Home
+  Assistant's own Area (the TV's is set on its device) is what decides.
+
 ## 2.496.201
 
 ### Fixed
