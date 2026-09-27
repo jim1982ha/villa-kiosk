@@ -93,8 +93,7 @@ export default function SpendTab(
   };
   const saveStatement = async () => {
     if (!statement) return;
-    await saveDocument({ kind: "spend", month, markdown: statement });
-    setStatementSaved(true);
+    if (await saveDocument({ kind: "spend", month, markdown: statement }) === "saved") setStatementSaved(true);
   };
   const reopenStatement = (doc: FmSavedDocument) => {
     setMonth(doc.month);

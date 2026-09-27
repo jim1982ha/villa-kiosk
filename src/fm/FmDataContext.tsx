@@ -29,6 +29,26 @@ import {
   type FmTicket, type FmTicketStatus,
 } from "./fmTypes";
 
+/**
+ * What happened to one Facility write — returned by EVERY mutator, so a screen
+ * can say it (round 13, 2.496.184). They all returned nothing: a guest was
+ * told "that's been reported" and the report dialogs said "Saved" whatever
+ * the add-on did.
+ *   saved     — on the add-on.
+ *   refused   — the add-on said no (the reason is in saveError); undone here.
+ *   offline   — could not reach it; kept on this device and re-sent on the
+ *               next refresh.
+ *   unchanged — nothing to send.
+ */
+export type FmWriteResult = "saved" | "refused" | "offline" | "unchanged";
+
+/** What a screen says when a write did NOT land — null when it did. */
+export function fmWriteProblem(r: FmWriteResult): string | null {
+  if (r === "refused") return "The add-on refused this — nothing was saved.";
+  if (r === "offline") return "Couldn't reach the add-on — nothing was sent. Check the connection and try again.";
+  return null;
+}
+
 interface FmDataContextValue {
   data: FmData;
   /** False until the first load resolves — screens show a loading state rather
@@ -37,26 +57,26 @@ interface FmDataContextValue {
   /** Set when the last write failed, so the UI can say so instead of pretending. */
   saveError: string | null;
   reload: () => Promise<void>;
-  addSchedule: (s: Omit<FmSchedule, "id" | "createdAt">) => Promise<void>;
-  updateSchedule: (id: string, patch: Partial<FmSchedule>) => Promise<void>;
-  removeSchedule: (id: string) => Promise<void>;
+  addSchedule: (s: Omit<FmSchedule, "id" | "createdAt">) => Promise<FmWriteResult>;
+  updateSchedule: (id: string, patch: Partial<FmSchedule>) => Promise<FmWriteResult>;
+  removeSchedule: (id: string) => Promise<FmWriteResult>;
   /** Delete every schedule in one write — the Today tab's "delete all" action.
    *  Same policy as a single removeSchedule: completions already logged stay
    *  (they're evidence of work actually done, not of the task still existing),
    *  only the schedule entries themselves go. */
-  removeAllSchedules: () => Promise<void>;
+  removeAllSchedules: () => Promise<FmWriteResult>;
   /** Log a completion, optionally recording what it cost in the same action —
    *  the two belong together and splitting them loses the link. */
   logCompletion: (
     c: Omit<FmCompletion, "id" | "costId">,
     cost?: Omit<FmCost, "id" | "at" | "photoIds">,
-  ) => Promise<void>;
-  addCost: (c: Omit<FmCost, "id">) => Promise<void>;
+  ) => Promise<FmWriteResult>;
+  addCost: (c: Omit<FmCost, "id">) => Promise<FmWriteResult>;
   /** Correct a recorded spend entry. Amending is ordinary work (a mistyped
    *  amount, a missing receipt photo) — only ERASING one needs the superadmin
    *  code, because that destroys the record rather than fixing it. */
-  updateCost: (id: string, patch: Partial<FmCost>) => Promise<void>;
-  addTicket: (t: Omit<FmTicket, "id" | "openedAt" | "status">) => Promise<void>;
+  updateCost: (id: string, patch: Partial<FmCost>) => Promise<FmWriteResult>;
+  addTicket: (t: Omit<FmTicket, "id" | "openedAt" | "status">) => Promise<FmWriteResult>;
   /** Move a fault to its next stage AND record the proof behind that move.
    *
    *  One mutator for every transition rather than one per stage: they differ
@@ -70,19 +90,19 @@ interface FmDataContextValue {
     to: FmTicketStatus,
     step: { by?: string; note?: string; photoIds: string[] },
     cost?: Omit<FmCost, "id" | "at" | "photoIds">,
-  ) => Promise<void>;
-  updateTicket: (id: string, patch: Partial<FmTicket>) => Promise<void>;
+  ) => Promise<FmWriteResult>;
+  updateTicket: (id: string, patch: Partial<FmTicket>) => Promise<FmWriteResult>;
   /** Erase a spend entry for good. Needs a single-use superadmin token — the
    *  server rejects the write without one, so this is not a UI-level rule. */
-  removeCost: (id: string, elevation: string) => Promise<void>;
+  removeCost: (id: string, elevation: string) => Promise<FmWriteResult>;
   /** Erase a fault, its history and its evidence photos. Superadmin only. */
-  removeTicket: (id: string, elevation: string) => Promise<void>;
+  removeTicket: (id: string, elevation: string) => Promise<FmWriteResult>;
   /** Erase a logged completion and the cost logged with it. Superadmin only. */
-  removeCompletion: (id: string, elevation: string) => Promise<void>;
+  removeCompletion: (id: string, elevation: string) => Promise<FmWriteResult>;
   /** Keep a generated report/spend statement (see FmSavedDocument) so it can
    *  be reopened or handed over later without regenerating it. */
-  saveDocument: (doc: Omit<FmSavedDocument, "id" | "generatedAt">) => Promise<void>;
-  removeDocument: (id: string) => Promise<void>;
+  saveDocument: (doc: Omit<FmSavedDocument, "id" | "generatedAt">) => Promise<FmWriteResult>;
+  removeDocument: (id: string) => Promise<FmWriteResult>;
   /** Internal — see useFacilityLiveView. Declares that this screen is showing
    *  the data right now, so the store polls at the on-screen cadence. Returns
    *  its own unregister. */
@@ -116,7 +136,7 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
   }, EMPTY_FM_DATA)).current;
   /** Retries a failed write. Assigned below, because `mutate` and `reload`
    *  refer to each other: a refresh that finds unsent work re-pushes it. */
-  const retryRef = useRef<(() => Promise<void>) | null>(null);
+  const retryRef = useRef<(() => Promise<unknown>) | null>(null);
 
   // Reports this store's pulls/pushes into the same telemetry ring the
   // device-config sync uses, tagged `store:"fm"`. Without it the entire
@@ -183,7 +203,7 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
    *  the local state is KEPT (so the operator doesn't lose what they typed)
    *  and the error surfaced — losing a completion someone just walked across
    *  the villa to log would be worse than showing it as unsaved. */
-  const mutate = useCallback(async (fn: (d: FmData) => FmData, elevation?: string) => {
+  const mutate = useCallback(async (fn: (d: FmData) => FmData, elevation?: string): Promise<FmWriteResult> => {
     const before = ref.current;
     const next = fn(before);
     setData(next);
@@ -204,22 +224,31 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
         openTickets: outcome.next.tickets.filter(isTicketOpen).length,
         costs: outcome.next.costs.length,
       });
-      return;
+      return "saved";
     }
-    if (outcome.reason === "nothing-to-push" || outcome.reason === "not-allowed" || outcome.reason === "not-pulled") return;
+    if (outcome.reason === "nothing-to-push" || outcome.reason === "not-allowed" || outcome.reason === "not-pulled") return "unchanged";
     reportSync({ op: "push", ok: false, reason: outcome.reason, elevated: Boolean(elevation) });
     // A rejected DELETE is the one failure that must not be left showing as
     // applied: the record still exists on the server, and every other device
     // still sees it. Put it back rather than leaving this screen quietly
     // disagreeing with the store until the next refresh.
+    // The add-on said NO: final. Undo it here and say why — it will never be
+    // accepted, and keeping it would leave this screen disagreeing with the
+    // store (and, before 2.496.184, re-pushed on every refresh for good).
+    if (outcome.reason === "refused") {
+      setData(before);
+      setSaveError(outcome.message ? `The add-on refused this change: ${outcome.message}` : "The add-on refused this change — nothing was saved.");
+      return "refused";
+    }
     if (elevation) {
       setData(before);
       setSaveError("The delete was refused by the add-on — nothing was removed.");
-      return;
+      return "refused";
     }
     // Local is now ahead of the server; the document has flagged it, so the
     // next refresh RETRIES this write instead of skipping forever (reload).
     setSaveError("Couldn't save to the add-on — the change is only on this device.");
+    return "offline";
   }, [doc, reportSync]);
 
   // Re-pushing is just an identity mutation: the diff is still computed

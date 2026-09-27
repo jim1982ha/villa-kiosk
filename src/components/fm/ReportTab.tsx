@@ -83,8 +83,8 @@ export default function ReportTab({
 
   const save = async () => {
     if (!markdown) return;
-    await saveDocument({ kind: "report", month, markdown });
-    setSaved(true);
+    // "Saved" only when it was; otherwise the store's banner says why.
+    if (await saveDocument({ kind: "report", month, markdown }) === "saved") setSaved(true);
   };
 
   const reopen = (doc: FmSavedDocument) => {

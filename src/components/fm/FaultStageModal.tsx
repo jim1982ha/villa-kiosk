@@ -22,7 +22,7 @@
 
 import { useState } from "react";
 
-import { useFmData } from "@/fm/FmDataContext";
+import { useFmData, fmWriteProblem } from "@/fm/FmDataContext";
 import { formatMoney, parseAmount } from "@/fm/fmEngine";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
@@ -60,6 +60,7 @@ export default function FaultStageModal({
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState<"minor" | "major">("minor");
   const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
 
   const copy = STAGE_COPY[to];
   // Cost belongs to the end of the job, not the middle of it — asking for it
@@ -69,7 +70,8 @@ export default function FaultStageModal({
 
   const submit = async () => {
     setBusy(true);
-    await advanceTicket(
+    setFailed(null);
+    const result = await advanceTicket(
       ticket.id, to,
       { by: by.trim() || undefined, note: note.trim() || undefined, photoIds },
       amountIdr > 0
@@ -83,7 +85,10 @@ export default function FaultStageModal({
           }
         : undefined,
     );
-    onClose();
+    setBusy(false);
+    // Closes only on a real save; otherwise stays, with what went wrong.
+    const problem = fmWriteProblem(result);
+    if (problem) setFailed(problem); else onClose();
   };
 
   return (
@@ -145,6 +150,7 @@ export default function FaultStageModal({
             </>
           )}
         </div>
+        {failed && <div className="fm-inline-error" role="alert" style={{ margin: "0 28px 8px" }}>{failed}</div>}
         {/* The modal shell's footer, as every dialog's (04-modals.css). */}
         <div className="modal-footer">
           <button className="btn" onClick={onClose}>Cancel</button>

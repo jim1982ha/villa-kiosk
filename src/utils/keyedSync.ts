@@ -80,11 +80,17 @@ export interface StoreFetch<TDoc> {
 
 export type StoreSaveResult =
   | { ok: true; rev: string }
-  | { ok: false; conflict: boolean };
+  | { ok: false; conflict: boolean }
+  /** The server said NO (400/401/403/413) — final, not a blip. ⚠️ It was
+   *  `{ conflict: false }` like a dropped connection, so a refused write was
+   *  kept, marked unsaved and re-pushed on every reload for good, while that
+   *  device stopped accepting anyone else's changes (round 13, 2.496.184). */
+  | { ok: false; conflict: false; refused: true; message?: string };
 
 export type PushOutcome<TDoc> =
   | { ok: true; next: TDoc; rev: string; attempts: number }
-  | { ok: false; reason: "nothing-to-push" | "transport" | "conflict-retries-exhausted" };
+  | { ok: false; reason: "nothing-to-push" | "transport" | "conflict-retries-exhausted" }
+  | { ok: false; reason: "refused"; message?: string };
 
 /** Rules 1-3 as one loop: fetch the freshest copy, replay THIS device's diff
  *  onto it, write under the revision that copy came at, and rebase-retry if
@@ -113,6 +119,7 @@ export async function pushWithRebase<TDoc, TDiff>(opts: {
     const next = opts.apply(base, opts.diff);
     const result = await opts.save(next, fresh?.rev ?? "0", fresh?.raw ?? {});
     if (result.ok) return { ok: true, next, rev: result.rev, attempts: attempt + 1 };
+    if ("refused" in result && result.refused) return { ok: false, reason: "refused", message: result.message };
     if (!result.conflict) return { ok: false, reason: "transport" };
     // Someone else's write landed between our read and our write — loop and
     // rebase this device's diff onto the copy the 409 tells us now exists.

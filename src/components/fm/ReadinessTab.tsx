@@ -88,11 +88,12 @@ export default function ReadinessTab({
           className="btn ghost"
           style={{ marginLeft: "auto" }}
           onClick={async () => {
-            await saveDocument({
+            const result = await saveDocument({
               kind: "readiness",
               month: monthKey(Date.now()),
               markdown: buildReadinessSnapshot(report, resolveSiteTitle(config, haConfig?.location_name)),
             });
+            if (result !== "saved") return;   // the store's banner says why
             setSaved(true);
             window.setTimeout(() => setSaved(false), 2500);
           }}

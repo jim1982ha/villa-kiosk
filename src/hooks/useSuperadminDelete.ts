@@ -18,7 +18,7 @@ import { useSuperadmin, type ElevationIntent } from "@/auth/SuperadminGate";
  */
 export function useSuperadminDelete(
   intent: ElevationIntent,
-  erase: (elevation: string) => Promise<void>,
+  erase: (elevation: string) => Promise<unknown>,
 ): LongPressHandlers {
   const { authorize } = useSuperadmin();
   return useLongPress(useCallback(() => {
