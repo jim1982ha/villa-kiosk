@@ -20,21 +20,16 @@ FROM --platform=${BUILDPLATFORM:-$TARGETPLATFORM} node:24-alpine AS build
 WORKDIR /app
 # Install deps first so this layer caches across code edits.
 #
-# ⚠️ `npm install`, AND CI USES THE SAME — BUT NOT FOR THE REASON THIS COMMENT
-# ONCE GAVE. It used to say "`npm ci` would hard-fail" on an unresolved
-# transitive peer (babylonjs-gltf2interface). 2.496.33 called that stale on the
-# strength of `npm ci --dry-run` exiting 0 locally and switched this line to
-# `npm ci`. That was the wrong test: `npm ci` succeeds in a clean local
-# checkout of this exact lockfile AND fails on a GitHub runner, every time,
-# which is why ci.yaml's Install step had never once passed. The two facts
-# together say the failure is environmental, not a lockfile defect — and the
-# command that provably builds this image on a runner is this one.
-#
-# The original point stands and is now actually met: ONE resolver on both
-# paths, so a green CI build says something about the image's build stage.
-# Do not switch either side alone.
-COPY package.json package-lock.json ./
-RUN npm install --no-audit --no-fund
+# `npm ci`, and CI runs the same: the committed lockfile exactly, or a failure.
+# For 180 releases this line was `npm install` because `npm ci` "failed on the
+# runner and nowhere else" — it did, and the reason was never the runner: the
+# lockfile was written under a developer-machine `legacy-peer-deps=true`
+# (~/.npmrc) that neither the runner nor this build stage had, so both quietly
+# rewrote it and `npm ci` rightly refused it. .npmrc now pins that setting for
+# every machine (2.496.209). ONE resolver on both paths: do not switch either
+# side alone.
+COPY package.json package-lock.json .npmrc ./
+RUN npm ci --no-audit --no-fund
 COPY . .
 RUN npm run build
 

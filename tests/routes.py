@@ -224,9 +224,13 @@ for wf in sorted((ROOT / ".github" / "workflows").glob("*.yaml")):
              if re.match(r"\s*(- )?uses: [^.]", l) and not re.search(r"@[0-9a-f]{40}\b", l)]
     ck(f"{wf.name}: every action is pinned to a commit", not loose, "; ".join(loose))
 ci = (ROOT / ".github" / "workflows" / "ci.yaml").read_text()
-ck("ci.yaml checks the lockfile after npm install, and reports a rewrite where it can be read",
-   ci.index("run: npm install") < ci.index("git diff --quiet -- package-lock.json")
-   and "::warning title=package-lock.json rewritten" in ci)
+dockerfile = (ROOT / "Dockerfile").read_text()
+ck("CI and the image both install with `npm ci` (the lockfile exactly, or a failure)",
+   "run: npm ci --no-audit --no-fund" in ci and "RUN npm ci --no-audit --no-fund" in dockerfile
+   and not re.search(r"^\s*(run: |RUN )npm install\b", ci + dockerfile, re.M))
+npmrc = (ROOT / ".npmrc").read_text()
+ck("the repository fixes the resolver setting that once made every lockfile a local artefact",
+   re.search(r"^legacy-peer-deps=false$", npmrc, re.M) is not None and "COPY package.json package-lock.json .npmrc ./" in dockerfile)
 
 # ── the proxy runs unprivileged, and writes only where that user owns ──────
 print("\n  who runs the proxy:")

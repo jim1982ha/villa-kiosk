@@ -1,3 +1,9 @@
+## 2.496.209
+
+### Build
+- **The dependency lockfile is now honest, and the build refuses anything else.** The check added in 2.496.207 found that the build runner rewrote `package-lock.json` on every build — because every lockfile in this project's history was written on a machine whose npm ignored peer dependencies (`legacy-peer-deps=true` in the developer's own settings). That, not the runner, is why `npm ci` "only failed in CI" since 2.496.23. The lockfile is regenerated with peer dependencies honoured (same package versions; only how they are arranged changed), a project `.npmrc` fixes the setting for every machine, and both the build runner and the image now install with `npm ci`, which fails instead of quietly rewriting. Verified locally under two npm versions and in a local image build.
+- The two remaining GitHub Actions still targeting Node 20 (checkout, setup-node) move to their Node 24 releases, pinned by commit.
+
 ## 2.496.208
 
 ### Security
