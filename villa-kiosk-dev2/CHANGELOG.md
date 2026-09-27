@@ -1,3 +1,21 @@
+## 2.496.179
+
+### Fixed — history charts
+- **"Unavailable" is always the same colour** — the amber of the colour
+  legend — on every history bar. A text sensor such as an access point's
+  "Connected" painted its lost stretches in a dark green, and a camera whose
+  motion sensor was lost showed that time as green "online".
+- **Every device's history is shown in 5-minute steps**, whatever the range
+  (1 hour, 12 hours, 24 hours or 7 days) and whatever the device. Sensors
+  that report every minute — the pumps' power, for example — now show one
+  value per 5 minutes (the average over those 5 minutes), and on/off sensors
+  use the same 5-minute bar as the others.
+- **Unavailable time is shaded over each 5-minute interval** in which it
+  happened, and the tooltip still gives the exact times it dropped and came
+  back (for example "Unavailable · 14:22–14:31 (9 min)").
+- A reading in a device group that is unavailable right now still shows its
+  chart, so you can see when it dropped.
+
 ## 2.496.178
 
 ### New — move the bird's-eye view with the keyboard
