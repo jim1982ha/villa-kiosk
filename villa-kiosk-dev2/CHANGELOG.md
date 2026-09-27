@@ -1,3 +1,19 @@
+## 2.496.176
+
+### Changed — Energy device lists
+- **Devices are grouped under their main meter.** "Every device" (History
+  and trends) and the phone's "Where today's energy went" now list the main
+  devices — each phase, and any device on its own — and a tap on the arrow
+  beside a phase shows or hides the devices connected to it. The phases no
+  longer look as if they were used on top of the devices inside them.
+- The arrow is now only on a main device that has devices inside it, not on
+  the devices themselves.
+
+### Changed — window height
+- **Settings, Advanced Settings, Facility, the Cockpit and the colour
+  legend all open at the same height** on a tablet or computer. Advanced
+  Settings used to shrink to its content.
+
 ## 2.496.175
 
 ### Changed — every window looks the same
