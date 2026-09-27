@@ -1,3 +1,11 @@
+## 2.496.181
+
+### Fixed — a room you tapped stays open
+- **After tapping a room badge (e.g. "Swimming Pool") its devices stay
+  shown when you move the mouse.** On some window sizes, simply moving the
+  pointer over the 3D view folded the room back into its badge, as if you
+  had zoomed out.
+
 ## 2.496.180
 
 ### Changed — keyboard in the bird's-eye view
