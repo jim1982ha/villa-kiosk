@@ -1,3 +1,16 @@
+## 2.496.183
+
+### Fixed — Facility
+- **The monthly report no longer lists fault repairs as "(removed task)"**
+  under preventive maintenance; repairs stay in the faults section.
+- **Erasing a fault also erases the repair and the cost recorded for it**,
+  instead of leaving them behind as "a fault since erased".
+- **The "need attention" numbers agree everywhere.** The Today tab also
+  counted tasks that were only due soon; it now counts, like the top bar and
+  the Cockpit, tasks that are overdue or never done (labelled "tasks need
+  attention").
+- An amount typed with decimals, such as "12.50", is no longer read as 1250.
+
 ## 2.496.182
 
 ### Fixed — privacy of the Facility record
