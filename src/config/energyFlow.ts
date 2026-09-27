@@ -10,7 +10,7 @@
 // out here in viewBox units so the component only draws.
 // tests/oracles/energy_flow.mjs drives it with the villa's day.
 
-import { deviceRanking, fmtKwh, fmtPower, type EnergySetup, type EnergySplit, type NodeUse } from "./energyModel";
+import { fmtKwh, fmtPower, type EnergySetup, type EnergySplit, type NodeUse } from "./energyModel";
 import { share } from "./energyObservations";
 
 /**
@@ -98,20 +98,6 @@ export function flowTree(split: EnergySplit, house: string, colourOf: (id: strin
   };
   const children = kids("_house", split.roots, split.untracked, 1);
   return { id: "_house", label: house, kwh: total, kind: "house", cls: "e-house", rateId: null, members: children.map((c) => ({ label: c.label, kwh: c.kwh })), children };
-}
-
-/**
- * The tree as rows, in READING order — each device followed by what is inside
- * it — for a phone, where the diagram's text would be 7 px. The layout's
- * boxes are in COLUMN order (every top-level device, then everything inside
- * any of them), which on a phone put the pool pump under phase A when it is
- * inside phase C (owner's screenshot, 2026-09-26).
- */
-export function flowRows(tree: FlowNode): { node: FlowNode; depth: number }[] {
-  const out: { node: FlowNode; depth: number }[] = [];
-  const walk = (n: FlowNode, depth: number) => { out.push({ node: n, depth }); n.children.forEach((c) => walk(c, depth + 1)); };
-  walk(tree, 0);
-  return out;
 }
 
 export interface FlowBox { node: FlowNode; depth: number; x: number; y: number; h: number }
@@ -222,16 +208,29 @@ export function seriesSegs(series: readonly DeviceSeries[], bucket: EnergySplit)
 export const UNTRACKED_ID = "_untracked";
 
 /** A row of "Every device". */
-export interface DeviceRow { id: string; label: string; kwh: number; cls: string; untracked: boolean }
-
-/** Every device ranked (a meter AND the devices inside it — as HA's list),
- *  each worth showing, then what none accounts for. */
-export function rankRows(whole: EnergySplit, colourOf: (id: string) => string): DeviceRow[] {
-  return [
-    ...deviceRanking(whole).filter((u) => shows(u.kwh))
-      .map((u) => ({ id: u.node.id, label: u.node.name, kwh: u.kwh, cls: colourOf(u.node.id), untracked: false })),
-    ...(shows(whole.untracked) ? [{ id: UNTRACKED_ID, label: "Untracked", kwh: whole.untracked, cls: UNTRACKED_CLS, untracked: true }] : []),
-  ];
+/**
+ * The tree as the LIST shows it: every main device (the house's own
+ * children — a phase, a device on its own, what none accounts for) with
+ * everything inside it, in READING order — each device followed by what is
+ * inside it — and with its depth below that main device (1 = directly
+ * inside). Column order (the diagram's) put the pool pump under phase A when
+ * it is inside phase C (owner's screenshot, 2026-09-26).
+ *
+ * ⚠️ THE LIST WAS FLAT (2.496.176). "Every device" ranked a meter AND the
+ * devices inside it side by side — Main Power Phase C at 948 kWh above the
+ * Pool Pump's 172 that is part of it — which read as if the phases were in
+ * ADDITION to the devices (owner). The phone's rows had the hierarchy but
+ * put the chevron on the CHILD rows. Now both lists are this: the main
+ * devices, each opening onto what is inside it.
+ */
+export interface DeviceGroup { node: FlowNode; inside: { node: FlowNode; depth: number }[] }
+export function deviceGroups(tree: FlowNode): DeviceGroup[] {
+  return tree.children.map((main) => {
+    const inside: { node: FlowNode; depth: number }[] = [];
+    const walk = (n: FlowNode, depth: number) => { inside.push({ node: n, depth }); n.children.forEach((c) => walk(c, depth + 1)); };
+    main.children.forEach((c) => walk(c, 1));
+    return { node: main, inside };
+  });
 }
 
 /** The house's power now: the sum of its top-level devices' live power —

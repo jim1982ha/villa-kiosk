@@ -150,7 +150,7 @@ export default function CockpitModal({ onClose, onOpenEntity }: CockpitModalProp
     <div className="modal-backdrop" onClick={onClose}>
       <div
         ref={dialogRef}
-        className="modal settings-modal cockpit-modal modal-fixed-height"
+        className="modal settings-modal cockpit-modal"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"

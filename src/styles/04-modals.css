@@ -107,7 +107,13 @@
    footer (see that override's own comment). Reusable by any future tabbed
    modal — not a Facility-only rule. */
 @media (min-width: 641px) and (min-height: 561px) {
-  .modal-fixed-height { height: min(680px, 90vh); }
+  /* ⚠️ EVERY settings-family dialog, not the two that opted in (2.496.176).
+     Settings, Advanced Settings, Facility, the Cockpit and the Legend are
+     one family; only Facility and the Cockpit carried `.modal-fixed-height`
+     (680 px), Settings reached 90vh because its content is long, and
+     Advanced Settings shrank to its content — three heights for one kind of
+     window (owner). One height, here. */
+  .modal.settings-modal { height: 90vh; }
 }
 /* Header is a row: title left, the icon-only theme selector right. */
 /* min-height: the tallest thing a header holds (a 44px device icon) plus the

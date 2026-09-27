@@ -12,12 +12,12 @@
 // here the next time the window opens. The words: config/energyModel.ts.
 // No Energy dashboard in HA: the bar's old device list opens instead.
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { ChevronRight, Zap } from "lucide-react";
 import { List, PieChart } from "lucide-react";
 import {
-  flowTree, flowLayout, flowRows, flowNow, flowTipRows, energySlices, sliceTurns, ringArc, ringPoint,
-  deviceColours, deviceSeries, seriesSegs, rankRows, UNTRACKED_CLS, type FlowNode,
+  flowTree, flowLayout, deviceGroups, flowNow, flowTipRows, energySlices, sliceTurns, ringArc, ringPoint,
+  deviceColours, deviceSeries, seriesSegs, UNTRACKED_CLS, type FlowNode, type DeviceGroup,
 } from "@/config/energyFlow";
 import { useConfig } from "@/config/ConfigContext";
 import { resolveSiteTitle } from "@/config/AppConfig";
@@ -182,17 +182,11 @@ export function Flow({ split, rateKw, house, colourOf }: { split: EnergySplit; r
   const hb = hover === null ? null : L.boxes[hover];
   return (
     <>
-    {/* A phone: the same tree as rows in reading order, drawn as "Every
-        device" draws its rows — every bar starting at the same left edge;
-        only the NAME is indented to show what is inside what. */}
-    <div className="energy-flow-list energy-rank">
-      {/* Without the house's own row: the window's title already names it and
-          its total (owner, 2026-09-26). A device inside a meter carries a
-          chevron, so the grouping reads at a glance. */}
-      {flowRows(tree).filter((r) => r.depth > 0).map(({ node: n, depth }) => (
-        <RankRow key={`r${n.id}`} label={n.label} kwh={n.kwh} of={tree.kwh} used={tree.kwh} cls={n.cls}
-          muted={n.kind === "untracked" || n.kind === "other"} depth={depth - 1} note={nowOf(n)} />
-      ))}
+    {/* A phone: the same tree as "Every device" draws it — the main devices,
+        each opening onto what is inside it (DeviceTree). Without the house's
+        own row: the window's title already names it and its total. */}
+    <div className="energy-flow-list">
+      <DeviceTree groups={deviceGroups(tree)} of={tree.kwh} used={tree.kwh} nowOf={nowOf} />
     </div>
     <div className="spark-wrap energy-flow-wrap" onPointerLeave={() => setHover(null)}>
     <svg className="energy-flow" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Where the energy went: ${house}, then each device`}>
@@ -368,39 +362,87 @@ function HistoryView({ setup, costUnit, range: rangeKey, colourOf }: { setup: En
 /** Every device as a list, largest first, ten a page — each bar in the
  *  device's own colour, the pie's (energyFlow.deviceColours). */
 export function DeviceList({ whole, colourOf }: { whole: EnergySplit; colourOf: (id: string) => string }) {
-  const rows = rankRows(whole, colourOf);
-  const paged = usePaged(rows, PAGE_CARDS);
-  const of = Math.max(whole.used, rows[0]?.kwh ?? 0);
+  // Every device, none folded into an "Other" (otherBelow 0): this is the list.
+  const tree = flowTree(whole, "", colourOf, 0);
+  const groups = deviceGroups(tree);
+  // Ten MAIN devices a page; a page's groups open in place.
+  const paged = usePaged(groups, PAGE_CARDS);
+  const of = Math.max(tree.kwh, ...groups.map((g) => g.node.kwh));
   return (
     <>
-      <div className="energy-rank">
-        {paged.page.map((r) => (
-          <RankRow key={r.id} label={r.label} kwh={r.kwh} of={of} used={whole.used} cls={r.cls} muted={r.untracked} />
-        ))}
-      </div>
+      <DeviceTree groups={paged.page} of={of} used={whole.used} />
       <Pager paged={paged} unit="device" />
     </>
   );
 }
 
+/**
+ * The main devices, each with a chevron that opens onto the devices inside it
+ * (indented, no chevron of their own). ONE component for both lists — the
+ * phone's "Where today's energy went" and the history's "Every device" — so
+ * they cannot group differently (2.496.176). Closed by default: the main
+ * devices add up to what was used, and nothing is counted twice on screen.
+ */
+export function DeviceTree({ groups, of, used, nowOf }: {
+  groups: readonly DeviceGroup[]; of: number; used: number;
+  /** The power now, beside a name (the Now screen only). */
+  nowOf?: (n: FlowNode) => string;
+}) {
+  const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
+  const toggle = (id: string) => setOpen((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const muted = (n: FlowNode) => n.kind === "untracked" || n.kind === "other";
+  return (
+    <div className="energy-rank">
+      {groups.map(({ node: g, inside }) => {
+        const isOpen = open.has(g.id);
+        return (
+          <Fragment key={g.id}>
+            <RankRow label={g.label} kwh={g.kwh} of={of} used={used} cls={g.cls} muted={muted(g)} note={nowOf?.(g)}
+              toggle={inside.length > 0 ? { open: isOpen, onToggle: () => toggle(g.id) } : null} />
+            {isOpen && inside.map(({ node: n, depth }) => (
+              <RankRow key={n.id} label={n.label} kwh={n.kwh} of={of} used={used} cls={n.cls} muted={muted(n)}
+                depth={depth} note={nowOf?.(n)} />
+            ))}
+          </Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
 /** One device in the list: its name, a bar in its colour, its kWh and share.
  *  One grid row, so a phone can put the bar UNDER the name (styles). */
-function RankRow({ label, kwh, of, used, cls, muted, depth = 0, note }: {
+function RankRow({ label, kwh, of, used, cls, muted, depth = 0, note, toggle = null }: {
   label: string; kwh: number; of: number; used: number; cls: string; muted: boolean;
-  /** How deep in HA's hierarchy — indents the NAME only, never the bar. */
+  /** How deep inside its main device — indents the NAME only, never the bar. */
   depth?: number;
   /** A short muted aside after the name (the power now). */
   note?: string;
+  /** A main device with devices inside it: the row opens and closes them. */
+  toggle?: { open: boolean; onToggle: () => void } | null;
 }) {
+  const name = (
+    <>
+      {label}{note ? <small className="energy-rank-note"> · {note}</small> : null}
+    </>
+  );
+  const Row = toggle ? "button" : "div";
   return (
-    <div className="energy-rank-row">
-      <span className={`energy-rank-name${muted ? " muted" : ""}`} style={depth > 1 ? { paddingLeft: (depth - 1) * 14 } : undefined}>
-        {depth > 0 && <ChevronRight size={14} className="energy-rank-chevron" aria-hidden="true" />}
-        {label}{note ? <small className="energy-rank-note"> · {note}</small> : null}
+    <Row className={`energy-rank-row${toggle ? " energy-rank-group" : ""}`}
+      {...(toggle ? { type: "button" as const, onClick: toggle.onToggle, "aria-expanded": toggle.open } : {})}>
+      <span className={`energy-rank-name${muted ? " muted" : ""}`}
+        style={depth > 0 ? { paddingLeft: 18 + depth * 14 } : undefined}>
+        {/* The chevron is on the MAIN device, and only when it has devices
+            inside; a main device without one keeps the same indent, so every
+            main name starts in one column. */}
+        {depth === 0 && (toggle
+          ? <ChevronRight size={14} className={`energy-rank-chevron${toggle.open ? " open" : ""}`} aria-hidden="true" />
+          : <span className="energy-rank-chevron-slot" aria-hidden="true" />)}
+        {name}
       </span>
       <span className="energy-rank-bar"><i style={{ width: `${Math.max(1, (kwh / Math.max(1e-6, of)) * 100)}%` }} className={cls} /></span>
       <b>{fmtKwh(kwh)} kWh</b>
       <span className="energy-rank-pct">{used > 0 ? `${share(kwh, used)}%` : ""}</span>
-    </div>
+    </Row>
   );
 }

@@ -11,7 +11,7 @@
 //   Schedule   what the Today board measures against — configured, then acted on
 //   Report     the operational annex for whatever monthly owner report already exists
 //
-// Fixed height (.modal-fixed-height) on desktop/tablet: this modal switches
+// Fixed height (every .settings-modal, 04-modals.css) on desktop/tablet: this modal switches
 // between views with wildly different content — Spend can be two rows,
 // Faults a dozen — and letting the dialog resize around every tab switch was
 // jarring. See that class's own comment in styles.css.
@@ -164,7 +164,7 @@ export default function FacilityModal({
       <div className="modal-backdrop" onClick={onClose}>
         <div
           ref={dialogRef}
-          className="modal settings-modal config-editor-modal modal-fixed-height"
+          className="modal settings-modal config-editor-modal"
           onClick={(e) => e.stopPropagation()}
           role="dialog"
           aria-modal="true"

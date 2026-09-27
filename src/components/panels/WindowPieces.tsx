@@ -14,8 +14,8 @@ import type { Observation } from "@/config/observation";
  * HISTORY AND TRENDS screen. The window owns what both copied — which screen
  * is shown, opening each at its top (the body is one scroll area, so History
  * opened wherever Now had been scrolled to), the back arrow, the header's
- * live note or period picker, and the footer button (the modal shell's footer pill, as "Advanced
- * Settings" style, visible however far the body scrolls). Each window passes
+ * live note or period picker, and the footer button (the modal shell's
+ * footer pill, visible however far the body scrolls). Each window passes
  * only its content; each screen mounts only while shown.
  */
 export function DataWindow({ title, icon, live, picker, className, onClose, now, history }: {

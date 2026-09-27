@@ -50,5 +50,9 @@ ck(`all ${roots.length} dialogs have a header, a body and a footer from the shel
 const cornerX = roots.filter(([, s]) => /modal-header[\s\S]{0,300}aria-label="Close"/.test(s)).map(([f]) => f.slice(root.length));
 ck("no dialog hides its exit as a corner ✕ — Close is in the footer, as everywhere", cornerX.length === 0, cornerX);
 
+const allCss = css.map(([, s]) => noComments(s)).join("\n");
+ck("every settings-family dialog has ONE fixed height (Advanced Settings shrank to its content)",
+   /\.modal\.settings-modal \{ height: 90vh; \}/.test(allCss) && !tsx.some(([, s]) => /modal-fixed-height/.test(s)) && !/\.modal-fixed-height/.test(allCss));
+
 if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
 console.log("\n✅ one modal shell");
