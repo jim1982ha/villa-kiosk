@@ -117,6 +117,17 @@ function stripShape(mesh: AbstractMesh): StripShape {
   };
 }
 
+/**
+ * Whether one bulb's light reaches the scene: the entity is on AND its mesh's
+ * storey is shown (FloorManager). ONE copy for the PointLight, the pools and
+ * the shadow map (2.496.185) — it was written three times, and the shadow map
+ * read the entity's on alone. The fixture's own look is the exception, on
+ * purpose (showFixture): a hidden storey is not drawn at all.
+ */
+export function litHere(r: Pick<LightReading, "on">, mesh: Pick<AbstractMesh, "isEnabled">): boolean {
+  return r.on && mesh.isEnabled();
+}
+
 export class BulbSet {
   /** Keyed by fixture MESH uniqueId, so every piece of a multi-piece entity
    *  (two bedside lamps, a strip's markers) has a light. A merged strip
@@ -243,10 +254,11 @@ export class BulbSet {
   show(meshes: readonly AbstractMesh[], r: LightReading): void {
     for (const mesh of meshes) {
       this.showFixture(mesh, r);
-      this.pools.setLight(mesh.uniqueId, { on: r.on && mesh.isEnabled(), colour: r.colour, frac: r.frac });
+      this.pools.setLight(mesh.uniqueId, { on: litHere(r, mesh), colour: r.colour, frac: r.frac });
     }
     this.paintLights(meshes, r);
-    this.castShadow(meshes, r.on);
+    // Its storey too, as every other output (it read the entity's on alone).
+    this.castShadow(meshes, meshes.some((m) => litHere(r, m)));
   }
 
   /** One entity's PointLights: colour, and its brightness divided among its
@@ -254,7 +266,7 @@ export class BulbSet {
   private paintLights(meshes: readonly AbstractMesh[], r: LightReading): void {
     const share = new Set(meshes.map((m) => this.lights.get(m.uniqueId)).filter(Boolean)).size || 1;
     for (const mesh of meshes) {
-      const on = r.on && mesh.isEnabled();
+      const on = litHere(r, mesh);
       const light = this.lights.get(mesh.uniqueId);
       if (!light) continue;
       light.diffuse = r.colour;
@@ -329,7 +341,7 @@ export class BulbSet {
   /** Every bulb's reading as the pools want it: per mesh, the storey folded in. */
   private *poolReadings(): Iterable<[number, LightReading]> {
     for (const { meshes, reading } of this.readings()) {
-      for (const mesh of meshes) yield [mesh.uniqueId, { ...reading, on: reading.on && mesh.isEnabled() }];
+      for (const mesh of meshes) yield [mesh.uniqueId, { ...reading, on: litHere(reading, mesh) }];
     }
   }
 

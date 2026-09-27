@@ -249,5 +249,33 @@ console.log("\n  state:");
 }
 ck("the open-floor radius is still 1.8m", LIGHT_POOL_RADIUS === 1.8);
 
+// ── Off means off, and the pool owns its visibility (round 13, 2.496.185) ──
+{
+  const { LightPool, poolStrength } = await import("@/babylon/LightPools");
+  const { Vector3 } = await import("@babylonjs/core/Maths/math.vector.js");
+  const eng = new NullEngine(); const sc = new Scene(eng);
+  ck("a fixture at −100% (frac 0) gives its pool and its furniture light NOTHING (the floor lifted 0 to 0.15)",
+     poolStrength(0, 1) === 0 && poolStrength(-0.2, 1) === 0 && poolStrength(0.05, 1) === 0.15);
+  const pool = new LightPool(sc, "t", new Vector3(0, 0, 0), 1.8);
+  pool.setState(true, new Color3(1, 1, 1), 0);
+  ck("  ...and its pool is not drawn", !pool.mesh.isEnabled());
+  pool.setState(true, new Color3(1, 1, 1), 0.8);
+  pool.setFloorless(true);
+  ck("a pool over a stairwell hides", !pool.mesh.isEnabled());
+  pool.setFloorless(false);
+  ck("  ...and SHOWS AGAIN when a recalibration gives it a floor, its light still on (it stayed dark)", pool.mesh.isEnabled());
+  pool.setState(false, new Color3(1, 1, 1), 0.8); pool.setFloorless(false);
+  ck("  ...but not if its light is off", !pool.mesh.isEnabled());
+  const src = (await import("node:fs")).readFileSync(new URL("../../src/babylon/lightPoolSet.ts", import.meta.url), "utf8");
+  const { litHere } = await import("@/babylon/bulbSet");
+  const bs = (await import("node:fs")).readFileSync(new URL("../../src/babylon/bulbSet.ts", import.meta.url), "utf8");
+  ck("a bulb lights the scene when its light is on AND its storey is shown — one rule",
+     litHere({ on: true }, { isEnabled: () => true }) && !litHere({ on: true }, { isEnabled: () => false }) && !litHere({ on: false }, { isEnabled: () => true }));
+  ck("  ...the PointLight, the pools and the shadow map all ask it (the shadow map read the entity's on alone)",
+     (bs.match(/litHere\(/g) ?? []).length >= 4 && /this\.castShadow\(meshes, meshes\.some\(\(m\) => litHere\(r, m\)\)\)/.test(bs)
+     && (bs.match(/\.isEnabled\(\)/g) ?? []).length === 1);
+  ck("the pool set asks the pool (setFloorless), never flips its mesh itself", /pool\.setFloorless\(at\.floorless\)/.test(src) && !/pool\.mesh\.setEnabled/.test(src));
+}
+
 console.log(fail ? `\n❌ ${fail} failed` : "\n✅ every pool lands where its light is");
 process.exit(fail ? 1 : 0);

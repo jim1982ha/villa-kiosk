@@ -1,3 +1,13 @@
+## 2.496.185
+
+### Fixed — lights in the 3D villa
+- **A light turned down to −100% in Advanced Settings is fully off.** Its
+  bulb went dark, but its pool of light on the floor and its light on the
+  furniture kept shining.
+- **A light's pool on the floor comes back after the rooms are re-fitted.**
+  A pool moved away from the stairs stayed dark until the light was next
+  switched.
+
 ## 2.496.184
 
 ### Fixed — Facility saves tell the truth
