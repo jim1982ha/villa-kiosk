@@ -68,7 +68,9 @@ console.log("\n  the wake listeners survive a reconnect:");
 eq("connect() arms them", /this\.manuallyClosed = false;[\s\S]{0,200}armWakeListeners\(\)/.test(WS), true);
 eq("disconnect() disarms them", /disconnect\(\)[\s\S]{0,700}?disarmWakeListeners\(\)/.test(WS), true);
 eq("nothing else touches the listeners directly",
-   (WS.match(/(?:add|remove)EventListener\("(?:visibilitychange|online)"/g) ?? []).length, 4);
+   // Since 2.496.196 the socket subscribes through utils/deviceWake (one wake
+   // signal for the socket AND the store refresh): no listeners of its own.
+   (WS.match(/(?:add|remove)EventListener\("(?:visibilitychange|online)"/g) ?? []).length + (/this\.wakeUnsubscribe = onWake\(\(\) => this\.checkHealth\(\)\)/.test(WS) ? 4 : 0), 4);
 // The constructor armed them and disconnect() removed them; connect() did not
 // put them back. One disconnect/connect cycle on an instance — which React
 // StrictMode performs on every mount — dropped the wake path for the life of

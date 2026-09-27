@@ -1953,10 +1953,22 @@ def _read_json_store(path: str, empty):
 def _write_json_store(path: str, payload: str) -> None:
     """Atomic overwrite (temp file + os.replace) so a partial or failed write
     can never leave the live store truncated — readers either see the whole
-    previous version or the whole new one."""
+    previous version or the whole new one. SYNCHRONOUS: request handlers use
+    _write_json_store_async, see there."""
     def _write(out):
         out.write(payload)
     atomic_write(path, _write, binary=False)
+
+
+async def _write_json_store_async(path: str, payload: str) -> None:
+    """_write_json_store on a worker thread. ⚠️ THIS PROCESS HAS ONE EVENT
+    LOOP, and it also relays every kiosk's HA websocket frames (lock, cover,
+    light). A device-config PUT may carry 8 MB and an fm-data PUT 4 MB; writing
+    that inline stalled every relay for the write's duration — "save my
+    settings" and "unlock the front door" shared a thread (2.496.196). The
+    caller's asyncio.Lock still serialises writes to one store; only the
+    blocking part leaves the loop."""
+    await asyncio.to_thread(_write_json_store, path, payload)
 
 
 def _store_revision(path: str) -> str:
@@ -2132,7 +2144,7 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
                 veto = write_guard(request, body, stored, value)
                 if veto is not None:
                     return veto
-            _write_json_store(path, payload)
+            await _write_json_store_async(path, payload)
             new_rev = _store_revision(path)
             if after_write is not None:
                 after_write(stored, value, readable)
@@ -2151,6 +2163,37 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
 # user-agent the browser already sends on every request.
 TELEMETRY_FILE = "/data/telemetry.json"
 TELEMETRY_MAX_BODY = 64_000
+# The ring is bounded by COUNT (telemetry_max_events, up to 5000) AND by
+# serialised size: at the count ceiling alone, 5000 x 64 kB events made a
+# ~320 MB file that every POST re-read and rewrote whole (2.496.196).
+TELEMETRY_MAX_RING_BYTES = 2_000_000
+# One writer at a time: the read-append-write below leaves the event loop
+# (a worker thread), so two POSTs could otherwise interleave and one would
+# overwrite the other's event.
+_telemetry_lock = asyncio.Lock()
+
+
+def _telemetry_ring_after(events: list, max_events: int, max_bytes: int) -> list:
+    """The ring to keep: the newest `max_events`, then the newest that fit in
+    `max_bytes` once serialised. Pure — tests/proxy-rules.py drives it."""
+    kept = events[-max_events:] if max_events > 0 else []
+    while len(kept) > 1 and len(json.dumps(kept).encode("utf-8")) > max_bytes:
+        # Halve the excess per step rather than one event per step: a ring
+        # far over the cap (a raised ceiling later lowered) trims in a few
+        # passes, not thousands of full serialisations.
+        drop = max(1, len(kept) // 8)
+        kept = kept[drop:]
+    return kept
+
+
+def _telemetry_append(body: dict, max_events: int, max_bytes: int) -> int:
+    """Read the ring, append, trim, write — on a worker thread (see
+    _write_json_store_async for why nothing here may run on the loop)."""
+    events = _read_json_store(TELEMETRY_FILE, [])
+    events.append(body)
+    events = _telemetry_ring_after(events, max_events, max_bytes)
+    _write_json_store(TELEMETRY_FILE, json.dumps(events))
+    return len(events)
 
 
 async def telemetry_post_handler(request: web.Request) -> web.Response:
@@ -2174,11 +2217,10 @@ async def telemetry_post_handler(request: web.Request) -> web.Response:
     body["ua"] = request.headers.get("User-Agent", "")[:300]
     body["role"] = _role_for(request)
 
-    events = _read_json_store(TELEMETRY_FILE, [])
-    events.append(body)
-    del events[:-_telemetry_max_events()]       # keep only the newest N
-    _write_json_store(TELEMETRY_FILE, json.dumps(events))
-    return web.json_response({"ok": True, "stored": len(events)})
+    async with _telemetry_lock:
+        stored = await asyncio.to_thread(
+            _telemetry_append, body, _telemetry_max_events(), TELEMETRY_MAX_RING_BYTES)
+    return web.json_response({"ok": True, "stored": stored})
 
 
 async def telemetry_get_handler(request: web.Request) -> web.Response:
@@ -2187,9 +2229,10 @@ async def telemetry_get_handler(request: web.Request) -> web.Response:
     if (refused := _refuse(request, "administer",
                            "Only the owner profile may read telemetry.")) is not None:
         return refused
-    events = _read_json_store(TELEMETRY_FILE, [])
-    if request.query.get("clear") == "1":
-        _write_json_store(TELEMETRY_FILE, json.dumps([]))
+    async with _telemetry_lock:
+        events = await asyncio.to_thread(_read_json_store, TELEMETRY_FILE, [])
+        if request.query.get("clear") == "1":
+            await _write_json_store_async(TELEMETRY_FILE, json.dumps([]))
     return web.json_response(
         {"events": events, "count": len(events)}, headers={"Cache-Control": "no-store"})
 
@@ -2284,7 +2327,7 @@ async def fm_evidence_post_handler(request: web.Request) -> web.Response:
     # orphaned the .part in /data permanently. atomic_write has none of those
     # (fresh mkstemp name, cleanup on every failure path) and is the same
     # primitive the model upload and the JSON stores use.
-    atomic_write(dest, lambda out: out.write(body))
+    await asyncio.to_thread(atomic_write, dest, lambda out: out.write(body))
     pruned = _prune_fm_evidence()
     return web.json_response({"ok": True, "id": photo_id, "bytes": len(body), "pruned": pruned})
 

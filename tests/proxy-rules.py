@@ -551,6 +551,25 @@ with tempfile.TemporaryDirectory() as d:
     ck("  ...a REFUSED piece ends the upload — its pieces go with it",
        refused and _piece(dest, "retrytest03", 64, b) == 409)
 
+# ── the telemetry ring is bounded by COUNT and by BYTES ──────────────────
+# At the count ceiling alone (5000 x 64 kB) the ring reached ~320 MB and was
+# re-read and rewritten whole on every POST, on the event loop (2.496.196).
+print("\n  the telemetry ring:")
+ring = [{"i": i, "pad": "x" * 100} for i in range(50)]
+ck("the newest N are kept", [e["i"] for e in proxy._telemetry_ring_after(ring, 10, 10**9)] == list(range(40, 50)))
+small = proxy._telemetry_ring_after(ring, 50, 2_000)
+ck("  ...and then the newest that FIT the byte cap", 0 < len(small) < 50
+   and len(proxy.json.dumps(small).encode()) <= 2_000 and small[-1]["i"] == 49)
+ck("  ...never trimming to nothing (one event always fits)", len(proxy._telemetry_ring_after(ring, 50, 1)) == 1)
+ck("the ceiling the options allow is under the byte cap by construction",
+   proxy.TELEMETRY_MAX_RING_BYTES < 5000 * proxy.TELEMETRY_MAX_BODY)
+src = PROXY.read_text()
+ck("a store PUT writes OFF the event loop, inside its lock",
+   "await _write_json_store_async(path, payload)" in src and "asyncio.to_thread(_write_json_store, path, payload)" in src
+   and "            _write_json_store(path, payload)" not in src)
+ck("  ...and so does the telemetry append, under ONE lock", "async with _telemetry_lock:" in src
+   and "await asyncio.to_thread(\n            _telemetry_append" in src)
+
 print()
 print("✅ the proxy's pure rules hold" if FAIL == 0
       else "❌ A PROXY RULE IS BROKEN")

@@ -4,6 +4,7 @@
 // (round 10, 2.496.162), which held this, the per-device view preferences and
 // the add-on's central model in one file.
 
+import { readJson, writeJson, removeStored } from "./storedJson";
 
 
 const DB_NAME = "villa-kiosk-db";
@@ -39,7 +40,7 @@ export async function saveModelToIndexedDB(buf: ArrayBuffer, name = "model.glb")
   });
   db.close();
   const meta: ModelMeta = { name, size: buf.byteLength, savedAt: Date.now() };
-  localStorage.setItem(META_KEY, JSON.stringify(meta));
+  writeJson(META_KEY, meta);
 }
 
 export async function loadModelFromIndexedDB(): Promise<ArrayBuffer | null> {
@@ -63,10 +64,11 @@ export async function clearStoredModel(): Promise<void> {
     tx.onerror = () => reject(tx.error);
   });
   db.close();
-  localStorage.removeItem(META_KEY);
+  removeStored(META_KEY);
 }
 
 export function getModelMeta(): ModelMeta | null {
-  const raw = localStorage.getItem(META_KEY);
-  return raw ? (JSON.parse(raw) as ModelMeta) : null;
+  // Through storedJson: this was a bare JSON.parse on the boot path.
+  return readJson<ModelMeta>(META_KEY, (v): v is ModelMeta =>
+    typeof v === "object" && v !== null && typeof (v as ModelMeta).name === "string" && typeof (v as ModelMeta).size === "number");
 }

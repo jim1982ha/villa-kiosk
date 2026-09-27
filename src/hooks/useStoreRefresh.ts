@@ -22,6 +22,7 @@
 // nothing beside the HA WebSocket's own 25s ping, and nothing at all while
 // hidden.
 
+import { onWake } from "@/utils/deviceWake";
 import { useEffect } from "react";
 
 /** Background cadence: slow enough to be invisible in battery/network terms,
@@ -52,15 +53,14 @@ export const STORE_ACTIVE_MS = 15 * 1000;
 export function useStoreRefresh(refresh: () => void, intervalMs: number = STORE_HEARTBEAT_MS): void {
   useEffect(() => {
     refresh();
-    const onWake = () => { refresh(); };
-    window.addEventListener("focus", onWake);
-    document.addEventListener("visibilitychange", onWake);
+    // Visible again, focused, or back online — the same three signals the HA
+    // socket health-checks on (utils/deviceWake).
+    const stopWake = onWake(refresh);
     const heartbeat = setInterval(() => {
       if (document.visibilityState === "visible") refresh();
     }, intervalMs);
     return () => {
-      window.removeEventListener("focus", onWake);
-      document.removeEventListener("visibilitychange", onWake);
+      stopWake();
       clearInterval(heartbeat);
     };
   }, [refresh, intervalMs]);

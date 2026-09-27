@@ -1,3 +1,18 @@
+## 2.496.196
+
+### Fixed
+- **Saving a large configuration no longer delays door, cover and light
+  commands from other kiosks for the duration of the write.** The add-on
+  wrote the file on the same thread that relays commands to Home Assistant.
+- **The add-on's diagnostics log is capped by size as well as by count**, so
+  raising its event limit can no longer grow a file that is rewritten on
+  every event.
+- **A corrupt saved-model note in the browser reads as "no stored model"**
+  instead of stopping the model from loading.
+- **Settings and Facility data refresh when the network comes back**, and the
+  connection is checked when the window regains focus (each used to react to
+  only two of the three signals).
+
 ## 2.496.195
 
 ### Fixed

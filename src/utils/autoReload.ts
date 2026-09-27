@@ -13,6 +13,7 @@
 // service-worker cached, so this comes back fast with no re-login needed —
 // safe to fire unattended overnight.
 
+import { readString, writeString } from "./storedJson";
 const RELOAD_HOUR = 4; // 04:00 local device time — a quiet window for a villa kiosk
 const CHECK_INTERVAL_MS = 60_000;
 const GUARD_KEY = "villa-kiosk:last-auto-reload-date";
@@ -70,9 +71,7 @@ export function installDailyAutoReload(isSafeToReload: () => boolean): () => voi
 
   const dailyDue = (now: Date): boolean => {
     if (now.getHours() !== RELOAD_HOUR) return false;
-    let already = "";
-    try { already = localStorage.getItem(GUARD_KEY) ?? ""; } catch { /* storage disabled */ }
-    return already !== todayKey(now); // not already reloaded today
+    return (readString(GUARD_KEY) ?? "") !== todayKey(now); // not already reloaded today
   };
 
   const pressureDue = (now: number): boolean => {
@@ -81,8 +80,7 @@ export function installDailyAutoReload(isSafeToReload: () => boolean): () => voi
     // A freshly-started tab already over the line is not drift — reloading it
     // would only repeat, so leave it alone and let the daily refresh handle it.
     if (now - startedAt < MIN_UPTIME_BEFORE_PRESSURE_RELOAD_MS) return false;
-    let last = 0;
-    try { last = Number(localStorage.getItem(PRESSURE_GUARD_KEY)) || 0; } catch { /* storage disabled */ }
+    const last = Number(readString(PRESSURE_GUARD_KEY)) || 0;
     return now - last >= MIN_INTERVAL_BETWEEN_PRESSURE_RELOADS_MS;
   };
 
@@ -93,12 +91,12 @@ export function installDailyAutoReload(isSafeToReload: () => boolean): () => voi
     if (!daily && !pressure) return;
     if (!isSafeToReload()) return; // busy — retry next minute
     try {
-      if (daily) localStorage.setItem(GUARD_KEY, todayKey(now));
+      if (daily) writeString(GUARD_KEY, todayKey(now));
       // Stamped for BOTH triggers: a daily reload resets the heap just as a
       // pressure one does, so it must also restart the pressure cooldown —
       // otherwise a tab that crossed the threshold shortly before 04:00 could
       // reload twice in quick succession for the same accumulated memory.
-      localStorage.setItem(PRESSURE_GUARD_KEY, String(now.getTime()));
+      writeString(PRESSURE_GUARD_KEY, String(now.getTime()));
     } catch { /* best-effort */ }
     location.reload();
   };

@@ -2,6 +2,7 @@
 // Robust HA WebSocket client: auth, message-id tracking, event subscriptions,
 // exponential-backoff reconnect with re-subscription. (3Dash-informed patterns.)
 
+import { onWake } from "@/utils/deviceWake";
 import type {
   EnergyInfo, EnergyPrefs, HassAreaRegistryEntry, HassDeviceRegistryEntry, HassEntity, HassEntityRegistryEntry,
   HassFloorRegistryEntry, HassServiceTarget, RawLogbookEntry, StatisticIdInfo, StatisticPeriod,
@@ -57,12 +58,10 @@ export class HAWebSocket {
   // Stored so disconnect() can remove them — anonymous inline handlers would
   // leak (and keep this whole client, its socket and timers, reachable) if
   // the provider that owns this ever unmounts.
-  private onVisibility = () => { if (!document.hidden) this.checkHealth(); };
-  private onOnline = () => this.checkHealth();
-
-  /** True while the wake/online listeners are registered — so arming twice is
-   *  a no-op rather than a second registration that only one removal clears. */
-  private wakeListenersArmed = false;
+  /** The wake subscription (utils/deviceWake) while armed, else null — so
+   *  arming twice is a no-op rather than a second registration that only one
+   *  removal clears. */
+  private wakeUnsubscribe: (() => void) | null = null;
 
   /**
    * Arm the wake/online health checks.
@@ -81,25 +80,13 @@ export class HAWebSocket {
    * bolted to a wall, that is the exact scenario the listeners exist for.
    */
   private armWakeListeners() {
-    if (this.wakeListenersArmed) return;
-    if (typeof document !== "undefined") {
-      document.addEventListener("visibilitychange", this.onVisibility);
-    }
-    if (typeof window !== "undefined") {
-      window.addEventListener("online", this.onOnline);
-    }
-    this.wakeListenersArmed = true;
+    if (this.wakeUnsubscribe) return;
+    this.wakeUnsubscribe = onWake(() => this.checkHealth());
   }
 
   private disarmWakeListeners() {
-    if (!this.wakeListenersArmed) return;
-    if (typeof document !== "undefined") {
-      document.removeEventListener("visibilitychange", this.onVisibility);
-    }
-    if (typeof window !== "undefined") {
-      window.removeEventListener("online", this.onOnline);
-    }
-    this.wakeListenersArmed = false;
+    this.wakeUnsubscribe?.();
+    this.wakeUnsubscribe = null;
   }
 
   constructor() {
