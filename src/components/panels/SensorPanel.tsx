@@ -43,7 +43,7 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
   // one of these (that's why a device like an access point's "connected" /
   // "disconnected" state used to show "Not enough history yet" despite HA
   // holding real history for it), so it gets the raw state-history path below
-  // instead of the numeric Sparkline one.
+  // instead of the numeric line chart.
   const isEnum = !isBinary && entity != null && !Number.isFinite(numeric);
   const unit = entity?.attributes.unit_of_measurement ?? "";
   // One reading, written once — see utils/entityValue.

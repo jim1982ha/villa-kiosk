@@ -193,7 +193,7 @@ export const ENTITY_DOMAINS = [
 
 export type EntityDomain = (typeof ENTITY_DOMAINS)[number];
 
-/** A single point of a sensor history series (for sparklines). */
+/** A single point of a sensor history series (for line charts). */
 export interface HistoryPoint {
   t: number; // epoch ms
   v: number; // numeric value

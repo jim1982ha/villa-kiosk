@@ -1,7 +1,7 @@
 // src/components/panels/StateTimeline.tsx
 // A horizontal "last N hours" state-history bar: one coloured segment per
 // state the entity held, sized to how long it held it — the equivalent of
-// Sparkline/DualSparkline for entities whose meaningful history is discrete
+// LineChart for entities whose meaningful history is discrete
 // states (on/off, locked/unlocked, open/closed, or an arbitrary text state
 // like an access point's "connected"/"disconnected") rather than a numeric
 // series. Renders div segments (not SVG) since flat colour blocks, not a

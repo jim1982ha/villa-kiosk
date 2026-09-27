@@ -1,6 +1,6 @@
 // src/components/panels/historyRange.tsx
 // The shared "how far back" control for every history view in a device panel —
-// the state timeline, the numeric sparkline, and the multi-series group chart.
+// the state timeline, the numeric line chart, and the multi-series group chart.
 //
 // One definition, because the three used to disagree by construction: each
 // fetched a hardcoded 24 hours, so a panel showing both a timeline and a
