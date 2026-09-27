@@ -1,3 +1,16 @@
+## 2.496.188
+
+### Fixed
+- **Device history charts say "Couldn't load this history." when Home
+  Assistant did not answer**, instead of "Not enough history yet." — and no
+  longer say "Not enough history yet." while they are still loading (device
+  groups did).
+- **An offline device's history now shows the last day it was working**,
+  labelled "… before <date>", on generic devices and on binary and text
+  sensors too (it already did on lights, switches and the like).
+- **The Energy window says so when it cannot read Home Assistant's Energy
+  settings**, instead of showing a loading placeholder forever.
+
 ## 2.496.187
 
 ### Fixed
