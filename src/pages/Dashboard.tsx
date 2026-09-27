@@ -1,6 +1,7 @@
 // src/pages/Dashboard.tsx
 // Main page: 3D canvas + HUD + panels + teleport + settings + onboarding.
 
+import { overlayOpen } from "@/hooks/useBackToClose";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BabylonCanvas from "@/components/canvas/BabylonCanvas";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
@@ -230,13 +231,8 @@ export default function Dashboard() {
   // Once-a-day auto-reload safety net (see utils/autoReload.ts) against a slow
   // background memory drift — only fires during its quiet overnight hour AND
   // when nothing's open AND no one's touched the kiosk recently, so it never
-  // interrupts real use. Read via refs (not React deps) because the check runs
-  // on a plain setInterval outside the render cycle; the refs just mirror
-  // whatever's most recently rendered.
-  const modalOpenRef = useRef(false);
-  useEffect(() => {
-    modalOpenRef.current = !!activePanel || teleportOpen || settingsOpen || configEditorOpen || facilityOpen;
-  }, [activePanel, teleportOpen, settingsOpen, configEditorOpen, facilityOpen]);
+  // interrupts real use. "Nothing's open" is the Back stack's answer
+  // (overlayOpen) — every dismissable surface is on it.
   const lastInteractionRef = useRef(Date.now());
   useEffect(() => {
     const mark = () => { lastInteractionRef.current = Date.now(); };
@@ -250,7 +246,7 @@ export default function Dashboard() {
     };
   }, []);
   useEffect(() => installDailyAutoReload(() =>
-    !modalOpenRef.current && Date.now() - lastInteractionRef.current > 5 * 60_000,
+    !overlayOpen() && Date.now() - lastInteractionRef.current > 5 * 60_000,
   ), []);
 
   // Auto-connect on load / refresh. We always reach HA through the same-origin

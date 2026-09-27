@@ -1,3 +1,18 @@
+## 2.496.192
+
+### Fixed
+- **The phone's Back button now closes the Rooms menu, the ⋯ menu and the
+  held-floor rooms dial**, like every other window, instead of leaving the app.
+- **The kiosk's once-a-day automatic refresh never happens while anything is
+  open** — it could refresh over a half-written guest fault report or an
+  open menu.
+- The Facility window no longer says the spend cap is set in the Schedule
+  tab (there is no such setting).
+
+### Behind the scenes
+- A "Pool serviced" readiness line that could never appear was removed, and
+  several outdated notes in the code were corrected.
+
 ## 2.496.191
 
 ### Fixed

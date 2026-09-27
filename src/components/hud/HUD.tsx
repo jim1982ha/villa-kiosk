@@ -19,6 +19,7 @@
 // labels are always shown; "Highlight clickable objects" moved to Settings.)
 // Bottom bar: bottom-right shows the first-person movement joystick only.
 
+import { useBackToClose } from "@/hooks/useBackToClose";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   // MapIcon, not Map: the bare name shadows the global Map constructor,
@@ -158,6 +159,7 @@ export default function HUD({
   // actually held, so its screen position always matches the gesture.
   const floorBtnRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
   const [radial, setRadial] = useState<RadialState | null>(null);
+  useBackToClose(() => setRadial(null), radial !== null);
   const floorLongTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const floorLongFired = useRef(false);
 
@@ -352,6 +354,9 @@ export default function HUD({
   // the compact bar), this state only drives the dropdown. Closes on outside
   // tap and Escape, and after any action is chosen.
   const [menuOpen, setMenuOpen] = useState(false);
+  // Back closes it, as it closes every other surface (and puts it on the one
+  // list of what is open — see overlayOpen).
+  useBackToClose(() => setMenuOpen(false), menuOpen);
   const [legendOpen, setLegendOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {

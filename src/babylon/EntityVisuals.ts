@@ -247,9 +247,10 @@ const MIN_STRIP_THICKNESS = 0.06; // metres (6 cm) — still reads as a slim cov
 // The colour is deliberately a soft plaster-grey, NOT a dark "housing" tone:
 // a dark strip against white ceilings/walls is maximal contrast — from the
 // overview it printed as bold black frames above the beds, worse than the
-// white tube it replaced. Off-state unobtrusiveness comes from
-// STRIP_OFF_VISIBILITY below, not from the colour; the colour's only job is
-// to blend with the ceiling around it for whatever alpha remains.
+// white tube it replaced. Off-state unobtrusiveness comes from the housing
+// being faded out when the light is OFF (applyToMesh, via the tag set where
+// the strip is built), not from the colour; the colour's only job is to blend
+// with the ceiling around it for whatever alpha remains.
 const LED_HOUSING_COLOR = new Color3(0.8, 0.79, 0.77);
 // The inflated ~6cm bar is sized for the ON state, where the emissive core
 // needs several on-screen pixels to read as one continuous line. OFF, it goes
@@ -1792,8 +1793,7 @@ export class EntityVisuals {
 
     // This mesh is a genuine filament we're artificially thickening — mute its
     // baked "self-lit" base colour to a ceiling-matched grey and tag it so
-    // applyToMesh can fade it out when the light is OFF (see
-    // STRIP_OFF_VISIBILITY). The dynamic on/off glow is carried entirely by
+    // applyToMesh can fade it out when the light is OFF. The dynamic on/off glow is carried entirely by
     // the emissive channel, untouched by this.
     const mat = mesh.material;
     if (mat instanceof StandardMaterial) mat.diffuseColor = LED_HOUSING_COLOR.clone();

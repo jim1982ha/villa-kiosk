@@ -1,6 +1,6 @@
 // src/babylon/LightingSystem.ts
-// Scene lights: a directional "sun" + ambient, driven by SunController, plus a
-// registry of per-entity light glows.
+// The scene's sun (a directional light) and ambient colour, driven by
+// SunController. Device lights are not here: see bulbSet and LightPools.
 
 import { DirectionalLight } from "@babylonjs/core/Lights/directionalLight";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";

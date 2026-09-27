@@ -2044,9 +2044,8 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
     moments earlier. When `rev` is present and stale, the write is rejected
     (409) with the current value + revision instead of applied — the caller
     is expected to rebase its own change onto that fresher copy and retry
-    (see the frontend's DeviceConfigSync). Omitting `rev` keeps the old
-    unconditional-overwrite behaviour, which is what fm-data's single-writer
-    store still uses. The lock makes the read-check-write atomic against a
+    (see the frontend's DeviceConfigSync and fm/fmApi — both stores send it).
+    Omitting `rev` keeps the old unconditional-overwrite behaviour. The lock makes the read-check-write atomic against a
     second PUT landing on this same store mid-request.
     """
     lock = asyncio.Lock()
