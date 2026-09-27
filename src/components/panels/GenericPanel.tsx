@@ -38,7 +38,6 @@ export default function GenericPanel({ entity, mapping, onClose }: PanelProps) {
           legend={distinctStates.map((s) => ({ state: s, color: colorFor(s) }))}
           loading={historyLoading}
           hours={range.hours}
-        bucketMinutes={range.bucketMinutes}
         />
       </div>
     </BasePanel>

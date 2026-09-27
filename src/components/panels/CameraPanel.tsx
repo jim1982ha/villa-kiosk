@@ -53,6 +53,11 @@ const TAP_MAX_MS = LONG_PRESS_MS;
 /** The feed before its player exists: the first tier, nothing painted. */
 const FEED_STARTING: CameraPlayerState = { mode: "webrtc", frameReady: false };
 
+/** The camera bar's synthesized states, as the tooltip says them. */
+const CAMERA_BAR_LABEL: Record<string, string> = {
+  online: "Online", offline: "Camera unavailable", motion: "Motion", "motion-unavailable": "Motion sensor unavailable",
+};
+
 export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEntity }: Props) {
   const { connected, ws, entities } = useHA();
   const entityLabel = useEntityLabel();
@@ -369,6 +374,10 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
       (cur) => {
         if (!cur.camera || UNKNOWN_STATES.has(cur.camera)) return "offline";
         if (motionId && cur.motion === "on") return "motion";
+        // ⚠️ A LOST MOTION SENSOR IS NOT "ONLINE" (2.496.179): it resolved
+        // to the camera's resting state and was painted green — an outage of
+        // the thing this bar exists to report, shown as all-clear.
+        if (motionId && (!cur.motion || UNKNOWN_STATES.has(cur.motion))) return "motion-unavailable";
         return "online";
       },
     );
@@ -641,18 +650,16 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
             loading={statusLoading}
             height={56}
             vertical={railVertical}
-            // 5-minute buckets: 288 across the day. This bar answers "was
-            // there presence / was the camera down in this slice", not "for
-            // exactly how long" — a motion sensor fires far too often for
-            // per-change segments, which is what made this bar overstate
-            // motion and visibly reshuffle between renders. See
-            // StateTimeline's bucketMinutes docstring.
+            // Five-minute intervals, as every timeline (utils/trendInterval):
+            // this bar answers "was there presence / was the camera down in
+            // this slice", not "for exactly how long".
             hours={24}
-            bucketMinutes={5}
             // `online` is the resting state — the camera being fine is not
             // news, so it is neither painted nor listed. What remains is a
             // bare track marked only where something actually happened.
             baselineStates={["online"]}
+            // The bar's own words: these states are synthesized here.
+            labelFor={(s) => CAMERA_BAR_LABEL[s] ?? s}
             // Straight from the shared vocabulary the "Map colours" legend
             // documents (utils/stateColors STATUS_COLOR) — this bar used to
             // paint a camera HA had lost contact with in its own literal
@@ -668,7 +675,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
             // vocabularies; don't collapse them.
             colorFor={(s) => (
               s === "motion" ? STATUS_COLOR.alert
-                : s === "offline" ? STATUS_COLOR.unavailable
+                : s === "offline" || s === "motion-unavailable" ? STATUS_COLOR.unavailable
                   // A camera that is up and recording is ON, which the legend
                   // calls "On / active" and paints green. It is emphatically
                   // not "Off / idle" — that token means a device at rest, and

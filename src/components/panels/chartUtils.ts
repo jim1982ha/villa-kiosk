@@ -28,7 +28,9 @@ export function fmtDuration(ms: number): string {
 
 /** An outage in a chart's tooltip: "Unavailable · 05:21–05:24 (3 min)", or
  *  "Unavailable since 05:21" for one still running at `now` (the window's end). */
-export function fmtOutage(g: { from: number; to: number }, now: number): string {
+export function fmtOutage(gap: { from: number; to: number; actual?: { from: number; to: number } }, now: number): string {
+  // The real times, when the band was widened to whole five-minute intervals.
+  const g = gap.actual ?? gap;
   if (!Number.isFinite(g.to) || g.to >= now) return `Unavailable since ${fmtChartTime(g.from)} (${fmtDuration(now - g.from)})`;
   return `Unavailable · ${fmtChartTime(g.from)}–${fmtChartTime(g.to)} (${fmtDuration(g.to - g.from)})`;
 }

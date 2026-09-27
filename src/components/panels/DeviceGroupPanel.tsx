@@ -12,7 +12,7 @@ import BasePanel from "./BasePanel";
 import LineChart from "./LineChart";
 import UnavailableNotice from "./UnavailableNotice";
 import { useHA } from "@/ha/HAStateStore";
-import { fetchHistory } from "@/ha/HAHistoryAPI";
+import { fetchTrend } from "@/ha/HAHistoryAPI";
 import { useHistoryRange, HistoryHeader } from "./historyRange";
 import { useHistory } from "@/hooks/useHistory";
 import type { DeviceGroup } from "@/config/AppConfig";
@@ -68,7 +68,10 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
       unavailable: isUnavailable(entity),
     };
   });
-  const numericRows = rows.filter((r) => r.numeric !== undefined);
+  // A reading with a unit is a measurement even while it is UNAVAILABLE —
+  // that is exactly when its chart's shaded outage has something to say. It
+  // used to need a numeric state NOW, so an offline member had no chart.
+  const numericRows = rows.filter((r) => r.numeric !== undefined || (r.unavailable && r.unit !== ""));
   const numericIds = numericRows.map((r) => r.id).join(",");
   // One range for the whole group — a temp+humidity pair plotted over two
   // different windows would invite exactly the wrong comparison.
@@ -77,7 +80,7 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
   const { data: history } = useHistory<Record<string, HistorySeries>>(
     numericIds ? `${numericIds}|${range.hours}` : null,
     async () => Object.fromEntries(await Promise.all(
-      numericIds.split(",").map((id) => fetchHistory(id, range.hours).then((h) => [id, h] as const)))),
+      numericIds.split(",").map((id) => fetchTrend(id, range.hours).then((h) => [id, h] as const)))),
     {},
   );
 

@@ -13,6 +13,7 @@ import { gapsFrom } from "@/utils/historyGaps";
 import { statisticsSeries, type StatisticField, type StatisticsPeriod } from "@/utils/statisticsSeries";
 import type { StateHistoryPoint, HistorySeries, StatisticPeriod } from "@/types/ha.types";
 import { ingressApiBase } from "./ingress";
+import { fiveMinuteSeries } from "@/utils/trendInterval";
 
 interface RawHistoryState {
   state: string;
@@ -87,6 +88,17 @@ export async function fetchHistory(entityId: string, hours = 24): Promise<Histor
     gaps: gapsFrom(rows, window.to),
     window,
   };
+}
+
+/**
+ * A device's numeric TREND: its history in the one five-minute interval every
+ * device chart reports in (utils/trendInterval) — each interval's mean, and
+ * the outages widened to the intervals they touched. What a device panel
+ * draws; `fetchHistory` stays the raw series for the few readers that want
+ * every change (the pressure tendency).
+ */
+export async function fetchTrend(entityId: string, hours = 24): Promise<HistorySeries> {
+  return fiveMinuteSeries(await fetchHistory(entityId, hours));
 }
 
 /**

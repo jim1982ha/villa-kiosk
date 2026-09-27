@@ -208,6 +208,10 @@ export interface HistoryPoint {
 export interface HistoryGap {
   from: number; // epoch ms
   to: number;   // epoch ms — `now` while the outage is still running
+  /** The outage's REAL start and end when `from`/`to` have been widened to
+   *  the five-minute intervals it touched (utils/trendInterval) — what the
+   *  tooltip reports. */
+  actual?: { from: number; to: number };
 }
 
 /** What a numeric history fetch returns: the readings, AND where there were

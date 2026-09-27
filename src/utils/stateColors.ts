@@ -263,7 +263,23 @@ export function paletteColorFor(states: string[]): (state: string) => string {
   const map = new Map<string, string>();
   let i = 0;
   for (const s of states) {
+    // ⚠️ NOT A VALUE (2.496.179): "unavailable"/"unknown" took a palette slot
+    // like "connected" did, so an access point's lost stretches were painted
+    // dark green inside its green bar (owner's screenshot). They are the one
+    // meaning every chart shows in the legend's colour — see paintState.
+    if (UNKNOWN_STATES.has(s)) continue;
     if (!map.has(s)) map.set(s, PALETTE[i++ % PALETTE.length]);
   }
-  return (state: string) => map.get(state) ?? "var(--text-dim)";
+  return paintState((state: string) => map.get(state) ?? "var(--text-dim)");
+}
+
+/**
+ * Any chart's colouring, with the one rule every chart shares: an
+ * unavailable or unknown stretch is ALWAYS the legend's unavailable colour
+ * (STATUS_COLOR.unavailable), whatever the device's own mapping says. The
+ * timeline applies it to whatever `colorFor` it is given, so no panel can
+ * forget it (2.496.179).
+ */
+export function paintState(colorFor: (state: string) => string): (state: string) => string {
+  return (state: string) => (UNKNOWN_STATES.has(state) ? STATUS_COLOR.unavailable : colorFor(state));
 }

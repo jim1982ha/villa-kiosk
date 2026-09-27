@@ -19,6 +19,8 @@ import { useChartPointer } from "./useChartPointer";
 // every panel's history bar and the camera's status rail, so the drift would
 // have shown as one word spelled two ways on one screen.
 import { prettyState } from "@/utils/entityValue";
+import { paintState } from "@/utils/stateColors";
+import { TREND_INTERVAL_MS } from "@/utils/trendInterval";
 
 export interface TimelineLegendEntry {
   state: string;
@@ -70,30 +72,12 @@ interface Props {
    *  out on the correct axis in the first place has no such coupling — the bar
    *  simply fills its container like any other block. */
   vertical?: boolean;
-  /**
-   * Render fixed time buckets of this many minutes instead of one segment per
-   * state change. A bucket is painted if AT LEAST ONE event of a state landed
-   * in it, and shows every state it saw (striped when more than one), so it
-   * answers "was there presence / was it offline during this slice" rather
-   * than "exactly how long did each state last".
-   *
-   * This exists because the per-change rendering degenerates for a
-   * high-frequency entity. Segments are absolutely positioned and floored to a
-   * minimum width for legibility — 0.3%, which on a 24h window is 4.3 MINUTES
-   * — so a camera's motion sensor firing dozens of brief blips drew each one
-   * ~100x too wide, overlapping its neighbours into a solid red mass that
-   * wildly overstated how much motion there had been. Worse, which of those
-   * overlapping segments won a given pixel depended on sub-pixel positions
-   * that shift as `now` advances, so the bar visibly reshuffled on every
-   * re-render while showing the same data (reported as the bar "changing while
-   * displaying the same view").
-   *
-   * Buckets fix both: they tile, so nothing overlaps and no minimum width is
-   * needed, and they are anchored to ABSOLUTE wall-clock time rather than to
-   * `now`, so the layout is bit-identical between renders and only changes
-   * when the clock actually crosses a boundary.
-   */
-  bucketMinutes?: number;
+  /* ⚠️ `bucketMinutes` IS GONE (2.496.179). Every timeline is drawn in the
+   ONE five-minute interval (utils/trendInterval) — it was 1, 5, 10 or 60
+   minutes by range, and a binary sensor drew per-change segments floored to
+   0.3% of the bar, the rendering whose overlaps the camera bar had already
+   had to leave. Buckets tile and are anchored to the clock, so nothing
+   overlaps and identical data renders identically. */
   /**
    * States that mean "nothing to report" — never painted, never listed in the
    * tooltip, and a bucket containing only these is left as bare track.
@@ -142,33 +126,33 @@ function cellBackground(states: string[], colorFor: (s: string) => string): stri
 
 
 export default function StateTimeline({
-  data, hours, end, colorFor, labelFor = prettyState, height, legend, loading, vertical, bucketMinutes,
+  data, hours, end, colorFor: ownColour, labelFor = prettyState, height, legend, loading, vertical,
   baselineStates,
 }: Props) {
+  // Unavailable/unknown are the legend's colour on EVERY timeline, whatever
+  // the panel's mapping (stateColors.paintState).
+  const colorFor = useMemo(() => paintState(ownColour), [ownColour]);
   // Where the pointer is along the bar, as a fraction (the app's one rule:
   // useChartPointer) — along whichever axis the bar runs.
   const { frac, handlers } = useChartPointer<HTMLDivElement>(vertical ? "y" : "x");
 
-  const bucketMs = (bucketMinutes ?? 0) * 60_000;
+  const bucketMs = TREND_INTERVAL_MS;
   // Joined so the memo below has a stable primitive dep rather than a new
   // array identity on every render.
   const baselineKey = (baselineStates ?? []).join("\u0000");
   // Recomputed only when the wall clock crosses a bucket boundary — NOT on
   // every render. This is what makes a bucketed bar stable: `now` advancing a
   // few milliseconds no longer nudges anything, so identical data renders
-  // identically every time. Falls back to a 1s key for the segment mode, whose
-  // last segment legitimately grows toward `now`.
-  const timeKey = bucketMs
-    ? Math.floor(Date.now() / bucketMs)
-    : Math.floor(Date.now() / 1000);
+  // identically every time.
+  const timeKey = Math.floor(Date.now() / bucketMs);
 
   const cells = useMemo<Cell[]>(() => {
     if (data.length === 0) return [];
-    const now = end ?? timeKey * (bucketMs || 1000) + (bucketMs || 1000);
+    const now = end ?? (timeKey + 1) * bucketMs;
     const start = now - hours * 3600 * 1000;
     const span = now - start;
 
-    if (bucketMs) {
+    {
       // Anchored to absolute time, so bucket edges are the same wall-clock
       // instants for everyone and do not drift with when the panel opened.
       const first = Math.floor(start / bucketMs) * bucketMs;
@@ -220,24 +204,18 @@ export default function StateTimeline({
       }
       return out.filter((c) => c.states.length > 0 || c.baseline !== undefined);
     }
+  }, [data, hours, end, bucketMs, timeKey, baselineKey]);
 
-    const out: Cell[] = [];
-    for (let i = 0; i < data.length; i++) {
-      const segStart = data[i].t;
-      const segEnd = i + 1 < data.length ? data[i + 1].t : now;
-      if (segEnd <= start) continue;
-      const clippedStart = Math.max(segStart, start);
-      const clippedEnd = Math.min(segEnd, now);
-      if (clippedEnd <= clippedStart) continue;
-      out.push({
-        left: ((clippedStart - start) / span) * 100,
-        width: ((clippedEnd - clippedStart) / span) * 100,
-        from: clippedStart, to: clippedEnd,
-        states: [data[i].state], events: [],
-      });
+  const runs = useMemo(() => {
+    const out: { left: number; width: number; bg: string }[] = [];
+    for (const c of cells) {
+      const bg = c.states.length ? cellBackground(c.states, colorFor) : colorFor(c.baseline ?? "");
+      const last = out[out.length - 1];
+      if (last && last.bg === bg && Math.abs(last.left + last.width - c.left) < 1e-6) last.width += c.width;
+      else out.push({ left: c.left, width: c.width, bg });
     }
     return out;
-  }, [data, hours, end, bucketMs, timeKey, baselineKey]);
+  }, [cells, colorFor]);
 
   if (data.length === 0) {
     return loading
@@ -264,39 +242,24 @@ export default function StateTimeline({
           style={{ ...(height && !vertical ? { height } : undefined), touchAction: "none" }}
           {...handlers}
         >
-          {cells.map((c, i) => {
-            // The minimum width is only needed where cells do NOT tile: in
-            // bucket mode they do, and forcing one wider would reintroduce the
-            // overlap this mode exists to remove.
-            // ⚠️ THE EXTRA PIXEL IS WHAT CLOSES THE SEAMS. Buckets tile
-            // exactly in percentages, but `left` and `width` are rounded to
-            // device pixels INDEPENDENTLY, so at boundaries that land
-            // mid-pixel the two neighbours each cover part of it and the track
-            // shows through as a hairline. Reported as "white lines between
-            // two green values" on a 24h bar — 144 cells of ~4px each, where a
-            // handful of boundaries round badly. The give-away was a bar that
-            // was a SINGLE segment and still had internal lines: they were
-            // never data. One pixel of overlap costs at most a half-pixel
-            // shift of a colour boundary and cannot leave a gap; the track has
-            // `overflow: hidden`, so the last cell's extra pixel is clipped.
-            const size = bucketMs
-              ? `calc(${c.width}% + 1px)`
-              : `${Math.max(c.width, 0.3)}%`;
-            const bg = c.states.length
-              ? cellBackground(c.states, colorFor)
-              : colorFor(c.baseline ?? "");
-            return (
-              <div
-                key={i}
-                className="state-timeline-seg"
-                style={
-                  vertical
-                    ? { top: `${c.left}%`, height: size, background: bg }
-                    : { left: `${c.left}%`, width: size, background: bg }
-                }
-              />
-            );
-          })}
+          {/* One strip per RUN of intervals that paint the same — a 7-day bar
+              is 2,016 five-minute intervals, and a div each was the cost of a
+              resolution nobody can see drawn. The tooltip still reads the
+              interval under the pointer (`cells`), not the run. */}
+          {runs.map((r, i) => (
+            <div
+              key={i}
+              className="state-timeline-seg"
+              // ⚠️ THE EXTRA PIXEL IS WHAT CLOSES THE SEAMS: `left` and `width`
+              // round to device pixels independently, so a boundary landing
+              // mid-pixel showed the track through as a hairline ("white lines
+              // between two green values"). One pixel of overlap cannot leave a
+              // gap; the track's overflow clips the last strip's.
+              style={vertical
+                ? { top: `${r.left}%`, height: `calc(${r.width}% + 1px)`, background: r.bg }
+                : { left: `${r.left}%`, width: `calc(${r.width}% + 1px)`, background: r.bg }}
+            />
+          ))}
           {hover && (
             <div
               className="state-timeline-cursor"
@@ -308,9 +271,7 @@ export default function StateTimeline({
           // The app's tooltip (ChartTip): beside a vertical rail, under a
           // horizontal bar — never over the cells being pointed at.
           <ChartTip x={vertical ? 1 : hover.frac} y={vertical ? hover.frac : 1}
-            {...(bucketMs
-              ? {
-                  rows: [
+            rows={[
                     { key: "_range", text: `${fmtChartStamp(hover.cell.from, hours)} – ${fmtChartTime(hover.cell.to)}` },
                     // Only the resting state here: the state alone IS the answer.
                     ...(hover.cell.states.length === 0
@@ -320,12 +281,7 @@ export default function StateTimeline({
                       : hover.cell.events.length === 0
                         ? hover.cell.states.map((st) => ({ key: st, event: true, marker: dot(st), text: labelFor(st) }))
                         : hover.cell.events.map((ev, k) => ({ key: `e${k}`, event: true, marker: dot(ev.state), text: `${labelFor(ev.state)} · ${fmtChartStamp(ev.t, hours)}` }))),
-                  ],
-                }
-              : {
-                  rows: [{ key: "_s", marker: dot(hover.cell.states[0]), text: labelFor(hover.cell.states[0]) }],
-                  stamp: fmtChartStamp(hover.cell.from, hours),
-                })} />
+                  ]} />
         )}
       </div>
       {legend && legend.length > 1 && (

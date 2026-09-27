@@ -69,7 +69,7 @@ console.log("\n  the callers:");
   const SRC = new URL("../../src/", import.meta.url).pathname;
   const walk = (d, out = []) => { for (const e of readdirSync(d)) { const p = join(d, e); statSync(p).isDirectory() ? walk(p, out) : /\.tsx?$/.test(p) && out.push(p); } return out; };
   const files = walk(SRC).filter((f) => /\/(components|hooks)\//.test(f));
-  const fetchers = files.filter((f) => /\b(fetchHistory|fetchStateHistory|fetchStatistics)\(|getStatisticsDuringPeriod\(/.test(readFileSync(f, "utf8")));
+  const fetchers = files.filter((f) => /\b(fetchHistory|fetchTrend|fetchStateHistory|fetchStatistics)\(|getStatisticsDuringPeriod\(/.test(readFileSync(f, "utf8")));
   ck(`found the panels that read history (${fetchers.length})`, fetchers.length >= 5, fetchers.map((f) => f.slice(SRC.length)));
   const raw = fetchers.filter((f) => /getStatisticsDuringPeriod\(/.test(readFileSync(f, "utf8"))).map((f) => f.slice(SRC.length));
   ck("no panel reads raw statistics rows — only the adapter's series", raw.length === 0, raw);

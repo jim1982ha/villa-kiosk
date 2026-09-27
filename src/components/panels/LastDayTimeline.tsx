@@ -46,7 +46,6 @@ export default function LastDayTimeline({
         hours={range.hours}
         end={lastSeen}
         labelFor={stateLabelFor(entityId, entities[entityId]?.attributes.device_class as string | undefined)}
-        bucketMinutes={range.bucketMinutes}
       />
     </div>
   );
