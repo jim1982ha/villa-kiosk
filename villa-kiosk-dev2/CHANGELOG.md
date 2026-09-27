@@ -1,3 +1,10 @@
+## 2.496.205
+
+### Fixed
+- The diagnostics log records a given error at most once every 30 s, so a
+  single fault can no longer flood it (2.496.197–203 wrote about ten
+  copies a second of one error and pushed out everything else).
+
 ## 2.496.204
 
 ### Fixed
