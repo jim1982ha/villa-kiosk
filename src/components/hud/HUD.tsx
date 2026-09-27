@@ -45,7 +45,7 @@ import LegendModal from "./LegendModal";
 import CockpitModal from "@/components/cockpit/CockpitModal";
 import { useVillaAttention } from "@/components/cockpit/useVillaAttention";
 import { useFmData } from "@/fm/FmDataContext";
-import { isTicketOpen, scheduleBoard } from "@/fm/fmEngine";
+import { fmAttention } from "@/fm/fmEngine";
 import { formatCountBadge } from "@/utils/countBadge";
 
 // Label-size stepper (next to the category filter): each click moves
@@ -139,12 +139,8 @@ export default function HUD({
   // that you find out you're late WITHOUT having to go looking — an operator
   // who must open a modal to discover overdue work will discover it late.
   const { data: fmData } = useFmData();
-  const facilityAttention = useMemo(() => {
-    const lateTasks = scheduleBoard(fmData).filter(
-      (s) => s.state === "overdue" || s.state === "never").length;
-    const openFaults = fmData.tickets.filter(isTicketOpen).length;
-    return lateTasks + openFaults;
-  }, [fmData]);
+  // The Facility's attention rule (fmEngine.fmAttention) — the Cockpit's too.
+  const facilityAttention = useMemo(() => fmAttention(fmData).total, [fmData]);
 
   // ── Floor buttons now do double duty, no separate Rooms button any more:
   // a normal tap/click keeps the original behaviour (switch to that floor,

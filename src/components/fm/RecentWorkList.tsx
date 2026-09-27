@@ -16,7 +16,7 @@
 import { useMemo } from "react";
 import { CalendarCheck, Wrench } from "lucide-react";
 import { useFmData } from "@/fm/FmDataContext";
-import { localStamp, formatMoney } from "@/fm/fmEngine";
+import { localStamp, formatMoney, completionSource } from "@/fm/fmEngine";
 import EvidenceRow from "./EvidenceRow";
 import ErasableRow from "./ErasableRow";
 
@@ -24,8 +24,6 @@ export default function RecentWorkList({ limit = 12 }: { limit?: number }) {
   const { data, removeCompletion } = useFmData();
 
   const rows = useMemo(() => {
-    const scheduleTitle = new Map(data.schedules.map((s) => [s.id, s.title]));
-    const ticketTitle = new Map(data.tickets.map((t) => [t.id, t.title]));
     const costById = new Map(data.costs.map((c) => [c.id, c]));
     return [...data.completions]
       .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
@@ -35,9 +33,10 @@ export default function RecentWorkList({ limit = 12 }: { limit?: number }) {
         // A completion can outlive the thing it answered (a schedule deleted,
         // a fault erased). Say so plainly rather than rendering a blank title
         // — the work still happened, which is the whole point of keeping it.
-        source: c.ticketId
-          ? { kind: "fault" as const, title: ticketTitle.get(c.ticketId) ?? "a fault since erased" }
-          : { kind: "schedule" as const, title: scheduleTitle.get(c.scheduleId) ?? "a task since removed" },
+        source: (() => {
+          const src = completionSource(data, c);   // one reading (fmEngine)
+          return { kind: src.kind, title: src.title ?? (src.kind === "fault" ? "a fault since erased" : "a task since removed") };
+        })(),
         cost: c.costId ? costById.get(c.costId) : undefined,
       }));
   }, [data.completions, data.schedules, data.tickets, data.costs, limit]);

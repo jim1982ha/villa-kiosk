@@ -13,9 +13,7 @@ import {
   createContext, useCallback, useContext, useEffect, useRef, useState,
   type ReactNode,
 } from "react";
-import {
-  isTicketOpen, withCompletion, withoutCost, withoutCompletion, withTicketPatch, withTicketAdvanced, type FmStamp,
-} from "./fmEngine";
+import { isTicketOpen, withCompletion, withoutCost, withoutCompletion, withTicketPatch, withTicketAdvanced, type FmStamp, withoutTicket } from "./fmEngine";
 
 /** The real clock and id maker the record changes are stamped with (fmEngine). */
 const stamp = (): FmStamp => ({ now: new Date().toISOString(), id: fmId });
@@ -271,7 +269,7 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
     mutate((d) => withoutCost(d, id), elevation), [mutate]);
 
   const removeTicket = useCallback((id: string, elevation: string) =>
-    mutate((d) => ({ ...d, tickets: d.tickets.filter((t) => t.id !== id) }), elevation), [mutate]);
+    mutate((d) => withoutTicket(d, id), elevation), [mutate]);
 
   const removeCompletion = useCallback((id: string, elevation: string) =>
     mutate((d) => withoutCompletion(d, id), elevation), [mutate]);

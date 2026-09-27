@@ -23,7 +23,7 @@
 import { useState } from "react";
 
 import { useFmData } from "@/fm/FmDataContext";
-import { formatMoney } from "@/fm/fmEngine";
+import { formatMoney, parseAmount } from "@/fm/fmEngine";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
 import NotesField from "./NotesField";
@@ -65,7 +65,7 @@ export default function FaultStageModal({
   // Cost belongs to the end of the job, not the middle of it — asking for it
   // while work is still in progress invites a guess.
   const asksCost = to === "resolved";
-  const amountIdr = asksCost ? Number(amount.replace(/[^\d]/g, "")) || 0 : 0;
+  const amountIdr = asksCost ? parseAmount(amount) : 0;
 
   const submit = async () => {
     setBusy(true);

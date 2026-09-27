@@ -114,15 +114,18 @@ export function buildMonthlyReport(input: ReportInput): string {
 
   // ── 1. Preventive maintenance ─────────────────────────────────────────────
   L.push(`## 1. Preventive maintenance`);
-  const done = completionsInMonth(fm, month);
+  // Scheduled work only: a fault's resolution is filed as a completion with
+  // no schedule and printed here as "(removed task)" — it is in §3.
+  const done = completionsInMonth(fm, month).filter(({ completion: c }) => !c.ticketId);
   if (done.length === 0) {
     L.push(`_No maintenance recorded in this period._`);
   } else {
     L.push(`| Date | Task | Clause | By | Evidence | Note |`);
     L.push(`|---|---|---|---|---|---|`);
     for (const { completion: c, schedule: s } of done) {
-      L.push(`| ${shortDate(c.at)} | ${s?.title ?? "(removed task)"} | ${s?.clause ?? "—"} `
-        + `| ${c.by || "—"} | ${c.photoIds.length} photo(s) | ${c.note?.replace(/\|/g, "/") ?? ""} |`);
+      const esc = (v: string) => v.replace(/\|/g, "/");
+      L.push(`| ${shortDate(c.at)} | ${esc(s?.title ?? "(removed task)")} | ${esc(s?.clause ?? "—")} `
+        + `| ${esc(c.by || "—")} | ${c.photoIds.length} photo(s) | ${esc(c.note ?? "")} |`);
     }
   }
   L.push("");

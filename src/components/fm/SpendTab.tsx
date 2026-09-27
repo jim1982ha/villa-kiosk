@@ -13,7 +13,7 @@ import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { resolveSiteTitle } from "@/config/AppConfig";
 import { useFmData } from "@/fm/FmDataContext";
-import { budgetStatus, formatMoney, monthKey, localStamp } from "@/fm/fmEngine";
+import { budgetStatus, formatMoney, monthKey, localStamp, parseAmount } from "@/fm/fmEngine";
 import { MONEY_CURRENCY } from "@/fm/fmTypes";
 import { buildSpendStatement } from "@/fm/fmReport";
 import type { FmCost, FmSavedDocument } from "@/fm/fmTypes";
@@ -76,7 +76,7 @@ export default function SpendTab(
   };
 
   const b = budgetStatus(data.costs, month);
-  const amountIdr = Number(amount.replace(/[^\d]/g, "")) || 0;
+  const amountIdr = parseAmount(amount);
 
   const generateStatement = () => {
     setStatement(buildSpendStatement(data, month, villaName));
