@@ -1,3 +1,11 @@
+## 2.496.203
+
+### Behind the scenes
+- Dead code removed: a resize hook nothing used, a weather "comfort
+  insight" sentence that was never shown, an outage-band helper the charts
+  did not call, two unused type names, and two unused test helpers.
+  Nothing changes on screen.
+
 ## 2.496.202
 
 ### Fixed
