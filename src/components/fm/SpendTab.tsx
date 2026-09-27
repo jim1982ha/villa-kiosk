@@ -8,6 +8,7 @@
 // which is why the entry form projects the new total as you type.
 
 import { useState } from "react";
+import SaveButton from "@/components/common/SaveButton";
 import { Plus, Sparkles, Save, Download } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
@@ -294,9 +295,7 @@ export default function SpendTab(
         <button className="btn ghost" onClick={generateStatement}>
           <Sparkles size={16} /> {statement ? "Regenerate statement" : "Generate statement"}
         </button>
-        <button className="btn ghost" onClick={() => void saveStatement()} disabled={!statement || statementSaved}>
-          <Save size={16} /> {statementSaved ? "Saved" : "Save statement"}
-        </button>
+        <SaveButton saved={statementSaved} label="Save statement" icon={<Save size={16} />} onClick={() => void saveStatement()} disabled={!statement} />
         <button className="btn ghost" onClick={downloadStatement} disabled={!statement}>
           <Download size={16} /> Download .md
         </button>

@@ -14,7 +14,8 @@
 // name HA still knows it by — and would print the new name back at the operator
 // as if it were evidence the entity exists.
 
-import { useEffect, useRef, useMemo, useState } from "react";
+import { useRef, useMemo, useState } from "react";
+import { useOutsideClose } from "@/hooks/useOutsideClose";
 import { Search, X } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { ENTITY_ID_RE } from "@/utils/sh3dParser";
@@ -52,28 +53,8 @@ export default function EntityPicker({
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Close on click outside.
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-        setQuery("");
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
-
-  // Close on Escape.
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { setOpen(false); setQuery(""); }
-    };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [open]);
+  // Outside tap or Escape closes the list and clears the query.
+  useOutsideClose([containerRef], open, () => { setOpen(false); setQuery(""); });
 
   const list = useMemo(() => {
     const q = query.toLowerCase();

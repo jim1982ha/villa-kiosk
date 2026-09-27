@@ -18,7 +18,8 @@
 // scrollable centre strip so it never fights the corner controls
 // (view toggle / joystick) in the bottom bar.
 
-import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
+import { useMemo, useRef, useState, type ComponentType } from "react";
+import { useOutsideClose } from "@/hooks/useOutsideClose";
 import { createPortal } from "react-dom";
 import { Snowflake, Zap, CloudSun, Sparkles } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
@@ -305,28 +306,9 @@ function SceneMenu({ scenes, canRun, apply }: {
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: PointerEvent) => {
-      const t = e.target as Node;
-      if (btnRef.current?.contains(t) || menuRef.current?.contains(t)) return;
-      setOpen(false);
-    };
-    // ⚠️ DELIBERATELY NOT useModalA11y (/dry-audit note, 2.433.0). That hook is
-    // the MODAL contract — focus trap, Escape, focus restore, back-to-close —
-    // and this is a non-modal POPOVER: anchored to the tile, no backdrop, no
-    // role="dialog", dismissed by an outside pointerdown. Trapping focus in a
-    // menu that is not modal is a defect, not a fix: a keyboard user could not
-    // Tab out of a thing that is not covering anything. Escape alone is the
-    // right half of the contract here, so it is hand-written on purpose.
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("pointerdown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("pointerdown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
+  // A non-modal popover: outside tap or Escape closes it (useOutsideClose
+  // says why that is not useModalA11y's contract).
+  useOutsideClose([btnRef, menuRef], open, () => setOpen(false));
 
   const toggle = () => {
     // Tapping the tile NEVER applies a scene directly (even with just one) —

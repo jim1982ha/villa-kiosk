@@ -20,6 +20,9 @@
 // Bottom bar: bottom-right shows the first-person movement joystick only.
 
 import { useBackToClose } from "@/hooks/useBackToClose";
+import { useOutsideClose } from "@/hooks/useOutsideClose";
+import { useInterval } from "@/hooks/useInterval";
+import { fmtChartTime } from "@/components/panels/chartUtils";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   // MapIcon, not Map: the bare name shadows the global Map constructor,
@@ -97,12 +100,9 @@ interface Props {
 }
 
 function useClock(): string {
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 1000 * 20);
-    return () => clearInterval(t);
-  }, []);
-  return now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const [now, setNow] = useState(() => Date.now());
+  useInterval(() => setNow(Date.now()), 1000 * 20);
+  return fmtChartTime(now);
 }
 
 export default function HUD({
@@ -359,19 +359,7 @@ export default function HUD({
   useBackToClose(() => setMenuOpen(false), menuOpen);
   const [legendOpen, setLegendOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onDown = (e: PointerEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMenuOpen(false); };
-    document.addEventListener("pointerdown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("pointerdown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [menuOpen]);
+  useOutsideClose([menuRef], menuOpen, () => setMenuOpen(false));
 
   // The view toggle + default-view anchor (and their tap-vs-hold gesture) live
   // in <ViewControls>, rendered either here or inside the SummaryBar.

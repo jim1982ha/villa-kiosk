@@ -100,7 +100,7 @@
 .fm-lightbox {
   position: fixed; inset: 0; z-index: 200;
   display: flex; align-items: center; justify-content: center;
-  background: rgba(0, 0, 0, 0.88);
+  background: var(--chip-scrim-solid);
   padding: calc(env(safe-area-inset-top, 0px) + 16px) 16px
            max(16px, var(--safe-bottom));
 }
@@ -112,12 +112,12 @@
   position: absolute; display: flex; align-items: center; justify-content: center;
   width: var(--touch-min); height: var(--touch-min);
   border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.25);
-  background: rgba(0, 0, 0, 0.45); color: #fff; cursor: pointer;
+  background: var(--chip-scrim); color: #fff; cursor: pointer;
 }
 .fm-lightbox-close { top: calc(env(safe-area-inset-top, 0px) + 12px); right: 12px; }
 .fm-lightbox-nav.prev { left: 12px; }
 .fm-lightbox-nav.next { right: 12px; }
-.fm-lightbox-close:hover, .fm-lightbox-nav:hover { background: rgba(0, 0, 0, 0.7); }
+.fm-lightbox-close:hover, .fm-lightbox-nav:hover { background: var(--chip-scrim-strong); }
 .fm-lightbox-count {
   position: absolute; bottom: max(14px, var(--safe-bottom));
   left: 50%; transform: translateX(-50%);
@@ -385,7 +385,7 @@
   position: absolute; top: 3px; right: 3px; width: 20px; height: 20px;
   display: flex; align-items: center; justify-content: center;
   border-radius: 50%; border: none; cursor: pointer;
-  background: rgba(0,0,0,.6); color: #fff;
+  background: var(--chip-scrim-strong); color: #fff;
 }
 .fm-thumb-add {
   display: flex; flex-direction: column; align-items: center; justify-content: center;

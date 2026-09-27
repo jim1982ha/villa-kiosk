@@ -6,6 +6,7 @@
 // A failing check names the devices behind it and opens them directly.
 
 import { useState } from "react";
+import SaveButton from "@/components/common/SaveButton";
 import { CheckCircle2, AlertTriangle, XCircle, ChevronRight, Camera } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
@@ -84,9 +85,7 @@ export default function ReadinessTab({
           <strong>{headline}</strong>
           <span className="muted">{report.passed} of {report.total} checks passing</span>
         </div>
-        <button
-          className="btn ghost"
-          style={{ marginLeft: "auto" }}
+        <SaveButton saved={saved} label="Save snapshot" icon={<Camera size={16} />} style={{ marginLeft: "auto" }}
           onClick={async () => {
             const result = await saveDocument({
               kind: "readiness",
@@ -97,9 +96,7 @@ export default function ReadinessTab({
             setSaved(true);
             window.setTimeout(() => setSaved(false), 2500);
           }}
-        >
-          <Camera size={16} /> {saved ? "Saved" : "Save snapshot"}
-        </button>
+        />
       </div>
 
       <div className="fm-list">

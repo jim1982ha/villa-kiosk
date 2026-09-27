@@ -25,6 +25,8 @@ import {
   Activity, Zap, RefreshCw, ChevronRight,
 } from "lucide-react";
 import { useModalA11y } from "@/hooks/useModalA11y";
+import SegmentedGroup from "@/components/common/SegmentedGroup";
+import { fmtChartTime } from "@/components/panels/chartUtils";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
@@ -188,17 +190,11 @@ export default function CockpitModal({ onClose, onOpenEntity }: CockpitModalProp
               names whichever is showing. */}
           <div className="settings-section-title cockpit-pivot-header">
             <span>By {pivot}</span>
-            <div className="segmented" role="group" aria-label="Group by" style={{ flex: "0 0 auto" }}>
-              <button className={pivot === "room" ? "active" : ""} onClick={() => setPivot("room")} aria-pressed={pivot === "room"}>
-                <MapPin size={16} /> Room
-              </button>
-              <button className={pivot === "floor" ? "active" : ""} onClick={() => setPivot("floor")} aria-pressed={pivot === "floor"}>
-                <Building2 size={16} /> Floor
-              </button>
-              <button className={pivot === "category" ? "active" : ""} onClick={() => setPivot("category")} aria-pressed={pivot === "category"}>
-                <LayoutGrid size={16} /> Category
-              </button>
-            </div>
+            <SegmentedGroup ariaLabel="Group by" className="cockpit-pivot" active={pivot} onChange={setPivot} options={[
+              { key: "room", label: <><MapPin size={16} /> Room</> },
+              { key: "floor", label: <><Building2 size={16} /> Floor</> },
+              { key: "category", label: <><LayoutGrid size={16} /> Category</> },
+            ]} />
           </div>
           {pivot === "category" ? (
             <div className="cockpit-category-grid">
@@ -287,7 +283,7 @@ export default function CockpitModal({ onClose, onOpenEntity }: CockpitModalProp
             <div className="cockpit-activity-list">
               {villaActivity.map((e, i) => (
                 <div key={`${e.t}-${i}`} className="cockpit-activity-row">
-                  <span className="cockpit-activity-time muted">{new Date(e.t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                  <span className="cockpit-activity-time muted">{fmtChartTime(e.t)}</span>
                   <span className="cockpit-activity-text"><strong>{e.name}</strong> {e.message}</span>
                 </div>
               ))}

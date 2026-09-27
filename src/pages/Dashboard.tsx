@@ -2,6 +2,7 @@
 // Main page: 3D canvas + HUD + panels + teleport + settings + onboarding.
 
 import { overlayOpen } from "@/hooks/useBackToClose";
+import { useInterval } from "@/hooks/useInterval";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BabylonCanvas from "@/components/canvas/BabylonCanvas";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
@@ -282,9 +283,9 @@ export default function Dashboard() {
       return;
     }
     manager.sun.applyRealSun();
-    const t = setInterval(() => manager.sun.applyRealSun(), 1000 * 60 * 15);
-    return () => clearInterval(t);
   }, [manager, haSun]);
+  // Re-aimed every 15 minutes while no sun.sun entity drives it.
+  useInterval(() => manager?.sun.applyRealSun(), manager && !haSun ? 1000 * 60 * 15 : null);
 
   const onEntityPicked = useCallback(
     (entityId: string, clientX: number, clientY: number) => {

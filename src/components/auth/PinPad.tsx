@@ -12,6 +12,7 @@
 
 import { authErrorText } from "@/auth/authErrorText";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useInterval } from "@/hooks/useInterval";
 import { ArrowLeft, Delete } from "lucide-react";
 
 const DEFAULT_PIN_LENGTH = 4;
@@ -54,13 +55,7 @@ export default function PinPad({
 
   // Lockout countdown (rate-limited by the verifier). Interval is cleaned up
   // on unmount and whenever the count reaches zero.
-  useEffect(() => {
-    if (lockedFor <= 0) return;
-    const t = setInterval(() => {
-      setLockedFor((s) => (s > 1 ? s - 1 : 0));
-    }, 1000);
-    return () => clearInterval(t);
-  }, [lockedFor > 0]); // eslint-disable-line react-hooks/exhaustive-deps
+  useInterval(() => setLockedFor((s) => (s > 1 ? s - 1 : 0)), lockedFor > 0 ? 1000 : null);
 
   const submit = useCallback(async (pin: string) => {
     setBusy(true);

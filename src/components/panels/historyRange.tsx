@@ -14,6 +14,7 @@
 // entry here carries both resolutions and a view picks which ranges it offers.
 
 import { useState, type ReactNode } from "react";
+import SegmentedGroup from "@/components/common/SegmentedGroup";
 import type { StatisticsPeriod } from "@/utils/statisticsSeries";
 
 export interface HistoryRange {
@@ -61,16 +62,7 @@ export function useSegmentedChoice<K extends string>(
 ): { key: K; picker: ReactNode } {
   const [picked, setPicked] = useState<K>(initial);
   const key = options.some((o) => o.key === picked) ? picked : initial;
-  const picker = (
-    <div className={`segmented ${className}`} role="group" aria-label={ariaLabel}>
-      {options.map((o) => (
-        <button key={o.key} type="button" className={o.key === key ? "active" : ""}
-          onClick={() => setPicked(o.key)} aria-pressed={o.key === key} title={o.title} aria-label={o.title}>
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
+  const picker = <SegmentedGroup options={options} active={key} onChange={setPicked} ariaLabel={ariaLabel} className={className} />;
   return { key, picker };
 }
 

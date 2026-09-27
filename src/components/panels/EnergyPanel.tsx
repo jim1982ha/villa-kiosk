@@ -12,7 +12,8 @@
 // here the next time the window opens. The words: config/energyModel.ts.
 // No Energy dashboard in HA: the bar's old device list opens instead.
 
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useMemo, useState, type ReactNode } from "react";
+import { useInterval } from "@/hooks/useInterval";
 import { ChevronRight, Zap } from "lucide-react";
 import { List, PieChart } from "lucide-react";
 import {
@@ -94,7 +95,7 @@ function NowView({ setup, costUnit, house, colourOf }: { setup: EnergyWindowSetu
   // Refreshed every five minutes while open: the recorder writes hourly
   // buckets, so a faster refresh would fetch the same numbers.
   const [tick, setTick] = useState(0);
-  useEffect(() => { const t = setInterval(() => setTick((n) => n + 1), 300_000); return () => clearInterval(t); }, []);
+  useInterval(() => setTick((n) => n + 1), 300_000);
   const { data, status } = useHistory<{ hourly: Record<string, HistorySeries>; daily: Record<string, HistorySeries> } | null>(
     `energy-now|${today}|${tick}`,
     async () => {
