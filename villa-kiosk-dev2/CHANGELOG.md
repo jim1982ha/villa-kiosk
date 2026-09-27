@@ -1,3 +1,11 @@
+## 2.496.177
+
+### Fixed — room badges while walking
+- **A room behind you no longer shows up ahead of you.** In walk mode a room
+  badge such as "Swimming Pool +7" could appear in front of you while the
+  pool was behind, slide as you turned, and then vanish. Rooms behind you
+  are now never folded into a badge you can see.
+
 ## 2.496.176
 
 ### Changed — Energy device lists
