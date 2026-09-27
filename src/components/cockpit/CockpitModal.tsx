@@ -30,7 +30,7 @@ import { fmtChartTime } from "@/components/panels/chartUtils";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
-import { hasCapability, roleCan } from "@/auth/permissions";
+import { hasCapability, isCategoryAllowed, roleCan } from "@/auth/permissions";
 import { CATEGORY_LABELS, CATEGORY_ICONS, categorySurface } from "@/config/EntityCategories";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { isUnavailable } from "@/utils/stateColors";
@@ -110,14 +110,17 @@ export default function CockpitModal({ onClose, onOpenEntity }: CockpitModalProp
   // statistic ID with no recorded data is a real, confirmed case, not a
   // theoretical one). null (not shown) either way it doesn't resolve;
   // undefined only while the fetch is in flight.
+  // Not asked at all for a profile without the energy category (the guest's).
+  const seesEnergy = role != null && isCategoryAllowed(role, "energy");
   const [energy, setEnergy] = useState<EnergyToday | null | undefined>(undefined);
   useEffect(() => {
+    if (!seesEnergy) { setEnergy(null); return; }
     let cancelled = false;
     fetchEnergyToday(ws)
       .then((r) => { if (!cancelled) setEnergy(r); })
       .catch(() => { if (!cancelled) setEnergy(null); });
     return () => { cancelled = true; };
-  }, [ws]);
+  }, [ws, seesEnergy]);
 
   // Firmware/add-on updates available — HA's own `update` domain already
   // tracks this per device AND per add-on (including this one). A small

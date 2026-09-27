@@ -2502,6 +2502,9 @@ export class EntityVisuals {
    *  either). Still real, still opt-in (only fires when the camera's own
    *  Room is set), never a guess about WHERE the camera is aiming. */
   private applyMotionRouting(entity: HassEntity): void {
+    // The role-filtered config: a profile denied motion sensors (the guest's)
+    // sees no motion beam or room glow either (2.496.210).
+    if (this.config.deniedTypes?.includes("binary_sensor")) return;
     const on = entity.state === "on";
     const cameraIds = this.motionToCameraIds.get(entity.entity_id);
     if (cameraIds) {

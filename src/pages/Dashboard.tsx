@@ -26,7 +26,7 @@ import { roomKey } from "@/config/roomKey";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import RoomChoiceSheet, { type RoomChoice } from "@/components/hud/RoomChoiceSheet";
 import { useProfile } from "@/auth/ProfileContext";
-import { hasCapability, isMappingAllowed, panelMapping } from "@/auth/permissions";
+import { hasCapability, isMappingAllowed, isTypeAllowed, panelMapping } from "@/auth/permissions";
 import FacilityModal from "@/components/fm/FacilityModal";
 import GuestReportModal from "@/components/fm/GuestReportModal";
 import { useHA } from "@/ha/HAStateStore";
@@ -72,6 +72,8 @@ export default function Dashboard() {
   // config.teleportPoints from whenever that effect last ran).
   const configRef = useRef(config);
   configRef.current = config;
+  const roleRef = useRef(role);
+  roleRef.current = role;
   // Same reasoning, for the motion-toast subscription below (deps: [subscribeAll]).
   const resolvedRoomsRef = useRef(resolvedRooms);
   resolvedRoomsRef.current = resolvedRooms;
@@ -359,6 +361,10 @@ export default function Dashboard() {
       // A motion/presence detector — BinarySensorClasses.isMotionSensor, the
       // one rule (device_class, or its id when HA reports none).
       if (!isMotionSensor(id, e.attributes?.device_class as string | undefined)) return;
+      // A profile that may not see motion sensors (the guest's) is not told
+      // about motion either (2.496.210).
+      const who = roleRef.current;
+      if (!who || !isTypeAllowed(who, "binary_sensor")) return;
       const map = configRef.current.entityMap[id];
       // Only announce a sensor actually configured somewhere in the app —
       // real geometry in the model, or another mapping's Linked entity /

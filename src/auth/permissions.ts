@@ -157,6 +157,14 @@ export function isCategoryAllowed(role: Role, category: Category): boolean {
   return allowed === "all" || allowed.includes(category);
 }
 
+/** Whether the role may see entities of this type at all (its deniedTypes).
+ *  The surfaces that are not an entity's own panel — the motion toast, the
+ *  room glow — ask this, so a guest's profile ("no motion sensors") holds
+ *  there too (2.496.210). */
+export function isTypeAllowed(role: Role, type: EntityType): boolean {
+  return !PERMISSION_MATRIX[role].deniedTypes.includes(type);
+}
+
 /** Categories the role must never see — merged into the scene's hidden set. */
 function deniedCategories(role: Role): Category[] {
   return CATEGORY_ORDER.filter((c) => !isCategoryAllowed(role, c));
@@ -164,7 +172,7 @@ function deniedCategories(role: Role): Category[] {
 
 /** Full per-entity check: category allowed AND type not denied. */
 function isEntityAllowed(role: Role, type: EntityType, category: Category): boolean {
-  return isCategoryAllowed(role, category) && !PERMISSION_MATRIX[role].deniedTypes.includes(type);
+  return isCategoryAllowed(role, category) && isTypeAllowed(role, type);
 }
 
 /** The guest-style bounded climate range, when the role has one. */

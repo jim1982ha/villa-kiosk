@@ -204,7 +204,9 @@ function deriveTiles(
   // along, three files away; this now asks it.
   // Every power sensor, not only the villa's devices — a plug's or a pump's
   // power sensor is a FOLDED member, not a device (see villaSummary's header).
-  if (facts.power) {
+  // Only for a profile that may see the energy category — the tile opens the
+  // Energy window, and the guest profile excludes energy (2.496.210).
+  if (facts.power && can("energy")) {
     const totalW = facts.power.totalW;
     tiles.push({
       id: "__energy", icon: Zap, label: "Energy",
