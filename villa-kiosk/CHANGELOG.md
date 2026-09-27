@@ -1,3 +1,12 @@
+## 2.496.208
+
+### Security
+- **Guest and Facility Manager sessions now receive only the kinds of entity the kiosk shows.** Home Assistant used to stream every entity in the instance to any signed-in profile — persons, phone trackers, the alarm panel, calendars — even though the kiosk never drew them. The add-on now relays only lights, climate, locks, covers, fans, sensors, media players, switches, scenes, the sun and the weather to non-owner profiles (camera states only to a profile that may view cameras), and the same rule covers live updates, history, the logbook and the entity list. The owner profile is unchanged.
+- **The add-on's service now runs as an unprivileged account** (`vesta`) instead of root, so a flaw in anything it parses cannot reach beyond its own data folder. Verified in a local container: options are read, sessions issued and stores written as that account.
+
+### Build
+- 2.496.207 never published: its new lockfile check found that installing dependencies on the build runner rewrites `package-lock.json` (it does not on a developer machine). For this release the check reports the difference instead of failing, so the lockfile can be corrected next.
+
 ## 2.496.207
 
 ### Security

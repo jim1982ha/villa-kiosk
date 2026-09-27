@@ -687,6 +687,51 @@ with tempfile.TemporaryDirectory() as d:
 ck("sign-every-device-out rotates the key after bumping the epoch",
    "    epoch = _bump_session_epoch()\n    try:\n        _rotate_session_secret()" in PROXY.read_text())
 
+# ── what a non-owner session may READ: domains, at the relay ──────────────
+# get_states and subscribe_events used to stream every entity in the instance
+# to a guest (persons, trackers, the alarm panel); the docstring called the
+# per-entity mirror impossible, and it is — the DOMAIN line is not (2.496.208).
+print("\n  reads narrowed by domain:")
+relay = proxy._relay_to_client
+states = _json.dumps({"id": 3, "type": "result", "success": True, "result": [
+    {"entity_id": "light.pool", "state": "on"}, {"entity_id": "person.owner", "state": "home"},
+    {"entity_id": "camera.gate", "state": "idle"}, {"entity_id": "sun.sun", "state": "above_horizon"},
+    {"entity_id": "device_tracker.phone", "state": "home"}, {"entity_id": "alarm_control_panel.villa", "state": "armed"}]})
+ids = lambda text: [e["entity_id"] for e in _json.loads(text)["result"]]
+ck("a guest's get_states keeps the drawn domains and loses persons, trackers, alarms AND cameras",
+   ids(relay("guest", states, {})) == ["light.pool", "sun.sun"])
+ck("  ...ops (may view cameras) keeps the camera", ids(relay("ops", states, {})) == ["light.pool", "camera.gate", "sun.sun"])
+ck("  ...the owner's frame is passed through untouched", relay("owner", states, {}) is states)
+ev = lambda eid: _json.dumps({"type": "event", "event": {"event_type": "state_changed", "data": {"entity_id": eid, "new_state": {}}}})
+ck("a state_changed for a person is dropped, for a light forwarded",
+   relay("guest", ev("person.owner"), {}) is None and relay("guest", ev("light.pool"), {}) is not None)
+reg = _json.dumps({"type": "event", "event": {"event_type": "entity_registry_updated", "data": {"action": "update", "entity_id": "device_tracker.phone"}}})
+ck("  ...and so is a registry event naming one", relay("guest", reg, {}) is None)
+registry = _json.dumps({"id": 4, "type": "result", "result": [{"entity_id": "person.owner", "name": "Owner"}, {"entity_id": "climate.ac", "name": "AC"}]})
+ck("the entity registry listing is narrowed the same way", ids(relay("guest", registry, {})) == ["climate.ac"])
+log = _json.dumps({"id": 5, "type": "result", "result": [
+    {"when": 1, "entity_id": "lock.gate", "name": "Gate"}, {"when": 2, "entity_id": "person.owner", "name": "Owner arrived"},
+    {"when": 3, "name": "Automation ran", "message": "triggered"}]})
+pend = {5: "logbook/get_events"}
+ck("a logbook result loses the person AND the entity-less entry (a name and a message)",
+   [e["when"] for e in _json.loads(relay("guest", log, pend))["result"]] == [1] and pend == {})
+devices = _json.dumps({"id": 6, "type": "result", "result": [{"id": "d1", "name": "Hub"}, {"id": "d2"}]})
+ck("a list that names no entity (device registry) passes whole", relay("guest", devices, {}) is devices)
+ck("a frame Core did not write as JSON is dropped, not passed on trust",
+   relay("guest", "not json", {}) is None and relay("guest", "[1,2]", {}) is None)
+ck("the relay records which requests are logbook ones",
+   'elif obj.get("type") in _ENTITY_LIST_COMMANDS:\n                            pending[obj.get("id")] = obj["type"]' in PROXY.read_text()
+   and "if (out := _relay_to_client(role, msg.data, pending)) is not None:" in PROXY.read_text())
+q = proxy._rest_query_allowed
+ck("REST history: a non-owner must name entities, and only readable ones",
+   not q("guest", "history/period/2026-01-01T00:00:00Z", {}) and not q("guest", "history/period/x", {"filter_entity_id": "light.a,person.b"})
+   and q("guest", "history/period/x", {"filter_entity_id": "sensor.power"}) and q("owner", "history/period/x", {}))
+ck("  ...and the REST relay asks it", "if not _rest_query_allowed(role, tail, request.query):" in PROXY.read_text())
+table = _json.loads((ROOT / "rootfs" / "usr" / "share" / "vesta" / "ha-commands.json").read_text())
+ck("readDomains comes from the shared table, and holds the drawn domains plus sun/scene/weather",
+   proxy.READ_DOMAINS == frozenset(table["readDomains"]) and {"light", "sensor", "sun", "scene", "weather"} <= proxy.READ_DOMAINS
+   and not {"person", "device_tracker", "alarm_control_panel", "update", "calendar"} & proxy.READ_DOMAINS)
+
 print()
 print("✅ the proxy's pure rules hold" if FAIL == 0
       else "❌ A PROXY RULE IS BROKEN")

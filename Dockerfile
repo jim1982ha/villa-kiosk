@@ -43,7 +43,11 @@ FROM ${BUILD_FROM}
 
 # nginx serves the static build; python3 + aiohttp run the token-injecting
 # Supervisor proxy (supervisor-proxy.py). /run/nginx holds the pid/temp files.
-RUN apk add --no-cache nginx python3 py3-aiohttp && mkdir -p /run/nginx
+# `vesta` is the unprivileged account the proxy runs as (2.496.208) — see the
+# s6 run script for what it needs and why root was the wrong default. No home,
+# no shell, no password: it exists only to own /data and the loopback socket.
+RUN apk add --no-cache nginx python3 py3-aiohttp && mkdir -p /run/nginx \
+ && adduser -D -H -s /sbin/nologin -g "supervisor-proxy" vesta
 
 # Our nginx config, the Supervisor proxy, and the s6 services that run them.
 COPY rootfs /

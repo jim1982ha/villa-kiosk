@@ -1,4 +1,19 @@
 #!/command/with-contenv sh
 # Token-injecting Home Assistant Core proxy. `with-contenv` exposes
 # SUPERVISOR_TOKEN to the process; s6 supervises and restarts it.
-exec python3 /usr/bin/supervisor-proxy.py
+#
+# ⚠️ AS `vesta`, NOT ROOT (2.496.208). This process parses bodies that any
+# session on the LAN or the tunnel can send — JSON stores, uploads, telemetry,
+# passcodes — and it needs nothing root has: a loopback port above 1024,
+# /data, and the Supervisor API over HTTP. Before this it ran as root because
+# the base image's /init does, and nothing had asked otherwise.
+#
+# /data is a volume the Supervisor mounts owned by root, so it is handed over
+# on every start — a chown is metadata only, the model's 200 MB cost nothing.
+# nginx's workers, already unprivileged, keep reading what they read: every
+# file the proxy writes for them is 0644 (atomic_write). options.json is
+# rewritten by the Supervisor, as root, on every option save; Home Assistant
+# then asks for the restart that runs this line again before the proxy reads
+# it, and _read_options fails CLOSED in the gap (no passcode verifies).
+chown -R vesta:vesta /data
+exec s6-setuidgid vesta python3 /usr/bin/supervisor-proxy.py

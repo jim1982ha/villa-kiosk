@@ -72,16 +72,19 @@ Access control (why this proxy authenticates at all):
   switch/media_player, plus homeassistant.toggle. Anything else reaching this
   proxy from a non-owner session is either a bug or someone driving the raw
   API from devtools, and is rejected before it reaches Core.
-  This does NOT restrict what a non-owner session can READ (get_states /
-  subscribe_events still stream every entity in the whole HA instance,
-  cameras included) — the kiosk's category/type filtering
-  (permissions.ts/deniedTypes) that hides those from guest is resolved from
-  entityMap, which lives only in the browser's own localStorage and is never
-  visible to this process, so a faithful server-side mirror of THAT part of
-  the matrix isn't possible without moving entity metadata into the add-on's
-  own storage — a larger change, not attempted here. Camera images
-  specifically ARE blocked server-side for guest (see _rest_call_allowed),
-  since that one denial needs no entity metadata, just the request path.
+  What a non-owner session can READ is narrowed by DOMAIN (2.496.208):
+  get_states, state_changed events, the entity registry, the logbook and
+  REST history are filtered to ha-commands.json's `readDomains` — the
+  domains the kiosk draws or scans — by _read_allowed / _relay_to_client /
+  _rest_query_allowed. A person, a tracker, an alarm panel or a calendar
+  never leaves this process for a guest or ops session, and camera states
+  go only to a profile that may view cameras. The kiosk's finer
+  category/type filtering (permissions.ts, per mapped entity) is NOT
+  mirrored here: the effective category depends on the live device_class and
+  the mapping the browser holds, and the guest surfaces scan whole domains
+  (power sensors, the weather station), so a per-entity mirror would either
+  duplicate that rule or break those surfaces. Domain is the line this
+  process can hold on its own.
 
 Security notes:
   * Request smuggling (aiohttp CVE-2025-53643) affects only aiohttp's *pure
@@ -374,6 +377,82 @@ ALLOWED_SERVICE_DOMAINS = frozenset(HA_COMMANDS.get("serviceDomains", ()))
 ALLOWED_HOMEASSISTANT_SERVICES = frozenset(HA_COMMANDS.get("homeassistantServices", ()))
 
 
+# The entity domains a non-owner session may read — see the docstring's
+# "What a non-owner session can READ". FAIL CLOSED like the rest of the table.
+READ_DOMAINS = frozenset(HA_COMMANDS.get("readDomains", ()))
+
+# Websocket commands whose result is a list of ENTITIES: the relay narrows
+# those lists, and a logbook entry that names no entity is dropped rather than
+# passed (it can still carry a name and a message).
+_ENTITY_LIST_COMMANDS = frozenset({"get_states", "config/entity_registry/list", "logbook/get_events"})
+
+
+def _read_allowed(role: str, entity_id: str) -> bool:
+    """Whether this role may see this entity at all. Owner is exempt; everyone
+    else is held to READ_DOMAINS, and to `viewCameras` for a camera."""
+    if _may(role, "administer"):
+        return True
+    domain = str(entity_id).partition(".")[0]
+    if domain not in READ_DOMAINS:
+        return False
+    return domain != "camera" or _may(role, "viewCameras")
+
+
+def _relay_to_client(role: str, text: str, pending: dict) -> str | None:
+    """The one place a Core→browser websocket frame is judged for a non-owner
+    session: the text to forward — narrowed when it lists entities — or None
+    to drop it. `pending` maps a request id to its command type, recorded by
+    the upstream side, so a logbook result is known to be one.
+
+    A state_changed event (or any event naming an entity) for an entity the
+    role may not read is dropped whole. A result that is a list of entities
+    keeps only what the role may read; a logbook result also drops entries
+    that name no entity. Anything unreadable as JSON is dropped: Core speaks
+    JSON, and a frame this process cannot judge must not pass on its say-so."""
+    if _may(role, "administer"):
+        return text
+    try:
+        obj = json.loads(text)
+    except ValueError:
+        return None
+    if not isinstance(obj, dict):
+        return None
+    kind = obj.get("type")
+    if kind == "event":
+        data = (obj.get("event") or {}).get("data") if isinstance(obj.get("event"), dict) else None
+        eid = data.get("entity_id") if isinstance(data, dict) else None
+        if eid is not None and not _read_allowed(role, str(eid)):
+            return None
+        return text
+    if kind == "result":
+        command = pending.pop(obj.get("id"), None)
+        res = obj.get("result")
+        if isinstance(res, list) and any(isinstance(e, dict) and "entity_id" in e for e in res):
+            logbook = command == "logbook/get_events"
+            obj["result"] = [
+                e for e in res
+                if not isinstance(e, dict)
+                or ("entity_id" in e and _read_allowed(role, str(e["entity_id"])))
+                or ("entity_id" not in e and not logbook)
+            ]
+            return json.dumps(obj, separators=(",", ":"))
+        return text
+    return text
+
+
+def _rest_query_allowed(role: str, tail: str, query) -> bool:
+    """The REST twin of _relay_to_client, for the one relayed read that names
+    entities in its QUERY: history/period without `filter_entity_id` returns
+    every entity's history, so a non-owner must name what it asks for, and
+    every id named must be one it may read."""
+    if _may(role, "administer"):
+        return True
+    if not tail.startswith("history/period/"):
+        return True
+    ids = [i.strip() for i in str(query.get("filter_entity_id", "")).split(",") if i.strip()]
+    return bool(ids) and all(_read_allowed(role, i) for i in ids)
+
+
 def _service_call_allowed(role: str, domain: str, service: str) -> bool:
     """Whether a call_service (WS) / services/<domain>/<service> (REST) frame
     from this role may reach Core. Owner administers the kiosk and is exempt
@@ -475,6 +554,7 @@ async def ws_handler(request: web.Request):
     if (refused := _refuse(request)) is not None:
         return refused
     role = _role_for(request)
+    pending: dict = {}  # request id -> command type, for _relay_to_client
     # ⚠️ THE SESSION IS RE-RESOLVED FOR THE LIFE OF THE SOCKET, AND IT USED NOT
     # TO BE. `role` was decided here, at the handshake, and captured into the
     # relay loop below — which never looked at the cookie again. So
@@ -549,6 +629,8 @@ async def ws_handler(request: web.Request):
                                 "error": {"code": "unauthorized", "message": refusal},
                             })
                             continue
+                        elif obj.get("type") in _ENTITY_LIST_COMMANDS:
+                            pending[obj.get("id")] = obj["type"]
                     except (ValueError, TypeError):
                         pass
                     await upstream.send_str(data)
@@ -561,7 +643,8 @@ async def ws_handler(request: web.Request):
         async def to_client() -> None:
             async for msg in upstream:
                 if msg.type == WSMsgType.TEXT:
-                    await client.send_str(msg.data)
+                    if (out := _relay_to_client(role, msg.data, pending)) is not None:
+                        await client.send_str(out)
                 elif msg.type == WSMsgType.BINARY:
                     await client.send_bytes(msg.data)
                 else:
@@ -734,6 +817,8 @@ async def rest_handler(request: web.Request) -> web.StreamResponse:
     tail = request.match_info.get("path", "")
     if not _rest_call_allowed(role, tail):
         return _forbidden("This profile may not access this endpoint.")
+    if not _rest_query_allowed(role, tail, request.query):
+        return _forbidden("This profile may not read these entities.")
     session: ClientSession = request.app["session"]
     url = f"http://{SUPERVISOR}/core/api/{tail}"
     headers = {k: v for k, v in request.headers.items() if k.lower() not in HOP_BY_HOP}
@@ -756,10 +841,16 @@ async def rest_handler(request: web.Request) -> web.StreamResponse:
 
 
 def _read_options() -> dict:
+    """The add-on's options, or {} — which every reader treats as "nothing
+    configured": no passcode verifies, no profile opens. That is the CLOSED
+    failure, and it is what an unreadable file must produce: the proxy runs
+    unprivileged (2.496.208) and the Supervisor rewrites this file as root on
+    every option save, so between a save and the restart Home Assistant asks
+    for, a read may be refused rather than merely absent."""
     try:
         with open("/data/options.json") as f:
             return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
+    except (OSError, ValueError):
         return {}
 
 

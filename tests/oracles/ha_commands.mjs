@@ -51,4 +51,21 @@ const { TOGGLEABLE_DOMAINS } = await import("@/utils/quickAction");
 const badToggle = [...TOGGLEABLE_DOMAINS].filter((d) => !domains.has(d));
 ck("every domain a tile toggles by variable (quickAction's toggle set) is in the table", badToggle.length === 0, badToggle);
 
-done("✅ the app sends Home Assistant only what the proxy was told about");
+// ── and reads only the domains the proxy will relay to a non-owner ────────
+// The proxy narrows get_states / events / history / logbook / the registry to
+// `readDomains` for guest and ops (2.496.208). Every domain the app draws
+// (ENTITY_DOMAINS) or reads by a fixed id / prefix scan must be in it, or a
+// non-owner surface goes blank with nothing in the console to say why.
+const { ENTITY_DOMAINS } = await import("@/types/ha.types");
+const readable = new Set(table.readDomains);
+const undrawn = ENTITY_DOMAINS.filter((d) => !readable.has(d));
+ck("every drawn domain is readable by a non-owner", undrawn.length === 0, undrawn);
+const scanned = new Map();
+for (const { f, src } of files) {
+  for (const m of src.matchAll(/entities\["([a-z_]+)\.[a-z_]+"\]|entity_id === "([a-z_]+)\.[a-z_]+"|startsWith\("([a-z_]+)\."\)/g)) scanned.set(m[1] ?? m[2] ?? m[3], f);
+}
+// `update.*` is the one owner-only scan (Cockpit's updates count sits behind seeUpdates).
+const unread = [...scanned].filter(([d]) => d !== "update" && !readable.has(d)).map(([d, f]) => `${d} (${f})`);
+ck(`every domain read by a fixed id or prefix scan is readable (${[...scanned.keys()].sort().join(", ")})`, scanned.has("sun") && scanned.has("scene") && unread.length === 0, unread);
+
+done("✅ the app sends Home Assistant only what the proxy was told about, and reads only what it relays");
