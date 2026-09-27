@@ -54,6 +54,18 @@ console.log("\n  the batch:");
   ck("dispose forgets the pending events and cancels the timer", b.size === 0 && timers[1].cancelled === true);
 }
 
+console.log("\n  an error is reported once per window, not once per event:");
+{
+  const { errorReportAllowed, ERROR_REPORT_WINDOW_MS } = await import("@/utils/diagnostics");
+  const seen = new Map();
+  ck("first report of a message goes out", errorReportAllowed("x", 1000, seen) === true);
+  ck("  ...the same message inside the window does not", errorReportAllowed("x", 1000 + ERROR_REPORT_WINDOW_MS - 1, seen) === false);
+  ck("  ...a different message does", errorReportAllowed("y", 1001, seen) === true);
+  ck("  ...and the same one again after the window", errorReportAllowed("x", 1000 + ERROR_REPORT_WINDOW_MS, seen) === true);
+  const src = readFileSync(new URL("../../src/utils/diagnostics.ts", import.meta.url), "utf8");
+  ck("captureError asks it before reporting", /if \(errorReportAllowed\(`\$\{code\}\|\$\{e\.message\}`, captured\.at\)\) \{\s*report\("error"/.test(src));
+}
+
 console.log("\n  one scan per summary:");
 {
   let reads = 0;
