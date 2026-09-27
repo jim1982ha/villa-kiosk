@@ -1313,6 +1313,44 @@ def _fm_guest_write_ok(old, new) -> bool:
     return True
 
 
+def _fm_reader_view(request: web.Request, stored):
+    """What this session may READ of the Facility record.
+
+    ⚠️ A GUEST READ EVERYTHING (round 13, 2.496.182). The GET was open to any
+    session because a guest's device must write fault reports, and the client
+    can only write against a copy it has read — so every guest phone downloaded
+    every cost, note, fault and completion in the villa, which the guest report
+    dialog itself says a guest must not see. A profile without manageFacility
+    now reads an EMPTY record (with the real revision, so its writes still
+    carry optimistic concurrency); _fm_writer_merge files what it sends onto
+    the real one.
+    """
+    if _may(_role_for(request), "manageFacility"):
+        return stored
+    return {name: [] for name in FM_RECORD_COLLECTIONS}
+
+
+def _fm_writer_merge(request: web.Request, stored, value):
+    """A restricted session's write, merged onto the REAL record.
+
+    It read an empty view (_fm_reader_view), so what it sends is that view plus
+    its new reports — writing it as-is would erase the villa's record. Only the
+    tickets it ADDED (ids the store does not have) are taken, appended after
+    the stored ones; _fm_guest_write_ok then judges the merged document exactly
+    as before (open, reported by a guest, no cost, at most
+    FM_GUEST_MAX_NEW_TICKETS).
+    """
+    if _may(_role_for(request), "manageFacility") or not isinstance(stored, dict) \
+            or not isinstance(value, dict):
+        return value
+    have = _fm_ids(stored)["tickets"]
+    sent = value.get("tickets") if isinstance(value.get("tickets"), list) else []
+    added = [t for t in sent if isinstance(t, dict) and str(t.get("id")) not in have]
+    merged = dict(stored)
+    merged["tickets"] = list(stored.get("tickets") or []) + added
+    return merged
+
+
 def _fm_write_guard(request: web.Request, body, old, new):
     """Erasing an evidence record needs a superadmin elevation.
 
@@ -1945,7 +1983,8 @@ def _store_revision(path: str) -> str:
 
 def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
                          writer_capability: str = "editConfig",
-                         write_guard=None, after_write=None):
+                         write_guard=None, after_write=None,
+                         reader_view=None, writer_merge=None):
     """Build the (GET, PUT) handler pair for one shared store.
 
     GET is open to any authorized session — a guest still has to read the
@@ -1960,6 +1999,12 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
     DELETED); `after_write(old, new, baseline_readable)` runs once the write has
     landed (used to purge evidence photos an authorised delete orphaned). Both
     are optional hooks on this one factory rather than a reason to fork it again.
+
+    `reader_view(request, stored)` is what THIS session may read — applied to
+    the GET and to the 409 body alike (a stale write must not be a way to read
+    what a GET withholds). `writer_merge(request, stored, value)` turns what a
+    restricted session sent into the document to write (run BEFORE the guard,
+    which then judges the merged result). Both default to the whole document.
 
     ⚠️ `baseline_readable` IS FALSE WHEN THE STORED DOCUMENT COULD NOT BE
     PARSED. The PUT path refuses such a write outright, so a hook should never
@@ -2020,8 +2065,10 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
         # never stated. no-store is explicit rather than assumed — confirmed
         # in the field as the cause of one client's shared config silently
         # disagreeing with every other client's.
+        stored_now = _read_json_store(path, empty)
         return web.json_response(
-            {key: _read_json_store(path, empty), "rev": _store_revision(path)},
+            {key: reader_view(request, stored_now) if reader_view else stored_now,
+             "rev": _store_revision(path)},
             headers={"Cache-Control": "no-store"},
         )
 
@@ -2075,8 +2122,13 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
                     # as the GET above rather than relying on 409 responses
                     # not normally being cacheable.
                     return web.json_response(
-                        {"error": "conflict", key: stored, "rev": current_rev},
+                        {"error": "conflict",
+                         key: reader_view(request, stored) if reader_view else stored,
+                         "rev": current_rev},
                         status=409, headers={"Cache-Control": "no-store"})
+            if writer_merge is not None:
+                value = writer_merge(request, stored, value)
+                payload = json.dumps(value)
             if write_guard is not None:
                 veto = write_guard(request, body, stored, value)
                 if veto is not None:
@@ -2278,7 +2330,8 @@ fm_data_get_handler, fm_data_put_handler = _json_store_handlers(
     # alone would be far too broad. Everything else about the maintenance
     # record stays owner/ops.
     writer_capability="reportFault",
-    write_guard=_fm_write_guard, after_write=_fm_after_write)
+    write_guard=_fm_write_guard, after_write=_fm_after_write,
+    reader_view=_fm_reader_view, writer_merge=_fm_writer_merge)
 
 
 def main() -> None:

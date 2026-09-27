@@ -455,6 +455,38 @@ ck("  ...no handler writes the gate out by hand again", not hand)
 if hand:
     print(f"          by hand: {', '.join(hand)}")
 
+# ── a guest reads NOTHING of the Facility record (round 13, 2.496.182) ────
+# The GET was open to every session, so every guest phone downloaded every
+# cost, note and fault. A profile without manageFacility now reads an empty
+# record; what it writes is merged onto the real one, new reports only.
+_real_role_for = proxy._role_for
+STORED = {"schedules": [{"id": "s1"}], "completions": [{"id": "c1"}], "costs": [{"id": "k1", "amount": 9}],
+          "tickets": [{"id": "t1", "status": "open", "reportedBy": "owner"}], "savedDocuments": []}
+try:
+    proxy._role_for = lambda _r: "guest"
+    view = proxy._fm_reader_view(None, STORED)
+    ck("a guest's view of the record is EMPTY — no cost, note, fault or completion",
+       all(view[c] == [] for c in proxy.FM_RECORD_COLLECTIONS) and set(view) == set(proxy.FM_RECORD_COLLECTIONS))
+    report = {"id": "t2", "status": "open", "reportedBy": "guest", "title": "AC dripping"}
+    merged = proxy._fm_writer_merge(None, STORED, {**view, "tickets": [report]})
+    ck("  ...its write (the empty view + one report) lands on the REAL record, nothing erased",
+       merged["costs"] == STORED["costs"] and merged["tickets"] == STORED["tickets"] + [report])
+    ck("  ...and the guest rule still judges it: an open guest report passes",
+       proxy._fm_guest_write_ok(STORED, merged))
+    bad = proxy._fm_writer_merge(None, STORED, {**view, "tickets": [{**report, "status": "resolved"}]})
+    ck("  ...a pre-resolved one is still refused", not proxy._fm_guest_write_ok(STORED, bad))
+    resent = proxy._fm_writer_merge(None, STORED, {**view, "tickets": [{"id": "t1", "status": "resolved", "reportedBy": "guest"}]})
+    ck("  ...re-sending an EXISTING ticket id cannot edit it (only new ids are taken)", resent["tickets"] == STORED["tickets"])
+    proxy._role_for = lambda _r: "owner"
+    ck("the owner reads and writes the whole record, untouched",
+       proxy._fm_reader_view(None, STORED) is STORED and proxy._fm_writer_merge(None, STORED, {"x": 1}) == {"x": 1})
+finally:
+    proxy._role_for = _real_role_for
+src = PROXY.read_text()
+ck("the store applies the view to the GET AND to the 409 body (a stale write is not a way to read)",
+   "key: reader_view(request, stored) if reader_view else stored," in src and "reader_view(request, stored_now)" in src
+   and "reader_view=_fm_reader_view, writer_merge=_fm_writer_merge" in src)
+
 # ── A chunked upload survives a re-sent piece (round 11, 2.496.166) ──────────
 # Driven through the real handler with a fake request: the client re-sends a
 # piece whose reply it never got, so the server must accept the same offset

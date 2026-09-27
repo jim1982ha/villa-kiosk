@@ -192,8 +192,10 @@ export default function SpendTab(
           <label className="fm-field">
             <span>Category</span>
             <select value={category} onChange={(e) => setCategory(e.target.value as "minor" | "major")}>
-              <option value="minor">Minor — shared Direct Expense (Cl. 3.3(i))</option>
-              <option value="major">Major — Owner&rsquo;s account (Cl. 6.2(iii))</option>
+              {/* Neutral words: which contract clause or account a category
+                  maps to is one villa's arrangement (hard-rules.py, 3b). */}
+              <option value="minor">Minor — routine maintenance</option>
+              <option value="major">Major — larger works</option>
             </select>
           </label>
 

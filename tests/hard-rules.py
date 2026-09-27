@@ -57,6 +57,10 @@ DOMAINS = ("light|switch|sensor|binary_sensor|lock|cover|climate|camera|fan|"
 ENTITY_ID = re.compile(rf'"({DOMAINS})\.[a-z0-9_]{{3,}}"')
 
 
+# A contract clause reference: "Cl. 3.3", "Cl.6.2(iii)", "Clause 4", "§ 12".
+CLAUSE_REF = re.compile(r"\b(?:Cl\.|Clause)\s*\d|§\s*\d")
+
+
 def tracked() -> list[str]:
     out = subprocess.run(["git", "ls-files"], cwd=ROOT,
                          capture_output=True, text=True, check=True).stdout
@@ -125,6 +129,21 @@ def main() -> int:
         for num, line in enumerate(code.split("\n"), 1):
             if ENTITY_ID.search(line):
                 ids.append(f"{rel}:{num}")
+
+    # ── 3b: no contract's clause numbers in the UI (round 13, 2.496.182) ──
+    # A maintenance contract is one villa's business arrangement. The Spend
+    # tab shipped "Cl. 3.3(i)" / "Cl. 6.2(iii)" — one contract's clause
+    # numbers in every install — and nothing here could see it: it is neither
+    # an entity id nor a host. Clause references in CODE are refused; a
+    # comment may still cite a document.
+    clauses: list[str] = []
+    for rel in files:
+        if not rel.startswith("src/") or not rel.endswith((".ts", ".tsx")):
+            continue
+        code = strip_comments((ROOT / rel).read_text(encoding="utf-8"))
+        for num, line in enumerate(code.split("\n"), 1):
+            if CLAUSE_REF.search(line):
+                clauses.append(f"{rel}:{num}")
 
     # ── 4: the five clauses no regex can find ─────────────────────────────
     # ⚠️ THE TOKEN LIST IS LOCAL AND UNTRACKED, BECAUSE WRITING IT HERE WOULD BE
@@ -210,6 +229,8 @@ def main() -> int:
            "no third-party host anywhere shipped")
     report("an entity_id is hardcoded in executable code", ids,
            "no entity_id in executable code")
+    report("a contract's clause number is in shipped UI code", clauses,
+           "no contract clause reference in executable code")
 
     if token_file.exists() and not hash_only:
         report("a villa-specific token is in a shipped file", leaks,
