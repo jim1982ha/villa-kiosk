@@ -1,3 +1,16 @@
+## 2.496.199
+
+### Fixed
+- **Tapping outside a device search list now closes it on touch screens**
+  as it does with a mouse (Advanced Settings' entity picker and the
+  Facility device picker listened for mouse presses only).
+
+### Behind the scenes
+- The button groups in Settings and the Cockpit, the "Save / Saved"
+  buttons, the "close when tapping outside" behaviour, the periodic
+  refresh timers and the HH:MM clock are each one shared piece now instead
+  of several copies. Nothing else changes on screen.
+
 ## 2.496.198
 
 ### Improved
