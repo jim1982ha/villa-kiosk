@@ -1,3 +1,15 @@
+## 2.496.201
+
+### Fixed
+- **A device mounted in a wall belongs to the room behind that wall.** A
+  wall-mounted speaker, TV, switch or sensor sits just outside the room's
+  floor outline, so it counted as being in no room at all — and a device in
+  no room can never fold into its room's label, which is why an unavailable
+  media player was drawn on top of the collapsed "Living Room 18" label on
+  the phone. Such a device now takes the nearest room within a wall's
+  thickness (0.6 m), so it folds into that room's label like everything
+  else. Home Assistant's own Area assignment still wins whenever one is set.
+
 ## 2.496.200
 
 ### Fixed
