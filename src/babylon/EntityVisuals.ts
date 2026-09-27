@@ -131,7 +131,7 @@ import { badgeText } from "./badgeText";
 import { badgeShadow } from "./badgeShadow";
 import { cameraFrame } from "./cameraFrame";
 import {
-  arrange, cardStruts, gridCells, MAX_TOTAL_CHIPS, MAX_GRID_CHIPS, PHONE_MAX_GRID_CHIPS,
+  arrange, cardLift, cardStruts, gridCells, MAX_TOTAL_CHIPS, MAX_GRID_CHIPS, PHONE_MAX_GRID_CHIPS,
   type CardArrangement,
 } from "./badgeCard";
 import { iconKeyFor } from "./badgeIconKeys";
@@ -3871,46 +3871,7 @@ export class EntityVisuals {
         }
       }
       for (const room of result.chipRooms) this.pass.chipRoom(room, "solver");
-      for (let b = 0; b < result.bucketCount; b++) {
-        const bucket = result.buckets[b];
-        let wx = 0, wy = 0, wz = 0;
-        for (const i of bucket.members) {
-          wx += shown[i].wx; wy += shown[i].wy; wz += shown[i].wz;
-          this.pass.entityGrouped.add(shown[i].id);
-        }
-        const n = bucket.members.length;
-        // Keyed by the PILE alone. It was `room|pileKey`, which was stable only
-        // while a bucket's room was — and a bucket's room can now change (a
-        // cross-room pile loses a member and becomes single-room), which would
-        // have rebuilt the group's GUI controls mid-zoom and flickered.
-        // pileKey is the pile's lowest entity_id, so it is already unique.
-        const primary = this.pass.roomDisplay.get(bucket.room) ?? bucket.room;
-        pending.push({
-          key: `grp|${bucket.pileKey}`,
-          // The room chip's own convention for "and others" (see chipLabel), so
-          // a summary spanning two rooms reads the same way whichever tier
-          // drew it.
-          room: bucket.rooms.length > 1 ? `${primary} +${bucket.rooms.length - 1}` : primary,
-          roomKeys: bucket.rooms.slice(),
-          // Members are indices into `shown`, which lives exactly as long as
-          // this pass — copied because placeEntityGroups may drop a group and
-          // the pooled bucket is about to be reused. Sorted into the cell order
-          // a card draws them in; see sortCardMembers for why that is not the
-          // order the solver hands them over in.
-          members: this.sortCardMembers(shown, bucket.members.slice()),
-          wx: wx / n, wy: wy / n, wz: wz / n,
-          // Derived from the world centroid just above, by the same projection
-          // every badge went through — never accumulated alongside it. See
-          // PendingEntityGroup.sx.
-          ...this.planeOf(clearance, wx / n, wy / n, wz / n),
-          // Every device, always: `gridCells` turns an over-cap ask into the
-          // count badge itself, so no producer restates the cap (see there —
-          // the one that did not restate it truncated its card and hid a
-          // device).
-          grid: n,
-          focused: false,
-        });
-      }
+      this.pass.groupsFromBuckets(shown, result.buckets, result.bucketCount, clearance, pending);
       this.pass.pairFocusedRoom(shown, items, clearance, pending);
     }
 
@@ -3938,8 +3899,7 @@ export class EntityVisuals {
         // grouping has already been decided, so neither can move a badge or
         // change which pile it belongs to.
         && !s.occluded
-        && !this.pass.roomClustered.get(roomKey(this.roomOf(s.id)))
-        && !this.pass.entityGrouped.has(s.id);
+        && this.pass.drawnBadge(s.id);
     }
     this.renderChips(chips);
     this.updateEntityGroups(shown, pending);
@@ -4771,7 +4731,7 @@ export class EntityVisuals {
       };
     });
     // A card is drawn ENTIRELY ABOVE its anchor — updateEntityGroups sets
-    // linkOffsetYInPixels = -(lay.height / 2) * scale so the card's bottom
+    // linkOffsetYInPixels = -cardLift(lay, scale) so the card's bottom
     // edge lands on the anchor, exactly as a badge's does. The LAYOUT models
     // the same card as a disc centred ON the anchor (cardHalfOf), a documented
     // asymmetry; using the layout's model here would report overlaps nobody
@@ -4785,7 +4745,7 @@ export class EntityVisuals {
       Vector3.ProjectToRef(p, Matrix.IdentityReadOnly, tm, vp, p);
       if (!(p.z >= 0 && p.z <= 1)) continue;
       const hw = (lay.width / 2) * scale;
-      const hh = (lay.height / 2) * scale;
+      const hh = cardLift(lay, scale);
       // The square INSCRIBED in the card — "is this badge under my ink", the
       // question absorb exists to answer, and a different question from "do we
       // clear each other". Same distinction cardInscribedHalf draws.
@@ -5532,7 +5492,7 @@ export class EntityVisuals {
         // Half the card's OWN height, so its bottom edge lands on the anchor
         // exactly as a badge's does — a two-row card would otherwise sit half a
         // row too low, straddling the device it stands for.
-        c.container.linkOffsetYInPixels = -(lay.height / 2) * scale;
+        c.container.linkOffsetYInPixels = -cardLift(lay, scale);
         c.container.isVisible = true;
       }
     }

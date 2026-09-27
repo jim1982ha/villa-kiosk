@@ -24,11 +24,11 @@ import { roomKey, NO_ROOM_LABEL } from "@/config/roomKey";
 import type { LabelControls } from "./EntityVisuals";
 import { type BadgeMetrics } from "./badgeMetrics";
 import type { MeasureFrame } from "./badgeProjection";
-import { mergeCollidingPiles, buildCliques, type PlacementItem } from "./badgePlacement";
+import { mergeCollidingPiles, buildCliques, type PlacementItem, type DeferralBucket } from "./badgePlacement";
 import { channelEnabled } from "@/utils/tapDebug";
 import { type RoomChip } from "./roomChips";
 import { RoomFocus } from "./roomFocus";
-import { type CardArrangement } from "./badgeCard";
+import { cardLift, type CardArrangement } from "./badgeCard";
 
 /** The comparison key of the no-room bucket, normalised ONCE at module level —
  *  `roomOf` hands out the LABEL and every map here is keyed by `roomKey`, so
@@ -183,6 +183,12 @@ const CHIP_COLLISION = true as boolean;
  */
 export function groundOf(dx: number, dz: number): number {
   return Math.hypot(dx, dz);
+}
+
+/** "Living +2" — the room chip's own convention for "and others", so a card
+ *  spanning rooms reads the same way whichever tier drew it. */
+export function roomSpanLabel(primary: string, roomCount: number): string {
+  return roomCount > 1 ? `${primary} +${roomCount - 1}` : primary;
 }
 
 /** A badge that survived the per-entity culls (category / floor / enabled),
@@ -517,7 +523,7 @@ export class PlacementPass {
      */
     const cardCentreY = (g: PendingEntityGroup) => {
       const lay = this.host.layoutOf(g, g.members.length);
-      return g.sy - (lay.height / 2) * scale;
+      return g.sy - cardLift(lay, scale);
     };
     /**
      * The largest disc that fits INSIDE the card — "is this badge underneath
@@ -608,8 +614,7 @@ export class PlacementPass {
         // a chip it never needed, an escalation cascade driven by geometry
         // nobody could see. Safe to read both here: every solver decision is
         // final by the time this runs.
-        if (this.entityGrouped.has(shown[j].id)) continue;
-        if (this.roomClustered.get(roomKey(this.host.roomOf(shown[j].id)))) continue;
+        if (!this.drawnBadge(shown[j].id)) continue;
         // A FOCUSED room's badge blocks nobody — the same contract the `others`
         // loop below already honours for focused groups, and the one
         // PlacementItem.exempt states in the solver: "accepted unconditionally,
@@ -743,10 +748,8 @@ export class PlacementPass {
         const inkY = cardCentreY(g);
         const take: number[] = [];
         for (let j = 0; j < shown.length; j++) {
-          if (this.entityGrouped.has(shown[j].id)) continue;
-          const rk = roomKey(this.host.roomOf(shown[j].id));
-          if (this.roomClustered.get(rk)) continue;
-          if (focus.has(rk)) continue;
+          if (!this.drawnBadge(shown[j].id)) continue;
+          if (focus.has(roomKey(this.host.roomOf(shown[j].id)))) continue;
           // ── BOX vs BOX, ON EACH AXIS ─────────────────────────────────
           // Burial is a question about two rectangles of ink, and it has to be
           // tested as one. Two earlier shapes of this were both wrong in the
@@ -831,7 +834,7 @@ export class PlacementPass {
         g.grid = g.members.length;
         g.roomKeys.sort();
         const primary = this.roomDisplay.get(g.roomKeys[0]) ?? g.roomKeys[0];
-        g.room = g.roomKeys.length > 1 ? `${primary} +${g.roomKeys.length - 1}` : primary;
+        g.room = roomSpanLabel(primary, g.roomKeys.length);
         let wx = 0, wy = 0, wz = 0;
         for (const i of g.members) { wx += shown[i].wx; wy += shown[i].wy; wz += shown[i].wz; }
         g.wx = wx / g.members.length;
@@ -1043,6 +1046,61 @@ export class PlacementPass {
   }
 
   /**
+   * Is this badge still DRAWN once placement has decided — not taken into a
+   * card, not behind its room's chip? THE predicate: the renderer's
+   * visibility and every "only a drawn badge can be in the way" test read it.
+   * It was written out five times, three of them as two lines that had to be
+   * kept in the same order. (`inFront` and `occluded` are render gates on top
+   * of it, and deliberately not part of it — see ShownLabel.)
+   */
+  drawnBadge(id: string): boolean {
+    return !this.entityGrouped.has(id) && !this.roomClustered.get(roomKey(this.host.roomOf(id)));
+  }
+
+  /**
+   * The solver's deferral buckets, as cards to seat. Every member leaves the
+   * badge tier (`entityGrouped`); the card stands at the members' WORLD
+   * centroid and is projected by this pass's own frame, never accumulated in
+   * the plane alongside it (see PendingEntityGroup.sx). Appends to `out`.
+   */
+  groupsFromBuckets(
+    shown: ShownLabel[], buckets: readonly DeferralBucket[], count: number,
+    clearance: MeasureFrame, out: PendingEntityGroup[],
+  ): void {
+    for (let b = 0; b < count; b++) {
+      const bucket = buckets[b];
+      let wx = 0, wy = 0, wz = 0;
+      for (const i of bucket.members) {
+        wx += shown[i].wx; wy += shown[i].wy; wz += shown[i].wz;
+        this.entityGrouped.add(shown[i].id);
+      }
+      const n = bucket.members.length;
+      out.push({
+        // Keyed by the PILE alone. It was `room|pileKey`, which was stable only
+        // while a bucket's room was — and a bucket's room can change (a
+        // cross-room pile loses a member and becomes single-room), which would
+        // have rebuilt the group's GUI controls mid-zoom and flickered.
+        // pileKey is the pile's lowest entity_id, so it is already unique.
+        key: `grp|${bucket.pileKey}`,
+        room: roomSpanLabel(this.roomDisplay.get(bucket.room) ?? bucket.room, bucket.rooms.length),
+        roomKeys: bucket.rooms.slice(),
+        // Indices into `shown`, which lives exactly as long as this pass —
+        // copied because placeEntityGroups may drop a group and the pooled
+        // bucket is about to be reused. Sorted into the cell order a card
+        // draws them in; see sortCardMembers for why that is not the order
+        // the solver hands them over in.
+        members: this.host.sortCardMembers(shown, bucket.members.slice()),
+        wx: wx / n, wy: wy / n, wz: wz / n,
+        ...this.host.planeOf(clearance, wx / n, wy / n, wz / n),
+        // Every device, always: `gridCells` turns an over-cap ask into the
+        // count badge itself, so no producer restates the cap.
+        grid: n,
+        focused: false,
+      });
+    }
+  }
+
+  /**
    * Pair up the FOCUSED room's own overlapping badges.
    *
    * ── The gap this closes ───────────────────────────────────────────────────
@@ -1206,7 +1264,7 @@ export class PlacementPass {
         // measuring them against any smaller number sizes a box the card is
         // about to overflow.
         const lay = this.host.cardOf(pile.length, pile.length, this.host.cardBudget());
-        const hh = (lay.height / 2) * scale;
+        const hh = cardLift(lay, scale);
         // Anchored bottom-edge-on-anchor exactly as the renderer draws it —
         // this file's oldest rule, and the one 2.288.0 had to restate.
         return { cx: q.sx, cy: q.sy - hh, hw: (lay.width / 2) * scale + gapPx, hh: hh + gapPx };
@@ -1377,9 +1435,8 @@ export class PlacementPass {
       // make that room disappear.
       for (let i = 0; i < shown.length; i++) {
         const s2 = shown[i];
-        if (this.entityGrouped.has(s2.id)) continue;
+        if (!this.drawnBadge(s2.id)) continue;
         const rk = roomKey(this.host.roomOf(s2.id));
-        if (this.roomClustered.get(rk)) continue;
         if (focus.has(rk)) continue;
         if (clears(s2.sx, s2.sy, s2.sz, boxes[i].halfW, boxes[i].halfH)) continue;
         this.chipRoom(rk, "chip-v-badge");
@@ -1390,7 +1447,7 @@ export class PlacementPass {
         if (g.focused) continue;
         if (g.roomKeys.some((k) => this.roomClustered.get(k))) continue;
         const lay = this.host.layoutOf(g, g.members.length);
-        const hh = (lay.height / 2) * scale;
+        const hh = cardLift(lay, scale);
         if (clears(g.sx, g.sy - hh, g.sz, (lay.width / 2) * scale, hh)) continue;
         for (const k of g.roomKeys) this.chipRoom(k, "chip-v-card");
         escalated = true;
@@ -1447,7 +1504,7 @@ export class PlacementPass {
     // termination is untouched.
     const focusBoxes: { cx: number; cy: number; cz: number; hw: number; hh: number }[] = [];
     for (let i = 0; i < shown.length; i++) {
-      if (this.entityGrouped.has(shown[i].id)) continue;
+      if (!this.drawnBadge(shown[i].id)) continue;
       if (!focus.has(roomKey(this.host.roomOf(shown[i].id)))) continue;
       // The same box the escalation loop above measures a badge with.
       focusBoxes.push({
@@ -1457,7 +1514,7 @@ export class PlacementPass {
     for (const g of pending) {
       if (!g.focused) continue;
       const lay = this.host.layoutOf(g, g.members.length);
-      const hh = (lay.height / 2) * scale;
+      const hh = cardLift(lay, scale);
       focusBoxes.push({ cx: g.sx, cy: g.sy - hh, cz: g.sz, hw: (lay.width / 2) * scale, hh });
     }
     if (focusBoxes.length === 0) return rendered;

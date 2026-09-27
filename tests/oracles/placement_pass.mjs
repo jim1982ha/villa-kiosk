@@ -12,9 +12,9 @@
 //   * a focused room's card never escalates.
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
-const { PlacementPass } = await import("@/babylon/placementPass");
+const { PlacementPass, roomSpanLabel } = await import("@/babylon/placementPass");
 const { RoomFocus } = await import("@/babylon/roomFocus");
-const { arrange } = await import("@/babylon/badgeCard");
+const { arrange, cardLift } = await import("@/babylon/badgeCard");
 const { roomKey, NO_ROOM_LABEL } = await import("@/config/roomKey");
 
 let fail = 0;
@@ -110,11 +110,41 @@ console.log("\n  seating cards:");
   }
 }
 
+console.log("\n  the pass's own products (2.496.189):");
+{
+  ck("a card spanning rooms reads 'primary +N', one room reads its name",
+     roomSpanLabel("Living", 3) === "Living +2" && roomSpanLabel("Living", 1) === "Living");
+  ck("a card hangs half its own height above its anchor, at the badge scale", cardLift({ height: 40 }, 1.5) === 30);
+  const rooms = { a: "Living", b: "Living", c: "Kitchen", d: "Hall" };
+  const shown = ["a", "b", "c", "d"].map((id, i) => badge(id, i * 2, i));
+  const { pass } = rig(rooms);
+  pass.roomDisplay.set("living", "Living"); pass.roomDisplay.set("kitchen", "Kitchen");
+  pass.entityGrouped.add("a");
+  pass.chipRoom("hall", "solver");
+  ck("drawn: a badge in a card is not, one behind its room's chip is not, the rest are",
+     !pass.drawnBadge("a") && !pass.drawnBadge("d") && pass.drawnBadge("b") && pass.drawnBadge("c"));
+  const clear = { pxPerWorld: 10, basis: { rx: 1, rz: 0, ax: 0, az: 1, sinPhi: 1, cosPhi: 0, mode: "plane" } };
+  const out = [];
+  const buckets = [{ room: "kitchen", rooms: ["kitchen", "living"], pileKey: "b", members: [2, 1] }, { room: "living", rooms: ["living"], pileKey: "zz", members: [0, 1] }];
+  pass.groupsFromBuckets(shown, buckets, 1, clear, out);
+  const g = out[0];
+  ck("only `count` buckets become cards (the pool may hold stale ones)", out.length === 1);
+  ck("a bucket's card: keyed by its pile, named 'primary +N', its rooms copied",
+     g.key === "grp|b" && g.room === "Kitchen +1" && g.roomKeys.join() === "kitchen,living" && g.roomKeys !== buckets[0].rooms, g);
+  ck("  ...its members in card order, and they leave the badge tier",
+     g.members.join() === "1,2" && pass.entityGrouped.has("b") && pass.entityGrouped.has("c") && buckets[0].members.join() === "2,1", g.members);
+  ck("  ...standing at their WORLD centroid, projected by the pass's frame",
+     g.wx === 3 && g.wz === 1.5 && g.sx === 30 && g.sy === 15 && g.grid === 2 && g.focused === false, [g.wx, g.wz, g.sx, g.sy]);
+}
+
 console.log("\n  the caller:");
 {
   const { readFileSync } = await import("node:fs");
   const ev = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
   ck("EntityVisuals holds one pass and starts it each layout", /private readonly pass = new PlacementPass\(/.test(ev) && (ev.match(/this\.pass\.begin\(\);/g) ?? []).length === 2);
+  ck("EntityVisuals draws a badge by the pass's own predicate, and takes its cards from it",
+     /&& this\.pass\.drawnBadge\(s\.id\);/.test(ev) && /this\.pass\.groupsFromBuckets\(shown, result\.buckets, result\.bucketCount, clearance, pending\);/.test(ev)
+     && /linkOffsetYInPixels = -cardLift\(lay, scale\);/.test(ev));
   ck("  ...and keeps none of its state or steps", !/private (roomClustered|entityGrouped|chipWhyCount|seatLog)\b|private (placeEntityGroups|pairFocusedRoom|settleChips|dropEscalatedGroups|chipRoom)\(/.test(ev));
 }
 

@@ -137,6 +137,17 @@ export interface CardArrangement {
 }
 
 /**
+ * How far a card hangs above its anchor, in GUI px: half its own height. A
+ * card is drawn ENTIRELY ABOVE the point it stands for (the renderer sets
+ * linkOffsetYInPixels to minus this), so every test that measures a card
+ * "where it is drawn" lifts it by the same amount. It was written out ten
+ * times across the placement pass, the renderer and the self-check.
+ */
+export function cardLift(lay: { height: number }, scale: number): number {
+  return (lay.height / 2) * scale;
+}
+
+/**
  * Lay out `n` chips as one or more cards.
  *
  *   n <= 2 → a single row  (1x1, 2x1)
