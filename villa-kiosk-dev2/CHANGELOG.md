@@ -1,3 +1,9 @@
+## 2.496.193
+
+### Behind the scenes
+- How a device's state history is cut into five-minute slices and painted
+  is now one tested step. Nothing changes on screen.
+
 ## 2.496.192
 
 ### Fixed
