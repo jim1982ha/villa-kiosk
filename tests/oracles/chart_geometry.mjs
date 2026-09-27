@@ -95,9 +95,9 @@ console.log("\n  the callers:");
   // a chart added or dropped fails here until this list is updated.
   const PRIMITIVE = /<polyline|className="bar-chart"|className="state-timeline-seg"|className="energy-flow"|className="chart-bar"/;
   const CHARTS = {
-    "components/panels/Sparkline.tsx": "line",
-    "components/panels/DualSparkline.tsx": "line",
-    "components/panels/WeatherPanel.tsx": "line",
+    // ONE line chart since 2.496.144 (Sparkline, DualSparkline and the
+    // Weather tiles drew their own before).
+    "components/panels/LineChart.tsx": "line",
     "components/panels/BarChart.tsx": "bars",
     "components/panels/StateTimeline.tsx": "timeline",
     "components/panels/EnergyPanel.tsx": "flow",
@@ -109,6 +109,9 @@ console.log("\n  the callers:");
   ck("every file that draws a chart is a known chart module", unknown.length === 0, unknown);
   const missing = Object.keys(CHARTS).filter((f) => !charts.map(rel).includes(f));
   ck(`  ...and all ${Object.keys(CHARTS).length} still draw one — the scan cannot shrink unseen`, missing.length === 0, missing);
+  const lineUsers = files.filter((f) => /<LineChart\b/.test(src(f))).map(rel).sort();
+  ck("every history line is drawn by LineChart: the Weather window and both device panels",
+     lineUsers.join() === "components/panels/DeviceGroupPanel.tsx,components/panels/SensorPanel.tsx,components/panels/WeatherPanel.tsx", lineUsers);
   const byKind = (k) => charts.filter((f) => CHARTS[rel(f)] === k);
   const own = byKind("line").filter((f) => !/\bchartGeometry\(/.test(src(f))).map(rel);
   ck("every line chart draws from chartGeometry", own.length === 0, own);
@@ -125,6 +128,45 @@ console.log("\n  the callers:");
   ck("every line chart draws the bands its geometry returns", unbanded.length === 0, unbanded);
   const tips = charts.filter((f) => /className="spark-tip/.test(src(f))).map(rel);
   ck("every chart's tooltip is ChartTip", tips.length === 0, tips);
+}
+
+console.log("\n  an outage you can SEE and POINT AT (2.496.149 — a pump's 3-min drop-outs were hairlines, its 2-s blips nothing):");
+{
+  const { MIN_BAND_OF_PLOT } = await import("@/utils/chartGeometry");
+  const { fmtOutage, fmtDuration } = await import("@/components/panels/chartUtils");
+  const H = 3_600_000, t0 = 1_800_000_000_000, win = { from: t0, to: t0 + 24 * H };
+  const blip = { from: t0 + 3 * H, to: t0 + 3 * H + 2_000 };            // 2 s
+  const drop = { from: t0 + 5 * H, to: t0 + 5 * H + 3 * 60_000 };        // 3 min
+  const pts = [0, 1, 2, 3, 4, 5, 6, 8, 12, 20].map((h) => ({ t: t0 + h * H + 60_000, v: h < 6 ? 0 : 750 }));
+  const plot = { left: 0, right: 320, top: 0, bottom: 100 };
+  const g = chartGeometry(win, [{ pts, gaps: [blip, drop] }], plot);
+  const b = g.series[0].bands;
+  ck("every outage is drawn at least MIN_BAND_OF_PLOT wide — the 2-second blip too (it was 1 unit: nothing on screen)",
+     b.length === 2 && b.every((x) => x.w >= 320 * MIN_BAND_OF_PLOT - 1e-9), b.map((x) => x.w));
+  ck("  ...centred on its outage", Math.abs((b[1].x + b[1].w / 2) - g.sx((drop.from + drop.to) / 2)) < 1e-6);
+  // The pointer where the owner's was: at the band's edge, a whole pointer step
+  // from the outage's own minutes — the tooltip read the reading after it.
+  const edge = g.tAt(b[1].x + b[1].w - 0.1);
+  const h1 = g.hover(edge);
+  ck("hovering anywhere on the drawn band reports the outage, and no reading for that line",
+     !!h1 && h1.outages[0] === drop && h1.readings[0] === null, h1 && { out: h1.outages[0], r: h1.readings[0] });
+  ck("  ...even where no line has a reading at all (it returned no tooltip)", !!g.hover(drop.from + 60_000));
+  ck("  ...and just clear of it, the reading again", g.hover(g.tAt(b[1].x + b[1].w + 2))?.outages[0] === null);
+  ck("the tooltip says what and how long: 'Unavailable · from–to (3 min)', a 2-s blip in seconds, a running one 'since'",
+     /^Unavailable · .+–.+ \(3 min\)$/.test(fmtOutage(drop, win.to)) && fmtDuration(2_000) === "2 s" && fmtDuration(80 * 60_000) === "1 h 20 min"
+     && /^Unavailable since .+ \(2 h\)$/.test(fmtOutage({ from: win.to - 2 * H, to: Infinity }, win.to)), fmtOutage(drop, win.to));
+  // 2.496.150: the line is cut at the DRAWN band, not only at the outage's
+  // own seconds — 2.496.149 drew the widened bands with the line straight
+  // across them (owner: "this is not what we see in the picture").
+  const inside = g.series[0].runs.flat().filter((p) => b.some((x) => p.x > x.x + 1e-6 && p.x < x.x + x.w - 1e-6));
+  const across = g.series[0].runs.flatMap((r) => r.slice(1).map((p, k) => [r[k], p]))
+    .filter(([a, p]) => Math.abs(p.x - a.x) > 1e-9 && b.some((x) => Math.min(a.x, p.x) < x.x + x.w - 1e-6 && Math.max(a.x, p.x) > x.x + 1e-6));
+  ck("the line stops at every drawn band's edges: no point inside a band, no segment across one",
+     inside.length === 0 && across.length === 0, { inside: inside.length, across: across.length });
+  ck("  ...and only there: each break in the line is a band's width",
+     g.series[0].runs.slice(1).every((r, k) => b.some((x) => Math.abs(g.series[0].runs[k].at(-1).x - x.x) < 1e-6 && Math.abs(r[0].x - (x.x + x.w)) < 1e-6)));
+  const lc = readFileSync(new URL("../../src/components/panels/LineChart.tsx", import.meta.url), "utf8");
+  ck("LineChart prints the outage row the geometry reports", /if \(out\) return \[\{ key: `\$\{i\}`, marker: keyOf\(l\), text: `\$\{who\}\$\{fmtOutage\(out, g\.window\.to\)\}` \}\];/.test(lc));
 }
 
 console.log(fail ? `\n❌ ${fail} failed` : "\n✅ one chart geometry; an outage is never a reading");

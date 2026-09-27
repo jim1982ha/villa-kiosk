@@ -20,6 +20,7 @@
 
 import { Color4 } from "@babylonjs/core/Maths/math.color";
 import type { Scene } from "@babylonjs/core/scene";
+import { nightLerp } from "./sunState";
 
 export interface LookInputs {
   /** Settings' exposure, as the render pass applies it (device-adjusted). */
@@ -50,8 +51,8 @@ const NIGHT_SKY = [0.03, 0.03, 0.05, 1] as const;
 
 export function resolveLook(i: LookInputs): Look {
   // 0 by day; at night, how much EXTRA dimming beyond the mild baseline.
-  const nd = i.isDay ? 0 : Math.min(1, Math.max(0, i.nightDimming));
-  const lerp = (a: number, b: number) => a + (b - a) * nd;
+  // (The same rule as the sun's lights — sunState.nightLerp.)
+  const lerp = nightLerp(i.isDay ? 0 : i.nightDimming);
   // Baked structure ignores every light, so night reaches it only through
   // exposure: a night atlas is already dark and only ADDS dimming (floor 0.5);
   // a single daytime atlas needs the full day→0.45 range to read as night at

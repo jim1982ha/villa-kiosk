@@ -18,7 +18,7 @@ export interface LoadedModelInfo {
    * scene (decode geometry, build materials, upload GPU buffers). A fast
    * fetch (a service-worker cache hit is normally well under a second) with a
    * still-slow overall load means the cost is the parse, not the network —
-   * see this app's caching docs in storage.ts/sw.js, which can only ever
+   * see this app's caching docs in centralModel.ts/sw.js, which can only ever
    * speed up the fetch half.
    */
   fetchMs: number;

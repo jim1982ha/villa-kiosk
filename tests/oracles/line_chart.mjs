@@ -68,6 +68,20 @@ console.log("\n  a device down longer than its window:");
   ck("  ...and everything inside it", win.map((p) => p.t / H).join() === "70,90,100", win.map((p) => p.t / H));
 }
 
+console.log("\n  a held value reaches every outage (2.496.149):");
+{
+  const { lineRuns: runsOf } = await import("@/utils/lineChart");
+  const H = 3_600_000, t0 = 1_800_000_000_000, w = { from: t0, to: t0 + 6 * H };
+  // The pool pump: 0 W reported once, held an hour, a 2-second blip, 0 W again.
+  const data = [{ t: t0, v: 0 }, { t: t0 + H + 2_000, v: 0 }, { t: t0 + 3 * H, v: 750 }];
+  const gaps = [{ from: t0 + H, to: t0 + H + 2_000 }];
+  const runs = runsOf(data, gaps, w);
+  ck("the reading holds right up to the outage's start (the hour before a blip vanished)",
+     runs.length === 2 && runs[0].at(-1).t === t0 + H && runs[0].at(-1).v === 0, runs.map((r) => r.map((p) => [(p.t - t0) / 60_000, p.v])));
+  ck("  ...and the line resumes at the reading after it", runs[1][0].t === t0 + H + 2_000);
+  ck("  ...every break in the line lies inside an outage", runs.slice(1).every((r, i) => gaps.some((g) => g.from <= runs[i].at(-1).t + 1e-9 && g.to >= r[0].t - 1e-9)));
+}
+
 console.log("\n  the callers:");
 // The rule is only as good as its callers: a chart handed no window falls back
 // to the old axis and loses the band again. Every numeric chart in the app
@@ -77,7 +91,7 @@ const DIR = new URL("../../src/components/panels/", import.meta.url);
 const sites = [];
 for (const f of readdirSync(DIR).filter((n) => n.endsWith(".tsx"))) {
   const src = readFileSync(new URL(f, DIR), "utf8");
-  for (const m of src.matchAll(/<(Sparkline|DualSparkline)\b[\s\S]*?\/>/g)) sites.push({ f, tag: m[1], ok: /\bwindow=\{/.test(m[0]) });
+  for (const m of src.matchAll(/<(LineChart)\b[\s\S]*?\/>/g)) sites.push({ f, tag: m[1], ok: /\bwindow=\{/.test(m[0]) });
 }
 ck(`found the chart call sites (${sites.length})`, sites.length >= 3, sites);
 const missing = sites.filter((x) => !x.ok).map((x) => `${x.f}:${x.tag}`);

@@ -6,9 +6,9 @@
 // badge tap opens) — so nothing here re-implements rich control; it reuses it.
 //
 // Built on the shared BasePanel (same modal chrome/header/close as every other
-// panel) and the shared gradient badge (badgeImageDataUrl) so it feels native.
+// panel) and the shared gradient badge (badgeImage) so it feels native.
 
-import { useState, type ComponentType } from "react";
+import { useState } from "react";
 import { deviceRowText } from "@/utils/entityValue";
 import { ChevronRight, Sparkles, Power, PowerOff, EyeOff } from "lucide-react";
 import BasePanel from "./BasePanel";
@@ -18,7 +18,7 @@ import { useConfig } from "@/config/ConfigContext";
 import { useSceneConfirm } from "@/hooks/useSceneConfirm";
 import { useProfile } from "@/auth/ProfileContext";
 import type { HaSceneInfo } from "@/config/haScenes";
-import { badgeImageDataUrl } from "@/babylon/badgeIcons";
+import { badgeImage } from "@/babylon/badgeIcons";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
 import { effectiveCategory, subjectOf } from "@/config/EntityCategories";
@@ -33,20 +33,17 @@ import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityType } from "@/types/scene.types";
 import { NO_ROOM_LABEL } from "@/config/roomKey";
 
-export interface SummaryGroup {
-  title: string;
-  icon: ComponentType<{ size?: number | string }>;
-  entityIds: string[];
-}
+// The group's shape is config/summaryGroups' (this screen only draws one).
+export type { SummaryGroup } from "@/config/summaryGroups";
+import type { SummaryGroup } from "@/config/summaryGroups";
+import { useVillaModel } from "@/config/VillaModel";
+import { devicePower } from "@/utils/devicePower";
+import InlineConfirm from "@/components/common/InlineConfirm";
 
 interface Props {
   group: SummaryGroup;
   /** Whether the profile may control these devices (else the modal is read-only). */
   canControl: boolean;
-  /** Entities with real geometry in the loaded model. Anything NOT in here
-   *  exists only in Home Assistant — it's listed last and tinted, so it's
-   *  obvious it can't be found on the 3D map. */
-  mappedEntityIds: Set<string>;
   onClose: () => void;
   /** Drill into an entity's full type panel (PanelRouter) — wired to
    *  Dashboard's setActivePanel, so it opens the exact same rich panel a 3D
@@ -107,9 +104,12 @@ function groupByRoom(
 }
 
 export default function SummaryGroupPanel({
-  group, canControl, mappedEntityIds, onClose, onOpenEntity, hideBulkToggle,
+  group, canControl, onClose, onOpenEntity, hideBulkToggle,
   filterSuppressed = true, roomScenes,
 }: Props) {
+  // Entities on the 3D map; anything else exists only in Home Assistant and
+  // is listed last and tinted (config/VillaModel).
+  const { mappedEntityIds } = useVillaModel();
   const { entities, suppressedEntityIds, hiddenInHaEntityIds, callService } = useHA();
   const { config, resolvedRooms } = useConfig();
   // Each row's badge is a PNG baked from the theme's tokens — see the hook.
@@ -208,12 +208,8 @@ export default function SummaryGroupPanel({
       // visible, not scrolled past a long, room-grouped device list.
       headerActions={!hideBulkToggle && canControl && toggleables.length > 1 && (
         confirming ? (
-          <div className="modal-actions" style={{ margin: 0 }}>
-            <button className="btn ghost" onClick={() => setConfirming(false)}>Cancel</button>
-            <button className="btn danger" onClick={doToggleAll}>
-              {anyOn ? "Turn off?" : "Turn on?"}
-            </button>
-          </div>
+          <InlineConfirm confirmLabel={anyOn ? "Turn off?" : "Turn on?"}
+            onConfirm={doToggleAll} onCancel={() => setConfirming(false)} />
         ) : (
           // Icon-only — the text label ("Turn all on/off") cost too much
           // horizontal space in the header, especially on a phone. The icon
@@ -359,10 +355,11 @@ export default function SummaryGroupPanel({
     // tell "HA itself says this is hidden" from an ordinary device at a
     // glance, not just infer it silently.
     const hiddenInHa = hiddenInHaEntityIds.has(id);
-    const doToggle = () =>
-      isLock
-        ? callService("lock", e.state === "locked" ? "unlock" : "lock", {}, { entity_id: id })
-        : callService(domain, "toggle", {}, { entity_id: id });
+    // The flip is devicePower's (lock/unlock, open/close, a domain's toggle).
+    const doToggle = () => {
+      const f = devicePower(e, id).flip;
+      if (f) void callService(f.domain, f.service, {}, { entity_id: id });
+    };
 
     return (
       <div
@@ -378,8 +375,7 @@ export default function SummaryGroupPanel({
         >
           <img
             className="summary-entity-badge"
-            src={badgeImageDataUrl(
-              cat, iconKeyFor(type, e), badge.face, config.entityMap[id]?.badgeColor, 0, badge.ring)}
+            src={badgeImage({ category: cat, iconKey: iconKeyFor(type, e), state: badge.face, color: config.entityMap[id]?.badgeColor, ringState: badge.ring })}
             key={theme}
             alt=""
             draggable={false}

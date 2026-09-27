@@ -18,6 +18,7 @@ import { VertexBuffer } from "@babylonjs/core/Buffers/buffer";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { Scene } from "@babylonjs/core/scene";
 import type { HassEntity } from "@/types/ha.types";
+import { isRenderedFloor, stampedFloor } from "./floorOf";
 
 // Ceiling-fan spin: angular speed (rad/s) at full fan percentage. A whole-mesh
 // spin reads as "blades turning" at kiosk distance; ~1 rev/s is lively without
@@ -248,8 +249,7 @@ export class FanRigs {
       // Only spin (and keep rendering) while the fan's storey is being viewed —
       // floors above the active one are hidden, so their fans needn't drive
       // continuous frames. (Cumulative floors: <= active are visible.)
-      const floorIdx = (rig[0].mesh.metadata as { floorIndex?: number } | null)?.floorIndex;
-      if (floorIdx !== undefined && floorIdx > activeFloor) continue;
+      if (!isRenderedFloor(stampedFloor(rig[0].mesh), activeFloor)) continue;
 
       // The TOTAL angle, wrapped — every frame recomputes rotation fresh from
       // this absolute value (never accumulated), so there is nothing for

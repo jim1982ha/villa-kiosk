@@ -18,6 +18,7 @@ import ConfigEditor from "./ConfigEditor";
 import BindingsTable from "./BindingsTable";
 import TelemetryPanel from "./TelemetryPanel";
 import GroupedDevices from "./GroupedDevices";
+import InlineConfirm from "@/components/common/InlineConfirm";
 
 /** ⚠️ EVERY TAB CARRIES TWO PANELS, AND THAT IS A RULE RATHER THAN AN
  *  ACCIDENT. This screen was a stack of six collapsible sections and read as
@@ -113,19 +114,13 @@ function LogoutAllSection() {
         </div>
       )}
       {confirming ? (
-        <div className="modal-actions" style={{ margin: 0 }}>
-          <button className="btn ghost" onClick={() => setConfirming(false)}>Cancel</button>
-          <button
-            className="btn danger"
-            onClick={async () => {
-              const ok = await logoutAll();
-              setFailed(!ok);
-              setConfirming(false);
-            }}
-          >
-            Log out every device?
-          </button>
-        </div>
+        <InlineConfirm confirmLabel="Log out every device?"
+          onConfirm={async () => {
+            const ok = await logoutAll();
+            setFailed(!ok);
+            setConfirming(false);
+          }}
+          onCancel={() => setConfirming(false)} />
       ) : (
         <button className="btn ghost" onClick={() => setConfirming(true)}>
           <LogOut size={16} /> Log out all devices
@@ -166,7 +161,7 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
         aria-modal="true"
         aria-label="Advanced settings"
       >
-        <div className="settings-header">
+        <div className="modal-header">
           {/* tabIndex={-1} + data-autofocus: useModalA11y's default (the
               FIRST focusable descendant) would otherwise land here on the
               (i) model-info button — the very next element — whose tooltip
@@ -209,7 +204,7 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
           )}
         </div>
 
-        {/* ⚠️ OUTSIDE `.settings-body`, LIKE FACILITY'S. The strip is chrome and
+        {/* ⚠️ OUTSIDE `.modal-body`, LIKE FACILITY'S. The strip is chrome and
             the body scrolls; putting the tabs inside would scroll them out of
             reach on the long tabs — the entity table is hundreds of rows. */}
         <ModalTabs
@@ -219,7 +214,7 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
           label="Settings sections"
         />
 
-        <div className="settings-body">
+        <div className="modal-body">
           {glbUpload.uploadMsg && (
             <div className={`test-result ${glbUpload.uploadMsg.ok ? "ok" : "fail"}`} style={{ marginTop: 0 }}>
               {glbUpload.uploadMsg.text}
@@ -282,7 +277,7 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
         {/* No Save: every tab here applies LIVE to the 3D scene through
             `ConfigContext`, which is why the strip above is passed no `commit`
             and a tab switch can lose nothing. */}
-        <div className="settings-footer" style={{ justifyContent: "space-between" }}>
+        <div className="modal-footer">
           <span className="muted body-text" style={{ fontSize: "var(--text-xs)" }}>v{__APP_VERSION__}</span>
           <button className="btn primary" onClick={onBack}>Close</button>
         </div>

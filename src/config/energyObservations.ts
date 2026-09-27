@@ -15,6 +15,7 @@ import {
   type EnergyPeriod, type EnergySetup, type EnergySplit,
 } from "./energyModel";
 import { localMidnight } from "@/utils/localDay";
+import type { Observation } from "./observation";
 
 /** Devices adding up to more than this share OVER what was used: some are set
  *  up beside the meter they belong to. */
@@ -33,7 +34,8 @@ export function share(v: number, total: number): number {
 /** Whether the devices overlap the meter enough to say so (card and note). */
 export const overlapShows = (s: EnergySplit) => s.used > 0 && s.overlap > s.used * OVERLAP_SHOWS;
 
-export interface EnergyCard { tone: "good" | "caution" | "bad" | "neutral"; title: string; detail: string }
+/** An Energy card is an observation card (config/observation). */
+export type EnergyCard = Observation;
 
 export interface EnergyToday {
   split: EnergySplit;

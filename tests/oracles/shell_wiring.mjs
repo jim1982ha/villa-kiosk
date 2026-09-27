@@ -56,8 +56,8 @@ eq("...and NOT on the imported function, which never changes",
 // ── one gate on the one thing that writes ────────────────────────────────
 const DCS = read("src/config/DeviceConfigSync.tsx");
 console.log("\n  only an owner writes shared config:");
-eq("the gate is inside pushOwnDiff",
-   /const pushOwnDiff = useCallback\(async \(\) => \{[\s\S]{0,700}?roleRef\.current !== "owner"/.test(DCS), true);
+eq("the gate is the document's own write gate (judged when a push RUNS, on every path)",
+   /canWrite: \(\) => roleRef\.current === "owner"/.test(DCS) && !/fetchSharedConfig\(\)[\s\S]{0,200}saveSharedConfig\(/.test(DCS), true);
 // It used to be only on the push effect, so the pull's abort branch — which
 // retries a stuck edit — ran the whole fetch-rebase-write loop for every role,
 // forever, against a server that 403s.
@@ -88,7 +88,7 @@ eq("loadConfig uses it", /return normaliseConfig\(\{/.test(AC), true);
 // replace() and found that call instead, so deleting update()'s stayed green.
 const updateBody = /const update = useCallback([\s\S]*?)(?=const replace = useCallback)/.exec(CC)?.[1] ?? "";
 eq("...the update() the server pull arrives through wraps its setConfig",
-   /normaliseConfig\(next\)/.test(updateBody), true);
+   /normaliseConfig\(\{ \.\.\.prev, \.\.\.patch \}, \{ maps \}\)/.test(updateBody), true);
 eq("...and replace() does too",
    /const replace = useCallback[\s\S]{0,300}?setConfig\(normaliseConfig\(/.test(CC), true);
 eq("the migrations have no other caller",
@@ -102,8 +102,8 @@ eq("the migrations have no other caller",
 console.log("\n  no screen reaches past the engine for the cap:");
 const screens = ["src/components/fm/SpendTab.tsx", "src/components/fm/TodayTab.tsx"];
 for (const f of screens) {
-  eq(`${f.split("/").pop()} reads budgetStatus().capIdr`,
-     /MINOR_MAINTENANCE_CAP_IDR/.test(code(f)), false);
+  eq(`${f.split("/").pop()} reads budgetStatus().cap`,
+     /MINOR_MAINTENANCE_CAP/.test(code(f)), false);
 }
 // ⚠️ THE WHOLE OF src/fm/, NOT THE ONE FILE THE LAST DEFECT WAS IN. This read
 // only fmEngine.ts and matched only `toLocaleString(` — so fmReport.ts's
@@ -122,7 +122,7 @@ const baked = FM.filter((f) => {
 eq("no currency or locale is baked into any money or date the owner reads",
    baked.length ? baked : "none", "none");
 // SpendTab printed "of IDR 0" on an unconfigured install: it read the raw
-// constant where every neighbouring line reads b.capIdr and gates on > 0.
+// constant where every neighbouring line reads b.cap and gates on > 0.
 
 console.log(`\n${fail ? `❌ ${fail} failed` : "✅ the shell is wired as described"}`);
 process.exit(fail ? 1 : 0);

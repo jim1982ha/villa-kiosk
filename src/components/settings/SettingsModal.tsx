@@ -136,8 +136,8 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
 
   const [siteTitle, setSiteTitle] = useState(config.siteTitle);
   const [eyeHeight, setEyeHeight] = useState(eyeHeightOf(config.eyeHeight));
-  const [walkSpeed, setWalkSpeed] = useState(config.walkSpeed ?? 1);
-  const [render, setRender] = useState<RenderConfig>(config.render ?? DEFAULT_RENDER);
+  const [walkSpeed, setWalkSpeed] = useState(config.walkSpeed);
+  const [render, setRender] = useState<RenderConfig>(config.render);
 
   const applySiteTitle = (v: string) => {
     setSiteTitle(v);
@@ -176,7 +176,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
         aria-modal="true"
         aria-label="Settings"
       >
-        <div className="settings-header">
+        <div className="modal-header">
           <h2>Settings</h2>
           {/* Theme selector lives in the header, icon-only + right-aligned —
               self-explanatory glyphs, no Save step (applies and persists
@@ -233,7 +233,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             </div>
           )}
         </div>
-        <div className="settings-body">
+        <div className="modal-body">
 
         {/* RBAC: shared branding — administration, not personal taste. */}
         {can("editConfig") && (
@@ -284,9 +284,9 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
           </div>
           <div className="segmented settings-row-half" role="group" aria-label="Natural scrolling">
             <button
-              className={(config.naturalScrolling ?? true) ? "active" : ""}
-              onClick={() => update({ naturalScrolling: !(config.naturalScrolling ?? true) })}
-              aria-pressed={config.naturalScrolling ?? true}
+              className={config.naturalScrolling ? "active" : ""}
+              onClick={() => update({ naturalScrolling: !config.naturalScrolling })}
+              aria-pressed={config.naturalScrolling}
               title="Natural scrolling in the bird's-eye view"
             >
               <Move size={16} /> Natural Scroll
@@ -321,7 +321,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
               onChange={(e) => applyRender({ nightDimming: Number(e.target.value) })}
             />
           </div>
-          {(manager?.renderFx.isBaked() ?? false) && (
+          {(manager?.lightingMode().structureUnlit ?? false) && (
             // Sizing lives entirely in .daynight-segmented (styles.css), not
             // an inline style — a narrow-screen media query needs to override
             // it (full-width once it wraps onto its own line below the
@@ -365,7 +365,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
         </div>
         <p className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-2xs)" }}>
           Overall scene exposure, and how much extra dimming applies at night — both update live.
-          {(manager?.renderFx.isBaked() ?? false) && " Villa lighting forces this villa's baked day or night look, or follows the real cycle on Auto — it relights the 3D model, unlike the Interface theme in the header, which only recolours the panels."}
+          {(manager?.lightingMode().structureUnlit ?? false) && " Villa lighting forces this villa's baked day or night look, or follows the real cycle on Auto — it relights the 3D model, unlike the Interface theme in the header, which only recolours the panels."}
         </p>
 
         {/* Light effect strength scales a lit fixture's room illumination in
@@ -393,7 +393,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             grows (it carries a live value) rather than crushing the button
             below --touch-min. */}
         <label style={{ marginTop: 14 }}>
-          Model north offset · {(config.northOffsetDeg ?? 0)}°
+          Model north offset · {config.northOffsetDeg}°
         </label>
         {/* The button rides the SLIDER's line, not the title's: they are one
             control in two forms — the slider sets the offset by hand, the
@@ -403,7 +403,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             subtracted rather than guessed at. */}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <input
-            type="range" min={0} max={359} step={1} value={config.northOffsetDeg ?? 0}
+            type="range" min={0} max={359} step={1} value={config.northOffsetDeg}
             style={{ flex: "1 1 auto", minWidth: 0 }}
             onChange={(e) => update({ northOffsetDeg: Number(e.target.value) })}
           />
@@ -436,7 +436,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
         </p>
 
         <p className="muted body-text" style={{ marginTop: 10, fontSize: "var(--text-2xs)" }}>
-          Badge size — {(config.entityIconScale ?? 1.0).toFixed(2)}× — is set with
+          Badge size — {config.entityIconScale.toFixed(2)}× — is set with
           the +/- buttons next to the category filters in the top bar.
         </p>
 
@@ -453,18 +453,18 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
         <div className="row badge-style-row" style={{ gap: 10, marginTop: 6 }}>
           <div className="segmented settings-row-half" role="group" aria-label="Floating badge style">
             <button
-              className={(config.badgeStyle ?? "card") === "classic" ? "active" : ""}
+              className={config.badgeStyle === "classic" ? "active" : ""}
               onClick={() => update({ badgeStyle: "classic" })}
-              aria-pressed={(config.badgeStyle ?? "card") === "classic"}
+              aria-pressed={config.badgeStyle === "classic"}
               title="Icon badge style — the reading sits on a small pill under the icon"
               aria-label="Icon badge style"
             >
               <Circle size={16} /> <span className="badge-btn-label">Icon</span>
             </button>
             <button
-              className={(config.badgeStyle ?? "card") === "card" ? "active" : ""}
+              className={config.badgeStyle === "card" ? "active" : ""}
               onClick={() => update({ badgeStyle: "card" })}
-              aria-pressed={(config.badgeStyle ?? "card") === "card"}
+              aria-pressed={config.badgeStyle === "card"}
               title="Card badge style — the reading sits inline beside the icon (default)"
               aria-label="Card badge style"
             >
@@ -480,9 +480,9 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
               Default/Card pair the most room. */}
           <div className="segmented settings-row-half" role="group" aria-label="Summary bar">
             <button
-              className={(config.showSummaryBar ?? true) ? "active" : ""}
-              onClick={() => update({ showSummaryBar: !(config.showSummaryBar ?? true) })}
-              aria-pressed={config.showSummaryBar ?? true}
+              className={config.showSummaryBar ? "active" : ""}
+              onClick={() => update({ showSummaryBar: !config.showSummaryBar })}
+              aria-pressed={config.showSummaryBar}
             >
               <PanelBottom size={16} />
               <span className="settings-label-full">Summary bar</span>
@@ -523,7 +523,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
         </>
         )}
 
-        </div>{/* end settings-body */}
+        </div>{/* end modal-body */}
 
         {/* ⚠️ THE FOOTER OWNS THE CLOSE QUESTION for its own button; this file
             owns it for Escape and the backdrop. Both raise the SAME

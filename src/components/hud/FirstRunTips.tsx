@@ -1,6 +1,6 @@
 // src/components/hud/FirstRunTips.tsx
 // One-time orientation card for a kiosk's first-ever login (see
-// utils/storage.ts's hasSeenFirstRunTips for the per-device "seen" gate).
+// utils/viewPrefs.ts's hasSeenFirstRunTips for the per-device "seen" gate).
 // Addresses two related gaps at once rather than as separate, competing
 // overlays: the HUD's icon-only chrome has no text labels to learn from, and
 // several controls' long-press actions had no discovery path beyond a hover
@@ -9,7 +9,7 @@
 // this device either way.
 
 import { Armchair, Compass, Info } from "lucide-react";
-import { markFirstRunTipsSeen } from "@/utils/storage";
+import { markFirstRunTipsSeen } from "@/utils/viewPrefs";
 import { useModalA11y } from "@/hooks/useModalA11y";
 
 export default function FirstRunTips({ onClose }: { onClose: () => void }) {
@@ -45,10 +45,10 @@ export default function FirstRunTips({ onClose }: { onClose: () => void }) {
     // big empty area below instead of centered like every other popup.
     <div className="modal-backdrop panel-modal-backdrop first-run-backdrop" onClick={dismiss}>
       <div ref={dialogRef} className="modal panel-modal first-run-tips" role="dialog" aria-modal="true" aria-label="Quick tips" onClick={(e) => e.stopPropagation()}>
-        <div className="settings-header">
+        <div className="modal-header">
           <h2>Quick tips</h2>
         </div>
-        <div className="settings-body">
+        <div className="modal-body">
           <ul className="first-run-tip-list">
             <li>
               <Armchair size={18} />
@@ -64,7 +64,7 @@ export default function FirstRunTips({ onClose }: { onClose: () => void }) {
             </li>
           </ul>
         </div>
-        <div className="settings-footer">
+        <div className="modal-footer">
           <span />
           <button className="btn primary" onClick={dismiss}>Got it, thanks</button>
         </div>

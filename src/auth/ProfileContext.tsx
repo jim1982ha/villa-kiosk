@@ -10,11 +10,17 @@ import {
   createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode,
 } from "react";
 import { isRole, type Role } from "./roles";
-import { currentSession } from "./PinVerifier";
+import { currentSession, serverSession } from "./PinVerifier";
+import { onSessionLost, sessionLostDecision } from "./sessionLost";
+import { report as reportTelemetry } from "@/utils/telemetry";
 import { ingressPath } from "@/ha/ingress";
 import { markBoot } from "@/utils/bootTimeline";
 
 const SESSION_KEY = "villa-kiosk:profile:v1";
+/** A session-lost report waiting for a session to send it with: the proxy
+ *  refuses telemetry from a session it no longer honours, which is exactly
+ *  when this report is made, so it goes out right after the next sign-in. */
+const PENDING_LOST_KEY = "villa-kiosk:session-lost:v1";
 
 interface ProfileContextType {
   /** Active profile, or null when nobody is signed in. */
@@ -107,6 +113,15 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     // this is the one honest boundary between time spent waiting on a PERSON
     // and time spent waiting on the APP. See utils/bootTimeline.
     markBoot("auth");
+    // A session lost earlier on this device is reported now that one exists.
+    try {
+      const pending = localStorage.getItem(PENDING_LOST_KEY);
+      if (pending) {
+        localStorage.removeItem(PENDING_LOST_KEY);
+        const p = JSON.parse(pending) as { source?: string; role?: string; at?: number };
+        reportTelemetry("session", { phase: "lost", source: p.source, lostRole: p.role, agoMs: p.at ? Date.now() - p.at : undefined });
+      }
+    } catch { /* unreadable — nothing to report */ }
     try {
       sessionStorage.setItem(SESSION_KEY, JSON.stringify({ role: next, at: Date.now() }));
     } catch {
@@ -139,6 +154,29 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     setRole(null);
     setSwitching(false);
   }, []);
+
+  // ── A SESSION THE SERVER STOPPED HONOURING ENDS HERE (2.496.152) ────────
+  // A 401 from the add-on or the socket's 4401 (sessionLost) is confirmed with
+  // the server — one question in flight at a time — and only a definite "no
+  // session" signs out: locally, since the server has already ended it. The
+  // gate then shows the profile screen instead of a villa stuck "connecting".
+  useEffect(() => {
+    let asking = false;
+    return onSessionLost((source) => {
+      if (asking || role === null) return;
+      asking = true;
+      void serverSession().then((server) => {
+        asking = false;
+        if (sessionLostDecision(role, server) !== "sign-out") return;
+        try {
+          localStorage.setItem(PENDING_LOST_KEY, JSON.stringify({ source, role, at: Date.now() }));
+          sessionStorage.removeItem(SESSION_KEY);
+        } catch { /* storage blocked — the sign-out below still happens */ }
+        setRole(null);
+        setSwitching(false);
+      });
+    });
+  }, [role]);
 
   const logoutAll = useCallback(async () => {
     try {

@@ -2,13 +2,21 @@
 // Typed service-call wrappers. Each takes the live HAWebSocket instance.
 
 import type { HAWebSocket } from "./HAWebSocket";
+import type { HassEntity } from "@/types/ha.types";
+import { devicePower } from "@/utils/devicePower";
 
 type WS = HAWebSocket;
 const t = (entityId: string) => ({ entity_id: entityId });
 
 export const HAServices = {
+  /** Throw a device's power switch the other way — the service is
+   *  devicePower's (lock/unlock, open/close, a domain's own toggle); nothing
+   *  is sent when its position is unknown. */
+  power: (ws: WS, entity: HassEntity | undefined, id: string) => {
+    const f = devicePower(entity, id).flip;
+    if (f) void ws.callService(f.domain, f.service, {}, t(id));
+  },
   // --- Lights ---
-  toggleLight: (ws: WS, id: string) => ws.callService("light", "toggle", {}, t(id)),
   setLightBrightness: (ws: WS, id: string, brightness: number) =>
     ws.callService("light", "turn_on", { brightness }, t(id)),
   setLightColorTemp: (ws: WS, id: string, kelvin: number) =>
@@ -34,19 +42,15 @@ export const HAServices = {
     ws.callService("cover", "set_cover_position", { position }, t(id)),
 
   // --- Fans ---
-  toggleFan: (ws: WS, id: string) => ws.callService("fan", "toggle", {}, t(id)),
   setFanPercentage: (ws: WS, id: string, percentage: number) =>
     ws.callService("fan", "set_percentage", { percentage }, t(id)),
   setFanPreset: (ws: WS, id: string, preset_mode: string) =>
     ws.callService("fan", "set_preset_mode", { preset_mode }, t(id)),
 
   // --- Switches ---
-  toggleSwitch: (ws: WS, id: string) => ws.callService("switch", "toggle", {}, t(id)),
 
   // --- Generic toggle (works for switch, input_boolean, light, fan, …) ---
-  toggleEntity: (ws: WS, id: string) => ws.callService("homeassistant", "toggle", {}, t(id)),
 
   // --- Media ---
-  toggleMedia: (ws: WS, id: string) => ws.callService("media_player", "toggle", {}, t(id)),
   mediaPlayPause: (ws: WS, id: string) => ws.callService("media_player", "media_play_pause", {}, t(id)),
 };

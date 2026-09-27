@@ -20,9 +20,8 @@ export interface HistoryRange {
   hours: number;
   /** Heading for the section ("Last 12 hours"). */
   title: string;
-  /** Timeline bucket width. A 7-day window at the 24-hour window's resolution
-   *  would be thousands of segments wide, so each range carries its own. */
-  bucketMinutes: number;
+  /* No timeline bucket width per range any more: every device trend is drawn
+     in the ONE five-minute interval (utils/trendInterval, 2.496.179). */
   /** The recorder-statistics bucket for a MEASUREMENT over this range (at most
    *  ~720 points a line), and for a TOTAL (rain: per hour, or per day). */
   period: StatisticsPeriod;
@@ -32,11 +31,11 @@ export interface HistoryRange {
 export type RangeKey = "1h" | "12h" | "24h" | "7d" | "30d";
 
 const RANGES: (HistoryRange & { key: RangeKey; label: string })[] = [
-  { key: "1h", label: "1h", hours: 1, title: "Last hour", bucketMinutes: 1, period: "5minute", totalPeriod: "hour" },
-  { key: "12h", label: "12h", hours: 12, title: "Last 12 hours", bucketMinutes: 5, period: "5minute", totalPeriod: "hour" },
-  { key: "24h", label: "24h", hours: 24, title: "Last 24 hours", bucketMinutes: 10, period: "5minute", totalPeriod: "hour" },
-  { key: "7d", label: "7d", hours: 168, title: "Last 7 days", bucketMinutes: 60, period: "hour", totalPeriod: "day" },
-  { key: "30d", label: "30d", hours: 720, title: "Last 30 days", bucketMinutes: 240, period: "hour", totalPeriod: "day" },
+  { key: "1h", label: "1h", hours: 1, title: "Last hour", period: "5minute", totalPeriod: "hour" },
+  { key: "12h", label: "12h", hours: 12, title: "Last 12 hours", period: "5minute", totalPeriod: "hour" },
+  { key: "24h", label: "24h", hours: 24, title: "Last 24 hours", period: "5minute", totalPeriod: "hour" },
+  { key: "7d", label: "7d", hours: 168, title: "Last 7 days", period: "hour", totalPeriod: "day" },
+  { key: "30d", label: "30d", hours: 720, title: "Last 30 days", period: "hour", totalPeriod: "day" },
 ];
 
 /** What a device panel offers — raw state history, so no 30 days of it. */

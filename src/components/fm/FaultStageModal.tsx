@@ -21,7 +21,7 @@
 // left where it is — both worse than a thin but honest record.
 
 import { useState } from "react";
-import { X } from "lucide-react";
+
 import { useFmData } from "@/fm/FmDataContext";
 import { formatMoney } from "@/fm/fmEngine";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
@@ -99,7 +99,6 @@ export default function FaultStageModal({
       >
         <div className="modal-header">
           <h2>{copy.title}</h2>
-          <button className="icon-btn" onClick={onClose} aria-label="Close"><X size={18} /></button>
         </div>
         <div className="modal-body fm-stack">
           <div className="fm-banner">{ticket.title}</div>
@@ -146,8 +145,9 @@ export default function FaultStageModal({
             </>
           )}
         </div>
-        <div className="modal-actions">
-          <button className="btn ghost" onClick={onClose}>Cancel</button>
+        {/* The modal shell's footer, as every dialog's (04-modals.css). */}
+        <div className="modal-footer">
+          <button className="btn" onClick={onClose}>Cancel</button>
           <button className="btn primary" disabled={busy} onClick={() => void submit()}>
             {busy ? "Saving…" : copy.cta}
           </button>

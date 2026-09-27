@@ -6,21 +6,17 @@
 // only the row actually being edited re-renders.
 
 import type { HassEntity } from "@/types/ha.types";
-import { useDraftCommit } from "@/hooks/useDraftCommit";
 import { Unlink, Link2 } from "lucide-react";
 import EntityPicker from "./EntityPicker";
-import { CATEGORY_ORDER, CATEGORY_LABELS, effectiveCategory, subjectOf } from "@/config/EntityCategories";
-import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
+import type { EntityMapping } from "@/types/scene.types";
+import MappingFields from "./MappingFields";
 import { memo } from "react";
-import { CONFIRM_GATE_TYPES } from "@/utils/quickAction";
 
-const TYPES: EntityType[] = [
-  "light", "climate", "lock", "camera", "cover", "fan",
-  "binary_sensor", "sensor", "media_player", "switch", "input_boolean",
-  "assist_satellite",
-];
-
-// Same gate as EntityMapRow's own — see EntityMapping.requireConfirm.
+/** BindingRow's compact control look (its selects sit inline in a row). */
+const COMPACT: React.CSSProperties = {
+  fontSize: "var(--text-xs)", padding: "5px 8px", borderRadius: 6, background: "var(--bg-input)",
+  color: "var(--text-primary)", border: "none", cursor: "pointer",
+};
 
 interface Props {
   mesh: string;
@@ -38,16 +34,7 @@ interface Props {
   onPatch: (entityId: string, change: Partial<EntityMapping>) => void;
 }
 
-function BindingRow({ mesh, entityId, meta: meta0, entity, onBind, onUnbind, onPatch }: Props) {
-  const intensity = useDraftCommit<number>((_k, ratio) => onPatch(entityId, { lightIntensityRatio: ratio }), 500);
-  const field = useDraftCommit<Partial<EntityMapping>>((_k, change) => onPatch(entityId, change));
-  const draftField = (change: Partial<EntityMapping>, delay?: number) =>
-    field.draft("v", { ...field.drafts.v, ...change }, delay);
-
-  // Merge in any not-yet-committed edit so fields reflect the click/keystroke
-  // instantly, even while the commit is pending.
-  const meta = meta0 && field.drafts.v ? { ...meta0, ...field.drafts.v } : meta0;
-
+function BindingRow({ mesh, entityId, meta, entity, onBind, onUnbind, onPatch }: Props) {
   return (
     <div style={{ padding: "14px 0", borderTop: "1px solid var(--hairline)" }}>
       {/* Row 1 — object ↔ entity */}
@@ -74,98 +61,15 @@ function BindingRow({ mesh, entityId, meta: meta0, entity, onBind, onUnbind, onP
         </button>
       </div>
 
-      {/* Row 2 — display settings (only if entityMap entry exists) */}
+      {/* Row 2 — display settings (only if entityMap entry exists): the
+          fields both Advanced Settings tables share (MappingFields). */}
       {meta && (
         <div className="row" style={{ gap: 10, marginTop: 10, paddingLeft: "calc(34% + 12px)", flexWrap: "wrap" }}>
-          <select
-            style={{ fontSize: "var(--text-xs)", padding: "5px 8px", borderRadius: 6, background: "var(--bg-input)", color: "var(--text-primary)", border: "none", cursor: "pointer" }}
-            value={meta.type}
-            onChange={(e) => draftField({ type: e.target.value as EntityType })}
-            title="Panel type"
-          >
-            {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
-          <select
-            style={{ fontSize: "var(--text-xs)", padding: "5px 8px", borderRadius: 6, background: "var(--bg-input)", color: "var(--text-primary)", border: "none", cursor: "pointer" }}
-            value={effectiveCategory(subjectOf(entityId, meta, entity))}
-            onChange={(e) => draftField({ category: e.target.value as Category, categoryPicked: true })}
-            title="Which map filter group this device belongs to"
-          >
-            {CATEGORY_ORDER.map((c) => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
-          </select>
-          <input
-            style={{ flex: 1, minWidth: 80, fontSize: "var(--text-xs)", padding: "5px 8px", borderRadius: 6, background: "var(--bg-input)", color: "var(--text-primary)", border: "none" }}
-            placeholder="Label"
-            value={meta.label}
-            onChange={(e) => draftField({ label: e.target.value }, 500)}
-            title="Display name"
-          />
-          {CONFIRM_GATE_TYPES.has(meta.type) && (
-            <label
-              className="row"
-              style={{ gap: 6, fontSize: "var(--text-xs)", color: "var(--text-secondary)", cursor: "pointer", flex: "0 0 auto" }}
-            >
-              <input
-                type="checkbox"
-                checked={!!meta.requireConfirm}
-                onChange={(e) => draftField({ requireConfirm: e.target.checked })}
-                title="Ask before toggling — a tap on this device's map badge opens its panel instead of acting instantly, and its panel's own on/off button asks 'Turn on/off?' first. For a device where an accidental toggle has a real physical consequence, e.g. a door release or gate motor modelled as a plain switch."
-              />
-              Confirm before toggling
-            </label>
-          )}
-          {meta.type === "light" && (() => {
-            const ratio = intensity.drafts.v ?? meta.lightIntensityRatio ?? 0;
-            const pct = Math.round(ratio * 100);
-            return (
-              <div className="row" style={{ flex: "1 1 220px", minWidth: 180, gap: 8 }}>
-                <input
-                  type="range" min={-100} max={100} step={5}
-                  value={pct}
-                  onChange={(e) => intensity.draft("v", Number(e.target.value) / 100)}
-                  onMouseUp={() => intensity.flush("v")}
-                  onTouchEnd={() => intensity.flush("v")}
-                  style={{ flex: 1 }}
-                  title="Per-light brightness override on top of this light's live Home Assistant brightness and the global Light effect strength setting. 0% = no change."
-                  aria-label={`Intensity override for ${entityId}`}
-                />
-                <span className="muted" style={{ fontSize: "var(--text-xs)", minWidth: 36, textAlign: "right" }}>
-                  {pct > 0 ? "+" : ""}{pct}%
-                </span>
-              </div>
-            );
-          })()}
-          {/* The device's CONTROL link (any type) — drives the red badge
-              ring, and on a camera is the long-press toggle target. Paired
-              with, but separate from, the camera-only motion sensor below:
-              this is what the user toggles, that is what HA reports. */}
-          <div style={{ flex: "1 1 220px", minWidth: 180 }}>
-            <EntityPicker
-              value={meta.linkedEntityId}
-              onChange={(id) => draftField({ linkedEntityId: id })}
-              onClear={() => draftField({ linkedEntityId: undefined })}
-              allowCustom
-              hideCurrentLabel
-              placeholder={
-                meta.type === "camera"
-                  ? "Linked entity (arms detection, long-press)…"
-                  : "Linked entity (ring only)…"
-              }
-            />
-          </div>
-          {meta.type === "camera" && (
-            <div style={{ flex: "1 1 220px", minWidth: 180 }}>
-              <EntityPicker
-                value={meta.motionEntityId}
-                onChange={(id) => draftField({ motionEntityId: id })}
-                onClear={() => draftField({ motionEntityId: undefined })}
-                domains={["binary_sensor"]}
-                allowCustom
-                hideCurrentLabel
-                placeholder="Motion sensor (detection beam)…"
-              />
-            </div>
-          )}
+          <MappingFields entityId={entityId} mapping={meta} entity={entity} selectStyle={COMPACT}
+            onPatch={(change) => onPatch(entityId, change)}
+            cell={(key, _label, field, opts) => (opts?.pair
+              ? <div key={key} style={{ flex: "1 1 220px", minWidth: 180 }}>{field}</div>
+              : <span key={key} style={{ display: "contents" }}>{field}</span>)} />
         </div>
       )}
     </div>

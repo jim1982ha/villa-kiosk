@@ -33,6 +33,8 @@ export interface EnergyRange {
 
 const every = (n: number) => Array.from({ length: n }, (_, i) => i);
 const weekday = (t: number) => new Date(t).toLocaleDateString([], { weekday: "short", day: "numeric" });
+/** A day's short name alone ("Mon") — the last-seven-days chart's axis. */
+export const weekdayShort = (t: number) => new Date(t).toLocaleDateString([], { weekday: "short" });
 
 export const ENERGY_RANGES: readonly EnergyRange[] = [
   { key: "day", label: "Day", period: "hour", kind: "hoursToday", unit: "hour", bucketLabel: fmtChartTime, ticks: () => [0, 6, 12, 18, 23] },

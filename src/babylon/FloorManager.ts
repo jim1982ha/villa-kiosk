@@ -10,9 +10,12 @@
 //  1. Structure meshes (`vk_role: "structure"`), placed by their stamped
 //     `vk_level` — 0-based from the pipeline (0 = ground), +1 here because
 //     this app's floors are 1-based.
-//  2. Everything else — entity meshes, and the single fused Structure of
-//     older GLBs (which rule 1 pins to floor 1 so it can never vanish) — by
-//     elevation: bounding-box centre Y below FLOOR_SPLIT_Y is floor 1.
+//  2. Everything else — entity meshes — on the storey the room PLAN puts its
+//     bounding-box centre on (floorOf.ts; re-stamped by setPlan once the plan
+//     is built at calibration), or by the fixed height split while the plan
+//     knows fewer than two storeys. The single fused Structure of older GLBs
+//     is structure at level 0, so rule 1 pins it to floor 1 and it can never
+//     vanish.
 //
 // Switching floors is pure visibility and CUMULATIVE DOWNWARD (2.9.8): the
 // active floor AND every floor below it are enabled; only floors ABOVE are
@@ -30,8 +33,7 @@ import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { Scene } from "@babylonjs/core/scene";
 import type { CameraController } from "./CameraController";
 import { structureRole } from "./meshRoles";
-
-const FLOOR_SPLIT_Y = 2.8; // metres; ground floor wall height is ~2.5 m
+import { floorOf, type FloorPlan } from "./floorOf";
 
 
 export class FloorManager {
@@ -44,6 +46,10 @@ export class FloorManager {
    *  feet height when the GLB ships no stair-trigger meshes. */
   private floorBaseY = new Map<number, number>();
   private alwaysOnMeshes: AbstractMesh[] = [];
+  /** Every floor-bound mesh with what its floor is decided from, so a plan
+   *  arriving after the load (calibration) can re-decide it. */
+  private indexed: { mesh: AbstractMesh; role: { isStructure: boolean; level: number }; centreY: number }[] = [];
+  private plan: FloorPlan | null = null;
   private triggerUp: AbstractMesh | null = null;
   private triggerDown: AbstractMesh | null = null;
   private currentFloor = 1;
@@ -77,9 +83,11 @@ export class FloorManager {
   }
 
   indexFloors(meshes: AbstractMesh[]): void {
-    this.floorMeshes.clear();
-    this.floorBaseY.clear();
     this.alwaysOnMeshes = [];
+    this.indexed = [];
+    // A new model: the last one's plan describes other rooms. Calibration
+    // hands this one's over (setPlan); until then, the height split.
+    this.plan = null;
     for (const m of meshes) {
       if (/^trigger_stair_up/i.test(m.name)) {
         this.triggerUp = m;
@@ -94,10 +102,12 @@ export class FloorManager {
         continue;
       }
       // Container/root nodes carry no geometry but parent everything else —
-      // disabling one would take the whole model down with it. The night
-      // carrier is managed by the day/night crossfade, not by floors.
+      // disabling one would take the whole model down with it. The pipeline's
+      // carriers (BAKED_NightCarrier, BAKED_LightmapCarrier[_Night]) are
+      // hidden, area-less holders for a texture: on no floor. The lightmap
+      // ones sat at 2.82 m and the height split filed them under 2F.
       if (m.getTotalVertices() === 0) continue;
-      if (m.name === "BAKED_NightCarrier") continue;
+      if (/^BAKED_.*Carrier/.test(m.name)) continue;
       // Ask the mesh what it IS (pipeline metadata), not what it is CALLED —
       // see meshRoles.ts. Falls back to the legacy name convention for a GLB
       // built before the pipeline stamped that metadata, and that fallback
@@ -116,14 +126,25 @@ export class FloorManager {
         if (!m.isEnabled(false)) m.setEnabled(true);
         continue;
       }
-      // Pipeline level is 0-based (0 = ground); this app's floors are 1-based.
-      const floor = role.isStructure
-        ? role.level + 1
-        : m.getBoundingInfo().boundingBox.centerWorld.y > FLOOR_SPLIT_Y
-          ? 2
-          : 1;
-      // Stamp the floor on the mesh so other systems (the entity-label culler)
-      // can tell which storey a mesh belongs to without re-deriving the rules.
+      this.indexed.push({ mesh: m, role, centreY: m.getBoundingInfo().boundingBox.centerWorld.y });
+    }
+    this.classify();
+  }
+
+  /** The storey plan (SceneManager, once per calibration): every non-structure
+   *  mesh's floor is re-decided by it — see floorOf.ts. */
+  setPlan(plan: FloorPlan): void {
+    this.plan = plan;
+    if (this.indexed.length) this.classify();
+  }
+
+  /** Stamp each indexed mesh's floor, rebuild the per-floor lists, re-apply
+   *  visibility. The stamp is how readers ask (floorOf.stampedFloor). */
+  private classify(): void {
+    this.floorMeshes.clear();
+    this.floorBaseY.clear();
+    for (const { mesh: m, role, centreY } of this.indexed) {
+      const floor = floorOf(role, centreY, this.plan);
       m.metadata = { ...(m.metadata ?? {}), floorIndex: floor };
       const list = this.floorMeshes.get(floor) ?? [];
       list.push(m);
@@ -133,7 +154,7 @@ export class FloorManager {
       const prev = this.floorBaseY.get(floor);
       if (prev === undefined || minY < prev) this.floorBaseY.set(floor, minY);
     }
-    this.floorsDetected = [...this.floorMeshes.keys()].sort();
+    this.floorsDetected = [...this.floorMeshes.keys()].sort((a, b) => a - b);
     if (this.floorsDetected.length === 0) this.floorsDetected = [1];
     this.applyVisibility();
   }

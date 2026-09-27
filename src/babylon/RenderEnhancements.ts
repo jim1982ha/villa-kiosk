@@ -18,6 +18,7 @@ import type { Scene } from "@babylonjs/core/scene";
 import type { RenderConfig } from "@/config/AppConfig";
 import { devLog } from "@/utils/devLog";
 import type { SceneLook } from "./sceneLook";
+import { lightingModeFor, type LightingMode } from "./lightingMode";
 
 const TONE_MAP: Record<string, number> = {
   standard: ImageProcessingConfiguration.TONEMAPPING_STANDARD,
@@ -35,7 +36,7 @@ export class RenderEnhancements {
   private env: RawCubeTexture | null = null;
 
   private cfg: RenderConfig | null = null;
-  private baked = false;
+  private mode: LightingMode = lightingModeFor("unbaked");
 
   constructor(scene: Scene, look: SceneLook) {
     this.scene = scene;
@@ -43,24 +44,22 @@ export class RenderEnhancements {
   }
 
   /**
-   * Baked-lighting GLB loaded (see ModelLoader's BAKED_MATERIAL_PREFIX): the
-   * structure's texture already contains real Cycles ambient occlusion, GI and
-   * sun shadows. SSAO on top double-darkens every corner the bake already
-   * darkened, so it's forced off while a baked model is loaded, whatever the
-   * quality preset says. Tone mapping and IBL (entity meshes are still lit
-   * PBR) stay user-controlled.
+   * The loaded model's lighting mode (lightingMode.ts). A baked structure's
+   * texture already contains real Cycles ambient occlusion, GI and sun
+   * shadows, so its `ssao` column is off whatever the quality preset says.
+   * Tone mapping and IBL (entity meshes are still lit PBR) stay
+   * user-controlled.
    */
-  setBakedMode(baked: boolean): void {
-    if (this.baked === baked) return;
-    this.baked = baked;
-    if (this.cfg) this.apply(this.cfg);
+  setLightingMode(mode: LightingMode): void {
+    const changed = mode.ssao !== this.mode.ssao;
+    this.mode = mode;
+    if (changed && this.cfg) this.apply(this.cfg);
   }
 
-  /** Whether SSAO is currently forced off by a baked-lighting model — see
-   *  setBakedMode. Lets the Settings UI describe the Quality preset options
-   *  accurately instead of promising an AO effect that won't actually apply. */
-  isBaked(): boolean {
-    return this.baked;
+  /** Whether SSAO actually runs under this config — the preset AND the
+   *  model's mode. The one answer the load and frames records report. */
+  ssaoOn(cfg: RenderConfig): boolean {
+    return cfg.ssao && this.mode.ssao;
   }
 
   /** Apply the full render config. Idempotent — safe to call on every change. */
@@ -91,7 +90,7 @@ export class RenderEnhancements {
 
   // ── 3. SSAO2 (screen-space ambient occlusion) ────────────────────────────
   private applySSAO(cfg: RenderConfig): void {
-    if (cfg.ssao && !this.baked) {
+    if (this.ssaoOn(cfg)) {
       if (!this.ssao) {
         try {
           this.ssao = new SSAO2RenderingPipeline("villaSSAO", this.scene, { ssaoRatio: 0.75, blurRatio: 1.0 });

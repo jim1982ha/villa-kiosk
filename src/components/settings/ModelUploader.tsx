@@ -4,7 +4,7 @@
 import { useRef, useState } from "react";
 import { Upload, Box } from "lucide-react";
 import { ingestUploadedModel } from "@/babylon/ModelLoader";
-import { getModelMeta, clearStoredModel } from "@/utils/storage";
+import { getModelMeta, clearStoredModel } from "@/utils/localModel";
 
 interface Props {
   onUploaded: () => void;

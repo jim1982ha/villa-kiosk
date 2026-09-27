@@ -30,6 +30,7 @@
 // Pure: tests/oracles/weather_station.mjs.
 
 import type { HassEntity } from "@/types/ha.types";
+import type { Observation, ObservationTone } from "./observation";
 
 export type WeatherRole =
   | "temperature" | "feelsLike" | "dewPoint" | "humidity"
@@ -303,8 +304,9 @@ const VPD_GOOD_HPA = 10;
 const DRYING_SUN_WM2 = 200;
 const DRYING_WIND_KMH = 6;
 
-export type AdviceTone = "good" | "caution" | "bad" | "neutral";
-export interface Advice { tone: AdviceTone; title: string; detail: string }
+/** A piece of advice is an observation card (config/observation). */
+export type AdviceTone = ObservationTone;
+export type Advice = Observation;
 
 const f1 = (v: number) => v.toFixed(1);
 
@@ -394,6 +396,84 @@ export function outdoorsAdvice(r: { raining?: boolean; gustKmh?: number; windKmh
     .filter(Boolean).join(", ");
   const uvText = r.uv !== undefined ? ` UV ${Math.round(r.uv)} — no sun protection.` : "";
   return { tone: "good", title: "Outdoors: fine", detail: `${bits ? bits.charAt(0).toUpperCase() + bits.slice(1) + "." : ""}${uvText}`.trim() };
+}
+
+/** A rain rate in mm/h, from the sensor's own unit (in/h is converted). */
+export function toMmPerHour(value: number, unit: string): number {
+  return /in/i.test(unit) ? value * 25.4 : value;
+}
+
+// ── The station's readings, in the units the rules use ───────────────────
+// ⚠️ THE CONVERSION BY ROLE LIVED IN THE VIEW (round 9, 2.496.143): °C, km/h
+// and hPa were converted here but mm/h in WeatherPanel, and which role wants
+// which was the view's hook's to know.
+
+/** One sensor's reading as Home Assistant reports it; undefined when the role
+ *  has no sensor or it is unavailable. */
+export interface RoleReading { state: unknown; unit: string }
+
+/** Every reading the Weather window uses, by role, converted; undefined where
+ *  the station has no such sensor or it has no number. */
+export function stationReadings(read: (role: WeatherRole) => RoleReading | undefined) {
+  const raw = (role: WeatherRole) => {
+    const x = read(role);
+    const v = x ? Number(x.state) : NaN;
+    return Number.isFinite(v) ? v : undefined;
+  };
+  const unit = (role: WeatherRole) => read(role)?.unit ?? "";
+  const conv = (role: WeatherRole, f: (v: number, u: string) => number) => {
+    const v = raw(role);
+    return v === undefined ? undefined : f(v, unit(role));
+  };
+  const rate = raw("rainRate");
+  return {
+    t: conv("temperature", toCelsius), feels: conv("feelsLike", toCelsius), dew: conv("dewPoint", toCelsius),
+    inT: conv("indoorTemperature", toCelsius), inDew: conv("indoorDewPoint", toCelsius),
+    hum: raw("humidity"), inHum: raw("indoorHumidity"),
+    wind: conv("windSpeed", toKmh), gust: conv("windGust", toKmh), gustToday: conv("windGustToday", toKmh), dir: raw("windDirection"),
+    rate, rateMmH: conv("rainRate", toMmPerHour), raining: rate === undefined ? undefined : rate > 0,
+    rainToday: raw("rainToday"), rainMonth: raw("rainMonth"), rainYear: raw("rainYear"),
+    rainUnit: unit("rainToday") || "mm",
+    pressure: raw("pressure"), pressureUnit: unit("pressure") || "hPa",
+    vpd: conv("vapourDeficit", toHpa),
+    uv: raw("uv"), solar: raw("solar"),
+  };
+}
+export type StationReadings = ReturnType<typeof stationReadings>;
+
+// ── The instruments' scales ──────────────────────────────────────────────
+
+/** The barometer dial's scale, hPa: its left end and its right. */
+export const BAROMETER_HPA = [960, 1060] as const;
+/** The barometer needle, in degrees from straight up: the dial's ends at
+ *  ∓135°, a reading past either end pinned to it. */
+export function barometerAngle(hpa: number): number {
+  const [lo, hi] = BAROMETER_HPA;
+  return ((Math.max(lo, Math.min(hi, hpa)) - lo) / (hi - lo)) * 270 - 135;
+}
+/** The thermometer bars' top, °C (their foot is 0). */
+export const THERMOMETER_TOP_C = 40;
+/** How full a thermometer bar is, 0.04–1: never empty, so a cold reading
+ *  still shows its colour. */
+export function thermometerFraction(c: number): number {
+  return Math.max(0.04, Math.min(1, c / THERMOMETER_TOP_C));
+}
+/** The rain tube's top, in the gauge's unit: 20, or the next 10 above today. */
+export function rainTubeTop(today: number): number {
+  return Math.max(20, Math.ceil(today / 10) * 10);
+}
+
+/** The history's four figures, each a label and its value ("—" for none) —
+ *  as energyObservations.historyFigures gives the Energy window's. */
+export function weatherHistoryFigures(x: {
+  tMin?: number; tMax?: number; gustMax?: number; gustUnit: string; rainTotal?: number; rainUnit: string; uvMax?: number;
+}): { label: string; value: string }[] {
+  return [
+    { label: "Temperature range", value: x.tMin !== undefined && x.tMax !== undefined ? `${f1(x.tMin)}° – ${f1(x.tMax)}°` : "—" },
+    { label: "Strongest gust", value: x.gustMax !== undefined ? `${f1(x.gustMax)} ${x.gustUnit}` : "—" },
+    { label: "Rain", value: x.rainTotal !== undefined ? `${f1(x.rainTotal)} ${x.rainUnit || "mm"}` : "—" },
+    { label: "Highest UV", value: x.uvMax !== undefined ? `${Math.round(x.uvMax)} · ${uvBand(x.uvMax).band.toLowerCase()}` : "—" },
+  ];
 }
 
 /** A vapour-pressure deficit in hPa, from whatever unit the sensor reports. */

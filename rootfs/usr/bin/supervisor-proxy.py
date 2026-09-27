@@ -328,18 +328,38 @@ def _may(role: str, capability: str) -> bool:
     return capability in ROLE_CAPABILITIES.get(role, frozenset())
 
 
-# The exact (domain, service) surface the kiosk's own UI ever calls — see
-# src/ha/HAServiceCalls.ts and the one generic callService() use in
-# SwitchPanel.tsx (homeassistant.toggle). Anything outside this reaching
-# call_service/services/* from a non-owner session did not come from a kiosk
-# button. Keep this in sync if a new panel starts calling a new domain —
-# the failure mode of forgetting is a clear "service not permitted" error on
-# that panel's very first click, not a silent gap.
-ALLOWED_SERVICE_DOMAINS = {"light", "climate", "lock", "cover", "fan", "switch", "media_player"}
+# ── WHAT THE KIOSK SENDS HOME ASSISTANT: ONE TABLE, READ HERE AND BY THE APP ─
+# /usr/share/vesta/ha-commands.json (rootfs/usr/share/vesta/ in the repo) lists
+# every websocket type, camera command, service domain and homeassistant.*
+# service the kiosk's own UI sends. This file used to keep its own copy "in
+# sync" by a comment, and it drifted: the Energy window's `energy/info` (added
+# client-side in 2.496.105), scene.turn_on and input_boolean.toggle were all
+# refused for every non-owner profile while the app offered them (round 10,
+# 2.496.151). tests/oracles/ha_commands.mjs now fails when the app sends
+# something the table does not list.
+#
+# FAIL CLOSED: an unreadable table allows nothing beyond the owner's
+# exemption — never everything.
+def _load_ha_commands() -> dict:
+    here = os.path.dirname(os.path.abspath(__file__))
+    for path in ("/usr/share/vesta/ha-commands.json",
+                 os.path.join(here, "..", "share", "vesta", "ha-commands.json")):
+        try:
+            with open(path, encoding="utf-8") as f:
+                return json.load(f)
+        except (OSError, ValueError):
+            continue
+    print("[proxy] ha-commands.json unreadable: non-owner Home Assistant access refused", flush=True)
+    return {}
+
+
+HA_COMMANDS = _load_ha_commands()
+# Anything outside these reaching call_service/services/* from a non-owner
+# session did not come from a kiosk button.
+ALLOWED_SERVICE_DOMAINS = frozenset(HA_COMMANDS.get("serviceDomains", ()))
 # homeassistant.* also holds system-level services (restart, stop,
-# reload_core_config, set_location, ...) — only the generic toggle
-# SwitchPanel actually uses is let through.
-ALLOWED_HOMEASSISTANT_SERVICES = {"toggle"}
+# reload_core_config, set_location, ...) — only the generic toggle.
+ALLOWED_HOMEASSISTANT_SERVICES = frozenset(HA_COMMANDS.get("homeassistantServices", ()))
 
 
 def _service_call_allowed(role: str, domain: str, service: str) -> bool:
@@ -386,6 +406,23 @@ def _forbidden(message: str = "forbidden") -> web.Response:
     """Distinct from _unauthorized(): the session IS valid, its role just
     isn't allowed to do this specific thing."""
     return web.json_response({"error": message}, status=403)
+
+
+def _refuse(request: web.Request, capability: str | None = None,
+            message: str = "forbidden") -> web.Response | None:
+    """The gate at the top of a handler: 401 without a valid session, 403
+    (with `message`) when its role lacks `capability`, None to proceed.
+
+    ⚠️ WRITTEN OUT BY HAND AT TWELVE HANDLERS BEFORE (round 11, 2.496.169),
+    as `_authorized` then `_may(_role_for(...))`, and they had drifted into
+    two 403 shapes — `_forbidden(message)` at most, a bare {"error":
+    "forbidden"} at two. tests/proxy-rules.py requires every routed handler
+    to call this (or to be named there as public, with its reason)."""
+    if not _authorized(request):
+        return _unauthorized()
+    if capability is not None and not _may(_role_for(request), capability):
+        return _forbidden(message)
+    return None
 # Safety cap on a single upload (the GLB is the big one, ~tens of MB).
 MAX_UPLOAD_BYTES = 200 * 1024 * 1024
 # Leading bytes the upload must start with for its declared kind: a binary
@@ -409,10 +446,10 @@ HOP_BY_HOP = {
 
 async def ws_handler(request: web.Request):
     """Bridge the browser websocket to Core, injecting the Supervisor token."""
-    if not _authorized(request):
-        # Cookies ARE sent on a same-origin WS handshake, so an unauthenticated
-        # direct caller is rejected before any socket to Core is opened.
-        return _unauthorized()
+    # Cookies ARE sent on a same-origin WS handshake, so an unauthenticated
+    # direct caller is rejected before any socket to Core is opened.
+    if (refused := _refuse(request)) is not None:
+        return refused
     role = _role_for(request)
     # ⚠️ THE SESSION IS RE-RESOLVED FOR THE LIFE OF THE SOCKET, AND IT USED NOT
     # TO BE. `role` was decided here, at the handshake, and captured into the
@@ -596,24 +633,10 @@ _NON_OWNER_REST_PREFIXES = ("history/period/", "camera_proxy/", "camera_proxy_st
 # four more commands (capabilities, client config, offer, candidate), and a
 # guest who could send `camera/webrtc/offer` would watch the same feed the
 # HLS refusal exists to withhold.
-CAMERA_WS_TYPES = frozenset({
-    "camera/stream",
-    "camera/capabilities",
-    "camera/webrtc/get_client_config",
-    "camera/webrtc/offer",
-    "camera/webrtc/candidate",
-})
+CAMERA_WS_TYPES = frozenset(HA_COMMANDS.get("camera", ()))
 
-ALLOWED_WS_TYPES = frozenset({
-    "auth", "ping", "pong",
-    "subscribe_events", "unsubscribe_events",
-    "get_states", "call_service", *CAMERA_WS_TYPES,
-    "get_config",
-    "config/entity_registry/list", "config/device_registry/list", "config/area_registry/list",
-    "config/floor_registry/list",
-    "energy/get_prefs", "recorder/list_statistic_ids", "recorder/statistics_during_period",
-    "logbook/get_events",
-})
+# Read from the one table (see _load_ha_commands above).
+ALLOWED_WS_TYPES = frozenset({*HA_COMMANDS.get("websocket", ()), *CAMERA_WS_TYPES})
 
 
 def _ws_frame_refusal(role: str, obj: dict) -> str | None:
@@ -681,8 +704,8 @@ def _rest_call_allowed(role: str, tail: str) -> bool:
 
 async def rest_handler(request: web.Request) -> web.StreamResponse:
     """Relay a REST call to Core, adding the Supervisor Bearer token."""
-    if not _authorized(request):
-        return _unauthorized()
+    if (refused := _refuse(request)) is not None:
+        return refused
     role = _role_for(request)
     tail = request.match_info.get("path", "")
     if not _rest_call_allowed(role, tail):
@@ -1156,8 +1179,8 @@ async def auth_elevate_handler(request: web.Request) -> web.Response:
     Rate-limited on the same two-tier limiter as the profile PINs (per client
     IP and globally), and requires an already-authorized session — the code is
     an extra factor on top of a normal profile, never a way in from nothing."""
-    if not _authorized(request):
-        return _unauthorized()
+    if (refused := _refuse(request)) is not None:
+        return refused
     configured = _configured_superadmin_pin()
     if not configured:
         # Capability disabled (no code set). Say so plainly: this is an
@@ -1525,9 +1548,9 @@ async def auth_logout_all_handler(request: web.Request) -> web.Response:
     Bumps the session epoch, which is mixed into every signature, so all
     previously issued cookies stop verifying — including the caller's own.
     This is the answer to "a device was lost / a PIN was seen"."""
-    if not _authorized(request) or not _may(_role_for(request), "administer"):
-        return _unauthorized() if not _authorized(request) else web.json_response(
-            {"error": "forbidden"}, status=403)
+    if (refused := _refuse(request, "administer",
+                           "Only the owner profile may sign every device out.")) is not None:
+        return refused
     epoch = _bump_session_epoch()
     resp = web.json_response({"ok": True, "epoch": epoch})
     resp.del_cookie(SESSION_COOKIE, path="/")
@@ -1637,15 +1660,23 @@ async def _chunked_upload(request: web.Request, kind: str, dest: str,
     if offset == 0:
         _sweep_stale_parts(os.path.dirname(dest))
     else:
-        # The offset doubles as a sequence check: a dropped or duplicated
-        # piece shows up as a size mismatch and the client restarts cleanly
+        # The offset doubles as a sequence check: a MISSING piece (the server
+        # holds less than the offset) is refused and the client restarts
         # instead of assembling a corrupt file.
+        #
+        # ⚠️ HOLDING MORE IS A RETRY, NOT AN ERROR (round 11, 2.496.166). The
+        # client re-sends a piece whose reply it never got (postUploadRequest)
+        # — the piece may have landed in full, or in part before the
+        # connection dropped. This required `have == offset` and appended, so
+        # every such retry was a 409 and the upload failed on the very case
+        # the retry exists for. The piece is written AT its offset instead:
+        # the file is cut back to it first, so re-sending is idempotent.
         try:
             have = os.path.getsize(part)
         except OSError:
             return web.json_response(
                 {"error": "unknown upload_id — restart the upload"}, status=409)
-        if have != offset:
+        if have < offset:
             return web.json_response(
                 {"error": f"offset mismatch (server has {have}, client sent "
                           f"{offset}) — restart the upload"}, status=409)
@@ -1657,15 +1688,18 @@ async def _chunked_upload(request: web.Request, kind: str, dest: str,
     # it cannot express a file whose content arrives over minutes. The atomicity
     # guarantee is kept by hand and is the same one: all chunks land in `.part`,
     # never at `dest`, and only the final chunk chmods and os.replace()s it into
-    # place, with `os.unlink(part)` on any exception. A reader therefore sees the
-    # old file or the new one, never a half-assembled GLB.
+    # place. A reader therefore sees the old file or the new one, never a
+    # half-assembled GLB.
     #
     # Recorded here because a bare `open(..., "ab")` in this file reads exactly
     # like a missed atomic_write, and an audit that re-flags it every time
     # eventually gets someone to "fix" it into something that cannot work.
     # (/dry-audit: adjudicated — this token is what keeps the sweep quiet here.)
     try:
-        with open(part, "wb" if offset == 0 else "ab") as out:
+        with open(part, "wb" if offset == 0 else "r+b") as out:
+            if offset:
+                out.seek(offset)
+                out.truncate()
             n = await _stream_upload_body(
                 request, out, kind, check_magic=(offset == 0), base=offset)
         if n == 0:
@@ -1675,12 +1709,18 @@ async def _chunked_upload(request: web.Request, kind: str, dest: str,
         # See the single-shot handler for why 0644 before the atomic replace.
         os.chmod(part, 0o644)
         os.replace(part, dest)
-    except BaseException:
+    except web.HTTPException:
+        # REFUSED (not a GLB, over the size cap, an empty piece): the upload
+        # is over, and its pieces go with it.
         try:
             os.unlink(part)
         except OSError:
             pass
         raise
+    # Anything else — the connection dropped mid-piece — keeps the pieces
+    # already received: the client's retry re-writes this one at its offset.
+    # (Deleting them here turned that retry into "unknown upload_id".) A
+    # .part nobody finishes is swept after a day (_sweep_stale_parts).
 
     _write_upload_sidecar(request, dest)
     rel = os.path.relpath(dest, os.path.realpath(DATA_ROOT))
@@ -1696,13 +1736,12 @@ async def model_upload_handler(request: web.Request) -> web.Response:
     With upload_id/offset/last query params the body is one piece of a chunked
     upload instead (files above HA Ingress's ~16 MB per-request cap).
     """
-    if not _authorized(request):
-        return _unauthorized()
-    if not _may(_role_for(request), "manageModel"):
-        # manageModel is an owner-only capability in permissions.ts — a
-        # guest/ops session could otherwise overwrite the villa model every
-        # kiosk loads. (Ingress requests resolve to "owner" — see _role_for.)
-        return _forbidden("Only the owner profile may upload a model.")
+    # manageModel is an owner-only capability in permissions.ts — a
+    # guest/ops session could otherwise overwrite the villa model every
+    # kiosk loads. (Ingress requests resolve to "owner" — see _role_for.)
+    if (refused := _refuse(request, "manageModel",
+                           "Only the owner profile may upload a model.")) is not None:
+        return refused
     kind = request.query.get("kind", "")
     if kind not in ("glb", "rooms"):
         return web.json_response({"error": "kind must be 'glb' or 'rooms'"}, status=400)
@@ -1968,8 +2007,8 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
     lock = asyncio.Lock()
 
     async def get_handler(request: web.Request) -> web.Response:
-        if not _authorized(request):
-            return _unauthorized()
+        if (refused := _refuse(request)) is not None:
+            return refused
         # This store changes on every edit from any device and every client
         # is expected to see the current value within one heartbeat (see
         # useStoreRefresh) — not "eventually", and never a stale copy served
@@ -1987,13 +2026,11 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
         )
 
     async def put_handler(request: web.Request) -> web.Response:
-        if not _authorized(request):
-            return _unauthorized()
-        if not _may(_role_for(request), writer_capability):
-            owner_only = [r for r in AUTH_ROLES if _may(r, writer_capability)] == ["owner"]
-            return _forbidden(f"Only the owner profile may edit {what}."
-                              if owner_only
-                              else f"You do not have permission to edit {what}.")
+        owner_only = [r for r in AUTH_ROLES if _may(r, writer_capability)] == ["owner"]
+        if (refused := _refuse(request, writer_capability,
+                               f"Only the owner profile may edit {what}." if owner_only
+                               else f"You do not have permission to edit {what}.")) is not None:
+            return refused
         try:
             body = await request.json()
         except (json.JSONDecodeError, ValueError):
@@ -2069,8 +2106,8 @@ async def telemetry_post_handler(request: web.Request) -> web.Response:
     """Append one client event. Open to ANY authorized session (a guest's
     iPhone failing is exactly the case worth capturing), unlike the owner-only
     config stores. Silently bounded so a looping client can't fill /data."""
-    if not _authorized(request):
-        return _unauthorized()
+    if (refused := _refuse(request)) is not None:
+        return refused
     try:
         body = await request.json()
     except (json.JSONDecodeError, ValueError):
@@ -2096,10 +2133,9 @@ async def telemetry_post_handler(request: web.Request) -> web.Response:
 async def telemetry_get_handler(request: web.Request) -> web.Response:
     """Read the ring back (owner only — it carries other people's user-agents
     and error text). `?clear=1` empties it after reading."""
-    if not _authorized(request):
-        return _unauthorized()
-    if not _may(_role_for(request), "administer"):
-        return _forbidden("Only the owner profile may read telemetry.")
+    if (refused := _refuse(request, "administer",
+                           "Only the owner profile may read telemetry.")) is not None:
+        return refused
     events = _read_json_store(TELEMETRY_FILE, [])
     if request.query.get("clear") == "1":
         _write_json_store(TELEMETRY_FILE, json.dumps([]))
@@ -2165,13 +2201,12 @@ def _prune_fm_evidence() -> int:
 async def fm_evidence_post_handler(request: web.Request) -> web.Response:
     """Store one evidence photo. Owner or facility manager only — this is an
     operator action, never a guest one."""
-    if not _authorized(request):
-        return _unauthorized()
     # Guests too: a photo of the cracked panel is the most useful thing a
     # guest can contribute, and is worthless if they cannot attach it. What a
     # guest may then DO with it stays narrow — see _fm_guest_write_ok.
-    if not _may(_role_for(request), "reportFault"):
-        return _forbidden("You do not have permission to add evidence.")
+    if (refused := _refuse(request, "reportFault",
+                           "You do not have permission to add evidence.")) is not None:
+        return refused
     photo_id = request.query.get("id", "")
     if not FM_EVIDENCE_ID_RE.fullmatch(photo_id):
         return web.json_response({"error": "bad photo id"}, status=400)
@@ -2214,10 +2249,9 @@ async def fm_evidence_get_handler(request: web.Request) -> web.StreamResponse:
     decision. The stated reason for the open rule — "so a report can show the
     pictures behind each claim" — is unaffected: reports are opened by owner
     and facility-manager profiles, both of which still pass."""
-    if not _authorized(request):
-        return _unauthorized()
-    if not _may(_role_for(request), "manageFacility"):
-        return web.json_response({"error": "forbidden"}, status=403)
+    if (refused := _refuse(request, "manageFacility",
+                           "Only the owner and facility-manager profiles may view evidence.")) is not None:
+        return refused
     photo_id = request.match_info.get("id", "")
     if not FM_EVIDENCE_ID_RE.fullmatch(photo_id):
         return web.json_response({"error": "bad photo id"}, status=400)

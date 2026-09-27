@@ -83,6 +83,7 @@ import { badgeRank } from "./badgePriority";
 import {
   viewBasis, projectToView, VIEW_BASIS_STEPS,
   type ViewBasis, type ProjectedPoint, type ProjectionMode,
+  atReferenceDepth, type MeasureFrame,
 } from "./badgeProjection";
 import {
   solvePlacement, markContacts, createPlacementScratch,
@@ -114,7 +115,7 @@ import { FloorProbe } from "./floorProbe";
 import { axisWorldScale } from "./meshUnits";
 import type { LightReading } from "./lightPoolSet";
 import { OcclusionSweep } from "./occlusionSweep";
-import { bucketRoomChips, combineChips, chipSuffixOf, type RoomChip } from "./roomChips";
+import { bucketRoomChips, combineChips, chipSuffixOf, summaryRingRed, type RoomChip } from "./roomChips";
 import { rungAt, referenceDepthAt, iconZoomAt, viewportPx } from "./badgeScale";
 import { solveRoomZoom } from "./roomZoomSolver";
 import { RoomFocus } from "./roomFocus";
@@ -123,8 +124,8 @@ import { FanRigs } from "./fanRigs";
 import { PlacementPass, GROUP_OVERLAP_ALLOW_WIDTHS, type ShownLabel, type PendingEntityGroup } from "./placementPass";
 import { onGlass, glyphDrawPx, glyphBakePx } from "./badgeLayout";
 import type { FrameRequests } from "./frameScheduler";
-import { badgeImageDataUrl } from "./badgeIcons";
-import { badgeRing, badgeBakePx, BADGE_INSET_CARD, BADGE_CORNER_FRACTION } from "./badgeLook";
+import { badgeImage } from "./badgeIcons";
+import { applyBadgeFrame, badgeRing, badgeBakePx, BADGE_INSET_CARD, BADGE_CORNER_FRACTION, NO_RING } from "./badgeLook";
 import { DashableRectangle } from "./dashableRectangle";
 import { badgeText } from "./badgeText";
 import { badgeShadow } from "./badgeShadow";
@@ -148,6 +149,8 @@ import { chipWidthPx, fitChipLabel, type ChipTextMetrics } from "./labelLayout";
 import { BulbSet, WARM_GLOW, STRIP_MIN_LENGTH, type BulbReading } from "./bulbSet";
 import { lightingModeFor, type LightingMode } from "./lightingMode";
 import "./babylonSideEffects";
+import { onActiveFloor, stampedFloor } from "./floorOf";
+import { devicePower } from "@/utils/devicePower";
 
 // Baseline emissive for an UNWIRED light marker (no HA state yet). SweetHome
 // ceiling spots / LED strips export as small placeholder spheres; at the old
@@ -500,6 +503,12 @@ const BADGE_PLACEMENT = "priority" as "priority" | "legacy";
  * of the union reachable to the type checker. Do not "clean it up".
  */
 const VIEW_METRIC = "plane" as ProjectionMode;
+
+/** The nearest a device is taken to be when the walk camera measures it at
+ *  the reference depth (atReferenceDepth), in world units (metres): a device
+ *  at the walker's feet would otherwise be flung to infinity. Half a metre is
+ *  inside arm's reach — nothing is viewed from closer. */
+const WALK_MIN_MEASURE_DIST = 0.5;
 /** Reused, because getDirectionToRef takes the local axis by reference. */
 const CAMERA_LOCAL_FORWARD = new Vector3(0, 0, 1);
 /*
@@ -1722,7 +1731,7 @@ export class EntityVisuals {
     // than waiting on the next state_changed event, which may never come
     // again if the linked entity was already on before this index existed.
     for (const [linkedId, ids] of this.linkedEntityIndex) {
-      const on = this.lastState.get(linkedId)?.state === "on";
+      const on = devicePower(this.lastState.get(linkedId), linkedId).position === "on";
       for (const id of ids) {
         if (on) this.linkActiveIds.add(id);
         else this.linkActiveIds.delete(id);
@@ -2526,7 +2535,8 @@ export class EntityVisuals {
   private applyLinkedEntityRouting(entity: HassEntity): void {
     const linkedIds = this.linkedEntityIndex.get(entity.entity_id);
     if (!linkedIds) return;
-    const on = entity.state === "on";
+    // A linked lock rings when UNLOCKED, a cover when open (devicePower).
+    const on = devicePower(entity).position === "on";
     for (const id of linkedIds) {
       if (on) this.linkActiveIds.add(id);
       else this.linkActiveIds.delete(id);
@@ -3039,20 +3049,21 @@ export class EntityVisuals {
         // border made a second frame redundant — but the reference the design
         // was always measured against has the chip, and without it the art had
         // no padding of its own and sat flush on the border.
-        badgeImageDataUrl(category, iconKeyFor(type, this.lastState.get(entityId)), "off",
-          this.config.entityMap[entityId]?.badgeColor, card ? BADGE_INSET_CARD : 0,
+        badgeImage({
+          category, iconKey: iconKeyFor(type, this.lastState.get(entityId)), state: "off",
+          color: this.config.entityMap[entityId]?.badgeColor, inset: card ? BADGE_INSET_CARD : 0,
           // Card: the Rectangle above strokes the edge, so the chip bakes no
           // ring of its own — see updateLabel for the doubled outline this
           // stops. Classic: the image IS the badge and carries its own.
           // Card only: the glyph is bolder there — see ICON_STROKE_VIEWBOX_BOLD.
-          // ⚠️ `glyphBakePx`, NOT `glyphPx`. This argument is the bake size in
-          // RENDER pixels; every other number here is unscaled CSS px. Passing
-          // the CSS one baked the first version of every badge at the wrong
-          // rung — the exact mistake `glyphBakePx`'s own docstring was written
-          // to describe ("true of the two NUMBERS, and false of the pixels").
-          // It self-healed on the badge's first state change, so the one badge
-          // it stayed wrong for was a device that had never reported.
-          undefined, card, this.glyphBakePx(card), card));
+          ring: card ? "none" : "baked", bold: card,
+          // ⚠️ `glyphBakePx`, NOT `glyphPx`: the bake size is in RENDER pixels;
+          // every other number here is unscaled CSS px. The CSS one baked the
+          // first version of every badge at the wrong rung — it self-healed on
+          // the first state change, so it stayed wrong only for a device that
+          // had never reported.
+          bakePx: this.glyphBakePx(card),
+        }));
 
       glyph.width = `${glyphPx}px`;
       glyph.height = `${glyphPx}px`;
@@ -3386,17 +3397,13 @@ export class EntityVisuals {
       // in the icon shape?" (owner). Same corner, same weight, same place.
       // The card's frame is badgeLook's — the same answer a group's chip and
       // a room chip get (round 8).
-      const ring = badgeRing(surface, this.metrics.cardHeightPx, this.metrics);
-      lbl.badge.thickness = ring.px;
-      lbl.badge.dash = ring.dash;
-      lbl.badge.color = ring.color;
-      // Every state's chip is baked the same way: inset, with no ring of its own.
-      lbl.glyph.source = badgeImageDataUrl(
-        lbl.category, iconKey, state, override,
-        BADGE_INSET_CARD, ringState, true, this.glyphBakePx(true),
-        // This whole branch IS the card style, so the heavier glyph weight is
-        // unconditional here — see ICON_STROKE_VIEWBOX_BOLD.
-        true);
+      applyBadgeFrame(lbl.badge, badgeRing(surface, this.metrics.cardHeightPx, this.metrics), this.metrics.cardHeightPx);
+      // Every state's chip is baked the same way: inset, with no ring of its
+      // own, at the card style's heavier glyph weight.
+      lbl.glyph.source = badgeImage({
+        category: lbl.category, iconKey, state, ringState, color: override,
+        inset: BADGE_INSET_CARD, ring: "none", bakePx: this.glyphBakePx(true), bold: true,
+      });
       // Neutral ink, on a now-neutral card — the bottom bar's value is
       // `--text-primary` beside a coloured chip, not the chip's own hue. The
       // state is carried by the chip and the ring; the number is just a number.
@@ -3406,11 +3413,10 @@ export class EntityVisuals {
       // (see badgeIcons.ts) — the wrapping Rectangle stays a plain
       // transparent hit-target, not a second ring drawn on top of the baked one.
       lbl.badge.background = "transparent";
-      lbl.badge.thickness = 0;
-      lbl.badge.dash = null;
-      lbl.badge.color = "transparent";
-      lbl.glyph.source = badgeImageDataUrl(
-        lbl.category, iconKey, state, override, 0, ringState, false, this.glyphBakePx(false));
+      applyBadgeFrame(lbl.badge, NO_RING, this.metrics.badgeDiameterPx);
+      lbl.glyph.source = badgeImage({
+        category: lbl.category, iconKey, state, ringState, color: override, ring: "baked", bakePx: this.glyphBakePx(false),
+      });
     }
     lbl.badge.alpha = 1;
     // The value pill is never shown for an unavailable entity anyway
@@ -3488,10 +3494,8 @@ export class EntityVisuals {
     // Floors below the active one stay RENDERED (cumulative floors: the 2F
     // view keeps the 1F shell underneath), but badges are GUI overlay and
     // would draw straight through the 2F slab — only the active floor's.
-    const floorIdx = (mesh?.metadata as { floorIndex?: number } | null)?.floorIndex
-      ?? (lbl.anchor.metadata as { floorIndex?: number } | null)?.floorIndex
-      ?? (lbl.anchor.parent?.metadata as { floorIndex?: number } | null)?.floorIndex;
-    return floorIdx === undefined || floorIdx === this.activeFloor;
+    // The bound mesh first, then the anchor (each before its parent).
+    return onActiveFloor(stampedFloor(mesh, lbl.anchor), this.activeFloor);
   }
 
   /** Decide which badges are visible, then group the ones whose room is too
@@ -4450,7 +4454,7 @@ export class EntityVisuals {
   private screenClearance(
     shown: ShownLabel[],
   ): { pxPerWorld: number; gap: number; minSep: number; allow: number; basis: ViewBasis;
-       refDepth: number } | null {
+       refDepth: number; eye?: { x: number; y: number; z: number } } | null {
     const pxPerWorld = this.quantisedPixelsPerWorldUnit(shown);
     if (!(pxPerWorld > 0)) return null;
     const scale = this.effectiveScale();
@@ -4472,8 +4476,36 @@ export class EntityVisuals {
       allow: 1 - GROUP_OVERLAP_ALLOW_WIDTHS,
       basis: this.currentViewBasis(),
       refDepth: this.rungReferenceDepth(pxPerWorld),
+      // Walk mode measures from the walker's eye (atReferenceDepth); the
+      // orbit camera keeps the plane's own depth correction.
+      eye: this.orbitCamera() ? undefined : this.walkEye(),
     };
   }
+
+  /** Whether the active camera is the orbit (bird's-eye) one — duck-typed, as
+   *  quantisedPixelsPerWorldUnit and currentViewBasis are. */
+  private orbitCamera(): boolean {
+    return typeof (this.scene.activeCamera as unknown as { radius?: number } | null)?.radius === "number";
+  }
+
+  private walkEye(): { x: number; y: number; z: number } | undefined {
+    const cam = this.scene.activeCamera;
+    return cam ? { x: cam.globalPosition.x, y: cam.globalPosition.y, z: cam.globalPosition.z } : undefined;
+  }
+
+  /** The point placement measures a world position at: itself for the orbit
+   *  camera, moved onto the reference depth around the walker's eye for the
+   *  walk camera (badgeProjection.atReferenceDepth). The ONE place that
+   *  choice is made — badges (placementItems) and cards (planeOf) both. */
+  private measuredAt(
+    c: { refDepth?: number; eye?: { x: number; y: number; z: number } },
+    x: number, y: number, z: number,
+  ): { x: number; y: number; z: number } {
+    const o = this.measureTmp;
+    if (!c.eye || !(c.refDepth && c.refDepth > 0)) { o.x = x; o.y = y; o.z = z; return o; }
+    return atReferenceDepth(c.eye, c.refDepth, WALK_MIN_MEASURE_DIST, x, y, z, o);
+  }
+  private readonly measureTmp = { x: 0, y: 0, z: 0 };
 
   /**
    * Convert this pass's badges into solver input, into a grow-only pool.
@@ -4505,7 +4537,7 @@ export class EntityVisuals {
   private placementItems(
     shown: ShownLabel[],
     boxes: { halfW: number; halfH: number; cy: number }[],
-    clearance: { pxPerWorld: number; allow: number; basis: ViewBasis; refDepth: number },
+    clearance: { pxPerWorld: number; allow: number; basis: ViewBasis; refDepth: number; eye?: { x: number; y: number; z: number } },
   ): PlacementItem[] {
     const pool = this.placeItems;
     const focus = this.focus.rooms;
@@ -4522,7 +4554,8 @@ export class EntityVisuals {
       // carries both rules and their history. Written back onto the
       // ShownLabel too: placeEntityGroups needs the same plane coordinates,
       // and projecting twice is how two spaces drift apart.
-      onGlass(clearance, s.wx, s.wy, s.wz, boxes[i], p, it);
+      const m = this.measuredAt(clearance, s.wx, s.wy, s.wz);
+      onGlass(clearance, m.x, m.y, m.z, boxes[i], p, it);
       s.sx = it.sx; s.sy = it.sy; s.sz = it.sz;
       it.rank = badgeRank(s.lbl.type, s.lbl.category);
       it.sortKey = s.id;
@@ -4547,10 +4580,13 @@ export class EntityVisuals {
    * ones; that is two computations that can drift where there should be one.
    */
   private planeOf(
-    clearance: { pxPerWorld: number; basis: ViewBasis },
+    clearance: MeasureFrame,
     x: number, y: number, z: number,
   ): { sx: number; sy: number; sz: number } {
-    const p = projectToView(clearance.basis, x, y, z, this.projPlane);
+    // Measured where the card is DRAWN from the walker's eye, as its badges
+    // are (measuredAt).
+    const m = this.measuredAt(clearance, x, y, z);
+    const p = projectToView(clearance.basis, m.x, m.y, m.z, this.projPlane);
     const k = clearance.pxPerWorld;
     return { sx: p.px * k, sy: p.py * k, sz: p.pz * k };
   }
@@ -5426,7 +5462,6 @@ export class EntityVisuals {
           sub.height = `${src.height}px`;
           sub.left = `${src.left}px`;
           sub.top = `${src.top}px`;
-          sub.cornerRadius = lay.pitch * BADGE_CORNER_FRACTION;
           // WAS `shadowOffsetY = 2` — a directional skirt on a control drawn
           // beside badges that have none. See badgeShadow.ts.
           badgeShadow(sub, "surface");
@@ -5456,70 +5491,38 @@ export class EntityVisuals {
             const st = this.lastState.get(s2.id) ?? phantomEntity(s2.id);
             const { face, ring } = badgeFaceAndRing(
               this.reading(s2.lbl.type, st, this.linkActiveIds.has(s2.id)));
-            c.chips[k].source = badgeImageDataUrl(
-              s2.lbl.category, iconKeyFor(s2.lbl.type, st), face,
-              this.config.entityMap[s2.id]?.badgeColor,
-              // Inset 0: this chip IS the badge here, exactly as the classic
-              // style's is. The card behind it is the group's own surface, not
-              // a second frame — see updateLabel for the doubled ring that
-              // insetting inside a bordered card produced.
-              // Same correction as the lone badge's: `lay.chip` is in the
-              // arrangement's unscaled units and the group container carries
-              // effectiveScale(), so the bitmap has to be baked at the painted
-              // size. iconZoomScale is excluded for the same reason — see
-              // glyphBakePx.
-              0, ring, false, badgeBakePx(lay.chip, this.iconUserScale, this.bestCssToGui()),
-              // A summary card's cells are Card-style badges by definition —
-              // they ARE the card. They bake through this call rather than
-              // updateLabel's, which is why the Card style's heavier glyph did
-              // not reach them in 2.375.0 and the change looked like a no-op on
-              // a screen showing a two-cell card. Gated on the setting so the
-              // Icon style stays a clean control to compare against.
-              this.isCardStyle(),
-              // A card-style chip rings like the lone card beside it (badgeLook,
-              // in proportion to its size) — it baked the classic style's
-              // fractions, ≈1.3 px beside a card drawn at 3 (round 8).
-              this.isCardStyle()
-                ? badgeRing(categorySurfaceRinged(s2.lbl.category, face, ring, this.config.entityMap[s2.id]?.badgeColor),
-                    lay.chip, this.metrics).px / Math.max(1e-6, lay.chip)
-                : undefined);
+            const color = this.config.entityMap[s2.id]?.badgeColor;
+            c.chips[k].source = badgeImage({
+              category: s2.lbl.category, iconKey: iconKeyFor(s2.lbl.type, st), state: face, ringState: ring, color,
+              // Inset 0: this chip IS the badge here, as the classic style's is;
+              // the card behind it is the group's surface, not a second frame.
+              // Baked at the PAINTED size: `lay.chip` is unscaled and the group
+              // container carries effectiveScale() (see glyphBakePx).
+              bakePx: badgeBakePx(lay.chip, this.iconUserScale, this.bestCssToGui()),
+              // A summary card's cells are card-style badges by definition: the
+              // heavier glyph (it missed them in 2.375.0), and a ring in
+              // proportion to the lone card beside it (badgeLook, round 8) —
+              // it baked the classic fractions, ≈1.3 px beside a card at 3.
+              // Gated on the setting so the Icon style stays a clean control.
+              bold: this.isCardStyle(),
+              ring: this.isCardStyle()
+                ? badgeRing(categorySurfaceRinged(s2.lbl.category, face, ring, color), lay.chip, this.metrics).px / Math.max(1e-6, lay.chip)
+                : "baked",
+            });
           }
         }
         // ── A SUMMARY'S RING NEVER REPEATS A MEMBER'S OWN SIGNAL ────────────
-        // Two cases, because the ring means two different things depending on
-        // whether the summary can show what it stands for:
-        //
-        //   SHOWING ITS DEVICES  every chip already carries its own ring, so
-        //     the card's ring is only allowed to say something true of the
-        //     WHOLE set: red iff every member is red. A card that went red
-        //     because ONE of two devices was armed claimed the pair was armed,
-        //     and the other chip sitting there un-ringed said otherwise —
-        //     reported with exactly that pair on screen.
-        //
-        //   DRAWING A COUNT  nothing inside says anything, so the ring is the
-        //     only channel there is and it keeps the room chip's rule: red if
-        //     ANY member is on or alerting. Same rule as its sibling control,
-        //     for the same reason.
-        //
-        // And when it does show devices it reads the CHIPS' own vocabulary —
-        // `badgeFaceAndRing`'s ring, the linked/alert signal — not `badgeKind`,
-        // which folds in plain "on". Those disagree: a camera that is merely
-        // connected classifies as "on" (see classifyDeviceActivity), so three
-        // idle cameras drew three purple-ringed chips inside a red-ringed card
-        // that was claiming motion nobody had detected.
-        let ringRed = drawn >= 2;
-        for (const i of g.members) {
+        // Red iff every member alerts when the card shows its devices, iff any
+        // member rings when it draws a count — roomChips.summaryRingRed, which
+        // carries the reasons. This only reads the members.
+        const showingDevices = drawn >= 2;
+        const ringRed = summaryRingRed(g.members.map((i) => {
           const st = this.lastState.get(shown[i].id);
-          if (!st) { if (drawn >= 2) ringRed = false; continue; }
-          if (drawn >= 2) {
-            const { ring } = badgeFaceAndRing(
-              this.reading(shown[i].lbl.type, st, this.linkActiveIds.has(shown[i].id)));
-            if (ring !== "alert") ringRed = false;
-          } else {
-            const kind = this.badgeKind(shown[i].lbl.type, st);
-            if (kind === "on" || kind === "alert") ringRed = true;
-          }
-        }
+          if (!st) return null;
+          return showingDevices
+            ? { ring: badgeFaceAndRing(this.reading(shown[i].lbl.type, st, this.linkActiveIds.has(shown[i].id))).ring }
+            : { kind: this.badgeKind(shown[i].lbl.type, st) };
+        }), showingDevices);
         // A badge is never ringless — even at rest it carries the hairline
         // the brand guidelines give the idle state, which is what keeps it a
         // deliberate object rather than a shape on the floor. Same here.
@@ -5530,8 +5533,7 @@ export class EntityVisuals {
         // its border, so a host with one would shift every pixel offset below.
         const frame = badgeRing(ringRed ? alert : rest, this.metrics.cardHeightPx, this.metrics);
         for (const sub of c.cards) {
-          sub.thickness = frame.px;
-          sub.color = frame.color;
+          applyBadgeFrame(sub, frame, lay.pitch);
           sub.background = surface;
         }
         c.container.scaleX = scale;
@@ -5735,11 +5737,13 @@ export class EntityVisuals {
     // ONE object, both readers — fitChipLabel truncates against exactly the
     // model the merge then measures the result with.
     const chipText = this.chipTextMetrics();
+    const behind = new Set<RoomChip>();
     const measure = (c: RoomChip) => {
       c.label = fitChipLabel(c.room, chipSuffixOf(c), chipText, chipBudget);
       if (vp) {
         const p = Vector3.Project(c.centre, Matrix.IdentityReadOnly, tm, vp);
         c.x = p.x; c.y = p.y;
+        if (p.z >= 0 && p.z <= 1) behind.delete(c); else behind.add(c);
       }
       // Same width ESTIMATE the old path used (chipWidthPx) — it only has to be
       // close enough to decide overlap, not match the drawn glyphs exactly.
@@ -5754,8 +5758,17 @@ export class EntityVisuals {
 
     const chips: RoomChip[] = seeds;
     for (const c of chips) measure(c);
+    // ⚠️ ONLY CHIPS IN FRONT OF THE CAMERA MERGE (2.496.177). A room BEHIND
+    // the walker projects to a MIRRORED point — Vector3.Project does not know
+    // it is behind — which can land on the screen and "overlap" a chip that is
+    // really there. It then merged into it: "Swimming Pool +7" drawn ahead of
+    // the walker with the pool behind him, sliding as he turned (the mirrored
+    // point moves) until the merge broke and it vanished (owner, walk mode).
+    // A chip behind the camera is not drawn (the GUI skips a linked control
+    // outside the depth range), so it stays its own and never joins one.
+    const front = chips.filter((c) => !behind.has(c));
 
-    if (merge && vp && chips.length > 1) {
+    if (merge && vp && front.length > 1) {
       // ── THE SAME GAP AS EVERY OTHER TIER (2.419.0) ────────────────────
       // This read `chipGapPx`, a second dial that stayed at 6 when 2.412.0 cut
       // the shared one to 2 — so room chips merged at THREE TIMES the clear
@@ -5786,13 +5799,14 @@ export class EntityVisuals {
       //
       // Same defect class as the badge placement order-dependence fixed in
       // 2.366.0 — in the very subsystem that fix was written for.
-      mergeOverlapping(
-        chips,
+      const merged = mergeOverlapping(
+        front,
         gap,
         (c) => c.ids.length,
         // What the merged chip becomes — roomChips.combineChips.
         (keep, drop) => { combineChips(keep, drop); measure(keep); },
       );
+      return [...merged, ...chips.filter((c) => behind.has(c))];
     }
 
     return chips;
@@ -5996,8 +6010,7 @@ export class EntityVisuals {
       // otherwise no ring — the only attention signal available once the
       // individual badges are gone.
       const frame = badgeRing(chip.ringRed ? chipAlert : chipRest, this.metrics.cardHeightPx, this.metrics);
-      c.container.thickness = frame.px;
-      c.container.color = frame.color;
+      applyBadgeFrame(c.container, frame, this.summaryMetrics().size);
       // The count pill itself carries the room's REPORTING status — red if
       // at least one member is unavailable (HA has lost contact with it),
       // the same "available" green everywhere else otherwise. Separate
@@ -6298,7 +6311,7 @@ export class EntityVisuals {
 
   /** Distil any entity's live state into one of the colour-coded badge kinds.
    *  The per-type "on" vocabulary lives in utils/deviceActivity's
-   *  classifyDeviceActivity — shared with Dashboard.tsx's panel-header badge
+   *  classifyDeviceActivity — shared with Dashboard.tsx's modal-header badge
    *  and SummaryGroupPanel's device list, so all three read a device's
    *  activity identically. Only the linkActiveIds overlay below is specific
    *  to the map (a Babylon-side, confirmed-state-only signal). */

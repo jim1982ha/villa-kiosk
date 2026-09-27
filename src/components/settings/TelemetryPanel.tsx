@@ -16,6 +16,7 @@ import { ingressPath } from "@/ha/ingress";
 import { buildReport, captureError } from "@/utils/diagnostics";
 import { runRegisteredProbe, probeAvailable, formatProbe } from "@/babylon/perfProbe";
 import type { TelemetryKind } from "@/utils/telemetry";
+import { backendFetch } from "@/auth/sessionLost";
 
 interface TelemetryEvent {
   // ⚠️ `string`, not TelemetryKind, and deliberately (2.427.0): these events are
@@ -133,6 +134,11 @@ function summarise(e: TelemetryEvent): string {
     }
     case "error":
       return `${e.code}: ${String(e.message ?? "").slice(0, 120)}`;
+    case "session":
+      // `lostRole` is the profile that WAS signed in; the row's own role is
+      // whoever signed in afterwards, when the report could be sent.
+      return `session lost${e.lostRole ? ` (${e.lostRole})` : ""}`
+        + `${e.source ? ` · ${e.source}` : ""}${e.agoMs !== undefined ? ` · ${ms(e.agoMs)} before this sign-in` : ""}`;
     case "lifecycle":
       return `${e.event}${e.persisted !== undefined ? ` persisted=${e.persisted}` : ""}`
         + `${e.hiddenMs ? ` after ${ms(e.hiddenMs)} hidden` : ""}`
@@ -253,14 +259,14 @@ function summarise(e: TelemetryEvent): string {
       const stale = e.nowSeq !== undefined && e.nowSeq !== e.seq
         ? ` · ⚠ load ${e.seq} → ${e.nowSeq}, counters belong to the later one` : "";
       if (!e.census || e.census === "(empty)") {
-        return `${ms(e.at)} into load — counters were EMPTY (reset under us)${stale}`;
+        return `${ms(e.atMs)} into load — counters were EMPTY (reset under us)${stale}`;
       }
       const rows = String(e.census).split(",").filter(Boolean).map((part) => {
         const [name, runs, totalMs] = part.split(":");
         const n = Number(runs);
         return `${name} ${ms(Number(totalMs))}${n > 1 ? ` over ${n} RUNS` : ""}`;
       });
-      return `${ms(e.at)} into load — ${rows.join(" · ")}${stale}`;
+      return `${ms(e.atMs)} into load — ${rows.join(" · ")}${stale}`;
     }
     case "context-lost":
       return `WebGL context lost (${e.total ?? "?"} this session)`;
@@ -285,8 +291,8 @@ const TONE: Record<string, string> = {
 };
 
 /** The table only ever RENDERS this many rows (newest first) — the add-on
- *  already caps the underlying log at 500 events server-side (see
- *  supervisor-proxy.py's TELEMETRY_MAX_EVENTS ring buffer), but 500 rows of
+ *  already caps the underlying log server-side (the telemetry_max_events
+ *  option, 500 by default — supervisor-proxy.py's ring), but 500 rows of
  *  DOM in one long scroll is its own kind of unusable. Copy all/Download
  *  still act on the FULL fetched set, not just what's visibly rendered. */
 // ⚠️ THE FIXED WINDOW IS GONE. This showed the newest 10 and told you to use
@@ -306,7 +312,7 @@ export default function TelemetryPanel() {
     setBusy(true);
     setError(null);
     try {
-      const r = await fetch(ingressPath(`telemetry${clear ? "?clear=1" : ""}`),
+      const r = await backendFetch(ingressPath(`telemetry${clear ? "?clear=1" : ""}`),
         { credentials: "same-origin" });
       if (r.status === 404) { setError("This add-on build has no telemetry endpoint yet."); setEvents([]); return; }
       if (r.status === 403) { setError("Owner profile required to read telemetry."); setEvents([]); return; }

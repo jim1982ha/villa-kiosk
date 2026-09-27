@@ -179,7 +179,7 @@ console.log("\n  the Sun & UV tile — the WHO scale (2026-09-26)");
      W.rainBand(0).band === "Dry" && W.rainBand(2.4).band === "Light rain" && W.rainBand(2.5).band === "Moderate rain"
        && W.rainBand(7.6).band === "Heavy rain" && W.rainBand(50).band === "Violent rain" && W.rainBand(4.2).detail === "4.2 mm/h now");
   ck("the rain gauge opens with the Sun & UV head: today's rain, and whether it is raining",
-     /<div className="weather-rain">\s*<div className="weather-uv-head">/.test(panel) && /rainBand\(toMmPerHour\(r\.rate, r\.rateUnit\)\)/.test(panel));
+     /<div className="weather-rain">\s*<div className="weather-uv-head">/.test(panel) && /rainBand\(r\.rateMmH\)/.test(panel));
   ck("the barometer carries no 'CHANGE' label", !/>CHANGE</.test(panel));
   const css = readFileSync(new URL("../../src/styles/03-panels.css", import.meta.url), "utf8");
   ck("the gauge is VERTICAL (the reading's height from the bottom) in the 'How it feels' palette — no WHO hexes",
@@ -189,18 +189,24 @@ console.log("\n  the Sun & UV tile — the WHO scale (2026-09-26)");
 console.log("\n  the window: the approved boards 6 and 7");
 {
   const panel = readFileSync(new URL("../../src/components/panels/WeatherPanel.tsx", import.meta.url), "utf8");
-  ck("the same width as every other bottom-bar window", /className="summary-group-modal weather-modal"/.test(panel));
+  const wp = readFileSync(new URL("../../src/components/panels/WindowPieces.tsx", import.meta.url), "utf8");
+  const energyP = readFileSync(new URL("../../src/components/panels/EnergyPanel.tsx", import.meta.url), "utf8");
+  ck("both windows are the one DataWindow (round 9, 2.496.145), which keeps no copy of its shell in either",
+     /<DataWindow title="Weather"/.test(panel) && /<DataWindow title="Energy"/.test(energyP)
+     && ![panel, energyP].some((s) => /<BasePanel|topRef|setView\(/.test(s)));
+  ck("the same width as every other bottom-bar window", /className=\{`summary-group-modal data-window\$\{/.test(wp));
   ck("history reads the recorder's STATISTICS (5-minute / hourly), not raw history",
      /fetchStatistics\(ws, ids, range\.hours, range\.period, \["mean", "min", "max"\]/.test(panel));
-  ck("the history view goes back from its title's arrow, with no second 'back' link", /aria-label="Back to Weather"/.test(panel) && !/Back to now/.test(panel));
+  ck("the history view goes back from its title's arrow, with no second 'back' link", /aria-label=\{`Back to \$\{title\}`\}/.test(wp) && !/Back to now/.test(panel + wp));
   ck("'History and trends' is in the FOOTER, Settings' 'Advanced Settings' style (btn ghost, in the leading slot)",
-     /footerLeading=\{view === "now" && \([\s\S]{0,120}className="btn ghost"[\s\S]{0,120}History and trends/.test(panel) && !/weather-link/.test(panel));
+     /footerLeading=\{view === "now" && \([\s\S]{0,120}className="btn ghost"[\s\S]{0,120}History and trends/.test(wp) && !/weather-link/.test(panel));
   const base = readFileSync(new URL("../../src/components/panels/BasePanel.tsx", import.meta.url), "utf8");
-  ck("  ...and BasePanel's footer renders that slot", /<div className="panel-footer-left">\s*\{footerLeading\}/.test(base));
+  ck("  ...and BasePanel's footer renders that slot", /<div className="modal-footer-group">\s*\{footerLeading\}/.test(base));
   ck("each screen opens at its top (the body scrolls back on every switch)",
-     /useEffect\(\(\) => \{ topRef\.current\?\.closest\("\.panel-body"\)\?\.scrollTo\(\{ top: 0 \}\); \}, \[view\]\);/.test(panel));
+     /useEffect\(\(\) => \{ topRef\.current\?\.closest\("\.modal-body"\)\?\.scrollTo\(\{ top: 0 \}\); \}, \[view\]\);/.test(wp));
   ck("every history chart has the app's hover tooltip — the lines (ChartTip) and the rain bars (BarChart's)",
-     (panel.match(/<ChartTip /g) ?? []).length === 1 && (panel.match(/\{\.\.\.handlers\}/g) ?? []).length === 1 && /<BarChart label="Rain history"/.test(panel));
+     /<LineChart label=/.test(panel) && !/<ChartTip /.test(panel) && /<BarChart label="Rain history"/.test(panel)
+     && /<ChartTip /.test(readFileSync(new URL("../../src/components/panels/LineChart.tsx", import.meta.url), "utf8")));
   ck("the three advice cards are the rules above, fed the live readings",
      /windowAdvice\(\{/.test(panel) && /laundryAdvice\(\{/.test(panel) && /outdoorsAdvice\(\{/.test(panel));
 }
@@ -223,9 +229,36 @@ console.log("\n  the charts do not re-fetch on every state push (2.496.86)");
      /const station = useMemo\(\(\) => found, \[stationKey\]\);/.test(bar));
   ck("the history fetch is keyed by the sensors' ids and the range, not the station object",
      /useHistory<WeatherHistory>\(\s*`\$\{ids\.join\("\|"\)\}#\$\{rainId \?\? ""\}\|\$\{range\.hours\}`/.test(panel) && !/\], \[station\]\);/.test(panel));
-  const spark = readFileSync(new URL("../../src/components/panels/Sparkline.tsx", import.meta.url), "utf8");
+  const { drawableWindow } = await import("@/utils/lineChart");
+  const one = [{ t: 5, v: 0 }], win = { from: 0, to: 10 };
   ck("one reading over a known window is a line (0 mm all day), not 'not enough history'",
-     /data\.length === 0 \|\| \(data\.length < 2 && !\(window && window\.to > window\.from\)\)/.test(spark));
+     drawableWindow(win, one) === win && drawableWindow(undefined, one) === null
+     && drawableWindow(win, [], []) === null && drawableWindow(undefined, [], [{ t: 1, v: 1 }, { t: 2, v: 1 }])?.to === 2);
+}
+
+console.log("\n  the window's rules, out of the view (round 9, 2.496.143):");
+{
+  const sensors = { temperature: ["86", "°F"], windSpeed: ["10", "m/s"], rainRate: ["0.1", "in/h"], vapourDeficit: ["1.2", "kPa"],
+    humidity: ["71", "%"], rainToday: ["3.2", ""], pressure: ["unknown", "hPa"] };
+  const r = W.stationReadings((role) => (sensors[role] ? { state: sensors[role][0], unit: sensors[role][1] } : undefined));
+  ck("each role in the rules' unit: °F→°C, m/s→km/h, in/h→mm/h, kPa→hPa",
+     Math.abs(r.t - 30) < 1e-9 && Math.abs(r.wind - 36) < 1e-9 && Math.abs(r.rateMmH - 2.54) < 1e-9 && Math.abs(r.vpd - 12) < 1e-9, r);
+  ck("  ...raining from the rate; no sensor, or no number, is undefined (never 0)",
+     r.raining === true && r.dew === undefined && r.pressure === undefined && r.hum === 71);
+  ck("  ...a unitless rain gauge reads mm; a missing barometer's unit is hPa", r.rainUnit === "mm" && r.pressureUnit === "hPa");
+  ck("the barometer's needle: 960 hPa at -135°, 1010 straight up, 1060 at +135°, past the ends pinned",
+     W.barometerAngle(960) === -135 && W.barometerAngle(1010) === 0 && W.barometerAngle(1060) === 135 && W.barometerAngle(900) === -135 && W.barometerAngle(1100) === 135);
+  ck("a thermometer bar: 20 °C half full, 40 full, a cold reading never empty",
+     W.thermometerFraction(20) === 0.5 && W.thermometerFraction(45) === 1 && W.thermometerFraction(-5) === 0.04);
+  ck("the rain tube: 20 on a dry day, the next 10 above a wet one", W.rainTubeTop(0) === 20 && W.rainTubeTop(20) === 20 && W.rainTubeTop(23) === 30);
+  const figs = W.weatherHistoryFigures({ tMin: 24.04, tMax: 31.96, gustMax: 42.3, gustUnit: "km/h", rainTotal: 12, rainUnit: "", uvMax: 9.4 });
+  ck("the history's four figures, each worded once",
+     figs.map((x) => x.value).join(" | ") === "24.0° – 32.0° | 42.3 km/h | 12.0 mm | 9 · very high", figs.map((x) => x.value));
+  ck("  ...a missing one is a dash, never 0", W.weatherHistoryFigures({ gustUnit: "", rainUnit: "" }).every((x) => x.value === "—"));
+  const panel = readFileSync(new URL("../../src/components/panels/WeatherPanel.tsx", import.meta.url), "utf8");
+  ck("the panel keeps no conversion, scale or figure wording of its own",
+     !/toCelsius\(|toKmh\(|toHpa\(|25\.4|960|\/ 40\)|Math\.ceil\(today|"Temperature range"/.test(panel)
+     && /stationReadings\(/.test(panel) && /weatherHistoryFigures\(\{/.test(panel));
 }
 
 if (fail) { console.log(`  ${fail} FAILED`); process.exit(1); }

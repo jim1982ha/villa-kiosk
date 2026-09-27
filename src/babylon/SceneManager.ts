@@ -8,7 +8,6 @@
 // for frames the loop idles at ~0% GPU. (Core 3Dash idea, generalised.)
 
 import { Engine } from "@babylonjs/core/Engines/engine";
-import { sliceChanged } from "./entityMapDiff";
 import { Scene } from "@babylonjs/core/scene";
 import { SceneInstrumentation } from "@babylonjs/core/Instrumentation/sceneInstrumentation";
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
@@ -37,6 +36,8 @@ import { Storeys, isStairwell } from "./storeys";
 import { eyeHeightOf, pickSpawn, roomSpawn, stairFoot, flightBottom, type SpawnWorld } from "./walkerSpawn";
 import { ScenePhases, type ScenePhase } from "./scenePhases";
 import { RenderEnhancements } from "./RenderEnhancements";
+import { lightingModeFor, type LightingMode } from "./lightingMode";
+import { BETA_MIN } from "./overviewPose";
 import { loadModelInto } from "./ModelLoader";
 import { resetLightPoolTextureCache } from "./LightPools";
 import { resolveMeshToMapping } from "@/config/EntityMap";
@@ -52,11 +53,12 @@ import type { PlanWorldPair } from "@/utils/affineFit";
 import { pointInPolygon, type Pt2 } from "@/utils/geometry";
 import { devLog } from "@/utils/devLog";
 import { tapDebug } from "@/utils/tapDebug";
-import { loadOverviewView, saveOverviewView } from "@/utils/storage";
+import { loadOverviewView, saveOverviewView } from "@/utils/viewPrefs";
 import type { AppConfig, RenderConfig } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
 import type { TeleportPoint } from "@/types/scene.types";
-import { entityMapDelta } from "./entityMapDiff";
+import { sceneConfigPlan } from "./sceneConfigPlan";
+import { onActiveFloor, stampedFloor } from "./floorOf";
 import { ModelKeyedStore } from "./modelStore";
 import { cameraFrame } from "./cameraFrame";
 import { roomWallFit, MIN_ROOM_FIT_RADIUS } from "./roomZoomSolver";
@@ -201,6 +203,10 @@ export class SceneManager {
   readonly pick: PickHandler;
   readonly visuals: EntityVisuals;
   readonly renderFx: RenderEnhancements;
+  /** The loaded model's lighting mode (lightingMode.ts) — unbaked until one
+   *  loads. Settings reads its `structureUnlit` for the day/night control. */
+  private lightingModeNow: LightingMode = lightingModeFor("unbaked");
+  lightingMode(): LightingMode { return this.lightingModeNow; }
   /** Exposure, IBL strength and background — see sceneLook.ts. */
   private readonly look: SceneLook;
   private nightSky: NightSky;
@@ -550,7 +556,7 @@ export class SceneManager {
       onDoubleTap: handleDoubleTap,
       onAnimating: (ms) => this.requestAnimationRender(ms),
     });
-    this.overview.setNaturalScrolling(opts.config.naturalScrolling ?? true);
+    this.overview.setNaturalScrolling(opts.config.naturalScrolling);
     // Badge size holds at the configured "Icon size" (config.entityIconScale) for
     // all standard framings; only a zoom-OUT past the whole-villa fit scales it
     // down (getIconZoomCap). (We used to grow/shrink
@@ -850,7 +856,7 @@ export class SceneManager {
       // comparing Safari's "Apple GPU" against Chrome's ANGLE/Metal path.
       gpu: String(this.engine.getGlInfo()?.renderer ?? "").slice(0, 96),
       ibl: render.ibl,
-      ssao: render.ssao && !this.renderFx.isBaked(),
+      ssao: this.renderFx.ssaoOn(render),
     });
   }
 
@@ -1355,7 +1361,7 @@ export class SceneManager {
    * Persist the overview camera's CURRENT angle/tilt/zoom/pan as this
    * device's default framing, applied every time the app lands in overview
    * mode from now on (fresh load, model reload, or manually switching back).
-   * Per-device (localStorage — see utils/storage.ts), never synced or
+   * Per-device (localStorage — see utils/viewPrefs.ts), never synced or
    * exported: a wall tablet and a phone need different framing for the same
    * villa, which is exactly why the plain auto-fit isn't always right. Only
    * meaningful while already in overview mode.
@@ -1455,7 +1461,7 @@ export class SceneManager {
         + ` solved=${framed.solved} declutters=${framed.declutters}`
         + ` real=${framed.real} halfW=${framed.halfW.toFixed(2)}`
         + ` halfH=${framed.halfH.toFixed(2)}`
-        + ` minRadius=${(this.overview.camera.lowerRadiusLimit ?? 0).toFixed(2)}`,
+        + ` minRadius=${this.overview.getRadiusLimits().lo.toFixed(2)}`,
         "seat",
       );
     }
@@ -1533,13 +1539,13 @@ export class SceneManager {
     // room does not also spin under the user, and the villa keeps the
     // orientation they built their sense of it from.
     //
-    // The camera's OWN limit rather than a constant of ours (`lowerBetaLimit`
-    // is written from OverviewController.BETA_MIN), so "as far over as this
-    // camera goes" cannot drift from what the camera actually allows.
+    // The camera's own tilt limit (overviewPose.BETA_MIN, which is what it is
+    // set to), so "as far over as this camera goes" cannot drift from what
+    // the camera actually allows.
     //
     // It is computed HERE, above the fit, because the fit is measured through
     // it — see the anisotropy note below.
-    const destBeta = this.overview.camera.lowerBetaLimit ?? 0.05;
+    const destBeta = BETA_MIN;
     // The footprint fitted per screen axis, through the destination's own
     // view — roomZoomSolver.roomWallFit, beside the rung ladder it bounds.
     const fit = roomWallFit(bounds, allReal, { alpha: cam.alpha, beta: destBeta, vFov, hFov });
@@ -1580,11 +1586,11 @@ export class SceneManager {
       frame,
       cx, cy: bounds.floorY, cz,
       dir: destDir,
-      minRadius: this.overview.camera.lowerRadiusLimit ?? 2,
+      minRadius: this.overview.getRadiusLimits().lo,
       // The wall fit is the widest shot worth considering: past it the room no
       // longer fills the frame, and nothing about badges improves by backing
       // further away.
-      maxRadius: Math.max(radius, this.overview.camera.lowerRadiusLimit ?? 2),
+      maxRadius: Math.max(radius, this.overview.getRadiusLimits().lo),
     }) : null;
     const wallFit = radius;
     let declutters = true;
@@ -1967,8 +1973,9 @@ export class SceneManager {
         (result.nightBlend ? "; night atlas present (day/night crossfade)" : ""));
     }
     this.visuals.setLightingMode(result.lighting);
-    this.renderFx.setBakedMode(result.baked);
-    this.sun.setBakedMode(result.baked, result.nightBlend, result.glassDim);
+    this.lightingModeNow = result.lighting;
+    this.renderFx.setLightingMode(result.lighting);
+    this.sun.setLightingMode(result.lighting, result.nightBlend, result.glassDim);
     // How many materials an environment change can actually reach on this
     // model. 2.496.47 built sky reflections, released and reverted them because
     // the answer was "nearly none" — a question this line now asks every load.
@@ -2220,6 +2227,9 @@ export class SceneManager {
     const plan = new Storeys(worldPolys.filter((p) => p.pts.length >= 3));
     this.plan = plan;
     this.camera.setPlan(plan);
+    // FloorManager re-decides every non-structure mesh's floor by it
+    // (floorOf.ts) — before the visuals read the stamps.
+    this.floors.setPlan(plan);
     // Synchronously runs roomHighlight.setRooms AND LightPoolSet.setRooms — the
     // top suspect for the residual, since the latter re-probes every light
     // pool's floor. The pools report themselves as `calibPools`.
@@ -2264,8 +2274,8 @@ export class SceneManager {
     // mis-aim every beam for any other villa. Being settings means a wrong
     // heading is a value to change, not a code change.
     const DEG = Math.PI / 180;
-    const beamOffsetRad = (this.config.cameraBeamOffsetDeg ?? 180) * DEG;
-    const defaultPitchRad = (this.config.cameraBeamPitchDeg ?? 30) * DEG;
+    const beamOffsetRad = this.config.cameraBeamOffsetDeg * DEG;
+    const defaultPitchRad = this.config.cameraBeamPitchDeg * DEG;
     const cameraDirections = new Map<string, { x: number; y: number; z: number }>();
     if (this.config.sh3dEntities?.length) {
       for (const e of this.config.sh3dEntities) {
@@ -2462,7 +2472,7 @@ export class SceneManager {
       // Render tier — an iPhone runs with IBL off, which is exactly the kind
       // of difference that turns a comparison into a wrong conclusion.
       ibl: render.ibl,
-      ssao: render.ssao && !this.renderFx.isBaked(),
+      ssao: this.renderFx.ssaoOn(render),
       ...this.msaaState(),
     };
   }
@@ -2613,9 +2623,7 @@ export class SceneManager {
       // you're on 2F (and vice-versa). Match the badge culler: show only the
       // active storey's fixtures. floorIndex is stamped by FloorManager on the
       // entity mesh (or its parent when the mesh is a split primitive).
-      const floorIdx = (m.metadata as { floorIndex?: number } | null)?.floorIndex
-        ?? (m.parent?.metadata as { floorIndex?: number } | null)?.floorIndex;
-      if (floorIdx !== undefined && floorIdx !== activeFloor) continue;
+      if (!onActiveFloor(stampedFloor(m), activeFloor)) continue;
       const mapping = resolveMeshToMapping(
         m.name, this.config.entityMap, this.config.meshBindings, this.config.deniedTypes,
       );
@@ -2703,81 +2711,15 @@ export class SceneManager {
     this.config = config;
 
     // --- Change-detection gating ---------------------------------------------
-    // updateConfig() fires on EVERY config mutation, including cheap UI toggles
-    // like "show labels" / "highlight clickable". Re-running the lighting pass
-    // (which rewrites scene.clearColor + the sky) and the structural pass (which
-    // re-clones materials and recreates per-light PointLights) on every toggle
-    // is what made the background flicker and the scene visibly hitch. Each heavy
-    // subsystem now only re-runs when an input it actually depends on changed.
-    // Config objects are recreated immutably by ConfigContext.update(), so a
-    // reference change reliably marks "this slice was touched".
-    const renderChanged =
-      prev.render !== config.render ||
-      prev.latitude !== config.latitude ||
-      prev.longitude !== config.longitude;
-
-    // A freshly (re)uploaded central .sh3d lands here asynchronously — see
-    // BabylonCanvas's background "central SH3D refresh", which fetches +
-    // parses it AFTER first paint and just calls update({ sh3dRooms,
-    // sh3dEntities }), with no full remount to force a re-fit. Without this,
-    // the new room names/shapes sat in config but nothing ever re-ran
-    // calibrateRooms() to pick them up — the Rooms menu kept showing
-    // whatever was calibrated at the PREVIOUS model load until a second full
-    // reload happened to already have the fresh data cached from last time.
-    // ⚠️ BY CONTENT HERE TOO, THOUGH BabylonCanvas ALREADY GUARDS ITS CALLER.
-    // `parseRoomData` returns fresh arrays every open, so a bare reference
-    // check is wrong for the same reason it was wrong for the four keys above;
-    // it survives only because the one caller happens to check first. A second
-    // caller would not know that.
-    const sh3dChanged =
-      sliceChanged(prev.sh3dRooms, config.sh3dRooms)
-      || sliceChanged(prev.sh3dEntities, config.sh3dEntities);
-
-    // A COSMETIC per-entity edit (label, room, category, badge colour, linked/
-    // motion entity, light intensity) changes entityMap by reference like any
-    // other edit, but needs only a cheap glyph repaint — NOT the full
-    // indexMeshes re-clone/relight pass, whose multi-second hitch is what made
-    // both the colour modal and every Advanced Settings device card feel
-    // laggy. Detect that case and route it to repaintBadges() below instead of
-    // the structural branch. See COSMETIC_MAPPING_FIELDS for why these
-    // specific fields are safe to skip re-indexing for.
-    // Three outcomes, not two — see entityMapDelta. A same-content replacement
-    // ("identical") must be neither cosmetic NOR structural, or every
-    // DeviceConfigSync focus-pull buys a full multi-second re-index for a
-    // config that did not change.
-    const mapDelta = prev.entityMap === config.entityMap
-      ? "identical"
-      : entityMapDelta(prev.entityMap, config.entityMap);
-    // meshBindings needs the SAME same-content-different-reference guard as
-    // entityMap just above, for the identical reason: DeviceConfigSync's
-    // pull() hands both fields a freshly JSON-parsed (so never `===` the
-    // existing one) object on every call, including a no-op pull that ran
-    // purely because the tab regained focus/visibility. Missed when
-    // entityMapDelta was introduced — meshBindings sat right next to it,
-    // still comparing by bare reference, so a config that hadn't changed at
-    // all still tripped `structuralChanged` (a full indexMeshes/
-    // applyStructure pass) on every single focus regain. Unlike entityMap
-    // there's no cosmetic/structural split to make here — any REAL change to
-    // which mesh is which entity is inherently structural — so this only
-    // needs a same-content check, not a delta classifier.
-    const meshBindingsChanged = sliceChanged(prev.meshBindings, config.meshBindings);
-    const cosmeticOnly =
-      mapDelta === "cosmetic" &&
-      !meshBindingsChanged &&
-      !sh3dChanged;
-
-    // indexMeshes()/applyStructure() only read entity↔mesh bindings; everything
-    // else (glass hints, grass, model transform) takes effect on the next
-    // model load, not here.
-    const structuralChanged =
-      mapDelta === "structural" ||
-      meshBindingsChanged ||
-      sh3dChanged;
+    // updateConfig() fires on EVERY config mutation, including cheap UI toggles.
+    // Each heavy subsystem re-runs only when an input it depends on changed —
+    // decided by sceneConfigPlan (pure, value-tested); this method runs it.
+    const plan = sceneConfigPlan(prev, config);
 
     // Each pass owns what it writes (renderFx: tone mapping, SSAO, the IBL
     // texture; the sun: key, ambient and fill lights) and reports its share of
     // exposure and IBL strength to the look, so neither needs the other first.
-    if (renderChanged) {
+    if (plan.render) {
       this.renderFx.apply(this.deviceRenderConfig(config.render));
       this.sun.updateConfig(config);
     }
@@ -2786,40 +2728,18 @@ export class SceneManager {
     // Settings; an "auto" kiosk crossing into night, or the OS switching to
     // dark, leave it untouched while the whole UI re-themes around it.
     this.camera.updateConfig(config);
-    this.overview.setNaturalScrolling(config.naturalScrolling ?? true);
+    this.overview.setNaturalScrolling(config.naturalScrolling);
     this.pick.setMaps(config.entityMap, config.meshBindings, config.deniedTypes, config.hiddenCategories);
     this.visuals.updateConfig(config); // internally cheap; rebuilds labels only on its own diff
-    if (cosmeticOnly) this.visuals.repaintBadges(); // cheap glyph-only refresh
+    if (plan.repaintBadges) this.visuals.repaintBadges(); // cheap glyph-only refresh
 
-    // A room added/renamed/removed via the Rooms menu ("Add room here") should
-    // start glowing (or stop) immediately — no model reload needed, unlike the
-    // real room polygons which only change on a full recalibration.
-    //
-    // ⚠️ CONTENT, NOT REFERENCE — the FOURTH shared key to need this, and the
-    // last one that lacked it (/dry-audit). entityMap, meshBindings and
-    // deviceGroups each got the guard after the same bug was reported in the
-    // field; teleportPoints is a SHARED_CONFIG_KEY too, so DeviceConfigSync's
-    // pull() hands back a freshly JSON-parsed (never `===`) array on every
-    // window focus and visibilitychange. What that bought on each one was not
-    // cheap: syncRoomPoints → setPointRooms disposes EVERY point-room glow and
-    // rebuilds it, and each rebuild casts a floor probe and either builds a
-    // decal against real geometry or triangulates a clipped polygon into a
-    // fresh Mesh + material. Focus the tab, rebuild the lot, for a config that
-    // did not change.
-    //
-    // `eyeHeight` is in the predicate because syncRoomPoints READS it (a point
-    // stores the eye position, so the patch's floorY is `y - eyeHeight`) —
-    // moving the slider in Settings used to leave every point-room glow at its
-    // old height until a reload. Same class of defect from the other side: a
-    // consumer that does not re-run when one of its inputs moves.
-    const roomPointsChanged =
-      sliceChanged(prev.teleportPoints, config.teleportPoints)
-      || prev.eyeHeight !== config.eyeHeight;
-    if (roomPointsChanged) {
+    // A room added/renamed/removed via the Rooms menu ("Add room here") starts
+    // glowing (or stops) immediately — no model reload needed.
+    if (plan.roomPoints) {
       this.syncRoomPoints();
     }
 
-    if (this.loadedMeshes.length && structuralChanged) {
+    if (this.loadedMeshes.length && plan.structural) {
       // Yield BEFORE the first heavy call too, not just between the two —
       // the click/keystroke that triggered this edit only just committed via
       // React's state update; giving the browser a frame here is what lets
@@ -2833,40 +2753,26 @@ export class SceneManager {
       // for indexMeshes twice back-to-back. The caller discards this stale
       // call's result on its own (React effect cleanup), so returning early
       // is safe either way.
-      if (this.disposed || this.config !== config) return structuralChanged;
+      if (this.disposed || this.config !== config) return plan.structural;
       this.visuals.indexMeshes(this.loadedMeshes);
 
       await this.yieldFrame();
-      if (this.disposed || this.config !== config) return structuralChanged;
+      if (this.disposed || this.config !== config) return plan.structural;
       this.structure.apply(this.loadedMeshes, this.viewMode);
 
-      const prevEntityCount = Object.keys(prev.entityMap).length;
-      const newEntityCount  = Object.keys(config.entityMap).length;
-      const entityDelta = newEntityCount - prevEntityCount;
-
-      const needsRecalibration =
-        sh3dChanged ||
-        entityDelta > 0;  // new entities improve the plan→world fit
-
-      if (needsRecalibration) {
+      if (plan.recalibrate) {
         this.calibrateRooms(this.loadedMeshes);
-        // On bulk auto-detection (many entities added at once) the initial
-        // spawn was computed from the old, sparse entityMap and is likely
-        // wrong. Re-teleport to the corrected default (staircase) position now.
-        if (entityDelta >= 5) this.camera.teleport(this.firstPersonSpawn(), true);
+        // On bulk auto-detection the initial spawn was computed from the old,
+        // sparse entityMap — re-teleport to the corrected default position.
+        if (plan.reteleport) this.camera.teleport(this.firstPersonSpawn(), true);
       }
     }
 
-    if (
-      this.loadedMeshes.length &&
-      (structuralChanged || // a disabled/rebound entity must lose/gain its outline
-        prev.highlightInteractive !== config.highlightInteractive ||
-        prev.hiddenCategories.join() !== config.hiddenCategories.join())
-    ) {
+    if (this.loadedMeshes.length && plan.highlight) {
       this.applyHighlight(this.loadedMeshes);
     }
     this.requestRender();
-    return structuralChanged;
+    return plan.structural;
   }
 
   /** All entity mappings resolved from the last model load (for Config Editor auto-population). */

@@ -17,6 +17,13 @@ directions at once:
 This walks all three directions. It cannot make the four files into one
 declaration — that is the deeper fix — but it makes a disagreement loud.
 
+⚠️ THE FOURTH LIST WAS NAMED ABOVE AND NEVER CHECKED (round 11, 2.496.168).
+The service worker's never-cache rule decides whether a proxy GET is served
+from a cache on the standalone hostname — the defect its own comment records
+(a sync read returning a document 1.8 hours old). A new GET route the rule
+does not cover is that defect again; now every one must be excluded, or be
+named below as deliberately cacheable.
+
 Run: python3 tests/routes.py   (also `npm run test:routes`)
 """
 from __future__ import annotations
@@ -28,6 +35,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 NGINX = ROOT / "rootfs" / "etc" / "nginx" / "nginx.conf"
 PROXY = ROOT / "rootfs" / "usr" / "bin" / "supervisor-proxy.py"
+SW = ROOT / "public" / "sw.js"
 VITE = ROOT / "vite.config.ts"
 
 FAIL = 0
@@ -113,6 +121,97 @@ ck(f"all {len(to_backend)} locations reaching the proxy include the snippet",
 by_hand = [loc for loc, body in to_backend if "X-VK-Ingress" in body]
 ck("no location sets X-VK-Ingress by hand", not by_hand,
    f"a hand-written copy: {', '.join(by_hand)}")
+
+# ── what the service worker may serve from its cache ─────────────────────
+# Its rule, read from sw.js: a path containing one of the `includes(...)`
+# fragments, or ending with a NEVER_CACHE entry, goes to the network. Tried
+# on the BARE path — the standalone hostname, where the add-on's endpoints
+# are not under /api/ and only the explicit list protects them.
+sw = SW.read_text()
+nc = re.search(r"const NEVER_CACHE = \[(.*?)\];", sw, re.S)
+never = re.findall(r'"([^"]+)"', nc.group(1)) if nc else []
+guard = sw[nc.end():sw.index("return; // default network handling", nc.end())] if nc else ""
+fragments = re.findall(r'url\.pathname\.includes\("([^"]+)"\)', guard)
+ck("the service worker's never-cache rule was read", bool(never) and bool(fragments),
+   f"list {never}, fragments {fragments}")
+
+
+def sw_skips(path: str) -> bool:
+    return any(f in path for f in fragments) or any(path.endswith(p) for p in never)
+
+
+# Cacheable ON PURPOSE — and why. Anything else a GET reaches must be skipped.
+SW_CACHEABLE = {
+    "/fm-evidence/x": "a photo under a never-reused id: content-addressed",
+    "/core/websocket": "a websocket, which never passes through a fetch event",
+}
+gets = [re.sub(r"\{[^}]*\}", "x", m.group(1)) for m in
+        re.finditer(r'app\.router\.add_(?:get|route)\(\s*(?:"[A-Z*]+"\s*,\s*)?"([^"]+)"', px)]
+cached = sorted(p for p in gets if not sw_skips(p) and p not in SW_CACHEABLE)
+ck(f"every one of the proxy's {len(gets)} GET routes is kept out of the offline cache", bool(gets) and not cached,
+   f"the service worker would serve these from its cache: {', '.join(cached)}")
+stale = sorted(p for p in SW_CACHEABLE if p not in gets)
+ck("  ...and every deliberately cacheable path is still a route", not stale,
+   f"no longer routes: {', '.join(stale)}")
+
+# ── the security headers are written once (round 11, 2.496.173) ──────────
+# nginx drops every inherited add_header in a location that sets its own, so
+# the five headers live in one snippet that the server level AND each such
+# location include, and the CSP in another. They were also written out at the
+# server level, the CSP twice word for word.
+SNIPS = NGINX.parent / "snippets"
+SEC = ("X-Content-Type-Options", "Referrer-Policy", "X-Frame-Options",
+       "Permissions-Policy", "Strict-Transport-Security", "Content-Security-Policy")
+by_hand = [h for h in SEC if re.search(rf"^\s*add_header\s+{h}", ng, re.M)]
+ck("nginx.conf writes no security header by hand (the snippets hold them)", not by_hand,
+   f"written out in nginx.conf: {', '.join(by_hand)}")
+snip_text = "".join(f.read_text() for f in sorted(SNIPS.glob("*.conf")))
+csp_count = len(re.findall(r"^\s*add_header\s+Content-Security-Policy", snip_text, re.M))
+ck("  ...the CSP is written exactly once", csp_count == 1, f"{csp_count} copies")
+server_block = ng[re.search(r"^\s*server\s*\{", ng, re.M).start():]
+first_loc = re.search(r"^\s*location\s", server_block, re.M).start()
+ck("  ...the server level includes both snippets",
+   all(f"include /etc/nginx/snippets/{n}.conf;" in server_block[:first_loc] for n in ("security-headers", "csp")))
+own = [m.group(2) for m in re.finditer(r"location\s+(=\s*|~\*?\s*)?(\S+)\s*\{([^}]*)\}", ng)
+       if "add_header" in m.group(3) and "include /etc/nginx/snippets/security-headers.conf;" not in m.group(3)]
+ck("  ...and every location with an add_header of its own includes the headers again", not own,
+   f"these drop them: {', '.join(own)}")
+
+# ── each layer's body cap sits above the one inside it (round 11, 2.496.173) ─
+# A body passes the client, then nginx, then the proxy. nginx's cap must not
+# be the tighter one — its bare 413 would stand in for the proxy's own
+# explanation ("event too large", "…exceeds the limit") — and the client's
+# model upload must fit under HA Ingress's ~16 MB per-request cap, which no
+# setting here can raise. Three files in three languages, ordered here.
+def _num(expr: str) -> int:
+    return int(eval(expr.replace("_", ""), {"__builtins__": {}}))  # constant arithmetic only
+
+
+def _py(name: str) -> int:
+    m = re.search(rf"^{name}\s*=\s*([0-9_ *]+)", px, re.M)
+    return _num(m.group(1)) if m else -1
+
+
+def _nginx_cap(loc: str) -> int:
+    m = re.search(rf"location\s+(=\s*)?{re.escape(loc)}\s*\{{([^}}]*)\}}", ng)
+    cap = re.search(r"client_max_body_size\s+(\d+)([kKmM]?)", m.group(2)) if m else None
+    if not cap:
+        return -1
+    return int(cap.group(1)) * {"": 1, "k": 1024, "m": 1024 ** 2}[cap.group(2).lower()]
+
+
+CAPS = {"/device-config": "DEVICE_CONFIG_MAX_BYTES", "/fm-data": "FM_DATA_MAX_BYTES",
+        "/fm-evidence": "FM_EVIDENCE_MAX_BYTES", "/telemetry": "TELEMETRY_MAX_BODY",
+        "/model-upload": "MAX_UPLOAD_BYTES"}
+tighter = [f"{loc} nginx {_nginx_cap(loc)} < proxy {_py(name)}" for loc, name in CAPS.items()
+           if _nginx_cap(loc) < _py(name) or _py(name) < 0]
+ck(f"nginx's body cap is never tighter than the proxy's ({len(CAPS)} endpoints)", not tighter,
+   "; ".join(tighter))
+cm = (ROOT / "src" / "utils" / "centralModel.ts").read_text()
+ts = {k: _num(re.search(rf"const {k} = ([0-9 *]+);", cm).group(1)) for k in ("SINGLE_SHOT_MAX_BYTES", "UPLOAD_CHUNK_BYTES")}
+INGRESS_CAP = 16 * 1000 * 1000  # HA Ingress's per-request limit (~16 MB), Supervisor-side
+ck("  ...and every model-upload request fits HA Ingress's ~16 MB (single shot and each chunk)",
+   max(ts.values()) < INGRESS_CAP and max(ts.values()) <= _nginx_cap("/model-upload"), str(ts))
 
 print()
 print("✅ the four path lists agree" if FAIL == 0 else "❌ THE PATH LISTS DISAGREE")

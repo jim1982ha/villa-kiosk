@@ -15,6 +15,7 @@
 // to one villa belongs in shipped code; see the tables' own comments.
 
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
+import { ENTITY_DOMAINS } from "@/types/ha.types";
 
 export type { EntityMapping, EntityType };
 
@@ -26,7 +27,7 @@ export type { EntityMapping, EntityType };
  * Config Editor and auto-detection, and once those existed nobody removed the
  * seed — so every install, on any villa, started with two dozen devices that
  * belong to somebody else's house. Worse, DEFAULT_CONFIG is spread UNDER
- * stored config on load (see AppConfig's mergeStored), so deleting one of
+ * stored config on load (AppConfig's loadConfig did), so deleting one of
  * those entries in the UI silently came back on the next reload — a real bug
  * users hit as "stale entities I can't get rid of".
  *
@@ -53,12 +54,7 @@ const MESH_ALIASES: Record<string, string> = {};
 /** Infer a panel/entity type from an entity_id domain prefix. */
 export function inferTypeFromEntityId(entityId: string): EntityType | null {
   const domain = entityId.split(".")[0];
-  const known: EntityType[] = [
-    "light", "climate", "lock", "camera", "cover", "fan",
-    "binary_sensor", "sensor", "media_player", "switch", "input_boolean",
-    "assist_satellite",
-  ];
-  return (known as string[]).includes(domain) ? (domain as EntityType) : null;
+  return (ENTITY_DOMAINS as readonly string[]).includes(domain) ? (domain as EntityType) : null;
 }
 
 /** Collapse an immediately-repeated leading word-group — "master bedroom

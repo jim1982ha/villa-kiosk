@@ -1,130 +1,12 @@
-// src/utils/storage.ts
-// IndexedDB helper for the (large) GLB model, plus tiny localStorage helpers.
+// src/utils/centralModel.ts
+// The add-on's CENTRAL model: its configuration (/addon-config), the
+// version-stamped URL the service worker caches by, and the upload. Split out
+// of utils/storage.ts (round 10, 2.496.162).
 
 import { ingressPath } from "@/ha/ingress";
 import { devLog } from "@/utils/devLog";
+import { backendFetch } from "@/auth/sessionLost";
 
-const DB_NAME = "villa-kiosk-db";
-const STORE = "models";
-const MODEL_KEY = "current-model";
-const META_KEY = "villa-kiosk:model-meta";
-
-interface ModelMeta {
-  name: string;
-  size: number;
-  savedAt: number;
-}
-
-function openDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1);
-    req.onupgradeneeded = () => {
-      const db = req.result;
-      if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE);
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-export async function saveModelToIndexedDB(buf: ArrayBuffer, name = "model.glb"): Promise<void> {
-  const db = await openDB();
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).put(buf, MODEL_KEY);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-  db.close();
-  const meta: ModelMeta = { name, size: buf.byteLength, savedAt: Date.now() };
-  localStorage.setItem(META_KEY, JSON.stringify(meta));
-}
-
-export async function loadModelFromIndexedDB(): Promise<ArrayBuffer | null> {
-  const db = await openDB();
-  const result = await new Promise<ArrayBuffer | null>((resolve, reject) => {
-    const tx = db.transaction(STORE, "readonly");
-    const req = tx.objectStore(STORE).get(MODEL_KEY);
-    req.onsuccess = () => resolve((req.result as ArrayBuffer) ?? null);
-    req.onerror = () => reject(req.error);
-  });
-  db.close();
-  return result;
-}
-
-export async function clearStoredModel(): Promise<void> {
-  const db = await openDB();
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).delete(MODEL_KEY);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-  db.close();
-  localStorage.removeItem(META_KEY);
-}
-
-export function getModelMeta(): ModelMeta | null {
-  const raw = localStorage.getItem(META_KEY);
-  return raw ? (JSON.parse(raw) as ModelMeta) : null;
-}
-
-// ── Per-device overview camera default ──────────────────────────────────────
-// Deliberately NOT part of AppConfig, which is shared across devices: the
-// whole reason a saved overview pose is needed is that different devices (a
-// wall tablet vs. a phone in portrait) need different framing for the same
-// villa. Keeping it in its own localStorage key means it always reflects
-// THIS device/browser's own screen.
-
-// ── First-run tips ───────────────────────────────────────────────────────────
-// The icon-only HUD chrome plus several tap/long-press gestures (Rooms button,
-// the overview "save default view" anchor) have no discovery path for someone
-// using the kiosk for the first time — hover tooltips explain them, but never
-// reach a touchscreen. FirstRunTips shows a one-time card covering both, gated
-// per-BROWSER (not per-profile): whichever profile is first to log in on a
-// given kiosk/device sees it, and it never reappears there afterward, even for
-// a different profile signing in later. Simple default; villa staff can reset
-// it (along with everything else per-device) by clearing site data.
-
-const FIRST_RUN_TIPS_KEY = "villa-kiosk:first-run-tips-seen";
-
-export function hasSeenFirstRunTips(): boolean {
-  try {
-    return localStorage.getItem(FIRST_RUN_TIPS_KEY) === "1";
-  } catch {
-    return true; // storage disabled — don't show a tips card that can never be dismissed-and-remembered
-  }
-}
-
-export function markFirstRunTipsSeen(): void {
-  try {
-    localStorage.setItem(FIRST_RUN_TIPS_KEY, "1");
-  } catch { /* storage disabled */ }
-}
-
-const OVERVIEW_VIEW_KEY = "villa-kiosk:overview-view";
-
-export interface OverviewViewSnapshot {
-  alpha: number;
-  beta: number;
-  radius: number;
-  targetX: number;
-  targetY: number;
-  targetZ: number;
-}
-
-export function saveOverviewView(view: OverviewViewSnapshot): void {
-  try {
-    localStorage.setItem(OVERVIEW_VIEW_KEY, JSON.stringify(view));
-  } catch (err) {
-    console.error("[storage] failed to save overview view", err);
-  }
-}
-
-export function loadOverviewView(): OverviewViewSnapshot | null {
-  const raw = localStorage.getItem(OVERVIEW_VIEW_KEY);
-  return raw ? (JSON.parse(raw) as OverviewViewSnapshot) : null;
-}
 
 // ── Add-on central configuration ────────────────────────────────────────────
 // The 3D model is uploaded once through the kiosk's Settings and stored in the
@@ -287,7 +169,7 @@ async function postUploadOnce(
   const timer = setTimeout(() => ctl.abort(), timeoutMs);
   let resp: Response;
   try {
-    resp = await fetch(ingressPath(`model-upload?${query}`), {
+    resp = await backendFetch(ingressPath(`model-upload?${query}`), {
       method: "POST",
       headers: { "Content-Type": "application/octet-stream" },
       body,
@@ -321,11 +203,17 @@ async function postUploadOnce(
  * One chunk, retried through a stalled connection.
  *
  * Retrying is SAFE because the chunk protocol is idempotent: the server keys a
- * partial upload by `upload_id` and writes each piece at its own `offset`, so
- * re-sending the same piece overwrites the same bytes. That is what makes this
- * a retry rather than a corruption risk, and it is why the wrapper lives here —
- * around the request that carries those two parameters — rather than around the
- * whole file.
+ * partial upload by `upload_id` and writes each piece at its own `offset`
+ * (cutting the file back to it first), so re-sending the same piece — whether
+ * it had landed in full or the connection dropped half-way — overwrites the
+ * same bytes. That is what makes this a retry rather than a corruption risk,
+ * and it is why the wrapper lives here — around the request that carries those
+ * two parameters — rather than around the whole file.
+ *
+ * ⚠️ UNTIL 2.496.166 THIS PARAGRAPH WAS NOT TRUE. The server APPENDED and
+ * required its size to equal the offset exactly, and deleted the pieces on a
+ * dropped connection — so a retry of any piece after the first was a 409.
+ * tests/proxy-rules.py now drives the handler through both retries.
  */
 async function postUploadRequest(
   query: string,
@@ -435,7 +323,7 @@ export async function fetchAddonConfig(): Promise<AddonConfig> {
       const tid = setTimeout(() => ctrl.abort(), 3000);
       let resp: Response;
       try {
-        resp = await fetch(ingressPath("addon-config"), { signal: ctrl.signal });
+        resp = await backendFetch(ingressPath("addon-config"), { signal: ctrl.signal });
       } finally {
         clearTimeout(tid);
       }

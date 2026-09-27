@@ -36,12 +36,16 @@ console.log("\n  the callers:");
 const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
 const fm = strip(readFileSync(new URL("../../src/fm/FmDataContext.tsx", import.meta.url), "utf8"));
 const dc = strip(readFileSync(new URL("../../src/config/DeviceConfigSync.tsx", import.meta.url), "utf8"));
-const fmReload = fm.slice(fm.indexOf("const reload = useCallback"), fm.indexOf("}, [reportSync]);", fm.indexOf("const reload = useCallback")));
-const fetchAt = fmReload.indexOf("await fetchFmData()"), decideAt = fmReload.indexOf("decidePull(");
-ck("the Facility store decides AFTER its fetch", fetchAt > 0 && decideAt > fetchAt, { fetchAt, decideAt });
-ck("  ...counting a write that began during it", /writes\.current !== writesBefore/.test(fmReload));
-ck("  ...and every write is counted", /writes\.current \+= 1/.test(fm));
-ck("the device-config sync asks the same rule", /decidePull\(/.test(dc) && /action === "repush"/.test(dc));
+// Since 2.496.154 both stores run ONE machine, utils/syncedDocument, which
+// decides after its fetch and counts every write started during it — driven
+// by value in synced_document.mjs. Here: both stores are that machine.
+const sd = strip(readFileSync(new URL("../../src/utils/syncedDocument.ts", import.meta.url), "utf8"));
+const pullBody = sd.slice(sd.indexOf("async pull("), sd.indexOf("async push("));
+const fetchAt = pullBody.indexOf("await this.spec.fetch()"), decideAt = pullBody.indexOf("decidePull(");
+ck("the one machine decides AFTER its fetch", fetchAt > 0 && decideAt > fetchAt, { fetchAt, decideAt });
+ck("  ...counting a write that began during it", /localAhead: this\.writes !== writesBefore/.test(pullBody) && /this\.writes \+= 1;/.test(sd));
+ck("the Facility store and the device-config sync are both that machine, and neither decides for itself",
+   /new SyncedDocument\(/.test(fm) && /new SyncedDocument\(/.test(dc) && !/decidePull\(/.test(fm + dc) && /await doc\.pull\(/.test(fm) && /await doc\.pull\(/.test(dc));
 
 console.log(fail ? `\n❌ ${fail} failed` : "\n✅ a refresh never overwrites work this device has not saved");
 process.exit(fail ? 1 : 0);

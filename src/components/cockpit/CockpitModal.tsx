@@ -43,7 +43,6 @@ import {
 
 export interface CockpitModalProps {
   onClose: () => void;
-  mappedEntityIds: Set<string>;
   onOpenEntity: (entityId: string) => void;
 }
 
@@ -54,7 +53,7 @@ const ATTENTION_ICON: Record<AttentionKind, typeof TriangleAlert> = {
   alarm: TriangleAlert,
 };
 
-export default function CockpitModal({ onClose, mappedEntityIds, onOpenEntity }: CockpitModalProps) {
+export default function CockpitModal({ onClose, onOpenEntity }: CockpitModalProps) {
   const { entities, ws, entityFloorNumbers } = useHA();
   const { config, resolvedRooms } = useConfig();
   const { role } = useProfile();
@@ -72,7 +71,7 @@ export default function CockpitModal({ onClose, mappedEntityIds, onOpenEntity }:
   // Shared with HUD's own top-bar alert icon/overflow-menu badge — see
   // useVillaAttention's own docstring for why that sharing is load-bearing,
   // not just tidiness (the two used to disagree).
-  const { selectableIds, attentionItems, health } = useVillaAttention(mappedEntityIds);
+  const { selectableIds, attentionItems, health } = useVillaAttention();
   const categoryTiles = useMemo(
     () => buildCategoryTiles(selectableIds, entities, config.entityMap),
     [selectableIds, entities, config.entityMap],
@@ -151,17 +150,17 @@ export default function CockpitModal({ onClose, mappedEntityIds, onOpenEntity }:
     <div className="modal-backdrop" onClick={onClose}>
       <div
         ref={dialogRef}
-        className="modal settings-modal cockpit-modal modal-fixed-height"
+        className="modal settings-modal cockpit-modal"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-label="Villa Cockpit"
       >
-        <div className="settings-header">
+        <div className="modal-header">
           <h2>Cockpit</h2>
         </div>
 
-        <div className="settings-body">
+        <div className="modal-body">
           {/* ── Villa health headline ──────────────────────────────── */}
           <div className={`cockpit-health cockpit-health-${health.level}`}>
             {health.level === "ok" ? <CheckCircle2 size={22} /> : <TriangleAlert size={22} />}
@@ -303,14 +302,8 @@ export default function CockpitModal({ onClose, mappedEntityIds, onOpenEntity }:
           )}
         </div>
 
-        <div className="settings-footer">
-          {/* .settings-footer is `justify-content: space-between` for the
-              common case of TWO children (a left-side action + the primary
-              button on the right) — every other single-button footer in the
-              app (SettingsModal, LegendModal, FirstRunTips) pairs the button
-              with an empty spacer as its first child so space-between still
-              pushes it to the right; this one was missing that spacer,
-              which is why it rendered on the left instead. */}
+        <div className="modal-footer">
+          {/* Two slots, space-between (see .modal-footer): an empty left one. */}
           <span />
           <button className="btn primary" onClick={onClose}>Close</button>
         </div>
@@ -320,7 +313,6 @@ export default function CockpitModal({ onClose, mappedEntityIds, onOpenEntity }:
       <SummaryGroupPanel
         group={{ title: pivotDrill.label, icon: pivot === "room" ? MapPin : Building2, entityIds: pivotDrill.entityIds }}
         canControl={canControl}
-        mappedEntityIds={mappedEntityIds}
         onClose={() => setPivotDrill(null)}
         onOpenEntity={(id) => { setPivotDrill(null); onOpenEntity(id); }}
       />

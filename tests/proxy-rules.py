@@ -20,6 +20,7 @@ Run: python3 tests/proxy-rules.py   (also `npm run test:proxy`)
 from __future__ import annotations
 
 import importlib.util
+import inspect
 import re
 import sys
 from pathlib import Path
@@ -323,6 +324,30 @@ ck("ops may open every camera command",
    not any(refuse("ops", t) for t in cams))
 ck("owner is exempt, even from the allowlist",
    refuse("owner", "config/entity_registry/update") is None)
+
+# ── one table for what the kiosk sends (round 10, 2.496.151) ──────────────
+# The allow-lists were the proxy's own copy, "kept in sync" by a comment; the
+# Energy window's energy/info, scene.turn_on and input_boolean.toggle were all
+# refused for non-owners while the app offered them.
+print("\n  what the kiosk sends — one table:")
+import json as _json  # noqa: E402
+_table = _json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",
+                                      "rootfs", "usr", "share", "vesta", "ha-commands.json"), encoding="utf-8"))
+ck("the proxy's lists ARE the table's (websocket + camera, domains, homeassistant services)",
+   proxy.ALLOWED_WS_TYPES == frozenset(_table["websocket"]) | frozenset(_table["camera"])
+   and proxy.CAMERA_WS_TYPES == frozenset(_table["camera"])
+   and proxy.ALLOWED_SERVICE_DOMAINS == frozenset(_table["serviceDomains"])
+   and proxy.ALLOWED_HOMEASSISTANT_SERVICES == frozenset(_table["homeassistantServices"]))
+ck("a guest's Energy window may read its cost (energy/info)", refuse("guest", "energy/info") is None)
+ck("a guest may run a scene and toggle an input_boolean (the app offers both)",
+   refuse("guest", "call_service", domain="scene", service="turn_on") is None
+   and refuse("guest", "call_service", domain="input_boolean", service="toggle") is None)
+ck("  ...still never a system service or a write frame",
+   refuse("guest", "call_service", domain="homeassistant", service="restart") is not None
+   and refuse("guest", "call_service", domain="script", service="turn_on") is not None
+   and refuse("guest", "fire_event") is not None)
+ck("an unreadable table fails CLOSED (no non-owner access), never open",
+   'return {}' in inspect.getsource(proxy._load_ha_commands) and 'HA_COMMANDS.get("websocket", ())' in inspect.getsource(proxy))
 ck("an unlisted command is refused for ops",
    refuse("ops", "config/entity_registry/update") is not None)
 ck("  ...and for guest",
@@ -400,6 +425,99 @@ if cam_mismatch:
     print(f"          disagree for: {', '.join(cam_mismatch)}")
 ck("an unknown role holds nothing",
    not any(proxy._may("intruder", c) for caps in proxy.ROLE_CAPABILITIES.values() for c in caps))
+
+# ── every route is gated, or public on purpose (round 11, 2.496.169) ──────
+# The gate was written out by hand at twelve handlers and had drifted into two
+# 403 shapes; it is one call now (_refuse). A NEW handler that forgets it is an
+# open endpoint with every other check green — so each routed handler must
+# call _refuse (or the model gate, which adds the public_model_access option),
+# or be named here with the reason it answers without a session.
+PUBLIC_HANDLERS = {
+    "auth_roles_handler": "the profile screen lists the roles before anyone signs in",
+    "auth_session_handler": "answers 'is there a session' — to anyone, by design",
+    "auth_verify_handler": "the sign-in itself (rate-limited)",
+    "auth_logout_handler": "clears the caller's own cookie",
+}
+routed = re.findall(r'app\.router\.add_\w+\(\s*(?:"[A-Z*]+"\s*,\s*)?"[^"]+"\s*,\s*(\w+)',
+                    PROXY.read_text())
+ungated = sorted({h for h in routed if h not in PUBLIC_HANDLERS
+                  and not re.search(r"\b_refuse\(request|\b_model_authorized\(request",
+                                    inspect.getsource(getattr(proxy, h)))})
+ck(f"all {len(set(routed))} routed handlers are gated (_refuse), or named public with a reason",
+   len(routed) > 10 and not ungated)
+if ungated:
+    print(f"          answer without a session: {', '.join(ungated)}")
+stale_public = sorted(h for h in PUBLIC_HANDLERS if h not in routed)
+ck("  ...and every handler named public is still routed", not stale_public)
+hand = [n for n, f in vars(proxy).items() if n.endswith("_handler") and callable(f)
+        and re.search(r"if not _authorized\(request\)", inspect.getsource(f))]
+ck("  ...no handler writes the gate out by hand again", not hand)
+if hand:
+    print(f"          by hand: {', '.join(hand)}")
+
+# ── A chunked upload survives a re-sent piece (round 11, 2.496.166) ──────────
+# Driven through the real handler with a fake request: the client re-sends a
+# piece whose reply it never got, so the server must accept the same offset
+# twice — after the piece landed in full, and after the connection dropped
+# half-way through it — and assemble exactly the file.
+import asyncio  # noqa: E402
+import os  # noqa: E402
+import tempfile  # noqa: E402
+
+
+class _Body:
+    def __init__(self, data: bytes, drop_after: int | None = None):
+        self.data, self.drop_after = data, drop_after
+
+    async def iter_chunked(self, _n):
+        if self.drop_after is None:
+            yield self.data
+            return
+        yield self.data[: self.drop_after]
+        raise ConnectionResetError("client went away")
+
+
+class _Req:
+    def __init__(self, query: dict, body: _Body):
+        self.query, self.content = query, body
+
+
+def _piece(dest, uid, offset, data, last=False, drop_after=None):
+    q = {"offset": str(offset)}
+    if last:
+        q["last"] = "1"
+    try:
+        r = asyncio.run(proxy._chunked_upload(_Req(q, _Body(data, drop_after)), "glb", dest, uid))
+        return r.status
+    except ConnectionResetError:
+        return "dropped"
+
+
+with tempfile.TemporaryDirectory() as d:
+    dest = os.path.join(d, "villa.glb")
+    uid = "retrytest01"
+    a, b, c = proxy.UPLOAD_MAGIC["glb"][0] + b"A" * 60, b"B" * 64, b"C" * 64
+    st = [_piece(dest, uid, 0, a),
+          _piece(dest, uid, 64, b),
+          _piece(dest, uid, 64, b),                     # its reply was lost: sent again
+          _piece(dest, uid, 128, c, drop_after=20),     # dropped half-way…
+          _piece(dest, uid, 128, c, last=True)]         # …and re-sent
+    got = open(dest, "rb").read() if os.path.exists(dest) else b""
+    ck("a re-sent piece is accepted — landed in full, or dropped half-way",
+       st == [200, 200, 200, "dropped", 200])
+    if st != [200, 200, 200, "dropped", 200]:
+        print(f"          statuses: {st}")
+    ck("  ...and the file is exactly the three pieces, once each", got == a + b + c)
+    ck("  ...a MISSING piece is still refused (409)",
+       _piece(dest, "retrytest02", 0, a) == 200 and _piece(dest, "retrytest02", 128, c) == 409)
+    try:
+        _piece(dest, "retrytest03", 0, a)
+        _piece(dest, "retrytest03", 64, b"")            # refused: an empty piece
+        refused = False
+    except proxy.web.HTTPException:
+        refused = True
+    ck("  ...a REFUSED piece ends the upload — its pieces go with it",
+       refused and _piece(dest, "retrytest03", 64, b) == 409)
 
 print()
 print("✅ the proxy's pure rules hold" if FAIL == 0

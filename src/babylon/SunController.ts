@@ -9,11 +9,13 @@ import type { LightingSystem } from "./LightingSystem";
 import type { SkyDome } from "./SkyDome";
 import { skyNow, skyTickMs, skySimActive, skySimLabel } from "@/utils/skyClock";
 import { tapDebug } from "@/utils/tapDebug";
-import { type AppConfig, DEFAULT_RENDER } from "@/config/AppConfig";
+import { type AppConfig } from "@/config/AppConfig";
 import { getSunPosition, getMoonPosition, getMoonIllumination } from "@/utils/sunCalc";
 import type { NightSky } from "./NightSky";
 import type { FrameRequests } from "./frameScheduler";
 import type { SceneLook } from "./sceneLook";
+import type { LightingMode } from "./lightingMode";
+import { sunGeometry, sunLights } from "./sunState";
 
 export class SunController {
   private lighting: LightingSystem;
@@ -28,7 +30,8 @@ export class SunController {
   private frames: FrameRequests;
   /** The one writer of exposure, IBL strength and background — see sceneLook.ts. */
   private look: SceneLook;
-  private baked = false;
+  /** The model's structure renders unlit (lightingMode's structureUnlit). */
+  private structureUnlit = false;
   // Crossfade hook for dual-atlas baked GLBs (pipeline ≥2.1.0): 0 = day
   // atlas, 1 = the sun-free night atlas. Provided by ModelLoader when the
   // GLB carries a BAKED_Structure_Night texture; null = single-atlas GLB,
@@ -102,15 +105,15 @@ export class SunController {
    * blend closure over the new materials — keeping the old one would drive
    * disposed materials.
    */
-  setBakedMode(
-    baked: boolean,
+  setLightingMode(
+    mode: LightingMode,
     nightBlend?: (t: number) => void,
     glassDim?: (t: number) => void,
   ): void {
-    this.baked = baked;
+    this.structureUnlit = mode.structureUnlit;
     this.nightBlend = nightBlend ?? null;
     this.glassDim = glassDim ?? null;
-    this.look.setBaked(baked, !!nightBlend);
+    this.look.setBaked(mode.structureUnlit, !!nightBlend);
     this.applyRealSun();
   }
 
@@ -143,7 +146,7 @@ export class SunController {
    * See AppConfig.northOffsetDeg for why the correction exists at all.
    */
   private modelAzimuth(azimuth: number): number {
-    return azimuth + ((this.config.northOffsetDeg ?? 0) * Math.PI) / 180;
+    return azimuth + (this.config.northOffsetDeg * Math.PI) / 180;
   }
 
   /** Compute lighting from the computed sun altitude/azimuth right now. */
@@ -164,34 +167,14 @@ export class SunController {
       preview === "day" ? Math.abs(realAltitude)
       : preview === "night" ? -Math.abs(realAltitude)
       : realAltitude;
-    const isDay = altitude > 0;
-
-    // Direction the light travels: from the sun toward the scene. Floored at
-    // 0.05 so the lighting never goes fully edge-on after dark (the hemi/
-    // ambient fill carries the room past sunset) — but that floor must NOT
-    // reach the sky dome below: reusing it there kept SkyMaterial's "sun"
-    // hovering just above the horizon all night, so the physical scattering
-    // model never actually rendered a dark sky, just a dimmer haze of the
-    // daytime one ("night sky doesn't look like night" in first person).
-    const dir = new Vector3(
-      -Math.sin(azimuth) * Math.cos(altitude),
-      -Math.max(0.05, Math.sin(altitude)),
-      -Math.cos(azimuth) * Math.cos(altitude),
-    ).normalize();
-
-    // Unclamped sun direction for the sky dome ONLY — lets the sun marker
-    // genuinely sink below the horizon at night.
-    const skyDir = new Vector3(
-      -Math.sin(azimuth) * Math.cos(altitude),
-      -Math.sin(altitude),
-      -Math.cos(azimuth) * Math.cos(altitude),
-    ).normalize();
-
-    // Night-atlas crossfade factor: ramp 0→1 as the sun sinks from the
-    // horizon to 6° below it (civil twilight), so the baked day image fades
-    // into the night bake over ~25 real minutes instead of snapping.
-    const TWILIGHT = (6 * Math.PI) / 180;
-    const nightT = Math.min(1, Math.max(0, -altitude / TWILIGHT));
+    // The sun's two directions (the light's floored at 0.05 so the room is
+    // never lit edge-on after dark; the sky dome's UNCLAMPED, or its sun
+    // hovered over the horizon all night) and the twilight ramp that fades
+    // the night bake in over ~25 minutes: sunState.sunGeometry.
+    const g = sunGeometry(altitude, azimuth);
+    const isDay = g.isDay, nightT = g.nightT;
+    const dir = new Vector3(...g.dir);
+    const skyDir = new Vector3(...g.skyDir);
 
     this.applyDayNight(isDay, dir, nightT, skyDir);
 
@@ -320,41 +303,16 @@ export class SunController {
   ): void {
     // Render-quality multipliers let Settings rebalance the key light + fill
     // without touching the day/night base values here.
-    const r = this.config.render ?? DEFAULT_RENDER;
+    const r = this.config.render;
 
-    // How much EXTRA the night pass dims beyond its old "mild dim" baseline —
-    // 0 = the original mild dim (this file's long-standing default), 1 = deep
-    // dim (a lit fixture's own light clearly dominates the room). Interpolated
-    // rather than hardcoded so the look is user-tunable (Settings → Render
-    // quality) without another round of "too dark" / "too flat" reports.
-    const nd = isDay ? 0 : Math.min(1, Math.max(0, r.nightDimming));
-    const lerp = (a: number, b: number) => a + (b - a) * nd;
-
-    // Night used a cold blue key + blue ambient, which cast a strong cyan tint on
-    // white/light surfaces (kitchen cabinets, tables) — the "blue kitchen" report.
-    // Switch night to the warm, near-neutral indoor glow this file always claimed
-    // to render (see the header comment): a low warm key + warm-neutral ambient so
-    // white reads white at night, lifted a touch so interiors stay legible. The
-    // sky (clearColor) stays dark so it still clearly reads as night.
-    this.lighting.setSun(
-      dir,
-      (isDay ? 1.2 : lerp(0.32, 0.2)) * r.sunIntensity,
-      isDay ? new Color3(1.0, 0.95, 0.8) : new Color3(0.95, 0.85, 0.7),
-    );
-    this.lighting.setAmbient(
-      (isDay ? new Color3(0.4, 0.35, 0.3) : new Color3(0.26, 0.23, 0.19).scale(lerp(1, 0.35))).scale(r.ambientIntensity),
-    );
-
-    // Interior fill (hemispheric) is owned HERE so its day/night warmth stays
-    // consistent. It used to be a flat neutral-white at a constant intensity,
-    // which is exactly what made night walls read as a dead flat grey: a cold
-    // white wash with no warm key to balance it. At night we dim it and tint it
-    // warm so walls read as a warm, cosy interior; by day it stays neutral. The
-    // WARM tint is what keeps a deep nightDimming reading as "cosy dim", not a
-    // repeat of that old dead-grey bug — same colour treatment, just dimmer.
-    this.hemi.intensity = r.hemiIntensity * (isDay ? 1 : lerp(0.7, 0.22));
-    this.hemi.diffuse = isDay ? new Color3(1, 1, 1) : new Color3(1.0, 0.92, 0.82);
-    this.hemi.groundColor = isDay ? new Color3(0.55, 0.54, 0.52) : new Color3(0.32, 0.30, 0.27);
+    // Key, ambient and fill for day or for Settings' night dimming — warm at
+    // night (the "blue kitchen" and "dead grey" history is in sunState).
+    const L = sunLights(isDay, r);
+    this.lighting.setSun(dir, L.sunIntensity, new Color3(...L.sunColor));
+    this.lighting.setAmbient(new Color3(...L.ambient));
+    this.hemi.intensity = L.hemiIntensity;
+    this.hemi.diffuse = new Color3(...L.hemiDiffuse);
+    this.hemi.groundColor = new Color3(...L.hemiGround);
 
     // The IBL gradient cube is a fixed *daytime* sky (blue zenith, grey horizon).
     // Left at full strength it dumps a cold blue-grey ambient onto every wall at
@@ -381,7 +339,7 @@ export class SunController {
     // The exposure itself is resolveLook's (sceneLook.ts), from the day/night
     // and baked inputs reported here — it no longer depends on this pass
     // running after renderFx.
-    if (this.baked) {
+    if (this.structureUnlit) {
       if (this.nightBlend) this.nightBlend(nightT);
     }
     // Window panes dim on the same twilight ramp (see the field's comment) —

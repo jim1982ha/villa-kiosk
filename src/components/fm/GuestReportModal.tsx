@@ -21,7 +21,7 @@
 // something a report button should hand out.
 
 import { useState } from "react";
-import { Camera, Check, Wrench, X } from "lucide-react";
+import { Camera, Check, Wrench } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useFmData } from "@/fm/FmDataContext";
@@ -94,22 +94,26 @@ export default function GuestReportModal({
       >
         <div className="modal-header">
           <h2><Wrench size={18} /> Report a problem</h2>
-          <button className="icon-btn" onClick={onClose} aria-label="Close"><X size={18} /></button>
         </div>
 
         {sent ? (
           // A confirmation, not a silent close: the guest has no way to check
           // afterwards (they can't see the fault list), so the only proof they
           // get that it worked is this.
-          <div className="guest-report-done">
-            <Check size={28} />
-            <h3>Thank you — that&apos;s been reported.</h3>
-            <p className="muted body-text">
-              Whoever looks after this villa can see it now. You don&apos;t need
-              to do anything else.
-            </p>
-            <button className="btn primary" onClick={onClose}>Close</button>
-          </div>
+          <>
+            <div className="modal-body guest-report-done">
+              <Check size={28} />
+              <h3>Thank you — that&apos;s been reported.</h3>
+              <p className="muted body-text">
+                Whoever looks after this villa can see it now. You don&apos;t need
+                to do anything else.
+              </p>
+            </div>
+            <div className="modal-footer">
+              <span />
+              <button className="btn primary" onClick={onClose}>Close</button>
+            </div>
+          </>
         ) : (
           <>
             <div className="modal-body fm-stack">
@@ -164,8 +168,9 @@ export default function GuestReportModal({
                 {photoError && <div className="fm-inline-error">{photoError}</div>}
               </div>
             </div>
-            <div className="modal-actions">
-              <button className="btn ghost" onClick={onClose}>Cancel</button>
+            {/* The modal shell's footer, as every dialog's (04-modals.css). */}
+            <div className="modal-footer">
+              <button className="btn" onClick={onClose}>Cancel</button>
               <button className="btn primary" disabled={!title.trim() || busy}
                 onClick={() => void send()}>
                 {busy ? "Sending…" : "Send report"}

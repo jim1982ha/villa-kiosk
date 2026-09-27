@@ -86,10 +86,7 @@ export function bucketRoomChips(
     if (!g) { g = { ids: [], sum: Vector3.Zero(), ringRed: false, unavailable: false }; groups.set(m.room, g); }
     g.ids.push(m.id);
     g.sum.addInPlaceFromFloats(m.pos.x, m.pos.y, m.pos.z);
-    // Same rule as the individual badge ring (BADGE_RING): "on" and "alert"
-    // both ring red, "unavailable" does not — dimming is that kind's own
-    // signal, not a ring (see BADGE_RING's comment).
-    if (m.kind === "on" || m.kind === "alert") g.ringRed = true;
+    if (ringsSummary(m.kind)) g.ringRed = true;
     if (m.kind === "unavailable") g.unavailable = true;
   }
   const chips: RoomChip[] = [];
@@ -105,6 +102,40 @@ export function bucketRoomChips(
     });
   }
   return chips;
+}
+
+/**
+ * Whether a member's state rings a summary that shows it only as a COUNT (a
+ * room chip, a group card drawing a number): "on" and "alert" do, as they
+ * ring a lone badge (BADGE_RING); "unavailable" does not — dimming is that
+ * kind's own signal, not a ring.
+ */
+export function ringsSummary(kind: string | undefined): boolean {
+  return kind === "on" || kind === "alert";
+}
+
+/** A member as a summary's ring reads it: its badge `kind` (a count) or its
+ *  own chip's `ring` (badgeFaceAndRing's, when the card shows the devices).
+ *  null: Home Assistant has not reported it. */
+export type RingMember = { kind?: string; ring?: string | null } | null;
+
+/**
+ * Whether a summary rings red (round 9, 2.496.141 — this lived inline in
+ * EntityVisuals.updateEntityGroups, where no check reached it). Two rules,
+ * because the ring means two things:
+ *
+ *   SHOWING ITS DEVICES  each chip carries its own ring, so the card's may say
+ *     only what is true of the WHOLE set: red iff every member's own ring is
+ *     "alert". A card that went red because ONE of two devices was armed
+ *     claimed the pair was; and it reads the chips' ring, not the kind, which
+ *     folds in plain "on" — three merely-connected cameras drew a red card
+ *     round three idle chips. An unreported member is not alerting.
+ *   DRAWING A COUNT      nothing inside says anything, so the room chip's rule:
+ *     red if ANY member rings (ringsSummary).
+ */
+export function summaryRingRed(members: readonly RingMember[], showingDevices: boolean): boolean {
+  if (showingDevices) return members.length > 0 && members.every((m) => m?.ring === "alert");
+  return members.some((m) => ringsSummary(m?.kind));
 }
 
 /**

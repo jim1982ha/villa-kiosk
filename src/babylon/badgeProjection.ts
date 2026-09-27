@@ -279,3 +279,56 @@ export function projectToView(
   }
   return out;
 }
+
+/** What turns a world point into placement coordinates: the rung's scale and
+ *  view basis, and — walk camera only — the eye and reference depth the point
+ *  is first moved onto (atReferenceDepth). One shape for every stage of the
+ *  pass, so the walk camera's eye cannot be dropped between two of them. */
+export interface MeasureFrame {
+  pxPerWorld: number;
+  basis: ViewBasis;
+  refDepth?: number;
+  eye?: { x: number; y: number; z: number };
+}
+
+/**
+ * A world point moved along its line of sight from the walker's eye onto the
+ * REFERENCE DEPTH — same direction, distance `refDepth`. Walk camera only.
+ *
+ * ⚠️ WHY THE WALK CAMERA NEEDS IT (2.496.174). Placement measures the whole
+ * scene at one scale, taken at the median badge distance. The orbit camera
+ * looks AT the villa from outside and roughly satisfies that; the walker
+ * stands AMONG the badges, 1 m from some and 20 m from others. A device at a
+ * quarter of the reference distance draws four times further from its
+ * neighbours than the solver was told, and one four times further draws a
+ * quarter as far — so nearby devices grouped while well apart on the glass,
+ * and a card, drawn at its members' centroid, sat off every one of them
+ * ("the icons are wrongly positioned next to the asset they control").
+ * Measured with the real layout pass on the villa's own model, 8 spots x 12
+ * headings: 713 badges drawn and 151 cards before, 808 and 87 after; a
+ * card's distance to its nearest visible member, median / p90 / worst, from
+ * 15 / 29 / 43 px to 8 / 13 / 17 px.
+ *
+ * Moved onto one depth, every offset the solver takes IS the on-screen
+ * separation: the angle between two lines of sight, times the rung's focal
+ * scale — for every rule at once (reach, the tap-target floor, card against
+ * badge), not one correction per term. It is also independent of the
+ * HEADING, as the walk rung is: each point is scaled by its OWN distance,
+ * which turning does not change, and the whole set then rotates together.
+ *
+ * Distance is HORIZONTAL (the rung's own measure), floored at `minDist` so a
+ * device at the walker's feet cannot fling its point to infinity.
+ */
+export function atReferenceDepth(
+  eye: { x: number; y: number; z: number }, refDepth: number, minDist: number,
+  x: number, y: number, z: number,
+  out: { x: number; y: number; z: number },
+): { x: number; y: number; z: number } {
+  const dx = x - eye.x, dz = z - eye.z;
+  const r = Math.max(minDist, Math.hypot(dx, dz));
+  const s = refDepth > 0 ? refDepth / r : 1;
+  out.x = eye.x + dx * s;
+  out.y = eye.y + (y - eye.y) * s;
+  out.z = eye.z + dz * s;
+  return out;
+}

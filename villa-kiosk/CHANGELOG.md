@@ -1,3 +1,409 @@
+## 2.496.180
+
+### Changed — keyboard in the bird's-eye view
+- **↑ / ↓ (and W / S) are inverted** in the bird's-eye view: with Natural
+  Scroll on, ↑ now moves the view forward and ↓ back (with it off, the
+  reverse). ← / → are unchanged, and so is walk mode. The **?** window lists
+  the new behaviour.
+
+## 2.496.179
+
+### Fixed — history charts
+- **"Unavailable" is always the same colour** — the amber of the colour
+  legend — on every history bar. A text sensor such as an access point's
+  "Connected" painted its lost stretches in a dark green, and a camera whose
+  motion sensor was lost showed that time as green "online".
+- **Every device's history is shown in 5-minute steps**, whatever the range
+  (1 hour, 12 hours, 24 hours or 7 days) and whatever the device. Sensors
+  that report every minute — the pumps' power, for example — now show one
+  value per 5 minutes (the average over those 5 minutes), and on/off sensors
+  use the same 5-minute bar as the others.
+- **Unavailable time is shaded over each 5-minute interval** in which it
+  happened, and the tooltip still gives the exact times it dropped and came
+  back (for example "Unavailable · 14:22–14:31 (9 min)").
+- A reading in a device group that is unavailable right now still shows its
+  chart, so you can see when it dropped.
+
+## 2.496.178
+
+### New — move the bird's-eye view with the keyboard
+- **Hold a key to move**, the same four ways a finger does on the touch
+  screen:
+  - arrow keys or W A S D — pan
+  - Shift + ← → (or Q / E) — rotate
+  - Shift + ↑ ↓ — tilt
+  - + / − (or Page Up / Page Down) — zoom
+- **The Natural Scroll setting applies**: with it on, the villa moves the way
+  the arrow points (like a swipe); with it off, the view moves that way.
+- The **?** window (now "Map colours & keys") lists the keys for your
+  current setting, and the walking keys.
+
+### Fixed
+- Arrow keys pressed while typing in a text field no longer move the
+  camera in walk mode.
+
+## 2.496.177
+
+### Fixed — room badges while walking
+- **A room behind you no longer shows up ahead of you.** In walk mode a room
+  badge such as "Swimming Pool +7" could appear in front of you while the
+  pool was behind, slide as you turned, and then vanish. Rooms behind you
+  are now never folded into a badge you can see.
+
+## 2.496.176
+
+### Changed — Energy device lists
+- **Devices are grouped under their main meter.** "Every device" (History
+  and trends) and the phone's "Where today's energy went" now list the main
+  devices — each phase, and any device on its own — and a tap on the arrow
+  beside a phase shows or hides the devices connected to it. The phases no
+  longer look as if they were used on top of the devices inside them.
+- The arrow is now only on a main device that has devices inside it, not on
+  the devices themselves.
+
+### Changed — window height
+- **Settings, Advanced Settings, Facility, the Cockpit and the colour
+  legend all open at the same height** on a tablet or computer. Advanced
+  Settings used to shrink to its content.
+
+## 2.496.175
+
+### Changed — every window looks the same
+- **All windows now share one frame**: Settings, Energy, Weather, the device
+  windows, the Facility dialogs and the small questions all have the same
+  header height, the same thin line under the title, the same footer and the
+  same title size.
+- **Footer buttons use the soft rounded style** of the Energy window's
+  "History and trends" button everywhere — e.g. Settings' "Advanced Settings"
+  is no longer an outlined box.
+- **The Facility "report a problem" and fault-update dialogs** close from a
+  button in the footer like every other window, instead of a small ✕ in the
+  corner.
+
+## 2.496.174
+
+### Fixed — icons while walking
+- **Icons stay put when you look around.** In walk mode, turning on the spot
+  made devices join and leave shared cards, so the icons jumped to new places
+  depending on which way you faced. Now, wherever you stand, the icons are
+  grouped the same way whichever direction you look.
+- **Cards sit closer to the devices they stand for**, and fewer devices are
+  bundled into a card at all: devices near you, which are well apart on
+  screen, now keep their own icon instead of sharing one that floated
+  between them.
+
+## 2.496.173
+
+### Fixed
+- **Turning with the keyboard in walk mode (A/D, arrow keys) is the same
+  speed on every screen.** It turned twice as fast on a 120 Hz iPad as on a
+  60 Hz screen, and slowed down whenever the 3D view got busy.
+
+### Changed
+- A screen reader now hears "unavailable" for a linked device Home Assistant
+  has lost (it said "off").
+
+### Behind the scenes
+- The "Cancel / Confirm" step before unlocking a door, switching a device,
+  signing every device out or deleting all tasks is one shared piece.
+- The add-on's web server sends its security headers from one place, and a
+  check keeps each layer's upload size limit in the right order.
+
+## 2.496.172
+
+### Behind the scenes
+- Choosing which 3D model to load (the add-on's shared model, or this
+  browser's own upload) and what each failure means is now one tested step
+  of the loading sequence. Nothing changes on screen.
+
+## 2.496.171
+
+### Behind the scenes
+- How a baked villa is lit (no ambient-occlusion pass, its own day and night
+  look) is read from one table instead of three separate switches.
+- The sun's position and the day/night light levels are computed in one
+  tested place, and "Night dimming" follows a single rule for the lights and
+  the exposure — every number unchanged, checked over hundreds of sun
+  positions.
+- The bird's-eye camera's framing and its zoom, tilt and pan limits are
+  computed in one tested place instead of eight. Nothing changes on screen.
+
+## 2.496.170
+
+### Behind the scenes
+- The rule that decides which parts of the 3D model are ceilings now lives in
+  one place, with tests. The model looks exactly the same.
+- The load report's list of "surfaces that look like a window but are not
+  treated as glass" no longer lists glass that already is see-through, and
+  works for a model drawn in metres as well as in centimetres.
+
+## 2.496.169
+
+### Changed
+- **A refused request always explains itself.** Signing every device out
+  from a non-owner profile, or opening a fault photo from a guest profile,
+  now says who may do it, like every other refusal (it said only
+  "forbidden").
+
+## 2.496.168
+
+### Behind the scenes
+- A new check makes sure every live-data address the add-on answers stays
+  out of the app's offline cache, so a new one can never be served stale.
+  Nothing changes on screen.
+
+## 2.496.167
+
+### Fixed — Settings → Telemetry
+- **A lost sign-in now has its own readable row** ("session lost (guest) ·
+  2 min before this sign-in") and names the profile that was actually
+  signed in — it used to show whoever signed in afterwards.
+- **The load-census rows say how far into the load they were taken** — they
+  read "? into load".
+
+## 2.496.166
+
+### Fixed — uploading a large 3D model
+- **A big model upload no longer fails when the connection hiccups.** A large
+  file goes up in pieces, and a piece that stalled was re-sent — but the
+  add-on then refused it ("offset mismatch" or "unknown upload"), so the whole
+  upload failed on exactly the blip the retry was there for. A re-sent piece
+  is now accepted and the file is assembled correctly.
+
+## 2.496.165
+
+### Fixed — device panels
+- **A light's brightness and colour sliders follow the light.** If it was
+  changed elsewhere (a switch on the wall, an automation) while its panel was
+  open, the sliders kept the old value and a drag started from there.
+- **The air-conditioner panel uses Home Assistant's temperature unit** (it
+  always said °C), and a thermostat with 0.1° steps no longer shows
+  "22.900000000000002".
+- **A cover, a lock or any other device that Home Assistant has lost** shows
+  the same "Unavailable" notice as every other panel, with its explanation on
+  hover.
+- **The lock panel no longer says "Auto-lock reminder: check the door in 5
+  minutes"** — nothing ever sent that reminder.
+
+## 2.496.164
+
+### Fixed — switches in device panels
+- **A lock or a cover used as a device's "linked entity" now works.** Its
+  switch read "Off" when the lock was unlocked (or the cover open), and
+  flipping it sent a command a lock does not accept. It now reads the real
+  position, locks/unlocks or opens/closes, and shows "Unavailable" — with no
+  switch to flip — when Home Assistant has lost the device. Its red ring on
+  the map follows the same rule.
+- **A TV that is on but idle shows "On"** on its panel's power button (it
+  said "Off"); a paused one already did.
+
+## 2.496.163
+
+### Internal — settings and Facility names
+- No visible change. A device deleted in Advanced Settings can no longer be
+  brought back by the app's built-in defaults on reload, by construction; and
+  the Facility Manager's code no longer names one currency.
+
+## 2.496.162
+
+### Fixed — loading the 3D model
+- **A network blip while the profile screen is showing no longer costs a
+  second download.** The model's background download gave up on the first
+  dropped connection, and the villa then downloaded it again from scratch;
+  it now retries the way the main download does, and the villa uses it.
+
+## 2.496.161
+
+### Internal — the villa's device list
+- No visible change. The list of the villa's devices, and what needs
+  attention, are now worked out once for every screen instead of separately
+  by the bottom bar, the Facility Manager and the Cockpit.
+
+## 2.496.160
+
+### Fixed — reconnecting to Home Assistant
+- **Room names and floors are refreshed after a reconnect.** When the
+  connection dropped and came back, only device states were reloaded; a room
+  renamed or a device moved in Home Assistant meanwhile stayed out of date
+  until the next change there. Every reconnect now reloads them too.
+- The first connection no longer loads every device's state twice.
+
+## 2.496.159
+
+### Internal — device panels and Facility records
+- No visible change. Whether a device's panel may open is decided in one
+  place for a tap, a long press and a bottom-bar tile; and how a Facility
+  record changes (logging work, resolving a fault, erasing a cost) is now
+  checked automatically.
+
+## 2.496.158
+
+### Internal — 3D scene
+- No visible change. What the 3D view redoes after a settings change (the
+  lighting, the device badges, the room fit, the outlines) is now decided in
+  one tested place.
+
+## 2.496.157
+
+### Fixed — bottom bar
+- **The lock tile no longer shows an open door for a lock it cannot read.**
+  An unavailable lock showed an open-door icon next to "1 Unknown"; it now
+  shows a plain lock. The open door appears only when a lock is unlocked.
+- **The AC tile uses your Home Assistant's temperature unit.** It always
+  said "°C", even on an install set to Fahrenheit.
+
+## 2.496.156
+
+### Changed — Advanced Settings
+- **Both device tables edit a device the same way.** The bound-objects list
+  and the entity table showed the same fields built twice; they now share
+  one editor. A label is saved half a second after you stop typing, or as
+  soon as you leave the field, in both. The linked-entity hint now says what
+  it does everywhere: it adds the red ring and an on/off switch.
+
+## 2.496.155
+
+### Fixed — settings
+- **Settings shows the badge size actually used.** A stored size of 0 read
+  "0.00×" in Settings while the map used the smallest size; every setting is
+  now completed and kept within its limits in one place, so every screen
+  reads the same value.
+
+## 2.496.154
+
+### Fixed — settings shared between devices
+- **An Advanced Settings change no longer flicks back for a moment.** If a
+  device refreshed its shared settings at the same moment it was saving a
+  change, the older copy could briefly replace the change on that device.
+  The Facility Manager records were already protected from this; the device
+  settings now are too.
+
+## 2.496.153
+
+### Internal — diagnostics
+- No visible change. When a kiosk is returned to the profile screen because
+  its session ended, that is now recorded in the diagnostics log after the
+  next sign-in (the log refuses a signed-out device).
+
+## 2.496.152
+
+### Fixed — signing out
+- **A kiosk whose session has ended goes back to the profile screen.**
+  After "Log out everywhere", or once a session expired, the villa stayed on
+  screen saying "connecting" and "couldn't reach" indefinitely. It now shows
+  the profile screen, so someone can sign in again. A kiosk that simply
+  cannot reach the add-on (no network) stays signed in.
+
+## 2.496.151
+
+### Fixed — what guests and staff can do
+- **Scenes and on/off helpers work for every profile the app shows them
+  to.** Tapping a scene or an input_boolean switch was refused for anyone
+  but the owner, although the app offered it.
+- **The Energy window shows its cost for every profile.** It silently had
+  none for anyone but the owner.
+
+## 2.496.150
+
+### Fixed — history charts
+- **The line stops at every "unavailable" band.** 2.496.149 made short
+  outages visible as bands, but the line still ran straight across them,
+  saying "unavailable" and showing a value in the same place. The line now
+  breaks for the width of each band — the same stretch the tooltip reports
+  as unavailable.
+
+## 2.496.149
+
+### Fixed — history charts
+- **A chart's line no longer has gaps where nothing was unavailable.** A
+  reading that held steady right up to a moment the device was unavailable
+  was cut back to when it was last reported, so a steady hour could vanish
+  before a two-second drop-out. The line now runs right up to each outage.
+- **Every moment a device was unavailable is visible.** A short outage was
+  drawn as wide as it lasted — a hairline, or nothing at all for a few
+  seconds on a 24-hour chart. Each is now a visible band.
+- **Pointing at an outage says so.** The tooltip reads "Unavailable ·
+  05:21–05:24 (3 min)" over any outage band, instead of the reading beside it.
+
+## 2.496.148
+
+### Internal — badge checks
+- No visible change. The automatic checks now build the map's badges with
+  the real display controls and measure where each icon lands, so an
+  off-centre icon is caught before a release instead of on the wall.
+
+## 2.496.147
+
+### Internal — chart colours
+- No visible change. Each chart colour (outside, inside, rain, UV, each
+  device in the Energy window) is now written once in the stylesheet.
+
+## 2.496.146
+
+### Internal — map badges
+- No visible change. Every badge's border and picture is now described and
+  applied in one place, instead of each kind of badge setting them its own way.
+
+## 2.496.145
+
+### Internal — the Weather and Energy windows
+- No visible change. The two windows now share one frame (the Now and
+  History screens, the back arrow, the header, the "History and trends"
+  button) instead of each carrying its own copy.
+
+## 2.496.144
+
+### Fixed — chart axes
+- **A chart's y-axis labels are exact.** An axis stepping by 2.5 read
+  "28, 25, 23, 20" where the lines were at 27.5, 25, 22.5 and 20; it now
+  shows those values. This affected the Weather charts.
+
+### Changed — device history charts
+- **A device's history chart is drawn like the Weather window's.** The
+  temperature, humidity and other sensor charts in a device's panel now use
+  the same chart: the unit above the axis, "now" at the right end, and the
+  same tooltip and "no data" wording.
+
+## 2.496.143
+
+### Internal — the Weather window's rules
+- No visible change. The Weather window's unit conversions, the scales of
+  its barometer, thermometers and rain tube, and its four history figures
+  are now decided in one tested place instead of inside the screen.
+
+## 2.496.142
+
+### Internal — the Energy window's rules
+- No visible change. What the Energy window shows and hides (devices too
+  small to list, the "Untracked" row, the power now, the flow's tooltip, the
+  pie's slices and the currency) is now decided in one tested place instead
+  of inside the screen.
+
+## 2.496.141
+
+### Internal — group card ring
+- No visible change. The rule that decides when a group card's border turns
+  red (only when every device in it is alerting; or, when it shows a
+  number, when any device is on or alerting) now lives in one tested place.
+
+## 2.496.140
+
+### Changed — which floor a device is on
+- **Devices are placed on floors by your floor plan.** Which badges,
+  outlines and turning fans show on each floor was decided by a fixed 2.8 m
+  height, with at most two floors. It now follows the storeys of your room
+  plan, so a house with a low upper floor or a third storey shows each
+  device on the right one. Houses without a plan behave as before.
+
+## 2.496.139
+
+### Fixed — upstairs, where no room is drawn
+- **A light upstairs over a spot with no upstairs room (a balcony, a
+  landing) no longer takes the shape of the room one floor down.** Its pool
+  of light was cut to the outline of the ground-floor room below, and its
+  glow could disappear altogether. The room banner and a landing's glow
+  also named the room one floor down there; they now name none.
+
 ## 2.496.138
 
 ### Fixed — group cards

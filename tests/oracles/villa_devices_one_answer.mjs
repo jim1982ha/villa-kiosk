@@ -115,7 +115,7 @@ console.log(`  villaDevices call sites: ${callCounts.map(([f, n]) => `${f}×${n}
 if (legacy.length) console.log(`      still calls the old tuple: ${legacy.join(", ")}`);
 
 let fail = 0;
-const ck = (n, ok) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}`); if (!ok) fail++; };
+const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 console.log("\n  assertions:");
 ck("the scan reached the source tree", FILES.length > 100);
 ck("the device registry folds a combo sensor to one device", withRegistry.ids.length === 1);
@@ -129,5 +129,9 @@ ck("a real one survives all three", filtered.ids.join() === "sensor.real");
 ck("offline is drawn from the same list, not from the raw entity map",
    offlineCase.unavailable.join() === "sensor.down" && offlineCase.ids.length === 2);
 ck("the old positional tuple has no callers left", legacy.length === 0);
-ck("no screen asks the question twice", asksTwice.length === 0);
+// Since 2.496.161 the villa model (config/VillaModel) is the ONE place the
+// set is built — twice there on purpose: over every entity, and over the ones
+// a profile can see. No screen builds it at all.
+ck("no screen builds the villa's devices itself — only the villa model does (all, and visible)",
+   callCounts.length === 1 && callCounts[0][0] === "config/VillaModel.tsx" && callCounts[0][1] === 2, callCounts);
 process.exit(fail ? 1 : 0);

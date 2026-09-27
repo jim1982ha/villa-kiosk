@@ -69,7 +69,7 @@ console.log("\n  the callers:");
   const SRC = new URL("../../src/", import.meta.url).pathname;
   const walk = (d, out = []) => { for (const e of readdirSync(d)) { const p = join(d, e); statSync(p).isDirectory() ? walk(p, out) : /\.tsx?$/.test(p) && out.push(p); } return out; };
   const files = walk(SRC).filter((f) => /\/(components|hooks)\//.test(f));
-  const fetchers = files.filter((f) => /\b(fetchHistory|fetchStateHistory|fetchStatistics)\(|getStatisticsDuringPeriod\(/.test(readFileSync(f, "utf8")));
+  const fetchers = files.filter((f) => /\b(fetchHistory|fetchTrend|fetchStateHistory|fetchStatistics)\(|getStatisticsDuringPeriod\(/.test(readFileSync(f, "utf8")));
   ck(`found the panels that read history (${fetchers.length})`, fetchers.length >= 5, fetchers.map((f) => f.slice(SRC.length)));
   const raw = fetchers.filter((f) => /getStatisticsDuringPeriod\(/.test(readFileSync(f, "utf8"))).map((f) => f.slice(SRC.length));
   ck("no panel reads raw statistics rows — only the adapter's series", raw.length === 0, raw);
@@ -86,8 +86,11 @@ console.log("\n  the callers:");
   ck("'No rain' is said only over readings; no readings says so (utils/barChart.barNote, driven in bar_chart.mjs)",
      /barNote\(buckets, `No rain readings in the last \$\{span\}`, `No rain in the last \$\{span\}`\)/.test(panel));
   ck("the Rain figure is a dash, not '0.0 mm', when there is nothing to sum",
-     /<Figure label="Rain" value=\{rainTotal !== undefined \?/.test(panel));
-  ck("a failed history says it could not load", /status === "failed" \? "Couldn't load this history\."/.test(panel));
+     (await import("@/config/weatherStation")).weatherHistoryFigures({ gustUnit: "", rainUnit: "mm" }).find((f) => f.label === "Rain").value === "—"
+     && /const rainTotal = seriesTotal\(data\.rain\);/.test(panel) && /weatherHistoryFigures\(\{[\s\S]*?rainTotal,/.test(panel));
+  const lcSrc = readFileSync(new URL("../../src/components/panels/LineChart.tsx", import.meta.url), "utf8");
+  ck("a failed history says it could not load (LineChart's ChartEmpty, which the rain tile uses too)",
+     /status === "failed" \? "Couldn't load this history\."/.test(lcSrc) && /import LineChart, \{ ChartEmpty \} from "\.\/LineChart";/.test(panel));
 }
 
 console.log(fail ? `\n❌ ${fail} failed` : "\n✅ one history source; absent is never zero");

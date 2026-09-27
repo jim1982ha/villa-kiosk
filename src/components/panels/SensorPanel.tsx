@@ -7,12 +7,12 @@
 import { formatSensorParts } from "@/utils/entityValue";
 import { Activity, AlertTriangle } from "lucide-react";
 import BasePanel from "./BasePanel";
-import Sparkline from "./Sparkline";
+import LineChart from "./LineChart";
 import StateTimeline from "./StateTimeline";
 import type { PanelProps } from "@/types/panel.types";
 import type { HistorySeries, StateHistoryPoint } from "@/types/ha.types";
 import { useConfig } from "@/config/ConfigContext";
-import { fetchHistory, fetchStateHistory } from "@/ha/HAHistoryAPI";
+import { fetchTrend, fetchStateHistory } from "@/ha/HAHistoryAPI";
 import { useHistoryRange, HistoryHeader } from "./historyRange";
 import { useHistory } from "@/hooks/useHistory";
 import { levelForValue, type AlertLevel } from "@/config/ThresholdConfig";
@@ -80,7 +80,7 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
     `${mapping.entityId}|${asStates ? "states" : "numeric"}|${range.hours}`,
     async () => asStates
       ? { states: await fetchStateHistory(mapping.entityId, range.hours) }
-      : { series: await fetchHistory(mapping.entityId, range.hours) },
+      : { series: await fetchTrend(mapping.entityId, range.hours) },
     {},
   );
   const history = fetched.series ?? EMPTY_SERIES;
@@ -160,10 +160,10 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
                 legend={enumDistinctStates.map((s) => ({ state: s, color: enumPalette!(s) }))}
                 loading={historyLoading}
                 hours={range.hours}
-                bucketMinutes={range.bucketMinutes}
               />
             ) : (
-              <Sparkline data={history.points} gaps={history.gaps} window={history.window} color={LEVEL_COLOR[level]} unit={unit} loading={historyLoading} />
+              <LineChart label="History" height={110} window={history.window} status={historyLoading ? "loading" : "ready"}
+                lines={[{ pts: history.points, gaps: history.gaps, label: "Reading", unit: unit ? ` ${unit}` : "", color: LEVEL_COLOR[level] }]} />
             )}
           </div>
         </>

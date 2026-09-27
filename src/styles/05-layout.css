@@ -440,7 +440,7 @@
      fit short content instead, which for a tabbed workspace like Facility
      meant the whole dialog's height (and the footer's position) visibly
      jumped between tabs ("No faults recorded" vs. a long Faults list).
-     .settings-body's own flex:1 1 auto + overflow-y:auto already does the
+     .modal-body's own flex:1 1 auto + overflow-y:auto already does the
      rest — body scrolls/leaves blank space as needed, header and footer
      stay pinned to a stable full-height sheet either way. Deliberately NOT
      applied to .panel-modal (device panels, the group/room-cluster modal):
@@ -454,32 +454,27 @@
      Dynamic-Island-class phone, the island's clearance shows up as
      inset-left/right, not inset-top, so a header/body/footer with only a
      flat 18px had no protection from it on that side. */
-  .settings-header {
+  .modal-header {
+    min-height: 72px;
     padding: 16px calc(18px + env(safe-area-inset-right, 0px)) 12px calc(18px + env(safe-area-inset-left, 0px));
   }
-  .settings-body {
+  .modal-body {
     padding: 8px calc(18px + env(safe-area-inset-right, 0px)) 12px calc(18px + env(safe-area-inset-left, 0px));
   }
   /* Keep the footer on one line — Config Editor left, Cancel/Save right — like
      desktop, instead of wrapping. */
-  .settings-footer {
+  .modal-footer {
     padding: 12px calc(18px + env(safe-area-inset-right, 0px)) max(12px, var(--safe-bottom)) calc(18px + env(safe-area-inset-left, 0px));
     flex-wrap: nowrap;
   }
-  .settings-footer .btn { padding-left: 12px; padding-right: 12px; }
-  /* Facility's tab row sits between .settings-header and .settings-body but
+  .modal-footer .btn { padding-left: 12px; padding-right: 12px; }
+  /* Facility's tab row sits between .modal-header and .modal-body but
      used to keep its flat desktop 22px padding on mobile instead of picking
      up the same safe-area-aware inset those two get here — the one thing on
      this modal that didn't match the rest, most visible on a Dynamic-Island
      phone rotated to landscape (left/right inset, not top). */
   .fm-tabs {
     padding: 10px calc(18px + env(safe-area-inset-right, 0px)) 10px calc(18px + env(safe-area-inset-left, 0px));
-  }
-  /* Plain (non-settings) modals scroll their own content on tiny screens. */
-  .modal:not(.settings-modal) {
-    overflow-y: auto;
-    padding: calc(20px + var(--safe-top)) calc(18px + env(safe-area-inset-right, 0px))
-             max(20px, var(--safe-bottom)) calc(18px + env(safe-area-inset-left, 0px));
   }
   /* The device panel is short (a few rows + a small graph) and reads far
      better as a small centered card than the full-screen top-anchored sheet
@@ -496,16 +491,7 @@
     max-height: 80dvh;
     border-radius: 20px;
     border: 1px solid var(--hairline-strong);
-    padding: 20px;
-  }
-  /* first-run-tips borrows panel-modal's centered-card SHAPE but brings its
-     own header/body/footer padding (built on the .settings-* structure,
-     unlike the badge/device panels which have no inner padding) — so drop
-     the card's own 20px to avoid doubling it up on every side. legend-modal
-     no longer needs this: it's a plain .settings-modal now, same as
-     Settings/Config Editor, so it already gets their standard mobile
-     full-screen-sheet treatment with no special-casing here. */
-  .modal.panel-modal.first-run-tips {
+    /* No card padding: the header/body/footer carry it (the modal shell). */
     padding: 0;
   }
 

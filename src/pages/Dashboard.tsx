@@ -13,7 +13,7 @@ import AppNotice from "@/components/hud/AppNotice";
 import FirstRunTips from "@/components/hud/FirstRunTips";
 import SummaryBar from "@/components/hud/SummaryBar";
 import TapRipple, { RIPPLE_LIFETIME_MS, type Ripple } from "@/components/hud/TapRipple";
-import { hasSeenFirstRunTips } from "@/utils/storage";
+import { hasSeenFirstRunTips } from "@/utils/viewPrefs";
 import TeleportMenu from "@/components/teleport/TeleportMenu";
 import PanelRouter from "@/components/panels/PanelRouter";
 import { PanelActionsProvider } from "@/components/panels/PanelActionsContext";
@@ -24,11 +24,11 @@ import { roomKey } from "@/config/roomKey";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import RoomChoiceSheet, { type RoomChoice } from "@/components/hud/RoomChoiceSheet";
 import { useProfile } from "@/auth/ProfileContext";
-import { hasCapability, isMappingAllowed } from "@/auth/permissions";
+import { hasCapability, isMappingAllowed, panelMapping } from "@/auth/permissions";
 import FacilityModal from "@/components/fm/FacilityModal";
 import GuestReportModal from "@/components/fm/GuestReportModal";
 import { useHA } from "@/ha/HAStateStore";
-import { mappingForEntityId, displayLabelFor, resolveEntityRoom } from "@/config/EntityMap";
+import { displayLabelFor, resolveEntityRoom } from "@/config/EntityMap";
 import { deriveHaScenes, scenesForRoom } from "@/config/haScenes";
 import { effectiveCategory, subjectOf, categoryColor, CATEGORY_ICONS, CATEGORY_LABELS } from "@/config/EntityCategories";
 import { badgeFaceAndRing } from "@/utils/deviceActivity";
@@ -43,6 +43,8 @@ import { installDailyAutoReload } from "@/utils/autoReload";
 import type { SceneManager } from "@/babylon/SceneManager";
 import type { ActivePanel } from "@/types/panel.types";
 import type { Category, TeleportPoint } from "@/types/scene.types";
+import { VillaModelProvider } from "@/config/VillaModel";
+import { devicePower } from "@/utils/devicePower";
 
 
 export default function Dashboard() {
@@ -208,7 +210,7 @@ export default function Dashboard() {
   // replaces a native alert() that used to break out of the kiosk's own
   // dark/light chrome entirely. See AppNotice.
   const [notice, setNotice] = useState<string | null>(null);
-  // First-ever login on this device — see FirstRunTips/utils/storage's
+  // First-ever login on this device — see FirstRunTips/utils/viewPrefs'
   // hasSeenFirstRunTips docstring. Checked once, lazily, so it reflects
   // whatever was in localStorage when this component first mounted rather
   // than being re-evaluated (and potentially flipping on) on every render.
@@ -289,13 +291,10 @@ export default function Dashboard() {
 
   const onEntityPicked = useCallback(
     (entityId: string, clientX: number, clientY: number) => {
-      // mappingForEntityId handles type-upgrade for stored "sensor" fallbacks
-      // (e.g. input_boolean entities bound before that domain was recognized).
-      const mapping = mappingForEntityId(entityId, config.entityMap);
-      if (!mapping) return;
       // RBAC: the scene already hides badges for denied entities, but the raw
-      // 3D mesh is still tappable — enforce the permission here too.
-      if (!canControl || !role || !isMappingAllowed(role, entityId, mapping, entities[entityId])) return;
+      // 3D mesh is still tappable — the one panel gate (permissions.panelMapping).
+      const mapping = panelMapping(entityId, config.entityMap, role, entities[entityId], { control: true });
+      if (!mapping) return;
 
       // Simple on/off entities act in-world without the panel: a tap toggles
       // instantly. A long-press always opens the full panel instead (see
@@ -303,7 +302,7 @@ export default function Dashboard() {
       // action a "confirm before acting" gate would otherwise provide.
       const entity = entities[entityId];
       if (isQuickToggle(mapping, entity)) {
-        HAServices.toggleEntity(ws, entityId);
+        HAServices.power(ws, entity, entityId);
         // No panel opens for this path, so nothing on screen changes until
         // HA's real state_changed round-trip lands — spawn a tap ripple right
         // at the tap point so the gesture itself reads as acknowledged. See
@@ -315,7 +314,7 @@ export default function Dashboard() {
       // Rich entities (sliders, streams, info) open their control panel as before.
       setActivePanel({ entityId, mapping });
     },
-    [config.entityMap, entities, ws, role, canControl, spawnRipple],
+    [config.entityMap, entities, ws, role, spawnRipple],
   );
 
   // Long-press always opens the full control panel — even for quick-toggle
@@ -323,9 +322,8 @@ export default function Dashboard() {
   // panel popping up on every casual tap.
   const onEntityLongPressed = useCallback(
     (entityId: string, clientX: number, clientY: number) => {
-      const mapping = mappingForEntityId(entityId, config.entityMap);
+      const mapping = panelMapping(entityId, config.entityMap, role, entities[entityId], { control: true });
       if (!mapping) return;
-      if (!canControl || !role || !isMappingAllowed(role, entityId, mapping, entities[entityId])) return;
       // Acknowledge the HOLD itself, the moment it's recognised (the gesture
       // now fires mid-press, not on release — see TapRecognizer). Every
       // long-press gets this, on desktop mouse as much as on touch: the ripple
@@ -346,7 +344,9 @@ export default function Dashboard() {
       // reasoning.
       setActivePanel({ entityId, mapping, detail: mapping.type === "camera" });
     },
-    [config.entityMap, role, canControl, spawnRipple],
+    // `entities` is read (the category — and so the permission — can depend
+    // on a device's device_class); it was missing, so this judged a stale one.
+    [config.entityMap, entities, role, spawnRipple],
   );
 
   // Announce motion the moment it's detected, wherever it happens: a brief
@@ -388,14 +388,14 @@ export default function Dashboard() {
   }, [subscribeAll]);
 
   // Open an entity's control panel from a SummaryBar tile (a lock/climate
-  // "open" tile). The tile already gates on category permission before calling
-  // this; the panel's own controls enforce RBAC for any action taken inside.
+  // "open" tile) — to LOOK: the category decides (the same gate, without
+  // control); the panel's own controls enforce RBAC for any action inside.
   const openEntityPanel = useCallback(
     (entityId: string) => {
-      const mapping = mappingForEntityId(entityId, config.entityMap);
+      const mapping = panelMapping(entityId, config.entityMap, role, entities[entityId], { control: false });
       if (mapping) setActivePanel({ entityId, mapping });
     },
-    [config.entityMap],
+    [config.entityMap, entities, role],
   );
 
   // The open panel's LINKED entity (EntityMapping.linkedEntityId) — resolved
@@ -407,12 +407,15 @@ export default function Dashboard() {
   const linkedEntityId = activePanel
     ? (config.entityMap[activePanel.entityId] ?? activePanel.mapping).linkedEntityId
     : undefined;
+  // Its power is devicePower's: a linked LOCK is "on" when unlocked and is
+  // flipped with lock/unlock (it has no toggle); unknown when HA lost it.
+  const linkedPower = linkedEntityId ? devicePower(entities[linkedEntityId], linkedEntityId) : null;
   const linkedSend = useCallback(() => {
-    if (linkedEntityId) HAServices.toggleEntity(ws, linkedEntityId);
-  }, [ws, linkedEntityId]);
+    if (linkedEntityId) HAServices.power(ws, entities[linkedEntityId], linkedEntityId);
+  }, [ws, linkedEntityId, entities]);
   const linkedToggle = useOptimisticToggle(
     linkedEntityId,
-    linkedEntityId ? entities[linkedEntityId]?.state === "on" : false,
+    linkedPower?.position === "on",
     linkedSend,
   );
 
@@ -744,7 +747,7 @@ export default function Dashboard() {
   }, [manager]);
 
   return (
-    <>
+    <VillaModelProvider mappedEntityIds={effectiveMappedEntityIds}>
       <BabylonCanvas
         key={modelKey}
         onManager={setManager}
@@ -788,7 +791,6 @@ export default function Dashboard() {
         hasOverviewDefault={hasOverviewDefault}
         onApplyOverviewDefault={applyOverviewDefault}
         onSaveOverviewDefault={saveOverviewDefault}
-        mappedEntityIds={effectiveMappedEntityIds}
         onOpenEntity={openEntityPanel}
         onOpenFacility={canManageFacility ? () => setFacilityOpen(true) : undefined}
         onOpenCategory={setCategoryGroup}
@@ -799,7 +801,6 @@ export default function Dashboard() {
           bottom bar's corner controls (view toggle / joystick). */}
       <SummaryBar
         onOpenEntity={openEntityPanel}
-        mappedEntityIds={effectiveMappedEntityIds}
         scenes={haScenes}
       />
 
@@ -909,6 +910,7 @@ export default function Dashboard() {
                     linkedEntityId, config.entityMap[linkedEntityId]?.label,
                     entities[linkedEntityId]?.attributes.friendly_name),
                   isOn: linkedToggle.isOn,
+                  known: linkedPower?.position !== "unknown",
                   toggle: linkedToggle.toggle,
                 }
               : undefined,
@@ -960,7 +962,6 @@ export default function Dashboard() {
         <SummaryGroupPanel
           group={{ title: clusterGroup.room, icon: Layers, entityIds: clusterGroup.entityIds }}
           canControl={canControl}
-          mappedEntityIds={effectiveMappedEntityIds}
           onClose={() => setClusterGroup(null)}
           onOpenEntity={(id) => { setClusterGroup(null); openEntityPanel(id); }}
           roomScenes={scenesForRoom(haScenes, clusterGroup.room)}
@@ -980,7 +981,6 @@ export default function Dashboard() {
         <SummaryGroupPanel
           group={{ title: CATEGORY_LABELS[categoryGroup], icon: CATEGORY_ICONS[categoryGroup], entityIds: categoryGroupEntityIds }}
           canControl={canControl}
-          mappedEntityIds={effectiveMappedEntityIds}
           onClose={() => setCategoryGroup(null)}
           onOpenEntity={(id) => { setCategoryGroup(null); openEntityPanel(id); }}
           // categoryGroupEntityIds has ALREADY applied the precise
@@ -1005,7 +1005,6 @@ export default function Dashboard() {
       {facilityOpen && canManageFacility && (
         <FacilityModal
           onClose={() => { setFacilityOpen(false); setFaultForEntity(null); }}
-          mappedEntityIds={effectiveMappedEntityIds}
           onOpenEntity={(id) => { setFacilityOpen(false); openEntityPanel(id); }}
           reportFaultFor={faultForEntity ?? undefined}
           onFaultFormOpened={() => setFaultForEntity(null)}
@@ -1052,6 +1051,6 @@ export default function Dashboard() {
           onModelChanged={() => setModelKey((k) => k + 1)}
         />
       )}
-    </>
+    </VillaModelProvider>
   );
 }

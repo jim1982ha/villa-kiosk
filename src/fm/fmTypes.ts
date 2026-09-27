@@ -76,6 +76,11 @@ export interface FmCompletion {
 export interface FmCost {
   id: string;
   at: string;
+  /** The amount, in the install's own currency (MONEY_CURRENCY / fmtMoney).
+   *  ⚠️ THE NAME IS A STORED FIELD, NOT A CLAIM ABOUT THE CURRENCY: every
+   *  install's Facility records carry `amountIdr`, so renaming it needs a
+   *  migration of that data (the code-only names — the cap, the month's minor
+   *  and major spend — lost their "Idr" in 2.496.163). */
   amountIdr: number;
   label: string;
   category: "minor" | "major";
@@ -167,18 +172,18 @@ export const EMPTY_FM_DATA: FmData = {
   schedules: [], completions: [], costs: [], tickets: [], savedDocuments: [],
 };
 
-/** The monthly Minor Maintenance spend cap, in IDR — 0 means "not configured".
+/** The monthly Minor Maintenance spend cap, in the install's currency — 0 means "not configured".
  *  Was a hardcoded IDR 3,000,000 (one specific contract's clause), which
  *  applied that villa's real cap to every install with no way to turn it
  *  off. budgetStatus() below treats <= 0 as "not tracked" rather than an
  *  ever-exceeded cap, so a fresh install with nothing configured shows no
  *  false "over cap" warning instead of a wrong number. No in-app editor yet
  *  (same status as ThresholdConfig's alertThresholds), but every SCREEN now
- *  reads budgetStatus().capIdr rather than this constant — SpendTab printed
+ *  reads budgetStatus().cap rather than this constant — SpendTab printed
  *  "of IDR 0" on an unconfigured install because it reached past the engine
  *  for the raw value. Wiring this to real per-install config is the remaining
  *  follow-up. */
-export const MINOR_MAINTENANCE_CAP_IDR = 0;
+export const MINOR_MAINTENANCE_CAP = 0;
 
 /** The currency every money figure in the Facility Manager is written in —
  *  "" means "not configured", and an unconfigured install prints the number

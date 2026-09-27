@@ -34,13 +34,16 @@
 import { ArcRotateCamera } from "@babylonjs/core/Cameras/arcRotateCamera";
 import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { Scene } from "@babylonjs/core/scene";
-import { clamp } from "@/utils/geometry";
 import { Animation } from "@babylonjs/core/Animations/animation";
 import { CubicEase, EasingFunction } from "@babylonjs/core/Animations/easing";
 import { TapRecognizer } from "./TapRecognizer";
 import { cameraFrame } from "./cameraFrame";
+import { BETA_MAX, BETA_MIN, clampBeta, clampPose, clampRadius, clampTarget, fitFrame, type PanBounds, type RadiusLimits } from "./overviewPose";
 // Babylon prototype patches this module depends on — see babylonSideEffects.
 import "./babylonSideEffects";
+import { FrameClock } from "./frameClock";
+import { keyIsForCamera, overviewKeyAction, overviewKeyStep, type OverviewKeyAction } from "./overviewKeys";
+import type { Observer } from "@babylonjs/core/Misc/observable";
 
 interface OverviewCallbacks {
   onActivity: () => void;
@@ -54,11 +57,6 @@ interface OverviewCallbacks {
   /** Keep drawing for `ms` — a camera animation needs frames, and this scene
    *  renders on demand. */
   onAnimating?: (ms: number) => void;
-}
-
-interface Bounds {
-  minX: number; maxX: number;
-  minZ: number; maxZ: number;
 }
 
 // Sensitivity constants
@@ -98,7 +96,7 @@ export class OverviewController {
   private cb: OverviewCallbacks;
   private attached = false;
   private naturalScrolling = true;
-  private bounds: Bounds = { minX: -20, maxX: 20, minZ: -20, maxZ: 20 };
+  private bounds: PanBounds = { minX: -20, maxX: 20, minZ: -20, maxZ: 20 };
   /** The whole-villa fit radius (see fitTo): the threshold at/below which
    *  badges render at their configured size, and above which — zoomed OUT past
    *  the fit — EntityVisuals shrinks them so a far zoom-out can't pile every
@@ -106,8 +104,6 @@ export class OverviewController {
    *  getFitRadius; the SCALE itself is derived from the rung, not from here. */
   private fitRadius = 30;
 
-  private static readonly BETA_MIN = 0.05; // ~3° from straight down
-  private static readonly BETA_MAX = 1.4;  // ~80° (near horizon)
 
   constructor(scene: Scene, canvas: HTMLCanvasElement, cb: OverviewCallbacks) {
     this.scene = scene;
@@ -119,14 +115,23 @@ export class OverviewController {
     );
     this.camera.minZ = 0.1;
     this.camera.fov = 0.8;
-    this.camera.lowerBetaLimit = OverviewController.BETA_MIN;
-    this.camera.upperBetaLimit = OverviewController.BETA_MAX;
-    this.camera.lowerRadiusLimit = 3;
-    this.camera.upperRadiusLimit = 200;
+    this.camera.lowerBetaLimit = BETA_MIN;
+    this.camera.upperBetaLimit = BETA_MAX;
+    this.setRadiusLimits({ lo: 3, hi: 200 });
     // Input is fully manual — we never call attachControl.
   }
 
   setNaturalScrolling(v: boolean): void { this.naturalScrolling = v; }
+
+  /** How far this camera may zoom — the one copy every clamp reads (the
+   *  camera's own limits mirror it for its internal per-frame clamp). */
+  private radiusLimits: RadiusLimits = { lo: 3, hi: 200 };
+  getRadiusLimits(): RadiusLimits { return this.radiusLimits; }
+  private setRadiusLimits(l: RadiusLimits): void {
+    this.radiusLimits = l;
+    this.camera.lowerRadiusLimit = l.lo;
+    this.camera.upperRadiusLimit = l.hi;
+  }
   /**
    * The whole-villa fit radius — the threshold past which badges shrink.
    *
@@ -159,14 +164,6 @@ export class OverviewController {
   }
 
   fitTo(ext: { min: Vector3; max: Vector3 }): void {
-    const cx = (ext.min.x + ext.max.x) / 2;
-    const cz = (ext.min.z + ext.max.z) / 2;
-    const span = Math.max(ext.max.x - ext.min.x, ext.max.z - ext.min.z, 4);
-
-    this.bounds = {
-      minX: ext.min.x - span * 0.25, maxX: ext.max.x + span * 0.25,
-      minZ: ext.min.z - span * 0.25, maxZ: ext.max.z + span * 0.25,
-    };
     // A camera sees proportionally LESS WIDTH the narrower its viewport, so at
     // a fixed radius a portrait phone crops most of a villa that is wider than
     // it is deep. `span * 1.05` alone was tuned against a landscape aspect and
@@ -182,15 +179,14 @@ export class OverviewController {
     // but WHICH angle `fov` is belongs to cameraFrame.ts, not to a fourth
     // separate assumption here. Capped at 1 so landscape stays untouched.
     const { vHalf, hHalf } = cameraFrame(this.scene, this.camera);
-    const aspectCorrection = Math.max(1, Math.tan(vHalf) / Math.tan(hHalf));
-    const correctedSpan = span * aspectCorrection;
-
-    this.camera.lowerRadiusLimit = Math.max(2, span * 0.08);
-    this.camera.upperRadiusLimit = correctedSpan * 2.2;
-    this.camera.setTarget(new Vector3(cx, ext.min.y + 1, cz));
+    // The arithmetic — bounds, limits, target, radius — is overviewPose.fitFrame.
+    const f = fitFrame(ext, Math.tan(vHalf) / Math.tan(hHalf));
+    this.bounds = f.bounds;
+    this.setRadiusLimits(f.limits);
+    this.camera.setTarget(new Vector3(f.target.x, f.target.y, f.target.z));
     this.camera.alpha = -Math.PI / 2;
     this.camera.beta = 0.5;
-    this.camera.radius = correctedSpan * 1.05;
+    this.camera.radius = f.radius;
     this.fitRadius = this.camera.radius;   // published by getFitRadius
     this.cb.onActivity();
   }
@@ -210,13 +206,14 @@ export class OverviewController {
    *  clamps against), so it overrides the auto-fit angles without losing the
    *  pan bounds / icon-zoom reference fitTo just computed for this model. */
   applyPose(pose: { alpha: number; beta: number; radius: number; target: { x: number; y: number; z: number } }): void {
-    this.camera.alpha = pose.alpha;
-    this.camera.beta = clamp(pose.beta, OverviewController.BETA_MIN, OverviewController.BETA_MAX);
-    this.camera.radius = clamp(pose.radius, this.camera.lowerRadiusLimit ?? 2, this.camera.upperRadiusLimit ?? 200);
+    const p = clampPose(pose, this.bounds, this.radiusLimits);
+    this.camera.alpha = p.alpha;
+    this.camera.beta = p.beta;
+    this.camera.radius = p.radius;
     const t = this.camera.target;
-    t.x = clamp(pose.target.x, this.bounds.minX, this.bounds.maxX);
-    t.y = pose.target.y;
-    t.z = clamp(pose.target.z, this.bounds.minZ, this.bounds.maxZ);
+    t.x = p.target.x;
+    t.y = p.target.y;
+    t.z = p.target.z;
     this.cb.onActivity();
   }
 
@@ -224,8 +221,9 @@ export class OverviewController {
     // Mutate the orbit target IN PLACE — calling setTarget() would recompute
     // alpha/beta/radius from the current position and spin the view.
     const t = this.camera.target;
-    t.x = clamp(x, this.bounds.minX, this.bounds.maxX);
-    t.z = clamp(z, this.bounds.minZ, this.bounds.maxZ);
+    const c = clampTarget(x, z, this.bounds);
+    t.x = c.x;
+    t.z = c.z;
     this.cb.onActivity();
   }
 
@@ -237,6 +235,10 @@ export class OverviewController {
     this.canvas.addEventListener("pointercancel",this.onPointerUp);
     this.canvas.addEventListener("pointerleave", this.onPointerUp);
     this.canvas.addEventListener("wheel",        this.onWheel, { passive: false });
+    // The keyboard — the touch screen's four movements (overviewKeys.ts).
+    window.addEventListener("keydown", this.onKey);
+    window.addEventListener("keyup", this.onKey);
+    window.addEventListener("blur", this.releaseKeys);
     this.attached = true;
   }
 
@@ -248,6 +250,10 @@ export class OverviewController {
     this.canvas.removeEventListener("pointercancel",this.onPointerUp);
     this.canvas.removeEventListener("pointerleave", this.onPointerUp);
     this.canvas.removeEventListener("wheel",        this.onWheel);
+    window.removeEventListener("keydown", this.onKey);
+    window.removeEventListener("keyup", this.onKey);
+    window.removeEventListener("blur", this.releaseKeys);
+    this.releaseKeys();
     this.pointers.clear();
     this.touchBase = null;
     this.attached = false;
@@ -461,11 +467,7 @@ export class OverviewController {
       this.applyTilt(-dCentY * TILT_SENS_TOUCH * s);
     } else if (baseDist > 1 && dist > 1) {
       // Zoom: ratio of finger distances (spread = zoom in = smaller radius).
-      this.camera.radius = clamp(
-        this.camera.radius * (baseDist / dist),
-        this.camera.lowerRadiusLimit ?? 2,
-        this.camera.upperRadiusLimit ?? 200,
-      );
+      this.camera.radius = clampRadius(this.camera.radius * (baseDist / dist), this.radiusLimits);
     }
 
     // Advance the incremental baseline (start* stays fixed for classification).
@@ -511,6 +513,57 @@ export class OverviewController {
     this.cb.onActivity();
   };
 
+  // ── The keyboard (overviewKeys.ts) ─────────────────────────────────────────
+  private readonly held = new Set<OverviewKeyAction>();
+  private readonly keyClock = new FrameClock();
+  private keyObserver: Observer<Scene> | null = null;
+
+  private onKey = (e: KeyboardEvent): void => {
+    if (!keyIsForCamera(e.target)) return;
+    if (e.type === "keyup") {
+      // Released whatever it meant when pressed: Shift may have changed since,
+      // and a key that stays "held" would drift the camera for ever.
+      for (const shift of [false, true]) {
+        const a = overviewKeyAction(e.code, e.key, shift);
+        if (a) this.held.delete(a);
+      }
+      if (this.held.size === 0) this.stopKeyLoop();
+      return;
+    }
+    const a = overviewKeyAction(e.code, e.key, e.shiftKey);
+    if (!a || e.ctrlKey || e.metaKey || e.altKey) return;
+    e.preventDefault();
+    this.held.add(a);
+    this.startKeyLoop();
+  };
+
+  private releaseKeys = (): void => { this.held.clear(); this.stopKeyLoop(); };
+
+  private startKeyLoop(): void {
+    if (this.keyObserver) return;
+    this.keyClock.reset();
+    this.keyObserver = this.scene.onBeforeRenderObservable.add(() => this.keyStep());
+    this.cb.onActivity();
+  }
+
+  private stopKeyLoop(): void {
+    if (!this.keyObserver) return;
+    this.scene.onBeforeRenderObservable.remove(this.keyObserver);
+    this.keyObserver = null;
+  }
+
+  /** One frame of held keys, through the SAME primitives the gestures use —
+   *  the pointer's pan, the Shift+drag rotation, the tilt and zoom clamps. */
+  private keyStep(): void {
+    if (this.held.size === 0) { this.stopKeyLoop(); return; }
+    const k = overviewKeyStep(this.held, this.naturalScrolling, this.keyClock.step(performance.now()) / 1000);
+    if (k.dragX !== 0 || k.dragY !== 0) this.applyPan(k.dragX, k.dragY, DRAG_SENS);
+    if (k.rotate !== 0) this.camera.alpha += k.rotate;
+    if (k.tilt !== 0) this.applyTilt(k.tilt);
+    if (k.zoom !== 1) this.camera.radius = clampRadius(this.camera.radius * k.zoom, this.radiusLimits);
+    this.cb.onActivity();   // the scene renders on demand: keep frames coming
+  }
+
   // ── Movement primitives ────────────────────────────────────────────────────
 
   /**
@@ -552,8 +605,9 @@ export class OverviewController {
     // that broke the axis symmetry and re-inverted up/down in the other toggle
     // state. natural ON = content follows the finger on both axes; OFF =
     // opposes on both.)
-    t.x = clamp(t.x + (g0.x - g1.x) * s, this.bounds.minX, this.bounds.maxX);
-    t.z = clamp(t.z + (g0.z - g1.z) * s, this.bounds.minZ, this.bounds.maxZ);
+    const c = clampTarget(t.x + (g0.x - g1.x) * s, t.z + (g0.z - g1.z) * s, this.bounds);
+    t.x = c.x;
+    t.z = c.z;
   }
 
   /**
@@ -591,8 +645,9 @@ export class OverviewController {
     // from the stale position and rotate the view — moving only the target
     // translates the whole rig (position is re-derived from target + angles),
     // which is a pure pan with no rotation.
-    t.x = clamp(t.x + (-right.x * dx + fwd.x * dy) * k, this.bounds.minX, this.bounds.maxX);
-    t.z = clamp(t.z + (-right.z * dx + fwd.z * dy) * k, this.bounds.minZ, this.bounds.maxZ);
+    const c = clampTarget(t.x + (-right.x * dx + fwd.x * dy) * k, t.z + (-right.z * dx + fwd.z * dy) * k, this.bounds);
+    t.x = c.x;
+    t.z = c.z;
   }
 
   /**
@@ -614,9 +669,7 @@ export class OverviewController {
    */
   zoomStep(factor: number, toward?: Vector3): void {
     if (this.zooming) return;
-    const lo = this.camera.lowerRadiusLimit ?? 2;
-    const hi = this.camera.upperRadiusLimit ?? 200;
-    const to = clamp(this.camera.radius * factor, lo, hi);
+    const to = clampRadius(this.camera.radius * factor, this.radiusLimits);
     // Already against the stop: don't animate a move of nothing, which would
     // read as a dead control rather than as "there is no more zoom".
     if (Math.abs(to - this.camera.radius) < 1e-3) return;
@@ -637,11 +690,8 @@ export class OverviewController {
       const t = this.camera.target;
       // Clamped to the same pan bounds a drag obeys — a double tap must not be
       // able to put the camera somewhere dragging could never reach.
-      const dest = new Vector3(
-        clamp(t.x + (toward.x - t.x) * ZOOM_STEP_RECENTRE, this.bounds.minX, this.bounds.maxX),
-        t.y,
-        clamp(t.z + (toward.z - t.z) * ZOOM_STEP_RECENTRE, this.bounds.minZ, this.bounds.maxZ),
-      );
+      const c = clampTarget(t.x + (toward.x - t.x) * ZOOM_STEP_RECENTRE, t.z + (toward.z - t.z) * ZOOM_STEP_RECENTRE, this.bounds);
+      const dest = new Vector3(c.x, t.y, c.z);
       const targetAnim = new Animation(
         "overviewZoomTarget", "target", 60,
         Animation.ANIMATIONTYPE_VECTOR3, Animation.ANIMATIONLOOPMODE_CONSTANT,
@@ -663,18 +713,10 @@ export class OverviewController {
   }
 
   private applyZoom(delta: number): void {
-    this.camera.radius = clamp(
-      this.camera.radius - delta,
-      this.camera.lowerRadiusLimit ?? 2,
-      this.camera.upperRadiusLimit ?? 200,
-    );
+    this.camera.radius = clampRadius(this.camera.radius - delta, this.radiusLimits);
   }
 
   private applyTilt(delta: number): void {
-    this.camera.beta = clamp(
-      this.camera.beta + delta,
-      OverviewController.BETA_MIN,
-      OverviewController.BETA_MAX,
-    );
+    this.camera.beta = clampBeta(this.camera.beta + delta);
   }
 }

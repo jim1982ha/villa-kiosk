@@ -40,14 +40,14 @@ ck("  ...and above the modals", /\.chart-tip \{ z-index: 300; \}/.test(readFileS
 ck("ChartTip takes a point as FRACTIONS and a worded stamp — no px, no flip, no dummy time", /export default function ChartTip\(\{ x, y, rows, stamp \}/.test(tipSrc));
 const files = readdirSync(dir).filter((f) => f.endsWith(".tsx"));
 const tipCallers = files.filter((f) => /<ChartTip /.test(read(f)));
-ck("the charts that show a tooltip are these six", tipCallers.sort().join() === "BarChart.tsx,DualSparkline.tsx,EnergyPanel.tsx,Sparkline.tsx,StateTimeline.tsx,WeatherPanel.tsx", tipCallers);
+ck("the charts that show a tooltip are these four (one line chart since 2.496.144)", tipCallers.sort().join() === "BarChart.tsx,EnergyPanel.tsx,LineChart.tsx,StateTimeline.tsx", tipCallers);
 ck("no chart draws a tooltip of its own (the state timeline did)", files.filter((f) => f !== "ChartTip.tsx" && /className="spark-tip"/.test(read(f))).length === 0);
 const readers = tipCallers.filter((f) => /e\.clientX|e\.clientY/.test(read(f)));
 ck("no chart reads the pointer itself: useChartPointer does, once", readers.length === 0, readers);
-for (const f of ["Sparkline.tsx", "DualSparkline.tsx", "BarChart.tsx", "StateTimeline.tsx"]) {
+for (const f of ["LineChart.tsx", "BarChart.tsx", "StateTimeline.tsx"]) {
   ck(`  ${f} uses it`, /useChartPointer</.test(read(f)));
 }
-ck("  WeatherPanel's line charts use it, as a time in the geometry", /const hover = g && frac !== null \? g\.hover\(g\.tAt\(frac \* W\)\) : null;/.test(read("WeatherPanel.tsx")));
+ck("  LineChart reads it as a time in the geometry", /const hover = frac !== null \? g\.hover\(g\.tAt\(frac \* W\)\) : null;/.test(read("LineChart.tsx")));
 
 if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
 console.log("\n✅ one hover: pointer in, tip out");

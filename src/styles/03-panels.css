@@ -4,39 +4,18 @@
    same visual language. .panel-modal only adds what's specific to it: a
    readable width and its own internal scroll (content can be taller than a
    preset/high climate or camera-motion panel comfortably fits). */
-/* Same 3-section layout as the Settings modal (.settings-header/.settings-body/
-   .settings-footer): the HEADER and FOOTER stay put and only the BODY scrolls.
-   It used to scroll as one block (overflow-y on the modal itself), so the
-   device name/badge scrolled away on a long panel — inconsistent with
-   Settings, which pins its header. */
 .modal.panel-modal {
   max-width: 460px; overflow: hidden; overscroll-behavior: contain;
 }
-.panel-header { flex: 0 0 auto; }
-.panel-body { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; padding-top: 4px; }
-/* Edit/Close live in .panel-footer, not here (see BasePanel) — the header is
-   ONLY the icon/title/room/entity-id, so a long device name always gets the
-   full row width to wrap into instead of fighting two buttons for room
-   (the bug report this fixes: the buttons got pushed off-screen). */
-.panel-header { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 20px; }
-.panel-header .title { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1 1 auto; }
-/* A panel's one or two most-used actions (e.g. SummaryGroupPanel's "Turn all
-   on/off") — same idea as Settings' theme buttons living in ITS header. Top-
-   aligned with the close button, which .panel-header already is via
-   align-items:flex-start above. */
-.panel-header-actions { flex: 0 0 auto; }
-/* Single line, truncated with an ellipsis, instead of wrapping a long device
-   name onto a second line. */
-.panel-header .title h2 {
-  /* Smaller than a typical modal heading on purpose — this is the ONE spot
-     that echoes an arbitrary, unbounded device name (every other modal's
-     title is a short fixed string), so it gets more of the row before
-     truncating instead of the same size as e.g. Settings' fixed heading. */
-  margin: 0; font-family: var(--font-display); font-weight: 600; font-size: var(--text-lg);
-  letter-spacing: -0.015em;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
-}
-.panel-header .room { font-size: var(--text-xs); color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.08em; }
+/* The header, body and footer are THE modal sections (04-modals.css) — the
+   device panel, Energy and Weather use them exactly as Settings does. Only the
+   title row's device-specific parts are here. */
+.modal-header .title { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1 1 auto; }
+.modal-header-actions { flex: 0 0 auto; }
+/* A device name is unbounded: single line, truncated with an ellipsis. Same
+   size and weight as every modal title (.modal h2). */
+.modal-header .title h2 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.modal-header .room { font-size: var(--text-xs); color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.08em; }
 .panel-icon { width: 44px; height: 44px; border-radius: 12px; background: var(--bg-card); display: flex; align-items: center; justify-content: center; color: var(--accent); flex-shrink: 0; }
 /* Real map badge shown in the panel header. As a button it's a colour editor. */
 .panel-icon .panel-badge-img, .panel-badge-btn .panel-badge-img { width: 44px; height: 44px; display: block; border-radius: 12px; }
@@ -63,37 +42,10 @@
   font-size: var(--text-sm); box-shadow: none; border: 1px solid var(--hairline);
 }
 .badge-swatch.custom input[type="color"] { width: 26px; height: 26px; border: none; background: none; padding: 0; cursor: pointer; }
-/* Text-labelled button(s), right-aligned, no separator above (see
-   .settings-footer for the same rule applied to the other modal family).
-   Unlike .settings-footer this sits INSIDE the modal's own padding
-   (.panel-modal has no separate header/body/footer padding of their own,
-   see .modal:not(.settings-modal)), so it's inset like the rest of the
-   content rather than bleeding to the card edge. */
-.panel-footer {
-  flex: 0 0 auto;
-  display: flex; align-items: center; justify-content: flex-end; gap: 10px;
-  margin-top: 20px;
-}
-/* Secondary actions in a panel footer (Edit…) read as a soft "ghost" pill
-   rather than a default-looking bordered box — the boxy outline was the
-   single most old-fashioned thing left in these dialogs. */
-.panel-footer .btn {
-  border: none;
-  background: var(--bg-input);
-  border-radius: 999px;
-  padding: 10px 20px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  transition: background 0.15s ease, color 0.15s ease;
-}
-.panel-footer .btn:hover {
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
-  color: var(--accent);
-}
-.panel-footer .btn.primary { background: var(--accent); color: var(--text-on-accent); }
-
 .row-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
 .row-buttons.scroll { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
+/* A panel's controls while Home Assistant has lost the device. */
+.row-buttons.is-unavailable, .temp-stepper.is-unavailable { opacity: 0.5; pointer-events: none; }
 .field { margin: 18px 0; }
 .field > label { display: block; margin-bottom: var(--field-label-gap); }
 
@@ -510,9 +462,9 @@ input[type="range"]::-moz-range-thumb {
    other window the bottom bar opens. Every colour is a theme token: outside
    = --accent, inside = --accent-warm, water = --cat-energy. Values in tabular
    figures: digits that shift width as a reading updates read as flicker. */
-.weather-modal .panel-icon:has(.weather-back) { background: var(--bg-input); padding: 0; }
-.weather-back { width: 44px; height: 44px; border: 0; border-radius: 12px; background: transparent; color: var(--text-primary); display: flex; align-items: center; justify-content: center; cursor: pointer; }
-.weather-live { font-size: var(--text-sm); color: var(--text-secondary); white-space: nowrap; }
+.data-window .panel-icon:has(.data-window-back) { background: var(--bg-input); padding: 0; }
+.data-window-back { width: 44px; height: 44px; border: 0; border-radius: 12px; background: transparent; color: var(--text-primary); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.data-window-live { font-size: var(--text-sm); color: var(--text-secondary); white-space: nowrap; }
 .weather-ranges { flex: 0 1 auto; }
 .weather-ranges button { padding: 0 12px; min-height: 36px; font-size: var(--text-sm); }
 
@@ -531,8 +483,19 @@ input[type="range"]::-moz-range-thumb {
 .weather-band.b3 { background: color-mix(in srgb, var(--accent-warm) 40%, transparent); }
 .weather-band.b4 { border-radius: 0 7px 7px 0; background: color-mix(in srgb, var(--status-danger) 34%, transparent); }
 .weather-mark { position: absolute; top: -3px; width: 20px; height: 20px; margin-left: -10px; border-radius: 10px; border: 3px solid var(--bg-modal); box-sizing: border-box; }
-.weather-mark.out, .dot.out { background: var(--accent); }
-.weather-mark.in, .dot.in { background: var(--accent-warm); }
+/* ── SERIES COLOURS, ONCE (round 9, 2.496.147) ─────────────────────────────
+   Each series class names its colour as --series, for every chart piece that
+   carries it; each piece paints with var(--series). The colours were restated
+   per piece — "out" was var(--accent) six times — and editing one left the
+   others. (The area fills keep their own strengths below.) */
+:is(.key, .chart-line, .weather-bar-fill, .ring-fill, .weather-mark, .dot, .bar-seg, .bar-chart-dot).out { --series: var(--accent); }
+:is(.key, .chart-line, .weather-bar-fill, .ring-fill, .weather-mark, .dot, .bar-seg, .bar-chart-dot).in { --series: var(--accent-warm); }
+:is(.key, .chart-line, .weather-bar-fill, .ring-fill, .weather-mark, .dot, .bar-seg, .bar-chart-dot).water { --series: var(--cat-energy); }
+:is(.key, .chart-line, .weather-bar-fill, .ring-fill, .weather-mark, .dot, .bar-seg, .bar-chart-dot).warm { --series: var(--accent-warm); }
+:is(.key, .chart-line, .weather-bar-fill, .ring-fill, .weather-mark, .dot, .bar-seg, .bar-chart-dot).uv { --series: var(--status-danger); }
+:is(.key, .chart-line, .weather-bar-fill, .ring-fill, .weather-mark, .dot, .bar-seg, .bar-chart-dot):is(.ink, .cost) { --series: var(--text-primary); }
+:is(.key, .chart-line, .weather-bar-fill, .ring-fill, .weather-mark, .dot, .bar-seg, .bar-chart-dot).feels { --series: color-mix(in srgb, var(--accent) 60%, var(--text-primary)); }
+:is(.weather-mark, .dot):is(.out, .in) { background: var(--series); }
 .weather-comfort-labels { display: flex; justify-content: space-between; font-size: var(--text-xs); color: var(--text-secondary); }
 .weather-comfort-legend { display: flex; gap: 22px; flex-wrap: wrap; font-size: var(--text-sm); color: var(--text-primary); }
 .weather-comfort-legend .dot { display: inline-block; width: 10px; height: 10px; border-radius: 5px; margin-right: 6px; }
@@ -580,10 +543,7 @@ input[type="range"]::-moz-range-thumb {
 .weather-bar-v { font-size: var(--text-base); font-weight: 600; font-variant-numeric: tabular-nums; }
 .weather-bar-track { width: 22px; height: 140px; border-radius: 11px; background: var(--bg-card); display: flex; align-items: flex-end; overflow: hidden; }
 .weather-bar-fill { width: 100%; border-radius: 11px; }
-.weather-bar-fill.out { background: var(--accent); }
-.weather-bar-fill.feels { background: color-mix(in srgb, var(--accent) 60%, var(--text-primary)); }
-.weather-bar-fill.water { background: var(--cat-energy); }
-.weather-bar-fill.in { background: var(--accent-warm); }
+.weather-bar-fill:is(.out, .feels, .water, .in) { background: var(--series); }
 .weather-bar-l { font-size: var(--text-xs); color: var(--text-secondary); }
 
 .weather-rings { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: space-around; gap: 12px; }
@@ -600,8 +560,7 @@ input[type="range"]::-moz-range-thumb {
 }
 .ring-track { fill: none; stroke: var(--bg-card); stroke-width: 12; }
 .ring-fill { fill: none; stroke-width: 12; stroke-linecap: round; }
-.ring-fill.water { stroke: var(--cat-energy); }
-.ring-fill.in { stroke: var(--accent-warm); }
+.ring-fill:is(.water, .in) { stroke: var(--series); }
 .ring-value { font: 500 28px var(--font-display); fill: var(--text-primary); text-anchor: middle; }
 .weather-ring-l { font-size: var(--text-base); font-weight: 600; }
 .weather-ring-s { font-size: var(--text-sm); color: var(--text-secondary); }
@@ -661,11 +620,7 @@ input[type="range"]::-moz-range-thumb {
 .weather-legend { display: flex; gap: 12px; font-size: var(--text-xs); color: var(--text-secondary); }
 .weather-legend .key { display: inline-block; width: 14px; height: 3px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
 .weather-legend .key.area { height: 8px; opacity: 0.45; }
-.key.out { background: var(--accent); }
-.key.in { background: var(--accent-warm); }
-.key.water { background: var(--cat-energy); }
-.key.warm { background: var(--accent-warm); }
-.key.ink { background: var(--text-primary); }
+.key:is(.out, .in, .water, .warm, .ink, .uv) { background: var(--series); }
 .weather-chart { width: 100%; height: 150px; flex: 1 1 auto; }
 .weather-chart-wrap { flex: 1 1 auto; display: flex; }
 /* The shared chart tip (spark-tip), one row a line, each with its colour. */
@@ -679,16 +634,12 @@ input[type="range"]::-moz-range-thumb {
 .weather-chart-empty { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; }
 .chart-grid line { stroke: var(--hairline); stroke-width: 1; vector-effect: non-scaling-stroke; }
 .chart-line { fill: none; stroke-width: 2.4; stroke-linejoin: round; }
-.chart-line.out { stroke: var(--accent); }
-.chart-line.in { stroke: var(--accent-warm); }
-.chart-line.water { stroke: var(--cat-energy); }
-.chart-line.warm { stroke: var(--accent-warm); }
+.chart-line:is(.out, .in, .water, .warm, .uv, .ink) { stroke: var(--series); }
 /* UV: the UV scale's own high end, so it reads apart from the sunlight beside
    it (owner, 2026-09-26) — line, legend key, tooltip marker and its axis. */
-.chart-line.uv { stroke: var(--status-danger); }
-.key.uv { background: var(--status-danger); }
+
 .chart-yaxis.tint-uv { color: var(--status-danger); }
-.chart-line.ink { stroke: var(--text-primary); opacity: 0.8; }
+.chart-line.ink { opacity: 0.8; }
 .chart-line.thin { stroke-width: 1.6; }
 .chart-line.dashed { stroke-dasharray: 5 4; }
 .chart-area { stroke: none; }
@@ -726,7 +677,7 @@ input[type="range"]::-moz-range-thumb {
 .bar-seg { flex: 0 0 auto; }
 .bar-seg.none { height: 3px; background: var(--bg-card); }
 .bar-seg.zero { height: 2px; }
-.bar-seg.water { background: var(--cat-energy); }
+.bar-seg.water { background: var(--series); }
 /* No reading: the outage band every history chart draws, the slot's full width. */
 .bar-band { position: absolute; inset: 0; opacity: 0.18; }
 .bar-chart-typical { position: absolute; left: 0; right: 0; border-top: 2px dashed var(--hairline-strong); pointer-events: none; }
@@ -736,40 +687,45 @@ input[type="range"]::-moz-range-thumb {
 .bar-chart-line.cost polyline { stroke: var(--text-primary); }
 .bar-chart-dot { position: absolute; width: 7px; height: 7px; border-radius: 50%; transform: translate(-50%, -50%); border: 1.5px solid var(--bg-panel); pointer-events: none; }
 .bar-chart-dot.hover { width: 11px; height: 11px; }
-.bar-chart-dot.cost, .key.cost { background: var(--text-primary); }
+.bar-chart-dot.cost, .key.cost { background: var(--series); }
 .weather-legend .key.line { height: 3px; border-radius: 2px; }
 .bar-chart-note { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: var(--text-sm); color: var(--text-secondary); pointer-events: none; }
 .bar-chart-axis { position: relative; height: 1.4em; font-size: var(--text-xs); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .bar-chart-axis span { position: absolute; top: 0; white-space: nowrap; }
 .bar-chart-axis span.middle { transform: translateX(-50%); }
 .bar-chart-axis span.end { transform: translateX(-100%); }
-.e-used { background: color-mix(in srgb, var(--accent) 55%, transparent); }
-.e-standout { background: color-mix(in srgb, var(--status-danger) 55%, transparent); }
-.e-untracked { background: color-mix(in srgb, var(--text-secondary) 30%, transparent); fill: color-mix(in srgb, var(--text-secondary) 30%, transparent); }
-.e-s0 { background: color-mix(in srgb, var(--accent-warm) 60%, transparent); fill: color-mix(in srgb, var(--accent-warm) 60%, transparent); }
-.e-s1 { background: color-mix(in srgb, var(--cat-energy) 55%, transparent); fill: color-mix(in srgb, var(--cat-energy) 55%, transparent); }
-.e-s2 { background: color-mix(in srgb, var(--status-danger) 45%, transparent); fill: color-mix(in srgb, var(--status-danger) 45%, transparent); }
-.e-s3 { background: color-mix(in srgb, var(--accent) 55%, transparent); fill: color-mix(in srgb, var(--accent) 55%, transparent); }
-.e-s4 { background: color-mix(in srgb, var(--accent-warm) 30%, transparent); fill: color-mix(in srgb, var(--accent-warm) 30%, transparent); }
-.e-s5 { background: color-mix(in srgb, var(--cat-energy) 28%, transparent); fill: color-mix(in srgb, var(--cat-energy) 28%, transparent); }
+/* Every Energy colour slot states its colour ONCE, as --e; this paints a
+   bar (background) and a pie slice or flow node (fill) with it (round 9);
+   the two bar-only slots paint only a bar. */
+:is(.e-used, .e-standout) { background: var(--e); }
+:is(.e-untracked, .e-other, .e-s0, .e-s1, .e-s2, .e-s3, .e-s4, .e-s5, .e-p0, .e-p1, .e-p2, .e-p3, .e-p4, .e-p5, .e-p6, .e-p7, .e-p8, .e-p9, .e-p10, .e-p11) { background: var(--e); fill: var(--e); }
+.e-used { --e: color-mix(in srgb, var(--accent) 55%, transparent); }
+.e-standout { --e: color-mix(in srgb, var(--status-danger) 55%, transparent); }
+.e-untracked { --e: color-mix(in srgb, var(--text-secondary) 30%, transparent); }
+.e-s0 { --e: color-mix(in srgb, var(--accent-warm) 60%, transparent); }
+.e-s1 { --e: color-mix(in srgb, var(--cat-energy) 55%, transparent); }
+.e-s2 { --e: color-mix(in srgb, var(--status-danger) 45%, transparent); }
+.e-s3 { --e: color-mix(in srgb, var(--accent) 55%, transparent); }
+.e-s4 { --e: color-mix(in srgb, var(--accent-warm) 30%, transparent); }
+.e-s5 { --e: color-mix(in srgb, var(--cat-energy) 28%, transparent); }
 /* The energy flow's and pie's colours: the house, "Other", and twelve slots
    for the devices below the top level — theme tokens mixed, never hex. The
    slots open on hues the top-level devices (e-s0..5) do not use: the first
    device inside a meter was the first meter's tan (2.496.127). */
 .e-house { background: var(--accent); fill: var(--accent); }
-.e-other { background: color-mix(in srgb, var(--text-secondary) 45%, transparent); fill: color-mix(in srgb, var(--text-secondary) 45%, transparent); }
-.e-p0 { background: color-mix(in srgb, var(--accent-teal) 65%, transparent); fill: color-mix(in srgb, var(--accent-teal) 65%, transparent); }
-.e-p1 { background: color-mix(in srgb, var(--status-warning) 65%, transparent); fill: color-mix(in srgb, var(--status-warning) 65%, transparent); }
-.e-p2 { background: color-mix(in srgb, color-mix(in srgb, var(--accent-warm) 50%, var(--status-danger)) 70%, transparent); fill: color-mix(in srgb, color-mix(in srgb, var(--accent-warm) 50%, var(--status-danger)) 70%, transparent); }
-.e-p3 { background: color-mix(in srgb, color-mix(in srgb, var(--cat-energy) 50%, var(--accent-teal)) 70%, transparent); fill: color-mix(in srgb, color-mix(in srgb, var(--cat-energy) 50%, var(--accent-teal)) 70%, transparent); }
-.e-p4 { background: color-mix(in srgb, color-mix(in srgb, var(--status-warning) 50%, var(--accent)) 70%, transparent); fill: color-mix(in srgb, color-mix(in srgb, var(--status-warning) 50%, var(--accent)) 70%, transparent); }
-.e-p5 { background: color-mix(in srgb, color-mix(in srgb, var(--status-danger) 50%, var(--cat-energy)) 70%, transparent); fill: color-mix(in srgb, color-mix(in srgb, var(--status-danger) 50%, var(--cat-energy)) 70%, transparent); }
-.e-p6 { background: color-mix(in srgb, color-mix(in srgb, var(--accent-teal) 50%, var(--accent-warm)) 70%, transparent); fill: color-mix(in srgb, color-mix(in srgb, var(--accent-teal) 50%, var(--accent-warm)) 70%, transparent); }
-.e-p7 { background: color-mix(in srgb, var(--accent) 60%, transparent); fill: color-mix(in srgb, var(--accent) 60%, transparent); }
-.e-p8 { background: color-mix(in srgb, var(--accent-warm) 70%, transparent); fill: color-mix(in srgb, var(--accent-warm) 70%, transparent); }
-.e-p9 { background: color-mix(in srgb, var(--cat-energy) 65%, transparent); fill: color-mix(in srgb, var(--cat-energy) 65%, transparent); }
-.e-p10 { background: color-mix(in srgb, var(--status-danger) 55%, transparent); fill: color-mix(in srgb, var(--status-danger) 55%, transparent); }
-.e-p11 { background: color-mix(in srgb, var(--text-secondary) 45%, transparent); fill: color-mix(in srgb, var(--text-secondary) 45%, transparent); }
+.e-other { --e: color-mix(in srgb, var(--text-secondary) 45%, transparent); }
+.e-p0 { --e: color-mix(in srgb, var(--accent-teal) 65%, transparent); }
+.e-p1 { --e: color-mix(in srgb, var(--status-warning) 65%, transparent); }
+.e-p2 { --e: color-mix(in srgb, color-mix(in srgb, var(--accent-warm) 50%, var(--status-danger)) 70%, transparent); }
+.e-p3 { --e: color-mix(in srgb, color-mix(in srgb, var(--cat-energy) 50%, var(--accent-teal)) 70%, transparent); }
+.e-p4 { --e: color-mix(in srgb, color-mix(in srgb, var(--status-warning) 50%, var(--accent)) 70%, transparent); }
+.e-p5 { --e: color-mix(in srgb, color-mix(in srgb, var(--status-danger) 50%, var(--cat-energy)) 70%, transparent); }
+.e-p6 { --e: color-mix(in srgb, color-mix(in srgb, var(--accent-teal) 50%, var(--accent-warm)) 70%, transparent); }
+.e-p7 { --e: color-mix(in srgb, var(--accent) 60%, transparent); }
+.e-p8 { --e: color-mix(in srgb, var(--accent-warm) 70%, transparent); }
+.e-p9 { --e: color-mix(in srgb, var(--cat-energy) 65%, transparent); }
+.e-p10 { --e: color-mix(in srgb, var(--status-danger) 55%, transparent); }
+.e-p11 { --e: color-mix(in srgb, var(--text-secondary) 45%, transparent); }
 /* Every device as a pie (HA's "Individual devices"): the ring, its total, a legend. */
 .energy-rank-tools { display: flex; align-items: center; gap: 10px; }
 .energy-shape button { padding: 4px 10px; display: inline-flex; align-items: center; }
@@ -798,7 +754,7 @@ input[type="range"]::-moz-range-thumb {
 .energy-flow-name { font: 600 13px var(--font-ui); fill: var(--text-primary); paint-order: stroke; stroke: color-mix(in srgb, var(--bg-card) 70%, transparent); stroke-width: 3px; stroke-linejoin: round; }
 .energy-flow-sub { font: 13px var(--font-ui); fill: var(--text-secondary); }
 /* The flow as rows (a phone only): the "Every device" row, in reading order. */
-.energy-flow-list.energy-rank { display: none; }
+.energy-flow-list { display: none; }
 .energy-note { font-size: var(--text-sm); color: var(--text-secondary); line-height: 1.45; }
 /* Every device as a list: one grid row a device — name, bar (in the device's
    colour class), kWh, share. A phone moves the bar under the name. */
@@ -807,7 +763,13 @@ input[type="range"]::-moz-range-thumb {
 .energy-rank-name { grid-area: name; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .energy-rank-name.muted { color: var(--text-secondary); }
 .energy-rank-note { color: var(--text-secondary); font-size: var(--text-xs); }
-.energy-rank-chevron { color: var(--text-secondary); vertical-align: -2px; margin-right: 4px; }
+.energy-rank-chevron { color: var(--text-secondary); vertical-align: -2px; margin-right: 4px; transition: transform 0.15s ease; }
+.energy-rank-chevron.open { transform: rotate(90deg); }
+/* A main device without devices inside keeps the chevron's column. */
+.energy-rank-chevron-slot { display: inline-block; width: 18px; }
+/* A main device with devices inside is the button that opens them. */
+button.energy-rank-row.energy-rank-group { width: 100%; padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; border-radius: 6px; }
+button.energy-rank-row.energy-rank-group:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .energy-rank-row b { grid-area: kwh; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .energy-rank-pct { grid-area: pct; text-align: right; color: var(--text-secondary); }
 .energy-rank-bar { grid-area: bar; height: 8px; border-radius: 4px; background: var(--bg-card); overflow: hidden; }
@@ -850,7 +812,7 @@ input[type="range"]::-moz-range-thumb {
   .weather-big { font-size: var(--text-display-sm); }
   .weather-headline { font-size: var(--text-xl); }
   .energy-flow-wrap { display: none; }
-  .energy-flow-list.energy-rank { display: flex; }
+  .energy-flow-list { display: block; }
   .energy-rank { gap: 10px; }
   .energy-rank-row { grid-template-columns: minmax(0, 1fr) auto 2.8em; grid-template-areas: "name kwh pct" "bar bar bar"; }
 }

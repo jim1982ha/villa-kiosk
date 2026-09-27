@@ -15,33 +15,28 @@
 // Width: the same as every other window the bottom bar opens
 // (`summary-group-modal`, 780 px) — the owner asked for them to match.
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ChevronLeft, CloudSun, LineChart } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { CloudSun } from "lucide-react";
 import { fmtChartValue, fmtChartTick, fmtChartTime, fmtChartStamp } from "./chartUtils";
 import BarChart from "./BarChart";
-import { Figure, ObservationCards } from "./WindowPieces";
+import { DataWindow, Figure, LiveNote, ObservationCards } from "./WindowPieces";
 import { localMidnight } from "@/utils/localDay";
-import { useChartPointer } from "./useChartPointer";
 import { barNote, seriesBuckets } from "@/utils/barChart";
-import ChartTip from "./ChartTip";
-import { chartGeometry, type ChartGeometry } from "@/utils/chartGeometry";
-import YAxis, { type AxisTick } from "./ChartAxis";
-import BasePanel from "./BasePanel";
+import LineChart, { ChartEmpty } from "./LineChart";
 import { useHA } from "@/ha/HAStateStore";
 import { fetchHistory, fetchStatistics } from "@/ha/HAHistoryAPI";
 import { useHistory } from "@/hooks/useHistory";
 import { useHistoryRange, WEATHER_RANGES, type HistoryRange } from "./historyRange";
 import { peakOf, seriesExtent, seriesTotal, type HistoryStatus } from "@/utils/statisticsSeries";
-import { isUnavailable, STATUS_COLOR } from "@/utils/stateColors";
+import { isUnavailable } from "@/utils/stateColors";
 import type { HassEntity, HistorySeries } from "@/types/ha.types";
 import {
-  beaufort, compass, pressureTendency, toCelsius, toKmh, toHpa, uvBand,
-  UV_BANDS, UV_SCALE_TOP, uvScalePosition, sunshineFraction, rainBand,
+  beaufort, compass, pressureTendency, uvBand, stationReadings, barometerAngle, thermometerFraction, rainTubeTop,
+  weatherHistoryFigures, UV_BANDS, UV_SCALE_TOP, uvScalePosition, sunshineFraction, rainBand,
   comfortHeadline, comfortPosition, COMFORT_BANDS, windowAdvice, laundryAdvice, outdoorsAdvice,
   type Advice, type WeatherRole, type WeatherStation,
 } from "@/config/weatherStation";
 
-type View = "now" | "history";
 
 /** "16 s ago", "3 min ago", "2 h ago". */
 function ago(iso: string | undefined, now: number): string {
@@ -54,7 +49,8 @@ function ago(iso: string | undefined, now: number): string {
 const f1 = (v: number | undefined) => (v === undefined ? "—" : v.toFixed(1));
 const f0 = (v: number | undefined) => (v === undefined ? "—" : String(Math.round(v)));
 
-/** The station's live readings, by role, in the units the rules use. */
+/** The station's live readings, by role — converted by
+ *  weatherStation.stationReadings; this only finds each role's entity. */
 function useReadings(station: WeatherStation) {
   const { entities } = useHA();
   const ent = (role: WeatherRole): HassEntity | undefined => {
@@ -62,72 +58,26 @@ function useReadings(station: WeatherStation) {
     const e = id ? entities[id] : undefined;
     return e && !isUnavailable(e) ? e : undefined;
   };
-  const raw = (role: WeatherRole) => {
-    const e = ent(role);
-    const v = e ? Number(e.state) : NaN;
-    return Number.isFinite(v) ? v : undefined;
-  };
-  const unit = (role: WeatherRole) => String(ent(role)?.attributes.unit_of_measurement ?? "");
-  const c = (role: WeatherRole) => { const v = raw(role); return v === undefined ? undefined : toCelsius(v, unit(role)); };
-  const k = (role: WeatherRole) => { const v = raw(role); return v === undefined ? undefined : toKmh(v, unit(role)); };
-  const rate = raw("rainRate");
-  const vpd = raw("vapourDeficit");
   return {
-    ent,
-    t: c("temperature"), feels: c("feelsLike"), dew: c("dewPoint"),
-    inT: c("indoorTemperature"), inDew: c("indoorDewPoint"),
-    hum: raw("humidity"), inHum: raw("indoorHumidity"),
-    wind: k("windSpeed"), gust: k("windGust"), gustToday: k("windGustToday"), dir: raw("windDirection"),
-    rate, rateUnit: unit("rainRate"), raining: rate === undefined ? undefined : rate > 0,
-    rainToday: raw("rainToday"), rainMonth: raw("rainMonth"), rainYear: raw("rainYear"),
-    rainUnit: unit("rainToday") || "mm",
-    pressure: raw("pressure"), pressureUnit: unit("pressure") || "hPa",
-    vpd: vpd === undefined ? undefined : toHpa(vpd, unit("vapourDeficit")),
-    uv: raw("uv"), solar: raw("solar"),
+    ...stationReadings((role) => {
+      const e = ent(role);
+      return e ? { state: e.state, unit: String(e.attributes.unit_of_measurement ?? "") } : undefined;
+    }),
     updated: ent("temperature")?.last_updated,
   };
 }
 type Readings = ReturnType<typeof useReadings>;
 
 export default function WeatherPanel({ station, onClose }: { station: WeatherStation; onClose: () => void }) {
-  const [view, setView] = useState<View>("now");
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 10_000); return () => clearInterval(t); }, []);
   const r = useReadings(station);
   const { range, picker } = useHistoryRange(WEATHER_RANGES, "weather-ranges");
-  // Each screen opens at its TOP: the body is one scroll area shared by both,
-  // so History used to open wherever Now had been scrolled to.
-  const topRef = useRef<HTMLDivElement>(null);
-  useEffect(() => { topRef.current?.closest(".panel-body")?.scrollTo({ top: 0 }); }, [view]);
-
-  const back = (
-    <button type="button" className="weather-back" onClick={() => setView("now")} aria-label="Back to Weather">
-      <ChevronLeft size={22} />
-    </button>
-  );
   return (
-    <BasePanel
-      title={view === "now" ? "Weather" : "History and trends"}
-      icon={view === "now" ? <CloudSun size={22} /> : back}
-      className="summary-group-modal weather-modal"
-      history={false}
-      onClose={onClose}
-      headerActions={view === "now"
-        ? (r.updated && <span className="weather-live">live · {ago(r.updated, now)}</span>)
-        : picker}
-      // In the footer, so it is visible however far the body scrolls — and in
-      // Settings' "Advanced Settings" style: the same button, the same place.
-      footerLeading={view === "now" && (
-        <button type="button" className="btn ghost" onClick={() => setView("history")}>
-          <LineChart size={18} /> History and trends
-        </button>
-      )}
-    >
-      <div ref={topRef} />
-      {view === "now"
-        ? <NowView station={station} r={r} />
-        : <HistoryView station={station} range={range} />}
-    </BasePanel>
+    <DataWindow title="Weather" icon={<CloudSun size={22} />} onClose={onClose}
+      live={r.updated && <LiveNote>live · {ago(r.updated, now)}</LiveNote>} picker={picker}
+      now={() => <NowView station={station} r={r} />}
+      history={() => <HistoryView station={station} range={range} />} />
   );
 }
 
@@ -259,9 +209,9 @@ function WindCompass({ r }: { r: Readings }) {
   );
 }
 
-/** A barometer dial: 960 hPa at the left end, 1060 at the right. */
+/** A barometer dial (weatherStation.BAROMETER_HPA, barometerAngle). */
 function Barometer({ hpa }: { hpa: number }) {
-  const a = ((Math.max(960, Math.min(1060, hpa)) - 960) / 100) * 270 - 135; // degrees from up
+  const a = barometerAngle(hpa); // degrees from up
   const rad = (a * Math.PI) / 180;
   const x = 115 + 78 * Math.sin(rad), y = 120 - 78 * Math.cos(rad);
   // No "CHANGE" over the arc (owner, 2026-09-26: redundant — the needle
@@ -280,9 +230,9 @@ function Barometer({ hpa }: { hpa: number }) {
   );
 }
 
-/** A thermometer bar, 0–40 °C. */
+/** A thermometer bar (weatherStation.thermometerFraction). */
 function Bar({ label, c, cls }: { label: string; c: number; cls: string }) {
-  const pct = Math.max(4, Math.min(100, (c / 40) * 100));
+  const pct = thermometerFraction(c) * 100;
   return (
     <div className="weather-bar">
       <div className="weather-bar-v">{f1(c)}°</div>
@@ -306,21 +256,16 @@ function Ring({ pct, cls, label, sub }: { pct: number; cls: string; label: strin
   );
 }
 
-/** A rain tube for today, scaled 0–20 mm (or the next 10 above today). */
-/** A rain rate in mm/h, from the sensor's own unit (in/h is converted). */
-function toMmPerHour(v: number, unit: string): number {
-  return /in/i.test(unit) ? v * 25.4 : v;
-}
-
+/** A rain tube for today (weatherStation.rainTubeTop). */
 function RainGauge({ r }: { r: Readings }) {
   const today = r.rainToday ?? 0;
-  const top = Math.max(20, Math.ceil(today / 10) * 10);
+  const top = rainTubeTop(today);
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((q) => ({ v: Math.round(top * q), y: 248 - q * 224 }));
   const fillH = Math.max(3, (today / top) * 232);
   const u = r.rainUnit;
   // The same head as Sun & UV (owner, 2026-09-26): the number, and beside it
   // what it means — here today's rain, and whether and how hard it is raining.
-  const now = r.rate === undefined ? null : rainBand(toMmPerHour(r.rate, r.rateUnit));
+  const now = r.rateMmH === undefined ? null : rainBand(r.rateMmH);
   return (
     <div className="weather-rain">
     <div className="weather-uv-head">
@@ -433,12 +378,15 @@ function HistoryView({ station, range }: { station: WeatherStation; range: Histo
   const { data, status } = useHistory<WeatherHistory>(
     `${ids.join("|")}#${rainId ?? ""}|${range.hours}`,
     async () => {
-      const since = Date.now() - range.hours * 3600_000;
+      // One clock reading for both ends of the window, so its width is
+      // exactly the range's.
+      const at = Date.now();
+      const since = at - range.hours * 3600_000;
       const [measured, rain] = await Promise.all([
         fetchStatistics(ws, ids, range.hours, range.period, ["mean", "min", "max"] as const, since),
         rainId ? fetchStatistics(ws, [rainId], range.hours, range.totalPeriod, ["change"] as const, since) : Promise.resolve(null),
       ]);
-      return { measured, rain: rain && rainId ? rain[rainId].change : undefined, window: { from: since, to: Date.now() } };
+      return { measured, rain: rain && rainId ? rain[rainId].change : undefined, window: { from: since, to: at } };
     },
     { measured: {}, window: { from: 0, to: 0 } },
   );
@@ -463,10 +411,9 @@ function HistoryView({ station, range }: { station: WeatherStation; range: Histo
   return (
     <div className="weather-history">
       <div className="weather-figures">
-        <Figure label="Temperature range" value={t && T ? `${f1(t.min)}° – ${f1(T.max)}°` : "—"} />
-        <Figure label="Strongest gust" value={gustMax !== undefined ? `${f1(gustMax)} ${unitOf(gustRole)}` : "—"} />
-        <Figure label="Rain" value={rainTotal !== undefined ? `${f1(rainTotal)} ${unitOf("rainToday") || "mm"}` : "—"} />
-        <Figure label="Highest UV" value={uvMax !== undefined ? `${Math.round(uvMax)} · ${uvBand(uvMax).band.toLowerCase()}` : "—"} />
+        {weatherHistoryFigures({
+          tMin: t?.min, tMax: T?.max, gustMax, gustUnit: unitOf(gustRole), rainTotal, rainUnit: unitOf("rainToday"), uvMax,
+        }).map((f) => <Figure key={f.label} label={f.label} value={f.value} />)}
       </div>
       <div className="weather-charts">
         <ChartTile title="Temperature" legend={[["Outside", "out"], ["Inside", "in"]]} win={win} status={status}
@@ -485,60 +432,17 @@ function HistoryView({ station, range }: { station: WeatherStation; range: Histo
   );
 }
 
-/** The window's start, middle and "now" — chartGeometry's ticks, labelled by
- *  the app's one tick labeller. */
-function Axis({ g, right }: { g: ChartGeometry | null; right?: boolean }) {
-  if (!g) return <div className="weather-axis"><span>&nbsp;</span></div>;
-  // Under the PLOT, not under the y-axis beside it.
-  return (
-    <div className={`weather-axis under-yaxis${right ? " right" : ""}`}>
-      <span>{fmtChartTick(g.ticks[0], g.spanHours)}</span><span>{fmtChartTick(g.ticks[1], g.spanHours)}</span><span>now</span>
-    </div>
-  );
-}
-
 interface Line { s: HistorySeries | undefined; cls: string; label: string; unit: string; area?: boolean; ownScale?: boolean }
-const W = 320, H = 150, TOP = 12, BOT = 138;
-/** The chart's height on screen (px): the SVG (whose viewBox is H tall) and
- *  its y-axis are both set to it here, so they cannot disagree. */
+/** Every Weather chart's height on screen (px) — the line charts' and the rain bars'. */
 const CHART_PX = 150;
-const PLOT = { left: 0, right: W, top: TOP, bottom: BOT };
 
-/** What a chart says when it has nothing to draw — three different facts. */
-function ChartEmpty({ status }: { status: HistoryStatus }) {
-  if (status === "loading") return <div className="state-timeline-skeleton weather-chart" />;
-  return <div className="muted body-text weather-chart-empty">{status === "failed" ? "Couldn't load this history." : "Not enough history yet."}</div>;
-}
-
-function Bands({ g }: { g: ChartGeometry }) {
-  // A band per line, in its own slice of the plot: which sensor was out is
-  // part of the fact (an indoor sensor down used to break its line unshaded).
-  return <>{g.series.flatMap((s, i) => s.bands.map((b, j) => (
-    <rect key={`gap${i}-${j}`} x={b.x} y={b.y} width={b.w} height={b.h} fill={STATUS_COLOR.unavailable} opacity={0.18} />
-  )))}</>;
-}
-
-/** Gridlines at the left axis' ticks (the plot's own lines, in its units). */
-const Grid = ({ ticks }: { ticks: readonly AxisTick[] }) => (
-  <g className="chart-grid">{ticks.map((t) => <line key={t.v} x1="0" y1={t.y} x2={W} y2={t.y} />)}</g>
-);
-
+/** A Weather chart: its head, then the app's one line chart (LineChart). */
 function ChartTile({ title, legend, note, lines, win, status }: {
   title: string; legend?: [string, string][]; note?: string; lines: Line[]; win: { from: number; to: number }; status: HistoryStatus;
 }) {
   // Every line the station has a sensor for — one with no readings still has
   // its outage, and its band says so.
   const present = lines.filter((l): l is Line & { s: HistorySeries } => !!l.s);
-  const any = present.some((l) => l.s.points.length > 0);
-  const g = any ? chartGeometry(win, present.map((l) => ({ pts: l.s.points, gaps: l.s.gaps, scale: l.ownScale ? "fromZero" as const : "shared" as const })), PLOT, 0.08) : null;
-  // The left axis is the first line's scale; a later line on its OWN scale
-  // (sunlight in W/m², UV beside it) gets a right axis of its own.
-  const leftAxis = g ? g.series[0].ticks : [];
-  const ownAt = present.findIndex((l, i) => i > 0 && l.ownScale);
-  const rightAxis = g && ownAt > 0 ? g.series[ownAt].ticks : null;
-  // The pointer's fraction across the plot, as a time in chartGeometry's window.
-  const { frac, handlers } = useChartPointer<SVGSVGElement>();
-  const hover = g && frac !== null ? g.hover(g.tAt(frac * W)) : null;
   return (
     <div className="weather-tile chart">
       <div className="weather-chart-head">
@@ -546,45 +450,11 @@ function ChartTile({ title, legend, note, lines, win, status }: {
         {legend && <div className="weather-legend">{legend.map(([n, c]) => <span key={n}><i className={`key ${c}`} />{n}</span>)}</div>}
         {note && <div className="weather-legend">{note}</div>}
       </div>
-      {!g
-        ? <ChartEmpty status={status} />
-        : (
-          <div className="chart-with-axis has-unit">
-          <YAxis height={CHART_PX} frame={H} unit={present[0]?.unit.trim()} ticks={leftAxis} />
-          <div className="spark-wrap weather-chart-wrap">
-          <svg className="weather-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={`${title} history`}
-            style={{ height: CHART_PX, touchAction: "none" }} {...handlers}>
-            <Grid ticks={leftAxis} />
-            <Bands g={g} />
-            {g.series.map((sg, i) => (
-              <g key={i}>
-                {sg.runs.map((run, j) => {
-                  const pts = run.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`);
-                  return (
-                    <g key={j}>
-                      {present[i].area && <path d={`M${run[0].x.toFixed(1)},${BOT} L${pts.join(" L")} L${run[run.length - 1].x.toFixed(1)},${BOT} Z`} className={`chart-area ${present[i].cls}`} />}
-                      <polyline points={pts.join(" ")} className={`chart-line ${present[i].cls}`} vectorEffect="non-scaling-stroke" />
-                    </g>
-                  );
-                })}
-              </g>
-            ))}
-            {hover && <line x1={hover.x} y1={TOP} x2={hover.x} y2={BOT} className="spark-crosshair" vectorEffect="non-scaling-stroke" />}
-          </svg>
-          {hover && (
-            <ChartTip x={hover.x / W} y={TOP / H} stamp={fmtChartStamp(hover.t, g.spanHours)}
-              rows={present.flatMap((l, i) => {
-                const r = hover.readings[i];
-                return r ? [{ key: l.label, marker: <i className={`key ${l.cls.split(" ")[0]}`} />, text: `${l.label} ${fmtChartValue(r.v)}${l.unit}` }] : [];
-              })} />
-          )}
-          </div>
-          {/* The right axis is the colour of the line it measures (UV beside
-              sunlight), as the device panels' two-axis chart does. */}
-          {rightAxis && <YAxis side="right" height={CHART_PX} frame={H} unit={present[ownAt].unit.trim() || present[ownAt].label} ticks={rightAxis} cls={present[ownAt].cls.split(" ")[0]} />}
-          </div>
-        )}
-      <Axis g={g} right={!!rightAxis} />
+      <LineChart label={`${title} history`} height={CHART_PX} status={status} window={win.to > win.from ? win : undefined}
+        lines={present.map((l) => ({
+          pts: l.s.points, gaps: l.s.gaps, label: l.label, unit: l.unit, cls: l.cls, area: l.area,
+          scale: l.ownScale ? "fromZero" as const : "shared" as const,
+        }))} />
     </div>
   );
 }

@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { useConfig } from "@/config/ConfigContext";
 import { parseRoomData } from "@/utils/sh3dParser";
 import { extractEmbeddedRoomDataJson } from "@/utils/glbRoomDataExtractor";
-import { fetchAddonConfig, uploadCentralModel, clearAddonConfigCache, clearVersionedModelUrlCache, type AddonConfig } from "@/utils/storage";
+import { fetchAddonConfig, uploadCentralModel, clearAddonConfigCache, clearVersionedModelUrlCache, type AddonConfig } from "@/utils/centralModel";
 import { getLoadedModelInfo } from "@/utils/modelInfo";
 
 export function useGlbUpload(enabled: boolean, onModelChanged: () => void) {
@@ -21,7 +21,7 @@ export function useGlbUpload(enabled: boolean, onModelChanged: () => void) {
   const [uploadMsg, setUploadMsg] = useState<{ text: string; ok: boolean } | null>(null);
   /** 0-100 while a chunked upload is in flight, null otherwise. */
   const [uploadPct, setUploadPct] = useState<number | null>(null);
-  // A stalled chunk is retried (storage.ts's postUploadRequest), which from the
+  // A stalled chunk is retried (centralModel.ts's postUploadRequest), which from the
   // outside looks exactly like a frozen percentage for up to 45s — the reported
   // symptom was "the upload badge never progresses and nothing happens". Say so
   // instead: the count pill switches to the attempt number and the message line

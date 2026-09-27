@@ -37,16 +37,18 @@
 // no-cache-on-failure behaviour) and the state resets so a later authorized
 // call still works.
 
-import { fetchAddonConfig, versionedModelUrl } from "./storage";
-import { readWithProgress, MODEL_FETCH_STALL_MS } from "./fetchProgress";
+import { fetchAddonConfig, versionedModelUrl } from "./centralModel";
+import { fetchModelWithRetry } from "./fetchProgress";
 
 type ProgressListener = (frac: number) => void;
+type RetryListener = (attempt: number, waitMs: number) => void;
 
 interface PrefetchEntry {
   url: string;
   promise: Promise<ArrayBuffer>;
   progress: number;
   listeners: Set<ProgressListener>;
+  retryListeners: Set<RetryListener>;
 }
 
 let state: "idle" | "pending" | "done" = "idle";
@@ -67,21 +69,23 @@ export function startModelPrefetch(): void {
       return;
     }
     const url = await versionedModelUrl(addonCfg.model_path);
-    const e: PrefetchEntry = { url, progress: 0, listeners: new Set(), promise: null as unknown as Promise<ArrayBuffer> };
-    e.promise = fetch(url).then((resp) => {
+    const e: PrefetchEntry = {
+      url, progress: 0, listeners: new Set(), retryListeners: new Set(),
+      promise: null as unknown as Promise<ArrayBuffer>,
+    };
+    // ⚠️ THE SAME FETCH AS THE FOREGROUND ONE (round 10, 2.496.162). This was
+    // a plain fetch + stall watchdog while the canvas used fetchModelWithRetry
+    // (retries, escalation past the service worker) — two strategies for one
+    // file, and 9cd91cb3 had already fixed the stall on the path the failure
+    // was NOT on. A stalled or dropped prefetch now rides the same retries;
+    // its "reconnecting" reaches whoever claims it.
+    e.promise = fetchModelWithRetry(
+      url,
+      (f) => { e.progress = f; e.listeners.forEach((l) => l(f)); },
+      (attempt, wait) => e.retryListeners.forEach((l) => l(attempt, wait)),
+    ).then(({ resp, data }) => {
       if (!resp.ok) throw new Error(`prefetch HTTP ${resp.status}`);
-      // Same stall watchdog as the foreground fetch, and for the SAME failure:
-      // a stalled prefetch is worse than no prefetch, because BabylonCanvas
-      // awaits whatever this promise does (claimPrefetch) instead of running
-      // its own retrying fetch. The 87-second `fetchMs` seen in the field came
-      // through here — the record carried `prefetched: true` — so leaving this
-      // call unbounded would have left the real path unfixed. Rejecting drops
-      // the claimer straight onto fetchModelWithRetry, which retries AND
-      // escalates past the service worker.
-      return readWithProgress(resp, (f) => {
-        e.progress = f;
-        e.listeners.forEach((l) => l(f));
-      }, MODEL_FETCH_STALL_MS);
+      return data;
     }).catch((err) => {
       // A transient failure (e.g. dropped connection while still on the PIN
       // screen) shouldn't permanently block a later retry — but only reset
@@ -103,16 +107,9 @@ export function startModelPrefetch(): void {
 }
 
 /** If a prefetch for this EXACT model URL is in flight or finished, hand it
- *  over (one-shot — claimed at most once) so the real load path can await it
- *  instead of issuing a fresh fetch. Returns null (do a normal fetch) when
- *  nothing matches, e.g. prefetch hasn't started yet, failed, or the model
- *  was replaced in between. `onProgress` mirrors readWithProgress's
- *  contract — call it immediately with the current fraction, then again on
- *  every update; returns an unsubscribe function. */
-export function claimPrefetch(url: string): {
-  promise: Promise<ArrayBuffer>;
-  onProgress: (fn: ProgressListener) => () => void;
-} | null {
+ *  over (one-shot — claimed at most once). Null when nothing matches: the
+ *  prefetch hasn't started, failed, or the model was replaced in between. */
+function claimPrefetch(url: string): PrefetchEntry | null {
   if (!entry) return null;
   const e = entry;
   // One-shot EITHER way: on a URL mismatch (the model was replaced between
@@ -120,13 +117,38 @@ export function claimPrefetch(url: string): {
   // URLs only move forward) keeping it would pin the downloaded multi-MB
   // ArrayBuffer for the rest of the session. Drop our reference so it GCs.
   entry = null;
-  if (e.url !== url) return null;
-  return {
-    promise: e.promise,
-    onProgress: (fn) => {
-      fn(e.progress);
-      e.listeners.add(fn);
-      return () => e.listeners.delete(fn);
-    },
-  };
+  return e.url === url ? e : null;
+}
+
+export type ModelBytes =
+  | { ok: true; data: ArrayBuffer; prefetched: boolean }
+  | { ok: false; status: number };
+
+/**
+ * The model's bytes at `url` — THE one way to get them: the profile screen's
+ * background download when it is for this exact URL (awaited, its progress
+ * and "reconnecting" relayed), else a fresh fetch with the same retries. An
+ * HTTP error status is returned, not retried (a real "nothing there"); a
+ * sustained network outage throws, after the retry budget.
+ */
+export async function modelBytes(
+  url: string, onProgress: ProgressListener, onRetrying?: RetryListener,
+): Promise<ModelBytes> {
+  const claimed = claimPrefetch(url);
+  if (claimed) {
+    onProgress(claimed.progress);
+    claimed.listeners.add(onProgress);
+    if (onRetrying) claimed.retryListeners.add(onRetrying);
+    try {
+      return { ok: true, data: await claimed.promise, prefetched: true };
+    } catch {
+      // The prefetch failed (after its own retries, or an HTTP status) —
+      // fetch afresh below, which reports its own outcome.
+    } finally {
+      claimed.listeners.delete(onProgress);
+      if (onRetrying) claimed.retryListeners.delete(onRetrying);
+    }
+  }
+  const { resp, data } = await fetchModelWithRetry(url, onProgress, onRetrying);
+  return resp.ok ? { ok: true, data, prefetched: false } : { ok: false, status: resp.status };
 }

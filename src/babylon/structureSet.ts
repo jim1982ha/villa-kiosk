@@ -28,8 +28,9 @@ import { beginSpan } from "@/utils/perfSpans";
 import { debugFlagEnabled } from "@/utils/devLog";
 import { tapDebug } from "@/utils/tapDebug";
 import { inferTypeFromEntityId } from "@/config/EntityMap";
-import { isCeilingMesh, structureRole, isHelperMesh } from "./meshRoles";
+import { ceilingVerdict, isCeilingMesh, structureRole, isHelperMesh } from "./meshRoles";
 import { pointInPolygon } from "@/utils/geometry";
+import { stampedFloor } from "./floorOf";
 
 // ⚠️ THE STAIR-FOOT TOLERANCE ("the lowest room floor + 0.30 m is the ground")
 // WAS HERE, and was the height rule storeys.ts retired everywhere else: the
@@ -362,10 +363,12 @@ export class StructureSet {
       // their `isVisible` driven by the view toggle, and made a fifth of the
       // ceiling census meaningless. A ceiling has AREA; these have none, and
       // `BAKED_` is the pipeline's own prefix for its carriers.
-      const degenerate = footMax < 0.01 || m.name.startsWith("BAKED_");
-      const byHeight = !isPipelineStructure && !degenerate
-        && meshMinY > 2.5 && meshH < 0.35;
-      if (!degenerate && (isCeilingMesh(m) || byHeight)) {
+      // The rule itself — with both exclusions and the height guess — is
+      // meshRoles.ceilingVerdict (2.496.170).
+      if (ceilingVerdict({
+        named: isCeilingMesh(m), pipelineStructure: isPipelineStructure, name: m.name,
+        footMax, minY: meshMinY, height: meshH,
+      })) {
         // HIDDEN IN OVERVIEW, SHOWN WHILE WALKING (2.434.0). A ceiling exists to
         // be under, and the two cameras want opposite things from it: the
         // bird's-eye view is a cut-away and a lid over it shows nothing but the
@@ -603,7 +606,7 @@ export class StructureSet {
         + ` bbox=${(bb.maximumWorld.x - bb.minimumWorld.x).toFixed(1)}x`
         + `${(bb.maximumWorld.z - bb.minimumWorld.z).toFixed(1)}m`
         + ` area=${projectedAreaXZ(m).toFixed(1)}m2`
-        + ` floor=${(m.metadata as { floorIndex?: number } | null)?.floorIndex ?? "-"}`
+        + ` floor=${stampedFloor(m) ?? "-"}`
         + ` verts=${m.getTotalVertices()}`
         // ⚠️ `visibility` is NOT `isVisible`. Babylon has both: the boolean gates
         // submission, this is a 0..1 alpha multiplier applied when drawing. A

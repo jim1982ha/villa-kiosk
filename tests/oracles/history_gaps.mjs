@@ -124,8 +124,9 @@ for (const f of lineCharts) console.log(`     ${f.slice(SRC.length + 1)}`);
 if (blind.length) console.log(`      ✗ draws a line but ignores gaps: ${blind.join(", ")}`);
 
 console.log("\n  assertions:");
-ck("the scan sees all four history charts (Sparkline, DualSparkline, Weather, BarChart) — never fewer unseen",
-   lineCharts.length === 4, lineCharts.map((f) => f.slice(SRC.length + 1)));
+ck("the scan sees both history charts (LineChart — every line since 2.496.144 — and BarChart) — never fewer unseen",
+   lineCharts.map((f) => f.slice(SRC.length + 1)).sort().join() === "components/panels/BarChart.tsx,components/panels/LineChart.tsx",
+   lineCharts.map((f) => f.slice(SRC.length + 1)));
 ck("  ...and none of them ignores gaps", blind.length === 0, blind);
 ck("the dead stretch is one gap, spanning first-missing to next-reading", oneGap);
 ck("the line is broken into two runs", runs.length === 2);

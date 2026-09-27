@@ -1,5 +1,5 @@
 // src/components/fm/SpendTab.tsx
-// Maintenance spend against a monthly Minor Maintenance cap — MINOR_MAINTENANCE_CAP_IDR
+// Maintenance spend against a monthly Minor Maintenance cap — MINOR_MAINTENANCE_CAP
 // (see fmTypes.ts), 0 until an operator's own contract/agreement gives it a
 // real one. The cap matters because whatever agreement is in play, it's
 // typically the line that decides who pays for a repair: under it, ordinary
@@ -101,8 +101,8 @@ export default function SpendTab(
     setStatement(doc.markdown);
     setStatementSaved(true);
   };
-  const projected = b.minorIdr + (category === "minor" ? amountIdr : 0);
-  const projectedOver = b.capIdr > 0 && projected >= b.capIdr;
+  const projected = b.minorSpend + (category === "minor" ? amountIdr : 0);
+  const projectedOver = b.cap > 0 && projected >= b.cap;
 
   // Months that actually have entries, newest first — plus the current month so
   // it's always selectable even before anything is recorded in it.
@@ -120,12 +120,12 @@ export default function SpendTab(
 
       <div className={`fm-cap ${b.state}`}>
         <div className="fm-cap-head">
-          <strong>{formatMoney(b.minorIdr)}</strong>
+          <strong>{formatMoney(b.minorSpend)}</strong>
           <span className="muted">
-            {b.capIdr > 0 ? `of ${formatMoney(b.capIdr)} Minor Maintenance cap` : "Minor Maintenance spend (no cap configured)"}
+            {b.cap > 0 ? `of ${formatMoney(b.cap)} Minor Maintenance cap` : "Minor Maintenance spend (no cap configured)"}
           </span>
         </div>
-        {b.capIdr > 0 && (
+        {b.cap > 0 && (
           <div className="fm-cap-bar">
             <span style={{ width: `${Math.min(100, b.fraction * 100)}%` }} />
           </div>
@@ -142,9 +142,9 @@ export default function SpendTab(
             be raised as Major maintenance.
           </p>
         )}
-        {b.majorIdr > 0 && (
+        {b.majorSpend > 0 && (
           <p className="fm-cap-note">
-            Plus {formatMoney(b.majorIdr)} recorded as Major maintenance (Owner&rsquo;s
+            Plus {formatMoney(b.majorSpend)} recorded as Major maintenance (Owner&rsquo;s
             account, outside the cap).
           </p>
         )}
@@ -199,13 +199,13 @@ export default function SpendTab(
 
           {category === "minor" && amountIdr > 0 && (
             <div className={`fm-banner ${projectedOver ? "warn" : ""}`}>
-              {/* b.capIdr, NOT the raw constant — see fmEngine's budgetStatus, where
-                  capIdr <= 0 means "no cap configured yet" and every other line in
+              {/* b.cap, NOT the raw constant — see fmEngine's budgetStatus, where
+                  cap <= 0 means "no cap configured yet" and every other line in
                   this file already gates on it. This one did not, and the shipped
                   default is 0, so an unconfigured install read "…would become
                   IDR 450,000 of IDR 0" while projectedOver was correctly false —
                   a number with no warning attached to it. */}
-              This month would become {formatMoney(projected)} of {formatMoney(b.capIdr)}
+              This month would become {formatMoney(projected)} of {formatMoney(b.cap)}
               {projectedOver && " — over the cap. Consider recording it as Major maintenance instead."}
             </div>
           )}

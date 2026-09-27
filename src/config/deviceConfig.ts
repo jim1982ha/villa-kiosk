@@ -32,6 +32,7 @@
 import { ingressPath } from "@/ha/ingress";
 import type { AppConfig, DeviceGroup } from "./AppConfig";
 import type { EntityMapping, TeleportPoint } from "@/types/scene.types";
+import { backendFetch } from "@/auth/sessionLost";
 import {
   keyBy, diffKeyed, applyKeyed, keyedDiffIsEmpty,
   type Keyed, type KeyedDiff,
@@ -317,7 +318,7 @@ export interface SharedConfigFetch {
  *  reach it" (null) — the latter must NOT overwrite what this device has. */
 export async function fetchSharedConfig(): Promise<SharedConfigFetch | null> {
   try {
-    const resp = await fetch(ingressPath("device-config"), { credentials: "same-origin" });
+    const resp = await backendFetch(ingressPath("device-config"), { credentials: "same-origin" });
     if (!resp.ok) return null;
     const data = (await resp.json()) as { config?: unknown; rev?: unknown };
     const raw = data.config && typeof data.config === "object"
@@ -353,7 +354,7 @@ export async function saveSharedConfig(
 ): Promise<SaveSharedConfigResult> {
   try {
     const merged = { ...carryOver, ...config };
-    const resp = await fetch(ingressPath("device-config"), {
+    const resp = await backendFetch(ingressPath("device-config"), {
       method: "PUT",
       credentials: "same-origin",
       headers: { "Content-Type": "application/json" },

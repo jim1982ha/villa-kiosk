@@ -9,16 +9,20 @@
 // — the only thing that can disagree is a second device edited concurrently,
 // and re-opening the panel re-reads the store.
 
-import { decidePull } from "@/utils/pullDecision";
 import {
   createContext, useCallback, useContext, useEffect, useRef, useState,
   type ReactNode,
 } from "react";
-import { isTicketOpen, isTicketResolved } from "./fmEngine";
+import {
+  isTicketOpen, withCompletion, withoutCost, withoutCompletion, withTicketPatch, withTicketAdvanced, type FmStamp,
+} from "./fmEngine";
+
+/** The real clock and id maker the record changes are stamped with (fmEngine). */
+const stamp = (): FmStamp => ({ now: new Date().toISOString(), id: fmId });
 import {
   fetchFmData, saveFmData, fmId, diffFmData, fmDiffIsEmpty, applyFmDiff,
 } from "./fmApi";
-import { pushWithRebase } from "@/utils/keyedSync";
+import { SyncedDocument } from "@/utils/syncedDocument";
 import { useStoreRefresh, STORE_ACTIVE_MS, STORE_HEARTBEAT_MS } from "@/hooks/useStoreRefresh";
 import { useSyncReporter } from "@/utils/syncTelemetry";
 import {
@@ -98,19 +102,20 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
   const ref = useRef(data);
   ref.current = data;
 
-  /** What the server is known to hold, so a write can send only what THIS
-   *  device changed (see utils/keyedSync.ts). Empty until the first read —
-   *  which is the truth, and makes the first write push everything local. */
-  const baseline = useRef<FmData>(EMPTY_FM_DATA);
-
-  /** Writes this device has started but not yet had confirmed. */
-  const inFlight = useRef(0);
-  /** A write that FAILED and is still only on this device. */
-  const unsaved = useRef(false);
-  /** Writes STARTED, ever — so a refresh can tell that one began while its
-   *  fetch was in flight, which the in-flight count alone cannot (that write
-   *  may already have finished by the time the stale copy arrives). */
-  const writes = useRef(0);
+  /** The sync state machine — utils/syncedDocument, the SAME one the device-
+   *  config store runs (round 10, 2.496.154): the baseline the server is known
+   *  to hold (EMPTY until the first read — the truth, so the first write
+   *  pushes everything local), its revision, writes in flight, writes started
+   *  during a fetch, a failed write still only on this device. */
+  const doc = useRef(new SyncedDocument({
+    fetch: fetchFmData,
+    save: (next: FmData, rev: string, carryOver: Record<string, unknown>) => saveFmData(next, rev, carryOver),
+    diff: diffFmData,
+    isEmpty: fmDiffIsEmpty,
+    apply: applyFmDiff,
+    rebase: (_base: FmData, fresh: FmData) => fresh,
+    empty: EMPTY_FM_DATA,
+  }, EMPTY_FM_DATA)).current;
   /** Retries a failed write. Assigned below, because `mutate` and `reload`
    *  refer to each other: a refresh that finds unsent work re-pushes it. */
   const retryRef = useRef<(() => Promise<void>) | null>(null);
@@ -121,67 +126,45 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
   const reportSync = useSyncReporter("fm");
 
   const reload = useCallback(async () => {
-    // NEVER clobber a change this device hasn't got onto the server yet.
-    // `mutate` applies locally first and pushes after, so between those two
-    // moments local legitimately differs from the server — and a refresh
-    // landing right then would wipe a completion somebody just walked across
-    // the villa to log. Losing a beat of remote changes is fine, losing the
-    // operator's entry is not.
-    if (inFlight.current > 0) {
-      reportSync({ op: "pull", skipped: "write-in-flight" });
-      return;
+    // NEVER clobber a change this device hasn't got onto the server — a write
+    // in flight, one that failed, or one started while this read was out (a
+    // completion somebody just walked across the villa to log). The document
+    // decides (utils/syncedDocument); losing a beat of remote changes is fine,
+    // losing the operator's entry is not.
+    const baselineBefore = doc.baseline;
+    const r = await doc.pull(
+      () => ref.current,
+      (f) => JSON.stringify(f.doc) !== JSON.stringify(baselineBefore),
+    );
+    switch (r.action) {
+      case "wait":
+        reportSync({ op: "pull", skipped: "write-in-flight" });
+        return;
+      case "repush":
+        // A write that FAILED used to be a dead end (this device stopped
+        // accepting remote changes, silently); re-pushing both saves the work
+        // and returns the merged document.
+        reportSync({ op: "pull", deferred: "retrying-unsaved-write" });
+        await retryRef.current?.();
+        return;
+      case "unreachable":
+        reportSync({ op: "pull", aborted: "unreachable" });
+        setReady(true);
+        return;
     }
-    // A write that already FAILED is different, and used to be a dead end:
-    // local stayed ahead of the baseline forever, so this device silently
-    // stopped accepting remote changes for the rest of the session while
-    // showing no reason for it. Re-push instead — that both saves the work
-    // and clears the block, and the push returns the merged document so the
-    // remote changes arrive in the same step.
-    if (unsaved.current) {
-      reportSync({ op: "pull", deferred: "retrying-unsaved-write" });
-      await retryRef.current?.();
-      return;
-    }
-    const writesBefore = writes.current;
-    const fresh = await fetchFmData();
-    // ⚠️ ASKED AGAIN AFTER THE FETCH — see utils/pullDecision. A completion
-    // logged while this request was in flight, whose save finished first, left
-    // `inFlight` back at 0, and the stale copy then overwrote it on screen.
-    const changed = !!fresh && JSON.stringify(fresh.doc) !== JSON.stringify(baseline.current);
-    const action = decidePull({
-      writeInFlight: inFlight.current > 0,
-      reached: !!fresh,
-      serverEmpty: false,                         // an empty FM store is just an empty document
-      localAhead: unsaved.current || writes.current !== writesBefore,
-      wouldChange: changed,
-    });
-    if (action === "wait" || action === "repush") {
-      reportSync({ op: "pull", skipped: action === "wait" ? "write-in-flight" : "write-during-fetch" });
-      // A write that FAILED during the fetch is retried; one that SUCCEEDED
-      // already set this device to the newer merged document.
-      if (unsaved.current) await retryRef.current?.();
-      return;
-    }
-    if (action === "unreachable") {
-      reportSync({ op: "pull", aborted: "unreachable" });
-      setReady(true);
-      return;
-    }
-    if (action === "apply") {
-      setData(fresh!.doc);
-      baseline.current = fresh!.doc;
-    }
+    const fresh = r.fetched;
+    if (r.action === "apply") setData(fresh.doc);
     setReady(true);
     reportSync({
       op: "pull",
-      rev: fresh!.rev,
-      changed,
-      tickets: fresh!.doc.tickets.length,
-      openTickets: fresh!.doc.tickets.filter(isTicketOpen).length,
-      costs: fresh!.doc.costs.length,
-      completions: fresh!.doc.completions.length,
+      rev: fresh.rev,
+      changed: r.action === "apply",
+      tickets: fresh.doc.tickets.length,
+      openTickets: fresh.doc.tickets.filter(isTicketOpen).length,
+      costs: fresh.doc.costs.length,
+      completions: fresh.doc.completions.length,
     });
-  }, [reportSync]);
+  }, [doc, reportSync]);
 
   // Re-read on mount, on focus/visibility, and on a heartbeat — the SAME
   // triggers the device-config store uses. The heartbeat speeds up while the
@@ -207,26 +190,13 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
     const next = fn(before);
     setData(next);
     setSaveError(null);
-    inFlight.current += 1;
-    writes.current += 1;
     // Send ONLY what this action changed, replayed onto the server's freshest
-    // copy under the revision it came at. This used to PUT the whole document
-    // with no revision, so two people working the villa at once — which is the
-    // normal case, the owner and the facility manager both hold
-    // manageFacility — silently overwrote each other's records.
-    const outcome = await pushWithRebase({
-      diff: diffFmData(baseline.current, next),
-      isEmpty: fmDiffIsEmpty,
-      baseline: baseline.current,
-      fetchFresh: fetchFmData,
-      rebase: (_base, fresh) => fresh,
-      apply: applyFmDiff,
-      save: (doc, rev, carryOver) => saveFmData(doc, rev, carryOver, elevation),
-    });
-    inFlight.current -= 1;
+    // copy under the revision it came at (utils/syncedDocument). This used to
+    // PUT the whole document with no revision, so two people working the villa
+    // at once — the owner and the facility manager both hold manageFacility —
+    // silently overwrote each other's records.
+    const outcome = await doc.push(next, (d, rev, carryOver) => saveFmData(d, rev, carryOver, elevation));
     if (outcome.ok) {
-      baseline.current = outcome.next;
-      unsaved.current = false;
       // Fold in whatever another device contributed in the meantime, so this
       // screen reflects the merged truth rather than only its own edit.
       setData(outcome.next);
@@ -238,7 +208,7 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
       });
       return;
     }
-    if (outcome.reason === "nothing-to-push") { unsaved.current = false; return; }
+    if (outcome.reason === "nothing-to-push" || outcome.reason === "not-allowed" || outcome.reason === "not-pulled") return;
     reportSync({ op: "push", ok: false, reason: outcome.reason, elevated: Boolean(elevation) });
     // A rejected DELETE is the one failure that must not be left showing as
     // applied: the record still exists on the server, and every other device
@@ -249,12 +219,10 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
       setSaveError("The delete was refused by the add-on — nothing was removed.");
       return;
     }
-    // Local is now ahead of the server. Flagged rather than merely inferred
-    // from a deep-compare, so the next refresh knows to RETRY this write
-    // instead of skipping forever (see reload).
-    unsaved.current = true;
+    // Local is now ahead of the server; the document has flagged it, so the
+    // next refresh RETRIES this write instead of skipping forever (reload).
     setSaveError("Couldn't save to the add-on — the change is only on this device.");
-  }, [reportSync]);
+  }, [doc, reportSync]);
 
   // Re-pushing is just an identity mutation: the diff is still computed
   // against the un-advanced baseline, so it carries exactly the work that
@@ -281,16 +249,7 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
   const logCompletion = useCallback((
     c: Omit<FmCompletion, "id" | "costId">,
     cost?: Omit<FmCost, "id" | "at" | "photoIds">,
-  ) => mutate((d) => {
-    const costId = cost ? fmId("co") : undefined;
-    const completion: FmCompletion = { ...c, id: fmId("cp"), costId };
-    const costs = cost
-      // The cost inherits the completion's photos and date: it is the same
-      // event, and the report needs them to line up.
-      ? [...d.costs, { ...cost, id: costId!, at: c.at, photoIds: c.photoIds }]
-      : d.costs;
-    return { ...d, completions: [...d.completions, completion], costs };
-  }), [mutate]);
+  ) => mutate((d) => withCompletion(d, c, cost, stamp())), [mutate]);
 
   const addCost = useCallback((c: Omit<FmCost, "id">) =>
     mutate((d) => ({ ...d, costs: [...d.costs, { ...c, id: fmId("co") }] })), [mutate]);
@@ -309,30 +268,13 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
     })), [mutate]);
 
   const removeCost = useCallback((id: string, elevation: string) =>
-    mutate((d) => ({
-      ...d,
-      costs: d.costs.filter((c) => c.id !== id),
-      // A completion pointing at a cost that no longer exists would render as
-      // a job with an unknown price. Drop the link, keep the completion —
-      // the work still happened.
-      completions: d.completions.map((c) => (c.costId === id ? { ...c, costId: undefined } : c)),
-    }), elevation), [mutate]);
+    mutate((d) => withoutCost(d, id), elevation), [mutate]);
 
   const removeTicket = useCallback((id: string, elevation: string) =>
     mutate((d) => ({ ...d, tickets: d.tickets.filter((t) => t.id !== id) }), elevation), [mutate]);
 
   const removeCompletion = useCallback((id: string, elevation: string) =>
-    mutate((d) => {
-      const gone = d.completions.find((c) => c.id === id);
-      return {
-        ...d,
-        completions: d.completions.filter((c) => c.id !== id),
-        // The cost was logged as part of this completion — one event, so
-        // erasing it erases both. Leaving the spend behind would leave money
-        // in the accounts attributed to work with no record.
-        costs: gone?.costId ? d.costs.filter((c) => c.id !== gone.costId) : d.costs,
-      };
-    }, elevation), [mutate]);
+    mutate((d) => withoutCompletion(d, id), elevation), [mutate]);
 
   const addTicket = useCallback((t: Omit<FmTicket, "id" | "openedAt" | "status">) =>
     mutate((d) => ({
@@ -343,66 +285,14 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
     })), [mutate]);
 
   const updateTicket = useCallback((id: string, patch: Partial<FmTicket>) =>
-    mutate((d) => ({
-      ...d,
-      tickets: d.tickets.map((t) => {
-        if (t.id !== id) return t;
-        const next = { ...t, ...patch };
-        // Stamp the resolution time automatically — the operator marks it done,
-        // the app records WHEN, which is what the MTTR evidence rests on.
-        // The WRITE side of the same rule — stamp a resolution time when, and
-        // only when, the status actually becomes resolved.
-        if (isTicketResolved(patch) && !next.resolvedAt) {
-          next.resolvedAt = new Date().toISOString();
-        }
-        return next;
-      }),
-    })), [mutate]);
+    mutate((d) => withTicketPatch(d, id, patch, stamp())), [mutate]);
 
   const advanceTicket = useCallback((
     id: string,
     to: FmTicketStatus,
     step: { by?: string; note?: string; photoIds: string[] },
     cost?: Omit<FmCost, "id" | "at" | "photoIds">,
-  ) => mutate((d) => {
-    const ticket = d.tickets.find((t) => t.id === id);
-    if (!ticket) return d;
-    const at = new Date().toISOString();
-    const resolving = to === "resolved";
-    const costId = resolving && cost ? fmId("co") : undefined;
-    return {
-      ...d,
-      tickets: d.tickets.map((t) => {
-        if (t.id !== id) return t;
-        return {
-          ...t,
-          status: to,
-          // Stamped only on the way IN to resolved, and cleared if the fault
-          // is later reopened — a stale resolution time would silently
-          // corrupt every mean-time-to-resolution figure derived from it.
-          resolvedAt: resolving ? at : undefined,
-          // Evidence gathered at the moment of the step belongs on the fault
-          // itself too: that is the record anyone later opens to see what
-          // actually happened, without walking the timeline.
-          photoIds: [...t.photoIds, ...step.photoIds],
-          costId: costId ?? t.costId,
-          updates: [...(t.updates ?? []), { at, status: to, ...step }],
-        };
-      }),
-      // Only a resolution produces WORK. Picking a fault up is a step in its
-      // life, not a maintenance completion, and logging one for it would
-      // inflate every "work done" count in the record.
-      completions: resolving
-        ? [...d.completions, {
-            id: fmId("cp"), scheduleId: "", ticketId: id, at,
-            by: step.by ?? "—", note: step.note, photoIds: step.photoIds, costId,
-          }]
-        : d.completions,
-      costs: costId
-        ? [...d.costs, { ...cost!, id: costId, at, photoIds: step.photoIds }]
-        : d.costs,
-    };
-  }), [mutate]);
+  ) => mutate((d) => withTicketAdvanced(d, id, to, step, cost, stamp())), [mutate]);
 
   const saveDocument = useCallback((doc: Omit<FmSavedDocument, "id" | "generatedAt">) =>
     mutate((d) => ({

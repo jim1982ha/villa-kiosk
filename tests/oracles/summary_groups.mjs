@@ -1,68 +1,39 @@
-// tests/oracles/summary_groups.mjs
-//
-// Does a light that is not the villa's get counted?
-//
-// ⚠️ THIS FILE USED TO ANSWER THAT QUESTION ABOUT ITSELF. It declared its own
-// `lights`/`locks` lambdas, ran them over a fixture, and compared the two — a
-// decision record with no import of anything, so `summaryGroups.ts` could have
-// been rewritten freely without one line going red. And it had ALREADY drifted
-// without being able to say so: the real `locksGroup` takes three parameters
-// with `allowed` third and returns `null` for a villa with no locks, and the
-// replica modelled neither.
-//
-// The real functions are imported now. The replica is gone.
+// The summary tiles' groups are built from villaSummary's facts
+// (config/summaryGroups, round 10, 2.496.157). locksGroup re-selected `lock.*`
+// with an OPTIONAL villa scope and chose its icon by "all locked, else an open
+// door" — an unreadable lock showed an OPEN DOOR beside the facts' "1 Unknown".
+// And the AC tile appended "°C" whatever Home Assistant's unit system.
 import { register } from "node:module";
+import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
-const { lightsGroup, locksGroup } = await import("@/config/summaryGroups");
+const G = await import("@/config/summaryGroups");
+const V = await import("@/config/villaSummary");
+const { DoorClosed, DoorOpen, Lock } = await import("lucide-react");
 
 let fail = 0;
-const eq = (name, got, want) => {
-  const ok = JSON.stringify(got) === JSON.stringify(want);
-  console.log(`    ${ok ? "PASS" : "FAIL"}  ${name}  →  ${JSON.stringify(got)}${ok ? "" : `  (wanted ${JSON.stringify(want)})`}`);
-  if (!ok) fail++;
-};
+const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
+const e = (id, state) => ({ entity_id: id, state, attributes: {} });
+const ents = (list) => Object.fromEntries(list.map((x) => [x.entity_id, x]));
+const villa = { has: (id) => !id.includes("neighbour") };
 
-const E = (id, state) => [id, { entity_id: id, state, attributes: {} }];
-const ents = Object.fromEntries([
-  E("light.lounge", "on"), E("light.terrace", "off"),
-  E("light.wled_helper", "on"),      // config debris, not a villa device
-  E("light.neighbour_shed", "on"),   // someone else's
-  E("lock.front", "locked"),
-  E("lock.test_lock", "unlocked"),   // a test fixture, not a door
-]);
-// Only `.has` is ever called, so a plain Set stands in for villaDevices(...).
-const villa = new Set(["light.lounge", "light.terrace", "lock.front"]);
+const locks = (states) => { const es = ents(states.map((s, i) => e(`lock.l${i}`, s))); return [V.lockFacts(es, villa), es]; };
+ck("every lock locked: a closed door", G.locksGroup(...locks(["locked", "locked"])).icon === DoorClosed);
+ck("one unlocked: an open door", G.locksGroup(...locks(["locked", "unlocked"])).icon === DoorOpen);
+ck("one that cannot be read and none unlocked: a plain lock — never an open door", G.locksGroup(...locks(["locked", "unavailable"])).icon === Lock);
+ck("  ...an unlocked one still wins over an unreadable one", G.locksGroup(...locks(["unavailable", "unlocked"])).icon === DoorOpen);
+const withNeighbour = ents([e("lock.a", "locked"), e("lock.neighbour", "unlocked"), e("light.a", "on"), e("light.neighbour", "on")]);
+ck("the group is the facts' devices: the villa's own, nothing else (no optional scope left to forget)",
+   G.locksGroup(V.lockFacts(withNeighbour, villa), withNeighbour).entityIds.join() === "lock.a"
+   && G.lightsGroup(V.lightFacts(withNeighbour, villa)).entityIds.join() === "light.a");
+ck("no locks, no group", G.locksGroup(V.lockFacts(ents([]), villa), {}) === null && G.lightsGroup(null) === null);
+ck("the AC temperature in Home Assistant's unit: 24°C, 75°F, a bare degree when unknown",
+   V.fmtClimateTemp(24, "°C") === "24°C" && V.fmtClimateTemp(75, "°F") === "75°F" && V.fmtClimateTemp(24) === "24°");
 
-console.log("  the villa's own devices, and only those:");
-eq("two of four lights are the villa's",
-   lightsGroup(ents, villa)?.entityIds, ["light.lounge", "light.terrace"]);
-eq("one of two locks is a real door",
-   locksGroup(ents, {}, villa)?.entityIds, ["lock.front"]);
-// ⚠️ THE ARGUMENT ORDER IS THE PART A REPLICA GETS WRONG. locksGroup takes
-// entityMap SECOND and the allow-set THIRD; lightsGroup takes the set second.
-// Passing the set where the map belongs silently allows everything, because
-// a plain object has no `.has` and the filter falls through to "no allow-list".
-eq("...and passing the set in the map's place would count them all",
-   locksGroup(ents, villa)?.entityIds.length, 2);
+const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
+const sb = src("components/hud/SummaryBar.tsx"), fm = src("components/fm/FacilityModal.tsx"), sg = src("config/summaryGroups.ts");
+ck("the tile and the Facility shortcut build the groups from the facts", /locksGroup\(facts\.locks,/.test(sb) && /lightsGroup\(facts\.lights\)/.test(sb) && /locksGroup\(lockFacts\(entities, devices\)/.test(fm));
+ck("summaryGroups selects no domain itself and imports no screen", !/startsWith\("lock\.|startsWith\("light\./.test(sg) && !/@\/components\//.test(sg));
+ck("no assumed Celsius on the AC tile", !/°C`/.test(sb) && /fmtClimateTemp\(avg, tempUnit\)/.test(sb) && /haConfig\?\.unit_system\?\.temperature/.test(sb));
 
-console.log("\n  with no allow-list, every matching entity counts:");
-eq("all four lights", lightsGroup(ents)?.entityIds.length, 4);
-eq("both locks", locksGroup(ents)?.entityIds.length, 2);
-
-console.log("\n  a villa with none of a kind gets no tile at all:");
-// ⚠️ `null`, NOT AN EMPTY GROUP — the replica modelled a length and could not
-// have noticed. SummaryBar renders on truthiness, so returning an empty group
-// would put a "Lights" tile reading 0 on a villa with no lights.
-eq("no lights → no group", lightsGroup({}, villa), null);
-eq("no locks → no group", locksGroup({}, {}, villa), null);
-eq("...and an allow-list that matches nothing is the same answer",
-   lightsGroup(ents, new Set()), null);
-
-console.log("\n  what the lock tile says:");
-eq("all locked reads as one state",
-   locksGroup(ents, {}, new Set(["lock.front"]))?.title, "Front");
-eq("more than one lock is titled collectively",
-   locksGroup(ents, {}, new Set(["lock.front", "lock.test_lock"]))?.title, "Locks");
-
-console.log(`\n${fail ? `❌ ${fail} failed` : "✅ the tiles count the villa's own devices"}`);
-process.exit(fail ? 1 : 0);
+if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
+console.log("\n✅ a summary's icon and words come from the same facts");
