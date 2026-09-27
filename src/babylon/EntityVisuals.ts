@@ -869,7 +869,6 @@ export class EntityVisuals {
     roomOf: (id) => this.roomOf(id),
     layoutOf: (g, n) => this.layoutOf(g, n),
     planeOf: (c, x, y, z) => this.planeOf(c, x, y, z),
-    drawnDistance: (ax, ay, az, bx, by, bz) => this.drawnDistance(ax, ay, az, bx, by, bz),
     summaryMetrics: () => this.summaryMetrics(),
     sortCardMembers: (shown, m) => this.sortCardMembers(shown, m),
     cardOf: (cells, max, maxWidth) => this.cardOf(cells, max, maxWidth),
@@ -4421,25 +4420,6 @@ export class EntityVisuals {
   }
 
   /**
-   * The distance between two ALREADY-PROJECTED points — plain pixels, no
-   * conversion, because both sides are on the glass by the time they get here.
-   *
-   * THE rule, and it is applied in exactly two places. Here, for the
-   * comparisons EntityVisuals makes itself (a summary against a badge, a
-   * summary against another summary, the absorb sweep); and in
-   * `placementItems`, which projects once so that every distance the solver
-   * computes — `conflicts`, the spatial hash, the lone-deferral pull-back —
-   * inherits it without a single call site of its own having to remember.
-   * One meaning: "how far apart are these two on the glass".
-   */
-  private drawnDistance(
-    ax: number, ay: number, az: number,
-    bx: number, by: number, bz: number,
-  ): number {
-    return Math.hypot(ax - bx, ay - by, az - bz);
-  }
-
-  /**
    * The pass's clearance numbers, or null if the projection is not usable this
    * frame.
    *
@@ -4518,7 +4498,7 @@ export class EntityVisuals {
    * about a badge of a different size from the one on screen.
    *
    * The PROJECTION happens here, once per badge, and every distance the solver
-   * goes on to compute inherits it — see drawnDistance. The result is also
+   * goes on to compute inherits it — see placementPass's groundOf. The result is also
    * written back onto the ShownLabel, because placeEntityGroups needs the same
    * plane coordinates and projecting twice is how two spaces drift apart.
    *
@@ -4963,8 +4943,11 @@ export class EntityVisuals {
       // median.
       if (this.distPool.length < shown.length) this.distPool = new Float64Array(shown.length * 2);
       const ds = this.distPool;
+      // The eye the measurement and the occlusion rays use (walkEye) — not
+      // `position`, which is parent-relative (2.496.187).
+      const eye = cam.globalPosition;
       for (let i = 0; i < shown.length; i++) {
-        ds[i] = Math.hypot(shown[i].wx - cam.position.x, shown[i].wz - cam.position.z);
+        ds[i] = Math.hypot(shown[i].wx - eye.x, shown[i].wz - eye.z);
       }
       const view = ds.subarray(0, shown.length);
       view.sort();
@@ -5202,7 +5185,11 @@ export class EntityVisuals {
    */
   private isPhoneWidth(): boolean {
     const engine = this.scene.getEngine();
-    const cssWidth = engine.getRenderWidth() * engine.getHardwareScalingLevel();
+    // The canvas's own CSS width, through the SAME conversion the rung uses —
+    // render × hwScale truncates, and at a boundary width the valve's scale
+    // change flipped the answer with nothing moved (2.496.187).
+    const cssWidth = viewportPx(engine.getRenderWidth(), engine.getHardwareScalingLevel(), true,
+      engine.getRenderingCanvas()?.clientWidth);
     return cssWidth > 0 && cssWidth <= PHONE_MAX_CSS_WIDTH;
   }
 

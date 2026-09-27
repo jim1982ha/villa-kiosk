@@ -78,13 +78,13 @@ ck("turning on the spot through 36 headings gives ONE placement", sigs.size === 
 
 // ── the callers ──
 const src = (p) => readFileSync(new URL(`../../src/babylon/${p}`, import.meta.url), "utf8");
-const ev = src("EntityVisuals.ts"), pp = src("placementPass.ts");
+const ev = src("EntityVisuals.ts");
 ck("EntityVisuals gives the eye to the walk camera only, and measures badges AND cards through measuredAt",
    /eye: this\.orbitCamera\(\) \? undefined : this\.walkEye\(\)/.test(ev)
    && /const m = this\.measuredAt\(clearance, s\.wx, s\.wy, s\.wz\);\s*onGlass\(clearance, m\.x, m\.y, m\.z/.test(ev)
    && /const m = this\.measuredAt\(clearance, x, y, z\);\s*const p = projectToView\(clearance\.basis, m\.x, m\.y, m\.z/.test(ev));
-ck("the absorb test takes the walk camera's ground axes as ONE distance",
-   /Math\.hypot\(dx, dz\) < reach \+ boxes\[j\]\.halfW \+ gapPx/.test(pp));
+// The absorb test's ground metric is driven by VALUE in walk_frame.mjs (the
+// same distance in every direction) — it replaced a regex pin here.
 
 if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
 console.log("\n✅ walking: one placement at every heading, measured as drawn");

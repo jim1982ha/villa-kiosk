@@ -9,6 +9,7 @@ import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
 const { rungAt, viewportPx } = await import("@/babylon/badgeScale");
+const { PHONE_MAX_CSS_WIDTH } = await import("@/babylon/badgeMetrics");
 const { RoomFocus } = await import("@/babylon/roomFocus");
 
 let fail = 0;
@@ -39,6 +40,16 @@ ck("  ...while zooming OUT still ends it", g.size === 0, g.size);
 
 const ev = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
 ck("the layout gives the rung the canvas's CSS height", /viewportPx\(engine\.getRenderHeight\(\), engine\.getHardwareScalingLevel\(\), cssPixels,\s*engine\.getRenderingCanvas\(\)\?\.clientHeight\)/.test(ev));
+// The SAME conversion answers "is this a phone" (2.496.187). It used to be
+// render width × hwScale, which truncation reads SHORT: a window one CSS px
+// above the phone limit read as a phone at some valve scales and regrouped
+// its badges with nothing moved.
+{
+  const W = PHONE_MAX_CSS_WIDTH + 1, hw = 1.5, render = Math.trunc(W / hw);
+  ck("one px wider than a phone, read through the canvas: not a phone", viewportPx(render, hw, true, W) > PHONE_MAX_CSS_WIDTH, viewportPx(render, hw, true, W));
+  ck("  ...where render × hwScale read it as one", render * hw <= PHONE_MAX_CSS_WIDTH, render * hw);
+}
+ck("the phone test reads the canvas's CSS width the same way", /const cssWidth = viewportPx\(engine\.getRenderWidth\(\), engine\.getHardwareScalingLevel\(\), true,\s*engine\.getRenderingCanvas\(\)\?\.clientWidth\);/.test(ev));
 
 if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
 console.log("\n✅ a tapped room stays open when the pointer moves");

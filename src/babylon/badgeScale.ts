@@ -59,12 +59,13 @@ export function iconZoomAt(rung: number, vpH: number, tanHalf: number, fitRadius
   return snapToZoomLattice(Math.min(1, Math.max(ICON_ZOOM_MIN_SCALE, ratio)));
 }
 
-/** The viewport height a rung is measured in. RENDER pixels within a frame
- *  (the boxes it is compared with are render pixels too); CSS pixels for any
- *  value compared ACROSS frames, because the resolution valve moves the render
- *  height every time the camera starts and stops (c3367bcd). */
-export function viewportPx(renderHeight: number, hwScale: number, cssPixels: boolean, cssHeight?: number): number {
-  if (!cssPixels) return renderHeight;
+/** One viewport extent (height for a rung, width for "is this a phone"), in
+ *  RENDER pixels within a frame (the boxes it is compared with are render
+ *  pixels too); CSS pixels for any value compared ACROSS frames, because the
+ *  resolution valve moves the render size every time the camera starts and
+ *  stops (c3367bcd). */
+export function viewportPx(renderPx: number, hwScale: number, cssPixels: boolean, cssPx?: number): number {
+  if (!cssPixels) return renderPx;
   // ⚠️ THE CANVAS'S OWN CSS HEIGHT WHEN THERE IS ONE (2.496.181). The render
   // height is TRUNCATED to whole pixels (Babylon's setSize), so
   // `renderHeight × hwScale` came back up to a pixel SHORT at some scales —
@@ -78,6 +79,6 @@ export function viewportPx(renderHeight: number, hwScale: number, cssPixels: boo
   // (headless), rounding UP restores it EXACTLY only while hwScale ≤ 1 (the
   // truncation leaves it short by less than hwScale); above that it is a best
   // effort.
-  if (cssHeight !== undefined && cssHeight > 0) return cssHeight;
-  return Math.ceil(renderHeight * hwScale - 1e-6);
+  if (cssPx !== undefined && cssPx > 0) return cssPx;
+  return Math.ceil(renderPx * hwScale - 1e-6);
 }

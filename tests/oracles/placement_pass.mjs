@@ -27,7 +27,6 @@ function rig(rooms) {
     roomOf: (id) => rooms[id] ?? NO_ROOM_LABEL,
     layoutOf: (g, n) => arrange(Math.max(1, Math.min(g.grid, n)), 40, 0.8, 2),
     planeOf: (c, x, y, z) => ({ sx: x * c.pxPerWorld, sy: z * c.pxPerWorld, sz: 0 }),
-    drawnDistance: (ax, ay, az, bx, by, bz) => Math.hypot(ax - bx, ay - by, az - bz),
     summaryMetrics: () => ({ size: 40, font: 16, countSize: 16, countFont: 10 }),
     sortCardMembers: (shown, m) => m.sort((a, b) => (shown[a].id < shown[b].id ? -1 : 1)),
     cardOf: (cells) => arrange(Math.max(1, cells), 40, 0.8, 2),

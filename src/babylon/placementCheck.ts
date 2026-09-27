@@ -372,8 +372,8 @@ export class PlacementCheck {
 
     // "Nothing is drawn inside a summary's ink" — the invariant the absorb
     // phase exists to establish — used to be checked separately here, via
-    // drawnDistance. That made it circular in exactly the way the badge-pair
-    // check was: absorb decides with drawnDistance, so re-asking drawnDistance
+    // the distance absorb used. That made it circular in exactly the way the
+    // badge-pair check was: re-asking absorb's own distance
     // could only ever agree. It is check (b)'s `buried` counter now, measured
     // against the card's drawn box.
     // Order independence — the purity guard.
