@@ -1,3 +1,11 @@
+## 2.496.206
+
+### Security
+- **A signed-out tablet no longer keeps the floor plan.** The 3D model was served from the app's offline cache before the sign-in check ran, so after "Log out" on a shared device the next person could still open the villa without a passcode. Logging out (and a session the server ends) now clears that cache. The model is downloaded again at the next sign-in.
+- **Wrong-passcode lockouts can no longer be aimed at someone else.** The lockout counter was keyed by an address the client itself could write, so a few wrong passcodes could lock the owner's own device out. It is now keyed by the address the add-on actually accepted the connection from.
+- **Facility reports: text typed by a guest stays inside its table cell.** A line break in a fault title could turn the rest of the title into a heading or notice in the owner's monthly report. Every free-text cell is flattened in one place.
+- **Writes the browser itself flags as cross-site are refused**, a second layer behind the session cookie's own protection; and the cookie's protective attributes are now asserted by a test.
+
 ## 2.496.205
 
 ### Fixed
