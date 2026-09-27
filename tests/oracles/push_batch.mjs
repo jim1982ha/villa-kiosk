@@ -14,7 +14,29 @@ const { villaSummary, domainIndex } = await import("@/config/villaSummary");
 const { villaDevices, deviceFolding } = await import("@/config/deviceGroups");
 
 
-console.log("  the batch:");
+console.log("  the batch, with the browser's rule for window functions:");
+{
+  // In a browser, `setTimeout`/`clearTimeout` called with any `this` other
+  // than the window throw "Illegal invocation"; Node lets it pass, which is
+  // how 2.496.197 shipped a store that threw on every state event. Enforce
+  // the rule here, BEFORE the class captures its defaults.
+  const realSet = globalThis.setTimeout, realClear = globalThis.clearTimeout;
+  const strict = (real) => function (...args) {
+    if (this !== undefined && this !== globalThis) throw new TypeError("Illegal invocation");
+    return real.apply(globalThis, args);
+  };
+  globalThis.setTimeout = strict(realSet); globalThis.clearTimeout = strict(realClear);
+  let threw = null;
+  try {
+    const b = new PushBatch(1, () => {});
+    b.push({ entity_id: "light.a", state: "on" });
+    b.dispose();
+  } catch (e) { threw = String(e); }
+  globalThis.setTimeout = realSet; globalThis.clearTimeout = realClear;
+  ck("the default scheduler is callable as a method (no 'Illegal invocation')", threw === null, threw);
+}
+
+console.log("\n  the batch:");
 {
   const timers = []; let drained = [];
   const b = new PushBatch(250, (m) => drained.push([...m.values()]), (fn, ms) => { timers.push({ fn, ms }); return timers.length; }, (t) => { timers[t - 1].cancelled = true; });

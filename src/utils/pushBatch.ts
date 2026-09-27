@@ -25,11 +25,22 @@ export class PushBatch<T extends { entity_id: string }> {
   private readonly cancel: (t: ReturnType<typeof setTimeout>) => void;
 
   // No parameter properties: Node's type stripping (the oracles) refuses them.
+  //
+  // ⚠️ THE DEFAULTS ARE ARROWS, NOT THE BARE `setTimeout` (2.496.204). A bare
+  // `setTimeout` stored on the instance is called as `this.schedule(...)`,
+  // i.e. with a PushBatch as `this` — and in a browser that is
+  // "TypeError: Illegal invocation" (window functions refuse a foreign
+  // `this`). Node does not care, so tsc and the oracle were green while
+  // every state_changed event on the wall threw inside the store BEFORE
+  // notify(): no state reached the badges or React, the error reporter
+  // posted one telemetry event per HA event, and the kiosk read as dead.
+  // push_batch.mjs now runs the batch through a scheduler that enforces the
+  // browser's rule.
   constructor(
     windowMs: number,
     drain: (batch: ReadonlyMap<string, T>) => void,
-    schedule: (fn: () => void, ms: number) => ReturnType<typeof setTimeout> = setTimeout,
-    cancel: (t: ReturnType<typeof setTimeout>) => void = clearTimeout,
+    schedule: (fn: () => void, ms: number) => ReturnType<typeof setTimeout> = (fn, ms) => setTimeout(fn, ms),
+    cancel: (t: ReturnType<typeof setTimeout>) => void = (t) => clearTimeout(t),
   ) {
     this.windowMs = windowMs; this.drain = drain; this.schedule = schedule; this.cancel = cancel;
   }

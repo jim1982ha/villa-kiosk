@@ -1,3 +1,14 @@
+## 2.496.204
+
+### Fixed
+- **Devices react to taps again, and their state shows on the map.** Since
+  2.496.197 every state change from Home Assistant hit an error inside the
+  kiosk before it reached the 3D view or the panels, so a tapped light did
+  switch in Home Assistant but nothing on screen followed, and the kiosk read
+  as dead. The same error was also reported to the diagnostics log on every
+  event (about ten a second), which is why the add-on log filled up.
+- The diagnostics log now records a given error at most once per 30 s.
+
 ## 2.496.203
 
 ### Behind the scenes
