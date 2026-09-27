@@ -628,3 +628,8 @@ label.toggle span { user-select: none; line-height: 1.4; }
   border-left: none;
   transform: rotate(42deg);
 }
+
+/* The legend's keyboard list: the keys in a column of their own. */
+.legend-keys { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 10px; }
+.legend-keys .legend-row { display: grid; grid-template-columns: minmax(0, 15em) 1fr; gap: 12px; align-items: baseline; }
+.legend-keys kbd { font: 600 var(--text-xs) var(--font-ui); padding: 3px 8px; border-radius: 6px; background: var(--bg-input); border: 1px solid var(--hairline); white-space: nowrap; justify-self: start; }

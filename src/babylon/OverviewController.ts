@@ -41,6 +41,9 @@ import { cameraFrame } from "./cameraFrame";
 import { BETA_MAX, BETA_MIN, clampBeta, clampPose, clampRadius, clampTarget, fitFrame, type PanBounds, type RadiusLimits } from "./overviewPose";
 // Babylon prototype patches this module depends on — see babylonSideEffects.
 import "./babylonSideEffects";
+import { FrameClock } from "./frameClock";
+import { keyIsForCamera, overviewKeyAction, overviewKeyStep, type OverviewKeyAction } from "./overviewKeys";
+import type { Observer } from "@babylonjs/core/Misc/observable";
 
 interface OverviewCallbacks {
   onActivity: () => void;
@@ -232,6 +235,10 @@ export class OverviewController {
     this.canvas.addEventListener("pointercancel",this.onPointerUp);
     this.canvas.addEventListener("pointerleave", this.onPointerUp);
     this.canvas.addEventListener("wheel",        this.onWheel, { passive: false });
+    // The keyboard — the touch screen's four movements (overviewKeys.ts).
+    window.addEventListener("keydown", this.onKey);
+    window.addEventListener("keyup", this.onKey);
+    window.addEventListener("blur", this.releaseKeys);
     this.attached = true;
   }
 
@@ -243,6 +250,10 @@ export class OverviewController {
     this.canvas.removeEventListener("pointercancel",this.onPointerUp);
     this.canvas.removeEventListener("pointerleave", this.onPointerUp);
     this.canvas.removeEventListener("wheel",        this.onWheel);
+    window.removeEventListener("keydown", this.onKey);
+    window.removeEventListener("keyup", this.onKey);
+    window.removeEventListener("blur", this.releaseKeys);
+    this.releaseKeys();
     this.pointers.clear();
     this.touchBase = null;
     this.attached = false;
@@ -501,6 +512,57 @@ export class OverviewController {
     if (dx !== 0) this.applyPan(dx * s, 0, WHEEL_PAN_SENS);
     this.cb.onActivity();
   };
+
+  // ── The keyboard (overviewKeys.ts) ─────────────────────────────────────────
+  private readonly held = new Set<OverviewKeyAction>();
+  private readonly keyClock = new FrameClock();
+  private keyObserver: Observer<Scene> | null = null;
+
+  private onKey = (e: KeyboardEvent): void => {
+    if (!keyIsForCamera(e.target)) return;
+    if (e.type === "keyup") {
+      // Released whatever it meant when pressed: Shift may have changed since,
+      // and a key that stays "held" would drift the camera for ever.
+      for (const shift of [false, true]) {
+        const a = overviewKeyAction(e.code, e.key, shift);
+        if (a) this.held.delete(a);
+      }
+      if (this.held.size === 0) this.stopKeyLoop();
+      return;
+    }
+    const a = overviewKeyAction(e.code, e.key, e.shiftKey);
+    if (!a || e.ctrlKey || e.metaKey || e.altKey) return;
+    e.preventDefault();
+    this.held.add(a);
+    this.startKeyLoop();
+  };
+
+  private releaseKeys = (): void => { this.held.clear(); this.stopKeyLoop(); };
+
+  private startKeyLoop(): void {
+    if (this.keyObserver) return;
+    this.keyClock.reset();
+    this.keyObserver = this.scene.onBeforeRenderObservable.add(() => this.keyStep());
+    this.cb.onActivity();
+  }
+
+  private stopKeyLoop(): void {
+    if (!this.keyObserver) return;
+    this.scene.onBeforeRenderObservable.remove(this.keyObserver);
+    this.keyObserver = null;
+  }
+
+  /** One frame of held keys, through the SAME primitives the gestures use —
+   *  the pointer's pan, the Shift+drag rotation, the tilt and zoom clamps. */
+  private keyStep(): void {
+    if (this.held.size === 0) { this.stopKeyLoop(); return; }
+    const k = overviewKeyStep(this.held, this.naturalScrolling, this.keyClock.step(performance.now()) / 1000);
+    if (k.dragX !== 0 || k.dragY !== 0) this.applyPan(k.dragX, k.dragY, DRAG_SENS);
+    if (k.rotate !== 0) this.camera.alpha += k.rotate;
+    if (k.tilt !== 0) this.applyTilt(k.tilt);
+    if (k.zoom !== 1) this.camera.radius = clampRadius(this.camera.radius * k.zoom, this.radiusLimits);
+    this.cb.onActivity();   // the scene renders on demand: keep frames coming
+  }
 
   // ── Movement primitives ────────────────────────────────────────────────────
 

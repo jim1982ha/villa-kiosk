@@ -24,6 +24,7 @@ import { TapRecognizer } from "./TapRecognizer";
 // Babylon prototype patches this module depends on — see babylonSideEffects.
 import "./babylonSideEffects";
 import { keyLook, PITCH_LIMIT } from "./keyLook";
+import { keyIsForCamera } from "./overviewKeys";
 
 interface CameraCallbacks {
   onRoomChange: (room: string | null) => void;
@@ -314,6 +315,9 @@ export class CameraController {
   private keys = new Set<string>();
 
   private onKey = (e: KeyboardEvent): void => {
+    // Not while typing in a field or with a dialog open (overviewKeys) —
+    // arrow keys in a Settings field walked the villa behind it.
+    if (!keyIsForCamera(e.target) && e.type === "keydown") return;
     this.shift = e.shiftKey;
     const map: Record<string, string> = {
       ArrowUp: "fwd", KeyW: "fwd", ArrowDown: "back", KeyS: "back",

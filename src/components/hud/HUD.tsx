@@ -533,8 +533,8 @@ export default function HUD({
             <button
               className="icon-btn hud-cat-help"
               onClick={() => setLegendOpen(true)}
-              title="What do these colours mean?"
-              aria-label="Map colour legend"
+              title="What do these colours mean — and the keyboard keys"
+              aria-label="Map colours and keyboard keys"
             >
               <CircleHelp size={24} />
             </button>

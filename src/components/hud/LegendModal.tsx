@@ -10,6 +10,8 @@ import { CATEGORY_ORDER, CATEGORY_LABELS, categorySurface, type DeviceSurfaceSta
 import { useModalA11y } from "@/hooks/useModalA11y";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { STATUS_COLOR } from "@/utils/stateColors";
+import { useConfig } from "@/config/ConfigContext";
+import { overviewKeyHelp } from "@/babylon/overviewKeys";
 
 /** What the MAP badge actually does per state — mirrors config/
  *  EntityCategories.categorySurface exactly (VESTA-DESIGN.md §0): neutral by
@@ -49,6 +51,7 @@ const STATUS_ITEMS: { label: string; swatch: string; note: string }[] = [
 ];
 
 export default function LegendModal({ onClose }: { onClose: () => void }) {
+  const { config } = useConfig();
   // Focus trap + Escape + focus restore (see useModalA11y).
   const dialogRef = useModalA11y(onClose);
   // Every swatch below is a colour composited in JS from the theme's tokens,
@@ -69,10 +72,10 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-label="Map colours"
+        aria-label="Map colours and keys"
       >
         <div className="modal-header">
-          <h2>Map colours</h2>
+          <h2>Map colours &amp; keys</h2>
         </div>
         <div className="modal-body">
           <div className="settings-section-title">Device category (badge colour when active)</div>
@@ -119,6 +122,21 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
               );
             })}
           </div>
+
+          {/* The keyboard, as the current Natural Scroll setting makes it act
+              (overviewKeys.overviewKeyHelp) — nowhere else says it. */}
+          <div className="settings-section-title">Moving around with a keyboard</div>
+          <p className="muted body-text" style={{ marginTop: 4 }}>
+            Bird's-eye view — hold a key to keep moving{config.naturalScrolling ? " (Natural Scroll is on)" : " (Natural Scroll is off)"}:
+          </p>
+          <div className="legend-keys">
+            {overviewKeyHelp(config.naturalScrolling).map((k) => (
+              <div className="legend-row" key={k.keys}><kbd>{k.keys}</kbd><span>{k.does}</span></div>
+            ))}
+          </div>
+          <p className="muted body-text">
+            Walking: ↑ ↓ or W S walk, ← → or A D turn, Q / E step sideways, Shift + ↑ ↓ look up or down.
+          </p>
 
           <div className="settings-section-title">On a device panel (status pill)</div>
           <p className="muted body-text" style={{ marginTop: 4 }}>
