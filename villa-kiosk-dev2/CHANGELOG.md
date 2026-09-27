@@ -1,3 +1,16 @@
+## 2.496.187
+
+### Fixed
+- **Walking through the villa, fewer devices vanish with no card and no room
+  label.** A device standing just beside a group card could stop that card
+  from being drawn without being taken into it, and then showed nowhere.
+  Card, device and room-label spacing are now judged the same way, so a
+  device is either inside a card or clear of it.
+- **A room label far down a corridor no longer hides the devices in front of
+  you** because it happened to line up with them on screen.
+- **Windows right at the phone width limit keep their layout while the view
+  moves**, instead of briefly switching to the phone layout.
+
 ## 2.496.186
 
 ### Fixed
