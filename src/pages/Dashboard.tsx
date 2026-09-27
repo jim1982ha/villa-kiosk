@@ -45,6 +45,7 @@ import type { ActivePanel } from "@/types/panel.types";
 import type { Category, TeleportPoint } from "@/types/scene.types";
 import { VillaModelProvider } from "@/config/VillaModel";
 import { devicePower } from "@/utils/devicePower";
+import { readSceneMirror } from "./sceneMirror";
 
 
 export default function Dashboard() {
@@ -430,21 +431,16 @@ export default function Dashboard() {
     ? (config.entityMap[activePanel.entityId] ?? activePanel.mapping).motionEntityId
     : undefined;
 
-  // The app lands in the bird's-eye overview: the SCENE decides that (its
-  // constructor starts there), and this only reads it. A new SceneManager — a
-  // cold start, or a model (re)load remounting the canvas — starts in overview
-  // again, so React's copy is re-read rather than told. This used to call
-  // manager.setViewMode("overview") on ready, which returned at once because
-  // the scene was already there; only its React half ever did anything.
+  // Everything React shows of the scene's own state, read from EACH new scene
+  // (a cold start, or a model reload remounting the canvas) — the view it
+  // starts in, this device's saved default view, and its floor
+  // (pages/sceneMirror: the floor was the one left behind).
   useEffect(() => {
-    if (manager) setViewMode(manager.getViewMode());
-  }, [manager]);
-
-  // Read this device's saved-default-view flag whenever the manager changes
-  // (a model reload swaps it) so the HUD button's pressed state is correct
-  // from the start, not just after the user next saves it.
-  useEffect(() => {
-    setHasOverviewDefault(manager?.hasOverviewDefault() ?? false);
+    if (!manager) return;
+    const m = readSceneMirror(manager);
+    setViewMode(m.viewMode);
+    setHasOverviewDefault(m.hasOverviewDefault);
+    setCurrentFloor(m.floor);
   }, [manager]);
 
   // Tap the brand icon (see HUD.tsx's .hud-brand + useHomeAnchor) → jump to

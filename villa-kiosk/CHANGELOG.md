@@ -1,3 +1,11 @@
+## 2.496.186
+
+### Fixed
+- **After uploading or reloading the 3D model, the floor buttons show the
+  floor you are actually on.** They kept the previous floor (e.g. 2F) while
+  the villa had gone back to 1F, and teleporting to a room upstairs then
+  skipped the floor change.
+
 ## 2.496.185
 
 ### Fixed — lights in the 3D villa
