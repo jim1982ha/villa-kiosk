@@ -1,3 +1,11 @@
+## 2.496.180
+
+### Changed — keyboard in the bird's-eye view
+- **↑ / ↓ (and W / S) are inverted** in the bird's-eye view: with Natural
+  Scroll on, ↑ now moves the view forward and ↓ back (with it off, the
+  reverse). ← / → are unchanged, and so is walk mode. The **?** window lists
+  the new behaviour.
+
 ## 2.496.179
 
 ### Fixed — history charts
