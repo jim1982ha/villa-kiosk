@@ -5737,11 +5737,13 @@ export class EntityVisuals {
     // ONE object, both readers — fitChipLabel truncates against exactly the
     // model the merge then measures the result with.
     const chipText = this.chipTextMetrics();
+    const behind = new Set<RoomChip>();
     const measure = (c: RoomChip) => {
       c.label = fitChipLabel(c.room, chipSuffixOf(c), chipText, chipBudget);
       if (vp) {
         const p = Vector3.Project(c.centre, Matrix.IdentityReadOnly, tm, vp);
         c.x = p.x; c.y = p.y;
+        if (p.z >= 0 && p.z <= 1) behind.delete(c); else behind.add(c);
       }
       // Same width ESTIMATE the old path used (chipWidthPx) — it only has to be
       // close enough to decide overlap, not match the drawn glyphs exactly.
@@ -5756,8 +5758,17 @@ export class EntityVisuals {
 
     const chips: RoomChip[] = seeds;
     for (const c of chips) measure(c);
+    // ⚠️ ONLY CHIPS IN FRONT OF THE CAMERA MERGE (2.496.177). A room BEHIND
+    // the walker projects to a MIRRORED point — Vector3.Project does not know
+    // it is behind — which can land on the screen and "overlap" a chip that is
+    // really there. It then merged into it: "Swimming Pool +7" drawn ahead of
+    // the walker with the pool behind him, sliding as he turned (the mirrored
+    // point moves) until the merge broke and it vanished (owner, walk mode).
+    // A chip behind the camera is not drawn (the GUI skips a linked control
+    // outside the depth range), so it stays its own and never joins one.
+    const front = chips.filter((c) => !behind.has(c));
 
-    if (merge && vp && chips.length > 1) {
+    if (merge && vp && front.length > 1) {
       // ── THE SAME GAP AS EVERY OTHER TIER (2.419.0) ────────────────────
       // This read `chipGapPx`, a second dial that stayed at 6 when 2.412.0 cut
       // the shared one to 2 — so room chips merged at THREE TIMES the clear
@@ -5788,13 +5799,14 @@ export class EntityVisuals {
       //
       // Same defect class as the badge placement order-dependence fixed in
       // 2.366.0 — in the very subsystem that fix was written for.
-      mergeOverlapping(
-        chips,
+      const merged = mergeOverlapping(
+        front,
         gap,
         (c) => c.ids.length,
         // What the merged chip becomes — roomChips.combineChips.
         (keep, drop) => { combineChips(keep, drop); measure(keep); },
       );
+      return [...merged, ...chips.filter((c) => behind.has(c))];
     }
 
     return chips;
