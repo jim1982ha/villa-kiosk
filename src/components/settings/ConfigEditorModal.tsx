@@ -6,6 +6,7 @@
 // already applies to the live scene through ConfigContext.update(), so there is
 // nothing to reload on the way out.
 
+import { roleCan } from "@/auth/permissions";
 import { useState } from "react";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import { Boxes, Home, LogOut, Upload, Wrench } from "lucide-react";
@@ -137,14 +138,14 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
   // ⚠️ FILTERED BEFORE THE INITIAL VALUE IS CHOSEN, so a non-owner can never
   // start on a tab that is not in their strip — which would render an empty
   // body under a tab bar highlighting nothing.
-  const tabs = TABS.filter((t) => role === "owner" || !t.owner);
+  const tabs = TABS.filter((t) => roleCan(role, "editConfig") || !t.owner);
   // ⚠️ THE EDIT SHORTCUT OPENS ON "Devices". Arriving from a device panel's
   // "edit" and landing on Villa would hide the row the operator came for —
   // the same defect the old collapse's `defaultOpen` guarded against one level
   // down, which is the guard this tab replaces rather than drops.
   const [tab, setTab] = useState<SettingsTab>(
     focusEntityId ? "devices" : (tabs[0]?.id ?? "villa"));
-  const canUploadModel = role === "owner";
+  const canUploadModel = roleCan(role, "manageModel");
   // Central GLB/room-data upload — Owner only. Lives in this modal's OWN
   // header (icon-only, same header-icon-btn treatment as the day/night
   // invert toggle in the Settings modal's header), not the main app's top
@@ -259,7 +260,7 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
               carries other people's user-agents and error text), and logging
               every device out is an owner act. The tab is not rendered for
               other roles rather than rendered-and-403 — see the TABS filter. */}
-          {tab === "system" && role === "owner" && (
+          {tab === "system" && roleCan(role, "editConfig") && (
             <>
               {/* `TelemetryPanel` pages its own log, so there is nothing here
                   for an outer collapse to save — and hiding the section also

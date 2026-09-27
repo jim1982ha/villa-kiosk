@@ -57,6 +57,7 @@
 // request entirely for other roles) — shared state is exactly what a guest
 // must not be able to rewrite for the whole house.
 
+import { roleCan } from "@/auth/permissions";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useConfig } from "./ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
@@ -154,7 +155,7 @@ export default function DeviceConfigSync() {
       empty: baselineFromServer({}),
       // ⚠️ THE ROLE GATE LIVES IN THE ONE PLACE THAT WRITES, judged when the
       // push RUNS: a pull's re-push used to run for every role (67c32ccb).
-      canWrite: () => roleRef.current === "owner",
+      canWrite: () => roleCan(roleRef.current, "editConfig"),
       onBaseline: (b) => { serverJsonRef.current = JSON.stringify(b); saveSyncBaseline(b); },
       maxAttempts: MAX_PUSH_ATTEMPTS,
     }, initial);
@@ -247,7 +248,7 @@ export default function DeviceConfigSync() {
   // Push local edits up, debounced. Gated on rules 1 and 2 above.
   const pushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (role !== "owner") return;                 // non-owners never write
+    if (!roleCan(role, "editConfig")) return;     // only config editors write
     const known = serverJsonRef.current;
     if (known === null) return;                   // rule 1: no pull yet
     if (localJson === known) return;               // rule 2: nothing changed

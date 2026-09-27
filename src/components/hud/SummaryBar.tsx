@@ -25,7 +25,7 @@ import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import type { Threshold } from "@/config/ThresholdConfig";
 import { useProfile } from "@/auth/ProfileContext";
-import { isCategoryAllowed } from "@/auth/permissions";
+import { isCategoryAllowed, listedDevices } from "@/auth/permissions";
 import { CATEGORY_ORDER, categorySurface, type DeviceSurfaceState } from "@/config/EntityCategories";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import type { HaSceneInfo } from "@/config/haScenes";
@@ -420,7 +420,12 @@ export default function SummaryBar({ onOpenEntity, scenes }: Props) {
   // got wrong.
   // `visibleEntities`, not the raw store: this bar counts what the profile can
   // actually see. The set is the value's own now — no caller builds one.
-  const { visibleDevices: villaDeviceSet } = useVillaModel();
+  const { visibleDevices, mappedEntityIds } = useVillaModel();
+  // What this profile's lists cover — the SAME set the list a tile opens
+  // shows (SummaryGroupPanel), so a guest's tile cannot count an off-map
+  // device their list leaves out.
+  const villaDeviceSet = useMemo(
+    () => listedDevices(role, visibleDevices, mappedEntityIds), [role, visibleDevices, mappedEntityIds]);
 
   // The station the Weather tile opens — the same derivation the tile used.
   // ⚠️ STABLE WHILE THE STATION IS THE SAME. `visibleEntities` changes on every

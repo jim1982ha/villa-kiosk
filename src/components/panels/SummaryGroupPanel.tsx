@@ -8,6 +8,7 @@
 // Built on the shared BasePanel (same modal chrome/header/close as every other
 // panel) and the shared gradient badge (badgeImage) so it feels native.
 
+import { roleCan } from "@/auth/permissions";
 import { useState } from "react";
 import { deviceRowText } from "@/utils/entityValue";
 import { ChevronRight, Sparkles, Power, PowerOff, EyeOff } from "lucide-react";
@@ -171,7 +172,7 @@ export default function SummaryGroupPanel({
   // one tap apart — the exact bug this section exists to end.
   const notInHa = all.filter((e) => !inHa(e));
   const onMap = all.filter((e) => inHa(e) && mappedEntityIds.has(e.entity_id));
-  const offMap = role === "guest"
+  const offMap = !roleCan(role, "listUnmappedDevices")
     ? []
     : all.filter((e) => inHa(e) && !mappedEntityIds.has(e.entity_id));
   const rows = [...onMap, ...offMap, ...notInHa];

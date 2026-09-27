@@ -57,7 +57,7 @@ eq("...and NOT on the imported function, which never changes",
 const DCS = read("src/config/DeviceConfigSync.tsx");
 console.log("\n  only an owner writes shared config:");
 eq("the gate is the document's own write gate (judged when a push RUNS, on every path)",
-   /canWrite: \(\) => roleRef\.current === "owner"/.test(DCS) && !/fetchSharedConfig\(\)[\s\S]{0,200}saveSharedConfig\(/.test(DCS), true);
+   /canWrite: \(\) => roleCan\(roleRef\.current, "editConfig"\)/.test(DCS) && !/fetchSharedConfig\(\)[\s\S]{0,200}saveSharedConfig\(/.test(DCS), true);
 // It used to be only on the push effect, so the pull's abort branch — which
 // retries a stuck edit — ran the whole fetch-rebase-write loop for every role,
 // forever, against a server that 403s.

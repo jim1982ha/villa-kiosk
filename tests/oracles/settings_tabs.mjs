@@ -69,7 +69,7 @@ const collapseRefs = FILES.filter((f) => /CollapsibleSection/.test(readFileSync(
   .map((f) => f.slice(SRC.length + 1));
 
 /* ── 4. the owner-only tab is filtered, not rendered-and-empty ───────── */
-const filtersOwner = /TABS\.filter\(\(t\) => role === "owner" \|\| !t\.owner\)/.test(modal);
+const filtersOwner = /TABS\.filter\(\(t\) => roleCan\(role, "editConfig"\) \|\| !t\.owner\)/.test(modal);
 const startsInStrip = /useState<SettingsTab>\(\s*focusEntityId \? "devices" : \(tabs\[0\]\?\.id \?\? "villa"\)\)/
   .test(modal.replace(/\s*\n\s*/g, " "));
 

@@ -28,7 +28,7 @@ import { useModalA11y } from "@/hooks/useModalA11y";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
-import { hasCapability } from "@/auth/permissions";
+import { hasCapability, roleCan } from "@/auth/permissions";
 import { CATEGORY_LABELS, CATEGORY_ICONS, categorySurface } from "@/config/EntityCategories";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { isUnavailable } from "@/utils/stateColors";
@@ -122,7 +122,7 @@ export default function CockpitModal({ onClose, onOpenEntity }: CockpitModalProp
   // Owner-only count, not a version list — this is a maintenance signal, not
   // something a guest needs to see or act on.
   const updatesAvailable = useMemo(() => {
-    if (role !== "owner") return null;
+    if (!roleCan(role, "seeUpdates")) return null;
     return Object.values(entities).filter((e) => e.entity_id.startsWith("update.") && e.state === "on").length;
   }, [entities, role]);
 
