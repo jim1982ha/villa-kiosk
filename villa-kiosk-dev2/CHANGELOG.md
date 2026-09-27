@@ -1,3 +1,10 @@
+## 2.496.189
+
+### Behind the scenes
+- Deciding which device icons stay on the map, which fold into a group card
+  and how a card is labelled ("Living +1") now lives in one tested place.
+  Nothing changes on screen — checked frame by frame on the villa's model.
+
 ## 2.496.188
 
 ### Fixed
