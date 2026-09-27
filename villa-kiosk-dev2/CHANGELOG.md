@@ -1,3 +1,17 @@
+## 2.496.200
+
+### Fixed
+- **Stairs named in any of the plan's languages are recognised the same way
+  everywhere.** Two lists had drifted (one knew "escalera"/"steps", the
+  other "step"/"marche"), so a stair could be climbable but not treated as
+  a stairwell, or the reverse.
+- A device saved under an old catch-all type is upgraded once when the
+  settings load, so the 3D badges and the panels agree on what it is.
+
+### Behind the scenes
+- Shared maths helpers replace four private copies; the test suite's
+  assertion helper is one file instead of a pasted copy in 70 tests.
+
 ## 2.496.199
 
 ### Fixed
