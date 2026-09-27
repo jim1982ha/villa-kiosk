@@ -17,7 +17,7 @@
 // tests/oracles/line_chart.mjs drives it with the cases that were broken.
 
 import { stepped, type Reading } from "./stepSeries";
-import { splitAtGaps, gapBand } from "./historyGaps";
+import { splitAtGaps } from "./historyGaps";
 import type { HistoryGap, StateHistoryPoint } from "@/types/ha.types";
 
 export interface TimeWindow { from: number; to: number }
@@ -88,17 +88,6 @@ export function lineRuns(data: readonly Reading[], gaps: readonly HistoryGap[], 
     line.sort((p, q) => p.t - q.t);
   }
   return splitAtGaps(line, gaps);
-}
-
-/** One shaded band per outage, in pixels, clamped to the plot. Measured
- *  against the WINDOW's scale, so an outage running to now reaches the right
- *  edge instead of falling off it. */
-export function outageBands(
-  gaps: readonly HistoryGap[], sx: (t: number) => number, left: number, right: number,
-): { x: number; w: number }[] {
-  return gaps
-    .map((g) => gapBand(g, sx, left, right))
-    .filter((b): b is { x: number; w: number } => b !== null);
 }
 
 /** The points of `deep` that describe the `hours` ending at `end`: every

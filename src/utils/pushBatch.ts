@@ -41,9 +41,8 @@ export class PushBatch<T extends { entity_id: string }> {
     if (this.timer === null) this.timer = this.schedule(() => this.flush(), this.windowMs);
   }
 
-  /** Drain now — the caller wants React to catch up (a full hydrate is about
-   *  to replace everything anyway, or the store is going away). */
-  flush(): void {
+  /** The window's drain. */
+  private flush(): void {
     if (this.timer !== null) { this.cancel(this.timer); this.timer = null; }
     if (this.pending.size === 0) return;
     const batch = new Map(this.pending);

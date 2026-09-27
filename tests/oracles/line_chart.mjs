@@ -12,7 +12,11 @@
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 const { gapsFrom } = await import("@/utils/historyGaps");
-const { chartWindow, timeScale, lineRuns, outageBands, windowEndingAt, bucketGaps } = await import("@/utils/lineChart");
+const { chartWindow, timeScale, lineRuns, windowEndingAt, bucketGaps } = await import("@/utils/lineChart");
+const { gapBand } = await import("@/utils/historyGaps");
+// One band per outage, as chartGeometry draws them (lineChart.outageBands was a
+// wrapper nothing shipped called; deleted in 2.496.203).
+const outageBands = (gaps, sx, left, right) => gaps.map((g) => gapBand(g, sx, left, right)).filter(Boolean);
 
 let fail = 0;
 const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };

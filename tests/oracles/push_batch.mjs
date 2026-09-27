@@ -30,8 +30,6 @@ console.log("  the batch:");
   ck("  ...and nothing is pending after it (the base is returned as is)", b.size === 0 && b.overlay({ x: 1 }).x === 1);
   b.push({ entity_id: "light.a", state: "on" }); b.dispose();
   ck("dispose forgets the pending events and cancels the timer", b.size === 0 && timers[1].cancelled === true);
-  b.push({ entity_id: "light.z", state: "on" }); b.flush();
-  ck("flush drains immediately", drained.length === 2 && timers[2].cancelled === true);
 }
 
 console.log("\n  one scan per summary:");
