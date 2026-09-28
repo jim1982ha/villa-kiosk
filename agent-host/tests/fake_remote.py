@@ -27,6 +27,8 @@ HA_TOKEN, KIOSK_TOKEN, KEY, TG = "ha-TOKEN-123456", "kiosk-TOKEN-123456", "sk-an
 
 class Fake(BaseHTTPRequestHandler):
     kiosk = "json"          # json | spa | 404
+    #: The Kiosk's recorded button presses (the stub demo reads them back).
+    choices: list = []
     mcp = "json"            # json | sse
     requests: list[tuple[str, str]] = []
 
@@ -71,6 +73,8 @@ class Fake(BaseHTTPRequestHandler):
         if self.path.startswith("/v1/models"):
             return self.reply(200, {"data": [{"id": "claude"}]}) if self.headers.get("x-api-key") == KEY \
                 else self.reply(401, {"error": "invalid x-api-key"})
+        if self.path.startswith("/agent/v1/choices"):
+            return self.kiosk_reply({"choices": Fake.choices, "next_seq": len(Fake.choices) + 1})
         if self.path.startswith(f"/bot{TG}/getMe"):
             return self.reply(200, {"ok": True, "result": {"username": "villa_bot"}})
         if self.path.startswith("/bot"):
@@ -91,6 +95,15 @@ class Fake(BaseHTTPRequestHandler):
         if self.path == "/agent/v1/heartbeat":
             self.body()
             return self.kiosk_reply({"ok": True})
+        if self.path == "/agent/v1/messages":
+            msg = self.body()
+            if not msg.get("title") or not msg.get("buttons"):
+                return self.reply(400, {"error": "bad message"})
+            if Fake.kiosk != "json":
+                return self.kiosk_reply({})
+            if not self.auth(KIOSK_TOKEN):
+                return self.reply(401, {})
+            return self.reply(201, {"ok": True, "id": "msg_demo", "created_at": "2026-09-29T00:00:00Z"})
         if self.path == "/mcp":
             msg = self.body()
             if msg.get("method") == "initialize":

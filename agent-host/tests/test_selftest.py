@@ -52,7 +52,7 @@ class Base(unittest.TestCase):
         selftest.ANTHROPIC_MODELS, selftest.TELEGRAM_API = cls._anth, cls._tg
 
     def setUp(self):
-        Fake.kiosk, Fake.mcp, Fake.requests = "json", "json", []
+        Fake.kiosk, Fake.mcp, Fake.requests, Fake.choices = "json", "json", [], []
 
     def env(self, **kw):
         base = {"VESTA_HA_URL": self.url, "VESTA_HA_TOKEN": HA_TOKEN,
@@ -215,6 +215,12 @@ class Slot(Base):
     def test_stub_mode_selftest_then_stub(self):
         env = self.prepare(ha_token=HA_TOKEN, kiosk_agent_token=KIOSK_TOKEN,
                            telegram_bot_token=TG, stub_heartbeat=True)
+        # Someone already pressed a button on the demo message, and an earlier
+        # answer to another message must not be mistaken for it.
+        Fake.choices = [
+            {"seq": 1, "message_id": "msg_other", "button_id": "x", "profile": "owner", "at": "t0"},
+            {"seq": 2, "message_id": "msg_demo", "button_id": "looks_good", "profile": "ops",
+             "at": "2026-09-29T00:01:00Z"}]
         code, out = self.run_slot(env)
         self.assertEqual(code, 0, out)
         for line in ("self-test Home Assistant: pass", "self-test HA MCP: pass",
@@ -223,7 +229,10 @@ class Slot(Base):
                      "starting vesta-agent-stub 1",
                      "stub: environment contract received: 17/17 variables present",
                      "stub: Telegram disabled — no token received",
-                     "stub: heartbeat: HTTP 200", "stub: stopped"):
+                     "stub: heartbeat: HTTP 200",
+                     "stub: demo message posted (msg_demo)",
+                     'stub: answer received: "looks_good" pressed by ops at 2026-09-29T00:01:00Z',
+                     "stub: stopped"):
             self.assertIn(line, out)
         for secret in (HA_TOKEN, KIOSK_TOKEN, TG):
             self.assertNotIn(secret, out)

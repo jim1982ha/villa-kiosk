@@ -1,3 +1,8 @@
+## 0.6.0
+
+### Added
+- **"Stub heartbeat" now tests the whole connection with the VESTA Kiosk.** Besides showing the agent as online, the stub posts one test message with two buttons (*Looks good* / *Not now*) each time the app starts. Answer it in the Kiosk's VESTA Agent area, and within about 15 seconds this app's log says which button was pressed and by whom — the same path a real agent's question and your decision will take.
+
 ## 0.5.2
 
 ### Changed
