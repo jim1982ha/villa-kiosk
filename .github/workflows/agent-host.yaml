@@ -36,6 +36,10 @@ jobs:
         # Runs the real rootfs programs against a temporary root (test_host.py).
         run: python3 agent-host/tests/test_host.py
 
+      - name: The self-test reports each link correctly
+        # Against a local fake of every remote end; no request leaves the runner.
+        run: python3 agent-host/tests/test_selftest.py
+
   build:
     needs: [tests]
     runs-on: ubuntu-latest

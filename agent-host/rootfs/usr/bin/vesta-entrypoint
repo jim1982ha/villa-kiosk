@@ -36,12 +36,13 @@ def origin(url: object) -> str:
     return f"{u.scheme}://{u.hostname}{port}"
 
 
-def agent_identity() -> str:
-    if not paths.AGENT_MANIFEST.exists():
+def agent_identity(mode: object = "agent") -> str:
+    manifest = (paths.STUB_DIR if mode == "stub" else paths.AGENT_DIR) / paths.MANIFEST
+    if not manifest.exists():
         return "none installed"
     try:
         import yaml
-        m = yaml.safe_load(paths.AGENT_MANIFEST.read_text()) or {}
+        m = yaml.safe_load(manifest.read_text()) or {}
         return f"{m.get('name', '?')} {m.get('version', '?')} ({m.get('runtime', '?')})"
     except Exception as exc:  # a broken manifest is reported, not fatal here
         return f"unreadable manifest ({type(exc).__name__})"
@@ -54,7 +55,7 @@ def banner(o: options.Options) -> None:
     mode = o.get("agent_mode")
     log("info", f"VESTA Agent host {os.environ.get('VESTA_HOST_VERSION', 'dev')}"
                 f" · deployment {o.deployment} · instance {contract.instance()}")
-    log("info", f"agent slot: mode {mode} · agent {agent_identity()}")
+    log("info", f"agent slot: mode {mode} · runs {agent_identity(mode)}")
     log("info", f"link Home Assistant: {origin(o.get('ha_url'))} · token {state('ha_token')}")
     if o.get("ha_mcp_mode") == "external":
         log("info", f"link HA MCP: external {origin(o.get('ha_mcp_url'))}"
@@ -94,6 +95,14 @@ def main() -> int:
     paths.AGENT_ENV.chmod(0o600)
     paths.AGENT_ENV.write_text(json.dumps(contract.process_env(env)))
     redactor.save(paths.REDACT)
+    # What the slot and the self-test need that is NOT part of the contract:
+    # which program fills the slot, and whether the stub sends heartbeats.
+    paths.HOST_STATE.write_text(json.dumps({
+        "agent_mode": o.get("agent_mode"),
+        "stub_heartbeat": bool(o.get("stub_heartbeat")),
+        "ha_mcp_mode": o.get("ha_mcp_mode"),
+        "host_version": os.environ.get("VESTA_HOST_VERSION", "dev"),
+    }))
 
     # What started, when — never a secret. Read by later milestones' crash
     # accounting and by a person debugging from a backup.
@@ -103,7 +112,7 @@ def main() -> int:
         "deployment": o.deployment,
         "instance": contract.instance(),
         "agent_mode": o.get("agent_mode"),
-        "agent": agent_identity(),
+        "agent": agent_identity(o.get("agent_mode")),
     }, indent=2))
     log("info", "start-up checks passed")
     return 0

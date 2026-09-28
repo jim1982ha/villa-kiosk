@@ -178,18 +178,21 @@ class Host(unittest.TestCase):
             self.assertEqual((self.root / "run/vesta" / f).stat().st_mode & 0o777, 0o600, f)
 
     def test_agent_output_is_redacted_and_stop_is_forwarded(self) -> None:
-        self.ha_options(agent_mode="agent", **SECRETS)
+        # Stub mode, so no gate waits on a Home Assistant this test does not
+        # have; Anthropic left out, so the self-test makes no internet call.
+        self.ha_options(**{k: v for k, v in SECRETS.items() if k != "anthropic_api_key"},
+                        ha_url="http://127.0.0.1:9", kiosk_url="http://127.0.0.1:9")
         self.assertEqual(self.start().returncode, 0)
-        agent = self.root / "opt/vesta/agent"
+        agent = self.root / "opt/vesta/stub"
         agent.mkdir(parents=True)
         # A careless agent: prints its key, then waits to be stopped.
         (agent / "vesta-agent.yaml").write_text(yaml.safe_dump({
             "name": "leaky", "version": "0", "runtime": "python", "stop_grace_seconds": 5,
-            "start": "echo \"key=$ANTHROPIC_API_KEY token=$VESTA_HA_TOKEN\"; "
+            "start": "echo \"key=$VESTA_KIOSK_TOKEN token=$VESTA_HA_TOKEN\"; "
                      "trap 'echo got-term; exit 0' TERM; while :; do sleep 0.1; done"}))
         p = subprocess.Popen([sys.executable, str(SLOT)], env=self.env(),
                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-        time.sleep(1.5)
+        time.sleep(2.5)
         p.send_signal(signal.SIGTERM)
         out, _ = p.communicate(timeout=15)
         self.assertEqual(p.returncode, 0, out)

@@ -26,11 +26,16 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# ⚠️ NEVER `docker logs | grep -q` UNDER pipefail: grep -q exits at its first
+# match, docker logs dies of SIGPIPE, and the pipeline reports failure for a
+# line that IS there — the longer the log, the likelier. Read it, then search.
+has()  { local logs; logs=$(docker logs vesta-ct 2>&1); grep -qE -- "$1" <<<"$logs"; }
+hasf() { local logs; logs=$(docker logs vesta-ct 2>&1); grep -qF -- "$1" <<<"$logs"; }
 ok()   { echo "  PASS  $*"; }
 bad()  { echo "  FAIL  $*"; FAILED=1; }
 wait_log() {  # wait_log <text> <seconds>
   for _ in $(seq 1 $(( $2 * 2 ))); do
-    docker logs vesta-ct 2>&1 | grep -qF "$1" && return 0
+    hasf "$1" && return 0
     sleep 0.5
   done
   return 1
@@ -54,14 +59,21 @@ cat > "$WORK/data/options.json" <<EOF
 {"agent_mode":"stub","ha_url":"http://homeassistant:8123","ha_mcp_mode":"sidecar",
  "kiosk_url":"http://e66a2348-villa-kiosk:8099","telegram_takeover":false,
  "stub_heartbeat":false,"log_level":"info",
- "anthropic_api_key":"$KEY","ha_token":"$HATOKEN","telegram_bot_token":"$TGTOKEN"}
+ "ha_token":"$HATOKEN","telegram_bot_token":"$TGTOKEN"}
 EOF
 docker run -d --name vesta-ct "${PLATFORM[@]}" -e TZ=Asia/Bangkok \
   -v "$WORK/data:/data" -v "$WORK/config:/config" "$IMAGE" >/dev/null
-if wait_log "agent slot empty" 60; then ok "started: banner, checks, idle slot"; else bad "slot never reported idle"; fi
-docker logs vesta-ct 2>&1 | grep -q "deployment ha_app" && ok "banner: deployment ha_app" || bad "banner lacks deployment"
-docker logs vesta-ct 2>&1 | grep -q "link Anthropic: key set" && ok "banner: key set (value hidden)" || bad "banner lacks Anthropic state"
-docker logs vesta-ct 2>&1 | grep -q "time zone: Asia/Bangkok" && ok "banner: time zone from TZ" || bad "banner lacks TZ"
+if wait_log "stub: no heartbeat" 90; then ok "started: banner, self-test, stub"; else bad "the stub never started"; fi
+has "deployment ha_app" && ok "banner: deployment ha_app" || bad "banner lacks deployment"
+has "link Home Assistant: http://homeassistant:8123 · token set" && ok "banner: token set (value hidden)" || bad "banner lacks the HA token state"
+for link in "Home Assistant" "HA MCP" "VESTA Kiosk" "Anthropic" "Telegram" "Presence"; do
+  has "self-test ${link}: (pass|fail|skipped)" && ok "self-test line: ${link}" || bad "no self-test line for ${link}"
+done
+has "self-test Telegram: skipped — telegram_takeover is off" && ok "Telegram skipped, no call" || bad "Telegram not skipped"
+has "stub: environment contract received: 17/17" && ok "stub received the full contract" || bad "stub contract incomplete"
+[ -s "$WORK/data/host/selftest.json" ] && grep -q '"summary"' "$WORK/data/host/selftest.json" && ok "selftest.json written" || bad "selftest.json missing"
+grep -qF "$HATOKEN" "$WORK/data/host/selftest.json" && bad "a secret in selftest.json" || ok "no secret in selftest.json"
+has "time zone: Asia/Bangkok" && ok "banner: time zone from TZ" || bad "banner lacks TZ"
 no_secret "stub"
 [ -f "$WORK/config/skills/README.md" ] && [ -d "$WORK/data/agent" ] && ok "folders created" || bad "folders missing"
 env_json=$(docker exec vesta-ct cat /run/vesta/agent-env.json)
@@ -80,7 +92,7 @@ echo "== 2. README kept on restart"
 docker run --rm "${PLATFORM[@]}" --entrypoint /bin/sh -v "$WORK/config:/config" "$IMAGE" \
   -c 'echo "edited by a person" > /config/skills/README.md'
 docker start vesta-ct >/dev/null
-wait_log "agent slot empty" 60 >/dev/null || true
+wait_log "stub: no heartbeat" 90 >/dev/null || true
 docker stop -t 30 vesta-ct >/dev/null
 [ "$(cat "$WORK/config/skills/README.md")" = "edited by a person" ] && ok "README not overwritten" || bad "README overwritten"
 
@@ -91,17 +103,17 @@ echo '{"agent_mode":"agent","ha_url":"http://homeassistant:8123","ha_mcp_mode":"
 docker run -d --name vesta-ct "${PLATFORM[@]}" -v "$WORK/data:/data" -v "$WORK/config:/config" "$IMAGE" >/dev/null
 for _ in $(seq 1 60); do [ "$(docker inspect vesta-ct --format '{{.State.Running}}')" = "false" ] && break; sleep 0.5; done
 if [ "$(docker inspect vesta-ct --format '{{.State.Running}}')" = "false" ]; then ok "container stopped by itself"; else bad "container kept running"; fi
-docker logs vesta-ct 2>&1 | grep -q "agent mode needs anthropic_api_key" && ok "clear message in the log" || bad "no message"
-docker logs vesta-ct 2>&1 | grep -q "agent slot empty" && bad "the agent slot started anyway" || ok "agent slot never started"
+has "agent mode needs anthropic_api_key" && ok "clear message in the log" || bad "no message"
+has "self-test" && bad "the agent slot started anyway" || ok "agent slot never started"
 
 echo "== 4. Standalone: VESTA_OPT_* variables, no options.json"
 fresh
 docker run -d --name vesta-ct "${PLATFORM[@]}" \
-  -e VESTA_OPT_ANTHROPIC_API_KEY="$KEY" -e VESTA_OPT_KIOSK_URL=https://kiosk.example.test \
+  -e VESTA_OPT_HA_TOKEN="$HATOKEN" -e VESTA_OPT_KIOSK_URL=https://kiosk.example.test \
   -v "$WORK/data:/data" -v "$WORK/config:/config" "$IMAGE" >/dev/null
-wait_log "agent slot empty" 60 && ok "standalone started" || bad "standalone did not start"
-docker logs vesta-ct 2>&1 | grep -q "deployment standalone" && ok "banner: deployment standalone" || bad "banner lacks standalone"
-docker logs vesta-ct 2>&1 | grep -q "link VESTA Kiosk: https://kiosk.example.test" && ok "option read from environment" || bad "VESTA_OPT_KIOSK_URL ignored"
+wait_log "stub: no heartbeat" 90 && ok "standalone started" || bad "standalone did not start"
+has "deployment standalone" && ok "banner: deployment standalone" || bad "banner lacks standalone"
+has "link VESTA Kiosk: https://kiosk.example.test" && ok "option read from environment" || bad "VESTA_OPT_KIOSK_URL ignored"
 no_secret "standalone"
 docker stop -t 30 vesta-ct >/dev/null
 

@@ -1,0 +1,36 @@
+#!/usr/bin/env python3
+"""Runs the self-test on demand (SPEC 11) and prints one line per link.
+
+The slot already runs it at every start; this is for a person who wants a fresh
+answer without restarting the app — e.g. after issuing the VESTA Agent token:
+    docker exec addon_<id>_vesta_agent_dev vesta-selftest
+It also rewrites /data/host/selftest.json.
+"""
+from __future__ import annotations
+
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                "..", "..", "opt", "vesta", "host"))
+
+from vesta_host import paths, selftest  # noqa: E402
+from vesta_host.log import configure, log  # noqa: E402
+from vesta_host.redact import Redactor  # noqa: E402
+
+
+def main() -> int:
+    configure("info", Redactor.load(paths.REDACT))
+    try:
+        env = json.loads(paths.AGENT_ENV.read_text())
+        host = json.loads(paths.HOST_STATE.read_text())
+    except (OSError, ValueError):
+        log("error", "no prepared environment in /run/vesta — is the app running?")
+        return 1
+    results = selftest.execute(env, host)
+    return 1 if any(r.result == selftest.FAIL for r in results) else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

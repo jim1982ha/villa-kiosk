@@ -35,11 +35,15 @@ RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
  && node --version && npm --version && python3 --version
 
 COPY rootfs /
+# The self-test stub fills the slot in stub mode. The VESTA Agent itself goes to
+# /opt/vesta/agent (built from AGENT_REF, later); the stub stays beside it, so
+# switching agent_mode never needs a different image.
+COPY stub /opt/vesta/stub
 # ⚠️ THE SHAPE, NOT A LIST OF PATHS — as in the VESTA Kiosk Dockerfile: git
 # stores rootfs files as 0644, and an s6 `run` script that is not executable
 # builds green and fails only on the device.
 RUN find /etc/s6-overlay/s6-rc.d -name run -exec chmod a+x {} + \
- && chmod a+x /usr/bin/vesta-entrypoint /usr/bin/vesta-agent-slot
+ && chmod a+x /usr/bin/vesta-entrypoint /usr/bin/vesta-agent-slot /usr/bin/vesta-selftest
 
 # The start banner and the environment contract read these. VESTA_INSTANCE is
 # per channel: CI passes `prod` from main and `dev` from any other branch.

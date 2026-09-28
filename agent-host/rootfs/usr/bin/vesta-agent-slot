@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
-"""The agent slot: starts what the agent manifest names, with the contract.
+"""The agent slot: self-test, then start what the manifest names (SPEC 8, 10, 11).
 
 s6 runs this as the `agent` longrun after `init-vesta` has prepared
-/run/vesta. It knows the agent only through `vesta-agent.yaml` (SPEC 8, H2).
+/run/vesta. It knows the agent only through `vesta-agent.yaml` (SPEC H2):
+  stub mode  → /opt/vesta/stub, after one self-test that never blocks;
+  agent mode → /opt/vesta/agent, only once Home Assistant AND Anthropic pass
+               (retried with backoff, SPEC 11) — an agent started without
+               either would only fail on its own and restart in a loop.
 
 ⚠️ THE AGENT'S OUTPUT PASSES THROUGH THE REDACTION FILTER. The agent is told
 never to print a secret (SPEC 8 rule 3); this is what holds when it does anyway.
@@ -20,37 +24,39 @@ import threading
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)),
                                 "..", "..", "opt", "vesta", "host"))
 
-from vesta_host import paths  # noqa: E402
+from vesta_host import paths, selftest  # noqa: E402
 from vesta_host.log import configure, log  # noqa: E402
 from vesta_host.redact import Redactor  # noqa: E402
 
 DEFAULT_GRACE = 20
+#: Agent-mode gate backoff: 5 s doubling to 5 min, as s6's restart policy.
+BACKOFF_START, BACKOFF_MAX = 5, 300
+GATE = ("home_assistant", "anthropic")
+
+stop = threading.Event()
 
 
-def main() -> int:
-    redactor = Redactor.load(paths.REDACT)
-    try:
-        env = json.loads(paths.AGENT_ENV.read_text())
-    except (OSError, ValueError):
-        configure("info", redactor)
-        log("error", "no prepared environment in /run/vesta — init-vesta did not run")
-        return 1
-    configure(env.get("VESTA_LOG_LEVEL", "info"), redactor)
+def gate(env: dict[str, str], host: dict) -> bool:
+    """Agent mode: wait until Home Assistant and Anthropic pass. False = stopped."""
+    delay = BACKOFF_START
+    while not stop.is_set():
+        results = selftest.execute(env, host, only=GATE, write=False)
+        failing = [r.link for r in results if r.result != selftest.PASS]
+        if not failing:
+            return True
+        log("warning", f"agent start delayed: {', '.join(failing)} not passing — retry in {delay} s")
+        if stop.wait(delay):
+            return False
+        delay = min(delay * 2, BACKOFF_MAX)
+    return False
 
-    stop = threading.Event()
-    signal.signal(signal.SIGTERM, lambda *_: stop.set())
-    signal.signal(signal.SIGINT, lambda *_: stop.set())
 
-    if not paths.AGENT_MANIFEST.exists():
-        log("info", "agent slot empty: no vesta-agent.yaml — idle")
-        stop.wait()
-        return 0
-
+def run_program(folder, env: dict[str, str], redactor: Redactor) -> int:
     import yaml
-    manifest = yaml.safe_load(paths.AGENT_MANIFEST.read_text()) or {}
+    manifest = yaml.safe_load((folder / paths.MANIFEST).read_text()) or {}
     start = manifest.get("start")
     if not start:
-        log("error", "vesta-agent.yaml has no `start` command")
+        log("error", f"{folder / paths.MANIFEST} has no `start` command")
         return 1
     grace = int(manifest.get("stop_grace_seconds") or DEFAULT_GRACE)
     log("info", f"starting {manifest.get('name', 'agent')} {manifest.get('version', '')}".rstrip())
@@ -58,7 +64,7 @@ def main() -> int:
     # Own session, so a stop reaches the agent's whole process group, not only
     # the shell that launched it.
     proc = subprocess.Popen(
-        ["/bin/sh", "-c", str(start)], cwd=paths.AGENT_DIR, env=env,
+        ["/bin/sh", "-c", str(start)], cwd=folder, env=env,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         start_new_session=True, text=True, errors="replace", bufsize=1)
 
@@ -83,8 +89,52 @@ def main() -> int:
             proc.wait()
     reader.join(timeout=2)
     code = proc.returncode
-    log("info" if code == 0 or stop.is_set() else "warning", f"agent exited with code {code}")
+    if stop.is_set() and code in (0, -signal.SIGTERM, 128 + signal.SIGTERM):
+        # The launching shell dies of the SIGTERM it was sent: a clean stop.
+        log("info", "agent stopped cleanly")
+    else:
+        log("info" if code == 0 else "warning", f"agent exited with code {code}")
     return 0 if stop.is_set() else (code or 0)
+
+
+def main() -> int:
+    redactor = Redactor.load(paths.REDACT)
+    try:
+        env = json.loads(paths.AGENT_ENV.read_text())
+        host = json.loads(paths.HOST_STATE.read_text())
+    except (OSError, ValueError):
+        configure("info", redactor)
+        log("error", "no prepared environment in /run/vesta — init-vesta did not run")
+        return 1
+    configure(env.get("VESTA_LOG_LEVEL", "info"), redactor)
+    signal.signal(signal.SIGTERM, lambda *_: stop.set())
+    signal.signal(signal.SIGINT, lambda *_: stop.set())
+
+    mode = host.get("agent_mode", "stub")
+    # SPEC 11: at every start, in both modes. Stub mode never stops on it.
+    selftest.execute(env, host)
+
+    if mode == "stub":
+        folder = paths.STUB_DIR
+        # The only variable outside the contract, and only for the stub: it is
+        # host test machinery, not something any real agent is given.
+        if host.get("stub_heartbeat"):
+            env = {**env, "VESTA_STUB_HEARTBEAT": "true"}
+    else:
+        folder = paths.AGENT_DIR
+        if not (folder / paths.MANIFEST).exists():
+            log("error", "agent mode, but this image contains no VESTA Agent "
+                         "(built without AGENT_REF) — switch agent_mode to stub")
+            stop.wait()
+            return 0
+        if not gate(env, host):
+            return 0
+
+    if not (folder / paths.MANIFEST).exists():
+        log("info", f"agent slot empty: no {paths.MANIFEST} in {folder} — idle")
+        stop.wait()
+        return 0
+    return run_program(folder, env, redactor)
 
 
 if __name__ == "__main__":

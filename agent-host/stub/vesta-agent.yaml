@@ -1,0 +1,9 @@
+# The self-test stub's agent manifest (SPEC 8). Deliberately the same shape as
+# the VESTA Agent's own, so the host starts the stub through exactly the code
+# path the real agent will use.
+name: vesta-agent-stub
+version: "1"
+runtime: python
+install: ""                 # standard library only
+start: "python3 stub.py"
+stop_grace_seconds: 5
