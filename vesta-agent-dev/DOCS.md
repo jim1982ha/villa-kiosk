@@ -141,7 +141,7 @@ same rules and is a working example.
 |---|---|
 | Image download (compressed) | about 120 MB per architecture (0.4.0: amd64 122 MB, aarch64 120 MB) |
 | Image on disk | about 380 MB |
-| Idle memory, stub + HA MCP sidecar | about 136 MiB (HA MCP server about 120 MB of it) — measured on amd64, 2026-09-28; **HA Yellow: still to measure** |
+| Idle memory, stub + HA MCP sidecar | **142 MB on the HA Yellow** (3.4 % of 4 GB), 0.5.1, 28 September 2026 — about 34 MB without the sidecar |
 
 The real VESTA Agent will add to both: the Claude Agent SDK alone is about
 100 MB compressed and 240 MB unpacked. SPEC 12 asks for at least 500 MB free
@@ -160,8 +160,9 @@ Checked on 2026-09-28 against the running system and upstream sources.
 2. **Hostnames.** An app's hostname is its slug with `_` → `-` (Supervisor
    `apps/model.py`): `e66a2348-villa-kiosk` (confirmed live),
    `e66a2348-villa-kiosk-dev2` (DEV2 installed). Home Assistant's container is
-   `homeassistant`. Reachability from this app on the HA Yellow: **still to
-   confirm on the device** (the self-test shows it).
+   `homeassistant`. **Confirmed on the HA Yellow** (0.5.1): the self-test from
+   this app reached `http://homeassistant:8123/api/` (pass) and
+   `http://e66a2348-villa-kiosk-dev2:8099` (reached; no agent interface yet).
 3. **`map` and schema.** `- type: addon_config` + `read_only: false` is the
    current form (the `addon_config:rw` string is still converted). All schema
    types used are in the Supervisor's grammar (`apps/options.py`); `timeout`
@@ -171,4 +172,5 @@ Checked on 2026-09-28 against the running system and upstream sources.
 5. **Claude Agent SDK (Python)** does not need Node.js: its per-architecture
    wheels bundle a native `claude` binary.
 6. **Time zone.** The Supervisor sets `TZ` in every app container
-   (`docker/app.py`); the host passes it to the agent unchanged.
+   (`docker/app.py`); the host passes it to the agent unchanged. Confirmed on
+   the HA Yellow: the app logged Home Assistant's own time zone.
