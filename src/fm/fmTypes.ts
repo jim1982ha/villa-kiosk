@@ -19,8 +19,18 @@
 // replace is far easier to reason about than four stores that can disagree
 // mid-edit.
 
+/** Who last created or changed a record, when it was not a person
+ *  (docs/agent-integration/PLAN.md F6). Set by the ADD-ON, never by this app:
+ *  every record the VESTA Agent writes is stamped server-side, so the mark
+ *  cannot be forgotten by the writer. Absent on a person's record. */
+export interface FmProvenance {
+  source?: "vesta_agent";
+  /** ISO time of the agent's last change to this record. */
+  updatedAt?: string;
+}
+
 /** A recurring obligation. `everyDays` is the contractual interval. */
-export interface FmSchedule {
+export interface FmSchedule extends FmProvenance {
   id: string;
   title: string;
   /** Free-text clause reference, shown in the UI and the report annex. */
@@ -51,7 +61,7 @@ export interface FmSchedule {
 }
 
 /** One performance of a scheduled task. */
-export interface FmCompletion {
+export interface FmCompletion extends FmProvenance {
   id: string;
   /** The scheduled task this completes. Empty for work that answers a FAULT
    *  rather than a schedule — see ticketId. */
@@ -73,7 +83,7 @@ export interface FmCompletion {
 /** A maintenance expense. "minor" counts against the monthly cap and is a
  *  shared direct expense; "major" is the Owner's and is excluded from the
  *  cap — whatever the underlying contract calls that split. */
-export interface FmCost {
+export interface FmCost extends FmProvenance {
   id: string;
   at: string;
   /** The amount, in the install's own currency (MONEY_CURRENCY / fmtMoney).
@@ -120,7 +130,7 @@ export interface FmTicketUpdate {
 }
 
 /** A fault raised against a device or room. */
-export interface FmTicket {
+export interface FmTicket extends FmProvenance {
   id: string;
   title: string;
   status: FmTicketStatus;
@@ -151,7 +161,7 @@ export interface FmTicket {
  *  point-in-time record even if the underlying schedules/costs/tickets
  *  change afterwards — the same reasoning ReportTab's own "Generate" button
  *  (an explicit action, not a live re-render) already follows. */
-export interface FmSavedDocument {
+export interface FmSavedDocument extends FmProvenance {
   id: string;
   kind: "report" | "spend" | "readiness";
   /** The period the document is ABOUT ("2026-06"), not when it was saved. */

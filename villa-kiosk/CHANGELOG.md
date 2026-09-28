@@ -1,3 +1,12 @@
+## 2.496.212
+
+### Added
+- **The VESTA Agent now appears in the kiosk** — for the owner and the facility manager only, and only once the agent is connected (the **VESTA Agent token** setting). Guests never see it, and with the token empty nothing changes.
+- **A new robot button in the top bar** (and in the phone menu) shows whether the agent is **online** (green dot) or **offline** (amber dot), with a count of the agent's messages waiting for your answer.
+- **Tapping it opens the agent's area:** its messages, reports and recommendations, newest first — with the devices they are about (tap one to open it) and **buttons to answer** where the agent asks for a decision. The first answer counts; everyone then sees who answered and what. While the agent is offline its messages stay readable but the buttons are hidden.
+- **"by VESTA Agent"** now marks every maintenance record — fault, completed work, cost, schedule or saved document — that the agent created or last changed.
+- For the agent's map of the villa, the kiosk now shares the room it shows for each device, so a device Home Assistant has no area for is still placed in the right room.
+
 ## 2.496.211
 
 ### Added

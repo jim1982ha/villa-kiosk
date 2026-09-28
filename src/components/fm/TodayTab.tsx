@@ -16,6 +16,7 @@ import EvidenceRow from "./EvidenceRow";
 import RecentWorkList from "./RecentWorkList";
 import NotesField from "./NotesField";
 import InlineConfirm from "@/components/common/InlineConfirm";
+import AgentMark from "./AgentMark";
 
 const STATE_LABEL: Record<ScheduleStatus["state"], string> = {
   overdue: "Overdue",
@@ -118,6 +119,7 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
                 <strong>{s.schedule.title}</strong>
                 {s.schedule.clause && <span className="fm-clause">Cl. {s.schedule.clause}</span>}
                 {s.schedule.room && <span className="fm-clause">{s.schedule.room}</span>}
+                <AgentMark record={s.schedule} />
               </div>
               <div className="fm-row-sub muted">
                 {dueText(s)} · every {s.schedule.everyDays} days

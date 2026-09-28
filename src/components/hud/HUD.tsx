@@ -28,7 +28,7 @@ import {
   // MapIcon, not Map: the bare name shadows the global Map constructor,
   // which this file also uses.
   Settings, LogOut, Map as MapIcon, PersonStanding,
-  Minus, Plus, CircleHelp, TriangleAlert, ClipboardList,
+  Minus, Plus, CircleHelp, TriangleAlert, ClipboardList, Bot,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
@@ -51,6 +51,8 @@ import { useVillaAttention } from "@/components/cockpit/useVillaAttention";
 import { useFmData } from "@/fm/FmDataContext";
 import { fmAttention } from "@/fm/fmEngine";
 import { formatCountBadge } from "@/utils/countBadge";
+import { useAgent } from "@/agent/AgentContext";
+import { awaitingAnswer } from "@/agent/agentView";
 
 // Label-size stepper (next to the category filter): each click moves
 // entityIconScale by this much, clamped to the shared
@@ -93,6 +95,9 @@ interface Props {
   /** Open the Facility Manager workspace. Undefined when the profile lacks
    *  `manageFacility` — the button is then not rendered at all. */
   onOpenFacility?: () => void;
+  /** Open the VESTA Agent area. Undefined when the profile lacks `viewAgent`
+   *  or the agent is not configured — the button is then not rendered. */
+  onOpenAgent?: () => void;
   /** Long-press (or hold Enter/Space) a category filter icon — list every
    *  device in that category, the same group-modal every SummaryBar tile
    *  already opens. A plain tap keeps toggling that category's visibility. */
@@ -110,7 +115,7 @@ export default function HUD({
   onOpenSettings, canOpenSettings, onMove,
   viewMode, onToggleViewMode,
   hasOverviewDefault, onApplyOverviewDefault, onSaveOverviewDefault,
-  onOpenEntity, onOpenFacility, onOpenCategory,
+  onOpenEntity, onOpenFacility, onOpenAgent, onOpenCategory,
 }: Props) {
   const { connection, haConfig } = useHA();
   const { config, update } = useConfig();
@@ -142,6 +147,14 @@ export default function HUD({
   const { data: fmData } = useFmData();
   // The Facility's attention rule (fmEngine.fmAttention) — the Cockpit's too.
   const facilityAttention = useMemo(() => fmAttention(fmData).total, [fmData]);
+  // The VESTA Agent: its presence dot, and how many of its messages wait for
+  // an answer THIS profile can give (agentView.awaitingAnswer).
+  const { status: agentStatus, messages: agentMessages } = useAgent();
+  const agentOnline = agentStatus?.state === "online";
+  const agentWaiting = useMemo(() => awaitingAnswer(agentMessages, agentStatus),
+    [agentMessages, agentStatus]);
+  const agentTitle = `VESTA Agent — ${agentOnline ? "online" : "offline"}`
+    + (agentWaiting > 0 ? `, ${agentWaiting} message${agentWaiting === 1 ? "" : "s"} to answer` : "");
 
   // ── Floor buttons now do double duty, no separate Rooms button any more:
   // a normal tap/click keeps the original behaviour (switch to that floor,
@@ -611,6 +624,22 @@ export default function HUD({
                 )}
               </button>
             )}
+            {onOpenAgent && (
+              <button
+                className={`icon-btn agent-btn${agentWaiting > 0 ? " has-alert" : ""}`}
+                onClick={onOpenAgent}
+                title={agentTitle}
+                aria-label={`Open the VESTA Agent area (${agentOnline ? "online" : "offline"})`}
+              >
+                <Bot size={24} />
+                <span className={`agent-btn-dot ${agentOnline ? "online" : "offline"}`} aria-hidden="true" />
+                {agentWaiting > 0 && (
+                  <span className="icon-btn-count" aria-hidden="true">
+                    {formatCountBadge(agentWaiting)}
+                  </span>
+                )}
+              </button>
+            )}
             {/* (The colour-legend button moved into the category row — it
                 explains those very colours. See .hud-cat-help.) */}
             {/* First-person / bird's-eye switch, right after Facility — both
@@ -705,6 +734,19 @@ export default function HUD({
                   >
                     <ClipboardList size={18} />
                     <span>Facility{facilityAttention > 0 ? ` (${formatCountBadge(facilityAttention)})` : ""}</span>
+                  </button>
+                )}
+                {onOpenAgent && (
+                  <button
+                    role="menuitem"
+                    className="hud-menu-item"
+                    onClick={() => { setMenuOpen(false); onOpenAgent(); }}
+                  >
+                    <Bot size={18} />
+                    <span>
+                      VESTA Agent · {agentOnline ? "online" : "offline"}
+                      {agentWaiting > 0 ? ` (${formatCountBadge(agentWaiting)})` : ""}
+                    </span>
                   </button>
                 )}
                 {/* Same control as the (hidden-on-mobile) inline Minus/Plus

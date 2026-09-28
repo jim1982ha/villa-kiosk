@@ -28,6 +28,8 @@ import RoomChoiceSheet, { type RoomChoice } from "@/components/hud/RoomChoiceShe
 import { useProfile } from "@/auth/ProfileContext";
 import { hasCapability, isMappingAllowed, isTypeAllowed, panelMapping } from "@/auth/permissions";
 import FacilityModal from "@/components/fm/FacilityModal";
+import AgentModal from "@/components/agent/AgentModal";
+import { useAgent } from "@/agent/AgentContext";
 import GuestReportModal from "@/components/fm/GuestReportModal";
 import { useHA } from "@/ha/HAStateStore";
 import { displayLabelFor, resolveRooms } from "@/config/EntityMap";
@@ -84,6 +86,10 @@ export default function Dashboard() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [configEditorOpen, setConfigEditorOpen] = useState(false);
   const [facilityOpen, setFacilityOpen] = useState(false);
+  const [agentOpen, setAgentOpen] = useState(false);
+  // True only for a profile with viewAgent AND a configured agent — see
+  // AgentProvider. Nothing about the agent renders otherwise (PLAN A8).
+  const { visible: agentVisible } = useAgent();
   /** Device the Facility modal should open a blank fault for — set by a
    *  panel's "report a fault" shortcut, cleared as soon as the modal has
    *  consumed it so reopening Facility later doesn't resurrect the form. */
@@ -782,6 +788,7 @@ export default function Dashboard() {
         onSaveOverviewDefault={saveOverviewDefault}
         onOpenEntity={openEntityPanel}
         onOpenFacility={canManageFacility ? () => setFacilityOpen(true) : undefined}
+        onOpenAgent={agentVisible ? () => setAgentOpen(true) : undefined}
         onOpenCategory={setCategoryGroup}
       />
 
@@ -988,6 +995,13 @@ export default function Dashboard() {
           // If this prop is ever swapped for a differently-computed set,
           // that guarantee breaks — keep the two in lockstep.
           filterSuppressed={false}
+        />
+      )}
+
+      {agentOpen && agentVisible && (
+        <AgentModal
+          onClose={() => setAgentOpen(false)}
+          onOpenEntity={(id) => { setAgentOpen(false); openEntityPanel(id); }}
         />
       )}
 

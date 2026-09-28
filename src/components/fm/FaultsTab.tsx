@@ -22,6 +22,7 @@ import ErasableRow from "./ErasableRow";
 import FaultStageModal from "./FaultStageModal";
 import NotesField from "./NotesField";
 import DeviceSearchPicker, { type DeviceOption } from "./DeviceSearchPicker";
+import AgentMark from "./AgentMark";
 
 /** Read-only evidence strips never call back — a stable identity keeps the
  *  memoised row from re-rendering on every parent update. */
@@ -270,6 +271,7 @@ export default function FaultsTab(
                 {/* Read this row differently: a guest reports a symptom from
                     inside the villa, not a diagnosis. */}
                 {t.reportedBy === "guest" && <span className="fm-clause guest">guest report</span>}
+                <AgentMark record={t} />
               </div>
               <div className="fm-row-sub muted">
                 Opened {localStamp(t.openedAt)}

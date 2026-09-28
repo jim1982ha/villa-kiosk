@@ -13,6 +13,7 @@ import { useConfig } from "@/config/ConfigContext";
 import { useFmData } from "@/fm/FmDataContext";
 import { scheduleStatus, shortDate } from "@/fm/fmEngine";
 import type { FmSchedule } from "@/fm/fmTypes";
+import AgentMark from "./AgentMark";
 
 /** How the obligation is usually WRITTEN, mapped to days. Anything that isn't a
  *  whole number of days rounds DOWN (twice a week -> 3, not 4) so a genuinely
@@ -154,6 +155,7 @@ export default function ScheduleEditor() {
                   {s.clause && <span className="fm-clause">Cl. {s.clause}</span>}
                   {s.room && <span className="fm-clause">{s.room}</span>}
                   {!s.enabled && <span className="fm-clause">Paused</span>}
+                  <AgentMark record={s} />
                 </div>
                 <div className="fm-row-sub muted">
                   Every {s.everyDays} days · due by {due.dueAt ? shortDate(due.dueAt) : "—"}

@@ -24,6 +24,7 @@ import ErasableRow from "./ErasableRow";
 import NotesField from "./NotesField";
 import ReportPreview from "./ReportPreview";
 import SavedDocumentsList from "./SavedDocumentsList";
+import AgentMark from "./AgentMark";
 
 export default function SpendTab(
   { onOpenEntity, deviceOptions }: {
@@ -257,6 +258,7 @@ export default function SpendTab(
               <div className="fm-row-title">
                 <strong>{c.label}</strong>
                 <span className="fm-clause">{c.category === "minor" ? "Minor" : "Major"}</span>
+                <AgentMark record={c} />
               </div>
               <div className="fm-row-sub muted">{localStamp(c.at)}</div>
               {c.note && <div className="fm-timeline-note">{c.note}</div>}

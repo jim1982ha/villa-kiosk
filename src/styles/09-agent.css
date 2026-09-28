@@ -1,0 +1,61 @@
+/* The VESTA Agent (docs/agent-integration/PLAN.md A8): the top-bar button with
+   its presence dot, the agent area, and the "by VESTA Agent" record mark.
+   Colours come from the status tokens only — online is --status-on, offline
+   is --status-warning (the agent is unavailable, not a danger to the villa),
+   a critical message is --status-danger. */
+
+/* The mark on a Facility record the agent created or changed: the same pill as
+   "guest report", in the accent so the two provenances never read alike. */
+.fm-clause.agent {
+  color: var(--accent-strong);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+/* Top-bar button: presence as a small dot on the glyph's lower right, clear of
+   the count badge in the upper right (.icon-btn-count). */
+.agent-btn { position: relative; }
+.agent-btn-dot {
+  position: absolute; right: 6px; bottom: 6px;
+  width: 9px; height: 9px; border-radius: 50%;
+  box-shadow: 0 0 0 1.5px var(--bg-overlay);
+}
+.agent-btn-dot.online { background: var(--status-on); }
+.agent-btn-dot.offline { background: var(--status-warning); }
+
+.agent-presence {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-2) var(--space-3); border-radius: var(--radius-badge);
+  background: var(--bg-input); font-size: var(--text-sm);
+}
+.agent-presence-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.agent-presence-dot.online { background: var(--status-on); box-shadow: 0 0 8px var(--status-on); }
+.agent-presence-dot.offline { background: var(--status-warning); }
+
+.agent-message-list { display: flex; flex-direction: column; gap: var(--space-3); }
+.agent-message {
+  display: flex; flex-direction: column; gap: var(--space-2);
+  padding: var(--space-3); border-radius: var(--radius-badge);
+  background: var(--bg-card); border: 1px solid var(--hairline);
+  border-left: 3px solid var(--hairline-strong);
+}
+.agent-message.agent-sev-warning { border-left-color: var(--status-warning); }
+.agent-message.agent-sev-critical { border-left-color: var(--status-danger); }
+.agent-message.agent-state-answered,
+.agent-message.agent-state-expired { opacity: 0.75; }
+.agent-message-head { display: flex; align-items: center; gap: var(--space-2); }
+.agent-message-title { font-weight: 600; flex: 1; min-width: 0; }
+.agent-sev-icon-info { color: var(--text-dim); }
+.agent-sev-icon-warning { color: var(--status-warning); }
+.agent-sev-icon-critical { color: var(--status-danger); }
+.agent-message-meta { display: flex; align-items: center; gap: 4px; font-size: var(--text-2xs); }
+.agent-message-body { font-size: var(--text-sm); }
+.agent-message-entities { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.agent-entity-chip {
+  display: inline-flex; align-items: center; gap: 2px;
+  min-height: 32px; padding: 0 var(--space-2); border-radius: var(--radius-pill);
+  border: 1px solid var(--hairline); background: var(--bg-input);
+  color: var(--text-primary); font-size: var(--text-xs); cursor: pointer;
+}
+.agent-message-buttons { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.agent-message-buttons .btn { min-height: var(--touch-min); }
+.agent-message-note { margin: 0; font-size: var(--text-xs); }

@@ -10,6 +10,7 @@ import { localStamp } from "@/fm/fmEngine";
 
 import { monthLabel } from "@/fm/fmEngine";
 import type { FmSavedDocument } from "@/fm/fmTypes";
+import AgentMark from "./AgentMark";
 
 export default function SavedDocumentsList({
   kind, onOpen,
@@ -36,7 +37,10 @@ export default function SavedDocumentsList({
         {docs.map((doc) => (
           <div key={doc.id} className="fm-row">
             <div className="fm-row-main">
-              <div className="fm-row-title"><strong>{monthLabel(doc.month)}</strong></div>
+              <div className="fm-row-title">
+                <strong>{monthLabel(doc.month)}</strong>
+                <AgentMark record={doc} />
+              </div>
               <div className="fm-row-sub muted">Saved {localStamp(doc.generatedAt)}</div>
             </div>
             <button className="btn ghost" onClick={() => onOpen(doc)}>

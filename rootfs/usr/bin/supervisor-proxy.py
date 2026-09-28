@@ -3069,6 +3069,40 @@ async def agent_status_handler(request: web.Request) -> web.Response:
     return web.json_response(_agent_presence(), headers={"Cache-Control": "no-store"})
 
 
+# ── The rooms the Kiosk shows (the villa model's fallback) ───────────────────
+# "Which room is this device in" is the Kiosk's rule (EntityMap.ts
+# resolveEntityRoom): Home Assistant's area, else the drawn room the device's
+# 3D anchor sits in. The second half exists only in a browser with the scene
+# loaded, so an owner's or facility manager's device SHARES its resolved rooms
+# here (RoomShare.tsx) and the villa model uses them for a device Home Assistant
+# has no area for — the add-on is told the Kiosk's answer, never re-derives it.
+KIOSK_ROOMS_FILE = "/data/kiosk-rooms.json"
+KIOSK_ROOMS_MAX_BYTES = 1_000_000
+KIOSK_ROOMS_EMPTY: dict = {"rooms": {}}
+
+
+def _kiosk_rooms_merge(request: web.Request, stored, value):
+    """Keep only `rooms`, stamped with when and by whom it was shared."""
+    rooms = value.get("rooms") if isinstance(value, dict) else None
+    return {"rooms": rooms, "at": _now_iso(), "by": _role_for(request)}
+
+
+def _kiosk_rooms_guard(request: web.Request, body, old, new):
+    rooms = new.get("rooms")
+    if not isinstance(rooms, dict) or len(rooms) > 10_000 or not all(
+            isinstance(k, str) and AGENT_ENTITY_RE.fullmatch(k)
+            and isinstance(v, str) and 0 < len(v) <= 100 for k, v in rooms.items()):
+        return web.json_response(
+            {"error": "rooms must map entity ids to room names (at most 100 characters)"}, status=400)
+    return None
+
+
+_, kiosk_rooms_put_handler = _json_store_handlers(
+    KIOSK_ROOMS_FILE, "data", KIOSK_ROOMS_EMPTY, KIOSK_ROOMS_MAX_BYTES, "the shared rooms",
+    writer_capability="viewAgent", reader_capability="viewAgent",
+    writer_merge=_kiosk_rooms_merge, write_guard=_kiosk_rooms_guard)
+
+
 # ── Info and the villa model (PLAN A4) ───────────────────────────────────────
 
 async def _learn_own_version(session: ClientSession) -> None:
@@ -3155,10 +3189,14 @@ async def agent_villa_model_handler(request: web.Request) -> web.Response:
     ids = sorted({e for e in (*entity_map, *mesh.values(), *group_of)
                   if isinstance(e, str) and AGENT_ENTITY_RE.fullmatch(e) and e not in dismissed})
     areas = await _ha_areas(request.app["session"], ids)
+    shared = _read_json_store(KIOSK_ROOMS_FILE, KIOSK_ROOMS_EMPTY)
+    kiosk_rooms = shared.get("rooms") if isinstance(shared, dict) \
+        and isinstance(shared.get("rooms"), dict) else {}
     devices = []
     for eid in ids:
         mapping = entity_map.get(eid) if isinstance(entity_map.get(eid), dict) else {}
         area, floor, friendly = (areas or {}).get(eid) or [None, None, None]
+        fallback = kiosk_rooms.get(eid) if not area and isinstance(kiosk_rooms.get(eid), str) else None
         devices.append({
             "entity_id": eid,
             "name": mapping.get("label") or friendly or eid,
@@ -3166,9 +3204,11 @@ async def agent_villa_model_handler(request: web.Request) -> web.Response:
             "category": mapping.get("category"),
             "disabled": bool(mapping.get("disabled")),
             "group_id": group_of.get(eid),
-            "room": area or None,
+            "room": area or fallback or None,
             "floor": floor or None,
-            "room_source": "ha_area" if area else None,
+            # ha_area: Home Assistant's own area. kiosk: the drawn room the
+            # Kiosk places it in (shared by an owner/ops device). None: neither.
+            "room_source": "ha_area" if area else ("kiosk" if fallback else None),
         })
     rooms = []
     model = _effective_paths().get("model_path")
@@ -3234,6 +3274,7 @@ def build_app() -> web.Application:
     app.router.add_get("/agent-messages", agent_messages_get_handler)
     app.router.add_get("/agent-choices", agent_choices_get_handler)
     app.router.add_put("/agent-choices", agent_choices_put_handler)
+    app.router.add_put("/kiosk-rooms", kiosk_rooms_put_handler)
     # The VESTA Agent interface v1 (bearer token; 404 while agent_token is empty).
     app.router.add_get("/agent/v1/info", agent_info_handler)
     app.router.add_get("/agent/v1/villa-model", agent_villa_model_handler)

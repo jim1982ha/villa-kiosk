@@ -19,6 +19,7 @@ import { useFmData } from "@/fm/FmDataContext";
 import { localStamp, formatMoney, completionSource } from "@/fm/fmEngine";
 import EvidenceRow from "./EvidenceRow";
 import ErasableRow from "./ErasableRow";
+import AgentMark from "./AgentMark";
 
 export default function RecentWorkList({ limit = 12 }: { limit?: number }) {
   const { data, removeCompletion } = useFmData();
@@ -65,6 +66,7 @@ export default function RecentWorkList({ limit = 12 }: { limit?: number }) {
                   : <CalendarCheck size={16} className="muted" />}
                 <strong>{source.title}</strong>
                 {source.kind === "fault" && <span className="fm-clause">fault</span>}
+                <AgentMark record={c} />
               </div>
               <div className="fm-row-sub muted">
                 {localStamp(c.at)}{c.by && c.by !== "—" ? ` · ${c.by}` : ""}

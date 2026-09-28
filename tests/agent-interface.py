@@ -310,7 +310,8 @@ async def main() -> None:
     (TMP / "data" / "device-config.json").write_text(json.dumps({
         "entityMap": {"light.living_ceiling": {"entityId": "light.living_ceiling", "type": "light",
                                                "label": "Ceiling light"},
-                      "light.gone": {"entityId": "light.gone", "type": "light", "label": "Gone"}},
+                      "light.gone": {"entityId": "light.gone", "type": "light", "label": "Gone"},
+                      "light.hall": {"entityId": "light.hall", "type": "light", "label": "Hall light"}},
         "meshBindings": {"mesh_7": "switch.pool_pump"},
         "deviceGroups": [{"id": "g1", "primaryEntityId": "light.living_ceiling",
                           "memberEntityIds": ["sensor.living_power"]}],
@@ -319,10 +320,19 @@ async def main() -> None:
     (TMP / "data" / "www" / "villa.glb").write_bytes(b"glTF")
     (TMP / "data" / "www" / "villa.rooms.json").write_text(json.dumps(
         {"rooms": [{"name": "Living", "floor": 1, "points": []}]}))
+    async def share(headers, rooms):
+        r = await put("/kiosk-rooms", headers=headers, json={"data": {"rooms": rooms}})
+        return r.status
+
+    ck("a guest's device does not share rooms: 403", await share(cookie("guest"), {"light.hall": "Hall"}) == 403)
+    ck("  ...a room map that is not one: 400", await share(cookie("ops"), {"not an id": "x"}) == 400)
+    ck("an owner/ops device shares the rooms it resolved: 200", await share(cookie("ops"), {
+        "sensor.living_power": "Living", "light.living_ceiling": "Somewhere else"}) == 200)
     status, body = await jget("/agent/v1/villa-model", bearer())
     devices = {d["entity_id"]: d for d in body.get("devices", [])} if status == 200 else {}
     ck("devices: mapped, mesh-bound and grouped ids; the dismissed one left out",
-       set(devices) == {"light.living_ceiling", "switch.pool_pump", "sensor.living_power"}, sorted(devices))
+       set(devices) == {"light.living_ceiling", "switch.pool_pump", "sensor.living_power", "light.hall"},
+       sorted(devices))
     ck("  ...the Kiosk's label wins, Home Assistant's name otherwise",
        devices.get("light.living_ceiling", {}).get("name") == "Ceiling light"
        and devices.get("switch.pool_pump", {}).get("name") == "Pool pump")
@@ -330,9 +340,14 @@ async def main() -> None:
        devices.get("light.living_ceiling", {}).get("room") == "Living"
        and devices["light.living_ceiling"]["floor"] == "Ground"
        and devices.get("switch.pool_pump", {}).get("room") == "Garden")
-    ck("  ...a device with no area says so rather than guessing",
-       devices.get("sensor.living_power", {}).get("room") is None
-       and devices["sensor.living_power"]["room_source"] is None)
+    ck("  ...no area: the room the Kiosk shows, marked as the Kiosk's",
+       devices.get("sensor.living_power", {}).get("room") == "Living"
+       and devices["sensor.living_power"]["room_source"] == "kiosk", devices.get("sensor.living_power"))
+    ck("  ...Home Assistant's area still wins over what a device shared",
+       devices.get("light.living_ceiling", {}).get("room") == "Living"
+       and devices["light.living_ceiling"]["room_source"] == "ha_area")
+    ck("  ...neither: it says so rather than guessing",
+       devices.get("light.hall", {}).get("room") is None and devices["light.hall"]["room_source"] is None)
     ck("  ...its group", devices.get("sensor.living_power", {}).get("group_id") == "g1")
     names = [(r["name"], r["source"]) for r in body.get("rooms", [])]
     ck("rooms: the floor plan's and the ones people added; fitted points are not rooms",
