@@ -1,0 +1,113 @@
+#!/usr/bin/env python3
+"""Start-up of the VESTA Agent host (SPEC 10: read options → validate → …).
+
+Runs once per container start as the s6 oneshot `init-vesta`, before any
+longrun. It reads and validates the options, prints the start banner, creates
+the persistent folders and writes the agent's environment to /run/vesta.
+
+⚠️ A NON-ZERO EXIT STOPS THE CONTAINER. The HA base image sets
+S6_BEHAVIOUR_IF_STAGE2_FAILS=2, so a failed oneshot ends the start-up — which is
+what SPEC 6 asks for in agent mode ("a missing key stops the start with a clear
+message"): the message is the last line in the app's log.
+"""
+from __future__ import annotations
+
+import json
+import os
+import sys
+import time
+from urllib.parse import urlsplit
+
+# /usr/bin/../../opt/vesta/host in the image; rootfs/… in the repository.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                "..", "..", "opt", "vesta", "host"))
+
+from vesta_host import contract, layout, options, paths  # noqa: E402
+from vesta_host.log import configure, log  # noqa: E402
+from vesta_host.redact import Redactor  # noqa: E402
+
+
+def origin(url: object) -> str:
+    """scheme://host:port only — a path or query may carry a secret."""
+    u = urlsplit(str(url or ""))
+    if not u.hostname:
+        return "not set"
+    port = f":{u.port}" if u.port else ""
+    return f"{u.scheme}://{u.hostname}{port}"
+
+
+def agent_identity() -> str:
+    if not paths.AGENT_MANIFEST.exists():
+        return "none installed"
+    try:
+        import yaml
+        m = yaml.safe_load(paths.AGENT_MANIFEST.read_text()) or {}
+        return f"{m.get('name', '?')} {m.get('version', '?')} ({m.get('runtime', '?')})"
+    except Exception as exc:  # a broken manifest is reported, not fatal here
+        return f"unreadable manifest ({type(exc).__name__})"
+
+
+def banner(o: options.Options) -> None:
+    def state(name: str) -> str:
+        return "set" if o.has(name) else "missing"
+
+    mode = o.get("agent_mode")
+    log("info", f"VESTA Agent host {os.environ.get('VESTA_HOST_VERSION', 'dev')}"
+                f" · deployment {o.deployment} · instance {contract.instance()}")
+    log("info", f"agent slot: mode {mode} · agent {agent_identity()}")
+    log("info", f"link Home Assistant: {origin(o.get('ha_url'))} · token {state('ha_token')}")
+    if o.get("ha_mcp_mode") == "external":
+        log("info", f"link HA MCP: external {origin(o.get('ha_mcp_url'))}"
+                    f" · secret {state('ha_mcp_secret')}")
+    else:
+        log("info", f"link HA MCP: sidecar {contract.SIDECAR_HOST}:{contract.SIDECAR_PORT}")
+    log("info", f"link VESTA Kiosk: {origin(o.get('kiosk_url'))}"
+                f" · token {state('kiosk_agent_token')}")
+    log("info", f"link Anthropic: key {state('anthropic_api_key')}")
+    if o.get("telegram_takeover"):
+        log("info", f"link Telegram: ENABLED · token {state('telegram_bot_token')}")
+    else:
+        log("info", "link Telegram: disabled (takeover off) — no token exported, no call made")
+    log("info", f"time zone: {os.environ.get('TZ', 'UTC')} · log level {o.get('log_level')}")
+
+
+def main() -> int:
+    o = options.load()
+    redactor = Redactor(o.secrets())
+    configure(str(o.get("log_level") or "info"), redactor)
+
+    banner(o)
+    for note in o.notes:
+        log("info", note)
+    if o.errors:
+        for err in o.errors:
+            log("error", err)
+        log("error", "not starting: fix the options above and start the app again")
+        return 1
+
+    for path in layout.ensure():
+        log("info", f"created {path}")
+
+    env = contract.build(o)
+    paths.RUN.mkdir(parents=True, exist_ok=True)
+    paths.AGENT_ENV.touch(mode=0o600, exist_ok=True)
+    paths.AGENT_ENV.chmod(0o600)
+    paths.AGENT_ENV.write_text(json.dumps(contract.process_env(env)))
+    redactor.save(paths.REDACT)
+
+    # What started, when — never a secret. Read by later milestones' crash
+    # accounting and by a person debugging from a backup.
+    (paths.DATA_HOST / "last_start.json").write_text(json.dumps({
+        "at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "host_version": os.environ.get("VESTA_HOST_VERSION", "dev"),
+        "deployment": o.deployment,
+        "instance": contract.instance(),
+        "agent_mode": o.get("agent_mode"),
+        "agent": agent_identity(),
+    }, indent=2))
+    log("info", "start-up checks passed")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

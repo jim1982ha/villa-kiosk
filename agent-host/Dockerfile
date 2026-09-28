@@ -20,10 +20,12 @@ FROM ${NODE_FROM} AS node
 FROM ${BUILD_FROM}
 
 # python3-venv: the agent manifest's `install` and the HA MCP sidecar each get
-# their own virtualenv in later milestones. No compilers here — anything that
-# needs one is built in a separate stage (SPEC 4.4).
+# their own virtualenv in later milestones. python3-yaml: the host reads the
+# agent manifest (the host itself uses nothing else outside the standard
+# library). No compilers here — anything that needs one is built in a separate
+# stage (SPEC 4.4).
 RUN apt-get update \
- && apt-get install -y --no-install-recommends python3 python3-venv ca-certificates \
+ && apt-get install -y --no-install-recommends python3 python3-venv python3-yaml ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
@@ -36,9 +38,15 @@ COPY rootfs /
 # ⚠️ THE SHAPE, NOT A LIST OF PATHS — as in the VESTA Kiosk Dockerfile: git
 # stores rootfs files as 0644, and an s6 `run` script that is not executable
 # builds green and fails only on the device.
-RUN find /etc/s6-overlay/s6-rc.d -name run -exec chmod a+x {} +
+RUN find /etc/s6-overlay/s6-rc.d -name run -exec chmod a+x {} + \
+ && chmod a+x /usr/bin/vesta-entrypoint /usr/bin/vesta-agent-slot
 
+# The start banner and the environment contract read these. VESTA_INSTANCE is
+# per channel: CI passes `prod` from main and `dev` from any other branch.
 ARG BUILD_VERSION=dev
+ARG BUILD_INSTANCE=dev
+ENV VESTA_HOST_VERSION=${BUILD_VERSION} \
+    VESTA_BUILD_INSTANCE=${BUILD_INSTANCE}
 LABEL \
   io.hass.name="VESTA Agent" \
   io.hass.description="Host for the VESTA Agent (Claude Agent SDK)" \

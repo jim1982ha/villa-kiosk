@@ -32,6 +32,10 @@ jobs:
           python3 -c "import yaml" 2>/dev/null || pip3 install --quiet pyyaml
           python3 agent-host/tests/check_manifest.py
 
+      - name: The host's start-up, contract, folders and redaction
+        # Runs the real rootfs programs against a temporary root (test_host.py).
+        run: python3 agent-host/tests/test_host.py
+
   build:
     needs: [tests]
     runs-on: ubuntu-latest
@@ -61,6 +65,10 @@ jobs:
           if [ "${GITHUB_REF_NAME}" != "main" ]; then suffix="-${GITHUB_REF_NAME}"; fi
           image="ghcr.io/${owner}/vesta-agent${suffix}-${{ matrix.arch }}"
           echo "image=$image" >> "$GITHUB_OUTPUT"
+          # VESTA_INSTANCE in the environment contract: prod only from main.
+          instance=dev
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then instance=prod; fi
+          echo "instance=$instance" >> "$GITHUB_OUTPUT"
           # `:latest` only from main. The Supervisor resolves image:<version>.
           tags="${image}:${version}"
           if [ "${GITHUB_REF_NAME}" = "main" ]; then
@@ -97,6 +105,7 @@ jobs:
           build-args: |
             BUILD_FROM=ghcr.io/home-assistant/${{ matrix.arch }}-base-debian:trixie
             BUILD_VERSION=${{ steps.meta.outputs.version }}
+            BUILD_INSTANCE=${{ steps.meta.outputs.instance }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
@@ -115,6 +124,15 @@ jobs:
           bytes=$(docker buildx imagetools inspect --raw "$ref" | jq '[.layers[].size] | add')
           echo "### ${{ matrix.arch }}: $(numfmt --to=iec --suffix=B "$bytes") compressed" >> "$GITHUB_STEP_SUMMARY"
           echo "\`$ref\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: The image starts the way the Supervisor runs it
+        # ⚠️ EACH ARCH RUNS ITS OWN IMAGE (aarch64 under QEMU): the Yellow runs
+        # the aarch64 one, and a green amd64 run says nothing about it. Runs
+        # before the manifest sync, so a failure here never reaches the store.
+        run: |
+          agent-host/tests/container_test.sh \
+            "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}" \
+            --platform "${{ matrix.platform }}"
 
       - name: Pullable without credentials
         # ⚠️ THE SUPERVISOR PULLS ANONYMOUSLY. A package GHCR created private
