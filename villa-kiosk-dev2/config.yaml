@@ -5,7 +5,7 @@
 # no-compile operation. The {arch} placeholder + version resolve to e.g.
 # ghcr.io/jim1982ha/villa-kiosk-amd64:2.0.0 — published by .github/workflows/build.yaml.
 name: VESTA (dev2)
-version: "2.496.210"
+version: "2.496.211"
 slug: villa_kiosk_dev2
 description: 3D Home Assistant villa dashboard — HA sidebar (Ingress) + its own hostname
 url: https://github.com/jim1982ha/villa-kiosk
@@ -120,6 +120,21 @@ startup: application
 # pin_lockout_minutes (default 5). How long a device that has entered five
 #   wrong passcodes must wait. The lockout is per source address, so raising
 #   it punishes a guesser rather than locking the household out.
+#
+# ── The VESTA Agent (docs/agent-integration/PLAN.md, workstream A) ─────────
+# agent_token (empty by default = the agent interface does not exist: every
+#   /agent/v1 route answers 404 and no agent UI is shown). Set it to the same
+#   value as `kiosk_agent_token` in the VESTA Agent host to let the agent read
+#   and update Facility records (never delete them), post messages with
+#   buttons, and report its presence. At least 16 characters, so a short
+#   guessable token cannot be saved; a wrong token counts toward the passcode
+#   lockout like a wrong PIN. It never opens anything else in the kiosk.
+#
+# agent_offline_after_minutes (default 5): the agent is shown offline when no
+#   heartbeat arrived within this window.
+#
+# agent_message_retention_days (default 90): how long agent messages and the
+#   answers given to them are kept.
 options:
   guest_pin: ""
   owner_pin: ""
@@ -130,6 +145,9 @@ options:
   session_days: 30
   telemetry_max_events: 500
   pin_lockout_minutes: 5
+  agent_token: ""
+  agent_offline_after_minutes: 5
+  agent_message_retention_days: 90
 schema:
   guest_pin: match(^[0-9]{4}$|^$)?
   owner_pin: match(^[0-9]{4}$|^$)?
@@ -140,3 +158,6 @@ schema:
   session_days: int(1,365)?
   telemetry_max_events: int(50,5000)?
   pin_lockout_minutes: int(1,1440)?
+  agent_token: match(^$|^[A-Za-z0-9._~+/=-]{16,128}$)?
+  agent_offline_after_minutes: int(1,60)?
+  agent_message_retention_days: int(1,365)?

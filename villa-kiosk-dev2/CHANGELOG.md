@@ -1,3 +1,10 @@
+## 2.496.211
+
+### Added
+- **The kiosk can now be connected to the VESTA Agent** — the AI assistant that will help run the villa. Nothing changes until you choose to connect it: three new settings on the add-on's Configuration page, **VESTA Agent token**, **Agent shown offline after (minutes)** and **Keep agent messages for (days)**. With the token empty (the default) the kiosk behaves exactly as before.
+- Once connected, the agent can read and update maintenance records — faults, completed work, costs, schedules — and attach photos. **It can never delete a record, nor remove a photo from one**; every record it creates or changes is marked as coming from the VESTA Agent. It can also post messages with buttons and report that it is online. There is nothing new to see on screen yet: the agent's status and messages come to the kiosk in the next release.
+- The token opens only the agent's own door. A wrong token counts toward the same lockout as a wrong passcode, and it never gives access to anything else in the kiosk.
+
 ## 2.496.210
 
 ### Changed
