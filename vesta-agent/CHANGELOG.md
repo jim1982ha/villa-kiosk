@@ -1,3 +1,9 @@
+## 0.5.2
+
+### Changed
+- The help text of **VESTA Kiosk address** no longer says the default is the stable VESTA Kiosk: the dev channel's default is VESTA (dev2).
+- The documentation records what was confirmed on the HA Yellow: the app reaches Home Assistant and the VESTA Kiosk by their internal names, uses Home Assistant's time zone, and needs about 142 MB of memory with the HA MCP server running.
+
 ## 0.5.1
 
 ### Maintenance

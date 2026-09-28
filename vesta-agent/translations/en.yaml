@@ -40,7 +40,7 @@ configuration:
     name: VESTA Kiosk address
     description: >-
       Base address of the VESTA Kiosk agent interface. The default points at the
-      stable VESTA Kiosk on the same machine.
+      VESTA Kiosk on the same machine (VESTA (dev2) for the dev channel).
   kiosk_agent_token:
     name: VESTA Kiosk agent token
     description: The same value as the agent token set in the VESTA Kiosk.
