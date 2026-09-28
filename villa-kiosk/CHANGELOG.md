@@ -1,3 +1,8 @@
+## 2.496.215
+
+### Fixed
+- **Editing a device's label, colour or other display setting redraws the badges once, not twice.** Every such edit rebuilt every badge on the 3D map two times in a row; on a villa with many devices that doubled the pause after each change in Settings. Nothing looks different; the settings screens respond faster.
+
 ## 2.496.214
 
 ### Fixed

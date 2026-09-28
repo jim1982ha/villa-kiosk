@@ -136,7 +136,7 @@ import {
 } from "./badgeCard";
 import { iconKeyFor } from "./badgeIconKeys";
 import { ALERT_RED, ALERT_RED_HEX, UNAVAILABLE_AMBER, AVAILABLE_GREEN_HEX, SECURE_GREEN, ACTIVE_GLOW } from "./colors";
-import { COSMETIC_MAPPING_FIELDS, entityMapDelta } from "./entityMapDiff";
+import { COSMETIC_MAPPING_FIELDS, type EntityMapDelta } from "./entityMapDiff";
 // Pose-word resolution (which "__<word>" mesh variant a live state asks for)
 // — pure logic, extracted to keep this file to the things that actually touch
 // the scene. See meshVariants.ts for the vocabulary rules themselves.
@@ -1118,10 +1118,11 @@ export class EntityVisuals {
     return relight;
   }
 
-  updateConfig(config: AppConfig): void {
+  /** `mapDelta` is how the device list changed, as SceneManager's plan
+   *  decided it (sceneConfigPlan) — not re-diffed here. */
+  updateConfig(config: AppConfig, mapDelta: EntityMapDelta): void {
     const prevGroups = this.config.deviceGroups;
     const prevBadgeStyle = this.config.badgeStyle;
-    const prevEntityMap = this.config.entityMap;
     this.config = config;
     // hiddenCategories gates the layout pass's first cull and badgeStyle
     // switches labelBoxes to a different geometry entirely — neither is
@@ -1153,9 +1154,7 @@ export class EntityVisuals {
     // widths reconstructed from the jump distances came back as their real
     // label widths, and `top` never moved because `height` is set in explicit
     // pixels and needs no children.
-    // Reuses the shared classifier rather than a third stringify idiom.
-    const mapDelta = config.entityMap === prevEntityMap
-      ? "identical" : entityMapDelta(prevEntityMap, config.entityMap);
+    // The classification is sceneConfigPlan's (by content, via entityMapDelta).
     if (mapDelta !== "identical") {
       // The per-entity mappings cached here are built ONLY by indexMeshes()
       // — the structural pass a cosmetic edit deliberately skips — so every

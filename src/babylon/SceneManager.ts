@@ -2736,8 +2736,9 @@ export class SceneManager {
     this.camera.updateConfig(config);
     this.overview.setNaturalScrolling(config.naturalScrolling);
     this.pick.setMaps(config.entityMap, config.meshBindings, config.deniedTypes, config.hiddenCategories);
-    this.visuals.updateConfig(config); // internally cheap; rebuilds labels only on its own diff
-    if (plan.repaintBadges) this.visuals.repaintBadges(); // cheap glyph-only refresh
+    // Rebuilds the badges when the plan says the device list changed (or a
+    // group / the badge style did) — once; see SceneConfigPlan.entityMap.
+    this.visuals.updateConfig(config, plan.entityMap);
 
     // A room added/renamed/removed via the Rooms menu ("Add room here") starts
     // glowing (or stops) immediately — no model reload needed.

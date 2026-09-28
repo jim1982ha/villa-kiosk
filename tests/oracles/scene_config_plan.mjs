@@ -13,13 +13,13 @@ const clone = (x) => (x === undefined ? undefined : JSON.parse(JSON.stringify(x)
 const base = { ...DEFAULT_CONFIG, entityMap: { "light.a": { entityId: "light.a", type: "light", label: "A" } },
   meshBindings: { m1: "light.a" }, teleportPoints: [{ name: "Hall", position: { x: 0, y: 1.7, z: 0 } }], hiddenCategories: [] };
 const plan = (patch, from = base) => sceneConfigPlan(from, { ...from, ...patch });
-const none = (p) => !Object.values(p).some(Boolean);
+const none = (p) => p.entityMap === "identical" && !Object.entries(p).some(([k, v]) => k !== "entityMap" && v);
 
 ck("a focus pull that changed nothing (every shared key a fresh JSON copy) runs NO pass",
    none(plan({ entityMap: clone(base.entityMap), meshBindings: clone(base.meshBindings), teleportPoints: clone(base.teleportPoints),
      sh3dRooms: clone(base.sh3dRooms), sh3dEntities: clone(base.sh3dEntities), hiddenCategories: [] })), plan({ entityMap: clone(base.entityMap) }));
-ck("a label edit only repaints the badges", (() => { const p = plan({ entityMap: { "light.a": { ...base.entityMap["light.a"], label: "B" } } }); return p.repaintBadges && !p.structural && !p.highlight; })());
-ck("a rebinding is structural, re-outlines, but does not re-fit the rooms", (() => { const p = plan({ meshBindings: { m1: "light.b" } }); return p.structural && p.highlight && !p.recalibrate && !p.repaintBadges; })());
+ck("a label edit is a cosmetic change of the device list, nothing structural", (() => { const p = plan({ entityMap: { "light.a": { ...base.entityMap["light.a"], label: "B" } } }); return p.entityMap === "cosmetic" && !p.structural && !p.highlight; })());
+ck("a rebinding is structural, re-outlines, but does not re-fit the rooms", (() => { const p = plan({ meshBindings: { m1: "light.b" } }); return p.structural && p.highlight && !p.recalibrate && p.entityMap === "identical"; })());
 ck("a new entity re-fits the rooms; a handful at once also moves the walker",
    plan({ entityMap: { ...base.entityMap, "lock.b": { entityId: "lock.b", type: "lock", label: "B" } } }).recalibrate
    && !plan({ entityMap: { ...base.entityMap, "lock.b": { entityId: "lock.b", type: "lock", label: "B" } } }).reteleport
@@ -35,5 +35,13 @@ const sm = readFileSync(new URL("../../src/babylon/SceneManager.ts", import.meta
 const body = sm.slice(sm.indexOf("async updateConfig("), sm.indexOf("getAutoDetectedMappings()"));
 ck("SceneManager runs the plan and decides nothing itself",
    /const plan = sceneConfigPlan\(prev, config\);/.test(body) && !/sliceChanged\(|entityMapDelta\(|\.join\(\) !==|entityDelta/.test(body));
+// ⚠️ ONE DIFF, ONE REBUILD: every cosmetic edit rebuilt every badge twice —
+// EntityVisuals re-diffed the device list and rebuilt, then SceneManager
+// called repaintBadges() on top (2.496.215).
+const ev = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
+const evBody = ev.slice(ev.indexOf("  updateConfig(config: AppConfig"), ev.indexOf("  /** Settings' \"Light effect strength\" slider"));
+ck("the badge layer takes the plan's device-list answer and does not diff again",
+   /this\.visuals\.updateConfig\(config, plan\.entityMap\);/.test(body) && evBody.length > 0 && !/entityMapDelta\(/.test(evBody));
+ck("  ...and the scene no longer repaints the badges on top of that rebuild", !/repaintBadges\(/.test(body));
 
 done("✅ what a config change asks of the scene, decided once");
