@@ -184,9 +184,60 @@ def _enclosing(needle: str) -> str:
     return _code[start + 1:_code.index("(", start)].replace("async def ", "").replace("def ", "")
 
 ck("  the SUPERADMIN charge sits in the elevation handler",
-   _enclosing("_note_global_failure(SUPERADMIN,") == "auth_elevate_handler")
+   _enclosing("_auth_failed(SUPERADMIN,") == "auth_elevate_handler")
 ck("  ...and the caller's-role charge sits in the passcode handler",
-   _enclosing("_note_global_failure(role,") == "auth_verify_handler")
+   _enclosing("_auth_failed(role,") == "auth_verify_handler")
+ck("  ...and the agent's in the agent's gate",
+   _enclosing("_auth_failed(AGENT,") == "_agent_refuse")
+
+# ── the limiter's interface: ask, fail, succeed ───────────────────────────
+# Every door that takes a secret goes through `_lockout_remaining`,
+# `_auth_failed` and `_auth_succeeded`; the write side used to be copied into
+# three handlers. Driven here by value, per bucket and per caller.
+print("\n  the limiter (ask · fail · succeed):")
+proxy._auth_failures.clear()
+reset()
+A, B = "203.0.113.9", "198.51.100.7"
+for _ in range(proxy.AUTH_MAX_FAILURES - 1):
+    proxy._auth_failed(role, A)
+ck("one short of the per-caller limit is not locked",
+   proxy._lockout_remaining(role, A) == 0)
+proxy._auth_failed(role, A)
+ck("the limit locks that caller", proxy._lockout_remaining(role, A) > 0)
+ck("...not another caller", proxy._lockout_remaining(role, B) == 0)
+ck("...nor the same caller in another bucket",
+   proxy._lockout_remaining(proxy.SUPERADMIN, A) == 0)
+ck("each failure also counts toward the bucket's global rate",
+   len(proxy._auth_failures_global[role]) == proxy.AUTH_MAX_FAILURES)
+proxy._auth_failures.clear()
+reset()
+for _ in range(proxy.AUTH_MAX_FAILURES - 1):
+    proxy._auth_failed(role, A)
+proxy._auth_succeeded(role, A)
+proxy._auth_failed(role, A)
+ck("a success clears that caller's count",
+   proxy._lockout_remaining(role, A) == 0
+   and proxy._auth_failures[(role, A)]["count"] == 1)
+ck("...and leaves the global rate alone (one right PIN cannot reset a campaign)",
+   len(proxy._auth_failures_global[role]) == proxy.AUTH_MAX_FAILURES)
+proxy._auth_succeeded(role, "192.0.2.77")
+ck("a success from an unknown caller tracks nothing",
+   (role, "192.0.2.77") not in proxy._auth_failures)
+proxy._auth_failed("agent-" + role, A)
+ck("a new bucket needs no registration",
+   len(proxy._auth_failures_global["agent-" + role]) == 1)
+proxy._auth_failures.clear()
+reset()
+# ...and nothing else touches its state: a fourth door copying the write side
+# is exactly what this interface exists to stop.
+_LIMITER = {"_prune_auth_failures", "_lockout_remaining", "_auth_failed",
+            "_auth_succeeded", "_note_global_failure", "_global_locked_for"}
+_touching = sorted(
+    name for name, fn in inspect.getmembers(proxy, inspect.isfunction)
+    if fn.__module__ == proxy.__name__ and name not in _LIMITER
+    and re.search(r"\b_auth_failures(_global)?\b",
+                  re.sub(r"#.*", "", inspect.getsource(fn)).split('"""')[-1]))
+ck(f"only the limiter touches the limiter's state {_touching or ''}", not _touching)
 
 # ── the REST allow-list fails CLOSED ──────────────────────────────────────
 # Every string below reached Core from a guest session before the rule became a
@@ -229,8 +280,8 @@ ck("the re-check reads the COOKIE, not a captured role",
 # notice a bump or the fix above is inert.
 import os, tempfile, time as _t
 with tempfile.TemporaryDirectory() as tmp:
-    epoch_file = os.path.join(tmp, "session-epoch")
-    proxy.SESSION_EPOCH_FILE = epoch_file
+    proxy.DATA_DIR = tmp
+    epoch_file = proxy._data(proxy.SESSION_EPOCH_NAME)
     proxy._EPOCH_CACHE = None
     with open(epoch_file, "w") as fh:
         fh.write("7")
@@ -291,8 +342,9 @@ with tempfile.TemporaryDirectory() as tmp:
 # The sweep must not delete on a baseline nobody could read, whichever caller
 # reaches it — the PUT path refuses such a write, and this is the second lock.
 with tempfile.TemporaryDirectory() as tmp:
-    proxy.FM_EVIDENCE_DIR = tmp
-    photo = os.path.join(tmp, "a" * 32 + ".jpg")
+    proxy.DATA_DIR = tmp
+    os.makedirs(proxy._data(proxy.FM_EVIDENCE_NAME))
+    photo = os.path.join(proxy._data(proxy.FM_EVIDENCE_NAME), "a" * 32 + ".jpg")
     with open(photo, "wb") as fh:
         fh.write(b"\xff\xd8\xff")
     # ⚠️ A CURRENT MTIME, ON PURPOSE. The first attempt set this to epoch 0,
@@ -485,10 +537,8 @@ try:
        proxy._fm_reader_view(None, STORED) is STORED and proxy._fm_writer_merge(None, STORED, {"x": 1}) == {"x": 1})
 finally:
     proxy._role_for = _real_role_for
-src = PROXY.read_text()
-ck("the store applies the view to the GET AND to the 409 body (a stale write is not a way to read)",
-   "key: reader_view(request, stored) if reader_view else stored," in src and "reader_view(request, stored_now)" in src
-   and "reader_view=_fm_reader_view, writer_merge=_fm_writer_merge" in src)
+# The view on the GET AND on the 409 body is driven over HTTP now:
+# tests/store-doors.py ("a guest's STALE write gets the empty view back").
 
 # ── A chunked upload survives a re-sent piece (round 11, 2.496.166) ──────────
 # Driven through the real handler with a fake request: the client re-sends a
@@ -567,11 +617,14 @@ ck("  ...never trimming to nothing (one event always fits)", len(proxy._telemetr
 ck("the ceiling the options allow is under the byte cap by construction",
    proxy.TELEMETRY_MAX_RING_BYTES < 5000 * proxy.TELEMETRY_MAX_BODY)
 src = PROXY.read_text()
-ck("a store PUT writes OFF the event loop, inside its lock",
-   "await _write_json_store_async(path, payload)" in src and "asyncio.to_thread(_write_json_store, path, payload)" in src
-   and "            _write_json_store(path, payload)" not in src)
-ck("  ...and so does the telemetry append, under ONE lock", "async with _telemetry_lock:" in src
-   and "await asyncio.to_thread(\n            _telemetry_append" in src)
+_update = inspect.getsource(proxy.JsonStore.update)
+ck("a store change reads and writes OFF the event loop, inside its lock",
+   "async with self.lock:" in _update and "await asyncio.to_thread(self.read_status)" in _update
+   and "await _write_json_store_async(self.path, payload)" in _update
+   and "asyncio.to_thread(_write_json_store, path, payload)" in src
+   and "await asyncio.to_thread(after, stored, new)" in _update)
+ck("  ...and the telemetry append is a change to its store (ONE lock)",
+   "await TELEMETRY.update(" in inspect.getsource(proxy.telemetry_post_handler))
 
 # ── the lockout bucket is keyed by what the caller CANNOT write ───────────
 # _client_ip used to take the FIRST X-Forwarded-For hop — the one address in
@@ -676,16 +729,16 @@ ck("the telemetry POST recognises a browser's report body",
 # ── signing every device out also replaces the signing key ────────────────
 print("\n  the signing key:")
 with tempfile.TemporaryDirectory() as d:
-    proxy.SESSION_SECRET_FILE = os.path.join(d, ".session_secret")
-    proxy.SESSION_EPOCH_FILE = os.path.join(d, "session-epoch")
+    proxy.DATA_DIR = d
+    secret_file = proxy._data(proxy.SESSION_SECRET_NAME)
     proxy._session_secret_cache = None
     token = proxy._make_session_token("owner")
     ck("a fresh token verifies", proxy._session_role(token) == "owner")
-    before = open(proxy.SESSION_SECRET_FILE, "rb").read()
+    before = open(secret_file, "rb").read()
     proxy._rotate_session_secret()
     ck("after a rotation it does not, and the key on disk is new (0600)",
-       proxy._session_role(token) is None and open(proxy.SESSION_SECRET_FILE, "rb").read() != before
-       and (os.stat(proxy.SESSION_SECRET_FILE).st_mode & 0o777) == 0o600)
+       proxy._session_role(token) is None and open(secret_file, "rb").read() != before
+       and (os.stat(secret_file).st_mode & 0o777) == 0o600)
     ck("  ...and a token issued afterwards does", proxy._session_role(proxy._make_session_token("ops")) == "ops")
 ck("sign-every-device-out rotates the key after bumping the epoch",
    "    epoch = _bump_session_epoch()\n    try:\n        _rotate_session_secret()" in PROXY.read_text())

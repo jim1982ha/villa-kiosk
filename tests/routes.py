@@ -239,13 +239,22 @@ dockerfile = (ROOT / "Dockerfile").read_text()
 ck("the s6 run script drops to `vesta` after handing it /data",
    run.index("chown -R vesta:vesta /data") < run.index("exec s6-setuidgid vesta python3 /usr/bin/supervisor-proxy.py"))
 ck("  ...and the image creates that account (no home, no shell)", re.search(r"adduser -D -H -s /sbin/nologin\b.* vesta\b", dockerfile) is not None)
-# Filesystem paths only: a module-level `X_FILE/_DIR/_ROOT = "/…"` constant or
-# a literal handed to open()/os.* — HTTP routes ("/auth/verify") are not files.
+# Everything the proxy persists is a NAME resolved against DATA_DIR at call
+# time (`_data(...)`, a `*_NAME` constant, a `JsonStore("…")`); an absolute
+# literal handed to open()/os.* is the only other way to reach the disk, and
+# only the read-only table may be one. HTTP routes ("/auth/verify") are not files.
 src = PROXY.read_text()
-fs = set(re.findall(r'^[A-Z_]+(?:_FILE|_DIR|_ROOT) = "(/[^"]+)"', src, re.M))
-fs |= set(re.findall(r'(?:open|os\.\w+)\(\s*"(/[^"]+)"', src))
-outside = sorted(p for p in fs if not p.startswith(("/data/", "/usr/share/vesta/")))
-ck(f"every filesystem path the proxy names ({len(fs)}) is under /data or the read-only table", fs and not outside, "; ".join(outside))
+names = set(re.findall(r'^[A-Z_]+_NAME = "([^"]+)"', src, re.M))
+names |= set(re.findall(r'JsonStore\("([^"]+)"', src))
+names |= set(re.findall(r'_data\("([^"]+)"', src))
+bad_names = sorted(n for n in names if n.startswith("/") or ".." in n.split("/"))
+ck(f"the data directory is /data, and every name inside it ({len(names)}) is relative",
+   re.search(r'^DATA_DIR = "/data"$', src, re.M) is not None and len(names) >= 10 and not bad_names,
+   "; ".join(bad_names))
+fs = set(re.findall(r'(?:open|os\.\w+)\(\s*"(/[^"]+)"', src))
+fs |= set(re.findall(r'^[A-Z_]+(?:_FILE|_DIR|_ROOT) = "(/[^"]+)"', src, re.M))
+outside = sorted(p for p in fs - {"/data"} if not p.startswith("/usr/share/vesta/"))
+ck("no other absolute path reaches the disk (only the read-only table)", not outside, "; ".join(outside))
 ck("an unreadable options file reads as nothing configured (closed), not a crash",
    "except (OSError, ValueError):\n        return {}" in PROXY.read_text())
 

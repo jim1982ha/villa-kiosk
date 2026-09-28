@@ -1,3 +1,10 @@
+## 2.496.213
+
+### Changed
+- **Nothing changes on screen.** This release reorganises how the add-on saves its shared data (device settings, maintenance records, the agent's messages and answers, diagnostics) and how it counts wrong passcodes, so that each rule lives in one place and is tested by actually using it.
+- **Saving the maintenance record no longer pauses the kiosk.** Clearing out photos that a saved record no longer uses now happens in the background, instead of briefly holding up everything else the add-on relays — lights, locks and cameras included.
+- The wrong-passcode lockout is unchanged (same limits, same waiting time), but the passcode, the superadmin code and the agent's token now share one implementation instead of three copies.
+
 ## 2.496.212
 
 ### Added

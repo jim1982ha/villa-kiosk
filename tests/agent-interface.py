@@ -2,11 +2,9 @@
 """The VESTA Agent interface v1, driven over real HTTP (PLAN workstream A).
 
 ⚠️ THE SHIPPED PROXY, NOT A COPY, AND ITS OWN ROUTE TABLE. The module is loaded
-from rootfs/ with one substitution — every "/data/..." path points into a
-temporary directory, because the stores capture their path when they are built
-— and served by `build_app()`, the function main() serves. A handler that is
-not routed, or is routed to the wrong path, fails here; a test of the handler
-alone would stay green through it.
+from rootfs/ unchanged and served by `build_app(data_dir=<a temp dir>)`, the
+function main() serves. A handler that is not routed, or is routed to the wrong
+path, fails here; a test of the handler alone would stay green through it.
 
 ⚠️ A FAKE SUPERVISOR, so the villa model's rooms and /agent/v1/info's version
 are checked against answers the test controls, never against a guess.
@@ -16,12 +14,12 @@ Run: python3 tests/agent-interface.py   (also part of `npm run test:proxy`)
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import json
 import shutil
 import sys
 import tempfile
 import time
-import types
 from pathlib import Path
 
 try:
@@ -36,12 +34,9 @@ PROXY = ROOT / "rootfs" / "usr" / "bin" / "supervisor-proxy.py"
 TMP = Path(tempfile.mkdtemp(prefix="vk-agent-"))
 (TMP / "data" / "www").mkdir(parents=True)
 
-source = PROXY.read_text()
-moved = source.count('"/data/') + source.count('"/data"')
-proxy = types.ModuleType("vk_agent_proxy")
-proxy.__file__ = str(PROXY)
-exec(compile(source.replace('"/data/', f'"{TMP}/data/').replace('"/data"', f'"{TMP}/data"'),
-             str(PROXY), "exec"), proxy.__dict__)
+_spec = importlib.util.spec_from_file_location("vk_agent_proxy", PROXY)
+proxy = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(proxy)
 
 FAIL = 0
 TOKEN = "agent-token-for-tests-0123456789"
@@ -97,11 +92,14 @@ async def fake_supervisor() -> TestServer:
 
 
 async def main() -> None:
-    print(f"  loaded {PROXY.relative_to(ROOT)} with {moved} /data paths moved to a temp dir\n")
-    ck("the substitution moved every store (a store left on /data would be skipped)", moved >= 8, moved)
+    print(f"  loaded {PROXY.relative_to(ROOT)}, data in a temp dir\n")
     sup = await fake_supervisor()
     proxy.SUPERVISOR = f"127.0.0.1:{sup.port}"
-    client = TestClient(TestServer(proxy.build_app()))
+    client = TestClient(TestServer(proxy.build_app(data_dir=str(TMP / "data"))))
+    stores = {n: v.path for n, v in vars(proxy).items() if isinstance(v, proxy.JsonStore)}
+    ck(f"build_app(data_dir) moves every store ({len(stores)}) and the options",
+       len(stores) >= 7 and all(p.startswith(str(TMP / "data") + "/") for p in stores.values())
+       and proxy._data("options.json") == str(TMP / "data" / "options.json"), stores)
     await client.start_server()
     get, put, post = client.get, client.put, client.post
 
