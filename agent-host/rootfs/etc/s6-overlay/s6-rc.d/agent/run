@@ -1,0 +1,9 @@
+#!/command/with-contenv sh
+# The agent slot. M1 (0.1.x) proves only that the image installs by pull and
+# starts under s6: nothing is read, nothing is contacted. The entrypoint, the
+# stub and the self-test replace this in M2–M3 (docs/agent-host/SPEC.md 16).
+#
+# `exec` so s6's SIGTERM on stop reaches the process directly and the
+# container stops at once instead of waiting out the Supervisor's timeout.
+echo "[vesta-agent-host] agent slot empty (M1 skeleton) — idle"
+exec sleep infinity

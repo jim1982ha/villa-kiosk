@@ -1,0 +1,213 @@
+name: VESTA Agent host
+
+# Builds and publishes the VESTA Agent host image (docs/agent-host/SPEC.md 4.3)
+# so the app installs on the HA Yellow by image pull — it is never built there.
+#
+# ⚠️ SEPARATE FROM THE VESTA KIOSK BUILD ON PURPOSE. build.yaml and ci.yaml are
+# not touched, and nothing below reads or writes villa-kiosk/,
+# villa-kiosk-dev2/, the root Dockerfile, rootfs/ or src/. The two pipelines
+# share only the repository and the rebase-and-retry push to main.
+on:
+  push:
+    branches: [main, agent-dev]
+    paths:
+      - "agent-host/**"
+      - "vesta-agent/**"
+      - ".github/workflows/agent-host.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # The gates run first and the image waits for them, as in build.yaml: a push
+  # that fails a check must never reach GHCR, let alone the store.
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: The app manifest agrees with what the Supervisor reads
+        run: |
+          python3 -c "import yaml" 2>/dev/null || pip3 install --quiet pyyaml
+          python3 agent-host/tests/check_manifest.py
+
+  build:
+    needs: [tests]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+          - arch: aarch64
+            platform: linux/arm64
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Read app version
+        id: meta
+        run: |
+          version=$(grep -E '^version:' vesta-agent/config.yaml | head -1 | sed -E 's/.*version:[[:space:]]*"?([^"]+)"?.*/\1/')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          # SEPARATE IMAGE PER CHANNEL, as for the VESTA Kiosk: an agent-dev
+          # build can never overwrite a released image, even at the same version.
+          suffix=""
+          if [ "${GITHUB_REF_NAME}" != "main" ]; then suffix="-${GITHUB_REF_NAME}"; fi
+          image="ghcr.io/${owner}/vesta-agent${suffix}-${{ matrix.arch }}"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          # `:latest` only from main. The Supervisor resolves image:<version>.
+          tags="${image}:${version}"
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then
+            tags="${tags}"$'\n'"${image}:latest"
+          fi
+          {
+            echo "tags<<__TAGS__"
+            echo "$tags"
+            echo "__TAGS__"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: agent-host
+          file: agent-host/Dockerfile
+          platforms: ${{ matrix.platform }}
+          push: true
+          provenance: false
+          # `trixie`, not `latest` — see the Dockerfile's BUILD_FROM comment.
+          build-args: |
+            BUILD_FROM=ghcr.io/home-assistant/${{ matrix.arch }}-base-debian:trixie
+            BUILD_VERSION=${{ steps.meta.outputs.version }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            io.hass.version=${{ steps.meta.outputs.version }}
+            io.hass.arch=${{ matrix.arch }}
+            io.hass.type=addon
+          # Own cache scope: sharing the VESTA Kiosk's would evict its layers.
+          cache-from: type=gha,scope=agent-host-${{ matrix.arch }}
+          cache-to: type=gha,scope=agent-host-${{ matrix.arch }},mode=max
+
+      - name: Image size
+        # SPEC 12: keep the image lean and report it — disk on the Yellow is
+        # the scarce resource. Compressed = what the Yellow downloads.
+        run: |
+          ref="${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}"
+          bytes=$(docker buildx imagetools inspect --raw "$ref" | jq '[.layers[].size] | add')
+          echo "### ${{ matrix.arch }}: $(numfmt --to=iec --suffix=B "$bytes") compressed" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`$ref\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Pullable without credentials
+        # ⚠️ THE SUPERVISOR PULLS ANONYMOUSLY. A package GHCR created private
+        # builds green and pushes green, and the install on the Yellow then
+        # fails with "unauthorized". Checked here, as the Supervisor would,
+        # BEFORE the manifest sync makes Home Assistant offer the app.
+        run: |
+          image="${{ steps.meta.outputs.image }}"
+          repo="${image#ghcr.io/}"
+          token=$(curl -s "https://ghcr.io/token?scope=repository:${repo}:pull" | jq -r '.token // empty')
+          code=$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer ${token}" \
+            -H 'Accept: application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json' \
+            "https://ghcr.io/v2/${repo}/manifests/${{ steps.meta.outputs.version }}")
+          if [ "$code" != "200" ]; then
+            pkg="${repo#*/}"
+            echo "::error::${image} is not anonymously pullable (HTTP ${code}). Make the package public: https://github.com/users/${{ github.repository_owner }}/packages/container/${pkg}/settings → Danger Zone → Change visibility → Public"
+            exit 1
+          fi
+          echo "anonymous pull OK: ${image}:${{ steps.meta.outputs.version }}"
+
+  # ── Publish the agent-dev channel to Home Assistant ──────────────────────
+  # The Supervisor reads app manifests from the DEFAULT BRANCH only, so an
+  # agent-dev image is invisible until a manifest describing it is on main.
+  # Same pattern as build.yaml's sync-dev2-manifest: copy agent-dev's
+  # vesta-agent/ and patch the few fields that must differ, so the dev channel
+  # can never drift from the stable one's schema, options or translations.
+  #
+  # It writes vesta-agent-dev/ only — never vesta-agent/, villa-kiosk/ or
+  # villa-kiosk-dev2/.
+  sync-agent-dev-manifest:
+    if: github.ref_name == 'agent-dev'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: sync-agent-dev-manifest
+      cancel-in-progress: false
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Materialise vesta-agent-dev/ from agent-dev
+        run: |
+          set -euo pipefail
+          git fetch origin agent-dev
+          rm -rf vesta-agent-dev && mkdir -p vesta-agent-dev
+          git archive origin/agent-dev vesta-agent | tar -x --strip-components=1 -C vesta-agent-dev
+          owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          OWNER="$owner" python3 - <<'PATCH'
+          import os, re, pathlib
+          p = pathlib.Path("vesta-agent-dev/config.yaml")
+          out = []
+          for line in p.read_text().splitlines(keepends=True):
+              line = re.sub(r"^name:.*$", 'name: "VESTA Agent (dev)"', line)
+              line = re.sub(r"^slug:.*$", "slug: vesta_agent_dev", line)
+              line = re.sub(r"^image:.*$",
+                            f'image: "ghcr.io/{os.environ["OWNER"]}/vesta-agent-agent-dev-{{arch}}"', line)
+              # SPEC 5: the dev channel talks to the DEV2 VESTA Kiosk by default.
+              # ⚠️ THE QUOTED ADDRESS ONLY: `options:` and `schema:` both hold
+              # a two-space `kiosk_url:` line, and the schema's must stay `url`.
+              line = re.sub(r'^(  kiosk_url: )"http[^"]*"$',
+                            r'\1"http://e66a2348-villa-kiosk-dev2:8099"', line)
+              out.append(line)
+          p.write_text("".join(out))
+          PATCH
+          python3 -c "import yaml" 2>/dev/null || pip3 install --quiet pyyaml
+          python3 -c "import yaml;d=yaml.safe_load(open('vesta-agent-dev/config.yaml'));assert d['slug']=='vesta_agent_dev' and 'agent-dev' in d['image'] and d['options']['kiosk_url'].endswith('-dev2:8099'), d; print('agent-dev manifest ok:', d['version'])"
+
+      - name: Commit if changed
+        run: |
+          set -euo pipefail
+          # Stage first, then ask the index: `git diff` cannot see the untracked
+          # files of the run that CREATES vesta-agent-dev/ (see build.yaml).
+          git add --all vesta-agent-dev
+          if git diff --cached --quiet -- vesta-agent-dev; then
+            echo "agent-dev manifest already current — nothing to publish"; exit 0
+          fi
+          git diff --cached --stat -- vesta-agent-dev
+          version=$(grep -E '^version:' vesta-agent-dev/config.yaml | head -1 \
+                    | sed -E 's/.*version:[[:space:]]*"?([^"]+)"?.*/\1/')
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(agent-dev-channel): publish VESTA Agent (dev) ${version}"
+          # main may have moved (a VESTA Kiosk sync or release) since checkout.
+          # This commit touches only vesta-agent-dev/, so a rebase cannot conflict.
+          for attempt in 1 2 3; do
+            if git push origin main; then exit 0; fi
+            echo "push rejected (attempt ${attempt}) — rebasing onto main"
+            git fetch origin main && git rebase origin/main
+          done
+          echo "could not publish the agent-dev manifest after 3 attempts"; exit 1
