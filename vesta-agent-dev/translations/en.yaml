@@ -56,8 +56,10 @@ configuration:
   stub_heartbeat:
     name: Stub heartbeat
     description: >-
-      In stub mode, also report presence to the VESTA Kiosk, so it shows the
-      agent online. An end-to-end test; leave OFF otherwise.
+      In stub mode, test the whole connection with the VESTA Kiosk: the agent
+      shows as online there, and at each start the stub posts one test message
+      with two buttons — the button you press is written in this app's log.
+      Leave OFF otherwise.
   log_level:
     name: Log level
     description: Detail of the host and agent logs. Secrets are never logged.

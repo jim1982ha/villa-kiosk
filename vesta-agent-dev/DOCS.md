@@ -33,6 +33,13 @@ A start summary (version, each connection and whether its key or token is set
 | Telegram | `getMe` only — never `getUpdates` | `telegram_takeover` off (no call at all) |
 | Presence | `POST <kiosk_url>/agent/v1/heartbeat` → HTTP 200 | `stub_heartbeat` off, agent mode, or no agent interface |
 
+**Stub heartbeat — the end-to-end test.** With it on, the stub keeps the agent
+online in the VESTA Kiosk (a heartbeat every minute) and, at each start, posts
+one test message with the buttons *Looks good* and *Not now*. Answer it in the
+Kiosk's VESTA Agent area (owner or facility manager): within about 15 seconds
+this app's log shows `stub: answer received: "looks_good" pressed by owner …`.
+That is the full path a real agent's question and a person's decision take.
+
 Each line is **pass**, **fail** or **skipped** with the reason; the result is
 also saved in `/data/host/selftest.json`. For a fresh run without restarting:
 `docker exec addon_<id>_vesta_agent_dev vesta-selftest`.
