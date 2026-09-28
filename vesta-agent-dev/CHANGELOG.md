@@ -1,3 +1,12 @@
+## 0.5.0
+
+### Added
+- **The same app runs outside Home Assistant.** A ready-made `docker compose` setup (`agent-host/standalone/`) runs the identical image on any machine, with settings in a file instead of the Configuration page. For a machine outside the villa, the Cloudflare Access service token is sent with every request to Home Assistant, the HA MCP server and the VESTA Kiosk.
+- **Complete documentation** on the Documentation tab: modes, what each log line means, folders, the HA MCP server, restarts, running outside Home Assistant, what the VESTA Agent receives and must follow, and the measured image size and memory use.
+
+### Checked
+- Each release is now also checked for never touching the VESTA Kiosk's files, and for a skill added while the app runs being visible at once.
+
 ## 0.4.0
 
 ### Added
