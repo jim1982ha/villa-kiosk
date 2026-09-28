@@ -1,0 +1,70 @@
+# VESTA Agent host — Home Assistant app manifest (image-pull variant).
+#
+# Specification: docs/agent-host/SPEC.md (section 5 is this file).
+#
+# `image` makes the Supervisor PULL a prebuilt image from GHCR instead of
+# building on the device — the HA Yellow never builds (SPEC H7). {arch} + version
+# resolve to e.g. ghcr.io/jim1982ha/vesta-agent-aarch64:0.1.0, published by
+# .github/workflows/agent-host.yaml.
+#
+# ⚠️ BUMP `version` ON EVERY PUSH. The Supervisor resolves image:<version>, never
+# :latest, so an unchanged version is an update Home Assistant cannot see.
+name: "VESTA Agent (dev)"
+version: "0.1.0"
+slug: vesta_agent_dev
+description: "Host for the VESTA Agent (Claude Agent SDK)"
+url: "https://github.com/jim1982ha/villa-kiosk"
+arch:
+  - aarch64
+  - amd64
+image: "ghcr.io/jim1982ha/vesta-agent-agent-dev-{arch}"
+# The HA base image ships s6-overlay v3 as its own init — disable Docker's.
+init: false
+startup: application
+boot: auto
+# ⚠️ NO LOCAL-ONLY PRIVILEGES (SPEC H3, PLAN F10). Home Assistant is reached with
+# the "VESTA Agent" user's token, exactly as from outside the villa, so the same
+# image behaves identically as a standalone container. No port, no ingress
+# either (H4): nothing calls this app; it only calls out.
+homeassistant_api: false
+hassio_api: false
+# addon_config → /config in the container, /addon_configs/<repo>_<slug> on the
+# host: where VESTA Skills live so people can edit them from Home Assistant
+# without a restart or a rebuild (H6). The dict form is the Supervisor's current
+# syntax; the older `addon_config:rw` string is still accepted but converted.
+map:
+  - type: addon_config
+    read_only: false
+# SIGTERM → agent's stop grace → sidecar stop must all fit in here (SPEC 10).
+timeout: 30
+backup_exclude:
+  - "*/cache/*"
+# NOTE: the help text an operator SEES on the Configuration page lives in
+# translations/en.yaml; agent-host/tests/check_manifest.py fails when a field
+# is missing there, or when options and schema disagree.
+#
+# Secrets are `password` fields: masked in the UI, and the host redacts their
+# values from every log line (H8). `telegram_bot_token` is never exported to the
+# agent slot until `telegram_takeover` is true (H5).
+options:
+  agent_mode: stub
+  ha_url: "http://homeassistant:8123"
+  ha_mcp_mode: sidecar
+  kiosk_url: "http://e66a2348-villa-kiosk-dev2:8099"
+  telegram_takeover: false
+  stub_heartbeat: false
+  log_level: info
+schema:
+  agent_mode: list(stub|agent)
+  anthropic_api_key: password?
+  ha_url: url
+  ha_token: password?
+  ha_mcp_mode: list(sidecar|external)
+  ha_mcp_url: url?
+  ha_mcp_secret: password?
+  kiosk_url: url
+  kiosk_agent_token: password?
+  telegram_takeover: bool
+  telegram_bot_token: password?
+  stub_heartbeat: bool
+  log_level: list(debug|info|warning|error)

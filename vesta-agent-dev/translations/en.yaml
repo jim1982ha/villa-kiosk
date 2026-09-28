@@ -1,0 +1,63 @@
+# Field labels and help text for the app's Configuration page.
+#
+# Supervisor renders `name` as each field's label and `description` as the help
+# text underneath it. Keep them decision-oriented: the reader's question is
+# "what do I put in this box". The reasoning lives in config.yaml and DOCS.md.
+configuration:
+  agent_mode:
+    name: Agent mode
+    description: >-
+      "stub" runs only the self-test, which checks every connection and does
+      nothing else. "agent" runs the VESTA Agent itself; it needs the Anthropic
+      API key and the Home Assistant token below.
+  anthropic_api_key:
+    name: Anthropic API key
+    description: >-
+      Key from the Anthropic Console. Required in agent mode; in stub mode the
+      Anthropic check is skipped without it.
+  ha_url:
+    name: Home Assistant address
+    description: >-
+      Home Assistant as seen from this app. Keep the default on the same
+      machine.
+  ha_token:
+    name: Home Assistant token
+    description: >-
+      Long-lived access token of the dedicated "VESTA Agent" Home Assistant
+      user. Required in agent mode.
+  ha_mcp_mode:
+    name: Home Assistant MCP
+    description: >-
+      "sidecar" runs the agent's own Home Assistant MCP server inside this app.
+      "external" uses an existing MCP endpoint given below instead.
+  ha_mcp_url:
+    name: External MCP address
+    description: External mode only. Leave empty in sidecar mode.
+  ha_mcp_secret:
+    name: External MCP secret
+    description: External mode only. Leave empty in sidecar mode.
+  kiosk_url:
+    name: VESTA Kiosk address
+    description: >-
+      Base address of the VESTA Kiosk agent interface. The default points at the
+      stable VESTA Kiosk on the same machine.
+  kiosk_agent_token:
+    name: VESTA Kiosk agent token
+    description: The same value as the agent token set in the VESTA Kiosk.
+  telegram_takeover:
+    name: Telegram takeover
+    description: >-
+      Leave OFF until the Telegram switch-over. While OFF the bot token is never
+      given to the agent and no Telegram call is made, so Home Assistant keeps
+      receiving the bot's messages and buttons.
+  telegram_bot_token:
+    name: Telegram bot token
+    description: Used only when Telegram takeover is ON.
+  stub_heartbeat:
+    name: Stub heartbeat
+    description: >-
+      In stub mode, also report presence to the VESTA Kiosk, so it shows the
+      agent online. An end-to-end test; leave OFF otherwise.
+  log_level:
+    name: Log level
+    description: Detail of the host and agent logs. Secrets are never logged.
