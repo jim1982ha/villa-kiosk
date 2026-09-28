@@ -83,6 +83,24 @@ configuration:
       How long a device must wait after five wrong passcodes. The lockout
       applies per device address, so raising it slows down someone guessing
       without locking the household out of their own villa.
+  agent_token:
+    name: VESTA Agent token
+    description: >-
+      Leave EMPTY to keep the VESTA Agent switched off — the kiosk then behaves
+      exactly as before. To connect it, enter a long random value (at least 16
+      characters) and put the same value in the VESTA Agent app's "VESTA Kiosk
+      agent token". The agent can then read and update maintenance records (it
+      can never delete them), post messages, and show as online.
+  agent_offline_after_minutes:
+    name: Agent shown offline after (minutes)
+    description: >-
+      The owner and facility manager see the agent as offline when it has not
+      reported in for this long.
+  agent_message_retention_days:
+    name: Keep agent messages for (days)
+    description: >-
+      How long the agent's messages, reports and the answers given to them are
+      kept.
 network:
   8099/tcp: >-
     Reach the kiosk directly on this port, outside the Home Assistant

@@ -195,10 +195,12 @@ self.addEventListener("fetch", (event) => {
   // stay cacheable. Everything listed here is mutable and must not be.
   const NEVER_CACHE = [
     "/device-config", "/fm-data", "/telemetry", "/addon-config", "/model-upload",
+    "/agent-status", "/agent-messages", "/agent-choices",
   ];
   if (
     url.pathname.includes("/api/") ||
     url.pathname.includes("/auth/") ||
+    url.pathname.includes("/agent/v1/") ||
     url.pathname.includes("camera_proxy") ||
     NEVER_CACHE.some((p) => url.pathname.endsWith(p))
   ) {

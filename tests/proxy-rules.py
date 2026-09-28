@@ -412,7 +412,7 @@ for role in proxy.AUTH_ROLES:
                     set(re.findall(r'"(\w+)"', denied.group(1))) if denied else set())
 ck("the kiosk's matrix was read for every role",
    all(client[r][0] for r in proxy.AUTH_ROLES))
-SHARED = ("editConfig", "manageModel", "manageFacility", "reportFault")
+SHARED = ("editConfig", "manageModel", "manageFacility", "reportFault", "viewAgent")
 mismatch = [f"{r}.{c}" for r in proxy.AUTH_ROLES for c in SHARED
             if (c in client[r][0]) != proxy._may(r, c)]
 ck("every shared capability means the same thing on both sides", not mismatch)
@@ -430,8 +430,10 @@ ck("an unknown role holds nothing",
 # The gate was written out by hand at twelve handlers and had drifted into two
 # 403 shapes; it is one call now (_refuse). A NEW handler that forgets it is an
 # open endpoint with every other check green — so each routed handler must
-# call _refuse (or the model gate, which adds the public_model_access option),
-# or be named here with the reason it answers without a session.
+# call _refuse (or the model gate, which adds the public_model_access option,
+# or the VESTA Agent's bearer gate _agent_refuse — /agent/v1/*, and store
+# handlers built with gate=_agent_refuse), or be named here with the reason it
+# answers without a session.
 PUBLIC_HANDLERS = {
     "auth_roles_handler": "the profile screen lists the roles before anyone signs in",
     "auth_session_handler": "answers 'is there a session' — to anyone, by design",
@@ -441,7 +443,8 @@ PUBLIC_HANDLERS = {
 routed = re.findall(r'app\.router\.add_\w+\(\s*(?:"[A-Z*]+"\s*,\s*)?"[^"]+"\s*,\s*(\w+)',
                     PROXY.read_text())
 ungated = sorted({h for h in routed if h not in PUBLIC_HANDLERS
-                  and not re.search(r"\b_refuse\(request|\b_model_authorized\(request",
+                  and not re.search(r"\b_refuse\(request|\b_model_authorized\(request"
+                                    r"|\b_agent_refuse\(request|\bgate\(request",
                                     inspect.getsource(getattr(proxy, h)))})
 ck(f"all {len(set(routed))} routed handlers are gated (_refuse), or named public with a reason",
    len(routed) > 10 and not ungated)

@@ -330,11 +330,19 @@ def _role_for(request: web.Request) -> str:
 #                 confinement, may revoke every session and read telemetry.
 ROLE_CAPABILITIES = {
     "owner": frozenset({"administer", "editConfig", "manageModel", "manageFacility",
-                        "reportFault", "viewCameras"}),
-    "ops": frozenset({"manageFacility", "reportFault", "viewCameras"}),
+                        "reportFault", "viewCameras", "viewAgent"}),
+    "ops": frozenset({"manageFacility", "reportFault", "viewCameras", "viewAgent"}),
     # A guest reports faults and attaches photos of them; the write guard then
     # confines what that write may contain (see _fm_guest_write_ok).
     "guest": frozenset({"reportFault"}),
+    # ⚠️ THE VESTA AGENT IS NOT A PROFILE (docs/agent-integration/PLAN.md A3).
+    # It never appears on the profile picker, never holds a cookie, and is not
+    # in AUTH_ROLES — it reaches only /agent/v1/*, by bearer token
+    # (_agent_refuse). Its three capabilities are its own; it holds none of
+    # administer, editConfig, manageModel or viewCameras, and _authorized()
+    # never looks at its token, so the Home Assistant relay (/core/*) refuses
+    # it like any caller without a session.
+    "agent": frozenset({"agentRead", "agentWrite", "agentMessage"}),
 }
 
 
@@ -1070,7 +1078,7 @@ _auth_failures: dict = {}                                    # (role, ip) -> sta
 #: Bounded by construction: `_note_global_failure` drops what has aged out and
 #: keeps only the newest `AUTH_GLOBAL_MAX_FAILURES`, which is all the question
 #: "are there N inside the window" can need.
-_auth_failures_global: dict = {r: [] for r in (*AUTH_ROLES, SUPERADMIN)}
+_auth_failures_global: dict = {r: [] for r in (*AUTH_ROLES, SUPERADMIN, "agent")}
 
 
 def _note_global_failure(role: str, now: float = None) -> None:
@@ -2143,7 +2151,9 @@ def _store_revision(path: str) -> str:
 def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
                          writer_capability: str = "editConfig",
                          write_guard=None, after_write=None,
-                         reader_view=None, writer_merge=None):
+                         reader_view=None, writer_merge=None,
+                         reader_capability: str | None = None, gate=None,
+                         lock: asyncio.Lock | None = None, require_rev: bool = False):
     """Build the (GET, PUT) handler pair for one shared store.
 
     GET is open to any authorized session — a guest still has to read the
@@ -2190,6 +2200,15 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
 
     Everything that IS a whole-document JSON store belongs here.
 
+    `gate(request, capability, message)` replaces _refuse for a caller that is
+    not a browser session — the VESTA Agent's bearer token (_agent_refuse).
+    `reader_capability` gates the GET (None = any authorized caller).
+    ⚠️ `lock` IS SHARED WHEN TWO DOORS OPEN ONE FILE. /fm-data and
+    /agent/v1/fm-data write the same document; each factory call used to make
+    its own lock, and two locks on one file is no lock: the read-check-write
+    of one door could interleave with the other's. `require_rev` refuses a PUT
+    without `rev` (428) — the agent must always say which copy it changed.
+
     That role difference used to be the excuse for a SECOND, hand-written PUT
     handler for the FM store. Copying the handler copied its auth/validation
     but silently NOT its revision check or its lock, so the FM store — the
@@ -2207,10 +2226,12 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
     Omitting `rev` keeps the old unconditional-overwrite behaviour. The lock makes the read-check-write atomic against a
     second PUT landing on this same store mid-request.
     """
-    lock = asyncio.Lock()
+    lock = lock or asyncio.Lock()
+    gate = gate or _refuse
 
     async def get_handler(request: web.Request) -> web.Response:
-        if (refused := _refuse(request)) is not None:
+        if (refused := gate(request, reader_capability,
+                            f"You do not have permission to read {what}.")) is not None:
             return refused
         # This store changes on every edit from any device and every client
         # is expected to see the current value within one heartbeat (see
@@ -2232,9 +2253,9 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
 
     async def put_handler(request: web.Request) -> web.Response:
         owner_only = [r for r in AUTH_ROLES if _may(r, writer_capability)] == ["owner"]
-        if (refused := _refuse(request, writer_capability,
-                               f"Only the owner profile may edit {what}." if owner_only
-                               else f"You do not have permission to edit {what}.")) is not None:
+        if (refused := gate(request, writer_capability,
+                            f"Only the owner profile may edit {what}." if owner_only
+                            else f"You do not have permission to edit {what}.")) is not None:
             return refused
         try:
             body = await request.json()
@@ -2251,6 +2272,9 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
         # unconditionally rather than failing them forever.
         raw_rev = body.get("rev") if isinstance(body, dict) else None
         expected_rev = raw_rev if isinstance(raw_rev, str) else None
+        if require_rev and expected_rev is None:
+            return web.json_response(
+                {"error": "rev is required: send the revision you last read"}, status=428)
         payload = json.dumps(value)
         if len(payload.encode("utf-8")) > max_bytes:
             return web.json_response({"error": f"{key} payload too large"}, status=413)
@@ -2470,6 +2494,13 @@ async def fm_evidence_post_handler(request: web.Request) -> web.Response:
     if (refused := _refuse(request, "reportFault",
                            "You do not have permission to add evidence.")) is not None:
         return refused
+    return await _store_evidence(request)
+
+
+async def _store_evidence(request: web.Request) -> web.Response:
+    """The upload itself, for whichever door let the caller in: the app's
+    (/fm-evidence) or the VESTA Agent's (/agent/v1/fm-evidence). Same id rule,
+    size cap, JPEG check and atomic write for both — one copy of the checks."""
     photo_id = request.query.get("id", "")
     if not FM_EVIDENCE_ID_RE.fullmatch(photo_id):
         return web.json_response({"error": "bad photo id"}, status=400)
@@ -2534,8 +2565,12 @@ device_config_get_handler, device_config_put_handler = _json_store_handlers(
 # Facility Manager working set — same factory as the device config, so it gets
 # the same revision check, the same write lock and the same validation. The
 # only difference is who may write it.
+# One lock for the one file, shared with /agent/v1/fm-data (see the factory's
+# note on `lock`).
+FM_DATA_LOCK = asyncio.Lock()
 fm_data_get_handler, fm_data_put_handler = _json_store_handlers(
     FM_DATA_FILE, "data", {}, FM_DATA_MAX_BYTES, "facility manager data",
+    lock=FM_DATA_LOCK,
     # "guest" is admitted at the ROLE gate but constrained by the write guard
     # to appending a fault report (see _fm_guest_write_ok) — the role check
     # alone would be far too broad. Everything else about the maintenance
@@ -2545,7 +2580,622 @@ fm_data_get_handler, fm_data_put_handler = _json_store_handlers(
     reader_view=_fm_reader_view, writer_merge=_fm_writer_merge)
 
 
-def main() -> None:
+# ══ The VESTA Agent interface v1 ═════════════════════════════════════════════
+# docs/agent-integration/PLAN.md, workstream A. The VESTA Agent is an OUTSIDE
+# client (F1) that always starts the exchange (F2): this add-on never calls it
+# and needs no address for it. Everything is under /agent/v1, JSON, and gated
+# by one bearer token — the `agent_token` option. Empty token: every route
+# answers 404 and the rest of the kiosk behaves exactly as before (F8).
+#
+# The VESTA Kiosk OWNS this contract. The agent host's self-test checks
+# `contract: 1` on /agent/v1/info; a change a v1 client cannot survive is a
+# new version, not an edit to this one.
+
+AGENT = "agent"
+AGENT_CONTRACT = 1
+AGENT_TOKEN_OPTION = "agent_token"
+#: ⚠️ A SHORT TOKEN IS A GUESSABLE ONE. The schema enforces the same shape
+#: (config.yaml), so a token that fails this was hand-edited into options.json;
+#: it is treated as NOT CONFIGURED — the closed failure — rather than accepted.
+AGENT_TOKEN_RE = re.compile(r"^[A-Za-z0-9._~+/=-]{16,128}$")
+AGENT_MESSAGES_FILE = "/data/agent-messages.json"
+AGENT_CHOICES_FILE = "/data/agent-choices.json"
+AGENT_PRESENCE_FILE = "/data/agent-presence.json"
+AGENT_STORE_MAX_BYTES = 2_000_000
+#: Beyond the retention window, a hard cap: an agent posting in a loop must not
+#: grow /data (or the Kiosk's message list) without bound.
+AGENT_MAX_MESSAGES = 500
+AGENT_MESSAGE_KINDS = ("message", "report", "recommendation")
+AGENT_SEVERITIES = ("info", "warning", "critical")
+#: Who may press an agent's buttons. Never a guest: guests do not see the agent
+#: at all (PLAN A8).
+AGENT_ANSWER_PROFILES = ("owner", "ops")
+AGENT_MAX_BUTTONS = 6
+AGENT_BUTTON_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
+AGENT_ENTITY_RE = re.compile(r"^[a-z_]+\.[a-z0-9_]+$")
+#: What every Facility record the agent creates or changes carries (PLAN F6).
+AGENT_SOURCE = "vesta_agent"
+AGENT_NAME = "VESTA Agent"
+AGENT_MESSAGES_EMPTY: dict = {"messages": []}
+AGENT_CHOICES_EMPTY: dict = {"choices": [], "next_seq": 1}
+AGENT_MESSAGES_LOCK = asyncio.Lock()
+AGENT_CHOICES_LOCK = asyncio.Lock()
+
+#: This add-on's own version, for /agent/v1/info. Read once from the Supervisor
+#: at start-up (_learn_own_version); the image deliberately does not carry it
+#: (see the Dockerfile's LABEL note).
+_own_version = "unknown"
+
+
+def _agent_token() -> str:
+    """The configured token, or "" when the agent interface is off."""
+    tok = _read_options().get(AGENT_TOKEN_OPTION)
+    return tok if isinstance(tok, str) and AGENT_TOKEN_RE.fullmatch(tok) else ""
+
+
+def _agent_offline_minutes() -> int:
+    return _option_int("agent_offline_after_minutes", 5, 1, 60)
+
+
+def _agent_retention_days() -> int:
+    return _option_int("agent_message_retention_days", 90, 1, 365)
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def _iso_epoch(value) -> float | None:
+    """An ISO-8601 timestamp as epoch seconds, or None if it is not one."""
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.timestamp()
+
+
+def _agent_refuse(request: web.Request, capability: str | None = None,
+                  message: str = "forbidden") -> web.Response | None:
+    """The gate at the top of every /agent/v1 handler — _refuse's twin for a
+    caller that is not a browser.
+
+    404 while no token is configured: the interface does not exist, and says
+    nothing about why. Otherwise `Authorization: Bearer <agent_token>`,
+    compared in constant time.
+
+    ⚠️ A WRONG OR MISSING TOKEN COUNTS TOWARD THE SAME LOCKOUT AS A WRONG
+    PASSCODE (PLAN A3): per source address, with the global rate as the
+    backstop, in the agent's own bucket so it can never lock a profile out.
+
+    ⚠️ NEVER A COOKIE, NEVER INGRESS. A signed-in browser, or Home Assistant's
+    own Ingress, gets no further here than anyone else without the token —
+    this door is the agent's alone, and _authorized() (the kiosk's door) in
+    turn never looks at the token.
+    """
+    configured = _agent_token()
+    if not configured:
+        return web.json_response({"error": "not found"}, status=404)
+    ip = _client_ip(request)
+    retry_after = _lockout_remaining(AGENT, ip)
+    if retry_after > 0:
+        return web.json_response({"error": "locked", "retryAfter": retry_after}, status=429)
+    header = request.headers.get("Authorization", "")
+    sent = header[7:].strip() if header[:7].lower() == "bearer " else ""
+    now = time.monotonic()
+    if not sent or not hmac.compare_digest(sent.encode(), configured.encode()):
+        st = _auth_failures.setdefault((AGENT, ip), {"count": 0, "last": 0.0})
+        st["count"] += 1
+        st["last"] = now
+        _note_global_failure(AGENT, now)
+        return _unauthorized()
+    st = _auth_failures.get((AGENT, ip))
+    if st:
+        st["count"] = 0
+    if capability is not None and not _may(AGENT, capability):
+        return _forbidden(message)
+    return None
+
+
+# ── Facility records written by the agent (PLAN A5) ─────────────────────────
+
+def _fm_record_photo_ids(record) -> set:
+    """Every photo one record points at, its per-stage updates included."""
+    ids = set()
+    if not isinstance(record, dict):
+        return ids
+    if isinstance(record.get("photoIds"), list):
+        ids.update(str(p) for p in record["photoIds"])
+    if isinstance(record.get("updates"), list):
+        for u in record["updates"]:
+            if isinstance(u, dict) and isinstance(u.get("photoIds"), list):
+                ids.update(str(p) for p in u["photoIds"])
+    return ids
+
+
+def _fm_by_id(doc, name: str) -> dict:
+    items = doc.get(name) if isinstance(doc, dict) else None
+    return {str(it.get("id")): it for it in items
+            if isinstance(it, dict) and it.get("id") is not None} if isinstance(items, list) else {}
+
+
+def _fm_agent_merge(request: web.Request, stored, value):
+    """Stamp every record the agent created or changed (PLAN A5, F6).
+
+    ⚠️ STAMPED HERE, NOT TRUSTED FROM THE AGENT. `source: "vesta_agent"` is
+    what the Kiosk shows as "By VESTA Agent", and a marker the writer sets
+    itself is a marker the writer can forget. A record the agent sends back
+    exactly as it read it is left untouched — reading and re-saving the
+    document must not claim every record in the villa.
+    """
+    if not isinstance(stored, dict) or not isinstance(value, dict):
+        return value
+    now = _now_iso()
+    out = dict(value)
+    for name in FM_RECORD_COLLECTIONS:
+        items = value.get(name)
+        if not isinstance(items, list):
+            continue
+        before = _fm_by_id(stored, name)
+        stamped = []
+        for it in items:
+            old = before.get(str(it.get("id"))) if isinstance(it, dict) else None
+            if not isinstance(it, dict) or it.get("id") is None or old == it:
+                stamped.append(it)
+                continue
+            it = dict(it, source=AGENT_SOURCE, updatedAt=now)
+            if name == "completions":
+                it["by"] = AGENT_NAME
+            if name == "tickets" and isinstance(it.get("updates"), list):
+                prior = len(old.get("updates") or []) if isinstance(old, dict) else 0
+                it["updates"] = [
+                    dict(u, by=u.get("by") or AGENT_NAME)
+                    if i >= prior and isinstance(u, dict) else u
+                    for i, u in enumerate(it["updates"])]
+            stamped.append(it)
+        out[name] = stamped
+    return out
+
+
+def _fm_agent_write_guard(request: web.Request, body, old, new):
+    """What the agent may NOT do to the Facility record (PLAN A5, F6).
+
+    It may read, create and update records. It may never remove one: a whole
+    document that omits a record IS a delete, so the rule is on the shape of
+    the change, like the guest's. There is no elevation path for the agent —
+    the superadmin code is a person's.
+
+    ⚠️ NOR MAY IT DROP A PHOTO FROM A RECORD IT KEEPS. _fm_after_write deletes
+    a photo file the moment nothing references it, so removing a photo id is a
+    delete of evidence by another name — the loophole the plan's "the agent
+    cannot delete, so cannot orphan photos" did not see.
+    """
+    old = old if isinstance(old, dict) else {}
+    known = set(FM_RECORD_COLLECTIONS)
+    for key in set(old) | set(new):
+        if key not in known and old.get(key) != new.get(key):
+            return _forbidden(f"The VESTA Agent may not change `{key}`.")
+    for name in FM_RECORD_COLLECTIONS:
+        items = new.get(name, [])
+        if not isinstance(items, list) or any(
+                not isinstance(it, dict) or it.get("id") in (None, "") for it in items):
+            return web.json_response(
+                {"error": f"every record in `{name}` must be an object with an id"}, status=400)
+    old_ids, new_ids = _fm_ids(old), _fm_ids(new)
+    removed = {n: sorted(old_ids[n] - new_ids[n]) for n in FM_RECORD_COLLECTIONS}
+    if any(removed.values()):
+        what = ", ".join(f"{len(v)} from {n}" for n, v in removed.items() if v)
+        return _forbidden(f"The VESTA Agent may not delete Facility records (this write "
+                          f"removes {what}). Deleting stays with people.")
+    for name in FM_RECORD_COLLECTIONS:
+        now_by_id = _fm_by_id(new, name)
+        for rid, record in _fm_by_id(old, name).items():
+            lost = _fm_record_photo_ids(record) - _fm_record_photo_ids(now_by_id.get(rid))
+            if lost:
+                return _forbidden(f"The VESTA Agent may not remove photos from a record "
+                                  f"({name} {rid}): that would delete the evidence.")
+    return None
+
+
+agent_fm_get_handler, agent_fm_put_handler = _json_store_handlers(
+    FM_DATA_FILE, "data", {}, FM_DATA_MAX_BYTES, "the Facility records",
+    writer_capability="agentWrite", reader_capability="agentRead",
+    write_guard=_fm_agent_write_guard, after_write=_fm_after_write,
+    writer_merge=_fm_agent_merge, gate=_agent_refuse,
+    lock=FM_DATA_LOCK, require_rev=True)
+
+
+async def agent_fm_evidence_handler(request: web.Request) -> web.Response:
+    """Attach a photo: the same checks and limits as the app's upload."""
+    if (refused := _agent_refuse(request, "agentWrite")) is not None:
+        return refused
+    return await _store_evidence(request)
+
+
+# ── Messages and choices (PLAN A6) ───────────────────────────────────────────
+
+def _agent_prune_messages(messages: list, now: float | None = None) -> list:
+    """Messages inside the retention window, newest AGENT_MAX_MESSAGES."""
+    cutoff = (time.time() if now is None else now) - _agent_retention_days() * 86400
+    kept = [m for m in messages if isinstance(m, dict)
+            and (_iso_epoch(m.get("created_at")) or 0) >= cutoff]
+    return kept[-AGENT_MAX_MESSAGES:]
+
+
+def _agent_prune_choices(choices: list, now: float | None = None) -> list:
+    cutoff = (time.time() if now is None else now) - _agent_retention_days() * 86400
+    return [c for c in choices if isinstance(c, dict) and (_iso_epoch(c.get("at")) or 0) >= cutoff]
+
+
+def _agent_validate_message(body) -> tuple[dict | None, str | None]:
+    """A message as the agent may post it, normalised — or the reason not."""
+    if not isinstance(body, dict):
+        return None, "body must be a JSON object"
+    kind = body.get("kind", "message")
+    if kind not in AGENT_MESSAGE_KINDS:
+        return None, f"kind must be one of {', '.join(AGENT_MESSAGE_KINDS)}"
+    title = body.get("title")
+    if not isinstance(title, str) or not title.strip() or len(title) > 200:
+        return None, "title must be a non-empty string of at most 200 characters"
+    text = body.get("body", "")
+    if not isinstance(text, str) or len(text) > 20_000:
+        return None, "body must be a string of at most 20000 characters"
+    severity = body.get("severity", "info")
+    if severity not in AGENT_SEVERITIES:
+        return None, f"severity must be one of {', '.join(AGENT_SEVERITIES)}"
+    entities = body.get("entities", [])
+    if not isinstance(entities, list) or len(entities) > 100 or not all(
+            isinstance(e, str) and AGENT_ENTITY_RE.fullmatch(e) for e in entities):
+        return None, "entities must be a list of at most 100 entity ids"
+    buttons = body.get("buttons", [])
+    if not isinstance(buttons, list) or len(buttons) > AGENT_MAX_BUTTONS:
+        return None, f"buttons must be a list of at most {AGENT_MAX_BUTTONS}"
+    clean_buttons, seen = [], set()
+    for b in buttons:
+        if not isinstance(b, dict) or not isinstance(b.get("id"), str) \
+                or not AGENT_BUTTON_ID_RE.fullmatch(b["id"]) or b["id"] in seen \
+                or not isinstance(b.get("label"), str) or not b["label"].strip() \
+                or len(b["label"]) > 60:
+            return None, "each button needs a unique id ([A-Za-z0-9_-], 1-40) and a label (1-60)"
+        seen.add(b["id"])
+        clean_buttons.append({"id": b["id"], "label": b["label"].strip()})
+    profiles = body.get("allowed_profiles", list(AGENT_ANSWER_PROFILES))
+    if not isinstance(profiles, list) or not profiles or not all(
+            p in AGENT_ANSWER_PROFILES for p in profiles):
+        return None, f"allowed_profiles must be a non-empty subset of {', '.join(AGENT_ANSWER_PROFILES)}"
+    expires = body.get("expires_at")
+    if expires is not None and _iso_epoch(expires) is None:
+        return None, "expires_at must be an ISO-8601 timestamp or null"
+    return {
+        "id": f"msg_{secrets.token_hex(8)}",
+        "kind": kind,
+        "title": title.strip(),
+        "body": text,
+        "severity": severity,
+        "entities": entities,
+        "buttons": clean_buttons,
+        "allowed_profiles": sorted(set(profiles), key=AGENT_ANSWER_PROFILES.index),
+        "expires_at": expires,
+        "created_at": _now_iso(),
+    }, None
+
+
+async def agent_messages_post_handler(request: web.Request) -> web.Response:
+    """Publish a message, report or recommendation; returns its id."""
+    if (refused := _agent_refuse(request, "agentMessage")) is not None:
+        return refused
+    try:
+        body = await request.json()
+    except (ValueError, UnicodeDecodeError):
+        return web.json_response({"error": "invalid JSON body"}, status=400)
+    message, error = _agent_validate_message(body)
+    if error:
+        return web.json_response({"error": error}, status=400)
+    async with AGENT_MESSAGES_LOCK:
+        doc, readable = _read_json_store_status(AGENT_MESSAGES_FILE, AGENT_MESSAGES_EMPTY)
+        if not readable:
+            return web.json_response({"error": "the message store could not be read"}, status=409)
+        messages = _agent_prune_messages(list(doc.get("messages") or []))
+        messages.append(message)
+        payload = json.dumps({"messages": messages})
+        if len(payload.encode("utf-8")) > AGENT_STORE_MAX_BYTES:
+            return web.json_response({"error": "message store full"}, status=413)
+        await _write_json_store_async(AGENT_MESSAGES_FILE, payload)
+    return web.json_response({"ok": True, "id": message["id"],
+                              "created_at": message["created_at"]}, status=201)
+
+
+def _agent_answers() -> dict:
+    """{message_id: choice} — the first (only) answer to each message."""
+    doc = _read_json_store(AGENT_CHOICES_FILE, AGENT_CHOICES_EMPTY)
+    out = {}
+    for c in doc.get("choices") or [] if isinstance(doc, dict) else []:
+        if isinstance(c, dict) and c.get("message_id") not in out:
+            out[c.get("message_id")] = c
+    return out
+
+
+def _agent_messages_view(request: web.Request, stored):
+    """What an owner or facility manager sees: newest first, each message with
+    its state (open / answered / expired), who answered, and whether THIS
+    profile may press its buttons.
+
+    ⚠️ THE STATE IS COMPUTED, NOT STORED. "answered" lives in the choices store
+    and "expired" in the clock; a stored copy of either would be a second
+    answer to one question, and the two stores are written by different
+    parties under different locks."""
+    role = _role_for(request)
+    answers = _agent_answers()
+    now = time.time()
+    out = []
+    for m in reversed(_agent_prune_messages(list((stored or {}).get("messages") or []), now)):
+        answer = answers.get(m.get("id"))
+        exp = _iso_epoch(m.get("expires_at"))
+        state = "answered" if answer else ("expired" if exp is not None and exp <= now else "open")
+        out.append({**m, "state": state,
+                    "answer": {k: answer.get(k) for k in ("button_id", "profile", "at")} if answer else None,
+                    "can_answer": state == "open" and bool(m.get("buttons"))
+                    and role in (m.get("allowed_profiles") or [])})
+    return {"messages": out}
+
+
+agent_messages_get_handler, _ = _json_store_handlers(
+    AGENT_MESSAGES_FILE, "data", AGENT_MESSAGES_EMPTY, AGENT_STORE_MAX_BYTES, "agent messages",
+    reader_capability="viewAgent", reader_view=_agent_messages_view, lock=AGENT_MESSAGES_LOCK)
+
+
+def _agent_choice_merge(request: web.Request, stored, value):
+    """A button press, as the document to write.
+
+    The client sends the new choice (`message_id`, `button_id`, no `seq`); the
+    stored choices are taken from disk, never from the client, so a press can
+    add one answer and cannot rewrite anybody else's. The server fills in the
+    sequence number, the profile (from the session) and the time. Judged by
+    _agent_choice_guard afterwards."""
+    stored = stored if isinstance(stored, dict) else {}
+    have = [c for c in stored.get("choices") or [] if isinstance(c, dict)]
+    sent = value.get("choices") if isinstance(value, dict) and isinstance(value.get("choices"), list) else []
+    attempt = [c for c in sent if isinstance(c, dict) and "seq" not in c]
+    request["agent_choice_attempt"] = attempt
+    seq = max([int(stored.get("next_seq") or 1)]
+              + [int(c.get("seq", 0)) + 1 for c in have if isinstance(c.get("seq"), int)])
+    new = [{"seq": seq, "message_id": str(c.get("message_id", "")),
+            "button_id": str(c.get("button_id", "")), "profile": _role_for(request),
+            "at": _now_iso()} for c in attempt[:1]]
+    return {"choices": _agent_prune_choices(have) + new, "next_seq": seq + len(new)}
+
+
+def _agent_choice_guard(request: web.Request, body, old, new):
+    """One press, on an open message, with one of its buttons, by a profile it
+    allows. First press wins; a later one gets 409 and who answered."""
+    attempt = request.get("agent_choice_attempt") or []
+    if len(attempt) != 1:
+        return web.json_response({"error": "send exactly one new choice"}, status=400)
+    choice = new["choices"][-1]
+    messages = _read_json_store(AGENT_MESSAGES_FILE, AGENT_MESSAGES_EMPTY).get("messages") or []
+    message = next((m for m in messages if isinstance(m, dict)
+                    and m.get("id") == choice["message_id"]), None)
+    if message is None:
+        return web.json_response({"error": "no such message"}, status=404)
+    earlier = next((c for c in (old or {}).get("choices") or []
+                    if isinstance(c, dict) and c.get("message_id") == choice["message_id"]), None)
+    if earlier is not None:
+        return web.json_response(
+            {"error": "already answered",
+             "answer": {k: earlier.get(k) for k in ("button_id", "profile", "at")}}, status=409)
+    exp = _iso_epoch(message.get("expires_at"))
+    if exp is not None and exp <= time.time():
+        return web.json_response({"error": "this message has expired"}, status=409)
+    if choice["button_id"] not in {b.get("id") for b in message.get("buttons") or []}:
+        return web.json_response({"error": "no such button on this message"}, status=400)
+    if choice["profile"] not in (message.get("allowed_profiles") or []):
+        return _forbidden("This profile may not answer this message.")
+    return None
+
+
+agent_choices_get_handler, agent_choices_put_handler = _json_store_handlers(
+    AGENT_CHOICES_FILE, "data", AGENT_CHOICES_EMPTY, AGENT_STORE_MAX_BYTES, "agent choices",
+    writer_capability="viewAgent", reader_capability="viewAgent",
+    writer_merge=_agent_choice_merge, write_guard=_agent_choice_guard, lock=AGENT_CHOICES_LOCK)
+
+
+async def agent_choices_handler(request: web.Request) -> web.Response:
+    """Button presses made in the Kiosk after `since`, oldest first — the
+    agent's cursor over people's answers (PLAN A4)."""
+    if (refused := _agent_refuse(request, "agentRead")) is not None:
+        return refused
+    try:
+        since = int(request.query.get("since", "0"))
+    except ValueError:
+        return web.json_response({"error": "since must be an integer"}, status=400)
+    doc = _read_json_store(AGENT_CHOICES_FILE, AGENT_CHOICES_EMPTY)
+    items = sorted((c for c in doc.get("choices") or []
+                    if isinstance(c, dict) and isinstance(c.get("seq"), int) and c["seq"] > since),
+                   key=lambda c: c["seq"])[:500]
+    return web.json_response({"choices": items, "next_seq": doc.get("next_seq", 1)},
+                             headers={"Cache-Control": "no-store"})
+
+
+# ── Presence (PLAN A7) ───────────────────────────────────────────────────────
+
+async def agent_heartbeat_handler(request: web.Request) -> web.Response:
+    """The agent says it is alive, with an optional status text.
+
+    ⚠️ PERSISTED, SO A RESTART NEVER SHOWS A FALSE "ONLINE". Presence is
+    computed from the last heartbeat's time on every read; an in-memory flag
+    would come back from a restart either stale or wrong."""
+    if (refused := _agent_refuse(request, "agentMessage")) is not None:
+        return refused
+    status = None
+    if request.can_read_body:
+        try:
+            body = await request.json()
+        except (ValueError, UnicodeDecodeError):
+            return web.json_response({"error": "invalid JSON body"}, status=400)
+        status = body.get("status") if isinstance(body, dict) else None
+        if status is not None and (not isinstance(status, str) or len(status) > 200):
+            return web.json_response({"error": "status must be a string of at most 200 characters"},
+                                     status=400)
+    await _write_json_store_async(AGENT_PRESENCE_FILE, json.dumps(
+        {"last_seen": time.time(), "status": status}))
+    return web.json_response({"ok": True, "offline_after_minutes": _agent_offline_minutes()})
+
+
+def _agent_presence() -> dict:
+    """not_configured / offline / online, from the token and the last heartbeat."""
+    if not _agent_token():
+        return {"state": "not_configured"}
+    minutes = _agent_offline_minutes()
+    doc = _read_json_store(AGENT_PRESENCE_FILE, {})
+    last = doc.get("last_seen") if isinstance(doc, dict) else None
+    last = float(last) if isinstance(last, (int, float)) else None
+    online = last is not None and 0 <= time.time() - last < minutes * 60
+    return {
+        "state": "online" if online else "offline",
+        "last_seen": datetime.fromtimestamp(last, timezone.utc).isoformat(timespec="seconds")
+        .replace("+00:00", "Z") if last else None,
+        "status": doc.get("status") if isinstance(doc, dict) else None,
+        "offline_after_minutes": minutes,
+    }
+
+
+async def agent_status_handler(request: web.Request) -> web.Response:
+    """The Kiosk's view of the agent, for owner and facility manager."""
+    if (refused := _refuse(request, "viewAgent")) is not None:
+        return refused
+    return web.json_response(_agent_presence(), headers={"Cache-Control": "no-store"})
+
+
+# ── Info and the villa model (PLAN A4) ───────────────────────────────────────
+
+async def _learn_own_version(session: ClientSession) -> None:
+    global _own_version
+    try:
+        async with session.get(f"http://{SUPERVISOR}/addons/self/info", headers=AUTH,
+                               timeout=ClientTimeout(total=10)) as resp:
+            if resp.status == 200:
+                _own_version = str(((await resp.json()).get("data") or {}).get("version") or "unknown")
+    except Exception as err:  # noqa: BLE001 — best-effort, never blocks start-up
+        print(f"[supervisor-proxy] own version unknown: {err}", flush=True)
+
+
+async def agent_info_handler(request: web.Request) -> web.Response:
+    """The compatibility check: contract version, Kiosk version, capabilities."""
+    if (refused := _agent_refuse(request, "agentRead")) is not None:
+        return refused
+    return web.json_response({
+        "contract": AGENT_CONTRACT,
+        "version": _own_version,
+        "capabilities": sorted(ROLE_CAPABILITIES[AGENT]),
+        "offline_after_minutes": _agent_offline_minutes(),
+        "message_retention_days": _agent_retention_days(),
+    }, headers={"Cache-Control": "no-store"})
+
+
+_VILLA_AREAS_CACHE: dict = {"key": None, "at": 0.0, "value": None}
+VILLA_AREAS_TTL = 60
+
+
+async def _ha_areas(session: ClientSession, ids: list) -> dict | None:
+    """{entity_id: [area, floor, friendly_name]} from Home Assistant, or None.
+
+    ⚠️ HOME ASSISTANT'S AREA IS THE KIOSK'S OWN FIRST ANSWER to "which room is
+    this device in" (EntityMap.ts resolveEntityRoom); its fallback — which drawn
+    room the device's 3D anchor sits in — exists only inside the browser's
+    scene, so it is not repeated here. One template render for every id:
+    `area_name()` follows an entity to its device's area, as the Kiosk does.
+
+    The ids are embedded in the template, so every one has passed
+    AGENT_ENTITY_RE: a template is code Home Assistant runs."""
+    if not ids:
+        return {}
+    key = hashlib.sha256("\n".join(ids).encode()).hexdigest()
+    cache = _VILLA_AREAS_CACHE
+    if cache["key"] == key and time.monotonic() - cache["at"] < VILLA_AREAS_TTL:
+        return cache["value"]
+    template = ("{% set ns = namespace(o={}) %}{% for e in " + json.dumps(ids) + " %}"
+                "{% set a = area_name(e) %}"
+                "{% set ns.o = dict(ns.o, **{e: [a, floor_name(e) if a else none, "
+                "state_attr(e, 'friendly_name')]}) %}{% endfor %}{{ ns.o | tojson }}")
+    try:
+        async with session.post(f"http://{SUPERVISOR}/core/api/template", headers=AUTH,
+                                json={"template": template},
+                                timeout=ClientTimeout(total=20)) as resp:
+            if resp.status != 200:
+                return None
+            value = json.loads(await resp.text())
+    except Exception:  # noqa: BLE001 — the model is still useful without rooms
+        return None
+    if not isinstance(value, dict):
+        return None
+    cache.update(key=key, at=time.monotonic(), value=value)
+    return value
+
+
+async def agent_villa_model_handler(request: web.Request) -> web.Response:
+    """Rooms, devices, entity ids, names and the room of each device, as this
+    Kiosk models the villa — read-only, derived from the shared device
+    configuration, the floor plan's room file and Home Assistant's areas."""
+    if (refused := _agent_refuse(request, "agentRead")) is not None:
+        return refused
+    cfg = _read_json_store(DEVICE_CONFIG_FILE, {})
+    cfg = cfg if isinstance(cfg, dict) else {}
+    entity_map = cfg.get("entityMap") if isinstance(cfg.get("entityMap"), dict) else {}
+    mesh = cfg.get("meshBindings") if isinstance(cfg.get("meshBindings"), dict) else {}
+    groups = [g for g in cfg.get("deviceGroups") or [] if isinstance(g, dict)]
+    dismissed = {str(e) for e in cfg.get("dismissedEntityIds") or []}
+    group_of = {}
+    for g in groups:
+        for eid in [g.get("primaryEntityId"), *(g.get("memberEntityIds") or [])]:
+            if isinstance(eid, str):
+                group_of.setdefault(eid, str(g.get("id", "")))
+    ids = sorted({e for e in (*entity_map, *mesh.values(), *group_of)
+                  if isinstance(e, str) and AGENT_ENTITY_RE.fullmatch(e) and e not in dismissed})
+    areas = await _ha_areas(request.app["session"], ids)
+    devices = []
+    for eid in ids:
+        mapping = entity_map.get(eid) if isinstance(entity_map.get(eid), dict) else {}
+        area, floor, friendly = (areas or {}).get(eid) or [None, None, None]
+        devices.append({
+            "entity_id": eid,
+            "name": mapping.get("label") or friendly or eid,
+            "type": mapping.get("type") or eid.partition(".")[0],
+            "category": mapping.get("category"),
+            "disabled": bool(mapping.get("disabled")),
+            "group_id": group_of.get(eid),
+            "room": area or None,
+            "floor": floor or None,
+            "room_source": "ha_area" if area else None,
+        })
+    rooms = []
+    model = _effective_paths().get("model_path")
+    if model:
+        sidecar = _read_json_store(os.path.join(DATA_ROOT, _rooms_rel(model)), {})
+        for r in (sidecar.get("rooms") or []) if isinstance(sidecar, dict) else []:
+            if isinstance(r, dict) and isinstance(r.get("name"), str) and r["name"]:
+                rooms.append({"name": r["name"], "floor": r.get("floor", 1), "source": "floor_plan"})
+    for p in cfg.get("teleportPoints") or []:
+        if isinstance(p, dict) and isinstance(p.get("name"), str) and not p.get("fitted"):
+            rooms.append({"name": p["name"], "floor": p.get("floor", 1), "source": "added"})
+    return web.json_response({
+        "rooms": rooms,
+        "devices": devices,
+        "groups": [{"id": g.get("id"), "primary_entity_id": g.get("primaryEntityId"),
+                    "member_entity_ids": g.get("memberEntityIds") or [],
+                    "label": g.get("label")} for g in groups],
+        "ha_areas": areas is not None,
+    }, headers={"Cache-Control": "no-store"})
+
+
+def build_app() -> web.Application:
+    """The application with every route — what main() serves.
+
+    Split out so tests/agent-interface.py drives THIS route table over real
+    HTTP rather than a copy of it: a handler that exists but is not routed, or
+    is routed to the wrong path, is exactly what a copy would not show."""
     app = web.Application()
 
     async def on_start(a: web.Application) -> None:
@@ -2553,6 +3203,7 @@ def main() -> None:
         os.makedirs(DATA_ROOT, exist_ok=True)
         _session_secret()  # create the signing key on first boot
         await _cleanup_stale_options(a["session"])
+        await _learn_own_version(a["session"])
 
     async def on_cleanup(a: web.Application) -> None:
         await a["session"].close()
@@ -2578,6 +3229,25 @@ def main() -> None:
     app.router.add_get("/auth/check", auth_check_handler)
     app.router.add_get("/core/websocket", ws_handler)
     app.router.add_route("*", "/core/api/{path:.*}", rest_handler)
+    # The Kiosk's side of the VESTA Agent (owner and facility manager).
+    app.router.add_get("/agent-status", agent_status_handler)
+    app.router.add_get("/agent-messages", agent_messages_get_handler)
+    app.router.add_get("/agent-choices", agent_choices_get_handler)
+    app.router.add_put("/agent-choices", agent_choices_put_handler)
+    # The VESTA Agent interface v1 (bearer token; 404 while agent_token is empty).
+    app.router.add_get("/agent/v1/info", agent_info_handler)
+    app.router.add_get("/agent/v1/villa-model", agent_villa_model_handler)
+    app.router.add_get("/agent/v1/fm-data", agent_fm_get_handler)
+    app.router.add_put("/agent/v1/fm-data", agent_fm_put_handler)
+    app.router.add_post("/agent/v1/fm-evidence", agent_fm_evidence_handler)
+    app.router.add_post("/agent/v1/messages", agent_messages_post_handler)
+    app.router.add_get("/agent/v1/choices", agent_choices_handler)
+    app.router.add_post("/agent/v1/heartbeat", agent_heartbeat_handler)
+    return app
+
+
+def main() -> None:
+    app = build_app()
     # aiohttp's own shutdown_timeout defaults to 60s: on SIGTERM it waits that
     # long for in-flight connections to finish naturally before exiting. The
     # kiosk keeps a long-lived proxied websocket open continuously (see

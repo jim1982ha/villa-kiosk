@@ -49,7 +49,12 @@ export type Capability =
   | "listUnmappedDevices"
   /** The count of firmware/add-on updates Home Assistant has waiting — a
    *  maintenance signal for whoever administers the kiosk. */
-  | "seeUpdates";
+  | "seeUpdates"
+  /** The VESTA Agent's status, messages and reports, and its buttons where a
+   *  message allows this profile (docs/agent-integration/PLAN.md A8). Never a
+   *  guest's: a guest does not see the agent at all. The add-on holds the same
+   *  name (ROLE_CAPABILITIES) and refuses /agent-* to a session without it. */
+  | "viewAgent";
 
 export interface RolePermissions {
   /** Device categories this profile sees on the map. "all" = every category. */
@@ -107,7 +112,7 @@ const PERMISSION_MATRIX: Record<Role, RolePermissions> = {
     deniedTypes: [],
     capabilities: [
       "controlEntities", "openSettings", "customizeAppearance", "editConfig", "manageModel",
-      "manageFacility", "reportFault", "listUnmappedDevices", "seeUpdates",
+      "manageFacility", "reportFault", "listUnmappedDevices", "seeUpdates", "viewAgent",
     ],
   },
   ops: {
@@ -120,7 +125,7 @@ const PERMISSION_MATRIX: Record<Role, RolePermissions> = {
     // evidences the property's own maintenance/inspection obligations.
     capabilities: [
       "controlEntities", "openSettings", "customizeAppearance", "manageFacility", "reportFault",
-      "listUnmappedDevices",
+      "listUnmappedDevices", "viewAgent",
     ],
   },
 };
