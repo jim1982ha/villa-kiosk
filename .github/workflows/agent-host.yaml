@@ -40,6 +40,9 @@ jobs:
         # Against a local fake of every remote end; no request leaves the runner.
         run: python3 agent-host/tests/test_selftest.py
 
+      - name: The sidecar, the restart policy and the stop grace
+        run: python3 agent-host/tests/test_supervise.py
+
   build:
     needs: [tests]
     runs-on: ubuntu-latest

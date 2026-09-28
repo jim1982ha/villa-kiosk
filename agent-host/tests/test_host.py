@@ -181,7 +181,8 @@ class Host(unittest.TestCase):
         # Stub mode, so no gate waits on a Home Assistant this test does not
         # have; Anthropic left out, so the self-test makes no internet call.
         self.ha_options(**{k: v for k, v in SECRETS.items() if k != "anthropic_api_key"},
-                        ha_url="http://127.0.0.1:9", kiosk_url="http://127.0.0.1:9")
+                        ha_url="http://127.0.0.1:9", kiosk_url="http://127.0.0.1:9",
+                        ha_mcp_mode="external")
         self.assertEqual(self.start().returncode, 0)
         agent = self.root / "opt/vesta/stub"
         agent.mkdir(parents=True)

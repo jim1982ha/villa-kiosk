@@ -21,7 +21,7 @@ TGTOKEN="123456:TELEGRAM-CONTAINERTEST"
 cleanup() {
   docker rm -f vesta-ct >/dev/null 2>&1 || true
   # Files in the mounts were written by root inside the container.
-  docker run --rm "${PLATFORM[@]}" --entrypoint /bin/rm -v "$WORK:/w" "$IMAGE" -rf /w/data /w/config >/dev/null 2>&1 || true
+  docker run --rm "${PLATFORM[@]}" --entrypoint /bin/rm -v "$WORK:/w" "$IMAGE" -rf /w/data /w/config /w/stub >/dev/null 2>&1 || true
   rm -rf "$WORK"
 }
 trap cleanup EXIT
@@ -115,6 +115,64 @@ wait_log "stub: no heartbeat" 90 && ok "standalone started" || bad "standalone d
 has "deployment standalone" && ok "banner: deployment standalone" || bad "banner lacks standalone"
 has "link VESTA Kiosk: https://kiosk.example.test" && ok "option read from environment" || bad "VESTA_OPT_KIOSK_URL ignored"
 no_secret "standalone"
+docker stop -t 30 vesta-ct >/dev/null
+
+echo "== 5. HA MCP sidecar: starts with a token, loopback only, answers the self-test"
+fresh
+cat > "$WORK/data/options.json" <<EOF
+{"agent_mode":"stub","ha_url":"http://homeassistant:8123","ha_mcp_mode":"sidecar",
+ "kiosk_url":"http://e66a2348-villa-kiosk:8099","telegram_takeover":false,
+ "stub_heartbeat":false,"log_level":"info","ha_token":"$HATOKEN"}
+EOF
+docker run -d --name vesta-ct "${PLATFORM[@]}" -v "$WORK/data:/data" -v "$WORK/config:/config" "$IMAGE" >/dev/null
+wait_log "stub: no heartbeat" 180 || true
+has "self-test HA MCP: pass — ha-mcp [0-9.]+, [0-9]+ tools" && ok "HA MCP self-test passes against the sidecar" || bad "HA MCP self-test did not pass"
+# /proc/net/tcp: port 9583 = 256F, listening = state 0A. 0100007F = 127.0.0.1.
+tcp=$(docker exec vesta-ct cat /proc/net/tcp /proc/net/tcp6 2>/dev/null)
+grep -qE ":256F [0-9A-F:]+ 0A" <<<"$tcp" && ! grep -qE "^ *[0-9]+: 0+:256F .* 0A" <<<"$tcp" \
+  && grep -qE "0100007F:256F [0-9A-F:]+ 0A" <<<"$tcp" && ok "sidecar listens on 127.0.0.1 only" || bad "sidecar not loopback-only"
+has "pypi.org" && bad "the sidecar called PyPI (update check not disabled)" || ok "no update check"
+no_secret "sidecar"
+start=$(date +%s); docker stop -t 30 vesta-ct >/dev/null; took=$(( $(date +%s) - start ))
+has "ha-mcp stopped cleanly" && [ "$took" -lt 30 ] && ok "sidecar stopped cleanly after the agent (${took} s)" || bad "sidecar stop (${took} s)"
+
+echo "== 6. External MCP mode: no sidecar"
+fresh
+echo '{"agent_mode":"stub","ha_url":"http://homeassistant:8123","ha_mcp_mode":"external","ha_mcp_url":"http://127.0.0.1:9/mcp","kiosk_url":"http://e66a2348-villa-kiosk:8099","telegram_takeover":false,"stub_heartbeat":false,"log_level":"info","ha_token":"'"$HATOKEN"'"}' \
+  > "$WORK/data/options.json"
+docker run -d --name vesta-ct "${PLATFORM[@]}" -v "$WORK/data:/data" -v "$WORK/config:/config" "$IMAGE" >/dev/null
+wait_log "stub: no heartbeat" 90 || true
+has "HA MCP sidecar not started: external mode" && ok "sidecar skipped in external mode" || bad "sidecar started in external mode"
+has "self-test HA MCP: fail — unreachable" && ok "external endpoint checked instead" || bad "external endpoint not checked"
+docker stop -t 30 vesta-ct >/dev/null
+
+# A stand-in agent mounted over the stub, to exercise the slot's policy.
+mkstub() {  # mkstub <start command> <grace>
+  mkdir -p "$WORK/stub"
+  printf 'name: test-stub\nversion: "0"\nruntime: python\nstart: "%s"\nstop_grace_seconds: %s\n' "$1" "$2" \
+    > "$WORK/stub/vesta-agent.yaml"
+}
+DEFAULT_OPTS='{"agent_mode":"stub","ha_url":"http://homeassistant:8123","ha_mcp_mode":"sidecar","kiosk_url":"http://e66a2348-villa-kiosk:8099","telegram_takeover":false,"stub_heartbeat":false,"log_level":"info"}'
+
+echo "== 7. Stop grace: an agent that needs 15 s to stop gets them, all within 30 s"
+fresh; echo "$DEFAULT_OPTS" > "$WORK/data/options.json"
+mkstub "trap 'echo saving; sleep 15; echo saved; exit 0' TERM; echo up; while :; do sleep 1; done" 20
+docker run -d --name vesta-ct "${PLATFORM[@]}" -v "$WORK/data:/data" -v "$WORK/config:/config" \
+  -v "$WORK/stub:/opt/vesta/stub:ro" "$IMAGE" >/dev/null
+wait_log "[agent] up" 90 || true
+start=$(date +%s); docker stop -t 30 vesta-ct >/dev/null; took=$(( $(date +%s) - start ))
+has "\[agent\] saved" && [ "$took" -ge 15 ] && [ "$took" -lt 30 ] \
+  && ok "agent finished its 15 s shutdown; container stopped in ${took} s" || bad "grace not honoured (${took} s)"
+
+echo "== 8. Crash: restarted after 5 s, the app keeps running"
+fresh; echo "$DEFAULT_OPTS" > "$WORK/data/options.json"
+mkstub "echo boom; exit 3" 5
+docker run -d --name vesta-ct "${PLATFORM[@]}" -v "$WORK/data:/data" -v "$WORK/config:/config" \
+  -v "$WORK/stub:/opt/vesta/stub:ro" "$IMAGE" >/dev/null
+wait_log "crash 2 of 5" 90 || true
+has "exited with code 3 \(crash 1 of 5 allowed in 10 min\) — restarting in 5 s" && ok "first crash: restart in 5 s" || bad "no 5 s restart"
+has "crash 2 of 5 allowed in 10 min\) — restarting in 10 s" && ok "second crash: restart in 10 s (doubling)" || bad "backoff not doubling"
+[ "$(docker inspect vesta-ct --format '{{.State.Running}}')" = "true" ] && ok "container still running" || bad "container died"
 docker stop -t 30 vesta-ct >/dev/null
 
 echo

@@ -1,0 +1,58 @@
+#!/usr/bin/env python3
+"""The HA MCP sidecar: the agent's own HA MCP server, inside the host (SPEC 12).
+
+s6 runs this as the `ha-mcp` longrun, before the agent slot. It serves only on
+127.0.0.1 — nothing outside the container can reach it — and talks to Home
+Assistant with the VESTA Agent user's token, as from outside (SPEC H3, F10).
+
+Not started in external mode, nor without `ha_token` (there would be no Home
+Assistant behind it); the self-test then reports the HA MCP link `skipped`.
+"""
+from __future__ import annotations
+
+import json
+import os
+import signal
+import sys
+import threading
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                "..", "..", "opt", "vesta", "host"))
+
+from vesta_host import paths, supervise  # noqa: E402
+from vesta_host.log import configure, log  # noqa: E402
+from vesta_host.redact import Redactor  # noqa: E402
+
+GRACE = 3
+
+
+def main() -> int:
+    redactor = Redactor.load(paths.REDACT)
+    stop = threading.Event()
+    signal.signal(signal.SIGTERM, lambda *_: stop.set())
+    signal.signal(signal.SIGINT, lambda *_: stop.set())
+    try:
+        cfg = json.loads(paths.SIDECAR_ENV.read_text())
+    except (OSError, ValueError):
+        configure("info", redactor)
+        log("error", "no prepared sidecar settings in /run/vesta — init-vesta did not run")
+        return 1
+    configure(cfg.get("log_level", "info"), redactor)
+    if not cfg.get("enabled"):
+        log("info", f"HA MCP sidecar not started: {cfg.get('reason')}")
+        stop.wait()
+        return 0
+
+    env = cfg["env"]
+    os.makedirs(env["HOME"], exist_ok=True)
+    log("info", f"starting HA MCP sidecar {cfg.get('version', '')} on "
+                f"{env['MCP_HOST']}:{env['MCP_PORT']}".replace("  ", " "))
+    supervise.keep_running(
+        lambda: supervise.run_once([paths.SIDECAR_BIN], env["HOME"], env, "ha-mcp",
+                                   GRACE, stop, redactor),
+        "HA MCP sidecar", stop)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

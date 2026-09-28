@@ -1,3 +1,10 @@
+## 0.4.0
+
+### Added
+- **The agent's own Home Assistant MCP server now runs inside the app** (HA MCP **8.5.0** — the same version as the development instance; it changes only when deliberately upgraded). It starts when a Home Assistant token is set, is reachable only from inside the app, and the self-test's "HA MCP" line now reports **pass** with the number of tools it offers. In "external" mode it is not started and the given address is checked instead. It does not check for updates on the internet and does not ask HACS to refresh anything.
+- **Crash handling.** If the agent (or the stub) stops unexpectedly, it is restarted after 5 seconds, then 10, 20… up to 5 minutes. After 5 crashes within 10 minutes it is no longer restarted: the app stays running, says so in its log, and the VESTA Kiosk will show the agent offline. Restarting the app tries again.
+- **Clean stop.** On stop the agent gets the time its manifest asks for (up to 22 seconds) to finish, then the HA MCP server stops — all within the 30 seconds Home Assistant allows.
+
 ## 0.3.0
 
 ### Added

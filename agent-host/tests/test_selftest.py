@@ -193,9 +193,12 @@ class Links(Base):
         self.assertEqual(r["VESTA Kiosk"].result, FAIL)
         self.assertIn("expected 1", r["VESTA Kiosk"].detail)
 
-    def test_sidecar_not_running_is_skipped(self):
-        r = self.results(self.env(VESTA_HA_MCP_URL="http://127.0.0.1:9/mcp"), mcp_mode="sidecar")
+    def test_sidecar_not_started_is_skipped_not_answering_fails(self):
+        env = self.env(VESTA_HA_MCP_URL="http://127.0.0.1:9/mcp")
+        r = self.results(env, mcp_mode="sidecar", sidecar_reason="ha_token not set")
         self.assertEqual(r["HA MCP"].result, SKIPPED)
+        r = self.results(env, mcp_mode="sidecar")
+        self.assertEqual(r["HA MCP"].result, FAIL)
 
     def test_presence_only_in_stub_mode(self):
         r = self.results(self.env(), stub_heartbeat=True, agent_mode="agent")
@@ -234,7 +237,8 @@ class Slot(Base):
 
     def prepare(self, **opts):
         (self.root / "data/options.json").write_text(json.dumps({
-            "agent_mode": "stub", "ha_url": self.url, "ha_mcp_mode": "sidecar",
+            "agent_mode": "stub", "ha_url": self.url, "ha_mcp_mode": "external",
+            "ha_mcp_url": self.url + "/mcp",
             "kiosk_url": self.url, "telegram_takeover": False, "stub_heartbeat": False,
             "log_level": "info", **opts}))
         env = {k: v for k, v in os.environ.items() if not k.startswith("VESTA_")}
@@ -265,7 +269,7 @@ class Slot(Base):
                            telegram_bot_token=TG, stub_heartbeat=True)
         code, out = self.run_slot(env)
         self.assertEqual(code, 0, out)
-        for line in ("self-test Home Assistant: pass", "self-test HA MCP: skipped",
+        for line in ("self-test Home Assistant: pass", "self-test HA MCP: pass",
                      "self-test VESTA Kiosk: pass", "self-test Anthropic: skipped",
                      "self-test Telegram: skipped", "self-test Presence: pass",
                      "starting vesta-agent-stub 1",
@@ -276,7 +280,7 @@ class Slot(Base):
         for secret in (HA_TOKEN, KIOSK_TOKEN, TG):
             self.assertNotIn(secret, out)
         report = json.loads((self.root / "data/host/selftest.json").read_text())
-        self.assertEqual(report["summary"], {"pass": 3, "fail": 0, "skipped": 3})
+        self.assertEqual(report["summary"], {"pass": 4, "fail": 0, "skipped": 2})
         self.assertIn("at", report)
         self.assertNotIn(HA_TOKEN, json.dumps(report))
         self.assertFalse([p for _, p in Fake.requests if p.startswith("/bot")])

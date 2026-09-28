@@ -28,6 +28,11 @@ AGENT_ENV = RUN / "agent-env.json"
 REDACT = RUN / "redact.json"
 HOST_STATE = RUN / "host.json"                 # host-only flags, never given to the agent
 SELFTEST = DATA_HOST / "selftest.json"
+CRASHES = DATA_HOST / "crashes.json"
+SIDECAR_ENV = RUN / "sidecar.json"             # the sidecar's settings (holds the HA token)
+SIDECAR_HOME = DATA_HOST / "ha-mcp"            # anything the HA MCP server writes
+# The pinned HA MCP server, in its own virtualenv (agent-host/Dockerfile).
+SIDECAR_BIN = str(ROOT / "opt/vesta/ha-mcp/bin/ha-mcp-web")
 
 # The in-container paths the AGENT sees. Always the real ones: they are part of
 # the environment contract (SPEC 7), not of this container's test layout.

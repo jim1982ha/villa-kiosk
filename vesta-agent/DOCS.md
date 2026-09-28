@@ -3,11 +3,32 @@
 Home Assistant app that will host the VESTA Agent. The specification is
 `docs/agent-host/SPEC.md` in the repository.
 
-## Current state (0.3.x)
+## Current state (0.4.x)
 
 The app reads and checks its settings, prints a start-up summary, creates its
-folders, runs the self-test and starts the stub. The Home Assistant MCP
-sidecar comes in a later release; until then its check reports `skipped`.
+folders, starts the HA MCP sidecar, runs the self-test and starts the stub,
+restarting it if it crashes.
+
+## HA MCP sidecar
+
+- Pinned: HA MCP **8.5.0** (`ha-mcp-web`), upgraded only deliberately, with a
+  changelog entry.
+- Runs only in `sidecar` mode and only when `ha_token` is set; listens on
+  `127.0.0.1:9583/mcp`, never outside the app. The agent receives that address
+  as `VESTA_HA_MCP_URL`.
+- Its PyPI update check, the FastMCP update check and the HACS refresh it would
+  otherwise trigger at start-up are switched off.
+- `external` mode: no sidecar; the agent gets `ha_mcp_url` / `ha_mcp_secret`.
+
+## Restarts and stop
+
+- A crashed agent restarts after 5 s, doubling to 5 min. A run longer than
+  10 min resets the delay.
+- After 5 crashes within 10 min the agent is not restarted; the app keeps
+  running (heartbeats stop, so the VESTA Kiosk shows the agent offline).
+  Restarting the app tries again. Crash times: `/data/host/crashes.json`.
+- On stop: SIGTERM to the agent, up to `stop_grace_seconds` (capped at 22 s),
+  then the sidecar (3 s) — all within the app's 30 s timeout.
 
 ## Self-test
 

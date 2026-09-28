@@ -1,0 +1,5 @@
+#!/bin/sh
+# The HA MCP sidecar (SPEC 12). The agent slot depends on this service, so s6
+# starts it first and — on stop — stops it only after the agent has stopped:
+# the agent may still be finishing a Home Assistant call during its grace.
+exec /usr/bin/vesta-sidecar

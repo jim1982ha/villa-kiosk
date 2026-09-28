@@ -72,6 +72,46 @@ def banner(o: options.Options) -> None:
     log("info", f"time zone: {os.environ.get('TZ', 'UTC')} · log level {o.get('log_level')}")
 
 
+def write_private(path, data: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.touch(mode=0o600, exist_ok=True)
+    path.chmod(0o600)
+    path.write_text(json.dumps(data))
+
+
+def sidecar_settings(o: options.Options) -> dict:
+    """The HA MCP sidecar's settings (SPEC 12). Its own environment, like the
+    agent's: SUPERVISOR_TOKEN and VESTA_OPT_* never reach it either."""
+    base = {"log_level": o.get("log_level"), "version": os.environ.get("VESTA_HA_MCP_VERSION", "")}
+    if o.get("ha_mcp_mode") == "external":
+        return {**base, "enabled": False, "reason": "external mode — the agent uses ha_mcp_url"}
+    if not o.has("ha_token"):
+        return {**base, "enabled": False, "reason": "ha_token not set"}
+    return {**base, "enabled": True, "env": {
+        "PATH": "/usr/local/bin:/usr/bin:/bin",
+        "HOME": str(paths.SIDECAR_HOME),
+        "LANG": "C.UTF-8",
+        "TZ": os.environ.get("TZ", "UTC"),
+        "HOMEASSISTANT_URL": str(o.get("ha_url")),
+        "HOMEASSISTANT_TOKEN": str(o.get("ha_token")),
+        # ⚠️ LOOPBACK ONLY. ha-mcp-web binds 0.0.0.0 by default.
+        "MCP_HOST": contract.SIDECAR_HOST,
+        "MCP_PORT": str(contract.SIDECAR_PORT),
+        "MCP_SECRET_PATH": contract.SIDECAR_PATH,
+        # Its browser settings page is for people; nobody browses in here.
+        "HA_MCP_DISABLE_SETTINGS_UI": "1",
+        "LOG_LEVEL": str(o.get("log_level") or "info").upper(),
+        # ⚠️ NO SELF-UPDATE MACHINERY. The version is pinned and upgraded only
+        # deliberately (SPEC 12), so asking PyPI on every start is noise — and
+        # ha-mcp's update check also drives its "HACS nudge", which sends
+        # `hacs/repository/refresh` to Home Assistant: a change to the house
+        # made merely because the agent's sidecar started. One switch stops both.
+        "HA_MCP_DISABLE_UPDATE_CHECK": "1",
+        "FASTMCP_CHECK_FOR_UPDATES": "off",
+        "FASTMCP_SHOW_SERVER_BANNER": "false",
+    }}
+
+
 def main() -> int:
     o = options.load()
     redactor = Redactor(o.secrets())
@@ -90,17 +130,18 @@ def main() -> int:
         log("info", f"created {path}")
 
     env = contract.build(o)
-    paths.RUN.mkdir(parents=True, exist_ok=True)
-    paths.AGENT_ENV.touch(mode=0o600, exist_ok=True)
-    paths.AGENT_ENV.chmod(0o600)
-    paths.AGENT_ENV.write_text(json.dumps(contract.process_env(env)))
+    write_private(paths.AGENT_ENV, contract.process_env(env))
     redactor.save(paths.REDACT)
+    sidecar = sidecar_settings(o)
+    write_private(paths.SIDECAR_ENV, sidecar)
     # What the slot and the self-test need that is NOT part of the contract:
-    # which program fills the slot, and whether the stub sends heartbeats.
+    # which program fills the slot, whether the stub sends heartbeats, and
+    # whether the sidecar runs (and if not, why).
     paths.HOST_STATE.write_text(json.dumps({
         "agent_mode": o.get("agent_mode"),
         "stub_heartbeat": bool(o.get("stub_heartbeat")),
         "ha_mcp_mode": o.get("ha_mcp_mode"),
+        "sidecar_reason": None if sidecar["enabled"] else sidecar["reason"],
         "host_version": os.environ.get("VESTA_HOST_VERSION", "dev"),
     }))
 
