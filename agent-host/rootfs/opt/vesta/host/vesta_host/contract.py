@@ -12,7 +12,7 @@ import os
 from . import paths
 from .options import Options
 
-#: Where the HA MCP sidecar listens (M4). Loopback only — nothing outside the
+#: Where the HA MCP sidecar listens. Loopback only — nothing outside the
 #: container can reach it (SPEC 12).
 SIDECAR_HOST = "127.0.0.1"
 SIDECAR_PORT = 9583

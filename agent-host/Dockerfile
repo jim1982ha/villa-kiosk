@@ -37,8 +37,9 @@ RUN apt-get update \
 
 FROM ${BUILD_FROM}
 
-# python3-venv: the agent manifest's `install` and the HA MCP sidecar each get
-# their own virtualenv in later milestones. python3-yaml: the host reads the
+# python3-venv: the VESTA Agent's manifest `install` runs in its own
+# virtualenv when the image is built with AGENT_REF (the HA MCP sidecar has its
+# own, built in the stage above). python3-yaml: the host reads the
 # agent manifest (the host itself uses nothing else outside the standard
 # library). No compilers here — anything that needs one is built in a separate
 # stage (SPEC 4.4).
@@ -56,7 +57,7 @@ COPY --from=ha-mcp /opt/vesta/ha-mcp /opt/vesta/ha-mcp
 
 COPY rootfs /
 # The self-test stub fills the slot in stub mode. The VESTA Agent itself goes to
-# /opt/vesta/agent (built from AGENT_REF, later); the stub stays beside it, so
+# /opt/vesta/agent (from AGENT_REF — not wired yet); the stub stays beside it, so
 # switching agent_mode never needs a different image.
 COPY stub /opt/vesta/stub
 # ⚠️ THE SHAPE, NOT A LIST OF PATHS — as in the VESTA Kiosk Dockerfile: git

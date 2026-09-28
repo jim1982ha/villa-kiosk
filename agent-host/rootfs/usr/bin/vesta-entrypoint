@@ -145,8 +145,8 @@ def main() -> int:
         "host_version": os.environ.get("VESTA_HOST_VERSION", "dev"),
     }))
 
-    # What started, when — never a secret. Read by later milestones' crash
-    # accounting and by a person debugging from a backup.
+    # What started, when — never a secret. For a person diagnosing the app,
+    # including from a backup.
     (paths.DATA_HOST / "last_start.json").write_text(json.dumps({
         "at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "host_version": os.environ.get("VESTA_HOST_VERSION", "dev"),

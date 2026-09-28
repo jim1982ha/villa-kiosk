@@ -1,3 +1,8 @@
+## 0.5.1
+
+### Maintenance
+- Nothing changes in the app: internal notes in the source were brought up to date.
+
 ## 0.5.0
 
 ### Added
