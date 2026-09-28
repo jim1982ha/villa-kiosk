@@ -96,6 +96,14 @@ wait_log "stub: no heartbeat" 90 >/dev/null || true
 docker stop -t 30 vesta-ct >/dev/null
 [ "$(cat "$WORK/config/skills/README.md")" = "edited by a person" ] && ok "README not overwritten" || bad "README overwritten"
 
+echo "== 2b. Live skills: a file added from Home Assistant is visible without a restart"
+docker start vesta-ct >/dev/null
+wait_log "stub: no heartbeat" 90 >/dev/null || true
+docker run --rm "${PLATFORM[@]}" --entrypoint /bin/sh -v "$WORK/config:/config" "$IMAGE" \
+  -c 'mkdir -p /config/skills/pool-care && echo "# pool care" > /config/skills/pool-care/SKILL.md'
+docker exec vesta-ct test -f /config/skills/pool-care/SKILL.md && ok "new skill visible in the running app" || bad "new skill not visible"
+docker stop -t 30 vesta-ct >/dev/null
+
 echo "== 3. HA app, agent mode, no API key: must not start"
 fresh
 echo '{"agent_mode":"agent","ha_url":"http://homeassistant:8123","ha_mcp_mode":"sidecar","kiosk_url":"http://e66a2348-villa-kiosk:8099","telegram_takeover":false,"stub_heartbeat":false,"log_level":"info"}' \

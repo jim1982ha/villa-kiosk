@@ -26,6 +26,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          # The isolation check needs main's history to find the fork point.
+          fetch-depth: 0
+
+      - name: The VESTA Kiosk is untouched
+        run: agent-host/tests/check_isolation.sh origin/main
 
       - name: The app manifest agrees with what the Supervisor reads
         run: |
@@ -140,6 +146,15 @@ jobs:
           agent-host/tests/container_test.sh \
             "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}" \
             --platform "${{ matrix.platform }}"
+
+      - name: The same image runs standalone with docker compose
+        # SPEC 13: the shipped compose file, against a fake villa behind a fake
+        # Cloudflare Access. amd64 only: it proves the options path and the
+        # compose settings, which do not differ by architecture.
+        if: matrix.arch == 'amd64'
+        run: |
+          agent-host/tests/standalone_test.sh \
+            "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}"
 
       - name: Pullable without credentials
         # ⚠️ THE SUPERVISOR PULLS ANONYMOUSLY. A package GHCR created private

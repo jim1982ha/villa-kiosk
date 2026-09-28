@@ -20,7 +20,7 @@ import tempfile
 import threading
 import time
 import unittest
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import ThreadingHTTPServer
 from pathlib import Path
 
 import yaml
@@ -28,87 +28,12 @@ import yaml
 HERE = Path(__file__).resolve().parent
 ROOTFS = HERE.parent / "rootfs"
 sys.path.insert(0, str(ROOTFS / "opt/vesta/host"))
+sys.path.insert(0, str(HERE))
 
 from vesta_host import selftest  # noqa: E402
 from vesta_host.selftest import FAIL, PASS, SKIPPED, Checks  # noqa: E402
 
-HA_TOKEN, KIOSK_TOKEN, KEY, TG = "ha-TOKEN-123456", "kiosk-TOKEN-123456", "sk-ant-KEY-123456", "42:TG-TOKEN-123456"
-
-
-class Fake(BaseHTTPRequestHandler):
-    kiosk = "json"          # json | spa | 404
-    mcp = "json"            # json | sse
-    requests: list[tuple[str, str]] = []
-
-    def log_message(self, *a):  # quiet
-        pass
-
-    def reply(self, code, body, ctype="application/json", headers=None):
-        data = body if isinstance(body, bytes) else json.dumps(body).encode()
-        self.send_response(code)
-        self.send_header("Content-Type", ctype)
-        for k, v in (headers or {}).items():
-            self.send_header(k, v)
-        self.send_header("Content-Length", str(len(data)))
-        self.end_headers()
-        self.wfile.write(data)
-
-    def body(self):
-        n = int(self.headers.get("Content-Length") or 0)
-        return json.loads(self.rfile.read(n) or b"{}")
-
-    def auth(self, token):
-        return self.headers.get("Authorization") == f"Bearer {token}"
-
-    def do_GET(self):
-        Fake.requests.append(("GET", self.path))
-        if self.path == "/api/":
-            return self.reply(200, {"message": "API running."}) if self.auth(HA_TOKEN) \
-                else self.reply(401, {"message": "Unauthorized"})
-        if self.path == "/agent/v1/info":
-            return self.kiosk_reply({"contract": 1, "version": "2.500.0"})
-        if self.path.startswith("/v1/models"):
-            return self.reply(200, {"data": [{"id": "claude"}]}) if self.headers.get("x-api-key") == KEY \
-                else self.reply(401, {"error": "invalid x-api-key"})
-        if self.path.startswith(f"/bot{TG}/getMe"):
-            return self.reply(200, {"ok": True, "result": {"username": "villa_bot"}})
-        if self.path.startswith("/bot"):
-            return self.reply(401, {"ok": False})
-        self.reply(404, {})
-
-    def kiosk_reply(self, ok_body):
-        if Fake.kiosk == "404":
-            return self.reply(404, b"Not Found", "text/plain")
-        if Fake.kiosk == "spa":
-            return self.reply(200, b"<!doctype html><html>VESTA</html>", "text/html")
-        return self.reply(200, ok_body) if self.auth(KIOSK_TOKEN) else self.reply(401, {})
-
-    def do_POST(self):
-        Fake.requests.append(("POST", self.path))
-        if self.path == "/agent/v1/heartbeat":
-            self.body()
-            return self.kiosk_reply({"ok": True})
-        if self.path == "/mcp":
-            msg = self.body()
-            if msg.get("method") == "initialize":
-                return self.mcp_reply({"jsonrpc": "2.0", "id": msg["id"], "result": {
-                    "protocolVersion": "2025-06-18", "capabilities": {"tools": {}},
-                    "serverInfo": {"name": "fake-ha-mcp", "version": "8.5.0"}}},
-                    {"Mcp-Session-Id": "s1"})
-            if msg.get("method") == "notifications/initialized":
-                return self.reply(202, b"", "text/plain")
-            if msg.get("method") == "tools/list":
-                if self.headers.get("Mcp-Session-Id") != "s1":
-                    return self.reply(400, {"error": "no session"})
-                return self.mcp_reply({"jsonrpc": "2.0", "id": msg["id"],
-                                       "result": {"tools": [{"name": "ha_search"}, {"name": "ha_get_state"}]}})
-        self.reply(404, {})
-
-    def mcp_reply(self, msg, headers=None):
-        if Fake.mcp == "sse":
-            return self.reply(200, f"event: message\ndata: {json.dumps(msg)}\n\n".encode(),
-                              "text/event-stream", headers)
-        return self.reply(200, msg, headers=headers)
+from fake_remote import HA_TOKEN, KEY, KIOSK_TOKEN, TG, Fake  # noqa: E402
 
 
 class Base(unittest.TestCase):
@@ -204,6 +129,29 @@ class Links(Base):
         r = self.results(self.env(), stub_heartbeat=True, agent_mode="agent")
         self.assertEqual(r["Presence"].result, SKIPPED)
         self.assertNotIn(("POST", "/agent/v1/heartbeat"), Fake.requests)
+
+
+class CloudflareAccess(Base):
+    """Remote deployments: every request to the villa carries the service token."""
+
+    def setUp(self):
+        super().setUp()
+        os.environ["FAKE_REQUIRE_CF"] = "1"
+
+    def tearDown(self):
+        os.environ.pop("FAKE_REQUIRE_CF", None)
+
+    def test_with_service_token_passes(self):
+        from fake_remote import CF_ID, CF_SECRET
+        r = self.results(self.env(VESTA_CF_ACCESS_CLIENT_ID=CF_ID, VESTA_CF_ACCESS_CLIENT_SECRET=CF_SECRET),
+                         mcp_mode="external", stub_heartbeat=True)
+        for link in ("Home Assistant", "HA MCP", "VESTA Kiosk", "Presence"):
+            self.assertEqual(r[link].result, PASS, f"{link}: {r[link].detail}")
+
+    def test_without_service_token_is_refused(self):
+        r = self.results(self.env(), mcp_mode="external")
+        self.assertEqual(r["Home Assistant"].result, FAIL)
+        self.assertIn("403", r["Home Assistant"].detail)
 
 
 class Telegram(Base):

@@ -1,0 +1,4 @@
+# Filled-in settings (secrets) and the container's own folders.
+vesta-agent.env
+data/
+config/

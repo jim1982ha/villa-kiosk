@@ -1,0 +1,23 @@
+# The VESTA Agent host outside Home Assistant (SPEC 13, H1): the same image as
+# the HA app; only the source of the options differs — VESTA_OPT_<OPTION>
+# variables from vesta-agent.env instead of the app's Configuration page.
+#
+#   cp vesta-agent.env.example vesta-agent.env   # fill it in; never commit it
+#   docker compose up -d && docker compose logs -f
+#
+# The image is per architecture: `-amd64` on a PC or cloud VM, `-aarch64` on
+# an ARM machine. The development channel is
+# ghcr.io/jim1982ha/vesta-agent-agent-dev-<arch>:<version>.
+services:
+  vesta-agent:
+    image: ${VESTA_AGENT_IMAGE:-ghcr.io/jim1982ha/vesta-agent-amd64:latest}
+    restart: unless-stopped
+    env_file: vesta-agent.env
+    # ⚠️ COMPOSE WAITS 10 s BY DEFAULT before killing. The host promises the
+    # agent up to 22 s of stop grace plus the sidecar's 3 s — the same 30 s the
+    # Supervisor gives the app.
+    stop_grace_period: 30s
+    # No ports: nothing calls the host; it only calls out (SPEC H4).
+    volumes:
+      - ./data:/data          # agent state, self-test result, crash log
+      - ./config:/config      # VESTA Skills (config/skills) and agent settings
