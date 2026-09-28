@@ -10,7 +10,7 @@
 # ⚠️ BUMP `version` ON EVERY PUSH. The Supervisor resolves image:<version>, never
 # :latest, so an unchanged version is an update Home Assistant cannot see.
 name: "VESTA Agent (dev)"
-version: "0.3.0"
+version: "0.4.0"
 slug: vesta_agent_dev
 description: "Host for the VESTA Agent (Claude Agent SDK)"
 url: "https://github.com/jim1982ha/villa-kiosk"
