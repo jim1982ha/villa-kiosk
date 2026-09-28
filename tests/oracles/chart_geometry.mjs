@@ -109,8 +109,10 @@ console.log("\n  the callers:");
   const missing = Object.keys(CHARTS).filter((f) => !charts.map(rel).includes(f));
   ck(`  ...and all ${Object.keys(CHARTS).length} still draw one — the scan cannot shrink unseen`, missing.length === 0, missing);
   const lineUsers = files.filter((f) => /<LineChart\b/.test(src(f))).map(rel).sort();
-  ck("every history line is drawn by LineChart: the Weather window and both device panels",
-     lineUsers.join() === "components/panels/DeviceGroupPanel.tsx,components/panels/SensorPanel.tsx,components/panels/WeatherPanel.tsx", lineUsers);
+  // The device panels (Sensor, device group) draw theirs through the one
+  // numeric history section, NumericHistory (2.496.214).
+  ck("every history line is drawn by LineChart: the Weather window and the device panels' numeric section",
+     lineUsers.join() === "components/panels/NumericHistory.tsx,components/panels/WeatherPanel.tsx", lineUsers);
   const byKind = (k) => charts.filter((f) => CHARTS[rel(f)] === k);
   const own = byKind("line").filter((f) => !/\bchartGeometry\(/.test(src(f))).map(rel);
   ck("every line chart draws from chartGeometry", own.length === 0, own);

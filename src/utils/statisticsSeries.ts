@@ -1,6 +1,6 @@
 // src/utils/statisticsSeries.ts
 // The recorder's STATISTICS as a HistorySeries — the same value the states
-// path (HAHistoryAPI.fetchHistory) returns, so a chart cannot tell which one
+// path (historySource `readings`) returns, so a chart cannot tell which one
 // fed it and neither can forget the gaps.
 //
 // ⚠️ THE GAPS WERE THE CALLER'S JOB ON THIS PATH, AND ONE CALLER FORGOT. The

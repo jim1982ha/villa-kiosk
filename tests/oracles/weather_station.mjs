@@ -186,7 +186,7 @@ console.log("\n  the window: the approved boards 6 and 7");
      && ![panel, energyP].some((s) => /<BasePanel|topRef|setView\(/.test(s)));
   ck("the same width as every other bottom-bar window", /className=\{`summary-group-modal data-window\$\{/.test(wp));
   ck("history reads the recorder's STATISTICS (5-minute / hourly), not raw history",
-     /fetchStatistics\(ws, ids, range\.hours, range\.period, \["mean", "min", "max"\]/.test(panel));
+     /measured: \{ kind: "statistics", ids, period: range\.period, fields: \["mean", "min", "max"\], hours: range\.hours \}/.test(panel));
   ck("the history view goes back from its title's arrow, with no second 'back' link", /aria-label=\{`Back to \$\{title\}`\}/.test(wp) && !/Back to now/.test(panel + wp));
   ck("'History and trends' is in the FOOTER, Settings' 'Advanced Settings' style (btn ghost, in the leading slot)",
      /footerLeading=\{view === "now" && \([\s\S]{0,120}className="btn ghost"[\s\S]{0,120}History and trends/.test(wp) && !/weather-link/.test(panel));
@@ -217,8 +217,14 @@ console.log("\n  the charts do not re-fetch on every state push (2.496.86)");
   const panel = readFileSync(new URL("../../src/components/panels/WeatherPanel.tsx", import.meta.url), "utf8");
   ck("the bar's station keeps its identity while the station is the same",
      /const station = useMemo\(\(\) => found, \[stationKey\]\);/.test(bar));
-  ck("the history fetch is keyed by the sensors' ids and the range, not the station object",
-     /useHistory<WeatherHistory>\(\s*`\$\{ids\.join\("\|"\)\}#\$\{rainId \?\? ""\}\|\$\{range\.hours\}`/.test(panel) && !/\], \[station\]\);/.test(panel));
+  // The key is historyKey's, derived from the request: ids, range, fields —
+  // a station object has nothing to do with it, so a new one each state push
+  // cannot re-fire the fetch.
+  const { historyKey } = await import("@/ha/historySource");
+  const q = (hours) => ({ measured: { kind: "statistics", ids: ["sensor.t"], period: "hour", fields: ["mean"], hours } });
+  ck("the history request is keyed by the sensors' ids and the range, not the station object",
+     historyKey(q(24)) === historyKey(q(24)) && historyKey(q(24)) !== historyKey(q(168))
+     && /useHistorySource\(\{\s*measured:/.test(panel) && !/\], \[station\]\);/.test(panel));
   const { drawableWindow } = await import("@/utils/lineChart");
   const one = [{ t: 5, v: 0 }], win = { from: 0, to: 10 };
   ck("one reading over a known window is a line (0 mm all day), not 'not enough history'",

@@ -1,4 +1,5 @@
-// One history source, two recorder paths (src/ha/HAHistoryAPI.ts):
+// One history source, two recorder paths (src/ha/historySource.ts, Home
+// Assistant behind its port — the real adapter is src/ha/HAHistoryAPI.ts):
 // states over REST and STATISTICS over the websocket both return a
 // HistorySeries — points, gaps, window — and a failed request is a failure.
 //
@@ -14,7 +15,8 @@ import { join } from "node:path";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { statisticsSeries, seriesTotal, seriesExtent, PERIOD_MS } = await import("@/utils/statisticsSeries");
-const { fetchStatistics } = await import("@/ha/HAHistoryAPI");
+const { loadOne, loadHistory, historyKey, requestWindow } = await import("@/ha/historySource");
+const fakePort = (over = {}) => ({ stateRows: async () => [], getStatisticsDuringPeriod: async () => ({}), ...over });
 
 const Hr = PERIOD_MS.hour, t0 = 1_700_000_000_000;
 const win = { from: t0, to: t0 + 24 * Hr };
@@ -44,23 +46,52 @@ console.log("\n  the gaps travel with the points:");
   ck("extent: min and max, or undefined with none", JSON.stringify(seriesExtent(s)) === JSON.stringify({ min: 20, max: 42 }) && seriesExtent(statisticsSeries([], "mean", "hour", win)) === undefined, seriesExtent(s));
 }
 
-console.log("\n  the statistics adapter:");
+console.log("\n  the statistics path:");
 {
   const calls = [];
-  const port = { async getStatisticsDuringPeriod(ids, start, period, end, types) {
-    calls.push({ ids, period, types });
+  const port = fakePort({ async getStatisticsDuringPeriod(ids, start, period, end, types) {
+    calls.push({ ids, start, period, types });
     return { "sensor.a": hourly(3, () => ({ mean: 1, min: 0, max: 2 })) };
-  } };
-  const r = await fetchStatistics(port, ["sensor.a", "sensor.b"], 24, "hour", ["mean", "max"]);
+  } });
+  const now = t0 + 24 * Hr;
+  const r = await loadOne(port, { kind: "statistics", ids: ["sensor.a", "sensor.b"], period: "hour", fields: ["mean", "max"], hours: 24 }, now);
   ck("one request for every id and field", calls.length === 1 && calls[0].ids.length === 2 && calls[0].types.join() === "mean,max", calls);
+  ck("  ...starting where the window starts: now minus the range", calls[0].start === new Date(t0).toISOString(), calls[0].start);
   ck("a series per id per field", r["sensor.a"].mean.points.length === 3 && r["sensor.a"].max.points[0].v === 2);
   ck("an id the recorder has nothing for: an outage, not an empty zero", r["sensor.b"].mean.points.length === 0 && r["sensor.b"].mean.gaps.length === 1, r["sensor.b"]);
   let rejected = false;
-  await fetchStatistics({ async getStatisticsDuringPeriod() { throw new Error("socket closed"); } }, ["sensor.a"], 24, "hour", ["mean"])
-    .catch(() => { rejected = true; });
+  await loadOne(fakePort({ async getStatisticsDuringPeriod() { throw new Error("socket closed"); } }),
+    { kind: "statistics", ids: ["sensor.a"], period: "hour", fields: ["mean"], hours: 24 }, now).catch(() => { rejected = true; });
   ck("a failed request REJECTS — the caller's status is 'failed', not 'no data'", rejected);
-  const none = await fetchStatistics(port, [], 24, "hour", ["mean"]);
+  const none = await loadOne(port, { kind: "statistics", ids: [], period: "hour", fields: ["mean"], hours: 24 }, now);
   ck("no ids: no request", Object.keys(none).length === 0 && calls.length === 1);
+  const since = t0 + 3 * Hr;
+  ck("a calendar period runs from its start to now", JSON.stringify(requestWindow({ kind: "statistics", ids: [], period: "day", fields: ["change"], since }, now)) === JSON.stringify({ from: since, to: now }));
+}
+
+console.log("\n  one window, from one clock reading:");
+{
+  // ⚠️ "WHICH WINDOW DOES THIS CHART SHOW" WAS FIXED FOUR TIMES while the
+  // adapter read the clock per request and each panel read it again.
+  const asked = [];
+  const port = fakePort({
+    stateRows: async (id, from, to) => { asked.push({ id, from, to }); return [{ state: "3", last_changed: new Date(from).toISOString() }]; },
+  });
+  const now = t0 + 24 * Hr;
+  const out = await loadHistory(port, {
+    a: { kind: "readings", id: "sensor.p", hours: 3 },
+    b: { kind: "trend", ids: ["sensor.q"], hours: 24 },
+    c: { kind: "statistics", ids: ["sensor.r"], period: "hour", fields: ["mean"], hours: 24 },
+  }, now);
+  ck("every request answered together ends at the SAME now", out.a.window.to === now && out.b["sensor.q"].window.to === now && out.c["sensor.r"].mean.window.to === now,
+     [out.a.window, out.b["sensor.q"].window, out.c["sensor.r"].mean.window]);
+  ck("  ...and Home Assistant is asked for exactly that window", asked.find((x) => x.id === "sensor.p").from === now - 3 * Hr && asked.every((x) => x.to === now), asked);
+  const code = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8").replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
+  ck("the source and its adapter never read the clock themselves", !/Date\.now\(\)/.test(code("ha/historySource.ts")) && !/Date\.now\(\)/.test(code("ha/HAHistoryAPI.ts")));
+  const hook = code("hooks/useHistorySource.ts");
+  ck("  ...the panels' hook reads it ONCE per load, for every request in it", (hook.match(/Date\.now\(\)/g) ?? []).length === 1 && /loadHistory\(port, requests!, Date\.now\(\)\)/.test(hook));
+  const key = (hours, fields = ["mean"]) => historyKey({ c: { kind: "statistics", ids: ["sensor.r"], period: "hour", fields, hours } });
+  ck("a request's key names what it is: another range or field is another key", key(24) === key(24) && key(24) !== key(168) && key(24) !== key(24, ["max"]));
 }
 
 console.log("\n  the callers:");
@@ -68,15 +99,12 @@ console.log("\n  the callers:");
   const SRC = new URL("../../src/", import.meta.url).pathname;
   const walk = (d, out = []) => { for (const e of readdirSync(d)) { const p = join(d, e); statSync(p).isDirectory() ? walk(p, out) : /\.tsx?$/.test(p) && out.push(p); } return out; };
   const files = walk(SRC).filter((f) => /\/(components|hooks)\//.test(f));
-  const fetchers = files.filter((f) => /\b(fetchHistory|fetchTrend|fetchStateHistory|fetchStatistics)\(|getStatisticsDuringPeriod\(/.test(readFileSync(f, "utf8")));
-  // 4 since 2.496.188: useStateHistory's loader takes its fetch as a
-  // parameter (loadStateWindow, driven in history_section.mjs), so it no
-  // longer CALLS one by name.
-  ck(`found the panels that read history (${fetchers.length})`, fetchers.length >= 4, fetchers.map((f) => f.slice(SRC.length)));
-  const raw = fetchers.filter((f) => /getStatisticsDuringPeriod\(/.test(readFileSync(f, "utf8"))).map((f) => f.slice(SRC.length));
-  ck("no panel reads raw statistics rows — only the adapter's series", raw.length === 0, raw);
-  const handRolled = fetchers.filter((f) => !/\buseHistory\b/.test(readFileSync(f, "utf8"))).map((f) => f.slice(SRC.length));
-  ck("every one fetches through useHistory (one cancel guard, one failed state)", handRolled.length === 0, handRolled);
+  const readers = files.filter((f) => /\buseHistorySource\(/.test(readFileSync(f, "utf8"))).map((f) => f.slice(SRC.length)).sort();
+  ck(`found every reader of history, all through the source (${readers.length})`,
+     readers.join() === "components/cockpit/CockpitModal.tsx,components/panels/CameraPanel.tsx,components/panels/EnergyPanel.tsx,components/panels/NumericHistory.tsx,components/panels/WeatherPanel.tsx,hooks/useStateHistory.ts", readers);
+  const bypass = files.filter((f) => /getStatisticsDuringPeriod\(|history\/period|haHistoryPort\(|loadHistory\(|loadOne\(/.test(readFileSync(f, "utf8"))
+    && !f.endsWith("hooks/useHistorySource.ts")).map((f) => f.slice(SRC.length));
+  ck("no panel reaches Home Assistant's history around the source", bypass.length === 0, bypass);
   const hook = readFileSync(new URL("../../src/hooks/useHistory.ts", import.meta.url), "utf8");
   ck("  ...which reports a failure as 'failed', and drops the other range's answer",
      /\.catch\(\(\) => \{ if \(!cancelled\) \{ setData\(initialRef\.current\); setStatus\("failed"\); \} \}\)/.test(hook));
@@ -89,7 +117,7 @@ console.log("\n  the callers:");
      /barNote\(buckets, `No rain readings in the last \$\{span\}`, `No rain in the last \$\{span\}`\)/.test(panel));
   ck("the Rain figure is a dash, not '0.0 mm', when there is nothing to sum",
      (await import("@/config/weatherStation")).weatherHistoryFigures({ gustUnit: "", rainUnit: "mm" }).find((f) => f.label === "Rain").value === "—"
-     && /const rainTotal = seriesTotal\(data\.rain\);/.test(panel) && /weatherHistoryFigures\(\{[\s\S]*?rainTotal,/.test(panel));
+     && /const rainTotal = seriesTotal\(rain\);/.test(panel) && /weatherHistoryFigures\(\{[\s\S]*?rainTotal,/.test(panel));
   const lcSrc = readFileSync(new URL("../../src/components/panels/LineChart.tsx", import.meta.url), "utf8");
   const { emptyHistoryText } = await import("@/utils/statisticsSeries");
   ck("a failed history says it could not load (emptyHistoryText, through LineChart's ChartEmpty, which the rain tile uses too)",

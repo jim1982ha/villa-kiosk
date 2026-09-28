@@ -11,12 +11,11 @@
 //   * a device group's charts were never told they were loading, and said
 //     "Not enough history yet" until the data landed;
 //   * a failed Energy setup showed its skeleton forever.
-globalThis.window = { location: { origin: "", pathname: "/" } };
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import { readFileSync, readdirSync } from "node:fs";
-const { loadStateWindow, historyTitle } = await import("@/hooks/useStateHistory");
+const { loadOne, historyTitle } = await import("@/ha/historySource");
 const { emptyHistoryText } = await import("@/utils/statisticsSeries");
 
 
@@ -28,16 +27,23 @@ ck("a failed request and an empty answer are two different sentences",
 console.log("\n  the look-back:");
 {
   const H = 3_600_000, now = 1_000 * H;
-  const rows = (pts) => async (_id, hours) => pts.filter((p) => p.t >= now - hours * H);
+  // A fake Home Assistant behind the history source's port: the rows inside
+  // the window asked for, as the REST endpoint sends them.
+  const port = (pts) => ({
+    stateRows: async (_id, from, to) => pts.filter((p) => p.t >= from && p.t <= to)
+      .map((p) => ({ state: p.state, last_changed: new Date(p.t).toISOString() })),
+    getStatisticsDuringPeriod: async () => ({}),
+  });
+  const loadStateWindow = (id, hours, p) => loadOne(p, { kind: "stateWindow", id, hours }, now);
   const live = [{ t: now - 2 * H, state: "on" }, { t: now - H, state: "off" }];
-  const a = await loadStateWindow("x.y", 24, rows(live));
+  const a = await loadStateWindow("x.y", 24, port(live));
   ck("a live window is charted as it is, no 'before'", a.lastSeen === undefined && a.data.length === 2, a);
   const dead = [{ t: now - 50 * H, state: "on" }, { t: now - 40 * H, state: "unavailable" }];
-  const b = await loadStateWindow("x.y", 24, rows(dead));
+  const b = await loadStateWindow("x.y", 24, port(dead));
   ck("a window dead from end to end moves back to END at the last real reading", b.lastSeen === now - 50 * H, b.lastSeen);
   ck("  ...and charts nothing after it", b.data.length > 0 && b.data.every((p) => p.t <= b.lastSeen), b.data);
   const never = [{ t: now - 5 * H, state: "unavailable" }];
-  const c = await loadStateWindow("x.y", 24, rows(never));
+  const c = await loadStateWindow("x.y", 24, port(never));
   ck("a device never seen in the look-back: the asked-for window, no 'before'", c.lastSeen === undefined && c.data.length === 1, c);
   ck("the header says when a moved window ends", historyTitle("Last 24 hours", b.lastSeen).startsWith("Last 24 hours before ")
      && historyTitle("Last 24 hours", undefined) === "Last 24 hours");

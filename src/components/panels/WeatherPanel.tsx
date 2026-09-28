@@ -25,8 +25,7 @@ import { localMidnight } from "@/utils/localDay";
 import { barNote, seriesBuckets } from "@/utils/barChart";
 import LineChart, { ChartEmpty } from "./LineChart";
 import { useHA } from "@/ha/HAStateStore";
-import { fetchHistory, fetchStatistics } from "@/ha/HAHistoryAPI";
-import { useHistory } from "@/hooks/useHistory";
+import { useHistorySource } from "@/hooks/useHistorySource";
 import { useHistoryRange, WEATHER_RANGES, type HistoryRange } from "./historyRange";
 import { peakOf, seriesExtent, seriesTotal, type HistoryStatus } from "@/utils/statisticsSeries";
 import { isUnavailable } from "@/utils/stateColors";
@@ -88,9 +87,9 @@ function NowView({ station, r }: { station: WeatherStation; r: Readings }) {
   // The 3-hour pressure tendency and today's temperature range need the
   // recorder; both arrive a beat after the live readings rather than block them.
   const pressureId = station.roles.pressure;
-  const { data: pressure3h } = useHistory<HistorySeries | null>(
-    pressureId ? `${pressureId}|3` : null, () => fetchHistory(pressureId!, 3), null);
-  const pts = pressure3h?.points ?? [];
+  const { data: pressure3h } = useHistorySource(
+    pressureId ? { p: { kind: "readings", id: pressureId, hours: 3 } } : null);
+  const pts = pressure3h?.p.points ?? [];
   const tendency = pts.length >= 2 ? pressureTendency(pts[pts.length - 1].v - pts[0].v) : null;
   const today = useTodayRange(station.roles.temperature);
 
@@ -176,15 +175,11 @@ function Tile({ title, center, k, children }: { title: string; center?: boolean;
 
 /** Today's low and high, from the recorder's 5-minute statistics since midnight. */
 function useTodayRange(entityId: string | undefined): { min: number; max: number } | null {
-  const { ws } = useHA();
-  const since = localMidnight(Date.now());
-  const { data } = useHistory(
-    entityId ? `${entityId}|${since}` : null,
-    () => fetchStatistics(ws, [entityId!], 0, "5minute", ["min", "max"] as const, since),
-    {},
-  );
-  const lo = seriesExtent(entityId ? data[entityId]?.min : undefined);
-  const hi = seriesExtent(entityId ? data[entityId]?.max : undefined);
+  const { data } = useHistorySource(entityId ? { today: {
+    kind: "statistics", ids: [entityId], period: "5minute", fields: ["min", "max"],
+    since: localMidnight(Date.now()) } } : null);
+  const lo = seriesExtent(entityId ? data?.today[entityId]?.min : undefined);
+  const hi = seriesExtent(entityId ? data?.today[entityId]?.max : undefined);
   return lo && hi ? { min: lo.min, max: hi.max } : null;
 }
 
@@ -349,14 +344,10 @@ function SunUv({ r, uvId }: { r: Readings; uvId: string | undefined }) {
 
 /** Today's highest UV and the 5-minute bucket it fell in, from the recorder. */
 function useTodayPeak(entityId: string | undefined): { v: number; t: number } | null {
-  const { ws } = useHA();
-  const since = localMidnight(Date.now());
-  const { data } = useHistory(
-    entityId ? `${entityId}|peak|${since}` : null,
-    () => fetchStatistics(ws, [entityId!], 0, "5minute", ["max"] as const, since),
-    {},
-  );
-  return entityId ? peakOf(data[entityId]?.max) : null;
+  const { data } = useHistorySource(entityId ? { peak: {
+    kind: "statistics", ids: [entityId], period: "5minute", fields: ["max"],
+    since: localMidnight(Date.now()) } } : null);
+  return entityId ? peakOf(data?.peak[entityId]?.max) : null;
 }
 
 // ── History and trends ─────────────────────────────────────────────────
@@ -364,44 +355,30 @@ function useTodayPeak(entityId: string | undefined): { v: number; t: number } | 
 const MEASURED: WeatherRole[] = ["temperature", "indoorTemperature", "humidity", "indoorHumidity", "windSpeed", "windGust", "pressure", "solar", "uv"];
 type MeasuredField = "mean" | "min" | "max";
 
-interface WeatherHistory {
-  measured: Record<string, Record<MeasuredField, HistorySeries>>;
-  rain?: HistorySeries;
-  window: { from: number; to: number };
-}
-
 function HistoryView({ station, range }: { station: WeatherStation; range: HistoryRange }) {
-  const { ws, entities } = useHA();
+  const { entities } = useHA();
   const ids = MEASURED.map((r) => station.roles[r]).filter((x): x is string => !!x);
   const rainId = station.roles.rainToday;
   // The recorder's statistics (see the header), gaps included — a bucket it
   // did not write is an outage, and a failed request is "failed", not zero.
-  const { data, status } = useHistory<WeatherHistory>(
-    `${ids.join("|")}#${rainId ?? ""}|${range.hours}`,
-    async () => {
-      // One clock reading for both ends of the window, so its width is
-      // exactly the range's.
-      const at = Date.now();
-      const since = at - range.hours * 3600_000;
-      const [measured, rain] = await Promise.all([
-        fetchStatistics(ws, ids, range.hours, range.period, ["mean", "min", "max"] as const, since),
-        rainId ? fetchStatistics(ws, [rainId], range.hours, range.totalPeriod, ["change"] as const, since) : Promise.resolve(null),
-      ]);
-      return { measured, rain: rain && rainId ? rain[rainId].change : undefined, window: { from: since, to: at } };
-    },
-    { measured: {}, window: { from: 0, to: 0 } },
-  );
-  const win = data.window;
+  // Both are answered over ONE clock reading, so the rain bars and the lines
+  // cover exactly the same span.
+  const { data, status } = useHistorySource({
+    measured: { kind: "statistics", ids, period: range.period, fields: ["mean", "min", "max"], hours: range.hours },
+    rain: { kind: "statistics", ids: rainId ? [rainId] : [], period: range.totalPeriod, fields: ["change"], hours: range.hours },
+  });
+  const rain = rainId ? data?.rain[rainId]?.change : undefined;
+  const win = Object.values(data?.measured ?? {})[0]?.mean?.window ?? rain?.window ?? { from: 0, to: 0 };
 
   const series = (role: WeatherRole, key: MeasuredField = "mean"): HistorySeries | undefined => {
     const id = station.roles[role];
-    return id ? data.measured[id]?.[key] : undefined;
+    return id ? data?.measured[id]?.[key] : undefined;
   };
   const t = seriesExtent(series("temperature", "min")), T = seriesExtent(series("temperature", "max"));
   const gustRole: WeatherRole = station.roles.windGust ? "windGust" : "windSpeed";
   const gustMax = seriesExtent(series(gustRole, "max"))?.max;
   const uvMax = seriesExtent(series("uv", "max"))?.max;
-  const rainTotal = seriesTotal(data.rain);
+  const rainTotal = seriesTotal(rain);
   const p = seriesExtent(series("pressure", "min")), P = seriesExtent(series("pressure", "max"));
   const unitOf = (role: WeatherRole) => {
     const id = station.roles[role];
@@ -423,7 +400,7 @@ function HistoryView({ station, range }: { station: WeatherStation; range: Histo
           lines={[line("humidity", { cls: "water", label: "Outside", unit: "%" }), line("indoorHumidity", { cls: "in dashed", label: "Inside", unit: "%" })]} />
         <ChartTile title="Wind" legend={[["Speed", "out area"], ["Gust", "ink"]]} win={win} status={status}
           lines={[line("windSpeed", { cls: "out", area: true, label: "Speed", unit: ` ${unitOf("windSpeed")}` }), line("windGust", { cls: "ink thin", label: "Gust", unit: ` ${unitOf("windGust")}` }, "max")]} />
-        {rainId && <RainTile s={data.rain} win={win} status={status} perDay={range.totalPeriod === "day"} unit={unitOf("rainToday") || "mm"} />}
+        {rainId && <RainTile s={rain} win={win} status={status} perDay={range.totalPeriod === "day"} unit={unitOf("rainToday") || "mm"} />}
         <ChartTile title="Pressure" note={p && P ? `${Math.round(p.min)} – ${Math.round(P.max)} ${unitOf("pressure")}` : undefined}
           win={win} status={status} lines={[line("pressure", { cls: "out", label: "Pressure", unit: ` ${unitOf("pressure")}` })]} />
         <ChartTile title="Sun & UV" legend={[["Sunlight", "warm area"], ["UV", "uv"]]} win={win} status={status}

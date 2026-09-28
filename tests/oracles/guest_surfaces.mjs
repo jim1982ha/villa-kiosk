@@ -25,8 +25,8 @@ ck("the Energy tile (and so the Energy window) exists only when the profile may 
 const cockpit = src("components/cockpit/CockpitModal.tsx");
 ck("the Cockpit does not even fetch Energy today for such a profile",
    /const seesEnergy = role != null && isCategoryAllowed\(role, "energy"\);/.test(cockpit)
-   && /if \(!seesEnergy\) \{ setEnergy\(null\); return; \}\s*let cancelled = false;\s*fetchEnergyToday\(ws\)/.test(cockpit)
-   && /\}, \[ws, seesEnergy\]\);/.test(cockpit));
+   && /useHistory<EnergyWindowSetup \| null>\(\s*seesEnergy \? "energy-setup" : null,/.test(cockpit)
+   && /useHistorySource\(\s*seesEnergy && energySetup \?/.test(cockpit));
 ck("the motion toast is skipped for a profile denied motion sensors",
    /const who = roleRef\.current;\s*if \(!who \|\| !isTypeAllowed\(who, "binary_sensor"\)\) return;/.test(src("pages/Dashboard.tsx")));
 ck("the 3D motion glow / beam is skipped under the role-filtered config",

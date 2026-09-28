@@ -35,7 +35,11 @@ import { CATEGORY_LABELS, CATEGORY_ICONS, categorySurface } from "@/config/Entit
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { isUnavailable } from "@/utils/stateColors";
 import { fetchLogbookEvents } from "@/ha/HALogbookAPI";
-import { fetchEnergyToday, type EnergyToday } from "@/ha/HAEnergyAPI";
+import { fetchEnergySetup, energyRequest, energyChanges, type EnergyWindowSetup } from "@/ha/HAEnergyAPI";
+import { useHistory } from "@/hooks/useHistory";
+import { useHistorySource } from "@/hooks/useHistorySource";
+import { usedToday } from "@/config/energyModel";
+import { localMidnight } from "@/utils/localDay";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import { useVillaAttention } from "./useVillaAttention";
 import {
@@ -104,23 +108,19 @@ export default function CockpitModal({ onClose, onOpenEntity }: CockpitModalProp
     return buildActivityFeed(rawActivity, entities, config.entityMap, selectableIds);
   }, [rawActivity, entities, config.entityMap, selectableIds]);
 
-  // Energy today — only when the install has an Energy Dashboard configured
-  // AND its grid source actually resolves to recorded statistics (see
-  // HAEnergyAPI's own docstring — a configured source pointing at a
-  // statistic ID with no recorded data is a real, confirmed case, not a
-  // theoretical one). null (not shown) either way it doesn't resolve;
-  // undefined only while the fetch is in flight.
+  // Energy today — the Energy window's own "Today so far" (energyModel.
+  // usedToday: consumed, grid + solar − export), shown only when the install
+  // has an Energy Dashboard AND a source with a reading today (a configured
+  // source pointing at an orphaned statistic is a real, confirmed case).
   // Not asked at all for a profile without the energy category (the guest's).
   const seesEnergy = role != null && isCategoryAllowed(role, "energy");
-  const [energy, setEnergy] = useState<EnergyToday | null | undefined>(undefined);
-  useEffect(() => {
-    if (!seesEnergy) { setEnergy(null); return; }
-    let cancelled = false;
-    fetchEnergyToday(ws)
-      .then((r) => { if (!cancelled) setEnergy(r); })
-      .catch(() => { if (!cancelled) setEnergy(null); });
-    return () => { cancelled = true; };
-  }, [ws, seesEnergy]);
+  const { data: energySetup } = useHistory<EnergyWindowSetup | null>(
+    seesEnergy ? "energy-setup" : null, () => fetchEnergySetup(ws, (id) => id), null);
+  const today = localMidnight(Date.now());
+  const { data: energyToday } = useHistorySource(
+    seesEnergy && energySetup ? { hourly: energyRequest(energySetup, today, "hour") } : null);
+  const energy = energySetup && energyToday
+    ? usedToday(energySetup, energyChanges(energyToday.hourly), Date.now()) : null;
 
   // Firmware/add-on updates available — HA's own `update` domain already
   // tracks this per device AND per add-on (including this one). A small
@@ -268,10 +268,10 @@ export default function CockpitModal({ onClose, onOpenEntity }: CockpitModalProp
           )}
 
           {/* ── Energy today (only when it resolves) ───────────────── */}
-          {energy && (
+          {energy !== null && (
             <>
               <div className="settings-section-title"><Zap size={16} style={{ verticalAlign: -2 }} /> Energy today</div>
-              <p className="cockpit-energy-value">{energy.kwh.toFixed(1)} <span className="muted body-text">kWh</span></p>
+              <p className="cockpit-energy-value">{energy.toFixed(1)} <span className="muted body-text">kWh</span></p>
             </>
           )}
 

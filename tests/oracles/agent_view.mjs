@@ -11,7 +11,7 @@ register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import { readFileSync } from "node:fs";
 const { roleCan } = await import("@/auth/permissions");
-const { agentVisible, buttonsShown, awaitingAnswer, answerLine } = await import("@/agent/agentView");
+const { agentVisible, buttonsShown, awaitingAnswer, answerLine, roomsToShare } = await import("@/agent/agentView");
 const { parseAgentMessages, parseAgentStatus } = await import("@/agent/agentApi");
 
 const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
@@ -66,6 +66,18 @@ const ctx = src("agent/AgentContext.tsx");
 ck("a profile without viewAgent never fetches", /roleCan\(role, "viewAgent"\)/.test(ctx)
    && /const refresh = useCallback\(\(\) => \{\s*if \(!allowed\) return;/.test(ctx));
 ck("rooms are shared only while the agent is visible", /\{visible && <RoomShare \/>\}/.test(ctx));
+
+console.log("\n  sharing the rooms:");
+const first = roomsToShare({ "light.b": "Hall", "light.a": "Living", "sensor.x": null }, null);
+ck("the first time, the resolved rooms go out, empty ones dropped, in a stable order",
+   first && JSON.stringify(first.rooms) === '{"light.a":"Living","light.b":"Hall"}');
+ck("  ...and NOT again when nothing changed (a reload, the tablet waking)",
+   roomsToShare({ "light.a": "Living", "light.b": "Hall" }, first.key) === null);
+ck("  ...but again when a room moves", roomsToShare({ "light.a": "Kitchen", "light.b": "Hall" }, first.key) !== null);
+ck("  ...and never an empty list", roomsToShare({ "sensor.x": null }, null) === null);
+const share = src("agent/RoomShare.tsx");
+ck("RoomShare remembers what it sent in the device's storage, and asks roomsToShare",
+   share.includes("roomsToShare(resolvedRooms, readString(LAST_SENT_KEY)") && share.includes("writeString(LAST_SENT_KEY, share.key)"));
 const marks = ["FaultsTab", "RecentWorkList", "SpendTab", "TodayTab", "ScheduleEditor", "SavedDocumentsList"]
   .filter((f) => !/<AgentMark record=\{/.test(src(`components/fm/${f}.tsx`)));
 ck("every Facility list shows the 'by VESTA Agent' mark", marks.length === 0, marks);

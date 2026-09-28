@@ -3,7 +3,7 @@
 // around those stretches.
 //
 // THE DEFECT THIS EXISTS FOR
-// `fetchHistory` parsed every row with `numericState` and then dropped whatever
+// The numeric history (historySource `readings`) parsed every row with `numericState` and then dropped whatever
 // did not come out finite:
 //
 //     .map((s) => ({ t, v: numericState(s.state) }))

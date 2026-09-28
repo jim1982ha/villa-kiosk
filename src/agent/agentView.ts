@@ -31,3 +31,20 @@ export function answerLine(message: AgentMessage, profileLabel: (p: string) => s
   const button = message.buttons.find((b) => b.id === message.answer?.buttonId);
   return `Answered by ${profileLabel(message.answer.profile)} · ${button?.label || message.answer.buttonId}`;
 }
+
+/** What RoomShare should send, or null when nothing needs sending: the rooms
+ *  this device resolved (empty ones dropped, in a stable order), unless they
+ *  are exactly what this device last sent — kept across reloads, so the list
+ *  goes out when a room CHANGES, not on every page load. */
+export function roomsToShare(
+  resolved: Readonly<Record<string, string | null | undefined>>,
+  lastSent: string | null,
+): { rooms: Record<string, string>; key: string } | null {
+  const rooms = Object.fromEntries(
+    Object.entries(resolved)
+      .filter((e): e is [string, string] => !!e[1])
+      .sort(([a], [b]) => a.localeCompare(b)),
+  );
+  const key = JSON.stringify(rooms);
+  return key === "{}" || key === lastSent ? null : { rooms, key };
+}

@@ -25,7 +25,15 @@ ck("a month's label is its short name; a day's names its weekday", /Sep|sept/i.t
 console.log("\n  the callers:");
 const panel = readFileSync(new URL("../../src/components/panels/EnergyPanel.tsx", import.meta.url), "utf8");
 ck("no range ternary or second map left in the window", !/range === "(day|week|month|year)"/.test(panel) && !/const (RANGES|KIND)\b/.test(panel));
-ck("the history's cache key is the period's NAME (a row object there keyed every period '[object Object]')", /`energy-history\|\$\{range\.key\}\|\$\{starts\[0\]\}`/.test(panel));
+// The key is the history source's (historyKey), derived from the request —
+// the period's start and bucket, never a row object.
+const { historyKey } = await import("@/ha/historySource");
+const { energyRequest } = await import("@/ha/HAEnergyAPI");
+const setup = { gridIn: ["sensor.grid"], gridOut: [], solar: [], devices: [], costOf: {} };
+const keys = R.ENERGY_RANGES.map((r) => historyKey({ p: energyRequest(setup, E.periodStarts(r.kind, now)[0], r.period) }));
+ck("each period's history is its own request (a row object there once keyed every period '[object Object]')",
+   new Set(keys).size === keys.length && !keys.some((k) => k.includes("[object")), keys);
+ck("  ...and the window asks for exactly that request", /useHistorySource\(\{ p: energyRequest\(setup, starts\[0\], range\.period\) \}\)/.test(panel));
 ck("today's hour-by-hour chart is the Day row too", /energyRange\("day"\)\.ticks\(hours\.length\)/.test(panel));
 
 done("✅ one row a period");

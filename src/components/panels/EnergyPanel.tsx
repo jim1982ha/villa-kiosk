@@ -35,8 +35,8 @@ import type { BarSeg } from "@/utils/barChart";
 import { fmtChartTime } from "./chartUtils";
 import { useHA } from "@/ha/HAStateStore";
 import { useHistory } from "@/hooks/useHistory";
-import { fetchEnergySetup, fetchEnergyPeriod, type EnergyWindowSetup } from "@/ha/HAEnergyAPI";
-import type { HistorySeries } from "@/types/ha.types";
+import { fetchEnergySetup, energyRequest, energyChanges, type EnergyWindowSetup } from "@/ha/HAEnergyAPI";
+import { useHistorySource } from "@/hooks/useHistorySource";
 import { PERIOD_MS } from "@/utils/statisticsSeries";
 import { localMidnight } from "@/utils/localDay";
 import {
@@ -89,26 +89,19 @@ function useRateKw() {
 }
 
 function NowView({ setup, costUnit, house, colourOf }: { setup: EnergyWindowSetup; costUnit: string | undefined; house: string; colourOf: (id: string) => string }) {
-  const { ws } = useHA();
   const now = Date.now();
   const today = localMidnight(now), weekAgo = localMidnight(now, -7);
   // Refreshed every five minutes while open: the recorder writes hourly
   // buckets, so a faster refresh would fetch the same numbers.
   const [tick, setTick] = useState(0);
   useInterval(() => setTick((n) => n + 1), 300_000);
-  const { data, status } = useHistory<{ hourly: Record<string, HistorySeries>; daily: Record<string, HistorySeries> } | null>(
-    `energy-now|${today}|${tick}`,
-    async () => {
-      const [hourly, daily] = await Promise.all([
-        fetchEnergyPeriod(ws, setup, today, "hour"),
-        fetchEnergyPeriod(ws, setup, weekAgo, "day"),
-      ]);
-      return { hourly, daily };
-    },
-    null,
-  );
+  const { data: answer, status } = useHistorySource({
+    hourly: energyRequest(setup, today, "hour"),
+    daily: energyRequest(setup, weekAgo, "day"),
+  }, tick);
   const rateKw = useRateKw();
-  if (!data) return <div className="muted body-text weather-chart-empty">{status === "failed" ? "Couldn't load Home Assistant's energy." : "Loading…"}</div>;
+  if (!answer) return <ChartEmpty status={status === "failed" ? "failed" : "loading"} />;
+  const data = { hourly: energyChanges(answer.hourly), daily: energyChanges(answer.daily) };
 
   // The period's sums, bucket by bucket, are energyModel's: an hour the
   // recorder has no reading for is MISSING there, never 0 kWh.
@@ -290,23 +283,19 @@ const SHAPES = [
 
 function HistoryView({ setup, costUnit, range: rangeKey, colourOf }: { setup: EnergyWindowSetup; costUnit: string | undefined; range: EnergyRangeKey; colourOf: (id: string) => string }) {
   const range = energyRange(rangeKey);
-  const { ws } = useHA();
   // Every device as a list or as HA's pie — the app's one segmented control.
   const { key: shape, picker: shapePicker } = useSegmentedChoice(SHAPES, "list", "Show every device as", "energy-shape");
   const now = Date.now();
   const starts = periodStarts(range.kind, now);
-  const { data, status } = useHistory<Record<string, HistorySeries> | null>(
-    `energy-history|${range.key}|${starts[0]}`,
-    () => fetchEnergyPeriod(ws, setup, starts[0], range.period),
-    null,
-  );
-  if (!data) {
+  const { data: answer, status } = useHistorySource({ p: energyRequest(setup, starts[0], range.period) });
+  if (!answer) {
     return (
       <div className="weather-history">
-        <div className="muted body-text weather-chart-empty">{status === "failed" ? "Couldn't load Home Assistant's energy." : "Loading…"}</div>
+        <ChartEmpty status={status === "failed" ? "failed" : "loading"} />
       </div>
     );
   }
+  const data = energyChanges(answer.p);
   const p = energyPeriod(setup, data, starts, PERIOD_MS[range.period], now);
   const whole = p.whole;
   const costs = p.buckets.map((b) => b.cost);

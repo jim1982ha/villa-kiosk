@@ -1,3 +1,13 @@
+## 2.496.214
+
+### Fixed
+- **"Energy today" in the Cockpit now matches the Energy window.** The Cockpit counted only the electricity bought from the grid; the Energy window's "Today so far" counts what the house actually used (grid + solar − what was sold back). On a villa with solar panels the two showed different numbers for the same day. Both now show the Energy window's figure.
+- **The agent's room list is sent only when a room changes.** An owner's or facility manager's device used to send it again on every page load, even when nothing had changed. It now remembers what it last sent. (Only when the VESTA Agent is connected; nothing changes otherwise.)
+
+### Changed
+- **Every chart now loads its history the same way.** The device windows (sensors, device groups, the timelines), the camera's status bar, and the Weather and Energy windows all ask one shared loader, which decides the time window once. This is the kind of mismatch between a chart's title and what it actually showed that had to be fixed four times before. Charts look the same.
+- The Energy window's "couldn't load" message is now the same one every other chart uses.
+
 ## 2.496.213
 
 ### Changed

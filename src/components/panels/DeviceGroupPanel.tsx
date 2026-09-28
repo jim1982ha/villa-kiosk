@@ -9,15 +9,11 @@
 import { formatSensorParts } from "@/utils/entityValue";
 import { Layers } from "lucide-react";
 import BasePanel from "./BasePanel";
-import LineChart from "./LineChart";
+import NumericHistory from "./NumericHistory";
 import UnavailableNotice from "./UnavailableNotice";
 import { useHA } from "@/ha/HAStateStore";
-import { fetchTrend } from "@/ha/HAHistoryAPI";
-import { useHistoryRange, HistoryHeader } from "./historyRange";
-import { useHistory } from "@/hooks/useHistory";
 import type { DeviceGroup } from "@/config/AppConfig";
 import type { EntityMapping } from "@/types/scene.types";
-import type { HistorySeries } from "@/types/ha.types";
 import { isUnavailable } from "@/utils/stateColors";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 
@@ -72,18 +68,6 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
   // that is exactly when its chart's shaded outage has something to say. It
   // used to need a numeric state NOW, so an offline member had no chart.
   const numericRows = rows.filter((r) => r.numeric !== undefined || (r.unavailable && r.unit !== ""));
-  const numericIds = numericRows.map((r) => r.id).join(",");
-  // One range for the whole group — a temp+humidity pair plotted over two
-  // different windows would invite exactly the wrong comparison.
-  const { range, picker } = useHistoryRange();
-
-  const { data: history, status: historyStatus } = useHistory<Record<string, HistorySeries>>(
-    numericIds ? `${numericIds}|${range.hours}` : null,
-    async () => Object.fromEntries(await Promise.all(
-      numericIds.split(",").map((id) => fetchTrend(id, range.hours).then((h) => [id, h] as const)))),
-    {},
-  );
-
   return (
     <BasePanel
       title={group.label ?? primaryMapping.label}
@@ -119,40 +103,10 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
         </div>
       )}
 
-      {numericRows.length === 2 ? (
-        <div className="field">
-          <HistoryHeader title={range.title} picker={picker} />
-          {/* Two readings of one device, each on its OWN scale (left and
-              right axes in their line's colour), the second dashed. */}
-          <LineChart label={`${numericRows[0].label} and ${numericRows[1].label} history`} height={120}
-            window={history[numericRows[0].id]?.window} status={historyStatus}
-            lines={numericRows.slice(0, 2).map((r, i) => ({
-              pts: history[r.id]?.points ?? [], gaps: history[r.id]?.gaps ?? [], label: r.label,
-              unit: r.unit ? ` ${r.unit}` : "", color: SERIES_COLORS[i], dashed: i === 1, scale: "own" as const,
-            }))} />
-          <div className="row" style={{ gap: 16, marginTop: 8, fontSize: "var(--text-xs)" }}>
-            <span className="muted">
-              <span style={{ color: SERIES_COLORS[0] }}>●</span> {numericRows[0].label}
-            </span>
-            <span className="muted">
-              <span style={{ color: SERIES_COLORS[1] }}>┄</span> {numericRows[1].label}
-            </span>
-          </div>
-        </div>
-      ) : (
-        numericRows.map((r, i) => (
-          <div className="field" key={r.id}>
-            {/* The picker rides the FIRST series only — it drives one shared
-                fetch, so repeating it per series would imply each chart had
-                its own window. */}
-            {i === 0
-              ? <HistoryHeader title={`${r.label} — ${range.title.toLowerCase()}`} picker={picker} />
-              : <label className="entity-label">{r.label} — {range.title.toLowerCase()}</label>}
-            <LineChart label={`${r.label} history`} height={110} window={history[r.id]?.window} status={historyStatus}
-              lines={[{ pts: history[r.id]?.points ?? [], gaps: history[r.id]?.gaps ?? [], label: r.label, unit: r.unit ? ` ${r.unit}` : "", color: SERIES_COLORS[i % SERIES_COLORS.length] }]} />
-          </div>
-        ))
-      )}
+      {/* One range for the whole group — a temp+humidity pair plotted over two
+          different windows would invite exactly the wrong comparison. */}
+      <NumericHistory named series={numericRows.map((r, i) => ({
+        id: r.id, label: r.label, unit: r.unit, color: SERIES_COLORS[i % SERIES_COLORS.length] }))} />
     </BasePanel>
   );
 }

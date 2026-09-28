@@ -14,7 +14,8 @@
 import { useHA } from "@/ha/HAStateStore";
 import { stateLabelFor } from "@/config/BinarySensorClasses";
 import StateTimeline from "./StateTimeline";
-import { useStateHistory, historyTitle } from "@/hooks/useStateHistory";
+import { useStateHistory } from "@/hooks/useStateHistory";
+import { historyTitle } from "@/ha/historySource";
 import { useHistoryRange, HistoryHeader } from "./historyRange";
 import { historyStateColor, paletteColorFor } from "@/utils/stateColors";
 

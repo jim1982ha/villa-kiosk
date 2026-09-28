@@ -6,7 +6,7 @@
 // This file is everything around the picture: gestures, chrome, zoom, the
 // camera picker and the status bar.
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { X, VideoOff, Maximize2, Minimize2, ZoomOut, ChevronLeft, ChevronRight, Power, Check, Video } from "lucide-react";
 import type { PanelProps } from "@/types/panel.types";
 import { useRailLayout } from "@/utils/railLayout";
@@ -21,13 +21,11 @@ import { useModalA11y } from "@/hooks/useModalA11y";
 import { useBackToClose } from "@/hooks/useBackToClose";
 import { tapDebug } from "@/utils/tapDebug";
 import { WHEEL_IDLE_MS, swipeStep, wheelOwner, wheelStep } from "./cameraGestures";
-import { STATUS_COLOR, UNKNOWN_STATES } from "@/utils/stateColors";
+import { STATUS_COLOR } from "@/utils/stateColors";
 import { TAP_MOVE_TOL_PX, LONG_PRESS_MS } from "@/utils/tapThresholds";
-import { fetchStateHistory } from "@/ha/HAHistoryAPI";
-import { useHistory } from "@/hooks/useHistory";
-import { mergeStateHistories } from "./chartUtils";
+import { useHistorySource } from "@/hooks/useHistorySource";
+import { cameraBarHistory } from "./cameraStatusBar";
 import StateTimeline from "./StateTimeline";
-import type { StateHistoryPoint } from "@/types/ha.types";
 
 interface Props extends PanelProps {
   /** Lets the camera pin continuous rendering while the stream is open. */
@@ -342,46 +340,17 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
 
   // Bottom status bar: this camera's own online/offline history, layered with
   // its MOTION sensor's (mapping.motionEntityId, set in Advanced Settings)
-  // on/off history — merged into ONE composite timeline (see
-  // mergeStateHistories) and rendered through the SAME StateTimeline every
-  // other panel's "Last 24 hours" chart uses, just slim and pinned to the
-  // screen edge instead of sitting in a scrollable panel body. Reads the
-  // motion sensor, NOT linkedEntityId: this band answers "did it detect
-  // anything", which is the sensor's job — linkedEntityId only says whether
-  // detection was armed (and drives the badge ring, see EntityVisuals).
+  // on/off history into ONE composite timeline (cameraStatusBar) and rendered
+  // through the SAME StateTimeline every other panel's history uses, slim and
+  // pinned to the screen edge. Reads the motion sensor, NOT linkedEntityId:
+  // this band answers "did it detect anything", which is the sensor's job —
+  // linkedEntityId only says whether detection was armed.
   const motionId = mapping.motionEntityId;
-  const { data: statusHistory, status: statusFetch } = useHistory<StateHistoryPoint[]>(
-    `${mapping.entityId}|${motionId ?? ""}`, async () => {
-    // ⚠️ THIS BAR'S SUBJECT IS REACHABILITY, so a gap is the signal, not
-    // noise. Both series used to pass a `keepUnavailable` opt-out to get that;
-    // the flag is gone because keeping them is now the only behaviour — every
-    // other caller was broken by the old default. Why it matters here:
-    //   * the camera's own `unavailable` is what the "offline" band below is
-    //     for, and without this it never arrives to be drawn;
-    //   * the motion sensor's matters too, in the other direction — dropping
-    //     its unavailable points leaves the last known state standing, so a
-    //     sensor that went offline while reading `on` would paint red for the
-    //     whole outage. Kept, it stops being `on` and the bar stops claiming
-    //     motion nobody detected.
-    const [camHist, motionHist] = await Promise.all([
-      fetchStateHistory(mapping.entityId, 24),
-      motionId
-        ? fetchStateHistory(motionId, 24)
-        : Promise.resolve<StateHistoryPoint[]>([]),
-    ]);
-    return mergeStateHistories(
-      { camera: camHist, motion: motionHist },
-      (cur) => {
-        if (!cur.camera || UNKNOWN_STATES.has(cur.camera)) return "offline";
-        if (motionId && cur.motion === "on") return "motion";
-        // ⚠️ A LOST MOTION SENSOR IS NOT "ONLINE" (2.496.179): it resolved
-        // to the camera's resting state and was painted green — an outage of
-        // the thing this bar exists to report, shown as all-clear.
-        if (motionId && (!cur.motion || UNKNOWN_STATES.has(cur.motion))) return "motion-unavailable";
-        return "online";
-      },
-    );
-  }, []);
+  const { data: barStates, status: statusFetch } = useHistorySource({ s: {
+    kind: "states", ids: motionId ? [mapping.entityId, motionId] : [mapping.entityId], hours: 24 } });
+  const statusHistory = useMemo(() => barStates
+    ? cameraBarHistory(barStates.s[mapping.entityId] ?? [], motionId ? barStates.s[motionId] ?? [] : undefined)
+    : [], [barStates, mapping.entityId, motionId]);
 
   // ⚠️ THERE IS NO SNAPSHOT STAND-IN ANY MORE (2.496.52). While HLS started,
   // this panel showed the camera's still image on the theory that the swap to

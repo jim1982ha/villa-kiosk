@@ -7,14 +7,10 @@
 import { formatSensorParts } from "@/utils/entityValue";
 import { Activity, AlertTriangle } from "lucide-react";
 import BasePanel from "./BasePanel";
-import LineChart from "./LineChart";
 import LastDayTimeline from "./LastDayTimeline";
+import NumericHistory from "./NumericHistory";
 import type { PanelProps } from "@/types/panel.types";
-import type { HistorySeries } from "@/types/ha.types";
 import { useConfig } from "@/config/ConfigContext";
-import { fetchTrend } from "@/ha/HAHistoryAPI";
-import { useHistoryRange, HistoryHeader } from "./historyRange";
-import { useHistory } from "@/hooks/useHistory";
 import { levelForValue, type AlertLevel } from "@/config/ThresholdConfig";
 import { stateLabelFor, binarySensorClassInfo, alertStateFor } from "@/config/BinarySensorClasses";
 import { effectiveSensorClass, SENSOR_CLASS_ICON } from "@/config/SensorClasses";
@@ -26,20 +22,15 @@ const LEVEL_COLOR: Record<AlertLevel, string> = {
   danger: "var(--status-danger)",
 };
 
-const EMPTY_SERIES: HistorySeries = { points: [], gaps: [], window: { from: 0, to: 0 } };
-
 export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
   const { config } = useConfig();
-  // The numeric chart's range control (the state timelines carry their own,
-  // inside LastDayTimeline — the same shared control).
-  const { range, picker } = useHistoryRange();
 
   const isBinary = mapping.type === "binary_sensor";
   const unavailable = isUnavailable(entity);
   const numeric = Number(entity?.state);
   // A plain "sensor" whose current state doesn't parse as a number is a
   // text/enum sensor (connectivity status, a weather condition string, …) —
-  // fetchHistory's numeric-only filter would silently drop every point for
+  // the numeric history's number-only filter would silently drop every point for
   // one of these (that's why a device like an access point's "connected" /
   // "disconnected" state used to show "Not enough history yet" despite HA
   // holding real history for it), so it gets the raw state-history path below
@@ -70,16 +61,10 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
   const binaryStateText = labelFor(entity?.state === "on" ? "on" : "off");
   const binaryPillTone = level === "danger" ? "danger" : entity?.state === "on" ? "on" : "off";
 
-  // ONE of two history shapes, by what the sensor reports: raw states for a
+  // ONE of two history sections, by what the sensor reports: raw states for a
   // binary or text sensor (a numeric parse would drop every row) — the shared
   // state section, with its look-back for a sensor that is down for the whole
-  // window — and numbers with their gaps for the rest, fetched here.
-  const asStates = isBinary || isEnum;
-  const { data: history, status: historyStatus } = useHistory<HistorySeries>(
-    asStates ? null : `${mapping.entityId}|${range.hours}`,
-    () => fetchTrend(mapping.entityId, range.hours),
-    EMPTY_SERIES,
-  );
+  // window — and numbers with their gaps for the rest (NumericHistory).
 
   const BinaryIcon = classInfo.icon;
   // Same resolution the 3D badge uses (babylon/badgeIconKeys.ts) — device_class,
@@ -135,11 +120,7 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
             {!unavailable && formatted.unit && <span className="value-unit">{formatted.unit}</span>}
           </div>
           {isEnum ? <LastDayTimeline entityId={mapping.entityId} legend /> : (
-            <div className="field">
-              <HistoryHeader title={range.title} picker={picker} />
-              <LineChart label="History" height={110} window={history.window} status={historyStatus}
-                lines={[{ pts: history.points, gaps: history.gaps, label: "Reading", unit: unit ? ` ${unit}` : "", color: LEVEL_COLOR[level] }]} />
-            </div>
+            <NumericHistory series={[{ id: mapping.entityId, label: "Reading", unit, color: LEVEL_COLOR[level] }]} />
           )}
         </>
       )}

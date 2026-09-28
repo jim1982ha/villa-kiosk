@@ -130,5 +130,19 @@ ck("nothing about energy is stored in VESTA's config", !/energy(Sources|Devices|
 const bar = readFileSync(new URL("../../src/components/hud/SummaryBar.tsx", import.meta.url), "utf8");
 ck("the Energy tile opens the Energy window", /openGroup\?\.id === "__energy" && \(\s*<EnergyPanel/.test(bar));
 
+console.log("\n  'Energy today' is one figure everywhere:");
+{
+  // The Cockpit counted grid IMPORT only; the Energy window counts what the
+  // house consumed. With solar they disagreed about the same day.
+  const now = new Date(2026, 8, 29, 10, 30).getTime();
+  const h0 = E.periodStarts("hoursToday", now)[0];
+  const setup = { gridIn: ["g"], gridOut: ["x"], solar: ["s"], devices: [], roots: [], costOf: {} };
+  const series = (vals) => ({ points: vals.map((v, i) => ({ t: h0 + i * 3_600_000, v })), gaps: [], window: { from: h0, to: now } });
+  const used = E.usedToday(setup, { g: series([1, 1]), s: series([2, 3]), x: series([0.5, 0.5]) }, now);
+  ck("consumed = grid import + solar − export (1+1 + 2+3 − 1 = 6 kWh), not the import alone (2 kWh)", used === 6, used);
+  ck("  ...and nothing at all while no source has a reading today (an orphaned statistic)",
+     E.usedToday(setup, {}, now) === null && E.usedToday(setup, { x: series([1]) }, now) === null);
+}
+
 done("✅ HA's Energy, laid out — never re-configured");
 
