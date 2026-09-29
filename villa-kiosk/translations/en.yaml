@@ -83,20 +83,18 @@ configuration:
       How long a device must wait after five wrong passcodes. The lockout
       applies per device address, so raising it slows down someone guessing
       without locking the household out of their own villa.
-  vesta_agent:
-    name: VESTA Agent
+  agent_enabled:
+    name: Connect the VESTA Agent
     description: >-
-      The AI assistant that helps run the villa. Everything here only matters
-      when "Connect the VESTA Agent" is on; while it is off, the kiosk behaves
-      exactly as if there were no agent.
+      Off (the default): there is no agent — nothing about it is shown and it
+      cannot connect, whatever "VESTA Agent settings" holds. On: the agent
+      connects, and its token (in "VESTA Agent settings") is REQUIRED; if it is
+      empty or too short, the agent stays off and the app's log says so.
+  vesta_agent:
+    name: VESTA Agent settings
+    description: >-
+      Only used while "Connect the VESTA Agent" is on.
     fields:
-      enabled:
-        name: Connect the VESTA Agent
-        description: >-
-          Off (the default): there is no agent — nothing about it is shown and
-          it cannot connect, whatever the token holds. On: the agent connects,
-          and the token is REQUIRED; if it is empty or too short, the agent
-          stays off and the app's log says so.
       token:
         name: VESTA Agent token
         description: >-

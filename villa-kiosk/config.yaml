@@ -5,7 +5,7 @@
 # no-compile operation. The {arch} placeholder + version resolve to e.g.
 # ghcr.io/jim1982ha/villa-kiosk-amd64:2.0.0 — published by .github/workflows/build.yaml.
 name: VESTA
-version: "2.496.218"
+version: "2.496.219"
 slug: villa_kiosk
 description: 3D Home Assistant villa dashboard — HA sidebar (Ingress) + its own hostname
 url: https://github.com/jim1982ha/villa-kiosk
@@ -125,15 +125,16 @@ startup: application
 #   wrong passcodes must wait. The lockout is per source address, so raising
 #   it punishes a guesser rather than locking the household out.
 #
-# ── vesta_agent: the VESTA Agent, as ONE group (PLAN workstream A) ─────────
-# Every setting that only matters when an agent is connected lives in this
-# group, so the Configuration page shows them together under "VESTA Agent".
-# Until 2.496.218 they were four flat keys (agent_enabled, agent_token,
-# agent_offline_after_minutes, agent_message_retention_days); the proxy moves
-# an install's values into the group at its first start (_options_after_cleanup)
-# and reads the flat keys until then.
+# ── The VESTA Agent (PLAN workstream A) ────────────────────────────────────
+# agent_enabled — THE switch, a top-level field so it is visible with the group
+# below folded (the Supervisor's form cannot put a switch in a group header or
+# open a group on its own). vesta_agent — the group of settings that only
+# matter while it is on. History: four flat keys until 2.496.218, then all four
+# in the group (2.496.218), now the switch back outside it (2.496.219); the
+# proxy moves an install's values at its first start (_options_after_cleanup)
+# and reads the older places until then.
 #
-# enabled (default false): THE switch. Off = there is no agent: every
+# agent_enabled (default false): THE switch. Off = there is no agent: every
 #   /agent/v1 route answers 404 and no agent UI is shown, whatever the token
 #   holds. On = the agent interface exists once `token` is valid; on with an
 #   empty or short token stays off and says so in the log (the Supervisor's
@@ -159,8 +160,8 @@ options:
   session_days: 30
   telemetry_max_events: 500
   pin_lockout_minutes: 5
+  agent_enabled: false
   vesta_agent:
-    enabled: false
     token: ""
     offline_after_minutes: 5
     message_retention_days: 90
@@ -174,8 +175,8 @@ schema:
   session_days: int(1,365)?
   telemetry_max_events: int(50,5000)?
   pin_lockout_minutes: int(1,1440)?
+  agent_enabled: bool?
   vesta_agent:
-    enabled: bool?
     token: password?
     offline_after_minutes: int(1,60)?
     message_retention_days: int(1,365)?

@@ -879,19 +879,23 @@ def _read_options() -> dict:
 
 def _options_after_cleanup(options: dict) -> dict | None:
     """The stored options to write back, or None when nothing is stale:
-    retired keys dropped, and the pre-group VESTA Agent keys MOVED into the
-    `vesta_agent` group (their values kept — the owner's token and switch must
-    survive the update). Pure: tests/agent-interface.py drives it."""
+    retired keys dropped, and the VESTA Agent settings MOVED from their older
+    places (values kept — the owner's token and switch must survive the
+    update): flat keys into the `vesta_agent` group, and 2.496.218's in-group
+    `enabled` out to the top-level switch. Pure: tests/agent-interface.py
+    drives it."""
+    group = options.get(AGENT_GROUP_OPTION)
+    group = dict(group) if isinstance(group, dict) else {}
     moved = {old: field for old, field in LEGACY_AGENT_OPTIONS.items() if old in options}
-    if not (set(options) & REMOVED_OPTION_KEYS) and not moved:
+    if not (set(options) & REMOVED_OPTION_KEYS) and not moved and "enabled" not in group:
         return None
     cleaned = {k: v for k, v in options.items()
                if k not in REMOVED_OPTION_KEYS and k not in LEGACY_AGENT_OPTIONS}
-    if moved:
-        group = options.get(AGENT_GROUP_OPTION)
-        group = dict(group) if isinstance(group, dict) else {}
-        for old, field in moved.items():
-            group[field] = options[old]
+    if "enabled" in group:
+        cleaned[AGENT_ENABLED_OPTION] = group.pop("enabled")
+    for old, field in moved.items():
+        group[field] = options[old]
+    if moved or AGENT_GROUP_OPTION in options:
         cleaned[AGENT_GROUP_OPTION] = group
     return cleaned
 
@@ -2701,18 +2705,20 @@ fm_data_put_handler = _store_put_handler(
 
 AGENT = "agent"
 AGENT_CONTRACT = 1
-#: The VESTA Agent's settings, ONE group on the Configuration page (config.yaml
-#: `vesta_agent`): `enabled` is THE switch (no agent unless exactly `true`, see
-#: _agent_token), then `token`, `offline_after_minutes`, `message_retention_days`.
+#: THE switch (no agent unless exactly `true`, see _agent_token) — a TOP-LEVEL
+#: field, so the Configuration page shows it with the group below folded.
+AGENT_ENABLED_OPTION = "agent_enabled"
+#: The settings that only matter while it is on, one group on the page
+#: (config.yaml `vesta_agent`): `token`, `offline_after_minutes`,
+#: `message_retention_days`.
 AGENT_GROUP_OPTION = "vesta_agent"
-#: ⚠️ THE FLAT KEYS THE GROUP REPLACED (2.496.218), old name → field. An install
-#: that set them keeps them in its stored options until _options_after_cleanup
-#: moves them into the group at the first start, and /data/options.json only
-#: follows at the start after that — so the readers below take a flat key over
-#: the group while one is still present, or an update would silently drop the
-#: owner's token for one restart.
+#: ⚠️ THE OLDER PLACES, read until _options_after_cleanup moves them at the first
+#: start (and /data/options.json follows at the start after that — without this
+#: an update would silently drop the owner's token or switch for one restart):
+#:   * before 2.496.218, flat keys (old name → field in the group);
+#:   * in 2.496.218, the switch was INSIDE the group as `enabled` — it wins over
+#:     the top-level default the Supervisor fills in beside it.
 LEGACY_AGENT_OPTIONS = {
-    "agent_enabled": "enabled",
     "agent_token": "token",
     "agent_offline_after_minutes": "offline_after_minutes",
     "agent_message_retention_days": "message_retention_days",
@@ -2749,14 +2755,17 @@ _own_version = "unknown"
 
 
 def _agent_options(options: dict | None = None) -> dict:
-    """The VESTA Agent group's fields — with a pre-group flat key taking
-    precedence while one is still stored (see LEGACY_AGENT_OPTIONS)."""
+    """The agent's settings as one dict — `enabled` plus the group's fields —
+    with the older places taking precedence while still stored (see
+    LEGACY_AGENT_OPTIONS)."""
     options = _read_options() if options is None else options
     group = options.get(AGENT_GROUP_OPTION)
-    out = dict(group) if isinstance(group, dict) else {}
+    group = dict(group) if isinstance(group, dict) else {}
+    out = {k: v for k, v in group.items() if k != "enabled"}
     for old, field in LEGACY_AGENT_OPTIONS.items():
         if old in options:
             out[field] = options[old]
+    out["enabled"] = group["enabled"] if "enabled" in group else options.get(AGENT_ENABLED_OPTION)
     return out
 
 

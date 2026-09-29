@@ -56,9 +56,13 @@ def options(**opts) -> None:
     (TMP / "data" / "options.json").write_text(json.dumps(opts))
 
 
-def agent(**fields) -> None:
-    """options.json with the VESTA Agent group (config.yaml `vesta_agent`)."""
-    options(vesta_agent=fields)
+def agent(enabled=None, **fields) -> None:
+    """options.json as the Configuration page writes it: the top-level switch
+    `agent_enabled` and the `vesta_agent` settings group."""
+    opts = {"vesta_agent": fields}
+    if enabled is not None:
+        opts["agent_enabled"] = enabled
+    options(**opts)
 
 
 def bearer(tok: str = TOKEN, peer: str = "10.0.0.5") -> dict:
@@ -140,23 +144,32 @@ async def main() -> None:
     options()
     ck("switched off: no warning at all (an empty token is then correct)", proxy._agent_config_warning() is None)
 
-    # ── one group, and the update that moves an install into it (2.496.218) ──
-    print("\n  the settings group, and the update into it:")
-    options(agent_enabled=True, agent_token=TOKEN, vesta_agent={"enabled": False, "token": ""})
+    # ── the switch above the group, and the updates that move an install ──
+    print("\n  the switch, the settings group, and the updates into them:")
+    options(agent_enabled=True, agent_token=TOKEN, vesta_agent={"token": ""})
     status, _ = await jget("/agent/v1/info", bearer())
-    ck("before the move, the OLD flat keys are read (an update must not drop the owner's token)", status == 200, status)
-    legacy = {"owner_pin": "1234", "sh3d_path": "x", "agent_enabled": True, "agent_token": TOKEN,
+    ck("before 2.496.218's move, the OLD flat token is read (an update must not drop it)", status == 200, status)
+    options(agent_enabled=False, vesta_agent={"enabled": True, "token": TOKEN})
+    status, _ = await jget("/agent/v1/info", bearer())
+    ck("2.496.218's in-group switch wins over the top-level default beside it, until moved", status == 200, status)
+    pre218 = {"owner_pin": "1234", "sh3d_path": "x", "agent_enabled": True, "agent_token": TOKEN,
               "agent_offline_after_minutes": 7, "agent_message_retention_days": 30,
-              "vesta_agent": {"enabled": False, "token": "", "offline_after_minutes": 5, "message_retention_days": 90}}
-    moved = proxy._options_after_cleanup(legacy)
-    ck("the start-up cleanup moves all four into the group, values kept, old keys gone",
-       moved == {"owner_pin": "1234", "vesta_agent": {"enabled": True, "token": TOKEN,
+              "vesta_agent": {"token": "", "offline_after_minutes": 5, "message_retention_days": 90}}
+    moved = proxy._options_after_cleanup(pre218)
+    ck("from before 2.496.218: the three settings move into the group, the switch stays on top",
+       moved == {"owner_pin": "1234", "agent_enabled": True, "vesta_agent": {"token": TOKEN,
                  "offline_after_minutes": 7, "message_retention_days": 30}}, moved)
-    ck("  ...and has nothing to do on an install already moved",
-       proxy._options_after_cleanup({"owner_pin": "1", "vesta_agent": {"enabled": True}}) is None)
-    options(**moved)
+    from218 = {"owner_pin": "1234", "agent_enabled": False,
+               "vesta_agent": {"enabled": True, "token": TOKEN, "offline_after_minutes": 7, "message_retention_days": 90}}
+    moved218 = proxy._options_after_cleanup(from218)
+    ck("from 2.496.218: the switch moves OUT of the group, on as it was",
+       moved218 == {"owner_pin": "1234", "agent_enabled": True, "vesta_agent": {"token": TOKEN,
+                    "offline_after_minutes": 7, "message_retention_days": 90}}, moved218)
+    ck("  ...and there is nothing to do on an install already moved",
+       proxy._options_after_cleanup(moved218) is None)
+    options(**moved218)
     status, _ = await jget("/agent/v1/info", bearer())
-    ck("after the move the group alone opens the door", status == 200 and proxy._agent_offline_minutes() == 7, status)
+    ck("after the move the top-level switch and the group open the door", status == 200 and proxy._agent_offline_minutes() == 7, status)
     reset_lockout()
 
     # ── the token, and only the token (PLAN A3) ──────────────────────────
