@@ -25,12 +25,30 @@ ck("the premise: a point behind the camera projects ONTO the screen (mirrored) â
 const ahead = P(-0.5, 1.2, 6);
 ck("  ...while the same point in front is in the depth range", ahead.z >= 0 && ahead.z <= 1);
 
-const ev = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
-ck("deriveChips marks a chip outside the depth range as behind, and merges only the chips in front",
-   /if \(p\.z >= 0 && p\.z <= 1\) behind\.delete\(c\); else behind\.add\(c\);/.test(ev)
-   && /const front = chips\.filter\(\(c\) => !behind\.has\(c\)\);/.test(ev)
-   && /const merged = mergeOverlapping\(\s*front,/.test(ev)
-   && /return \[\.\.\.merged, \.\.\.chips\.filter\(\(c\) => behind\.has\(c\)\)\];/.test(ev));
+// Driven through the pass's own chip derivation (placementPass.deriveChips),
+// on the real camera above: Kitchen stands ahead, the Pool six metres BEHIND
+// at the spot whose mirrored projection lands on Kitchen's chip.
+const { PlacementPass } = await import("@/babylon/placementPass");
+const { RoomFocus } = await import("@/babylon/roomFocus");
+const { MAX_GRID_CHIPS } = await import("@/babylon/badgeCard");
+const member = (id, room, x, y, z) => ({ id, room, pos: { x, y, z } });
+const chipsFor = (members) => {
+  const pass = new PlacementPass();
+  pass.begin({
+    metrics: { minGapPx: 2, cardIconFraction: 0.8, countPillFraction: 0.4, countFontFraction: 0.6 },
+    summary: { size: 40, font: 16, countSize: 16, countFont: 10 }, perCardCap: MAX_GRID_CHIPS,
+    rooms: {}, focus: new RoomFocus(), scale: 1, cardBudget: 10_000, cellCap: 6,
+    chips: { members, view: { tm: scene.getTransformMatrix(), vp }, text: { charPx: 7, padPx: 20 }, budget: 400 },
+  });
+  for (const m of members) { pass.roomDisplay.set(m.room, m.room); pass.chipRoom(m.room, "solver"); }
+  return pass.deriveChips();
+};
+const mirrored = chipsFor([member("k", "kitchen", -0.5, 1.2, 6), member("p", "pool", 0.5, 1.2, -6)]);
+ck("a chip BEHIND the walker does not merge into the one in front â€” two chips, each its own room",
+   mirrored.length === 2 && mirrored.every((c) => c.ids.length === 1), mirrored.map((c) => [c.key, c.ids]));
+const bothAhead = chipsFor([member("k", "kitchen", -0.05, 1.2, 6), member("p", "pool", 0.05, 1.2, 6)]);
+ck("  ...while two chips in front on the same spot DO merge (the test still bites)",
+   bothAhead.length === 1 && bothAhead[0].ids.length === 2, bothAhead.map((c) => [c.key, c.ids]));
 const gui = readFileSync(new URL("../../node_modules/@babylonjs/gui/2D/advancedDynamicTexture.js", import.meta.url), "utf8");
 ck("  ...and a chip left behind is not drawn: the GUI skips a linked control outside the depth range",
    /projectedPosition\.z < 0 \|\| projectedPosition\.z > 1\)\s*\{\s*control\.notRenderable = true;/.test(gui));

@@ -71,7 +71,7 @@ import { StackPanel } from "@babylonjs/gui/2D/controls/stackPanel";
 import { Image } from "@babylonjs/gui/2D/controls/image";
 import { Control } from "@babylonjs/gui/2D/controls/control";
 import type { AppConfig } from "@/config/AppConfig";
-import { roomKey, NO_ROOM_LABEL } from "@/config/roomKey";
+import { roomKey } from "@/config/roomKey";
 import {
   badgeMetricsFor, detectPointerClass, observePointerClass, type BadgeMetrics, type PointerClass,
   CHIP_MAX_VIEWPORT_FRACTION, CARD_MAX_VIEWPORT_FRACTION,
@@ -79,14 +79,12 @@ import {
   snapToZoomLattice,
   SUMMARY_TEXT_OF_HEIGHT, VALUE_CHAR_ADVANCE,
 } from "./badgeMetrics";
-import { badgeRank } from "./badgePriority";
 import {
-  viewBasis, projectToView, VIEW_BASIS_STEPS,
-  type ViewBasis, type ProjectedPoint, type ProjectionMode,
-  atReferenceDepth, type MeasureFrame,
+  viewBasis, VIEW_BASIS_STEPS,
+  type ViewBasis, type ProjectionMode,
 } from "./badgeProjection";
 import {
-  solvePlacement, markContacts, createPlacementScratch,
+  markContacts, createPlacementScratch,
   type PlacementItem, type PlacementScratch, type PlacementStats,
 } from "./badgePlacement";
 import { clampIconScale } from "@/config/AppConfig";
@@ -100,7 +98,6 @@ import { alertStateFor } from "@/config/BinarySensorClasses";
 import type { BadgeKind } from "@/utils/deviceActivity";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
 import { compactValue, VALUE_CAPABLE_TYPES } from "@/utils/entityValue";
-import { mergeOverlapping } from "./boxMerge";
 import { phantomEntity } from "@/utils/phantomEntity";
 import { channelEnabled, tapDebug } from "@/utils/tapDebug";
 import { debugFlagEnabled } from "@/utils/devLog";
@@ -115,14 +112,18 @@ import { FloorProbe } from "./floorProbe";
 import { axisWorldScale } from "./meshUnits";
 import type { LightReading } from "./lightPoolSet";
 import { OcclusionSweep } from "./occlusionSweep";
-import { bucketRoomChips, combineChips, chipSuffixOf, summaryRingRed, type RoomChip } from "./roomChips";
+import { summaryRingRed, type RoomChip } from "./roomChips";
 import { rungAt, referenceDepthAt, iconZoomAt, viewportPx } from "./badgeScale";
 import { solveRoomZoom } from "./roomZoomSolver";
 import { RoomFocus } from "./roomFocus";
 import { PlacementCheck, type ScreenBox } from "./placementCheck";
 import { FanRigs } from "./fanRigs";
-import { PlacementPass, GROUP_OVERLAP_ALLOW_WIDTHS, type ShownLabel, type PendingEntityGroup } from "./placementPass";
-import { onGlass, glyphDrawPx, glyphBakePx } from "./badgeLayout";
+import {
+  PlacementPass, GROUP_OVERLAP_ALLOW_WIDTHS, BADGE_PLACEMENT, cardOf as passCardOf, cellMax, drawnCells,
+  layoutOf as passLayoutOf, roomOfEntity, placementItems as passItems, glassScratch,
+  type ShownLabel, type PendingEntityGroup, type PlacementFrame, type CardShapeInput,
+} from "./placementPass";
+import { glyphDrawPx, glyphBakePx, type GlassClearance } from "./badgeLayout";
 import type { FrameRequests } from "./frameScheduler";
 import { badgeImage } from "./badgeIcons";
 import { applyBadgeFrame, badgeRing, badgeBakePx, BADGE_INSET_CARD, BADGE_CORNER_FRACTION, NO_RING } from "./badgeLook";
@@ -131,7 +132,7 @@ import { badgeText } from "./badgeText";
 import { badgeShadow } from "./badgeShadow";
 import { cameraFrame } from "./cameraFrame";
 import {
-  arrange, cardLift, cardStruts, gridCells, MAX_TOTAL_CHIPS, MAX_GRID_CHIPS, PHONE_MAX_GRID_CHIPS,
+  cardLift, cardStruts, MAX_TOTAL_CHIPS, MAX_GRID_CHIPS, PHONE_MAX_GRID_CHIPS,
   type CardArrangement,
 } from "./badgeCard";
 import { iconKeyFor } from "./badgeIconKeys";
@@ -144,7 +145,7 @@ import {
   pickNearestVariant, desiredVariantWord, orderVariantWords,
 } from "./meshVariants";
 // Pure label/chip overlap geometry — see labelLayout.ts.
-import { chipWidthPx, fitChipLabel, type ChipTextMetrics } from "./labelLayout";
+import { type ChipTextMetrics } from "./labelLayout";
 // Babylon prototype patches this module depends on — see babylonSideEffects.
 import { BulbSet, WARM_GLOW, STRIP_MIN_LENGTH, type BulbReading } from "./bulbSet";
 import { lightingModeFor, type LightingMode } from "./lightingMode";
@@ -465,21 +466,7 @@ const PILL_TEXT = "#f8fafc";
  * it did not anticipate, and the ring is gone. See the "A BADGE NEVER MOVES"
  * block in cullLabels for what it was and why no budget above zero survives.
  */
-/**
- * THE KILL SWITCH for 2.232.0's placement change.
- *
- * `"priority"` ranks a crowded pile and keeps the devices that matter as real
- * badges; `"legacy"` restores 2.231.0 exactly — any pile of two or more
- * summarises whole. One word, one rebuild, and the old behaviour is back,
- * which is the safety a subsystem with six failed rewrites behind it should
- * ship with when everything lands in a single release.
- *
- * The `as` is load-bearing: without it TypeScript narrows the constant to its
- * literal type and reports the other branch as unreachable under
- * `noUnusedLocals`, so the switch would stop compiling the moment it was
- * needed. Do not "clean it up".
- */
-const BADGE_PLACEMENT = "priority" as "priority" | "legacy";
+// BADGE_PLACEMENT (the placement kill switch) lives with the pass: placementPass.ts.
 
 /**
  * ⚠️ VERTICAL_FORESHORTEN_STEPS lived here and is GONE (2.287.0). It quantised
@@ -505,11 +492,6 @@ const BADGE_PLACEMENT = "priority" as "priority" | "legacy";
  */
 const VIEW_METRIC = "plane" as ProjectionMode;
 
-/** The nearest a device is taken to be when the walk camera measures it at
- *  the reference depth (atReferenceDepth), in world units (metres): a device
- *  at the walker's feet would otherwise be flung to infinity. Half a metre is
- *  inside arm's reach — nothing is viewed from closer. */
-const WALK_MIN_MEASURE_DIST = 0.5;
 /** Reused, because getDirectionToRef takes the local axis by reference. */
 const CAMERA_LOCAL_FORWARD = new Vector3(0, 0, 1);
 /*
@@ -787,7 +769,6 @@ export class EntityVisuals {
   private camForward = new Vector3();
   /** Scratch for projectToView. Reused because it runs once per badge per
    *  layout pass and per rung of solveRoomZoomRadius's ~40-rung ladder. */
-  private projPlane: ProjectedPoint = { px: 0, py: 0, pz: 0, pd: 0 };
 
   /** Something that can change WHERE or WHETHER a badge draws has happened —
    *  recompute the layout on the next frame. Cheap and deliberately generous:
@@ -846,7 +827,6 @@ export class EntityVisuals {
   private zoomScratch: PlacementScratch = createPlacementScratch();
   /** Grow-only pools for the per-pass placement input and its groups. */
   private placeItems: PlacementItem[] = [];
-  private pendingGroups: PendingEntityGroup[] = [];
   /** `this.labels` newest-first, for badgeContaining's hit test. Refreshed in
    *  rebuildLabels, the only place this.labels is mutated. */
   private labelsNewestFirst: Array<[string, LabelControls]> = [];
@@ -866,20 +846,9 @@ export class EntityVisuals {
   /** One placement pass's cards and chips, and why — placementPass.ts. Its
    *  state (roomClustered, entityGrouped, the chip reasons, the seat log) is
    *  read here by the renderer and the logs. */
-  private readonly pass = new PlacementPass({
-    roomOf: (id) => this.roomOf(id),
-    layoutOf: (g, n) => this.layoutOf(g, n),
-    planeOf: (c, x, y, z) => this.planeOf(c, x, y, z),
-    summaryMetrics: () => this.summaryMetrics(),
-    sortCardMembers: (shown, m) => this.sortCardMembers(shown, m),
-    cardOf: (cells, max, maxWidth) => this.cardOf(cells, max, maxWidth),
-    cardBudget: () => this.cardBudget(),
-    cardCellCap: (max) => this.cardCellCap(max),
-    effectiveScale: () => this.effectiveScale(),
-    deriveChips: (shown, merge) => this.deriveChips(shown, merge),
-    metrics: () => this.metrics,
-    focus: () => this.focus,
-  });
+  private readonly pass = new PlacementPass();
+  /** Projection scratch for this layer's own glass measurements. */
+  private readonly glass = glassScratch();
 
   /** Entity groups drawn this frame, keyed by PendingEntityGroup.key. Same
    *  lazy-build / dispose-with-rebuildLabels lifecycle as `clusters`. */
@@ -3792,103 +3761,14 @@ export class EntityVisuals {
     // always, which is the honest answer: there is no view in which both could
     // be read, and drawing one on top of the other hides a device without
     // saying so.
-    // A new pass: the last one's chips, cards, reasons and counters go.
-    this.pass.begin();
-    for (const s2 of shown) {
-      const raw = this.roomOf(s2.id);
-      const k = roomKey(raw);
-      // Smallest spelling wins, so a chip's label cannot depend on which badge
-      // of the room happened to be projected first.
-      const seen = this.pass.roomDisplay.get(k);
-      if (seen === undefined || raw < seen) this.pass.roomDisplay.set(k, raw);
-    }
-
-    // ── A FOCUSED ROOM GETS THE SCREEN TO ITSELF (2.368.0) ─────────────────
-    // Tapping a room chip or picking a room from the radial menu means "show me
-    // THIS room". Until now the solver still ran over the whole villa, so the
-    // rooms around the one you asked for kept drawing their own badges and
-    // summary cards into the same frame — and, worse, a pile could straddle a
-    // wall and produce a card labelled "Living Room +1" that is half yours and
-    // half the neighbour's.
-    //
-    // Every room except the focused one(s) is therefore chipped up front, which
-    // is the ONE thing that has to happen and everything else follows from the
-    // existing tiers rather than from a new code path (writing a second
-    // escalation path is how the orphan bug was made — see dropEscalatedGroups):
-    //   * the focused room's badges are `exempt`, so they never enter a pile
-    //     and are drawn individually — a cross-room group involving them is now
-    //     not expressible at all;
-    //   * every other badge's room is clustered, so the visibility rule at the
-    //     end of this pass hides it;
-    //   * any group made of those badges is dropped by dropEscalatedGroups,
-    //     because all of its rooms are clustered;
-    //   * and each of those rooms still draws its CHIP, so nothing is lost —
-    //     the neighbours remain named, counted and tappable, which is the whole
-    //     reason this is a chip and not a delete.
-    // Only while the camera is still at the zoom the focus was granted at — see
-    // `suppressOthers`. Past that the neighbours are on their own merits again.
-    if (suppressOthers) {
-      for (const k of this.pass.roomDisplay.keys()) {
-        if (!this.focus.rooms.has(k)) {
-          this.pass.chipRoom(k, "focus");
-        }
-      }
-    }
-
-    const pending: PendingEntityGroup[] = this.pendingGroups;
-    pending.length = 0;
-    let solved: PlacementStats | null = null;
-    if (clearance) {
-      const items = this.placementItems(shown, boxes, clearance);
-      const result = solvePlacement(
-        items, clearance.gap, clearance.minSep, BADGE_PLACEMENT, this.placeScratch,
-        this.drawableMax(),
-      );
-      solved = result.stats;
-      // The solver states its own two reasons (undrawable/degenerate) in
-      // `stats`; they are re-counted here so every chip has ONE accounting.
-      // ── Every PAIR the solver formed, with the numbers behind it ─────────
-      // A group of TWO is the case a person can check by eye ("those two are
-      // not touching"), so it is the case the log has to be able to answer.
-      // Prints the ids, the actual separation on each axis, the requirement,
-      // and the half-extents each requirement came from — which is where a
-      // requirement can be larger than the ink. Same buffer as the seat lines,
-      // so it rides the `place` line's outcome dedupe.
-      // Gated on the channel that PRINTS it, not on the debug flag: `seat` is
-      // muted by default since 2.436.0, and this loop would otherwise walk
-      // every bucket and build a string per pair for a line nobody sees.
-      if (channelEnabled("seat")) {
-        for (let b = 0; b < result.bucketCount; b++) {
-          const bk = result.buckets[b];
-          if (bk.members.length !== 2) continue;
-          const [ia, ib] = bk.members;
-          const A = items[ia], B = items[ib];
-          const dx = Math.hypot(B.sx - A.sx, B.sz - A.sz), dy = Math.abs(B.sy - A.sy);
-          const needX = Math.max(A.reach + B.reach + clearance.gap, clearance.minSep);
-          const needY = Math.max(A.reachY + B.reachY + clearance.gap, clearance.minSep);
-          this.pass.seatLog.push(
-            `pair ${shown[ia].id} + ${shown[ib].id}`
-            + ` dx=${dx.toFixed(0)}/${needX.toFixed(0)} dy=${dy.toFixed(0)}/${needY.toFixed(0)}`
-            + ` halfW=${A.reach.toFixed(0)},${B.reach.toFixed(0)}`
-            + ` halfH=${A.reachY.toFixed(0)},${B.reachY.toFixed(0)}`
-            + ` pill=${shown[ia].lbl.valueWrap.isVisible ? "y" : "n"}`
-            + `${shown[ib].lbl.valueWrap.isVisible ? "y" : "n"}`);
-        }
-      }
-      for (const room of result.chipRooms) this.pass.chipRoom(room, "solver");
-      this.pass.groupsFromBuckets(shown, result.buckets, result.bucketCount, clearance, pending);
-      this.pass.pairFocusedRoom(shown, items, clearance, pending);
-    }
-
-    // Placed only after every bucket is known: a group's clearance is measured
-    // against the badges that were ACCEPTED, and which those are is not
-    // settled until the solve above has finished.
-    if (clearance) this.pass.placeEntityGroups(shown, boxes, pending, clearance);
-
-    // Chips are derived and drawn LAST, but which rooms have one is settled
-    // here — a chip can push a neighbour's badge or card to its own room's
-    // chip, and every visibility flag below has to be this pass's final answer.
-    const chips = this.pass.settleChips(shown, boxes, pending, clearance);
+    // ── THE PASS (placementPass.run) ──────────────────────────────────────
+    // Room names, the focused room's neighbours chipped, the solve, cards from
+    // its buckets, the focused room's own pairs, seating, and chips LAST —
+    // whose order is the pass's rule now, not this method's. It gets one frame
+    // of values and hands back the cards and chips; which badges are drawn is
+    // its `drawnBadge`.
+    const { pending, chips, solved } = this.pass.run(
+      this.placementFrame(shown), shown, boxes, clearance, suppressOthers);
 
     for (const s of shown) {
       // ZERO X offset and a FIXED Y lift that centres every badge over its
@@ -4304,7 +4184,7 @@ export class EntityVisuals {
   /** A badge's room, normalised — the single definition every grouping,
    *  chip and hit-test path reads, so none of them can disagree. */
   private roomOf(entityId: string): string {
-    return this.resolvedRooms[entityId]?.trim() || NO_ROOM_LABEL;
+    return roomOfEntity(this.resolvedRooms, entityId);
   }
 
   /**
@@ -4433,24 +4313,47 @@ export class EntityVisuals {
     return typeof (this.scene.activeCamera as unknown as { radius?: number } | null)?.radius === "number";
   }
 
+  /**
+   * This layout's PlacementFrame: every value the placement pass reads, taken
+   * once, before it runs — the pass never reaches back into this layer. The
+   * chips' members carry each badge's room, anchor and kind (the ring), which
+   * only this layer knows.
+   */
+  private placementFrame(shown: readonly ShownLabel[]): PlacementFrame {
+    const scale = this.effectiveScale();
+    const eng = this.scene.getEngine();
+    const cam = this.scene.activeCamera;
+    const members = shown.map((sh) => {
+      const st = this.lastState.get(sh.id);
+      const p = sh.lbl.anchor.getAbsolutePosition();
+      return { id: sh.id, room: roomKey(this.roomOf(sh.id)), pos: { x: p.x, y: p.y, z: p.z },
+               kind: st ? this.badgeKind(sh.lbl.type, st) : undefined };
+    });
+    return {
+      ...this.cardShape(),
+      rooms: this.resolvedRooms,
+      focus: this.focus,
+      scale,
+      cardBudget: this.cardBudget(),
+      cellCap: this.cardCellCap(),
+      chips: {
+        members,
+        view: cam
+          ? { tm: this.scene.getTransformMatrix(), vp: cam.viewport.toGlobal(eng.getRenderWidth(), eng.getRenderHeight()) }
+          : null,
+        text: this.chipTextMetrics(),
+        // How wide a chip may be DRAWN, in chipWidthPx's units: the viewport's
+        // share divided back through the scale the renderer multiplies by —
+        // the device-pixel ratio cancels (see CHIP_MAX_VIEWPORT_FRACTION).
+        budget: scale > 0 ? (eng.getRenderWidth() * CHIP_MAX_VIEWPORT_FRACTION) / scale : 0,
+      },
+    };
+  }
+
   private walkEye(): { x: number; y: number; z: number } | undefined {
     const cam = this.scene.activeCamera;
     return cam ? { x: cam.globalPosition.x, y: cam.globalPosition.y, z: cam.globalPosition.z } : undefined;
   }
-
-  /** The point placement measures a world position at: itself for the orbit
-   *  camera, moved onto the reference depth around the walker's eye for the
-   *  walk camera (badgeProjection.atReferenceDepth). The ONE place that
-   *  choice is made — badges (placementItems) and cards (planeOf) both. */
-  private measuredAt(
-    c: { refDepth?: number; eye?: { x: number; y: number; z: number } },
-    x: number, y: number, z: number,
-  ): { x: number; y: number; z: number } {
-    const o = this.measureTmp;
-    if (!c.eye || !(c.refDepth && c.refDepth > 0)) { o.x = x; o.y = y; o.z = z; return o; }
-    return atReferenceDepth(c.eye, c.refDepth, WALK_MIN_MEASURE_DIST, x, y, z, o);
-  }
-  private readonly measureTmp = { x: 0, y: 0, z: 0 };
 
   /**
    * Convert this pass's badges into solver input, into a grow-only pool.
@@ -4482,58 +4385,9 @@ export class EntityVisuals {
   private placementItems(
     shown: ShownLabel[],
     boxes: { halfW: number; halfH: number; cy: number }[],
-    clearance: { pxPerWorld: number; allow: number; basis: ViewBasis; refDepth: number; eye?: { x: number; y: number; z: number } },
+    clearance: GlassClearance,
   ): PlacementItem[] {
-    const pool = this.placeItems;
-    const focus = this.focus.rooms;
-    const p = this.projPlane;
-    for (let i = 0; i < shown.length; i++) {
-      const s = shown[i];
-      let it = pool[i];
-      if (!it) {
-        it = { sx: 0, sy: 0, sz: 0, reach: 0, reachY: 0, rank: 0, sortKey: "", category: "", room: "", exempt: false };
-        pool[i] = it;
-      }
-      // Position on the glass (centred where the box is DRAWN) and the room it
-      // claims there (inflated by its OWN depth) — badgeLayout.onGlass, which
-      // carries both rules and their history. Written back onto the
-      // ShownLabel too: placeEntityGroups needs the same plane coordinates,
-      // and projecting twice is how two spaces drift apart.
-      const m = this.measuredAt(clearance, s.wx, s.wy, s.wz);
-      onGlass(clearance, m.x, m.y, m.z, boxes[i], p, it);
-      s.sx = it.sx; s.sy = it.sy; s.sz = it.sz;
-      it.rank = badgeRank(s.lbl.type, s.lbl.category);
-      it.sortKey = s.id;
-      // Tiebreak only, never a gate — see PlacementItem.category.
-      it.category = s.lbl.category;
-      it.room = roomKey(this.roomOf(s.id));
-      it.exempt = focus.has(it.room);
-    }
-    pool.length = shown.length;
-    return pool;
-  }
-
-  /**
-   * Project a world point into this pass's plane, in GUI pixels, shaped as the
-   * `sx`/`sy`/`sz` a PendingEntityGroup carries.
-   *
-   * The ONE way a world position becomes a group's placement coordinate. A card
-   * is DRAWN at its members' world centroid and MEASURED at the projection of
-   * that same point, and because the projection is affine those are the same
-   * point — the plane centroid of the members IS the projection of their world
-   * centroid. Never accumulate plane coordinates in parallel with the world
-   * ones; that is two computations that can drift where there should be one.
-   */
-  private planeOf(
-    clearance: MeasureFrame,
-    x: number, y: number, z: number,
-  ): { sx: number; sy: number; sz: number } {
-    // Measured where the card is DRAWN from the walker's eye, as its badges
-    // are (measuredAt).
-    const m = this.measuredAt(clearance, x, y, z);
-    const p = projectToView(clearance.basis, m.x, m.y, m.z, this.projPlane);
-    const k = clearance.pxPerWorld;
-    return { sx: p.px * k, sy: p.py * k, sz: p.pz * k };
+    return passItems(shown, boxes, clearance, this.resolvedRooms, this.focus.rooms, this.placeItems, this.glass);
   }
 
   /**
@@ -4589,7 +4443,7 @@ export class EntityVisuals {
     let counts = 0;
     let split = 0;
     for (const g of placed) {
-      const cells = this.drawnCells(g, g.members.length);
+      const cells = drawnCells(g, g.members.length);
       if (cells >= 2) {
         bySize.set(cells, (bySize.get(cells) ?? 0) + 1);
         if (this.cardOf(cells).cards.length > 1) split++;
@@ -5018,100 +4872,6 @@ export class EntityVisuals {
 
 
   /**
-   * THE geometry of a summary card that carries pictograms — for every form of
-   * it, at every size.
-   *
-   * `unit` is the badge the card is built out of: one chip's worth of card.
-   * A card of `n` chips is `n` units wide, its chips are pitched exactly one
-   * unit apart, and each chip is `cardIconFraction` of a unit — which is the
-   * SAME proportion a card badge gives its own chip. So the margin at the ends
-   * and the gap between the chips both fall out of one number and cannot
-   * disagree with each other or with the badge.
-   *
-   * ── Why this is a function and not two sets of constants ────────────────
-   * The wide pair and the compact pair each computed their own card width,
-   * chip size and pitch inline, from three different places — `sm.size`,
-   * `sm.chipSize` or a `compactChip` metric, and `sm.size` or
-   * `compactChip + 2` with a bare literal in it. They were not one rule at two
-   * sizes; they were two layouts that happened to be reached through the same
-   * branch, and they looked it: the same pair of devices drew with a visible
-   * gap and honest margins in one form and cramped against the border in the
-   * other. Reported exactly that way, with both on screen at once.
-   *
-   * The compact form is now nothing more than this same layout at HALF the
-   * unit, which is what makes it land on the count badge's own footprint
-   * (2 chips x half a badge = one badge) while staying recognisably the same
-   * object as the wide one.
-   */
-  /**
-   * Order a card's members the way every other decision in this subsystem is
-   * ordered: static rank, then entity_id.
-   *
-   * A cell is a POSITION, so the order is the difference between "this device
-   * is always the left one" and "this device is wherever it happened to land
-   * this frame". The solver hands its buckets over in DEFERRAL order, and the
-   * lone-deferral pull-back APPENDS the badge it rescued — so a pair arrived as
-   * [loser, winner], reverse rank, while the focused-room pass had always
-   * sorted. Two orderings feeding one renderer; two symmetric chips hid it.
-   *
-   * A grid would not hide it. This is the same failure that got badge fanning
-   * deleted in 2.159.0 — "four badges in a diagonal line became a 2x2 block, in
-   * a different order" — and a card whose cells reshuffle between zoom rungs
-   * would be that bug wearing different clothes. Sorting here is what lets the
-   * card claim, honestly, that a device only moves cell when something that
-   * sorts BEFORE it appears or disappears.
-   */
-  private sortCardMembers(shown: ShownLabel[], members: number[]): number[] {
-    return members.sort((x, y) => {
-      const a = shown[x], b = shown[y];
-      const ra = badgeRank(a.lbl.type, a.lbl.category);
-      const rb = badgeRank(b.lbl.type, b.lbl.category);
-      return ra !== rb ? ra - rb : (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
-    });
-  }
-
-  /**
-   * How many cells this group ACTUALLY draws — the one clamp, used by the
-   * measuring in placeEntityGroups and by the drawing in updateEntityGroups.
-   *
-   * They used to clamp separately (only the draw did), so a producer that
-   * asked for more than the cap would have been MEASURED at one size and DRAWN
-   * at another. That is this file's oldest rule broken quietly, and it was one
-   * careless producer away from happening.
-   */
-  private drawnCells(g: PendingEntityGroup, memberCount: number): number {
-    const max = this.cellMax(g);
-    const cells = gridCells(Math.min(g.grid, memberCount), max);
-    // ⚠️ A FOCUSED group is NEVER refused into a count, and this is the line
-    // 2.306.0 was supposed to change and did not — its edit silently matched
-    // nothing, which is why an "8" still stood over the pool. The cap doing the
-    // refusing was never MAX_TOTAL_CHIPS; it is the viewport one below, and at
-    // icon 2.25x it fires at two cells. Tapping a room is a request to SEE the
-    // devices, and "too wide" has an answer that always exists — a card that
-    // wraps (see layoutOf). The ordinary path keeps the cap: a summary nobody
-    // asked for may legitimately collapse to a number rather than eat the
-    // screen.
-    // ⚠️ A FOCUSED group is NEVER refused into a count. 2.360.0 briefly made a
-    // phone do exactly that and it was wrong on the user's own terms: a count
-    // badge is a number standing where devices should be, and the answer to
-    // "too wide" is to CHANGE THE SHAPE, which always has an answer. On a phone
-    // the shape is now pairs side by side rather than a 2x2 — see perCardCap.
-    // ── NO SUMMARY IS EVER REFUSED INTO A NUMBER (2.363.0) ───────────────
-    // This used to return 0 — "draw your count" — for a group over the
-    // viewport cap. The cap itself is not gone and is not weakened: it is
-    // `drawableMax`, and the SOLVER uses it, so a bucket too big to draw
-    // escalates to its ROOM CHIP before it ever gets here. What is gone is the
-    // renderer's fallback of standing a digit where the devices should be.
-    //
-    // The one path that can still arrive over the cap is the absorb phase,
-    // which grows a group's membership after the solve. That group now draws
-    // every member and WRAPS into the width budget (see layoutOf) rather than
-    // collapsing to a number — wider than ideal, but honest, tappable, and
-    // rare, where the digit was none of those.
-    return cells;
-  }
-
-  /**
    * The most cells an arrangement may draw before it exceeds its share of the
    * viewport — measured with `cardOf`, the same function that lays the card
    * out, so there is no second width formula to keep in step.
@@ -5215,10 +4975,12 @@ export class EntityVisuals {
    *  degenerate one-card, zero-cell case, so every summary goes through one
    *  function and there is no second code path to keep in step. */
   private cardOf(cells: number, max = MAX_TOTAL_CHIPS, maxWidth = 0): CardArrangement {
-    return arrange(
-      Math.max(1, cells), this.summaryMetrics().size,
-      this.metrics.cardIconFraction, this.metrics.minGapPx, max, maxWidth,
-      this.perCardCap());
+    return passCardOf(this.cardShape(), cells, max, maxWidth);
+  }
+
+  /** What a card's shape depends on, now. */
+  private cardShape(): CardShapeInput {
+    return { metrics: this.metrics, summary: this.summaryMetrics(), perCardCap: this.perCardCap() };
   }
 
   /** Cells per CARD on this screen. A phone gets pairs — see
@@ -5231,51 +4993,7 @@ export class EntityVisuals {
   /** The arrangement a group actually draws — cells and ceiling in one place,
    *  so no caller can measure a focused card against the ordinary cap. */
   private layoutOf(g: PendingEntityGroup, memberCount: number): CardArrangement {
-    // EVERY arrangement is handed the width budget now, not just a focused one.
-    // The budget used to cap an ordinary group's cell count instead — and
-    // "capped" meant refused into a count. With the digit gone, wrapping is the
-    // only remaining answer to "too wide", so both kinds get it. Adapting the
-    // shape always has an answer; refusing does not.
-    return this.cardOf(this.drawnCells(g, memberCount), this.cellMax(g), this.cardBudget());
-  }
-
-  /**
-   * ⚠️ HISTORICAL NOTE, not a live constant. There is NO cell ceiling for a
-   * FOCUSED group's card — the one a room chip's tap produces — and this records
-   * why, because "add a cap" is the obvious-looking change that keeps being
-   * proposed. (`FOCUS_MAX_CHIPS` was deleted here; `badgeCard.cellMax` still
-   * points at this paragraph.)
-   *
-   * MAX_TOTAL_CHIPS (6) is set by the summary-vs-summary clearance test: a wide
-   * arrangement claims a wide disc and starts escalating rooms to their chip. A
-   * focused group is seated UNCONDITIONALLY and can never escalate its room, so
-   * that test — the entire reason for the cap — does not apply to it.
-   *
-   * ⚠️ 2.304.0 let a focused pile exceed the cap and fall through to a COUNT
-   * badge, and wrote it up as a deliberate trade against overlapping cards. It
-   * was neither deliberate nor a trade the user had left open: tapping a room
-   * must show that room's DEVICES, which had been stated twice, and an "8" in
-   * the middle of the pool is the same answer the chip already gave. Both had to
-   * go, and the way to have both is a card that can actually draw its members.
-   *
-   * The real bound is physical and already exists — the width budget, which
-   * `arrange` wraps into — so a focused group has NO cell ceiling of its own.
-   *
-   * ⚠️ There WAS one, `FOCUS_MAX_CHIPS = 12`, and it was chosen as "high enough
-   * that the viewport is what decides". It wasn't. A focused pile of nineteen
-   * (a Living Room tap) hit it, `gridCells` refused anything over its max by
-   * returning ZERO cells, and zero cells is a count badge — so the one code path
-   * that must never produce a number produced a "19". A fixed ceiling next to a
-   * physical one is always a second bound that can bind first, and the fix is
-   * not a bigger number: it is no number. `cellMax` returns the group's own
-   * membership for a focused group, so the clamp can never be the thing that
-   * refuses, and the budget stays the only bound.
-   */
-  /** The cell ceiling this group is entitled to. A FOCUSED group has none —
-   *  it is entitled to a cell per member, and the width budget decides the
-   *  shape. See the note where FOCUS_MAX_CHIPS used to be. */
-  private cellMax(g: PendingEntityGroup): number {
-    return g.focused ? Math.max(1, g.grid) : MAX_TOTAL_CHIPS;
+    return passLayoutOf({ ...this.cardShape(), cardBudget: this.cardBudget() }, g, memberCount);
   }
 
   /**
@@ -5380,7 +5098,7 @@ export class EntityVisuals {
         // co-located devices becomes one card of three chips rather than
         // three badges the top of which is the only one anybody can tap.
         const n = c.entityIds.length;
-        const drawn = this.drawnCells(g, n);
+        const drawn = drawnCells(g, n);
         c.gridN = drawn >= 2 ? drawn : 0;
         // ONE unit, always: a card is an integer number of badge boxes on both
         // axes, and a count badge is the degenerate 1x1 — so every summary,
@@ -5388,7 +5106,7 @@ export class EntityVisuals {
         // Same ceiling the placement measured with (layoutOf) — this is the
         // "layout geometry must equal render geometry" rule, and a focused
         // card drawn at the ordinary cap would be a different object.
-        const lay = this.cardOf(drawn, this.cellMax(g), this.cardBudget());
+        const lay = this.cardOf(drawn, cellMax(g), this.cardBudget());
         c.container.width = `${lay.width}px`;
         // HEIGHT IS PER-PASS, like the width. It used to be written once at
         // construction, which was invisible while every card was one row tall
@@ -5603,166 +5321,6 @@ export class EntityVisuals {
 
   // ── Room clusters (the "clusters" LOD band) ───────────────────────────────
 
-
-  /**
-   * `merge` is false for the collision pass and true (the default) for the set
-   * that gets drawn — see CHIP_COLLISION. It is a parameter rather than two
-   * functions so the bucketing, the label fitting and the width estimate can
-   * only ever be written once: an obstacle measured by a second copy of that
-   * arithmetic would drift from the pill the user actually sees, which is the
-   * "layout geometry must equal render geometry" rule this file keeps paying
-   * for.
-   */
-  private deriveChips(shown: ShownLabel[], merge = true): RoomChip[] {
-    // Bucket by room, accumulating the centroid and worst state as we go —
-    // but only for rooms flagged as grouped THIS frame (cullLabels); everyone
-    // else keeps their individual badges and gets no chip at all. Off-screen
-    // members of a grouped room are included deliberately: a room's chip
-    // should report the whole room's device count, not just the part
-    // currently framed, and its centroid should stay put rather than sliding
-    // around as members cross the viewport edge.
-    // NOTE: no suppressedEntityIds filtering here, deliberately. Every `s` in
-    // `shown` already has a real badge, i.e. real mesh/geometry (cullLabels
-    // no longer excludes suppressed entities — see its own comment) — so
-    // every candidate reaching this loop is, by construction, "mapped".
-    // Dashboard.tsx's room-cluster modal call passes filterSuppressed={false}
-    // for the exact same reason the category browse does: a diagnostic-in-HA
-    // entity someone deliberately bound to a mesh (a UniFi AP's "State"
-    // sensor) should count and be listed like any other room member: HA's
-    // "diagnostic" classification declutters a flat settings LIST, it isn't
-    // a verdict on whether a physically-real, mapped device belongs in a
-    // room's device count.
-    // One group per ROOM: a summarised room hands over ALL of its badges, so
-    // the chip's count is the room's device count and never a subset (see
-    // roomClustered).
-    // Keyed by roomKey() like roomClustered itself, so two spellings of one
-    // HA Area produce one chip rather than two overlapping ones.
-    // Which badges each chip stands for — roomChips.bucketRoomChips.
-    const members = shown.map((sh) => {
-      const st = this.lastState.get(sh.id);
-      const p = sh.lbl.anchor.getAbsolutePosition();
-      return { id: sh.id, room: roomKey(this.roomOf(sh.id)), pos: { x: p.x, y: p.y, z: p.z },
-               kind: st ? this.badgeKind(sh.lbl.type, st) : undefined };
-    });
-    const seeds = bucketRoomChips(members, (k) => !!this.pass.roomClustered.get(k), (k) => this.pass.roomDisplay.get(k) ?? k);
-
-    const scale = this.effectiveScale();
-
-    // ── Chips MERGE under pressure; they are never pushed (2.120.0) ────────
-    // A force-relaxation solver used to separate them by displacement; it was
-    // removed along with its last caller, and labelLayout.ts's header records
-    // what it was and how it failed. The short version: it knew only "these
-    // must not overlap" and nothing about where the villa was, so it satisfied
-    // that by putting the Master Bedroom chip on the lawn (reported with a
-    // screenshot).
-    //
-    // The invariant that was missing: A CHIP MUST NEVER LEAVE THE ROOM IT
-    // NAMES. Capping the nudge cannot deliver that AND "never overlap" — at low
-    // zoom there is genuinely no room to separate them. So overlapping chips
-    // are now MERGED into one (the map-engine answer) instead of displaced:
-    // every chip renders at its own anchor with ZERO offset, and the only way
-    // an overlap is resolved is by two chips becoming one. Both properties hold
-    // literally and at every zoom level.
-    //
-    // Merging is by worst overlap first and repeats until nothing overlaps.
-    // ⚠️ THAT ALONE DOES NOT MAKE IT ORDER-INDEPENDENT — this comment claimed
-    // it did for several releases while three tie-breaks still read array
-    // order. See the merge call below; `boxMerge.ts` owns the rule. The
-    // survivor keeps
-    // the BUSIER room's name (the more informative one) plus a "+N" suffix, its
-    // anchor becomes the device-count-weighted centroid of the merged rooms —
-    // so it still sits among the devices it represents — and it owns the union
-    // of their entity ids, keeping the tap target correct.
-    const cam = this.scene.activeCamera;
-    const eng = this.scene.getEngine();
-    const vp = cam ? cam.viewport.toGlobal(eng.getRenderWidth(), eng.getRenderHeight()) : null;
-    const tm = this.scene.getTransformMatrix();
-
-    // How wide a chip may be DRAWN, expressed in the same units chipWidthPx
-    // returns: the viewport's share, divided back through the scale the
-    // renderer will multiply by. `scale` carries cssToGui, and the render
-    // width carries it too, so the device-pixel ratio cancels and this is a
-    // pure fraction of the screen — see CHIP_MAX_VIEWPORT_FRACTION.
-    const chipBudget = scale > 0
-      ? (eng.getRenderWidth() * CHIP_MAX_VIEWPORT_FRACTION) / scale
-      : 0;
-    // ONE object, both readers — fitChipLabel truncates against exactly the
-    // model the merge then measures the result with.
-    const chipText = this.chipTextMetrics();
-    const behind = new Set<RoomChip>();
-    const measure = (c: RoomChip) => {
-      c.label = fitChipLabel(c.room, chipSuffixOf(c), chipText, chipBudget);
-      if (vp) {
-        const p = Vector3.Project(c.centre, Matrix.IdentityReadOnly, tm, vp);
-        c.x = p.x; c.y = p.y;
-        if (p.z >= 0 && p.z <= 1) behind.delete(c); else behind.add(c);
-      }
-      // Same width ESTIMATE the old path used (chipWidthPx) — it only has to be
-      // close enough to decide overlap, not match the drawn glyphs exactly.
-      // ⚠️ THE LABEL ALONE. The count is a fixed-size corner overlay living in
-      // padding chipWidthPx already reserves; concatenating it here charged
-      // every chip ~33 CSS px of phantom width and merged pills that were
-      // visibly clear — sixteen times the gap 2.419.0 removed for the same
-      // symptom, added back through the width. See chipWidthPx.
-      c.halfW = (chipWidthPx(c.label, chipText) / 2) * scale;
-      c.halfH = (this.summaryMetrics().size / 2) * scale;
-    };
-
-    const chips: RoomChip[] = seeds;
-    for (const c of chips) measure(c);
-    // ⚠️ ONLY CHIPS IN FRONT OF THE CAMERA MERGE (2.496.177). A room BEHIND
-    // the walker projects to a MIRRORED point — Vector3.Project does not know
-    // it is behind — which can land on the screen and "overlap" a chip that is
-    // really there. It then merged into it: "Swimming Pool +7" drawn ahead of
-    // the walker with the pool behind him, sliding as he turned (the mirrored
-    // point moves) until the merge broke and it vanished (owner, walk mode).
-    // A chip behind the camera is not drawn (the GUI skips a linked control
-    // outside the depth range), so it stays its own and never joins one.
-    const front = chips.filter((c) => !behind.has(c));
-
-    if (merge && vp && front.length > 1) {
-      // ── THE SAME GAP AS EVERY OTHER TIER (2.419.0) ────────────────────
-      // This read `chipGapPx`, a second dial that stayed at 6 when 2.412.0 cut
-      // the shared one to 2 — so room chips merged at THREE TIMES the clear
-      // space two badges need, and were reported as "aggregating together too
-      // soon". The rest of the glass had already converged: `settleChips`'
-      // own chip-vs-badge and chip-vs-card tests read `minGapPx` a few lines
-      // up, and only this merge did not.
-      //
-      // It is the last of the three tiers to arrive at THE collision rule —
-      // two things collide when their drawn boxes, inflated by ONE gap,
-      // intersect — and there is now exactly one number to move if contact
-      // ever wants to be tighter or looser. `chipGapPx` is deleted, not
-      // aliased, so nothing can drift back apart.
-      const gap = this.metrics.minGapPx * scale;
-      // ⚠️ THE FIXPOINT IS `boxMerge.ts` NOW, AND THE COMMENT ABOVE WAS WRONG.
-      // It claimed "the outcome does not depend on room iteration order", and
-      // this loop settled ties with `severity > worst` — so on an exact tie the
-      // first pair in ARRAY order won, and array order is room iteration order.
-      // Ties are not exotic: two equal-width chips at equal spacing produce
-      // them, and villas are frequently laid out on a grid.
-      //
-      // THREE things had to be made total, not one: which PAIR merges, which of
-      // the pair SURVIVES (`a.ids.length >= b.ids.length` handed it to whoever
-      // arrived first whenever the counts matched — two rooms with one device
-      // each, the common case), and the ORDER the survivors come back in.
-      // Measured over all 24 orderings of four tied chips: EIGHT distinct
-      // outcomes before, one after.
-      //
-      // Same defect class as the badge placement order-dependence fixed in
-      // 2.366.0 — in the very subsystem that fix was written for.
-      const merged = mergeOverlapping(
-        front,
-        gap,
-        (c) => c.ids.length,
-        // What the merged chip becomes — roomChips.combineChips.
-        (keep, drop) => { combineChips(keep, drop); measure(keep); },
-      );
-      return [...merged, ...chips.filter((c) => behind.has(c))];
-    }
-
-    return chips;
-  }
 
   /**
    * Draw the chips `deriveChips` settled on. Split off it in 2.290.0 so the

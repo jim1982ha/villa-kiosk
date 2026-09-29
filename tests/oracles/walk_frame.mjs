@@ -15,31 +15,26 @@ register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { PlacementPass, groundOf } = await import("@/babylon/placementPass");
 const { RoomFocus } = await import("@/babylon/roomFocus");
-const { arrange } = await import("@/babylon/badgeCard");
-const { NO_ROOM_LABEL, roomKey } = await import("@/config/roomKey");
+const { MAX_GRID_CHIPS } = await import("@/babylon/badgeCard");
+const { roomKey } = await import("@/config/roomKey");
 
 
 const PX = 10;
-// Walk projection stub: x across, y up (screen down is +sy, so -y), z along.
+// On the walk basis below, the pass's real projection (planeOf) is x across,
+// y up (screen down is +sy, so -y), z along — the fixtures' positions.
 const planeOf = (_c, x, y, z) => ({ sx: x * PX, sy: -y * PX, sz: z * PX });
 function rig(rooms, chips = []) {
-  const focus = new RoomFocus();
-  const metrics = { minGapPx: 2, cardIconFraction: 0.8, countPillFraction: 0.4, countFontFraction: 0.6 };
-  const pass = new PlacementPass({
-    roomOf: (id) => rooms[id] ?? NO_ROOM_LABEL,
-    layoutOf: (g, n) => arrange(Math.max(1, Math.min(g.grid, n)), 40, 0.8, 2),
-    planeOf,
-    summaryMetrics: () => ({ size: 40, font: 16, countSize: 16, countFont: 10 }),
-    sortCardMembers: (shown, m) => m.sort((a, b) => (shown[a].id < shown[b].id ? -1 : 1)),
-    cardOf: (cells) => arrange(Math.max(1, cells), 40, 0.8, 2),
-    cardBudget: () => 10_000,
-    cardCellCap: () => 6,
-    effectiveScale: () => 1,
-    deriveChips: () => chips,
-    metrics: () => metrics,
-    focus: () => focus,
+  const pass = new PlacementPass();
+  pass.begin({
+    metrics: { minGapPx: 2, cardIconFraction: 0.8, countPillFraction: 0.4, countFontFraction: 0.6 },
+    summary: { size: 40, font: 16, countSize: 16, countFont: 10 }, perCardCap: MAX_GRID_CHIPS,
+    rooms, focus: new RoomFocus(), scale: 1, cardBudget: 10_000, cellCap: 6,
+    chips: { members: [], view: null, text: { charPx: 7, padPx: 20 }, budget: 0 },
   });
-  pass.begin();
+  // The chips an obstacle test collides with, fixed: what is under test here is
+  // the collision metric, not how chips are derived (placement_pass,
+  // chips_behind).
+  pass.deriveChips = () => chips;
   return pass;
 }
 const badge = (id, x, y, z) => ({ id, lbl: { type: "sensor", category: "comfort" }, x: 0, y: 0, wx: x, wy: y, wz: z, ...planeOf(null, x, y, z), inFront: true, occluded: false });
@@ -48,7 +43,7 @@ const group = (key, members, shown, rooms) => {
   const wx = avg("wx"), wy = avg("wy"), wz = avg("wz");
   return { key, room: rooms[0], roomKeys: rooms.map(roomKey), members, wx, wy, wz, ...planeOf(null, wx, wy, wz), grid: n, focused: false };
 };
-const walk = { pxPerWorld: PX, basis: { rx: 1, rz: 0, ax: 0, az: 1, sinPhi: 0, cosPhi: 1, mode: "world3d" }, refDepth: 10, eye: { x: 0, y: 0, z: -10 } };
+const walk = { pxPerWorld: PX, basis: { rx: 1, rz: 0, ax: 0, az: 1, sinPhi: 0, cosPhi: 1, mode: "world3d" }, refDepth: 0 };
 const chipped = (pass) => [...pass.roomClustered].filter(([, v]) => v).map(([k]) => k);
 
 console.log("  the ground axis:");
