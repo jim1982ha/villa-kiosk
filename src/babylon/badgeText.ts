@@ -148,11 +148,21 @@ export function badgeText(name: string, opts: BadgeTextOptions): TextBlock {
 // right on at most one browser. That is the unexplained offset the header
 // above records: not a Babylon bug, a per-browser fact.
 //
-// So a string drawn alone in a shape is centred the way a glyph is: drawn once
-// at the baseline Babylon itself uses (its own cached font offset), its ink
-// measured in THIS browser, and moved by the same rule — OPTICAL_CORRECTION of
-// the way from the ink box's centre to its ink mass's centre. One function,
-// one rule, for everything drawn alone in a shape.
+// So a string drawn alone in a shape is centred VERTICALLY the way a glyph is:
+// drawn once at the baseline Babylon itself uses (its own cached font offset),
+// its ink measured in THIS browser, and moved by the same rule —
+// OPTICAL_CORRECTION of the way from the ink box's centre to its ink mass's
+// centre. One function, one rule.
+//
+// ⚠️ VERTICALLY ONLY (2.496.221). 2.496.220 applied the glyphs' HORIZONTAL
+// nudge too, and it moved every asymmetric figure off-centre: the owner's
+// screenshot had "3" and "7" 4 px left, "10"/"18"/"19" 2 px left, while the
+// symmetric "8" (nudge 0) sat dead centre. Horizontally a string is not in the
+// glyphs' situation: Babylon centres it by its ADVANCE width, which comes from
+// the font file itself (the same on every browser), and a figure's side
+// bearings are already balanced by the type designer — before 2.496.220 the
+// digits were never reported off horizontally. The vertical axis is the one
+// that depends on the browser's line box, so it is the one corrected.
 
 /** The font string Babylon's Control builds (_prepareFont) — also the key of
  *  its font-offset cache, so the offset read here is the one it draws with. */
@@ -174,7 +184,8 @@ export function textRasterLayout(textWidth: number, lineHeight: number, ascent: 
 
 const inkCache = new Map<string, { dx: number; dy: number }>();
 
-/** How far to move `text` so its INK is optically centred in its shape. */
+/** How far to move `text` so its INK is optically centred in its shape
+ *  (both axes; setInkCentredText applies the vertical one — see above). */
 export function textInkNudge(text: string, weight: string, px: number): { dx: number; dy: number } {
   const font = guiFont(weight, px);
   const key = `${font}|${text}`;
@@ -206,13 +217,12 @@ export function textInkNudge(text: string, weight: string, px: number): { dx: nu
   return out;
 }
 
-/** Set a centred TextBlock's text and centre its INK in its shape
- *  (textInkNudge). For a string drawn alone in a shape — the count pill. The
- *  control must have been created with `opticalNudge: false`: this replaces
- *  the fixed correction, it does not add to it. */
+/** Set a centred TextBlock's text and centre its INK vertically in its shape
+ *  (textInkNudge's dy); horizontally Babylon's advance-width centring stands.
+ *  For a string drawn alone in a shape — the count pill. The control must have
+ *  been created with `opticalNudge: false`: this replaces the fixed vertical
+ *  correction, it does not add to it. */
 export function setInkCentredText(t: TextBlock, text: string, weight: string, px: number): void {
   t.text = text;
-  const n = textInkNudge(text, weight, px);
-  t.left = `${n.dx}px`;
-  t.top = `${n.dy}px`;
+  t.top = `${textInkNudge(text, weight, px).dy}px`;
 }

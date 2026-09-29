@@ -1,3 +1,8 @@
+## 2.496.221
+
+### Fixed
+- **Room chip numbers are now centred side to side too.** 2.496.220 fixed their height but also shifted some numbers sideways — "3" and "7" sat a little to the left, as did two-digit numbers, while "8" was fine. The sideways shift is removed: numbers are centred horizontally by the font's own spacing, as before, and keep the new vertical centring.
+
 ## 2.496.220
 
 ### Fixed

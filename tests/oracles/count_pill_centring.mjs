@@ -54,4 +54,10 @@ ck("the count pill is ink-centred at every update, with the fixed nudge off",
    && /setInkCentredText\(c\.countText, formatCountBadge\(chip\.ids\.length\), "700", this\.summaryMetrics\(\)\.countFont\);/.test(ev)
    && !/c\.countText\.text = /.test(ev));
 
+// ⚠️ VERTICALLY ONLY (2.496.221): the horizontal ink nudge put "3" and "7" 4 px
+// left on the owner's screen; horizontally Babylon's advance centring stands.
+const setter = bt.slice(bt.indexOf("export function setInkCentredText"));
+ck("the count is moved VERTICALLY only — no horizontal nudge on text",
+   /t\.top = `\$\{textInkNudge\(text, weight, px\)\.dy\}px`;/.test(setter) && !/t\.left\s*=/.test(setter));
+
 done("✅ the count pill's digit is centred by its ink, like a glyph");
