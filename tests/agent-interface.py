@@ -56,6 +56,11 @@ def options(**opts) -> None:
     (TMP / "data" / "options.json").write_text(json.dumps(opts))
 
 
+def agent(**fields) -> None:
+    """options.json with the VESTA Agent group (config.yaml `vesta_agent`)."""
+    options(vesta_agent=fields)
+
+
 def bearer(tok: str = TOKEN, peer: str = "10.0.0.5") -> dict:
     return {"Authorization": f"Bearer {tok}", "X-VK-Peer": peer}
 
@@ -116,28 +121,47 @@ async def main() -> None:
     ck("the Kiosk sees the agent as not configured", body == {"state": "not_configured"}, body)
     # ⚠️ THE SWITCH, NOT THE TOKEN (owner, 2026-09-29): a valid token left in
     # the field while "Connect the VESTA Agent" is off opens nothing.
-    options(agent_token=TOKEN)
+    agent(token=TOKEN)
     status, _ = await jget("/agent/v1/info", bearer())
     ck("a valid token with the switch OFF: still 404 — the switch decides", status == 404, status)
     status, body = await jget("/agent-status", INGRESS)
     ck("  ...and the Kiosk still sees no agent (no robot, no menu entry)", body == {"state": "not_configured"}, body)
-    options(agent_enabled="true", agent_token=TOKEN)
+    agent(enabled="true", token=TOKEN)
     status, _ = await jget("/agent/v1/info", bearer())
     ck("  ...only a real `true` switches it on (a hand-edited string does not)", status == 404, status)
     print("\n  switched on without a usable token:")
-    options(agent_enabled=True)
+    agent(enabled=True)
     status, _ = await jget("/agent/v1/info", bearer())
     ck("no token: 404, the agent stays off", status == 404, status)
     ck("  ...and the start-up log says why", "switched on but its token is empty" in (proxy._agent_config_warning() or ""))
-    options(agent_enabled=True, agent_token="short")
+    agent(enabled=True, token="short")
     status, _ = await jget("/agent/v1/info", bearer("short"))
     ck("a token shorter than 16 characters counts as not configured", status == 404, status)
     options()
     ck("switched off: no warning at all (an empty token is then correct)", proxy._agent_config_warning() is None)
 
+    # ── one group, and the update that moves an install into it (2.496.218) ──
+    print("\n  the settings group, and the update into it:")
+    options(agent_enabled=True, agent_token=TOKEN, vesta_agent={"enabled": False, "token": ""})
+    status, _ = await jget("/agent/v1/info", bearer())
+    ck("before the move, the OLD flat keys are read (an update must not drop the owner's token)", status == 200, status)
+    legacy = {"owner_pin": "1234", "sh3d_path": "x", "agent_enabled": True, "agent_token": TOKEN,
+              "agent_offline_after_minutes": 7, "agent_message_retention_days": 30,
+              "vesta_agent": {"enabled": False, "token": "", "offline_after_minutes": 5, "message_retention_days": 90}}
+    moved = proxy._options_after_cleanup(legacy)
+    ck("the start-up cleanup moves all four into the group, values kept, old keys gone",
+       moved == {"owner_pin": "1234", "vesta_agent": {"enabled": True, "token": TOKEN,
+                 "offline_after_minutes": 7, "message_retention_days": 30}}, moved)
+    ck("  ...and has nothing to do on an install already moved",
+       proxy._options_after_cleanup({"owner_pin": "1", "vesta_agent": {"enabled": True}}) is None)
+    options(**moved)
+    status, _ = await jget("/agent/v1/info", bearer())
+    ck("after the move the group alone opens the door", status == 200 and proxy._agent_offline_minutes() == 7, status)
+    reset_lockout()
+
     # ── the token, and only the token (PLAN A3) ──────────────────────────
     print("\n  the bearer gate:")
-    options(agent_enabled=True, agent_token=TOKEN, agent_offline_after_minutes=5, agent_message_retention_days=90)
+    agent(enabled=True, token=TOKEN, offline_after_minutes=5, message_retention_days=90)
     reset_lockout()
     status, body = await jget("/agent/v1/info", bearer())
     ck("the right token reads /agent/v1/info", status == 200, status)
@@ -316,7 +340,7 @@ async def main() -> None:
     status, body = await jget("/agent-status", cookie("ops"))
     ck("six minutes of silence (window 5): offline — computed, so a restart cannot lie",
        body.get("state") == "offline", body)
-    options(agent_enabled=True, agent_token=TOKEN, agent_offline_after_minutes=10)
+    agent(enabled=True, token=TOKEN, offline_after_minutes=10)
     status, body = await jget("/agent-status", cookie("ops"))
     ck("  ...and the window is the option's", body.get("state") == "online", body)
 

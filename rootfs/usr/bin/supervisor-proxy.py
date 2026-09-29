@@ -877,6 +877,25 @@ def _read_options() -> dict:
         return {}
 
 
+def _options_after_cleanup(options: dict) -> dict | None:
+    """The stored options to write back, or None when nothing is stale:
+    retired keys dropped, and the pre-group VESTA Agent keys MOVED into the
+    `vesta_agent` group (their values kept — the owner's token and switch must
+    survive the update). Pure: tests/agent-interface.py drives it."""
+    moved = {old: field for old, field in LEGACY_AGENT_OPTIONS.items() if old in options}
+    if not (set(options) & REMOVED_OPTION_KEYS) and not moved:
+        return None
+    cleaned = {k: v for k, v in options.items()
+               if k not in REMOVED_OPTION_KEYS and k not in LEGACY_AGENT_OPTIONS}
+    if moved:
+        group = options.get(AGENT_GROUP_OPTION)
+        group = dict(group) if isinstance(group, dict) else {}
+        for old, field in moved.items():
+            group[field] = options[old]
+        cleaned[AGENT_GROUP_OPTION] = group
+    return cleaned
+
+
 async def _cleanup_stale_options(session: ClientSession) -> None:
     """Self-heal an add-on options key left over from a dropped schema field.
 
@@ -908,10 +927,10 @@ async def _cleanup_stale_options(session: ClientSession) -> None:
                 return
             body = await resp.json()
         options = (body.get("data") or {}).get("options") or {}
-        stale = sorted(set(options) & REMOVED_OPTION_KEYS)
-        if not stale:
+        cleaned = _options_after_cleanup(options)
+        if cleaned is None:
             return
-        cleaned = {k: v for k, v in options.items() if k not in REMOVED_OPTION_KEYS}
+        stale = sorted(set(options) - set(cleaned))
         async with session.post(
             f"http://{SUPERVISOR}/addons/self/options", headers=AUTH,
             json={"options": cleaned},
@@ -2682,12 +2701,26 @@ fm_data_put_handler = _store_put_handler(
 
 AGENT = "agent"
 AGENT_CONTRACT = 1
-AGENT_TOKEN_OPTION = "agent_token"
-#: THE switch: no agent unless this is exactly `true` (see _agent_token).
-AGENT_ENABLED_OPTION = "agent_enabled"
-#: ⚠️ A SHORT TOKEN IS A GUESSABLE ONE. The schema enforces the same shape
-#: (config.yaml), so a token that fails this was hand-edited into options.json;
-#: it is treated as NOT CONFIGURED — the closed failure — rather than accepted.
+#: The VESTA Agent's settings, ONE group on the Configuration page (config.yaml
+#: `vesta_agent`): `enabled` is THE switch (no agent unless exactly `true`, see
+#: _agent_token), then `token`, `offline_after_minutes`, `message_retention_days`.
+AGENT_GROUP_OPTION = "vesta_agent"
+#: ⚠️ THE FLAT KEYS THE GROUP REPLACED (2.496.218), old name → field. An install
+#: that set them keeps them in its stored options until _options_after_cleanup
+#: moves them into the group at the first start, and /data/options.json only
+#: follows at the start after that — so the readers below take a flat key over
+#: the group while one is still present, or an update would silently drop the
+#: owner's token for one restart.
+LEGACY_AGENT_OPTIONS = {
+    "agent_enabled": "enabled",
+    "agent_token": "token",
+    "agent_offline_after_minutes": "offline_after_minutes",
+    "agent_message_retention_days": "message_retention_days",
+}
+#: ⚠️ A SHORT TOKEN IS A GUESSABLE ONE. The option is a masked `password`
+#: field (config.yaml), which cannot also carry a pattern, so THIS is the one
+#: check of its shape: a token that fails it is treated as NOT CONFIGURED — the
+#: closed failure — and the start-up log says so (_agent_config_warning).
 AGENT_TOKEN_RE = re.compile(r"^[A-Za-z0-9._~+/=-]{16,128}$")
 AGENT_STORE_MAX_BYTES = 2_000_000
 #: Beyond the retention window, a hard cap: an agent posting in a loop must not
@@ -2715,17 +2748,38 @@ AGENT_PRESENCE = JsonStore("agent-presence.json", {}, 10_000)
 _own_version = "unknown"
 
 
+def _agent_options(options: dict | None = None) -> dict:
+    """The VESTA Agent group's fields — with a pre-group flat key taking
+    precedence while one is still stored (see LEGACY_AGENT_OPTIONS)."""
+    options = _read_options() if options is None else options
+    group = options.get(AGENT_GROUP_OPTION)
+    out = dict(group) if isinstance(group, dict) else {}
+    for old, field in LEGACY_AGENT_OPTIONS.items():
+        if old in options:
+            out[field] = options[old]
+    return out
+
+
+def _agent_int(field: str, default: int, lo: int, hi: int) -> int:
+    """A numeric field of the agent group, clamped — as _option_int."""
+    try:
+        value = int(_agent_options().get(field, default))
+    except (TypeError, ValueError):
+        return default
+    return max(lo, min(hi, value))
+
+
 def _agent_token() -> str:
     """The configured token, or "" when the agent interface is off.
 
-    ⚠️ THE SWITCH FIRST (agent_enabled, default off). A token alone used to be
-    the switch; the owner asked for an explicit one, so "is there an agent" is
-    a yes/no a person sets — and a token left in the field while the switch is
+    ⚠️ THE SWITCH FIRST (`enabled`, default off). A token alone used to be the
+    switch; the owner asked for an explicit one, so "is there an agent" is a
+    yes/no a person sets — and a token left in the field while the switch is
     off opens nothing. Only `True` counts: a hand-edited "yes" is not a yes."""
-    options = _read_options()
-    if options.get(AGENT_ENABLED_OPTION) is not True:
+    agent = _agent_options()
+    if agent.get("enabled") is not True:
         return ""
-    tok = options.get(AGENT_TOKEN_OPTION)
+    tok = agent.get("token")
     return tok if isinstance(tok, str) and AGENT_TOKEN_RE.fullmatch(tok) else ""
 
 
@@ -2733,8 +2787,7 @@ def _agent_config_warning() -> str | None:
     """What the log says at start when the switch is on and the token cannot
     be used — the Supervisor's form cannot make the token required only while
     the switch is on, so this is where "required" is enforced."""
-    options = _read_options()
-    if options.get(AGENT_ENABLED_OPTION) is not True or _agent_token():
+    if _agent_options().get("enabled") is not True or _agent_token():
         return None
     return ("the VESTA Agent is switched on but its token is empty or invalid "
             "(at least 16 characters: letters, digits and . _ ~ + / = -): "
@@ -2742,11 +2795,11 @@ def _agent_config_warning() -> str | None:
 
 
 def _agent_offline_minutes() -> int:
-    return _option_int("agent_offline_after_minutes", 5, 1, 60)
+    return _agent_int("offline_after_minutes", 5, 1, 60)
 
 
 def _agent_retention_days() -> int:
-    return _option_int("agent_message_retention_days", 90, 1, 365)
+    return _agent_int("message_retention_days", 90, 1, 365)
 
 
 def _now_iso() -> str:

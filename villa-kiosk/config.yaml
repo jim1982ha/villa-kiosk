@@ -5,7 +5,7 @@
 # no-compile operation. The {arch} placeholder + version resolve to e.g.
 # ghcr.io/jim1982ha/villa-kiosk-amd64:2.0.0 — published by .github/workflows/build.yaml.
 name: VESTA
-version: "2.496.217"
+version: "2.496.218"
 slug: villa_kiosk
 description: 3D Home Assistant villa dashboard — HA sidebar (Ingress) + its own hostname
 url: https://github.com/jim1982ha/villa-kiosk
@@ -125,25 +125,30 @@ startup: application
 #   wrong passcodes must wait. The lockout is per source address, so raising
 #   it punishes a guesser rather than locking the household out.
 #
-# ── The VESTA Agent (docs/agent-integration/PLAN.md, workstream A) ─────────
-# agent_enabled (default false): THE switch. Off = there is no agent: every
+# ── vesta_agent: the VESTA Agent, as ONE group (PLAN workstream A) ─────────
+# Every setting that only matters when an agent is connected lives in this
+# group, so the Configuration page shows them together under "VESTA Agent".
+# Until 2.496.218 they were four flat keys (agent_enabled, agent_token,
+# agent_offline_after_minutes, agent_message_retention_days); the proxy moves
+# an install's values into the group at its first start (_options_after_cleanup)
+# and reads the flat keys until then.
+#
+# enabled (default false): THE switch. Off = there is no agent: every
 #   /agent/v1 route answers 404 and no agent UI is shown, whatever the token
-#   field holds. On = the agent interface exists once agent_token is valid; on
-#   with an empty or short token stays off and says so in the log (the
-#   Supervisor's form cannot make a field required only when a switch is on).
-#
-# agent_token (only read while agent_enabled is on). Set it to the same
-#   value as `kiosk_agent_token` in the VESTA Agent host to let the agent read
-#   and update Facility records (never delete them), post messages with
-#   buttons, and report its presence. At least 16 characters, so a short
-#   guessable token cannot be saved; a wrong token counts toward the passcode
-#   lockout like a wrong PIN. It never opens anything else in the kiosk.
-#
-# agent_offline_after_minutes (default 5): the agent is shown offline when no
+#   holds. On = the agent interface exists once `token` is valid; on with an
+#   empty or short token stays off and says so in the log (the Supervisor's
+#   form cannot make a field required only when a switch is on).
+# token (only read while enabled). The same value as `kiosk_agent_token` in the
+#   VESTA Agent host. A `password` field, so the form masks it; its SHAPE (at
+#   least 16 characters) is checked by the proxy — a short token counts as not
+#   configured. It lets the agent read and update Facility records (never
+#   delete them), post messages with buttons and report its presence; a wrong
+#   token counts toward the passcode lockout like a wrong PIN, and it never
+#   opens anything else in the kiosk.
+# offline_after_minutes (default 5): the agent is shown offline when no
 #   heartbeat arrived within this window.
-#
-# agent_message_retention_days (default 90): how long agent messages and the
-#   answers given to them are kept.
+# message_retention_days (default 90): how long agent messages and the answers
+#   given to them are kept.
 options:
   guest_pin: ""
   owner_pin: ""
@@ -154,10 +159,11 @@ options:
   session_days: 30
   telemetry_max_events: 500
   pin_lockout_minutes: 5
-  agent_enabled: false
-  agent_token: ""
-  agent_offline_after_minutes: 5
-  agent_message_retention_days: 90
+  vesta_agent:
+    enabled: false
+    token: ""
+    offline_after_minutes: 5
+    message_retention_days: 90
 schema:
   guest_pin: match(^[0-9]{4}$|^$)?
   owner_pin: match(^[0-9]{4}$|^$)?
@@ -168,7 +174,8 @@ schema:
   session_days: int(1,365)?
   telemetry_max_events: int(50,5000)?
   pin_lockout_minutes: int(1,1440)?
-  agent_enabled: bool?
-  agent_token: match(^$|^[A-Za-z0-9._~+/=-]{16,128}$)?
-  agent_offline_after_minutes: int(1,60)?
-  agent_message_retention_days: int(1,365)?
+  vesta_agent:
+    enabled: bool?
+    token: password?
+    offline_after_minutes: int(1,60)?
+    message_retention_days: int(1,365)?

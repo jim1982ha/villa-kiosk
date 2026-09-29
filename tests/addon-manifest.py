@@ -94,6 +94,34 @@ if len(named) != len(described) or len(described_desc) != len(described):
                     f"{len(described_desc)} `description:` lines — one entry is "
                     f"missing its label or its help text")
 
+# 4b. a GROUP of options (a mapping, e.g. `vesta_agent`) is checked field by
+#     field: its fields are the same set in options and schema, and each has a
+#     label and help text under `fields:` in the translations — the three rules
+#     above stop at the group's own name.
+def group_fields(text: str, block: str, group: str) -> list[str]:
+    body = re.search(rf"^{block}:\s*$\n((?:(?:[ \t].*)?\n)*)", text, re.M).group(1)
+    m = re.search(rf"^  {group}:\s*$\n((?:    .*\n)*)", body, re.M)
+    return re.findall(r"^    (\w+):", m.group(1), re.M) if m else []
+
+
+groups = [k for k, v in options.items() if v == ""]
+for g in groups:
+    of, sf = group_fields(CFG, "options", g), group_fields(CFG, "schema", g)
+    if not of:
+        problems.append(f"option group `{g}` has no fields — the parser found nothing")
+    if sorted(of) != sorted(sf):
+        problems.append(f"option group `{g}`: options have {sorted(of)}, schema has {sorted(sf)}")
+    tm = re.search(rf"^  {g}:\s*$\n((?:    .*\n|\s*\n)*)", tr, re.M)
+    block = tm.group(1) if tm else ""
+    fields_block = block.split("    fields:\n", 1)[1] if "    fields:\n" in block else ""
+    labelled = re.findall(r"^      (\w+):\s*\n        name: .+\n        description:", fields_block, re.M)
+    for f in of:
+        if f not in labelled:
+            problems.append(f"option `{g}.{f}` has no name and description under `fields:` in translations/en.yaml")
+    for f in labelled:
+        if f not in of:
+            problems.append(f"translations/en.yaml describes `{g}.{f}`, which is not a field of the group")
+
 # 5. the version the two files must agree on
 pkg = (ROOT / "package.json").read_text()
 pkg_v = re.search(r'"version":\s*"([^"]+)"', pkg).group(1)
@@ -162,7 +190,8 @@ for m in re.finditer(r"tests/[A-Za-z0-9_/.-]+\.(?:py|mjs|sh|ts)", CFG):
                         f"a comment promising a guard that does not exist is worse "
                         f"than no comment")
 
-print(f"  {len(options)} options, {len(schema)} schema entries, {len(described)} described")
+print(f"  {len(options)} options, {len(schema)} schema entries, {len(described)} described"
+      + "".join(f", group `{g}`: {len(group_fields(CFG, 'options', g))} fields" for g in groups))
 print(f"  version: package.json {pkg_v} == config.yaml {cfg_v}")
 if problems:
     print("\n".join(f"    FAIL  {p}" for p in problems))
