@@ -1,3 +1,10 @@
+## 2.496.218
+
+### Changed
+- **All VESTA Agent settings are now grouped under one "VESTA Agent" section** on the app's Configuration page: **Connect the VESTA Agent** (the switch), **VESTA Agent token**, **Agent shown offline after (minutes)** and **Keep agent messages for (days)**. They only matter while the switch is on.
+- **The VESTA Agent token is now hidden like a password** (shown as dots). It still needs at least 16 characters; a shorter one keeps the agent off and the app's log says so.
+- Your current values are **moved into the new section automatically** the first time the app starts after this update — nothing to re-enter. Home Assistant's settings page cannot grey out or hide fields, so the token stays visible (as dots) even while the switch is off; it is simply not used then.
+
 ## 2.496.217
 
 ### Changed
