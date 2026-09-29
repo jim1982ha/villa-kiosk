@@ -1,3 +1,9 @@
+## 2.496.217
+
+### Changed
+- **A switch now says whether the VESTA Agent is connected: "Connect the VESTA Agent"** on the app's Configuration page, off by default. Off: there is no agent — nothing about it is shown and it cannot connect, even if a token is filled in. On: the agent connects with the **VESTA Agent token**, which is then required; if the token is empty or too short, the agent stays off and the app's log says so.
+- ⚠️ **If you already use the agent: after this update, turn "Connect the VESTA Agent" on** and restart the app. Your token is kept; until the switch is on, the robot button disappears from the kiosk.
+
 ## 2.496.216
 
 ### Changed

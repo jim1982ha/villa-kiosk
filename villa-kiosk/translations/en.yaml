@@ -83,14 +83,21 @@ configuration:
       How long a device must wait after five wrong passcodes. The lockout
       applies per device address, so raising it slows down someone guessing
       without locking the household out of their own villa.
+  agent_enabled:
+    name: Connect the VESTA Agent
+    description: >-
+      Off (the default): there is no agent — the kiosk behaves exactly as
+      before and shows nothing about it, whatever the token below holds. On:
+      the agent is connected, and the token below is REQUIRED; if it is empty
+      or too short, the agent stays off and the app's log says so.
   agent_token:
     name: VESTA Agent token
     description: >-
-      Leave EMPTY to keep the VESTA Agent switched off — the kiosk then behaves
-      exactly as before. To connect it, enter a long random value (at least 16
-      characters) and put the same value in the VESTA Agent app's "VESTA Kiosk
-      agent token". The agent can then read and update maintenance records (it
-      can never delete them), post messages, and show as online.
+      Required when "Connect the VESTA Agent" is on, ignored when it is off.
+      Enter a long random value (at least 16 characters) and put the same value
+      in the VESTA Agent app's "VESTA Kiosk agent token". The agent can then
+      read and update maintenance records (it can never delete them), post
+      messages, and show as online.
   agent_offline_after_minutes:
     name: Agent shown offline after (minutes)
     description: >-

@@ -2683,6 +2683,8 @@ fm_data_put_handler = _store_put_handler(
 AGENT = "agent"
 AGENT_CONTRACT = 1
 AGENT_TOKEN_OPTION = "agent_token"
+#: THE switch: no agent unless this is exactly `true` (see _agent_token).
+AGENT_ENABLED_OPTION = "agent_enabled"
 #: ⚠️ A SHORT TOKEN IS A GUESSABLE ONE. The schema enforces the same shape
 #: (config.yaml), so a token that fails this was hand-edited into options.json;
 #: it is treated as NOT CONFIGURED — the closed failure — rather than accepted.
@@ -2714,9 +2716,29 @@ _own_version = "unknown"
 
 
 def _agent_token() -> str:
-    """The configured token, or "" when the agent interface is off."""
-    tok = _read_options().get(AGENT_TOKEN_OPTION)
+    """The configured token, or "" when the agent interface is off.
+
+    ⚠️ THE SWITCH FIRST (agent_enabled, default off). A token alone used to be
+    the switch; the owner asked for an explicit one, so "is there an agent" is
+    a yes/no a person sets — and a token left in the field while the switch is
+    off opens nothing. Only `True` counts: a hand-edited "yes" is not a yes."""
+    options = _read_options()
+    if options.get(AGENT_ENABLED_OPTION) is not True:
+        return ""
+    tok = options.get(AGENT_TOKEN_OPTION)
     return tok if isinstance(tok, str) and AGENT_TOKEN_RE.fullmatch(tok) else ""
+
+
+def _agent_config_warning() -> str | None:
+    """What the log says at start when the switch is on and the token cannot
+    be used — the Supervisor's form cannot make the token required only while
+    the switch is on, so this is where "required" is enforced."""
+    options = _read_options()
+    if options.get(AGENT_ENABLED_OPTION) is not True or _agent_token():
+        return None
+    return ("the VESTA Agent is switched on but its token is empty or invalid "
+            "(at least 16 characters: letters, digits and . _ ~ + / = -): "
+            "the agent stays off until one is set")
 
 
 def _agent_offline_minutes() -> int:
@@ -3359,6 +3381,8 @@ def build_app(data_dir: str | None = None) -> web.Application:
         _session_secret()  # create the signing key on first boot
         await _cleanup_stale_options(a["session"])
         await _learn_own_version(a["session"])
+        if (warning := _agent_config_warning()) is not None:
+            print(f"[supervisor-proxy] {warning}", flush=True)
 
     async def on_cleanup(a: web.Application) -> None:
         await a["session"].close()

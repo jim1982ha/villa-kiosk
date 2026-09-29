@@ -108,19 +108,36 @@ async def main() -> None:
         return r.status, (await r.json() if r.content_type == "application/json" else None)
 
     # ── off by default (PLAN A2) ─────────────────────────────────────────
-    print("  no agent_token:")
+    print("  switched off (the default):")
     options()
     status, _ = await jget("/agent/v1/info", bearer())
     ck("every /agent/v1 route answers 404", status == 404, status)
     status, body = await jget("/agent-status", INGRESS)
     ck("the Kiosk sees the agent as not configured", body == {"state": "not_configured"}, body)
-    options(agent_token="short")
+    # ⚠️ THE SWITCH, NOT THE TOKEN (owner, 2026-09-29): a valid token left in
+    # the field while "Connect the VESTA Agent" is off opens nothing.
+    options(agent_token=TOKEN)
+    status, _ = await jget("/agent/v1/info", bearer())
+    ck("a valid token with the switch OFF: still 404 — the switch decides", status == 404, status)
+    status, body = await jget("/agent-status", INGRESS)
+    ck("  ...and the Kiosk still sees no agent (no robot, no menu entry)", body == {"state": "not_configured"}, body)
+    options(agent_enabled="true", agent_token=TOKEN)
+    status, _ = await jget("/agent/v1/info", bearer())
+    ck("  ...only a real `true` switches it on (a hand-edited string does not)", status == 404, status)
+    print("\n  switched on without a usable token:")
+    options(agent_enabled=True)
+    status, _ = await jget("/agent/v1/info", bearer())
+    ck("no token: 404, the agent stays off", status == 404, status)
+    ck("  ...and the start-up log says why", "switched on but its token is empty" in (proxy._agent_config_warning() or ""))
+    options(agent_enabled=True, agent_token="short")
     status, _ = await jget("/agent/v1/info", bearer("short"))
     ck("a token shorter than 16 characters counts as not configured", status == 404, status)
+    options()
+    ck("switched off: no warning at all (an empty token is then correct)", proxy._agent_config_warning() is None)
 
     # ── the token, and only the token (PLAN A3) ──────────────────────────
     print("\n  the bearer gate:")
-    options(agent_token=TOKEN, agent_offline_after_minutes=5, agent_message_retention_days=90)
+    options(agent_enabled=True, agent_token=TOKEN, agent_offline_after_minutes=5, agent_message_retention_days=90)
     reset_lockout()
     status, body = await jget("/agent/v1/info", bearer())
     ck("the right token reads /agent/v1/info", status == 200, status)
@@ -299,7 +316,7 @@ async def main() -> None:
     status, body = await jget("/agent-status", cookie("ops"))
     ck("six minutes of silence (window 5): offline — computed, so a restart cannot lie",
        body.get("state") == "offline", body)
-    options(agent_token=TOKEN, agent_offline_after_minutes=10)
+    options(agent_enabled=True, agent_token=TOKEN, agent_offline_after_minutes=10)
     status, body = await jget("/agent-status", cookie("ops"))
     ck("  ...and the window is the option's", body.get("state") == "online", body)
 

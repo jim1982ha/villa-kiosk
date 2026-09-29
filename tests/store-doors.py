@@ -141,6 +141,7 @@ async def main() -> None:
     # The app's door and the agent's door open ONE store, so they share ONE lock.
     options = on_disk("options.json")
     options["agent_token"] = "agent-token-for-tests-0123456789"
+    options["agent_enabled"] = True
     (DATA / "options.json").write_text(json.dumps(options))
     _, body = await call("GET", "/fm-data", ops)
     shared_rev, doc = body["rev"], body["data"]
