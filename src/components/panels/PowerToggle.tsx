@@ -11,7 +11,7 @@ import InlineConfirm from "@/components/common/InlineConfirm";
 
 interface Props {
   on: boolean;
-  onClick: () => void;
+  onClick: () => unknown;
   /** Device label, used in the confirm prompt below — only meaningful
    *  together with requireConfirm. */
   label?: string;
@@ -51,8 +51,7 @@ export default function PowerToggle({ on, onClick, label, requireConfirm }: Prop
 
   const act = () => {
     tapFeedback();
-    markPending();
-    onClick();
+    markPending(onClick());
     setConfirming(false);
   };
 

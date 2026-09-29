@@ -61,8 +61,10 @@ console.log("\n  who asks:");
   const src = (p) => readFileSync(new URL(p, new URL("../../src/", import.meta.url)), "utf8");
   ck("the summary tiles count the listed set", /listedDevices\(role, visibleDevices, mappedEntityIds\)/.test(src("components/hud/SummaryBar.tsx")));
   ck("the list a tile opens drops off-map rows by the same capability", /const offMap = !roleCan\(role, "listUnmappedDevices"\)/.test(src("components/panels/SummaryGroupPanel.tsx")));
+  // The rule itself is villaVisibility.visibleTo, driven by value in
+  // villa_visibility.mjs (2.496.226).
   ck("the badge and the Cockpit read the profile's attention", /return attentionFor\(attention, /.test(src("components/cockpit/useVillaAttention.ts"))
-     && /isMappingAllowed\(role, id, m, entities\[id\]\)/.test(src("components/cockpit/useVillaAttention.ts")));
+     && /visibleTo\(role\)/.test(src("components/cockpit/useVillaAttention.ts")));
 }
 
 done("✅ one table answers every role question; counts match their lists");

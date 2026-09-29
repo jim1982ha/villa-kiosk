@@ -35,8 +35,7 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
 
   const doLock = () => {
     tapFeedback();
-    markPending();
-    HAServices.lockDoor(ws, mapping.entityId);
+    markPending(HAServices.lockDoor(ws, mapping.entityId));
   };
 
   const doUnlock = () => {
@@ -44,8 +43,7 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
     // deliberately-confirmed action of the two — the haptic should feel
     // different from an ordinary acknowledgment.
     successFeedback();
-    markPending();
-    HAServices.unlockDoor(ws, mapping.entityId);
+    markPending(HAServices.unlockDoor(ws, mapping.entityId));
     setConfirming(false);
   };
 

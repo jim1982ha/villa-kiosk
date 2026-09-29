@@ -34,12 +34,13 @@ interface Props {
   actualOn: boolean;
   /** Accessible name for the switch, already resolved by the caller. */
   label: string;
-  /** Fire the real service call. */
-  onToggle: () => void;
+  /** Fire the real service call, returning its outcome so a refused one
+   *  reverts at once (see useOptimisticToggle). */
+  onToggle: () => unknown;
 }
 
 export default function EntityRowToggle({ entityId, actualOn, label, onToggle }: Props) {
-  const send = useCallback(() => { onToggle(); }, [onToggle]);
+  const send = useCallback(() => onToggle(), [onToggle]);
   const { isOn, toggle } = useOptimisticToggle(entityId, actualOn, send);
 
   return (

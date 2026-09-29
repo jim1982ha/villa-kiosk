@@ -13,7 +13,7 @@ import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { resolveSiteTitle } from "@/config/AppConfig";
 import { useFmData } from "@/fm/FmDataContext";
-import { budgetStatus, formatMoney, monthKey, localStamp, parseAmount, projectedSpend } from "@/fm/fmEngine";
+import { budgetStatus, formatMoney, monthKey, monthLabel, localStamp, parseAmount, projectedSpend } from "@/fm/fmEngine";
 import { categoryName } from "@/fm/fmTypes";
 import { useFmTerms } from "@/fm/useFmTerms";
 import { useProfile } from "@/auth/ProfileContext";
@@ -217,7 +217,8 @@ export default function SpendTab(
             <div className={`fm-banner ${projection.over ? "warn" : ""}`}>
               {/* Shown only with a cap set: with none there is nothing to be over
                   (an unconfigured install once read "…of IDR 0"). */}
-              {projection.month} would come to {money(projection.minorSpend)} of {money(projection.cap)}
+              {projection.month === monthKey(Date.now()) ? "This month" : monthLabel(projection.month)} would
+              come to {money(projection.minorSpend)} of {money(projection.cap)}
               {projection.over && ` — over the cap. Consider recording it as ${terms.uncappedName} instead.`}
             </div>
           )}

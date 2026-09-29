@@ -1,3 +1,14 @@
+## 2.496.226
+
+### Fixed
+- **A button whose command Home Assistant refuses now flips back straight away.** Until now the app only learned a command had failed through the error message; a switch you tapped kept showing its new position for up to ten seconds (or pulsed for four) before going back. It now returns to the real state the moment Home Assistant says no. This applies to the power button of lights, switches, fans and media players, the lock buttons, and the switches in device lists.
+- The spend form's cap line now says "This month would come to…" (or names the month when you correct an older entry) instead of a raw "2026-09".
+
+### Changed
+- **Nothing else to see on screen: two core pieces are simpler and fully tested.**
+- The part of the app that keeps the live state of every Home Assistant device (and reconnects when the link drops) is now separate from the screens. Its rules — listen for changes before reading the states so nothing is missed, re-read everything once after each reconnect, send the 3D map only what changed — are now tested directly against a stand-in Home Assistant.
+- "Which devices are on the map" and "which devices this profile may see" are now decided in one place and read by the Dashboard, the bottom bar and the Cockpit alike, so their counts cannot drift apart.
+
 ## 2.496.225
 
 ### New

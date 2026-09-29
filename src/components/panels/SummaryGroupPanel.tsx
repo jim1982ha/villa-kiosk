@@ -40,6 +40,7 @@ import type { SummaryGroup } from "@/config/summaryGroups";
 import { useVillaModel } from "@/config/VillaModel";
 import { devicePower } from "@/utils/devicePower";
 import InlineConfirm from "@/components/common/InlineConfirm";
+import { NOT_SENT } from "@/ha/serviceOutcome";
 
 interface Props {
   group: SummaryGroup;
@@ -359,7 +360,7 @@ export default function SummaryGroupPanel({
     // The flip is devicePower's (lock/unlock, open/close, a domain's toggle).
     const doToggle = () => {
       const f = devicePower(e, id).flip;
-      if (f) void callService(f.domain, f.service, {}, { entity_id: id });
+      return f ? callService(f.domain, f.service, {}, { entity_id: id }) : Promise.resolve(NOT_SENT);
     };
 
     return (

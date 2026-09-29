@@ -11,6 +11,7 @@ import { ingressWsUrl } from "./ingress";
 import { captureError } from "@/utils/diagnostics";
 import { report as reportTelemetry } from "@/utils/telemetry";
 import { reportSessionLost } from "@/auth/sessionLost";
+import type { ServiceOutcome } from "./serviceOutcome";
 
 type Resolver = (result: unknown) => void;
 type Rejecter = (err: Error) => void;
@@ -567,7 +568,7 @@ export class HAWebSocket {
     service: string,
     data: Record<string, unknown> = {},
     target?: HassServiceTarget,
-  ): Promise<void> {
+  ): Promise<ServiceOutcome> {
     try {
       await this.sendMessage("call_service", {
         domain,
@@ -575,12 +576,16 @@ export class HAWebSocket {
         service_data: data,
         ...(target ? { target } : {}),
       });
+      return { ok: true };
     } catch (err) {
-      // Every button in the app fires service calls without awaiting them; a
-      // silently swallowed rejection is exactly the "I tap and nothing
-      // happens" bug. Route failures to one place (the HUD toast) instead of
-      // throwing at callers that never catch.
-      this.onServiceError(err as Error);
+      // Most buttons fire service calls without awaiting them; a rejection
+      // nobody catches is exactly the "I tap and nothing happens" bug. So this
+      // never rejects: failures go to one listener (the HUD toast), AND the
+      // outcome resolves so the control that sent it can undo itself at once
+      // (see serviceOutcome.ts).
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.onServiceError(error);
+      return { ok: false, error };
     }
   }
 

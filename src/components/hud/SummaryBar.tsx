@@ -381,31 +381,24 @@ function SceneMenu({ scenes, canRun, apply }: {
 }
 
 export default function SummaryBar({ onOpenEntity, scenes }: Props) {
-  const { entities, suppressedEntityIds, entityDeviceIds, haConfig } = useHA();
+  const { entityDeviceIds, haConfig } = useHA();
   const { ask: askScene, dialog: sceneDialog } = useSceneConfirm();
   const { role } = useProfile();
   const { config, resolvedRooms } = useConfig();
 
   const [openGroup, setOpenGroup] = useState<SummaryTile | null>(null);
 
-  // Entities hidden in HA, or filed under entity_category config/diagnostic,
-  // are excluded up front so a tile's "3 On" count never disagrees with the
-  // (also-filtered, see SummaryGroupPanel) list its tap opens.
-  const visibleEntities = useMemo(() => {
-    if (suppressedEntityIds.size === 0) return entities;
-    const out: Record<string, HassEntity> = {};
-    for (const [id, e] of Object.entries(entities)) {
-      if (!suppressedEntityIds.has(id)) out[id] = e;
-    }
-    return out;
-  }, [entities, suppressedEntityIds]);
 
   // The villa's own devices — the same set the offline badge and the Facility
   // device count use. See lightsGroup for what counting by domain prefix alone
   // got wrong.
   // `visibleEntities`, not the raw store: this bar counts what the profile can
   // actually see. The set is the value's own now — no caller builds one.
-  const { visibleDevices, mappedEntityIds } = useVillaModel();
+  // Entities hidden in HA, or filed under entity_category config/diagnostic,
+  // are excluded up front (the villa model's visibleEntities) so a tile's
+  // "3 On" count never disagrees with the (also-filtered, see
+  // SummaryGroupPanel) list its tap opens.
+  const { visibleDevices, mappedEntityIds, visibleEntities } = useVillaModel();
   // What this profile's lists cover — the SAME set the list a tile opens
   // shows (SummaryGroupPanel), so a guest's tile cannot count an off-map
   // device their list leaves out.

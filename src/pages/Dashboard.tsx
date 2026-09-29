@@ -38,7 +38,6 @@ import { deriveHaScenes, scenesForRoom } from "@/config/haScenes";
 import { effectiveCategory, subjectOf, categoryColor, CATEGORY_ICONS, CATEGORY_LABELS } from "@/config/EntityCategories";
 import { badgeFaceAndRing } from "@/utils/deviceActivity";
 import { alertStateFor, isMotionSensor } from "@/config/BinarySensorClasses";
-import { dismissedEntitySet } from "@/config/dismissedEntities";
 import { phantomEntity } from "@/utils/phantomEntity";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
 import { isQuickToggle } from "@/utils/quickAction";
@@ -48,7 +47,7 @@ import { installDailyAutoReload } from "@/utils/autoReload";
 import type { SceneManager } from "@/babylon/SceneManager";
 import type { ActivePanel } from "@/types/panel.types";
 import type { Category, TeleportPoint } from "@/types/scene.types";
-import { VillaModelProvider } from "@/config/VillaModel";
+import { VillaModelProvider, useVillaSets } from "@/config/VillaModel";
 import { devicePower } from "@/utils/devicePower";
 import { readSceneMirror } from "./sceneMirror";
 
@@ -133,32 +132,12 @@ export default function Dashboard() {
   // from. Recomputed from config, not baked into the raw set at load time,
   // so re-linking a device in Settings takes effect without a model reload.
   //
-  // Dismissed entities (see AppConfig.dismissedEntityIds) are removed HERE
-  // rather than at each list that renders them. This set is what every
-  // "is it on the map / does it exist" surface downstream reads — the
-  // unavailable-devices modal, the room-cluster list, Facility readiness —
-  // so filtering once is what makes "Remove" mean the same thing in all of
-  // them. It cannot be done by filtering config.entityMap instead: rebuilding
-  // that object per render is exactly what forced a full multi-second Babylon
-  // re-index in 2.58.0 (see filterConfigForRole's docstring), whereas this
-  // derived Set is already recomputed and costs nothing.
-  const dismissedIds = useMemo(
-    () => dismissedEntitySet(config.dismissedEntityIds, entities),
-    [config.dismissedEntityIds, entities],
-  );
-  const effectiveMappedEntityIds = useMemo(() => {
-    const augmented = new Set<string>();
-    for (const id of mappedEntityIds) if (!dismissedIds.has(id)) augmented.add(id);
-    for (const mapping of Object.values(config.entityMap)) {
-      if (mapping.linkedEntityId && !dismissedIds.has(mapping.linkedEntityId)) {
-        augmented.add(mapping.linkedEntityId);
-      }
-      if (mapping.motionEntityId && !dismissedIds.has(mapping.motionEntityId)) {
-        augmented.add(mapping.motionEntityId);
-      }
-    }
-    return augmented;
-  }, [mappedEntityIds, config.entityMap, dismissedIds]);
+  // Which entities are on the map (the model's objects, plus every mapping's
+  // linked and motion entity, dismissed ones out), which are dismissed, and
+  // which a profile can see at all — decided once, by the villa model
+  // (config/villaVisibility.ts), and read here as by every surface below.
+  const villaSets = useVillaSets(mappedEntityIds);
+  const { dismissedIds, mappedEntityIds: effectiveMappedEntityIds } = villaSets;
   // Mirrored into a ref for the motion-toast subscription below, which reads
   // it from inside a subscribeAll callback set up once ([subscribeAll] only)
   // — a plain closure over the memo would freeze on whatever set existed at
@@ -421,9 +400,9 @@ export default function Dashboard() {
   // Its power is devicePower's: a linked LOCK is "on" when unlocked and is
   // flipped with lock/unlock (it has no toggle); unknown when HA lost it.
   const linkedPower = linkedEntityId ? devicePower(entities[linkedEntityId], linkedEntityId) : null;
-  const linkedSend = useCallback(() => {
-    if (linkedEntityId) HAServices.power(ws, entities[linkedEntityId], linkedEntityId);
-  }, [ws, linkedEntityId, entities]);
+  const linkedSend = useCallback(
+    () => (linkedEntityId ? HAServices.power(ws, entities[linkedEntityId], linkedEntityId) : undefined),
+    [ws, linkedEntityId, entities]);
   const linkedToggle = useOptimisticToggle(
     linkedEntityId,
     linkedPower?.position === "on",
@@ -743,7 +722,7 @@ export default function Dashboard() {
   }, [manager]);
 
   return (
-    <VillaModelProvider mappedEntityIds={effectiveMappedEntityIds}>
+    <VillaModelProvider sets={villaSets}>
       <BabylonCanvas
         key={modelKey}
         onManager={setManager}

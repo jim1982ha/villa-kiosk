@@ -4,6 +4,7 @@
 import type { HAWebSocket } from "./HAWebSocket";
 import type { HassEntity } from "@/types/ha.types";
 import { devicePower } from "@/utils/devicePower";
+import { NOT_SENT, type ServiceOutcome } from "./serviceOutcome";
 
 type WS = HAWebSocket;
 const t = (entityId: string) => ({ entity_id: entityId });
@@ -11,10 +12,11 @@ const t = (entityId: string) => ({ entity_id: entityId });
 export const HAServices = {
   /** Throw a device's power switch the other way — the service is
    *  devicePower's (lock/unlock, open/close, a domain's own toggle); nothing
-   *  is sent when its position is unknown. */
-  power: (ws: WS, entity: HassEntity | undefined, id: string) => {
+   *  is sent when its position is unknown (NOT_SENT). Every wrapper returns
+   *  the call's outcome. */
+  power: (ws: WS, entity: HassEntity | undefined, id: string): Promise<ServiceOutcome> => {
     const f = devicePower(entity, id).flip;
-    if (f) void ws.callService(f.domain, f.service, {}, t(id));
+    return f ? ws.callService(f.domain, f.service, {}, t(id)) : Promise.resolve(NOT_SENT);
   },
   // --- Lights ---
   setLightBrightness: (ws: WS, id: string, brightness: number) =>

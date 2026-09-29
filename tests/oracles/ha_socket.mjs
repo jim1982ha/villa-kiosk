@@ -29,6 +29,9 @@ class FakeSocket {
   send(raw) {
     const m = JSON.parse(raw); this.sent.push(m);
     if (m.type === "auth") setTimeout(() => this.emit({ type: "auth_ok" }), 0);
+    // A command to the "refused" domain is turned down, as Home Assistant
+    // (or the add-on's allow-list) turns down one it will not run.
+    else if (m.type === "call_service" && m.domain === "refused") setTimeout(() => this.emit({ id: m.id, type: "result", success: false, error: { code: "unauthorized", message: "refused" } }), 0);
     else if (m.id !== undefined && m.type !== "pong") setTimeout(() => this.emit({ id: m.id, type: "result", success: true, result: m.type === "get_states" ? [] : null }), 0);
   }
   close(code = 1000) { this.serverClose(code); }
@@ -47,6 +50,58 @@ ws.onStateChange = (s) => states.push(s);
 await ws.connect();
 ck("the handshake: connecting → authenticating → connected, answering auth on the socket that asked",
    states.join(",").endsWith("connecting,authenticating,connected") && sockets[0].sent[0].type === "auth", states);
+// ── a command reports what it came to (2.496.226) ─────────────────────────
+// callService used to resolve `void` either way, so a button could only undo
+// itself by timeout; it now RESOLVES an outcome and still never rejects.
+{
+  const reported = [];
+  ws.onServiceError = (e) => reported.push(e.message);
+  const good = await ws.callService("light", "turn_on", {}, { entity_id: "light.x" });
+  ck("a command Home Assistant ran resolves { ok: true }", good.ok === true, good);
+  let rejected = false;
+  const bad = await ws.callService("refused", "do", {}).catch(() => { rejected = true; });
+  ck("a refused one RESOLVES { ok: false } with the reason — it never rejects",
+     !rejected && bad?.ok === false && bad.error.message === "refused", bad);
+  ck("  ...and the error toast still hears it, once", reported.length === 1 && reported[0] === "refused", reported);
+  ws.onServiceError = () => {};
+}
+const { onFailure, NOT_SENT } = await import("@/ha/serviceOutcome");
+{
+  const calls = [];
+  const probe = (label, sent) => onFailure(sent, () => calls.push(label));
+  probe("nothing returned", undefined);
+  probe("ok", Promise.resolve({ ok: true }));
+  probe("failed", Promise.resolve({ ok: false, error: new Error("x") }));
+  probe("not sent", Promise.resolve(NOT_SENT));
+  probe("rejected", Promise.reject(new Error("y")));
+  await new Promise((r) => setTimeout(r, 0));
+  ck("a control undoes itself for a failed, unsent or rejected command — not for ok, not for nothing returned",
+     calls.sort().join() === "failed,not sent,rejected", calls);
+}
+const { HAServices } = await import("@/ha/HAServiceCalls");
+{
+  // Every wrapper hands the outcome back — power included, which used to
+  // swallow it with `void`.
+  const fakeWs = { callService: async () => ({ ok: true }) };
+  const r = HAServices.power(fakeWs, { entity_id: "light.x", state: "on", attributes: {} }, "light.x");
+  ck("HAServices.power returns the command's outcome", (await r)?.ok === true);
+  const unknown = await HAServices.power(fakeWs, { entity_id: "light.x", state: "unavailable", attributes: {} }, "light.x");
+  ck("  ...and NOT_SENT when the switch's position is unknown", unknown === NOT_SENT);
+}
+
+{
+  // ⚠️ PIN THE CALLERS: the hooks revert on failure only if the controls pass
+  // the outcome on. A test of the hooks stays green while a control drops it.
+  const { readFileSync } = await import("node:fs");
+  const src = (f) => readFileSync(new URL(`../../src/${f}`, import.meta.url), "utf8");
+  ck("the power button and the lock pass the command's outcome to their pending look",
+     /markPending\(onClick\(\)\)/.test(src("components/panels/PowerToggle.tsx"))
+     && (src("components/panels/LockPanel.tsx").match(/markPending\(HAServices\./g) ?? []).length === 2
+     && !/markPending\(\)/.test(src("components/panels/LockPanel.tsx") + src("components/panels/PowerToggle.tsx")));
+  ck("the list row's switch hands its send's outcome back",
+     /useCallback\(\(\) => onToggle\(\)/.test(src("components/panels/EntityRowToggle.tsx")));
+}
+
 const subId = await ws.subscribeEvents("state_changed", () => {});
 ck("a subscription goes out on the live socket", sockets[0].sent.some((m) => m.type === "subscribe_events" && m.id === subId));
 

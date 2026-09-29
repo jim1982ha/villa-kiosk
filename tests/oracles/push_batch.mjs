@@ -98,10 +98,9 @@ console.log("\n  folding computed once:");
 
 console.log("\n  the callers:");
 {
-  const st = readFileSync(new URL("../../src/ha/HAStateStore.tsx", import.meta.url), "utf8");
-  ck("state_changed pushes into the batch and notifies the 3D layer at once", /batchRef\.current\?\.push\(ns\);/.test(st) && /notify\(ns\);/.test(st) && !/setEntities\(\(prev\) => \(\{ \.\.\.prev, \[ns\.entity_id\]: ns \}\)\)/.test(st));
-  ck("  ...the snapshot lays the pending events over the last drain", /batchRef\.current!\.overlay\(entitiesRef\.current\)/.test(st));
-  ck("  ...and a full hydrate supersedes the batch", /batchRef\.current\?\.dispose\(\);\s*setEntities\(map\);/.test(st));
+  // The store's use of the batch (push + notify at once, the snapshot's
+  // overlay, a full read superseding it) is driven by value in
+  // entity_store.mjs since 2.496.226.
   const sb = readFileSync(new URL("../../src/components/hud/SummaryBar.tsx", import.meta.url), "utf8");
   ck("the summary bar finds the station once and hands it to the tiles", (sb.match(/findWeatherStation\(/g) ?? []).length === 1 && /useMemo\(\(\) => findWeatherStation\(visibleEntities, entityDeviceIds\)/.test(sb));
 }
