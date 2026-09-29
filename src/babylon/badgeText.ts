@@ -58,6 +58,7 @@
 import { TextBlock } from "@babylonjs/gui/2D/controls/textBlock";
 import { Control } from "@babylonjs/gui/2D/controls/control";
 import type { BadgeMetrics } from "./badgeMetrics";
+import { inkNudge } from "./badgeIcons";
 
 /**
  * The app's own UI typeface, as a canvas font stack.
@@ -133,4 +134,85 @@ export function badgeText(name: string, opts: BadgeTextOptions): TextBlock {
   if (opts.align === "left") t.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
   t.textVerticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
   return t;
+}
+
+// ── INK CENTRING for text that sits alone in a shape (2.496.220) ──────────
+// The room chip's COUNT PILL: a number in a circle, which is exactly the
+// situation the badge GLYPHS are in — and they are centred by measuring their
+// own ink (badgeIcons.inkNudge), while the digit was centred by Babylon's LINE
+// BOX plus the fixed textOpticalTopEm above. Measured (tests/_probe/count, a
+// real Babylon GUI in Firefox): the digit sat 0.09 em LOW there; the owner's
+// screenshot shows it HIGH on theirs (2026-09-29). Babylon's line box comes
+// from the browser's own font measure (GetFontOffset: a DOM span's ascent and
+// line height), which engines take differently, so ANY fixed correction is
+// right on at most one browser. That is the unexplained offset the header
+// above records: not a Babylon bug, a per-browser fact.
+//
+// So a string drawn alone in a shape is centred the way a glyph is: drawn once
+// at the baseline Babylon itself uses (its own cached font offset), its ink
+// measured in THIS browser, and moved by the same rule — OPTICAL_CORRECTION of
+// the way from the ink box's centre to its ink mass's centre. One function,
+// one rule, for everything drawn alone in a shape.
+
+/** The font string Babylon's Control builds (_prepareFont) — also the key of
+ *  its font-offset cache, so the offset read here is the one it draws with. */
+export function guiFont(weight: string, px: number): string {
+  return ` ${weight} ${px}px ${GUI_FONT_FAMILY}`;
+}
+
+/**
+ * Where a resizeToFit TextBlock's box sits in a square raster of side
+ * `size`, centred as its parent centres it — so the raster's centre is the
+ * shape's centre, which is what inkNudge measures against. Pure.
+ */
+export function textRasterLayout(textWidth: number, lineHeight: number, ascent: number): {
+  size: number; x: number; baseline: number;
+} {
+  const size = Math.ceil(Math.max(textWidth, lineHeight)) + 4;
+  return { size, x: (size - textWidth) / 2, baseline: (size - lineHeight) / 2 + ascent };
+}
+
+const inkCache = new Map<string, { dx: number; dy: number }>();
+
+/** How far to move `text` so its INK is optically centred in its shape. */
+export function textInkNudge(text: string, weight: string, px: number): { dx: number; dy: number } {
+  const font = guiFont(weight, px);
+  const key = `${font}|${text}`;
+  const hit = inkCache.get(key);
+  if (hit) return hit;
+  let out = { dx: 0, dy: 0 };
+  const canvas = typeof document !== "undefined" ? document.createElement("canvas") : null;
+  const ctx = canvas?.getContext("2d");
+  if (canvas && ctx && text) {
+    const offset = Control._GetFontOffset(font);
+    ctx.font = font;
+    const lay = textRasterLayout(ctx.measureText(text).width, offset.height, offset.ascent);
+    canvas.width = canvas.height = lay.size;
+    ctx.font = font;                       // resizing the canvas resets its state
+    ctx.fillStyle = "#000";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText(text, lay.x, lay.baseline);
+    const data = ctx.getImageData(0, 0, lay.size, lay.size).data;
+    const alpha = new Uint8ClampedArray(lay.size * lay.size);
+    for (let i = 0; i < alpha.length; i++) alpha[i] = data[i * 4 + 3];
+    out = inkNudge(alpha, lay.size);
+  }
+  // ⚠️ NOT CACHED BEFORE THE WEB FONT HAS LOADED: measured on the fallback
+  // font, the nudge would be kept for the life of the page after Public Sans
+  // replaced it on screen. The next update after the load measures again.
+  if (typeof document === "undefined" || !document.fonts || document.fonts.status === "loaded") {
+    inkCache.set(key, out);
+  }
+  return out;
+}
+
+/** Set a centred TextBlock's text and centre its INK in its shape
+ *  (textInkNudge). For a string drawn alone in a shape — the count pill. The
+ *  control must have been created with `opticalNudge: false`: this replaces
+ *  the fixed correction, it does not add to it. */
+export function setInkCentredText(t: TextBlock, text: string, weight: string, px: number): void {
+  t.text = text;
+  const n = textInkNudge(text, weight, px);
+  t.left = `${n.dx}px`;
+  t.top = `${n.dy}px`;
 }

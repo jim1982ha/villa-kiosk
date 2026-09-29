@@ -128,7 +128,7 @@ import type { FrameRequests } from "./frameScheduler";
 import { badgeImage } from "./badgeIcons";
 import { applyBadgeFrame, badgeRing, badgeBakePx, BADGE_INSET_CARD, BADGE_CORNER_FRACTION, NO_RING } from "./badgeLook";
 import { DashableRectangle } from "./dashableRectangle";
-import { badgeText } from "./badgeText";
+import { badgeText, setInkCentredText } from "./badgeText";
 import { badgeShadow } from "./badgeShadow";
 import { cameraFrame } from "./cameraFrame";
 import {
@@ -5514,7 +5514,7 @@ export class EntityVisuals {
       // A chip that absorbed others says so with a "+N" suffix, so the count
       // pill's total is never mistaken for one room's device count.
       c.text.text = chip.label;
-      c.countText.text = formatCountBadge(chip.ids.length);
+      setInkCentredText(c.countText, formatCountBadge(chip.ids.length), "700", this.summaryMetrics().countFont);
       // The chip's own ring mirrors the individual badge ring rule exactly
       // (BADGE_RING): red when at least one member is "on" or "alert",
       // otherwise no ring — the only attention signal available once the
@@ -5632,8 +5632,10 @@ export class EntityVisuals {
     countBadge.top = "3px";
     container.addControl(countBadge);
 
+    // Ink-centred in its circle, as a glyph is in its chip (setInkCentredText
+    // at every update): the fixed optical nudge is off for it.
     const countText = badgeText(`clusterCountText_${key}`, {
-      fontPx: sm.countFont, color: "#ffffff", weight: "700", metrics: this.metrics,
+      fontPx: sm.countFont, color: "#ffffff", weight: "700", metrics: this.metrics, opticalNudge: false,
     });
     countBadge.addControl(countText);
 

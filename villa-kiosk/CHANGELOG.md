@@ -1,3 +1,8 @@
+## 2.496.220
+
+### Fixed
+- **The number in a room chip's green (or red) circle is now centred.** It sat slightly too high on some devices and slightly too low on others: it was centred by the font's line spacing plus a fixed correction, and each browser measures that line spacing differently, so one fixed value could only ever be right on one of them. The number is now centred the way the badge icons already are — by measuring where its ink actually lands on this device — so it looks centred everywhere.
+
 ## 2.496.219
 
 ### Changed
