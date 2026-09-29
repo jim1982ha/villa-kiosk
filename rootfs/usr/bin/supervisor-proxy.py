@@ -328,37 +328,53 @@ def _role_for(request: web.Request) -> str:
     return _session_role(request.cookies.get(SESSION_COOKIE)) or "guest"
 
 
-# ── WHAT EACH ROLE MAY DO — the proxy's ONE statement of it ──────────────
+# ── WHAT EACH ROLE MAY DO — ONE TABLE, READ HERE AND BY THE APP ──────────
 # Every authorization decision below asks `_may(role, capability)`; none names
-# a role. It used to: "guest may not view cameras" was `role == "guest"` once
-# per door (REST and websocket), the owner's exemption from the allowlists was
-# `role == "owner"` in three functions, and five handlers carried their own
-# role tuples — so adding a profile meant finding about a dozen places.
+# a role. The rights themselves live in /usr/share/vesta/roles.json
+# (rootfs/usr/share/vesta/ in the repo), which src/auth/permissions.ts imports
+# too — the ha-commands.json precedent. They used to be written twice, here and
+# in the app, kept equal by a test that scraped the TypeScript as text.
 #
-# The names are src/auth/permissions.ts's wherever the kiosk has the same idea
-# (editConfig, manageModel, manageFacility, reportFault), and
-# tests/proxy-rules.py fails if the two tables disagree on any of them. Two
-# are the proxy's own:
-#   viewCameras — the client expresses it as `deniedTypes: ["camera"]`; the
-#                 test holds the two equivalent.
+# Two names are derived or proxy-only:
+#   viewCameras — held exactly when "camera" is not among a profile's
+#                 deniedTypes, so what the app hides and what the proxy refuses
+#                 cannot disagree.
 #   administer  — exempt from the websocket/REST allowlists and the service
 #                 confinement, may revoke every session and read telemetry.
-ROLE_CAPABILITIES = {
-    "owner": frozenset({"administer", "editConfig", "manageModel", "manageFacility",
-                        "reportFault", "viewCameras", "viewAgent"}),
-    "ops": frozenset({"manageFacility", "reportFault", "viewCameras", "viewAgent"}),
-    # A guest reports faults and attaches photos of them; the write guard then
-    # confines what that write may contain (see _fm_guest_write_ok).
-    "guest": frozenset({"reportFault"}),
-    # ⚠️ THE VESTA AGENT IS NOT A PROFILE (docs/agent-integration/PLAN.md A3).
-    # It never appears on the profile picker, never holds a cookie, and is not
-    # in AUTH_ROLES — it reaches only /agent/v1/*, by bearer token
-    # (_agent_refuse). Its three capabilities are its own; it holds none of
-    # administer, editConfig, manageModel or viewCameras, and _authorized()
-    # never looks at its token, so the Home Assistant relay (/core/*) refuses
-    # it like any caller without a session.
-    "agent": frozenset({"agentRead", "agentWrite", "agentMessage"}),
-}
+#
+# ⚠️ THE VESTA AGENT IS NOT A PROFILE (docs/agent-integration/PLAN.md A3). Its
+# row is roles.json's "agent": it never appears on the profile picker, never
+# holds a cookie, and is not in AUTH_ROLES — it reaches only /agent/v1/*, by
+# bearer token (_agent_refuse), and _authorized() never looks at its token.
+#
+# FAIL CLOSED: an unreadable table grants nothing to anyone.
+def _load_roles() -> dict:
+    here = os.path.dirname(os.path.abspath(__file__))
+    for path in ("/usr/share/vesta/roles.json",
+                 os.path.join(here, "..", "share", "vesta", "roles.json")):
+        try:
+            with open(path, encoding="utf-8") as f:
+                return json.load(f)
+        except (OSError, ValueError):
+            continue
+    print("[proxy] roles.json unreadable: every profile refused", flush=True)
+    return {}
+
+
+def _role_capabilities(table: dict) -> dict:
+    """roles.json → {role: frozenset of capabilities}, viewCameras derived."""
+    out = {}
+    for role, row in (table.get("profiles") or {}).items():
+        caps = set(row.get("capabilities") or ())
+        if "camera" not in (row.get("deniedTypes") or ()):
+            caps.add("viewCameras")
+        out[role] = frozenset(caps)
+    out["agent"] = frozenset((table.get("agent") or {}).get("capabilities") or ())
+    return out
+
+
+ROLES_TABLE = _load_roles()
+ROLE_CAPABILITIES = _role_capabilities(ROLES_TABLE)
 
 
 def _may(role: str, capability: str) -> bool:
@@ -495,7 +511,7 @@ def _public_model_access() -> bool:
     routes; /core/* (Home Assistant control) always goes through _authorized()
     regardless. Read fresh on every call (not cached) so flipping the option
     takes effect without restarting this process."""
-    return bool(_read_options().get("public_model_access", False))
+    return opt("public_model_access")
 
 
 def _model_authorized(request: web.Request) -> bool:
@@ -877,27 +893,141 @@ def _read_options() -> dict:
         return {}
 
 
-def _options_after_cleanup(options: dict) -> dict | None:
+# ── THE ADD-ON'S OPTIONS: ONE TABLE ─────────────────────────────────────────
+# Every option the Configuration page offers, one row each: its kind, its
+# default, its range or pattern, and any OLDER place an install may still have
+# it stored. Every reader asks opt(name); the start-up self-heal asks
+# migrate_options(stored). tests/addon-manifest.py checks villa-kiosk/
+# config.yaml against this table BY VALUE — default, range and pattern.
+#
+# Before 2.496.223 an option's default and range were written in the manifest
+# AND in each reader, never compared, and the three moves of the agent
+# settings in one day each touched seven or eight places.
+#
+# A dotted name is a field inside a group on the page (`vesta_agent.token`).
+# Values are read fresh on every call (a change needs no restart) and never
+# trusted: the schema validates what the form writes, but /data/options.json
+# can be hand-edited, so a malformed value falls back to the default (for a
+# code or token: to "not configured", the closed failure) and a number is
+# clamped — a retention of -1 or 10**9 must not become "delete everything" or
+# "never delete".
+PIN_RE = re.compile(r"^[0-9]{4}$")
+SUPERADMIN_PIN_RE = re.compile(r"^[0-9]{6}$")
+#: ⚠️ A SHORT TOKEN IS A GUESSABLE ONE. The option is a masked `password`
+#: field (config.yaml), which cannot also carry a pattern, so THIS is the one
+#: check of its shape: a token that fails it is treated as NOT CONFIGURED — the
+#: closed failure — and the start-up log says so (_agent_config_warning).
+AGENT_TOKEN_RE = re.compile(r"^[A-Za-z0-9._~+/=-]{16,128}$")
+
+
+class Option:
+    """One row of OPTIONS. `kind` is "text" (fullmatch `pattern`, else ""),
+    "secret" (the same, shown masked), "bool" (only a real true/false counts)
+    or "int" (clamped to lo..hi). `older` lists the places an earlier release
+    stored it, as key paths; while one is still stored it WINS, and
+    migrate_options moves it here."""
+    __slots__ = ("kind", "default", "lo", "hi", "pattern", "older")
+
+    def __init__(self, kind, default, lo=None, hi=None, pattern=None, older=()):
+        self.kind, self.default, self.lo, self.hi = kind, default, lo, hi
+        self.pattern, self.older = pattern, tuple(older)
+
+
+OPTIONS = {
+    "guest_pin": Option("text", "", pattern=PIN_RE),
+    "owner_pin": Option("text", "", pattern=PIN_RE),
+    "ops_pin": Option("text", "", pattern=PIN_RE),
+    "superadmin_pin": Option("text", "", pattern=SUPERADMIN_PIN_RE),
+    "public_model_access": Option("bool", False),
+    "evidence_retention_days": Option("int", 550, 0, 3650),
+    "session_days": Option("int", 30, 1, 365),
+    "telemetry_max_events": Option("int", 500, 50, 5000),
+    "pin_lockout_minutes": Option("int", 5, 1, 1440),
+    # THE agent switch sits above its group, so the page shows it with the
+    # group folded; in 2.496.218 it was inside the group as `enabled`.
+    "agent_enabled": Option("bool", False, older=[("vesta_agent", "enabled")]),
+    # Before 2.496.218 the agent's settings were flat keys.
+    "vesta_agent.token": Option("secret", "", pattern=AGENT_TOKEN_RE, older=[("agent_token",)]),
+    "vesta_agent.offline_after_minutes": Option("int", 5, 1, 60, older=[("agent_offline_after_minutes",)]),
+    "vesta_agent.message_retention_days": Option("int", 90, 1, 365, older=[("agent_message_retention_days",)]),
+}
+
+
+def _stored_at(options, path):
+    """(True, value) when `path` is stored in `options`, else (False, None)."""
+    node = options
+    for key in path:
+        if not isinstance(node, dict) or key not in node:
+            return False, None
+        node = node[key]
+    return True, node
+
+
+def _stored_value(options, name):
+    """The raw stored value of option `name` — an older place first — or its
+    default when it is stored nowhere."""
+    row = OPTIONS[name]
+    for path in row.older + (tuple(name.split(".")),):
+        found, value = _stored_at(options, path)
+        if found:
+            return value
+    return row.default
+
+
+def opt(name: str, options: dict | None = None):
+    """Option `name`, read fresh from /data/options.json (or `options`), in
+    the shape its row promises. Never raises."""
+    row = OPTIONS[name]
+    raw = _stored_value(_read_options() if options is None else options, name)
+    if row.kind == "bool":
+        return raw if isinstance(raw, bool) else row.default
+    if row.kind == "int":
+        if isinstance(raw, bool):
+            return row.default
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            return row.default
+        return max(row.lo, min(row.hi, value))
+    if row.kind == "secret":
+        text = raw if isinstance(raw, str) else ""
+    else:
+        text = str(raw or "").strip()
+    return text if row.pattern.fullmatch(text) else ""
+
+
+def migrate_options(stored: dict) -> dict | None:
     """The stored options to write back, or None when nothing is stale:
-    retired keys dropped, and the VESTA Agent settings MOVED from their older
-    places (values kept — the owner's token and switch must survive the
-    update): flat keys into the `vesta_agent` group, and 2.496.218's in-group
-    `enabled` out to the top-level switch. Pure: tests/agent-interface.py
-    drives it."""
-    group = options.get(AGENT_GROUP_OPTION)
-    group = dict(group) if isinstance(group, dict) else {}
-    moved = {old: field for old, field in LEGACY_AGENT_OPTIONS.items() if old in options}
-    if not (set(options) & REMOVED_OPTION_KEYS) and not moved and "enabled" not in group:
-        return None
-    cleaned = {k: v for k, v in options.items()
-               if k not in REMOVED_OPTION_KEYS and k not in LEGACY_AGENT_OPTIONS}
-    if "enabled" in group:
-        cleaned[AGENT_ENABLED_OPTION] = group.pop("enabled")
-    for old, field in moved.items():
-        group[field] = options[old]
-    if moved or AGENT_GROUP_OPTION in options:
-        cleaned[AGENT_GROUP_OPTION] = group
-    return cleaned
+    retired keys (REMOVED_OPTION_KEYS) dropped, and every option still in an
+    OLDER place moved to its current one, value kept — the owner's token and
+    switch must survive an update. Pure: tests/agent-interface.py drives it."""
+    out = json.loads(json.dumps(stored))
+    changed = False
+    for key in REMOVED_OPTION_KEYS & set(out):
+        del out[key]
+        changed = True
+    for name, row in OPTIONS.items():
+        path = tuple(name.split("."))
+        found_any, kept = False, None
+        for older in row.older:
+            found, value = _stored_at(out, older)
+            if not found:
+                continue
+            if not found_any:
+                found_any, kept = True, value   # the first older place wins
+            parent = out
+            for key in older[:-1]:
+                parent = parent[key]
+            del parent[older[-1]]
+        if found_any:
+            target = out
+            for key in path[:-1]:
+                if not isinstance(target.get(key), dict):
+                    target[key] = {}
+                target = target[key]
+            target[path[-1]] = kept
+            changed = True
+    return out if changed else None
 
 
 async def _cleanup_stale_options(session: ClientSession) -> None:
@@ -931,7 +1061,7 @@ async def _cleanup_stale_options(session: ClientSession) -> None:
                 return
             body = await resp.json()
         options = (body.get("data") or {}).get("options") or {}
-        cleaned = _options_after_cleanup(options)
+        cleaned = migrate_options(options)
         if cleaned is None:
             return
         stale = sorted(set(options) - set(cleaned))
@@ -1048,7 +1178,7 @@ async def auth_check_handler(request: web.Request) -> web.Response:
 
 AUTH_ROLES = ("guest", "owner", "ops")
 PIN_OPTION = {"guest": "guest_pin", "owner": "owner_pin", "ops": "ops_pin"}
-PIN_RE = re.compile(r"^[0-9]{4}$")
+# PIN_RE: see OPTIONS.
 
 # ── Superadmin elevation ─────────────────────────────────────────────────
 # NOT a fourth profile: it never appears in the profile picker, mints no
@@ -1065,7 +1195,7 @@ PIN_RE = re.compile(r"^[0-9]{4}$")
 # everyday profile PINs (and the same two-tier rate limiter still applies).
 SUPERADMIN = "superadmin"
 SUPERADMIN_PIN_OPTION = "superadmin_pin"
-SUPERADMIN_PIN_RE = re.compile(r"^[0-9]{6}$")
+# SUPERADMIN_PIN_RE: see OPTIONS.
 # Short window purely to cover the round-trip between "PIN accepted" and "the
 # write arrives". A token is consumed by the FIRST write that uses it, so this
 # is a ceiling on an unused one, not a period of standing privilege.
@@ -1149,32 +1279,9 @@ def _global_locked_for(role: str, now: float = None) -> int:
     return int(remaining) + 1 if remaining > 0 else 0
 
 
-def _option_int(key: str, default: int, lo: int, hi: int) -> int:
-    """A numeric add-on option, read fresh and clamped.
-
-    These exist so an operator can tune the add-on from the Supervisor UI
-    instead of editing constants in a Python file they would lose on the next
-    update. Every one of them is a POLICY choice — how long evidence is kept,
-    how long a session lasts — where no single number is right for every
-    property, which is the test for whether something belongs here at all.
-
-    Read on every call rather than cached, so a change takes effect without
-    restarting this process (same as _public_model_access). Clamped rather
-    than trusted: the schema validates what the UI writes, but /data/options.
-    json can be hand-edited, and a retention of -1 or 10**9 must not turn into
-    "delete everything" or "never delete".
-    """
-    raw = _read_options().get(key, default)
-    try:
-        value = int(raw)
-    except (TypeError, ValueError):
-        return default
-    return max(lo, min(hi, value))
-
-
 def _session_ttl() -> int:
     """How long a signed-in profile stays signed in, in seconds."""
-    return _option_int("session_days", 30, 1, 365) * 86400
+    return opt("session_days") * 86400
 
 
 def _evidence_retention_days() -> int:
@@ -1182,17 +1289,17 @@ def _evidence_retention_days() -> int:
     an operator whose own retention obligation outlives any default we could
     pick. Referenced-photo garbage collection is unaffected either way: this
     is about age, not about whether anything still points at the file."""
-    return _option_int("evidence_retention_days", 550, 0, 3650)
+    return opt("evidence_retention_days")
 
 
 def _telemetry_max_events() -> int:
     """How many diagnostic events the ring keeps."""
-    return _option_int("telemetry_max_events", 500, 50, 5000)
+    return opt("telemetry_max_events")
 
 
 def _auth_lockout_seconds() -> int:
     """How long a client is locked out after too many wrong passcodes."""
-    return _option_int("pin_lockout_minutes", 5, 1, 1440) * 60
+    return opt("pin_lockout_minutes") * 60
 
 
 def _client_ip(request: web.Request) -> str:
@@ -1255,8 +1362,7 @@ def _configured_pin(role: str) -> str:
     treated as unset rather than comparable — never let a weird value widen
     what a submitted string could match.
     """
-    raw = str(_read_options().get(PIN_OPTION[role], "") or "").strip()
-    return raw if PIN_RE.fullmatch(raw) else ""
+    return opt(PIN_OPTION[role])
 
 
 def _configured_superadmin_pin() -> str:
@@ -1264,8 +1370,7 @@ def _configured_superadmin_pin() -> str:
 
     Empty means the whole capability is OFF: no elevation can be minted, so no
     destructive delete can be authorised by anyone. That is the default."""
-    raw = str(_read_options().get(SUPERADMIN_PIN_OPTION, "") or "").strip()
-    return raw if SUPERADMIN_PIN_RE.fullmatch(raw) else ""
+    return opt(SUPERADMIN_PIN_OPTION)
 
 
 def _mint_elevation() -> str:
@@ -1452,17 +1557,186 @@ FM_PROTECTED_COLLECTIONS = ("completions", "costs", "tickets")
 FM_GUEST_MAX_NEW_TICKETS = 3
 
 
+# ── THE FACILITY RECORD'S CHANGE MODULE ─────────────────────────────────────
+# Three doors write the Facility record — a guest's report, owner/ops at work,
+# the VESTA Agent — and each used to re-derive "what did this write change?"
+# on its own (removed ids, dropped photos, unknown keys; the id index and the
+# photo walk existed twice). And nothing on the server said what a VALID
+# record is, so the agent's door could store a fault marked resolved with no
+# resolution date, a cost whose amount is text, or a completion tied to
+# nothing (2.496.223).
+#
+# Now one classifier (_fm_classify) says what a write changes, one validator
+# (_fm_record_errors) says what is wrong with a record, and each door is a
+# short POLICY on top: the guest may only append a report, deleting evidence
+# needs the superadmin code, the agent may delete nothing.
+#
+# ⚠️ ONLY NEW PROBLEMS ARE REFUSED. A record already stored with a problem is
+# not this write's fault: refusing every later write over it would lock the
+# owner out of their own record. A write is refused for a problem the record
+# did not have before it (_FmChange.invalid holds only those).
+
+def _fm_by_id(doc, name: str) -> dict:
+    """{id: record} for one collection — the ONE index every rule uses."""
+    items = doc.get(name) if isinstance(doc, dict) else None
+    return {str(it.get("id")): it for it in items
+            if isinstance(it, dict) and it.get("id") not in (None, "")} if isinstance(items, list) else {}
+
+
 def _fm_ids(doc) -> dict:
     """{collection: {id, ...}} for whatever this document actually contains."""
-    out = {}
-    for name in FM_RECORD_COLLECTIONS:
-        items = doc.get(name) if isinstance(doc, dict) else None
-        out[name] = {
-            str(it.get("id")) for it in items
-            if isinstance(it, dict) and it.get("id") is not None
-        } if isinstance(items, list) else set()
-    return out
+    return {name: set(_fm_by_id(doc, name)) for name in FM_RECORD_COLLECTIONS}
 
+
+def _fm_record_photo_ids(record) -> set:
+    """Every photo one record points at, its per-stage updates included — the
+    ONE photo walk. A fault's per-stage updates carry their own photos (see
+    FmTicketUpdate); missing those would delete a live photo."""
+    ids = set()
+    if not isinstance(record, dict):
+        return ids
+    if isinstance(record.get("photoIds"), list):
+        ids.update(str(p) for p in record["photoIds"])
+    if isinstance(record.get("updates"), list):
+        for u in record["updates"]:
+            if isinstance(u, dict) and isinstance(u.get("photoIds"), list):
+                ids.update(str(p) for p in u["photoIds"])
+    return ids
+
+
+def _fm_referenced_photo_ids(doc) -> set:
+    """Every evidence photo id the document still points at, anywhere."""
+    ids = set()
+    if not isinstance(doc, dict):
+        return ids
+    for name in FM_RECORD_COLLECTIONS:
+        items = doc.get(name)
+        if isinstance(items, list):
+            for it in items:
+                ids |= _fm_record_photo_ids(it)
+    return ids
+
+
+FM_TICKET_STATUSES = ("open", "in_progress", "resolved")
+FM_COST_CATEGORIES = ("minor", "major")
+
+
+def _fm_record_errors(name: str, record) -> set:
+    """What is wrong with one record of collection `name` — empty when valid.
+
+    The rules the app's own code always meets (src/fm/fmEngine.ts), so a
+    kiosk write never trips them; they exist for a writer that is not the
+    kiosk. Each is a sentence a person can act on."""
+    if not isinstance(record, dict):
+        return {"is not an object"}
+    errors = set()
+    if record.get("id") in (None, ""):
+        errors.add("has no id")
+    if "photoIds" in record and not (isinstance(record["photoIds"], list)
+                                     and all(isinstance(p, str) for p in record["photoIds"])):
+        errors.add("photoIds is not a list of photo ids")
+    if name == "tickets":
+        if record.get("status") not in FM_TICKET_STATUSES:
+            errors.add(f"status is not one of {', '.join(FM_TICKET_STATUSES)}")
+        # withTicketPatch / withTicketAdvanced stamp it on the way in; the
+        # time-to-resolve figures rest on it.
+        if record.get("status") == "resolved" and not (
+                isinstance(record.get("resolvedAt"), str) and record["resolvedAt"]):
+            errors.add("is resolved with no resolvedAt")
+    elif name == "costs":
+        amount = record.get("amountIdr")
+        if isinstance(amount, bool) or not isinstance(amount, (int, float)) \
+                or amount != amount or amount in (float("inf"), float("-inf")) or amount < 0:
+            errors.add("amountIdr is not a number of zero or more")
+        if record.get("category") not in FM_COST_CATEGORIES:
+            errors.add(f"category is not one of {', '.join(FM_COST_CATEGORIES)}")
+    elif name == "completions":
+        # A completion answers a schedule OR a fault (withTicketAdvanced files
+        # scheduleId "" with a ticketId); tied to neither it evidences nothing.
+        if not record.get("scheduleId") and not record.get("ticketId"):
+            errors.add("is tied to no schedule and no fault")
+    return errors
+
+
+class _FmChange:
+    """What one write does to the Facility record. Built by _fm_classify."""
+    __slots__ = ("removed", "added", "changed", "dropped_photos", "unknown_keys", "invalid")
+
+    def __init__(self):
+        self.removed = {}         # {collection: set of ids no longer present}
+        self.added = {}           # {collection: [records with a new id]}
+        self.changed = {}         # {collection: [ids whose record differs]}
+        self.dropped_photos = {}  # {(collection, id): photos a KEPT record lost}
+        self.unknown_keys = set() # top-level keys this server does not know, changed
+        self.invalid = []         # [(collection, id or "#index", problem)] NEW problems only
+
+
+def _fm_classify(old, new) -> _FmChange:
+    """The one statement of what a write changes. `old` may be anything (an
+    unreadable or empty store); `new` is what would be stored."""
+    old = old if isinstance(old, dict) else {}
+    new = new if isinstance(new, dict) else {}
+    ch = _FmChange()
+    known = set(FM_RECORD_COLLECTIONS)
+    ch.unknown_keys = {k for k in set(old) | set(new) if k not in known and old.get(k) != new.get(k)}
+    for name in FM_RECORD_COLLECTIONS:
+        before, after = _fm_by_id(old, name), _fm_by_id(new, name)
+        ch.removed[name] = set(before) - set(after)
+        ch.added[name] = [after[i] for i in after if i not in before]
+        ch.changed[name] = [i for i in after if i in before and after[i] != before[i]]
+        for i in set(before) & set(after):
+            lost = _fm_record_photo_ids(before[i]) - _fm_record_photo_ids(after[i])
+            if lost:
+                ch.dropped_photos[(name, i)] = lost
+        items = new.get(name, [])
+        if not isinstance(items, list):
+            if items != old.get(name, []):
+                ch.invalid.append((name, "", "is not a list"))
+            continue
+        # A record without a usable id cannot be addressed, kept or deleted.
+        # Judged by count, so one already stored is not held against a write.
+        if _fm_idless_count(items) > _fm_idless_count(old.get(name)):
+            ch.invalid.append((name, "", "a record is not an object with an id"))
+        seen, old_dupes = set(), _fm_duplicate_ids(old.get(name))
+        for it in items:
+            rid = str(it.get("id")) if isinstance(it, dict) and it.get("id") not in (None, "") else None
+            if rid is None:
+                continue
+            if rid in seen and rid not in old_dupes:
+                ch.invalid.append((name, rid, "appears twice"))
+            seen.add(rid)
+        for rid in [r["id"] for r in ch.added[name]] + ch.changed[name]:
+            rid = str(rid)
+            new_problems = _fm_record_errors(name, after[rid]) - (
+                _fm_record_errors(name, before[rid]) if rid in before else set())
+            ch.invalid.extend((name, rid, p) for p in sorted(new_problems))
+    return ch
+
+
+def _fm_idless_count(items) -> int:
+    return sum(1 for it in items if not isinstance(it, dict) or it.get("id") in (None, "")) \
+        if isinstance(items, list) else 0
+
+
+def _fm_duplicate_ids(items) -> set:
+    seen, dupes = set(), set()
+    for it in items if isinstance(items, list) else ():
+        if isinstance(it, dict) and it.get("id") not in (None, ""):
+            rid = str(it["id"])
+            (dupes if rid in seen else seen).add(rid)
+    return dupes
+
+
+def _fm_invalid_response(ch: _FmChange):
+    """400 naming the first few new problems, or None."""
+    if not ch.invalid:
+        return None
+    said = "; ".join(f"{n} {i} {p}".replace("  ", " ") for n, i, p in ch.invalid[:5])
+    return web.json_response({"error": f"This write would store an invalid Facility record: {said}."},
+                             status=400)
+
+
+# ── the three policies ──────────────────────────────────────────────────────
 
 def _fm_guest_write_ok(old, new) -> bool:
     """True when this write is one a GUEST is allowed to make.
@@ -1473,51 +1747,34 @@ def _fm_guest_write_ok(old, new) -> bool:
     guest happened to tell someone. Letting them raise a fault closes that,
     but a guest must not be able to edit the maintenance record itself.
 
-    So the rule is not a role, it is the SHAPE of the change: every collection
-    except `tickets` must be byte-identical, and `tickets` may only gain
-    entries — no removal, no edit of one that already exists. A guest can add
-    a report and nothing else, including to their own report once it is filed.
-    Triage, status, cost and resolution stay with owner/ops.
+    So the rule is not a role, it is the SHAPE of the change: nothing removed,
+    nothing edited, no unknown key touched, and only `tickets` may gain
+    entries — open reports, marked as a guest's, with no cost, at most
+    FM_GUEST_MAX_NEW_TICKETS. Triage, status, cost and resolution stay with
+    owner/ops.
     """
     if not isinstance(old, dict) or not isinstance(new, dict):
         return False
-    for name in FM_RECORD_COLLECTIONS:
-        if name == "tickets":
-            continue
-        if old.get(name, []) != new.get(name, []):
-            return False
-    # Any key this server version doesn't know about must also be untouched —
-    # a newer client's field is not a licence to rewrite it from a guest
-    # session.
-    known = set(FM_RECORD_COLLECTIONS)
-    for key in set(old) | set(new):
-        if key not in known and old.get(key) != new.get(key):
-            return False
-
-    old_tickets = old.get("tickets") or []
-    new_tickets = new.get("tickets") or []
-    if not isinstance(new_tickets, list) or len(new_tickets) < len(old_tickets):
+    ch = _fm_classify(old, new)
+    if ch.unknown_keys or ch.invalid or any(ch.removed.values()) or any(ch.changed.values()):
         return False
-    # Existing tickets must survive UNCHANGED and in place; only appended
-    # entries are new. Comparing element-wise rather than by id also rejects
-    # a reordering that hides an edit.
-    if new_tickets[:len(old_tickets)] != old_tickets:
+    # Records without an id are invisible to the index; a guest's write must
+    # leave every collection but tickets exactly as it was, and the existing
+    # tickets unchanged and IN PLACE — comparing element-wise also rejects a
+    # reordering that hides an edit.
+    if any(old.get(n, []) != new.get(n, []) for n in FM_RECORD_COLLECTIONS if n != "tickets"):
+        return False
+    old_tickets, new_tickets = old.get("tickets") or [], new.get("tickets") or []
+    if not isinstance(new_tickets, list) or new_tickets[:len(old_tickets)] != old_tickets:
         return False
     added = new_tickets[len(old_tickets):]
-    if not added or len(added) > FM_GUEST_MAX_NEW_TICKETS:
+    if not added or len(added) > FM_GUEST_MAX_NEW_TICKETS \
+            or len(ch.added["tickets"]) != len(added):
         return False
-    for t in added:
-        if not isinstance(t, dict):
-            return False
-        # A guest files an OPEN report and cannot pre-resolve it, backdate it,
-        # or attach a cost to the villa's accounts.
-        if t.get("status") != "open":
-            return False
-        if t.get("resolvedAt") is not None or t.get("costId") is not None:
-            return False
-        if t.get("reportedBy") != "guest":
-            return False
-    return True
+    # A guest files an OPEN report and cannot pre-resolve it, backdate it, or
+    # attach a cost to the villa's accounts.
+    return all(t.get("status") == "open" and t.get("resolvedAt") is None
+               and t.get("costId") is None and t.get("reportedBy") == "guest" for t in added)
 
 
 def _fm_reader_view(request: web.Request, stored):
@@ -1581,12 +1838,10 @@ def _fm_write_guard(request: web.Request, body, old, new):
             return _forbidden("A guest may only add a fault report.")
         return None
 
-    new_ids = _fm_ids(new)
-    removed = {
-        name: _fm_ids(old)[name] - new_ids[name]
-        for name in FM_PROTECTED_COLLECTIONS
-    }
-    if not any(removed.values()):
+    ch = _fm_classify(old, new)
+    if (bad := _fm_invalid_response(ch)) is not None:
+        return bad
+    if not any(ch.removed[name] for name in FM_PROTECTED_COLLECTIONS):
         return None                      # nothing destroyed — ordinary write
     if not _configured_superadmin_pin():
         return _forbidden("Deleting records requires the superadmin code, "
@@ -1596,32 +1851,6 @@ def _fm_write_guard(request: web.Request, body, old, new):
         return _forbidden("Deleting a record requires a fresh superadmin "
                           "authorisation for that specific action.")
     return None
-
-
-def _fm_referenced_photo_ids(doc) -> set:
-    """Every evidence photo id the document still points at, anywhere."""
-    ids = set()
-    if not isinstance(doc, dict):
-        return ids
-    for name in FM_RECORD_COLLECTIONS:
-        items = doc.get(name)
-        if not isinstance(items, list):
-            continue
-        for it in items:
-            if not isinstance(it, dict):
-                continue
-            for field in ("photoIds",):
-                photos = it.get(field)
-                if isinstance(photos, list):
-                    ids.update(str(p) for p in photos)
-            # A fault's per-stage updates carry their own photos (see
-            # FmTicketUpdate) — missing these would delete a live photo.
-            updates = it.get("updates")
-            if isinstance(updates, list):
-                for u in updates:
-                    if isinstance(u, dict) and isinstance(u.get("photoIds"), list):
-                        ids.update(str(p) for p in u["photoIds"])
-    return ids
 
 
 def _delete_evidence(photo_id: str) -> bool:
@@ -2705,29 +2934,8 @@ fm_data_put_handler = _store_put_handler(
 
 AGENT = "agent"
 AGENT_CONTRACT = 1
-#: THE switch (no agent unless exactly `true`, see _agent_token) — a TOP-LEVEL
-#: field, so the Configuration page shows it with the group below folded.
-AGENT_ENABLED_OPTION = "agent_enabled"
-#: The settings that only matter while it is on, one group on the page
-#: (config.yaml `vesta_agent`): `token`, `offline_after_minutes`,
-#: `message_retention_days`.
-AGENT_GROUP_OPTION = "vesta_agent"
-#: ⚠️ THE OLDER PLACES, read until _options_after_cleanup moves them at the first
-#: start (and /data/options.json follows at the start after that — without this
-#: an update would silently drop the owner's token or switch for one restart):
-#:   * before 2.496.218, flat keys (old name → field in the group);
-#:   * in 2.496.218, the switch was INSIDE the group as `enabled` — it wins over
-#:     the top-level default the Supervisor fills in beside it.
-LEGACY_AGENT_OPTIONS = {
-    "agent_token": "token",
-    "agent_offline_after_minutes": "offline_after_minutes",
-    "agent_message_retention_days": "message_retention_days",
-}
-#: ⚠️ A SHORT TOKEN IS A GUESSABLE ONE. The option is a masked `password`
-#: field (config.yaml), which cannot also carry a pattern, so THIS is the one
-#: check of its shape: a token that fails it is treated as NOT CONFIGURED — the
-#: closed failure — and the start-up log says so (_agent_config_warning).
-AGENT_TOKEN_RE = re.compile(r"^[A-Za-z0-9._~+/=-]{16,128}$")
+#: Its settings are rows of OPTIONS: `agent_enabled` (THE switch, above the
+#: group on the page) and the `vesta_agent.*` fields.
 AGENT_STORE_MAX_BYTES = 2_000_000
 #: Beyond the retention window, a hard cap: an agent posting in a loop must not
 #: grow /data (or the Kiosk's message list) without bound.
@@ -2754,30 +2962,6 @@ AGENT_PRESENCE = JsonStore("agent-presence.json", {}, 10_000)
 _own_version = "unknown"
 
 
-def _agent_options(options: dict | None = None) -> dict:
-    """The agent's settings as one dict — `enabled` plus the group's fields —
-    with the older places taking precedence while still stored (see
-    LEGACY_AGENT_OPTIONS)."""
-    options = _read_options() if options is None else options
-    group = options.get(AGENT_GROUP_OPTION)
-    group = dict(group) if isinstance(group, dict) else {}
-    out = {k: v for k, v in group.items() if k != "enabled"}
-    for old, field in LEGACY_AGENT_OPTIONS.items():
-        if old in options:
-            out[field] = options[old]
-    out["enabled"] = group["enabled"] if "enabled" in group else options.get(AGENT_ENABLED_OPTION)
-    return out
-
-
-def _agent_int(field: str, default: int, lo: int, hi: int) -> int:
-    """A numeric field of the agent group, clamped — as _option_int."""
-    try:
-        value = int(_agent_options().get(field, default))
-    except (TypeError, ValueError):
-        return default
-    return max(lo, min(hi, value))
-
-
 def _agent_token() -> str:
     """The configured token, or "" when the agent interface is off.
 
@@ -2785,18 +2969,14 @@ def _agent_token() -> str:
     switch; the owner asked for an explicit one, so "is there an agent" is a
     yes/no a person sets — and a token left in the field while the switch is
     off opens nothing. Only `True` counts: a hand-edited "yes" is not a yes."""
-    agent = _agent_options()
-    if agent.get("enabled") is not True:
-        return ""
-    tok = agent.get("token")
-    return tok if isinstance(tok, str) and AGENT_TOKEN_RE.fullmatch(tok) else ""
+    return opt("vesta_agent.token") if opt("agent_enabled") else ""
 
 
 def _agent_config_warning() -> str | None:
     """What the log says at start when the switch is on and the token cannot
     be used — the Supervisor's form cannot make the token required only while
     the switch is on, so this is where "required" is enforced."""
-    if _agent_options().get("enabled") is not True or _agent_token():
+    if not opt("agent_enabled") or _agent_token():
         return None
     return ("the VESTA Agent is switched on but its token is empty or invalid "
             "(at least 16 characters: letters, digits and . _ ~ + / = -): "
@@ -2804,11 +2984,11 @@ def _agent_config_warning() -> str | None:
 
 
 def _agent_offline_minutes() -> int:
-    return _agent_int("offline_after_minutes", 5, 1, 60)
+    return opt("vesta_agent.offline_after_minutes")
 
 
 def _agent_retention_days() -> int:
-    return _agent_int("message_retention_days", 90, 1, 365)
+    return opt("vesta_agent.message_retention_days")
 
 
 def _now_iso() -> str:
@@ -2866,26 +3046,6 @@ def _agent_refuse(request: web.Request, capability: str | None = None,
 
 # ── Facility records written by the agent (PLAN A5) ─────────────────────────
 
-def _fm_record_photo_ids(record) -> set:
-    """Every photo one record points at, its per-stage updates included."""
-    ids = set()
-    if not isinstance(record, dict):
-        return ids
-    if isinstance(record.get("photoIds"), list):
-        ids.update(str(p) for p in record["photoIds"])
-    if isinstance(record.get("updates"), list):
-        for u in record["updates"]:
-            if isinstance(u, dict) and isinstance(u.get("photoIds"), list):
-                ids.update(str(p) for p in u["photoIds"])
-    return ids
-
-
-def _fm_by_id(doc, name: str) -> dict:
-    items = doc.get(name) if isinstance(doc, dict) else None
-    return {str(it.get("id")): it for it in items
-            if isinstance(it, dict) and it.get("id") is not None} if isinstance(items, list) else {}
-
-
 def _fm_agent_merge(request: web.Request, stored, value):
     """Stamp every record the agent created or changed (PLAN A5, F6).
 
@@ -2937,30 +3097,19 @@ def _fm_agent_write_guard(request: web.Request, body, old, new):
     delete of evidence by another name — the loophole the plan's "the agent
     cannot delete, so cannot orphan photos" did not see.
     """
-    old = old if isinstance(old, dict) else {}
-    known = set(FM_RECORD_COLLECTIONS)
-    for key in set(old) | set(new):
-        if key not in known and old.get(key) != new.get(key):
-            return _forbidden(f"The VESTA Agent may not change `{key}`.")
-    for name in FM_RECORD_COLLECTIONS:
-        items = new.get(name, [])
-        if not isinstance(items, list) or any(
-                not isinstance(it, dict) or it.get("id") in (None, "") for it in items):
-            return web.json_response(
-                {"error": f"every record in `{name}` must be an object with an id"}, status=400)
-    old_ids, new_ids = _fm_ids(old), _fm_ids(new)
-    removed = {n: sorted(old_ids[n] - new_ids[n]) for n in FM_RECORD_COLLECTIONS}
-    if any(removed.values()):
-        what = ", ".join(f"{len(v)} from {n}" for n, v in removed.items() if v)
+    ch = _fm_classify(old, new)
+    if ch.unknown_keys:
+        return _forbidden(f"The VESTA Agent may not change `{sorted(ch.unknown_keys)[0]}`.")
+    if (bad := _fm_invalid_response(ch)) is not None:
+        return bad
+    if any(ch.removed.values()):
+        what = ", ".join(f"{len(v)} from {n}" for n, v in ch.removed.items() if v)
         return _forbidden(f"The VESTA Agent may not delete Facility records (this write "
                           f"removes {what}). Deleting stays with people.")
-    for name in FM_RECORD_COLLECTIONS:
-        now_by_id = _fm_by_id(new, name)
-        for rid, record in _fm_by_id(old, name).items():
-            lost = _fm_record_photo_ids(record) - _fm_record_photo_ids(now_by_id.get(rid))
-            if lost:
-                return _forbidden(f"The VESTA Agent may not remove photos from a record "
-                                  f"({name} {rid}): that would delete the evidence.")
+    if ch.dropped_photos:
+        name, rid = sorted(ch.dropped_photos)[0]
+        return _forbidden(f"The VESTA Agent may not remove photos from a record "
+                          f"({name} {rid}): that would delete the evidence.")
     return None
 
 

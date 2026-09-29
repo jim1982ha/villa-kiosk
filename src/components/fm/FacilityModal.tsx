@@ -25,7 +25,7 @@ import {
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
-import { hasCapability } from "@/auth/permissions";
+import { roleCan } from "@/auth/permissions";
 import { useFmData, useFacilityLiveView } from "@/fm/FmDataContext";
 import { buildReadiness, type ReadinessCheck } from "@/fm/readiness";
 import { locksGroup, lightsGroup } from "@/config/summaryGroups";
@@ -150,7 +150,7 @@ export default function FacilityModal({
   );
 
   const unavailableIds = devices.unavailable as string[];
-  const canControl = role != null && hasCapability(role, "controlEntities");
+  const canControl = roleCan(role, "controlEntities");
 
   return (
     // Fragment, not a shared wrapper: the Unavailable-devices panel below

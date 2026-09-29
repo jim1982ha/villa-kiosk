@@ -8,7 +8,7 @@ import { SceneManager } from "@/babylon/SceneManager";
 import { formatProbe, registerProbeRunner } from "@/babylon/perfProbe";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
-import { filterConfigForRole, hasCapability } from "@/auth/permissions";
+import { filterConfigForRole, roleCan } from "@/auth/permissions";
 import { useHA } from "@/ha/HAStateStore";
 import { loadModelFromIndexedDB, getModelMeta, clearStoredModel } from "@/utils/localModel";
 import { fetchAddonConfig, versionedModelUrl, roomsPathFor } from "@/utils/centralModel";
@@ -87,7 +87,7 @@ export default function BabylonCanvas({
     () => (role ? filterConfigForRole(config, role) : config),
     [config, role],
   );
-  const canManageModel = role != null && hasCapability(role, "manageModel");
+  const canManageModel = roleCan(role, "manageModel");
   // Keep a live ref so the one-shot loadModel callback can read the latest config
   // without being recreated (BabylonCanvas mounts once with empty deps).
   const configRef = useRef(config);

@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
-import { hasCapability, type Capability } from "@/auth/permissions";
+import { roleCan, type Capability } from "@/auth/permissions";
 import { useHA } from "@/ha/HAStateStore";
 import { useDraftCommit } from "@/hooks/useDraftCommit";
 import { DEFAULT_SITE_TITLE, DEFAULT_RENDER, type AppConfig, type RenderConfig } from "@/config/AppConfig";
@@ -37,7 +37,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
   const { haConfig } = useHA();
   // RBAC: which settings areas the active profile may use. Dashboard already
   // refuses to open this modal without "openSettings"; these narrow further.
-  const can = (c: Capability) => role != null && hasCapability(role, c);
+  const can = (c: Capability) => roleCan(role, c);
 
   // Every setting here applies AND persists live now, matching Advanced
   // Settings — there is nothing left to Cancel/Save, only a single Close.

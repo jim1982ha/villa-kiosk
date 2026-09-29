@@ -155,18 +155,18 @@ async def main() -> None:
     pre218 = {"owner_pin": "1234", "sh3d_path": "x", "agent_enabled": True, "agent_token": TOKEN,
               "agent_offline_after_minutes": 7, "agent_message_retention_days": 30,
               "vesta_agent": {"token": "", "offline_after_minutes": 5, "message_retention_days": 90}}
-    moved = proxy._options_after_cleanup(pre218)
+    moved = proxy.migrate_options(pre218)
     ck("from before 2.496.218: the three settings move into the group, the switch stays on top",
        moved == {"owner_pin": "1234", "agent_enabled": True, "vesta_agent": {"token": TOKEN,
                  "offline_after_minutes": 7, "message_retention_days": 30}}, moved)
     from218 = {"owner_pin": "1234", "agent_enabled": False,
                "vesta_agent": {"enabled": True, "token": TOKEN, "offline_after_minutes": 7, "message_retention_days": 90}}
-    moved218 = proxy._options_after_cleanup(from218)
+    moved218 = proxy.migrate_options(from218)
     ck("from 2.496.218: the switch moves OUT of the group, on as it was",
        moved218 == {"owner_pin": "1234", "agent_enabled": True, "vesta_agent": {"token": TOKEN,
                     "offline_after_minutes": 7, "message_retention_days": 90}}, moved218)
     ck("  ...and there is nothing to do on an install already moved",
-       proxy._options_after_cleanup(moved218) is None)
+       proxy.migrate_options(moved218) is None)
     options(**moved218)
     status, _ = await jget("/agent/v1/info", bearer())
     ck("after the move the top-level switch and the group open the door", status == 200 and proxy._agent_offline_minutes() == 7, status)
@@ -224,7 +224,7 @@ async def main() -> None:
     new_doc = json.loads(json.dumps(base))
     new_doc["tickets"].append({"id": "t2", "title": "Pump noise", "status": "open",
                                "openedAt": "2026-09-28T00:00:00Z", "photoIds": []})
-    new_doc["completions"].append({"id": "c1", "scheduleId": "", "at": "2026-09-28T01:00:00Z",
+    new_doc["completions"].append({"id": "c1", "scheduleId": "", "ticketId": "t2", "at": "2026-09-28T01:00:00Z",
                                    "by": "someone", "photoIds": []})
     status, body = await agent_put(new_doc, rev)
     ck("creating records: 200", status == 200, (status, body))
@@ -267,6 +267,37 @@ async def main() -> None:
     no_id["costs"].append({"label": "x"})
     status, _ = await agent_put(no_id, rev)
     ck("a record without an id: 400", status == 400, status)
+    # A record the agent writes is held to what a valid record is — the
+    # same rules the Kiosk's own code meets (_fm_record_errors, 2.496.223).
+    def with_record(name, record):
+        d = json.loads(json.dumps(stored))
+        d[name].append(record)
+        return d
+    before_disk = (TMP / "data" / "fm-data.json").read_text()
+    for what, name, record in (
+        ("a fault marked resolved with no resolution date", "tickets",
+         {"id": "t9", "title": "x", "status": "resolved", "openedAt": "2026-09-28T00:00:00Z", "photoIds": []}),
+        ("a fault with a status the Kiosk does not know", "tickets",
+         {"id": "t9", "title": "x", "status": "done", "openedAt": "2026-09-28T00:00:00Z", "photoIds": []}),
+        ("a cost whose amount is text", "costs",
+         {"id": "k9", "at": "2026-09-28T00:00:00Z", "amountIdr": "150000", "label": "x",
+          "category": "minor", "photoIds": []}),
+        ("a cost in a category the Kiosk does not know", "costs",
+         {"id": "k9", "at": "2026-09-28T00:00:00Z", "amountIdr": 5, "label": "x",
+          "category": "urgent", "photoIds": []}),
+        ("a completion tied to no schedule and no fault", "completions",
+         {"id": "c9", "scheduleId": "", "at": "2026-09-28T00:00:00Z", "by": "x", "photoIds": []}),
+    ):
+        status, body = await agent_put(with_record(name, record), rev)
+        ck(f"{what}: 400, named in the answer, nothing written",
+           status == 400 and "invalid Facility record" in body.get("error", "")
+           and (TMP / "data" / "fm-data.json").read_text() == before_disk, (status, body))
+    status, body = await agent_put(with_record("tickets", {
+        "id": "t9", "title": "x", "status": "resolved", "openedAt": "2026-09-28T00:00:00Z",
+        "resolvedAt": "2026-09-28T02:00:00Z", "photoIds": []}), rev)
+    ck("  ...the same fault WITH its resolution date is stored", status == 200, (status, body))
+    rev = body.get("rev", rev)
+    stored = json.loads((TMP / "data" / "fm-data.json").read_text())
 
     r = await post("/agent/v1/fm-evidence?id=agentphoto1", headers=bearer(), data=b"\xff\xd8\xff" + b"0" * 64)
     ck("the agent attaches a JPEG: 200", r.status == 200, r.status)

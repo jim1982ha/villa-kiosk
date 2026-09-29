@@ -26,7 +26,7 @@ import { roomKey } from "@/config/roomKey";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import RoomChoiceSheet, { type RoomChoice } from "@/components/hud/RoomChoiceSheet";
 import { useProfile } from "@/auth/ProfileContext";
-import { hasCapability, isMappingAllowed, isTypeAllowed, panelMapping } from "@/auth/permissions";
+import { isMappingAllowed, isTypeAllowed, panelMapping, roleCan } from "@/auth/permissions";
 import FacilityModal from "@/components/fm/FacilityModal";
 import AgentModal from "@/components/agent/AgentModal";
 import { useAgent } from "@/agent/AgentContext";
@@ -62,13 +62,13 @@ export default function Dashboard() {
   // platforms) — `role` is genuinely null until then, so every capability
   // check below must (and does) treat that as "nothing allowed," same as an
   // unrecognised role would.
-  const canControl = role != null && hasCapability(role, "controlEntities");
+  const canControl = roleCan(role, "controlEntities");
   // Facility workspace: the facility manager (whose job it is) and the owner
   // (accountable for the property, signs off the monthly report).
-  const canManageFacility = role != null && hasCapability(role, "manageFacility");
-  const canReportFault = role != null && hasCapability(role, "reportFault");
-  const canOpenSettings = role != null && hasCapability(role, "openSettings");
-  const canEditConfig = role != null && hasCapability(role, "editConfig");
+  const canManageFacility = roleCan(role, "manageFacility");
+  const canReportFault = roleCan(role, "reportFault");
+  const canOpenSettings = roleCan(role, "openSettings");
+  const canEditConfig = roleCan(role, "editConfig");
   // Read inside the onScene effect below (which intentionally
   // only depends on [manager], so its closure would otherwise see a stale
   // config.teleportPoints from whenever that effect last ran).

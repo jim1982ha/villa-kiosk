@@ -445,38 +445,39 @@ ck("guest cannot fetch a camera image over REST",
 ck("guest can still read history (the charts)",
    proxy._rest_call_allowed("guest", "history/period/2026-01-01T00:00:00+08:00"))
 
-# ── the proxy's table and the kiosk's agree ──────────────────────────────
-# permissions.ts decides what each profile is SHOWN; ROLE_CAPABILITIES what it
-# may DO. Two halves of one rule, so the names they share must mean the same
-# thing for every role, or the kiosk offers a button the proxy refuses (or
-# hides one the proxy would allow).
-print("\n  the proxy's roles and the kiosk's:")
-PERMS = ROOT / "src" / "auth" / "permissions.ts"
-pt = PERMS.read_text()
-matrix = pt[pt.index("const PERMISSION_MATRIX"):]
-client = {}
-for role in proxy.AUTH_ROLES:
-    m = re.search(rf"\b{role}:\s*\{{(.*?)\n  \}}", matrix, re.S)
-    body = m.group(1) if m else ""
-    caps = re.search(r"capabilities:\s*\[(.*?)\]", body, re.S)
-    denied = re.search(r"deniedTypes:\s*\[(.*?)\]", body, re.S)
-    client[role] = (set(re.findall(r'"(\w+)"', caps.group(1))) if caps else set(),
-                    set(re.findall(r'"(\w+)"', denied.group(1))) if denied else set())
-ck("the kiosk's matrix was read for every role",
-   all(client[r][0] for r in proxy.AUTH_ROLES))
-SHARED = ("editConfig", "manageModel", "manageFacility", "reportFault", "viewAgent")
-mismatch = [f"{r}.{c}" for r in proxy.AUTH_ROLES for c in SHARED
-            if (c in client[r][0]) != proxy._may(r, c)]
-ck("every shared capability means the same thing on both sides", not mismatch)
-if mismatch:
-    print(f"          the proxy and permissions.ts disagree on: {', '.join(mismatch)}")
-cam_mismatch = [r for r in proxy.AUTH_ROLES
-                if ("camera" not in client[r][1]) != proxy._may(r, "viewCameras")]
-ck("viewCameras is exactly the roles the kiosk shows cameras to", not cam_mismatch)
+# ── one role table, read by the proxy and the kiosk ──────────────────────
+# rootfs/usr/share/vesta/roles.json decides what each profile is SHOWN
+# (src/auth/permissions.ts imports it) and what it may DO (ROLE_CAPABILITIES
+# is built from it). These drive VALUES through the proxy's own loader; the
+# app side is tests/oracles/role_table.mjs.
+print("\n  the one role table:")
+ROLES_JSON = _json.loads((ROOT / "rootfs" / "usr" / "share" / "vesta" / "roles.json").read_text())
+ck("the proxy loaded the shipped role table", proxy.ROLES_TABLE == ROLES_JSON)
+ck("the table's profiles are exactly the sign-in profiles",
+   set(ROLES_JSON["profiles"]) == set(proxy.AUTH_ROLES))
+for r, row in ROLES_JSON["profiles"].items():
+    ck(f"{r}: holds exactly its listed capabilities (plus derived viewCameras)",
+       proxy.ROLE_CAPABILITIES[r] - {"viewCameras"} == set(row["capabilities"]))
+cam_mismatch = [r for r, row in ROLES_JSON["profiles"].items()
+                if ("camera" not in row["deniedTypes"]) != proxy._may(r, "viewCameras")]
+ck("viewCameras is exactly the profiles the kiosk shows cameras to", not cam_mismatch)
 if cam_mismatch:
     print(f"          disagree for: {', '.join(cam_mismatch)}")
+ck("the agent holds only its own three capabilities",
+   proxy.ROLE_CAPABILITIES["agent"] == {"agentRead", "agentWrite", "agentMessage"})
+# seeUpdates counts Home Assistant's update.* entities. The proxy lets a
+# profile read them only by `administer` (the update domain is not in
+# readDomains), so giving seeUpdates to a profile without it would show a
+# count that is always zero. Hold the two together.
+blind = [r for r in proxy.AUTH_ROLES
+         if proxy._may(r, "seeUpdates") and not proxy._read_allowed(r, "update.any")]
+ck("a profile that sees the update count may read update entities", not blind)
+if blind:
+    print(f"          sees the count but cannot read them: {', '.join(blind)}")
 ck("an unknown role holds nothing",
    not any(proxy._may("intruder", c) for caps in proxy.ROLE_CAPABILITIES.values() for c in caps))
+ck("an unreadable table grants nothing to anyone",
+   all(not caps for r, caps in proxy._role_capabilities({}).items()))
 
 # ── every route is gated, or public on purpose (round 11, 2.496.169) ──────
 # The gate was written out by hand at twelve handlers and had drifted into two
@@ -539,6 +540,123 @@ finally:
     proxy._role_for = _real_role_for
 # The view on the GET AND on the 409 body is driven over HTTP now:
 # tests/store-doors.py ("a guest's STALE write gets the empty view back").
+
+# ── The add-on's options table (2.496.223) ─────────────────────────────────
+# One row per option; every reader asks opt(name). The manifest is compared
+# with the table by value in tests/addon-manifest.py.
+print("\n  the options table:")
+o = proxy.opt
+ck("with nothing stored, every option reads as its row's default",
+   all(o(n, {}) == r.default for n, r in proxy.OPTIONS.items()))
+ck("a switch is on only for a real true (a hand-edited \"yes\" is not)",
+   o("public_model_access", {"public_model_access": "yes"}) is False
+   and o("public_model_access", {"public_model_access": True}) is True
+   and o("agent_enabled", {"agent_enabled": 1}) is False)
+ck("a number is clamped, and junk (text, true, a list) is the default",
+   o("session_days", {"session_days": 0}) == 1 and o("session_days", {"session_days": 10**9}) == 365
+   and all(o("session_days", {"session_days": j}) == 30 for j in ("abc", True, [], None)))
+ck("a code that does not fit its pattern is NOT configured (\"\"), never compared",
+   o("guest_pin", {"guest_pin": " 1234 "}) == "1234" and o("guest_pin", {"guest_pin": "12345"}) == ""
+   and o("superadmin_pin", {"superadmin_pin": "1234"}) == "")
+ck("a group field is read from its group",
+   o("vesta_agent.offline_after_minutes", {"vesta_agent": {"offline_after_minutes": 9}}) == 9)
+ck("an OLDER place still stored wins over the new one (an update must not drop it)",
+   o("vesta_agent.offline_after_minutes",
+     {"agent_offline_after_minutes": 7, "vesta_agent": {"offline_after_minutes": 5}}) == 7
+   and o("agent_enabled", {"agent_enabled": False, "vesta_agent": {"enabled": True}}) is True)
+ck("migrate: nothing stale, nothing to write", proxy.migrate_options({"session_days": 3}) is None)
+ck("migrate: a retired key is dropped", proxy.migrate_options({"sh3d_path": "x", "session_days": 3}) == {"session_days": 3})
+_m = proxy.migrate_options({"agent_token": "t" * 20})
+ck("migrate: an older place is moved, value kept, and a missing group is created",
+   _m == {"vesta_agent": {"token": "t" * 20}}, )
+ck("migrate: after it, reading gives the same answer as before it",
+   all(o(n, _m) == o(n, {"agent_token": "t" * 20}) for n in proxy.OPTIONS))
+
+# ── The Facility record's change module (2.496.223) ─────────────────────────
+# One classifier says what a write changes; one validator what is wrong with a
+# record; the guest, people and agent doors are policies on top. Driven by
+# value here; over HTTP by store-doors.py and agent-interface.py.
+print("\n  the Facility record's change module:")
+
+
+def ckv(label, ok, detail=None):
+    ck(label, ok)
+    if not ok and detail is not None:
+        print(f"          {detail}")
+
+
+OLD = {"schedules": [{"id": "s1"}],
+       "tickets": [{"id": "t1", "status": "open", "photoIds": ["p1", "p2"]},
+                   {"id": "legacy", "status": "resolved", "photoIds": []}],   # stored with a problem
+       "completions": [], "costs": [], "savedDocuments": [], "future": 1}
+NEW = {**OLD, "schedules": [],
+       "tickets": [{"id": "t1", "status": "in_progress", "photoIds": ["p1"]},
+                   {"id": "legacy", "status": "resolved", "photoIds": []},
+                   {"id": "t2", "status": "open", "photoIds": []}], "future": 2}
+ch = proxy._fm_classify(OLD, NEW)
+ckv("classify: a removed schedule", ch.removed["schedules"] == {"s1"}, ch.removed)
+ckv("classify: an added fault", [r["id"] for r in ch.added["tickets"]] == ["t2"], ch.added)
+ckv("classify: an edited fault, and only that one", ch.changed["tickets"] == ["t1"], ch.changed)
+ckv("classify: the photo a KEPT record lost", ch.dropped_photos == {("tickets", "t1"): {"p2"}}, ch.dropped_photos)
+ckv("classify: a key this server does not know, changed", ch.unknown_keys == {"future"}, ch.unknown_keys)
+ckv("classify: a problem already stored is not this write's", ch.invalid == [], ch.invalid)
+edited_legacy = {**OLD, "tickets": [OLD["tickets"][0], {"id": "legacy", "status": "resolved", "photoIds": [], "note": "x"}]}
+ckv("  ...and editing that stored record for something else is allowed",
+   proxy._fm_classify(OLD, edited_legacy).invalid == [])
+ckv("validate: resolved needs resolvedAt",
+   proxy._fm_record_errors("tickets", {"id": "a", "status": "resolved"}) == {"is resolved with no resolvedAt"})
+ckv("validate: an amount must be a number (text, true, NaN, negative all refused)",
+   all(proxy._fm_record_errors("costs", {"id": "k", "category": "minor", "amountIdr": a})
+       for a in ("5", True, float("nan"), -1, None))
+   and not proxy._fm_record_errors("costs", {"id": "k", "category": "major", "amountIdr": 0}))
+ckv("validate: a completion answers a schedule or a fault",
+   proxy._fm_record_errors("completions", {"id": "c", "scheduleId": ""})
+   and not proxy._fm_record_errors("completions", {"id": "c", "scheduleId": "", "ticketId": "t"})
+   and not proxy._fm_record_errors("completions", {"id": "c", "scheduleId": "s1"}))
+dup = {**OLD, "tickets": OLD["tickets"] + [{"id": "t1", "status": "open", "photoIds": []}]}
+ckv("classify: an id written twice is a new problem", any(p == "appears twice" for _, _, p in proxy._fm_classify(OLD, dup).invalid))
+_real_role_for = proxy._role_for
+try:
+    proxy._role_for = lambda _r: "ops"
+    bad = {**OLD, "tickets": OLD["tickets"] + [{"id": "t3", "status": "resolved", "photoIds": []}]}
+    r = proxy._fm_write_guard(None, {}, OLD, bad)
+    ckv("the people's door refuses a new invalid record too (400)", r is not None and r.status == 400)
+finally:
+    proxy._role_for = _real_role_for
+
+# ⚠️ THE KIOSK'S OWN WRITES MUST PASS. The validator's rules claim to be the
+# ones src/fm/fmEngine.ts always meets; a rule the app breaks would refuse an
+# owner's ordinary save. So run the REAL engine (Node) through every way it
+# builds a record, and hand what it built to the validator.
+import subprocess, tempfile as _tf
+_script = """
+import { register } from "node:module";
+register(%r, import.meta.url);
+const e = await import("@/fm/fmEngine");
+let n = 0; const k = { now: "2026-09-29T10:00:00.000Z", id: (p) => `${p}${++n}` };
+let d = { schedules: [{ id: "s1", title: "Filter", everyDays: 30, enabled: true }], completions: [], costs: [], tickets: [], savedDocuments: [] };
+const docs = [];
+d = e.withCompletion(d, { scheduleId: "s1", at: k.now, by: "FM", photoIds: ["a"] }, { amountIdr: e.parseAmount("150.000"), label: "Filter", category: "minor" }, k); docs.push(d);
+d = { ...d, tickets: [{ id: "t1", title: "Leak", status: "open", openedAt: k.now, photoIds: [] }] };
+d = e.withTicketAdvanced(d, "t1", "in_progress", { by: "FM", photoIds: [] }, undefined, k); docs.push(d);
+d = e.withTicketAdvanced(d, "t1", "resolved", { by: "FM", photoIds: ["b"] }, { amountIdr: 20, label: "Seal", category: "major" }, k); docs.push(d);
+d = e.withTicketAdvanced(d, "t1", "open", { by: "FM", photoIds: [] }, undefined, k); docs.push(d);
+d = e.withTicketPatch(d, "t1", { status: "resolved" }, k); docs.push(d);
+console.log(JSON.stringify(docs));
+""" % (ROOT / "tests" / "consistency" / "alias-hook.mjs").as_uri()
+with _tf.TemporaryDirectory() as _td:
+    _f = Path(_td) / "app-writes.mjs"
+    _f.write_text(_script)
+    _out = subprocess.run(["node", "--no-warnings", str(_f)], capture_output=True, text=True, cwd=ROOT)
+_docs = _json.loads(_out.stdout) if _out.returncode == 0 else []
+ckv("the Kiosk's engine was run (withCompletion, withTicketAdvanced, withTicketPatch)", len(_docs) == 5,
+   _out.stderr[-400:])
+_prev = {n: [] for n in proxy.FM_RECORD_COLLECTIONS}
+_problems = []
+for _d in _docs:
+    _problems += proxy._fm_classify(_prev, _d).invalid
+    _prev = _d
+ckv("  ...and every record it built passes the server's validator", not _problems, _problems)
 
 # ── A chunked upload survives a re-sent piece (round 11, 2.496.166) ──────────
 # Driven through the real handler with a fake request: the client re-sends a

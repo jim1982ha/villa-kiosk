@@ -122,6 +122,69 @@ for g in groups:
         if f not in of:
             problems.append(f"translations/en.yaml describes `{g}.{f}`, which is not a field of the group")
 
+# 4c. the manifest's defaults and ranges ARE the proxy's options table
+#     (OPTIONS in supervisor-proxy.py, 2.496.223) — compared by VALUE. A
+#     default changed in config.yaml alone used to disagree silently with the
+#     reader's own copy of it.
+def flat_block(text: str, block: str) -> dict[str, str]:
+    """`block:` as {"name" or "group.field": raw value}."""
+    body = re.search(rf"^{block}:\s*$\n((?:(?:[ \t].*)?\n)*)", text, re.M).group(1)
+    out, group = {}, None
+    for line in body.splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        top = re.match(r"^  (\w+):(.*)$", line)
+        sub = re.match(r"^    (\w+):(.*)$", line)
+        if top:
+            group = top.group(1) if not top.group(2).strip() else None
+            if group is None:
+                out[top.group(1)] = top.group(2).strip()
+        elif sub and group:
+            out[f"{group}.{sub.group(1)}"] = sub.group(2).strip()
+    return out
+
+
+import importlib.util as _ilu
+_spec = _ilu.spec_from_file_location("proxy", ROOT / "rootfs" / "usr" / "bin" / "supervisor-proxy.py")
+_proxy = _ilu.module_from_spec(_spec)
+_spec.loader.exec_module(_proxy)
+flat_opts, flat_schema = flat_block(CFG, "options"), flat_block(CFG, "schema")
+if set(flat_opts) != set(_proxy.OPTIONS):
+    problems.append(f"config.yaml offers {sorted(set(flat_opts) - set(_proxy.OPTIONS))} that the proxy's "
+                    f"OPTIONS table lacks, and the table has {sorted(set(_proxy.OPTIONS) - set(flat_opts))} "
+                    f"the manifest does not offer")
+
+
+def manifest_default(raw: str):
+    if raw in ("true", "false"):
+        return raw == "true"
+    if re.fullmatch(r"-?\d+", raw):
+        return int(raw)
+    return raw.strip('"\'')
+
+
+def manifest_schema(row) -> str:
+    if row.kind == "bool":
+        return "bool?"
+    if row.kind == "int":
+        return f"int({row.lo},{row.hi})?"
+    if row.kind == "secret":
+        return "password?"
+    return f"match({row.pattern.pattern}|^$)?"
+
+
+for name, row in _proxy.OPTIONS.items():
+    if name not in flat_opts:
+        continue
+    got = manifest_default(flat_opts[name])
+    if got != row.default or type(got) is not type(row.default):
+        problems.append(f"option `{name}`: config.yaml's default is {got!r}, the proxy's is {row.default!r}")
+    if flat_schema.get(name) != manifest_schema(row):
+        problems.append(f"option `{name}`: config.yaml's schema is {flat_schema.get(name)!r}, "
+                        f"the proxy's table means {manifest_schema(row)!r}")
+    if row.kind == "int" and not row.lo <= row.default <= row.hi:
+        problems.append(f"option `{name}`: its default {row.default} is outside {row.lo}..{row.hi}")
+
 # 5. the version the two files must agree on
 pkg = (ROOT / "package.json").read_text()
 pkg_v = re.search(r'"version":\s*"([^"]+)"', pkg).group(1)
@@ -192,6 +255,7 @@ for m in re.finditer(r"tests/[A-Za-z0-9_/.-]+\.(?:py|mjs|sh|ts)", CFG):
 
 print(f"  {len(options)} options, {len(schema)} schema entries, {len(described)} described"
       + "".join(f", group `{g}`: {len(group_fields(CFG, 'options', g))} fields" for g in groups))
+print(f"  {len(_proxy.OPTIONS)} options compared by value with the proxy's table")
 print(f"  version: package.json {pkg_v} == config.yaml {cfg_v}")
 if problems:
     print("\n".join(f"    FAIL  {p}" for p in problems))

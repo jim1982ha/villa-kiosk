@@ -30,7 +30,7 @@ import { fmtChartTime } from "@/components/panels/chartUtils";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
-import { hasCapability, isCategoryAllowed, roleCan } from "@/auth/permissions";
+import { isCategoryAllowed, roleCan } from "@/auth/permissions";
 import { CATEGORY_LABELS, CATEGORY_ICONS, categorySurface } from "@/config/EntityCategories";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { isUnavailable } from "@/utils/stateColors";
@@ -72,7 +72,7 @@ export default function CockpitModal({ onClose, onOpenEntity }: CockpitModalProp
   // devices in X" view in the app already opens (room clusters on the map,
   // the bottom Summary bar's tiles), rather than a bespoke list here.
   const [pivotDrill, setPivotDrill] = useState<{ label: string; entityIds: string[] } | null>(null);
-  const canControl = role != null && hasCapability(role, "controlEntities");
+  const canControl = roleCan(role, "controlEntities");
 
   // Shared with HUD's own top-bar alert icon/overflow-menu badge — see
   // useVillaAttention's own docstring for why that sharing is load-bearing,

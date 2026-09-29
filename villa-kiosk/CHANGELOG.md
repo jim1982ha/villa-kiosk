@@ -1,3 +1,11 @@
+## 2.496.223
+
+### Changed
+- **Nothing to see on screen: this release makes three safety rules simpler and stricter behind the scenes.**
+- **Who may do what is now written in one place.** What each profile (Guest, Owner, Facility manager) can see and do used to be written twice — once for the screens and once for the part of the app that checks every request — and kept equal by hand. Both now read the same list, so they can no longer disagree.
+- **The VESTA Agent can no longer save a broken maintenance record.** When the agent (or anything that is not the Kiosk's own screens) saves a Facility record, the app now checks it: a fault marked resolved must have a resolution date, a cost must have a real amount and a Minor/Major category, and completed work must be tied to a schedule or a fault. A record that fails is refused with a message saying why. Records already saved are never blocked, and the Kiosk's own screens always meet these rules.
+- **The app's settings are read from one table.** Each setting on the Configuration page (passcodes, session length, photo retention, VESTA Agent…) now has its default and allowed range written once, and a check stops a release if the Configuration page and the app ever disagree. Your saved values are unchanged.
+
 ## 2.496.222
 
 ### Fixed

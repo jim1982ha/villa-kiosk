@@ -5,7 +5,7 @@
 # no-compile operation. The {arch} placeholder + version resolve to e.g.
 # ghcr.io/jim1982ha/villa-kiosk-amd64:2.0.0 — published by .github/workflows/build.yaml.
 name: VESTA
-version: "2.496.222"
+version: "2.496.223"
 slug: villa_kiosk
 description: 3D Home Assistant villa dashboard — HA sidebar (Ingress) + its own hostname
 url: https://github.com/jim1982ha/villa-kiosk
@@ -131,7 +131,7 @@ startup: application
 # open a group on its own). vesta_agent — the group of settings that only
 # matter while it is on. History: four flat keys until 2.496.218, then all four
 # in the group (2.496.218), now the switch back outside it (2.496.219); the
-# proxy moves an install's values at its first start (_options_after_cleanup)
+# proxy moves an install's values at its first start (migrate_options)
 # and reads the older places until then.
 #
 # agent_enabled (default false): THE switch. Off = there is no agent: every

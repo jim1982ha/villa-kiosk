@@ -1,0 +1,32 @@
+{
+  "_what": "What each profile may see and do, declared ONCE. The app (src/auth/permissions.ts) imports this file to decide what each profile is SHOWN; the proxy (rootfs/usr/bin/supervisor-proxy.py, ROLE_CAPABILITIES) reads it to decide what each profile may DO. Change a profile's rights HERE, and nowhere else. Capability names are described where the app declares them (the Capability list in permissions.ts); tests/oracles/role_table.mjs and tests/proxy-rules.py fail on a name neither side knows.",
+  "_viewCameras": "Not written as a capability: a profile may view cameras exactly when 'camera' is not among its deniedTypes. The proxy derives viewCameras from that, so the two cannot disagree.",
+  "_administer": "Server-side only: exempt from the Home Assistant allow-lists and the service confinement, may revoke every session and read telemetry. The app never asks for it.",
+  "profiles": {
+    "guest": {
+      "allowedCategories": ["comfort", "light", "network", "access_control"],
+      "deniedTypes": ["camera", "binary_sensor"],
+      "capabilities": ["controlEntities", "openSettings", "customizeAppearance", "reportFault"]
+    },
+    "owner": {
+      "allowedCategories": "all",
+      "deniedTypes": [],
+      "capabilities": [
+        "administer", "controlEntities", "openSettings", "customizeAppearance", "editConfig", "manageModel",
+        "manageFacility", "reportFault", "listUnmappedDevices", "seeUpdates", "viewAgent"
+      ]
+    },
+    "ops": {
+      "allowedCategories": "all",
+      "deniedTypes": [],
+      "capabilities": [
+        "controlEntities", "openSettings", "customizeAppearance", "manageFacility", "reportFault",
+        "listUnmappedDevices", "viewAgent"
+      ]
+    }
+  },
+  "_agent": "THE VESTA AGENT IS NOT A PROFILE. It never appears on the profile picker, never holds a cookie, and reaches only /agent/v1/* by bearer token. Its capabilities are its own; the app never reads this row.",
+  "agent": {
+    "capabilities": ["agentRead", "agentWrite", "agentMessage"]
+  }
+}
