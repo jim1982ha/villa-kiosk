@@ -5,7 +5,7 @@
 # no-compile operation. The {arch} placeholder + version resolve to e.g.
 # ghcr.io/jim1982ha/villa-kiosk-amd64:2.0.0 — published by .github/workflows/build.yaml.
 name: VESTA (dev2)
-version: "2.496.216"
+version: "2.496.217"
 slug: villa_kiosk_dev2
 description: 3D Home Assistant villa dashboard — HA sidebar (Ingress) + its own hostname
 url: https://github.com/jim1982ha/villa-kiosk
@@ -122,8 +122,13 @@ startup: application
 #   it punishes a guesser rather than locking the household out.
 #
 # ── The VESTA Agent (docs/agent-integration/PLAN.md, workstream A) ─────────
-# agent_token (empty by default = the agent interface does not exist: every
-#   /agent/v1 route answers 404 and no agent UI is shown). Set it to the same
+# agent_enabled (default false): THE switch. Off = there is no agent: every
+#   /agent/v1 route answers 404 and no agent UI is shown, whatever the token
+#   field holds. On = the agent interface exists once agent_token is valid; on
+#   with an empty or short token stays off and says so in the log (the
+#   Supervisor's form cannot make a field required only when a switch is on).
+#
+# agent_token (only read while agent_enabled is on). Set it to the same
 #   value as `kiosk_agent_token` in the VESTA Agent host to let the agent read
 #   and update Facility records (never delete them), post messages with
 #   buttons, and report its presence. At least 16 characters, so a short
@@ -145,6 +150,7 @@ options:
   session_days: 30
   telemetry_max_events: 500
   pin_lockout_minutes: 5
+  agent_enabled: false
   agent_token: ""
   agent_offline_after_minutes: 5
   agent_message_retention_days: 90
@@ -158,6 +164,7 @@ schema:
   session_days: int(1,365)?
   telemetry_max_events: int(50,5000)?
   pin_lockout_minutes: int(1,1440)?
+  agent_enabled: bool?
   agent_token: match(^$|^[A-Za-z0-9._~+/=-]{16,128}$)?
   agent_offline_after_minutes: int(1,60)?
   agent_message_retention_days: int(1,365)?
