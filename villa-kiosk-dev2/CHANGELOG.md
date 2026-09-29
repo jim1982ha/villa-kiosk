@@ -1,3 +1,13 @@
+## 2.496.225
+
+### New
+- **Spend settings on the Facility Spend tab (Owner only).** You can now set, for your own maintenance agreement: the **monthly cap**, the **names of the two spend categories** (for example "Routine" and "Capital" instead of "Minor" and "Major"), and **when the "approaching the cap" warning starts** (80 % unless you choose another share). Every screen and both documents (the monthly report and the spend statement) use your words and your cap. They are shared by every device. With nothing set there is no cap, as before.
+- **Amounts are written in the currency set in Home Assistant** (Settings → System → General). The app no longer has a currency of its own that nobody could change.
+
+### Fixed
+- **Correcting a spend entry no longer counts it twice.** When you edited an existing entry, the "this month would come to…" line added the new amount on top of the old one, so it could warn about the cap when nothing was over. It now replaces the old amount, and it also judges the entry in the month it belongs to (a new entry is always dated today, whichever month is on screen).
+- The report and screens no longer say spend beyond the cap is on the "Owner's account": that depends on your agreement, so they now just say it is outside the cap.
+
 ## 2.496.224
 
 ### Fixed
