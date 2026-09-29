@@ -1,0 +1,91 @@
+name: VESTA Agent updates
+
+# Every hour: is there a newer HA MCP release, or a newer VESTA Agent release?
+# If so, make the app release that ships it (agent-host/tools/check_updates.py:
+# versions.json, the app version, the changelog) and start the build. The
+# build is the safety gate — it starts the new HA MCP server and the agent
+# slot the way the Supervisor does, and a version that fails there is never
+# published — so the owner only ever sees "Update available" for one that
+# passed.
+#
+# ⚠️ GITHUB RUNS A SCHEDULE FROM THE DEFAULT BRANCH ONLY. Until this file is on
+# main, the hourly run does not happen; "Run workflow" (workflow_dispatch) runs
+# the same check on the branch chosen there.
+#
+# ⚠️ A PUSH MADE WITH GITHUB_TOKEN STARTS NO WORKFLOW (GitHub's rule against
+# loops), so the commit below does not trigger agent-host.yaml by itself: the
+# build is started explicitly with `gh workflow run`, which that rule allows.
+on:
+  schedule:
+    - cron: "23 * * * *"
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch to check (the channel it publishes)"
+        default: agent-dev
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    strategy:
+      fail-fast: false
+      matrix:
+        # The scheduled run checks both channels; a manual run, the one asked.
+        branch: ${{ github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', inputs.branch)) || fromJSON('["main","agent-dev"]') }}
+    concurrency:
+      group: agent-updates-${{ matrix.branch }}
+      cancel-in-progress: false
+    steps:
+      - name: Is this channel's app on the branch?
+        id: exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api "repos/${{ github.repository }}/contents/agent-host/versions.json?ref=${{ matrix.branch }}" >/dev/null 2>&1; then
+            echo "yes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No agent-host/versions.json on ${{ matrix.branch }} — nothing to check."
+            echo "yes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        if: steps.exists.outputs.yes == 'true'
+        with:
+          ref: ${{ matrix.branch }}
+
+      - name: Look for newer releases
+        if: steps.exists.outputs.yes == 'true'
+        id: check
+        env:
+          AGENT_REPO_TOKEN: ${{ secrets.AGENT_REPO_TOKEN }}
+        run: |
+          out=$(python3 agent-host/tools/check_updates.py)
+          echo "$out"
+          echo "$out" | grep -q '^changed=true$' && echo "changed=true" >> "$GITHUB_OUTPUT" || echo "changed=false" >> "$GITHUB_OUTPUT"
+          { echo '### ${{ matrix.branch }}'; echo '```'; echo "$out"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit the release and start its build
+        if: steps.check.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version=$(grep -E '^version:' vesta-agent/config.yaml | head -1 | sed -E 's/.*version:[[:space:]]*"?([^"]+)"?.*/\1/')
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add agent-host/versions.json vesta-agent/config.yaml vesta-agent/CHANGELOG.md
+          git commit -m "chore(agent-updates): VESTA Agent ${version} — newer HA MCP or VESTA Agent release"
+          for attempt in 1 2 3; do
+            if git push origin "HEAD:${{ matrix.branch }}"; then break; fi
+            echo "push rejected (attempt ${attempt}) — rebasing"
+            git fetch origin "${{ matrix.branch }}" && git rebase "origin/${{ matrix.branch }}"
+            [ "$attempt" = 3 ] && { echo "could not push after 3 attempts"; exit 1; }
+          done
+          gh workflow run agent-host.yaml --ref "${{ matrix.branch }}"
+          echo "started the build of VESTA Agent ${version} on ${{ matrix.branch }}" >> "$GITHUB_STEP_SUMMARY"

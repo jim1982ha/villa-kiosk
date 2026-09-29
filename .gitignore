@@ -59,3 +59,7 @@ __pycache__/
 
 # Local dev TLS certs (mkcert) — never commit
 certs/
+
+# The VESTA Agent source is fetched into agent-host/agent-src/ at build time only.
+agent-host/agent-src/*
+!agent-host/agent-src/README.md

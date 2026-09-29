@@ -28,3 +28,34 @@ You are building the **VESTA Agent host**: a Home Assistant app that hosts the f
 - Follow the milestones in SPEC section 16, in order.
 - Plan first; after each milestone, stop and report: what changed, how it was tested, what is `skipped` and why.
 - A check that cannot pass yet because a dependency does not exist (SPEC section 15) is reported as `skipped`, never faked.
+
+## Verified facts (SPEC section 14)
+
+Moved from vesta-agent/DOCS.md (the owner's Documentation tab) on 2026-09-29 —
+internal engineering notes, not for the app's readers.
+
+Checked on 2026-09-28 against the running system and upstream sources.
+
+1. **HA MCP.** The installed app `81f33d0f_ha_mcp` is
+   `homeassistant-ai/ha-mcp` 8.5.0 (PyPI `ha-mcp`, Python >=3.13,<3.15). HTTP
+   mode: `ha-mcp-web`, configured by `HOMEASSISTANT_URL`, `HOMEASSISTANT_TOKEN`,
+   `MCP_HOST`, `MCP_PORT`, `MCP_SECRET_PATH` (default `/mcp`),
+   `HA_MCP_DISABLE_SETTINGS_UI`; transport streamable HTTP (stateless). The
+   self-test's handshake against 8.5.0: pass, 77 tools.
+2. **Hostnames.** An app's hostname is its slug with `_` → `-` (Supervisor
+   `apps/model.py`): `e66a2348-villa-kiosk` (confirmed live),
+   `e66a2348-villa-kiosk-dev2` (DEV2 installed). Home Assistant's container is
+   `homeassistant`. **Confirmed on the HA Yellow** (0.5.1): the self-test from
+   this app reached `http://homeassistant:8123/api/` (pass) and
+   `http://e66a2348-villa-kiosk-dev2:8099` (reached; no agent interface yet).
+3. **`map` and schema.** `- type: addon_config` + `read_only: false` is the
+   current form (the `addon_config:rw` string is still converted). All schema
+   types used are in the Supervisor's grammar (`apps/options.py`); `timeout`
+   must be 10–300 s.
+4. **Base image.** `ghcr.io/home-assistant/{arch}-base-debian`; tags `latest`,
+   `trixie`, `bookworm` and dated ones. This app uses `trixie` (Python 3.13).
+5. **Claude Agent SDK (Python)** does not need Node.js: its per-architecture
+   wheels bundle a native `claude` binary.
+6. **Time zone.** The Supervisor sets `TZ` in every app container
+   (`docker/app.py`); the host passes it to the agent unchanged. Confirmed on
+   the HA Yellow: the app logged Home Assistant's own time zone.

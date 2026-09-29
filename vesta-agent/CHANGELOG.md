@@ -1,3 +1,13 @@
+## 0.7.0
+
+### Added
+- **The app now updates itself.** Every hour, the app's build service looks for a newer release of the VESTA Agent (once its repository is set) and of the HA MCP server. When there is one, it builds a new version of this app with it, checks that it starts correctly, and only then does Home Assistant show "Update available". A version that fails the check is never offered. You only press Update.
+- **The real VESTA Agent can now be built into the app**, from its own GitHub repository at the release it names: its libraries are installed while the app is built, never on the Home Assistant machine. Until the agent's repository is set, the app keeps the test agent.
+
+### Changed
+- The HA MCP server is no longer fixed at one version: it follows HA MCP's releases, each one checked before it is offered (today: 8.5.0).
+- The Documentation tab no longer shows internal engineering notes, and explains how a new agent version reaches the app.
+
 ## 0.6.0
 
 ### Added

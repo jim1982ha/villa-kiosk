@@ -2,7 +2,7 @@
 
 The Home Assistant app that hosts the **VESTA Agent**. Until the agent is
 delivered, its slot holds a **stub** that tests every connection the agent will
-use. Specification: `docs/agent-host/SPEC.md` in the repository.
+use.
 
 The app has no web page and no port: nothing connects to it; it only connects
 out (Home Assistant, the VESTA Kiosk, Anthropic, and Telegram after go-live).
@@ -52,7 +52,7 @@ host, the HA MCP server or the agent — has it replaced by `***`.
 While **Telegram takeover** is off, the bot token is not given to the agent at
 all and no Telegram call is made, so Home Assistant keeps receiving the bot's
 messages and button presses. Turn it on only at the Telegram switch-over
-(PLAN section 8).
+(the go-live step where the agent takes over the bot).
 
 ## Folders
 
@@ -69,9 +69,12 @@ file in them.
 
 ## HA MCP sidecar
 
-- The agent's own HA MCP server, pinned to **HA MCP 8.5.0** (the same release
-  as the development instance). Upgraded only deliberately, with a changelog
-  entry.
+- The agent's own HA MCP server. **It updates itself:** every hour the app's
+  build service looks for a newer HA MCP release; when there is one, it builds
+  a new version of this app with it, checks that the server starts and lists
+  its tools, and only then does Home Assistant offer the update. A release
+  that fails that check is never offered. The version in use is named in the
+  changelog.
 - Runs only in `sidecar` mode and only when `ha_token` is set, with that token.
   Listens on `127.0.0.1:9583/mcp` — reachable only from inside the app.
 - Its own update checks, and the HACS refresh they would trigger in Home
@@ -135,6 +138,15 @@ start: "python -m vesta_agent"
 stop_grace_seconds: 20     # at most 22
 ```
 
+**How the agent reaches this app.** The agent lives in its own GitHub
+repository, with `vesta-agent.yaml` at the root. Publishing a GitHub
+**release** (for example `v1.1.0`) is all it takes: within the hour the app's
+build service fetches that release, runs its `install` command while building
+the image (nothing is installed on the Home Assistant machine), checks the
+image, and Home Assistant offers the update. A private repository is read with
+a read-only access token for that one repository, stored as a secret on the
+build side. Drafts and pre-releases are never picked up.
+
 Rules: read configuration only from the variables above; write only under
 `VESTA_DATA_DIR`; read skills from `VESTA_SKILLS_DIR` and pick up changes
 without a restart; log to stdout, never a secret; stop within
@@ -146,38 +158,10 @@ same rules and is a working example.
 
 | | Measured |
 |---|---|
-| Image download (compressed) | about 120 MB per architecture (0.4.0: amd64 122 MB, aarch64 120 MB) |
+| Image download (compressed) | about 120 MB per architecture |
 | Image on disk | about 380 MB |
-| Idle memory, stub + HA MCP sidecar | **142 MB on the HA Yellow** (3.4 % of 4 GB), 0.5.1, 28 September 2026 — about 34 MB without the sidecar |
+| Idle memory, stub + HA MCP sidecar | about 142 MB on the HA Yellow (3.4 % of its 4 GB); about 34 MB without the sidecar |
 
 The real VESTA Agent will add to both: the Claude Agent SDK alone is about
-100 MB compressed and 240 MB unpacked. SPEC 12 asks for at least 500 MB free
-on the Yellow once the agent runs.
-
-## Verified facts (SPEC section 14)
-
-Checked on 2026-09-28 against the running system and upstream sources.
-
-1. **HA MCP.** The installed app `81f33d0f_ha_mcp` is
-   `homeassistant-ai/ha-mcp` 8.5.0 (PyPI `ha-mcp`, Python >=3.13,<3.15). HTTP
-   mode: `ha-mcp-web`, configured by `HOMEASSISTANT_URL`, `HOMEASSISTANT_TOKEN`,
-   `MCP_HOST`, `MCP_PORT`, `MCP_SECRET_PATH` (default `/mcp`),
-   `HA_MCP_DISABLE_SETTINGS_UI`; transport streamable HTTP (stateless). The
-   self-test's handshake against 8.5.0: pass, 77 tools.
-2. **Hostnames.** An app's hostname is its slug with `_` → `-` (Supervisor
-   `apps/model.py`): `e66a2348-villa-kiosk` (confirmed live),
-   `e66a2348-villa-kiosk-dev2` (DEV2 installed). Home Assistant's container is
-   `homeassistant`. **Confirmed on the HA Yellow** (0.5.1): the self-test from
-   this app reached `http://homeassistant:8123/api/` (pass) and
-   `http://e66a2348-villa-kiosk-dev2:8099` (reached; no agent interface yet).
-3. **`map` and schema.** `- type: addon_config` + `read_only: false` is the
-   current form (the `addon_config:rw` string is still converted). All schema
-   types used are in the Supervisor's grammar (`apps/options.py`); `timeout`
-   must be 10–300 s.
-4. **Base image.** `ghcr.io/home-assistant/{arch}-base-debian`; tags `latest`,
-   `trixie`, `bookworm` and dated ones. This app uses `trixie` (Python 3.13).
-5. **Claude Agent SDK (Python)** does not need Node.js: its per-architecture
-   wheels bundle a native `claude` binary.
-6. **Time zone.** The Supervisor sets `TZ` in every app container
-   (`docker/app.py`); the host passes it to the agent unchanged. Confirmed on
-   the HA Yellow: the app logged Home Assistant's own time zone.
+100 MB compressed and 240 MB unpacked. Keep at least 500 MB free on the
+Yellow once the agent runs.

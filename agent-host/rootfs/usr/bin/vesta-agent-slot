@@ -114,6 +114,13 @@ def main() -> int:
         stop.wait()
         return 0
 
+    # The virtualenv the image build created for the agent's `install`
+    # (Dockerfile, agent stage): first on PATH, so `python` / `pip` in the
+    # manifest's `start` are the agent's own, with its libraries.
+    venv = folder / ".venv" / "bin"
+    if venv.is_dir():
+        env = {**env, "PATH": f"{venv}:{env.get('PATH', '')}"}
+
     import yaml
     manifest = yaml.safe_load((folder / paths.MANIFEST).read_text()) or {}
     start = manifest.get("start")

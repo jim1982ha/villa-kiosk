@@ -202,6 +202,26 @@ class Host(unittest.TestCase):
         for s in SECRETS.values():
             self.assertNotIn(s, out)
 
+    def test_agent_virtualenv_comes_first_on_path(self) -> None:
+        # The image build installs the agent's libraries into <folder>/.venv
+        # (Dockerfile, agent stage); `python` in its `start` must be that one.
+        self.ha_options(ha_url="http://127.0.0.1:9", kiosk_url="http://127.0.0.1:9", ha_mcp_mode="external")
+        self.assertEqual(self.start().returncode, 0)
+        agent = self.root / "opt/vesta/stub"
+        (agent / ".venv/bin").mkdir(parents=True)
+        probe = agent / ".venv/bin/vesta-probe"
+        probe.write_text("#!/bin/sh\necho from-the-agent-venv\n")
+        probe.chmod(0o755)
+        (agent / "vesta-agent.yaml").write_text(yaml.safe_dump({
+            "name": "venv", "version": "0", "runtime": "python", "stop_grace_seconds": 5,
+            "start": "vesta-probe; trap 'exit 0' TERM; while :; do sleep 0.1; done"}))
+        p = subprocess.Popen([sys.executable, str(SLOT)], env=self.env(),
+                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        time.sleep(2.5)
+        p.send_signal(signal.SIGTERM)
+        out, _ = p.communicate(timeout=15)
+        self.assertIn("[agent] from-the-agent-venv", out)
+
     def test_redactor(self) -> None:
         r = Redactor(["abcdef123", "abcdef123456", "x"])
         self.assertEqual(r("a abcdef123456 b abcdef123 c x"), "a *** b *** c x")
