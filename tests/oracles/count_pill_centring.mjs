@@ -1,63 +1,51 @@
-// The room chip's COUNT PILL digit, centred by its own INK — the rule the badge
-// glyphs use (badgeIcons.inkNudge), not a fixed em offset (2.496.220).
+// The room chip's COUNT PILL: a picture baked at the size it is drawn, its
+// number centred inside the bitmap — the way the badge glyphs are (2.496.222).
 //
-// ⚠️ THE FIXED OFFSET WAS RIGHT ON AT MOST ONE BROWSER. Babylon centres a
-// TextBlock's LINE BOX, whose ascent and height come from the browser's own
-// font measure (GetFontOffset). Measured with a real Babylon GUI in Firefox
-// (tests/_probe/count): the digit sat 0.09 em low; the owner's screenshot shows
-// it high. Driven here by value: the same digit ink under two browsers' line
-// metrics needs two different corrections, and textInkNudge finds each.
+// ⚠️ THREE RELEASES CENTRED A BABYLON TEXTBLOCK AND EACH WAS RIGHT ON SOME
+// SCREENS ONLY: a fixed 0.105 em nudge, then an ink-measured one (2.496.220,
+// made vertical-only in .221). Measured with a real Babylon GUI in Chromium
+// and WebKit (tests/_probe/count): Babylon snaps every control to whole pixels
+// at the chip's BASE size (~16 px circle, ~10 px digit) and the chip's scale
+// then magnifies each snapped pixel 3–4×. As a baked picture there is nothing
+// left for it to snap. Driven here by value: the baseline rule centres a
+// digit's ink, whatever the font's metrics.
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
-const { textRasterLayout } = await import("@/babylon/badgeText");
-const { inkNudge, OPTICAL_CORRECTION } = await import("@/babylon/badgeIcons");
+const { countBaseline } = await import("@/babylon/badgeText");
+const { OPTICAL_CORRECTION } = await import("@/babylon/badgeIcons");
 
-// A digit as a solid block of ink: from the baseline up to the figure height,
-// no descender — what "2", "3", "12" are, as far as their box is concerned.
-function digitRaster(width, lineHeight, ascent, figureHeight) {
-  const lay = textRasterLayout(width, lineHeight, ascent);
-  const alpha = new Uint8ClampedArray(lay.size * lay.size);
-  const top = Math.round(lay.baseline - figureHeight), bottom = Math.round(lay.baseline);
-  for (let y = top; y < bottom; y++) for (let x = Math.round(lay.x); x < Math.round(lay.x + width); x++) alpha[y * lay.size + x] = 255;
-  return { lay, alpha, inkCentre: (top + bottom - 1) / 2 };
+// A digit as a solid block of ink from its baseline up to its figure height,
+// rasterised with the baseline at the centre of a `size` square — what
+// countBadgeImage measures before it draws.
+function digitAtCentre(size, figure) {
+  const alpha = new Uint8ClampedArray(size * size);
+  const base = size / 2, top = Math.round(base - figure);
+  for (let y = top; y < base; y++) for (let x = size / 2 - 8; x < size / 2 + 8; x++) alpha[y * size + x] = 255;
+  return { alpha, inkCentre: (top + base - 1) / 2 };
 }
 
-console.log("  one digit, two browsers' line metrics:");
-// Public Sans at 100 px as Firefox measured it (ascent 95, line 117), and the
-// same font with the line gap counted into "normal" line height, as other
-// engines can report it (line 130: 13 px more below the baseline).
-const firefox = digitRaster(56, 117, 95, 74);
-const other = digitRaster(56, 130, 95, 74);
-const nF = inkNudge(firefox.alpha, firefox.lay.size, 1), nO = inkNudge(other.alpha, other.lay.size, 1);
-const centre = (lay) => (lay.size - 1) / 2;
-ck("the nudge moves the ink's centre onto the shape's centre (Firefox metrics)",
-   Math.abs(firefox.inkCentre + nF.dy - centre(firefox.lay)) < 0.51, [firefox.inkCentre, nF.dy, centre(firefox.lay)]);
-ck("  ...and under the other engine's metrics too",
-   Math.abs(other.inkCentre + nO.dy - centre(other.lay)) < 0.51, [other.inkCentre, nO.dy, centre(other.lay)]);
-ck("  ...and the two corrections DIFFER — no single fixed em offset is right for both",
-   Math.abs(nF.dy - nO.dy) >= 1, [nF.dy, nO.dy]);
-
-console.log("\n  the same rule as the glyphs:");
-ck("text uses the glyphs' own OPTICAL_CORRECTION (half-way from ink box to ink mass)", OPTICAL_CORRECTION === 0.5);
-const lay = textRasterLayout(40, 20, 16);
-ck("the box sits centred in the raster, as its parent centres it", lay.size === 44 && lay.x === 2 && lay.baseline === 28);
+console.log("  the number's baseline:");
+for (const [size, figure] of [[64, 23], [96, 34], [160, 57], [256, 92]]) {
+  const d = digitAtCentre(size, figure);
+  const base = countBaseline(d.alpha, size);
+  const moved = d.inkCentre + (base - size / 2);
+  ck(`a ${size} px pill: the ink ends centred (within half a pixel)`, Math.abs(moved - (size - 1) / 2) < 0.51, [size, base, moved]);
+}
+ck("the baseline moves DOWN for a digit (its ink sits above the baseline)", countBaseline(digitAtCentre(96, 34).alpha, 96) > 48);
+ck("the same rule as the glyphs (half-way from ink box to ink mass)", OPTICAL_CORRECTION === 0.5);
 
 console.log("\n  the wiring:");
 const bt = readFileSync(new URL("../../src/babylon/badgeText.ts", import.meta.url), "utf8");
 const ev = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
-ck("textInkNudge measures with Babylon's OWN font offset and the glyphs' inkNudge",
-   /Control\._GetFontOffset\(font\)/.test(bt) && /out = inkNudge\(alpha, lay\.size\);/.test(bt));
-ck("the count pill is ink-centred at every update, with the fixed nudge off",
-   /clusterCountText_\$\{key\}`, \{\s*fontPx: sm\.countFont, color: "#ffffff", weight: "700", metrics: this\.metrics, opticalNudge: false,/.test(ev)
-   && /setInkCentredText\(c\.countText, formatCountBadge\(chip\.ids\.length\), "700", this\.summaryMetrics\(\)\.countFont\);/.test(ev)
-   && !/c\.countText\.text = /.test(ev));
+ck("the pill is baked at its DRAWN size on the glyphs' ladder, number centred by countBaseline",
+   /const px = bakeSizeFor\(s\.drawnPx\);/.test(bt) && /const baseline = countBaseline\(alpha, px\);/.test(bt)
+   && /ctx\.textAlign = "center";/.test(bt));
+ck("the chip draws it as ONE image — no TextBlock, no Rectangle for the count",
+   /const countBadge = new Image\(`clusterCount_\$\{key\}`\);/.test(ev) && !/clusterCountText_/.test(ev)
+   && /countBadge: Image;/.test(ev));
+ck("  ...baked from the badge metrics and the chip's scale — no size of its own",
+   /drawnPx: csm\.countSize \* scale,/.test(ev) && /fontOfSize: csm\.countFont \/ csm\.countSize,/.test(ev));
 
-// ⚠️ VERTICALLY ONLY (2.496.221): the horizontal ink nudge put "3" and "7" 4 px
-// left on the owner's screen; horizontally Babylon's advance centring stands.
-const setter = bt.slice(bt.indexOf("export function setInkCentredText"));
-ck("the count is moved VERTICALLY only — no horizontal nudge on text",
-   /t\.top = `\$\{textInkNudge\(text, weight, px\)\.dy\}px`;/.test(setter) && !/t\.left\s*=/.test(setter));
-
-done("✅ the count pill's digit is centred by its ink, like a glyph");
+done("✅ the count pill is a baked picture, its number centred by its ink");

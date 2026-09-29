@@ -1,3 +1,8 @@
+## 2.496.222
+
+### Fixed
+- **Room chip numbers are now centred on every screen and at every zoom.** The last two releases centred them well on some screens but not on others (on a phone they still sat a little high and to the left). The cause: the map lays each chip out at a small base size and then magnifies it for the zoom and the screen, so the tiniest rounding on the number grew three or four times on screen. The number's circle is now drawn the same way as the badge icons — as a sharp picture made at the size it is shown, with the number centred inside it — so there is no rounding left to magnify. Nothing is tuned to one device or one villa: each screen measures its own number.
+
 ## 2.496.221
 
 ### Fixed

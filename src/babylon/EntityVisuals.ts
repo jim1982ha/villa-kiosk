@@ -128,7 +128,7 @@ import type { FrameRequests } from "./frameScheduler";
 import { badgeImage } from "./badgeIcons";
 import { applyBadgeFrame, badgeRing, badgeBakePx, BADGE_INSET_CARD, BADGE_CORNER_FRACTION, NO_RING } from "./badgeLook";
 import { DashableRectangle } from "./dashableRectangle";
-import { badgeText, setInkCentredText } from "./badgeText";
+import { badgeText, countBadgeImage } from "./badgeText";
 import { badgeShadow } from "./badgeShadow";
 import { cameraFrame } from "./cameraFrame";
 import {
@@ -626,7 +626,7 @@ export interface LabelControls {
  *  node sits at the world-space centroid of the room's badge anchors — a
  *  fixed point, which is what makes the chip immune to the jitter that
  *  motivated all of this. The device count renders as its own small red
- *  pill (countBadge/countText) rather than being folded into the room-name
+ *  pill (countBadge, a baked picture) rather than being folded into the room-name
  *  text — the same "small red pill for a count" convention the HUD's
  *  unavailable-devices/facility icons use (DOM's .icon-btn-count); see
  *  utils/countBadge.ts for the one piece of that actually shareable across
@@ -634,8 +634,8 @@ export interface LabelControls {
 interface ClusterControls {
   container: Rectangle;
   text: TextBlock;
-  countBadge: Rectangle;
-  countText: TextBlock;
+  /** The count pill — a baked picture (badgeText.countBadgeImage). */
+  countBadge: Image;
   node: TransformNode;
   entityIds: string[];
   /** The raw room name to show a person. The Map key is a roomKey(), which is
@@ -5514,7 +5514,6 @@ export class EntityVisuals {
       // A chip that absorbed others says so with a "+N" suffix, so the count
       // pill's total is never mistaken for one room's device count.
       c.text.text = chip.label;
-      setInkCentredText(c.countText, formatCountBadge(chip.ids.length), "700", this.summaryMetrics().countFont);
       // The chip's own ring mirrors the individual badge ring rule exactly
       // (BADGE_RING): red when at least one member is "on" or "alert",
       // otherwise no ring — the only attention signal available once the
@@ -5526,7 +5525,17 @@ export class EntityVisuals {
       // the same "available" green everywhere else otherwise. Separate
       // signal from the ring above: a room can be fully reporting AND have
       // something on (red ring, green pill) at the same time.
-      c.countBadge.background = chip.unavailable ? ALERT_RED_HEX : AVAILABLE_GREEN_HEX;
+      // Baked at the size it is DRAWN (its size × the chip's scale), number
+      // ink-centred inside the picture — see badgeText.countBadgeImage for why
+      // it is no longer a Rectangle and a TextBlock.
+      const csm = this.summaryMetrics();
+      c.countBadge.source = countBadgeImage({
+        text: formatCountBadge(chip.ids.length),
+        fill: chip.unavailable ? ALERT_RED_HEX : AVAILABLE_GREEN_HEX,
+        ink: "#ffffff",
+        drawnPx: csm.countSize * scale,
+        fontOfSize: csm.countFont / csm.countSize,
+      });
       // Themed here rather than at creation: a chip outlives a theme change,
       // and Babylon GUI cannot consume a CSS variable, so the value has to be
       // read and re-applied. Doing it on the pass that already runs keeps it in
@@ -5617,12 +5626,10 @@ export class EntityVisuals {
     // colour is REPORTING status (red = something unavailable, green =
     // everything reporting), set every update in updateClusters — the value
     // here is just the pre-first-update placeholder.
-    const countBadge = new Rectangle(`clusterCount_${key}`);
+    const countBadge = new Image(`clusterCount_${key}`);
     countBadge.width = `${sm.countSize}px`;
     countBadge.height = `${sm.countSize}px`;
-    countBadge.cornerRadius = sm.countSize / 2;
-    countBadge.thickness = 0;
-    countBadge.background = AVAILABLE_GREEN_HEX;
+    countBadge.stretch = Image.STRETCH_UNIFORM;
     countBadge.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
     countBadge.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
     // Small INWARD inset (negative left pulls it left off the right edge,
@@ -5632,12 +5639,6 @@ export class EntityVisuals {
     countBadge.top = "3px";
     container.addControl(countBadge);
 
-    // Ink-centred in its circle, as a glyph is in its chip (setInkCentredText
-    // at every update): the fixed optical nudge is off for it.
-    const countText = badgeText(`clusterCountText_${key}`, {
-      fontPx: sm.countFont, color: "#ffffff", weight: "700", metrics: this.metrics, opticalNudge: false,
-    });
-    countBadge.addControl(countText);
 
     // ── A ROOM CHIP PAINTS BEHIND BADGES AND CARDS (2.430.0) ───────────────
     // Reported: focus a room and its devices draw "behind" other rooms' chips.
@@ -5661,7 +5662,7 @@ export class EntityVisuals {
     container.linkOffsetYInPixels = -sm.size / 2;
 
     const c: ClusterControls = {
-      container, text, countBadge, countText, node,
+      container, text, countBadge, node,
       entityIds: [], displayName: key, roomNames: [],
     };
     this.clusters.set(key, c);
