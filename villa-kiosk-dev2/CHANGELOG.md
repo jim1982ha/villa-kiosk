@@ -1,3 +1,9 @@
+## 2.496.219
+
+### Changed
+- **"Connect the VESTA Agent" is now always visible** on the Configuration page, just above the folded **"VESTA Agent settings"** section (token, offline delay, message retention), which you open only when you need it. Home Assistant draws this page itself and cannot put a switch inside a section's title or open a section on its own, so the switch sits right above it instead.
+- Your current values move to their new place automatically the first time the app starts after this update — nothing to re-enter.
+
 ## 2.496.218
 
 ### Changed
