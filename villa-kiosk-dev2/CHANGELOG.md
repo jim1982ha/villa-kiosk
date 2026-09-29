@@ -1,3 +1,8 @@
+## 2.496.216
+
+### Changed
+- **Nothing changes on screen.** The code that decides where badges, device cards and room chips go on the 3D map has been reorganised into one self-contained piece, so future placement fixes are easier and safer to make and to test. Before release, every badge, card and chip position was recorded on the villa's own 3D model — walking and overview, every floor, a focused room, on a tablet-sized and a phone-sized screen (196 views) — and the new version places them all in exactly the same spots.
+
 ## 2.496.215
 
 ### Fixed
