@@ -17,12 +17,14 @@ import { useMemo } from "react";
 import { CalendarCheck, Wrench } from "lucide-react";
 import { useFmData } from "@/fm/FmDataContext";
 import { localStamp, formatMoney, completionSource } from "@/fm/fmEngine";
+import { useFmTerms } from "@/fm/useFmTerms";
 import EvidenceRow from "./EvidenceRow";
 import ErasableRow from "./ErasableRow";
 import AgentMark from "./AgentMark";
 
 export default function RecentWorkList({ limit = 12 }: { limit?: number }) {
   const { data, removeCompletion } = useFmData();
+  const terms = useFmTerms();
 
   const rows = useMemo(() => {
     const costById = new Map(data.costs.map((c) => [c.id, c]));
@@ -76,7 +78,7 @@ export default function RecentWorkList({ limit = 12 }: { limit?: number }) {
                 <EvidenceRow photoIds={c.photoIds} disabled />
               )}
             </div>
-            {cost && <span className="fm-amount">{formatMoney(cost.amountIdr)}</span>}
+            {cost && <span className="fm-amount">{formatMoney(cost.amountIdr, terms.currency)}</span>}
           </ErasableRow>
         ))}
       </div>

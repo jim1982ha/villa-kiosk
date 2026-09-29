@@ -18,7 +18,7 @@ import {
   budgetStatus, completionsInMonth, formatMoney, localStamp, monthKey, monthLabel,
   scheduleStatus, shortDate, ticketStats,
 } from "./fmEngine";
-import type { FmData } from "./fmTypes";
+import { categoryName, NO_FM_TERMS, type FmData, type FmTerms } from "./fmTypes";
 import type { BudgetStatus } from "./fmEngine";
 import type { ReadinessReport } from "./readiness";
 
@@ -31,6 +31,8 @@ export interface ReportInput {
   /** Devices currently unavailable, for the uptime section. */
   offlineDeviceCount?: number;
   totalDeviceCount?: number;
+  /** The owner's contract terms (cap, currency, category names). */
+  terms?: FmTerms;
 }
 
 /**
@@ -65,20 +67,21 @@ export function cell(v: string, max = 200): string {
   return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
 }
 
-export function spendSummary(b: BudgetStatus): string[] {
+export function spendSummary(b: BudgetStatus, terms: FmTerms = NO_FM_TERMS): string[] {
+  const money = (n: number) => formatMoney(n, terms.currency);
   const out: string[] = [
     b.cap > 0
-      ? `- **Minor Maintenance this month:** ${formatMoney(b.minorSpend)} of the `
-        + `${formatMoney(b.cap)} monthly cap (${Math.round(b.fraction * 100)}%)`
-      : `- **Minor Maintenance this month:** ${formatMoney(b.minorSpend)} `
+      ? `- **${cell(terms.cappedName, 60)} maintenance this month:** ${money(b.minorSpend)} of the `
+        + `${money(b.cap)} monthly cap (${Math.round(b.fraction * 100)}%)`
+      : `- **${cell(terms.cappedName, 60)} maintenance this month:** ${money(b.minorSpend)} `
         + `(no monthly cap configured)`,
   ];
   if (b.majorSpend > 0) {
-    out.push(`- **Major maintenance (Owner's account):** ${formatMoney(b.majorSpend)}`);
+    out.push(`- **${cell(terms.uncappedName, 60)} maintenance (outside the cap):** ${money(b.majorSpend)}`);
   }
   if (b.state === "exceeded") {
-    out.push(`- ⚠️ The Minor Maintenance cap was reached. Spend beyond it is Major `
-      + `maintenance and falls to the Owner.`);
+    out.push(`- ⚠️ The monthly cap was reached. Spend beyond it belongs to `
+      + `${cell(terms.uncappedName, 60)} maintenance, on whatever terms the agreement sets.`);
   }
   return out;
 }
@@ -89,13 +92,13 @@ export function spendSummary(b: BudgetStatus): string[] {
  *  "|" splits the markdown row and shifts every column after it — found once by
  *  rendering the table, and the fix that followed escaped some columns and not
  *  others. Anything an operator typed gets the same treatment here. */
-export function spendTable(b: BudgetStatus): string[] {
+export function spendTable(b: BudgetStatus, terms: FmTerms = NO_FM_TERMS): string[] {
   return [
     `| Date | Item | Category | Amount |`,
     `|---|---|---|---|`,
     ...b.entries.slice().sort((x, y) => Date.parse(x.at) - Date.parse(y.at)).map(
       (c) => `| ${shortDate(c.at)} | ${cell(c.label)} `
-        + `| ${c.category === "minor" ? "Minor" : "Major"} | ${formatMoney(c.amountIdr)} |`),
+        + `| ${cell(categoryName(terms, c.category), 60)} | ${formatMoney(c.amountIdr, terms.currency)} |`),
   ];
 }
 
@@ -169,12 +172,13 @@ export function buildMonthlyReport(input: ReportInput): string {
   L.push("");
 
   // ── 2. Maintenance spend ──────────────────────────────────────────────────
-  const b = budgetStatus(fm.costs, month);
+  const terms = input.terms ?? NO_FM_TERMS;
+  const b = budgetStatus(fm.costs, month, terms);
   L.push(`## 2. Maintenance spend`);
-  L.push(...spendSummary(b));
+  L.push(...spendSummary(b, terms));
   L.push("");
   if (b.entries.length) {
-    L.push(...spendTable(b));
+    L.push(...spendTable(b, terms));
     L.push("");
   }
 
@@ -237,25 +241,27 @@ export function buildMonthlyReport(input: ReportInput): string {
   return L.join("\n");
 }
 
-/** A standalone spend statement for one month — the Minor Maintenance spend
+/** A standalone spend statement for one month — the maintenance spend
  *  section of buildMonthlyReport, on its own, for whenever the operator wants
  *  that handed over without the rest of the operational annex. Same data,
  *  same section, deliberately not re-derived separately so the two can never
- *  disagree about what a given month's Minor Maintenance total is. */
-export function buildSpendStatement(fm: FmData, month: string, villaName: string): string {
+ *  disagree about what a given month's capped total is. */
+export function buildSpendStatement(
+  fm: FmData, month: string, villaName: string, terms: FmTerms = NO_FM_TERMS,
+): string {
   const L: string[] = [];
-  const b = budgetStatus(fm.costs, month);
+  const b = budgetStatus(fm.costs, month, terms);
 
   L.push(...reportHeader(
     "maintenance spend statement", villaName, month,
-    "maintenance spend against the configured Minor Maintenance cap.",
+    "maintenance spend against the configured monthly cap.",
   ));
 
-  L.push(...spendSummary(b));
+  L.push(...spendSummary(b, terms));
   L.push("");
 
   if (b.entries.length) {
-    L.push(...spendTable(b));
+    L.push(...spendTable(b, terms));
   } else {
     L.push(`_No spend recorded in this period._`);
   }

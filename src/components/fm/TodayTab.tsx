@@ -11,7 +11,7 @@ import { Check, CalendarClock, Trash2 } from "lucide-react";
 import { useFmData } from "@/fm/FmDataContext";
 import { formatMoney, isTicketOpen, localStamp, scheduleBoard, shortDate, type ScheduleStatus, parseAmount, fmAttention } from "@/fm/fmEngine";
 import { budgetStatus, wouldExceedCap } from "@/fm/fmEngine";
-import { MONEY_CURRENCY } from "@/fm/fmTypes";
+import { useFmTerms } from "@/fm/useFmTerms";
 import EvidenceRow from "./EvidenceRow";
 import RecentWorkList from "./RecentWorkList";
 import NotesField from "./NotesField";
@@ -165,7 +165,7 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
 }
 
 /** The completion form. Cost is optional and defaults to Minor — but the moment
- *  it would take the month past the configured Minor Maintenance cap (see
+ *  it would take the month past the owner's monthly cap (see
  *  fmEngine's budgetStatus().cap), the operator is told BEFORE
  *  saving, because that is when the minor-vs-major decision is still theirs
  *  to make. No-op with no cap configured — wouldExceedCap is never true then. */
@@ -188,8 +188,9 @@ function LogCompletion({
   const [amount, setAmount] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const terms = useFmTerms();
   const amountIdr = parseAmount(amount);
-  const willExceed = amountIdr > 0 && wouldExceedCap(data.costs, amountIdr);
+  const willExceed = amountIdr > 0 && wouldExceedCap(data.costs, amountIdr, terms);
 
   return (
     <div className="fm-form">
@@ -209,16 +210,16 @@ function LogCompletion({
       />
 
       <label className="fm-field">
-        <span>Cost (optional{MONEY_CURRENCY ? `, ${MONEY_CURRENCY}` : ""})</span>
+        <span>Cost (optional{terms.currency ? `, ${terms.currency}` : ""})</span>
         <input value={amount} inputMode="numeric"
           onChange={(e) => setAmount(e.target.value)} placeholder="e.g. 450000" />
       </label>
 
       {willExceed && (
         <div className="fm-banner warn">
-          This takes the month past the {formatMoney(budgetStatus(data.costs).cap)} Minor
-          Maintenance cap. Spend beyond it is Major maintenance — record it as that
-          category instead if that's what your own agreement calls for.
+          This takes the month past the {formatMoney(terms.monthlyCap, terms.currency)} monthly
+          cap. Spend beyond it belongs to {terms.uncappedName} — record it there instead
+          if that's what your own agreement calls for.
         </div>
       )}
 

@@ -86,7 +86,7 @@ export interface FmCompletion extends FmProvenance {
 export interface FmCost extends FmProvenance {
   id: string;
   at: string;
-  /** The amount, in the install's own currency (MONEY_CURRENCY / fmtMoney).
+  /** The amount, in the install's own currency (FmTerms.currency, Home Assistant's own).
    *  ⚠️ THE NAME IS A STORED FIELD, NOT A CLAIM ABOUT THE CURRENCY: every
    *  install's Facility records carry `amountIdr`, so renaming it needs a
    *  migration of that data (the code-only names — the cap, the month's minor
@@ -182,32 +182,64 @@ export const EMPTY_FM_DATA: FmData = {
   schedules: [], completions: [], costs: [], tickets: [], savedDocuments: [],
 };
 
-/** The monthly Minor Maintenance spend cap, in the install's currency — 0 means "not configured".
- *  Was a hardcoded IDR 3,000,000 (one specific contract's clause), which
- *  applied that villa's real cap to every install with no way to turn it
- *  off. budgetStatus() below treats <= 0 as "not tracked" rather than an
- *  ever-exceeded cap, so a fresh install with nothing configured shows no
- *  false "over cap" warning instead of a wrong number. No in-app editor yet
- *  (same status as ThresholdConfig's alertThresholds), but every SCREEN now
- *  reads budgetStatus().cap rather than this constant — SpendTab printed
- *  "of IDR 0" on an unconfigured install because it reached past the engine
- *  for the raw value. Wiring this to real per-install config is the remaining
- *  follow-up. */
-export const MINOR_MAINTENANCE_CAP = 0;
+/** The maintenance contract's money rules, as the OWNER sets them — stored
+ *  in the shared config (`fmContract`, so every device reads the same terms)
+ *  and edited on the Spend tab. Before 2.496.225 these were code: a cap of 0
+ *  and a currency of "" that nothing could set, the words "Minor"/"Major" and
+ *  "Owner's account" typed in the report and three screens, and the 80 %
+ *  warning inline in the engine — one contract's shape in a redistributable
+ *  add-on (CLAUDE.md, the hard rule).
+ *
+ *  Stored EMPTY by default ("" and 0) and resolved by fmTerms(): an empty
+ *  name reads as the generic word, a cap of 0 as "no cap", so a fresh install
+ *  shows no invented number. The stored category ids stay "minor"/"major"
+ *  (FmCost.category) — only their NAMES are the owner's. */
+export interface FmContract {
+  /** The monthly cap on the capped category, in the install's currency. 0 = no cap. */
+  monthlyCap: number;
+  /** What the capped category is called ("" → "Minor"). */
+  cappedName: string;
+  /** What the uncapped category is called ("" → "Major"). */
+  uncappedName: string;
+  /** Warn when the month reaches this share of the cap, in percent (0 → 80). */
+  warnAtPercent: number;
+}
 
-/** The currency every money figure in the Facility Manager is written in —
- *  "" means "not configured", and an unconfigured install prints the number
- *  alone rather than guessing.
- *
- *  ⚠️ SAME HARD RULE AS THE CAP ABOVE, ONE LEVEL DOWN. The cap's AMOUNT was
- *  correctly emptied when one contract's clause turned out to be shipping to
- *  every install — but the CURRENCY stayed welded into formatMoney as the
- *  literal "IDR", alongside an "en-US" grouping locale, so a villa billed in
- *  euros read "IDR 450,000" and a reader in France got US digit grouping. A
- *  currency is a per-site value exactly as a cap amount is; the first hard rule
- *  names business and contract-specific values, and this was one.
- *
- *  Empty rather than a "helpful" default, for the reason AppConfig's merge-on-
- *  load taught this repo: a seed spread underneath stored config resurrects
- *  what the user deleted. */
-export const MONEY_CURRENCY = "";
+export const EMPTY_FM_CONTRACT: FmContract = { monthlyCap: 0, cappedName: "", uncappedName: "", warnAtPercent: 0 };
+
+/** The contract as every Facility screen, the engine and the report read it:
+ *  names and threshold resolved, plus the currency Home Assistant is set to
+ *  (Settings → System → General) — the app keeps no currency of its own. */
+export interface FmTerms {
+  monthlyCap: number;
+  currency: string;
+  cappedName: string;
+  uncappedName: string;
+  /** 0–1. */
+  warnAt: number;
+}
+
+const WARN_DEFAULT_PERCENT = 80;
+
+/** Resolve stored terms (any shape an older or hand-edited store may hold). */
+export function fmTerms(contract: Partial<FmContract> | undefined, haCurrency: string | undefined): FmTerms {
+  const c = contract ?? {};
+  const cap = Number(c.monthlyCap);
+  const pct = Number(c.warnAtPercent);
+  const name = (v: unknown, fallback: string) => (typeof v === "string" && v.trim() ? v.trim() : fallback);
+  return {
+    monthlyCap: Number.isFinite(cap) && cap > 0 ? cap : 0,
+    currency: typeof haCurrency === "string" ? haCurrency.trim() : "",
+    cappedName: name(c.cappedName, "Minor"),
+    uncappedName: name(c.uncappedName, "Major"),
+    warnAt: (Number.isFinite(pct) && pct >= 1 && pct <= 99 ? pct : WARN_DEFAULT_PERCENT) / 100,
+  };
+}
+
+/** Terms with nothing configured — what a caller that has none passes. */
+export const NO_FM_TERMS: FmTerms = fmTerms(undefined, undefined);
+
+/** The owner's name for a cost category. */
+export function categoryName(terms: FmTerms, category: "minor" | "major"): string {
+  return category === "minor" ? terms.cappedName : terms.uncappedName;
+}

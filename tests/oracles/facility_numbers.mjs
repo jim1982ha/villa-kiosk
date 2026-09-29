@@ -74,7 +74,7 @@ console.log("\n  an unconfigured cap is not a cap of zero:");
 // documents printed the unset value anyway: "0 of the 0 monthly cap (0%)".
 // SpendTab and TodayTab were corrected in 2.496.31; the pin written with them
 // named only those two files, which is how fmReport survived it.
-const noCap = budgetStatus([], "2026-09", 0);
+const noCap = budgetStatus([], "2026-09", { monthlyCap: 0, warnAt: 0.8 });
 eq("no cap configured reads as ok, not exceeded", noCap.state, "ok");
 eq("...with fraction 0, never NaN or Infinity", noCap.fraction, 0);
 eq("...and the report says so in words, not as a zero",
@@ -83,7 +83,7 @@ eq("...and does not print a cap figure at all",
    /of the .* monthly cap/.test(spendSummary(noCap)[0]), false);
 const withCap = budgetStatus(
   [{ id: "c", at: "2026-09-02T00:00:00Z", label: "Pump seal", category: "minor", amountIdr: 900 }],
-  "2026-09", 1000);
+  "2026-09", { monthlyCap: 1000, warnAt: 0.8 });
 eq("a configured cap still reports the fraction", withCap.fraction, 0.9);
 eq("...and reads as approaching at 80%", withCap.state, "approaching");
 eq("...and the report prints the cap", spendSummary(withCap)[0].includes("monthly cap"), true);

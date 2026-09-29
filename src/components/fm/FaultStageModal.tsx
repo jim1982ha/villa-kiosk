@@ -24,6 +24,7 @@ import { useState } from "react";
 
 import { useFmData, fmWriteProblem } from "@/fm/FmDataContext";
 import { formatMoney, parseAmount } from "@/fm/fmEngine";
+import { useFmTerms } from "@/fm/useFmTerms";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
 import NotesField from "./NotesField";
@@ -50,6 +51,7 @@ export default function FaultStageModal({
   onClose: () => void;
 }) {
   const { advanceTicket } = useFmData();
+  const terms = useFmTerms();
   // Escape + Back + focus trap + focus restore, from ONE hook — see
   // useModalA11y. It registers useBackToClose itself, so calling both would
   // push this surface onto the dismissal stack twice.
@@ -129,7 +131,7 @@ export default function FaultStageModal({
           </div>
           {asksCost && (
             <label className="fm-field">
-              <span>What it cost (optional — leave blank if nothing was spent)</span>
+              <span>What it cost{terms.currency ? ` (${terms.currency})` : ""} (optional — leave blank if nothing was spent)</span>
               <input value={amount} inputMode="numeric"
                 onChange={(e) => setAmount(e.target.value)} placeholder="450000" />
             </label>
@@ -140,12 +142,12 @@ export default function FaultStageModal({
                 <span>Category</span>
                 <select value={category}
                   onChange={(e) => setCategory(e.target.value as "minor" | "major")}>
-                  <option value="minor">Minor — counts against the monthly cap</option>
-                  <option value="major">Major — outside the cap</option>
+                  <option value="minor">{terms.cappedName}{terms.monthlyCap > 0 ? " — counts against the monthly cap" : ""}</option>
+                  <option value="major">{terms.uncappedName}{terms.monthlyCap > 0 ? " — outside the cap" : ""}</option>
                 </select>
               </label>
               <div className="fm-row-sub muted">
-                Records {formatMoney(amountIdr)} against this fault.
+                Records {formatMoney(amountIdr, terms.currency)} against this fault.
               </div>
             </>
           )}

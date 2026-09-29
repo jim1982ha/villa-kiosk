@@ -1,7 +1,6 @@
 // src/components/fm/SpendTab.tsx
-// Maintenance spend against a monthly Minor Maintenance cap — MINOR_MAINTENANCE_CAP
-// (see fmTypes.ts), 0 until an operator's own contract/agreement gives it a
-// real one. The cap matters because whatever agreement is in play, it's
+// Maintenance spend against the owner's monthly cap (the shared `fmContract`
+// terms, see fmTypes.ts fmTerms) — none until the owner sets one here. The cap matters because whatever agreement is in play, it's
 // typically the line that decides who pays for a repair: under it, ordinary
 // shared maintenance; over it, a bigger expense the owner is on the hook
 // for. The warning therefore has to arrive BEFORE the money is committed,
@@ -14,8 +13,12 @@ import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { resolveSiteTitle } from "@/config/AppConfig";
 import { useFmData } from "@/fm/FmDataContext";
-import { budgetStatus, formatMoney, monthKey, localStamp, parseAmount } from "@/fm/fmEngine";
-import { MONEY_CURRENCY } from "@/fm/fmTypes";
+import { budgetStatus, formatMoney, monthKey, localStamp, parseAmount, projectedSpend } from "@/fm/fmEngine";
+import { categoryName } from "@/fm/fmTypes";
+import { useFmTerms } from "@/fm/useFmTerms";
+import { useProfile } from "@/auth/ProfileContext";
+import { roleCan } from "@/auth/permissions";
+import ContractTermsEditor from "./ContractTermsEditor";
 import { buildSpendStatement } from "@/fm/fmReport";
 import type { FmCost, FmSavedDocument } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
@@ -37,6 +40,9 @@ export default function SpendTab(
   const { data, addCost, updateCost, removeCost, saveDocument } = useFmData();
   const { config, resolvedRooms } = useConfig();
   const { haConfig } = useHA();
+  const { role } = useProfile();
+  const terms = useFmTerms();
+  const money = (n: number) => formatMoney(n, terms.currency);
   const [month, setMonth] = useState(monthKey(Date.now()));
   const [adding, setAdding] = useState(false);
   /** Id of the entry being corrected, or null when recording a new one — one
@@ -77,11 +83,11 @@ export default function SpendTab(
     setDeviceText(c.deviceLabel ?? "");
   };
 
-  const b = budgetStatus(data.costs, month);
+  const b = budgetStatus(data.costs, month, terms);
   const amountIdr = parseAmount(amount);
 
   const generateStatement = () => {
-    setStatement(buildSpendStatement(data, month, villaName));
+    setStatement(buildSpendStatement(data, month, villaName, terms));
     setStatementSaved(false);
   };
   const downloadStatement = () => {
@@ -102,8 +108,11 @@ export default function SpendTab(
     setStatement(doc.markdown);
     setStatementSaved(true);
   };
-  const projected = b.minorSpend + (category === "minor" ? amountIdr : 0);
-  const projectedOver = b.cap > 0 && projected >= b.cap;
+  // The engine's one cap check. An edited entry's OWN old amount is taken out
+  // first (it used to be counted twice), and the month is the one the entry
+  // lands in — a new one is stamped today, whichever month is on screen.
+  const projection = projectedSpend(
+    data.costs, { amount: amountIdr, category, replacing: editingId ?? undefined }, terms);
 
   // Months that actually have entries, newest first — plus the current month so
   // it's always selectable even before anything is recorded in it.
@@ -112,6 +121,9 @@ export default function SpendTab(
 
   return (
     <div className="fm-stack">
+      {/* The terms are the villa's agreement, set by whoever administers the
+          kiosk — the shared config only the owner may write. */}
+      {roleCan(role, "editConfig") && <ContractTermsEditor />}
       <label className="fm-field" style={{ maxWidth: 220 }}>
         <span>Month</span>
         <select value={month} onChange={(e) => { setMonth(e.target.value); setStatement(null); setStatementSaved(false); }}>
@@ -121,9 +133,11 @@ export default function SpendTab(
 
       <div className={`fm-cap ${b.state}`}>
         <div className="fm-cap-head">
-          <strong>{formatMoney(b.minorSpend)}</strong>
+          <strong>{money(b.minorSpend)}</strong>
           <span className="muted">
-            {b.cap > 0 ? `of ${formatMoney(b.cap)} Minor Maintenance cap` : "Minor Maintenance spend (no cap configured)"}
+            {b.cap > 0
+              ? `${terms.cappedName} spend, of a ${money(b.cap)} monthly cap`
+              : `${terms.cappedName} spend (no monthly cap set)`}
           </span>
         </div>
         {b.cap > 0 && (
@@ -133,20 +147,19 @@ export default function SpendTab(
         )}
         {b.state === "exceeded" && (
           <p className="fm-cap-note">
-            Cap reached. Further spend this month is Major maintenance, on whatever
-            terms your own agreement sets for spend beyond it.
+            Cap reached. Further spend this month belongs to {terms.uncappedName}, on
+            whatever terms your own agreement sets for spend beyond it.
           </p>
         )}
         {b.state === "approaching" && (
           <p className="fm-cap-note">
-            Approaching the cap — decide now whether upcoming work is Minor or should
-            be raised as Major maintenance.
+            Approaching the cap — decide now whether upcoming work is {terms.cappedName} or
+            should be recorded as {terms.uncappedName}.
           </p>
         )}
         {b.majorSpend > 0 && (
           <p className="fm-cap-note">
-            Plus {formatMoney(b.majorSpend)} recorded as Major maintenance (Owner&rsquo;s
-            account, outside the cap).
+            Plus {money(b.majorSpend)} recorded as {terms.uncappedName} (outside the cap).
           </p>
         )}
       </div>
@@ -186,7 +199,7 @@ export default function SpendTab(
             placeholder="e.g. Second refill this quarter — check for a leak"
           />
           <label className="fm-field">
-            <span>Amount{MONEY_CURRENCY ? ` (${MONEY_CURRENCY})` : ""}</span>
+            <span>Amount{terms.currency ? ` (${terms.currency})` : ""}</span>
             <input value={amount} inputMode="numeric"
               onChange={(e) => setAmount(e.target.value)} placeholder="450000" />
           </label>
@@ -195,21 +208,17 @@ export default function SpendTab(
             <select value={category} onChange={(e) => setCategory(e.target.value as "minor" | "major")}>
               {/* Neutral words: which contract clause or account a category
                   maps to is one villa's arrangement (hard-rules.py, 3b). */}
-              <option value="minor">Minor — routine maintenance</option>
-              <option value="major">Major — larger works</option>
+              <option value="minor">{terms.cappedName}{terms.monthlyCap > 0 ? " — counts against the monthly cap" : ""}</option>
+              <option value="major">{terms.uncappedName}{terms.monthlyCap > 0 ? " — outside the cap" : ""}</option>
             </select>
           </label>
 
-          {category === "minor" && amountIdr > 0 && (
-            <div className={`fm-banner ${projectedOver ? "warn" : ""}`}>
-              {/* b.cap, NOT the raw constant — see fmEngine's budgetStatus, where
-                  cap <= 0 means "no cap configured yet" and every other line in
-                  this file already gates on it. This one did not, and the shipped
-                  default is 0, so an unconfigured install read "…would become
-                  IDR 450,000 of IDR 0" while projectedOver was correctly false —
-                  a number with no warning attached to it. */}
-              This month would become {formatMoney(projected)} of {formatMoney(b.cap)}
-              {projectedOver && " — over the cap. Consider recording it as Major maintenance instead."}
+          {category === "minor" && amountIdr > 0 && projection.cap > 0 && (
+            <div className={`fm-banner ${projection.over ? "warn" : ""}`}>
+              {/* Shown only with a cap set: with none there is nothing to be over
+                  (an unconfigured install once read "…of IDR 0"). */}
+              {projection.month} would come to {money(projection.minorSpend)} of {money(projection.cap)}
+              {projection.over && ` — over the cap. Consider recording it as ${terms.uncappedName} instead.`}
             </div>
           )}
 
@@ -250,14 +259,14 @@ export default function SpendTab(
         {b.entries.sort((a, c) => Date.parse(c.at) - Date.parse(a.at)).map((c) => (
           <ErasableRow
             key={c.id}
-            intent={{ title: "Erase this spend entry", detail: `${c.label} — ${formatMoney(c.amountIdr)}` }}
+            intent={{ title: "Erase this spend entry", detail: `${c.label} — ${money(c.amountIdr)}` }}
             erase={(token) => removeCost(c.id, token)}
             onOpen={() => openEditor(c)}
           >
             <div className="fm-row-main">
               <div className="fm-row-title">
                 <strong>{c.label}</strong>
-                <span className="fm-clause">{c.category === "minor" ? "Minor" : "Major"}</span>
+                <span className="fm-clause">{categoryName(terms, c.category)}</span>
                 <AgentMark record={c} />
               </div>
               <div className="fm-row-sub muted">{localStamp(c.at)}</div>
@@ -282,7 +291,7 @@ export default function SpendTab(
                 </div>
               )}
             </div>
-            <span className="fm-amount">{formatMoney(c.amountIdr)}</span>
+            <span className="fm-amount">{money(c.amountIdr)}</span>
           </ErasableRow>
         ))}
       </div>

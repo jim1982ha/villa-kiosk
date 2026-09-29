@@ -25,6 +25,7 @@ import { resolveSiteTitle } from "@/config/AppConfig";
 import { useFmData } from "@/fm/FmDataContext";
 import { buildMonthlyReport } from "@/fm/fmReport";
 import { monthKey } from "@/fm/fmEngine";
+import { useFmTerms } from "@/fm/useFmTerms";
 import type { ReadinessReport } from "@/fm/readiness";
 import type { FmSavedDocument } from "@/fm/fmTypes";
 import ReportPreview from "./ReportPreview";
@@ -47,6 +48,7 @@ export default function ReportTab({
   totalDeviceCount: number;
 }) {
   const { data, saveDocument } = useFmData();
+  const terms = useFmTerms();
   const { config } = useConfig();
   const { haConfig } = useHA();
   const [month, setMonth] = useState(defaultMonth());
@@ -67,7 +69,7 @@ export default function ReportTab({
 
   const generate = () => {
     setMarkdown(buildMonthlyReport({
-      fm: data, month, villaName, readiness, offlineDeviceCount, totalDeviceCount,
+      fm: data, month, villaName, readiness, offlineDeviceCount, totalDeviceCount, terms,
     }));
     setSaved(false);
   };
@@ -98,7 +100,7 @@ export default function ReportTab({
     <div className="fm-stack">
       <p className="muted body-text">
         The operational annex for the monthly owner report — maintenance performed
-        against the configured schedule, spend against the Minor Maintenance cap,
+        against the configured schedule, spend against the monthly cap,
         faults and response times. Financial reporting is out of scope and stays
         with whoever already handles it.
       </p>

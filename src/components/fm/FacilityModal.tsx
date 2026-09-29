@@ -7,7 +7,7 @@
 //   Today      what needs doing right now (the maintenance board + open faults)
 //   Readiness  is the villa fit for the next guest
 //   Faults     the work queue
-//   Spend      this month against the configured Minor Maintenance cap
+//   Spend      this month against the owner's monthly cap
 //   Schedule   what the Today board measures against — configured, then acted on
 //   Report     the operational annex for whatever monthly owner report already exists
 //

@@ -17,6 +17,7 @@
 //     dismissedEntityIds  entities the owner removed as "no longer in HA" —
 //                    a decision about the VILLA's model, so dismissing on a
 //                    phone must dismiss on the wall tablet too
+//     fmContract     the maintenance contract's cap and category names
 //
 //   PER-DEVICE — describes THIS CLIENT's look/feel, where different answers on
 //   different hardware are correct, not a drift to be reconciled: render
@@ -31,6 +32,7 @@
 
 import { ingressPath } from "@/ha/ingress";
 import type { AppConfig, DeviceGroup } from "./AppConfig";
+import { EMPTY_FM_CONTRACT, type FmContract } from "@/fm/fmTypes";
 import type { EntityMapping, TeleportPoint } from "@/types/scene.types";
 import { backendFetch } from "@/auth/sessionLost";
 import {
@@ -58,6 +60,7 @@ interface SharedItems {
   deviceGroups: DeviceGroup;
   teleportPoints: TeleportPoint;
   dismissedEntityIds: true;
+  fmContract: FmContract;
 }
 
 export type SharedConfigKey = keyof SharedItems;
@@ -102,6 +105,14 @@ const SHARED_KEYS: { [K in SharedConfigKey]: SharedKeyRow<AppConfig[K], SharedIt
     fromIndex: Object.keys,
     parse: (raw) => (Array.isArray(raw) ? raw.filter((v): v is string => typeof v === "string") : undefined),
     empty: [],
+  },
+  // One value, not a collection: indexed as a single item, so a change on
+  // one device replaces it whole and an untouched copy carries nothing.
+  fmContract: {
+    index: (v) => ({ terms: v }),
+    fromIndex: (items) => items.terms ?? EMPTY_FM_CONTRACT,
+    parse: (raw) => (isRecord(raw) ? { ...EMPTY_FM_CONTRACT, ...(raw as Partial<FmContract>) } : undefined),
+    empty: EMPTY_FM_CONTRACT,
   },
 };
 

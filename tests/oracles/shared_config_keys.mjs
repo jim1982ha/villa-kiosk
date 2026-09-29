@@ -18,6 +18,7 @@ const sample = {
   deviceGroups: [{ id: "g1", primaryEntityId: "light.a", memberEntityIds: [] }, { id: "g2", primaryEntityId: "light.b", memberEntityIds: [] }],
   teleportPoints: [{ name: "Kitchen", position: [0, 0, 0] }, { name: "Patio", position: [1, 0, 1] }],
   dismissedEntityIds: ["sensor.x", "sensor.y"],
+  fmContract: { monthlyCap: 1000, cappedName: "", uncappedName: "", warnAtPercent: 0 },
 };
 const edit = {
   entityMap: (v, n) => ({ ...v, [`light.n${n}`]: { type: "light", label: `N${n}` } }),
@@ -25,7 +26,11 @@ const edit = {
   deviceGroups: (v, n) => [...v, { id: `gn${n}`, primaryEntityId: "light.a", memberEntityIds: [] }],
   teleportPoints: (v, n) => [...v, { name: `Room ${n}`, position: [n, 0, 0] }],
   dismissedEntityIds: (v, n) => [...v, `sensor.n${n}`],
+  fmContract: (v, n) => ({ ...v, monthlyCap: 1000 + n }),
 };
+// Keys holding ONE value rather than a collection: a change replaces it whole,
+// so two devices' edits cannot both survive — the later one wins.
+const SINGLE = new Set(["fmContract"]);
 const base = Object.fromEntries(KEYS.map((k) => [k, sample[k]]));
 const J = JSON.stringify;
 
@@ -37,7 +42,7 @@ console.log("\n  reading what the server holds:");
   const parsed = dc.parseSharedConfig({ ...base, fromANewerVersion: 1 });
   ck("every shared key is read back as stored", KEYS.every((k) => J(parsed[k]) === J(base[k])));
   ck("a key this version does not know is dropped", !("fromANewerVersion" in parsed));
-  const wrong = dc.parseSharedConfig({ entityMap: [], meshBindings: "x", deviceGroups: {}, teleportPoints: 3, dismissedEntityIds: "a" });
+  const wrong = dc.parseSharedConfig({ entityMap: [], meshBindings: "x", deviceGroups: {}, teleportPoints: 3, dismissedEntityIds: "a", fmContract: 5 });
   ck("a wrong-shaped value is left out, so the device keeps its own", Object.keys(wrong).length === 0, J(wrong));
   ck("a dismissed list keeps only its ids", J(dc.parseSharedConfig({ dismissedEntityIds: ["a", 3, null, "b"] }).dismissedEntityIds) === J(["a", "b"]));
   ck("nothing usable reads as nothing", J(dc.parseSharedConfig(null)) === "{}" && J(dc.parseSharedConfig([1])) === "{}");
@@ -52,6 +57,13 @@ for (const k of KEYS) {
      !dc.isSharedConfigDiffEmpty(diff) && J(dc.describeSharedConfigDiff(diff)) === J({ [k]: 1 }), J(dc.describeSharedConfigDiff(diff)));
   ck(`${k}: replaying the diff onto the base gives the edit`,
      J(dc.applySharedConfigDiff(base, diff)[k]) === J(next[k]));
+  if (SINGLE.has(k)) {
+    const a = dc.diffSharedConfig(base, { ...base, [k]: edit[k](base[k], 1) });
+    const b = dc.diffSharedConfig(base, { ...base, [k]: edit[k](base[k], 2) });
+    ck(`${k}: one value — the later of two edits wins, whole`,
+       J(dc.applySharedConfigDiff(dc.applySharedConfigDiff(base, a), b)[k]) === J(edit[k](base[k], 2)));
+    continue;
+  }
   // Two devices adding DIFFERENT items at once: both survive, in either order.
   const a = dc.diffSharedConfig(base, { ...base, [k]: edit[k](base[k], 1) });
   const b = dc.diffSharedConfig(base, { ...base, [k]: edit[k](base[k], 2) });
@@ -77,7 +89,7 @@ for (const k of KEYS) {
 console.log("\n  the baseline when the server holds nothing:");
 {
   const empty = dc.baselineFromServer({});
-  ck("every key is present, empty", KEYS.every((k) => k in empty && J(empty[k]).length === 2), J(empty));
+  ck("every key is present, empty", KEYS.every((k) => k in empty && (SINGLE.has(k) ? !empty[k].monthlyCap : J(empty[k]).length === 2)), J(empty));
   ck("built in the same key order as the push (the gate compares JSON strings)",
      J(Object.keys(empty)) === J(KEYS));
   ck("a key the server holds is taken as held", J(dc.baselineFromServer({ meshBindings: { m: "x" } }).meshBindings) === J({ m: "x" }));

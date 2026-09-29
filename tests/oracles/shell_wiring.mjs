@@ -101,11 +101,14 @@ eq("the migrations have no other caller",
 // them. The resurrection bug, arriving over the network.
 
 // ── the cap has one owner ────────────────────────────────────────────────
-console.log("\n  no screen reaches past the engine for the cap:");
-const screens = ["src/components/fm/SpendTab.tsx", "src/components/fm/TodayTab.tsx"];
+// Since 2.496.225 the cap is the owner's setting (fmTerms), and the cap
+// check is the engine's projectedSpend/wouldExceedCap: SpendTab used to add
+// the amount to the month itself, and counted an edited entry twice.
+console.log("\n  no screen computes the cap check itself:");
+const screens = ["src/components/fm/SpendTab.tsx", "src/components/fm/TodayTab.tsx", "src/components/fm/FaultStageModal.tsx"];
 for (const f of screens) {
-  eq(`${f.split("/").pop()} reads budgetStatus().cap`,
-     /MINOR_MAINTENANCE_CAP/.test(code(f)), false);
+  eq(`${f.split("/").pop()} adds no amount to a month's spend itself`,
+     /minorSpend\s*\+/.test(code(f)), false);
 }
 // ⚠️ THE WHOLE OF src/fm/, NOT THE ONE FILE THE LAST DEFECT WAS IN. This read
 // only fmEngine.ts and matched only `toLocaleString(` — so fmReport.ts's

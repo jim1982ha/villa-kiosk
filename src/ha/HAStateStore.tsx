@@ -24,6 +24,9 @@ export interface HAConfig {
   location_name: string;
   /** Home Assistant's units — every climate/temperature state is in these. */
   unit_system?: { temperature?: string };
+  /** The currency set in Home Assistant (Settings → System → General) —
+   *  every Facility money figure is written in it (fm/fmTypes.fmTerms). */
+  currency?: string;
 }
 
 interface HAStateContextType {
