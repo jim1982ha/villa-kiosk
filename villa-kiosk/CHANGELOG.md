@@ -1,3 +1,13 @@
+## 2.496.224
+
+### Fixed
+- **Two quick changes to the same device no longer undo each other.** In Settings, the bindings table, the badge colour picker and the Grouped devices screen, a change could be built from a slightly out-of-date copy of your settings — so making a second change straight after the first (for example, accepting two group suggestions in a row) could silently undo the first. Every one of these changes now starts from your latest settings.
+
+### Changed
+- **Nothing else to see on screen; three pieces of the settings code are simpler and fully tested.**
+- The list of settings shared between all your devices (device settings, 3D object links, grouped devices, rooms, removed devices) is now written once. Adding a shared setting in future can no longer leave it silently unshared.
+- The Settings window no longer keeps extra copies of the dashboard title, eye height, walk speed and look settings beside its own draft, so **Discard** always puts every one of them back, and the app refuses to build if a new control could change a setting that Discard does not restore.
+
 ## 2.496.223
 
 ### Changed

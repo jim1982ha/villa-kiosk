@@ -30,7 +30,10 @@ ck("  ...and are skipped for a patch that carries no map ({ maps: false }) — c
    && A.normaliseConfig({ ...withVariant, walkSpeed: null }, { maps: false }).walkSpeed === 1);
 
 const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
-ck("EVERY patch is completed, maps migrated only when carried", /setConfig\(\(prev\) => normaliseConfig\(\{ \.\.\.prev, \.\.\.patch \}, \{ maps \}\)\);/.test(src("config/ConfigContext.tsx")));
+// update() takes a patch or an edit (config/mappingEdits.ts, 2.496.224); both
+// reach the same completion, inside the state updater.
+ck("EVERY patch is completed, maps migrated only when carried",
+   /setConfig\(\(prev\) => \{[\s\S]*?const patch = typeof change === "function" \? change\(prev\) : change;[\s\S]*?return normaliseConfig\(\{ \.\.\.prev, \.\.\.patch \}, \{ maps \}\);/.test(src("config/ConfigContext.tsx")));
 const SRC = new URL("../../src/", import.meta.url).pathname;
 const walk = (d, out = []) => { for (const e of readdirSync(d)) { const p = join(d, e); statSync(p).isDirectory() ? walk(p, out) : /\.tsx?$/.test(p) && out.push(p); } return out; };
 const keys = Object.keys(A.DEFAULT_CONFIG).join("|");

@@ -2526,7 +2526,7 @@ export class EntityVisuals {
   /** An entity's map-filter category: whatever the user set in the Config
    *  Editor (persisted on its EntityMapping), falling back to the type-based
    *  default (config/EntityCategories.ts) for entities that don't have one
-   *  yet (see bindingUtils). Public: SceneManager's applyHighlight (the blue
+   *  yet (see config/mappingEdits). Public: SceneManager's applyHighlight (the blue
    *  "clickable" glow) reuses this exact resolution instead of its own
    *  effectiveCategory() call, which used to omit device_class — the same
    *  entity could disagree with itself (badge under Network, glow only

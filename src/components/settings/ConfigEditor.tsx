@@ -20,7 +20,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ShowAll, useTruncated } from "@/components/common/TruncatedList";
 import { Search } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
-import { dismissedEntitySet, forgetEntities } from "@/config/dismissedEntities";
+import { dismissedEntitySet } from "@/config/dismissedEntities";
+import { forgetMappings, patchMapping, remapMapping } from "@/config/mappingEdits";
 import { useHA } from "@/ha/HAStateStore";
 import EntityMapRow from "./EntityMapRow";
 import type { EntityMapping } from "@/types/scene.types";
@@ -103,10 +104,7 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
   // after the entity), so deleting alone regenerated every one of them: the
   // reported "I press Remove and they come straight back, on this device and
   // the others".
-  const removeStale = useCallback(() => {
-    update(forgetEntities(
-      configRef.current.entityMap, configRef.current.dismissedEntityIds, staleIds));
-  }, [staleIds, update]);
+  const removeStale = useCallback(() => update(forgetMappings(staleIds)), [staleIds, update]);
 
   // Live filter by entity id, label or resolved room — the auto-detected list
   // is long. Room is no longer part of the mapping itself (see
@@ -129,50 +127,27 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
   // you clicked.
   const shown = useTruncated(entries);
 
-  // Stable-identity commit path: reads the LATEST config through a ref rather
-  // than closing over `config` directly, so `patch`'s own function identity
-  // never changes — every row receives the exact same `onPatch` reference on
-  // every ConfigEditor render, which is what lets React.memo actually skip
-  // re-rendering rows that a given edit doesn't touch (patch()'s shallow
-  // spread also preserves reference equality for every OTHER entry in
-  // entityMap, so their `mapping` prop stays stable too).
-  const configRef = useRef(config);
-  configRef.current = config;
+  // Stable-identity commit path: every edit is computed from the LATEST
+  // config inside update() (config/mappingEdits.ts), so these callbacks close
+  // over nothing that changes — every row receives the exact same `onPatch`
+  // reference on every ConfigEditor render, which is what lets React.memo
+  // skip re-rendering rows a given edit doesn't touch (the edit's shallow
+  // spread also keeps every OTHER entry's `mapping` prop reference-equal).
   const patch = useCallback((key: string, change: Partial<EntityMapping>) =>
-    update({
-      entityMap: {
-        ...configRef.current.entityMap,
-        [key]: { ...configRef.current.entityMap[key], ...change },
-      },
-    }), [update]);
+    update(patchMapping(key, change)), [update]);
 
   // ⚠️ THE SAME OPERATION AS THE BANNER ABOVE, AND IT USED NOT TO BE. This
   // deleted the row and recorded nothing, so it could not deliver the removal
   // it offered: a live entity's row is rebuilt by auto-detection on the next
   // model load, and a stale one merely disappeared from THIS table while
   // staying in the fault picker, the offline count and readiness.
-  const remove = useCallback((key: string) => {
-    update(forgetEntities(
-      configRef.current.entityMap, configRef.current.dismissedEntityIds, [key]));
-  }, [update]);
+  const remove = useCallback((key: string) => update(forgetMappings([key])), [update]);
 
-  /**
-   * Redirect a GLB mesh (named oldKey) to a different HA entity (newId) without
-   * rebuilding the model. Works by:
-   *  1. Adding a mesh binding: meshBindings[oldKey] = newId
-   *  2. Renaming the entityMap entry to newId
-   *  3. Removing the old entityMap entry
-   * The 3D mesh stays in the scene — only the entity it controls changes.
-   */
+  /** Redirect a GLB mesh to a different HA entity without rebuilding the
+   *  model — see mappingEdits.remapMapping. */
   const remapEntity = useCallback((oldKey: string, newId: string) => {
     if (!newId || newId === oldKey) return;
-    const oldEntry = configRef.current.entityMap[oldKey];
-    if (!oldEntry) return;
-    const { [oldKey]: _removed, ...restMap } = configRef.current.entityMap;
-    update({
-      entityMap: { ...restMap, [newId]: { ...oldEntry, entityId: newId } },
-      meshBindings: { ...configRef.current.meshBindings, [oldKey]: newId },
-    });
+    update(remapMapping(oldKey, newId));
     setRemapKey(null);
     setRemapNewId(undefined);
   }, [update]);

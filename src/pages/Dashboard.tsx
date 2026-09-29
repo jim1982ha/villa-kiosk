@@ -27,6 +27,7 @@ import { useEntityLabel } from "@/hooks/useEntityLabel";
 import RoomChoiceSheet, { type RoomChoice } from "@/components/hud/RoomChoiceSheet";
 import { useProfile } from "@/auth/ProfileContext";
 import { isMappingAllowed, isTypeAllowed, panelMapping, roleCan } from "@/auth/permissions";
+import { patchMapping } from "@/config/mappingEdits";
 import FacilityModal from "@/components/fm/FacilityModal";
 import AgentModal from "@/components/agent/AgentModal";
 import { useAgent } from "@/agent/AgentContext";
@@ -883,16 +884,8 @@ export default function Dashboard() {
               };
             })(),
             onSetBadgeColor: canEditConfig
-              ? (hex) => {
-                  const id = activePanel.entityId;
-                  const prev = config.entityMap[id] ?? activePanel.mapping;
-                  update({
-                    entityMap: {
-                      ...config.entityMap,
-                      [id]: { ...prev, badgeColor: hex ?? undefined },
-                    },
-                  });
-                }
+              ? (hex) => update(patchMapping(
+                  activePanel.entityId, { badgeColor: hex ?? undefined }, activePanel.mapping))
               : undefined,
             // The linked-entity on/off switch, rendered by the shared panel
             // chrome — so it appears on EVERY device type whose

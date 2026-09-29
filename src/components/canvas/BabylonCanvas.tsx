@@ -27,7 +27,7 @@ import {
   isCrashLooping, crashLoopInfo, noteLoadStart, noteLoadPhase, noteModel,
   noteLoadSuccess, clearCrashLoop, noteContextLoss, captureError, buildReport,
 } from "@/utils/diagnostics";
-import type { EntityMapping } from "@/types/scene.types";
+import { adoptDetected } from "@/config/mappingEdits";
 import type { ParsedRoomData } from "@/utils/sh3dParser";
 
 type RoomsSyncResult =
@@ -556,8 +556,6 @@ export default function BabylonCanvas({
         function autoDetectEntities() {
         const detected = manager.getAutoDetectedMappings();
         if (detected.length > 0) {
-          const current = configRef.current;
-          const additions: Record<string, EntityMapping> = {};
           // Live HA state, read once for this whole pass — a mesh literally
           // named after an entity_id (the pipeline's own naming convention)
           // that HA no longer reports (renamed/removed) used to get
@@ -566,7 +564,7 @@ export default function BabylonCanvas({
           // Advanced Settings' "N entities no longer in Home Assistant ->
           // Remove N" — the auto-detect pass never checked whether the
           // entity was still real, only whether a mesh happened to carry its
-          // name. Reported: climate.gym_room kept "coming back" no matter
+          // name. Reported: one climate entity kept "coming back" no matter
           // how many times it was removed; confirmed via HA that the entity
           // genuinely no longer exists. Auto-detect exists to save typing
           // for a genuinely new, live entity — not to repopulate one that's
@@ -574,15 +572,10 @@ export default function BabylonCanvas({
           // get_states has resolved, a real new entity could be skipped
           // here and only get picked up on the NEXT load — self-healing,
           // and far better than silently undoing an explicit removal.)
+          // The rule itself is mappingEdits.adoptDetected, applied to the
+          // config React holds when it lands (not a snapshot of it).
           const liveEntities = getEntitiesSnapshot();
-          for (const m of detected) {
-            if (current.entityMap[m.entityId]) continue;
-            if (!liveEntities[m.entityId]) continue;
-            additions[m.entityId] = m;
-          }
-          if (Object.keys(additions).length > 0) {
-            update({ entityMap: { ...current.entityMap, ...additions } });
-          }
+          update(adoptDetected(detected, (id) => !!liveEntities[id]));
         }
         }
         // Paint the current entity states immediately (meshes + markers). Read

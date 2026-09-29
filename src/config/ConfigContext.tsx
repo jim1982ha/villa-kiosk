@@ -5,12 +5,17 @@ import {
   createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode,
 } from "react";
 import { type AppConfig, loadConfig, saveConfig, resetConfig, normaliseConfig } from "./AppConfig";
+import type { ConfigEdit } from "./mappingEdits";
 import { resolveEffectiveTheme } from "@/utils/themeTime";
 import { beginSpan } from "@/utils/perfSpans";
 
 interface ConfigContextType {
   config: AppConfig;
-  update: (patch: Partial<AppConfig>) => void;
+  /** Apply a patch — or an EDIT (config/mappingEdits.ts), which is computed
+   *  from the config React holds at the moment it applies, so two edits in
+   *  the same moment both land. An edit that changes nothing re-renders
+   *  nothing. */
+  update: (patch: Partial<AppConfig> | ConfigEdit) => void;
   replace: (next: AppConfig) => void;
   reset: () => void;
   /** entity_id -> room name, live-computed (HA's own Area assignment, falling
@@ -33,14 +38,18 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<AppConfig>(() => loadConfig());
   const [resolvedRooms, setResolvedRooms] = useState<Record<string, string>>({});
 
-  const update = useCallback((patch: Partial<AppConfig>) => {
+  const update = useCallback((change: Partial<AppConfig> | ConfigEdit) => {
     // EVERY patch is completed (defaults, bounds — cheap), so no reader ever
     // sees a missing or out-of-range setting. The MAP MIGRATIONS run only when
     // the patch carries one of the two maps they clean — the seam
     // DeviceConfigSync's pull arrives through: update() fires on every
     // keystroke in Advanced Settings, and they walk the whole entityMap.
-    const maps = patch.entityMap !== undefined || patch.meshBindings !== undefined;
-    setConfig((prev) => normaliseConfig({ ...prev, ...patch }, { maps }));
+    setConfig((prev) => {
+      const patch = typeof change === "function" ? change(prev) : change;
+      if (typeof change === "function" && Object.keys(patch).length === 0) return prev;
+      const maps = patch.entityMap !== undefined || patch.meshBindings !== undefined;
+      return normaliseConfig({ ...prev, ...patch }, { maps });
+    });
   }, []);
 
   const replace = useCallback((next: AppConfig) => {

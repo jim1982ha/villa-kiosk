@@ -52,11 +52,17 @@ export default function GroupedDevices() {
   // accepting a second row for a primary that already has a group must ADD
   // to it, not silently create a second, orphaned group under the same
   // primaryEntityId (only the first would ever be found by groupForPrimary).
+  // Every change is computed from the config update() applies it to, not
+  // the one this render saw: accepting two suggestions in a row used to
+  // build the second from a list that did not yet hold the first.
   const acceptSuggestion = (primaryEntityId: string, memberEntityId: string) => {
-    const existing = config.deviceGroups.find((g) => g.primaryEntityId === primaryEntityId);
-    update(upsertGroup(config, existing
-      ? { ...existing, memberEntityIds: [...existing.memberEntityIds, memberEntityId] }
-      : { id: newGroupId(), primaryEntityId, memberEntityIds: [memberEntityId] }));
+    const id = newGroupId();
+    update((c) => {
+      const existing = c.deviceGroups.find((g) => g.primaryEntityId === primaryEntityId);
+      return upsertGroup(c, existing
+        ? { ...existing, memberEntityIds: [...existing.memberEntityIds, memberEntityId] }
+        : { id, primaryEntityId, memberEntityIds: [memberEntityId] });
+    });
   };
 
   const createGroup = (primaryEntityId: string) => {
@@ -64,7 +70,8 @@ export default function GroupedDevices() {
       setNotice("This entity is already part of another group.");
       return;
     }
-    update(upsertGroup(config, { id: newGroupId(), primaryEntityId, memberEntityIds: [] }));
+    const id = newGroupId();
+    update((c) => upsertGroup(c, { id, primaryEntityId, memberEntityIds: [] }));
     setNewPrimary(undefined);
   };
 
@@ -74,15 +81,19 @@ export default function GroupedDevices() {
       setNotice("This entity is already part of a group.");
       return;
     }
-    update(upsertGroup(config, { ...group, memberEntityIds: [...group.memberEntityIds, memberEntityId] }));
+    update((c) => {
+      const now = c.deviceGroups.find((g) => g.id === group.id) ?? group;
+      return upsertGroup(c, { ...now, memberEntityIds: [...now.memberEntityIds, memberEntityId] });
+    });
   };
 
   const removeMember = (group: DeviceGroup, memberEntityId: string) =>
-    update(upsertGroup(config, {
-      ...group, memberEntityIds: group.memberEntityIds.filter((id) => id !== memberEntityId),
-    }));
+    update((c) => {
+      const now = c.deviceGroups.find((g) => g.id === group.id) ?? group;
+      return upsertGroup(c, { ...now, memberEntityIds: now.memberEntityIds.filter((id) => id !== memberEntityId) });
+    });
 
-  const deleteGroup = (groupId: string) => update(removeGroup(config, groupId));
+  const deleteGroup = (groupId: string) => update((c) => removeGroup(c, groupId));
 
   return (
     <div>
