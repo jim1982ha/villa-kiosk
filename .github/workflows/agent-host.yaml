@@ -40,17 +40,17 @@ jobs:
 
       - name: The host's start-up, contract, folders and redaction
         # Runs the real rootfs programs against a temporary root (test_host.py).
-        run: python3 agent-host/tests/test_host.py
+        run: agent-host/tests/ci_run.sh python3 agent-host/tests/test_host.py
 
       - name: The self-test reports each link correctly
         # Against a local fake of every remote end; no request leaves the runner.
-        run: python3 agent-host/tests/test_selftest.py
+        run: agent-host/tests/ci_run.sh python3 agent-host/tests/test_selftest.py
 
       - name: The sidecar, the restart policy and the stop grace
-        run: python3 agent-host/tests/test_supervise.py
+        run: agent-host/tests/ci_run.sh python3 agent-host/tests/test_supervise.py
 
       - name: The update check moves only forward, one release per change
-        run: python3 agent-host/tests/test_updates.py
+        run: agent-host/tests/ci_run.sh python3 agent-host/tests/test_updates.py
 
   build:
     needs: [tests]
