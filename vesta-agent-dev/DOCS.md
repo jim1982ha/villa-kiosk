@@ -3,7 +3,7 @@
 The Home Assistant app that runs the **VESTA Agent**: the villa's assistant on
 Telegram. It reads Home Assistant, follows up the critical alerts of the VESTA
 rules, records jobs for the facility manager in the VESTA Kiosk, writes the
-daily, weekly and monthly reports (PDF), and **asks before any action**: every
+daily, weekly and monthly reports, and **asks before any action**: every
 action is an Approve / Refuse button pressed by a registered person.
 
 The app has no web page and no port: nothing connects to it; it only connects
@@ -114,10 +114,14 @@ Telegram button.
 | Every 2 min | presence in the VESTA Kiosk (online / offline) | No |
 | 01:30 · 02:00 | inventory of Home Assistant, the night's maintenance checks, a ticket per job, anything urgent to the facility manager at once | No |
 | 07:00 | the facility manager's daily digest (also the agent's daily sign of life) | Yes |
-| Monday 08:00 | the facility manager's weekly page (PDF) and three lines for the owner | Yes |
-| 1st of the month 08:00 | the owner's monthly report (PDF) | Yes |
+| Monday 08:00 | the facility manager's weekly page (a file attached to the message) and three lines for the owner | Yes |
+| 1st of the month 08:00 | the owner's monthly report (a file attached to the message) | Yes |
 
 These times come from the skills (below): changing them is a skill edit.
+
+The weekly and monthly reports arrive as a message with the headline and the
+key numbers, and the full report as an attached page (`.html`): tap it and the
+phone opens it in its browser, which can also print it or save it as PDF.
 
 If Home Assistant cannot be reached for 30 minutes, both chats get "Villa
 silent"; the next contact closes it.
@@ -130,7 +134,13 @@ its schedule) and `scripts/`. The agent reads the folder at every use: a change
 counts at once. To remove a skill, delete its folder; to add one, copy a folder
 and edit it. The `README.md` in that folder explains `skill.yaml`. A
 `skill.yaml` the agent cannot read switches that skill off alone, and the log
-says why. App updates never touch this folder.
+says why.
+
+App updates never touch a skill you edited. A starter skill you never edited
+follows the app: when an update brings a new version of it, it is replaced, and
+the log says `Starter skills updated to this version (never edited here): …`.
+If you edited it, yours is kept, the log says so, and the new version is put in
+`skills/.starter/` to compare. A deleted skill stays deleted.
 
 ## Acting on the villa
 
@@ -142,6 +152,18 @@ whatever the file says: restarting Home Assistant, shell or REST commands,
 scripts not listed, MQTT, updates, the recorder, any toggle, triggering or
 reloading automations. A button works once, for 15 minutes, for the exact
 action shown.
+
+Each service in `allowed_services` has one rule:
+
+| Rule | Who decides |
+|---|---|
+| `any` | the owner or the facility manager, with Approve / Refuse |
+| `owner` | only the owner, with Approve / Refuse |
+| `listed` | only the devices named in the file's lists (`switch_entities`, `scene_allowlist`, `script_allowlist`, `button_allowlist`), then as `any`; any other device is refused |
+| `direct` | no buttons: done at once when a person listed in `people` asks in a chat, and the answer says whether it worked. A scheduled job or an alert still asks, and an owner-only device still waits for the owner |
+
+For example, `light.turn_on: direct` and `light.turn_off: direct` switch
+lights without an approval.
 
 ## Log lines
 
@@ -222,18 +244,22 @@ name: vesta-agent
 version: "x.y.z"
 runtime: python
 install: "pip install --no-cache-dir -r requirements.txt"   # run at image build, never on the Yellow
+install_files: [requirements.txt]   # the only files `install` sees: libraries rebuilt only when these change
 start: "python -m vesta_agent"
-stop_grace_seconds: 20                                        # at most 22
-system_packages: [chromium-headless-shell, fonts-dejavu-core] # Debian packages, installed at image build
+stop_grace_seconds: 20              # at most 22
+system_packages: []                 # Debian packages, installed at image build
 ```
+
+The image stacks what changes least first and the agent's code last, so an
+update that changes only the code downloads only the code.
 
 ## Resources
 
 | | Measured |
 |---|---|
-| Image download (compressed) | to measure with 0.9.0 (0.8.0 without the agent: about 120 MB) |
-| Idle memory | to measure on the HA Yellow with 0.9.0 (0.8.0, stub + HA MCP: about 142 MB) |
+| Image, unpacked | about 530 MB (0.9.2; 1.1 GB in 0.9.0–0.9.1 with the PDF browser) |
+| An update that changes only the agent's code | its code: under 1 MB |
+| Idle memory | to measure on the HA Yellow (0.8.0, stub + HA MCP: about 142 MB) |
 
-The headless Chromium used for the PDF reports adds about 200 MB to the image
-and runs only for the few seconds a PDF takes. Keep at least 500 MB free on the
-Yellow once the agent runs.
+The largest parts are the Claude program the agent runs on (about 230 MB) and
+the HA MCP server (about 100 MB); both change rarely.

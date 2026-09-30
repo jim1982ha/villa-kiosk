@@ -10,7 +10,7 @@
 # ⚠️ BUMP `version` ON EVERY PUSH. The Supervisor resolves image:<version>, never
 # :latest, so an unchanged version is an update Home Assistant cannot see.
 name: "VESTA Agent (dev)"
-version: "0.9.1"
+version: "0.9.3"
 slug: vesta_agent_dev
 description: "Runs the VESTA Agent, the villa's AI assistant"
 url: "https://github.com/jim1982ha/villa-kiosk"
@@ -39,8 +39,8 @@ map:
 timeout: 30
 backup_exclude:
   - "*/cache/*"
-  # The VESTA Agent's scratch folders (its work files, generated reports and
-  # PDFs). Its conversations, approvals and incidents stay in backups.
+  # The VESTA Agent's scratch folders (its work files and generated report
+  # pages). Its conversations, approvals and incidents stay in backups.
   - "agent/work/*"
   - "agent/out/*"
 # NOTE: the help text an operator SEES on the Configuration page lives in
