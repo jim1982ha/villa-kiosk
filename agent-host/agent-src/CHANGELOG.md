@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.3 (30 September 2026)
+
+- `allowed_services` rule `direct`: executed at once when a registered person asked in a chat
+  (`Actions.request`, logged `direct`); no requester (a job, an alert, a skill) or an owner-only device, directly
+  or behind a group, still goes through an approval. The system prompt and the tool description say so.
+
 ## 0.3.2 (30 September 2026)
 
 - Fixed: every approved action failed. `McpClient.call_service` sent `entity_id` as a list; ha-mcp 8.5.0's

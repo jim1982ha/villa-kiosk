@@ -153,6 +153,18 @@ scripts not listed, MQTT, updates, the recorder, any toggle, triggering or
 reloading automations. A button works once, for 15 minutes, for the exact
 action shown.
 
+Each service in `allowed_services` has one rule:
+
+| Rule | Who decides |
+|---|---|
+| `any` | the owner or the facility manager, with Approve / Refuse |
+| `owner` | only the owner, with Approve / Refuse |
+| `listed` | only the devices named in the file's lists (`switch_entities`, `scene_allowlist`, `script_allowlist`, `button_allowlist`), then as `any`; any other device is refused |
+| `direct` | no buttons: done at once when a person listed in `people` asks in a chat, and the answer says whether it worked. A scheduled job or an alert still asks, and an owner-only device still waits for the owner |
+
+For example, `light.turn_on: direct` and `light.turn_off: direct` switch
+lights without an approval.
+
 ## Log lines
 
 | Line | Meaning |

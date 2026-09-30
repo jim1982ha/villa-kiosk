@@ -46,7 +46,12 @@ siren_auto_off_min: 3
 excluded_entities: []
 
 # Lights, covers, fans for both roles; locks, siren, automations for the owner.
-# service: who may approve. any = owner or FM, owner = owner only, listed = only the entities in the lists below.
+# service: who may approve.
+#   any    = the owner or the facility manager approves (Approve / Refuse buttons)
+#   owner  = only the owner approves
+#   listed = only the devices named in the lists below (switch_entities...), then any
+#   direct = no buttons: done at once when a registered person asks in a chat. A scheduled job or an
+#            alert still asks, and an owner-only device still waits for the owner.
 allowed_services:
   light.turn_on: any
   light.turn_off: any

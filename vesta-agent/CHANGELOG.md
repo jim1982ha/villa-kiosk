@@ -1,3 +1,8 @@
+## 0.9.3
+
+### Added
+- **Actions without the Approve button, where you choose.** A new rule, `direct`, in `policy.yaml`: for example `light.turn_on: direct` and `light.turn_off: direct`, and a light is switched as soon as a registered person asks in a chat; the reply says whether it worked. Alerts and scheduled jobs still ask, and owner-only devices still wait for the owner. See the Documentation tab, "Acting on the villa".
+
 ## 0.9.2
 
 ### Fixed

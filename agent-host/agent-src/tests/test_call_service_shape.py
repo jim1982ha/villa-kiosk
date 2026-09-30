@@ -81,3 +81,47 @@ def test_a_refused_call_says_so_and_confirms_nothing(run, caplog):
         hc.McpClient.call_service = orig
     assert not result["ok"] and calls == []
     assert any("valid" in r.message and "light.turn_on" in r.message for r in caplog.records)   # the reason, in the app's log
+
+
+# ---------------------------------------------------------------------- the `direct` rule
+from vesta_agent.policy import Person, Policy  # noqa: E402
+
+JM = Person(111, "Registered", "fm", "en")
+
+
+@pytest.fixture
+def villa(tmp_path, monkeypatch):
+    monkeypatch.delenv("VESTA_HA_READ_ONLY", raising=False)
+    session = StrictSession()
+    pol = Policy({"act_enabled": True, "people": [{"telegram_id": 111, "name": "Registered", "role": "fm"}],
+                  "chats": {"fm": 111, "owner": -100},
+                  "owner_only_entities": ["light.example_gate_lamp"],
+                  "allowed_services": {"light.turn_on": "direct", "cover.open_cover": "any"}})
+    # a light group that holds the owner-only lamp (what _wrap_check looks behind)
+    actions = Actions(lambda: pol, State(str(tmp_path / "state.db")),
+                      lambda: Writer("http://unused", "UTC", write=True, session=session),
+                      related=lambda ids: {"light.example_gate_lamp"} if "light.example_group" in ids else set())
+    return actions, session
+
+
+def test_direct_runs_at_once_when_a_registered_person_asks(villa):
+    actions, session = villa
+    answer, msg = actions.request("light", "turn_on", "light.example_pool", {}, JM, 111)
+    assert msg is None and "without approval" in answer and "Done" in answer
+    assert session.calls == [{"domain": "light", "service": "turn_on", "wait": True, "entity_id": "light.example_pool"}]
+
+
+def test_direct_still_asks_for_a_job_or_an_alert_and_for_an_owner_only_device(villa):
+    actions, session = villa
+    _, msg = actions.request("light", "turn_on", "light.example_pool", {}, None, 111)       # no person: a job
+    assert msg is not None
+    stranger = Person(999, "Stranger", "fm", "en")                                          # not in policy.yaml
+    _, msg = actions.request("light", "turn_on", "light.example_pool", {}, stranger, 111)
+    assert msg is not None
+    _, msg = actions.request("light", "turn_on", "light.example_gate_lamp", {}, JM, 111)    # owner-only
+    assert msg is not None and "Only the owner" in msg.text
+    _, msg = actions.request("light", "turn_on", "light.example_group", {}, JM, 111)        # owner-only inside
+    assert msg is not None and "Only the owner" in msg.text
+    _, msg = actions.request("cover", "open_cover", "cover.example_shutter", {}, JM, 111)    # rule `any`
+    assert msg is not None
+    assert session.calls == []                                                              # nothing ran

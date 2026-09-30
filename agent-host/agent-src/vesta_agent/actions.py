@@ -106,6 +106,18 @@ class Actions:
         if not d.allowed:
             self.state.log("refused", dict(base, reason=d.reason))
             return f"Refused by the villa's rules: {d.reason}", None
+        # ⚠️ `direct` SKIPS THE BUTTON ONLY FOR A PERSON'S OWN REQUEST: a registered
+        # person, writing in a chat. A scheduled job, an alert, a skill (no requester)
+        # still asks; so does anything an owner-only device hides behind (_wrap_check
+        # raised it to "owner").
+        if (d.direct and d.required_role == "any" and requester is not None
+                and requester.telegram_id in policy.people and origin_chat is not None):
+            result = self.execute(d)
+            self.state.log("direct", dict(base, by=requester.name, ok=result["ok"]))
+            log.info("Direct %s.%s on %s, asked by %s: %s", d.domain, d.service, ", ".join(d.entity_ids),
+                     requester.name, result["text"])
+            return (f"Executed without approval (this villa's rule for {d.domain}.{d.service} is direct). "
+                    f"Result: {result['text']}"), None
         origin_ok = origin_chat is not None and (policy.chat_role(origin_chat) is not None or int(origin_chat) in policy.people)
         target_chat = policy.chats.get("owner") if d.required_role == "owner" else (origin_chat if origin_ok else policy.chats.get("owner"))
         if d.required_role == "owner" and not target_chat:

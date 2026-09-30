@@ -68,6 +68,7 @@ class Decision:
     service: str = ""
     entity_ids: list[str] = field(default_factory=list)
     data: dict = field(default_factory=dict)
+    direct: bool = False                  # no approval when a registered person asked (rule `direct`)
 
     def action_hash(self) -> str:
         return action_hash(self.domain, self.service, self.entity_ids, self.data)
@@ -232,11 +233,14 @@ class Policy:
             role = "owner"
         elif mode == "any":
             role = "any"
+        elif mode == "direct":
+            role, d.direct = "any", True
         else:
             return deny(f"Unknown rule '{mode}' for {full} in policy.yaml.")
         if any(e in self.owner_only for e in ents):
             role = "owner"
-        d.allowed, d.reason, d.required_role = True, "allowed with approval", role
+        d.allowed, d.required_role = True, role
+        d.reason = "allowed without approval when a person asks" if d.direct and role == "any" else "allowed with approval"
         return self._act_gate(d)
 
     def _act_gate(self, d: Decision) -> Decision:
@@ -259,8 +263,11 @@ class Policy:
             return ("Acting on the villa is switched OFF: you inform only. Never offer to request an action "
                     "(no \"shall I turn it on?\", no \"do you want me to lock it?\"). If someone asks for one, say plainly "
                     "that acting is not switched on yet; do not call ha_call_service.")
-        return ("Acting on the villa is switched on. Every action is a request that a person approves with a "
-                "button; you never execute anything yourself.")
+        direct = sorted(k for k, v in self.allowed_services.items() if v == "direct")
+        return ("Acting on the villa is switched on. An action is a request that a person approves with a "
+                "button; you never execute anything yourself."
+                + (f" Exception: {', '.join(direct)} run at once when the person writing to you asks for them; "
+                   "ha_call_service then tells you the result: report it as it is." if direct else ""))
 
 
 def match_any(name: str, patterns: list[str]) -> bool:

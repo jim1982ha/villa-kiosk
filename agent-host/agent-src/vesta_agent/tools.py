@@ -213,9 +213,11 @@ class Toolbox:
             "data": {"type": "object"}}, "required": ["domain", "service"]}
 
         @tool("ha_call_service",
-              "Ask for an action on the villa (e.g. light turn_on, lock lock). This does NOT execute: it sends the request "
-              "with Approve and Refuse buttons to the person allowed to approve it. Name every entity explicitly; use absolute "
-              "states, never toggle. The villa's rules may refuse the request: say so plainly.", schema)
+              "Ask for an action on the villa (e.g. light turn_on, lock lock). Usually this does NOT execute: it sends the "
+              "request with Approve and Refuse buttons to the person allowed to approve it. A service the villa marks direct "
+              "runs at once when the person writing to you asked for it; the answer says which happened and the result. "
+              "Name every entity explicitly; use absolute states, never toggle. The villa's rules may refuse the request: "
+              "say so plainly.", schema)
         async def handler(args: dict) -> dict:
             answer, msg = await asyncio.to_thread(self.actions.request, args.get("domain", ""), args.get("service", ""),
                                                   args.get("entity_id"), args.get("data") or {}, person, chat_id)
