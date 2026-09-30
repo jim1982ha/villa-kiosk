@@ -15,13 +15,8 @@
 # below, so an image can never be built from a stale number by accident. A
 # local build passes them: --build-arg HA_MCP_VERSION=$(jq -r .ha_mcp agent-host/versions.json)
 ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:trixie
-# Node.js 24 LTS, copied from the official image. Debian trixie packages Node
-# 20, which reached end of life in April 2026.
-ARG NODE_FROM=node:24-trixie-slim
-
-# Resolved for the TARGET platform (no --platform pin): the node binary is
-# copied into the final image, so it must match its architecture.
-FROM ${NODE_FROM} AS node
+# ⚠️ NO NODE.JS (decision D3, 2026-09-30). The VESTA Agent is Python, and the
+# Python Agent SDK's wheels bundle their own `claude` binary: nothing runs Node.
 
 # ---- the HA MCP sidecar (SPEC 12) -------------------------------------------
 # ⚠️ EXACTLY ONE RELEASE PER IMAGE, MOVED FORWARD AUTOMATICALLY. The version is
@@ -55,14 +50,10 @@ FROM ${BUILD_FROM} AS agent
 RUN apt-get update \
  && apt-get install -y --no-install-recommends python3 python3-venv python3-yaml ca-certificates \
  && rm -rf /var/lib/apt/lists/*
-COPY --from=node /usr/local/bin/node /usr/local/bin/node
-COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
-RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
- && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 COPY agent-src /opt/vesta/agent
 # The manifest is read by vesta_host.manifest, here as in the slot.
 COPY rootfs/opt/vesta/host /opt/vesta/host
-RUN set -e; cd /opt/vesta/agent; rm -f README.md; \
+RUN set -e; cd /opt/vesta/agent; rm -rf README.md tests; \
     if [ -f vesta-agent.yaml ]; then \
       python3 -m venv .venv; \
       install=$(PYTHONPATH=/opt/vesta/host python3 -m vesta_host.manifest install vesta-agent.yaml); \
@@ -81,14 +72,23 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends python3 python3-venv python3-yaml ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 
-COPY --from=node /usr/local/bin/node /usr/local/bin/node
-COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
-RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
- && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
- && node --version && npm --version && python3 --version
+RUN python3 --version
 
 COPY --from=ha-mcp /opt/vesta/ha-mcp /opt/vesta/ha-mcp
 COPY --from=agent /opt/vesta/agent /opt/vesta/agent
+
+# The agent's `system_packages` (its manifest): what it needs from Debian in the
+# image it RUNS in — the VESTA Agent's headless Chromium for its PDF reports.
+# Read by vesta_host.manifest like every other manifest field (SPEC H2); none
+# listed, nothing installed. Installed here, never at run time on the Yellow.
+COPY rootfs/opt/vesta/host /opt/vesta/host
+RUN set -e; m=/opt/vesta/agent/vesta-agent.yaml; \
+    if [ -f "$m" ]; then \
+      pkgs=$(PYTHONPATH=/opt/vesta/host python3 -m vesta_host.manifest system-packages "$m"); \
+      if [ -n "$pkgs" ]; then \
+        apt-get update && apt-get install -y --no-install-recommends $pkgs && rm -rf /var/lib/apt/lists/*; \
+      fi; \
+    fi
 
 COPY rootfs /
 # The self-test stub fills the slot in stub mode. The VESTA Agent is in

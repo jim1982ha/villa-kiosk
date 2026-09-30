@@ -83,7 +83,10 @@ class Wiring(unittest.TestCase):
     def test_ci_builds_from_versions_json(self) -> None:
         wf = (HERE.parents[1] / ".github/workflows/agent-host.yaml").read_text()
         self.assertIn("HA_MCP_VERSION=${{ steps.versions.outputs.ha_mcp }}", wf)
-        self.assertIn("path: agent-host/agent-src", wf)
+        # The VESTA Agent is built from the tree (agent-host/agent-src/, owner
+        # 2026-09-30): nothing may check another repository out over it.
+        self.assertNotIn("path: agent-host/agent-src", wf)
+        self.assertIn("context: agent-host", wf)
 
 
 if __name__ == "__main__":

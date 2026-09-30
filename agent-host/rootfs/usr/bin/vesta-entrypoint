@@ -51,11 +51,7 @@ def banner(o: options.Options) -> None:
                 f" · deployment {o.deployment} · instance {contract.instance()}")
     log("info", f"agent slot: mode {mode} · runs {agent_identity(mode)}")
     log("info", f"link Home Assistant: {origin(o.get('ha_url'))} · token {state('ha_token')}")
-    if o.get("ha_mcp_mode") == "external":
-        log("info", f"link HA MCP: external {origin(o.get('ha_mcp_url'))}"
-                    f" · secret {state('ha_mcp_secret')}")
-    else:
-        log("info", f"link HA MCP: sidecar {contract.SIDECAR_HOST}:{contract.SIDECAR_PORT}")
+    log("info", f"link HA MCP: sidecar {contract.SIDECAR_HOST}:{contract.SIDECAR_PORT}")
     log("info", f"link VESTA Kiosk: {origin(o.get('kiosk_url'))}"
                 f" · token {state('kiosk_agent_token')}")
     log("info", f"link Anthropic: key {state('anthropic_api_key')}")
@@ -77,8 +73,6 @@ def sidecar_settings(o: options.Options) -> dict:
     """The HA MCP sidecar's settings (SPEC 12). Its own environment, like the
     agent's: SUPERVISOR_TOKEN and VESTA_OPT_* never reach it either."""
     base = {"log_level": o.get("log_level"), "version": os.environ.get("VESTA_HA_MCP_VERSION", "")}
-    if o.get("ha_mcp_mode") == "external":
-        return {**base, "enabled": False, "reason": "external mode — the agent uses ha_mcp_url"}
     if not o.has("ha_token"):
         return {**base, "enabled": False, "reason": "ha_token not set"}
     return {**base, "enabled": True, "env": {
@@ -134,7 +128,6 @@ def main() -> int:
     HostState(
         agent_mode=str(o.get("agent_mode") or "stub"),
         stub_heartbeat=bool(o.get("stub_heartbeat")),
-        ha_mcp_mode=str(o.get("ha_mcp_mode") or "sidecar"),
         sidecar_reason=None if sidecar["enabled"] else sidecar["reason"],
         host_version=os.environ.get("VESTA_HOST_VERSION", "dev"),
     ).write(paths.HOST_STATE)

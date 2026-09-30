@@ -12,9 +12,11 @@ from __future__ import annotations
 import json
 import os
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -53,6 +55,27 @@ class Host(unittest.TestCase):
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
+    def fake_sidecar(self) -> None:
+        """Something listening on the sidecar's port, so the slot does not wait
+        its 120 s for an HA MCP server this test has no need of."""
+        from vesta_host import contract
+        s = socket.socket()
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.bind((contract.SIDECAR_HOST, contract.SIDECAR_PORT))
+        s.listen(8)
+
+        def refuse() -> None:
+            # accept and close at once: the self-test's handshake fails fast
+            # instead of waiting for an answer that never comes
+            while True:
+                try:
+                    conn, _ = s.accept()
+                except OSError:
+                    return
+                conn.close()
+        threading.Thread(target=refuse, daemon=True).start()
+        self.addCleanup(s.close)
+
     def env(self, **extra: str) -> dict[str, str]:
         base = {k: v for k, v in os.environ.items() if not k.startswith("VESTA_")}
         return {**base, "VESTA_ROOT": str(self.root), **extra}
@@ -89,12 +112,16 @@ class Host(unittest.TestCase):
                         ha_token=SECRETS["ha_token"])
         self.assertEqual(self.start().returncode, 0)
 
-    def test_agent_mode_external_mcp_needs_url(self) -> None:
-        self.ha_options(agent_mode="agent", ha_mcp_mode="external",
-                        anthropic_api_key=SECRETS["anthropic_api_key"], ha_token=SECRETS["ha_token"])
-        r = self.start()
-        self.assertEqual(r.returncode, 1)
-        self.assertIn("agent mode needs ha_mcp_url", r.stdout)
+    def test_old_external_mcp_options_are_ignored(self) -> None:
+        # An install updated from 0.8.x still holds these in /data/options.json
+        # (decision D2 removed them): the app must start, and export none of them.
+        self.ha_options(ha_mcp_mode="external", ha_mcp_url="https://mcp.example.test/private_abc123",
+                        ha_mcp_secret="mcp-SECRET-987654")
+        self.assertEqual(self.start().returncode, 0)
+        env = self.contract()
+        self.assertEqual(env["VESTA_HA_MCP_URL"], "http://127.0.0.1:9583/mcp")
+        self.assertNotIn("VESTA_HA_MCP_SECRET", env)
+        self.assertNotIn("mcp-SECRET-987654", json.dumps(env))
 
     # ── environment contract ──────────────────────────────────────────────
     def test_contract_has_exactly_the_spec_names(self) -> None:
@@ -121,16 +148,10 @@ class Host(unittest.TestCase):
         self.assertEqual(self.start(SUPERVISOR_TOKEN="supervisor-SECRET-xyz").returncode, 0)
         self.assertNotIn("supervisor-SECRET-xyz", json.dumps(self.contract()))
 
-    def test_sidecar_vs_external_mcp_url(self) -> None:
+    def test_mcp_url_is_always_the_sidecar(self) -> None:
         self.ha_options()
         self.start()
-        self.assertTrue(self.contract()["VESTA_HA_MCP_URL"].startswith("http://127.0.0.1:"))
-        self.ha_options(ha_mcp_mode="external", ha_mcp_url="https://mcp.example.test/private_abc123",
-                        ha_mcp_secret="mcp-SECRET-987654")
-        self.start()
-        env = self.contract()
-        self.assertEqual(env["VESTA_HA_MCP_URL"], "https://mcp.example.test/private_abc123")
-        self.assertEqual(env["VESTA_HA_MCP_SECRET"], "mcp-SECRET-987654")
+        self.assertEqual(self.contract()["VESTA_HA_MCP_URL"], "http://127.0.0.1:9583/mcp")
 
     def test_standalone_reads_vesta_opt_variables(self) -> None:
         r = self.start(VESTA_OPT_AGENT_MODE="agent", VESTA_OPT_ANTHROPIC_API_KEY=SECRETS["anthropic_api_key"],
@@ -181,9 +202,9 @@ class Host(unittest.TestCase):
         # Stub mode, so no gate waits on a Home Assistant this test does not
         # have; Anthropic left out, so the self-test makes no internet call.
         self.ha_options(**{k: v for k, v in SECRETS.items() if k != "anthropic_api_key"},
-                        ha_url="http://127.0.0.1:9", kiosk_url="http://127.0.0.1:9",
-                        ha_mcp_mode="external")
+                        ha_url="http://127.0.0.1:9", kiosk_url="http://127.0.0.1:9")
         self.assertEqual(self.start().returncode, 0)
+        self.fake_sidecar()
         agent = self.root / "opt/vesta/stub"
         agent.mkdir(parents=True)
         # A careless agent: prints its key, then waits to be stopped.
@@ -205,7 +226,7 @@ class Host(unittest.TestCase):
     def test_agent_virtualenv_comes_first_on_path(self) -> None:
         # The image build installs the agent's libraries into <folder>/.venv
         # (Dockerfile, agent stage); `python` in its `start` must be that one.
-        self.ha_options(ha_url="http://127.0.0.1:9", kiosk_url="http://127.0.0.1:9", ha_mcp_mode="external")
+        self.ha_options(ha_url="http://127.0.0.1:9", kiosk_url="http://127.0.0.1:9")
         self.assertEqual(self.start().returncode, 0)
         agent = self.root / "opt/vesta/stub"
         (agent / ".venv/bin").mkdir(parents=True)

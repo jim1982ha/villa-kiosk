@@ -5,8 +5,9 @@ s6 runs this as the `ha-mcp` longrun, before the agent slot. It serves only on
 127.0.0.1 — nothing outside the container can reach it — and talks to Home
 Assistant with the VESTA Agent user's token, as from outside (SPEC H3, F10).
 
-Not started in external mode, nor without `ha_token` (there would be no Home
-Assistant behind it); the self-test then reports the HA MCP link `skipped`.
+Not started without `ha_token` (there would be no Home Assistant behind it);
+the self-test then reports the HA MCP link `skipped`. There is no other HA MCP:
+the external mode was removed (decision D2, 2026-09-30).
 """
 from __future__ import annotations
 

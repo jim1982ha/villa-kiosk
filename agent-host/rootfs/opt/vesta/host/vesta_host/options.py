@@ -19,7 +19,6 @@ from . import paths
 DEFAULTS: dict[str, object] = {
     "agent_mode": "stub",
     "ha_url": "http://homeassistant:8123",
-    "ha_mcp_mode": "sidecar",
     "kiosk_url": "http://e66a2348-villa-kiosk:8099",
     "telegram_takeover": False,
     "stub_heartbeat": False,
@@ -32,9 +31,6 @@ SCHEMA: dict[str, tuple[str, bool]] = {
     "anthropic_api_key": ("password", False),
     "ha_url": ("url", True),
     "ha_token": ("password", False),
-    "ha_mcp_mode": ("list:sidecar|external", True),
-    "ha_mcp_url": ("url", False),
-    "ha_mcp_secret": ("password", False),
     "kiosk_url": ("url", True),
     "kiosk_agent_token": ("password", False),
     "telegram_takeover": ("bool", True),
@@ -43,10 +39,12 @@ SCHEMA: dict[str, tuple[str, bool]] = {
     "log_level": ("list:debug|info|warning|error", True),
 }
 
-#: Values the redaction filter masks. `ha_mcp_url` is one: an MCP endpoint's
-#: path is commonly its secret (the HA MCP app serves on /private_<random>).
-SECRET_OPTIONS = ("anthropic_api_key", "ha_token", "ha_mcp_secret",
-                  "kiosk_agent_token", "telegram_bot_token", "ha_mcp_url")
+#: Values the redaction filter masks.
+#: ⚠️ NO EXTERNAL HA MCP ANY MORE (decision D2, 2026-09-30): the sidecar in this
+#: image runs the same way on the Yellow, standalone or remote, so `ha_mcp_mode`,
+#: `ha_mcp_url` and `ha_mcp_secret` are gone. A stored options.json that still
+#: holds them is fine — an unknown key is ignored (load()).
+SECRET_OPTIONS = ("anthropic_api_key", "ha_token", "kiosk_agent_token", "telegram_bot_token")
 
 
 @dataclass
@@ -131,8 +129,6 @@ def validate(o: Options) -> Options:
     without; stub mode starts regardless and only skips the related checks."""
     agent = o.get("agent_mode") == "agent"
     need = [("anthropic_api_key", "Anthropic"), ("ha_token", "Home Assistant and HA MCP")]
-    if o.get("ha_mcp_mode") == "external":
-        need.append(("ha_mcp_url", "HA MCP"))
     for name, check in need:
         if o.has(name):
             continue
@@ -145,6 +141,4 @@ def validate(o: Options) -> Options:
     if o.get("telegram_takeover") and not o.has("telegram_bot_token"):
         msg = "telegram_takeover is on but telegram_bot_token is empty"
         (o.errors if agent else o.notes).append(msg)
-    if o.get("ha_mcp_mode") == "sidecar" and o.has("ha_mcp_url"):
-        o.notes.append("ha_mcp_url is ignored in sidecar mode")
     return o

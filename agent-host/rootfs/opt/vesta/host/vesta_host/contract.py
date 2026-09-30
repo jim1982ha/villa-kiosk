@@ -21,7 +21,7 @@ SIDECAR_PATH = "/mcp"
 NAMES = (
     "ANTHROPIC_API_KEY",
     "VESTA_HA_URL", "VESTA_HA_TOKEN",
-    "VESTA_HA_MCP_URL", "VESTA_HA_MCP_SECRET",
+    "VESTA_HA_MCP_URL",
     "VESTA_KIOSK_URL", "VESTA_KIOSK_TOKEN",
     "VESTA_CF_ACCESS_CLIENT_ID", "VESTA_CF_ACCESS_CLIENT_SECRET",
     "VESTA_TELEGRAM_ENABLED", "VESTA_TELEGRAM_BOT_TOKEN",
@@ -42,15 +42,12 @@ def build(o: Options) -> dict[str, str]:
         v = o.get(name)
         return "" if v is None else str(v)
 
-    external = o.get("ha_mcp_mode") == "external"
     telegram = bool(o.get("telegram_takeover"))
     env = {
         "ANTHROPIC_API_KEY": opt("anthropic_api_key"),
         "VESTA_HA_URL": opt("ha_url"),
         "VESTA_HA_TOKEN": opt("ha_token"),
-        "VESTA_HA_MCP_URL": opt("ha_mcp_url") if external
-        else f"http://{SIDECAR_HOST}:{SIDECAR_PORT}{SIDECAR_PATH}",
-        "VESTA_HA_MCP_SECRET": opt("ha_mcp_secret") if external else "",
+        "VESTA_HA_MCP_URL": f"http://{SIDECAR_HOST}:{SIDECAR_PORT}{SIDECAR_PATH}",
         "VESTA_KIOSK_URL": opt("kiosk_url"),
         "VESTA_KIOSK_TOKEN": opt("kiosk_agent_token"),
         # Empty on the Yellow; a remote deployment sets them in its environment.

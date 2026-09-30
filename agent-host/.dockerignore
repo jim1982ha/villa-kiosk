@@ -1,0 +1,5 @@
+# The build context is agent-host/. The VESTA Agent's tests never enter an image:
+# its villa tests (agent-src/tests/villa/, local only) hold a real villa's data.
+agent-src/tests
+**/__pycache__
+**/.pytest_cache

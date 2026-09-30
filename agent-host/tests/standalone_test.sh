@@ -56,8 +56,6 @@ write_env() {  # write_env <cf id> <cf secret>
 VESTA_OPT_AGENT_MODE=stub
 VESTA_OPT_HA_URL=http://villa:8080
 VESTA_OPT_HA_TOKEN=$HA_TOKEN
-VESTA_OPT_HA_MCP_MODE=external
-VESTA_OPT_HA_MCP_URL=http://villa:8080/mcp
 VESTA_OPT_KIOSK_URL=http://villa:8080
 VESTA_OPT_KIOSK_AGENT_TOKEN=$KIOSK_TOKEN
 VESTA_OPT_STUB_HEARTBEAT=true
@@ -74,7 +72,7 @@ write_env "$CF_ID" "$CF_SECRET"
 compose up -d >/dev/null 2>&1
 wait_log "stub: heartbeat" 180 || true
 has "deployment standalone · instance prod" && ok "banner: standalone, prod" || bad "banner"
-for line in "Home Assistant: pass" "HA MCP: pass — fake-ha-mcp" "VESTA Kiosk: pass — contract 1" \
+for line in "Home Assistant: pass" "HA MCP: pass — ha-mcp" "VESTA Kiosk: pass — contract 1" \
             "Presence: pass" "Anthropic: skipped" "Telegram: skipped"; do
   has "self-test $line" && ok "self-test $line" || bad "self-test $line"
 done

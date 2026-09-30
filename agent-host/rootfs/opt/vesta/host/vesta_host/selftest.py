@@ -77,10 +77,9 @@ def unreachable(exc: BaseException) -> str:
 
 class Checks:
     def __init__(self, env: dict[str, str], stub_heartbeat: bool = False,
-                 agent_mode: str = "stub", mcp_mode: str = "sidecar",
+                 agent_mode: str = "stub",
                  client_version: str = "dev", sidecar_reason: str | None = None) -> None:
         self.env = env
-        self.mcp_mode = mcp_mode
         self.sidecar_reason = sidecar_reason   # None = the sidecar is meant to run
         self.stub_heartbeat = stub_heartbeat
         self.agent_mode = agent_mode
@@ -112,24 +111,16 @@ class Checks:
     def ha_mcp(self) -> Result:
         link, url = "HA MCP", self.env.get("VESTA_HA_MCP_URL", "")
         if not url:
-            return Result(link, SKIPPED, "ha_mcp_url not set")
-        if self.mcp_mode == "sidecar":
-            if self.sidecar_reason:
-                return Result(link, SKIPPED, f"HA MCP sidecar not started: {self.sidecar_reason}")
-            u = urlsplit(url)
-            try:
-                socket.create_connection((u.hostname, u.port), timeout=2).close()
-            except OSError:
-                # Meant to run and not listening: broken, not missing.
-                return Result(link, FAIL, "HA MCP sidecar not answering")
-        return mcp_handshake(link, url, self.mcp_headers(), self.client_version)
-
-    def mcp_headers(self) -> dict[str, str]:
-        h = dict(self.cf())
-        secret = self.env.get("VESTA_HA_MCP_SECRET")
-        if secret:
-            h["Authorization"] = f"Bearer {secret}"
-        return h
+            return Result(link, SKIPPED, "no HA MCP address in the environment")
+        if self.sidecar_reason:
+            return Result(link, SKIPPED, f"HA MCP sidecar not started: {self.sidecar_reason}")
+        u = urlsplit(url)
+        try:
+            socket.create_connection((u.hostname, u.port), timeout=2).close()
+        except OSError:
+            # Meant to run and not listening: broken, not missing.
+            return Result(link, FAIL, "HA MCP sidecar not answering")
+        return mcp_handshake(link, url, self.cf(), self.client_version)
 
     # ── VESTA Kiosk ───────────────────────────────────────────────────────
     def kiosk(self) -> Result:
@@ -315,7 +306,7 @@ def execute(env: dict[str, str], host: "HostState | dict", only: tuple[str, ...]
 
     h = HostState.of(host)
     checks = Checks(env, stub_heartbeat=h.stub_heartbeat, agent_mode=h.agent_mode,
-                    mcp_mode=h.ha_mcp_mode, client_version=h.host_version,
+                    client_version=h.host_version,
                     sidecar_reason=h.sidecar_reason)
     results = run(checks, only)
     for r in results:

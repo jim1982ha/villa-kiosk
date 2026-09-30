@@ -1,0 +1,75 @@
+# Routing of alerts. A live vesta_critical_event names the VESTA rule's blueprint:
+# it is matched first (`blueprint:`). Other alerts (the maintenance findings, the
+# agent's own villa-silent watch) are matched by rule id prefix. First match wins.
+# Severity: P1 owner and FM now, P2 FM now, P3 FM digest, P4 report only.
+# cooldown_min: a repeat of the same rule on the same entity inside the cooldown
+# is counted, not re-sent.
+#
+# Nothing here names a device. The entity comes with the event.
+
+defaults:
+  severity: P3
+  cooldown_min: 60
+  ladder: true          # Done / Not found / Need help with the 15 / 45 min chase
+
+routes:
+  - blueprint: critical_binary_trip
+    severity: P1
+    cooldown_min: 30
+    check: "Go to the device named. If it is water, close the supply valve of that room and photograph the floor. Reply Done."
+  - blueprint: critical_presence_guard
+    severity: P1
+    cooldown_min: 15
+    intrusion: true
+    check: "Activity while the villa is marked empty. Look at the camera before anything else."
+  - blueprint: critical_condition
+    severity: P2
+    cooldown_min: 120
+    check: "Check the door, lock or supply named, put it right, reply Done."
+  - blueprint: critical_watchdog
+    severity: P2
+    cooldown_min: 240
+    check: "Power and network of the device named. Reply Done when it is back."
+  - blueprint: critical_schedule
+    severity: P2
+    cooldown_min: 720
+    check: "The equipment named did not run as scheduled: check its timer, breaker and supply."
+  - blueprint: critical_system
+    severity: P2
+    cooldown_min: 720
+    check: "A guarded automation is off or missing after a restart. Switch it back on in Home Assistant."
+  - prefix: critical_internet
+    severity: P1
+    cooldown_min: 30
+    check: "Raised by the agent itself (villa silent). Check the power, the router and the internet link."
+  - prefix: critical_
+    severity: P2
+  - prefix: maintenance_
+    severity: P3
+    cooldown_min: 1440
+  - prefix: roi_
+    severity: P4
+    ladder: false
+  - prefix: audit_
+    severity: P4
+    ladder: false
+  - prefix: PM-
+    severity: P3        # findings from the preventive-maintenance batch
+    cooldown_min: 1440
+
+siren:
+  # The siren never fires on a single signal. Two independent signals inside
+  # the window, the villa marked vacant or away, and one explicit human approval.
+  window_min: 5
+  min_signals: 2
+  confirm_word: "SIREN"
+  confirm_timeout_min: 10
+  auto_off_min: 3
+  authorised_roles: [owner]          # the siren is owner-only
+  requires_villa_mode: [vacant, away]
+
+people_roles:
+  # role -> which severities reach that chat
+  owner: [P1]
+  fm: [P1, P2]
+  digest: [P3]

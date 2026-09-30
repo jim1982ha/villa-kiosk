@@ -43,7 +43,7 @@ stop = threading.Event()
 
 
 def wait_for_sidecar(host: HostState) -> None:
-    if host.ha_mcp_mode != "sidecar" or host.sidecar_reason:
+    if host.sidecar_reason:
         return
     deadline = time.monotonic() + SIDECAR_WAIT
     while time.monotonic() < deadline and not stop.is_set():
@@ -101,7 +101,7 @@ def main() -> int:
         folder = paths.AGENT_DIR
         if not (folder / paths.MANIFEST).exists():
             log("error", "agent mode, but this image contains no VESTA Agent "
-                         "(built without AGENT_REF) — switch agent_mode to stub")
+                         "(agent-host/agent-src was empty at build time) — switch agent_mode to stub")
             stop.wait()
             return 0
         if not gate(env, host):

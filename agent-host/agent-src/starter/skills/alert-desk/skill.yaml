@@ -1,0 +1,11 @@
+# What the engine needs to run this skill. Read again at every use: an edit
+# counts at once. SKILL.md is what the model reads.
+description: Critical alerts from the VESTA rules — dedup, routing, the Done / Not found / Need help chase, the siren gate, the villa-silent watch
+scripts:                      # what the MODEL may run (the code runs the hooks below itself)
+  desk.py:
+    commands: [status]
+    inject: [store]
+every_5_min: "desk.py tick"   # the chase ladder and the villa-silent watch, no model
+on_event:
+  critical_event: "desk.py intake --event {event}"
+on_reply: "desk.py reply --incident {incident} --text {text} --from {role}"

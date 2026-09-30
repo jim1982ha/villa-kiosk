@@ -1,6 +1,6 @@
 # Working rules — VESTA Agent host (`agent-host/`)
 
-You are building the **VESTA Agent host**: a Home Assistant app that hosts the future VESTA Agent. You are NOT building the VESTA Agent.
+You are building the **VESTA Agent host**: a Home Assistant app that hosts the VESTA Agent. The agent itself (Fabien's, integrated 2026-09-30) is in `agent-src/`; its design and every decision behind it are in `docs/agent-host/INTEGRATION-PLAN.md` and `ZIP-CHANGES.md` (local).
 
 ## Read before any change
 1. `docs/agent-host/SPEC.md` — the specification you implement (source of truth).
@@ -15,6 +15,7 @@ You are building the **VESTA Agent host**: a Home Assistant app that hosts the f
 - Never export the Telegram token or call Telegram unless `telegram_takeover` is true. Never call `getUpdates` from the host or the stub.
 - Never write a secret to a log, a file under `/config`, the repository, or a CI log.
 - No agent logic in the host. The host only knows the agent manifest and the environment contract.
+- Nothing villa-specific in `agent-src/` either (the repository's hard rule): its villa tests and their real data live in `agent-src/tests/villa/`, gitignored, run locally only.
 - Use the names from PLAN.md section 1 exactly. Never write "VESTA" alone.
 - Bump `version` in `vesta-agent/config.yaml` on every push to `agent-dev`: the Supervisor resolves `image:<version>`, so an unchanged version is invisible to Home Assistant.
 - Pin GitHub Actions by commit SHA, as `build.yaml` does.
@@ -70,3 +71,25 @@ copy and the Kiosk's file differ — when the Kiosk changes the agreement, copy
 its file here and release the host; never edit one side alone.
 `vesta_host.manifest` reads `vesta-agent.yaml` (slot, start banner, image
 build); `vesta_host.host_state.HostState` is `/run/vesta/host.json`.
+
+## The VESTA Agent in this repository (0.9.0)
+
+`agent-src/` is the VESTA Agent's source (owner, 2026-09-30: no separate
+repository for now). The image build installs it from its `vesta-agent.yaml`:
+`install` in the agent stage, `system_packages` (Debian packages, checked as
+package names) in the final stage. The separate-repository fetch was removed
+from the workflow; `versions.json` still holds the empty `agent_repo` /
+`agent_ref` the update check reads, until that question is decided.
+
+Decisions of 2026-09-30 (owner):
+- D1: the agent opens one Home Assistant websocket that only LISTENS
+  (`vesta_critical_event`, `telegram_text`, `telegram_command`,
+  `telegram_callback`). Home Assistant stays the only receiver of the villa
+  bot; the agent reads Telegram from those events and only sends.
+- D2: no external HA MCP mode — the sidecar always (`ha_mcp_mode`,
+  `ha_mcp_url`, `ha_mcp_secret`, `VESTA_HA_MCP_SECRET` removed; old stored
+  values are ignored).
+- D3: no Node.js in the image.
+- D5: the "VESTA Agent" HA user is an administrator with login off.
+- Skills live in `/config/skills` as files, each with a `skill.yaml`; PDF
+  reports by `chromium-headless-shell` from the manifest's `system_packages`.

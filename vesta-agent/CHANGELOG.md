@@ -1,3 +1,15 @@
+## 0.9.0
+
+### Added
+- **The real VESTA Agent is inside the app.** Switch *Agent mode* to `agent` to run it: it answers the owner and the facility manager on Telegram, follows up every critical alert of the VESTA rules (Done / Not found / Need help, reminders, the owner after 45 minutes), records each job for the facility manager as a ticket in the VESTA Kiosk, runs the night's maintenance checks, and sends the daily digest and the weekly and monthly reports with their PDF.
+- **Skills you can change without an update.** Each skill is a folder under the app's `skills` folder: edit it, add one, delete one, and it counts at once. The five starter skills are copied there at the first start; updates never touch them.
+- **The Documentation tab explains the set-up**: the "VESTA Agent" Home Assistant user (administrator, login off), registering people with `/whoami`, and the agent's `policy.yaml`.
+
+### Changed
+- **Telegram: Home Assistant keeps the bot.** The agent reads the bot's messages from Home Assistant and only sends, so the gate button, the alerts and every Telegram automation keep working whether the agent runs or not. *Telegram takeover* now means "the agent may send on the bot" — turn it on for one app only.
+- The Home Assistant MCP server always runs inside the app: the *Home Assistant MCP*, *External MCP address* and *External MCP secret* fields are gone (an older value left in them is ignored).
+- The app is smaller where it can be (no Node.js) and larger where the reports need it (a headless Chromium, used only while a PDF is printed).
+
 ## 0.8.0
 
 ### Changed

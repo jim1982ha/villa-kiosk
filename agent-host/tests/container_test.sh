@@ -56,7 +56,7 @@ fresh() {
 echo "== 1. HA app, stub mode, secrets set, Telegram takeover off"
 fresh
 cat > "$WORK/data/options.json" <<EOF
-{"agent_mode":"stub","ha_url":"http://homeassistant:8123","ha_mcp_mode":"sidecar",
+{"agent_mode":"stub","ha_url":"http://homeassistant:8123",
  "kiosk_url":"http://e66a2348-villa-kiosk:8099","telegram_takeover":false,
  "stub_heartbeat":false,"log_level":"info",
  "ha_token":"$HATOKEN","telegram_bot_token":"$TGTOKEN"}
@@ -70,7 +70,7 @@ for link in "Home Assistant" "HA MCP" "VESTA Kiosk" "Anthropic" "Telegram" "Pres
   has "self-test ${link}: (pass|fail|skipped)" && ok "self-test line: ${link}" || bad "no self-test line for ${link}"
 done
 has "self-test Telegram: skipped — telegram_takeover is off" && ok "Telegram skipped, no call" || bad "Telegram not skipped"
-has "stub: environment contract received: 17/17" && ok "stub received the full contract" || bad "stub contract incomplete"
+has "stub: environment contract received: 16/16" && ok "stub received the full contract" || bad "stub contract incomplete"
 [ -s "$WORK/data/host/selftest.json" ] && grep -q '"summary"' "$WORK/data/host/selftest.json" && ok "selftest.json written" || bad "selftest.json missing"
 grep -qF "$HATOKEN" "$WORK/data/host/selftest.json" && bad "a secret in selftest.json" || ok "no secret in selftest.json"
 has "time zone: Asia/Bangkok" && ok "banner: time zone from TZ" || bad "banner lacks TZ"
@@ -106,7 +106,7 @@ docker stop -t 30 vesta-ct >/dev/null
 
 echo "== 3. HA app, agent mode, no API key: must not start"
 fresh
-echo '{"agent_mode":"agent","ha_url":"http://homeassistant:8123","ha_mcp_mode":"sidecar","kiosk_url":"http://e66a2348-villa-kiosk:8099","telegram_takeover":false,"stub_heartbeat":false,"log_level":"info"}' \
+echo '{"agent_mode":"agent","ha_url":"http://homeassistant:8123","kiosk_url":"http://e66a2348-villa-kiosk:8099","telegram_takeover":false,"stub_heartbeat":false,"log_level":"info"}' \
   > "$WORK/data/options.json"
 docker run -d --name vesta-ct "${PLATFORM[@]}" -v "$WORK/data:/data" -v "$WORK/config:/config" "$IMAGE" >/dev/null
 for _ in $(seq 1 60); do [ "$(docker inspect vesta-ct --format '{{.State.Running}}')" = "false" ] && break; sleep 0.5; done
@@ -126,9 +126,11 @@ no_secret "standalone"
 docker stop -t 30 vesta-ct >/dev/null
 
 echo "== 5. HA MCP sidecar: starts with a token, loopback only, answers the self-test"
+# The options an 0.8.x install still holds for the removed external mode
+# (decision D2) are part of this run: they must change nothing.
 fresh
 cat > "$WORK/data/options.json" <<EOF
-{"agent_mode":"stub","ha_url":"http://homeassistant:8123","ha_mcp_mode":"sidecar",
+{"agent_mode":"stub","ha_url":"http://homeassistant:8123","ha_mcp_mode":"external","ha_mcp_url":"http://127.0.0.1:9/mcp",
  "kiosk_url":"http://e66a2348-villa-kiosk:8099","telegram_takeover":false,
  "stub_heartbeat":false,"log_level":"info","ha_token":"$HATOKEN"}
 EOF
@@ -144,15 +146,49 @@ no_secret "sidecar"
 start=$(date +%s); docker stop -t 30 vesta-ct >/dev/null; took=$(( $(date +%s) - start ))
 has "ha-mcp stopped cleanly" && [ "$took" -lt 30 ] && ok "sidecar stopped cleanly after the agent (${took} s)" || bad "sidecar stop (${took} s)"
 
-echo "== 6. External MCP mode: no sidecar"
-fresh
-echo '{"agent_mode":"stub","ha_url":"http://homeassistant:8123","ha_mcp_mode":"external","ha_mcp_url":"http://127.0.0.1:9/mcp","kiosk_url":"http://e66a2348-villa-kiosk:8099","telegram_takeover":false,"stub_heartbeat":false,"log_level":"info","ha_token":"'"$HATOKEN"'"}' \
-  > "$WORK/data/options.json"
-docker run -d --name vesta-ct "${PLATFORM[@]}" -v "$WORK/data:/data" -v "$WORK/config:/config" "$IMAGE" >/dev/null
-wait_log "stub: no heartbeat" 90 || true
-has "HA MCP sidecar not started: external mode" && ok "sidecar skipped in external mode" || bad "sidecar started in external mode"
-has "self-test HA MCP: fail — unreachable" && ok "external endpoint checked instead" || bad "external endpoint not checked"
-docker stop -t 30 vesta-ct >/dev/null
+echo "== 6. The VESTA Agent itself, in this image, against a fake villa"
+# The real engine and its starter skills, started directly (the slot's gate
+# wants Home Assistant AND Anthropic to pass, and a CI run has neither): its
+# settings from the environment contract, its folders under /tmp, the fake
+# villa of tests/fake_remote.py on the host network (HA MCP, the Kiosk).
+FAKE_PORT=18080
+python3 "$(dirname "$0")/fake_remote.py" "$FAKE_PORT" >/dev/null 2>&1 &
+FAKE_PID=$!
+sleep 1
+docker rm -f vesta-ct >/dev/null 2>&1 || true
+docker run -d --name vesta-ct "${PLATFORM[@]}" --network host --entrypoint /opt/vesta/agent/.venv/bin/python \
+  -w /opt/vesta/agent \
+  -e ANTHROPIC_API_KEY="$KEY" -e VESTA_HA_MCP_URL="http://127.0.0.1:${FAKE_PORT}/mcp" \
+  -e VESTA_HA_URL="http://127.0.0.1:${FAKE_PORT}" -e VESTA_HA_TOKEN="$HATOKEN" \
+  -e VESTA_KIOSK_URL="http://127.0.0.1:${FAKE_PORT}" -e VESTA_KIOSK_TOKEN="kiosk-TOKEN-123456" \
+  -e VESTA_TELEGRAM_ENABLED=false -e VESTA_TELEGRAM_BOT_TOKEN="$TGTOKEN" \
+  -e VESTA_SKILLS_DIR=/tmp/skills -e VESTA_AGENT_CONFIG_DIR=/tmp/agent-config -e VESTA_DATA_DIR=/tmp/agent-data \
+  -e TZ=Asia/Bangkok "$IMAGE" -m vesta_agent >/dev/null
+if wait_log "Acting on the villa is OFF" 120; then ok "the VESTA Agent started"; else bad "the VESTA Agent did not start"; fi
+hasf "Starter skills copied to the skills folder (first start): alert-desk, preventive-maintenance, reports, roi-energy, villa-concierge" \
+  && ok "starter skills seeded once" || bad "starter skills not seeded"
+hasf "Skills: alert-desk, preventive-maintenance, reports, roi-energy, villa-concierge" && ok "five skills loaded" || bad "skills not loaded"
+hasf "VESTA Kiosk: agreement 1" && ok "Kiosk agreement checked" || bad "Kiosk not checked"
+hasf "HA MCP: 2 tools on the server" && ok "HA MCP read through the client" || bad "HA MCP not read"
+hasf "Telegram: off" && ok "Telegram off: nothing sent" || bad "Telegram not off"
+docker exec vesta-ct test -f /tmp/agent-config/policy.yaml && docker exec vesta-ct test -f /tmp/skills/.seeded \
+  && ok "policy.yaml and the seed marker written" || bad "config not seeded"
+docker exec vesta-ct sh -c 'grep -q "people: \[\]" /tmp/agent-config/policy.yaml' && ok "the example policy ships empty" || bad "policy not empty"
+no_secret "agent"
+start=$(date +%s); docker stop -t 30 vesta-ct >/dev/null; took=$(( $(date +%s) - start ))
+hasf "Stopped" && [ "$took" -lt 20 ] && ok "the agent stopped cleanly on SIGTERM (${took} s)" || bad "agent stop (${took} s)"
+kill "$FAKE_PID" 2>/dev/null || true
+
+echo "== 6b. A PDF report with the image's own headless Chromium"
+pdf=$(docker run --rm "${PLATFORM[@]}" --entrypoint /opt/vesta/agent/.venv/bin/python -w /tmp "$IMAGE" -c '
+import importlib.util, os
+spec = importlib.util.spec_from_file_location("compose", "/opt/vesta/agent/starter/skills/reports/scripts/compose.py")
+open("/tmp/r.html", "w").write("<html><body><h1>VESTA test page</h1></body></html>")
+import sys; sys.path.insert(0, "/opt/vesta/agent")
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+out = m.to_pdf("/tmp/r.html", "/tmp/r.pdf")
+print("PDF" if out and open(out, "rb").read(4) == b"%PDF" else "NONE")' 2>&1 | tail -1)
+[ "$pdf" = "PDF" ] && ok "a PDF printed by chromium-headless-shell" || bad "no PDF ($pdf)"
 
 # A stand-in agent mounted over the stub, to exercise the slot's policy.
 mkstub() {  # mkstub <start command> <grace>
@@ -160,7 +196,7 @@ mkstub() {  # mkstub <start command> <grace>
   printf 'name: test-stub\nversion: "0"\nruntime: python\nstart: "%s"\nstop_grace_seconds: %s\n' "$1" "$2" \
     > "$WORK/stub/vesta-agent.yaml"
 }
-DEFAULT_OPTS='{"agent_mode":"stub","ha_url":"http://homeassistant:8123","ha_mcp_mode":"sidecar","kiosk_url":"http://e66a2348-villa-kiosk:8099","telegram_takeover":false,"stub_heartbeat":false,"log_level":"info"}'
+DEFAULT_OPTS='{"agent_mode":"stub","ha_url":"http://homeassistant:8123","kiosk_url":"http://e66a2348-villa-kiosk:8099","telegram_takeover":false,"stub_heartbeat":false,"log_level":"info"}'
 
 echo "== 7. Stop grace: an agent that needs 15 s to stop gets them, all within 30 s"
 fresh; echo "$DEFAULT_OPTS" > "$WORK/data/options.json"

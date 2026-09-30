@@ -1,0 +1,26 @@
+description: The facility manager's daily digest and weekly page, the owner's weekly lines and monthly proof (PDF)
+scripts:
+  compose.py:
+    commands: [fm-daily, fm-weekly, owner-weekly, owner-monthly]
+    flags: {--energy: infile, --optimiser: infile, --proposals: infile, --as-of: date, --out: outfile, --pdf: switch}
+    inject: [pack, store]
+schedule:
+  - when: "07:00"
+    prompt: >-
+      It is 07:00. Read the reports skill, compose the facility manager daily digest (fm-daily) with
+      run_skill_script, and send it to the fm chat with send_message, written in {fm_language}, keeping every
+      number exactly as the script gave it. If there is nothing to report, send one short line saying the villa
+      is quiet, so the facility manager knows the VESTA Agent is alive. No rule codes, no entity ids.
+  - when: "Mon 08:00"
+    prompt: >-
+      It is Monday 08:00. Produce the week's numbers (roi-energy, energy_period.py --period week --out week.json),
+      the facility manager weekly page (reports, fm-weekly --energy week.json --out fm_weekly.html --pdf) and
+      send it to fm with send_message and the PDF attached, the message written in {fm_language}. Then send the
+      owner the three owner-weekly lines (reports, owner-weekly), in {owner_language}.
+  - when: "1 08:00"
+    prompt: >-
+      It is the first of the month, 08:00. Produce the monthly proof for the owner: roi-energy for the month
+      (--period month --out month.json), the filtration optimiser (--out optimiser.json), the proposals
+      (--period-json month.json --optimiser-json optimiser.json --out proposals.json), then reports owner-monthly
+      with --energy month.json --optimiser optimiser.json --proposals proposals.json --out owner_monthly.html --pdf.
+      Send it to the owner with send_message and the PDF attached, in {owner_language}.

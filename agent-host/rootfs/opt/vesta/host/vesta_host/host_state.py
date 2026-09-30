@@ -17,7 +17,6 @@ from pathlib import Path
 class HostState:
     agent_mode: str = "stub"
     stub_heartbeat: bool = False
-    ha_mcp_mode: str = "sidecar"
     sidecar_reason: str | None = None
     host_version: str = "dev"
 
@@ -29,7 +28,6 @@ class HostState:
         d = raw if isinstance(raw, dict) else {}
         return cls(agent_mode=str(d.get("agent_mode") or "stub"),
                    stub_heartbeat=bool(d.get("stub_heartbeat")),
-                   ha_mcp_mode=str(d.get("ha_mcp_mode") or "sidecar"),
                    sidecar_reason=d.get("sidecar_reason") if isinstance(d.get("sidecar_reason"), str) else None,
                    host_version=str(d.get("host_version") or "dev"))
 

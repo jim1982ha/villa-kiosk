@@ -128,7 +128,7 @@ class Programs(unittest.TestCase):
 
     def prepare(self, **opts):
         (self.root / "data/options.json").write_text(json.dumps({
-            "agent_mode": "stub", "ha_url": "http://127.0.0.1:9", "ha_mcp_mode": "sidecar",
+            "agent_mode": "stub", "ha_url": "http://127.0.0.1:9",
             "kiosk_url": "http://127.0.0.1:9", "telegram_takeover": False,
             "stub_heartbeat": False, "log_level": "info", **opts}))
         r = subprocess.run([sys.executable, str(ROOTFS / "usr/bin/vesta-entrypoint")],
@@ -171,14 +171,15 @@ class Programs(unittest.TestCase):
         host = json.loads((self.root / "run/vesta/host.json").read_text())
         self.assertIsNone(host["sidecar_reason"])
 
-    def test_sidecar_disabled_without_token_or_in_external_mode(self):
+    def test_sidecar_disabled_without_token(self):
         self.prepare()
-        self.assertEqual(self.sidecar_cfg()["reason"], "ha_token not set")
-        self.prepare(ha_token=TOKEN, ha_mcp_mode="external", ha_mcp_url="https://mcp.example.test/x")
         cfg = self.sidecar_cfg()
         self.assertFalse(cfg["enabled"])
-        self.assertIn("external mode", cfg["reason"])
+        self.assertEqual(cfg["reason"], "ha_token not set")
         self.assertNotIn("env", cfg)
+        # the options the 0.8.x external mode left behind change nothing (decision D2)
+        self.prepare(ha_token=TOKEN, ha_mcp_mode="external", ha_mcp_url="https://mcp.example.test/x")
+        self.assertTrue(self.sidecar_cfg()["enabled"])
 
     def test_sidecar_output_redacted_and_restarted(self):
         self.prepare(ha_token=TOKEN)

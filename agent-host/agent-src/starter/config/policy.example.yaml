@@ -1,0 +1,99 @@
+# policy.yaml: the villa's people, lists and the agent's settings. Copied from
+# this example at the first start into the agent's config folder
+# (/addon_configs/<app>/agent/policy.yaml, reachable from Studio Code Server or
+# Samba), then edited there. A change applies within seconds, no restart.
+# Anything absent from this file is refused.
+#
+# ⚠️ SHIPPED EMPTY ON PURPOSE. Every villa fills its own people, chats and
+# devices; nothing here may name one villa's devices.
+#
+# The NEVER rules are in the code, not here: homeassistant.*, hassio.*,
+# shell_command.*, rest_command.*, python_script.*, pyscript.*, command_line.*,
+# mqtt.publish, update.install, recorder.*, system_log.*, logger.*, every toggle,
+# automation.trigger and automation.reload are refused whatever this file says.
+
+# How the agent behaves. Any value left out, or not understood, uses its default.
+settings:
+  profile: auto                   # the brain: auto (Sonnet), economy (Haiku), performance (Opus)
+  reply_limit_usd: 1              # a reply that reaches it stops, keeps what it wrote, and offers a Continue button
+  web_search: true                # Claude's own web search (weather warnings, manuals); never used to decide an action
+  conversation_reset: daily_04_00 # daily_04_00, after_8h_silence or never; /new starts a new conversation at any time
+
+act_enabled: false            # informs only. true switches the act path on (every action still needs a button press).
+approval_ttl_minutes: 15      # an Approve button older than this does nothing
+
+# People, by Telegram user id (not the group). Send /whoami to the bot to read yours.
+# role: owner | fm. language: en, fr, id...
+people: []
+#  - telegram_id: 123456789
+#    name: Owner
+#    role: owner
+#    language: en
+
+# Chat ids. A group id is a negative number; /whoami in the group shows it.
+# ⚠️ A GROUP NOT LISTED HERE IS IGNORED, NEVER LEFT: the bot is Home Assistant's too.
+chats: {}
+#  owner: -1000000000000
+#  fm: -1000000000000
+
+# Only the owner can approve an action on these, whatever the service (locks, the gate, the siren...).
+owner_only_entities: []
+
+siren_entity: null            # what the alert desk asks the owner to switch on, e.g. a siren switch
+siren_auto_off_min: 3
+
+# Never acted on, never reported as real devices (a test lock, for example).
+excluded_entities: []
+
+# Lights, covers, fans for both roles; locks, siren, automations for the owner.
+# service: who may approve. any = owner or FM, owner = owner only, listed = only the entities in the lists below.
+allowed_services:
+  light.turn_on: any
+  light.turn_off: any
+  cover.open_cover: any
+  cover.close_cover: any
+  cover.set_cover_position: any
+  fan.turn_on: any
+  fan.turn_off: any
+  switch.turn_on: listed
+  switch.turn_off: listed
+  scene.turn_on: listed
+  script.turn_on: listed
+  button.press: listed
+  lock.lock: owner
+  lock.unlock: owner
+  automation.turn_on: owner
+  automation.turn_off: owner
+
+switch_entities: []           # the switches an action may name
+scene_allowlist: []           # a scene can hold any action: add one by hand after reading it
+script_allowlist: []          # same for scripts
+button_allowlist: []          # never a restart button
+notify_recipients: []         # the agent writes on Telegram itself; notify.* stays closed
+
+# Calls the code makes for itself, without a person. The siren's automatic stop
+# after siren_auto_off_min needs its line here once siren_entity is set:
+system_actions: []
+#  - service: switch.turn_off
+#    entity_id: switch.your_siren
+
+# The Home Assistant tools the model may read with, name by name.
+# A tool not listed here does not exist for the model, including tools added by a later HA MCP version.
+# Several need the "VESTA Agent" user to be an administrator (decision D5): templates, automation
+# settings and traces, system logs.
+ha_read_tools:
+  - ha_get_state
+  - ha_get_entity
+  - ha_get_device
+  - ha_search
+  - ha_eval_template
+  - ha_get_history
+  - ha_get_logs
+  - ha_get_automation_traces
+  - ha_config_get_automation
+  - ha_config_list_helpers
+  - ha_list_floors_areas
+  - ha_get_camera_image
+  - ha_get_todo
+  - ha_get_overview
+  - ha_get_system_health

@@ -56,7 +56,7 @@ class Base(unittest.TestCase):
 
     def env(self, **kw):
         base = {"VESTA_HA_URL": self.url, "VESTA_HA_TOKEN": HA_TOKEN,
-                "VESTA_HA_MCP_URL": self.url + "/mcp", "VESTA_HA_MCP_SECRET": "",
+                "VESTA_HA_MCP_URL": self.url + "/mcp",
                 "VESTA_KIOSK_URL": self.url, "VESTA_KIOSK_TOKEN": KIOSK_TOKEN,
                 "ANTHROPIC_API_KEY": KEY, "VESTA_TELEGRAM_ENABLED": "false"}
         return {**base, **kw}
@@ -68,7 +68,7 @@ class Base(unittest.TestCase):
 class Links(Base):
     def test_everything_configured_passes(self):
         r = self.results(self.env(VESTA_TELEGRAM_ENABLED="true", VESTA_TELEGRAM_BOT_TOKEN=TG),
-                         mcp_mode="external", stub_heartbeat=True)
+                         stub_heartbeat=True)
         for link in ("Home Assistant", "HA MCP", "VESTA Kiosk", "Anthropic", "Telegram", "Presence"):
             self.assertEqual(r[link].result, PASS, f"{link}: {r[link].detail}")
         self.assertIn("fake-ha-mcp 8.5.0, 2 tools", r["HA MCP"].detail)
@@ -77,7 +77,7 @@ class Links(Base):
 
     def test_mcp_over_sse(self):
         Fake.mcp = "sse"
-        r = self.results(self.env(), mcp_mode="external")
+        r = self.results(self.env())
         self.assertEqual(r["HA MCP"].result, PASS, r["HA MCP"].detail)
 
     def test_missing_credentials_are_skipped_never_failed(self):
@@ -120,9 +120,9 @@ class Links(Base):
 
     def test_sidecar_not_started_is_skipped_not_answering_fails(self):
         env = self.env(VESTA_HA_MCP_URL="http://127.0.0.1:9/mcp")
-        r = self.results(env, mcp_mode="sidecar", sidecar_reason="ha_token not set")
+        r = self.results(env, sidecar_reason="ha_token not set")
         self.assertEqual(r["HA MCP"].result, SKIPPED)
-        r = self.results(env, mcp_mode="sidecar")
+        r = self.results(env)
         self.assertEqual(r["HA MCP"].result, FAIL)
 
     def test_presence_only_in_stub_mode(self):
@@ -144,12 +144,12 @@ class CloudflareAccess(Base):
     def test_with_service_token_passes(self):
         from fake_remote import CF_ID, CF_SECRET
         r = self.results(self.env(VESTA_CF_ACCESS_CLIENT_ID=CF_ID, VESTA_CF_ACCESS_CLIENT_SECRET=CF_SECRET),
-                         mcp_mode="external", stub_heartbeat=True)
+                         stub_heartbeat=True)
         for link in ("Home Assistant", "HA MCP", "VESTA Kiosk", "Presence"):
             self.assertEqual(r[link].result, PASS, f"{link}: {r[link].detail}")
 
     def test_without_service_token_is_refused(self):
-        r = self.results(self.env(), mcp_mode="external")
+        r = self.results(self.env())
         self.assertEqual(r["Home Assistant"].result, FAIL)
         self.assertIn("403", r["Home Assistant"].detail)
 
@@ -169,6 +169,22 @@ class Telegram(Base):
 class Slot(Base):
     """The slot program end to end: self-test, selftest.json, stub start."""
 
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        # The same fake, ALSO on the sidecar's own address: the environment
+        # contract always points the agent at 127.0.0.1:9583 (no external HA
+        # MCP since decision D2), so that is where the slot's check must land.
+        from vesta_host import contract
+        cls.sidecar = ThreadingHTTPServer((contract.SIDECAR_HOST, contract.SIDECAR_PORT), Fake)
+        threading.Thread(target=cls.sidecar.serve_forever, daemon=True).start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.sidecar.shutdown()
+        cls.sidecar.server_close()
+        super().tearDownClass()
+
     def setUp(self):
         super().setUp()
         self.tmp = tempfile.TemporaryDirectory()
@@ -186,8 +202,7 @@ class Slot(Base):
 
     def prepare(self, **opts):
         (self.root / "data/options.json").write_text(json.dumps({
-            "agent_mode": "stub", "ha_url": self.url, "ha_mcp_mode": "external",
-            "ha_mcp_url": self.url + "/mcp",
+            "agent_mode": "stub", "ha_url": self.url,
             "kiosk_url": self.url, "telegram_takeover": False, "stub_heartbeat": False,
             "log_level": "info", **opts}))
         env = {k: v for k, v in os.environ.items() if not k.startswith("VESTA_")}
@@ -239,7 +254,7 @@ class Slot(Base):
                      "self-test VESTA Kiosk: pass", "self-test Anthropic: skipped",
                      "self-test Telegram: skipped", "self-test Presence: pass",
                      "starting vesta-agent-stub 1",
-                     "stub: environment contract received: 17/17 variables present",
+                     "stub: environment contract received: 16/16 variables present",
                      "stub: Telegram disabled — no token received",
                      "stub: heartbeat: HTTP 200",
                      "stub: demo message posted (msg_demo)",

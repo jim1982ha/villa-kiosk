@@ -1,0 +1,6 @@
+description: Answers about the villa's state (is everything OK? where is X?) and asks for actions, always by Approve / Refuse
+scripts:
+  concierge.py:
+    commands: [status, find]
+    flags: {--what: text, --where: text}
+    inject: [pack, store, zone]

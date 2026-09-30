@@ -60,6 +60,13 @@ jobs:
       - name: The agent's manifest and the host state, without a process
         run: agent-host/tests/ci_run.sh python3 agent-host/tests/test_manifest.py
 
+      - name: The VESTA Agent's own tests
+        # The synthetic ones (agent-src/tests/*.py). Its villa tests
+        # (tests/villa/, real data) are never in the repository and run locally.
+        run: |
+          python3 -m pip install --quiet -r agent-host/agent-src/requirements.txt pytest
+          cd agent-host/agent-src && python3 -m pytest tests -q -p no:cacheprovider
+
   build:
     needs: [tests]
     runs-on: ubuntu-latest
@@ -78,39 +85,16 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Read the versions to build with
-        # agent-host/versions.json is the one place they are written: HA MCP's
-        # release and the VESTA Agent's repository and release tag. The hourly
-        # update check (agent-updates.yaml) moves them forward.
+        # agent-host/versions.json holds HA MCP's release; the hourly update
+        # check (agent-updates.yaml) moves it forward. The VESTA Agent's source
+        # is in this repository, agent-host/agent-src/ (owner, 2026-09-30).
         id: versions
         run: |
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
           import json
           v = json.load(open("agent-host/versions.json"))
           print(f"ha_mcp={v['ha_mcp']}")
-          print(f"agent_repo={v.get('agent_repo', '')}")
-          print(f"agent_ref={v.get('agent_ref', '')}")
           PY
-
-      - name: Fetch the VESTA Agent at its release
-        # Into the build context's agent-src/, where the Dockerfile's agent
-        # stage installs it. A private repository is read with the secret
-        # AGENT_REPO_TOKEN (read-only, that repository only); a public one
-        # needs nothing. No repository yet: the image carries the stub alone.
-        if: steps.versions.outputs.agent_repo != '' && steps.versions.outputs.agent_ref != ''
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-        with:
-          repository: ${{ steps.versions.outputs.agent_repo }}
-          ref: ${{ steps.versions.outputs.agent_ref }}
-          token: ${{ secrets.AGENT_REPO_TOKEN || github.token }}
-          path: agent-host/agent-src
-          persist-credentials: false
-
-      - name: The VESTA Agent source is a real agent
-        if: steps.versions.outputs.agent_repo != '' && steps.versions.outputs.agent_ref != ''
-        run: |
-          rm -rf agent-host/agent-src/.git
-          test -f agent-host/agent-src/vesta-agent.yaml \
-            || { echo "::error::${{ steps.versions.outputs.agent_repo }}@${{ steps.versions.outputs.agent_ref }} has no vesta-agent.yaml at its root"; exit 1; }
 
       - name: Read app version
         id: meta
@@ -195,7 +179,6 @@ jobs:
             --platform "${{ matrix.platform }}"
 
       - name: The image carries the VESTA Agent it was built with
-        if: steps.versions.outputs.agent_repo != '' && steps.versions.outputs.agent_ref != ''
         run: |
           docker run --rm --platform "${{ matrix.platform }}" --entrypoint /bin/sh \
             "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}" \

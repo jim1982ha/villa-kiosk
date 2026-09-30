@@ -1,0 +1,9 @@
+description: Nightly maintenance checks on Home Assistant's history — pumps, batteries, devices offline — each finding a ticket for the facility manager
+scripts:
+  nightly.py:
+    flags: {--as-of: date, --out: outfile, --skip-raw: switch}
+    inject: [pack, store, zone]
+schedule:
+  - when: "02:00"             # code only: zero tokens; the 07:00 digest carries the words
+    run: "nightly.py --out nightly.json"
+    timeout: 1800

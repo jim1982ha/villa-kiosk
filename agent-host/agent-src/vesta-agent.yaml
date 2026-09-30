@@ -1,0 +1,14 @@
+# The VESTA Agent's manifest, read by the VESTA Agent host (SPEC section 8).
+name: vesta-agent
+version: "0.3.0"
+runtime: python
+# Runs at IMAGE BUILD, in CI, never on the Yellow. `rm -rf tests` keeps every test
+# (and the villa's own fixtures, which a local copy may hold) out of the image.
+install: "pip install --no-cache-dir -r requirements.txt && rm -rf tests"
+start: "python -m vesta_agent"
+stop_grace_seconds: 20
+# Installed in the host image's final stage: the PDF reports (headless Chromium,
+# started only while printing) and a font for their text.
+system_packages:
+  - chromium-headless-shell
+  - fonts-dejavu-core
