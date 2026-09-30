@@ -1,3 +1,15 @@
+## 0.10.0
+
+### Added
+- **The VESTA Agent page, in Home Assistant's sidebar** (administrators only), in the VESTA Kiosk's look. **Rules**: the agent's `policy.yaml` as forms (acting on or off, people, chats, what the agent may do and who decides, protected devices, allowed lists, AI settings), plus the whole file. **Skills**: see, edit, add and delete skills and their files while the agent runs. **Overview**: problems to fix and the last 24 hours. Every save is checked with the agent's own rules first, the file's comments are kept, and a file changed elsewhere meanwhile is never overwritten. The page keeps working while the agent is stopped.
+
+### Fixed
+- **A report asked for in a chat is sent to that chat.** Asked in the group, the weekly report went to the facility manager's chat (a private chat) and the group got only "report sent".
+- **Asked again, the agent does the job again**, instead of repeating an earlier failed attempt from the same conversation.
+
+### Changed
+- The app's log now says when `policy.yaml` holds something the agent ignores (a misspelt section, a person without a Telegram id).
+
 ## 0.9.4
 
 ### Fixed
