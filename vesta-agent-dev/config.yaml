@@ -10,7 +10,7 @@
 # ⚠️ BUMP `version` ON EVERY PUSH. The Supervisor resolves image:<version>, never
 # :latest, so an unchanged version is an update Home Assistant cannot see.
 name: "VESTA Agent (dev)"
-version: "0.8.0"
+version: "0.9.0"
 slug: vesta_agent_dev
 description: "Runs the VESTA Agent, the villa's AI assistant"
 url: "https://github.com/jim1982ha/villa-kiosk"
@@ -39,6 +39,10 @@ map:
 timeout: 30
 backup_exclude:
   - "*/cache/*"
+  # The VESTA Agent's scratch folders (its work files, generated reports and
+  # PDFs). Its conversations, approvals and incidents stay in backups.
+  - "agent/work/*"
+  - "agent/out/*"
 # NOTE: the help text an operator SEES on the Configuration page lives in
 # translations/en.yaml; agent-host/tests/check_manifest.py fails when a field
 # is missing there, or when options and schema disagree.
@@ -49,7 +53,6 @@ backup_exclude:
 options:
   agent_mode: stub
   ha_url: "http://homeassistant:8123"
-  ha_mcp_mode: sidecar
   kiosk_url: "http://e66a2348-villa-kiosk-dev2:8099"
   telegram_takeover: false
   stub_heartbeat: false
@@ -59,9 +62,6 @@ schema:
   anthropic_api_key: password?
   ha_url: url
   ha_token: password?
-  ha_mcp_mode: list(sidecar|external)
-  ha_mcp_url: url?
-  ha_mcp_secret: password?
   kiosk_url: url
   kiosk_agent_token: password?
   telegram_takeover: bool

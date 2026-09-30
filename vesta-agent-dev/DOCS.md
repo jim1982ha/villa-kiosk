@@ -1,124 +1,201 @@
-# VESTA Agent host
+# VESTA Agent
 
-The Home Assistant app that hosts the **VESTA Agent**. Until the agent is
-delivered, its slot holds a **stub** that tests every connection the agent will
-use.
+The Home Assistant app that runs the **VESTA Agent**: the villa's assistant on
+Telegram. It reads Home Assistant, follows up the critical alerts of the VESTA
+rules, records jobs for the facility manager in the VESTA Kiosk, writes the
+daily, weekly and monthly reports (PDF), and **asks before any action**: every
+action is an Approve / Refuse button pressed by a registered person.
 
 The app has no web page and no port: nothing connects to it; it only connects
-out (Home Assistant, the VESTA Kiosk, Anthropic, and Telegram after go-live).
-It is installed by downloading a ready-made image; nothing is built on the
-HA Yellow.
+out (Home Assistant, the VESTA Kiosk, Anthropic, Telegram). It is installed by
+downloading a ready-made image; nothing is built on the HA Yellow.
 
 ## Modes
 
-- **stub** (default) — runs the self-test and the stub. Starts with nothing
-  configured: a missing key or token only means the matching check is skipped.
+- **stub** (default) — a self-test of every connection, and nothing else.
+  Starts with nothing configured.
 - **agent** — runs the VESTA Agent. Needs the Anthropic API key and the Home
-  Assistant token (and the external MCP address in external mode); without
-  them the app stops at once and its log says which setting is missing. It
-  starts the agent only once Home Assistant and Anthropic both answer,
-  retrying from every 5 s up to every 5 min.
+  Assistant token; without them the app stops at once and its log says which
+  setting is missing. The agent starts once Home Assistant and Anthropic both
+  answer.
 
-## What the log shows
+## Before the first start in agent mode
 
-A start summary (version, each connection and whether its key or token is set
-— never the value), then one self-test line per connection:
+1. **The "VESTA Agent" Home Assistant user.** Settings → People → Users → Add
+   user, named "VESTA Agent":
+   - **Administrator: ON.** The agent reads automation settings and traces,
+     templates and system logs, which Home Assistant keeps for administrators.
+     It changes nothing without an approved button: its own code refuses
+     every other write.
+   - **Allow person to login: OFF.** Nobody can open Home Assistant with this
+     account; only its token works.
+   - Log in as that user once, then its profile → Security → **Long-lived
+     access token**: that is the *Home Assistant token* below.
+2. **The Anthropic API key** (from the Anthropic Console).
+3. **The VESTA Kiosk.** In the Kiosk's configuration, turn the agent on and set
+   its agent token; put the same value in *VESTA Kiosk agent token* here. The
+   dev channel talks to VESTA (dev2).
+4. **Telegram.** The villa bot's token, and *Telegram takeover* ON — on **one**
+   app only (the dev app while testing, the stable one after).
 
-| Connection | Check | Skipped when |
-|---|---|---|
-| Home Assistant | `GET <ha_url>/api/` with the token → HTTP 200 | no `ha_token` |
-| HA MCP | MCP initialize + list tools → at least one tool | sidecar not started (no `ha_token`), or no external address |
-| VESTA Kiosk | `GET <kiosk_url>/agent/v1/info` → contract `1` | no `kiosk_agent_token`, or the Kiosk has no agent interface yet (404 or its web page) |
-| Anthropic | list models with the key → HTTP 200 | no `anthropic_api_key` |
-| Telegram | `getMe` only — never `getUpdates` | `telegram_takeover` off (no call at all) |
-| Presence | `POST <kiosk_url>/agent/v1/heartbeat` → HTTP 200 | `stub_heartbeat` off, agent mode, or no agent interface |
+Keep backups encrypted if they leave the machine: they hold these tokens.
 
-**Stub heartbeat — the end-to-end test.** With it on, the stub keeps the agent
-online in the VESTA Kiosk (a heartbeat every minute) and, at each start, posts
-one test message with the buttons *Looks good* and *Not now*. Answer it in the
-Kiosk's VESTA Agent area (owner or facility manager): within about 15 seconds
-this app's log shows `stub: answer received: "looks_good" pressed by owner …`.
-That is the full path a real agent's question and a person's decision take.
+## Configuration
 
-Each line is **pass**, **fail** or **skipped** with the reason; the result is
-also saved in `/data/host/selftest.json`. For a fresh run without restarting:
-`docker exec addon_<id>_vesta_agent_dev vesta-selftest`.
+| Field | What to put |
+|---|---|
+| Agent mode | `agent` |
+| Anthropic API key | the key |
+| Home Assistant address | keep the default on the same machine |
+| Home Assistant token | the VESTA Agent user's long-lived token |
+| VESTA Kiosk address | keep the default |
+| VESTA Kiosk agent token | the same value as in the Kiosk |
+| Telegram takeover | ON on one app only |
+| Telegram bot token | the villa bot's token |
+| Log level | `info` |
 
-Keys and tokens never appear in the log: any line that contains one — from the
-host, the HA MCP server or the agent — has it replaced by `***`.
+## First start
+
+The log shows the start summary (never a key or token), one self-test line per
+connection, then the agent:
+
+```
+Starter skills copied to the skills folder (first start): alert-desk, preventive-maintenance, reports, roi-energy, villa-concierge
+Skills: alert-desk, preventive-maintenance, reports, roi-energy, villa-concierge
+Telegram: sending as @<the bot> (Home Assistant receives; the agent reads its events)
+VESTA Kiosk: agreement 1
+HA MCP: 77 tools on the server, 15 shown to the model
+policy.yaml has no people yet: the agent answers nobody. ...
+Acting on the villa is OFF (informs only)
+```
+
+**Register the people.** In each chat the agent should use (a private chat
+with the bot, the villa group), each person sends `/whoami`; the bot answers
+with their Telegram id and the chat id. Then edit
+`/addon_configs/<id>_vesta_agent[_dev]/agent/policy.yaml` (Studio Code Server or
+Samba): `people` (id, name, role `owner` or `fm`, language) and `chats`
+(`owner`, `fm`: a group id is a negative number). Saved changes apply within
+seconds, no restart. The same file holds the owner-only devices, the allowed
+actions and the agent's settings (AI model, limit per reply, web search).
 
 ## Telegram
 
-While **Telegram takeover** is off, the bot token is not given to the agent at
-all and no Telegram call is made, so Home Assistant keeps receiving the bot's
-messages and button presses. Turn it on only at the Telegram switch-over
-(the go-live step where the agent takes over the bot).
+**Home Assistant stays the one receiver of the villa bot, for good.** The agent
+reads what the bot receives from the events Home Assistant already fires
+(`telegram_text`, `telegram_command`, `telegram_callback`), and only sends. So
+nothing Home Assistant does with Telegram changes, whether the agent runs or
+not: its alerts, the doorbell's gate button, any automation that waits for a
+Telegram button.
+
+- In a private chat, the agent answers any message from a registered person.
+- In a group, it answers a message that mentions the bot, a reply to one of its
+  own messages, or `/ask …`. Anything else is dropped by its code, unread by
+  the AI. (A mention reaches it only while the bot is a group administrator;
+  replies and commands always do.)
+- It answers only the chats listed in `policy.yaml`, and never leaves a group.
+- A button press on a Home Assistant message (the gate) is left to Home
+  Assistant; the agent handles only the buttons of its own messages.
+- `/new` starts a new conversation; a reply that reaches the cost limit stops
+  and offers a **Continue** button.
+
+## What it does on its own
+
+| When | What | AI (cost) |
+|---|---|---|
+| A VESTA rule fires | the alert follow-up: the facility manager gets the alert with Done / Not found / Need help / Mute, a ticket in the Kiosk; a reminder after 15 min, the owner after 45 min; closed when Home Assistant says it cleared | No |
+| Every 2 min | presence in the VESTA Kiosk (online / offline) | No |
+| 01:30 · 02:00 | inventory of Home Assistant, the night's maintenance checks, a ticket per job, anything urgent to the facility manager at once | No |
+| 07:00 | the facility manager's daily digest (also the agent's daily sign of life) | Yes |
+| Monday 08:00 | the facility manager's weekly page (PDF) and three lines for the owner | Yes |
+| 1st of the month 08:00 | the owner's monthly report (PDF) | Yes |
+
+These times come from the skills (below): changing them is a skill edit.
+
+If Home Assistant cannot be reached for 30 minutes, both chats get "Villa
+silent"; the next contact closes it.
+
+## Skills: edit, add, delete — no code, no rebuild
+
+`/addon_configs/<id>_vesta_agent[_dev]/skills/` holds one folder per skill:
+`SKILL.md` (what the agent reads), `skill.yaml` (its scripts, their options,
+its schedule) and `scripts/`. The agent reads the folder at every use: a change
+counts at once. To remove a skill, delete its folder; to add one, copy a folder
+and edit it. The `README.md` in that folder explains `skill.yaml`. A
+`skill.yaml` the agent cannot read switches that skill off alone, and the log
+says why. App updates never touch this folder.
+
+## Acting on the villa
+
+Off at first (`act_enabled: false` in `policy.yaml`). Once on, an action asked
+in a chat sends Approve / Refuse to the person allowed to decide: lights,
+covers, fans and the listed switches by the owner or the facility manager; the
+owner-only devices (locks, the gate, the siren) by the owner only. Never,
+whatever the file says: restarting Home Assistant, shell or REST commands,
+scripts not listed, MQTT, updates, the recorder, any toggle, triggering or
+reloading automations. A button works once, for 15 minutes, for the exact
+action shown.
+
+## Log lines
+
+| Line | Meaning |
+|---|---|
+| `Setting missing: …` | a field of the Configuration page is empty |
+| `The VESTA Agent is waiting: …` | the Anthropic key or the HA MCP server is missing: nothing runs until fixed |
+| `Skill <name>: skill.yaml refused (…)` | that skill is off until its file is fixed |
+| `Home Assistant events: connection lost …` | retried every 5 s up to 5 min; after 30 min the chats get "Villa silent" |
+| `Home Assistant events: Home Assistant refused the VESTA Agent token` | the token is wrong or was revoked |
+| `VESTA Kiosk: …` | the Kiosk's agent interface is off, or the token differs |
+| `Telegram: off` | *Telegram takeover* is off: nothing is sent |
+| `Unregistered sender: id …` | someone not in `policy.yaml` wrote to the agent |
 
 ## Folders
 
 | In the app | In Home Assistant | Content |
 |---|---|---|
-| `/config/skills` | `/addon_configs/<id>_vesta_agent[_dev]/skills` | VESTA Skills — edit here; seen by the agent without a restart |
-| `/config/agent` | `/addon_configs/<id>_vesta_agent[_dev]/agent` | agent-owned editable settings |
-| `/data/agent` | app data | agent state |
+| `/config/skills` | `/addon_configs/<id>_vesta_agent[_dev]/skills` | the skills — edit here |
+| `/config/agent` | `/addon_configs/<id>_vesta_agent[_dev]/agent` | `policy.yaml`, `instructions.md` |
+| `/data/agent` | app data | conversations, approvals, incidents, reports |
 | `/data/host` | app data | `selftest.json`, `crashes.json`, `last_start.json` |
 
-All four are kept across restarts and updates and are included in Home
-Assistant backups. The app creates them on first start and never overwrites a
-file in them.
+All are kept across restarts and updates and included in backups, except the
+agent's scratch folders (`agent/work`, `agent/out`).
 
-## HA MCP sidecar
+## HA MCP server
 
-- The agent's own HA MCP server. **It updates itself:** every hour the app's
-  build service looks for a newer HA MCP release; when there is one, it builds
-  a new version of this app with it, checks that the server starts and lists
-  its tools, and only then does Home Assistant offer the update. A release
-  that fails that check is never offered. The version in use is named in the
-  changelog.
-- Runs only in `sidecar` mode and only when `ha_token` is set, with that token.
-  Listens on `127.0.0.1:9583/mcp` — reachable only from inside the app.
-- Its own update checks, and the HACS refresh they would trigger in Home
-  Assistant at start-up, are switched off.
-- `external` mode: no sidecar; the agent uses `ha_mcp_url` / `ha_mcp_secret`.
+The agent's own HA MCP server runs inside the app, with the VESTA Agent user's
+token, on `127.0.0.1:9583` — reachable only from inside the app. It updates
+itself: every hour the app's build service looks for a newer HA MCP release,
+builds a new version of this app with it, checks that it starts, and only then
+does Home Assistant offer the update.
 
 ## Restarts and stop
 
 - A crashed agent restarts after 5 s, doubling to 5 min; a run longer than
-  10 min resets the delay. The sidecar restarts the same way.
-- After 5 agent crashes within 10 min it is no longer restarted. The app keeps
-  running and says so in its log; heartbeats stop, so the VESTA Kiosk shows the
-  agent offline. Restarting the app tries again.
-- On stop the agent receives SIGTERM and up to its `stop_grace_seconds`
-  (capped at 22 s); then the sidecar stops. Everything fits in the app's 30 s.
+  10 min resets the delay. After 5 crashes within 10 min it is no longer
+  restarted; the app says so, and the Kiosk shows the agent offline.
+  Restarting the app tries again. Nothing in a chat can restart or stop it.
+- On stop the agent gets up to 20 s to finish; everything fits in the app's
+  30 s.
 
 ## Running outside Home Assistant
 
-The same image runs as a plain container; only the source of the options
-changes — `VESTA_OPT_<OPTION>` environment variables instead of the
-Configuration page. A ready-made setup is in `agent-host/standalone/`:
-
-```
-cp vesta-agent.env.example vesta-agent.env    # fill in; never commit it
-docker compose up -d && docker compose logs -f
-```
-
-Remote deployments also set `VESTA_CF_ACCESS_CLIENT_ID` and
-`VESTA_CF_ACCESS_CLIENT_SECRET` (the Cloudflare Access service token); every
-request to Home Assistant, the HA MCP endpoint and the VESTA Kiosk then carries
-it. Use the image for the machine's architecture (`-amd64` or `-aarch64`).
+The same image runs as a plain container: `VESTA_OPT_<OPTION>` environment
+variables instead of the Configuration page. A ready-made setup is in
+`agent-host/standalone/`. Remote deployments also set
+`VESTA_CF_ACCESS_CLIENT_ID` and `VESTA_CF_ACCESS_CLIENT_SECRET`.
 
 ## For the VESTA Agent's developer
 
-**The agent receives only these environment variables** (and `PATH`, `HOME` =
-`/data/agent`, `LANG`) — the same names in every deployment:
+The agent's source is `agent-host/agent-src/` in this repository; the app's
+build installs it (its `vesta-agent.yaml`). It receives only these variables
+(and `PATH`, `HOME` = `/data/agent`, `LANG`):
 
 | Variable | Content |
 |---|---|
 | `ANTHROPIC_API_KEY` | Anthropic key |
-| `VESTA_HA_URL`, `VESTA_HA_TOKEN` | Home Assistant address and VESTA Agent user token |
-| `VESTA_HA_MCP_URL` | sidecar `http://127.0.0.1:9583/mcp`, or the external address |
-| `VESTA_HA_MCP_SECRET` | external mode only, else empty |
-| `VESTA_KIOSK_URL`, `VESTA_KIOSK_TOKEN` | VESTA Kiosk agent interface and its bearer token |
+| `VESTA_HA_URL`, `VESTA_HA_TOKEN` | Home Assistant and the VESTA Agent user token |
+| `VESTA_HA_MCP_URL` | the sidecar, `http://127.0.0.1:9583/mcp` |
+| `VESTA_KIOSK_URL`, `VESTA_KIOSK_TOKEN` | VESTA Kiosk agent interface and its token |
 | `VESTA_CF_ACCESS_CLIENT_ID`, `VESTA_CF_ACCESS_CLIENT_SECRET` | empty on the Yellow; set when remote |
 | `VESTA_TELEGRAM_ENABLED` | `true` / `false` |
 | `VESTA_TELEGRAM_BOT_TOKEN` | present **only** when enabled |
@@ -126,42 +203,23 @@ it. Use the image for the machine's architecture (`-amd64` or `-aarch64`).
 | `VESTA_LOG_LEVEL`, `TZ` | log level; Home Assistant's time zone |
 | `VESTA_DEPLOYMENT`, `VESTA_INSTANCE` | `ha_app`/`standalone`; `dev`/`prod` |
 
-**The agent ships `vesta-agent.yaml`** at the root of its folder
-(`/opt/vesta/agent` in the image):
-
 ```yaml
 name: vesta-agent
 version: "x.y.z"
-runtime: python            # python | node
-install: "pip install --no-cache-dir -r requirements.txt"   # run at image build
+runtime: python
+install: "pip install --no-cache-dir -r requirements.txt"   # run at image build, never on the Yellow
 start: "python -m vesta_agent"
-stop_grace_seconds: 20     # at most 22
+stop_grace_seconds: 20                                        # at most 22
+system_packages: [chromium-headless-shell, fonts-dejavu-core] # Debian packages, installed at image build
 ```
-
-**How the agent reaches this app.** The agent lives in its own GitHub
-repository, with `vesta-agent.yaml` at the root. Publishing a GitHub
-**release** (for example `v1.1.0`) is all it takes: within the hour the app's
-build service fetches that release, runs its `install` command while building
-the image (nothing is installed on the Home Assistant machine), checks the
-image, and Home Assistant offers the update. A private repository is read with
-a read-only access token for that one repository, stored as a secret on the
-build side. Drafts and pre-releases are never picked up.
-
-Rules: read configuration only from the variables above; write only under
-`VESTA_DATA_DIR`; read skills from `VESTA_SKILLS_DIR` and pick up changes
-without a restart; log to stdout, never a secret; stop within
-`stop_grace_seconds` of SIGTERM; never contact Telegram while
-`VESTA_TELEGRAM_ENABLED` is `false`. The stub in `agent-host/stub/` follows the
-same rules and is a working example.
 
 ## Resources
 
 | | Measured |
 |---|---|
-| Image download (compressed) | about 120 MB per architecture |
-| Image on disk | about 380 MB |
-| Idle memory, stub + HA MCP sidecar | about 142 MB on the HA Yellow (3.4 % of its 4 GB); about 34 MB without the sidecar |
+| Image download (compressed) | to measure with 0.9.0 (0.8.0 without the agent: about 120 MB) |
+| Idle memory | to measure on the HA Yellow with 0.9.0 (0.8.0, stub + HA MCP: about 142 MB) |
 
-The real VESTA Agent will add to both: the Claude Agent SDK alone is about
-100 MB compressed and 240 MB unpacked. Keep at least 500 MB free on the
+The headless Chromium used for the PDF reports adds about 200 MB to the image
+and runs only for the few seconds a PDF takes. Keep at least 500 MB free on the
 Yellow once the agent runs.

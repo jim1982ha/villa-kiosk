@@ -24,18 +24,8 @@ configuration:
     name: Home Assistant token
     description: >-
       Long-lived access token of the dedicated "VESTA Agent" Home Assistant
-      user. Required in agent mode.
-  ha_mcp_mode:
-    name: Home Assistant MCP
-    description: >-
-      "sidecar" runs the agent's own Home Assistant MCP server inside this app.
-      "external" uses an existing MCP endpoint given below instead.
-  ha_mcp_url:
-    name: External MCP address
-    description: External mode only. Leave empty in sidecar mode.
-  ha_mcp_secret:
-    name: External MCP secret
-    description: External mode only. Leave empty in sidecar mode.
+      user — an administrator with "Allow person to login" turned off. Required
+      in agent mode.
   kiosk_url:
     name: VESTA Kiosk address
     description: >-
@@ -47,12 +37,13 @@ configuration:
   telegram_takeover:
     name: Telegram takeover
     description: >-
-      Leave OFF until the Telegram switch-over. While OFF the bot token is never
-      given to the agent and no Telegram call is made, so Home Assistant keeps
-      receiving the bot's messages and buttons.
+      ON lets the agent send on the villa's bot. Home Assistant keeps receiving
+      the bot's messages and buttons either way; the agent reads them from Home
+      Assistant. While OFF the bot token is never given to the agent and it sends
+      nothing. Only one app (dev or stable) should have it ON.
   telegram_bot_token:
     name: Telegram bot token
-    description: Used only when Telegram takeover is ON.
+    description: The villa bot's token. Used only when Telegram takeover is ON.
   stub_heartbeat:
     name: Stub heartbeat
     description: >-
