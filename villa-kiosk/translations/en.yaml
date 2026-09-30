@@ -86,14 +86,13 @@ configuration:
   agent_enabled:
     name: Connect the VESTA Agent
     description: >-
-      Off (the default): there is no agent — nothing about it is shown and it
-      cannot connect, whatever "VESTA Agent settings" holds. On: the agent
-      connects, and its token (in "VESTA Agent settings") is REQUIRED; if it is
-      empty or too short, the agent stays off and the app's log says so.
+      "Off" by default (no agent). When "On", the agent connects. If "VESTA
+      Agent token" is empty or too short, the agent stays off and the app's log
+      says so.
   vesta_agent:
     name: VESTA Agent settings
     description: >-
-      Only used while "Connect the VESTA Agent" is on.
+      Only used when "Connect the VESTA Agent" is on.
     fields:
       token:
         name: VESTA Agent token

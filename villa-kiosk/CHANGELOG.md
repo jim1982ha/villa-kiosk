@@ -1,3 +1,8 @@
+## 2.496.227
+
+### Changed
+- **Shorter help text for the VESTA Agent on the Configuration page.** "Connect the VESTA Agent" now reads: "Off" by default (no agent); when "On", the agent connects; if the token is empty or too short, the agent stays off and the app's log says so. The "VESTA Agent settings" section now says "Only used when "Connect the VESTA Agent" is on."
+
 ## 2.496.226
 
 ### Fixed
