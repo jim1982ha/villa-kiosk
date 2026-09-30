@@ -27,8 +27,10 @@ downloading a ready-made image; nothing is built on the HA Yellow.
      templates and system logs, which Home Assistant keeps for administrators.
      It changes nothing without an approved button: its own code refuses
      every other write.
-   - **Allow person to login: OFF.** Nobody can open Home Assistant with this
-     account; only its token works.
+   - **Active: ON** and **Can only log in from the local network: ON**, with
+     a long random password nobody keeps. Do not deactivate the user or turn
+     its login off: Home Assistant refuses the token of a user that cannot log
+     in, and the agent would lose Home Assistant.
    - Log in as that user once, then its profile → Security → **Long-lived
      access token**: that is the *Home Assistant token* below.
 2. **The Anthropic API key** (from the Anthropic Console).
@@ -95,6 +97,12 @@ Telegram button.
 - It answers only the chats listed in `policy.yaml`, and never leaves a group.
 - A button press on a Home Assistant message (the gate) is left to Home
   Assistant; the agent handles only the buttons of its own messages.
+- An alert's buttons disappear once one is pressed; the message then says who
+  answered, what, and at what time. The answer goes to the chat where the
+  button was pressed.
+- Messages are plain text: Telegram shows exactly what is written.
+- Ask it "what did you do last night?": it reads its own record (the jobs run,
+  the alerts followed, the buttons pressed, the tickets, the cost).
 - `/new` starts a new conversation; a reply that reaches the cost limit stops
   and offers a **Continue** button.
 
@@ -147,6 +155,12 @@ action shown.
 | `VESTA Kiosk: …` | the Kiosk's agent interface is off, or the token differs |
 | `Telegram: off` | *Telegram takeover* is off: nothing is sent |
 | `Unregistered sender: id …` | someone not in `policy.yaml` wrote to the agent |
+| `Alert received: opened — …` | Home Assistant sent a critical alert; the next line says what the agent did with it |
+| `Alert handled by alert-desk: new, incident #…` | the follow-up started (`repeat`, `counted`, `muted`, `resolved`, `abandoned` otherwise) |
+| `Sent to chat … (fm chat)` | one message sent, and to which chat |
+| `Button Done on incident #… pressed by …` | someone answered an alert |
+| `Kiosk ticket … created / resolved` | a fault in the Kiosk's Facility records |
+| `Answered … in chat … (0.012 USD)` | a conversation reply and what it cost |
 
 ## Folders
 
