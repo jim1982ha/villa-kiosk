@@ -3,7 +3,6 @@
 // is configured), then the children render. Minimum-click funnel: a profile
 // without a configured PIN signs in with a single tap.
 
-import { authErrorText } from "@/auth/authErrorText";
 import { useEffect, useState, type ReactNode } from "react";
 import { UserRound, KeyRound, Wrench } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
@@ -85,16 +84,15 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
       // Un-gated profile: one tap and in — but still establish a server session
       // first, so direct/Cloudflare access is authorized (the cookie, not this
       // click, is what unlocks /core and /model).
-      openSession(r)
-        .then((res) => {
-          if (res.ok) {
-            // Session cookie now exists — retry the prefetch in case the
-            // earlier mount-time attempt (before any cookie existed) failed.
-            startModelPrefetch();
-            login(r);
-          } else setGateError("Couldn't start a session — please try again.");
-        })
-        .catch((err) => setGateError(authErrorText(err, "Couldn't reach the kiosk service — please try again.")));
+      void openSession(r).then((res) => {
+        if (res.kind === "accepted") {
+          // A session cookie now exists; login() also retries the model
+          // prefetch (auth/profileSession's signedIn).
+          login(r);
+        } else if (res.kind === "closed") setGateError(res.text);
+        else if (res.kind === "unavailable") setGateError("Couldn't reach the kiosk service — please try again.");
+        else setGateError("Couldn't start a session — please try again.");
+      });
     } else {
       setPending(r);
     }
@@ -144,9 +142,8 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
               roleLabel={ROLE_LABELS[pending]}
               onSubmit={(pin) => verify(pending, pin)}
               onAccepted={() => {
-                // Correct PIN just minted the session cookie — retry the
-                // prefetch (the mount-time attempt had no cookie to use yet).
-                startModelPrefetch();
+                // Correct PIN just minted the session cookie; login() also
+                // retries the model prefetch (auth/profileSession's signedIn).
                 login(pending);
                 setPending(null);
               }}

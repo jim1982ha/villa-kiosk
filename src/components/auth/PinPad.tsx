@@ -10,7 +10,7 @@
 // is a prop, so the keypad behaviour, lockout countdown and keyboard handling
 // stay identical in both.
 
-import { authErrorText } from "@/auth/authErrorText";
+import type { PinOutcome } from "@/auth/pinOutcome";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useInterval } from "@/hooks/useInterval";
 import { ArrowLeft, Delete } from "lucide-react";
@@ -21,8 +21,8 @@ const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
 interface Props {
   /** Display name of the profile being unlocked. */
   roleLabel: string;
-  /** Resolves true when the code is accepted. Throws on service failure. */
-  onSubmit: (pin: string) => Promise<{ ok: boolean; retryAfter?: number }>;
+  /** What the attempt came to (auth/pinOutcome) — never throws. */
+  onSubmit: (pin: string) => Promise<PinOutcome>;
   onAccepted: () => void;
   onBack: () => void;
   /** Digits to collect before submitting. Default 4. */
@@ -60,27 +60,25 @@ export default function PinPad({
   const submit = useCallback(async (pin: string) => {
     setBusy(true);
     setError(null);
-    try {
-      const result = await onSubmit(pin);
-      if (!mounted.current) return;
-      if (result.ok) {
-        onAccepted();
-        return;
-      }
-      setDigits("");
-      if (result.retryAfter) {
-        setLockedFor(result.retryAfter);
-        setError(null);
-      } else {
-        setError("Incorrect code — try again.");
-        setFailCount((c) => c + 1);
-      }
-    } catch (err) {
-      if (!mounted.current) return;
-      setDigits("");
-      setError(authErrorText(err, "Couldn't reach the passcode service. Check the connection and try again."));
-    } finally {
-      if (mounted.current) setBusy(false);
+    const result = await onSubmit(pin);
+    if (!mounted.current) return;
+    setBusy(false);
+    if (result.kind === "accepted") {
+      onAccepted();
+      return;
+    }
+    setDigits("");
+    if (result.kind === "locked") {
+      setLockedFor(result.retryAfter);
+    } else if (result.kind === "wrong") {
+      setError("Incorrect code — try again.");
+      setFailCount((c) => c + 1);
+    } else if (result.kind === "closed") {
+      // The server's own reason — e.g. "set a passcode in the add-on's
+      // options" — is the one actionable message.
+      setError(result.text);
+    } else {
+      setError("Couldn't reach the passcode service. Check the connection and try again.");
     }
   }, [onSubmit, onAccepted]);
 

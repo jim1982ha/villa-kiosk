@@ -123,21 +123,40 @@ ck("no location sets X-VK-Ingress by hand", not by_hand,
    f"a hand-written copy: {', '.join(by_hand)}")
 
 # ── what the service worker may serve from its cache ─────────────────────
-# Its rule, read from sw.js: a path containing one of the `includes(...)`
-# fragments, or ending with a NEVER_CACHE entry, goes to the network. Tried
-# on the BARE path — the standalone hostname, where the add-on's endpoints
-# are not under /api/ and only the explicit list protects them.
+# Its rule is sw.js's own swRoute (2.496.233), RUN here through Node — this
+# used to read its fragments by regex and re-implement them in Python
+# (`sw_skips`), a copy sw.js's own header warns against. Every GET route is
+# tried bare (the standalone hostname, where the add-on's endpoints are not
+# under /api/ and only NEVER_CACHE protects them) AND behind Home Assistant's
+# Ingress prefix.
+import json as _json
+import subprocess as _sp
 sw = SW.read_text()
-nc = re.search(r"const NEVER_CACHE = \[(.*?)\];", sw, re.S)
-never = re.findall(r'"([^"]+)"', nc.group(1)) if nc else []
-guard = sw[nc.end():sw.index("return; // default network handling", nc.end())] if nc else ""
-fragments = re.findall(r'url\.pathname\.includes\("([^"]+)"\)', guard)
-ck("the service worker's never-cache rule was read", bool(never) and bool(fragments),
-   f"list {never}, fragments {fragments}")
+INGRESS = "/api/hassio_ingress/tok"
 
 
-def sw_skips(path: str) -> bool:
-    return any(f in path for f in fragments) or any(path.endswith(p) for p in never)
+def sw_routes(paths):
+    """{path: route} from the real swRoute, for bare and Ingress paths."""
+    script = r"""
+const fs = require("fs");
+const src = fs.readFileSync(process.argv[1], "utf8");
+const grab = (re) => { const m = re.exec(src); if (!m) throw new Error("not found: " + re); return m[0]; };
+const body = [
+  grab(/const SW_BYPASS_PARAM = [^;]+;/),
+  grab(/const NEVER_CACHE = \[[\s\S]*?\];/),
+  grab(/const NEVER_CACHE_FRAGMENTS = \[[\s\S]*?\];/),
+  grab(/function swRoute\(url, mode, destination, origin\) \{[\s\S]*?\n\}/),
+].join("\n");
+const swRoute = new Function(body + "; return swRoute;")();
+const out = {};
+for (const p of JSON.parse(process.argv[2])) out[p] = swRoute(new URL("http://localhost" + p), "cors", "", "http://localhost");
+console.log(JSON.stringify(out));
+"""
+    res = _sp.run(["node", "-e", script, str(SW), _json.dumps(paths)], capture_output=True, text=True)
+    if res.returncode != 0:
+        print(res.stderr[-600:])
+        return {}
+    return _json.loads(res.stdout)
 
 
 # Cacheable ON PURPOSE — and why. Anything else a GET reaches must be skipped.
@@ -147,9 +166,13 @@ SW_CACHEABLE = {
 }
 gets = [re.sub(r"\{[^}]*\}", "x", m.group(1)) for m in
         re.finditer(r'app\.router\.add_(?:get|route)\(\s*(?:"[A-Z*]+"\s*,\s*)?"([^"]+)"', px)]
-cached = sorted(p for p in gets if not sw_skips(p) and p not in SW_CACHEABLE)
-ck(f"every one of the proxy's {len(gets)} GET routes is kept out of the offline cache", bool(gets) and not cached,
-   f"the service worker would serve these from its cache: {', '.join(cached)}")
+routed = sw_routes(gets + [INGRESS + p for p in gets])
+ck("the service worker's real routing function was run", len(routed) == 2 * len(gets) and bool(gets),
+   f"{len(routed)} answers for {2 * len(gets)} paths")
+cached = sorted(p for p in gets if p not in SW_CACHEABLE
+                and (routed.get(p) != "network" or routed.get(INGRESS + p) != "network"))
+ck(f"every one of the proxy's {len(gets)} GET routes is kept out of the offline cache, bare and behind Ingress",
+   bool(gets) and not cached, f"the service worker would serve these from its cache: {', '.join(cached)}")
 stale = sorted(p for p in SW_CACHEABLE if p not in gets)
 ck("  ...and every deliberately cacheable path is still a route", not stale,
    f"no longer routes: {', '.join(stale)}")

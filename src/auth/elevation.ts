@@ -11,41 +11,10 @@
 // client believes. This module only carries the token; it grants nothing.
 
 import { ingressPath } from "@/ha/ingress";
+import { askPin, type PinOutcome } from "./pinOutcome";
 
-export type ElevationResult =
-  | { ok: true; token: string }
-  | { ok: false; reason: "wrong-code" | "disabled" | "locked-out" | "error"; retryAfter?: number };
-
-/** Exchange the 6-digit code for one single-use token. */
-export async function requestElevation(pin: string): Promise<ElevationResult> {
-  try {
-    const r = await fetch(ingressPath("auth/elevate"), {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pin }),
-    });
-    if (r.ok) {
-      const d = (await r.json()) as { token?: unknown };
-      return typeof d.token === "string" && d.token
-        ? { ok: true, token: d.token }
-        : { ok: false, reason: "error" };
-    }
-    if (r.status === 401) return { ok: false, reason: "wrong-code" };
-    // 403 here means the capability is switched off (no code configured),
-    // which is an operator state worth saying out loud rather than letting
-    // someone hunt for a code that does not exist.
-    if (r.status === 403) return { ok: false, reason: "disabled" };
-    if (r.status === 429) {
-      const d = (await r.json().catch(() => ({}))) as { retryAfter?: unknown };
-      return {
-        ok: false,
-        reason: "locked-out",
-        retryAfter: typeof d.retryAfter === "number" ? d.retryAfter : undefined,
-      };
-    }
-    return { ok: false, reason: "error" };
-  } catch {
-    return { ok: false, reason: "error" };
-  }
+/** Ask for a one-shot superadmin elevation. "accepted" carries the token;
+ *  "closed" means no superadmin code is configured. Never throws. */
+export async function requestElevation(pin: string): Promise<PinOutcome> {
+  return askPin(ingressPath("auth/elevate"), { pin });
 }

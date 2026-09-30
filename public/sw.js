@@ -149,73 +149,50 @@ self.addEventListener("activate", (event) => {
   })());
 });
 
+// ── WHAT HAPPENS TO EACH REQUEST: ONE FUNCTION ───────────────────────────
+// Pure, so tests/oracles/sw_lifecycle.mjs and tests/routes.py run THIS (not a
+// copy of it) over every address the add-on serves, bare and behind Home
+// Assistant's Ingress prefix (2.496.233). The order is the rule:
+//   bypass   — the client's escape hatch (SW_BYPASS_PARAM): no interception;
+//   model    — the central GLB / .rooms.json: its own cache, first (a camera
+//              proxy URL that happens to end the same way is not a model);
+//   network  — live data, never cached: Home Assistant's /api/, auth, the
+//              agent door, cameras, and the add-on's own dynamic endpoints
+//              (NEVER_CACHE — on the STANDALONE hostname they are bare paths
+//              like /device-config, not under /api/: once served from cache,
+//              a GET four seconds after a confirmed write returned a document
+//              1.8 hours old, which broke the shared-config sync);
+//   foreign  — another origin: not ours to cache;
+//   page     — a navigation: network first, the cached shell when offline;
+//   asset    — everything else of ours: cache first, refreshed behind.
+const NEVER_CACHE = [
+  "/device-config", "/fm-data", "/telemetry", "/addon-config", "/model-upload",
+  "/agent-status", "/agent-messages", "/agent-choices", "/kiosk-rooms",
+];
+const NEVER_CACHE_FRAGMENTS = ["/api/", "/auth/", "/agent/v1/", "camera_proxy"];
+
+function swRoute(url, mode, destination, origin) {
+  if (url.searchParams.has(SW_BYPASS_PARAM)) return "bypass";
+  const path = url.pathname;
+  if ((path.endsWith(".glb") || path.endsWith(".rooms.json")) && !path.includes("camera_proxy")) return "model";
+  if (NEVER_CACHE_FRAGMENTS.some((f) => path.includes(f)) || NEVER_CACHE.some((p) => path.endsWith(p))) return "network";
+  if (url.origin !== origin) return "foreign";
+  if (mode === "navigate" || destination === "document" || path.endsWith("/") || path.endsWith(".html")) return "page";
+  return "asset";
+}
+
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
 
   const url = new URL(req.url);
+  const route = swRoute(url, req.mode, req.destination, self.location.origin);
+  if (route === "bypass" || route === "network" || route === "foreign") return; // default network handling
 
-  // Client-requested bypass — pure network, before any other rule. Must stay
-  // the FIRST check so it also escapes any future branch added below.
-  if (url.searchParams.has(SW_BYPASS_PARAM)) return;
-
-  // Central 3D model files (GLB/room-data sidecar): cache-first in the
-  // persistent model cache. Checked BEFORE the /api/ exclusion below because,
-  // behind Ingress, the model is served under
-  // /api/hassio_ingress/<token>/model/… — without this branch it matched the
-  // "never cache" rule and was re-downloaded on every single open. Matched by
-  // extension (not just the "/model/" path) so a standalone build's central
-  // model — served at HA's own /local/ static route, see storage.ts's
-  // probeStandaloneCentralModel — gets the same treatment, not just Ingress's.
-  const isModelFile = url.pathname.endsWith(".glb") || url.pathname.endsWith(".rooms.json");
-  if (isModelFile && !url.pathname.includes("camera_proxy")) {
+  if (route === "model") {
     event.respondWith(modelCacheFirst(event, req, url));
     return;
   }
-
-  // Never cache live data — HA's, and the add-on's OWN dynamic endpoints.
-  //
-  // The add-on's endpoints only carried the "/api/" exclusion by accident:
-  // behind Ingress they sit under /api/hassio_ingress/<token>/…, so they
-  // matched. On the STANDALONE hostname (which is what the installed PWA
-  // uses) the very same endpoints are bare paths like /device-config — same
-  // origin, matching nothing here — so they fell through to the cache-first
-  // branch below and were served from cache.
-  //
-  // That is not a stale-looking UI, it is a broken sync: a client would read
-  // a pre-write copy of the shared config, diff against it, and push
-  // conclusions drawn from data hours out of date. Seen in the field as a GET
-  // four seconds after a confirmed write returning a document 1.8 hours old,
-  // and as reads whose body predated the `rev` field entirely. It also made
-  // the telemetry panel itself serve a stale ring — i.e. it corrupted the
-  // very diagnostics used to investigate it.
-  //
-  // /model/*.glb is handled above (deliberately cache-first, version-stamped)
-  // and /fm-evidence/<id> is content-addressed by a never-reused id, so both
-  // stay cacheable. Everything listed here is mutable and must not be.
-  const NEVER_CACHE = [
-    "/device-config", "/fm-data", "/telemetry", "/addon-config", "/model-upload",
-    "/agent-status", "/agent-messages", "/agent-choices", "/kiosk-rooms",
-  ];
-  if (
-    url.pathname.includes("/api/") ||
-    url.pathname.includes("/auth/") ||
-    url.pathname.includes("/agent/v1/") ||
-    url.pathname.includes("camera_proxy") ||
-    NEVER_CACHE.some((p) => url.pathname.endsWith(p))
-  ) {
-    return; // default network handling
-  }
-
-  // App-shell / static assets: cache-first with background refresh.
-  // Same-origin ONLY. The two Google Fonts hosts that used to be allowed here
-  // are gone: 2.144.0 moved the app to self-hosted Jost + Public Sans under
-  // /fonts/, so nothing requests them any more, and leaving them listed
-  // implied this app may reach a third-party host — which it must never do
-  // (the target is an iPad in a villa with no internet at all).
-  const isStatic = url.origin === self.location.origin;
-
-  if (!isStatic) return;
 
   const cacheCopy = (res) => {
     if (res && res.status === 200) {
@@ -227,13 +204,7 @@ self.addEventListener("fetch", (event) => {
 
   // The unhashed HTML shell must stay fresh: network-first, fall back to cache
   // only when offline. (Hashed assets below are immutable, so cache-first.)
-  const isNavigation =
-    req.mode === "navigate" ||
-    req.destination === "document" ||
-    url.pathname.endsWith("/") ||
-    url.pathname.endsWith(".html");
-
-  if (isNavigation) {
+  if (route === "page") {
     event.respondWith(
       fetch(req).then(cacheCopy).catch(() => caches.match(req).then((c) => c || caches.match("./index.html"))),
     );

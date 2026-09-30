@@ -38,11 +38,15 @@ console.log("\n  the wiring:");
 const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
 ck("the socket reports the proxy's 4401 close", /if \(ev\.code === 4401\) reportSessionLost\("socket 4401"\);/.test(src("ha/HAWebSocket.ts")));
 const pc = src("auth/ProfileContext.tsx");
-ck("ProfileContext answers it: confirms with the server, decides by sessionLostDecision, signs out locally",
-   /onSessionLost\(/.test(pc) && /serverSession\(\)/.test(pc) && /sessionLostDecision\(role, server\) !== "sign-out"/.test(pc) && /setRole\(null\)/.test(pc));
+// The answer (ask the server, decide by sessionLostDecision, sign out, report
+// with the NEXT sign-in) is auth/profileSession.sessionLost, driven by value
+// in profile_session.mjs since 2.496.233; this pins that the context wires it.
+ck("ProfileContext answers it: the session module confirms with the server and decides by sessionLostDecision",
+   /onSessionLost\(\(source\) => \{ void session\.sessionLost\(source\); \}\)/.test(pc) && /askServer: serverSession/.test(pc)
+   && /sessionLostDecision\(role, server\) !== "sign-out"/.test(src("auth/profileSession.ts")));
 ck("  ...and its telemetry waits for the NEXT sign-in (the proxy refuses telemetry from the dead session it reports)",
-   /localStorage\.setItem\(PENDING_LOST_KEY/.test(pc) && /const pending = localStorage\.getItem\(PENDING_LOST_KEY\);/.test(pc)
-     && !/onSessionLost\([\s\S]{0,600}reportTelemetry\(/.test(pc));
+   /localStorage\.setItem\(PENDING_LOST_KEY/.test(pc) && /localStorage\.getItem\(PENDING_LOST_KEY\)/.test(pc)
+     && /this\.io\.pendingLost\.put\(/.test(src("auth/profileSession.ts")));
 ck("serverSession answers in three: a role, none, unknown (a failed request is never 'none')",
    /if \(!resp\.ok\) return "unknown";/.test(src("auth/PinVerifier.ts")) && /\} catch \{\s*return "unknown";/.test(src("auth/PinVerifier.ts")));
 const SRC = new URL("../../src/", import.meta.url).pathname;

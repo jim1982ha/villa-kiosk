@@ -7,15 +7,17 @@
 // never syncs across tabs or devices. The PIN itself is never stored.
 
 import {
-  createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode,
+  createContext, useContext, useEffect, useMemo, useRef, useSyncExternalStore, type ReactNode,
 } from "react";
 import { isRole, type Role } from "./roles";
-import { currentSession, serverSession } from "./PinVerifier";
-import { onSessionLost, sessionLostDecision } from "./sessionLost";
+import { serverSession } from "./PinVerifier";
+import { onSessionLost } from "./sessionLost";
+import { ProfileSession, type LostReport, type SessionAdapters } from "./profileSession";
 import { report as reportTelemetry } from "@/utils/telemetry";
 import { ingressPath } from "@/ha/ingress";
 import { purgeModelCache } from "@/utils/modelCache";
 import { markBoot } from "@/utils/bootTimeline";
+import { startModelPrefetch } from "@/utils/modelPrefetch";
 
 const SESSION_KEY = "villa-kiosk:profile:v1";
 /** A session-lost report waiting for a session to send it with: the proxy
@@ -64,149 +66,71 @@ function loadStoredRole(): Role | null {
     if (!stored) return null;
     const parsed: unknown = JSON.parse(stored);
     const role = (parsed as { role?: unknown } | null)?.role;
-    // Whitelist-validate: a tampered value falls back to signed-out.
     return isRole(role) ? role : null;
   } catch {
     return null;
   }
 }
 
+/** The browser pieces the session module is given (see auth/profileSession). */
+function browserAdapters(): SessionAdapters {
+  return {
+    stored: {
+      read: loadStoredRole,
+      write: (role) => {
+        try { sessionStorage.setItem(SESSION_KEY, JSON.stringify({ role, at: Date.now() })); } catch { /* blocked: in-memory still works */ }
+      },
+      clear: () => { try { sessionStorage.removeItem(SESSION_KEY); } catch { /* ignore */ } },
+    },
+    pendingLost: {
+      take: () => {
+        try {
+          const raw = localStorage.getItem(PENDING_LOST_KEY);
+          if (!raw) return null;
+          localStorage.removeItem(PENDING_LOST_KEY);
+          return JSON.parse(raw) as LostReport;
+        } catch { return null; }
+      },
+      put: (r) => { try { localStorage.setItem(PENDING_LOST_KEY, JSON.stringify(r)); } catch { /* the sign-out still happens */ } },
+    },
+    askServer: serverSession,
+    signOut: () => {
+      void fetch(ingressPath("auth/logout"), { method: "POST", credentials: "include", keepalive: true })
+        .catch(() => { /* offline: local state is still cleared */ });
+    },
+    signOutEverywhere: async () => {
+      try {
+        const resp = await fetch(ingressPath("auth/logout-all"), { method: "POST", credentials: "include" });
+        return resp.ok;
+      } catch { return false; }
+    },
+    // The service worker answers a model request from its cache BEFORE
+    // nginx's /model/ gate is asked, so a signed-out device must not keep it.
+    forget: () => { void purgeModelCache(); },
+    // The one honest boundary between waiting on a PERSON and on the APP
+    // (bootTimeline), and the model download once a cookie exists.
+    signedIn: () => { markBoot("auth"); startModelPrefetch(); },
+    report: (p, now) => reportTelemetry("session", { phase: "lost", source: p.source, lostRole: p.role, agoMs: p.at ? now - p.at : undefined }),
+    now: () => Date.now(),
+  };
+}
+
 export function ProfileProvider({ children }: { children: ReactNode }) {
-  const [role, setRole] = useState<Role | null>(loadStoredRole);
-  const [switching, setSwitching] = useState(false);
-  // Only when this tab has no remembered profile is there anything to ask the
-  // server about — and only then must the gate hold back, so it never flashes
-  // the profile picker for the ~80ms of the round trip before resolving into
-  // the villa. With a stored role there is no wait and no flash.
-  const [resolving, setResolving] = useState(() => loadStoredRole() === null);
+  const sessionRef = useRef<ProfileSession>();
+  if (!sessionRef.current) sessionRef.current = new ProfileSession(browserAdapters());
+  const session = sessionRef.current;
+  const state = useSyncExternalStore(session.onChange, session.getState);
 
-  // Restore the profile from the SERVER's session cookie, which outlives this
-  // document. sessionStorage alone made a returning device re-enter a passcode
-  // the server had already accepted and would still honour: Android evicts a
-  // backgrounded PWA and relaunches it with empty sessionStorage, so the pad
-  // reappeared on essentially every launch. Measured at 2.4-3.1s of the user's
-  // wall clock per launch — more than the villa's whole load. The cookie's own
-  // expiry (`session_days`) stays the single source of truth for how long a
-  // sign-in lasts; this only stops the UI from contradicting it.
-  useEffect(() => {
-    if (!resolving) return;
-    let cancelled = false;
-    void currentSession().then((serverRole) => {
-      if (cancelled) return;
-      if (serverRole) {
-        // Deliberately NOT login(): that marks the boot timeline's `auth`
-        // milestone, which exists to measure how long a HUMAN took at the
-        // gate. Nobody was asked anything here, so recording it would report
-        // phantom wait time on exactly the loads this fixes.
-        try {
-          sessionStorage.setItem(SESSION_KEY, JSON.stringify({ role: serverRole, at: Date.now() }));
-        } catch { /* storage blocked — in-memory session still works */ }
-        setRole(serverRole);
-      }
-      setResolving(false);
-    });
-    return () => { cancelled = true; };
-  }, [resolving]);
+  useEffect(() => { void session.start(); }, [session]);
+  useEffect(() => onSessionLost((source) => { void session.sessionLost(source); }), [session]);
 
-  const login = useCallback((next: Role) => {
-    // The single choke point for "a session now exists" — every sign-in path
-    // (un-gated one-tap, passcode accepted, profile switch) ends up here, so
-    // this is the one honest boundary between time spent waiting on a PERSON
-    // and time spent waiting on the APP. See utils/bootTimeline.
-    markBoot("auth");
-    // A session lost earlier on this device is reported now that one exists.
-    try {
-      const pending = localStorage.getItem(PENDING_LOST_KEY);
-      if (pending) {
-        localStorage.removeItem(PENDING_LOST_KEY);
-        const p = JSON.parse(pending) as { source?: string; role?: string; at?: number };
-        reportTelemetry("session", { phase: "lost", source: p.source, lostRole: p.role, agoMs: p.at ? Date.now() - p.at : undefined });
-      }
-    } catch { /* unreadable — nothing to report */ }
-    try {
-      sessionStorage.setItem(SESSION_KEY, JSON.stringify({ role: next, at: Date.now() }));
-    } catch {
-      // Storage full/blocked — the in-memory session still works for this tab.
-    }
-    setRole(next);
-    setSwitching(false);
-  }, []);
-
-  // Everything a signed-out device must no longer hold: this tab's session
-  // marker AND the service worker's model cache. The worker answers a model
-  // request from that cache BEFORE nginx's /model/ gate is asked, so on a
-  // shared tablet the floor plan outlived the session it was fetched under —
-  // the next person, with no passcode, was served it (2.496.206). Every way
-  // a session ends goes through here.
-  const endSession = useCallback(() => {
-    try {
-      sessionStorage.removeItem(SESSION_KEY);
-    } catch {
-      // Ignore — clearing state below is what matters.
-    }
-    void purgeModelCache();
-    setRole(null);
-    setSwitching(false);
-  }, []);
-
-  const logout = useCallback(() => {
-    // Tell the SERVER, not just this tab. Logging out used to clear
-    // sessionStorage and React state only — the signed vk_session cookie
-    // survived, still authorizing /core, /model, /fm-data and the config
-    // stores for its full 30-day life. "Log out" that leaves the session
-    // valid is not a log out; the next person to open this browser was still
-    // authenticated at whatever role had just "left".
-    //
-    // keepalive so the request still goes out if this is the last thing the
-    // page does before navigating away, and best-effort because a failed
-    // network call must not trap the user in a session they asked to end —
-    // the local state is cleared either way, and the cookie has an expiry.
-    void fetch(ingressPath("auth/logout"), {
-      method: "POST", credentials: "include", keepalive: true,
-    }).catch(() => { /* offline: local state is still cleared below */ });
-    endSession();
-  }, [endSession]);
-
-  // ── A SESSION THE SERVER STOPPED HONOURING ENDS HERE (2.496.152) ────────
-  // A 401 from the add-on or the socket's 4401 (sessionLost) is confirmed with
-  // the server — one question in flight at a time — and only a definite "no
-  // session" signs out: locally, since the server has already ended it. The
-  // gate then shows the profile screen instead of a villa stuck "connecting".
-  useEffect(() => {
-    let asking = false;
-    return onSessionLost((source) => {
-      if (asking || role === null) return;
-      asking = true;
-      void serverSession().then((server) => {
-        asking = false;
-        if (sessionLostDecision(role, server) !== "sign-out") return;
-        try {
-          localStorage.setItem(PENDING_LOST_KEY, JSON.stringify({ source, role, at: Date.now() }));
-        } catch { /* storage blocked — the sign-out below still happens */ }
-        endSession();
-      });
-    });
-  }, [role, endSession]);
-
-  const logoutAll = useCallback(async () => {
-    try {
-      const resp = await fetch(ingressPath("auth/logout-all"), {
-        method: "POST", credentials: "include",
-      });
-      if (!resp.ok) return false;
-    } catch {
-      return false;
-    }
-    endSession();
-    return true;
-  }, [endSession]);
-
-  const beginSwitch = useCallback(() => setSwitching(true), []);
-  const cancelSwitch = useCallback(() => setSwitching(false), []);
-
-  const value = useMemo(
-    () => ({ role, login, logout, logoutAll, switching, beginSwitch, cancelSwitch, resolving }),
-    [role, login, logout, logoutAll, switching, beginSwitch, cancelSwitch, resolving],
+  const value = useMemo<ProfileContextType>(
+    () => ({
+      role: state.role, switching: state.switching, resolving: state.resolving,
+      login: session.login, logout: session.logout, logoutAll: session.logoutAll,
+      beginSwitch: session.beginSwitch, cancelSwitch: session.cancelSwitch,
+    }),
+    [state, session],
   );
   return <ProfileContext.Provider value={value}>{children}</ProfileContext.Provider>;
 }

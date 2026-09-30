@@ -9,14 +9,10 @@
 // /model on the directly-exposed port.
 
 import { ingressPath } from "@/ha/ingress";
+import { askPin, type PinOutcome } from "./pinOutcome";
 import { ROLE_ORDER, isRole, type Role } from "./roles";
 import type { ServerSession } from "./sessionLost";
 
-export interface VerifyResult {
-  ok: boolean;
-  /** Seconds until this role accepts attempts again (rate-limited). */
-  retryAfter?: number;
-}
 
 const PIN_SHAPE = /^[0-9]{4}$/;
 
@@ -75,35 +71,16 @@ export async function serverSession(): Promise<ServerSession> {
   }
 }
 
-/** Check a PIN-gated profile's passcode; sets the session cookie on success. */
-export async function verify(role: Role, pin: string): Promise<VerifyResult> {
-  if (!PIN_SHAPE.test(pin)) return { ok: false };
-  return postVerify({ role, pin });
+/** Check a PIN-gated profile's passcode; sets the session cookie on success.
+ *  Never throws — see pinOutcome. */
+export async function verify(role: Role, pin: string): Promise<PinOutcome> {
+  if (!PIN_SHAPE.test(pin)) return { kind: "wrong" };
+  return askPin(ingressPath("auth/verify"), { role, pin });
 }
 
-/** Establish a session for an un-PIN'd profile (no passcode configured). */
-export async function openSession(role: Role): Promise<VerifyResult> {
-  return postVerify({ role });
-}
-
-async function postVerify(body: { role: Role; pin?: string }): Promise<VerifyResult> {
-  const resp = await fetch(ingressPath("auth/verify"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (resp.status === 429) {
-    const data = (await resp.json().catch(() => ({}))) as { retryAfter?: number };
-    return { ok: false, retryAfter: data.retryAfter ?? 60 };
-  }
-  if (resp.status === 403) {
-    // A privileged (owner/ops) profile with no PIN configured — the server
-    // refuses to auto-grant it (see supervisor-proxy.py's auth_verify_handler).
-    // Surface the server's specific reason instead of a generic retry prompt.
-    const data = (await resp.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error || "this profile is not available");
-  }
-  if (!resp.ok) throw new Error(`auth service unavailable (HTTP ${resp.status})`);
-  const data = (await resp.json()) as { ok?: boolean };
-  return { ok: Boolean(data.ok) };
+/** Establish a session for an un-PIN'd profile (no passcode configured). A
+ *  privileged profile with no passcode is refused by the server ("closed",
+ *  with its reason: set a passcode in the add-on's options). */
+export async function openSession(role: Role): Promise<PinOutcome> {
+  return askPin(ingressPath("auth/verify"), { role });
 }
