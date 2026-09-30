@@ -52,6 +52,14 @@ jobs:
       - name: The update check moves only forward, one release per change
         run: agent-host/tests/ci_run.sh python3 agent-host/tests/test_updates.py
 
+      - name: The agreement with the VESTA Kiosk is the Kiosk's own
+        # Compares this host's copy with the Kiosk's file on its dev2 branch
+        # (fetched above: fetch-depth 0 brings every branch).
+        run: agent-host/tests/ci_run.sh python3 agent-host/tests/test_kiosk_contract.py
+
+      - name: The agent's manifest and the host state, without a process
+        run: agent-host/tests/ci_run.sh python3 agent-host/tests/test_manifest.py
+
   build:
     needs: [tests]
     runs-on: ubuntu-latest

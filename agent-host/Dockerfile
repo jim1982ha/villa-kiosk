@@ -60,10 +60,12 @@ COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
  && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 COPY agent-src /opt/vesta/agent
+# The manifest is read by vesta_host.manifest, here as in the slot.
+COPY rootfs/opt/vesta/host /opt/vesta/host
 RUN set -e; cd /opt/vesta/agent; rm -f README.md; \
     if [ -f vesta-agent.yaml ]; then \
       python3 -m venv .venv; \
-      install=$(python3 -c "import yaml; print((yaml.safe_load(open('vesta-agent.yaml')) or {}).get('install') or '')"); \
+      install=$(PYTHONPATH=/opt/vesta/host python3 -m vesta_host.manifest install vesta-agent.yaml); \
       if [ -n "$install" ]; then PATH="/opt/vesta/agent/.venv/bin:$PATH" sh -c "$install"; fi; \
       find . -name __pycache__ -prune -exec rm -rf {} +; \
     fi

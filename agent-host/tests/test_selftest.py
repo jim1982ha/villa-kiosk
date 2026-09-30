@@ -178,7 +178,8 @@ class Slot(Base):
         stub = self.root / "opt/vesta/stub"
         stub.mkdir(parents=True)
         for f in (HERE.parent / "stub").iterdir():
-            (stub / f.name).write_text(f.read_text())
+            if f.is_file():   # a __pycache__ left by another test is not the stub
+                (stub / f.name).write_text(f.read_text())
 
     def tearDown(self):
         self.tmp.cleanup()

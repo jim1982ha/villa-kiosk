@@ -19,6 +19,13 @@ import json
 import os
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+
+# The agreement with the Kiosk (vesta_host.kiosk_contract — a copy of the
+# Kiosk's own file): this stand-in answers with ITS version and refuses what
+# the real Kiosk would refuse, instead of a picture of the Kiosk typed here.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "rootfs" / "opt" / "vesta" / "host"))
+from vesta_host import kiosk_contract  # noqa: E402
 
 CF_ID, CF_SECRET = "cf-client-id.access", "cf-SECRET-123456"
 
@@ -69,7 +76,7 @@ class Fake(BaseHTTPRequestHandler):
             return self.reply(200, {"message": "API running."}) if self.auth(HA_TOKEN) \
                 else self.reply(401, {"message": "Unauthorized"})
         if self.path == "/agent/v1/info":
-            return self.kiosk_reply({"contract": 1, "version": "2.500.0"})
+            return self.kiosk_reply({"contract": kiosk_contract.VERSION, "version": "2.500.0"})
         if self.path.startswith("/v1/models"):
             return self.reply(200, {"data": [{"id": "claude"}]}) if self.headers.get("x-api-key") == KEY \
                 else self.reply(401, {"error": "invalid x-api-key"})
@@ -97,8 +104,9 @@ class Fake(BaseHTTPRequestHandler):
             return self.kiosk_reply({"ok": True})
         if self.path == "/agent/v1/messages":
             msg = self.body()
-            if not msg.get("title") or not msg.get("buttons"):
-                return self.reply(400, {"error": "bad message"})
+            problem = kiosk_contract.message_problem(msg)
+            if problem:
+                return self.reply(400, {"error": problem})
             if Fake.kiosk != "json":
                 return self.kiosk_reply({})
             if not self.auth(KIOSK_TOKEN):

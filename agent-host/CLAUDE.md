@@ -59,3 +59,14 @@ Checked on 2026-09-28 against the running system and upstream sources.
 6. **Time zone.** The Supervisor sets `TZ` in every app container
    (`docker/app.py`); the host passes it to the agent unchanged. Confirmed on
    the HA Yellow: the app logged Home Assistant's own time zone.
+
+## The agreement with the VESTA Kiosk (0.8.0)
+
+`agent-host/rootfs/opt/vesta/host/agent-contract.json` is a COPY of the Kiosk's
+`rootfs/usr/share/vesta/agent-contract.json` (dev2). `vesta_host.kiosk_contract`
+reads it (version, message rules); the self-test, the stub's demo message and
+`tests/fake_remote.py` all use it. `tests/test_kiosk_contract.py` fails when the
+copy and the Kiosk's file differ — when the Kiosk changes the agreement, copy
+its file here and release the host; never edit one side alone.
+`vesta_host.manifest` reads `vesta-agent.yaml` (slot, start banner, image
+build); `vesta_host.host_state.HostState` is `/run/vesta/host.json`.

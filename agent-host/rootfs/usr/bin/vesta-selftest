@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)),
                                 "..", "..", "opt", "vesta", "host"))
 
 from vesta_host import paths, selftest  # noqa: E402
+from vesta_host.host_state import HostState  # noqa: E402
 from vesta_host.log import configure, log  # noqa: E402
 from vesta_host.redact import Redactor  # noqa: E402
 
@@ -24,7 +25,7 @@ def main() -> int:
     configure("info", Redactor.load(paths.REDACT))
     try:
         env = json.loads(paths.AGENT_ENV.read_text())
-        host = json.loads(paths.HOST_STATE.read_text())
+        host = HostState.read(paths.HOST_STATE)
     except (OSError, ValueError):
         log("error", "no prepared environment in /run/vesta — is the app running?")
         return 1

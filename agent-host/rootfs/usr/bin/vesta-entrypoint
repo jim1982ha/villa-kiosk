@@ -23,6 +23,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)),
                                 "..", "..", "opt", "vesta", "host"))
 
 from vesta_host import contract, layout, options, paths  # noqa: E402
+from vesta_host import manifest as agent_manifest  # noqa: E402
+from vesta_host.host_state import HostState  # noqa: E402
 from vesta_host.log import configure, log  # noqa: E402
 from vesta_host.redact import Redactor  # noqa: E402
 
@@ -37,15 +39,7 @@ def origin(url: object) -> str:
 
 
 def agent_identity(mode: object = "agent") -> str:
-    manifest = (paths.STUB_DIR if mode == "stub" else paths.AGENT_DIR) / paths.MANIFEST
-    if not manifest.exists():
-        return "none installed"
-    try:
-        import yaml
-        m = yaml.safe_load(manifest.read_text()) or {}
-        return f"{m.get('name', '?')} {m.get('version', '?')} ({m.get('runtime', '?')})"
-    except Exception as exc:  # a broken manifest is reported, not fatal here
-        return f"unreadable manifest ({type(exc).__name__})"
+    return agent_manifest.identity((paths.STUB_DIR if mode == "stub" else paths.AGENT_DIR) / paths.MANIFEST)
 
 
 def banner(o: options.Options) -> None:
@@ -137,13 +131,13 @@ def main() -> int:
     # What the slot and the self-test need that is NOT part of the contract:
     # which program fills the slot, whether the stub sends heartbeats, and
     # whether the sidecar runs (and if not, why).
-    paths.HOST_STATE.write_text(json.dumps({
-        "agent_mode": o.get("agent_mode"),
-        "stub_heartbeat": bool(o.get("stub_heartbeat")),
-        "ha_mcp_mode": o.get("ha_mcp_mode"),
-        "sidecar_reason": None if sidecar["enabled"] else sidecar["reason"],
-        "host_version": os.environ.get("VESTA_HOST_VERSION", "dev"),
-    }))
+    HostState(
+        agent_mode=str(o.get("agent_mode") or "stub"),
+        stub_heartbeat=bool(o.get("stub_heartbeat")),
+        ha_mcp_mode=str(o.get("ha_mcp_mode") or "sidecar"),
+        sidecar_reason=None if sidecar["enabled"] else sidecar["reason"],
+        host_version=os.environ.get("VESTA_HOST_VERSION", "dev"),
+    ).write(paths.HOST_STATE)
 
     # What started, when — never a secret. For a person diagnosing the app,
     # including from a backup.

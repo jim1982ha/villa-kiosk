@@ -24,6 +24,8 @@ import urllib.request
 from dataclasses import asdict, dataclass
 from typing import Callable
 from urllib.parse import urlsplit
+from . import kiosk_contract
+from .host_state import HostState
 
 TIMEOUT = 10
 ANTHROPIC_MODELS = "https://api.anthropic.com/v1/models?limit=1"
@@ -147,11 +149,13 @@ class Checks:
         if r.status != 200:
             return Result(link, FAIL, f"HTTP {r.status}")
         info = r.json()
+        # The version the agreement names (kiosk_contract — a copy of the
+        # Kiosk's own file, compared by the tests), not a literal typed here.
         contract = info.get("contract") if isinstance(info, dict) else None
-        if str(contract) != "1":
-            return Result(link, FAIL, f"agent interface contract {contract!r}, expected 1")
+        if str(contract) != str(kiosk_contract.VERSION):
+            return Result(link, FAIL, f"agent interface contract {contract!r}, expected {kiosk_contract.VERSION}")
         version = info.get("version", "?") if isinstance(info, dict) else "?"
-        return Result(link, PASS, f"contract 1, VESTA Kiosk {version}")
+        return Result(link, PASS, f"contract {kiosk_contract.VERSION}, VESTA Kiosk {version}")
 
     # ── Anthropic ─────────────────────────────────────────────────────────
     def anthropic(self) -> Result:
@@ -303,17 +307,16 @@ def report(results: list[Result], host_version: str, mode: str) -> dict:
     }
 
 
-def execute(env: dict[str, str], host: dict, only: tuple[str, ...] | None = None,
+def execute(env: dict[str, str], host: "HostState | dict", only: tuple[str, ...] | None = None,
             write: bool = True) -> list[Result]:
     """Runs the checks, logs one line per link, writes /data/host/selftest.json."""
     from . import paths
     from .log import log
 
-    checks = Checks(env, stub_heartbeat=bool(host.get("stub_heartbeat")),
-                    agent_mode=str(host.get("agent_mode", "stub")),
-                    mcp_mode=str(host.get("ha_mcp_mode", "sidecar")),
-                    client_version=str(host.get("host_version", "dev")),
-                    sidecar_reason=host.get("sidecar_reason"))
+    h = HostState.of(host)
+    checks = Checks(env, stub_heartbeat=h.stub_heartbeat, agent_mode=h.agent_mode,
+                    mcp_mode=h.ha_mcp_mode, client_version=h.host_version,
+                    sidecar_reason=h.sidecar_reason)
     results = run(checks, only)
     for r in results:
         log("warning" if r.result == FAIL else "info",
@@ -321,6 +324,5 @@ def execute(env: dict[str, str], host: dict, only: tuple[str, ...] | None = None
     if write:
         paths.SELFTEST.parent.mkdir(parents=True, exist_ok=True)
         paths.SELFTEST.write_text(json.dumps(
-            report(results, str(host.get("host_version", "dev")),
-                   str(host.get("agent_mode", "stub"))), indent=2))
+            report(results, h.host_version, h.agent_mode), indent=2))
     return results
