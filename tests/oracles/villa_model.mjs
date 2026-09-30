@@ -15,5 +15,8 @@ ck("the attention count is the model's — computed once, for the HUD badge and 
    /const \{ attention, visibleTo \} = useVillaModel\(\);/.test(hook) && !/buildAttentionItems\(/.test(hook) && /buildAttentionItems\(/.test(src("config/VillaModel.tsx")));
 ck("the bottom bar counts the VISIBLE devices; the Facility the full set",
    /const \{ visibleDevices, mappedEntityIds, visibleEntities \} = useVillaModel\(\)/.test(src("components/hud/SummaryBar.tsx")) && /const \{ devices \} = useVillaModel\(\);/.test(src("components/fm/FacilityModal.tsx")));
+const cockpit = src("components/cockpit/CockpitModal.tsx");
+ck("the Cockpit says 'needs attention' once: the count in the list's title, the headline only when all is well (2.496.236)",
+   /Needs attention \(\{attentionItems\.length\}\)/.test(cockpit) && /\{attentionItems\.length === 0 && \(\s*<div className=\{`cockpit-health/.test(cockpit));
 if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
 console.log("\n✅ the villa's device model, owned once");

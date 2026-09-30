@@ -185,16 +185,21 @@ export default function CockpitModal({ onClose, onOpenEntity }: CockpitModalProp
         </div>
 
         <div className="modal-body">
-          {/* ── Villa health headline ──────────────────────────────── */}
-          <div className={`cockpit-health cockpit-health-${health.level}`}>
-            {health.level === "ok" ? <CheckCircle2 size={22} /> : <TriangleAlert size={22} />}
-            <span>{health.summary}</span>
-          </div>
+          {/* ── Villa health headline — only when all is well ─────────
+              With something to attend to, the list below IS the message,
+              its count in its title; the red line above it said the same
+              thing again (owner, 2.496.236). */}
+          {attentionItems.length === 0 && (
+            <div className={`cockpit-health cockpit-health-${health.level}`}>
+              {health.level === "ok" ? <CheckCircle2 size={22} /> : <TriangleAlert size={22} />}
+              <span>{health.summary}</span>
+            </div>
+          )}
 
           {/* ── Needs attention ────────────────────────────────────── */}
           {attentionItems.length > 0 && (
             <>
-              <div className="settings-section-title">Needs attention</div>
+              <div className="settings-section-title">Needs attention ({attentionItems.length})</div>
               <div className="cockpit-attention-list">
                 {attentionItems.map((item) => (
                   <CockpitAttentionRow key={item.id} item={item} onOpenEntity={onOpenEntity} />

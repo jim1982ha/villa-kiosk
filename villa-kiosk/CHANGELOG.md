@@ -1,3 +1,8 @@
+## 2.496.236
+
+### Changed
+- **The Cockpit no longer says "needs attention" twice.** The red line at the top is gone when something needs attention; the list's title now carries the count instead — "Needs attention (1)". When nothing needs attention, the green "Everything looks fine." line still shows.
+
 ## 2.496.235
 
 ### Changed
