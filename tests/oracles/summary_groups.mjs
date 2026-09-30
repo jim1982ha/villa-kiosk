@@ -29,9 +29,11 @@ ck("the AC temperature in Home Assistant's unit: 24°C, 75°F, a bare degree whe
    V.fmtClimateTemp(24, "°C") === "24°C" && V.fmtClimateTemp(75, "°F") === "75°F" && V.fmtClimateTemp(24) === "24°");
 
 const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
-const sb = src("components/hud/SummaryBar.tsx"), fm = src("components/fm/FacilityModal.tsx"), sg = src("config/summaryGroups.ts");
+const sb = src("config/summaryTiles.ts"), bar = src("components/hud/SummaryBar.tsx"), fm = src("components/fm/FacilityModal.tsx"), sg = src("config/summaryGroups.ts");
 ck("the tile and the Facility shortcut build the groups from the facts", /locksGroup\(facts\.locks,/.test(sb) && /lightsGroup\(facts\.lights\)/.test(sb) && /locksGroup\(lockFacts\(entities, devices\)/.test(fm));
 ck("summaryGroups selects no domain itself and imports no screen", !/startsWith\("lock\.|startsWith\("light\./.test(sg) && !/@\/components\//.test(sg));
-ck("no assumed Celsius on the AC tile", !/°C`/.test(sb) && /fmtClimateTemp\(avg, tempUnit\)/.test(sb) && /haConfig\?\.unit_system\?\.temperature/.test(sb));
+// The tiles are config/summaryTiles.ts since 2.496.232 (summary_tiles.mjs
+// calls them); the bar still hands them HA's unit.
+ck("no assumed Celsius on the AC tile", !/°C`/.test(sb) && /fmtClimateTemp\(avg, tempUnit\)/.test(sb) && /haConfig\?\.unit_system\?\.temperature/.test(bar));
 
 done("✅ a summary's icon and words come from the same facts");

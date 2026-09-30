@@ -1,3 +1,8 @@
+## 2.496.232
+
+### Changed
+- **Nothing to see on screen.** The rules behind the bottom bar's tiles (which tiles each profile gets, what each one says — "Locked", "1 Unlocked", "3 kW" — and which window a tap opens) now live in one place that is tested directly, instead of inside the bar's screen code.
+
 ## 2.496.231
 
 ### Fixed

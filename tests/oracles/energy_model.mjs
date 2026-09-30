@@ -128,7 +128,7 @@ ck("the observation cards share the row however many there are (two cards, no em
 const cfg = readFileSync(new URL("../../src/config/AppConfig.ts", import.meta.url), "utf8");
 ck("nothing about energy is stored in VESTA's config", !/energy(Sources|Devices|Tariff)/i.test(cfg));
 const bar = readFileSync(new URL("../../src/components/hud/SummaryBar.tsx", import.meta.url), "utf8");
-ck("the Energy tile opens the Energy window", /openGroup\?\.id === "__energy" && \(\s*<EnergyPanel/.test(bar));
+ck("the Energy tile opens the Energy window", /openGroup\?\.kind === "energy" && \(\s*<EnergyPanel/.test(bar));
 
 console.log("\n  'Energy today' is one figure everywhere:");
 {

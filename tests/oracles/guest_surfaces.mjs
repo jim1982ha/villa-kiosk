@@ -20,8 +20,10 @@ ck("  ...the owner and ops may see both", ["owner", "ops"].every((r) => isTypeAl
 ck("  ...and a guest still sees lights", isTypeAllowed("guest", "light") && isCategoryAllowed("guest", "light"));
 
 console.log("\n  every surface asks:");
+// Called by value in summary_tiles.mjs since 2.496.232; the rule lives in
+// config/summaryTiles.ts.
 ck("the Energy tile (and so the Energy window) exists only when the profile may see energy",
-   /if \(facts\.power && can\("energy"\)\) \{/.test(src("components/hud/SummaryBar.tsx")));
+   /if \(facts\.power && can\("energy"\)\) \{/.test(src("config/summaryTiles.ts")));
 const cockpit = src("components/cockpit/CockpitModal.tsx");
 ck("the Cockpit does not even fetch Energy today for such a profile",
    /const seesEnergy = role != null && isCategoryAllowed\(role, "energy"\);/.test(cockpit)
