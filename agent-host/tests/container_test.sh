@@ -32,7 +32,12 @@ trap cleanup EXIT
 has()  { local logs; logs=$(docker logs vesta-ct 2>&1); grep -qE -- "$1" <<<"$logs"; }
 hasf() { local logs; logs=$(docker logs vesta-ct 2>&1); grep -qF -- "$1" <<<"$logs"; }
 ok()   { echo "  PASS  $*"; }
-bad()  { echo "  FAIL  $*"; FAILED=1; }
+bad()  {
+  echo "  FAIL  $*"; FAILED=1
+  # The job log needs a signed-in GitHub account; an annotation does not.
+  [ -n "${GITHUB_ACTIONS:-}" ] && echo "::error title=container_test ${PLATFORM[*]:-}::$*"
+  return 0
+}
 wait_log() {  # wait_log <text> <seconds>
   for _ in $(seq 1 $(( $2 * 2 ))); do
     hasf "$1" && return 0
@@ -220,5 +225,8 @@ has "crash 2 of 5 allowed in 10 min\) — restarting in 10 s" && ok "second cras
 docker stop -t 30 vesta-ct >/dev/null
 
 echo
-if [ "$FAILED" = 0 ]; then echo "✅ container checks passed"; else echo "❌ container checks FAILED"; docker logs vesta-ct 2>&1 | tail -30; fi
+if [ "$FAILED" = 0 ]; then echo "✅ container checks passed"; else
+  echo "❌ container checks FAILED"; tail_log=$(docker logs vesta-ct 2>&1 | tail -30); echo "$tail_log"
+  [ -n "${GITHUB_ACTIONS:-}" ] && echo "::error title=container_test last log lines::$(tr '\n' '|' <<<"$tail_log" | cut -c1-1500)"
+fi
 exit "$FAILED"
