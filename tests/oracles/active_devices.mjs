@@ -83,4 +83,17 @@ ck("alarm level: out of range is danger; a binary sensor in its alert state is d
    && S.readingLevel(e("binary_sensor.leak", "on"), "binary", undefined, "on") === "danger"
    && S.readingLevel(e("sensor.ap", "down"), "text", { max: 1 }, undefined) === "normal");
 
+console.log("\n  the Cockpit's tiles (rooms, floors, categories — one wording):");
+{
+  const { tileStats, tileLine } = await import("@/components/cockpit/cockpitData");
+  const ents = { "lock.a": e("lock.a", "locked"), "lock.b": e("lock.b", "unlocked"), "sensor.t": e("sensor.t", "unavailable"), "light.x": e("light.x", "on") };
+  const s = tileStats(["lock.a", "lock.b", "sensor.t", "light.x"], ents);
+  ck("counts devices, those on (a locked lock is not), and those offline", s.total === 4 && s.onCount === 2 && s.offline === 1, JSON.stringify(s));
+  ck("  ...worded once: \"4 devices · 2 on · 1 offline\"", tileLine(s) === "4 devices · 2 on · 1 offline", tileLine(s));
+  ck("  ...a quiet room says only its size", tileLine(tileStats(["lock.a"], ents)) === "1 device");
+  ck("  ...and an empty one \"None\"", tileLine(tileStats([], ents)) === "None");
+  const counts = A.categoryCounts(["lock.a", "lock.b"], ents, { "lock.a": { type: "lock", category: "access_control" }, "lock.b": { type: "lock", category: "access_control" } });
+  ck("a category tile knows its devices (it opens their list now)", counts.find((c) => c.category === "access_control").entityIds.join() === "lock.a,lock.b");
+}
+
 done("✅ one meaning of on; one call per domain; an offline measurement keeps its chart");

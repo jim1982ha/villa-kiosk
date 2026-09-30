@@ -157,58 +157,45 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
 .cockpit-pivot { flex: 0 0 auto; }
 
 .cockpit-category-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-top: 4px; }
-.cockpit-category-tile { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 12px; background: var(--bg-input); }
+/* ONE tile for rooms, floors and categories (2.496.235 — rooms and floors
+   were health bars). A real <button>: each opens that group's device list. */
+.cockpit-category-tile {
+  display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 12px;
+  background: var(--bg-input); border: none; width: 100%; min-width: 0;
+  color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.cockpit-category-tile:hover, .cockpit-category-tile:focus-visible {
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-input));
+}
 .cockpit-category-icon {
   flex: 0 0 auto; width: 34px; height: 34px; border-radius: 10px;
   display: flex; align-items: center; justify-content: center; color: #fff;
 }
-.cockpit-category-label { font-size: var(--text-sm); font-weight: 500; color: var(--text-primary); }
-
-.cockpit-pivot-list { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
-/* A real button (tap opens that room/floor's own device list, SummaryGroupPanel
-   reused from every other device-group view in the app) — reset to plain row
-   chrome first since a <button> otherwise brings its own border/background,
-   then the SAME layout the row always had (flex/gap unchanged) plus a hover
-   cue and the trailing chevron below. .cockpit-pivot-label itself is
-   untouched — only the row's own container gained interactivity. */
-.cockpit-pivot-row {
-  display: flex; align-items: center; gap: 10px; width: 100%;
-  background: none; border: none; padding: 3px 4px; margin: -3px -4px;
-  border-radius: 8px; color: inherit; font: inherit; text-align: left; cursor: pointer;
+/* A room or floor has no category colour: neutral, amber while one of its
+   devices is offline (the signal the bars used to carry). */
+.cockpit-category-icon.is-neutral { background: var(--bg-card); color: var(--text-secondary); }
+.cockpit-category-icon.is-warn {
+  background: color-mix(in srgb, var(--status-warning) 22%, var(--bg-card)); color: var(--status-warning);
 }
-.cockpit-pivot-row:hover, .cockpit-pivot-row:focus-visible {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-}
-.cockpit-pivot-label {
-  flex: 0 0 130px; font-size: var(--text-sm); color: var(--text-primary);
+.cockpit-tile-text { min-width: 0; }
+.cockpit-category-label {
+  font-size: var(--text-sm); font-weight: 500; color: var(--text-primary);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-/* The track IS the unavailable state — amber — and the green fill covers the
-   part that is reporting. One element instead of two, so the two segments can
-   never disagree about where the boundary is. */
-.cockpit-pivot-bar {
-  position: relative;
-  flex: 1 1 auto; height: 8px; border-radius: 999px;
-  background: color-mix(in srgb, var(--status-warning) 55%, var(--bg-input));
-  overflow: hidden;
-}
-.cockpit-pivot-bar-ok { height: 100%; background: var(--status-on); border-radius: inherit; }
-/* Per-device notches, one every --tick of the width. Faint on purpose: it is a
-   scale for reading the bar, not data of its own, so it should be legible when
-   looked for and invisible when not. Hidden once devices are thinner than a
-   notch, where it would read as texture rather than as divisions. */
-.cockpit-pivot-bar::after {
-  content: ""; position: absolute; inset: 0; pointer-events: none;
-  background: repeating-linear-gradient(
-    to right,
-    transparent 0, transparent calc(var(--tick) - 1px),
-    color-mix(in srgb, var(--bg-base) 55%, transparent) calc(var(--tick) - 1px), color-mix(in srgb, var(--bg-base) 55%, transparent) var(--tick));
-}
-@supports not (width: calc(var(--tick) - 1px)) { .cockpit-pivot-bar::after { display: none; } }
-.cockpit-pivot-count { flex: 0 0 26px; text-align: right; font-size: var(--text-xs); }
-.cockpit-pivot-chevron { flex: 0 0 auto; }
+.cockpit-tile-line { font-size: var(--text-xs); }
+.cockpit-tile-line.is-warn { color: var(--status-warning); }
 
-.cockpit-energy-value { font-size: var(--text-display-sm); font-weight: 600; color: var(--text-primary); margin: 4px 0 0; }
+/* "Energy today": the figure, and a shortcut to the Energy window. */
+.cockpit-energy-tile {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  width: 100%; margin-top: 4px; padding: 10px 12px; border-radius: 12px;
+  background: var(--bg-input); border: none; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.cockpit-energy-tile:hover, .cockpit-energy-tile:focus-visible {
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-input));
+}
+.cockpit-energy-open { display: inline-flex; align-items: center; gap: 2px; font-size: var(--text-sm); }
+.cockpit-energy-value { font-size: var(--text-display-sm); font-weight: 600; color: var(--text-primary); margin: 0; }
 
 .cockpit-activity-list { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
 /* Two columns where there is width for them, so the same 20 entries are read

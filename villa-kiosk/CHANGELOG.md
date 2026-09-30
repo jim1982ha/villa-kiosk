@@ -1,3 +1,9 @@
+## 2.496.235
+
+### Changed
+- **The Cockpit shows rooms and floors as tiles, like the categories.** Each tile gives the name and "N devices · M on", plus "· K offline" in amber when Home Assistant has lost any of its devices (what the red-and-green bars used to show). Every tile — room, floor or category — opens the list of its devices, so you can see exactly what a count includes.
+- **"Energy today" in the Cockpit opens the Energy window**, the same one as the Energy tile of the bottom bar.
+
 ## 2.496.234
 
 ### Changed

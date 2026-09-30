@@ -8,7 +8,8 @@
 // memory for how this was verified.
 
 import { binarySensorClassInfo } from "@/config/BinarySensorClasses";
-import { categoryCounts } from "@/config/activeDevices";
+import { categoryCounts, isActive } from "@/config/activeDevices";
+import { isUnavailable } from "@/utils/stateColors";
 import { displayLabelFor } from "@/config/EntityMap";
 import { roomKey, NO_ROOM_LABEL } from "@/config/roomKey";
 import { fmAttention } from "@/fm/fmEngine";
@@ -157,6 +158,33 @@ export interface CategoryTile {
   category: Category;
   total: number;
   onCount: number;
+  /** The category's devices — what its tile opens. */
+  entityIds: string[];
+}
+
+/** What a Cockpit tile (room, floor or category) counts: its devices, how
+ *  many are on (activeDevices.isActive — a locked lock is not "on"), and how
+ *  many Home Assistant has lost. */
+export interface TileStats { total: number; onCount: number; offline: number }
+
+export function tileStats(entityIds: readonly string[], entities: Record<string, HassEntity>): TileStats {
+  let onCount = 0, offline = 0;
+  for (const id of entityIds) {
+    if (isActive(entities[id], id)) onCount++;
+    if (isUnavailable(entities[id])) offline++;
+  }
+  return { total: entityIds.length, onCount, offline };
+}
+
+/** The line under a tile's name — ONE wording for rooms, floors and
+ *  categories (2.496.235; rooms and floors were bars): "4 devices · 1 on",
+ *  plus "· 1 offline" when Home Assistant has lost any of them. */
+export function tileLine(s: TileStats): string {
+  if (s.total === 0) return "None";
+  const parts = [`${s.total} device${s.total === 1 ? "" : "s"}`];
+  if (s.onCount > 0) parts.push(`${s.onCount} on`);
+  if (s.offline > 0) parts.push(`${s.offline} offline`);
+  return parts.join(" · ");
 }
 
 /** One tile per category, count + a generic cross-domain "on" count —

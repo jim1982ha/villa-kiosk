@@ -19,7 +19,7 @@
 // radio health, HA's own Area registry for grouping, presence tracking) and
 // why.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ComponentType } from "react";
 import {
   TriangleAlert, CheckCircle2, AlertOctagon, MapPin, Building2, LayoutGrid,
   Activity, Zap, RefreshCw, ChevronRight,
@@ -33,7 +33,6 @@ import { useProfile } from "@/auth/ProfileContext";
 import { isCategoryAllowed, roleCan } from "@/auth/permissions";
 import { CATEGORY_LABELS, CATEGORY_ICONS, categorySurface } from "@/config/EntityCategories";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
-import { isUnavailable } from "@/utils/stateColors";
 import { fetchLogbookEvents } from "@/ha/HALogbookAPI";
 import { fetchEnergySetup, energyRequest, energyChanges, type EnergyWindowSetup } from "@/ha/HAEnergyAPI";
 import { useHistory } from "@/hooks/useHistory";
@@ -41,11 +40,13 @@ import { useHistorySource } from "@/hooks/useHistorySource";
 import { usedToday } from "@/config/energyModel";
 import { localMidnight } from "@/utils/localDay";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
+import EnergyPanel from "@/components/panels/EnergyPanel";
 import { useVillaAttention } from "./useVillaAttention";
 import {
   buildCategoryTiles, buildRoomGroups, buildFloorGroups,
-  buildActivityFeed, type AttentionItem, type AttentionKind, type ActivityEntry,
+  buildActivityFeed, tileStats, tileLine, type TileStats, type AttentionItem, type AttentionKind, type ActivityEntry,
 } from "./cockpitData";
+import type { Category } from "@/types/scene.types";
 
 export interface CockpitModalProps {
   onClose: () => void;
@@ -59,6 +60,17 @@ const ATTENTION_ICON: Record<AttentionKind, typeof TriangleAlert> = {
   alarm: TriangleAlert,
 };
 
+/** One tile of the Room / Floor / Category grid. */
+interface PivotTile {
+  key: string;
+  label: string;
+  icon: ComponentType<{ size?: number | string }>;
+  /** Set for a category tile: it takes that category's colour. */
+  category: Category | null;
+  entityIds: string[];
+  stats: TileStats;
+}
+
 export default function CockpitModal({ onClose, onOpenEntity }: CockpitModalProps) {
   const { entities, ws, entityFloorNumbers } = useHA();
   const { config, resolvedRooms } = useConfig();
@@ -71,7 +83,9 @@ export default function CockpitModal({ onClose, onOpenEntity }: CockpitModalProp
   // SummaryGroupPanel, the same device-list modal every other "all the
   // devices in X" view in the app already opens (room clusters on the map,
   // the bottom Summary bar's tiles), rather than a bespoke list here.
-  const [pivotDrill, setPivotDrill] = useState<{ label: string; entityIds: string[] } | null>(null);
+  const [pivotDrill, setPivotDrill] = useState<{ label: string; entityIds: string[]; icon: ComponentType<{ size?: number | string }> } | null>(null);
+  // The Energy window (the bottom bar's own), opened from "Energy today".
+  const [energyOpen, setEnergyOpen] = useState(false);
   const canControl = roleCan(role, "controlEntities");
 
   // Shared with HUD's own top-bar alert icon/overflow-menu badge — see
@@ -137,18 +151,23 @@ export default function CockpitModal({ onClose, onOpenEntity }: CockpitModalProp
   // room/category grouping across the app already uses for "doesn't
   // resolve to one of the real ones". Reusing it here, not a second word
   // for the same idea.
-  const pivotRows = useMemo(
-    () => (pivot === "room"
-      ? roomGroups.map((g) => ({ key: g.room, label: g.room, count: g.count, entityIds: g.entityIds }))
-      : pivot === "floor"
-        ? floorGroups.map((g) => ({
-            key: String(g.floor), label: g.floor != null ? `Floor ${g.floor}` : "Other",
-            count: g.count, entityIds: g.entityIds,
-          }))
-        : []
-    ),
-    [pivot, roomGroups, floorGroups],
-  );
+  // ONE tile for every grouping (2.496.235): rooms and floors were bars, the
+  // categories tiles — the same question ("what is in here, how much is on,
+  // is any of it lost?") drawn two ways. Every tile opens its device list.
+  const pivotTiles = useMemo((): PivotTile[] => {
+    if (pivot === "category") {
+      return categoryTiles.map((t) => ({
+        key: t.category, label: CATEGORY_LABELS[t.category], icon: CATEGORY_ICONS[t.category],
+        category: t.category, entityIds: t.entityIds, stats: tileStats(t.entityIds, entities),
+      }));
+    }
+    const rows = pivot === "room"
+      ? roomGroups.map((g) => ({ key: g.room, label: g.room, entityIds: g.entityIds }))
+      // "Other" for the no-floor bucket — the room pivot's own word for it.
+      : floorGroups.map((g) => ({ key: String(g.floor), label: g.floor != null ? `Floor ${g.floor}` : "Other", entityIds: g.entityIds }));
+    const icon = pivot === "room" ? MapPin : Building2;
+    return rows.map((r) => ({ ...r, icon, category: null, stats: tileStats(r.entityIds, entities) }));
+  }, [pivot, categoryTiles, roomGroups, floorGroups, entities]);
 
   return (
     <>
@@ -199,79 +218,54 @@ export default function CockpitModal({ onClose, onOpenEntity }: CockpitModalProp
               { key: "category", label: <><LayoutGrid size={16} /> Category</> },
             ]} />
           </div>
-          {pivot === "category" ? (
-            <div className="cockpit-category-grid">
-              {categoryTiles.map((tile) => {
-                const Icon = CATEGORY_ICONS[tile.category];
-                // Neutral unless at least one device in the category is on
-                // (VESTA-DESIGN.md §0) — a house at rest shouldn't report
-                // every category as if it were doing something.
-                const surface = categorySurface(tile.category, tile.onCount > 0 ? "active" : "off");
-                return (
-                  // Keyed by theme as well as category: the surface above is
-                  // composited in JS from the theme's tokens, so it is frozen
-                  // at render time rather than re-evaluated by the cascade.
-                  <div key={`${tile.category}:${theme}`} className="cockpit-category-tile">
-                    <div className="cockpit-category-icon" style={{ background: surface.fill, color: surface.glyph }}>
-                      <Icon size={18} />
-                    </div>
-                    <div>
-                      <div className="cockpit-category-label">{CATEGORY_LABELS[tile.category]}</div>
-                      <div className="muted body-text" style={{ fontSize: "var(--text-xs)" }}>
-                        {tile.total === 0 ? "None" : `${tile.total} device${tile.total === 1 ? "" : "s"}${tile.onCount > 0 ? ` · ${tile.onCount} on` : ""}`}
-                      </div>
+          <div className="cockpit-category-grid">
+            {pivotTiles.map((t) => {
+              // A category's own colour while any of its devices is on
+              // (VESTA-DESIGN.md §0 — a house at rest reports nothing as
+              // active); a room or floor neutral, amber while a device in it
+              // is offline.
+              const surface = t.category
+                ? categorySurface(t.category, t.stats.onCount > 0 ? "active" : "off")
+                : null;
+              const Icon = t.icon;
+              return (
+                // Keyed by theme too: the category surface is composited in
+                // JS from the theme's tokens, frozen at render time.
+                <button
+                  key={`${t.key}:${theme}`}
+                  type="button"
+                  className="cockpit-category-tile"
+                  onClick={() => setPivotDrill({ label: t.label, entityIds: t.entityIds, icon: t.icon })}
+                  aria-label={`Show ${t.label}'s devices — ${tileLine(t.stats)}`}
+                >
+                  <div
+                    className={`cockpit-category-icon${surface ? "" : t.stats.offline > 0 ? " is-warn" : " is-neutral"}`}
+                    style={surface ? { background: surface.fill, color: surface.glyph } : undefined}
+                  >
+                    <Icon size={18} />
+                  </div>
+                  <div className="cockpit-tile-text">
+                    <div className="cockpit-category-label">{t.label}</div>
+                    <div className={`body-text cockpit-tile-line${t.stats.offline > 0 ? " is-warn" : " muted"}`}>
+                      {tileLine(t.stats)}
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="cockpit-pivot-list">
-              {pivotRows.map((row) => {
-                // The bar reports HEALTH, not size. It used to be the row's
-                // share of the villa's device count, which says nothing
-                // actionable — a room having more devices than another is not
-                // a fact anyone opens Cockpit to learn. Each bar now fills its
-                // whole track and splits into "reporting" and "unavailable",
-                // so a room with a problem is visible at a glance down the
-                // column. The count beside it still gives the size.
-                const down = row.entityIds.reduce(
-                  (n, id) => n + (isUnavailable(entities[id]) ? 1 : 0), 0);
-                const okPct = row.count > 0 ? ((row.count - down) / row.count) * 100 : 0;
-                return (
-                  <button
-                    key={row.key}
-                    type="button"
-                    className="cockpit-pivot-row"
-                    onClick={() => setPivotDrill({ label: row.label, entityIds: row.entityIds })}
-                    title={down > 0
-                      ? `${row.label}: ${down} of ${row.count} unavailable`
-                      : `${row.label}: all ${row.count} reporting`}
-                    aria-label={`Show ${row.label}'s devices — ${row.count} device${row.count === 1 ? "" : "s"}, ${down} unavailable`}
-                  >
-                    <span className="cockpit-pivot-label">{row.label}</span>
-                    {/* --tick is one device's width, which draws the faint
-                        per-device notches: it gives the bar a scale, so a
-                        sliver reads as "one device" rather than "a little". */}
-                    <div
-                      className="cockpit-pivot-bar"
-                      style={{ ["--tick" as string]: `${100 / Math.max(1, row.count)}%` }}
-                    >
-                      <div className="cockpit-pivot-bar-ok" style={{ width: `${okPct}%` }} />
-                    </div>
-                    <span className="cockpit-pivot-count muted">{row.count}</span>
-                    <ChevronRight size={16} className="cockpit-pivot-chevron muted" />
-                  </button>
-                );
-              })}
-            </div>
-          )}
+                </button>
+              );
+            })}
+          </div>
 
           {/* ── Energy today (only when it resolves) ───────────────── */}
           {energy !== null && (
             <>
               <div className="settings-section-title"><Zap size={16} style={{ verticalAlign: -2 }} /> Energy today</div>
-              <p className="cockpit-energy-value">{energy.toFixed(1)} <span className="muted body-text">kWh</span></p>
+              {/* A shortcut to the Energy window — the one the bottom bar's
+                  Energy tile opens — for the day this figure comes from. */}
+              <button type="button" className="cockpit-energy-tile" onClick={() => setEnergyOpen(true)}
+                aria-label={`Energy today: ${energy.toFixed(1)} kWh — open the Energy window`}>
+                <span className="cockpit-energy-value">{energy.toFixed(1)} <span className="muted body-text">kWh</span></span>
+                <span className="cockpit-energy-open muted">Energy <ChevronRight size={16} /></span>
+              </button>
             </>
           )}
 
@@ -308,9 +302,19 @@ export default function CockpitModal({ onClose, onOpenEntity }: CockpitModalProp
         </div>
       </div>
     </div>
+    {energyOpen && (
+      <EnergyPanel onClose={() => setEnergyOpen(false)} fallback={() => (
+        <SummaryGroupPanel
+          group={{ title: "Energy", icon: Zap, entityIds: categoryTiles.find((t) => t.category === "energy")?.entityIds ?? [] }}
+          canControl={false}
+          onClose={() => setEnergyOpen(false)}
+          onOpenEntity={(id) => { setEnergyOpen(false); onOpenEntity(id); }}
+        />
+      )} />
+    )}
     {pivotDrill && (
       <SummaryGroupPanel
-        group={{ title: pivotDrill.label, icon: pivot === "room" ? MapPin : Building2, entityIds: pivotDrill.entityIds }}
+        group={{ title: pivotDrill.label, icon: pivotDrill.icon, entityIds: pivotDrill.entityIds }}
         canControl={canControl}
         onClose={() => setPivotDrill(null)}
         onOpenEntity={(id) => { setPivotDrill(null); onOpenEntity(id); }}
