@@ -255,10 +255,12 @@ class Policy:
 
     def summary(self) -> str:
         """Plain words for the system prompt. The code holds the rules; this only tells the model."""
-        return (
-            "Acting on the villa is " + ("switched on" if self.act_enabled else "switched OFF (inform only)") + ". "
-            "Every action is a request that a person approves with a button; you never execute anything yourself."
-        )
+        if not self.act_enabled:
+            return ("Acting on the villa is switched OFF: you inform only. Never offer to request an action "
+                    "(no \"shall I turn it on?\", no \"do you want me to lock it?\"). If someone asks for one, say plainly "
+                    "that acting is not switched on yet; do not call ha_call_service.")
+        return ("Acting on the villa is switched on. Every action is a request that a person approves with a "
+                "button; you never execute anything yourself.")
 
 
 def match_any(name: str, patterns: list[str]) -> bool:

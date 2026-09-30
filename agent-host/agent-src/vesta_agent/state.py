@@ -85,7 +85,13 @@ class State:
         q = "select * from calls" + (" where kind=?" if kind else "") + " order by id"
         return [dict(r) for r in self.db.execute(q, (kind,) if kind else ())]
 
+    def calls_since(self, since_iso: str) -> list[dict]:
+        return [dict(r) for r in self.db.execute("select * from calls where at>=? order by id", (since_iso,))]
+
     # ------------------------------------------------------------------ kv
+    def kv_prefix(self, prefix: str) -> dict[str, str]:
+        return {r["k"]: r["v"] for r in self.db.execute("select k, v from kv where substr(k, 1, ?)=?", (len(prefix), prefix))}
+
     def get(self, k: str, default: str | None = None) -> str | None:
         r = self.db.execute("select v from kv where k=?", (k,)).fetchone()
         return r["v"] if r else default

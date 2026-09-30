@@ -23,15 +23,22 @@ import hashlib
 import json
 import os
 import re
+from datetime import datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable
 
 from claude_agent_sdk import create_sdk_mcp_server, tool
 
+from . import __version__
 from .policy import Person, Policy
 from .runner import WEB_SEARCH
 from .skills import FILE_NAME, Skills, ToolError, run_script, validate_script_args
 
 SERVER = "vesta"
+# agent_status: the records worth telling a person about, and the fields of each (never a chat id or a token)
+STATUS_KINDS = ("critical_event", "ladder", "executed", "requested", "approved", "refused_by_person", "failed",
+                "action_failed", "send_failed", "code_script_failed", "script_refused", "pack", "ticket_skipped")
+STATUS_FIELDS = ("rule", "phase", "handled", "incident", "by", "reply", "tool", "ticket", "entity", "service",
+                 "skill", "script", "reason", "error", "code", "entities")
 PART_CHARS = 60_000          # about 15,000 tokens: under the SDK's 25,000-token cut of a tool answer
 
 # Arguments of the Home Assistant read tools that are pinned by code. ha_get_logs can read other add-ons'
@@ -127,7 +134,8 @@ class Toolbox:
     # ------------------------------------------------------------------ names
     def model_tool_names(self, include_web: bool) -> list[str]:
         names = [f"mcp__{SERVER}__{n}" for n in self.read_tool_names()]
-        names += [f"mcp__{SERVER}__{n}" for n in ("ha_call_service", "read_skill", "run_skill_script", "send_message")]
+        names += [f"mcp__{SERVER}__{n}" for n in ("ha_call_service", "read_skill", "run_skill_script", "send_message",
+                                                  "agent_status")]
         if self.ticket:
             names.append(f"mcp__{SERVER}__create_ticket")
         if include_web:
@@ -149,13 +157,14 @@ class Toolbox:
     # ------------------------------------------------------------------ build
     def tool_objects(self, person: Person | None, chat_id: int | None, include_web: bool) -> list:
         tools = [self._proxy(n) for n in self.read_tool_names()]
-        tools += [self._call_service(person, chat_id), self._read_skill(), self._run_script(), self._send()]
+        tools += [self._call_service(person, chat_id), self._read_skill(), self._run_script(), self._send(),
+                  self._status()]
         if self.ticket:
             tools.append(self._ticket())
         return tools
 
     def server(self, person: Person | None, chat_id: int | None, include_web: bool):
-        return create_sdk_mcp_server(name=SERVER, version="0.3.0", tools=self.tool_objects(person, chat_id, include_web))
+        return create_sdk_mcp_server(name=SERVER, version=__version__, tools=self.tool_objects(person, chat_id, include_web))
 
     def _proxy(self, name: str):
         t = self.server_tools[name]
@@ -237,6 +246,61 @@ class Toolbox:
                 return _err(f"The Kiosk did not record the ticket ({type(e).__name__}).")
             self.state.log("executed", {"tool": "create_ticket", "ticket": tid, "entity": ent})
             return _ok("Recorded.")
+        return handler
+
+    def status_report(self, hours: int = 24, now: datetime | None = None) -> dict:
+        """What the agent itself did: its scheduled jobs, the alerts it followed, the buttons pressed, the
+        actions asked and done, the failures. Read from its own records only; it changes nothing."""
+        now = now or datetime.now(timezone.utc)
+        since = now - timedelta(hours=hours)
+        jobs = []
+        for k, slot in sorted(self.state.kv_prefix("job:").items(), key=lambda kv: kv[1]):
+            try:
+                if datetime.fromisoformat(slot) >= since:
+                    jobs.append({"job": k[4:], "ran_at": slot})
+            except ValueError:
+                continue
+        counts: dict[str, int] = {}
+        cost = 0.0
+        events = []
+        for c in self.state.calls_since(since.isoformat()):
+            counts[c["kind"]] = counts.get(c["kind"], 0) + 1
+            try:
+                d = json.loads(c["detail"] or "{}")
+            except ValueError:
+                d = {}
+            if c["kind"] == "run" and isinstance(d.get("cost_usd"), (int, float)):
+                cost += d["cost_usd"]
+            if c["kind"] in STATUS_KINDS:
+                events.append({"at": c["at"], "what": c["kind"], **{k: v for k, v in d.items() if k in STATUS_FIELDS}})
+        incidents = []
+        if os.path.exists(self.s.store_path):
+            try:
+                from vesta_shared.store import Store
+                st = Store(self.s.store_path)
+                for i in st.incidents(open_only=False):
+                    if (i.get("opened_at") or "") >= since.isoformat() or not i.get("closed_at"):
+                        incidents.append({k: i.get(k) for k in ("id", "rule_id", "entity_id", "opened_at", "state",
+                                                                 "reply", "assignee", "closed_at")})
+            except Exception as e:  # noqa: BLE001 — a status answer never fails on the store
+                incidents.append({"error": type(e).__name__})
+        return {"since": since.isoformat(), "until": now.isoformat(), "scheduled_jobs": jobs,
+                "counts": counts, "ai_cost_usd": round(cost, 3), "events": events[-60:],
+                "incidents": incidents[-40:]}
+
+    def _status(self):
+        schema = {"type": "object", "properties": {
+            "hours": {"type": "integer", "description": "How far back, in hours (default 24, at most 168)."}}}
+
+        @tool("agent_status", "What YOU (the VESTA Agent) did recently: scheduled jobs run, alerts followed, "
+                              "buttons pressed, tickets, actions asked or done, failures, AI cost. Read-only. "
+                              "Use it for 'what did you do last night?'. Times are UTC.", schema)
+        async def handler(args: dict) -> dict:
+            try:
+                hours = max(1, min(168, int(args.get("hours") or 24)))
+            except (TypeError, ValueError):
+                return _err("hours must be a whole number.")
+            return _ok(scrub(json.dumps(self.status_report(hours), default=str), self._secrets()))
         return handler
 
     def _read_skill(self):

@@ -90,6 +90,8 @@ Decisions of 2026-09-30 (owner):
   `ha_mcp_url`, `ha_mcp_secret`, `VESTA_HA_MCP_SECRET` removed; old stored
   values are ignored).
 - D3: no Node.js in the image.
-- D5: the "VESTA Agent" HA user is an administrator with login off.
+- D5: the "VESTA Agent" HA user is an administrator, Active, local-network
+  login only. NOT login off: Home Assistant refuses the token of an inactive
+  user (found on the Yellow, 2026-09-30).
 - Skills live in `/config/skills` as files, each with a `skill.yaml`; PDF
   reports by `chromium-headless-shell` from the manifest's `system_packages`.

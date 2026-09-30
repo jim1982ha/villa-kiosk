@@ -5,6 +5,8 @@ live on 2026-09-30; ids invented."""
 from __future__ import annotations
 
 import asyncio
+import json
+import re
 
 import pytest
 import yaml
@@ -20,7 +22,7 @@ BOT = {"id": 8000, "username": "Villa_Test_bot"}
 
 class FakeTelegram:
     def __init__(self):
-        self.sent, self.toasts, self.next_id = [], [], 1000
+        self.sent, self.toasts, self.edits, self.next_id = [], [], [], 1000
 
     async def open(self):
         return BOT
@@ -36,8 +38,8 @@ class FakeTelegram:
     async def answer_callback(self, qid, text):
         self.toasts.append((qid, text))
 
-    async def edit(self, *a):
-        pass
+    async def edit(self, chat_id, message_id, text):
+        self.edits.append((chat_id, message_id, text))
 
     def __getattr__(self, name):          # getUpdates, leaveChat... must never be reached
         raise AssertionError(f"Telegram.{name} must never be called")
@@ -148,6 +150,59 @@ def test_a_press_on_the_agents_own_message_is_handled(agent):
     run(agent.on_ha_event("telegram_callback", press))
     assert agent.tg.toasts and agent.tg.toasts[0][1] == "Not found: noted."
     assert any("Noted for #1" in t for _, t, _ in agent.tg.sent)
+
+
+def test_a_press_in_a_private_chat_is_answered_there_and_its_buttons_go(agent):
+    # the facility manager's chat is the group, but the alert was pressed in a private chat:
+    # the answer goes where the press was, and the pressed message loses its buttons
+    mid = run(agent.send(FM, "🚨 Incident #1: pump stopped", keyboard={"inline_keyboard": [[{"text": "Done"}]]}))
+    agent.state.put(f"inc:1:{FM}", "alert-desk")
+    from vesta_shared.store import Store
+    Store(agent.s.store_path).new_incident("k", "automation.x", "lock.front_door", "P2", {"message": "m"})
+    press = {"id": "cb3", "data": "i:1:done", "chat_id": FM, "user_id": FM,
+             "message": {"message_id": mid, "chat": {"id": FM}, "text": "🚨 Incident #1: pump stopped"}, "bot": BOT}
+    before = len(agent.tg.sent)
+    run(agent.on_ha_event("telegram_callback", press))
+    replies = agent.tg.sent[before:]
+    assert replies and all(chat == FM for chat, _, _ in replies)           # never the group
+    (chat, m, text), = agent.tg.edits
+    assert (chat, m) == (FM, mid)
+    assert text.startswith("🚨 Incident #1: pump stopped\n\nDone — FM, ")    # who, what, when
+    assert re.search(r", \d\d:\d\d$", text)
+
+
+def test_telegram_gets_plain_text_not_markdown(agent):
+    run(agent.send(PRIVATE, "## Pool\n**Pump**: `on`, see [the log](https://example.invalid/x) — 2**3 stays"))
+    (_, text, _), = agent.tg.sent
+    assert text == "Pool\nPump: on, see the log (https://example.invalid/x) — 2**3 stays"
+
+
+def test_a_kiosk_ticket_title_has_no_leading_emoji_or_rule_code():
+    from vesta_agent.app import _ticket_title
+    assert _ticket_title("🚨 [VESTA-WD-01] Pump offline\nmore") == "Pump offline"
+    assert _ticket_title("⚠️  Battery low") == "Battery low"
+    assert _ticket_title("Battery low") == "Battery low"
+
+
+def test_while_acting_is_off_the_model_is_told_not_to_offer(agent):
+    s = agent.policy().summary()
+    assert "Never offer" in s and "approves with a" not in s
+    assert "no Markdown" in agent.system_prompt()
+
+
+def test_the_status_tool_reports_the_agents_own_night(agent):
+    from datetime import datetime, timedelta, timezone
+    now = datetime.now(timezone.utc)
+    agent.state.put("job:alert-desk:0:daily 02:00", (now - timedelta(hours=3)).isoformat())
+    agent.state.put("job:reports:0:monthly 1 08:00", (now - timedelta(days=20)).isoformat())
+    agent.state.log("critical_event", {"rule": "automation.x", "phase": "opened", "handled": True})
+    agent.state.log("run", {"who": "FM@1", "cost_usd": 0.25, "chat": 42})
+    agent.state.log("ladder", {"incident": 1, "by": "FM", "reply": "Done"})
+    rep = agent.toolbox().status_report(24, now=now)
+    assert [j["job"] for j in rep["scheduled_jobs"]] == ["alert-desk:0:daily 02:00"]   # last night only
+    assert rep["ai_cost_usd"] == 0.25 and rep["counts"]["run"] == 1
+    assert [e["what"] for e in rep["events"]] == ["critical_event", "ladder"]
+    assert "chat" not in json.dumps(rep["events"])                                   # no chat ids told
 
 
 def test_nothing_is_sent_while_telegram_is_off(tmp_path):

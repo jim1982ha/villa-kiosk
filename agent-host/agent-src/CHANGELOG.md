@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.1 (30 September 2026)
+
+- A reply to an alert button goes to the chat where it was pressed; the pressed message loses its buttons and
+  says who answered, what, and when (Telegram `editMessageText` without a keyboard).
+- Telegram messages are plain text: Markdown the model writes anyway is removed before sending, and the system
+  prompt says so.
+- Acting off: the model is told never to offer an action.
+- Kiosk ticket titles: no leading emoji or rule code.
+- Log lines per alert received and handled, message sent, button pressed, ticket created/resolved, reply answered.
+- New read-only tool `agent_status`: the agent's own jobs, calls, incidents and AI cost over the last hours.
+
 ## 0.3.0 (30 September 2026)
 
 Integrated into the VESTA Agent host (Home Assistant app "VESTA Agent"); decisions D1–D5 approved by the owner.

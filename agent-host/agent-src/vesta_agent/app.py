@@ -56,6 +56,29 @@ def _clean_summary(s: str) -> str:
     return re.sub(r"^\s*\[[^\]]{2,80}\]\s*", "", s or "").strip()
 
 
+def _ticket_title(s: str) -> str:
+    """A Facility record's title: no rule code, and no leading emoji or symbol (the 🚨 of an alert)."""
+    s = (s or "").strip().splitlines()[0] if (s or "").strip() else ""
+    s = re.sub(r"^[^\w(\"'\[]+", "", s)          # 🚨 before the rule code, or alone
+    return re.sub(r"^[^\w(\"']+", "", _clean_summary(s)).strip()
+
+
+_MD_LINK = re.compile(r"\[([^\]]+)\]\((https?://[^)\s]+)\)")
+
+
+def plain_text(s: str) -> str:
+    """What Telegram shows as written: the bot sends plain text, so Markdown the model
+    writes anyway (**bold**, # headings, `code`, [links](url)) would appear raw."""
+    if not s:
+        return s
+    s = _MD_LINK.sub(r"\1 (\2)", s)
+    s = re.sub(r"\*\*(.+?)\*\*", r"\1", s, flags=re.S)
+    s = re.sub(r"(?<!\w)__(.+?)__(?!\w)", r"\1", s, flags=re.S)
+    s = re.sub(r"`{1,3}([^`]*)`{1,3}", r"\1", s)
+    s = re.sub(r"(?m)^\s{0,3}#{1,6}\s+", "", s)
+    return s
+
+
 def _pretty(entity_id: str) -> str:
     obj = entity_id.split(".", 1)[-1]
     return obj.replace("_", " ").strip().capitalize()
@@ -170,7 +193,9 @@ class Vesta:
                    document: str | None = None, photo_b64=None) -> int | None:
         if self.tg is None:
             self.state.log("send_skipped", {"chat": chat_id, "reason": "Telegram is off (telegram_takeover false)"})
+            log.info("Telegram off: a message for chat %s was not sent", chat_id)
             return None
+        text = plain_text(text)
         try:
             mid = await self.tg.send(int(chat_id), text, keyboard=keyboard, document=document, photo_b64=photo_b64)
         except TelegramError as e:
@@ -178,12 +203,22 @@ class Vesta:
             self.state.log("send_failed", {"chat": chat_id, "error": str(e)})
             return None
         self.state.remember_message(chat_id, mid)
+        log.info("Sent to chat %s (%s)%s%s", chat_id, self._chat_label(chat_id),
+                 " with buttons" if keyboard else "", " and a file" if document else "")
         if approval_id and mid:
             self.state.set_approval_message(approval_id, mid)
         return mid
 
+    def _chat_label(self, chat_id) -> str:
+        role = self.policy().chat_role(chat_id)
+        if role:
+            return f"{role} chat"
+        return "private chat" if int(chat_id) > 0 else "group"
+
     async def create_ticket(self, title: str, entity_id: str | None = None, note: str | None = None) -> str:
-        return await self.kiosk.add_ticket(title, entity_id=entity_id, note=note)
+        tid = await self.kiosk.add_ticket(_ticket_title(title)[:200], entity_id=entity_id, note=note)
+        log.info("Kiosk ticket %s created: %s", tid, _ticket_title(title)[:80])
+        return tid
 
     # ------------------------------------------------------------------ start
     async def start(self):
@@ -253,9 +288,11 @@ class Vesta:
             return {}
         return res if isinstance(res, dict) else {}
 
-    async def run_code_job(self, skill, command: str, timeout: int = 900, values: dict | None = None) -> None:
+    async def run_code_job(self, skill, command: str, timeout: int = 900, values: dict | None = None,
+                           here: tuple[str, int] | None = None) -> dict:
         res = await asyncio.to_thread(self.code_command, skill, command, values, timeout)
-        await self._safe(self.dispatch(res, skill))
+        await self._safe(self.dispatch(res, skill, here))
+        return res
 
     def build_pack(self) -> dict:
         p = subprocess.run([sys.executable, "-m", "vesta_shared.build_pack", "--out", self.s.pack_path,
@@ -289,12 +326,18 @@ class Vesta:
         path = os.path.join(self.s.out_dir, "events", f"{datetime.now(timezone.utc):%Y%m%dT%H%M%S%f}.json")
         with open(path, "w", encoding="utf-8") as f:
             json.dump(event, f)
+        log.info("Alert received: %s — %s (%s)", event.get("phase") or "?", event.get("label") or event.get("rule_id"),
+                 event.get("blueprint") or "no blueprint")
         handled = False
         for sk in self.skills.all().values():
             cmd = sk.on_event.get("critical_event")
             if cmd:
                 handled = True
-                await self.run_code_job(sk, cmd, 300, {"event": path})
+                res = await self.run_code_job(sk, cmd, 300, {"event": path})
+                log.info("Alert handled by %s: %s%s", sk.name, res.get("decision") or "no decision",
+                         f", incident #{res['incident_id']}" if res.get("incident_id") else "")
+        if not handled:
+            log.warning("Alert received but no skill handles critical events (alert-desk deleted?)")
         self.state.log("critical_event", {"rule": event.get("rule_id"), "phase": event.get("phase"), "handled": handled})
 
     def beat(self) -> None:
@@ -373,6 +416,8 @@ class Vesta:
         pol = self.policy()
         skills = "; ".join(f"{n} ({sk.description})" if sk.description else n for n, sk in self.skills.all().items())
         return (self.s.instructions() + "\n\n" +
+                "Telegram shows your text exactly as written: plain text only, no Markdown (no ** or #, no tables); "
+                "a list is lines starting with '- '.\n" +
                 f"Your skills: {skills or 'none'}. Read a skill with read_skill before doing its job.\n" + pol.summary() + "\n"
                 f"Villa time zone: {self.s.timezone}. Today: {_now_local(self.s.timezone):%A %d %B %Y, %H:%M}.")
 
@@ -397,6 +442,9 @@ class Vesta:
                                    who=f"{person.name if person else 'system'}@{cid}", resume=resume)
             if res.session_id:
                 self.state.set_session(cid, res.session_id)
+            log.info("Answered %s in chat %s (%s)%s", person.name if person else "system", cid,
+                     f"{res.cost_usd:.3f} USD" if isinstance(res.cost_usd, (int, float)) else "cost unknown",
+                     f", error {res.error}" if res.error else "")
             answer = res.text
             if res.error and not answer:
                 answer = "The VESTA Agent could not answer this time. Try again in a moment."
@@ -486,7 +534,16 @@ class Vesta:
         label = options[opt]
         await toast(f"{label}: noted.")
         self.state.log("ladder", {"incident": iid, "by": person.name, "reply": label})
-        await self.run_code_job(skill, skill.on_reply, 120, {"incident": iid, "text": label, "role": person.role})
+        log.info("Button %s on incident #%s pressed by %s", label, iid, person.name)
+        # the buttons go, and the message says who did what, when: nobody presses twice,
+        # and the chat itself shows the incident was handled
+        msg = q.get("message") or {}
+        if self.tg and msg.get("message_id"):
+            when = _now_local(self.s.timezone).strftime("%H:%M")
+            base = (msg.get("text") or msg.get("caption") or "").rstrip()
+            await self.tg.edit(cid, msg["message_id"], f"{base}\n\n{label} — {person.name}, {when}"[:4096])
+        await self.run_code_job(skill, skill.on_reply, 120, {"incident": iid, "text": label, "role": person.role},
+                                here=(person.role, cid))
 
     async def after_execution(self, ap: dict):
         """The siren switches itself off after a few minutes (alert-desk rules)."""
@@ -504,7 +561,7 @@ class Vesta:
             asyncio.create_task(off())
 
     # ------------------------------------------------------------------ what a script decided
-    async def dispatch(self, res: dict, skill=None):
+    async def dispatch(self, res: dict, skill=None, here: tuple[str, int] | None = None):
         """Carry out a script's standard output: `send` items, then `actions`.
 
         send:    {to: owner|fm, text, keyboard?: true (the Done / Not found / Need help / Mute ladder)}
@@ -521,6 +578,9 @@ class Vesta:
             if gate_prompt and item.get("text") == gate_prompt:
                 continue
             chat = pol.chats.get(item.get("to") or "")
+            # an answer to the person who pressed goes where they pressed, not to their role's chat
+            if here and item.get("to") == here[0]:
+                chat = here[1]
             if not chat:
                 continue
             text = item.get("text") or ""
@@ -564,8 +624,9 @@ class Vesta:
         if not self.kiosk.enabled:
             self.state.log("ticket_skipped", {"reason": "no Kiosk configured", "summary": a.get("summary", "")[:80]})
             return
-        tid = await self.kiosk.add_ticket(_clean_summary(a.get("summary", ""))[:200], entity_id=a.get("entity_id") or None,
+        tid = await self.kiosk.add_ticket(_ticket_title(a.get("summary", ""))[:200], entity_id=a.get("entity_id") or None,
                                           note=a.get("note") or None)
+        log.info("Kiosk ticket %s created: %s", tid, _ticket_title(a.get("summary", ""))[:80])
         if a.get("task_id"):
             from vesta_shared.store import Store
             Store(self.s.store_path).set_task_uid(int(a["task_id"]), tid)
@@ -576,7 +637,8 @@ class Vesta:
         task = Store(self.s.store_path).task(int(a.get("task_id") or 0)) if a.get("task_id") else None
         uid = (task or {}).get("todo_uid") or a.get("ticket_id")
         if uid and self.kiosk.enabled:
-            await self.kiosk.resolve_ticket(uid, note=a.get("note"))
+            if await self.kiosk.resolve_ticket(uid, note=a.get("note")):
+                log.info("Kiosk ticket %s resolved", uid)
 
     # ------------------------------------------------------------------ scheduled model jobs
     def _language_of(self, role: str) -> str:

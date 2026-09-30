@@ -1,9 +1,20 @@
+## 0.9.1
+
+### Changed
+- **Alert buttons go once pressed.** The alert message then says who answered, what, and at what time, and the answer goes to the chat where the button was pressed (no longer to the group).
+- **Plain text on Telegram**: no more `**` around words.
+- **While acting is off, the agent no longer offers to do things** ("shall I turn it on?"); it says it informs only.
+- The Kiosk fault created for an alert no longer starts with 🚨.
+- **The app's log tells the story of each alert**: received, handled, each message sent and to which chat, each button pressed, each Kiosk fault created or resolved, each reply and what it cost.
+- **Ask "what did you do last night?"**: the agent reads its own record (jobs run, alerts followed, buttons pressed, faults, cost) and answers. It changes nothing.
+- The help text for the Home Assistant token was wrong: keep the "VESTA Agent" user **Active**, with "Can only log in from the local network" on. Turning its login off makes Home Assistant refuse its token.
+
 ## 0.9.0
 
 ### Added
 - **The real VESTA Agent is inside the app.** Switch *Agent mode* to `agent` to run it: it answers the owner and the facility manager on Telegram, follows up every critical alert of the VESTA rules (Done / Not found / Need help, reminders, the owner after 45 minutes), records each job for the facility manager as a ticket in the VESTA Kiosk, runs the night's maintenance checks, and sends the daily digest and the weekly and monthly reports with their PDF.
 - **Skills you can change without an update.** Each skill is a folder under the app's `skills` folder: edit it, add one, delete one, and it counts at once. The five starter skills are copied there at the first start; updates never touch them.
-- **The Documentation tab explains the set-up**: the "VESTA Agent" Home Assistant user (administrator, login off), registering people with `/whoami`, and the agent's `policy.yaml`.
+- **The Documentation tab explains the set-up**: the "VESTA Agent" Home Assistant user (administrator, active, local network only — corrected in 0.9.1), registering people with `/whoami`, and the agent's `policy.yaml`.
 
 ### Changed
 - **Telegram: Home Assistant keeps the bot.** The agent reads the bot's messages from Home Assistant and only sends, so the gate button, the alerts and every Telegram automation keep working whether the agent runs or not. *Telegram takeover* now means "the agent may send on the bot" — turn it on for one app only.

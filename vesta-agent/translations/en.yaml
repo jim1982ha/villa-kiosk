@@ -24,8 +24,9 @@ configuration:
     name: Home Assistant token
     description: >-
       Long-lived access token of the dedicated "VESTA Agent" Home Assistant
-      user — an administrator with "Allow person to login" turned off. Required
-      in agent mode.
+      user: Administrator on, Active on, "Can only log in from the local
+      network" on. Keep the user active — Home Assistant refuses the token of a
+      deactivated user. Required in agent mode.
   kiosk_url:
     name: VESTA Kiosk address
     description: >-
