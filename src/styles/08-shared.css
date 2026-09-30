@@ -112,16 +112,6 @@
 }
 
 /* --- Cockpit page (CockpitModal) — villa-wide status report ------------- */
-.cockpit-health {
-  display: flex; align-items: center; gap: 10px;
-  padding: 12px 14px; border-radius: 12px;
-  font-size: var(--text-md); font-weight: 500;
-}
-.cockpit-health svg { flex: 0 0 auto; }
-.cockpit-health-ok { background: color-mix(in srgb, var(--status-on) 14%, transparent); color: var(--status-on); }
-.cockpit-health-warn { background: color-mix(in srgb, var(--status-warning) 16%, transparent); color: var(--status-warning); }
-.cockpit-health-danger { background: color-mix(in srgb, var(--status-danger) 16%, transparent); color: var(--status-danger); }
-
 .cockpit-attention-list { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
 .cockpit-attention-row {
   display: flex; align-items: center; gap: 10px; width: 100%;

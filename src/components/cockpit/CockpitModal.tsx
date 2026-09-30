@@ -21,7 +21,7 @@
 
 import { useEffect, useMemo, useState, type ComponentType } from "react";
 import {
-  TriangleAlert, CheckCircle2, AlertOctagon, MapPin, Building2, LayoutGrid,
+  TriangleAlert, AlertOctagon, MapPin, Building2, LayoutGrid,
   Activity, Zap, RefreshCw, ChevronRight,
 } from "lucide-react";
 import { useModalA11y } from "@/hooks/useModalA11y";
@@ -91,7 +91,7 @@ export default function CockpitModal({ onClose, onOpenEntity }: CockpitModalProp
   // Shared with HUD's own top-bar alert icon/overflow-menu badge — see
   // useVillaAttention's own docstring for why that sharing is load-bearing,
   // not just tidiness (the two used to disagree).
-  const { selectableIds, attentionItems, health } = useVillaAttention();
+  const { selectableIds, attentionItems } = useVillaAttention();
   const categoryTiles = useMemo(
     () => buildCategoryTiles(selectableIds, entities, config.entityMap),
     [selectableIds, entities, config.entityMap],
@@ -185,17 +185,9 @@ export default function CockpitModal({ onClose, onOpenEntity }: CockpitModalProp
         </div>
 
         <div className="modal-body">
-          {/* ── Villa health headline — only when all is well ─────────
-              With something to attend to, the list below IS the message,
-              its count in its title; the red line above it said the same
-              thing again (owner, 2.496.236). */}
-          {attentionItems.length === 0 && (
-            <div className={`cockpit-health cockpit-health-${health.level}`}>
-              {health.level === "ok" ? <CheckCircle2 size={22} /> : <TriangleAlert size={22} />}
-              <span>{health.summary}</span>
-            </div>
-          )}
-
+          {/* No headline (owner, 2.496.237): the list below IS the message,
+              its count in its title — and when nothing needs attention, the
+              Cockpit simply starts with the villa's rooms. */}
           {/* ── Needs attention ────────────────────────────────────── */}
           {attentionItems.length > 0 && (
             <>
