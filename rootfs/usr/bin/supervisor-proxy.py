@@ -2933,21 +2933,50 @@ fm_data_put_handler = _store_put_handler(
 # new version, not an edit to this one.
 
 AGENT = "agent"
-AGENT_CONTRACT = 1
+#: THE AGREEMENT WITH THE AGENT: /usr/share/vesta/agent-contract.json (the
+#: roles.json precedent) — version, message kinds, severities, states, limits
+#: and samples, read here, by the app, and by the agent host's copy (its CI
+#: compares the two). FAIL CLOSED: unreadable, the agent door answers nothing
+#: (version 0, no kinds).
+def _load_agent_contract() -> dict:
+    here = os.path.dirname(os.path.abspath(__file__))
+    for path in ("/usr/share/vesta/agent-contract.json",
+                 os.path.join(here, "..", "share", "vesta", "agent-contract.json")):
+        try:
+            with open(path, encoding="utf-8") as f:
+                return json.load(f)
+        except (OSError, ValueError):
+            continue
+    print("[proxy] agent-contract.json unreadable: the agent interface refuses every message", flush=True)
+    return {}
+
+
+AGENT_CONTRACT_TABLE = _load_agent_contract()
+_AGENT_MSG = AGENT_CONTRACT_TABLE.get("message") or {}
+_AGENT_LIMITS = _AGENT_MSG.get("limits") or {}
+AGENT_CONTRACT = int(AGENT_CONTRACT_TABLE.get("version") or 0)
 #: Its settings are rows of OPTIONS: `agent_enabled` (THE switch, above the
 #: group on the page) and the `vesta_agent.*` fields.
 AGENT_STORE_MAX_BYTES = 2_000_000
 #: Beyond the retention window, a hard cap: an agent posting in a loop must not
 #: grow /data (or the Kiosk's message list) without bound.
 AGENT_MAX_MESSAGES = 500
-AGENT_MESSAGE_KINDS = ("message", "report", "recommendation")
-AGENT_SEVERITIES = ("info", "warning", "critical")
-#: Who may press an agent's buttons. Never a guest: guests do not see the agent
-#: at all (PLAN A8).
-AGENT_ANSWER_PROFILES = ("owner", "ops")
-AGENT_MAX_BUTTONS = 6
-AGENT_BUTTON_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
-AGENT_ENTITY_RE = re.compile(r"^[a-z_]+\.[a-z0-9_]+$")
+AGENT_MESSAGE_KINDS = tuple(_AGENT_MSG.get("kinds") or ())
+AGENT_SEVERITIES = tuple(_AGENT_MSG.get("severities") or ())
+#: Who may press an agent's buttons: every profile holding the contract's
+#: answering capability in roles.json — never a guest (PLAN A8). Was a second
+#: list, ("owner", "ops"), which a profile newly given the agent would have
+#: been missing from: it would see messages it could never answer.
+AGENT_ANSWER_PROFILES = tuple(
+    r for r, row in (ROLES_TABLE.get("profiles") or {}).items()
+    if AGENT_CONTRACT_TABLE.get("answeringCapability") in (row.get("capabilities") or ()))
+AGENT_MAX_BUTTONS = int(_AGENT_LIMITS.get("buttons") or 0)
+AGENT_MAX_TITLE = int(_AGENT_LIMITS.get("title") or 0)
+AGENT_MAX_BODY = int(_AGENT_LIMITS.get("body") or 0)
+AGENT_MAX_ENTITIES = int(_AGENT_LIMITS.get("entities") or 0)
+AGENT_MAX_LABEL = int(_AGENT_LIMITS.get("buttonLabel") or 0)
+AGENT_BUTTON_ID_RE = re.compile(_AGENT_MSG.get("buttonIdPattern") or r"(?!)")
+AGENT_ENTITY_RE = re.compile(_AGENT_MSG.get("entityPattern") or r"(?!)")
 #: What every Facility record the agent creates or changes carries (PLAN F6).
 AGENT_SOURCE = "vesta_agent"
 AGENT_NAME = "VESTA Agent"
@@ -3151,18 +3180,18 @@ def _agent_validate_message(body) -> tuple[dict | None, str | None]:
     if kind not in AGENT_MESSAGE_KINDS:
         return None, f"kind must be one of {', '.join(AGENT_MESSAGE_KINDS)}"
     title = body.get("title")
-    if not isinstance(title, str) or not title.strip() or len(title) > 200:
-        return None, "title must be a non-empty string of at most 200 characters"
+    if not isinstance(title, str) or not title.strip() or len(title) > AGENT_MAX_TITLE:
+        return None, f"title must be a non-empty string of at most {AGENT_MAX_TITLE} characters"
     text = body.get("body", "")
-    if not isinstance(text, str) or len(text) > 20_000:
-        return None, "body must be a string of at most 20000 characters"
+    if not isinstance(text, str) or len(text) > AGENT_MAX_BODY:
+        return None, f"body must be a string of at most {AGENT_MAX_BODY} characters"
     severity = body.get("severity", "info")
     if severity not in AGENT_SEVERITIES:
         return None, f"severity must be one of {', '.join(AGENT_SEVERITIES)}"
     entities = body.get("entities", [])
-    if not isinstance(entities, list) or len(entities) > 100 or not all(
+    if not isinstance(entities, list) or len(entities) > AGENT_MAX_ENTITIES or not all(
             isinstance(e, str) and AGENT_ENTITY_RE.fullmatch(e) for e in entities):
-        return None, "entities must be a list of at most 100 entity ids"
+        return None, f"entities must be a list of at most {AGENT_MAX_ENTITIES} entity ids"
     buttons = body.get("buttons", [])
     if not isinstance(buttons, list) or len(buttons) > AGENT_MAX_BUTTONS:
         return None, f"buttons must be a list of at most {AGENT_MAX_BUTTONS}"
@@ -3171,8 +3200,8 @@ def _agent_validate_message(body) -> tuple[dict | None, str | None]:
         if not isinstance(b, dict) or not isinstance(b.get("id"), str) \
                 or not AGENT_BUTTON_ID_RE.fullmatch(b["id"]) or b["id"] in seen \
                 or not isinstance(b.get("label"), str) or not b["label"].strip() \
-                or len(b["label"]) > 60:
-            return None, "each button needs a unique id ([A-Za-z0-9_-], 1-40) and a label (1-60)"
+                or len(b["label"]) > AGENT_MAX_LABEL:
+            return None, f"each button needs a unique id ({AGENT_BUTTON_ID_RE.pattern}) and a label (1-{AGENT_MAX_LABEL})"
         seen.add(b["id"])
         clean_buttons.append({"id": b["id"], "label": b["label"].strip()})
     profiles = body.get("allowed_profiles", list(AGENT_ANSWER_PROFILES))

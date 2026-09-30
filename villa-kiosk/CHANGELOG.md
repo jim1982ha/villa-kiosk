@@ -1,3 +1,8 @@
+## 2.496.234
+
+### Changed
+- **Nothing to see on screen.** What the Kiosk and the VESTA Agent agree on — the version, what a message may contain, and what the Kiosk shows back — is now written in one file that both sides are tested against, so a change on one side can no longer silently break the other. Who may answer an agent's message now follows the profile rights directly (today: Owner and Facility manager, as before).
+
 ## 2.496.233
 
 ### Fixed

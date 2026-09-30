@@ -82,4 +82,21 @@ const marks = ["FaultsTab", "RecentWorkList", "SpendTab", "TodayTab", "ScheduleE
   .filter((f) => !/<AgentMark record=\{/.test(src(`components/fm/${f}.tsx`)));
 ck("every Facility list shows the 'by VESTA Agent' mark", marks.length === 0, marks);
 
+console.log("\n  the agreement's sample, as the app reads it (2.496.234):");
+{
+  // tests/agent-interface.py proves the proxy produces exactly this shape;
+  // here the app must read every field of it — none falling back to a default.
+  const contract = JSON.parse(readFileSync(new URL("../../rootfs/usr/share/vesta/agent-contract.json", import.meta.url), "utf8"));
+  const want = contract.samples.messagesView.messages[0];
+  const [m] = parseAgentMessages(contract.samples.messagesView);
+  ck("the sample view parses to one message", !!m);
+  ck("  ...every field the proxy sends arrives", m && m.kind === want.kind && m.severity === want.severity && m.state === want.state
+     && m.title === want.title && m.body === want.body && m.buttons.length === want.buttons.length && m.canAnswer === want.can_answer
+     && m.createdAt === want.created_at, JSON.stringify(m));
+  ck("  ...every kind, severity and state in the agreement is one the app keeps (not folded to a default)",
+     contract.message.kinds.every((k) => parseAgentMessages({ messages: [{ ...want, kind: k }] })[0].kind === k)
+     && contract.message.severities.every((v) => parseAgentMessages({ messages: [{ ...want, severity: v }] })[0].severity === v)
+     && contract.message.states.every((v) => parseAgentMessages({ messages: [{ ...want, state: v }] })[0].state === v));
+}
+
 done("✅ the agent is shown to the right people, with the right buttons");

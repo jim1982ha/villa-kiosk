@@ -10,6 +10,7 @@
 
 import { ingressPath } from "@/ha/ingress";
 import { backendFetch } from "@/auth/sessionLost";
+import CONTRACT from "../../rootfs/usr/share/vesta/agent-contract.json" with { type: "json" };
 
 export type AgentState = "not_configured" | "offline" | "online";
 
@@ -49,6 +50,13 @@ export interface AgentMessage {
   expiresAt: string | null;
 }
 
+// The lists are the agreement's (rootfs/usr/share/vesta/agent-contract.json),
+// the ones the proxy checks against — they were typed here a second time.
+const STATUS_STATES = CONTRACT.status.states as readonly AgentState[];
+const KINDS = CONTRACT.message.kinds as readonly AgentMessageKind[];
+const SEVERITIES = CONTRACT.message.severities as readonly AgentSeverity[];
+const MESSAGE_STATES = CONTRACT.message.states as readonly AgentMessageState[];
+
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 const oneOf = <T extends string>(v: unknown, allowed: readonly T[], fallback: T): T =>
   (allowed as readonly unknown[]).includes(v) ? (v as T) : fallback;
@@ -56,7 +64,7 @@ const oneOf = <T extends string>(v: unknown, allowed: readonly T[], fallback: T)
 export function parseAgentStatus(raw: unknown): AgentStatus {
   const b = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   return {
-    state: oneOf(b.state, ["not_configured", "offline", "online"] as const, "not_configured"),
+    state: oneOf(b.state, STATUS_STATES, "not_configured"),
     lastSeen: typeof b.last_seen === "string" ? b.last_seen : null,
     statusText: typeof b.status === "string" && b.status ? b.status : null,
     offlineAfterMinutes: typeof b.offline_after_minutes === "number" ? b.offline_after_minutes : 5,
@@ -74,17 +82,17 @@ export function parseAgentMessages(raw: unknown): AgentMessage[] {
     const answer = m.answer && typeof m.answer === "object" ? (m.answer as Record<string, unknown>) : null;
     out.push({
       id: str(m.id),
-      kind: oneOf(m.kind, ["message", "report", "recommendation"] as const, "message"),
+      kind: oneOf(m.kind, KINDS, "message"),
       title: str(m.title),
       body: str(m.body),
-      severity: oneOf(m.severity, ["info", "warning", "critical"] as const, "info"),
+      severity: oneOf(m.severity, SEVERITIES, "info"),
       entities: Array.isArray(m.entities) ? m.entities.filter((e): e is string => typeof e === "string") : [],
       buttons: Array.isArray(m.buttons)
         ? m.buttons.flatMap((b) => (b && typeof b === "object" && str((b as Record<string, unknown>).id)
           ? [{ id: str((b as Record<string, unknown>).id), label: str((b as Record<string, unknown>).label) }]
           : []))
         : [],
-      state: oneOf(m.state, ["open", "answered", "expired"] as const, "open"),
+      state: oneOf(m.state, MESSAGE_STATES, "open"),
       answer: answer ? { buttonId: str(answer.button_id), profile: str(answer.profile), at: str(answer.at) } : null,
       canAnswer: m.can_answer === true,
       createdAt: str(m.created_at),

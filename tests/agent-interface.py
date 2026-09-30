@@ -330,6 +330,28 @@ async def main() -> None:
     ck("  ...an owner-only message is not answerable by ops", msgs.get(owner_only, {}).get("can_answer") is False)
     ck("  ...an expired one shows expired, buttons off",
        msgs.get(expired, {}).get("state") == "expired" and not msgs[expired]["can_answer"])
+    # ── the agreement's samples, through the real proxy (2.496.234) ──────
+    # rootfs/usr/share/vesta/agent-contract.json holds what an agent posts
+    # and what the Kiosk app reads; the agent host's tests replay the same
+    # file. If the proxy changes either shape, this fails on the Kiosk side.
+    contract = json.loads((ROOT / "rootfs" / "usr" / "share" / "vesta" / "agent-contract.json").read_text())
+    ck("the proxy speaks the agreement's version", proxy.AGENT_CONTRACT == contract["version"] >= 1)
+    r = await post("/agent/v1/messages", headers=bearer(), json=contract["samples"]["postMessage"])
+    sample_id = (await r.json()).get("id") if r.status in (200, 201) else None
+    ck("the agreement's sample message is accepted", sample_id is not None, r.status)
+    status, body = await jget("/agent-messages", cookie("owner"))
+    got = next((m for m in body["data"]["messages"] if m["id"] == sample_id), {}) if status == 200 else {}
+    want = contract["samples"]["messagesView"]["messages"][0]
+    ck("  ...and the Kiosk reads it back in exactly the agreement's shape (every field, no other)",
+       set(got) == set(want), sorted(set(got) ^ set(want)))
+    ck("  ...with the agreement's values", all(got.get(k) == want[k] for k in
+       ("kind", "title", "body", "severity", "entities", "buttons", "allowed_profiles", "state", "answer", "can_answer")),
+       {k: (got.get(k), want[k]) for k in want if got.get(k) != want[k] and k not in ("id", "created_at")})
+    ck("who may answer is every profile holding the agreement's capability in roles.json (never a guest)",
+       list(proxy.AGENT_ANSWER_PROFILES) == [r for r, row in proxy.ROLES_TABLE["profiles"].items()
+                                             if contract["answeringCapability"] in row["capabilities"]]
+       and "guest" not in proxy.AGENT_ANSWER_PROFILES and proxy.AGENT_ANSWER_PROFILES)
+
     status, _ = await jget("/agent-messages", cookie("guest"))
     ck("a guest reads none of it: 403", status == 403, status)
     status, _ = await jget("/agent-status", cookie("guest"))
