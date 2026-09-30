@@ -24,7 +24,12 @@ from pathlib import Path
 # The agreement with the Kiosk (vesta_host.kiosk_contract — a copy of the
 # Kiosk's own file): this stand-in answers with ITS version and refuses what
 # the real Kiosk would refuse, instead of a picture of the Kiosk typed here.
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "rootfs" / "opt" / "vesta" / "host"))
+# From the source tree (the unit tests) or from the image (standalone_test.sh
+# runs this file in the image with only tests/ mounted: /opt/vesta/host).
+for _where in (Path(__file__).resolve().parent.parent / "rootfs" / "opt" / "vesta" / "host", Path("/opt/vesta/host")):
+    if (_where / "vesta_host" / "kiosk_contract.py").exists():
+        sys.path.insert(0, str(_where))
+        break
 from vesta_host import kiosk_contract  # noqa: E402
 
 CF_ID, CF_SECRET = "cf-client-id.access", "cf-SECRET-123456"
