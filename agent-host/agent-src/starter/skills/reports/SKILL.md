@@ -21,16 +21,26 @@ model writing only the headline and nothing that is a number.
 |---|---|---|---|
 | Daily 07:00 | FM | chat, under 4,096 characters, split if longer | `compose.py fm-daily` |
 | Monday 08:00 | FM | page (HTML file attached) and its headline in chat | `energy_period.py --period week` then `compose.py fm-weekly --out fm_weekly.html` |
-| Monday 08:00 | Owner | three lines in chat | `compose.py owner-weekly` |
+| Monday 08:00 | Owner | three lines in chat | `compose.py owner-weekly --energy week.json` |
 | 1st of the month 08:00 | Owner | page (HTML file attached), the monthly proof, and its four numbers in chat | `energy_period.py --period month`, `filtration_optimiser.py`, `proposals.py`, then `compose.py owner-monthly --out owner_monthly.html` |
 | Quarterly | Owner | coverage annex (what is measured, what is not, retention) | the coverage block of the monthly, standalone |
-| On demand | either | the matching period, from the cache when it exists | same commands with `--start --end` |
+| On demand | either | the matching period, from the cache when it exists | the same two steps as the scheduled one (below) |
 
 The FM reads the digest on a phone in the morning: new items first, then the
 open tasks with their numbers so a reply "3 done" closes the right one. The
 owner reads the monthly as proof that the villa was looked after: what was
 found, what was done, what it cost, what VESTA suggests, and how much of the
 villa is actually measured (never hide the unmetered share).
+
+## A weekly or monthly page, step by step (on schedule or on request)
+
+1. `roi-energy` `energy_period.py --period week --out week.json` (`--period month --out
+   month.json` for the monthly; add `--end YYYY-MM-DD` for a past period).
+2. `reports` `compose.py fm-weekly --energy week.json --out fm_weekly.html` (or `owner-monthly
+   --energy month.json ... --out owner_monthly.html`). `--energy` is required: without it the
+   script stops and says so.
+3. `send_message` with `attachment` the page's file name and, as text, the headline and the key
+   numbers from the `facts` the script printed.
 
 ## Rules
 

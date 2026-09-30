@@ -17,7 +17,7 @@ schedule:
       the facility manager weekly page (reports, fm-weekly --energy week.json --out fm_weekly.html) and
       send it to fm with send_message, attachment fm_weekly.html: the message itself gives the headline and
       the few lines that matter (from the facts the script printed), in {fm_language}; the page opens on the phone. Then send the
-      owner the three owner-weekly lines (reports, owner-weekly), in {owner_language}.
+      owner the three owner-weekly lines (reports, owner-weekly --energy week.json), in {owner_language}.
   - when: "1 08:00"
     prompt: >-
       It is the first of the month, 08:00. Produce the monthly proof for the owner: roi-energy for the month

@@ -132,6 +132,13 @@ def main(argv=None):
     ap.add_argument("--energy"); ap.add_argument("--optimiser"); ap.add_argument("--proposals")
     ap.add_argument("--as-of"); ap.add_argument("--out")
     a = ap.parse_args(argv)
+    if a.cmd != "fm-daily" and not a.energy:
+        # ⚠️ NOT A HALF PAGE: without the period's numbers every figure would be blank,
+        # and Jinja stopped on the first one with "type Undefined doesn't define
+        # __round__" — the model read that as "a template error" (2026-09-30).
+        print(f"{a.cmd} needs --energy: first run roi-energy energy_period.py --period "
+              f"{'month' if a.cmd == 'owner-monthly' else 'week'} --out <file>.json, then pass that file.", file=sys.stderr)
+        return 1
     pack = KnowledgePack.load(a.pack)
     store = Store(a.store)
     Z = ZoneInfo(pack.time_zone)
@@ -142,7 +149,7 @@ def main(argv=None):
         text = fm_daily(pack, store, as_of)
         print(json.dumps({"messages": split_message(text)}, indent=1)); return 0
 
-    energy = json.load(open(a.energy)) if a.energy else {"loads": [], "pumps": [], "start": as_of.isoformat(), "end": as_of.isoformat()}
+    energy = json.load(open(a.energy))
     if a.cmd == "owner-weekly":
         print(json.dumps({"messages": [owner_weekly(pack, store, energy)]}, indent=1)); return 0
 

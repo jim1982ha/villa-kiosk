@@ -291,7 +291,9 @@ class Vesta:
         if code not in (0, 2):
             self.state.log("code_script_failed", {"skill": skill.name, "command": command.split()[0],
                                                   "stderr": scrub(err[-800:], self.s.secrets())})
-            log.warning("Skill %s: %s failed (exit %s)", skill.name, command.split()[0], code)
+            last = scrub(err.strip().splitlines()[-1] if err.strip() else "", self.s.secrets())
+            log.warning("Skill %s: %s failed (exit %s)%s", skill.name, command.split()[0], code,
+                        f": {last[:300]}" if last else "")
             return {}
         try:
             res = json.loads(out or "{}")

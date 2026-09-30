@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.4 (30 September 2026)
+
+- reports: `compose.py` fm-weekly / owner-weekly / owner-monthly require `--energy` and say what to run when it is
+  missing (without it Jinja stopped on `Undefined.__round__`, reported as "a template error"). SKILL.md gives
+  the two steps; the Monday prompt passes `--energy week.json` to owner-weekly.
+- A failed skill script (model tool or code job) is logged with the last line of its stderr, scrubbed.
+
 ## 0.3.3 (30 September 2026)
 
 - `allowed_services` rule `direct`: executed at once when a registered person asked in a chat

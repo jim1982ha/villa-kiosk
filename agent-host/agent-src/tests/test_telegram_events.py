@@ -211,3 +211,17 @@ def test_nothing_is_sent_while_telegram_is_off(tmp_path):
     assert v.tg is None
     assert run(v.send(PRIVATE, "hello")) is None
     assert v.state.calls("send_skipped")
+
+
+def test_a_failed_skill_script_is_in_the_apps_log_with_its_reason(agent, caplog):
+    import os
+    d = os.path.join(agent.s.skills_dir, "pool-care")
+    os.makedirs(os.path.join(d, "scripts"))
+    open(os.path.join(d, "SKILL.md"), "w").write("# pool-care\n")
+    open(os.path.join(d, "skill.yaml"), "w").write(yaml.safe_dump({"description": "t", "scripts": {"check.py": {}}}))
+    open(os.path.join(d, "scripts", "check.py"), "w").write(
+        "import sys\nprint('Traceback...', file=sys.stderr)\nprint('check needs --energy', file=sys.stderr)\nsys.exit(1)\n")
+    tool = next(t for t in agent.toolbox().tool_objects(None, PRIVATE, False) if t.name == "run_skill_script")
+    res = run(tool.handler({"skill": "pool-care", "script": "check.py", "args": []}))
+    assert res.get("is_error")
+    assert any("pool-care: check.py failed (exit 1): check needs --energy" in r.getMessage() for r in caplog.records)

@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import os
 import re
 from datetime import datetime, timedelta, timezone
@@ -34,6 +35,7 @@ from .runner import WEB_SEARCH
 from .skills import FILE_NAME, Skills, ToolError, run_script, validate_script_args
 
 SERVER = "vesta"
+log = logging.getLogger("vesta.tools")
 # agent_status: the records worth telling a person about, and the fields of each (never a chat id or a token)
 STATUS_KINDS = ("critical_event", "ladder", "executed", "requested", "approved", "refused_by_person", "failed",
                 "action_failed", "send_failed", "code_script_failed", "script_refused", "pack", "ticket_skipped")
@@ -341,6 +343,8 @@ class Toolbox:
             code, out, err = await asyncio.to_thread(run_script, self.s, skill, sc, final)
             if code not in (0, 2):
                 out = (out + "\n" + err).strip()
+                last = scrub(err.strip().splitlines()[-1] if err.strip() else "", self._secrets())
+                log.warning("Skill %s: %s failed (exit %s)%s", sk, sc, code, f": {last[:300]}" if last else "")
             out = scrub(out, self._secrets())
             self.state.log("script", {"skill": sk, "script": sc, "args": final, "exit": code})
             key = hashlib.sha256(json.dumps([sk, sc, final]).encode()).hexdigest()
