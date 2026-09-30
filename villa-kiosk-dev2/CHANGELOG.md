@@ -1,3 +1,12 @@
+## 2.496.230
+
+_2.496.229 did not reach Home Assistant (one of its checks failed); this update carries its changes._
+
+### Fixed
+- **The Cockpit's category tiles no longer count locked locks, closed blinds or sensor readings as "on".** A tile used to read, for example, "2 devices · 2 on" for two locked doors while the bottom bar said "Locked". "On" now means what it means everywhere else in the app: a light or switch that is on, an unlocked lock, an open blind, an A/C that is running, a speaker that is playing. Sensors and cameras add to a tile's device count but are never "on".
+- **"Turn all off" / "Turn all on" in a room or category list now works for mixed lists.** It used to send the first device's kind of command to every device in the list (a light command to a switch); it now sends each kind its own command.
+- **A power or temperature sensor that goes offline keeps its chart** in its own window, with the offline period shaded, instead of switching to a text timeline. The grouped-device window already did this; both now follow the same rule.
+
 ## 2.496.228
 
 ### Changed
