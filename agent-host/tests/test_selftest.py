@@ -197,7 +197,7 @@ class Slot(Base):
         self.assertEqual(r.returncode, 0, r.stdout)
         return env
 
-    def run_slot(self, env, seconds=3.0):
+    def run_slot(self, env, seconds=3.0, until=None):
         # The real slot program, with Anthropic and Telegram pointed at the fake
         # server first — a test must never reach the internet with a fake key.
         boot = ("import runpy, sys; sys.path.insert(0, %r); "
@@ -208,10 +208,21 @@ class Slot(Base):
             str(ROOTFS / "usr/bin/vesta-agent-slot"), str(ROOTFS / "usr/bin/vesta-agent-slot"))
         p = subprocess.Popen([sys.executable, "-c", boot], env=env,
                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-        time.sleep(seconds)
+        # ⚠️ WAIT FOR WHAT THE TEST READS, NOT A FIXED TIME. A flat 3 s sleep
+        # failed twice on GitHub's runner (0.7.0 and 0.8.0): the stub had not
+        # sent its heartbeat yet when it was stopped. With `until`, the output
+        # is read as it comes and the program is stopped once that line is
+        # there (or after 20 s, and the assertions then say what is missing).
+        lines: list[str] = []
+        reader = threading.Thread(target=lambda: lines.extend(iter(p.stdout.readline, "")), daemon=True)
+        reader.start()
+        deadline = time.monotonic() + (20.0 if until else seconds)
+        while time.monotonic() < deadline and not (until and any(until in l for l in lines)):
+            time.sleep(0.1)
         p.send_signal(signal.SIGTERM)
-        out, _ = p.communicate(timeout=20)
-        return p.returncode, out
+        p.wait(timeout=20)
+        reader.join(timeout=5)
+        return p.returncode, "".join(lines)
 
     def test_stub_mode_selftest_then_stub(self):
         env = self.prepare(ha_token=HA_TOKEN, kiosk_agent_token=KIOSK_TOKEN,
@@ -222,7 +233,7 @@ class Slot(Base):
             {"seq": 1, "message_id": "msg_other", "button_id": "x", "profile": "owner", "at": "t0"},
             {"seq": 2, "message_id": "msg_demo", "button_id": "looks_good", "profile": "ops",
              "at": "2026-09-29T00:01:00Z"}]
-        code, out = self.run_slot(env)
+        code, out = self.run_slot(env, until="stub: answer received")
         self.assertEqual(code, 0, out)
         for line in ("self-test Home Assistant: pass", "self-test HA MCP: pass",
                      "self-test VESTA Kiosk: pass", "self-test Anthropic: skipped",
