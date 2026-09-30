@@ -1,3 +1,8 @@
+## 2.496.228
+
+### Changed
+- **The VESTA Agent section on the Configuration page is now titled "VESTA Agent settings (Only used while "Connect the VESTA Agent" is on)"**, and the separate line of text inside it is gone.
+
 ## 2.496.227
 
 ### Changed
