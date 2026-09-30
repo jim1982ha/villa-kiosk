@@ -1,0 +1,61 @@
+#!/usr/bin/env python3
+"""The agent's UI slot: runs the manifest's `ui` command, always.
+
+s6 runs this as the `agent-ui` longrun beside the agent, not inside it: a
+policy.yaml or a skill that stops the agent can still be fixed from the UI.
+It runs in both modes (in stub mode, to prepare the files before switching).
+
+⚠️ NO SECRET REACHES IT (vesta_host.contract.ui_env): not the Anthropic key,
+not a Home Assistant or Kiosk token, not the bot token.
+"""
+from __future__ import annotations
+
+import json
+import os
+import signal
+import sys
+import threading
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                "..", "..", "opt", "vesta", "host"))
+
+from vesta_host import contract, manifest as agent_manifest, paths, supervise  # noqa: E402
+from vesta_host.log import configure, log  # noqa: E402
+from vesta_host.redact import Redactor  # noqa: E402
+
+stop = threading.Event()
+
+
+def main() -> int:
+    redactor = Redactor.load(paths.REDACT)
+    signal.signal(signal.SIGTERM, lambda *_: stop.set())
+    signal.signal(signal.SIGINT, lambda *_: stop.set())
+    try:
+        full = json.loads(paths.AGENT_ENV.read_text())
+    except (OSError, ValueError):
+        configure("info", redactor)
+        log("error", "UI: no prepared environment in /run/vesta — init-vesta did not run")
+        stop.wait()
+        return 0
+    configure(full.get("VESTA_LOG_LEVEL", "info"), redactor)
+    folder = paths.AGENT_DIR
+    m, problem = agent_manifest.load(folder / paths.MANIFEST) if (folder / paths.MANIFEST).exists() else (None, None)
+    if m is None or not m.ui:
+        log("info", "UI: this agent has none" + (f" ({problem})" if problem else ""))
+        stop.wait()
+        return 0
+    env = contract.ui_env(full)
+    venv = folder / ".venv" / "bin"
+    if venv.is_dir():
+        env["PATH"] = f"{venv}:{env['PATH']}"
+
+    def once() -> int | None:
+        log("info", "UI: starting (Home Assistant sidebar)")
+        return supervise.run_once(["/bin/sh", "-c", m.ui], folder, env, "ui", 5, stop, redactor)
+
+    supervise.keep_running(once, "the UI", stop, supervise.CrashLog(paths.UI_CRASHES))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

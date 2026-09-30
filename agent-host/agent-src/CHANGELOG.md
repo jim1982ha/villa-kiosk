@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.0 (30 September 2026)
+
+- The UI (`python -m vesta_agent.ui`, the manifest's `ui`): aiohttp, plain HTML/CSS/JS, no build step, the
+  Kiosk's tokens and self-hosted fonts. policy.yaml forms and raw file (ruamel.yaml, comments kept; `rev`
+  refuses a stale save), skills and their files (checked with `skills._parse` on a trial copy, Python with
+  `compile`). Only the Ingress gateway may connect (standalone: loopback); writes need a JSON body and the
+  page's header. Skills deleted go to `skills/.trash`.
+- `policy.problems()`: the file's checks in one place, used by the UI (refuses to save) and the agent (logs).
+- `status.report()` shared by the `agent_status` tool and the UI overview.
+- `send_message` `to: here` (the chat asked in); the system prompt says to redo a job, never replay one.
+- `ruamel.yaml==0.19.1`.
+
 ## 0.3.4 (30 September 2026)
 
 - reports: `compose.py` fm-weekly / owner-weekly / owner-monthly require `--energy` and say what to run when it is

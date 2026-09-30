@@ -40,7 +40,8 @@ villa is actually measured (never hide the unmetered share).
    --energy month.json ... --out owner_monthly.html`). `--energy` is required: without it the
    script stops and says so.
 3. `send_message` with `attachment` the page's file name and, as text, the headline and the key
-   numbers from the `facts` the script printed.
+   numbers from the `facts` the script printed. Asked for in a chat: `to: here`, the chat it was
+   asked in. On schedule: `to: fm` (weekly) or `to: owner` (monthly).
 
 ## Rules
 

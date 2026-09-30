@@ -1,0 +1,4 @@
+#!/bin/sh
+# The agent's UI (Home Assistant sidebar), beside the agent so it outlives an agent
+# that stopped. `exec` so s6's SIGTERM reaches the slot directly.
+exec /usr/bin/vesta-agent-ui

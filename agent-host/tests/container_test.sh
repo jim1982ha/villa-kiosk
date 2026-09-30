@@ -81,6 +81,29 @@ grep -qF "$HATOKEN" "$WORK/data/host/selftest.json" && bad "a secret in selftest
 has "time zone: Asia/Bangkok" && ok "banner: time zone from TZ" || bad "banner lacks TZ"
 no_secret "stub"
 [ -f "$WORK/config/skills/README.md" ] && [ -d "$WORK/data/agent" ] && ok "folders created" || bad "folders missing"
+# The agent's UI (Home Assistant sidebar): beside the stub too, reachable only
+# through Home Assistant's Ingress gateway, and holding no secret.
+wait_log "UI: listening on port 8095" 60 && ok "the UI runs beside the stub" || bad "the UI did not start"
+ui=$(docker exec vesta-ct python3 -c '
+import urllib.request, urllib.error
+try:
+    urllib.request.urlopen("http://127.0.0.1:8095/api/policy", timeout=5); print("OPEN")
+except urllib.error.HTTPError as e:
+    print(e.code)' 2>&1)
+[ "$(tail -1 <<<"$ui")" = "403" ] && ok "the UI refuses a process inside the container (not the Ingress gateway)" \
+  || bad "the UI answered a local process: $(tail -1 <<<"$ui")"
+uienv=$(docker exec vesta-ct python3 -c '
+import os
+for pid in os.listdir("/proc"):
+    try:
+        if b"vesta_agent.ui" in open(f"/proc/{pid}/cmdline", "rb").read():
+            print(open(f"/proc/{pid}/environ", "rb").read().replace(b"\0", b"\n").decode()); break
+    except OSError:
+        pass')
+if [ -z "$uienv" ]; then bad "the UI process was not found"
+elif grep -qF "$HATOKEN" <<<"$uienv" || grep -qF "$TGTOKEN" <<<"$uienv" || grep -q "SUPERVISOR_TOKEN" <<<"$uienv"; then
+  bad "a secret in the UI's environment"
+else ok "no secret in the UI's environment"; fi
 env_json=$(docker exec vesta-ct cat /run/vesta/agent-env.json)
 grep -q '"VESTA_TELEGRAM_ENABLED": "false"' <<<"$env_json" && ! grep -qF "$TGTOKEN" <<<"$env_json" \
   && ok "Telegram token not exported" || bad "Telegram token exported with takeover off"

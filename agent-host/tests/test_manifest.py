@@ -117,6 +117,7 @@ class Manifests(unittest.TestCase):
         self.assertEqual((m.name, m.start), ("vesta-agent", "python -m vesta_agent"))
         self.assertEqual(m.system_packages, [])                      # no PDF, no headless browser (0.9.2)
         self.assertEqual(m.install_files, ["requirements.txt"])
+        self.assertEqual(m.ui, "python -m vesta_agent.ui")
 
 
 class HostStates(unittest.TestCase):

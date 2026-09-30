@@ -29,6 +29,7 @@ REDACT = RUN / "redact.json"
 HOST_STATE = RUN / "host.json"                 # host-only flags, never given to the agent
 SELFTEST = DATA_HOST / "selftest.json"
 CRASHES = DATA_HOST / "crashes.json"
+UI_CRASHES = DATA_HOST / "ui-crashes.json"
 SIDECAR_ENV = RUN / "sidecar.json"             # the sidecar's settings (holds the HA token)
 SIDECAR_HOME = DATA_HOST / "ha-mcp"            # anything the HA MCP server writes
 # The pinned HA MCP server, in its own virtualenv (agent-host/Dockerfile).

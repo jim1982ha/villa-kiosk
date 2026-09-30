@@ -81,3 +81,20 @@ def process_env(contract: dict[str, str]) -> dict[str, str]:
         "LANG": "C.UTF-8",
         **contract,
     }
+
+
+# ------------------------------------------------------------------ the agent's UI
+#: The port Home Assistant's Ingress reaches the UI on (vesta-agent/config.yaml
+#: `ingress_port`). Nothing else listens on it; no port is published.
+UI_PORT = 8095
+#: ⚠️ THE UI GETS NO SECRET. It edits files (policy.yaml, the skills) and reads the
+#: agent's own records; it never talks to Home Assistant, Anthropic, the Kiosk or
+#: Telegram, so it is given the folders and its port, and nothing that opens them.
+UI_NAMES = ("VESTA_SKILLS_DIR", "VESTA_AGENT_CONFIG_DIR", "VESTA_DATA_DIR",
+            "VESTA_LOG_LEVEL", "TZ", "VESTA_DEPLOYMENT", "VESTA_INSTANCE")
+
+
+def ui_env(contract: dict[str, str]) -> dict[str, str]:
+    """The UI process's whole environment: the contract's folders and settings, its port."""
+    return {**{k: v for k, v in process_env(contract).items() if k not in NAMES or k in UI_NAMES},
+            "VESTA_UI_PORT": str(UI_PORT)}

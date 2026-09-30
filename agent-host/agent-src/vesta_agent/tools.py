@@ -24,23 +24,18 @@ import json
 import logging
 import os
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from typing import Any, Awaitable, Callable
 
 from claude_agent_sdk import create_sdk_mcp_server, tool
 
-from . import __version__
+from . import __version__, status
 from .policy import Person, Policy
 from .runner import WEB_SEARCH
 from .skills import FILE_NAME, Skills, ToolError, run_script, validate_script_args
 
 SERVER = "vesta"
 log = logging.getLogger("vesta.tools")
-# agent_status: the records worth telling a person about, and the fields of each (never a chat id or a token)
-STATUS_KINDS = ("critical_event", "ladder", "executed", "requested", "approved", "refused_by_person", "failed",
-                "action_failed", "send_failed", "code_script_failed", "script_refused", "pack", "ticket_skipped")
-STATUS_FIELDS = ("rule", "phase", "handled", "incident", "by", "reply", "tool", "ticket", "entity", "service",
-                 "skill", "script", "reason", "error", "code", "entities")
 PART_CHARS = 60_000          # about 15,000 tokens: under the SDK's 25,000-token cut of a tool answer
 
 # Arguments of the Home Assistant read tools that are pinned by code. ha_get_logs can read other add-ons'
@@ -159,7 +154,7 @@ class Toolbox:
     # ------------------------------------------------------------------ build
     def tool_objects(self, person: Person | None, chat_id: int | None, include_web: bool) -> list:
         tools = [self._proxy(n) for n in self.read_tool_names()]
-        tools += [self._call_service(person, chat_id), self._read_skill(), self._run_script(), self._send(),
+        tools += [self._call_service(person, chat_id), self._read_skill(), self._run_script(), self._send(chat_id),
                   self._status()]
         if self.ticket:
             tools.append(self._ticket())
@@ -253,44 +248,7 @@ class Toolbox:
         return handler
 
     def status_report(self, hours: int = 24, now: datetime | None = None) -> dict:
-        """What the agent itself did: its scheduled jobs, the alerts it followed, the buttons pressed, the
-        actions asked and done, the failures. Read from its own records only; it changes nothing."""
-        now = now or datetime.now(timezone.utc)
-        since = now - timedelta(hours=hours)
-        jobs = []
-        for k, slot in sorted(self.state.kv_prefix("job:").items(), key=lambda kv: kv[1]):
-            try:
-                if datetime.fromisoformat(slot) >= since:
-                    jobs.append({"job": k[4:], "ran_at": slot})
-            except ValueError:
-                continue
-        counts: dict[str, int] = {}
-        cost = 0.0
-        events = []
-        for c in self.state.calls_since(since.isoformat()):
-            counts[c["kind"]] = counts.get(c["kind"], 0) + 1
-            try:
-                d = json.loads(c["detail"] or "{}")
-            except ValueError:
-                d = {}
-            if c["kind"] == "run" and isinstance(d.get("cost_usd"), (int, float)):
-                cost += d["cost_usd"]
-            if c["kind"] in STATUS_KINDS:
-                events.append({"at": c["at"], "what": c["kind"], **{k: v for k, v in d.items() if k in STATUS_FIELDS}})
-        incidents = []
-        if os.path.exists(self.s.store_path):
-            try:
-                from vesta_shared.store import Store
-                st = Store(self.s.store_path)
-                for i in st.incidents(open_only=False):
-                    if (i.get("opened_at") or "") >= since.isoformat() or not i.get("closed_at"):
-                        incidents.append({k: i.get(k) for k in ("id", "rule_id", "entity_id", "opened_at", "state",
-                                                                 "reply", "assignee", "closed_at")})
-            except Exception as e:  # noqa: BLE001 — a status answer never fails on the store
-                incidents.append({"error": type(e).__name__})
-        return {"since": since.isoformat(), "until": now.isoformat(), "scheduled_jobs": jobs,
-                "counts": counts, "ai_cost_usd": round(cost, 3), "events": events[-60:],
-                "incidents": incidents[-40:]}
+        return status.report(self.state, self.s.store_path, hours, now)
 
     def _status(self):
         schema = {"type": "object", "properties": {
@@ -352,17 +310,25 @@ class Toolbox:
             return _ok(text) if code in (0, 2) else _err(text or f"The script failed (exit {code}).")
         return handler
 
-    def _send(self):
+    def _send(self, chat_id: int | None):
+        # ⚠️ "HERE" IS THE CHAT A PERSON ASKED IN. Without it a report asked for in the
+        # group went to the fm chat (a private chat on the villa) and the group got only
+        # "report sent" (2026-09-30). A scheduled job has no such chat: owner or fm only.
+        targets = (["here"] if chat_id is not None else []) + ["owner", "fm"]
         schema = {"type": "object", "properties": {
-            "to": {"type": "string", "enum": ["owner", "fm"]}, "text": {"type": "string"},
+            "to": {"type": "string", "enum": targets}, "text": {"type": "string"},
             "attachment": {"type": "string", "description": "A file name in the out folder (an HTML report page), optional."}},
             "required": ["to", "text"]}
+        desc = ("Send a message, with a file attached if needed. "
+                + ("to=here: the chat of the person you are answering; use it for anything they asked for (a report "
+                   "they requested goes here, not to owner or fm). " if chat_id is not None else "")
+                + "to=owner / to=fm: the configured owner or facility manager chat, for scheduled reports and digests. "
+                  "A plain answer needs no tool: your reply is sent for you.")
 
-        @tool("send_message", "Send a message to the owner chat or the facility manager chat. Use it for scheduled "
-                              "reports and digests. In a conversation, just answer: your reply is sent for you.", schema)
+        @tool("send_message", desc, schema)
         async def handler(args: dict) -> dict:
             to = args.get("to")
-            chat = self.policy.chats.get(to or "")
+            chat = chat_id if to == "here" and chat_id is not None else self.policy.chats.get(to or "")
             if not chat:
                 return _err(f"No {to} chat is configured.")
             att = args.get("attachment")

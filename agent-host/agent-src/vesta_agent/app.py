@@ -32,7 +32,7 @@ from .actions import Actions
 from .config import STARTER_DIR
 from .ha_events import HaEvents
 from .kiosk import Kiosk, KioskError
-from .policy import Person, Policy
+from .policy import Person, Policy, problems as policy_problems
 from .scheduler import Scheduler
 from .skills import Skills, run_command, script_env
 from .state import State
@@ -131,6 +131,8 @@ class Vesta:
         if self._policy is None or m != self._policy_mtime:
             self._policy = Policy.load(self.s.policy_path)
             self._policy_mtime = m
+            for p in policy_problems(self._policy.raw):
+                log.warning("policy.yaml: %s", p)
         return self._policy
 
     def name_of(self, entity_id: str) -> str:
@@ -431,6 +433,8 @@ class Vesta:
         return (self.s.instructions() + "\n\n" +
                 "Telegram shows your text exactly as written: plain text only, no Markdown (no ** or #, no tables); "
                 "a list is lines starting with '- '.\n" +
+                "When asked to produce, check or run something, do it again now with your tools: never answer from an "
+                "earlier attempt in this conversation. Skills, data and fixes change between messages.\n" +
                 f"Your skills: {skills or 'none'}. Read a skill with read_skill before doing its job.\n" + pol.summary() + "\n"
                 f"Villa time zone: {self.s.timezone}. Today: {_now_local(self.s.timezone):%A %d %B %Y, %H:%M}.")
 

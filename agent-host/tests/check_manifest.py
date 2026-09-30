@@ -61,9 +61,16 @@ if not 10 <= int(cfg.get("timeout", 10)) <= 300:
 for key in ("homeassistant_api", "hassio_api"):
     if cfg.get(key) is not False:
         problems.append(f"{key} must be explicitly false (SPEC H3)")
-for key in ("ports", "ingress", "host_network", "privileged", "full_access", "docker_api"):
+for key in ("ports", "host_network", "privileged", "full_access", "docker_api"):
     if cfg.get(key):
         problems.append(f"`{key}` is set — SPEC H4 forbids anything listening or privileged")
+# H4 as amended (owner, 2026-09-30): Home Assistant's Ingress is the one way in, for
+# the agent's UI, administrators only, on the port the UI listens on.
+if cfg.get("ingress"):
+    if cfg.get("panel_admin") is not True:
+        problems.append("ingress without panel_admin: true — the UI edits what the agent may do, admins only (H4)")
+    if cfg.get("ingress_port") != 8095:
+        problems.append("ingress_port must be 8095, the UI's port (vesta_host.contract.UI_PORT)")
 
 maps = cfg.get("map") or []
 if not any(isinstance(m, dict) and m.get("type") == "addon_config"

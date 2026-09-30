@@ -135,6 +135,17 @@ class Host(unittest.TestCase):
         self.assertEqual(env["HOME"], "/data/agent")
         self.assertEqual(env["VESTA_DEPLOYMENT"], "ha_app")
 
+    def test_the_ui_gets_the_folders_and_no_secret(self) -> None:
+        from vesta_host import contract
+        self.ha_options(telegram_takeover=True, telegram_bot_token=SECRETS["telegram_bot_token"])
+        self.assertEqual(self.start().returncode, 0)
+        ui = contract.ui_env(self.contract())
+        self.assertEqual(set(ui) - {"PATH", "HOME", "LANG", "VESTA_UI_PORT"}, set(contract.UI_NAMES))
+        self.assertEqual(ui["VESTA_UI_PORT"], str(contract.UI_PORT))
+        dumped = json.dumps(ui)
+        for name, value in SECRETS.items():
+            self.assertNotIn(value, dumped, name)
+
     def test_telegram_token_absent_until_takeover(self) -> None:
         self.ha_options(telegram_bot_token=SECRETS["telegram_bot_token"])
         self.assertEqual(self.start().returncode, 0)

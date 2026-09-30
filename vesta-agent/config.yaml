@@ -10,7 +10,7 @@
 # ⚠️ BUMP `version` ON EVERY PUSH. The Supervisor resolves image:<version>, never
 # :latest, so an unchanged version is an update Home Assistant cannot see.
 name: "VESTA Agent"
-version: "0.9.4"
+version: "0.10.0"
 slug: vesta_agent
 description: "Runs the VESTA Agent, the villa's AI assistant"
 url: "https://github.com/jim1982ha/villa-kiosk"
@@ -24,10 +24,18 @@ startup: application
 boot: auto
 # ⚠️ NO LOCAL-ONLY PRIVILEGES (SPEC H3, PLAN F10). Home Assistant is reached with
 # the "VESTA Agent" user's token, exactly as from outside the villa, so the same
-# image behaves identically as a standalone container. No port, no ingress
-# either (H4): nothing calls this app; it only calls out.
+# image behaves identically as a standalone container.
 homeassistant_api: false
 hassio_api: false
+# ⚠️ H4 AMENDED (owner, 2026-09-30): one way in, Home Assistant's Ingress — the
+# agent's UI (policy.yaml, the skills) in the sidebar, behind Home Assistant's
+# login, for administrators only (panel_admin). Still no published port: the UI
+# accepts only Home Assistant's Ingress gateway, and holds no secret.
+ingress: true
+ingress_port: 8095
+panel_icon: mdi:robot-outline
+panel_title: VESTA Agent
+panel_admin: true
 # addon_config → /config in the container, /addon_configs/<repo>_<slug> on the
 # host: where VESTA Skills live so people can edit them from Home Assistant
 # without a restart or a rebuild (H6). The dict form is the Supervisor's current

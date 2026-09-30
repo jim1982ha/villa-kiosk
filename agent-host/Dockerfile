@@ -110,7 +110,7 @@ COPY stub /opt/vesta/stub
 # stores rootfs files as 0644, and an s6 `run` script that is not executable
 # builds green and fails only on the device.
 RUN find /etc/s6-overlay/s6-rc.d -name run -exec chmod a+x {} + \
- && chmod a+x /usr/bin/vesta-entrypoint /usr/bin/vesta-agent-slot /usr/bin/vesta-selftest /usr/bin/vesta-sidecar
+ && chmod a+x /usr/bin/vesta-entrypoint /usr/bin/vesta-agent-slot /usr/bin/vesta-agent-ui /usr/bin/vesta-selftest /usr/bin/vesta-sidecar
 
 # The VESTA Agent's own code, LAST: the one layer most releases change.
 COPY --from=agent-inputs /src /opt/vesta/agent

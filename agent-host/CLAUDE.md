@@ -11,7 +11,11 @@ You are building the **VESTA Agent host**: a Home Assistant app that hosts the V
 - Work on branch `agent-dev`. Never commit to `main` except through the CI manifest-sync job.
 - Never modify `villa-kiosk/`, `villa-kiosk-dev2/`, the root `Dockerfile`, `rootfs/`, `src/`, `build.yaml` or `ci.yaml`.
 - Never build on the HA Yellow. Images come from GitHub Actions and GHCR only.
-- `homeassistant_api: false`, `hassio_api: false`, no published port, no ingress.
+- `homeassistant_api: false`, `hassio_api: false`, no published port. One way
+  in (H4 amended by the owner, 2026-09-30): Home Assistant's Ingress, for the
+  agent's UI only, `panel_admin: true`, port `contract.UI_PORT`. The UI runs as
+  its own s6 service (`agent-ui`, the manifest's `ui`), gets `contract.ui_env`
+  (folders, no secret), and accepts only the Ingress gateway 172.30.32.2.
 - Never export the Telegram token or call Telegram unless `telegram_takeover` is true. Never call `getUpdates` from the host or the stub.
 - Never write a secret to a log, a file under `/config`, the repository, or a CI log.
 - No agent logic in the host. The host only knows the agent manifest and the environment contract.

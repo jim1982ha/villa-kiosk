@@ -270,5 +270,147 @@ class Policy:
                    "ha_call_service then tells you the result: report it as it is." if direct else ""))
 
 
+# ------------------------------------------------------------------ the file's own checks
+RULES = ("any", "owner", "listed", "direct")
+ENTITY_LISTS = {"owner_only_entities": None, "excluded_entities": None, "switch_entities": "switch",
+                "scene_allowlist": "scene", "script_allowlist": "script", "button_allowlist": "button"}
+SECTIONS = {"settings", "act_enabled", "approval_ttl_minutes", "people", "chats", "siren_entity",
+            "siren_auto_off_min", "allowed_services", "notify_recipients", "system_actions", "ha_read_tools",
+            *ENTITY_LISTS}
+
+
+def _id(v: Any) -> int | None:
+    """An id as the agent reads it (int(...)): a number, or a number written as text."""
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, int):
+        return v
+    if isinstance(v, str) and re.match(r"^-?[0-9]+$", v.strip()):
+        return int(v)
+    return None
+
+
+def problems(raw: Any) -> list[str]:
+    """What is wrong in a policy.yaml, in plain words — [] when nothing is.
+
+    ⚠️ ONE OWNER FOR "IS THIS FILE RIGHT": the agent logs these when the file
+    changes, and the UI refuses to save a file that has any. The agent itself
+    stays lenient (a bad value is ignored, never a crash), so a hand edit can
+    only switch something off, never stop the agent; the UI is stricter because
+    it can say why before the file is written."""
+    from .config import CONVERSATION_RESETS, PROFILES
+    if raw is None:
+        return []
+    if not isinstance(raw, dict):
+        return ["The file must be a set of sections (name: value), not a list or a single value."]
+    out: list[str] = []
+    for k in raw:
+        if k not in SECTIONS:
+            out.append(f"Unknown section {k!r}: a misspelt name is ignored by the agent.")
+
+    s = raw.get("settings")
+    if s is not None:
+        if not isinstance(s, dict):
+            out.append("settings must be a set of name: value.")
+        else:
+            for k, v in s.items():
+                if k == "profile" and v not in PROFILES:
+                    out.append(f"settings.profile must be one of {', '.join(PROFILES)}.")
+                elif k == "reply_limit_usd" and (isinstance(v, bool) or not isinstance(v, (int, float)) or v < 0.05):
+                    out.append("settings.reply_limit_usd must be a number of at least 0.05.")
+                elif k == "web_search" and not isinstance(v, bool):
+                    out.append("settings.web_search must be true or false.")
+                elif k == "conversation_reset" and v not in CONVERSATION_RESETS:
+                    out.append(f"settings.conversation_reset must be one of {', '.join(CONVERSATION_RESETS)}.")
+                elif k not in ("profile", "reply_limit_usd", "web_search", "conversation_reset"):
+                    out.append(f"Unknown setting {k!r}.")
+    if "act_enabled" in raw and not isinstance(raw["act_enabled"], bool):
+        out.append("act_enabled must be true or false.")
+    for k, lo, hi in (("approval_ttl_minutes", 1, 1440), ("siren_auto_off_min", 1, 60)):
+        v = raw.get(k)
+        if v is not None and (isinstance(v, bool) or not isinstance(v, int) or not lo <= v <= hi):
+            out.append(f"{k} must be a whole number from {lo} to {hi}.")
+
+    people = raw.get("people")
+    if people is not None:
+        if not isinstance(people, list):
+            out.append("people must be a list.")
+        else:
+            seen = set()
+            for i, p in enumerate(people, 1):
+                if not isinstance(p, dict):
+                    out.append(f"people, entry {i}: must have telegram_id, name, role, language.")
+                    continue
+                tid = _id(p.get("telegram_id"))
+                who = p.get("name") or f"entry {i}"
+                if tid is None or tid <= 0:
+                    out.append(f"people, {who}: telegram_id must be the person's Telegram id (a positive number; "
+                               "/whoami shows it). Until then the agent ignores this person.")
+                elif tid in seen:
+                    out.append(f"people, {who}: telegram_id {tid} is listed twice.")
+                else:
+                    seen.add(tid)
+                if p.get("role") not in ROLES:
+                    out.append(f"people, {who}: role must be owner or fm.")
+                if not str(p.get("name") or "").strip():
+                    out.append(f"people, entry {i}: a name is needed.")
+                if p.get("language") is not None and not re.match(r"^[a-z]{2,3}$", str(p.get("language"))):
+                    out.append(f"people, {who}: language must be a code such as en, fr, id.")
+                for extra in set(p) - {"telegram_id", "name", "role", "language"}:
+                    out.append(f"people, {who}: unknown field {extra!r}.")
+
+    chats = raw.get("chats")
+    if chats is not None:
+        if not isinstance(chats, dict):
+            out.append("chats must be owner: <id> and fm: <id>.")
+        else:
+            for k, v in chats.items():
+                if k not in ROLES:
+                    out.append(f"chats: {k!r} is not a role (owner or fm).")
+                elif v not in (None, "", 0, "0") and not _id(v):         # 0 = not set yet, as the agent reads it
+                    out.append(f"chats.{k} must be a chat id (a group's is negative; /whoami in the chat shows it).")
+
+    for key, domain in ENTITY_LISTS.items():
+        v = raw.get(key)
+        if v is None:
+            continue
+        if not isinstance(v, list):
+            out.append(f"{key} must be a list of entity ids.")
+            continue
+        for e in v:
+            if not isinstance(e, str) or not ENTITY_ID.match(e):
+                out.append(f"{key}: {e!r} is not an entity id (domain.name).")
+            elif domain and e.split(".")[0] != domain:
+                out.append(f"{key}: {e} is not a {domain} entity.")
+    siren = raw.get("siren_entity")
+    if siren is not None and (not isinstance(siren, str) or not ENTITY_ID.match(siren)):
+        out.append("siren_entity must be an entity id, or null.")
+
+    services = raw.get("allowed_services")
+    if services is not None:
+        if not isinstance(services, dict):
+            out.append("allowed_services must be service: rule.")
+        else:
+            for svc, rule in services.items():
+                if not isinstance(svc, str) or not re.match(r"^[a-z0-9_]+\.[a-z0-9_]+$", svc):
+                    out.append(f"allowed_services: {svc!r} is not a service (domain.service).")
+                    continue
+                if svc.split(".")[0] in NEVER_DOMAINS or svc in NEVER_SERVICES or "toggle" in svc.split(".")[1]:
+                    out.append(f"allowed_services: {svc} is never allowed, whatever the file says.")
+                if rule not in RULES:
+                    out.append(f"allowed_services: {svc} has the rule {rule!r}; use any, owner, listed or direct.")
+                elif rule == "listed" and svc.split(".")[0] not in {d for d in ENTITY_LISTS.values() if d}:
+                    out.append(f"allowed_services: {svc} is listed, but there is no list for {svc.split('.')[0]}.")
+    for key in ("notify_recipients", "ha_read_tools"):
+        v = raw.get(key)
+        if v is not None and (not isinstance(v, list) or not all(isinstance(x, str) for x in v)):
+            out.append(f"{key} must be a list of names.")
+    acts = raw.get("system_actions")
+    if acts is not None:
+        if not isinstance(acts, list) or not all(isinstance(a, dict) and set(a) <= {"service", "entity_id"} for a in acts):
+            out.append("system_actions must be a list of service: / entity_id: pairs.")
+    return out
+
+
 def match_any(name: str, patterns: list[str]) -> bool:
     return any(fnmatch.fnmatchcase(name, p) for p in patterns)

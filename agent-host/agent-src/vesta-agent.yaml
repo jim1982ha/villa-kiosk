@@ -1,6 +1,6 @@
 # The VESTA Agent's manifest, read by the VESTA Agent host (SPEC section 8).
 name: vesta-agent
-version: "0.3.4"
+version: "0.4.0"
 runtime: python
 # Runs at IMAGE BUILD, in CI, never on the Yellow. `rm -rf tests` keeps every test
 # (and the villa's own fixtures, which a local copy may hold) out of the image.
@@ -10,6 +10,9 @@ install: "pip install --no-cache-dir -r requirements.txt"
 # the code downloads the code, not 280 MB of libraries again.
 install_files: [requirements.txt]
 start: "python -m vesta_agent"
+# The agent's UI in Home Assistant's sidebar: run by the host beside the agent (it
+# stays up when the agent stops), with the folders and no secret.
+ui: "python -m vesta_agent.ui"
 stop_grace_seconds: 20
 # Debian packages the agent needs at run time, installed in the host image's
 # final stage. None: the reports are HTML pages (no PDF, no headless browser —

@@ -38,6 +38,7 @@ class Manifest:
     stop_grace: int
     system_packages: list[str] = field(default_factory=list)
     install_files: list[str] | None = None
+    ui: str = ""
     warnings: list[str] = field(default_factory=list)
 
     @property
@@ -81,7 +82,8 @@ def load(path: Path) -> tuple[Manifest | None, str | None]:
     return Manifest(name=str(m.get("name", "agent")), version=str(m.get("version", "")),
                     runtime=str(m.get("runtime", "?")), start=str(start),
                     install=str(m.get("install") or ""), stop_grace=max(1, grace),
-                    system_packages=pkgs, install_files=files, warnings=warnings), None
+                    system_packages=pkgs, install_files=files, ui=str(m.get("ui") or ""),
+                    warnings=warnings), None
 
 
 #: A Debian package name (Debian Policy 5.6.1). The list reaches `apt-get install`

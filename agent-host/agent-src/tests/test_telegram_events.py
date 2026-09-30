@@ -188,6 +188,7 @@ def test_while_acting_is_off_the_model_is_told_not_to_offer(agent):
     s = agent.policy().summary()
     assert "Never offer" in s and "approves with a" not in s
     assert "no Markdown" in agent.system_prompt()
+    assert "never answer from an earlier attempt" in agent.system_prompt()
 
 
 def test_the_status_tool_reports_the_agents_own_night(agent):
@@ -225,3 +226,14 @@ def test_a_failed_skill_script_is_in_the_apps_log_with_its_reason(agent, caplog)
     res = run(tool.handler({"skill": "pool-care", "script": "check.py", "args": []}))
     assert res.get("is_error")
     assert any("pool-care: check.py failed (exit 1): check needs --energy" in r.getMessage() for r in caplog.records)
+
+
+def test_a_report_asked_for_in_a_chat_can_be_sent_there(agent):
+    # 2026-09-30: asked in the group, the weekly page went to the fm chat (a private chat)
+    # asked in a private chat; owner and fm are both the group in this policy
+    here = next(t for t in agent.toolbox().tool_objects(None, PRIVATE, False) if t.name == "send_message")
+    assert "here" in here.input_schema["properties"]["to"]["enum"]
+    run(here.handler({"to": "here", "text": "Weekly page"}))
+    assert agent.tg.sent[-1][0] == PRIVATE != GROUP
+    job = next(t for t in agent.toolbox().tool_objects(None, None, False) if t.name == "send_message")
+    assert job.input_schema["properties"]["to"]["enum"] == ["owner", "fm"]      # a scheduled job names a chat

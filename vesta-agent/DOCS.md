@@ -6,9 +6,33 @@ rules, records jobs for the facility manager in the VESTA Kiosk, writes the
 daily, weekly and monthly reports, and **asks before any action**: every
 action is an Approve / Refuse button pressed by a registered person.
 
-The app has no web page and no port: nothing connects to it; it only connects
-out (Home Assistant, the VESTA Kiosk, Anthropic, Telegram). It is installed by
-downloading a ready-made image; nothing is built on the HA Yellow.
+It has one page, **VESTA Agent** in Home Assistant's sidebar (administrators
+only), to edit its rules and its skills. Nothing else connects to it: no port
+is opened, and the page is reachable only through Home Assistant's own login.
+It is installed by downloading a ready-made image; nothing is built on the HA
+Yellow.
+
+## The VESTA Agent page
+
+In the sidebar, **VESTA Agent**. It opens on:
+
+- **Overview** — whether the rules and the skills have a problem, and the last
+  24 hours: alerts followed, buttons pressed, actions, replies, AI cost,
+  failures, scheduled jobs run.
+- **Rules** — `policy.yaml` as forms: acting on or off, the people, the chats,
+  what the agent may do and who decides (`any`, `owner`, `listed`, `direct`),
+  the protected devices, the allowed lists, the AI settings. **The file** shows
+  the whole file for everything else. The file's comments are kept.
+- **Skills** — every skill, on or switched off (and why). Open one to edit its
+  files; add a file, delete one, create a skill, delete a skill (kept in
+  `skills/.trash`, it does not come back by itself).
+
+Every save is checked first with the agent's own rules: a change the agent
+would refuse or misread is not written, and the page says why. If the file was
+changed elsewhere since you opened it (Studio Code Server), the save is refused
+rather than overwriting that change. A saved change counts within seconds, no
+restart. The page keeps working while the agent is stopped, so a file that
+stops the agent can be fixed from it.
 
 ## Modes
 
@@ -73,9 +97,9 @@ Acting on the villa is OFF (informs only)
 
 **Register the people.** In each chat the agent should use (a private chat
 with the bot, the villa group), each person sends `/whoami`; the bot answers
-with their Telegram id and the chat id. Then edit
-`/addon_configs/<id>_vesta_agent[_dev]/agent/policy.yaml` (Studio Code Server or
-Samba): `people` (id, name, role `owner` or `fm`, language) and `chats`
+with their Telegram id and the chat id. Then, on the VESTA Agent page, **Rules**
+(or the file `/addon_configs/<id>_vesta_agent[_dev]/agent/policy.yaml` with
+Studio Code Server): `people` (id, name, role `owner` or `fm`, language) and `chats`
 (`owner`, `fm`: a group id is a negative number). Saved changes apply within
 seconds, no restart. The same file holds the owner-only devices, the allowed
 actions and the agent's settings (AI model, limit per reply, web search).
@@ -131,8 +155,9 @@ silent"; the next contact closes it.
 `/addon_configs/<id>_vesta_agent[_dev]/skills/` holds one folder per skill:
 `SKILL.md` (what the agent reads), `skill.yaml` (its scripts, their options,
 its schedule) and `scripts/`. The agent reads the folder at every use: a change
-counts at once. To remove a skill, delete its folder; to add one, copy a folder
-and edit it. The `README.md` in that folder explains `skill.yaml`. A
+counts at once. Edit them on the VESTA Agent page (**Skills**), or as files
+(Studio Code Server, Samba): to remove a skill, delete its folder; to add one,
+copy a folder and edit it. The `README.md` in that folder explains `skill.yaml`. A
 `skill.yaml` the agent cannot read switches that skill off alone, and the log
 says why.
 
@@ -184,6 +209,9 @@ lights without an approval.
 | `Kiosk ticket … created / resolved` | a fault in the Kiosk's Facility records |
 | `Answered … in chat … (0.012 USD)` | a conversation reply and what it cost |
 | `Skill <name>: <script> failed (exit …): …` | a skill's script stopped; the end says why |
+| `policy.yaml: …` | something in the file the agent ignores (a misspelt section, a person without an id) |
+| `UI: policy.yaml saved` · `UI: skill …` | a change made on the VESTA Agent page |
+| `UI: refused a connection from …` | something other than Home Assistant's sidebar tried to open the page |
 
 ## Folders
 
