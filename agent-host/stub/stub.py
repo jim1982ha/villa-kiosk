@@ -109,7 +109,10 @@ def main():
     else:
         say(f"demo message not posted: {status if isinstance(status, str) else f'HTTP {status}'}")
 
-    last_beat, last_beat_outcome, answered = 0.0, None, False
+    # ⚠️ NOT 0.0: time.monotonic() counts from the machine's boot, and a fresh CI
+    # runner (or a Yellow just restarted) can be younger than HEARTBEAT_EVERY —
+    # `now - 0.0 >= 60` was then false and the first heartbeat was skipped.
+    last_beat, last_beat_outcome, answered = float("-inf"), None, False
     while not stop.is_set():
         now = time.monotonic()
         if now - last_beat >= HEARTBEAT_EVERY:
