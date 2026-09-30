@@ -1,3 +1,13 @@
+## 2.496.237
+
+### Changed
+- **The Cockpit has no status line at the top any more.** The green "Everything looks fine." line is gone too, like the red one in 2.496.236: when something needs attention, the "Needs attention (N)" list says so; when nothing does, the Cockpit simply starts with the rooms.
+
+## 2.496.236
+
+### Changed
+- **The Cockpit no longer says "needs attention" twice.** The red line at the top is gone when something needs attention; the list's title now carries the count instead — "Needs attention (1)". When nothing needs attention, the green "Everything looks fine." line still shows.
+
 ## 2.496.235
 
 ### Changed
