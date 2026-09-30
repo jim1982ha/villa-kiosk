@@ -134,11 +134,19 @@ def to_pdf(html_path: str, pdf_path: str) -> str | None:
         return None
     # the headless shell IS headless and knows only the plain flag; the full browser needs the new mode named
     headless = "--headless" if "headless-shell" in os.path.basename(exe) else "--headless=new"
-    cmd = [exe, headless, "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage", "--no-pdf-header-footer",
+    # --single-process --no-zygote: one process for a one-page print — lighter on the Yellow's
+    # memory, and what lets Chromium run at all under CI's arm64 emulation (QEMU).
+    cmd = [exe, headless, "--no-sandbox", "--single-process", "--no-zygote", "--disable-gpu",
+           "--disable-dev-shm-usage", "--no-pdf-header-footer",
            f"--print-to-pdf={pdf_path}", "file://" + os.path.abspath(html_path)]
     try:
         subprocess.run(cmd, check=True, capture_output=True, timeout=120)
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+    except subprocess.CalledProcessError as e:
+        # the reason, for the engine's log and the container test — a file path at most, no secret
+        print(f"chromium exit {e.returncode}: {(e.stderr or b'').decode(errors='replace')[-600:]}", file=sys.stderr)
+        return None
+    except (subprocess.TimeoutExpired, OSError) as e:
+        print(f"chromium: {type(e).__name__}", file=sys.stderr)
         return None
     return pdf_path if os.path.exists(pdf_path) else None
 

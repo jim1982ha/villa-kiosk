@@ -192,8 +192,9 @@ open("/tmp/r.html", "w").write("<html><body><h1>VESTA test page</h1></body></htm
 import sys; sys.path.insert(0, "/opt/vesta/agent")
 m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 out = m.to_pdf("/tmp/r.html", "/tmp/r.pdf")
-print("PDF" if out and open(out, "rb").read(4) == b"%PDF" else "NONE")' 2>&1 | tail -1)
-[ "$pdf" = "PDF" ] && ok "a PDF printed by chromium-headless-shell" || bad "no PDF ($pdf)"
+print("PDF" if out and open(out, "rb").read(4) == b"%PDF" else "NONE")' 2>&1)
+if [ "$(tail -1 <<<"$pdf")" = "PDF" ]; then ok "a PDF printed by chromium-headless-shell"
+else bad "no PDF: $(tail -12 <<<"$pdf" | tr '\n' ' ' | cut -c1-900)"; fi
 
 # A stand-in agent mounted over the stub, to exercise the slot's policy.
 mkstub() {  # mkstub <start command> <grace>
