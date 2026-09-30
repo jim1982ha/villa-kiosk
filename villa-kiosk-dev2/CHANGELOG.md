@@ -1,3 +1,12 @@
+## 2.496.233
+
+### Fixed
+- **A tablet whose session ended while the app was closed no longer keeps the villa's floor plan in its offline storage.** Signing out already cleared it; a session that ran out, or was ended with "Sign every device out" from another device, left it until the next sign-out. The app now clears it at start whenever the server says there is no session. (With no network at all, it is kept — an offline wall tablet must not lose its villa.)
+- **A passcode lockout without a stated time now waits 60 seconds on both passcodes.** The profile passcode and the superadmin code handled this differently.
+
+### Changed
+- **Nothing else to see on screen.** Signing in and out, the passcode answers and the offline storage rules each now live in one place and are tested directly.
+
 ## 2.496.232
 
 ### Changed
