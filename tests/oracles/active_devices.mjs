@@ -22,6 +22,9 @@ ck("a light that is on, an unlocked lock, an open blind, a heating A/C, a playin
    && A.isActive(e("media_player.m", "playing"), "media_player.m"));
 ck("a LOCKED lock and a CLOSED blind are not on (the Cockpit counted both)",
    !A.isActive(e("lock.d", "locked"), "lock.d") && !A.isActive(e("cover.b", "closed"), "cover.b"));
+ck("a motion or door sensor detecting is NOT on (only what a person can switch counts — 2.496.238)",
+   !A.isActive(e("binary_sensor.motion4_occupancy", "on", { device_class: "occupancy" }), "binary_sensor.motion4_occupancy")
+   && !A.isActive(e("binary_sensor.front_door", "on", { device_class: "door" }), "binary_sensor.front_door"));
 ck("a sensor reading, a camera, a weather station are never on",
    !A.isActive(e("sensor.t", "24"), "sensor.t") && !A.isActive(e("camera.g", "recording"), "camera.g")
    && !A.isActive(e("weather.home", "sunny"), "weather.home"));

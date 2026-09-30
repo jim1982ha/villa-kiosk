@@ -10,18 +10,22 @@
 //
 // Active is devicePower's own answer (the position a power switch would
 // show: an unlocked lock, an open blind, a playing media player, a heating
-// A/C), and only for devices that HAVE an on/off at all. A sensor, a camera,
-// a weather station is never "on".
+// A/C), and only for devices a person can switch. A sensor (motion, door,
+// temperature), a camera, a weather station is never "on".
 
 import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping } from "@/types/scene.types";
 import { devicePower } from "@/utils/devicePower";
 import { CATEGORY_ORDER, effectiveCategory, subjectOf } from "./EntityCategories";
 
-/** Domains with an on/off a person reads as "on": power switches, locks
- *  (unlocked), covers (open), climate (running), binary sensors (detecting). */
+/** Domains a person can SWITCH, whose "on" is what a tile counts: power
+ *  switches, locks (unlocked), covers (open), climate (running), speakers.
+ *  ⚠️ NOT SENSORS (owner, 2.496.238): a motion sensor "on" is someone passing,
+ *  not something left on — under Access Control it read as "2 on" beside one
+ *  unlocked door, and flickered every few seconds. A sensor adds to a tile's
+ *  device count, never to its "on". */
 const ON_OFF_DOMAINS: ReadonlySet<string> = new Set([
-  "light", "switch", "fan", "input_boolean", "media_player", "lock", "cover", "climate", "binary_sensor",
+  "light", "switch", "fan", "input_boolean", "media_player", "lock", "cover", "climate",
 ]);
 
 const domainOf = (id: string) => id.split(".")[0];

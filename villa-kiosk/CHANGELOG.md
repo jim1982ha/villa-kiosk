@@ -1,3 +1,8 @@
+## 2.496.238
+
+### Changed
+- **"On" in the Cockpit now counts only devices you can switch**: lights, switches, unlocked locks, open blinds, A/C that is running, speakers that are on. Sensors — motion, doors, temperature — still count as devices but never as "on". Before, a motion sensor detecting someone made the Access Control tile read "2 on" beside a single unlocked door, and the number changed every few seconds.
+
 ## 2.496.237
 
 ### Changed
