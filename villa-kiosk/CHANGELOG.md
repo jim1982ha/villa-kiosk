@@ -1,4 +1,6 @@
-## 2.496.229
+## 2.496.230
+
+_2.496.229 did not reach Home Assistant (one of its checks failed); this update carries its changes._
 
 ### Fixed
 - **The Cockpit's category tiles no longer count locked locks, closed blinds or sensor readings as "on".** A tile used to read, for example, "2 devices · 2 on" for two locked doors while the bottom bar said "Locked". "On" now means what it means everywhere else in the app: a light or switch that is on, an unlocked lock, an open blind, an A/C that is running, a speaker that is playing. Sensors and cameras add to a tile's device count but are never "on".
