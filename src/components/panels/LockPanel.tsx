@@ -6,14 +6,13 @@ import type { PanelProps } from "@/types/panel.types";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { usePendingAck } from "@/hooks/usePendingAck";
-import { isUnavailable, statusKeyFor, STATUS_PILL_CLASS } from "@/utils/stateColors";
+import { statusKeyFor, STATUS_PILL_CLASS } from "@/utils/stateColors";
 import { tapFeedback, successFeedback } from "@/utils/haptics";
-import UnavailableNotice from "./UnavailableNotice";
+import ControlFrame from "./ControlFrame";
 import InlineConfirm from "@/components/common/InlineConfirm";
 
 export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
   const { ws } = useHA();
-  const unavailable = isUnavailable(entity);
   const locked = entity?.state === "locked";
   // The pill reads the lock's ACTUAL state rather than `locked ? … : …`.
   // The old ternary had only two answers for a domain with five real ones, so
@@ -54,9 +53,9 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
       icon={locked ? <Lock size={22} /> : <Unlock size={22} />}
       onClose={onClose}
     >
-      {/* The shared notice when HA has lost the lock (ab0ffb46 routed Lock
-          through it in a comment only); its state pill otherwise. */}
-      {unavailable ? <UnavailableNotice device="lock" /> : (
+      {/* The shared frame: its notice when HA has lost the lock, the state
+          pill and the buttons otherwise (ControlFrame). */}
+      <ControlFrame entity={entity} mapping={mapping} device="lock">
       <div className="center" style={{ margin: "8px 0 20px" }}>
         <span className={`status-pill ${STATUS_PILL_CLASS[lockStatus]}`}>
           {/* The open padlock is reserved for a lock that is genuinely NOT
@@ -69,8 +68,7 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
           {(entity?.state ?? "unknown").replace(/_/g, " ").toUpperCase()}
         </span>
       </div>
-      )}
-      {unavailable ? null : locked ? (
+      {locked ? (
         <button
           className={`big-toggle${pending ? " pending" : ""}`}
           onClick={doLock}
@@ -93,7 +91,6 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
         </button>
       )}
 
-      {!unavailable && (
         <div className="mt">
           {!confirming ? (
             <button className="btn ghost" style={{ width: "100%" }} onClick={() => setConfirming(true)}>
@@ -104,8 +101,8 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
               confirmLabel="Confirm unlock" onConfirm={doUnlock} onCancel={() => setConfirming(false)} />
           )}
         </div>
-      )}
 
+      </ControlFrame>
     </BasePanel>
   );
 }

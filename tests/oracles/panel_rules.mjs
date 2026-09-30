@@ -43,9 +43,13 @@ const ac = src("ACPanel.tsx"), fan = src("FanPanel.tsx"), light = src("LightPane
 ck("ACPanel steps through climateStep, reads HA's unit, writes no °C literal",
    /climateStep\(/.test(ac) && /unit_system\?\.temperature/.test(ac) && !/°C/.test(ac.replace(/\/\/.*$/gm, "")));
 ck("FanPanel's levels come from fanLevels (no SPEED_LABELS of its own)", /fanLevels\(/.test(fan) && !/SPEED_LABELS/.test(fan));
-ck("the light's sliders and the cover's follow the device (useLiveDraft, held while dragged)",
-   (light.match(/useLiveDraft</g) ?? []).length === 2 && /\.hold\b/.test(light) && /useLiveDraft</.test(cover) && /position\.hold/.test(cover) && !/useState/.test(light));
-for (const f of ["CoverPanel.tsx", "LockPanel.tsx", "GenericPanel.tsx", "ACPanel.tsx"])
+// The draft's rules (hold, send on any release, back on a refusal) are
+// utils/liveDraft.draftStep, driven by value in live_draft.mjs (2.496.231).
+ck("the light's sliders and the cover's follow the device (useLiveDraft, one set of range handlers)",
+   (light.match(/useLiveDraft</g) ?? []).length === 2 && (light.match(/\.rangeProps\}/g) ?? []).length === 2
+   && /useLiveDraft</.test(cover) && /position\.rangeProps\}/.test(cover) && !/useState/.test(light));
+// The control panels show it through ControlFrame (live_draft.mjs pins that).
+for (const f of ["GenericPanel.tsx", "ControlFrame.tsx"])
   ck(`${f} shows the shared UnavailableNotice`, /<UnavailableNotice\b/.test(src(f)));
 
 done("✅ panel rules hold");

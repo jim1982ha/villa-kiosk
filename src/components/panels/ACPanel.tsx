@@ -6,8 +6,7 @@ import { useHA } from "@/ha/HAStateStore";
 import { useProfile } from "@/auth/ProfileContext";
 import { climateLimits } from "@/auth/permissions";
 import { HAServices } from "@/ha/HAServiceCalls";
-import { isUnavailable } from "@/utils/stateColors";
-import UnavailableNotice from "./UnavailableNotice";
+import ControlFrame from "./ControlFrame";
 import { climateRange, climateStep, fmtTemp } from "@/utils/panelRules";
 import { useLiveDraft } from "@/hooks/useLiveDraft";
 
@@ -21,7 +20,6 @@ export default function ACPanel({ entity, mapping, onClose }: PanelProps) {
   // Home Assistant's own unit — the readings are in it (it said "°C" always).
   const unit = haConfig?.unit_system?.temperature;
   const { role } = useProfile();
-  const unavailable = isUnavailable(entity);
   const a = entity?.attributes;
   const step = a?.target_temp_step ?? 0.5;
   // RBAC bounded controls: a profile with a climate range (guests) gets the
@@ -31,37 +29,33 @@ export default function ACPanel({ entity, mapping, onClose }: PanelProps) {
   const { min, max } = range;
   // The target FOLLOWS the device (useLiveDraft); a step is clamped and
   // rounded to the step's precision (panelRules.climateStep).
-  const target = useLiveDraft<number>(a?.temperature as number | undefined, 24);
-  const commit = (dir: 1 | -1) => {
-    const next = climateStep(target.value, dir, step, range);
-    target.set(next);
-    HAServices.setTemperature(ws, mapping.entityId, next);
-  };
+  const target = useLiveDraft<number>(a?.temperature as number | undefined, 24,
+    (v) => HAServices.setTemperature(ws, mapping.entityId, v));
+  // A press sends at once; a refused one puts the device's set-point back.
+  const commit = (dir: 1 | -1) => target.commit(climateStep(target.value, dir, step, range));
 
   const hvacModes = (a?.hvac_modes ?? ["cool", "fan_only", "auto", "off"]) as string[];
   const fanModes = (a?.fan_modes ?? []) as string[];
 
   return (
     <BasePanel title={mapping.label} entityId={mapping.entityId} icon={<Snowflake size={22} />} onClose={onClose}>
-      {unavailable && <UnavailableNotice device="AC" />}
-
+      <ControlFrame entity={entity} mapping={mapping} device="AC">
       <div className="temp-display">
         <span className="value-unit">Current</span>
-        <div className="big">{fmtTemp(unavailable ? null : a?.current_temperature, unit)}</div>
+        <div className="big">{fmtTemp(a?.current_temperature, unit)}</div>
       </div>
 
-      <div className={`temp-stepper${unavailable ? " is-unavailable" : ""}`}>
-        <button onClick={() => commit(-1)} aria-label="Lower target temperature" disabled={unavailable}><Minus size={26} /></button>
-        <div className="target">{fmtTemp(unavailable ? null : target.value, unit)}</div>
-        <button onClick={() => commit(1)} aria-label="Raise target temperature" disabled={unavailable}><Plus size={26} /></button>
+      <div className="temp-stepper">
+        <button onClick={() => commit(-1)} aria-label="Lower target temperature"><Minus size={26} /></button>
+        <div className="target">{fmtTemp(target.value, unit)}</div>
+        <button onClick={() => commit(1)} aria-label="Raise target temperature"><Plus size={26} /></button>
       </div>
-      {limits && !unavailable && (
+      {limits && (
         <div className="muted" style={{ textAlign: "center", fontSize: "var(--text-sm)" }}>
           Adjustable between {fmtTemp(min, unit)} and {fmtTemp(max, unit)}
         </div>
       )}
 
-      {!unavailable && (
         <div className="field">
           <label className="entity-label">Mode</label>
           <div className="row-buttons scroll">
@@ -76,9 +70,8 @@ export default function ACPanel({ entity, mapping, onClose }: PanelProps) {
             ))}
           </div>
         </div>
-      )}
 
-      {!unavailable && fanModes.length > 0 && (
+      {fanModes.length > 0 && (
         <div className="field">
           <label className="entity-label">Fan speed</label>
           <div className="row-buttons scroll">
@@ -94,6 +87,7 @@ export default function ACPanel({ entity, mapping, onClose }: PanelProps) {
           </div>
         </div>
       )}
+      </ControlFrame>
     </BasePanel>
   );
 }

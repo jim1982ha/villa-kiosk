@@ -1,12 +1,10 @@
 // src/components/panels/FanPanel.tsx
 import { Fan } from "lucide-react";
 import BasePanel from "./BasePanel";
-import PowerToggle from "./PowerToggle";
-import UnavailableNotice from "./UnavailableNotice";
+import ControlFrame from "./ControlFrame";
 import type { PanelProps } from "@/types/panel.types";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
-import { isUnavailable } from "@/utils/stateColors";
 import { devicePower } from "@/utils/devicePower";
 import { fanLevels, nearestLevel } from "@/utils/panelRules";
 
@@ -16,7 +14,6 @@ import { fanLevels, nearestLevel } from "@/utils/panelRules";
 
 export default function FanPanel({ entity, mapping, onClose }: PanelProps) {
   const { ws } = useHA();
-  const unavailable = isUnavailable(entity);
   const on = devicePower(entity, mapping.entityId).position === "on";
   const presets = (entity?.attributes.preset_modes ?? []) as string[];
   const currentPreset = entity?.attributes.preset_mode;
@@ -34,14 +31,8 @@ export default function FanPanel({ entity, mapping, onClose }: PanelProps) {
 
   return (
     <BasePanel title={mapping.label} entityId={mapping.entityId} icon={<Fan size={22} />} onClose={onClose}>
-      {unavailable ? <UnavailableNotice device="fan" /> : (
-        <PowerToggle
-          on={on} onClick={() => HAServices.power(ws, entity, mapping.entityId)}
-          label={mapping.label} requireConfirm={mapping.requireConfirm}
-        />
-      )}
-
-      {!unavailable && levels.length > 0 && (
+      <ControlFrame entity={entity} mapping={mapping} device="fan" power>
+      {levels.length > 0 && (
         <div className="field">
           <label className="entity-label">Speed</label>
           <div className="row-buttons">
@@ -59,7 +50,7 @@ export default function FanPanel({ entity, mapping, onClose }: PanelProps) {
         </div>
       )}
 
-      {!unavailable && presets.length > 0 && (
+      {presets.length > 0 && (
         <div className="field">
           <label className="entity-label">Preset</label>
           <div className="row-buttons scroll">
@@ -75,6 +66,7 @@ export default function FanPanel({ entity, mapping, onClose }: PanelProps) {
           </div>
         </div>
       )}
+      </ControlFrame>
 
     </BasePanel>
   );
