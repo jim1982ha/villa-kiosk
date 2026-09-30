@@ -1,3 +1,9 @@
+## 0.8.0
+
+### Changed
+- **Nothing to see in the app.** The app now checks the VESTA Kiosk connection against the same written agreement the Kiosk itself uses (the version and what a message may contain), instead of a copy typed from memory. Its tests fail the moment the two differ, so a change on the Kiosk side can no longer silently break the agent.
+- The agent's settings file (`vesta-agent.yaml`) and the app's own start-up state are each read in one place and tested directly.
+
 ## 0.7.0
 
 ### Added
