@@ -9,6 +9,8 @@ import type { EntityMapping } from "@/types/scene.types";
 import type { HassEntity } from "@/types/ha.types";
 import type { Role } from "@/auth/roles";
 import { isMappingAllowed, listedDevices } from "@/auth/permissions";
+import { effectiveCategory, subjectOf } from "./EntityCategories";
+import type { Category } from "@/types/scene.types";
 
 interface IdSet { has(id: string): boolean }
 
@@ -66,4 +68,30 @@ export function visibleTo(
       return !m || isMappingAllowed(role, id, m, ctx.entities[id]);
     },
   };
+}
+
+/**
+ * The devices a profile's long-press CATEGORY list shows: every mapped device
+ * of that category the profile may see, dismissed ones out, and a hidden or
+ * diagnostic one only while it is ON THE MAP (a UniFi AP's diagnostic
+ * "State" sensor someone bound to a mesh stays; an orphan RSSI sensor does
+ * not). Lived inline in the Dashboard, held to SummaryGroupPanel's own rules
+ * by a comment (2.496.229).
+ */
+export function categoryMembers(
+  role: Role | null, category: Category,
+  ctx: {
+    entityMap: Record<string, EntityMapping>; entities: Record<string, HassEntity>;
+    dismissed: IdSet; suppressed: IdSet; mapped: IdSet;
+  },
+): string[] {
+  if (role === null) return [];
+  return Object.entries(ctx.entityMap)
+    .filter(([id, mapping]) => {
+      if (ctx.dismissed.has(id)) return false;
+      if (!isMappingAllowed(role, id, mapping, ctx.entities[id])) return false;
+      if (effectiveCategory(subjectOf(id, mapping, ctx.entities[id])) !== category) return false;
+      return !ctx.suppressed.has(id) || ctx.mapped.has(id);
+    })
+    .map(([id]) => id);
 }

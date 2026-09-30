@@ -8,12 +8,11 @@
 // memory for how this was verified.
 
 import { binarySensorClassInfo } from "@/config/BinarySensorClasses";
-import { CATEGORY_ORDER, effectiveCategory, subjectOf } from "@/config/EntityCategories";
+import { categoryCounts } from "@/config/activeDevices";
 import { displayLabelFor } from "@/config/EntityMap";
 import { roomKey, NO_ROOM_LABEL } from "@/config/roomKey";
 import { fmAttention } from "@/fm/fmEngine";
 import type { FmData } from "@/fm/fmTypes";
-import { isOn } from "@/utils/entityState";
 import type { HassEntity, RawLogbookEntry } from "@/types/ha.types";
 import type { Category, EntityMapping } from "@/types/scene.types";
 
@@ -169,19 +168,8 @@ export function buildCategoryTiles(
   entities: Record<string, HassEntity>,
   entityMap: Record<string, EntityMapping>,
 ): CategoryTile[] {
-  const totals = new Map<Category, number>(CATEGORY_ORDER.map((c) => [c, 0]));
-  const ons = new Map<Category, number>(CATEGORY_ORDER.map((c) => [c, 0]));
-  for (const id of selectableIds) {
-    const mapping = entityMap[id];
-    if (!mapping) continue;
-    const entity = entities[id];
-    const cat = effectiveCategory(subjectOf(id, mapping, entity));
-    totals.set(cat, (totals.get(cat) ?? 0) + 1);
-    if (isOn(entity)) ons.set(cat, (ons.get(cat) ?? 0) + 1);
-  }
-  return CATEGORY_ORDER.map((category) => ({
-    category, total: totals.get(category) ?? 0, onCount: ons.get(category) ?? 0,
-  }));
+  // "On" is config/activeDevices' one rule (a locked lock is not on).
+  return categoryCounts(selectableIds, entities, entityMap);
 }
 
 

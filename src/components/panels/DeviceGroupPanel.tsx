@@ -16,6 +16,7 @@ import type { DeviceGroup } from "@/config/AppConfig";
 import type { EntityMapping } from "@/types/scene.types";
 import { isUnavailable } from "@/utils/stateColors";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
+import { readingKind } from "@/config/sensorReading";
 
 interface Props {
   group: DeviceGroup;
@@ -62,12 +63,13 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
       display: entity ? formatSensorParts(entity) : { value: "", unit: "" },
       numeric: Number.isFinite(numeric) ? numeric : undefined,
       unavailable: isUnavailable(entity),
+      kind: readingKind(entity, "sensor"),
     };
   });
   // A reading with a unit is a measurement even while it is UNAVAILABLE —
-  // that is exactly when its chart's shaded outage has something to say. It
-  // used to need a numeric state NOW, so an offline member had no chart.
-  const numericRows = rows.filter((r) => r.numeric !== undefined || (r.unavailable && r.unit !== ""));
+  // that is exactly when its chart's shaded outage has something to say
+  // (config/sensorReading, the rule the sensor panel shares).
+  const numericRows = rows.filter((r) => r.kind === "measurement" && (r.numeric !== undefined || r.unit !== ""));
   return (
     <BasePanel
       title={group.label ?? primaryMapping.label}

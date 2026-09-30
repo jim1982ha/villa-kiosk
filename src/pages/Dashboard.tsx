@@ -26,7 +26,7 @@ import { roomKey } from "@/config/roomKey";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import RoomChoiceSheet, { type RoomChoice } from "@/components/hud/RoomChoiceSheet";
 import { useProfile } from "@/auth/ProfileContext";
-import { isMappingAllowed, isTypeAllowed, panelMapping, roleCan } from "@/auth/permissions";
+import { isTypeAllowed, panelMapping, roleCan } from "@/auth/permissions";
 import { patchMapping } from "@/config/mappingEdits";
 import FacilityModal from "@/components/fm/FacilityModal";
 import AgentModal from "@/components/agent/AgentModal";
@@ -48,6 +48,7 @@ import type { SceneManager } from "@/babylon/SceneManager";
 import type { ActivePanel } from "@/types/panel.types";
 import type { Category, TeleportPoint } from "@/types/scene.types";
 import { VillaModelProvider, useVillaSets } from "@/config/VillaModel";
+import { categoryMembers } from "@/config/villaVisibility";
 import { devicePower } from "@/utils/devicePower";
 import { readSceneMirror } from "./sceneMirror";
 
@@ -164,25 +165,12 @@ export default function Dashboard() {
   // denied TYPE within it (a role that allows cameras but denies locks,
   // say) — connected-profile-aware from the start, not left to the shared
   // SummaryGroupPanel to somehow guess.
-  const categoryGroupEntityIds = useMemo(() => {
-    if (!categoryGroup || !role) return [];
-    return Object.entries(config.entityMap)
-      .filter(([id, mapping]) => {
-        // Same dismissal rule as every other surface — this list reads the raw
-        // entityMap, so a row the owner removed would otherwise still appear
-        // here (reported: gone from Advanced Settings, still in the category
-        // modal) whenever the entityMap delete itself hasn't propagated yet.
-        if (dismissedIds.has(id)) return false;
-        // ONE subject, read once — these two lines used to resolve the same
-        // entity's category two different ways, one line apart.
-        const subject = subjectOf(id, mapping, entities[id]);
-        if (!isMappingAllowed(role, id, mapping, entities[id])) return false;
-        if (effectiveCategory(subject) !== categoryGroup) return false;
-        if (suppressedEntityIds.has(id) && !effectiveMappedEntityIds.has(id)) return false;
-        return true;
-      })
-      .map(([id]) => id);
-  }, [categoryGroup, role, config.entityMap, entities, suppressedEntityIds, effectiveMappedEntityIds, dismissedIds]);
+  const categoryGroupEntityIds = useMemo(
+    () => (categoryGroup ? categoryMembers(role, categoryGroup, {
+      entityMap: config.entityMap, entities, dismissed: dismissedIds,
+      suppressed: suppressedEntityIds, mapped: effectiveMappedEntityIds,
+    }) : []),
+    [categoryGroup, role, config.entityMap, entities, suppressedEntityIds, effectiveMappedEntityIds, dismissedIds]);
   const [modelKey, setModelKey] = useState(0); // bump to force canvas remount
   // Starts "overview" to match the actual landing view (see the one-shot
   // effect below): the HUD reads this to decide joystick vs. overview-help

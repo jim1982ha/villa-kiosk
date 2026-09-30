@@ -56,14 +56,9 @@ export function switchPosition(e: HassEntity | undefined, domain?: string): Swit
   return OFF_STATES.has(e.state) ? "off" : "on";
 }
 
-/** Generic cross-domain "is this on" — anything not off/unavailable/unknown
- *  counts, so it covers an open cover, an unlocked lock, a playing media
- *  player or a heating climate uniformly without an exhaustive per-domain
- *  allow-list. Domain-specific tiles (locks, climate) still compute their
- *  OWN active set where "on" isn't the right word for what's being counted. */
-export function isOn(e: HassEntity | undefined): boolean {
-  return !!e && !OFF_STATES.has(e.state);
-}
+// `isOn` (anything not off/unavailable/unknown) is GONE (2.496.229): it
+// counted a locked lock, a closed blind and a sensor reading as "on". "Is this
+// device active" is config/activeDevices.isActive.
 
 /** The ONE phrasing every "how many of these are on?" summary uses:
  *    all on   -> "All On"      none on -> "All Off"

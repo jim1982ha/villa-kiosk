@@ -20,7 +20,7 @@
 // Energy total.
 
 import type { HassEntity } from "@/types/ha.types";
-import { OFF_STATES } from "@/utils/entityState";
+import { isActive } from "./activeDevices";
 import { isUnavailable } from "@/utils/stateColors";
 import { effectiveSensorClass, toBaseUnit } from "./SensorClasses";
 import { levelForValue, type Threshold } from "./ThresholdConfig";
@@ -79,7 +79,6 @@ const ofDomain = (entities: Record<string, HassEntity>, d: string, allowed?: All
   return allowed ? all.filter((e) => allowed.has(e.entity_id)) : [...all];
 };
 const idsOf = (es: readonly HassEntity[]) => es.map((e) => e.entity_id);
-const isOn = (e: HassEntity) => !OFF_STATES.has(e.state);
 
 export function lockFacts(entities: Record<string, HassEntity>, allowed?: Allowed, index?: DomainIndex): LockFacts | null {
   const locks = ofDomain(entities, "lock", allowed, index);
@@ -94,13 +93,13 @@ export function lockFacts(entities: Record<string, HassEntity>, allowed?: Allowe
 
 export function lightFacts(entities: Record<string, HassEntity>, allowed?: Allowed, index?: DomainIndex): OnOffFacts | null {
   const lights = ofDomain(entities, "light", allowed, index);
-  return lights.length ? { ids: idsOf(lights), on: idsOf(lights.filter(isOn)) } : null;
+  return lights.length ? { ids: idsOf(lights), on: idsOf(lights.filter((e) => isActive(e, e.entity_id))) } : null;
 }
 
 export function climateFacts(entities: Record<string, HassEntity>, allowed?: Allowed, index?: DomainIndex): ClimateFacts | null {
   const units = ofDomain(entities, "climate", allowed, index);
   if (!units.length) return null;
-  const active = units.filter((e) => e.state !== "off" && !OFF_STATES.has(e.state));
+  const active = units.filter((e) => isActive(e, e.entity_id));
   const temps = active
     .map((e) => e.attributes.current_temperature)
     .filter((t): t is number => typeof t === "number");

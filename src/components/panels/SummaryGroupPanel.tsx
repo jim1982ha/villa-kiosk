@@ -25,7 +25,8 @@ import { iconKeyFor } from "@/babylon/badgeIconKeys";
 import { effectiveCategory, subjectOf } from "@/config/EntityCategories";
 import { badgeFaceAndRing } from "@/utils/deviceActivity";
 import { alertStateFor } from "@/config/BinarySensorClasses";
-import { isOn, switchPosition } from "@/utils/entityState";
+import { switchPosition } from "@/utils/entityState";
+import { bulkSwitchPlan, isActive } from "@/config/activeDevices";
 import { inferTypeFromEntityId } from "@/config/EntityMap";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { phantomEntity } from "@/utils/phantomEntity";
@@ -182,7 +183,10 @@ export default function SummaryGroupPanel({
   // and the row could never reflect it either way.
   const toggleables = [...onMap, ...offMap]
     .filter((e) => TOGGLEABLE_DOMAINS.has(e.entity_id.split(".")[0]));
-  const anyOn = toggleables.some(isOn);
+  // "On" and the bulk switch are config/activeDevices' rules: one meaning of
+  // on for the whole app, and one call PER DOMAIN (the first row's domain
+  // used to be sent for every row — a light command to a switch).
+  const anyOn = toggleables.some((e) => isActive(e, e.entity_id));
 
   const typeOf = (id: string): EntityType =>
     (config.entityMap[id]?.type ?? inferTypeFromEntityId(id) ?? "sensor");
@@ -190,12 +194,9 @@ export default function SummaryGroupPanel({
   const Icon = group.icon;
 
   const doToggleAll = () => {
-    callService(
-      toggleables[0].entity_id.split(".")[0],
-      anyOn ? "turn_off" : "turn_on",
-      {},
-      { entity_id: toggleables.map((e) => e.entity_id) },
-    );
+    for (const call of bulkSwitchPlan(toggleables.map((e) => e.entity_id), !anyOn, TOGGLEABLE_DOMAINS)) {
+      void callService(call.domain, call.service, {}, { entity_id: call.entityIds });
+    }
     setConfirming(false);
   };
 

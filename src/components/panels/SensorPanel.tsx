@@ -11,7 +11,8 @@ import LastDayTimeline from "./LastDayTimeline";
 import NumericHistory from "./NumericHistory";
 import type { PanelProps } from "@/types/panel.types";
 import { useConfig } from "@/config/ConfigContext";
-import { levelForValue, type AlertLevel } from "@/config/ThresholdConfig";
+import type { AlertLevel } from "@/config/ThresholdConfig";
+import { readingKind, readingLevel } from "@/config/sensorReading";
 import { stateLabelFor, binarySensorClassInfo, alertStateFor } from "@/config/BinarySensorClasses";
 import { effectiveSensorClass, SENSOR_CLASS_ICON } from "@/config/SensorClasses";
 import { binarySensorColor, isUnavailable } from "@/utils/stateColors";
@@ -25,17 +26,15 @@ const LEVEL_COLOR: Record<AlertLevel, string> = {
 export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
   const { config } = useConfig();
 
-  const isBinary = mapping.type === "binary_sensor";
+  // What kind of reading this is — config/sensorReading, the ONE answer the
+  // grouped-device panel shares. A text sensor (an access point's
+  // "connected") gets the state timeline, because the numeric history would
+  // drop every point; an OFFLINE measurement keeps its chart (it used to
+  // become "text" the moment its state stopped being a number).
+  const kind = readingKind(entity, mapping.type);
+  const isBinary = kind === "binary";
+  const isEnum = kind === "text";
   const unavailable = isUnavailable(entity);
-  const numeric = Number(entity?.state);
-  // A plain "sensor" whose current state doesn't parse as a number is a
-  // text/enum sensor (connectivity status, a weather condition string, …) —
-  // the numeric history's number-only filter would silently drop every point for
-  // one of these (that's why a device like an access point's "connected" /
-  // "disconnected" state used to show "Not enough history yet" despite HA
-  // holding real history for it), so it gets the raw state-history path below
-  // instead of the numeric line chart.
-  const isEnum = !isBinary && entity != null && !Number.isFinite(numeric);
   const unit = entity?.attributes.unit_of_measurement ?? "";
   // One reading, written once — see utils/entityValue.
   const formatted = entity ? formatSensorParts(entity) : { value: "", unit: "" };
@@ -51,10 +50,7 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
   // badge and this panel disagreed about every motion sensor in the villa.
   const alertState = alertStateFor(
     entity?.attributes.device_class as string | undefined, threshold?.alertState);
-  const level: AlertLevel =
-    isBinary
-      ? alertState !== undefined && entity?.state === alertState ? "danger" : "normal"
-      : Number.isFinite(numeric) ? levelForValue(numeric, threshold) : "normal";
+  const level: AlertLevel = readingLevel(entity, kind, threshold, alertState);
   // The pill and the history tooltip word a state the same way — stateLabelFor.
   // (An unavailable sensor never reaches this: the pill shows "Unavailable" first.)
   const labelFor = stateLabelFor(mapping.entityId, entity?.attributes.device_class as string | undefined);
