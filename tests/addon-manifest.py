@@ -88,10 +88,16 @@ for key in schema:
     if key not in options:
         problems.append(f"schema declares `{key}` with no default in options")
 
-# 4. every name/description pair is actually filled in
-if len(named) != len(described) or len(described_desc) != len(described):
-    problems.append(f"{len(described)} fields but {len(named)} `name:` and "
-                    f"{len(described_desc)} `description:` lines — one entry is "
+# 4. every name/description pair is actually filled in. A GROUP (an entry
+#    with `fields:`) may go without its own description — its title says
+#    what it is for, and each of its fields is described (4b); an ordinary
+#    option may not.
+_entries = re.findall(r"^  (\w+):\s*\n((?:    .*\n|\s*\n)*)", tr, re.M)
+_undescribed = [k for k, body in _entries
+                if not re.search(r"^    description:", body, re.M) and "    fields:\n" not in body]
+if len(named) != len(described) or _undescribed:
+    problems.append(f"{len(described)} fields but {len(named)} `name:` lines, and "
+                    f"{_undescribed or 'none'} without a `description:` — one entry is "
                     f"missing its label or its help text")
 
 # 4b. a GROUP of options (a mapping, e.g. `vesta_agent`) is checked field by

@@ -90,9 +90,7 @@ configuration:
       Agent token" is empty or too short, the agent stays off and the app's log
       says so.
   vesta_agent:
-    name: VESTA Agent settings
-    description: >-
-      Only used when "Connect the VESTA Agent" is on.
+    name: VESTA Agent settings (Only used while "Connect the VESTA Agent" is on)
     fields:
       token:
         name: VESTA Agent token
