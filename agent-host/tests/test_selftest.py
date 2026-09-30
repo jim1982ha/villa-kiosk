@@ -232,7 +232,8 @@ class Slot(Base):
         reader = threading.Thread(target=lambda: lines.extend(iter(p.stdout.readline, "")), daemon=True)
         reader.start()
         deadline = time.monotonic() + (20.0 if until else seconds)
-        while time.monotonic() < deadline and not (until and any(until in l for l in lines)):
+        wanted = (until,) if isinstance(until, str) else tuple(until or ())
+        while time.monotonic() < deadline and not (wanted and all(any(w in l for l in lines) for w in wanted)):
             time.sleep(0.1)
         p.send_signal(signal.SIGTERM)
         p.wait(timeout=20)
@@ -248,7 +249,10 @@ class Slot(Base):
             {"seq": 1, "message_id": "msg_other", "button_id": "x", "profile": "owner", "at": "t0"},
             {"seq": 2, "message_id": "msg_demo", "button_id": "looks_good", "profile": "ops",
              "at": "2026-09-29T00:01:00Z"}]
-        code, out = self.run_slot(env, until="stub: answer received")
+        # ⚠️ BOTH LINES: the heartbeat and the demo run side by side in the stub,
+        # and on GitHub's runner the answer can land before the first heartbeat
+        # is logged (0.9.0's first CI run) — stopping at one line lost the other.
+        code, out = self.run_slot(env, until=("stub: answer received", "stub: heartbeat: HTTP 200"))
         self.assertEqual(code, 0, out)
         for line in ("self-test Home Assistant: pass", "self-test HA MCP: pass",
                      "self-test VESTA Kiosk: pass", "self-test Anthropic: skipped",
