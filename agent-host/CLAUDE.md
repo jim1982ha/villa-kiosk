@@ -93,5 +93,12 @@ Decisions of 2026-09-30 (owner):
 - D5: the "VESTA Agent" HA user is an administrator, Active, local-network
   login only. NOT login off: Home Assistant refuses the token of an inactive
   user (found on the Yellow, 2026-09-30).
-- Skills live in `/config/skills` as files, each with a `skill.yaml`; PDF
-  reports by `chromium-headless-shell` from the manifest's `system_packages`.
+- Skills live in `/config/skills` as files, each with a `skill.yaml`. A starter
+  skill never edited there follows the release (fingerprints of every shipped
+  version in `agent-src/starter/shipped-skills.json`; a test fails until a
+  changed starter is recorded); an edited one is kept.
+- No PDF (owner, 2026-09-30): the reports are self-contained HTML pages sent
+  as attachments. Chromium was ~480 MB of a 1.1 GB image for this alone.
+- ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent
+  code LAST, libraries built from `install_files` only (`manifest
+  build-inputs`). 0.9.1 re-sent ~840 MB for a few KB of code.

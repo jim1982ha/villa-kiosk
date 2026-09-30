@@ -349,7 +349,7 @@ class Toolbox:
     def _send(self):
         schema = {"type": "object", "properties": {
             "to": {"type": "string", "enum": ["owner", "fm"]}, "text": {"type": "string"},
-            "attachment": {"type": "string", "description": "A file name in the out folder (a PDF or HTML report), optional."}},
+            "attachment": {"type": "string", "description": "A file name in the out folder (an HTML report page), optional."}},
             "required": ["to", "text"]}
 
         @tool("send_message", "Send a message to the owner chat or the facility manager chat. Use it for scheduled "

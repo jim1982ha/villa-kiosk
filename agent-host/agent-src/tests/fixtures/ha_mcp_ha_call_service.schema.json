@@ -1,0 +1,118 @@
+{
+ "additionalProperties": false,
+ "properties": {
+  "data": {
+   "anyOf": [
+    {
+     "additionalProperties": true,
+     "type": "object"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "description": "Extra service-call parameters beyond entity_id (e.g. {'temperature': 22} for climate.set_temperature). Also carries the raw command payload when ws_command is set. If entity_id is also present in data, the entity_id parameter wins."
+  },
+  "domain": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "description": "Service domain (e.g. 'light', 'climate', 'automation'). Required for a service call; must be omitted when ws_command is set."
+  },
+  "entity_id": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "description": "Entity ID(s) the service call targets \u2014 one ID ('light.living_room') or several comma-separated ('light.a,light.b'). Optional for services that don't target a specific entity. Must be omitted when ws_command is set."
+  },
+  "result_attribute_keys": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "items": {
+      "type": "string"
+     },
+     "type": "array"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "description": "Project each record's 'attributes' dict to only these keys (e.g. ['brightness', 'rgb_color']). Mirrors ha_get_state's attribute_keys=. Setting this DISABLES default compaction. Requires 'attributes' to be present in result_fields (or result_fields=None)."
+  },
+  "result_fields": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "items": {
+      "type": "string"
+     },
+     "type": "array"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "description": "Project each record in 'result' to only these top-level keys (e.g. ['entity_id', 'state']). Mirrors ha_get_state's fields=. Setting this DISABLES default compaction \u2014 no entity-id filter, no metadata strip \u2014 and applies the explicit projection instead."
+  },
+  "return_response": {
+   "default": false,
+   "description": "If True, the service's response data is returned once, as the top-level 'service_response' key \u2014 never nested inside 'result' (default: False). Must stay False when ws_command is set.",
+   "type": "boolean"
+  },
+  "service": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "description": "Service name within domain (e.g. 'turn_on', 'set_temperature', 'trigger'). Required for a service call; must be omitted when ws_command is set."
+  },
+  "verbose": {
+   "default": false,
+   "description": "Return HA's raw changed-state records unchanged (default: False). Use as an escape hatch when you need the full propagation chain or raw attribute payload (debug / inspection). With return_response=True the response data still surfaces once as the top-level service_response key, never nested in result. WARNING: brings back token-bloat for nested-group targets \u2014 prefer result_fields / result_attribute_keys for targeted control.",
+   "type": "boolean"
+  },
+  "wait": {
+   "default": true,
+   "description": "If True (default), wait for the entity state to change before returning. Applies only to state-changing services called with a single entity_id. A comma-separated multi-target does not get confirmed by this: it falls through to a legacy path that polls for the literal composite entity_id and times out after 10s. Set wait=False for multi-target calls.",
+   "type": "boolean"
+  },
+  "ws_command": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "description": "Advanced escape hatch: send a raw one-shot Home Assistant WebSocket command that is NOT a registered service (e.g. 'repairs/ignore_issue' to dismiss a Repairs issue). When set, omit domain/service and the other service params; put the command's parameters in data. Streaming/two-phase and service-invoking commands (call_service, execute_script) are rejected."
+  }
+ },
+ "type": "object"
+}

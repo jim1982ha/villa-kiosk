@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.3.2 (30 September 2026)
+
+- Fixed: every approved action failed. `McpClient.call_service` sent `entity_id` as a list; ha-mcp 8.5.0's
+  `ha_call_service` takes one string. One device now goes as that string (ha-mcp waits for its state), several
+  as Home Assistant's list inside `data` (the read-back then polls up to 5 s). Pinned against ha-mcp's real input
+  schema (`tests/fixtures`); the host's container test fails when the server in the image stops matching it.
+  A failed approved action is logged with its reason.
+- No PDF: `compose.py` writes a self-contained HTML page (`--pdf` and `to_pdf` removed); the weekly and monthly
+  pages are sent as an attachment with the headline and key numbers in the message. `system_packages` is empty.
+- Starter skills follow the release when never edited: `starter/shipped-skills.json` holds the fingerprint of every
+  shipped version; `Skills.update_starters()` replaces a matching folder, keeps an edited one and leaves the new
+  version in `skills/.starter/`. A test fails until a changed starter is recorded (`record_shipped`).
+- `install_files: [requirements.txt]` in the manifest: the image build installs the libraries from that file alone.
+
 ## 0.3.1 (30 September 2026)
 
 - A reply to an alert button goes to the chat where it was pressed; the pressed message loses its buttons and

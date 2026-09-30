@@ -1,16 +1,22 @@
 #!/usr/bin/env python3
 """reports: one composer for the FM daily digest, the FM weekly page, the
-owner weekly three lines, the owner monthly proof (HTML and PDF).
+owner weekly three lines, the owner monthly proof (an HTML page).
 
   compose.py fm-daily      --pack pack.json --store S [--as-of D]                     -> text (chat)
-  compose.py fm-weekly     --pack pack.json --store S --energy week.json [--out f.html] [--pdf]
+  compose.py fm-weekly     --pack pack.json --store S --energy week.json [--out f.html]
   compose.py owner-weekly  --pack pack.json --store S --energy week.json              -> 3 lines
-  compose.py owner-monthly --pack pack.json --store S --energy month.json [--optimiser o.json] [--proposals p.json] --out f.html --pdf
+  compose.py owner-monthly --pack pack.json --store S --energy month.json [--optimiser o.json] [--proposals p.json] --out f.html
 
 Inputs are the JSON files the other skills produced (roi-energy period,
 optimiser, proposals) plus the store. No Home Assistant read here: the
 composer assembles, it does not fetch. The model phrases the headline from
 the `facts` block the composer prints; everything else is templated.
+
+The weekly and monthly pages are sent as the HTML file itself, attached to the
+chat message: one self-contained file (its CSS inline, no image or script
+fetched) that the phone opens in its browser, and can print or save as PDF
+from there. No PDF is made here (owner, 2026-09-30: a headless browser was
+~480 MB of the app for this alone).
 """
 
 from __future__ import annotations
@@ -107,48 +113,16 @@ def _name(pack, entity_id: str) -> str:
     return entity_id.split(".", 1)[-1].replace("_", " ").capitalize()
 
 
-def render(template: str, ctx: dict, out: str | None, pdf: bool) -> dict:
+def render(template: str, ctx: dict, out: str | None) -> dict:
     html = TPL.get_template(template).render(css=CSS, **ctx)
     res = {"html_chars": len(html)}
     if out:
         with open(out, "w", encoding="utf-8") as f:
             f.write(html)
         res["html"] = out
-        if pdf:
-            pdf_path = os.path.splitext(out)[0] + ".pdf"
-            res["pdf"] = to_pdf(out, pdf_path)
     else:
         res["html_text"] = html
     return res
-
-
-def to_pdf(html_path: str, pdf_path: str) -> str | None:
-    """Print the page to PDF with the system Chromium (no Playwright: lighter on 4 GB shared with Home Assistant)."""
-    import shutil
-    import subprocess
-    # The VESTA Agent host installs Debian's chromium-headless-shell (the headless build only,
-    # ~200 MB lighter than the full browser); a full chromium works too.
-    exe = (os.environ.get("VESTA_CHROMIUM") or shutil.which("chromium-headless-shell") or shutil.which("chromium")
-           or shutil.which("chromium-browser") or shutil.which("google-chrome"))
-    if not exe:
-        return None
-    # the headless shell IS headless and knows only the plain flag; the full browser needs the new mode named
-    headless = "--headless" if "headless-shell" in os.path.basename(exe) else "--headless=new"
-    # --single-process --no-zygote: one process for a one-page print — lighter on the Yellow's
-    # memory, and what lets Chromium run at all under CI's arm64 emulation (QEMU).
-    cmd = [exe, headless, "--no-sandbox", "--single-process", "--no-zygote", "--disable-gpu",
-           "--disable-dev-shm-usage", "--no-pdf-header-footer",
-           f"--print-to-pdf={pdf_path}", "file://" + os.path.abspath(html_path)]
-    try:
-        subprocess.run(cmd, check=True, capture_output=True, timeout=120)
-    except subprocess.CalledProcessError as e:
-        # the reason, for the engine's log and the container test — a file path at most, no secret
-        print(f"chromium exit {e.returncode}: {(e.stderr or b'').decode(errors='replace')[-600:]}", file=sys.stderr)
-        return None
-    except (subprocess.TimeoutExpired, OSError) as e:
-        print(f"chromium: {type(e).__name__}", file=sys.stderr)
-        return None
-    return pdf_path if os.path.exists(pdf_path) else None
 
 
 def main(argv=None):
@@ -156,7 +130,7 @@ def main(argv=None):
     ap.add_argument("cmd", choices=["fm-daily", "fm-weekly", "owner-weekly", "owner-monthly"])
     ap.add_argument("--pack", required=True); ap.add_argument("--store", default=os.environ.get("VESTA_STORE", "vesta_store.sqlite"))
     ap.add_argument("--energy"); ap.add_argument("--optimiser"); ap.add_argument("--proposals")
-    ap.add_argument("--as-of"); ap.add_argument("--out"); ap.add_argument("--pdf", action="store_true")
+    ap.add_argument("--as-of"); ap.add_argument("--out")
     a = ap.parse_args(argv)
     pack = KnowledgePack.load(a.pack)
     store = Store(a.store)
@@ -188,7 +162,7 @@ def main(argv=None):
                notes=[f["summary"] for f in store.findings(status="open") if f["rule_id"] == "PM-PARAM-MISSING"])
     if a.cmd == "fm-weekly":
         ctx["week"] = start.isocalendar()[1]
-        res = render("fm_weekly.html", ctx, a.out, a.pdf)
+        res = render("fm_weekly.html", ctx, a.out)
         res["facts"] = facts; print(json.dumps(res, indent=1)); return 0
 
     # owner monthly
@@ -212,7 +186,7 @@ def main(argv=None):
                               f"{len(pack.families.get('security', []))} security devices, {len(pack.families.get('battery', []))} batteries watched. "
                               f"Water: {'measured' if pack.families.get('water') else 'not measured'}. Solar: {'measured' if pack.families.get('generation') else 'none'}. "
                               f"Retention: raw history {pack.retention['raw_history_days']} days, statistics permanent, agent store {pack.retention['agent_feature_store_months']} months, photos {pack.retention['photos_days']} days."))
-    res = render("owner_monthly.html", ctx, a.out, a.pdf)
+    res = render("owner_monthly.html", ctx, a.out)
     res["facts"] = facts; print(json.dumps(res, indent=1)); return 0
 
 

@@ -227,6 +227,17 @@ class Vesta:
         copied = self.skills.seed()
         if copied:
             log.info("Starter skills copied to the skills folder (first start): %s", ", ".join(copied))
+        try:
+            updated, kept = self.skills.update_starters()
+        except OSError as e:
+            updated, kept = [], []
+            log.error("Starter skills could not be updated (%s): the ones in the skills folder stay as they are",
+                      type(e).__name__)
+        if updated:
+            log.info("Starter skills updated to this version (never edited here): %s", ", ".join(updated))
+        for name in kept:
+            log.warning("Starter skill %s: this version brings changes, but yours was edited, so it is kept. "
+                        "The new version is in skills/.starter/%s to compare.", name, name)
         names = sorted(self.skills.all())
         log.info("Skills: %s", ", ".join(names) or "none")
         if self.tg:

@@ -1,3 +1,13 @@
+## 0.9.2
+
+### Fixed
+- **An approved action now happens.** Pressing Approve (for example "Turn on Pool Bottom") failed with "Home Assistant refused or failed": the agent sent the device in a form Home Assistant's MCP server does not accept. The app's log now also says why when an approved action fails.
+
+### Changed
+- **Updates are much smaller.** The app was built so that any change to the agent re-sent almost the whole app (about 840 MB of 1.1 GB). It is now stacked with the agent's own code last: an update that changes only the agent downloads only that, well under 1 MB. This update itself is still a full download, one last time.
+- **No more PDF: the app is half the size** (about 530 MB instead of 1.1 GB). The weekly and monthly reports arrive as a message with the headline and the key numbers, plus the full report as an attached page: tap it and the phone opens it in its browser, which can print it or save it as PDF.
+- **Starter skills now follow the updates, unless you edited them.** A starter skill you never changed is replaced by the new version and the log says so; one you edited is kept, and the new version is left beside it in `skills/.starter/` to compare.
+
 ## 0.9.1
 
 ### Changed

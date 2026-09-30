@@ -78,7 +78,8 @@ class Wiring(unittest.TestCase):
         df = (HERE.parent / "Dockerfile").read_text()
         self.assertNotIn("HA_MCP_VERSION=8", df, "the version lives in versions.json only")
         self.assertIn('test -n "${HA_MCP_VERSION}"', df)
-        self.assertIn("COPY agent-src /opt/vesta/agent", df)
+        self.assertIn("COPY agent-src /src", df)                                # the agent comes from this repository
+        self.assertIn("COPY --from=agent-inputs /src /opt/vesta/agent", df)
 
     def test_ci_builds_from_versions_json(self) -> None:
         wf = (HERE.parents[1] / ".github/workflows/agent-host.yaml").read_text()

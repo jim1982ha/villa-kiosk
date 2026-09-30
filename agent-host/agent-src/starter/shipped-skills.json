@@ -1,0 +1,19 @@
+{
+ "alert-desk": [
+  "ce4486a0595f5dc358c9ecf493e71ea58fab8dc7bf7f542db820cb011e1edb5e"
+ ],
+ "preventive-maintenance": [
+  "02f7abad19c23204c1413bab8be631962ea565917cf9d5402f706a8c49b44465"
+ ],
+ "reports": [
+  "b7bf31f4152df06677b88fab9ad6c803f56dfd3868f79ac9732f0b3684940107",
+  "061ceeb9514fd34f7be05d9e7b7167e1dc96b235070881bafcd44e6dd30b0fad",
+  "f2e16d28c556631e3d2cbd01d058f7724fb1feb813cb52eab4330e15d534bf54"
+ ],
+ "roi-energy": [
+  "df7b9e01b1b8e1fa1dcded3b1400bde5b44ad8f5f5371bfcf30f2ed9ec0cd4f3"
+ ],
+ "villa-concierge": [
+  "1d66b14d7810d1aae81666a478e73e9fcf7c3e0d976d73dc8b2b62ae3fe5ce72"
+ ]
+}

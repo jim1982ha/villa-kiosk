@@ -7,7 +7,7 @@ and skill.yaml (what the engine needs):
     scripts:                         the ONLY scripts the model may run, with the flags it may pass
       energy_period.py:
         commands: [week, month]      optional: allowed first argument
-        flags: {--period: [week, month], --out: outfile, --as-of: date, --pdf: switch, --what: text}
+        flags: {--period: [week, month], --out: outfile, --as-of: date, --what: text}
         inject: [pack, store, zone]  what the engine adds itself
     schedule:                        what the scheduler starts
       - when: "07:00"                "HH:MM" daily, "Mon 08:00" weekly, "1 08:00" monthly
@@ -32,6 +32,8 @@ declaration, before anything starts. Writing a skill folder needs access to
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import os
 import re
@@ -52,6 +54,11 @@ WHEN = re.compile(r"^(?:(Mon|Tue|Wed|Thu|Fri|Sat|Sun|[1-9]|[12][0-9]|3[01]) )?([
 FLAG_KINDS = {"text", "date", "outfile", "infile", "switch"}
 INJECTS = {"pack", "store", "zone"}
 SEEDED = ".seeded"
+# Every version of each starter skill a release has shipped, as fingerprints
+# (starter/shipped-skills.json). A skill folder equal to one of them was never
+# edited here, so an update may replace it; any other folder is the owner's.
+SHIPPED = "shipped-skills.json"
+REFERENCE = ".starter"      # the current starter skills, for reading: not loaded (a dot is not a skill name)
 HOOK_EVENTS = {"critical_event"}
 
 
@@ -173,6 +180,55 @@ class Skills:
                     "it will not come back.\n")
         return copied
 
+    # ------------------------------------------------------------------ updating
+    def update_starters(self) -> tuple[list[str], list[str]]:
+        """Bring each starter skill that was NEVER EDITED here to this release's version.
+
+        Returns (updated, kept). ⚠️ AN EDITED SKILL IS NEVER TOUCHED: "edited" means
+        its files match no version a release shipped. It is kept as it is, and the
+        new version is left in skills/.starter/ to compare or copy by hand. A
+        deleted starter skill stays deleted. Without this, a starter skill's first
+        copy would stay on the machine forever, whatever later releases fix in it."""
+        if not self.starter_dir or not os.path.isdir(self.starter_dir):
+            return [], []
+        try:
+            with open(os.path.join(os.path.dirname(self.starter_dir), SHIPPED), encoding="utf-8") as f:
+                shipped: dict = json.load(f)
+        except (OSError, ValueError):
+            shipped = {}
+        updated, kept = [], []
+        for name in sorted(os.listdir(self.starter_dir)):
+            src, dst = os.path.join(self.starter_dir, name), os.path.join(self.dir, name)
+            if not os.path.isdir(src):
+                continue
+            old = dst + ".old"
+            if not os.path.exists(dst) and os.path.isdir(old):
+                os.rename(old, dst)                       # a replacement cut short: the skill comes back as it was
+            if not os.path.isdir(dst):
+                continue                                  # deleted by the owner, or never copied
+            have, new = fingerprint(dst), fingerprint(src)
+            if have == new:
+                continue
+            if have not in shipped.get(name, []):
+                kept.append(name)
+                continue
+            tmp = dst + ".new"
+            shutil.rmtree(tmp, ignore_errors=True)
+            shutil.copytree(src, tmp, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+            shutil.rmtree(old, ignore_errors=True)
+            os.rename(dst, old)
+            os.rename(tmp, dst)
+            shutil.rmtree(old, ignore_errors=True)
+            updated.append(name)
+        ref = os.path.join(self.dir, REFERENCE)
+        shutil.rmtree(ref, ignore_errors=True)
+        if kept:
+            os.makedirs(ref, exist_ok=True)
+            for name in kept:
+                shutil.copytree(os.path.join(self.starter_dir, name), os.path.join(ref, name),
+                                ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+        return updated, kept
+
     # ------------------------------------------------------------------ reading
     def all(self) -> dict[str, Skill]:
         out: dict[str, Skill] = {}
@@ -279,8 +335,44 @@ def script_env(settings) -> dict:
         "VESTA_STORE": settings.store_path,
         "VILLA_TZ": settings.timezone,
         "TZ": settings.timezone,
-        "VESTA_CHROMIUM": os.environ.get("VESTA_CHROMIUM", ""),
     }
+
+
+def fingerprint(folder: str) -> str:
+    """One hash for a skill folder's files (names and contents; not Python's caches)."""
+    h = hashlib.sha256()
+    for root, dirs, files in os.walk(folder):
+        dirs.sort()                          # a fixed order; Python's caches hold only .pyc, skipped below
+        for name in sorted(files):
+            if name.endswith(".pyc"):
+                continue
+            path = os.path.join(root, name)
+            h.update(os.path.relpath(path, folder).replace(os.sep, "/").encode() + b"\0")
+            with open(path, "rb") as f:
+                h.update(hashlib.sha256(f.read()).digest())
+    return h.hexdigest()
+
+
+def record_shipped(starter_dir: str) -> list[str]:
+    """Add this tree's starter skills to shipped-skills.json (run before a release
+    that changes one; a test fails until it is done). Returns the skills added."""
+    path = os.path.join(os.path.dirname(starter_dir), SHIPPED)
+    try:
+        with open(path, encoding="utf-8") as f:
+            shipped = json.load(f)
+    except (OSError, ValueError):
+        shipped = {}
+    added = []
+    for name in sorted(os.listdir(starter_dir)):
+        if os.path.isdir(os.path.join(starter_dir, name)):
+            fp = fingerprint(os.path.join(starter_dir, name))
+            if fp not in shipped.setdefault(name, []):
+                shipped[name].append(fp)
+                added.append(name)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(shipped, f, indent=1, sort_keys=True)
+        f.write("\n")
+    return added
 
 
 def injected(settings, skill: Skill, script: str) -> list[str]:

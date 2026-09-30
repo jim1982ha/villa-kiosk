@@ -1,6 +1,6 @@
 ---
 name: reports
-description: The one composer of every VESTA document: the 07:00 FM daily digest (chat), the FM weekly page, the owner weekly three lines, the owner monthly proof (page and PDF), on-demand reports from the cache. Carries the "VESTA suggests" proposals. Use on schedule and when someone asks for a report.
+description: The one composer of every VESTA document: the 07:00 FM daily digest (chat), the FM weekly page, the owner weekly three lines, the owner monthly proof (page), on-demand reports from the cache. Carries the "VESTA suggests" proposals. Use on schedule and when someone asks for a report.
 ---
 
 # reports
@@ -20,9 +20,9 @@ model writing only the headline and nothing that is a number.
 | When (villa time) | Reader | Form | Command |
 |---|---|---|---|
 | Daily 07:00 | FM | chat, under 4,096 characters, split if longer | `compose.py fm-daily` |
-| Monday 08:00 | FM | page (HTML), PDF on request | `energy_period.py --period week` then `compose.py fm-weekly --pdf` |
+| Monday 08:00 | FM | page (HTML file attached) and its headline in chat | `energy_period.py --period week` then `compose.py fm-weekly --out fm_weekly.html` |
 | Monday 08:00 | Owner | three lines in chat | `compose.py owner-weekly` |
-| 1st of the month 08:00 | Owner | page and PDF, the monthly proof | `energy_period.py --period month`, `filtration_optimiser.py`, `proposals.py`, then `compose.py owner-monthly --pdf` |
+| 1st of the month 08:00 | Owner | page (HTML file attached), the monthly proof, and its four numbers in chat | `energy_period.py --period month`, `filtration_optimiser.py`, `proposals.py`, then `compose.py owner-monthly --out owner_monthly.html` |
 | Quarterly | Owner | coverage annex (what is measured, what is not, retention) | the coverage block of the monthly, standalone |
 | On demand | either | the matching period, from the cache when it exists | same commands with `--start --end` |
 
@@ -37,8 +37,10 @@ villa is actually measured (never hide the unmetered share).
 - Every number in a document comes from a JSON the scripts produced. The model
   writes the headline from the `facts` block the composer prints, in the
   reader's language, and touches nothing else.
-- A page over two chat messages is sent as a link (the page) or a PDF, not as
-  text.
+- A page over two chat messages is sent as its HTML file attached to a short
+  message (the headline and the key numbers), not as text. The file is
+  self-contained: it opens in the phone's browser, which can print it or save
+  it as PDF.
 - A load first seen less than 30 days ago is marked "baseline building".
 - Muted rules, devices with no room, and missing helpers are listed under
   "monitoring health" and "what would help" so nothing silently disappears.
@@ -46,8 +48,6 @@ villa is actually measured (never hide the unmetered share).
   handled by villa-concierge.
 - Once sent, the rendered document is cached by period in the store; a second
   request returns it, with no new computation and no LLM call.
-- PDF rendering uses Chromium through Playwright (`to_pdf`). Without it the HTML
-  is still produced and the result says the PDF is missing.
 
 ## What the monthly proof must contain, in this order
 

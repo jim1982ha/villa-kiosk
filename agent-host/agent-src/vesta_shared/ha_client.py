@@ -459,9 +459,18 @@ class McpClient(HABase):
             raise HAError("call_service refused: this client is read-only (writes go through an approval)")
         data = dict(data or {})
         ent = data.pop("entity_id", None)
+        if isinstance(ent, (list, tuple)) and len(ent) == 1:
+            ent = ent[0]
         args = {"domain": domain, "service": service, "wait": True}
-        if ent:
+        # ⚠️ ha-mcp's `entity_id` ARGUMENT IS ONE STRING (8.5.0 refuses a list: "Input
+        # should be a valid string" — the first approved action on the villa failed
+        # so). One device goes there, and ha-mcp waits for its new state. Several go
+        # as Home Assistant's own list inside `data`: a comma-joined string would
+        # make ha-mcp wait 10 s on a composite name that does not exist.
+        if isinstance(ent, str):
             args["entity_id"] = ent
+        elif ent:
+            data["entity_id"] = list(ent)
         if data:
             args["data"] = data
         return self.tool("ha_call_service", args)

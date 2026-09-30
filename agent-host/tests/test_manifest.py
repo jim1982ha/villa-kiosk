@@ -59,12 +59,40 @@ class Manifests(unittest.TestCase):
         self.assertEqual(manifest.identity(self.dir / "missing.yaml"), "none installed")
         self.assertEqual(manifest.identity(self.write("name: helper\nversion: 2\nruntime: node\nstart: x\n")), "helper 2 (node)")
 
-    def test_the_build_reads_install_through_it(self):
-        p = self.write("start: x\ninstall: npm ci\n")
-        r = subprocess.run([sys.executable, "-m", "vesta_host.manifest", "install", str(p)],
-                           capture_output=True, text=True, env={"PYTHONPATH": str(HOST)})
-        self.assertEqual((r.returncode, r.stdout.strip()), (0, "npm ci"))
-        self.assertIn("vesta_host.manifest install", (HERE.parent / "Dockerfile").read_text())
+    def build_inputs(self, text: str, files: dict[str, str]) -> tuple[subprocess.CompletedProcess, Path]:
+        src = self.dir / "src"
+        for rel, body in files.items():
+            (src / rel).parent.mkdir(parents=True, exist_ok=True)
+            (src / rel).write_text(body)
+        dst = self.dir / "inputs"
+        r = subprocess.run([sys.executable, "-m", "vesta_host.manifest", "build-inputs", str(self.write(text)),
+                            str(src), str(dst)], capture_output=True, text=True, env={"PYTHONPATH": str(HOST)})
+        return r, dst
+
+    def test_the_install_inputs_are_only_the_install_files(self):
+        # what keeps an update small: the libraries' layer depends on these alone
+        r, dst = self.build_inputs("start: x\ninstall: pip install -r requirements.txt\ninstall_files: [requirements.txt]\n"
+                                   "system_packages: [fonts-dejavu-core]\n",
+                                   {"requirements.txt": "aiohttp==1\n", "agent/code.py": "x = 1\n", "tests/t.py": ""})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(sorted(p.name for p in (dst / "install").iterdir()), ["install.sh", "requirements.txt"])
+        self.assertEqual((dst / "install" / "install.sh").read_text(), "pip install -r requirements.txt\n")
+        self.assertEqual((dst / "packages.txt").read_text().strip(), "fonts-dejavu-core")
+        self.assertIn("vesta_host.manifest build-inputs", (HERE.parent / "Dockerfile").read_text())
+
+    def test_without_install_files_the_whole_source_is_the_input(self):
+        r, dst = self.build_inputs("start: x\ninstall: make\n", {"Makefile": "all:\n", "tests/t.py": ""})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(sorted(p.name for p in (dst / "install").iterdir()), ["Makefile", "install.sh"])
+        self.assertEqual((dst / "packages.txt").read_text().strip(), "")
+
+    def test_install_files_outside_the_agent_folder_are_refused(self):
+        for bad in ("[../../etc/passwd]", "[/etc/passwd]", "[a/../../b]", "[-rf]", "requirements.txt"):
+            m, problem = manifest.load(self.write(f"start: x\ninstall_files: {bad}\n"))
+            self.assertIsNone(m, bad)
+            self.assertIn("install_files", problem)
+            r, _ = self.build_inputs(f"start: x\ninstall_files: {bad}\n", {})
+            self.assertEqual(r.returncode, 1, bad)
 
     def test_system_packages(self):
         m, problem = manifest.load(self.write(
@@ -79,23 +107,16 @@ class Manifests(unittest.TestCase):
             m, problem = manifest.load(self.write(f"start: x\nsystem_packages: {bad}\n"))
             self.assertIsNone(m, bad)
             self.assertIn("system_packages", problem)
-            r = subprocess.run([sys.executable, "-m", "vesta_host.manifest", "system-packages",
-                                str(self.write(f"start: x\nsystem_packages: {bad}\n"))],
-                               capture_output=True, text=True, env={"PYTHONPATH": str(HOST)})
-            self.assertEqual((r.returncode, r.stdout), (1, ""), bad)
-
-    def test_the_build_reads_system_packages_through_it(self):
-        p = self.write("start: x\nsystem_packages: [fonts-dejavu-core]\n")
-        r = subprocess.run([sys.executable, "-m", "vesta_host.manifest", "system-packages", str(p)],
-                           capture_output=True, text=True, env={"PYTHONPATH": str(HOST)})
-        self.assertEqual((r.returncode, r.stdout.strip()), (0, "fonts-dejavu-core"))
-        self.assertIn("vesta_host.manifest system-packages", (HERE.parent / "Dockerfile").read_text())
+            r, dst = self.build_inputs(f"start: x\nsystem_packages: {bad}\n", {})
+            self.assertEqual(r.returncode, 1, bad)
+            self.assertFalse((dst / "packages.txt").exists(), bad)
 
     def test_the_real_agent_manifest_loads(self):
         m, problem = manifest.load(HERE.parent / "agent-src" / "vesta-agent.yaml")
         self.assertIsNone(problem)
         self.assertEqual((m.name, m.start), ("vesta-agent", "python -m vesta_agent"))
-        self.assertIn("chromium-headless-shell", m.system_packages)
+        self.assertEqual(m.system_packages, [])                      # no PDF, no headless browser (0.9.2)
+        self.assertEqual(m.install_files, ["requirements.txt"])
 
 
 class HostStates(unittest.TestCase):

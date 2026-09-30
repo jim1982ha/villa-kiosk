@@ -1,8 +1,8 @@
-description: The facility manager's daily digest and weekly page, the owner's weekly lines and monthly proof (PDF)
+description: The facility manager's daily digest and weekly page, the owner's weekly lines and monthly proof (HTML pages)
 scripts:
   compose.py:
     commands: [fm-daily, fm-weekly, owner-weekly, owner-monthly]
-    flags: {--energy: infile, --optimiser: infile, --proposals: infile, --as-of: date, --out: outfile, --pdf: switch}
+    flags: {--energy: infile, --optimiser: infile, --proposals: infile, --as-of: date, --out: outfile}
     inject: [pack, store]
 schedule:
   - when: "07:00"
@@ -14,13 +14,15 @@ schedule:
   - when: "Mon 08:00"
     prompt: >-
       It is Monday 08:00. Produce the week's numbers (roi-energy, energy_period.py --period week --out week.json),
-      the facility manager weekly page (reports, fm-weekly --energy week.json --out fm_weekly.html --pdf) and
-      send it to fm with send_message and the PDF attached, the message written in {fm_language}. Then send the
+      the facility manager weekly page (reports, fm-weekly --energy week.json --out fm_weekly.html) and
+      send it to fm with send_message, attachment fm_weekly.html: the message itself gives the headline and
+      the few lines that matter (from the facts the script printed), in {fm_language}; the page opens on the phone. Then send the
       owner the three owner-weekly lines (reports, owner-weekly), in {owner_language}.
   - when: "1 08:00"
     prompt: >-
       It is the first of the month, 08:00. Produce the monthly proof for the owner: roi-energy for the month
       (--period month --out month.json), the filtration optimiser (--out optimiser.json), the proposals
       (--period-json month.json --optimiser-json optimiser.json --out proposals.json), then reports owner-monthly
-      with --energy month.json --optimiser optimiser.json --proposals proposals.json --out owner_monthly.html --pdf.
-      Send it to the owner with send_message and the PDF attached, in {owner_language}.
+      with --energy month.json --optimiser optimiser.json --proposals proposals.json --out owner_monthly.html.
+      Send it to the owner with send_message, attachment owner_monthly.html: the message itself gives the
+      headline and the four key numbers (from the facts the script printed), in {owner_language}.

@@ -1,8 +1,8 @@
 """Chat message helpers shared by the skills.
 
 Telegram caps a message at 4,096 characters. Long content is split on
-paragraph boundaries; a report longer than two messages is sent as a link or
-a PDF instead (the reports skill decides).
+paragraph boundaries; a report longer than two messages is sent as its HTML
+page, attached, instead (the reports skill decides).
 """
 
 from __future__ import annotations

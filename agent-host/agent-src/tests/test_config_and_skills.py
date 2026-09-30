@@ -79,6 +79,75 @@ def test_seeded_once_and_a_deleted_skill_stays_deleted(tmp_path):
     assert "roi-energy" not in sk.all()
 
 
+def test_every_starter_skill_version_is_recorded_as_shipped():
+    # without it, the NEXT release would take this version for an edited one and never update it
+    import json
+    from vesta_agent.skills import SHIPPED, fingerprint
+    shipped = json.load(open(os.path.join(STARTER_DIR, SHIPPED)))
+    for name in os.listdir(os.path.join(STARTER_DIR, "skills")):
+        fp = fingerprint(os.path.join(STARTER_DIR, "skills", name))
+        assert fp in shipped.get(name, []), (
+            f"starter skill {name} changed: run python3 -c \"from vesta_agent.skills import record_shipped; "
+            f"record_shipped('starter/skills')\" in agent-src")
+
+
+def _starters(tmp_path, versions: dict[str, str]):
+    """A starter folder whose skills say `versions[name]`, with a shipped list naming v1 and v2."""
+    import json
+    from vesta_agent.skills import SHIPPED, fingerprint
+    root = tmp_path / "starter"
+    shipped = {}
+    for v in ("v1", "v2"):
+        d = _minimal_skill(tmp_path / "hist" / v, "pool-care")
+        (d / "scripts" / "check.py").write_text(f"print('{v}')\n")
+        shipped.setdefault("pool-care", []).append(fingerprint(str(d)))
+    for name, v in versions.items():
+        d = _minimal_skill(root / "skills", name)
+        (d / "scripts" / "check.py").write_text(f"print('{v}')\n")
+    (root / SHIPPED).write_text(json.dumps(shipped))
+    return str(root / "skills")
+
+
+def test_an_untouched_starter_skill_follows_the_release(tmp_path):
+    old = _starters(tmp_path / "old", {"pool-care": "v1"})
+    new = _starters(tmp_path / "new", {"pool-care": "v2"})
+    skills = tmp_path / "skills"
+    Skills(str(skills), old).seed()
+    (skills / "pool-care" / "scripts" / "__pycache__").mkdir()          # Python's cache is not an edit
+    (skills / "pool-care" / "scripts" / "__pycache__" / "check.pyc").write_bytes(b"x")
+    assert Skills(str(skills), new).update_starters() == (["pool-care"], [])
+    assert (skills / "pool-care" / "scripts" / "check.py").read_text() == "print('v2')\n"
+    assert Skills(str(skills), new).update_starters() == ([], [])      # once
+    assert not (skills / ".starter").exists()
+
+
+def test_an_edited_starter_skill_is_kept_and_the_new_one_left_beside_it(tmp_path):
+    old = _starters(tmp_path / "old", {"pool-care": "v1"})
+    new = _starters(tmp_path / "new", {"pool-care": "v2"})
+    skills = tmp_path / "skills"
+    Skills(str(skills), old).seed()
+    (skills / "pool-care" / "SKILL.md").write_text("# pool-care\nMy own words.\n")
+    sk = Skills(str(skills), new)
+    assert sk.update_starters() == ([], ["pool-care"])
+    assert "My own words" in (skills / "pool-care" / "SKILL.md").read_text()
+    assert (skills / ".starter" / "pool-care" / "scripts" / "check.py").read_text() == "print('v2')\n"
+    assert sorted(sk.all()) == ["pool-care"]                            # the reference copy is not a skill
+
+
+def test_a_deleted_starter_skill_stays_deleted_and_a_cut_replacement_comes_back(tmp_path):
+    old = _starters(tmp_path / "old", {"pool-care": "v1"})
+    new = _starters(tmp_path / "new", {"pool-care": "v2"})
+    skills = tmp_path / "skills"
+    Skills(str(skills), old).seed()
+    os.rename(skills / "pool-care", str(skills / "pool-care") + ".old")  # cut between the two renames
+    assert Skills(str(skills), new).update_starters() == (["pool-care"], [])
+    assert (skills / "pool-care" / "scripts" / "check.py").read_text() == "print('v2')\n"
+    import shutil
+    shutil.rmtree(skills / "pool-care")
+    assert Skills(str(skills), new).update_starters() == ([], [])
+    assert not (skills / "pool-care").exists()
+
+
 def _minimal_skill(root, name="pool-care", **yaml_extra):
     d = root / name
     (d / "scripts").mkdir(parents=True)

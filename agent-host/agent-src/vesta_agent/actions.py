@@ -16,12 +16,16 @@ tool it sees creates an approval request). The code then:
 from __future__ import annotations
 
 import json
+import logging
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable
 
 from .policy import Decision, Person, Policy, action_hash
 from .state import State
+
+log = logging.getLogger("vesta.actions")
 
 EXPECT = {
     ("light", "turn_on"): "on", ("light", "turn_off"): "off",
@@ -183,17 +187,25 @@ class Actions:
             writer.call_service(d.domain, d.service, data)
         except Exception as e:  # noqa: BLE001
             self.state.log("failed", {"domain": d.domain, "service": d.service, "entities": d.entity_ids, "error": str(e)[:300]})
+            log.warning("Approved %s.%s on %s failed: %s", d.domain, d.service, ", ".join(d.entity_ids) or "-", str(e)[:300])
             return {"ok": False, "text": f"Home Assistant refused or failed ({type(e).__name__}). Nothing confirmed."}
         self.state.log("executed", {"domain": d.domain, "service": d.service, "entities": d.entity_ids, "data": d.data})
         expect = EXPECT.get((d.domain, d.service))
         if not d.entity_ids or not expect:
             return {"ok": True, "text": "Sent."}
-        try:
-            st = writer.states(d.entity_ids)
-        except Exception:  # noqa: BLE001
-            st = {}
-        rows = [(e, (st.get(e) or {}).get("state")) for e in d.entity_ids]
-        bad = [(e, s) for e, s in rows if s != expect]
+        # One device: ha-mcp already waited for its new state. Several: it could not
+        # (see McpClient.call_service), so the read-back gives them a few seconds.
+        for attempt in range(1 if len(d.entity_ids) == 1 else 5):
+            if attempt:
+                time.sleep(1)
+            try:
+                st = writer.states(d.entity_ids)
+            except Exception:  # noqa: BLE001
+                st = {}
+            rows = [(e, (st.get(e) or {}).get("state")) for e in d.entity_ids]
+            bad = [(e, s) for e, s in rows if s != expect]
+            if not bad:
+                break
         self.state.log("readback", {"entities": d.entity_ids, "expect": expect, "states": dict(rows)})
         if not bad:
             return {"ok": True, "text": f"Done: {', '.join(self.names(e) for e, _ in rows)} {expect}."}

@@ -147,6 +147,29 @@ tcp=$(docker exec vesta-ct cat /proc/net/tcp /proc/net/tcp6 2>/dev/null)
 grep -qE ":256F [0-9A-F:]+ 0A" <<<"$tcp" && ! grep -qE "^ *[0-9]+: 0+:256F .* 0A" <<<"$tcp" \
   && grep -qE "0100007F:256F [0-9A-F:]+ 0A" <<<"$tcp" && ok "sidecar listens on 127.0.0.1 only" || bad "sidecar not loopback-only"
 has "pypi.org" && bad "the sidecar called PyPI (update check not disabled)" || ok "no update check"
+# ⚠️ THE AGENT'S CALLS HAVE THE SHAPE OF THIS SERVER'S TOOL. The agent's tests check
+# its ha_call_service arguments against a saved copy of the tool's input schema
+# (agent-src/tests/fixtures); an HA MCP release that changes it fails here, before
+# it can reach the Yellow. (0.9.1: a list where 8.5.0 takes one string, and the
+# first approved action on the villa failed.)
+live=$(docker exec -i vesta-ct /opt/vesta/ha-mcp/bin/python - <<'EOF' 2>&1
+import json, urllib.request
+def post(body):
+    r = urllib.request.Request("http://127.0.0.1:9583/mcp", json.dumps(body).encode(),
+                               {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})
+    return urllib.request.urlopen(r, timeout=10).read().decode()
+post({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-03-26",
+      "capabilities": {}, "clientInfo": {"name": "container-test", "version": "1"}}})
+raw = post({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+data = [l[5:] for l in raw.splitlines() if l.startswith("data:")]
+tools = json.loads(data[0] if data else raw)["result"]["tools"]
+print(json.dumps(next(t for t in tools if t["name"] == "ha_call_service")["inputSchema"], sort_keys=True))
+EOF
+)
+saved=$(python3 -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1])), sort_keys=True))' \
+        "$(dirname "$0")/../agent-src/tests/fixtures/ha_mcp_ha_call_service.schema.json")
+[ "$(tail -1 <<<"$live")" = "$saved" ] && ok "ha_call_service takes the arguments the agent's tests check" \
+  || bad "ha_call_service's input schema changed in this HA MCP: update agent-src/tests/fixtures and the agent — $(tail -3 <<<"$live" | cut -c1-400)"
 no_secret "sidecar"
 start=$(date +%s); docker stop -t 30 vesta-ct >/dev/null; took=$(( $(date +%s) - start ))
 has "ha-mcp stopped cleanly" && [ "$took" -lt 30 ] && ok "sidecar stopped cleanly after the agent (${took} s)" || bad "sidecar stop (${took} s)"
@@ -184,17 +207,18 @@ start=$(date +%s); docker stop -t 30 vesta-ct >/dev/null; took=$(( $(date +%s) -
 hasf "Stopped" && [ "$took" -lt 20 ] && ok "the agent stopped cleanly on SIGTERM (${took} s)" || bad "agent stop (${took} s)"
 kill "$FAKE_PID" 2>/dev/null || true
 
-echo "== 6b. A PDF report with the image's own headless Chromium"
-pdf=$(docker run --rm "${PLATFORM[@]}" --entrypoint /opt/vesta/agent/.venv/bin/python -w /tmp "$IMAGE" -c '
-import importlib.util, os
-spec = importlib.util.spec_from_file_location("compose", "/opt/vesta/agent/starter/skills/reports/scripts/compose.py")
-open("/tmp/r.html", "w").write("<html><body><h1>VESTA test page</h1></body></html>")
-import sys; sys.path.insert(0, "/opt/vesta/agent")
-m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
-out = m.to_pdf("/tmp/r.html", "/tmp/r.pdf")
-print("PDF" if out and open(out, "rb").read(4) == b"%PDF" else "NONE")' 2>&1)
-if [ "$(tail -1 <<<"$pdf")" = "PDF" ]; then ok "a PDF printed by chromium-headless-shell"
-else bad "no PDF: $(tail -12 <<<"$pdf" | tr '\n' ' ' | cut -c1-900)"; fi
+echo "== 6b. The agent in the image: its libraries, its code, nothing else"
+# The code and the libraries now come from different stages (the layer order
+# that keeps updates small): check they met, and that tests and the old PDF
+# browser stayed out.
+got=$(docker run --rm "${PLATFORM[@]}" --entrypoint sh "$IMAGE" -c '
+cd /opt/vesta/agent && .venv/bin/python -c "import vesta_agent, claude_agent_sdk, jinja2, aiohttp, yaml; print(\"IMPORTS\")"
+test -f starter/shipped-skills.json && test -f starter/skills/reports/templates/vesta.css && echo STARTER
+test ! -e tests && test ! -e README.md && test ! -e install.sh && echo CLEAN
+command -v chromium-headless-shell chromium >/dev/null || echo NOBROWSER' 2>&1)
+for w in IMPORTS STARTER CLEAN NOBROWSER; do
+  grep -qx "$w" <<<"$got" && ok "agent image: $w" || bad "agent image: $w missing — $(tr '\n' ' ' <<<"$got" | cut -c1-600)"
+done
 
 # A stand-in agent mounted over the stub, to exercise the slot's policy.
 mkstub() {  # mkstub <start command> <grace>

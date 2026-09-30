@@ -39,27 +39,43 @@ RUN test -n "${HA_MCP_VERSION}" || { echo "HA_MCP_VERSION is required (agent-hos
  && /opt/vesta/ha-mcp/bin/python -c "import ha_mcp" \
  && find /opt/vesta/ha-mcp -name __pycache__ -prune -exec rm -rf {} +
 
-# ---- the VESTA Agent (SPEC 8) ----------------------------------------------
-# CI checks the agent's repository out into agent-src/ at the release named in
-# versions.json (empty: only the README, and the image carries the stub alone).
+# ---- the VESTA Agent's build inputs (SPEC 8) --------------------------------
+# ⚠️ THE ORDER OF THIS FILE IS WHAT AN UPDATE COSTS THE YELLOW. Home Assistant
+# downloads only the layers that changed, and a changed layer rebuilds every
+# layer after it. So the final image stacks what changes least first: Debian,
+# the agent's apt packages, the HA MCP server, the agent's libraries, the host,
+# and the agent's own code LAST. Before 0.9.2 the code came first and every
+# release re-sent ~840 MB of 1.1 GB for a few kilobytes of change.
+# This stage splits the agent's source with its manifest (vesta_host.manifest
+# build-inputs): /inputs/install (the `install` command and only its
+# `install_files`), /inputs/packages.txt, and /src (the code). Docker compares
+# COPY sources by content, so an unchanged install input or package list keeps
+# the layers built from it, whatever else changed.
+FROM ${BUILD_FROM} AS agent-inputs
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends python3 python3-yaml \
+ && rm -rf /var/lib/apt/lists/*
+COPY rootfs/opt/vesta/host /opt/vesta/host
+COPY agent-src /src
+RUN set -e; mkdir -p /inputs/install; : > /inputs/packages.txt; \
+    if [ -f /src/vesta-agent.yaml ]; then \
+      PYTHONPATH=/opt/vesta/host python3 -m vesta_host.manifest build-inputs /src/vesta-agent.yaml /src /inputs; \
+    fi; \
+    rm -rf /src/README.md /src/tests; find /src -name __pycache__ -prune -exec rm -rf {} +
+
+# ---- the VESTA Agent's libraries --------------------------------------------
 # Its manifest's `install` runs HERE, in a virtualenv inside its folder, on the
 # same base as the final image — so anything it builds is built once, in CI,
 # and nothing is installed on the Yellow. The slot puts that virtualenv first
 # on the agent's PATH (vesta-agent-slot).
 FROM ${BUILD_FROM} AS agent
 RUN apt-get update \
- && apt-get install -y --no-install-recommends python3 python3-venv python3-yaml ca-certificates \
+ && apt-get install -y --no-install-recommends python3 python3-venv ca-certificates \
  && rm -rf /var/lib/apt/lists/*
-COPY agent-src /opt/vesta/agent
-# The manifest is read by vesta_host.manifest, here as in the slot.
-COPY rootfs/opt/vesta/host /opt/vesta/host
-RUN set -e; cd /opt/vesta/agent; rm -rf README.md tests; \
-    if [ -f vesta-agent.yaml ]; then \
-      python3 -m venv .venv; \
-      install=$(PYTHONPATH=/opt/vesta/host python3 -m vesta_host.manifest install vesta-agent.yaml); \
-      if [ -n "$install" ]; then PATH="/opt/vesta/agent/.venv/bin:$PATH" sh -c "$install"; fi; \
-      find . -name __pycache__ -prune -exec rm -rf {} +; \
-    fi
+COPY --from=agent-inputs /inputs/install /opt/vesta/agent
+RUN set -e; cd /opt/vesta/agent; python3 -m venv .venv; \
+    if [ -s install.sh ]; then PATH="/opt/vesta/agent/.venv/bin:$PATH" sh install.sh; fi; \
+    find .venv -name __pycache__ -prune -exec rm -rf {} +
 
 FROM ${BUILD_FROM}
 
@@ -74,32 +90,30 @@ RUN apt-get update \
 
 RUN python3 --version
 
-COPY --from=ha-mcp /opt/vesta/ha-mcp /opt/vesta/ha-mcp
-COPY --from=agent /opt/vesta/agent /opt/vesta/agent
-
 # The agent's `system_packages` (its manifest): what it needs from Debian in the
-# image it RUNS in — the VESTA Agent's headless Chromium for its PDF reports.
-# Read by vesta_host.manifest like every other manifest field (SPEC H2); none
-# listed, nothing installed. Installed here, never at run time on the Yellow.
-COPY rootfs/opt/vesta/host /opt/vesta/host
-RUN set -e; m=/opt/vesta/agent/vesta-agent.yaml; \
-    if [ -f "$m" ]; then \
-      pkgs=$(PYTHONPATH=/opt/vesta/host python3 -m vesta_host.manifest system-packages "$m"); \
-      if [ -n "$pkgs" ]; then \
-        apt-get update && apt-get install -y --no-install-recommends $pkgs && rm -rf /var/lib/apt/lists/*; \
-      fi; \
+# image it RUNS in, checked as package names by vesta_host.manifest (SPEC H2);
+# none listed, nothing installed. Installed here, never at run time on the Yellow.
+COPY --from=agent-inputs /inputs/packages.txt /tmp/agent-packages.txt
+RUN set -e; pkgs=$(cat /tmp/agent-packages.txt); rm /tmp/agent-packages.txt; \
+    if [ -n "$pkgs" ]; then \
+      apt-get update && apt-get install -y --no-install-recommends $pkgs && rm -rf /var/lib/apt/lists/*; \
     fi
 
+COPY --from=ha-mcp /opt/vesta/ha-mcp /opt/vesta/ha-mcp
+COPY --from=agent /opt/vesta/agent/.venv /opt/vesta/agent/.venv
+
 COPY rootfs /
-# The self-test stub fills the slot in stub mode. The VESTA Agent is in
-# /opt/vesta/agent (the stage above); the stub stays beside it, so switching
-# agent_mode never needs a different image.
+# The self-test stub fills the slot in stub mode; the VESTA Agent is in
+# /opt/vesta/agent, so switching agent_mode never needs a different image.
 COPY stub /opt/vesta/stub
 # ⚠️ THE SHAPE, NOT A LIST OF PATHS — as in the VESTA Kiosk Dockerfile: git
 # stores rootfs files as 0644, and an s6 `run` script that is not executable
 # builds green and fails only on the device.
 RUN find /etc/s6-overlay/s6-rc.d -name run -exec chmod a+x {} + \
  && chmod a+x /usr/bin/vesta-entrypoint /usr/bin/vesta-agent-slot /usr/bin/vesta-selftest /usr/bin/vesta-sidecar
+
+# The VESTA Agent's own code, LAST: the one layer most releases change.
+COPY --from=agent-inputs /src /opt/vesta/agent
 
 # The start banner and the environment contract read these. VESTA_INSTANCE is
 # per channel: CI passes `prod` from main and `dev` from any other branch.

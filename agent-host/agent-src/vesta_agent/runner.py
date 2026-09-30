@@ -36,7 +36,7 @@ BUILTIN_DENY = ["Bash", "BashOutput", "KillShell", "Read", "Write", "Edit", "Mul
 # token (SUPERVISOR_TOKEN in an add-on). Found by the end-to-end test.
 KEEP_ENV = {"PATH", "HOME", "LANG", "LC_ALL", "TZ", "TMPDIR", "SSL_CERT_FILE", "REQUESTS_CA_BUNDLE", "NODE_EXTRA_CA_CERTS",
             "HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "https_proxy", "http_proxy", "no_proxy", "ANTHROPIC_BASE_URL",
-            "VESTA_CHROMIUM", "PYTHONPATH"}
+            "PYTHONPATH"}
 
 
 def clean_environ() -> list[str]:

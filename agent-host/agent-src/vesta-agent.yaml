@@ -1,14 +1,17 @@
 # The VESTA Agent's manifest, read by the VESTA Agent host (SPEC section 8).
 name: vesta-agent
-version: "0.3.1"
+version: "0.3.2"
 runtime: python
 # Runs at IMAGE BUILD, in CI, never on the Yellow. `rm -rf tests` keeps every test
 # (and the villa's own fixtures, which a local copy may hold) out of the image.
-install: "pip install --no-cache-dir -r requirements.txt && rm -rf tests"
+install: "pip install --no-cache-dir -r requirements.txt"
+# ⚠️ ONLY THESE FILES are present when `install` runs: the image build caches the
+# installed libraries until one of them changes, so a release that changes only
+# the code downloads the code, not 280 MB of libraries again.
+install_files: [requirements.txt]
 start: "python -m vesta_agent"
 stop_grace_seconds: 20
-# Installed in the host image's final stage: the PDF reports (headless Chromium,
-# started only while printing) and a font for their text.
-system_packages:
-  - chromium-headless-shell
-  - fonts-dejavu-core
+# Debian packages the agent needs at run time, installed in the host image's
+# final stage. None: the reports are HTML pages (no PDF, no headless browser —
+# owner, 2026-09-30).
+system_packages: []
