@@ -1,3 +1,9 @@
+## 0.9.4
+
+### Fixed
+- **"Generate a weekly report now" works.** The report page was built without the week's energy figures and stopped with "a template error". The reports skill now spells out its two steps, and the page builder says exactly what is missing instead of failing. The owner's Monday lines also use the week's figures (they could say "kWh n/a").
+- **A failed skill script is now in the app's log**, with its reason, not only in the chat.
+
 ## 0.9.3
 
 ### Added

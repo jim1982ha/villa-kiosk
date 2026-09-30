@@ -183,6 +183,7 @@ lights without an approval.
 | `Button Done on incident #… pressed by …` | someone answered an alert |
 | `Kiosk ticket … created / resolved` | a fault in the Kiosk's Facility records |
 | `Answered … in chat … (0.012 USD)` | a conversation reply and what it cost |
+| `Skill <name>: <script> failed (exit …): …` | a skill's script stopped; the end says why |
 
 ## Folders
 
