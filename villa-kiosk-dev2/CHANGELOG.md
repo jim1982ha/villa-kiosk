@@ -1,3 +1,12 @@
+## 2.496.231
+
+### Fixed
+- **Sliders now always send their value.** Brightness, colour temperature and blind position were only sent when a finger or mouse was lifted: moving them with the keyboard changed the slider but did nothing, and a touch the browser turned into a scroll left the slider stuck and no longer following the device. They now send on every kind of release (a keyboard change once the keys stop), and a touch that turns into a scroll simply goes back to the device's value.
+- **A refused slider or A/C temperature change goes back straight away** to the device's real value, instead of showing a value Home Assistant did not apply.
+
+### Changed
+- **An offline device looks the same in every window**: the "Unavailable" notice, and no controls. The A/C used to show greyed-out controls under the notice, and the blind greyed-out buttons.
+
 ## 2.496.230
 
 _2.496.229 did not reach Home Assistant (one of its checks failed); this update carries its changes._
