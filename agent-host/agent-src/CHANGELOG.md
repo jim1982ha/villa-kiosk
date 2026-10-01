@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.1 (1 October 2026)
+
+- UI: index.html is served with the version in its files' addresses (`static/app.js?v=…`): on the villa, 0.12.0's
+  page showed 0.10.0's code with the new data. `errors.js` (loaded first, plain script) shows a page error on the
+  page and posts it to `/api/client-error`, logged as `UI: page error: …`; `UI: page opened (agent …)` per load.
+  Cause found from the owner's console: the villa's HA is behind Cloudflare, which served 0.10.0's app.js.
+- UI: no inline `style` (the CSP refused it): `.spaced`, `.push-right`; a test forbids `style:` in app.js.
+
 ## 0.6.0 (1 October 2026)
 
 Readings (owner's design, agent-host/docs/adr/0001; glossary agent-host/CONTEXT.md).

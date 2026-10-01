@@ -110,6 +110,7 @@ class UI:
         r.add_get("/", self.index)
         r.add_static("/static/", STATIC, follow_symlinks=False)
         r.add_get("/api/overview", self.overview)
+        r.add_post("/api/client-error", self.client_error)
         r.add_get("/api/policy", self.policy_get)
         r.add_put("/api/policy/form", self.policy_form)
         r.add_put("/api/policy/text", self.policy_text)
@@ -145,7 +146,18 @@ class UI:
         return resp
 
     async def index(self, _request):
-        return web.FileResponse(os.path.join(STATIC, "index.html"))
+        # ⚠️ THE FILES' ADDRESSES CARRY THE VERSION (static/app.js?v=0.6.1): after an update no copy kept
+        # anywhere between the app and the screen (Home Assistant's frame, a phone's web view) can serve
+        # the previous page's code with the new data — seen on 0.12.0: no banner, no AI jobs card.
+        with open(os.path.join(STATIC, "index.html"), encoding="utf-8") as f:
+            html = f.read().replace("{version}", __version__)
+        log.info("UI: page opened (agent %s)", __version__)
+        return web.Response(text=html, content_type="text/html")
+
+    async def client_error(self, request):
+        body = await request.json()
+        log.warning("UI: page error: %s (%s)", str(body.get("message") or "")[:300], str(body.get("agent") or "")[:120])
+        return web.json_response({"ok": True})
 
     # ------------------------------------------------------------------ overview
     async def overview(self, _request):

@@ -137,7 +137,7 @@ async function overview() {
          ["actions done", count("executed") + count("direct")], ["replies written", count("run")],
          ["AI cost (USD)", r.ai_cost_usd.toFixed(2)], ["failures", count("failed") + count("code_script_failed") + count("send_failed")]]
           .map(([l, n]) => h("div", { class: "kpi" }, h("div", { class: "n" }, n), h("div", { class: "l" }, l)))),
-      r.scheduled_jobs.length ? h("div", {}, h("h2", { style: "margin-top:18px" }, "Scheduled jobs run"),
+      r.scheduled_jobs.length ? h("div", {}, h("h2", { class: "spaced" }, "Scheduled jobs run"),
         h("ul", { class: "plain" }, r.scheduled_jobs.map((j) => h("li", {}, j.job, h("span", { class: "muted" }, "  " + new Date(j.ran_at).toLocaleString()))))) : null));
   } else {
     kids.push(card("The last 24 hours", "The agent has not recorded anything yet (it has not run in agent mode)."));
@@ -364,7 +364,7 @@ async function openSkill(name, pane, info, path = "SKILL.md") {
     h("div", { class: "actions" },
       h("button", { class: "btn ghost", onclick: newFile }, "New file"),
       path && !["SKILL.md", "skill.yaml"].includes(path) ? h("button", { class: "btn ghost", onclick: delFile }, "Delete this file") : null,
-      h("button", { class: "btn danger", onclick: delSkill, style: "margin-left:auto" }, "Delete the skill"))));
+      h("button", { class: "btn danger push-right", onclick: delSkill }, "Delete the skill"))));
   setBar({ save, discard: () => load(path), idle: path ? `Editing ${path}. Saves are checked before they are written.` : "" });
   if (path) await load(path);
 }

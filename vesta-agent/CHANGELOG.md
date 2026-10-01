@@ -1,3 +1,10 @@
+## 0.12.1
+
+### Fixed
+- **The VESTA Agent page could show the previous version's page** after an update (no "AI jobs" card, no "Add them" banner): when Home Assistant is reached through Cloudflare, Cloudflare kept the old page code. Its files now carry the version in their address, so an old copy can never be used again.
+- Two spacings on the page were blocked by the page's own security rule; they now come from its stylesheet.
+- If the page meets an error in your browser, it now says so on the page and writes it to the app's log.
+
 ## 0.12.0
 
 ⚠️ **After updating, open the VESTA Agent page and press "Add them"** (or Rules → AI jobs): the daily digest and the weekly and monthly reports now each need their brain and spending limit set, and do not run until they are.

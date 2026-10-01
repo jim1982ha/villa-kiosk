@@ -163,3 +163,25 @@ def test_the_page_lists_the_ai_jobs_says_which_are_not_set_and_sets_them(ui):
     assert sorted(before) == ["fm-daily", "fm-weekly", "owner-monthly"] and status == 200 and after == []
     with open(ui.policy_path) as f:
         assert _yaml.safe_load(f)["settings"]["jobs"]["owner-monthly"] == {"profile": "performance", "limit_usd": 6}
+
+
+def test_the_page_names_its_files_with_the_version_and_reports_its_errors_to_the_log(ui, caplog):
+    from vesta_agent import __version__
+
+    async def fn(c):
+        html = await (await c.get("/")).text()
+        js = await c.get(f"/static/app.js?v={__version__}")
+        err = await c.post("/api/client-error", json={"message": "TypeError: x is undefined at app.js:12"}, headers=HDR)
+        return html, js.status, err.status
+    html, js, err = call(ui, fn)
+    assert f'src="static/app.js?v={__version__}"' in html and f'href="static/app.css?v={__version__}"' in html
+    assert "{version}" not in html and js == 200 and err == 200
+    assert any("UI: page error: TypeError: x is undefined at app.js:12" in r.getMessage() for r in caplog.records)
+
+
+def test_the_page_sets_no_inline_style_its_csp_would_block():
+    # seen on the villa: "Applying inline style violates ... style-src 'self'" — the style is silently dropped
+    import re
+    from vesta_agent.ui.server import STATIC
+    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
+    assert not re.search(r"\bstyle\s*:", js)
