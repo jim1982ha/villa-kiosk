@@ -2,10 +2,12 @@ description: The facility manager's daily digest and weekly page, the owner's we
 scripts:
   facts.py:                    # every figure, and the clues, of a weekly or monthly page (reports.yaml)
     commands: [fm-weekly, owner-monthly]
+    job_only: {fm-weekly: fm-weekly, owner-monthly: owner-monthly}   # asked for in a chat: start_job, not here
     flags: {--energy: infile, --out: outfile}
     inject: [pack, store, zone]
   compose.py:                  # the chat texts, and a page from its facts and your notes
     commands: [fm-daily, fm-weekly, owner-weekly, owner-monthly]
+    job_only: {fm-daily: fm-daily, fm-weekly: fm-weekly, owner-monthly: owner-monthly}
     flags: {--energy: infile, --facts: infile, --notes: infile, --as-of: date, --out: outfile}
     inject: [pack, store, zone]
 # AI jobs: each `name` is the key of its model and spending limit in policy.yaml settings.jobs (VESTA
@@ -16,6 +18,8 @@ schedule:
   - when: "07:00"
     name: fm-daily
     to: fm
+    on_request: true
+    description: the facility manager's daily digest (what is new since yesterday, what is still open)
     default: {profile: auto, limit_usd: 1}
     prompt: >-
       It is 07:00. Read the reports skill, compose the facility manager daily digest (fm-daily) with

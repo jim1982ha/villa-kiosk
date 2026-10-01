@@ -163,7 +163,7 @@ class Toolbox:
         """`requested`: a job a person asked for in chat_id; all it sends goes there (routing.Origin)."""
         origin = Origin(chat_id, requested) if chat_id is not None else None
         tools = [self._proxy(n) for n in self.read_tool_names()]
-        tools += [self._call_service(person, chat_id), self._read_skill(), self._run_script(origin), self._send(origin),
+        tools += [self._call_service(person, chat_id), self._read_skill(), self._run_script(origin, person is not None), self._send(origin),
                   self._status(), self._save_file()]
         if person is not None and chat_id is not None and self.start_job:
             # a person asking, in a chat: never a job (even one started from a chat), so no job starts another
@@ -295,7 +295,7 @@ class Toolbox:
             return _ok(SKILL_PREFACE + f"Scripts you may run for this skill: {', '.join(scripts) or 'none'}.\n\n" + body)
         return handler
 
-    def _run_script(self, origin: Origin | None):
+    def _run_script(self, origin: Origin | None, in_chat: bool = False):
         schema = {"type": "object", "properties": {
             "skill": {"type": "string"}, "script": {"type": "string"},
             "args": {"type": "array", "items": {"type": "string"}},
@@ -306,6 +306,15 @@ class Toolbox:
         async def handler(args: dict) -> dict:
             sk, sc = args.get("skill", ""), args.get("script", "")
             skill = self.skills.get(sk)
+            job = ((skill.scripts.get(sc) or {}).get("job_only") or {}).get(str((args.get("args") or [""])[0])) \
+                if skill and in_chat else None
+            if job:
+                # ⚠️ A REPORT ASKED FOR IN A CHAT RUNS AS ITS JOB (owner, 2026-10-01): made here, inside the
+                # conversation, it used the chat's brain and limit, and the AI followed the job's own steps
+                # to the fm chat — the group that asked got "Done" (villa, 2026-10-01 17:31).
+                self.state.log("script_refused", {"skill": sk, "script": sc, "args": args.get("args"), "reason": f"job {job}"})
+                return _err(f"Asked for in a chat, this is the {job} job: call start_job with name {job}. "
+                            "It runs with its own brain and limit and sends its result to this chat.")
             try:
                 final = validate_script_args(skill, sk, sc, list(args.get("args") or []), self.s.out_dir)
             except ToolError as e:
@@ -392,27 +401,28 @@ class Toolbox:
         # ⚠️ "HERE" IS THE CHAT A PERSON ASKED IN. Without it a report asked for in the
         # group went to the fm chat (a private chat on the villa) and the group got only
         # "report sent" (2026-09-30). A scheduled job has no such chat: owner or fm only.
-        # A job asked for in a chat can send only there (routing.Origin.requested).
+        # ⚠️ ANSWERING A PERSON, OR DOING WHAT THEY ASKED: ONLY THEIR CHAT (owner, 2026-10-01). Offered
+        # owner and fm too, the AI followed a skill's "send it to fm" and the group that asked got
+        # nothing but "Done". Scheduled jobs (no chat) send to owner or fm.
         chat_id = origin.chat if origin else None
-        targets = ["here"] if origin and origin.requested else (["here"] if origin else []) + ["owner", "fm"]
+        targets = ["here"] if origin else ["owner", "fm"]
         schema = {"type": "object", "properties": {
             "to": {"type": "string", "enum": targets}, "text": {"type": "string"},
             "attachment": {"type": "string", "description": "A file name in the out folder (an HTML report page), optional."}},
             "required": ["to", "text"]}
-        if origin and origin.requested:
-            desc = ("Send a message, with a file attached if needed, to=here: the chat this job was asked for in. "
-                    "Everything this job sends goes there.")
+        if origin:
+            desc = ("Send a message, with a file attached if needed (an HTML report page), to=here: the chat of the "
+                    "person you are answering, or the chat this job was asked for in. Nothing goes to another chat. "
+                    "A plain answer needs no tool: your reply is sent for you.")
         else:
-            desc = ("Send a message, with a file attached if needed. "
-                    + ("to=here: the chat of the person you are answering; use it for anything they asked for (a report "
-                       "they requested goes here, not to owner or fm). " if chat_id is not None else "")
-                    + "to=owner / to=fm: the configured owner or facility manager chat, for scheduled reports and digests. "
-                      "A plain answer needs no tool: your reply is sent for you.")
+            desc = ("Send a message, with a file attached if needed. to=owner / to=fm: the configured owner or "
+                    "facility manager chat, for scheduled reports and digests.")
 
         @tool("send_message", desc, schema)
         async def handler(args: dict) -> dict:
             to = args.get("to")
-            chat = Routing(self.policy).target(to, origin)
+            # the menu offers only `here` with a chat; a model that writes another name anyway is held to it
+            chat = origin.chat if origin else Routing(self.policy).target(to, origin)
             if not chat:
                 return _err(f"No {to} chat is configured.")
             att = args.get("attachment")

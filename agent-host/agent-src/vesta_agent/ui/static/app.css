@@ -65,13 +65,12 @@ body { min-height: 100vh; padding-bottom: 96px; }
 .mark { font-family: var(--font-display); font-weight: 500; font-size: var(--text-xl); letter-spacing: var(--tracking-brand); }
 .eyebrow { font-family: var(--font-display); text-transform: uppercase; letter-spacing: var(--tracking-eyebrow); font-size: var(--text-xs); color: var(--accent); }
 .ver { margin-left: auto; color: var(--text-dim); font-size: var(--text-xs); }
-.tabs { display: flex; gap: 6px; padding: 8px 20px 0; max-width: 1100px; margin: 0 auto; border-bottom: 1px solid var(--hairline); }
-.tabs button, .subtabs button {
+.tabs { display: flex; gap: 6px; overflow-x: auto; padding: 8px 20px 0; max-width: 1100px; margin: 0 auto; border-bottom: 1px solid var(--hairline); }
+.tabs button {
   background: none; border: 0; padding: 10px 14px; cursor: pointer; color: var(--text-secondary);
   border-bottom: 2px solid transparent; font-weight: 500; min-height: var(--touch-min);
 }
-.tabs button.on, .subtabs button.on { color: var(--text-primary); border-bottom-color: var(--accent); }
-.subtabs { display: flex; gap: 4px; margin: 0 0 12px; }
+.tabs button.on { color: var(--text-primary); border-bottom-color: var(--accent); }
 main { max-width: 1100px; margin: 0 auto; padding: 16px 20px; }
 
 /* ---- cards */
@@ -155,6 +154,7 @@ ul.plain li:last-child { border-bottom: 0; }
 
 /* layout helpers: the page's CSP refuses style attributes, so spacing lives here */
 .spaced { margin-top: 18px; }
+.divided { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--hairline); }
 .push-right { margin-left: auto; }
 
 /* AI jobs: the same fields and grid as "The AI", one block per job */

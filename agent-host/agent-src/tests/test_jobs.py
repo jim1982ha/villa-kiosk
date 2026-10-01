@@ -87,7 +87,8 @@ def test_a_report_asked_for_in_a_chat_runs_as_its_job(agent):
         return msg
     msg = run(go())
     assert msg.startswith("Started fm-weekly") and agent.runs[-1]["profile"] == "performance"
-    assert run(agent.start_job("fm-daily", ASKER)).startswith("There is no job")      # not on_request
+    assert run(agent.start_job("no-such-job", ASKER)).startswith("There is no job")
+    assert "not set up yet" in run(agent.start_job("fm-daily", ASKER))                # asked for, not in policy.yaml
     tb = agent.toolbox()
     person = Person(ASKER, "Asker", "fm")
     assert "start_job" in [t.name for t in tb.tool_objects(person, ASKER, False)]
@@ -111,9 +112,28 @@ def test_a_job_asked_for_in_a_chat_sends_only_to_that_chat(agent):
     agent.tg.sent.clear()
     run(agent.outcome.carry_out({"send": [{"to": "fm", "text": "from the script"}]}, "reports", Origin(ASKER, requested=True)))
     assert [c for c, *_ in agent.tg.sent] == [ASKER]
-    # a person answered in a chat keeps owner and fm: only a requested job is held to its chat
+    # a person answered in a chat: their chat only, whatever the skill's steps name (villa, 2026-10-01 17:31)
     plain = next(t for t in tb.tool_objects(Person(ASKER, "Asker", "fm"), ASKER, False) if t.name == "send_message")
-    assert plain.input_schema["properties"]["to"]["enum"] == ["here", "owner", "fm"]
+    assert plain.input_schema["properties"]["to"]["enum"] == ["here"]
+    agent.tg.sent.clear()
+    assert not run(plain.handler({"to": "fm", "text": "the weekly"})).get("is_error")
+    assert [c for c, *_ in agent.tg.sent] == [ASKER]
+    # a scheduled job (no chat) sends to owner or fm
+    sched = next(t for t in tb.tool_objects(None, None, False) if t.name == "send_message")
+    assert sched.input_schema["properties"]["to"]["enum"] == ["owner", "fm"]
+
+
+def test_a_report_asked_for_in_a_chat_cannot_be_made_inside_the_conversation(agent):
+    # villa, 2026-10-01 17:31: the AI made the weekly itself in the group's conversation instead of starting
+    # the job; the skill marks the report commands job_only, so in a chat they point to start_job
+    tb = agent.toolbox()
+    script = next(t for t in tb.tool_objects(Person(ASKER, "Asker", "fm"), ASKER, False) if t.name == "run_skill_script")
+    res = run(script.handler({"skill": "reports", "script": "facts.py", "args": ["fm-weekly", "--energy", "week.json"]}))
+    assert res.get("is_error") and "call start_job with name fm-weekly" in res["content"][0]["text"]
+    # the job itself (no person) runs it
+    job = next(t for t in tb.tool_objects(None, ASKER, False, requested=True) if t.name == "run_skill_script")
+    res = run(job.handler({"skill": "reports", "script": "facts.py", "args": ["fm-weekly", "--energy", "week.json"]}))
+    assert "start_job" not in res["content"][0]["text"]
 
 
 def test_an_ai_job_without_a_name_switches_its_skill_off(tmp_path):
@@ -133,3 +153,15 @@ def test_settings_jobs_in_policy_yaml():
                                           "d": {"profile": "auto", "limit_usd": 1, "model": "x"}}}})
     assert any("jobs.b.profile" in x for x in out) and any("jobs.c.limit_usd" in x for x in out)
     assert any("jobs.d must give profile and limit_usd only" in x for x in out)
+
+
+def test_every_report_a_person_may_ask_for_runs_as_its_job():
+    # owner, 2026-10-01: "handled consistently" — every AI job a person may ask for is tied to the
+    # commands that make it (job_only), so in a chat it can only be started as its job, never made inline
+    from helpers import STARTER_SKILLS
+    for sk in Skills(STARTER_SKILLS).all().values():
+        tied = {job for spec in sk.scripts.values() for job in spec["job_only"].values()}
+        for j in sk.schedule:
+            if j.get("on_request"):
+                assert j["name"] in tied, f"{sk.name}: {j['name']} may be asked for but no command is job_only for it"
+

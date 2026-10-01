@@ -9,6 +9,7 @@ and skill.yaml (what the engine needs):
         commands: [week, month]      optional: allowed first argument
         flags: {--period: [week, month], --out: outfile, --as-of: date, --what: text}
         inject: [pack, store, zone]  what the engine adds itself
+        job_only: {week: weekly}     a command that, asked for in a chat, runs only as that AI job
     schedule:                        what the scheduler starts
       - when: "07:00"                "HH:MM" daily, "Mon 08:00" weekly, "1 08:00" monthly
         prompt: "..."                a model job (costs tokens)
@@ -123,7 +124,9 @@ def _parse(name: str, path: str) -> Skill:
         if not set(inject) <= INJECTS:
             raise SkillError(f"scripts.{script}: inject may only name {', '.join(sorted(INJECTS))}")
         cmds = spec.get("commands")
-        sk.scripts[script] = {"cmds": set(map(str, cmds)) if cmds else None, "flags": flags, "inject": inject}
+        job_only = {str(k): str(v) for k, v in (spec.get("job_only") or {}).items()}
+        sk.scripts[script] = {"cmds": set(map(str, cmds)) if cmds else None, "flags": flags, "inject": inject,
+                              "job_only": job_only}
     for i, job in enumerate(raw.get("schedule") or []):
         job = job or {}
         when = str(job.get("when") or "")
@@ -146,6 +149,11 @@ def _parse(name: str, path: str) -> Skill:
         sk.on_event[ev] = _check_command(path, str(cmd), f"on_event.{ev}")
     if raw.get("on_reply"):
         sk.on_reply = _check_command(path, str(raw["on_reply"]), "on_reply")
+    asked = {j["name"] for j in sk.schedule if j.get("on_request")}
+    for script, spec in sk.scripts.items():
+        for cmd, job in spec["job_only"].items():
+            if job not in asked:
+                raise SkillError(f"scripts.{script}.job_only: {job} is not an AI job of this skill a person may ask for")
     return sk
 
 

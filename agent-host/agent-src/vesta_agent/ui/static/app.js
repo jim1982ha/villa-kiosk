@@ -110,7 +110,7 @@ function go(tab) {
   current = tab; dirty = false; setBar(null);
   history.replaceState(null, "", "#" + tab);
   document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
-  ({ overview, rules, skills })[tab]();
+  ({ overview, rules, "rules-file": () => rules("file"), skills })[tab]();
 }
 
 // ---------------------------------------------------------------- overview
@@ -123,12 +123,9 @@ async function overview() {
   const count = (k) => (r && r.counts[k]) || 0;
   const kids = [
     jobsBanner(o.jobs_not_set, () => go("overview")),
-    card("Rules", "policy.yaml: who the agent answers, what it may do.",
-      o.policy_problems.length ? problemsBox(o.policy_problems, "To fix:") : h("p", { class: "ok" }, "No problem found."),
-      h("div", { class: "actions" }, h("button", { class: "btn ghost", onclick: () => go("rules") }, "Open the rules"))),
-    card("Skills", `${o.skills.length - off.length} on, ${off.length} switched off.`,
-      off.length ? h("ul", { class: "plain" }, off.map((s) => h("li", {}, h("b", {}, s.name), " — ", s.problem))) : null,
-      h("div", { class: "actions" }, h("button", { class: "btn ghost", onclick: () => go("skills") }, "Open the skills"))),
+    // the Rules and Skills tabs are one click away: only what is wrong with them is shown here
+    o.policy_problems.length ? problemsBox(o.policy_problems, "Rules — to fix:") : null,
+    off.length ? problemsBox(off.map((s) => `${s.name}: ${s.problem}`), "Skills switched off:") : null,
   ];
   if (r) {
     kids.push(card("The last 24 hours", "From the agent's own records.",
@@ -137,7 +134,7 @@ async function overview() {
          ["actions done", count("executed") + count("direct")], ["replies written", count("run")],
          ["AI cost (USD)", r.ai_cost_usd.toFixed(2)], ["failures", count("failed") + count("code_script_failed") + count("send_failed")]]
           .map(([l, n]) => h("div", { class: "kpi" }, h("div", { class: "n" }, n), h("div", { class: "l" }, l)))),
-      r.scheduled_jobs.length ? h("div", {}, h("h2", { class: "spaced" }, "Scheduled jobs run"),
+      r.scheduled_jobs.length ? h("div", { class: "divided" }, h("h2", {}, "Scheduled jobs run"),
         h("ul", { class: "plain" }, r.scheduled_jobs.map((j) => h("li", {}, j.job, h("span", { class: "muted" }, "  " + new Date(j.ran_at).toLocaleString()))))) : null));
   } else {
     kids.push(card("The last 24 hours", "The agent has not recorded anything yet (it has not run in agent mode)."));
@@ -165,15 +162,13 @@ async function rules(sub = "forms") {
   fill($view, h("p", { class: "muted" }, "Loading…"));
   let doc = await api("GET", "api/policy");
   const { jobs } = await api("GET", "api/jobs");
-  const tabs = h("div", { class: "subtabs" },
-    h("button", { class: sub === "forms" ? "on" : "", onclick: () => { if (sub !== "forms" && guard()) rules("forms"); } }, "Forms"),
-    h("button", { class: sub === "file" ? "on" : "", onclick: () => { if (sub !== "file" && guard()) rules("file"); } }, "The file"));
   dirty = false;
-  if (sub === "file" || !doc.form) return rulesFile(doc, tabs);
-  return rulesForms(doc, tabs, jobs);
+  // the forms are "Rules", the raw file is "Rules (file)": two tabs at the top, no sub-menu (owner, 2026-10-01)
+  if (sub === "file" || !doc.form) return rulesFile(doc);
+  return rulesForms(doc, jobs);
 }
 
-function rulesFile(doc, tabs) {
+function rulesFile(doc) {
   const ta = h("textarea", { class: "editor", spellcheck: "false", oninput: markDirty });
   ta.value = doc.text;
   const probs = h("div");
@@ -184,11 +179,11 @@ function rulesFile(doc, tabs) {
     } catch (e) { fill(probs, problemsBox(e.problems)); }
   };
   setBar({ save, discard: () => rules("file"), idle: "Everything, including what the forms do not show." });
-  fill($view, tabs, doc.problems.length ? problemsBox(doc.problems, "To fix in this file:") : null, probs,
+  fill($view, doc.problems.length ? problemsBox(doc.problems, "To fix in this file:") : null, probs,
     card("policy.yaml", "Comments start with #. Every save is checked with the agent's own rules first.", ta));
 }
 
-function rulesForms(doc, tabs, jobs = []) {
+function rulesForms(doc, jobs = []) {
   const f = structuredClone(doc.form);
   const probs = h("div");
   const on = (fn) => (e) => { fn(e.target); markDirty(); };
@@ -298,7 +293,7 @@ function rulesForms(doc, tabs, jobs = []) {
     }
   };
   setBar({ save, discard: () => rules("forms"), idle: "Changes apply within seconds, no restart." });
-  fill($view, tabs, doc.problems.length ? problemsBox(doc.problems, "To fix in this file:") : null, probs,
+  fill($view, doc.problems.length ? problemsBox(doc.problems, "To fix in this file:") : null, probs,
     jobsBanner(missing, () => rules("forms")), acting, people, chats, services, devices, lists, ai);
 }
 
@@ -394,4 +389,4 @@ async function openSkill(name, pane, info, path = "SKILL.md") {
   if (path) await load(path);
 }
 
-go(["overview", "rules", "skills"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "overview");
+go(["overview", "rules", "rules-file", "skills"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "overview");
