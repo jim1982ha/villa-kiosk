@@ -1,3 +1,9 @@
+## 2.496.240
+
+### Fixed
+- **A room chip turned red when a pump was simply running.** A device whose linked switch is on (a pump's power badge with its relay on) counted as "needs attention" for the room chip and the group cards that hold it, so the Swimming Pool chip went red while nothing was wrong. It counts as "on" now: the chip gets the neutral ring, and red stays for a real problem.
+- **The room list from a long press on a floor button overlapped on a phone.** With many rooms (17 on 1F), the names were laid on an arc that did not fit an upright phone, and they piled on top of each other (Bedroom 1 on Guest Bathroom, WIC on Swimming Pool). When the arc does not fit, the rooms now show as one column beside the floor buttons, one name per line, scrolling if needed; tap a name to go there. The arc stays wherever it fits, such as on the wall tablet.
+
 ## 2.496.239
 
 ### Added
