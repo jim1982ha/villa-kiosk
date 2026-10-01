@@ -1,3 +1,17 @@
+## 0.12.7
+
+### Changed
+- **The weekly report reads like the example PDFs.** One "Do this week" list: each device appears once (a pump's power drop and its open task are one line), and many devices with the same problem share one line ("4 monitoring devices offline — all since 1 Oct, 09:28: one cause is likely"). The separate "What VESTA noticed" section is gone. The monthly report's "Preventive maintenance" uses the same list.
+- **Alerts that fired:** one line per alert with how many times it happened, in plain words ("Entrance unlocked — 6 times"), instead of one row per rule run.
+- The reports skill has 6 files instead of 29 (the page is one template file; the charts are in compose.py).
+
+### Fixed
+- **The weekly showed 71 "critical alerts" that were not alerts.** It counted every time a safety rule *ran*. The pump schedule rules run twice a day to check the pumps and almost never alert. Home Assistant's record now counts only the rules that alert every time they run (the "condition" rules); the others come from the agent's own record.
+- "Nothing happened" only says what was actually watched: for a week the agent was not listening, it no longer claims "no equipment missed its schedule".
+- **Sensors reporting an unchanged value were tasks** ("has not reported for 1.6 days"): a rain gauge at 0 or a curtain nobody moved. A sensor is now silent only when it stops *reporting*, not when its value stops *changing*.
+- A pump that runs a few minutes at a time no longer shows a fake "power down 31%" (its hourly averages follow its use, not its water).
+- Circuits: "+10900%" from almost nothing shows as ">+300%"; an empty comparison shows "—".
+
 ## 0.12.6
 
 ### Changed
