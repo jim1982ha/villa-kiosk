@@ -50,6 +50,21 @@ ANONYMOUS_TELEGRAM_IDS = {1087968824, 136817688, 777000}
 
 ROLES = ("owner", "fm")
 
+# ------------------------------------------------------------------ the file's defaults, once
+# ⚠️ THE ONE READER OF policy.yaml (owner, 2026-10-01): the agent, the settings loader
+# (config.Settings.behaviour), the skills' scripts (siren time) and the UI's forms all
+# take these values from here, never from a table of their own.
+PROFILES = {
+    # profile: (model for conversations, effort)
+    "auto": ("sonnet", "medium"),
+    "economy": ("haiku", "low"),
+    "performance": ("opus", "high"),
+}
+CONVERSATION_RESETS = ("daily_04_00", "after_8h_silence", "never")
+DEFAULT_BEHAVIOUR = {"profile": "auto", "reply_limit_usd": 1.0, "web_search": True, "conversation_reset": "daily_04_00"}
+#: A value the file leaves out. The starter policy.example.yaml writes the same ones.
+DEFAULTS = {"act_enabled": False, "approval_ttl_minutes": 15, "siren_auto_off_min": 3}
+
 
 @dataclass
 class Person:
@@ -98,12 +113,44 @@ def _as_list(v: Any) -> list[str]:
     return out
 
 
+def _int_in(v: Any, lo: int, hi: int, default: int) -> int:
+    if isinstance(v, bool):
+        return default
+    try:
+        v = int(v)
+    except (TypeError, ValueError):
+        return default
+    return v if lo <= v <= hi else default
+
+
+def _behaviour(raw: Any) -> dict:
+    """The settings block, leniently: a value not understood keeps its default."""
+    v = dict(DEFAULT_BEHAVIOUR)
+    raw = raw if isinstance(raw, dict) else {}
+    if raw.get("profile") in PROFILES:
+        v["profile"] = raw["profile"]
+    try:
+        limit = float(raw.get("reply_limit_usd", v["reply_limit_usd"]))
+        if limit >= 0.05:
+            v["reply_limit_usd"] = limit
+    except (TypeError, ValueError):
+        pass
+    if isinstance(raw.get("web_search"), bool):
+        v["web_search"] = raw["web_search"]
+    if raw.get("conversation_reset") in CONVERSATION_RESETS:
+        v["conversation_reset"] = raw["conversation_reset"]
+    return v
+
+
 class Policy:
     def __init__(self, raw: dict):
         self.raw = raw or {}
         r = self.raw
-        self.act_enabled: bool = bool(r.get("act_enabled", False))
-        self.approval_ttl_minutes: int = int(r.get("approval_ttl_minutes", 15))
+        self.act_enabled: bool = bool(r.get("act_enabled", DEFAULTS["act_enabled"]))
+        self.approval_ttl_minutes: int = _int_in(r.get("approval_ttl_minutes"), 1, 1440, DEFAULTS["approval_ttl_minutes"])
+        # ⚠️ A SAFETY STOP, SO NEVER ABSENT: an unreadable value still stops the siren (and problems() says so).
+        self.siren_auto_off_min: int = _int_in(r.get("siren_auto_off_min"), 1, 60, DEFAULTS["siren_auto_off_min"])
+        self.behaviour: dict = _behaviour(r.get("settings"))
         self.people: dict[int, Person] = {}
         for p in r.get("people") or []:
             try:
@@ -131,10 +178,11 @@ class Policy:
     # ------------------------------------------------------------------ load
     @classmethod
     def load(cls, path: str) -> "Policy":
-        if not os.path.exists(path):
+        if not path or not os.path.exists(path):
             return cls({})
         with open(path, encoding="utf-8") as f:
-            return cls(yaml.safe_load(f) or {})
+            raw = yaml.safe_load(f) or {}
+        return cls(raw if isinstance(raw, dict) else {})
 
     # ------------------------------------------------------------------ people
     def person(self, telegram_id: int | None) -> Person | None:
@@ -298,7 +346,6 @@ def problems(raw: Any) -> list[str]:
     stays lenient (a bad value is ignored, never a crash), so a hand edit can
     only switch something off, never stop the agent; the UI is stricter because
     it can say why before the file is written."""
-    from .config import CONVERSATION_RESETS, PROFILES
     if raw is None:
         return []
     if not isinstance(raw, dict):

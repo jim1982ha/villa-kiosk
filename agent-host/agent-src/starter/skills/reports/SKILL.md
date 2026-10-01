@@ -5,26 +5,28 @@ description: The one composer of every VESTA document: the 07:00 FM daily digest
 
 # reports
 
-You assemble; you do not fetch. The other skills leave JSON files and rows in
-the store; you turn them into the document each reader expects, with the
-model writing only the headline and nothing that is a number.
+The scripts compute every figure (facts.py reads Home Assistant, the store and the
+energy period); you write only the sentences reports.yaml asks for, from those
+figures; compose.py lays the page out and checks your sentences.
 
 ## Files
 
-- `scripts/compose.py`   fm-daily, fm-weekly, owner-weekly, owner-monthly
-- `templates/`           `vesta.css` (the visual system of the validated mock-ups), `fm_weekly.html`, `owner_monthly.html`
-- Inputs: `energy_period.py` JSON (roi-energy), `filtration_optimiser.py` JSON, `proposals.py` JSON, the store
+- `reports.yaml`         the reports: sections and their order, thresholds, the sentences you write, "what would help"
+- `scripts/facts.py`     every figure of a weekly or monthly page (Home Assistant, the store, the energy period)
+- `scripts/compose.py`   fm-daily and owner-weekly (chat text); fm-weekly and owner-monthly (the page, from facts + notes)
+- `scripts/charts.py`    the page's charts (inline SVG)
+- `templates/`           `report.html`, one `blocks/<section>.html` per section, `vesta.css`
+- Inputs: `energy_period.py` JSON (roi-energy), `proposals.py` (roi-energy, writes the proposals to the store)
 
 ## Cadence and readers
 
 | When (villa time) | Reader | Form | Command |
 |---|---|---|---|
 | Daily 07:00 | FM | chat, under 4,096 characters, split if longer | `compose.py fm-daily` |
-| Monday 08:00 | FM | page (HTML file attached) and its headline in chat | `energy_period.py --period week` then `compose.py fm-weekly --out fm_weekly.html` |
+| Monday 08:00 | FM | page (HTML file attached) and its headline in chat | the steps below, weekly |
 | Monday 08:00 | Owner | three lines in chat | `compose.py owner-weekly --energy week.json` |
-| 1st of the month 08:00 | Owner | page (HTML file attached), the monthly proof, and its four numbers in chat | `energy_period.py --period month`, `filtration_optimiser.py`, `proposals.py`, then `compose.py owner-monthly --out owner_monthly.html` |
-| Quarterly | Owner | coverage annex (what is measured, what is not, retention) | the coverage block of the monthly, standalone |
-| On demand | either | the matching period, from the cache when it exists | the same two steps as the scheduled one (below) |
+| 1st of the month 08:00 | Owner | page (HTML file attached), the monthly proof, and its headline in chat | the steps below, monthly |
+| On demand | either | the period asked for (`--end` for a past one) | the steps below |
 
 The FM reads the digest on a phone in the morning: new items first, then the
 open tasks with their numbers so a reply "3 done" closes the right one. The
@@ -34,36 +36,39 @@ villa is actually measured (never hide the unmetered share).
 
 ## A weekly or monthly page, step by step (on schedule or on request)
 
-1. `roi-energy` `energy_period.py --period week --out week.json` (`--period month --out
-   month.json` for the monthly; add `--end YYYY-MM-DD` for a past period).
-2. `reports` `compose.py fm-weekly --energy week.json --out fm_weekly.html` (or `owner-monthly
-   --energy month.json ... --out owner_monthly.html`). `--energy` is required: without it the
-   script stops and says so.
-3. `send_message` with `attachment` the page's file name and, as text, the headline and the key
-   numbers from the `facts` the script printed. Asked for in a chat: `to: here`, the chat it was
-   asked in. On schedule: `to: fm` (weekly) or `to: owner` (monthly).
+1. `roi-energy` `energy_period.py --period week --out week.json` (`--period month --out month.json`
+   for the monthly; add `--end YYYY-MM-DD` for a past period). For the monthly, first also
+   `filtration_optimiser.py --out optimiser.json` and `proposals.py --period-json month.json
+   --optimiser-json optimiser.json` (it records the proposals the page shows).
+2. `reports` `facts.py fm-weekly --energy week.json --out facts.json` (or `owner-monthly --energy
+   month.json`). It prints `to_write`: each sentence the page needs, with its instruction and the
+   only figures you may use for it.
+3. Write every sentence of `to_write`, in the reader's language, and save them with `save_file` as
+   `notes.json`: `{"<id>": "<sentence>", ...}`. Use only the figures given with that id — a number
+   that is not among them gets the sentence refused. Plain words; no rule codes, no entity ids.
+4. `reports` `compose.py fm-weekly --facts facts.json --notes notes.json --out fm_weekly.html` (or
+   `owner-monthly ... --out owner_monthly.html`). It says which sentences it used and which it
+   refused and why: fix and save the refused ones, then compose again (once).
+5. `send_message` with `attachment` the page's file name and, as text, your headline sentence.
+   Asked for in a chat: `to: here`, the chat it was asked in. On schedule: `to: fm` (weekly) or
+   `to: owner` (monthly).
 
 ## Rules
 
-- Every number in a document comes from a JSON the scripts produced. The model
-  writes the headline from the `facts` block the composer prints, in the
-  reader's language, and touches nothing else.
+- Every number in a document comes from facts.py. You write only the sentences
+  `to_write` asks for, from their own figures; compose.py checks every number.
 - A page over two chat messages is sent as its HTML file attached to a short
   message (the headline and the key numbers), not as text. The file is
   self-contained: it opens in the phone's browser, which can print it or save
   it as PDF.
-- A load first seen less than 30 days ago is marked "baseline building".
 - Muted rules, devices with no room, and missing helpers are listed under
   "monitoring health" and "what would help" so nothing silently disappears.
 - Proposals carry their store id; the reply "accept N / later N / ignore N" is
   handled by villa-concierge.
-- Once sent, the rendered document is cached by period in the store; a second
-  request returns it, with no new computation and no LLM call.
+- Asked again, make the page again: the figures and this skill may have changed.
 
-## What the monthly proof must contain, in this order
+## What each page contains
 
-Light and headline; four numbers (kWh and trend, cost at the villa tariff,
-alerts handled and median time to close, share of electricity attributed);
-where the electricity went; what VESTA found and what was done; pool
-filtration; VESTA suggests; coverage and retention. If a section has no
-content, it says so in one line rather than disappearing.
+`reports.yaml`, `reports:`: the sections of each page, in order, and which ones
+ask you for a sentence. Money left on the table, the night standby and the
+monitoring uptime show "not measured yet" until their calculation is agreed.

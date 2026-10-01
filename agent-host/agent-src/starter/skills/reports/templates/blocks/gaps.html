@@ -1,0 +1,6 @@
+<section>
+  <h2>What would help</h2>
+  {% if s.rows %}<div class="card tbl"><table><tr><th>Gap</th><th>What it would unlock</th></tr>
+  {% for g in s.rows %}<tr><td>{{ g.gap }}</td><td>{{ g.unlocks }}</td></tr>{% endfor %}</table></div>
+  {% else %}<p class="note">No gap found.</p>{% endif %}
+</section>

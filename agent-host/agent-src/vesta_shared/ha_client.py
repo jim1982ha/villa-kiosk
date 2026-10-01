@@ -431,7 +431,11 @@ class McpClient(HABase):
     def logbook(self, start, end, entity_id=None):
         now = datetime.now(timezone.utc)
         hours = max(1, int((now - start.astimezone(timezone.utc)).total_seconds() // 3600) + 1)
-        rows, offset = [], 0
+        # ⚠️ A PAGE MUST BRING NEW ROWS. ha-mcp 8.5.0 answered the same first page to every offset
+        # (seen on the villa: one 3-day read became 20 identical calls, and every flip of a
+        # device was counted 20 times by the reconnect check). Rows are kept once each, and the
+        # reading stops at the first page that adds nothing.
+        rows, seen, offset = [], set(), 0
         while True:
             args = {"source": "logbook", "hours_back": hours, "end_time": end.astimezone(timezone.utc).isoformat(),
                     "limit": 1000, "offset": offset, "order": "oldest"}
@@ -439,8 +443,14 @@ class McpClient(HABase):
                 args["entity_id"] = entity_id
             body = self.tool("ha_get_logs", args)
             batch = body.get("entries") or []
-            rows += batch
-            if not body.get("has_more") or not batch or offset >= 20000:   # 20 pages at most: a busy logbook is not a loop
+            fresh = 0
+            for r in batch:
+                key = json.dumps(r, sort_keys=True, default=str)
+                if key not in seen:
+                    seen.add(key)
+                    rows.append(r)
+                    fresh += 1
+            if not body.get("has_more") or not fresh or offset >= 20000:   # 20 pages at most: a busy logbook is not a loop
                 break
             offset += len(batch)
         out = []

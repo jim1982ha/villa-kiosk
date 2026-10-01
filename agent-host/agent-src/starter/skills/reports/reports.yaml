@@ -1,0 +1,105 @@
+# The reports: which sections, in which order, what they judge by, and the sentences the AI writes.
+# Edit here (VESTA Agent page → Skills → reports): no release, no restart. A section left out of a
+# report's list is not shown; reorder the list to reorder the page.
+#
+# ⚠️ NOTHING HERE NAMES ONE VILLA'S DEVICES. A villa adds its own cards under `cards:` in ITS copy
+# of this file (the page edits that copy); the shipped file stays generic.
+
+# ---------------------------------------------------------------- judgements
+thresholds:
+  light:                       # the colour of a report, from the severities of what is open
+    red: [P1]
+    amber: [P2, P3]
+  battery:
+    replace_below_pct: 20      # red bar, "replace"
+    watch_below_pct: 35        # amber bar
+    show: 8                    # the lowest N batteries are drawn
+  pump:
+    watch_drop_pct: 10         # Watch when the running power of the last 3 days is this much under the days before
+    run_min_w: 15              # an hour whose mean power is above this counts as running
+  circuits_show: 8             # rows of the circuit table, largest first
+  card_days: 14                # days drawn in an equipment card
+  trend_weeks: 10              # weeks drawn in the monthly electricity trend
+  horizon:                     # preventive maintenance: when, from the finding's severity
+    P1: Now
+    P2: Now
+    P3: Soon
+    P4: Plan
+
+# Families whose devices count for "devices offline", and those that make an offline device critical.
+offline_families: [power, energy, battery, security, level, network, runtime]
+critical_families: [security]
+
+# "What would help": a gap is shown when its condition holds for this villa.
+gaps:
+  - when: {unmetered_pct_above: 50}
+    gap: Most of the electricity is not metered
+    unlocks: The report can say where the electricity goes, and how much of it is avoidable.
+  - when: {family_missing: water}
+    gap: No water meter
+    unlocks: Leaks and night-time flow can be measured.
+  - when: {family_missing: level}
+    gap: No tank or pool level sensor
+    unlocks: A pump running dry is seen before it stops.
+
+# Extra cards for this villa's own devices (none shipped). Kinds:
+#   sensor_daily_max | sensor_daily_mean | energy_daily
+# e.g.  - {kind: sensor_daily_max, entity: sensor.<your cabinet temperature>, title: Electrical cabinet,
+#          unit: "°C", alert_at: 70}
+cards: []
+
+# Sections that need a calculation not agreed yet: shown as "not measured yet".
+not_measured_yet:
+  money: "Money left on the table — the avoidable energy (an AC on in an empty room, lights left on) is not measured yet."
+  standby: "Night standby of the whole villa — not measured yet."
+  uptime: "Monitoring uptime — not measured yet."
+
+# ---------------------------------------------------------------- the reports
+# Each section: `id` (its layout block in templates/blocks/<id>.html) and, when the AI writes a
+# sentence for it, `write` (one sentence for the section) or `write_each` (one per item: tasks,
+# equipment cards). The AI may use only the figures of that section; compose.py refuses a
+# sentence with a number that is not in them.
+reports:
+  fm-weekly:
+    eyebrow: VESTA · Facility manager · Weekly
+    period: week
+    sections:
+      - id: header
+      - id: headline
+        write: >-
+          One or two plain sentences for the facility manager: what needs them this week (open tasks,
+          alerts), and that everything else ran normally if it did.
+      - id: kpis
+      - id: tasks
+        write_each:
+          why: "One sentence: what was seen and since when, from the task's figures."
+          check: "One sentence: what to check or do on site, concrete."
+      - id: alerts
+      - id: equipment
+        write_each:
+          reading: "One line under the chart: what changed and when, or that it was steady."
+      - id: batteries
+      - id: energy_days
+      - id: circuits
+      - id: monitoring
+      - id: footer
+  owner-monthly:
+    eyebrow: VESTA · Owner · Monthly proof
+    period: month
+    sections:
+      - id: header
+      - id: hero
+        write: >-
+          Two plain sentences for the owner: what the month cost in electricity, how many incidents
+          and whether they were handled, and the one thing that needs a look, if any.
+      - id: kpis_month
+      - id: happened
+      - id: money
+      - id: fixed_suggest
+      - id: maintenance
+      - id: trends
+        write_each:
+          reading: "One line under the chart: the trend and anything that stands out."
+      - id: monitoring
+      - id: gaps
+      - id: footer

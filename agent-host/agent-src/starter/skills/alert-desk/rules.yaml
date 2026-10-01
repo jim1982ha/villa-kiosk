@@ -62,11 +62,9 @@ siren:
   # the window, the villa marked vacant or away, and one explicit human approval.
   window_min: 5
   min_signals: 2
-  confirm_word: "SIREN"
-  confirm_timeout_min: 10
-  auto_off_min: 3
-  authorised_roles: [owner]          # the siren is owner-only
   requires_villa_mode: [vacant, away]
+  # The human step is the owner's Approve button (the siren is an owner-only device in
+  # policy.yaml); how long it sounds is policy.yaml's siren_auto_off_min.
 
 people_roles:
   # role -> which severities reach that chat

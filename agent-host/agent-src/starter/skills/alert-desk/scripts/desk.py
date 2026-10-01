@@ -6,7 +6,6 @@ Sub-commands (all print JSON the engine acts on; none sends anything itself):
   desk.py intake   --event event.json     one vesta_critical_event from Home Assistant (or a PM finding)
   desk.py tick                            every 5 min: re-asks, escalations, villa-silent check, fatigue
   desk.py reply    --incident 12 --text "Done" --from fm
-  desk.py siren    --incident 12 --text "SIREN" --from owner     the human confirmation step
   desk.py status                          open incidents, muted rules, last beats
 
 The event is the one the VESTA rules fire AFTER their own Telegram message
@@ -192,6 +191,13 @@ def abandoned(store: Store, ev: dict, now: datetime) -> dict:
     return out
 
 
+def siren_minutes() -> int:
+    """How long the siren sounds: policy.yaml's siren_auto_off_min, the one place it is set
+    (owner, 2026-10-01). The engine reads the same value when it switches the siren off."""
+    from vesta_agent.policy import Policy
+    return Policy.load(os.environ.get("VESTA_POLICY", "")).siren_auto_off_min
+
+
 def siren_gate(store: Store, ev: dict, now: datetime) -> dict:
     cfg = RULES["siren"]
     window = now - timedelta(minutes=cfg["window_min"])
@@ -203,73 +209,44 @@ def siren_gate(store: Store, ev: dict, now: datetime) -> dict:
     armed = len(signals) >= cfg["min_signals"] and mode in cfg["requires_villa_mode"]
     prompt = ""
     if armed:
+        # The engine turns this into an Approve / Refuse request to the owner (outcome.carry_out).
         prompt = (f"Intrusion suspected: {len(signals)} independent sensors in {cfg['window_min']} min while the villa is {mode}: "
-                  f"{', '.join(sorted(signals))}. Look at the snapshot. Reply {cfg['confirm_word']} within {cfg['confirm_timeout_min']} min "
-                  f"to sound the siren for {cfg['auto_off_min']} min. Any other reply cancels.")
-        # In the engine the " Reply ..." part is replaced by an Approve / Refuse request to the owner.
+                  f"{', '.join(sorted(signals))}. Look at the snapshot. Approving sounds the siren for {siren_minutes()} min.")
     return {"armed": armed, "signals": sorted(signals), "villa_mode": mode, "prompt": prompt,
             "reason": None if armed else ("villa not vacant/away" if mode not in cfg["requires_villa_mode"] else "single signal")}
-
-
-def siren_confirm(store: Store, iid: int, text: str, sender_role: str, now: datetime) -> dict:
-    cfg = RULES["siren"]
-    inc = store.incident(iid)
-    out = {"send": [], "actions": [], "fired": False}
-    if not inc or inc.get("closed_at"):
-        out["send"].append({"to": sender_role, "text": f"Incident #{iid} is not open."}); return out
-    if sender_role not in cfg["authorised_roles"]:
-        out["send"].append({"to": sender_role, "text": "You are not authorised to sound the siren."}); return out
-    opened = datetime.fromisoformat(inc["opened_at"])
-    if text.strip().upper() != cfg["confirm_word"]:
-        store.update_incident(iid, reply=text, state="siren_cancelled")
-        out["send"].append({"to": sender_role, "text": "Siren cancelled."}); return out
-    if now - opened > timedelta(minutes=cfg["confirm_timeout_min"]):
-        out["send"].append({"to": sender_role, "text": f"Too late: the {cfg['confirm_timeout_min']} min confirmation window has passed. Send a new request if still needed."})
-        return out
-    ev = json.loads(inc.get("payload") or "{}")
-    gate = siren_gate(store, ev, opened + timedelta(seconds=1))
-    if not gate["armed"]:
-        out["send"].append({"to": sender_role, "text": f"Siren not armed: {gate['reason']}."}); return out
-    out["fired"] = True
-    out["actions"].append({"action": "siren.on", "auto_off_min": cfg["auto_off_min"], "incident_id": iid, "confirmed_by": sender_role})
-    store.update_incident(iid, state="siren_on", reply=text)
-    store.audit("alert-desk", "siren_on", {"incident": iid, "by": sender_role})
-    out["send"].append({"to": "owner", "text": f"Siren on for {cfg['auto_off_min']} min (incident #{iid}), confirmed by {sender_role}."})
-    out["send"].append({"to": "fm", "text": f"Siren on for {cfg['auto_off_min']} min (incident #{iid})."})
-    return out
 
 
 def reply(store: Store, iid: int, text: str, sender_role: str, now: datetime, params: VillaParams | None = None) -> dict:
     inc = store.incident(iid)
     out = {"send": [], "actions": []}
     if not inc:
-        out["send"].append({"to": sender_role, "text": f"No incident #{iid}."}); return out
+        out["send"].append({"to": "here", "text": f"No incident #{iid}."}); return out
     t = text.strip().lower()
     if inc.get("closed_at") and not t.startswith("mute"):
-        out["send"].append({"to": sender_role, "text": f"Incident #{iid} is already closed."}); return out
+        out["send"].append({"to": "here", "text": f"Incident #{iid} is already closed."}); return out
     if t.startswith("done"):
         store.update_incident(iid, state="done", reply=text, closed_at=now.isoformat())
         task = store.open_task(inc["rule_id"], inc["entity_id"])
         if task:
             store.close_task(task["id"])
             out["actions"].append({"action": "ticket.resolve", "task_id": task["id"], "note": f"Done, answered by the {sender_role}."})
-        out["send"].append({"to": sender_role, "text": f"Thanks, incident #{iid} closed. The VESTA Agent will check it stays quiet."})
+        out["send"].append({"to": "here", "text": f"Thanks, incident #{iid} closed. The VESTA Agent will check it stays quiet."})
     elif t.startswith("not found"):
         store.update_incident(iid, state="not_found", reply=text)
-        out["send"].append({"to": sender_role, "text": f"Noted for #{iid}. It stays open and goes in the weekly report; tell me if it comes back."})
+        out["send"].append({"to": "here", "text": f"Noted for #{iid}. It stays open and goes in the weekly report; tell me if it comes back."})
     elif t.startswith("need help"):
         store.update_incident(iid, state="escalated", reply=text, escalated_at=now.isoformat(), assignee="owner")
         out["send"].append({"to": "owner", "text": f"The FM needs help on incident #{iid}: {json.loads(inc['payload'] or '{}').get('message', inc['rule_id'])}."})
-        out["send"].append({"to": sender_role, "text": "Owner notified."})
+        out["send"].append({"to": "here", "text": "Owner notified."})
     elif t.startswith("mute"):
         days = int((params.behaviour("mute_days") if params else 30))
         until = (now + timedelta(days=days)).isoformat()
         store.mute(inc["rule_id"], inc["entity_id"], until, sender_role)
         store.update_incident(iid, state="muted", reply=text, closed_at=now.isoformat())
-        out["send"].append({"to": sender_role, "text": f"Muted this alert for {days} days. The report will list it."})
+        out["send"].append({"to": "here", "text": f"Muted this alert for {days} days. The report will list it."})
     else:
         store.update_incident(iid, reply=text)
-        out["send"].append({"to": sender_role, "text": f"Noted on #{iid}: {text}"})
+        out["send"].append({"to": "here", "text": f"Noted on #{iid}: {text}"})
     store.audit("alert-desk", "reply", {"incident": iid, "by": sender_role, "text": text})
     return out
 
@@ -327,7 +304,7 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None) -> dict
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["intake", "tick", "reply", "siren", "status"])
+    ap.add_argument("cmd", choices=["intake", "tick", "reply", "status"])
     ap.add_argument("--store", default=os.environ.get("VESTA_STORE", "vesta_store.sqlite"))
     ap.add_argument("--event"); ap.add_argument("--incident", type=int); ap.add_argument("--text"); ap.add_argument("--from", dest="sender", default="fm")
     ap.add_argument("--now", help="ISO time, for tests")
@@ -345,8 +322,6 @@ def main(argv=None):
         res = tick(store, now, params)
     elif a.cmd == "reply":
         res = reply(store, a.incident, a.text or "", a.sender, now, params)
-    elif a.cmd == "siren":
-        res = siren_confirm(store, a.incident, a.text or "", a.sender, now)
     else:
         res = {"open": store.incidents(), "muted": store.mutes(), "beats": {n: store.last_beat(n) for n in (HA_BEAT, "agent_tick", "maintenance_nightly")}}
     print(json.dumps(res, indent=1, default=str))

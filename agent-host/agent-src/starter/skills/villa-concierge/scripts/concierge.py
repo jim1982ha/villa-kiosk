@@ -169,8 +169,7 @@ def execute(pack: KnowledgePack, store: Store, cli, pid: int, role: str, confirm
     store.decide_proposal(pid, "executed")
     store.audit("villa-concierge", prop["action"], {"by": role, "targets": [t["entity_id"] for t in prop["targets"]], "value": prop.get("value")})
     return {"ok": True, "proposal_id": pid, "calls": calls, "expect_state": prop.get("expect_state"),
-            "readback_entities": [t["entity_id"] for t in prop["targets"] if "." in t["entity_id"]],
-            "auto_off_min": spec.get("auto_off_min")}
+            "readback_entities": [t["entity_id"] for t in prop["targets"] if "." in t["entity_id"]]}
 
 
 def readback(cli, entities: list[str], expect: str | None) -> dict:

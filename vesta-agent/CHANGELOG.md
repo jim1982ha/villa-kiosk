@@ -1,3 +1,18 @@
+## 0.11.0
+
+### Changed
+- **The weekly and monthly reports follow your mock-ups.** Weekly: the colour of the week, the four tiles, the tasks, the alerts that fired, a chart per pump, the batteries, kWh per day against last week, the circuits, the monitoring's own health. Monthly: the cost, the tiles, what happened, what was fixed and suggested, preventive maintenance, the trends, the monitoring's health and what would help. Every figure comes from Home Assistant and the agent's records; the AI writes only the sentences, and a sentence with a number that is not in its section is refused. Money left on the table, night standby and monitoring uptime say "not measured yet" for now.
+- **What a report shows is set in the reports skill** (`reports.yaml`, editable on the VESTA Agent page): its sections and their order, the thresholds, the sentences the AI writes.
+- **Alerts in a report include those Home Assistant handled alone** (while the agent was not there), read from Home Assistant's own record of the VESTA rules.
+- **One rule decides which chat a message goes to**: a reply where the person wrote or pressed; scheduled and alert messages to their role's chat; approvals to the chat they were asked from, or the owner's; a message for both roles sharing one chat sent once.
+- **The siren's sounding time is set in one place**, `policy.yaml` (`siren_auto_off_min`).
+
+### Fixed
+- **A skill run from a chat now does what it does on schedule**: its Kiosk faults are created and its messages sent. Before, a maintenance check run from a chat stored its tasks but never created their faults, and the night run then skipped them.
+- **Faults that never reached the Kiosk are created**, at every start and every night.
+- **The maintenance check read the same logbook page 20 times** and counted each device's drop-outs 20 times; it now reads it once.
+- Asking for the next part of a long script answer no longer runs the script again.
+
 ## 0.10.0
 
 ### Added

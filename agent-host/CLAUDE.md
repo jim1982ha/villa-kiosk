@@ -101,6 +101,14 @@ Decisions of 2026-09-30 (owner):
   skill never edited there follows the release (fingerprints of every shipped
   version in `agent-src/starter/shipped-skills.json`; a test fails until a
   changed starter is recorded); an edited one is kept.
+- ⚠️ SKILLS BEFORE CODE (owner, 2026-10-01, mandatory): whatever a skill can
+  define (report sections, thresholds, wording, routes, which scripts the model
+  may run, which rules are VESTA alerts) lives in the skill, never in
+  `vesta_agent/`. No threshold in code: a missing one is named, not guessed.
+- One module per job (architecture review, 0.11.0): `outcome.py` carries out
+  every script result (all callers), `routing.py` decides every chat,
+  `policy.py` is the one reader of policy.yaml, `status.py` the one reading of
+  the agent's records.
 - No PDF (owner, 2026-09-30): the reports are self-contained HTML pages sent
   as attachments. Chromium was ~480 MB of a 1.1 GB image for this alone.
 - ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent

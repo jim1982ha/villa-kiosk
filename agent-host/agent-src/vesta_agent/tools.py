@@ -31,10 +31,12 @@ from claude_agent_sdk import create_sdk_mcp_server, tool
 
 from . import __version__, status
 from .policy import Person, Policy
+from .routing import Origin, Routing
 from .runner import WEB_SEARCH
 from .skills import FILE_NAME, Skills, ToolError, run_script, validate_script_args
 
 SERVER = "vesta"
+SAVE_MAX = 64 * 1024
 log = logging.getLogger("vesta.tools")
 PART_CHARS = 60_000          # about 15,000 tokens: under the SDK's 25,000-token cut of a tool answer
 
@@ -113,7 +115,8 @@ def _err(text: str) -> dict:
 class Toolbox:
     def __init__(self, *, settings, policy: Policy, reader, actions, skills: Skills,
                  send: Callable[..., Awaitable[Any]], server_tools: list[dict], state,
-                 ticket: Callable[..., Awaitable[str]] | None = None):
+                 ticket: Callable[..., Awaitable[str]] | None = None,
+                 carry_out: Callable[..., Awaitable[dict]] | None = None):
         self.s = settings
         self.policy = policy
         self.reader = reader
@@ -121,6 +124,7 @@ class Toolbox:
         self.skills = skills
         self.send = send
         self.ticket = ticket
+        self.carry_out = carry_out
         self.server_tools = {t["name"]: t for t in server_tools}
         self.state = state
         self.parts = Parts()
@@ -132,7 +136,7 @@ class Toolbox:
     def model_tool_names(self, include_web: bool) -> list[str]:
         names = [f"mcp__{SERVER}__{n}" for n in self.read_tool_names()]
         names += [f"mcp__{SERVER}__{n}" for n in ("ha_call_service", "read_skill", "run_skill_script", "send_message",
-                                                  "agent_status")]
+                                                  "agent_status", "save_file")]
         if self.ticket:
             names.append(f"mcp__{SERVER}__create_ticket")
         if include_web:
@@ -154,8 +158,8 @@ class Toolbox:
     # ------------------------------------------------------------------ build
     def tool_objects(self, person: Person | None, chat_id: int | None, include_web: bool) -> list:
         tools = [self._proxy(n) for n in self.read_tool_names()]
-        tools += [self._call_service(person, chat_id), self._read_skill(), self._run_script(), self._send(chat_id),
-                  self._status()]
+        tools += [self._call_service(person, chat_id), self._read_skill(), self._run_script(chat_id), self._send(chat_id),
+                  self._status(), self._save_file()]
         if self.ticket:
             tools.append(self._ticket())
         return tools
@@ -282,7 +286,7 @@ class Toolbox:
             return _ok(SKILL_PREFACE + f"Scripts you may run for this skill: {', '.join(scripts) or 'none'}.\n\n" + body)
         return handler
 
-    def _run_script(self):
+    def _run_script(self, chat_id: int | None):
         schema = {"type": "object", "properties": {
             "skill": {"type": "string"}, "script": {"type": "string"},
             "args": {"type": "array", "items": {"type": "string"}},
@@ -298,6 +302,12 @@ class Toolbox:
             except ToolError as e:
                 self.state.log("script_refused", {"skill": sk, "script": sc, "args": args.get("args"), "reason": str(e)})
                 return _err(str(e))
+            key = hashlib.sha256(json.dumps([sk, sc, final]).encode()).hexdigest()
+            part = int(args.get("vesta_part") or 1)
+            if part > 1 and key in self.parts.cache:
+                # ⚠️ THE NEXT PART OF THE SAME RUN, NOT A NEW RUN: running it again would carry its
+                # tickets and messages out a second time.
+                return _ok(self.parts.serve(key, None, part))
             code, out, err = await asyncio.to_thread(run_script, self.s, skill, sc, final)
             if code not in (0, 2):
                 out = (out + "\n" + err).strip()
@@ -305,9 +315,51 @@ class Toolbox:
                 log.warning("Skill %s: %s failed (exit %s)%s", sk, sc, code, f": {last[:300]}" if last else "")
             out = scrub(out, self._secrets())
             self.state.log("script", {"skill": sk, "script": sc, "args": final, "exit": code})
-            key = hashlib.sha256(json.dumps([sk, sc, final]).encode()).hexdigest()
-            text = self.parts.serve(key, out, int(args.get("vesta_part") or 1))
+            if code in (0, 2) and self.carry_out:
+                # ⚠️ THE SAME RESULT AS ON SCHEDULE (owner, 2026-10-01): its tickets are created and its
+                # messages sent to their chats; the model still answers the person itself.
+                try:
+                    res = json.loads(out or "{}")
+                except ValueError:
+                    res = None
+                if isinstance(res, dict) and (res.get("send") or res.get("actions") or res.get("siren_gate")):
+                    done = await self.carry_out(res, sk, Origin(chat_id) if chat_id is not None else None)
+                    out = (f"[Carried out by the VESTA Agent: {done['sent']} message(s) sent, {done['tickets']} ticket(s) "
+                           f"created, {done['resolved']} closed. Do not send or create them again.]\n") + out
+            text = self.parts.serve(key, out, part)
             return _ok(text) if code in (0, 2) else _err(text or f"The script failed (exit {code}).")
+        return handler
+
+    def _save_file(self):
+        schema = {"type": "object", "properties": {
+            "name": {"type": "string", "description": "A file name in the out folder, ending .json, .txt or .md."},
+            "content": {"type": "string"}}, "required": ["name", "content"]}
+
+        @tool("save_file", "Save a text or JSON file in your out folder, for a skill's script to read as an input "
+                           "(for example the sentences a report asks you to write: notes.json). It writes nowhere else "
+                           "and cannot overwrite a file a script made.", schema)
+        async def handler(args: dict) -> dict:
+            name, content = str(args.get("name") or ""), args.get("content")
+            if not FILE_NAME.match(name) or not name.endswith((".json", ".txt", ".md")):
+                return _err("A plain file name ending .json, .txt or .md.")
+            if not isinstance(content, str) or len(content.encode("utf-8")) > SAVE_MAX:
+                return _err(f"The content must be text of at most {SAVE_MAX // 1024} KB.")
+            if name.endswith(".json"):
+                try:
+                    json.loads(content)
+                except ValueError as e:
+                    return _err(f"Not valid JSON: {e}")
+            path = os.path.join(self.s.out_dir, name)
+            # ⚠️ ONLY ITS OWN FILES: a file a script wrote (facts.json, a report page) is that script's
+            # output; the model saving over it would put its own figures in a report.
+            if os.path.exists(path) and self.state.get("saved_by_model:" + name) is None:
+                return _err(f"{name} was made by a script: choose another name.")
+            os.makedirs(self.s.out_dir, exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(content)
+            self.state.put("saved_by_model:" + name, name)
+            self.state.log("saved_file", {"name": name, "bytes": len(content)})
+            return _ok(f"Saved {name}.")
         return handler
 
     def _send(self, chat_id: int | None):
@@ -328,7 +380,7 @@ class Toolbox:
         @tool("send_message", desc, schema)
         async def handler(args: dict) -> dict:
             to = args.get("to")
-            chat = chat_id if to == "here" and chat_id is not None else self.policy.chats.get(to or "")
+            chat = Routing(self.policy).target(to, Origin(chat_id) if chat_id is not None else None)
             if not chat:
                 return _err(f"No {to} chat is configured.")
             att = args.get("attachment")

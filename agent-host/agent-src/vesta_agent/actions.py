@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable
 
 from .policy import Decision, Person, Policy, action_hash
+from .routing import Routing
 from .state import State
 
 log = logging.getLogger("vesta.actions")
@@ -118,8 +119,7 @@ class Actions:
                      requester.name, result["text"])
             return (f"Executed without approval (this villa's rule for {d.domain}.{d.service} is direct). "
                     f"Result: {result['text']}"), None
-        origin_ok = origin_chat is not None and (policy.chat_role(origin_chat) is not None or int(origin_chat) in policy.people)
-        target_chat = policy.chats.get("owner") if d.required_role == "owner" else (origin_chat if origin_ok else policy.chats.get("owner"))
+        target_chat = Routing(policy).approver_chat(d.required_role, origin_chat)
         if d.required_role == "owner" and not target_chat:
             self.state.log("refused", dict(base, reason="no owner chat configured"))
             return "Refused: no owner chat is configured in policy.yaml.", None

@@ -1,0 +1,10 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ title }}</title>
+<style>{{ css }}</style></head>
+<body><main class="wrap">
+{# The sections, in reports.yaml's order: each is templates/blocks/<id>.html. #}
+{% for sid in order %}{% set s = sections[sid] %}
+{% if s.error %}<section class="card"><p class="note">This part could not be prepared: {{ s.error }}</p></section>
+{% else %}{% include "blocks/" ~ sid ~ ".html" ignore missing %}{% endif %}
+{% endfor %}
+</main></body></html>

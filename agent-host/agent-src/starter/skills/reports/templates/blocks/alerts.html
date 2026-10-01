@@ -1,0 +1,8 @@
+<section>
+  <h2>Alerts that fired</h2>
+  {% if s.rows %}
+  <div class="card tbl"><table><tr><th>When</th><th>What</th><th class="num">Lasted</th><th>Outcome</th></tr>
+  {% for a in s.rows %}<tr><td>{{ a.when_h }}</td><td>{{ a.what }}</td><td class="num">{{ a.lasted or "—" }}</td><td>{{ a.outcome }}</td></tr>{% endfor %}
+  </table></div>
+  {% else %}<p class="note">No critical alert this week.</p>{% endif %}
+</section>

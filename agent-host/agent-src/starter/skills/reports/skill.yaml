@@ -1,9 +1,13 @@
 description: The facility manager's daily digest and weekly page, the owner's weekly lines and monthly proof (HTML pages)
 scripts:
-  compose.py:
+  facts.py:                    # every figure of a weekly or monthly page (sections and thresholds: reports.yaml)
+    commands: [fm-weekly, owner-monthly]
+    flags: {--energy: infile, --out: outfile}
+    inject: [pack, store, zone]
+  compose.py:                  # the chat texts, and a page from its facts and your notes
     commands: [fm-daily, fm-weekly, owner-weekly, owner-monthly]
-    flags: {--energy: infile, --optimiser: infile, --proposals: infile, --as-of: date, --out: outfile}
-    inject: [pack, store]
+    flags: {--energy: infile, --facts: infile, --notes: infile, --as-of: date, --out: outfile}
+    inject: [pack, store, zone]
 schedule:
   - when: "07:00"
     prompt: >-
@@ -13,16 +17,13 @@ schedule:
       is quiet, so the facility manager knows the VESTA Agent is alive. No rule codes, no entity ids.
   - when: "Mon 08:00"
     prompt: >-
-      It is Monday 08:00. Produce the week's numbers (roi-energy, energy_period.py --period week --out week.json),
-      the facility manager weekly page (reports, fm-weekly --energy week.json --out fm_weekly.html) and
-      send it to fm with send_message, attachment fm_weekly.html: the message itself gives the headline and
-      the few lines that matter (from the facts the script printed), in {fm_language}; the page opens on the phone. Then send the
-      owner the three owner-weekly lines (reports, owner-weekly --energy week.json), in {owner_language}.
+      It is Monday 08:00. Read the reports skill and make the facility manager's weekly page, following its
+      steps "A weekly or monthly page": energy for the week, facts.py fm-weekly, your sentences in notes.json
+      (in {fm_language}), compose.py fm-weekly, then send_message to fm with the page attached. Then send the
+      owner the three owner-weekly lines (compose.py owner-weekly --energy week.json), in {owner_language}.
   - when: "1 08:00"
     prompt: >-
-      It is the first of the month, 08:00. Produce the monthly proof for the owner: roi-energy for the month
-      (--period month --out month.json), the filtration optimiser (--out optimiser.json), the proposals
-      (--period-json month.json --optimiser-json optimiser.json --out proposals.json), then reports owner-monthly
-      with --energy month.json --optimiser optimiser.json --proposals proposals.json --out owner_monthly.html.
-      Send it to the owner with send_message, attachment owner_monthly.html: the message itself gives the
-      headline and the four key numbers (from the facts the script printed), in {owner_language}.
+      It is the first of the month, 08:00. Read the reports skill and make the owner's monthly proof for last
+      month, following its steps "A weekly or monthly page" (with the filtration optimiser and the proposals
+      first, so the page carries them): energy for the month, facts.py owner-monthly, your sentences in
+      notes.json (in {owner_language}), compose.py owner-monthly, then send_message to owner with the page attached.

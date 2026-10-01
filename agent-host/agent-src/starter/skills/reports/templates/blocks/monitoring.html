@@ -1,0 +1,11 @@
+<section>
+  <h2>Is the monitoring itself healthy</h2>
+  <div class="card tbl"><table><tr><th>Item</th><th>State</th><th>Effect</th></tr>
+  {% for o in s.offline %}<tr><td>{{ o.item }}</td><td><span class="st bad">Offline</span></td><td>{% if o.critical %}A safety device: its rule cannot see it{% else %}Its readings are missing since {{ o.since.replace("T", " ") }}{% endif %}</td></tr>{% endfor %}
+  {% for r in s.counter_resets %}<tr><td>{{ r.item }}</td><td><span class="st watch">counter stepped back</span></td><td>{{ day(r.day) }} excluded from totals</td></tr>{% endfor %}
+  {% if s.rules_total %}<tr><td>Safety rules</td><td><span class="st {{ 'ok' if s.rules_on == s.rules_total else 'watch' }}">{{ s.rules_on }} of {{ s.rules_total }} on</span></td><td></td></tr>{% endif %}
+  {% if s.muted %}<tr><td>Muted alerts</td><td><span class="st watch">{{ s.muted|length }}</span></td><td>{{ s.muted|join(", ") }}</td></tr>{% endif %}
+  {% if s.ai_cost_usd is not none %}<tr><td>VESTA cost this period</td><td><span class="st ok">US$ {{ "%.2f"|format(s.ai_cost_usd) }}</span></td><td>the AI's replies and reports</td></tr>{% endif %}
+  {% if not (s.offline or s.counter_resets or s.rules_total or s.muted) %}<tr><td colspan="3" class="note">Every watched device answered.</td></tr>{% endif %}
+  </table></div>
+</section>

@@ -14,7 +14,7 @@ import yaml
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 
-from ..config import DEFAULT_BEHAVIOUR
+from ..policy import DEFAULT_BEHAVIOUR, DEFAULTS
 
 #: What the forms edit. Everything else (ha_read_tools, system_actions,
 #: notify_recipients...) is edited in the file itself and never touched here.
@@ -46,13 +46,13 @@ def to_form(text: str) -> dict:
     chats = raw.get("chats") if isinstance(raw.get("chats"), dict) else {}
     return {
         "settings": settings,
-        "act_enabled": raw.get("act_enabled", False),
-        "approval_ttl_minutes": raw.get("approval_ttl_minutes", 15),
+        "act_enabled": raw.get("act_enabled", DEFAULTS["act_enabled"]),
+        "approval_ttl_minutes": raw.get("approval_ttl_minutes", DEFAULTS["approval_ttl_minutes"]),
         "people": [p for p in (raw.get("people") or []) if isinstance(p, dict)],
         "chats": {"owner": chats.get("owner"), "fm": chats.get("fm")},
         "allowed_services": dict(raw.get("allowed_services") or {}),
         "siren_entity": raw.get("siren_entity"),
-        "siren_auto_off_min": raw.get("siren_auto_off_min", 3),
+        "siren_auto_off_min": raw.get("siren_auto_off_min", DEFAULTS["siren_auto_off_min"]),
         **{k: list(raw.get(k) or []) for k in LISTS},
     }
 

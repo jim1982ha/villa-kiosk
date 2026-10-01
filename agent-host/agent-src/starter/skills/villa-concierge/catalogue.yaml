@@ -67,8 +67,7 @@ actions:
     confirm: true
     via: alert-desk            # only the desk's gate may emit this action
     service: {domain: switch, service: turn_on}
-    expect_state: "on"
-    auto_off_min: 3
+    expect_state: "on"                 # it stops after policy.yaml's siren_auto_off_min (the engine's timer)
   siren.off:
     families: [security]
     domains: [switch, siren]

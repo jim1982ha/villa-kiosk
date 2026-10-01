@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.5.0 (1 October 2026)
+
+Owner's architecture review (all six candidates, one release); rule: whatever a skill can define lives in the skill.
+
+- `outcome.py`: one module carries out a script's result (send / ticket / ticket.resolve / snapshot.get / siren gate)
+  for every caller — scheduler, hooks, alert buttons and the model's run_skill_script (before: dropped on the model
+  path, losing tickets). The alert buttons live there (`press`). `repair_tickets()` at start and nightly.
+- `routing.py`: the one routing rule (`here`, role chats, approver chat, one send per chat). alert-desk replies use
+  `to: here`. send_message, Actions.request and the siren notice route through it.
+- `policy.py` is the one reader of policy.yaml: settings block, `siren_auto_off_min`, defaults; config, the UI and
+  the skills read from it. Skill scripts get `VESTA_POLICY` and `VESTA_STATE` (read only).
+- alert-desk: the dead `siren` command and `siren.on` action removed; the gate prompt reads the policy's minutes.
+- ha_client logbook: stops at a page that brings nothing new, keeps each row once (ha-mcp 8.5.0 repeated page 1).
+- run_skill_script serves part N of a long answer from the first run, never runs the script again.
+- New tool `save_file`: a .json/.txt/.md in the out folder, never over a script's file.
+- reports: `reports.yaml` (sections, order, thresholds, sentences, gaps), `facts.py` (every figure: HA statistics,
+  states, the VESTA rules' logbook, the store, the AI cost), `compose.py` renders `report.html` + `blocks/*`, inline
+  SVG charts (`charts.py`), and refuses a note whose numbers are not its section's. Old page templates removed.
+
 ## 0.4.0 (30 September 2026)
 
 - The UI (`python -m vesta_agent.ui`, the manifest's `ui`): aiohttp, plain HTML/CSS/JS, no build step, the

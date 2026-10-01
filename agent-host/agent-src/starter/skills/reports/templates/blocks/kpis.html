@@ -1,0 +1,6 @@
+<section class="kpis">
+  <div class="kpi"><div class="n">{{ s.open_tasks }}</div><div class="l">open tasks</div><div class="d flat">{{ s.new }} new, {{ s.carried }} carried over</div></div>
+  <div class="kpi"><div class="n">{{ s.alerts }}</div><div class="l">critical alert{{ "" if s.alerts == 1 else "s" }}</div><div class="d flat">{{ s.alerts_closed }} closed</div></div>
+  <div class="kpi"><div class="n">{{ num(s.kwh, 0) }}</div><div class="l">kWh used</div><div class="d {{ 'up' if (s.vs_prev_pct or 0) > 0 else 'down' }}">{{ pct(s.vs_prev_pct) }} vs last week</div></div>
+  <div class="kpi"><div class="n">{{ s.offline }}</div><div class="l">devices offline</div><div class="d {{ 'up' if s.offline_critical else 'flat' }}">{{ s.offline_critical }} critical</div></div>
+</section>

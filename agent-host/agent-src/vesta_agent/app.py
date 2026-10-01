@@ -32,7 +32,9 @@ from .actions import Actions
 from .config import STARTER_DIR
 from .ha_events import HaEvents
 from .kiosk import Kiosk, KioskError
+from .outcome import Outcome
 from .policy import Person, Policy, problems as policy_problems
+from .routing import Origin, Routing
 from .scheduler import Scheduler
 from .skills import Skills, run_command, script_env
 from .state import State
@@ -42,25 +44,12 @@ from .tools import Toolbox, scrub
 log = logging.getLogger("vesta")
 
 LANG = {"en": "English", "fr": "French", "id": "Indonesian", "de": "German", "es": "Spanish", "it": "Italian", "nl": "Dutch"}
-LADDER = [("Done", "done"), ("Not found", "not_found"), ("Need help", "need_help"), ("Mute", "mute")]
 #: Commands the agent answers. Any other command belongs to Home Assistant's automations.
 OWN_COMMANDS = {"/ask", "/new", "/whoami"}
 
 
 def _now_local(tz: str) -> datetime:
     return datetime.now(ZoneInfo(tz))
-
-
-def _clean_summary(s: str) -> str:
-    """No rule codes for a human."""
-    return re.sub(r"^\s*\[[^\]]{2,80}\]\s*", "", s or "").strip()
-
-
-def _ticket_title(s: str) -> str:
-    """A Facility record's title: no rule code, and no leading emoji or symbol (the 🚨 of an alert)."""
-    s = (s or "").strip().splitlines()[0] if (s or "").strip() else ""
-    s = re.sub(r"^[^\w(\"'\[]+", "", s)          # 🚨 before the rule code, or alone
-    return re.sub(r"^[^\w(\"']+", "", _clean_summary(s)).strip()
 
 
 _MD_LINK = re.compile(r"\[([^\]]+)\]\((https?://[^)\s]+)\)")
@@ -116,6 +105,10 @@ class Vesta:
         self.cf_headers = cf
         self.kiosk = kiosk if kiosk is not None else Kiosk(settings.kiosk_url, settings.kiosk_token, cf)
         self.actions = Actions(self.policy, self.state, self.writer_factory, names=self.name_of, related=self.related_entities)
+        self.outcome = Outcome(policy=self.policy, state=self.state, store_path=settings.store_path,
+                               timezone=settings.timezone, send=self.send, kiosk=self.kiosk, actions=self.actions,
+                               reader=self.reader, skills=self.skills, run_job=self.run_code_job,
+                               edit=(self.tg.edit if self.tg else None))
         self.server_tools: list[dict] = []
         self.bot_username: str | None = None
         self._locks: dict[int, asyncio.Lock] = {}
@@ -185,7 +178,8 @@ class Vesta:
     def toolbox(self) -> Toolbox:
         return Toolbox(settings=self.s, policy=self.policy(), reader=self.reader, actions=self.actions,
                        skills=self.skills, send=self.send, server_tools=self.server_tools, state=self.state,
-                       ticket=self.create_ticket if self.kiosk.enabled else None)
+                       ticket=self.outcome.create_ticket if self.kiosk.enabled else None,
+                       carry_out=self.outcome.carry_out)
 
     def lock(self, chat_id: int) -> asyncio.Lock:
         return self._locks.setdefault(int(chat_id), asyncio.Lock())
@@ -205,22 +199,11 @@ class Vesta:
             self.state.log("send_failed", {"chat": chat_id, "error": str(e)})
             return None
         self.state.remember_message(chat_id, mid)
-        log.info("Sent to chat %s (%s)%s%s", chat_id, self._chat_label(chat_id),
+        log.info("Sent to chat %s (%s)%s%s", chat_id, Routing(self.policy()).label(chat_id),
                  " with buttons" if keyboard else "", " and a file" if document else "")
         if approval_id and mid:
             self.state.set_approval_message(approval_id, mid)
         return mid
-
-    def _chat_label(self, chat_id) -> str:
-        role = self.policy().chat_role(chat_id)
-        if role:
-            return f"{role} chat"
-        return "private chat" if int(chat_id) > 0 else "group"
-
-    async def create_ticket(self, title: str, entity_id: str | None = None, note: str | None = None) -> str:
-        tid = await self.kiosk.add_ticket(_ticket_title(title)[:200], entity_id=entity_id, note=note)
-        log.info("Kiosk ticket %s created: %s", tid, _ticket_title(title)[:80])
-        return tid
 
     # ------------------------------------------------------------------ start
     async def start(self):
@@ -255,6 +238,7 @@ class Vesta:
             try:
                 await self.kiosk.check()
                 log.info("VESTA Kiosk: agreement %s", self.kiosk.info.get("contract"))
+                await self._safe(self.outcome.repair_tickets())
             except KioskError as e:
                 log.warning("VESTA Kiosk: %s", e)
         await self.refresh_server_tools()
@@ -304,9 +288,9 @@ class Vesta:
         return res if isinstance(res, dict) else {}
 
     async def run_code_job(self, skill, command: str, timeout: int = 900, values: dict | None = None,
-                           here: tuple[str, int] | None = None) -> dict:
+                           origin: Origin | None = None) -> dict:
         res = await asyncio.to_thread(self.code_command, skill, command, values, timeout)
-        await self._safe(self.dispatch(res, skill, here))
+        await self._safe(self.outcome.carry_out(res, skill.name, origin))
         return res
 
     def build_pack(self) -> dict:
@@ -322,8 +306,11 @@ class Vesta:
             return {}
 
     async def rebuild_pack(self) -> None:
+        """The engine's nightly job (scheduler.PACK_AT): the knowledge pack, the tool list, and any
+        open task still without its Kiosk ticket."""
         await asyncio.to_thread(self.build_pack)
         await self.refresh_server_tools()
+        await self._safe(self.outcome.repair_tickets())
 
     # ------------------------------------------------------------------ Home Assistant's events
     async def on_ha_event(self, event_type: str, data: dict) -> None:
@@ -521,141 +508,23 @@ class Vesta:
             return await self.converse(cid, person, "", chat_role=pol.chat_role(cid) or "private",
                                        resume=cont["session_id"], is_continue=True)
         if data.startswith("i:"):
-            return await self._ladder_press(q, cid, data, presser, toast)
+            return await self.outcome.press(q, cid, data, pol.person(presser), toast)
         await toast("Unknown button.")
-
-    async def _ladder_press(self, q: dict, cid: int, data: str, presser, toast):
-        pol = self.policy()
-        person = pol.person(presser)
-        if person is None:
-            return await toast("You are not registered with the VESTA Agent.")
-        try:
-            _, iid, opt = data.split(":")
-            int(iid)
-        except ValueError:
-            return await toast("Unknown button.")
-        options = {b: a for a, b in LADDER}
-        if opt not in options:
-            return await toast("Unknown button.")
-        skill_name = self.state.get(f"inc:{iid}:{cid}")
-        skill = self.skills.get(skill_name) if skill_name else None
-        if skill is None or not skill.on_reply:
-            self.state.log("press_refused", {"incident": iid, "by": presser, "reason": "not sent to this chat, or its skill is gone"})
-            return await toast("This button belongs to another chat.")
-        if opt == "mute" and person.role != "owner":
-            from vesta_shared.store import Store
-            inc = Store(self.s.store_path).incident(int(iid)) or {}
-            if inc.get("severity") in ("P1", "P2"):
-                self.state.log("press_refused", {"incident": iid, "by": presser, "reason": "mute of a P1/P2 is owner only"})
-                return await toast("Only the owner can mute a P1 or P2 alert.")
-        label = options[opt]
-        await toast(f"{label}: noted.")
-        self.state.log("ladder", {"incident": iid, "by": person.name, "reply": label})
-        log.info("Button %s on incident #%s pressed by %s", label, iid, person.name)
-        # the buttons go, and the message says who did what, when: nobody presses twice,
-        # and the chat itself shows the incident was handled
-        msg = q.get("message") or {}
-        if self.tg and msg.get("message_id"):
-            when = _now_local(self.s.timezone).strftime("%H:%M")
-            base = (msg.get("text") or msg.get("caption") or "").rstrip()
-            await self.tg.edit(cid, msg["message_id"], f"{base}\n\n{label} — {person.name}, {when}"[:4096])
-        await self.run_code_job(skill, skill.on_reply, 120, {"incident": iid, "text": label, "role": person.role},
-                                here=(person.role, cid))
 
     async def after_execution(self, ap: dict):
         """The siren switches itself off after a few minutes (alert-desk rules)."""
         pol = self.policy()
         act = ap["action"]
         if pol.siren_entity and act["domain"] == "switch" and act["service"] == "turn_on" and pol.siren_entity in act["entity_ids"]:
-            minutes = int(pol.raw.get("siren_auto_off_min", 3))
+            minutes = pol.siren_auto_off_min
 
             async def off():
                 await asyncio.sleep(minutes * 60)
                 ok = await asyncio.to_thread(self.actions.system, "switch", "turn_off", pol.siren_entity)
-                owner = pol.chats.get("owner")
+                owner = Routing(pol).target("owner")
                 if owner:
                     await self.send(owner, "Siren switched off." if ok else "The siren could not be switched off: check it now.")
             asyncio.create_task(off())
-
-    # ------------------------------------------------------------------ what a script decided
-    async def dispatch(self, res: dict, skill=None, here: tuple[str, int] | None = None):
-        """Carry out a script's standard output: `send` items, then `actions`.
-
-        send:    {to: owner|fm, text, keyboard?: true (the Done / Not found / Need help / Mute ladder)}
-        actions: ticket {summary, entity_id?, note?, task_id?} · ticket.resolve {task_id}
-                 snapshot.get {entity_id, incident_id} · the siren gate (`siren_gate` key)
-        Every write goes through the policy or the Kiosk's own rules; nothing here acts on a device."""
-        if not res:
-            return
-        pol = self.policy()
-        gate = res.get("siren_gate") or {}
-        gate_prompt = gate.get("prompt") if gate.get("armed") else None
-        sent_to: set[int] = set()
-        for item in res.get("send") or []:
-            if gate_prompt and item.get("text") == gate_prompt:
-                continue
-            chat = pol.chats.get(item.get("to") or "")
-            # an answer to the person who pressed goes where they pressed, not to their role's chat
-            if here and item.get("to") == here[0]:
-                chat = here[1]
-            if not chat:
-                continue
-            text = item.get("text") or ""
-            kb = None
-            if item.get("keyboard") and skill is not None:
-                m = re.search(r"#(\d+)", text)
-                iid = res.get("incident_id") or (int(m.group(1)) if m else None)
-                if iid:
-                    kb = {"inline_keyboard": [[{"text": a, "callback_data": f"i:{iid}:{b}"} for a, b in LADDER]]}
-                    self.state.put(f"inc:{iid}:{chat}", skill.name)
-            await self.send(chat, text, keyboard=kb)
-            sent_to.add(chat)
-        if gate_prompt and pol.siren_entity:
-            answer, msg = self.actions.request("switch", "turn_on", pol.siren_entity, {}, None, pol.chats.get("owner"))
-            owner = pol.chats.get("owner")
-            if msg:
-                await self.send(msg.chat_id, gate_prompt.split(" Reply ")[0] + "\n\n" + msg.text,
-                                keyboard=msg.keyboard, approval_id=msg.approval_id)
-            elif owner:
-                await self.send(owner, gate_prompt.split(" Reply ")[0] + f"\n\nThe siren cannot be requested: {answer}")
-        for a in res.get("actions") or []:
-            kind = a.get("action")
-            try:
-                if kind == "ticket":
-                    await self._ticket_action(a)
-                elif kind == "ticket.resolve":
-                    await self._ticket_resolve(a)
-                elif kind == "snapshot.get":
-                    blocks = await asyncio.to_thread(self.reader.tool_content, "ha_get_camera_image", {"entity_id": a.get("entity_id")})
-                    img = next((b for b in blocks if b.get("type") == "image"), None)
-                    if img:
-                        for chat in sent_to:
-                            await self.send(chat, f"Snapshot, incident #{a.get('incident_id')}", photo_b64=(img.get("data"), img.get("mimeType")))
-                else:
-                    self.state.log("action_ignored", {"action": kind, "skill": getattr(skill, "name", None)})
-            except Exception as e:  # noqa: BLE001
-                self.state.log("action_failed", {"action": kind, "error": type(e).__name__})
-                log.warning("action %s failed (%s)", kind, type(e).__name__)
-
-    async def _ticket_action(self, a: dict) -> None:
-        if not self.kiosk.enabled:
-            self.state.log("ticket_skipped", {"reason": "no Kiosk configured", "summary": a.get("summary", "")[:80]})
-            return
-        tid = await self.kiosk.add_ticket(_ticket_title(a.get("summary", ""))[:200], entity_id=a.get("entity_id") or None,
-                                          note=a.get("note") or None)
-        log.info("Kiosk ticket %s created: %s", tid, _ticket_title(a.get("summary", ""))[:80])
-        if a.get("task_id"):
-            from vesta_shared.store import Store
-            Store(self.s.store_path).set_task_uid(int(a["task_id"]), tid)
-        self.state.log("executed", {"tool": "ticket", "ticket": tid})
-
-    async def _ticket_resolve(self, a: dict) -> None:
-        from vesta_shared.store import Store
-        task = Store(self.s.store_path).task(int(a.get("task_id") or 0)) if a.get("task_id") else None
-        uid = (task or {}).get("todo_uid") or a.get("ticket_id")
-        if uid and self.kiosk.enabled:
-            if await self.kiosk.resolve_ticket(uid, note=a.get("note")):
-                log.info("Kiosk ticket %s resolved", uid)
 
     # ------------------------------------------------------------------ scheduled model jobs
     def _language_of(self, role: str) -> str:

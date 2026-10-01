@@ -13,7 +13,7 @@ decides alone to act on the villa.
 
 - `skill.yaml`        what the engine runs, and when (intake on each alert, tick every 5 minutes, reply on a button)
 - `rules.yaml`        routing by blueprint and rule id, cooldowns, siren policy, which role gets which severity
-- `scripts/desk.py`   intake, tick, reply, siren, status (each prints JSON: `send` and `actions`)
+- `scripts/desk.py`   intake, tick, reply, status (each prints JSON: `send` and `actions`)
 
 ## Inputs (all run by the engine, never by you)
 
@@ -65,7 +65,8 @@ The decision is one of:
 `rules.yaml` section `siren`. The gate arms only when all three hold:
 1. At least 2 independent intrusion signals (different entities) inside 5 minutes.
 2. The villa is marked vacant or away (`input_select.villa_mode`).
-3. The owner approves the siren request with the Approve button within 10 minutes.
+3. The owner approves the siren request with the Approve button (it expires after policy.yaml's
+   `approval_ttl_minutes`). It sounds for policy.yaml's `siren_auto_off_min`, then stops.
 
 The approval goes through the engine's policy like any action, with read-back and a 3-minute
 automatic stop. A single sensor, an occupied villa, a late press: nothing fires. The snapshot

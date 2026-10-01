@@ -1,0 +1,9 @@
+<section>
+  <h2>What we fixed, what we suggest</h2>
+  <div class="grid2">
+  {% for f in s.fixed %}<div class="asset"><span class="st ok">Fixed</span><b>{{ f.title }}</b><div class="s">Closed {{ day(f.day) }}.</div></div>{% endfor %}
+  {% for p in s.proposals %}<div class="asset"><span class="st watch">Proposal</span><b>{{ p.title }}</b><div class="s">{{ p.detail }}{% if p.benefit %} {{ p.benefit }}{% endif %}</div>
+    <div class="btns"><span class="btn">Accept {{ p.id }}</span><span class="btn">Later {{ p.id }}</span><span class="btn">Ignore {{ p.id }}</span></div></div>{% endfor %}
+  {% if not (s.fixed or s.proposals) %}<p class="note">Nothing fixed or proposed this month.</p>{% endif %}
+  </div>
+</section>

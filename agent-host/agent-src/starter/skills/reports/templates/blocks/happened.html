@@ -1,0 +1,8 @@
+<section>
+  <h2>What happened</h2>
+  {% if s.rows %}
+  <div class="card tbl"><table><tr><th></th><th>Date</th><th>Event</th><th>Handled</th></tr>
+  {% for a in s.rows %}<tr><td>{% if a.severity %}<span class="pill {{ a.severity }}">{{ a.severity }}</span>{% endif %}</td><td>{{ a.when_h }}</td><td>{{ a.what }}</td><td>{{ a.outcome }}</td></tr>{% endfor %}
+  </table></div>
+  {% else %}<p class="note">No incident this month.</p>{% endif %}
+</section>

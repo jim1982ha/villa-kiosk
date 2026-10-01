@@ -25,14 +25,8 @@ import yaml
 APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STARTER_DIR = os.path.join(APP_DIR, "starter")
 
-PROFILES = {
-    # profile: (model for conversations, effort)
-    "auto": ("sonnet", "medium"),
-    "economy": ("haiku", "low"),
-    "performance": ("opus", "high"),
-}
-CONVERSATION_RESETS = ("daily_04_00", "after_8h_silence", "never")
-DEFAULT_BEHAVIOUR = {"profile": "auto", "reply_limit_usd": 1.0, "web_search": True, "conversation_reset": "daily_04_00"}
+# The settings block is policy.yaml's, read by vesta_agent.policy (one reader of the file).
+from .policy import CONVERSATION_RESETS, DEFAULT_BEHAVIOUR, PROFILES, Policy  # noqa: E402,F401
 
 
 def _env(name: str, default: str = "") -> str:
@@ -102,35 +96,18 @@ class Settings:
 
     # ------------------------------------------------------------------ behaviour (policy.yaml `settings:`)
     def behaviour(self) -> dict:
-        """The `settings:` block of policy.yaml, read again whenever the file changes.
-
-        An unknown or out-of-range value falls back to its default and is not an
-        error: a typo in a hand-edited file must not stop the agent."""
+        """The `settings:` block of policy.yaml, read again whenever the file changes — by Policy, the
+        one reader of the file. A value it does not understand falls back to its default (not an error:
+        a typo in a hand-edited file must not stop the agent; the UI refuses it before it is saved)."""
         try:
             m = os.path.getmtime(self.policy_path)
         except OSError:
             m = None
         if self._behaviour_cache.get("mtime") != m or "value" not in self._behaviour_cache:
-            raw = {}
-            if m is not None:
-                try:
-                    with open(self.policy_path, encoding="utf-8") as f:
-                        raw = (yaml.safe_load(f) or {}).get("settings") or {}
-                except (OSError, yaml.YAMLError, AttributeError):
-                    raw = {}
-            v = dict(DEFAULT_BEHAVIOUR)
-            if raw.get("profile") in PROFILES:
-                v["profile"] = raw["profile"]
             try:
-                limit = float(raw.get("reply_limit_usd", v["reply_limit_usd"]))
-                if limit >= 0.05:
-                    v["reply_limit_usd"] = limit
-            except (TypeError, ValueError):
-                pass
-            if isinstance(raw.get("web_search"), bool):
-                v["web_search"] = raw["web_search"]
-            if raw.get("conversation_reset") in CONVERSATION_RESETS:
-                v["conversation_reset"] = raw["conversation_reset"]
+                v = Policy.load(self.policy_path).behaviour
+            except (OSError, yaml.YAMLError, AttributeError):
+                v = dict(DEFAULT_BEHAVIOUR)
             self._behaviour_cache.update(mtime=m, value=v)
         return self._behaviour_cache["value"]
 
