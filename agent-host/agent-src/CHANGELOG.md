@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.0 (1 October 2026)
+
+Readings (owner's design, agent-host/docs/adr/0001; glossary agent-host/CONTEXT.md).
+
+- AI jobs: `schedule` entries with `prompt` need a `name` (+ optional `to`, `on_request`, `default`, `on_limit`,
+  `description`); policy.yaml `settings.jobs.<name>: {profile, limit_usd}`; a job not set does not run.
+  `runner.run(profile=)`. At the limit, the job's `on_limit` code step runs ({to}, {started}, {limit}).
+- Tool `start_job`: a person (never a job) starts an on_request job; it runs as itself and answers `here`.
+- Skill messages may carry an `attachment` (a file of the out folder).
+- Files named `villa.*` in a starter skill: not an edit (fingerprint), kept by updates.
+- UI: AI jobs card, "not set" banner and "Add them" on Overview and Rules; `/api/jobs`.
+- reports: `playbook:` (when kinds power_step, run_change, battery_trend, offline, use_while_empty; entries without
+  `when` are knowledge), `nothing_happened:`, sections `noticed` and `quiet`; readings unchecked and marked, slots
+  `checked: true` still checked; `compose.py --finish/--since/--limit`; `villa.reports.yaml` merged.
+
 ## 0.5.0 (1 October 2026)
 
 Owner's architecture review (all six candidates, one release); rule: whatever a skill can define lives in the skill.

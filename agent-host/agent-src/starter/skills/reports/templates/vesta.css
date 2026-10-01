@@ -53,3 +53,7 @@ svg{width:100%;height:auto;display:block}
 .bat .bar i{display:block;height:100%;background:var(--good)}
 .bat .bar i.watch{background:var(--warn)}.bat .bar i.replace{background:var(--crit)}
 .bat .num{font-variant-numeric:tabular-nums;color:var(--ink2)}
+.mark{display:inline-block;font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--acc);border:1px solid currentColor;border-radius:999px;padding:0 6px;margin-right:4px;vertical-align:1px;opacity:.85}
+.unwritten{font-size:13px;color:var(--warn);font-style:italic}
+.task .ask{margin-top:6px;font-size:14px;font-style:italic}
+.task .s{margin-top:6px;font-size:12px;color:var(--ink2)}

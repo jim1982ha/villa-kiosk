@@ -43,8 +43,8 @@ def test_the_schedule_comes_from_the_skills_and_runs_once_per_slot(tmp_path):
     async def run_code(skill, command, timeout):
         code.append((skill.name, command))
 
-    async def run_model(skill, prompt, name):
-        model.append(name)
+    async def run_model(skill, job):
+        model.append(f"{skill.name}:{job['when']}")
 
     async def rebuild():
         packs.append(1)

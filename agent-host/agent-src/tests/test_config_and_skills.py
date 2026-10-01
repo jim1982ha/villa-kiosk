@@ -216,3 +216,14 @@ def test_a_code_job_runs_with_its_placeholders_filled(tmp_path):
     assert code == 0
     import json
     assert json.loads(out)["argv"][:4] == ["--incident", "7", "--text", "Not found"]
+
+
+def test_the_villas_own_file_in_a_starter_skill_is_kept_and_does_not_stop_its_updates(tmp_path):
+    old = _starters(tmp_path / "old", {"pool-care": "v1"})
+    new = _starters(tmp_path / "new", {"pool-care": "v2"})
+    skills = tmp_path / "skills"
+    Skills(str(skills), old).seed()
+    (skills / "pool-care" / "villa.extra.yaml").write_text("mine: true\n")
+    assert Skills(str(skills), new).update_starters() == (["pool-care"], [])       # not an edit: updated
+    assert (skills / "pool-care" / "scripts" / "check.py").read_text() == "print('v2')\n"
+    assert (skills / "pool-care" / "villa.extra.yaml").read_text() == "mine: true\n"  # and kept

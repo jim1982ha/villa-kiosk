@@ -1,0 +1,5 @@
+<section class="card">
+  {% set r = reading("quiet") %}
+  {% if r %}<p>{{ r }}</p>
+  {% else %}<p class="note">{% if s.did_not_happen %}{{ (s.did_not_happen|join(", "))|capitalize }}.{% endif %}{% if s.rules_total %} {{ s.rules_on }} of {{ s.rules_total }} safety rules on.{% endif %}</p>{% endif %}
+</section>

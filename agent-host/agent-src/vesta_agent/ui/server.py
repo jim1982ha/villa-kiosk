@@ -113,6 +113,7 @@ class UI:
         r.add_get("/api/policy", self.policy_get)
         r.add_put("/api/policy/form", self.policy_form)
         r.add_put("/api/policy/text", self.policy_text)
+        r.add_get("/api/jobs", self.jobs)
         r.add_get("/api/skills", self.skills_list)
         r.add_post("/api/skills", self.skill_create)
         r.add_delete("/api/skills/{name}", self.skill_delete)
@@ -160,7 +161,22 @@ class UI:
             except Exception as e:  # noqa: BLE001 — the overview shows what it can
                 log.warning("UI: the agent's records could not be read (%s)", type(e).__name__)
         return web.json_response({"version": __version__, "instance": self.s.instance,
-                                  "policy_problems": pol, "skills": self._skill_rows(), "last_24h": report})
+                                  "policy_problems": pol, "skills": self._skill_rows(), "last_24h": report,
+                                  "jobs_not_set": [j["name"] for j in self._jobs() if not j["set"]]})
+
+    # ------------------------------------------------------------------ AI jobs
+    def _jobs(self) -> list[dict]:
+        """The AI jobs the skills declare, and whether policy.yaml sets their model and limit (else they do not run)."""
+        from ..policy import Policy
+        from ..skills import ai_jobs
+        set_ = Policy.load(self.s.policy_path).jobs
+        return [{"name": j["name"], "skill": sk.name, "when": j["when"], "to": j.get("to"),
+                 "on_request": j.get("on_request", False), "description": j.get("description") or "",
+                 "default": j.get("default") or {}, "set": j["name"] in set_, "current": set_.get(j["name"])}
+                for sk, j in ai_jobs(self.skills.all())]
+
+    async def jobs(self, _request):
+        return web.json_response({"jobs": self._jobs()})
 
     # ------------------------------------------------------------------ policy.yaml
     def _policy(self) -> tuple[str, str]:

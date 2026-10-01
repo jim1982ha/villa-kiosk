@@ -105,7 +105,7 @@ class Vesta:
         self.cf_headers = cf
         self.kiosk = kiosk if kiosk is not None else Kiosk(settings.kiosk_url, settings.kiosk_token, cf)
         self.actions = Actions(self.policy, self.state, self.writer_factory, names=self.name_of, related=self.related_entities)
-        self.outcome = Outcome(policy=self.policy, state=self.state, store_path=settings.store_path,
+        self.outcome = Outcome(policy=self.policy, state=self.state, store_path=settings.store_path, out_dir=settings.out_dir,
                                timezone=settings.timezone, send=self.send, kiosk=self.kiosk, actions=self.actions,
                                reader=self.reader, skills=self.skills, run_job=self.run_code_job,
                                edit=(self.tg.edit if self.tg else None))
@@ -179,7 +179,7 @@ class Vesta:
         return Toolbox(settings=self.s, policy=self.policy(), reader=self.reader, actions=self.actions,
                        skills=self.skills, send=self.send, server_tools=self.server_tools, state=self.state,
                        ticket=self.outcome.create_ticket if self.kiosk.enabled else None,
-                       carry_out=self.outcome.carry_out)
+                       carry_out=self.outcome.carry_out, start_job=self.start_job)
 
     def lock(self, chat_id: int) -> asyncio.Lock:
         return self._locks.setdefault(int(chat_id), asyncio.Lock())
@@ -533,18 +533,58 @@ class Vesta:
                 return LANG.get(p.language, p.language)
         return "English"
 
-    async def run_model_job(self, skill, prompt: str, name: str) -> None:
+    async def run_model_job(self, skill, job: dict, origin: Origin | None = None) -> None:
+        """An AI job of a skill: its model and spending limit are policy.yaml's settings.jobs[name].
+
+        ⚠️ NOT SET, NOT RUN (owner, 2026-10-01): a job policy.yaml does not name has no agreed cost, so it
+        is skipped and the log says so (the VESTA Agent page offers to add it). When the limit stops it,
+        the skill's `on_limit` code step still finishes the work (a report is sent with what is done)."""
+        name = job["name"]
+        cfg = self.policy().jobs.get(name)
+        if cfg is None:
+            log.warning("AI job %s (skill %s) is not set in policy.yaml: it does not run. "
+                        "VESTA Agent page → Rules → AI jobs → Add them.", name, skill.name)
+            self.state.log("job_not_set", {"job": name, "skill": skill.name})
+            if origin:
+                await self.send(origin.chat, f"The {name} job is not set up yet (VESTA Agent page → Rules → AI jobs), "
+                                             "so it cannot run.")
+            return
+        prompt = job["prompt"]
         try:
             prompt = prompt.format(fm_language=self._language_of("fm"), owner_language=self._language_of("owner"))
         except (KeyError, IndexError, ValueError):
             pass                        # a prompt with other braces is used as written
+        if origin:
+            prompt += ("\n\nThis was asked for in a chat, not on schedule: send the result there (send_message "
+                       "to=here), not to its usual chat.")
         if not self.server_tools:
             await self.refresh_server_tools()
+        started = datetime.now(timezone.utc).isoformat()
         tb = self.toolbox()
-        server = tb.server(None, None, False)
+        server = tb.server(None, origin.chat if origin else None, False)
         allowed = set(tb.model_tool_names(False))
-        res = await runner.run(self.s, self.system_prompt(), prompt, server, allowed, self.state, who=f"job:{name}")
-        log.info("job %s done (cost %s USD%s)", name, res.cost_usd, ", stopped at the reply limit" if res.stopped_at_limit else "")
+        log.info("AI job %s started (%s, limit %g USD)%s", name, cfg["profile"], cfg["limit_usd"],
+                 " on request" if origin else "")
+        res = await runner.run(self.s, self.system_prompt(), prompt, server, allowed, self.state, who=f"job:{name}",
+                               limit_usd=cfg["limit_usd"], profile=cfg["profile"])
+        log.info("AI job %s done (%s USD%s)", name, res.cost_usd,
+                 ", stopped at its limit" if res.stopped_at_limit else "")
+        if res.stopped_at_limit and job.get("on_limit"):
+            to = "here" if origin else (job.get("to") or "owner")
+            await self.run_code_job(skill, job["on_limit"], 300,
+                                    {"to": to, "started": started, "limit": f"{cfg['limit_usd']:g}"}, origin)
+
+    async def start_job(self, name: str, chat: int) -> str:
+        """A job a skill marks on_request, started from a chat: it runs as itself (its model, its limit)."""
+        from .skills import ai_jobs
+        found = [(sk, j) for sk, j in ai_jobs(self.skills.all()) if j["name"] == name and j.get("on_request")]
+        if not found:
+            return f"There is no job {name} that can be started from a chat."
+        if name not in self.policy().jobs:
+            return f"The {name} job is not set up yet (VESTA Agent page → Rules → AI jobs): it cannot run."
+        sk, job = found[0]
+        asyncio.create_task(self._safe(self.run_model_job(sk, job, Origin(int(chat)))))
+        return f"Started {name}: the result will be sent here when it is ready (a few minutes)."
 
     async def housekeeping(self) -> None:
         if not self.server_tools and _now_local(self.s.timezone).minute % 10 == 0:

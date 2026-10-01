@@ -2,7 +2,8 @@
 
 A skill script prints its decision in the standard form; this module does it:
 
-  send:       [{to: here | owner | fm, text, keyboard?: true}]   keyboard = the alert buttons
+  send:       [{to: here | owner | fm, text, keyboard?: true, attachment?: <a file of the out folder>}]
+              keyboard = the alert buttons
   actions:    ticket {summary, entity_id?, note?, task_id?} · ticket.resolve {task_id | ticket_id, note?}
               snapshot.get {entity_id, incident_id}
   siren_gate: {armed, prompt}  → an Approve / Refuse request to the owner for the policy's siren
@@ -21,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import re
 from datetime import datetime
 from typing import Awaitable, Callable
@@ -47,11 +49,13 @@ def ticket_title(s: str) -> str:
 
 class Outcome:
     def __init__(self, *, policy: Callable, state, store_path: str, timezone: str, send: Callable[..., Awaitable],
+                 out_dir: str = "",
                  kiosk, actions, reader, skills, run_job: Callable[..., Awaitable] | None = None,
                  edit: Callable[..., Awaitable] | None = None):
         self.policy = policy
         self.state = state
         self.store_path = store_path
+        self.out_dir = out_dir
         self.tz = timezone
         self.send = send
         self.kiosk = kiosk
@@ -96,7 +100,16 @@ class Outcome:
                 if iid:
                     kb = {"inline_keyboard": [[{"text": a, "callback_data": f"i:{iid}:{b}"} for a, b in LADDER]]}
                     self.state.put(f"inc:{iid}:{chat}", skill_name)
-            await self.send(chat, text, keyboard=kb)
+            doc = None
+            att = item.get("attachment")
+            if att:
+                from .skills import FILE_NAME
+                path = os.path.join(self.out_dir, str(att))
+                if FILE_NAME.match(str(att)) and self.out_dir and os.path.isfile(path):
+                    doc = path
+                else:
+                    log.warning("Skill %s attached %r, which is not a file of the out folder: sent without it", skill_name, att)
+            await self.send(chat, text, keyboard=kb, document=doc)
             chats.add(chat)
             done["sent"] += 1
         pol = self.policy()

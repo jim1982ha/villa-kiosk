@@ -21,6 +21,8 @@ from dataclasses import dataclass
 from claude_agent_sdk import (AssistantMessage, ClaudeAgentOptions, ClaudeSDKClient, HookMatcher,
                               PermissionResultAllow, PermissionResultDeny, ResultMessage, TextBlock)
 
+from .policy import PROFILES  # noqa: E402
+
 log = logging.getLogger("vesta.runner")
 
 WEB_SEARCH = "WebSearch"
@@ -81,7 +83,7 @@ def make_guard(allowed: set[str], state, who: str):
 
 
 def build_options(settings, system_prompt: str, server, allowed: set[str], state, who: str,
-                  resume: str | None, limit_usd: float) -> tuple[ClaudeAgentOptions, list[str]]:
+                  resume: str | None, limit_usd: float, profile: str | None = None) -> tuple[ClaudeAgentOptions, list[str]]:
     can_use_tool, pre_hook, denied = make_guard(allowed, state, who)
     # WebSearch exists for the CLI only when this run allows it; every other built-in stays off and denied.
     web = WEB_SEARCH in allowed
@@ -100,8 +102,9 @@ def build_options(settings, system_prompt: str, server, allowed: set[str], state
              # sessions kept under the data folder so a conversation survives a restart of the app
              "CLAUDE_CONFIG_DIR": settings.claude_dir,
              "DISABLE_AUTOUPDATER": "1", "DISABLE_TELEMETRY": "1", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"},
-        model=settings.model,
-        effort=settings.effort,
+        # an AI job's own profile (policy.yaml settings.jobs), else the villa's chat profile
+        model=PROFILES[profile][0] if profile in PROFILES else settings.model,
+        effort=PROFILES[profile][1] if profile in PROFILES else settings.effort,
         max_budget_usd=float(limit_usd),
         resume=resume,
     )
@@ -109,10 +112,10 @@ def build_options(settings, system_prompt: str, server, allowed: set[str], state
 
 
 async def run(settings, system_prompt: str, prompt: str, server, allowed: set[str], state, who: str,
-              resume: str | None = None, limit_usd: float | None = None) -> RunResult:
+              resume: str | None = None, limit_usd: float | None = None, profile: str | None = None) -> RunResult:
     clean_environ()
     opts, denied = build_options(settings, system_prompt, server, allowed, state, who, resume,
-                                 limit_usd if limit_usd is not None else settings.reply_limit_usd)
+                                 limit_usd if limit_usd is not None else settings.reply_limit_usd, profile)
     texts: list[str] = []
     session_id, stopped, cost, err = resume, False, None, None
     try:
@@ -135,5 +138,5 @@ async def run(settings, system_prompt: str, prompt: str, server, allowed: set[st
     state.log("run", {"who": who, "cost_usd": cost, "stopped_at_limit": stopped, "denied": denied, "error": err})
     if err and resume and not texts:
         # the session could not be resumed (lost, or from an older version): answer in a new one
-        return await run(settings, system_prompt, prompt, server, allowed, state, who, None, limit_usd)
+        return await run(settings, system_prompt, prompt, server, allowed, state, who, None, limit_usd, profile)
     return RunResult("\n\n".join(texts).strip(), session_id, stopped, cost, denied, err)

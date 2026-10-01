@@ -105,6 +105,11 @@ Decisions of 2026-09-30 (owner):
   define (report sections, thresholds, wording, routes, which scripts the model
   may run, which rules are VESTA alerts) lives in the skill, never in
   `vesta_agent/`. No threshold in code: a missing one is named, not guessed.
+- Readings (0.12.0, docs/adr/0001, glossary CONTEXT.md): a report's FIGURES are
+  computed and checked; VESTA's READINGS are the AI's conclusions with its own
+  numbers, marked, unchecked — do not reinstate the check on readings. AI jobs
+  run only when policy.yaml `settings.jobs` names them. A starter skill's
+  `villa.*` files are the villa's: kept by updates, not an edit.
 - One module per job (architecture review, 0.11.0): `outcome.py` carries out
   every script result (all callers), `routing.py` decides every chat,
   `policy.py` is the one reader of policy.yaml, `status.py` the one reading of

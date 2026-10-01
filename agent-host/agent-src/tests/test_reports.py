@@ -115,24 +115,59 @@ def test_a_threshold_missing_from_reports_yaml_is_named_never_guessed(tmp_path, 
     assert facts["sections"]["energy_days"]["rows"]                                    # the rest still computed
 
 
-def test_the_page_uses_only_sentences_whose_numbers_are_the_sections_own(tmp_path):
+def test_readings_carry_the_ais_own_numbers_marked_and_a_checked_slot_is_still_checked(tmp_path):
+    # agent-host/docs/adr/0001: a reading may hold numbers the AI found itself, and is marked as VESTA's;
+    # a slot reports.yaml marks `checked: true` still refuses a number that is not one of its figures
     fx = _villa(tmp_path)
-    _facts(tmp_path, fx)
+    _, facts = _facts(tmp_path, fx)
+    facts["to_write"].append({"id": "kpis", "kind": "checked", "instruction": "x", "figures": facts["sections"]["kpis"]})
+    (tmp_path / "facts.json").write_text(json.dumps(facts))
     (tmp_path / "notes.json").write_text(json.dumps({
-        "headline": "One battery needs replacing; electricity was down 1% on last week.",
-        "card-pump.reading": "Running power fell from 900 W to 740 W.",
-        "card-pump.why": "not asked for",
-        "headline2": "x"}))
+        "headline": "The garden pump moves less water since 2 Oct: 900 W down to 740 W at the same hours.",
+        "kpis": "999 kWh used.",
+        "card-pump.why": "not asked for"}))
     r = _run(COMPOSE, "fm-weekly", "--facts", str(tmp_path / "facts.json"), "--notes", str(tmp_path / "notes.json"),
              "--out", str(tmp_path / "page.html"))
     res = json.loads(r.stdout)
-    assert res["notes_used"] == ["headline"]
+    assert res["notes_used"] == ["headline"]                                           # 900 is its own: accepted
     refused = {x["id"]: x["why"] for x in res["notes_refused"]}
-    assert "900 is not one of this section's figures" in refused["card-pump.reading"]  # 850 → 740 are; 900 is invented
+    assert "999 is not one of this section's figures" in refused["kpis"]
     assert "does not ask" in refused["card-pump.why"]
     page = (tmp_path / "page.html").read_text()
-    assert "One battery needs replacing" in page and "Running power fell" not in page
+    assert "VESTA's reading</span> The garden pump moves less water" in page
     assert "<svg" in page and "http://" not in page and "https://" not in page and "<script" not in page
+
+
+def test_a_report_stopped_at_its_limit_is_still_sent_and_says_what_is_missing(tmp_path):
+    fx = _villa(tmp_path)
+    _facts(tmp_path, fx)
+    since = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
+    r = _run(COMPOSE, "fm-weekly", "--facts", str(tmp_path / "facts.json"), "--notes", str(tmp_path / "none.json"),
+             "--out", str(tmp_path / "page.html"), "--finish", "here", "--since", since, "--limit", "2")
+    (item,) = json.loads(r.stdout)["send"]
+    assert item["to"] == "here" and item["attachment"] == "page.html" and "stopped at its 2 USD limit" in item["text"]
+    assert "Not written: this report reached its 2 USD limit." in (tmp_path / "page.html").read_text()
+    # the limit came before the figures: last period's facts are never sent as this one's
+    later = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()
+    r = _run(COMPOSE, "fm-weekly", "--facts", str(tmp_path / "facts.json"), "--out", str(tmp_path / "page2.html"),
+             "--finish", "fm", "--since", later, "--limit", "2")
+    (item,) = json.loads(r.stdout)["send"]
+    assert "attachment" not in item and "before its figures were ready" in item["text"]
+
+
+def test_the_playbook_turns_the_villas_data_into_clues(tmp_path):
+    fx = _villa(tmp_path)
+    _, facts = _facts(tmp_path, fx)
+    clues = facts["sections"]["noticed"]["rows"]
+    step = next(c for c in clues if c["entry"] == "running power stepped down")
+    assert step["subject"] == "Garden pump"
+    assert step["figures"]["step_date"] == "2026-10-02" and step["figures"]["after_w"] == 740      # the drop, dated
+    assert step["figures"]["hours_before"] == step["figures"]["hours_after"] == 8                  # same running time
+    assert step["playbook"]["ask"] == "was anything done in the pump room on 2 Oct or the day before?"
+    offline = [c["subject"] for c in clues if c["entry"] == "a safety device offline"]
+    assert offline == ["Front door lock"]
+    assert facts["sections"]["quiet"]["did_not_happen"][0] == "no leak or electrical trip"
+    assert {w["id"] for w in facts["to_write"]} >= {f"{step['id']}.reading", f"{step['id']}.ask", "quiet"}
 
 
 def test_the_order_of_the_page_is_reports_yaml_s(tmp_path):
@@ -180,3 +215,21 @@ def test_alerts_the_agent_did_not_follow_come_from_home_assistants_own_record(tm
                        {"message": "Meter unreachable"}, at=when)
     rows = facts._alert_rows(c)
     assert [r["source"] for r in rows] == ["agent"]
+
+
+def test_the_villas_own_playbook_and_cards_are_added_to_the_shipped_ones(tmp_path):
+    fx = _villa(tmp_path)
+    skill = tmp_path / "skills" / "reports"
+    shutil.copytree(os.path.join(STARTER_SKILLS, "reports"), skill)
+    (skill / "villa.reports.yaml").write_text(json.dumps({
+        "playbook": {"pumps": [{"name": "garden pump dry run", "means": "it slides before it stops"}]},
+        "cards": [{"kind": "energy_daily", "entity": "sensor.example_pump_energy", "title": "Garden pump energy"}],
+        "thresholds": {"battery": {"replace_below_pct": 15}}}))
+    r = _run(str(skill / "scripts" / "facts.py"), "fm-weekly", "--pack", str(tmp_path / "pack.json"),
+             "--store", str(tmp_path / "s.sqlite"), "--energy", str(tmp_path / "week.json"), "--fixture-dir", str(fx),
+             "--out", str(tmp_path / "facts.json"))
+    printed, facts = json.loads(r.stdout), json.load(open(tmp_path / "facts.json"))
+    assert [k["name"] for k in printed["knowledge"]] == ["garden pump dry run"]              # knowledge, not a clue
+    assert "Garden pump energy" in [c["title"] for c in facts["sections"]["equipment"]["cards"]]
+    assert facts["sections"]["batteries"]["replace_below_pct"] == 15                          # the villa's threshold
+    assert facts["sections"]["batteries"]["rows"][0]["level"] == "replace"                    # 12 % < 15 %

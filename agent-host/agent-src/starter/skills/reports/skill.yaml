@@ -1,6 +1,6 @@
 description: The facility manager's daily digest and weekly page, the owner's weekly lines and monthly proof (HTML pages)
 scripts:
-  facts.py:                    # every figure of a weekly or monthly page (sections and thresholds: reports.yaml)
+  facts.py:                    # every figure, and the clues, of a weekly or monthly page (reports.yaml)
     commands: [fm-weekly, owner-monthly]
     flags: {--energy: infile, --out: outfile}
     inject: [pack, store, zone]
@@ -8,22 +8,43 @@ scripts:
     commands: [fm-daily, fm-weekly, owner-weekly, owner-monthly]
     flags: {--energy: infile, --facts: infile, --notes: infile, --as-of: date, --out: outfile}
     inject: [pack, store, zone]
+# AI jobs: each `name` is the key of its model and spending limit in policy.yaml settings.jobs (VESTA
+# Agent page → Rules → AI jobs); a job that policy.yaml does not name does not run. `default` is what
+# the page offers when it adds the job. `on_limit` is the code step that still sends the page, with what
+# is done, when the limit stops the job ({to}: here when asked in a chat, else the job's `to`).
 schedule:
   - when: "07:00"
+    name: fm-daily
+    to: fm
+    default: {profile: auto, limit_usd: 1}
     prompt: >-
       It is 07:00. Read the reports skill, compose the facility manager daily digest (fm-daily) with
       run_skill_script, and send it to the fm chat with send_message, written in {fm_language}, keeping every
       number exactly as the script gave it. If there is nothing to report, send one short line saying the villa
       is quiet, so the facility manager knows the VESTA Agent is alive. No rule codes, no entity ids.
   - when: "Mon 08:00"
+    name: fm-weekly
+    to: fm
+    on_request: true
+    description: the facility manager's weekly report (last week, or the week a person names)
+    default: {profile: auto, limit_usd: 2}
+    on_limit: "compose.py fm-weekly --facts facts.json --notes notes.json --out fm_weekly.html --finish {to} --since {started} --limit {limit}"
     prompt: >-
-      It is Monday 08:00. Read the reports skill and make the facility manager's weekly page, following its
-      steps "A weekly or monthly page": energy for the week, facts.py fm-weekly, your sentences in notes.json
-      (in {fm_language}), compose.py fm-weekly, then send_message to fm with the page attached. Then send the
-      owner the three owner-weekly lines (compose.py owner-weekly --energy week.json), in {owner_language}.
+      It is Monday 08:00. Read the reports skill and make the facility manager's weekly report, following its
+      steps "A weekly or monthly report": the week's energy, facts.py fm-weekly, your readings from the clues,
+      the playbook and Home Assistant, saved in notes.json (in {fm_language}), compose.py fm-weekly, then
+      send_message to fm with the page attached. Then send the owner the three owner-weekly lines
+      (compose.py owner-weekly --energy week.json), in {owner_language}.
   - when: "1 08:00"
+    name: owner-monthly
+    to: owner
+    on_request: true
+    description: the owner's monthly report (last month, or the month a person names)
+    default: {profile: performance, limit_usd: 6}
+    on_limit: "compose.py owner-monthly --facts facts.json --notes notes.json --out owner_monthly.html --finish {to} --since {started} --limit {limit}"
     prompt: >-
-      It is the first of the month, 08:00. Read the reports skill and make the owner's monthly proof for last
-      month, following its steps "A weekly or monthly page" (with the filtration optimiser and the proposals
-      first, so the page carries them): energy for the month, facts.py owner-monthly, your sentences in
-      notes.json (in {owner_language}), compose.py owner-monthly, then send_message to owner with the page attached.
+      It is the first of the month, 08:00. Read the reports skill and make the owner's monthly report for last
+      month, following its steps "A weekly or monthly report" (with the filtration optimiser and the proposals
+      first, so the page carries them): the month's energy, facts.py owner-monthly, your readings from the
+      clues, the playbook and Home Assistant, saved in notes.json (in {owner_language}), compose.py
+      owner-monthly, then send_message to owner with the page attached.

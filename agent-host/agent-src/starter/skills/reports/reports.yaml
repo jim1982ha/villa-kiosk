@@ -2,8 +2,9 @@
 # Edit here (VESTA Agent page → Skills → reports): no release, no restart. A section left out of a
 # report's list is not shown; reorder the list to reorder the page.
 #
-# ⚠️ NOTHING HERE NAMES ONE VILLA'S DEVICES. A villa adds its own cards under `cards:` in ITS copy
-# of this file (the page edits that copy); the shipped file stays generic.
+# ⚠️ NOTHING HERE NAMES ONE VILLA'S DEVICES. A villa adds its own playbook entries, cards and thresholds
+# in `villa.reports.yaml` beside this file (VESTA Agent page → Skills → reports → New file): it is added
+# to this one, and app updates keep it while they still update this file.
 
 # ---------------------------------------------------------------- judgements
 thresholds:
@@ -20,7 +21,7 @@ thresholds:
   circuits_show: 8             # rows of the circuit table, largest first
   card_days: 14                # days drawn in an equipment card
   trend_weeks: 10              # weeks drawn in the monthly electricity trend
-  horizon:                     # preventive maintenance: when, from the finding's severity
+  horizon:                    # preventive maintenance: when, from the finding's severity
     P1: Now
     P2: Now
     P3: Soon
@@ -42,7 +43,7 @@ gaps:
     gap: No tank or pool level sensor
     unlocks: A pump running dry is seen before it stops.
 
-# Extra cards for this villa's own devices (none shipped). Kinds:
+# Extra cards for this villa's own devices (none shipped; the villa's go in villa.reports.yaml). Kinds:
 #   sensor_daily_max | sensor_daily_mean | energy_daily
 # e.g.  - {kind: sensor_daily_max, entity: sensor.<your cabinet temperature>, title: Electrical cabinet,
 #          unit: "°C", alert_at: 70}
@@ -54,11 +55,86 @@ not_measured_yet:
   standby: "Night standby of the whole villa — not measured yet."
   uptime: "Monitoring uptime — not measured yet."
 
+# ---------------------------------------------------------------- the playbook
+# The situations the agent can recognise in the villa's data. `when` is checked by facts.py: each match
+# is a CLUE handed to the AI with the entry. The other fields are for the AI's reading: what to look at
+# in Home Assistant to confirm and explain it, what it usually means, what to check on site, what to ask,
+# when to act and what ignoring it costs. Placeholders in {braces} come from the clue.
+# The villa adds its own entries (its pool, its onsen, its cabinet...) in villa.reports.yaml.
+# An entry without `when` is knowledge only: no clue, but the AI reads it with the clues (for what
+# no figure shows yet, e.g. "the onsen pump's power slides for two hours before it runs dry").
+#   when kinds:  power_step {drop_pct, min_days, days}         a motor's running power steps down
+#                run_change {change_pct, min_days, days, min_hours}  a motor's hours of running per day change
+#                battery_trend {below_pct, days}               a battery falling: weeks left
+#                offline {families}                            a watched device not answering now
+#                use_while_empty {mode_entity, empty, days}    electricity used while the villa is empty
+playbook:
+  pumps:
+    - name: running power stepped down
+      when: {kind: power_step, drop_pct: 10, min_days: 3, days: 30}
+      look_at: "the pump's hourly power over 30 days around {step_date}, its hours of running per day, the logbook of that day"
+      means: "at the same running hours, less power usually means less water moved — a full skimmer basket, a low water level, a valve half closed, a clogged filter, air in the line"
+      check: "water level and air at the skimmer, empty the basket, valve positions, photograph the filter gauge before any backwash"
+      ask: "was anything done in the pump room on {step_date} or the day before?"
+      horizon: "Now"
+      cost_of_ignoring: "cheap to fix now; the motor strains and the water turns if it is left"
+    - name: running time changed
+      when: {kind: run_change, change_pct: 30, min_days: 3, days: 30, min_hours: 2}
+      look_at: "the pump's hours of running per day, its timer or schedule helper, the logbook for who changed it"
+      means: "a timer changed, a float switch, or a pump stopping early (dry run, overheating)"
+      check: "the timer and its schedule, the supply and the breaker, signs of overheating"
+      ask: "was the timer changed on purpose?"
+      horizon: "Soon"
+      cost_of_ignoring: "a pump that stops early leaves the water untreated; one that runs longer costs electricity"
+  batteries:
+    - name: battery falling
+      when: {kind: battery_trend, below_pct: 35, days: 30}
+      look_at: "the battery's daily level over 30 days"
+      means: "falling {fall_per_week} points a week: it reaches {replace_below_pct}% in about {weeks_left} weeks"
+      check: "replace the cell at the next visit, before it reaches the replace level"
+      horizon: "Soon"
+      cost_of_ignoring: "the device goes silent and the rules that watch it go blind"
+  locks_and_doors:
+    - name: a safety device offline
+      when: {kind: offline, families: [security]}
+      look_at: "its history over the last days, its battery, its last change"
+      means: "a lock or a sensor no rule can see: often a battery or a radio drop"
+      check: "its battery, then a reset; if it stays offline, it needs re-pairing"
+      ask: "does it still work by hand (key, keypad)?"
+      horizon: "Now"
+      cost_of_ignoring: "the unlocked-door and intrusion rules are blind for this door"
+  energy_and_occupancy:
+    - name: electricity used while the villa is empty
+      when: {kind: use_while_empty, mode_entity: input_select.villa_mode, empty: [vacant, away], days: 10}
+      look_at: "the main meter per hour on empty days, which circuits ran, lights and air conditioning left on"
+      means: "something left on, or a load that should be off when nobody is there"
+      check: "what was left on, and whether a scene or automation should switch it off when the villa is empty"
+      ask: "was anyone in the villa on those days?"
+      horizon: "Soon"
+      cost_of_ignoring: "paid every empty day until it is found"
+  monitoring:
+    - name: a device of the monitoring offline
+      when: {kind: offline, families: [power, energy, battery, level, network, runtime]}
+      look_at: "when it stopped answering, its battery or power, the Wi-Fi of its area"
+      means: "a reading the report and the rules no longer have"
+      check: "its power or battery, its network"
+      horizon: "Soon"
+      cost_of_ignoring: "the problems it would have shown go unseen"
+
+# What "nothing else happened" says: per VESTA rule blueprint (alert-desk), the sentence when it did not fire.
+nothing_happened:
+  critical_binary_trip: no leak or electrical trip
+  critical_presence_guard: no intrusion while the villa was empty
+  critical_condition: no door left unlocked and no supply left open
+  critical_watchdog: no critical device lost
+  critical_schedule: no equipment missed its schedule
+  critical_system: no safety rule switched off
+
 # ---------------------------------------------------------------- the reports
-# Each section: `id` (its layout block in templates/blocks/<id>.html) and, when the AI writes a
-# sentence for it, `write` (one sentence for the section) or `write_each` (one per item: tasks,
-# equipment cards). The AI may use only the figures of that section; compose.py refuses a
-# sentence with a number that is not in them.
+# Each section: `id` (its layout block in templates/blocks/<id>.html) and the sentences the AI writes for
+# it: `write` (one for the section) or `write_each` (one per item: a task, a card, a clue). A sentence is a
+# READING (marked "VESTA's reading", the AI's own numbers) unless the slot says `checked: true`: then
+# compose.py refuses it if a number in it is not one of the section's figures.
 reports:
   fm-weekly:
     eyebrow: VESTA · Facility manager · Weekly
@@ -67,18 +143,27 @@ reports:
       - id: header
       - id: headline
         write: >-
-          One or two plain sentences for the facility manager: what needs them this week (open tasks,
-          alerts), and that everything else ran normally if it did.
+          One or two sentences for the facility manager: what needs them this week and why, from the clues,
+          the tasks and the alerts — the conclusion, not a list. Say that everything else ran normally if it did.
       - id: kpis
+      - id: noticed
+        write_each:
+          reading: "What it is and what it means, from the clue and what you found in Home Assistant: one or two sentences."
+          check: "What to check or do on site, concrete, from the playbook entry."
+          ask: "The question to the facility manager, if the entry has one, with the date filled in."
       - id: tasks
         write_each:
-          why: "One sentence: what was seen and since when, from the task's figures."
-          check: "One sentence: what to check or do on site, concrete."
+          why: "What was seen and since when, and what it most likely means."
+          check: "What to check or do on site, concrete."
       - id: alerts
+      - id: quiet
+        write: >-
+          One sentence: what did not happen this week (from the list), and how many safety rules were on.
       - id: equipment
         write_each:
-          reading: "One line under the chart: what changed and when, or that it was steady."
+          reading: "One line under the chart: what changed and when, or that it was steady, and what that means."
       - id: batteries
+        write: "One line: which battery is next to replace and roughly when."
       - id: energy_days
       - id: circuits
       - id: monitoring
@@ -90,16 +175,24 @@ reports:
       - id: header
       - id: hero
         write: >-
-          Two plain sentences for the owner: what the month cost in electricity, how many incidents
-          and whether they were handled, and the one thing that needs a look, if any.
+          Two or three sentences for the owner: what the month cost, how many incidents and whether they were
+          handled, and the one thing that needs a look — a judgement, as a property manager would write it.
       - id: kpis_month
       - id: happened
+      - id: quiet
+        write: "One sentence: what did not happen this month, and how many safety rules were on."
       - id: money
+      - id: noticed
+        write_each:
+          reading: "What it is and what it means for the owner: one or two sentences."
+          check: "What is being done or should be done, and by whom."
       - id: fixed_suggest
       - id: maintenance
+        write_each:
+          when: "When to act and why (this week, by a date, next year), with the cost of ignoring it."
       - id: trends
         write_each:
-          reading: "One line under the chart: the trend and anything that stands out."
+          reading: "One line under the chart: the trend and anything that stands out, and why it matters."
       - id: monitoring
       - id: gaps
       - id: footer

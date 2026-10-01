@@ -77,6 +77,29 @@ function showBar() {
     h("button", { class: "btn primary", disabled: !dirty, onclick: barState.save }, barState.label || "Save"));
 }
 
+// ---------------------------------------------------------------- AI jobs not set
+// A job policy.yaml does not name does not run (owner, 2026-10-01): say so where it is seen, and add them
+// with the starter values their skill offers, in one press.
+async function addMissingJobs() {
+  const [doc, { jobs }] = await Promise.all([api("GET", "api/policy"), api("GET", "api/jobs")]);
+  const form = doc.form;
+  form.settings.jobs = form.settings.jobs || {};
+  for (const j of jobs) if (!j.set) form.settings.jobs[j.name] = { ...j.default };
+  await api("PUT", "api/policy/form", { form, rev: doc.rev });
+}
+
+function jobsBanner(names, after) {
+  if (!names || !names.length) return null;
+  const btn = h("button", { class: "btn primary", onclick: async () => {
+    btn.disabled = true;
+    try { await addMissingJobs(); toast("AI jobs added. Change their brain or limit under Rules."); after(); }
+    catch (e) { btn.disabled = false; alert(e.problems.join("\n")); }
+  } }, "Add them");
+  return h("div", { class: "banner" },
+    h("div", {}, h("b", {}, `${names.length} AI job${names.length > 1 ? "s are" : " is"} not set: ${names.length > 1 ? "they don't" : "it doesn't"} run.`),
+      h("div", { class: "muted" }, names.join(", "), " — each needs a brain and a spending limit.")), btn);
+}
+
 // ---------------------------------------------------------------- tabs
 document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => {
   if (b.dataset.tab === current || !guard()) return;
@@ -99,6 +122,7 @@ async function overview() {
   const r = o.last_24h;
   const count = (k) => (r && r.counts[k]) || 0;
   const kids = [
+    jobsBanner(o.jobs_not_set, () => go("overview")),
     card("Rules", "policy.yaml: who the agent answers, what it may do.",
       o.policy_problems.length ? problemsBox(o.policy_problems, "To fix:") : h("p", { class: "ok" }, "No problem found."),
       h("div", { class: "actions" }, h("button", { class: "btn ghost", onclick: () => go("rules") }, "Open the rules"))),
@@ -140,12 +164,13 @@ const LISTS = [
 async function rules(sub = "forms") {
   fill($view, h("p", { class: "muted" }, "Loading…"));
   let doc = await api("GET", "api/policy");
+  const { jobs } = await api("GET", "api/jobs");
   const tabs = h("div", { class: "subtabs" },
     h("button", { class: sub === "forms" ? "on" : "", onclick: () => { if (sub !== "forms" && guard()) rules("forms"); } }, "Forms"),
     h("button", { class: sub === "file" ? "on" : "", onclick: () => { if (sub !== "file" && guard()) rules("file"); } }, "The file"));
   dirty = false;
   if (sub === "file" || !doc.form) return rulesFile(doc, tabs);
-  return rulesForms(doc, tabs);
+  return rulesForms(doc, tabs, jobs);
 }
 
 function rulesFile(doc, tabs) {
@@ -163,7 +188,7 @@ function rulesFile(doc, tabs) {
     card("policy.yaml", "Comments start with #. Every save is checked with the agent's own rules first.", ta));
 }
 
-function rulesForms(doc, tabs) {
+function rulesForms(doc, tabs, jobs = []) {
   const f = structuredClone(doc.form);
   const probs = h("div");
   const on = (fn) => (e) => { fn(e.target); markDirty(); };
@@ -186,6 +211,24 @@ function rulesForms(doc, tabs) {
         "A reply that reaches it stops and offers Continue."),
       field("New conversation", sel(RESETS, f.settings.conversation_reset, (v) => (f.settings.conversation_reset = v)))),
     h("label", { class: "switch" }, h("input", { type: "checkbox", checked: f.settings.web_search, onchange: on((t) => (f.settings.web_search = t.checked)) }), "Web search (weather warnings, manuals)"));
+
+  // AI jobs: each skill's scheduled AI work, with its own brain and spending limit
+  f.settings.jobs = f.settings.jobs || {};
+  const jobsBody = h("tbody");
+  const drawJobs = () => jobsBody.replaceChildren(...jobs.map((j) => {
+    const cur = f.settings.jobs[j.name];
+    return h("tr", {},
+      h("td", {}, h("b", {}, j.name), h("div", { class: "muted" }, `${j.skill} · ${j.when}${j.on_request ? " · can be asked for in a chat" : ""}`)),
+      cur ? h("td", {}, sel(PROFILES, cur.profile, (v) => (cur.profile = v))) : h("td", { class: "muted" }, "not set: does not run"),
+      cur ? h("td", {}, h("input", { type: "number", step: "0.5", min: 0.05, value: cur.limit_usd, "aria-label": "Limit (USD)",
+                                    oninput: on((t) => (cur.limit_usd = num(t.value))) }))
+          : h("td", {}, h("button", { class: "btn ghost", onclick: () => { f.settings.jobs[j.name] = { ...j.default }; drawJobs(); markDirty(); } }, "Set")),
+      h("td", { class: "x" }, cur ? h("button", { class: "btn icon ghost", title: "Stop this job", onclick: () => { delete f.settings.jobs[j.name]; drawJobs(); markDirty(); } }, "×") : null));
+  }));
+  drawJobs();
+  const jobsCard = card("AI jobs", "The skills' scheduled work done by the AI: each with its own brain and spending limit per run. A job that is not set does not run. When a report reaches its limit, it is still sent with what is done.",
+    h("table", { class: "rows" }, h("thead", {}, h("tr", {}, ["Job", "Brain", "Limit (USD)", ""].map((x) => h("th", {}, x)))), jobsBody));
+  const missing = jobs.filter((j) => !(f.settings.jobs || {})[j.name]).map((j) => j.name);
 
   // people
   const peopleBody = h("tbody");
@@ -247,7 +290,7 @@ function rulesForms(doc, tabs) {
   };
   setBar({ save, discard: () => rules("forms"), idle: "Changes apply within seconds, no restart." });
   fill($view, tabs, doc.problems.length ? problemsBox(doc.problems, "To fix in this file:") : null, probs,
-    acting, people, chats, services, devices, lists, ai);
+    jobsBanner(missing, () => rules("forms")), acting, people, chats, services, devices, lists, ai, jobsCard);
 }
 
 // ---------------------------------------------------------------- skills

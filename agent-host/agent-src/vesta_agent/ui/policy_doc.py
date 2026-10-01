@@ -41,8 +41,11 @@ def to_form(text: str) -> dict:
     if not isinstance(raw, dict):
         raw = {}
     settings = dict(DEFAULT_BEHAVIOUR)
+    settings["jobs"] = {}
     if isinstance(raw.get("settings"), dict):
         settings.update({k: v for k, v in raw["settings"].items() if k in DEFAULT_BEHAVIOUR})
+        if isinstance(raw["settings"].get("jobs"), dict):
+            settings["jobs"] = raw["settings"]["jobs"]
     chats = raw.get("chats") if isinstance(raw.get("chats"), dict) else {}
     return {
         "settings": settings,

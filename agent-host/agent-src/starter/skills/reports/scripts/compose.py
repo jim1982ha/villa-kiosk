@@ -6,13 +6,20 @@
   compose.py fm-weekly     --facts facts.json [--notes notes.json] --out page.html
   compose.py owner-monthly --facts facts.json [--notes notes.json] --out page.html
 
-A page is built from facts.py's figures (every number) and the AI's notes.json (the sentences
-reports.yaml asks for, saved with the save_file tool), laid out by templates/report.html and its
-blocks/<section>.html, in reports.yaml's order.
+A page is built from facts.py's FIGURES and the AI's notes.json (the sentences reports.yaml asks
+for, saved with the save_file tool), laid out by templates/report.html and its blocks/<section>.html,
+in reports.yaml's order.
 
-⚠️ A SENTENCE MAY ONLY USE ITS SECTION'S FIGURES. Each note is checked: a number in it that is
-not in the figures of the section it belongs to rejects the note (the page shows the plain
-fallback instead), and the result says which and why. The model writes words, never numbers.
+⚠️ TWO KINDS OF SENTENCE (owner, 2026-10-01; agent-host/docs/adr/0001). A READING is the AI's own
+conclusion: it may carry numbers the AI found in Home Assistant, it is not checked, and the page marks
+it "VESTA's reading". A slot reports.yaml marks `checked: true` is a summary of the figures: a number
+in it that is not one of its section's figures refuses it.
+
+When the AI job's spending limit stops it, the job's on_limit step runs
+  compose.py fm-weekly --facts facts.json --notes notes.json --out page.html --finish fm --since <start> --limit 2
+which still builds the page with what is done ("not written: this report reached its limit" in the
+empty slots) and prints the message that sends it — unless facts.json is older than the job (the limit
+came before the figures): then it says so instead of sending last period's page.
 
 The page is sent as the HTML file itself, attached to the chat message: one self-contained file
 (CSS and charts inline, nothing fetched) that the phone opens in its browser and can print or
@@ -30,7 +37,7 @@ from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from jinja2 import Environment, FileSystemLoader
-from markupsafe import Markup
+from markupsafe import Markup, escape
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "..", "_shared"))
@@ -110,13 +117,18 @@ def note_ok(text: str, figures) -> tuple[bool, str]:
 
 
 def checked_notes(facts: dict, notes: dict) -> tuple[dict, list[dict]]:
-    asked = {w["id"]: w["figures"] for w in facts.get("to_write") or []}
+    asked = {w["id"]: w for w in facts.get("to_write") or []}
     good, refused = {}, []
     for nid, text in (notes or {}).items():
         if nid not in asked:
             refused.append({"id": nid, "why": "reports.yaml does not ask for this sentence"})
             continue
-        ok, why = note_ok(str(text), asked[nid])
+        if not str(text).strip():
+            continue
+        if asked[nid].get("kind", "reading") == "reading":
+            good[nid] = str(text).strip()             # the AI's own reading: marked, not checked
+            continue
+        ok, why = note_ok(str(text), asked[nid]["figures"])
         if ok:
             good[nid] = str(text).strip()
         else:
@@ -125,7 +137,18 @@ def checked_notes(facts: dict, notes: dict) -> tuple[dict, list[dict]]:
 
 
 # ---------------------------------------------------------------- the page
-def page(facts: dict, notes: dict) -> str:
+def page(facts: dict, notes: dict, limit: str | None = None) -> str:
+    kinds = {w["id"]: w.get("kind", "reading") for w in facts.get("to_write") or []}
+
+    def reading(k):
+        """A slot's sentence: marked when it is a reading; when the limit stopped the job, says so."""
+        text = notes.get(k, "")
+        if not text:
+            return Markup(f'<span class="unwritten">Not written: this report reached its {escape(limit)} USD limit.</span>') \
+                if limit and k in kinds else ""
+        mark = Markup('<span class="mark">VESTA\'s reading</span> ') if kinds.get(k) == "reading" else ""
+        return mark + escape(text)
+
     def num(v, nd=1):
         if v is None:
             return "—"
@@ -144,7 +167,7 @@ def page(facts: dict, notes: dict) -> str:
     header = sections.get("header") or {}
     return TPL.get_template("report.html").render(
         css=CSS, title=header.get("title") or facts.get("villa", ""), eyebrow=facts.get("eyebrow", ""),
-        order=facts.get("order") or [], sections=sections, note=lambda k: notes.get(k, ""),
+        order=facts.get("order") or [], sections=sections, note=lambda k: notes.get(k, ""), reading=reading,
         num=num, pct=pct, day=day, money=lambda v, cur: fmt_money(v, cur) if v else "—",
         chart_line=lambda *a: Markup(charts.line(*a)), chart_bars=lambda b: Markup(charts.bars(b)),
         chart_pairs=lambda r: Markup(charts.pairs(r)))
@@ -156,16 +179,30 @@ def main(argv=None):
     ap.add_argument("--pack"); ap.add_argument("--store", default=os.environ.get("VESTA_STORE", "vesta_store.sqlite"))
     ap.add_argument("--zone"); ap.add_argument("--energy"); ap.add_argument("--as-of")
     ap.add_argument("--facts"); ap.add_argument("--notes"); ap.add_argument("--out")
+    ap.add_argument("--finish", choices=["here", "owner", "fm"], help="the job's on_limit step: send the page")
+    ap.add_argument("--since"); ap.add_argument("--limit")
     a = ap.parse_args(argv)
 
     if a.cmd in ("fm-weekly", "owner-monthly"):
         if not a.facts:
             print(f"{a.cmd} needs --facts: first run facts.py {a.cmd} --energy <period>.json --out facts.json.", file=sys.stderr)
             return 1
+        name = "weekly" if a.cmd == "fm-weekly" else "monthly"
+        if a.finish and (not os.path.exists(a.facts) or (a.since and datetime.fromtimestamp(
+                os.path.getmtime(a.facts)).astimezone() < datetime.fromisoformat(a.since))):
+            print(json.dumps({"send": [{"to": a.finish, "text": (
+                f"The {name} report stopped at its {a.limit} USD limit before its figures were ready, so there is "
+                f"nothing to send. Its limit can be raised on the VESTA Agent page (Rules → AI jobs).")}]}))
+            return 0
         facts = json.load(open(a.facts, encoding="utf-8"))
-        notes = json.load(open(a.notes, encoding="utf-8")) if a.notes else {}
+        notes = {}
+        if a.notes and os.path.exists(a.notes):
+            try:
+                notes = json.load(open(a.notes, encoding="utf-8"))
+            except ValueError:
+                notes = {}
         good, refused = checked_notes(facts, notes if isinstance(notes, dict) else {})
-        html = page(facts, good)
+        html = page(facts, good, a.limit if a.finish else None)
         res = {"html_chars": len(html), "notes_used": sorted(good), "notes_refused": refused,
                "missing_notes": sorted(w["id"] for w in facts.get("to_write") or [] if w["id"] not in good),
                "problems": facts.get("problems") or []}
@@ -173,6 +210,10 @@ def main(argv=None):
             with open(a.out, "w", encoding="utf-8") as f:
                 f.write(html)
             res["html"] = a.out
+        if a.finish and a.out:
+            head = good.get("headline") or good.get("hero") or f"The {name} report."
+            res = {"send": [{"to": a.finish, "attachment": os.path.basename(a.out),
+                             "text": f"{head}\n\n(This report stopped at its {a.limit} USD limit: some readings are missing.)"}]}
         print(json.dumps(res, indent=1)); return 0
 
     if a.cmd == "owner-weekly" and not a.energy:

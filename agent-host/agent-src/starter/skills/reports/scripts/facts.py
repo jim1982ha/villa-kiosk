@@ -45,8 +45,26 @@ OFF = {"unavailable", "unknown"}
 
 
 def load_cfg() -> dict:
+    """reports.yaml, with the villa's own villa.reports.yaml on top: its playbook entries and cards are
+    added, its thresholds and nothing_happened words replace the shipped ones key by key. The villa's file
+    survives app updates (skills.VILLA_PREFIX), so the shipped file keeps updating."""
     with open(os.path.join(SKILL, "reports.yaml"), encoding="utf-8") as f:
-        return yaml.safe_load(f) or {}
+        cfg = yaml.safe_load(f) or {}
+    villa = os.path.join(SKILL, "villa.reports.yaml")
+    if os.path.exists(villa):
+        with open(villa, encoding="utf-8") as f:
+            own = yaml.safe_load(f) or {}
+        for group, entries in (own.get("playbook") or {}).items():
+            cfg.setdefault("playbook", {}).setdefault(group, [])
+            cfg["playbook"][group] = list(cfg["playbook"][group] or []) + list(entries or [])
+        cfg["cards"] = list(cfg.get("cards") or []) + list(own.get("cards") or [])
+        for key in ("thresholds", "nothing_happened"):
+            for k, v in (own.get(key) or {}).items():
+                if isinstance(v, dict) and isinstance((cfg.get(key) or {}).get(k), dict):
+                    cfg[key][k] = {**cfg[key][k], **v}
+                else:
+                    cfg.setdefault(key, {})[k] = v
+    return cfg
 
 
 def alert_blueprints() -> list[str]:
@@ -88,6 +106,7 @@ class Ctx:
         self.e_dt = datetime.combine(self.end + timedelta(days=1), time(0), self.Z)
         self.days = (self.end - self.start).days + 1
         self._rules = None
+        self._clues = None
         self._states = None
 
     def need(self, *path):
@@ -117,14 +136,18 @@ class Ctx:
 
     def vesta_rules(self) -> dict[str, str]:
         """automation entity id -> its name, for the automations built on the alert-desk blueprints."""
+        return {eid: r["alias"] for eid, r in self.vesta_rule_info().items()}
+
+    def vesta_rule_info(self) -> dict[str, dict]:
+        """automation entity id -> {alias, blueprint} for the VESTA rules."""
         if self._rules is not None:
             return self._rules
-        key = f"vesta_rules:{self.now.date().isoformat()}"
+        key = f"vesta_rules2:{self.now.date().isoformat()}"
         cached = self.store.cache_get(key)
         if isinstance(cached, dict):
             self._rules = cached
             return cached
-        rules: dict[str, str] = {}
+        rules: dict[str, dict] = {}
         bps = alert_blueprints()
         if bps and hasattr(self.cli, "all_entity_ids") and hasattr(self.cli, "tool"):
             for eid in [e for e in self.cli.all_entity_ids() if e.startswith("automation.")]:
@@ -134,8 +157,9 @@ class Ctx:
                     continue
                 conf = body.get("config", body) if isinstance(body, dict) else {}
                 path = str(((conf or {}).get("use_blueprint") or {}).get("path") or "")
-                if any(bp in path for bp in bps):
-                    rules[eid] = str(conf.get("alias") or eid)
+                hit = next((bp for bp in bps if bp in path), None)
+                if hit:
+                    rules[eid] = {"alias": str(conf.get("alias") or eid), "blueprint": hit}
             self.store.cache_put(key, rules)
         self._rules = rules
         return rules
@@ -148,7 +172,8 @@ class Ctx:
         """VESTA rules that ran, from Home Assistant's logbook, not already an incident of the agent."""
         out = []
         known = [(i.get("rule_id"), datetime.fromisoformat(i["opened_at"])) for i in self.incidents() if i.get("opened_at")]
-        for eid, alias in self.vesta_rules().items():
+        for eid, rinfo in self.vesta_rule_info().items():
+            alias = rinfo["alias"]
             try:
                 rows = self.cli.logbook(self.s_dt, self.e_dt, entity_id=eid)
             except Exception:  # noqa: BLE001
@@ -160,7 +185,7 @@ class Ctx:
                     continue
                 if any(rid == eid and abs((t - at).total_seconds()) < 900 for rid, at in known):
                     continue
-                out.append({"when": t.isoformat(), "what": alias, "lasted": None, "severity": None,
+                out.append({"when": t.isoformat(), "what": alias, "lasted": None, "severity": None, "blueprint": rinfo["blueprint"],
                             "outcome": "Fired in Home Assistant (the agent did not follow it up)", "source": "home_assistant"})
         return out
 
@@ -249,6 +274,183 @@ class Ctx:
 def _no_code(s: str) -> str:
     import re
     return re.sub(r"^\s*\[[^\]]{2,80}\]\s*", "", s or "").strip()
+
+
+# ---------------------------------------------------------------- the clues (reports.yaml playbook)
+def _fill(text, figures: dict) -> str:
+    """A playbook text with the clue's figures in it; a date as a person writes it ("23 Sep")."""
+    def show(v):
+        if isinstance(v, str) and len(v) == 10 and v[4] == "-" and v[7] == "-":
+            try:
+                return date.fromisoformat(v).strftime("%d %b").lstrip("0")
+            except ValueError:
+                return v
+        return v
+    try:
+        return str(text or "").format(**{k: show(v) for k, v in figures.items() if not isinstance(v, (list, dict))})
+    except (KeyError, IndexError, ValueError):
+        return str(text or "")
+
+
+def _days_power(c: "Ctx", entity_id: str, days: int) -> list[tuple[date, float, float]]:
+    """Per day: (day, mean running power, hours running), from HA's hourly means."""
+    thr = float(c.need("pump", "run_min_w"))
+    s = datetime.combine(c.end - timedelta(days=days - 1), time(0), c.Z)
+    rows = c.cli.statistics([entity_id], s, c.e_dt, "hour", ("mean",)).get(entity_id, [])
+    per: dict[date, list[float]] = {}
+    for r in rows:
+        v = _num(r.get("mean"))
+        if v is not None:
+            per.setdefault(_ms_day(r["start"], c.Z), []).append(v)
+    out = []
+    for d, vals in sorted(per.items()):
+        run = [v for v in vals if v > thr]
+        out.append((d, round(statistics.mean(run)) if run else 0.0, len(run)))
+    return out
+
+
+def _best_split(vals: list[float], min_days: int) -> tuple[int, float] | None:
+    """Where the series steps the most: (index of the first day after, change in % of the before mean)."""
+    best = None
+    for k in range(min_days, len(vals) - min_days + 1):
+        before, after = statistics.mean(vals[:k]), statistics.mean(vals[k:])
+        if before:
+            ch = (after - before) / before * 100
+            if best is None or abs(ch) > abs(best[1]):
+                best = (k, ch)
+    return best
+
+
+def clue_power_step(c, when):
+    out = []
+    for slug, a in sorted(c.pack.assets.items()):
+        pw = (a.get("entities") or {}).get("power")
+        if a.get("kind") != "motor" or not pw:
+            continue
+        rows = [r for r in _days_power(c, pw, int(when.get("days", 30))) if r[2] > 0]
+        best = _best_split([r[1] for r in rows], int(when.get("min_days", 3)))
+        if best and -best[1] >= float(when["drop_pct"]):
+            k = best[0]
+            out.append({"subject": a.get("name") or slug, "entity_id": pw, "step_date": rows[k][0].isoformat(),
+                        "before_w": round(statistics.mean(r[1] for r in rows[:k])),
+                        "after_w": round(statistics.mean(r[1] for r in rows[k:])), "drop_pct": round(-best[1]),
+                        "hours_before": round(statistics.mean(r[2] for r in rows[:k]), 1),
+                        "hours_after": round(statistics.mean(r[2] for r in rows[k:]), 1)})
+    return out
+
+
+def clue_run_change(c, when):
+    out = []
+    for slug, a in sorted(c.pack.assets.items()):
+        pw = (a.get("entities") or {}).get("power")
+        if a.get("kind") != "motor" or not pw:
+            continue
+        rows = _days_power(c, pw, int(when.get("days", 30)))
+        best = _best_split([float(r[2]) for r in rows], int(when.get("min_days", 3)))
+        if best and abs(best[1]) >= float(when["change_pct"]):
+            k = best[0]
+            before = statistics.mean(r[2] for r in rows[:k])
+            after = statistics.mean(r[2] for r in rows[k:])
+            if max(before, after) < float(when.get("min_hours", 0)):
+                continue                             # a few minutes a day either way: not a change to report
+            out.append({"subject": a.get("name") or slug, "entity_id": pw, "change_date": rows[k][0].isoformat(),
+                        "hours_before": round(statistics.mean(r[2] for r in rows[:k]), 1),
+                        "hours_after": round(statistics.mean(r[2] for r in rows[k:]), 1), "change_pct": round(best[1])})
+    return out
+
+
+def clue_battery_trend(c, when):
+    repl = float(c.need("battery", "replace_below_pct"))
+    days = int(when.get("days", 30))
+    s = datetime.combine(c.end - timedelta(days=days - 1), time(0), c.Z)
+    out = []
+    for r in c.pack.families.get("battery", []):
+        now_v = _num((c.states().get(r["entity_id"]) or {}).get("state"))
+        if now_v is None or now_v >= float(when["below_pct"]):
+            continue
+        rows = c.cli.statistics([r["entity_id"]], s, c.e_dt, "day", ("mean",)).get(r["entity_id"], [])
+        pts = [(i, _num(x.get("mean"))) for i, x in enumerate(rows) if _num(x.get("mean")) is not None]
+        fall = None
+        if len(pts) >= 5:
+            xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+            mx, my = statistics.mean(xs), statistics.mean(ys)
+            den = sum((x - mx) ** 2 for x in xs)
+            slope = sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / den if den else 0
+            fall = round(-slope * 7, 1)
+        if not fall or fall <= 0 or now_v <= repl:
+            continue                    # no trend to project, or already due: the batteries section shows it
+        out.append({"subject": r.get("name") or r["entity_id"], "entity_id": r["entity_id"], "level_pct": round(now_v),
+                    "fall_per_week": fall, "weeks_left": round((now_v - repl) / fall, 1), "replace_below_pct": repl})
+    return out
+
+
+def clue_offline(c, when):
+    fams = set(when.get("families") or [])
+    return [{"subject": o["name"], "since": o["since"], "family": o["family"]} for o in c.offline() if o["family"] in fams]
+
+
+def clue_use_while_empty(c, when):
+    meter, ent = c.energy.get("main_meter"), when.get("mode_entity")
+    if not meter or not ent:
+        return []
+    days = int(when.get("days", 10))
+    start = max(c.start, c.end - timedelta(days=days - 1))
+    s = datetime.combine(start, time(0), c.Z)
+    hist = sorted(c.cli.history([ent], s, c.e_dt).get(ent, []), key=lambda h: h.get("last_changed", ""))
+    if not hist:
+        return []
+    empty = {str(x).lower() for x in when.get("empty") or []}
+    per = c.daily_kwh(meter, start, c.end)
+    empty_days, other_days = [], []
+    for k in range((c.end - start).days + 1):
+        d = start + timedelta(days=k)
+        noon = datetime.combine(d, time(12), c.Z)
+        state = None
+        for h in hist:
+            if datetime.fromisoformat(h["last_changed"]) <= noon:
+                state = str(h.get("state") or "").lower()
+        if d in per and state is not None:
+            (empty_days if state in empty else other_days).append(per[d])
+    if not empty_days:
+        return []
+    return [{"subject": "the villa", "empty_days": len(empty_days),
+             "kwh_per_empty_day": round(statistics.mean(empty_days), 1),
+             "kwh_per_other_day": round(statistics.mean(other_days), 1) if other_days else "no occupied day"}]
+
+
+CLUES = {"power_step": clue_power_step, "run_change": clue_run_change, "battery_trend": clue_battery_trend,
+         "offline": clue_offline, "use_while_empty": clue_use_while_empty}
+
+
+def clues(c: "Ctx") -> tuple[list[dict], list[str]]:
+    """Every playbook entry whose `when` holds, as clues: the entry's guidance filled with the clue's figures."""
+    if c._clues is not None:
+        return c._clues
+    out, problems = [], []
+    for group, entries in (c.cfg.get("playbook") or {}).items():
+        for e in entries or []:
+            when = e.get("when") or {}
+            if not when:
+                continue                             # knowledge only: handed to the AI, never a clue
+            fn = CLUES.get(when.get("kind"))
+            if fn is None:
+                problems.append(f"playbook {group}/{e.get('name')}: unknown when kind {when.get('kind')!r}")
+                continue
+            try:
+                found = fn(c, when)
+            except MissingParameter as ex:
+                problems.append(f"playbook {group}/{e.get('name')}: {ex}")
+                continue
+            except (KeyError, TypeError, ValueError) as ex:
+                problems.append(f"playbook {group}/{e.get('name')}: {type(ex).__name__}: {ex}")
+                continue
+            for f in found:
+                out.append({"id": f"clue-{len(out) + 1}", "group": group, "entry": e.get("name"), "subject": f.get("subject"),
+                            "figures": f, "horizon": e.get("horizon"),
+                            "playbook": {k: _fill(e.get(k), f) for k in ("look_at", "means", "check", "ask", "cost_of_ignoring")
+                                         if e.get(k)}})
+    c._clues = (out, problems)
+    return c._clues
 
 
 # ---------------------------------------------------------------- the sections
@@ -493,6 +695,27 @@ def s_gaps(c: Ctx) -> dict:
     return {"rows": rows}
 
 
+def s_noticed(c: Ctx) -> dict:
+    rows, problems = clues(c)
+    return {"rows": rows, "problems": problems}
+
+
+def s_quiet(c: Ctx) -> dict:
+    """What did not happen: each VESTA blueprint that never fired in the period (the agent's incidents and
+    Home Assistant's own record), in reports.yaml's words, and how many VESTA rules are on."""
+    info = c.vesta_rule_info()
+    fired = set()
+    for i in c.incidents():
+        fired.add(json.loads(i.get("payload") or "{}").get("blueprint"))
+    for a in c.ha_alerts():
+        fired.add(a.get("blueprint"))
+    words = c.cfg.get("nothing_happened") or {}
+    st = c.cli.states(sorted(info)) if info else {}
+    return {"did_not_happen": [w for bp, w in words.items() if bp not in fired],
+            "rules_on": sum(1 for eid in info if (st.get(eid) or {}).get("state") == "on") if info else None,
+            "rules_total": len(info)}
+
+
 def s_footer(c: Ctx) -> dict:
     return {"retention": c.pack.retention}
 
@@ -501,7 +724,7 @@ BUILD = {"header": s_header, "headline": s_headline, "hero": s_hero, "kpis": s_k
          "tasks": s_tasks, "alerts": s_alerts, "happened": s_happened, "equipment": s_equipment,
          "batteries": s_batteries, "energy_days": s_energy_days, "circuits": s_circuits, "monitoring": s_monitoring,
          "money": s_money, "fixed_suggest": s_fixed_suggest, "maintenance": s_maintenance, "trends": s_trends,
-         "gaps": s_gaps, "footer": s_footer}
+         "gaps": s_gaps, "footer": s_footer, "noticed": s_noticed, "quiet": s_quiet}
 
 
 def _r(v, nd=1):
@@ -533,13 +756,14 @@ def facts(kind: str, c: Ctx) -> dict:
             out["problems"].append(f"section {sid}: {data['error']}")
         out["order"].append(sid)
         out["sections"][sid] = data
+        kind = "checked" if sec.get("checked") else "reading"
         if sec.get("write"):
-            out["to_write"].append({"id": sid, "instruction": sec["write"], "figures": data})
+            out["to_write"].append({"id": sid, "kind": kind, "instruction": sec["write"], "figures": data})
         for field, instruction in (sec.get("write_each") or {}).items():
             items = data.get("rows") or data.get("cards") or data.get("charts") or []
             for it in items:
                 if it.get("id"):
-                    out["to_write"].append({"id": f"{it['id']}.{field}", "instruction": instruction,
+                    out["to_write"].append({"id": f"{it['id']}.{field}", "kind": kind, "instruction": instruction,
                                             "figures": {k: v for k, v in it.items() if k != "id"}})
     return out
 
@@ -569,7 +793,11 @@ def main(argv=None):
         with open(a.out, "w", encoding="utf-8") as f:
             json.dump(res, f, indent=1, default=str)
     # what the model reads: what to write, not the whole figures file again
+    # the playbook entries without a `when`: what the villa knows that no figure can show
+    knowledge = [{"group": g, **{k: v for k, v in e.items() if k != "when"}}
+                 for g, entries in (c.cfg.get("playbook") or {}).items() for e in entries or [] if not e.get("when")]
     print(json.dumps({"out": a.out, "sections": res["order"], "problems": res["problems"],
+                      "clues": res["sections"].get("noticed", {}).get("rows", []), "knowledge": knowledge,
                       "to_write": res["to_write"]}, indent=1, default=str))
     return 0
 

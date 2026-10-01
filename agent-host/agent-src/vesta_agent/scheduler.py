@@ -86,7 +86,7 @@ class Scheduler:
                 if job.get("run"):
                     await self.run_code(sk, job["run"], job["timeout"])
                 else:
-                    await self.run_model(sk, job["prompt"], name)
+                    await self.run_model(sk, job)
                 started.append(name)
         if self.housekeeping:
             await self.housekeeping()

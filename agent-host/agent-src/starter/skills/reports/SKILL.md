@@ -34,29 +34,42 @@ owner reads the monthly as proof that the villa was looked after: what was
 found, what was done, what it cost, what VESTA suggests, and how much of the
 villa is actually measured (never hide the unmetered share).
 
-## A weekly or monthly page, step by step (on schedule or on request)
+## A weekly or monthly report, step by step (on schedule, or started from a chat)
+
+You are the analyst here, as a careful property manager would be: the figures are computed for you;
+the conclusions are yours.
 
 1. `roi-energy` `energy_period.py --period week --out week.json` (`--period month --out month.json`
    for the monthly; add `--end YYYY-MM-DD` for a past period). For the monthly, first also
    `filtration_optimiser.py --out optimiser.json` and `proposals.py --period-json month.json
    --optimiser-json optimiser.json` (it records the proposals the page shows).
 2. `reports` `facts.py fm-weekly --energy week.json --out facts.json` (or `owner-monthly --energy
-   month.json`). It prints `to_write`: each sentence the page needs, with its instruction and the
-   only figures you may use for it.
-3. Write every sentence of `to_write`, in the reader's language, and save them with `save_file` as
-   `notes.json`: `{"<id>": "<sentence>", ...}`. Use only the figures given with that id — a number
-   that is not among them gets the sentence refused. Plain words; no rule codes, no entity ids.
-4. `reports` `compose.py fm-weekly --facts facts.json --notes notes.json --out fm_weekly.html` (or
-   `owner-monthly ... --out owner_monthly.html`). It says which sentences it used and which it
-   refused and why: fix and save the refused ones, then compose again (once).
-5. `send_message` with `attachment` the page's file name and, as text, your headline sentence.
-   Asked for in a chat: `to: here`, the chat it was asked in. On schedule: `to: fm` (weekly) or
-   `to: owner` (monthly).
+   month.json`). It prints the CLUES (what the playbook found in the villa's data, each with its
+   playbook entry: what to look at, what it means, what to check, what to ask) and `to_write`:
+   every sentence the page needs, with its instruction.
+3. For each clue, before you write: look at what its entry's `look_at` says, in Home Assistant
+   (ha_get_history for statistics or history, ha_get_logs for the logbook, ha_get_automation_traces,
+   ha_get_state). Confirm it, date it, explain it; tie clues together (a pump drawing less power AND
+   running as long as before means less water moved, not less running). Drop what the data does not
+   support — say so in the reading rather than inventing a cause.
+4. Write every sentence of `to_write` in the reader's language: conclusions, not descriptions —
+   what it is, what it means, what to do, when, and the question to ask. Your numbers may be your
+   own (what you read in Home Assistant); write them as you would to the owner, rounded and dated.
+   Save them with `save_file` as `notes.json`: `{"<id>": "<sentence>", ...}`.
+5. `reports` `compose.py fm-weekly --facts facts.json --notes notes.json --out fm_weekly.html` (or
+   `owner-monthly ... --out owner_monthly.html`). Your readings show as "VESTA's reading"; a slot
+   reports.yaml marks `checked: true` is refused if one of its numbers is not in its figures — fix
+   it and compose again (once).
+6. `send_message` with `attachment` the page's file name and, as text, your headline. Started from
+   a chat: `to: here`. On schedule: `to: fm` (weekly) or `to: owner` (monthly).
+
+Spend with care: the job has a spending limit (VESTA Agent page → Rules → AI jobs). Read what the
+clues point to, not the whole villa. If the limit stops you, the page is still sent with what is done.
 
 ## Rules
 
-- Every number in a document comes from facts.py. You write only the sentences
-  `to_write` asks for, from their own figures; compose.py checks every number.
+- The figures (tiles, tables, charts) come from facts.py. Your sentences are readings: marked as
+  VESTA's, with your own numbers; never present a guess as a measurement.
 - A page over two chat messages is sent as its HTML file attached to a short
   message (the headline and the key numbers), not as text. The file is
   self-contained: it opens in the phone's browser, which can print it or save
@@ -69,6 +82,7 @@ villa is actually measured (never hide the unmetered share).
 
 ## What each page contains
 
-`reports.yaml`, `reports:`: the sections of each page, in order, and which ones
-ask you for a sentence. Money left on the table, the night standby and the
+`reports.yaml`: `reports:` the sections of each page, in order, and which ones ask you for a
+sentence; `playbook:` the situations to recognise and how to read them; `nothing_happened:` the
+words for what did not happen. Money left on the table, the night standby and the
 monitoring uptime show "not measured yet" until their calculation is agreed.

@@ -18,6 +18,12 @@ settings:
   reply_limit_usd: 1              # a reply that reaches it stops, keeps what it wrote, and offers a Continue button
   web_search: true                # Claude's own web search (weather warnings, manuals); never used to decide an action
   conversation_reset: daily_04_00 # daily_04_00, after_8h_silence or never; /new starts a new conversation at any time
+  # The AI jobs of the skills, by the name each skill gives them: the brain and the spending limit of each
+  # run. A job not named here does not run (the VESTA Agent page offers to add it).
+  jobs:
+    fm-daily: {profile: auto, limit_usd: 1}             # the 07:00 digest
+    fm-weekly: {profile: auto, limit_usd: 2}            # the facility manager's weekly report
+    owner-monthly: {profile: performance, limit_usd: 6} # the owner's monthly report
 
 act_enabled: false            # informs only. true switches the act path on (every action still needs a button press).
 approval_ttl_minutes: 15      # an Approve button older than this does nothing

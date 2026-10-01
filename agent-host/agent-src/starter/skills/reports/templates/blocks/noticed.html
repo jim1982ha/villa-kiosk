@@ -1,0 +1,19 @@
+<section>
+  <h2>What VESTA noticed</h2>
+  <div class="tasks">
+  {% for c in s.rows %}
+    <div class="task {{ 'p2' if c.horizon == 'Now' else ('p3' if c.horizon == 'Soon' else 'p4') }}">
+      <span class="pill {{ 'P2' if c.horizon == 'Now' else ('P3' if c.horizon == 'Soon' else 'P4') }}">{{ c.horizon or "Note" }}</span>
+      <div>
+        <b>{{ c.subject }}: {{ c.entry }}</b>
+        {% set r = reading(c.id ~ ".reading") %}<div class="why">{{ r or c.playbook.means }}</div>
+        {% set chk = reading(c.id ~ ".check") or c.playbook.check %}{% if chk %}<div class="act">{{ chk }}</div>{% endif %}
+        {% set ask = reading(c.id ~ ".ask") or c.playbook.ask %}{% if ask %}<div class="ask">{{ ask }}</div>{% endif %}
+        {% if c.playbook.cost_of_ignoring %}<div class="s">If left: {{ c.playbook.cost_of_ignoring }}</div>{% endif %}
+      </div>
+    </div>
+  {% else %}
+    <p class="note">Nothing out of the ordinary in the villa's data.</p>
+  {% endfor %}
+  </div>
+</section>

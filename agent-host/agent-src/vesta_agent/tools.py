@@ -116,7 +116,8 @@ class Toolbox:
     def __init__(self, *, settings, policy: Policy, reader, actions, skills: Skills,
                  send: Callable[..., Awaitable[Any]], server_tools: list[dict], state,
                  ticket: Callable[..., Awaitable[str]] | None = None,
-                 carry_out: Callable[..., Awaitable[dict]] | None = None):
+                 carry_out: Callable[..., Awaitable[dict]] | None = None,
+                 start_job: Callable[..., Awaitable[str]] | None = None):
         self.s = settings
         self.policy = policy
         self.reader = reader
@@ -125,6 +126,7 @@ class Toolbox:
         self.send = send
         self.ticket = ticket
         self.carry_out = carry_out
+        self.start_job = start_job
         self.server_tools = {t["name"]: t for t in server_tools}
         self.state = state
         self.parts = Parts()
@@ -136,7 +138,7 @@ class Toolbox:
     def model_tool_names(self, include_web: bool) -> list[str]:
         names = [f"mcp__{SERVER}__{n}" for n in self.read_tool_names()]
         names += [f"mcp__{SERVER}__{n}" for n in ("ha_call_service", "read_skill", "run_skill_script", "send_message",
-                                                  "agent_status", "save_file")]
+                                                  "agent_status", "save_file", "start_job")]
         if self.ticket:
             names.append(f"mcp__{SERVER}__create_ticket")
         if include_web:
@@ -160,6 +162,9 @@ class Toolbox:
         tools = [self._proxy(n) for n in self.read_tool_names()]
         tools += [self._call_service(person, chat_id), self._read_skill(), self._run_script(chat_id), self._send(chat_id),
                   self._status(), self._save_file()]
+        if person is not None and chat_id is not None and self.start_job:
+            # a person asking, in a chat: never a job (even one started from a chat), so no job starts another
+            tools.append(self._start_job(chat_id))
         if self.ticket:
             tools.append(self._ticket())
         return tools
@@ -328,6 +333,23 @@ class Toolbox:
                            f"created, {done['resolved']} closed. Do not send or create them again.]\n") + out
             text = self.parts.serve(key, out, part)
             return _ok(text) if code in (0, 2) else _err(text or f"The script failed (exit {code}).")
+        return handler
+
+    def _start_job(self, chat_id: int):
+        from .skills import ai_jobs
+        jobs = [(sk, j) for sk, j in ai_jobs(self.skills.all()) if j.get("on_request")]
+        names = [j["name"] for _, j in jobs] or ["none"]
+        listing = "; ".join(f"{j['name']}: {j.get('description') or sk.description}" for sk, j in jobs) or "none"
+        schema = {"type": "object", "properties": {"name": {"type": "string", "enum": names}}, "required": ["name"]}
+
+        @tool("start_job", "Start one of the skills' jobs because the person asked for it (for example a weekly or "
+                           "monthly report). It runs as on schedule, with its own model and spending limit, and "
+                           "sends its result to this chat when ready. Do not do the job yourself. Jobs: " + listing,
+              schema)
+        async def handler(args: dict) -> dict:
+            answer = await self.start_job(str(args.get("name") or ""), chat_id)
+            self.state.log("job_requested", {"job": args.get("name"), "answer": answer[:80]})
+            return _ok(answer)
         return handler
 
     def _save_file(self):

@@ -138,3 +138,28 @@ def test_the_page_and_its_files_are_served_with_a_strict_policy(ui):
     assert status == 200 and css == 200 and font == 200
     assert "default-src 'self'" in csp and "script-src 'self'" in csp
     assert "http://" not in html and "https://" not in html                         # nothing from the internet
+
+
+def test_the_page_lists_the_ai_jobs_says_which_are_not_set_and_sets_them(ui):
+    import yaml as _yaml
+    with open(ui.policy_path) as f:
+        raw = _yaml.safe_load(f)
+    raw["settings"].pop("jobs", None)                                      # a policy.yaml from before 0.12.0
+    with open(ui.policy_path, "w") as f:
+        _yaml.safe_dump(raw, f)
+
+    async def fn(c):
+        jobs = (await (await c.get("/api/jobs")).json())["jobs"]
+        before = (await (await c.get("/api/overview")).json())["jobs_not_set"]
+        doc = await (await c.get("/api/policy")).json()
+        form = doc["form"]
+        for j in jobs:                                                     # what "Add them" does
+            form["settings"]["jobs"][j["name"]] = j["default"]
+        r = await c.put("/api/policy/form", json={"form": form, "rev": doc["rev"]}, headers=HDR)
+        after = (await (await c.get("/api/overview")).json())["jobs_not_set"]
+        return jobs, before, r.status, after
+    jobs, before, status, after = call(ui, fn)
+    assert {j["name"] for j in jobs} == {"fm-daily", "fm-weekly", "owner-monthly"}
+    assert sorted(before) == ["fm-daily", "fm-weekly", "owner-monthly"] and status == 200 and after == []
+    with open(ui.policy_path) as f:
+        assert _yaml.safe_load(f)["settings"]["jobs"]["owner-monthly"] == {"profile": "performance", "limit_usd": 6}

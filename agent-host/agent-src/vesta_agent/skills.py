@@ -59,7 +59,13 @@ SEEDED = ".seeded"
 # edited here, so an update may replace it; any other folder is the owner's.
 SHIPPED = "shipped-skills.json"
 REFERENCE = ".starter"      # the current starter skills, for reading: not loaded (a dot is not a skill name)
+# ⚠️ THE VILLA'S OWN FILES IN A STARTER SKILL: a file named villa.* (e.g. reports' villa.reports.yaml, with
+# the villa's playbook entries and cards) is the villa's, never shipped. It does not count as an edit of
+# the skill, and an update keeps it — so the villa adds its own without losing the starter's updates.
+VILLA_PREFIX = "villa."
 HOOK_EVENTS = {"critical_event"}
+JOB_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,40}$")
+JOB_TARGETS = ("owner", "fm")
 
 
 class ToolError(Exception):
@@ -127,8 +133,11 @@ def _parse(name: str, path: str) -> Skill:
             raise SkillError(f"schedule[{i}]: give either prompt (model job) or run (code job)")
         if job.get("run"):
             _check_command(path, str(job["run"]), f"schedule[{i}].run")
-        sk.schedule.append({"when": when, "prompt": job.get("prompt"), "run": job.get("run"),
-                            "timeout": int(job.get("timeout") or 900)})
+        entry = {"when": when, "prompt": job.get("prompt"), "run": job.get("run"),
+                 "timeout": int(job.get("timeout") or 900)}
+        if job.get("prompt"):
+            entry.update(_ai_job(path, job, f"schedule[{i}]"))
+        sk.schedule.append(entry)
     if raw.get("every_5_min"):
         sk.every_5_min = _check_command(path, str(raw["every_5_min"]), "every_5_min")
     for ev, cmd in (raw.get("on_event") or {}).items():
@@ -140,6 +149,28 @@ def _parse(name: str, path: str) -> Skill:
     return sk
 
 
+def _ai_job(path: str, job: dict, where: str) -> dict:
+    """An AI job's own fields (owner, 2026-10-01): its name — the key of its model and spending limit in
+    policy.yaml settings.jobs, without which it does not run —, the chat its result goes to, whether a
+    person may start it from a chat, the starter values the VESTA Agent page offers, and the code step
+    that still finishes its work when the spending limit stops it."""
+    name = str(job.get("name") or "")
+    if not JOB_NAME.match(name):
+        raise SkillError(f"{where}: an AI job needs a name (lower case, digits, - and _), the key of its "
+                         "model and limit in policy.yaml")
+    to = job.get("to")
+    if to is not None and to not in JOB_TARGETS:
+        raise SkillError(f"{where}: to must be owner or fm")
+    default = job.get("default") or {}
+    if not isinstance(default, dict) or set(default) - {"profile", "limit_usd"}:
+        raise SkillError(f"{where}: default may give only profile and limit_usd")
+    on_limit = job.get("on_limit")
+    if on_limit:
+        _check_command(path, str(on_limit), f"{where}.on_limit")
+    return {"name": name, "to": to, "on_request": bool(job.get("on_request")), "default": dict(default),
+            "on_limit": str(on_limit) if on_limit else None, "description": str(job.get("description") or "")}
+
+
 def _check_command(path: str, cmd: str, where: str) -> str:
     try:
         parts = shlex.split(cmd)
@@ -148,6 +179,11 @@ def _check_command(path: str, cmd: str, where: str) -> str:
     if not parts or not _script_file_ok(path, parts[0]):
         raise SkillError(f"{where}: {parts[0] if parts else '(empty)'} is not a .py file in scripts/")
     return cmd
+
+
+def ai_jobs(skills: dict) -> list[tuple["Skill", dict]]:
+    """Every AI job the skills declare, in skill order: what policy.yaml settings.jobs configures."""
+    return [(sk, job) for _, sk in sorted(skills.items()) for job in sk.schedule if job.get("prompt")]
 
 
 class Skills:
@@ -214,7 +250,13 @@ class Skills:
                 continue
             tmp = dst + ".new"
             shutil.rmtree(tmp, ignore_errors=True)
-            shutil.copytree(src, tmp, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+            shutil.copytree(src, tmp, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", VILLA_PREFIX + "*"))
+            for root, _, files in os.walk(dst):              # the villa's own files go with it
+                for f in files:
+                    if f.startswith(VILLA_PREFIX):
+                        rel = os.path.relpath(os.path.join(root, f), dst)
+                        os.makedirs(os.path.dirname(os.path.join(tmp, rel)), exist_ok=True)
+                        shutil.copy2(os.path.join(root, f), os.path.join(tmp, rel))
             shutil.rmtree(old, ignore_errors=True)
             os.rename(dst, old)
             os.rename(tmp, dst)
@@ -348,7 +390,7 @@ def fingerprint(folder: str) -> str:
     for root, dirs, files in os.walk(folder):
         dirs.sort()                          # a fixed order; Python's caches hold only .pyc, skipped below
         for name in sorted(files):
-            if name.endswith(".pyc"):
+            if name.endswith(".pyc") or name.startswith(VILLA_PREFIX):
                 continue
             path = os.path.join(root, name)
             h.update(os.path.relpath(path, folder).replace(os.sep, "/").encode() + b"\0")

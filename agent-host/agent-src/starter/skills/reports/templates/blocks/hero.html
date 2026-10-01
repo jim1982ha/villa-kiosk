@@ -3,7 +3,7 @@
     <div>
       <div class="big">{{ money(s.cost, s.currency) }}</div>
       <p class="meta">Electricity this period ({{ num(s.kwh) }} kWh{% if s.tariff %} at {{ num(s.tariff) }} {{ s.currency }}/kWh{% endif %}).</p>
-      {% if note("hero") %}<p>{{ note("hero") }}</p>{% endif %}
+      {% set r = reading("hero") %}{% if r %}<p>{{ r }}</p>{% endif %}
     </div>
     <span class="light {{ s.colour }}"><span class="dot"></span>{{ s.text.split(":")[0] }}</span>
   </div>

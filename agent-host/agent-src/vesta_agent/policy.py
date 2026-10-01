@@ -142,6 +142,23 @@ def _behaviour(raw: Any) -> dict:
     return v
 
 
+def _jobs(settings: Any) -> dict[str, dict]:
+    """settings.jobs: each AI job's model profile and spending limit, by the name its skill gives it.
+    A job left out, or set to something not understood, is absent: it does not run (owner, 2026-10-01)."""
+    raw = (settings or {}).get("jobs") if isinstance(settings, dict) else None
+    out = {}
+    for name, v in (raw or {}).items() if isinstance(raw, dict) else ():
+        if not isinstance(v, dict) or v.get("profile") not in PROFILES:
+            continue
+        try:
+            limit = float(v.get("limit_usd"))
+        except (TypeError, ValueError):
+            continue
+        if limit >= 0.05:
+            out[str(name)] = {"profile": v["profile"], "limit_usd": limit}
+    return out
+
+
 class Policy:
     def __init__(self, raw: dict):
         self.raw = raw or {}
@@ -151,6 +168,7 @@ class Policy:
         # ⚠️ A SAFETY STOP, SO NEVER ABSENT: an unreadable value still stops the siren (and problems() says so).
         self.siren_auto_off_min: int = _int_in(r.get("siren_auto_off_min"), 1, 60, DEFAULTS["siren_auto_off_min"])
         self.behaviour: dict = _behaviour(r.get("settings"))
+        self.jobs: dict[str, dict] = _jobs(r.get("settings"))
         self.people: dict[int, Person] = {}
         for p in r.get("people") or []:
             try:
@@ -369,6 +387,19 @@ def problems(raw: Any) -> list[str]:
                     out.append("settings.web_search must be true or false.")
                 elif k == "conversation_reset" and v not in CONVERSATION_RESETS:
                     out.append(f"settings.conversation_reset must be one of {', '.join(CONVERSATION_RESETS)}.")
+                elif k == "jobs":
+                    if not isinstance(v, dict):
+                        out.append("settings.jobs must be job name: {profile, limit_usd}.")
+                        continue
+                    for name, j in v.items():
+                        if not isinstance(j, dict) or set(j) - {"profile", "limit_usd"}:
+                            out.append(f"settings.jobs.{name} must give profile and limit_usd only.")
+                            continue
+                        if j.get("profile") not in PROFILES:
+                            out.append(f"settings.jobs.{name}.profile must be one of {', '.join(PROFILES)}.")
+                        lim = j.get("limit_usd")
+                        if isinstance(lim, bool) or not isinstance(lim, (int, float)) or lim < 0.05:
+                            out.append(f"settings.jobs.{name}.limit_usd must be a number of at least 0.05.")
                 elif k not in ("profile", "reply_limit_usd", "web_search", "conversation_reset"):
                     out.append(f"Unknown setting {k!r}.")
     if "act_enabled" in raw and not isinstance(raw["act_enabled"], bool):

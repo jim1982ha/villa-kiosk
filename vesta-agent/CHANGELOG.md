@@ -1,3 +1,16 @@
+## 0.12.0
+
+⚠️ **After updating, open the VESTA Agent page and press "Add them"** (or Rules → AI jobs): the daily digest and the weekly and monthly reports now each need their brain and spending limit set, and do not run until they are.
+
+### Added
+- **VESTA's readings in the weekly and monthly reports**, as in your mock-ups: the AI now reads the villa's data like a property manager — what changed and when, what it means, what to check, what to ask, when to act and what ignoring it costs — in the headline, in a new "What VESTA noticed" section, in each task, under each chart and in a "nothing else happened" line. Its conclusions carry its own numbers and are marked "VESTA's reading"; the tiles, tables and charts stay computed.
+- **A playbook in the reports skill**: the situations the agent recognises (a pump's power stepping down at the same hours, its running time changing, a battery falling, a safety device offline, electricity used while the villa is empty…). The villa adds its own in `villa.reports.yaml`, which app updates keep.
+- **AI jobs on the VESTA Agent page**: each job's brain and spending limit; a job not set does not run (banner, "Add them").
+- **Ask for a report in a chat** (`/ask make the weekly report`): it runs as its job and the page comes back to that chat.
+
+### Changed
+- A report that reaches its spending limit is still sent, with every figure and the readings written so far.
+
 ## 0.11.0
 
 ### Changed

@@ -6,7 +6,7 @@
       <div class="t">{{ c.title }} <span class="st {{ 'watch' if c.status == 'Watch' else 'ok' }}">{{ c.status }}</span></div>
       <div class="s">{{ c.subtitle }}</div>
       {{ chart_line(c.series, c.unit, c.get("alert_at")) }}
-      {% if note(c.id ~ ".reading") %}<div class="s">{{ note(c.id ~ ".reading") }}</div>{% endif %}
+      {% set r = reading(c.id ~ ".reading") %}{% if r %}<div class="s">{{ r }}</div>{% endif %}
     </div>
   {% else %}<p class="note">No equipment with a power meter.</p>{% endfor %}
   </div>
