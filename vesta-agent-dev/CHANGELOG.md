@@ -1,3 +1,10 @@
+## 0.12.14
+
+### Fixed
+- **The Kiosk's Cockpit filled with faults that were long gone.** The nightly check closed its findings but never their Kiosk tickets, so every false alarm ("has not reported", a device back online) stayed an "Open fault" for ever. Now:
+  - when the night check no longer sees a problem, its Kiosk ticket is resolved ("Cleared: the nightly check no longer sees it.");
+  - at each start and each night, the agent closes the tickets of problems already gone (the ones left over from before), and closes its own task when a person resolves the fault in the Kiosk.
+
 ## 0.12.13
 
 ### Added
