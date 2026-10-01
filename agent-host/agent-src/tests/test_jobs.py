@@ -77,7 +77,7 @@ def test_at_its_limit_a_report_job_still_sends_its_page(agent):
     run(agent.run_model_job(agent.skills.get("reports"), job(agent, "fm-weekly"), Origin(ASKER)))
     (cmd, values, origin), = agent.code
     assert values["to"] == "here" and origin == Origin(ASKER)               # asked in a chat: back to that chat
-    assert "send the result there" in agent.runs[-1]["prompt"]
+    assert "everything you send goes to that chat" in agent.runs[-1]["prompt"]
 
 
 def test_a_report_asked_for_in_a_chat_runs_as_its_job(agent):
@@ -92,6 +92,28 @@ def test_a_report_asked_for_in_a_chat_runs_as_its_job(agent):
     person = Person(ASKER, "Asker", "fm")
     assert "start_job" in [t.name for t in tb.tool_objects(person, ASKER, False)]
     assert "start_job" not in [t.name for t in tb.tool_objects(None, ASKER, False)]    # a job never starts a job
+
+
+def test_a_job_asked_for_in_a_chat_sends_only_to_that_chat(agent):
+    """The group asks for the weekly: its page and the owner lines its steps address to fm and owner all
+    come back to the group, never to the fm or owner chat (owner, 2026-10-01)."""
+    async def go():
+        await agent.start_job("fm-weekly", ASKER)
+        await asyncio.sleep(0.05)
+    run(go())
+    tb = agent.toolbox()
+    send = next(t for t in tb.tool_objects(None, ASKER, False, requested=True) if t.name == "send_message")
+    assert send.input_schema["properties"]["to"]["enum"] == ["here"]
+    for to in ("fm", "owner", "here"):
+        assert not run(send.handler({"to": to, "text": f"weekly for {to}"})).get("is_error")
+    assert [c for c, text, _ in agent.tg.sent if text.startswith("weekly")] == [ASKER, ASKER, ASKER]
+    # a script's own messages too (outcome.carry_out through the same rule)
+    agent.tg.sent.clear()
+    run(agent.outcome.carry_out({"send": [{"to": "fm", "text": "from the script"}]}, "reports", Origin(ASKER, requested=True)))
+    assert [c for c, *_ in agent.tg.sent] == [ASKER]
+    # a person answered in a chat keeps owner and fm: only a requested job is held to its chat
+    plain = next(t for t in tb.tool_objects(Person(ASKER, "Asker", "fm"), ASKER, False) if t.name == "send_message")
+    assert plain.input_schema["properties"]["to"]["enum"] == ["here", "owner", "fm"]
 
 
 def test_an_ai_job_without_a_name_switches_its_skill_off(tmp_path):

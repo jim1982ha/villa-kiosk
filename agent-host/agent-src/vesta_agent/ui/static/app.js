@@ -197,42 +197,46 @@ function rulesForms(doc, tabs, jobs = []) {
   // acting
   const acting = card("Acting on the villa",
     "Off: the agent informs only. On: it may act, within the rules below.",
-    h("label", { class: "switch" }, h("input", { type: "checkbox", checked: f.act_enabled, onchange: on((t) => (f.act_enabled = t.checked)) }), "The agent may act on the villa"),
-    h("div", { class: "grid" }, field("An Approve button works for (minutes)",
-      h("input", { type: "number", min: 1, max: 1440, value: f.approval_ttl_minutes, oninput: on((t) => (f.approval_ttl_minutes = num(t.value))) }))));
+    h("div", { class: "inline" },
+      h("label", { class: "switch" }, h("input", { type: "checkbox", checked: f.act_enabled, onchange: on((t) => (f.act_enabled = t.checked)) }), "The agent may act on the villa"),
+      field("An Approve button works for (minutes)",
+        h("input", { type: "number", min: 1, max: 1440, value: f.approval_ttl_minutes, oninput: on((t) => (f.approval_ttl_minutes = num(t.value))) }))));
 
   // the AI
   const sel = (opts, value, set) => h("select", { onchange: on((t) => set(t.value)) },
     Object.entries(opts).map(([k, l]) => h("option", { value: k, selected: k === value }, l)));
-  const ai = card("The AI", "How the agent thinks and what one reply may cost.",
-    h("div", { class: "grid" },
-      field("Brain", sel(PROFILES, f.settings.profile, (v) => (f.settings.profile = v))),
-      field("Limit per reply (USD)", h("input", { type: "number", step: "0.05", min: 0.05, value: f.settings.reply_limit_usd, oninput: on((t) => (f.settings.reply_limit_usd = num(t.value))) }),
-        "A reply that reaches it stops and offers Continue."),
-      field("New conversation", sel(RESETS, f.settings.conversation_reset, (v) => (f.settings.conversation_reset = v)))),
-    h("label", { class: "switch" }, h("input", { type: "checkbox", checked: f.settings.web_search, onchange: on((t) => (f.settings.web_search = t.checked)) }), "Web search (weather warnings, manuals)"));
-
   // AI jobs: each skill's scheduled AI work, with its own brain and spending limit
   f.settings.jobs = f.settings.jobs || {};
-  // the same fields as "The AI" (label above, same grid), one block per job
-  const jobsList = h("div", { class: "jobs" });
-  const drawJobs = () => jobsList.replaceChildren(...jobs.map((j) => {
-    const cur = f.settings.jobs[j.name];
-    const head = h("div", { class: "job-head" },
-      h("div", {}, h("h3", {}, j.name), h("div", { class: "muted" }, `${j.skill} · ${j.when}${j.on_request ? " · can be asked for in a chat" : ""}`)),
-      cur ? h("button", { class: "btn ghost", title: "Stop this job", onclick: () => { delete f.settings.jobs[j.name]; drawJobs(); markDirty(); } }, "Stop")
-          : h("button", { class: "btn primary", onclick: () => { f.settings.jobs[j.name] = { ...j.default }; drawJobs(); markDirty(); } }, "Set"));
-    if (!cur) return h("div", { class: "job" }, head, h("p", { class: "muted" }, "Not set: this job does not run."));
-    return h("div", { class: "job" }, head,
-      h("div", { class: "grid" },
-        field("Brain", sel(PROFILES, cur.profile, (v) => (cur.profile = v))),
-        field("Limit per run (USD)", h("input", { type: "number", step: "0.5", min: 0.05, value: cur.limit_usd,
-                                                  oninput: on((t) => (cur.limit_usd = num(t.value))) }),
-              "A run that reaches it stops; a report is still sent.")));
-  }));
-  drawJobs();
-  const jobsCard = card("AI jobs", "The skills' scheduled work done by the AI, each with its own brain and spending limit per run. A job that is not set does not run.",
-    jobsList);
+  // The AI: one table, one row per piece of AI work (chat answers, then each skill's AI job), like
+  // "What the agent may do"; then the conversation settings.
+  const aiBody = h("tbody");
+  const limitInput = (value, set, label) => h("input", { type: "number", step: "0.05", min: 0.05, value, "aria-label": label,
+                                                          oninput: on((t) => set(num(t.value))) });
+  const drawAi = () => aiBody.replaceChildren(
+    h("tr", {},
+      h("td", {}, h("b", {}, "Chat answers"), h("div", { class: "muted" }, "replies in the chats; a reply at its limit offers Continue")),
+      h("td", {}, sel(PROFILES, f.settings.profile, (v) => (f.settings.profile = v))),
+      h("td", {}, limitInput(f.settings.reply_limit_usd, (v) => (f.settings.reply_limit_usd = v), "Limit per reply (USD)")),
+      h("td", { class: "x" })),
+    ...jobs.map((j) => {
+      const cur = f.settings.jobs[j.name];
+      const what = h("td", {}, h("b", {}, j.name),
+        h("div", { class: "muted" }, `${j.skill} · ${j.when}${j.on_request ? " · can be asked for in a chat" : ""}`));
+      if (!cur) {
+        return h("tr", {}, what, h("td", { colspan: 2, class: "muted" }, "Not set: this job does not run."),
+          h("td", { class: "x" }, h("button", { class: "btn icon ghost", title: "Set this job", onclick: () => { f.settings.jobs[j.name] = { ...j.default }; drawAi(); markDirty(); } }, "+")));
+      }
+      return h("tr", {}, what,
+        h("td", {}, sel(PROFILES, cur.profile, (v) => (cur.profile = v))),
+        h("td", {}, limitInput(cur.limit_usd, (v) => (cur.limit_usd = v), `Limit per run of ${j.name} (USD)`)),
+        h("td", { class: "x" }, h("button", { class: "btn icon ghost", title: "Stop this job", onclick: () => { delete f.settings.jobs[j.name]; drawAi(); markDirty(); } }, "×")));
+    }));
+  drawAi();
+  const ai = card("The AI", "Which brain does each piece of work, and what one run may cost. An AI job that is not set does not run; a report that reaches its limit is still sent with what is done.",
+    h("table", { class: "rows ai" }, h("thead", {}, h("tr", {}, ["Work", "Brain", "Limit (USD)", ""].map((x) => h("th", {}, x)))), aiBody),
+    h("div", { class: "inline spaced" },
+      field("New conversation", sel(RESETS, f.settings.conversation_reset, (v) => (f.settings.conversation_reset = v))),
+      h("label", { class: "switch" }, h("input", { type: "checkbox", checked: f.settings.web_search, onchange: on((t) => (f.settings.web_search = t.checked)) }), "Web search (weather warnings, manuals)")));
   const missing = jobs.filter((j) => !(f.settings.jobs || {})[j.name]).map((j) => j.name);
 
   // people
@@ -295,7 +299,7 @@ function rulesForms(doc, tabs, jobs = []) {
   };
   setBar({ save, discard: () => rules("forms"), idle: "Changes apply within seconds, no restart." });
   fill($view, tabs, doc.problems.length ? problemsBox(doc.problems, "To fix in this file:") : null, probs,
-    jobsBanner(missing, () => rules("forms")), acting, people, chats, services, devices, lists, ai, jobsCard);
+    jobsBanner(missing, () => rules("forms")), acting, people, chats, services, devices, lists, ai);
 }
 
 // ---------------------------------------------------------------- skills
@@ -322,6 +326,8 @@ async function newSkill() {
   catch (e) { alert(e.problems.join("\n")); }
 }
 
+let filesOpen = false;
+
 async function openSkill(name, pane, info, path = "SKILL.md") {
   const { files } = await api("GET", `api/skills/${encodeURIComponent(name)}/files`);
   if (!files.some((x) => x.path === path)) path = files.length ? files[0].path : null;
@@ -337,7 +343,21 @@ async function openSkill(name, pane, info, path = "SKILL.md") {
     const f = await api("GET", `api/skills/${encodeURIComponent(name)}/file?path=${encodeURIComponent(p)}`);
     ta.value = f.content; fileRev = f.rev; dirty = false; showBar(); fill(probs);
   };
-  const fileBtns = h("div", { class: "files" }, files.map((x) => h("button", { class: x.path === path ? "on" : "", onclick: () => { if (x.path !== path && guard()) openSkill(name, pane, info, x.path); } }, x.path)));
+  // one line of files while collapsed (the open one first, so it always shows); a button shows them all,
+  // and appears only when they do not fit on that line. Open or closed is kept from skill to skill.
+  const fileList = h("div", { class: "files" + (filesOpen ? "" : " collapsed") }, files.map((x) => h("button", { class: x.path === path ? "on" : "", onclick: () => { if (x.path !== path && guard()) openSkill(name, pane, info, x.path); } }, x.path)));
+  const more = h("button", { class: "btn ghost files-more", hidden: true, onclick: () => {
+    filesOpen = !filesOpen; fileList.classList.toggle("collapsed", !filesOpen); fits(); } });
+  const fits = () => {
+    const overflow = fileList.scrollHeight > fileList.clientHeight + 1;
+    more.hidden = !filesOpen && !overflow;
+    more.textContent = filesOpen ? "Show fewer files" : `All ${files.length} files`;
+  };
+  // measured after layout and on a window resize (a ResizeObserver here loops: the button changes the width it watches)
+  requestAnimationFrame(fits);
+  const onResize = () => (fileList.isConnected ? fits() : window.removeEventListener("resize", onResize));
+  window.addEventListener("resize", onResize);
+  const fileBtns = h("div", { class: "files-row" }, fileList, more);
   const save = async () => {
     try {
       const r = await api("PUT", `api/skills/${encodeURIComponent(name)}/file?path=${encodeURIComponent(path)}`, { content: ta.value, rev: fileRev });

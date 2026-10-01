@@ -131,12 +131,18 @@ ul.plain li:last-child { border-bottom: 0; }
 
 /* ---- skills */
 .skills { display: grid; grid-template-columns: 280px 1fr; gap: 16px; align-items: start; }
+.skills > * { min-width: 0; }   /* a long line in the editor scrolls inside it, never widens the page */
 @media (max-width: 760px) { .skills { grid-template-columns: 1fr; } }
 .skill-item { display: block; width: 100%; text-align: left; background: none; border: 1px solid transparent; border-radius: var(--radius); padding: 10px 12px; cursor: pointer; }
 .skill-item:hover { background: var(--bg-input); }
 .skill-item.on { border-color: var(--accent); background: var(--accent-soft); }
 .skill-item .d { color: var(--text-secondary); font-size: var(--text-xs); margin-top: 3px; }
-.files { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.files-row { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 12px; }
+.files { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; min-width: 0; }
+/* collapsed: one row of 34px buttons; the open file is moved first so it is never the hidden one */
+.files.collapsed { max-height: 34px; overflow: hidden; }
+.files.collapsed button.on { order: -1; }
+.files-more { white-space: nowrap; min-height: 34px; padding: 6px 12px; font-size: 12px; }
 .files button { font-family: var(--font-mono); font-size: 12px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--hairline); background: none; cursor: pointer; min-height: 34px; }
 .files button.on { border-color: var(--accent); background: var(--accent-soft); }
 
@@ -152,8 +158,17 @@ ul.plain li:last-child { border-bottom: 0; }
 .push-right { margin-left: auto; }
 
 /* AI jobs: the same fields and grid as "The AI", one block per job */
-.jobs { display: grid; gap: 18px; }
-.job { display: grid; gap: 12px; padding-top: 16px; border-top: 1px solid var(--hairline); }
-.job:first-child { padding-top: 0; border-top: 0; }
-.job-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
-.job-head h3 { margin: 0; font-family: var(--font-display); font-weight: 500; font-size: var(--text-md); }
+/* a switch and a field side by side on one line; they stack when the screen is too narrow */
+.inline { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 32px; }
+.inline label.field { min-width: 220px; }
+/* the AI table: the brain menu and the limit stay usable on a phone */
+table.rows td select, table.rows td input { width: 100%; min-width: 0; }
+/* on a phone each AI row puts the work on its own line, its brain and limit below it */
+@media (max-width: 600px) {
+  table.rows.ai thead { display: none; }
+  table.rows.ai tr { display: grid; grid-template-columns: 1fr 88px 44px; gap: 6px 8px; padding: 10px 0; border-top: 1px solid var(--hairline); }
+  table.rows.ai tr:first-child { border-top: 0; }
+  table.rows.ai td { padding: 0; }
+  table.rows.ai td:first-child { grid-column: 1 / -1; }
+  table.rows.ai td[colspan] { grid-column: span 2; }
+}

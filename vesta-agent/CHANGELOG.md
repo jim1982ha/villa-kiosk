@@ -1,3 +1,14 @@
+## 0.12.6
+
+### Changed
+- **The AI** is one section, laid out like "What the agent may do": one line per piece of work (chat answers, then each AI job) with its Brain and its Limit (USD). A job that is not set shows "+"; "×" stops it. On a phone, each line puts the work above its brain and limit.
+- "The agent may act on the villa" and the Approve minutes sit on one line, as do "New conversation" and "Web search" (they stack on a narrow screen).
+- **Skills:** the file list of a skill shows one line; "All N files" shows the rest ("Show fewer files" folds them back). The open file is always on that line.
+
+### Fixed
+- **A report asked for in a chat comes back to that chat, and only there.** Before, the agent was only told to; it could still send the page to the facility manager's chat (the weekly's own steps name it). Now everything such a report sends, including the owner's lines, goes to the chat that asked.
+- On a phone, a skill's editor made the page wider than the screen.
+
 ## 0.12.5
 
 ### Changed

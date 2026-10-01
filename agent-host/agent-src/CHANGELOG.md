@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.6 (1 October 2026)
+
+- A job asked for in a chat sends only to that chat: `Origin.requested` makes routing send every `to` (here, owner, fm) there, for send_message and for its scripts' results; send_message offers only `here`.
+- UI: The AI and the AI jobs are one table (Work / Brain / Limit), stacked per row on a phone; the AI jobs card is gone.
+- UI: a switch and its field share one line (Acting on the villa; New conversation and Web search).
+- UI: a skill's file list is folded to one line, with "All N files" when it does not fit; the open file comes first.
+- UI: the skills grid no longer widens the page on a phone; the error reporter ignores the browser's "ResizeObserver loop" notice.
+
 ## 0.6.5 (1 October 2026)
 
 - UI: the AI jobs card uses The AI card's fields and grid (one block per job, Set / Stop) instead of a table.

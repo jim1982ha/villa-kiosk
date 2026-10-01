@@ -158,9 +158,12 @@ class Toolbox:
         return out
 
     # ------------------------------------------------------------------ build
-    def tool_objects(self, person: Person | None, chat_id: int | None, include_web: bool) -> list:
+    def tool_objects(self, person: Person | None, chat_id: int | None, include_web: bool,
+                     requested: bool = False) -> list:
+        """`requested`: a job a person asked for in chat_id; all it sends goes there (routing.Origin)."""
+        origin = Origin(chat_id, requested) if chat_id is not None else None
         tools = [self._proxy(n) for n in self.read_tool_names()]
-        tools += [self._call_service(person, chat_id), self._read_skill(), self._run_script(chat_id), self._send(chat_id),
+        tools += [self._call_service(person, chat_id), self._read_skill(), self._run_script(origin), self._send(origin),
                   self._status(), self._save_file()]
         if person is not None and chat_id is not None and self.start_job:
             # a person asking, in a chat: never a job (even one started from a chat), so no job starts another
@@ -169,8 +172,9 @@ class Toolbox:
             tools.append(self._ticket())
         return tools
 
-    def server(self, person: Person | None, chat_id: int | None, include_web: bool):
-        return create_sdk_mcp_server(name=SERVER, version=__version__, tools=self.tool_objects(person, chat_id, include_web))
+    def server(self, person: Person | None, chat_id: int | None, include_web: bool, requested: bool = False):
+        return create_sdk_mcp_server(name=SERVER, version=__version__,
+                                     tools=self.tool_objects(person, chat_id, include_web, requested))
 
     def _proxy(self, name: str):
         t = self.server_tools[name]
@@ -291,7 +295,7 @@ class Toolbox:
             return _ok(SKILL_PREFACE + f"Scripts you may run for this skill: {', '.join(scripts) or 'none'}.\n\n" + body)
         return handler
 
-    def _run_script(self, chat_id: int | None):
+    def _run_script(self, origin: Origin | None):
         schema = {"type": "object", "properties": {
             "skill": {"type": "string"}, "script": {"type": "string"},
             "args": {"type": "array", "items": {"type": "string"}},
@@ -328,7 +332,7 @@ class Toolbox:
                 except ValueError:
                     res = None
                 if isinstance(res, dict) and (res.get("send") or res.get("actions") or res.get("siren_gate")):
-                    done = await self.carry_out(res, sk, Origin(chat_id) if chat_id is not None else None)
+                    done = await self.carry_out(res, sk, origin)
                     out = (f"[Carried out by the VESTA Agent: {done['sent']} message(s) sent, {done['tickets']} ticket(s) "
                            f"created, {done['resolved']} closed. Do not send or create them again.]\n") + out
             text = self.parts.serve(key, out, part)
@@ -384,25 +388,31 @@ class Toolbox:
             return _ok(f"Saved {name}.")
         return handler
 
-    def _send(self, chat_id: int | None):
+    def _send(self, origin: Origin | None):
         # ⚠️ "HERE" IS THE CHAT A PERSON ASKED IN. Without it a report asked for in the
         # group went to the fm chat (a private chat on the villa) and the group got only
         # "report sent" (2026-09-30). A scheduled job has no such chat: owner or fm only.
-        targets = (["here"] if chat_id is not None else []) + ["owner", "fm"]
+        # A job asked for in a chat can send only there (routing.Origin.requested).
+        chat_id = origin.chat if origin else None
+        targets = ["here"] if origin and origin.requested else (["here"] if origin else []) + ["owner", "fm"]
         schema = {"type": "object", "properties": {
             "to": {"type": "string", "enum": targets}, "text": {"type": "string"},
             "attachment": {"type": "string", "description": "A file name in the out folder (an HTML report page), optional."}},
             "required": ["to", "text"]}
-        desc = ("Send a message, with a file attached if needed. "
-                + ("to=here: the chat of the person you are answering; use it for anything they asked for (a report "
-                   "they requested goes here, not to owner or fm). " if chat_id is not None else "")
-                + "to=owner / to=fm: the configured owner or facility manager chat, for scheduled reports and digests. "
-                  "A plain answer needs no tool: your reply is sent for you.")
+        if origin and origin.requested:
+            desc = ("Send a message, with a file attached if needed, to=here: the chat this job was asked for in. "
+                    "Everything this job sends goes there.")
+        else:
+            desc = ("Send a message, with a file attached if needed. "
+                    + ("to=here: the chat of the person you are answering; use it for anything they asked for (a report "
+                       "they requested goes here, not to owner or fm). " if chat_id is not None else "")
+                    + "to=owner / to=fm: the configured owner or facility manager chat, for scheduled reports and digests. "
+                      "A plain answer needs no tool: your reply is sent for you.")
 
         @tool("send_message", desc, schema)
         async def handler(args: dict) -> dict:
             to = args.get("to")
-            chat = Routing(self.policy).target(to, Origin(chat_id) if chat_id is not None else None)
+            chat = Routing(self.policy).target(to, origin)
             if not chat:
                 return _err(f"No {to} chat is configured.")
             att = args.get("attachment")

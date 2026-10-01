@@ -24,6 +24,8 @@
       report("could not load " + src.split("/").pop());
       return;
     }
+    // The browser's notice that a layout watcher deferred a callback is not a failure (the page draws fine).
+    if (/^ResizeObserver loop/.test(e.message || "")) return;
     report((e.message || "error") + (e.filename ? " at " + e.filename.split("/").pop() + ":" + e.lineno : ""));
   }, true);
   window.addEventListener("unhandledrejection", function (e) {

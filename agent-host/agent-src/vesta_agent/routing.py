@@ -20,8 +20,13 @@ TARGETS = ("here", "owner", "fm")
 
 @dataclass(frozen=True)
 class Origin:
-    """The chat a person is being answered in: where `here` points."""
+    """The chat a person is being answered in: where `here` points.
+
+    `requested`: a job a person asked for in this chat (a report from the group). Everything it sends
+    goes back to this chat, whatever the job's own steps name (owner, fm): the person who asked gets the
+    result, and nothing goes to a chat nobody asked from (owner, 2026-10-01)."""
     chat: int
+    requested: bool = False
 
 
 class Routing:
@@ -30,6 +35,8 @@ class Routing:
 
     def target(self, to: str | None, origin: Origin | None = None) -> int | None:
         """Rules 1 and 2. None when there is nowhere to send it (no origin for `here`, an unset role chat)."""
+        if origin and origin.requested and to in TARGETS:
+            return origin.chat
         if to == "here":
             return origin.chat if origin else None
         if to in ("owner", "fm"):

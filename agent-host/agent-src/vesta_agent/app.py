@@ -555,13 +555,13 @@ class Vesta:
         except (KeyError, IndexError, ValueError):
             pass                        # a prompt with other braces is used as written
         if origin:
-            prompt += ("\n\nThis was asked for in a chat, not on schedule: send the result there (send_message "
-                       "to=here), not to its usual chat.")
+            prompt += ("\n\nThis was asked for in a chat, not on schedule: everything you send goes to that chat "
+                       "(send_message to=here), including what the steps above address to owner or fm.")
         if not self.server_tools:
             await self.refresh_server_tools()
         started = datetime.now(timezone.utc).isoformat()
         tb = self.toolbox()
-        server = tb.server(None, origin.chat if origin else None, False)
+        server = tb.server(None, origin.chat if origin else None, False, requested=origin is not None)
         allowed = set(tb.model_tool_names(False))
         log.info("AI job %s started (%s, limit %g USD)%s", name, cfg["profile"], cfg["limit_usd"],
                  " on request" if origin else "")
@@ -583,7 +583,7 @@ class Vesta:
         if name not in self.policy().jobs:
             return f"The {name} job is not set up yet (VESTA Agent page → Rules → AI jobs): it cannot run."
         sk, job = found[0]
-        asyncio.create_task(self._safe(self.run_model_job(sk, job, Origin(int(chat)))))
+        asyncio.create_task(self._safe(self.run_model_job(sk, job, Origin(int(chat), requested=True))))
         return f"Started {name}: the result will be sent here when it is ready (a few minutes)."
 
     async def housekeeping(self) -> None:
