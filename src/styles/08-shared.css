@@ -185,18 +185,6 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
 .cockpit-tile-line { font-size: var(--text-xs); }
 .cockpit-tile-line.is-warn { color: var(--status-warning); }
 
-/* "Energy today": the figure, and a shortcut to the Energy window. */
-.cockpit-energy-tile {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  width: 100%; margin-top: 4px; padding: 10px 12px; border-radius: 12px;
-  background: var(--bg-input); border: none; color: inherit; font: inherit; text-align: left; cursor: pointer;
-}
-.cockpit-energy-tile:hover, .cockpit-energy-tile:focus-visible {
-  background: color-mix(in srgb, var(--accent) 12%, var(--bg-input));
-}
-.cockpit-energy-open { display: inline-flex; align-items: center; gap: 2px; font-size: var(--text-sm); }
-.cockpit-energy-value { font-size: var(--text-display-sm); font-weight: 600; color: var(--text-primary); margin: 0; }
-
 .cockpit-activity-list { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
 /* Two columns where there is width for them, so the same 20 entries are read
    without scrolling. CSS columns rather than a grid: the feed is chronological,

@@ -42,7 +42,9 @@
      smaller than the category/alert pills beside it. Fixed height + flex
      centering (align-items: center above) matches .hud-group exactly
      instead, and tracks it automatically if --hud-pill-h ever changes. */
-  height: var(--hud-pill-h);
+  /* max(): on a phone the pills shrink to 42px but the app-icon tile keeps
+     the left rail's width (--hud-rail-w) — the chip is as tall as its tile. */
+  height: max(var(--hud-pill-h), var(--hud-rail-w));
   /* Left padding matches .hud-stack's own 4px (not the right side's 16px,
      kept for the villa-name text) so the home icon's left edge lines up
      exactly under the 1F/2F floor buttons directly below it — both are now
@@ -62,7 +64,17 @@
      switch below the bar. It truncates instead (see .hud-title), and the
      progressive rules further down drop the clock, then the name entirely,
      before it can get that tight. */
-  white-space: nowrap; min-width: 0; overflow: hidden;
+  white-space: nowrap; min-width: 0;
+}
+/* ⚠️ THE TEXT CLIPS, NOT THE CHIP (2.496.242). `overflow: hidden` used to sit
+   on .hud-brand itself, which also cut off the app-icon tile's shadow — the
+   shadow it now shares with the floor block below (see .hud-home-btn). The
+   villa name, connection dot and clock clip here instead; stretched to the
+   chip's full height so the name's halo and the clock's pill are not clipped
+   top and bottom. */
+.hud-brand-text {
+  display: flex; align-items: center; gap: inherit; align-self: stretch;
+  min-width: 0; overflow: hidden;
 }
 /* The name used to be legible because it sat on the brand capsule's glass.
    With the capsule gone it is type directly over the villa render, which can
@@ -135,6 +147,23 @@
 .hud-right-inline .icon-btn.active { filter: none; }
 
 .hud-right-inline { display: flex; align-items: center; gap: 8px; }
+
+/* Signed-in badge (2.496.242): the role's letter(s) in a circle, the same
+   40px as the icons beside it, last on the right. The soft accent laid over
+   the solid dialog surface — opaque, so the letter keeps its contrast over
+   any part of the map — in the theme's own tokens: light, dark and night. */
+.hud-group .icon-btn.hud-role-badge {
+  border-radius: 50%;
+  background: linear-gradient(var(--accent-soft), var(--accent-soft)), var(--bg-modal);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+  color: var(--text-primary);
+  font-family: var(--font-display); font-size: var(--text-md); font-weight: 600;
+  letter-spacing: 0.02em; line-height: 1;
+}
+.hud-group .icon-btn.hud-role-badge:hover {
+  background: linear-gradient(var(--bg-input), var(--bg-input)),
+              linear-gradient(var(--accent-soft), var(--accent-soft)), var(--bg-modal);
+}
 
 /* Overflow menu: on phones the right-side controls (view mode, Settings,
    switch profile) collapse into this single button + dropdown. Hidden on
@@ -220,12 +249,19 @@
 }
 .hud-group.hud-group-scroll::-webkit-scrollbar { display: none; }
 .hud-group.hud-group-scroll .icon-btn { flex: 0 0 auto; }
-/* Time sits inside the brand chip, right of the villa name — a hairline
-   divider separates it instead of a nested pill-in-pill. */
+/* Time, right of the villa name. ⚠️ ITS OWN PILL (2.496.242): as bare
+   secondary-grey text over the 3D map it was reported barely readable — the
+   name has a halo, the time had nothing. The title's colour, a step larger,
+   tabular digits so 21:59 → 22:00 does not shift the bar, on the same section
+   material as every other top-bar pill (--chip-bg, blur, hairline) so it reads
+   over a bright sky and a night scene alike, in every theme. */
 .hud-clock {
-  font-variant-numeric: tabular-nums; font-size: var(--text-md); font-weight: 400;
-  color: var(--text-secondary);
-  padding-left: 10px; margin-left: 2px; border-left: 1px solid var(--hairline);
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums; font-size: var(--text-lg); font-weight: 500; line-height: 1.2;
+  color: var(--text-primary);
+  padding: 3px 10px; border-radius: var(--radius-pill);
+  background: var(--chip-bg); border: 1px solid var(--hairline);
+  backdrop-filter: blur(20px) saturate(1.1);
 }
 
 /* Connection status sits right next to the villa name — just a coloured dot. */
@@ -243,6 +279,16 @@
 /* The Rooms dial button + the 1F/2F floor toggle now flow together in the
    left-column .hud-stack (see HUD). "1F"/"2F" are text, not icons. */
 .hud-floor-btn { font-size: var(--text-sm); font-weight: 700; letter-spacing: 0.02em; }
+/* The floor block is the left rail's width (--hud-rail-w, shared with the
+   app-icon tile above it); its buttons fill it. ::before, not ::after, for
+   the invisible 44px touch target — ::after is .has-hold-action's dot. */
+.hud-left-col .hud-stack { width: var(--hud-rail-w); }
+.hud-left-col .hud-stack .icon-btn { width: 100%; }
+.hud-floor-btn::before {
+  content: ""; position: absolute; top: 50%; left: 50%;
+  width: var(--touch-min); height: var(--touch-min);
+  transform: translate(-50%, -50%);
+}
 
 /* Rooms dial popup: tappable floating chips on arcs beside the button (see
    RadialRoomMenu). The full-screen backdrop catches an outside tap to dismiss;
@@ -337,9 +383,21 @@
      pill it read as a small icon floating in a tall row rather than a peer of
      the section beside it. One value, tracking the pill, so the two cannot
      drift apart again. */
-  height: var(--hud-pill-h); width: auto;
-  background: none; border: none;
-  border-radius: 10px; cursor: pointer; color: inherit;
+  /* ⚠️ THE LEFT RAIL (2.496.242): the tile is --hud-rail-w square with the
+     floor block's radius and shadow, so the two read as one column — they
+     were a 44px app-icon plate (its own ~10px corners, no shadow) above a
+     50px glass block (18px corners, --elev-2). */
+  height: var(--hud-rail-w); width: var(--hud-rail-w);
+  background: none; border: none; padding: 0;
+  border-radius: var(--panel-radius); cursor: pointer; color: inherit;
+}
+/* The artwork's own plate is clipped to the panel radius (larger than its
+   22% corners, so the cut is clean); the inset ring is the floor block's
+   1px hairline. */
+.hud-home-btn .vesta-appicon {
+  width: 100%; height: 100%;
+  border-radius: var(--panel-radius);
+  box-shadow: var(--elev-2), inset 0 0 0 1px var(--hairline);
 }
 .hud-home-btn:hover, .hud-home-btn:focus-visible { background: var(--bg-input); }
 .hud-home-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

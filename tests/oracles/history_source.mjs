@@ -101,7 +101,7 @@ console.log("\n  the callers:");
   const files = walk(SRC).filter((f) => /\/(components|hooks)\//.test(f));
   const readers = files.filter((f) => /\buseHistorySource\(/.test(readFileSync(f, "utf8"))).map((f) => f.slice(SRC.length)).sort();
   ck(`found every reader of history, all through the source (${readers.length})`,
-     readers.join() === "components/cockpit/CockpitModal.tsx,components/panels/CameraPanel.tsx,components/panels/EnergyPanel.tsx,components/panels/NumericHistory.tsx,components/panels/WeatherPanel.tsx,hooks/useStateHistory.ts", readers);
+     readers.join() === "components/panels/CameraPanel.tsx,components/panels/EnergyPanel.tsx,components/panels/NumericHistory.tsx,components/panels/WeatherPanel.tsx,hooks/useStateHistory.ts", readers);
   const bypass = files.filter((f) => /getStatisticsDuringPeriod\(|history\/period|haHistoryPort\(|loadHistory\(|loadOne\(/.test(readFileSync(f, "utf8"))
     && !f.endsWith("hooks/useHistorySource.ts")).map((f) => f.slice(SRC.length));
   ck("no panel reaches Home Assistant's history around the source", bypass.length === 0, bypass);

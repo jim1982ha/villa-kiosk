@@ -5,9 +5,10 @@
 //              the right-side overflow menu instead — see hud-overflow) so
 //              the category row keeps its width
 //   • Center — category filter, then a label-size stepper (+/-)
-//   • Right  — unavailable-devices + Facility alerts, then the profile chip
-//              and Settings — grouped together since they're all "who's
-//              signed in / what needs attention" info, not map controls
+//   • Right  — the Cockpit (the robot when a VESTA Agent is configured) +
+//              Facility alerts, then Settings and, last, the round signed-in
+//              badge — grouped together since they're all "who's signed in /
+//              what needs attention" info, not map controls
 // A left control column floats below the brand: the vertical floor toggle
 // (1F / 2F) — a plain tap switches floor as before; a LONG-PRESS on either
 // button opens the radial rooms dial pre-scoped to that floor, replacing the
@@ -34,7 +35,7 @@ import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { isCategoryAllowed } from "@/auth/permissions";
-import { ROLE_LABELS } from "@/auth/roles";
+import { ROLE_LABELS, ROLE_INITIALS } from "@/auth/roles";
 import { resolveSiteTitle } from "@/config/AppConfig";
 import { VestaAppIcon } from "@/components/VestaMark";
 import { CATEGORY_ORDER, CATEGORY_LABELS, CATEGORY_ICONS } from "@/config/EntityCategories";
@@ -96,7 +97,8 @@ interface Props {
    *  `manageFacility` — the button is then not rendered at all. */
   onOpenFacility?: () => void;
   /** Open the VESTA Agent area. Undefined when the profile lacks `viewAgent`
-   *  or the agent is not configured — the button is then not rendered. */
+   *  or the agent is not configured — the Cockpit button then keeps its ⚠
+   *  icon and the Cockpit's footer has no "VESTA Agent" button. */
   onOpenAgent?: () => void;
   /** Long-press (or hold Enter/Space) a category filter icon — list every
    *  device in that category, the same group-modal every SummaryBar tile
@@ -495,20 +497,27 @@ export default function HUD({
                 looks exactly like the undersized icon this was reported as.
                 A couple of px shy of the box so the focus ring and the
                 has-hold-action dot still have somewhere to land. */}
-            <VestaAppIcon size={44} />
+            {/* size={null}: the rail width (--hud-rail-w) sizes it in CSS,
+                so the tile and the floor block under it are one number. */}
+            <VestaAppIcon size={null} />
           </button>
           <span id="home-btn-hint" className="sr-only">Hold Space (or right-click) to save the current view as the default</span>
-          <span className="hud-title">{title}</span>
-          <span
-            className={`conn-dot ${connClass}`}
-            title={`Connection: ${connection}`}
-            role="img"
-            aria-label={`Connection: ${connection}`}
-          >
-            <span className="dot" />
+          {/* The text clips here, not on .hud-brand: the app icon beside it
+              carries the left rail's shadow, which a clipping parent would
+              cut off (see .hud-brand-text). */}
+          <span className="hud-brand-text">
+            <span className="hud-title">{title}</span>
+            <span
+              className={`conn-dot ${connClass}`}
+              title={`Connection: ${connection}`}
+              role="img"
+              aria-label={`Connection: ${connection}`}
+            >
+              <span className="dot" />
+            </span>
+            {/* Time sits right next to the villa name + connection dot. */}
+            <span className="hud-clock">{clock}</span>
           </span>
-          {/* Time sits right next to the villa name + connection dot. */}
-          <span className="hud-clock">{clock}</span>
         </div>
         {homeFlash && (
           <div className="overview-hint hud-home-hint">
@@ -625,13 +634,20 @@ export default function HUD({
             category row) can't read as bigger/higher than its neighbours. */}
         <div className="hud-right">
           <div className="hud-right-inline hud-group">
+            {/* ONE button for the Cockpit and the agent (2.496.242): with an
+                agent configured the Cockpit's icon IS the robot — its count
+                (top right) stays the Cockpit's, the agent's presence dot sits
+                bottom right — and the agent's own window opens from the
+                Cockpit's footer. Without one, the ⚠ as before. */}
             <button
-              className={`icon-btn${attentionItems.length > 0 ? " has-alert" : ""}`}
+              className={`icon-btn${onOpenAgent ? " agent-btn" : ""}${attentionItems.length > 0 ? " has-alert" : ""}`}
               onClick={() => setCockpitOpen(true)}
-              title={attentionItems.length > 0 ? health.summary : "Cockpit — villa status at a glance"}
-              aria-label="Open Cockpit — villa status at a glance"
+              title={(attentionItems.length > 0 ? health.summary : "Cockpit — villa status at a glance")
+                + (onOpenAgent ? ` · ${agentTitle}` : "")}
+              aria-label={`Open Cockpit — villa status at a glance${onOpenAgent ? ` (${agentTitle})` : ""}`}
             >
-              <TriangleAlert size={24} />
+              {onOpenAgent ? <Bot size={24} /> : <TriangleAlert size={24} />}
+              {onOpenAgent && <span className={`agent-btn-dot ${agentOnline ? "online" : "offline"}`} aria-hidden="true" />}
               {attentionItems.length > 0 && (
                 <span className="icon-btn-count" aria-hidden="true">
                   {formatCountBadge(attentionItems.length)}
@@ -655,22 +671,6 @@ export default function HUD({
                 )}
               </button>
             )}
-            {onOpenAgent && (
-              <button
-                className={`icon-btn agent-btn${agentWaiting > 0 ? " has-alert" : ""}`}
-                onClick={onOpenAgent}
-                title={agentTitle}
-                aria-label={`Open the VESTA Agent area (${agentOnline ? "online" : "offline"})`}
-              >
-                <Bot size={24} />
-                <span className={`agent-btn-dot ${agentOnline ? "online" : "offline"}`} aria-hidden="true" />
-                {agentWaiting > 0 && (
-                  <span className="icon-btn-count" aria-hidden="true">
-                    {formatCountBadge(agentWaiting)}
-                  </span>
-                )}
-              </button>
-            )}
             {/* (The colour-legend button moved into the category row — it
                 explains those very colours. See .hud-cat-help.) */}
             {/* First-person / bird's-eye switch, right after Facility — both
@@ -681,22 +681,23 @@ export default function HUD({
                 this whole row collapses into the overflow menu, which
                 carries its own copy (see .hud-menu). */}
             <ViewControls viewMode={viewMode} onToggleViewMode={onToggleViewMode} />
-            {role && (
-              <span className="hud-profile" title={`Signed in as ${ROLE_LABELS[role]}`}>
-                <span className="hud-profile-name">{ROLE_LABELS[role]}</span>
-                <button
-                  className="icon-btn"
-                  onClick={beginSwitch}
-                  title="Switch profile"
-                  aria-label={`Signed in as ${ROLE_LABELS[role]} — switch profile`}
-                >
-                  <LogOut size={18} />
-                </button>
-              </span>
-            )}
             {canOpenSettings && (
               <button className="icon-btn" onClick={onOpenSettings} title="Settings" aria-label="Settings">
                 <Settings size={24} />
+              </button>
+            )}
+            {/* Who is signed in, as ONE round badge, last on the right
+                (2.496.242): the role's letter(s) in place of the name + exit
+                arrow. Same action as before — the profile switch, which keeps
+                the villa loaded under the PIN pad (ProfileContext.beginSwitch). */}
+            {role && (
+              <button
+                className="icon-btn hud-role-badge"
+                onClick={beginSwitch}
+                title={`Signed in as ${ROLE_LABELS[role]} — switch profile`}
+                aria-label={`Signed in as ${ROLE_LABELS[role]} — switch profile`}
+              >
+                <span aria-hidden="true">{ROLE_INITIALS[role]}</span>
               </button>
             )}
           </div>
@@ -754,8 +755,11 @@ export default function HUD({
                   className="hud-menu-item"
                   onClick={() => { setMenuOpen(false); setCockpitOpen(true); }}
                 >
-                  <TriangleAlert size={18} />
-                  <span>Cockpit{attentionItems.length > 0 ? ` (${formatCountBadge(attentionItems.length)})` : ""}</span>
+                  {onOpenAgent ? <Bot size={18} /> : <TriangleAlert size={18} />}
+                  <span>
+                    Cockpit{attentionItems.length > 0 ? ` (${formatCountBadge(attentionItems.length)})` : ""}
+                    {onOpenAgent ? ` · agent ${agentOnline ? "online" : "offline"}` : ""}
+                  </span>
                 </button>
                 {onOpenFacility && (
                   <button
@@ -765,19 +769,6 @@ export default function HUD({
                   >
                     <ClipboardList size={18} />
                     <span>Facility{facilityAttention > 0 ? ` (${formatCountBadge(facilityAttention)})` : ""}</span>
-                  </button>
-                )}
-                {onOpenAgent && (
-                  <button
-                    role="menuitem"
-                    className="hud-menu-item"
-                    onClick={() => { setMenuOpen(false); onOpenAgent(); }}
-                  >
-                    <Bot size={18} />
-                    <span>
-                      VESTA Agent · {agentOnline ? "online" : "offline"}
-                      {agentWaiting > 0 ? ` (${formatCountBadge(agentWaiting)})` : ""}
-                    </span>
                   </button>
                 )}
                 {/* Same control as the (hidden-on-mobile) inline Minus/Plus
@@ -860,6 +851,9 @@ export default function HUD({
         <CockpitModal
           onClose={() => setCockpitOpen(false)}
           onOpenEntity={(id) => { setCockpitOpen(false); onOpenEntity(id); }}
+          onOpenAgent={onOpenAgent}
+          agentOnline={agentOnline}
+          agentWaiting={agentWaiting}
         />
       )}
 

@@ -111,9 +111,7 @@
   .hud-clock { display: none; }
 }
 @media (max-width: 1000px) {
-  /* Then the profile's NAME (the logout icon beside it stays, so switching
-     profiles is still one click) and some chrome padding. */
-  .hud-profile .hud-profile-name { display: none; }
+  /* Then some chrome padding. */
   /* Sets --hud-side-pad too (not just padding) so .hud-left-col's left
      offset — which reads that same variable — stays lined up with the
      brand chip at this width tier as well. */

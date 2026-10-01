@@ -22,7 +22,7 @@
 import { useEffect, useMemo, useState, type ComponentType } from "react";
 import {
   TriangleAlert, AlertOctagon, MapPin, Building2, LayoutGrid,
-  Activity, Zap, RefreshCw, ChevronRight, X,
+  Activity, RefreshCw, ChevronRight, X, Bot,
 } from "lucide-react";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import SegmentedGroup from "@/components/common/SegmentedGroup";
@@ -32,17 +32,12 @@ import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { useFmData, fmWriteProblem } from "@/fm/FmDataContext";
 import InlineConfirm from "@/components/common/InlineConfirm";
-import { isCategoryAllowed, roleCan } from "@/auth/permissions";
+import { roleCan } from "@/auth/permissions";
 import { CATEGORY_LABELS, CATEGORY_ICONS, categorySurface } from "@/config/EntityCategories";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { fetchLogbookEvents } from "@/ha/HALogbookAPI";
-import { fetchEnergySetup, energyRequest, energyChanges, type EnergyWindowSetup } from "@/ha/HAEnergyAPI";
-import { useHistory } from "@/hooks/useHistory";
-import { useHistorySource } from "@/hooks/useHistorySource";
-import { usedToday } from "@/config/energyModel";
-import { localMidnight } from "@/utils/localDay";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
-import EnergyPanel from "@/components/panels/EnergyPanel";
+import { formatCountBadge } from "@/utils/countBadge";
 import { useVillaAttention } from "./useVillaAttention";
 import {
   buildCategoryTiles, buildRoomGroups, buildFloorGroups,
@@ -53,6 +48,14 @@ import type { Category } from "@/types/scene.types";
 export interface CockpitModalProps {
   onClose: () => void;
   onOpenEntity: (entityId: string) => void;
+  /** Open the VESTA Agent window. Undefined when no agent is configured or
+   *  the profile may not see it (AgentContext's `visible`, the rule the
+   *  top-bar robot icon used) — the footer button is then not rendered. */
+  onOpenAgent?: () => void;
+  /** The agent's presence and what waits for this profile's answer, for the
+   *  footer button's label. */
+  agentOnline?: boolean;
+  agentWaiting?: number;
 }
 
 const ATTENTION_ICON: Record<AttentionKind, typeof TriangleAlert> = {
@@ -73,7 +76,9 @@ interface PivotTile {
   stats: TileStats;
 }
 
-export default function CockpitModal({ onClose, onOpenEntity }: CockpitModalProps) {
+export default function CockpitModal({
+  onClose, onOpenEntity, onOpenAgent, agentOnline = false, agentWaiting = 0,
+}: CockpitModalProps) {
   const { entities, ws, entityFloorNumbers } = useHA();
   const { config, resolvedRooms } = useConfig();
   const { role } = useProfile();
@@ -86,8 +91,6 @@ export default function CockpitModal({ onClose, onOpenEntity }: CockpitModalProp
   // devices in X" view in the app already opens (room clusters on the map,
   // the bottom Summary bar's tiles), rather than a bespoke list here.
   const [pivotDrill, setPivotDrill] = useState<{ label: string; entityIds: string[]; icon: ComponentType<{ size?: number | string }> } | null>(null);
-  // The Energy window (the bottom bar's own), opened from "Energy today".
-  const [energyOpen, setEnergyOpen] = useState(false);
   const canControl = roleCan(role, "controlEntities");
   // Closing a fault from here is Facility work: the profiles that manage it.
   const canCloseFaults = roleCan(role, "manageFacility");
@@ -125,20 +128,6 @@ export default function CockpitModal({ onClose, onOpenEntity }: CockpitModalProp
     if (!Array.isArray(rawActivity)) return rawActivity;
     return buildActivityFeed(rawActivity, entities, config.entityMap, selectableIds);
   }, [rawActivity, entities, config.entityMap, selectableIds]);
-
-  // Energy today — the Energy window's own "Today so far" (energyModel.
-  // usedToday: consumed, grid + solar − export), shown only when the install
-  // has an Energy Dashboard AND a source with a reading today (a configured
-  // source pointing at an orphaned statistic is a real, confirmed case).
-  // Not asked at all for a profile without the energy category (the guest's).
-  const seesEnergy = role != null && isCategoryAllowed(role, "energy");
-  const { data: energySetup } = useHistory<EnergyWindowSetup | null>(
-    seesEnergy ? "energy-setup" : null, () => fetchEnergySetup(ws, (id) => id), null);
-  const today = localMidnight(Date.now());
-  const { data: energyToday } = useHistorySource(
-    seesEnergy && energySetup ? { hourly: energyRequest(energySetup, today, "hour") } : null);
-  const energy = energySetup && energyToday
-    ? usedToday(energySetup, energyChanges(energyToday.hourly), Date.now()) : null;
 
   // Firmware/add-on updates available — HA's own `update` domain already
   // tracks this per device AND per add-on (including this one). A small
@@ -257,20 +246,6 @@ export default function CockpitModal({ onClose, onOpenEntity }: CockpitModalProp
             })}
           </div>
 
-          {/* ── Energy today (only when it resolves) ───────────────── */}
-          {energy !== null && (
-            <>
-              <div className="settings-section-title"><Zap size={16} style={{ verticalAlign: -2 }} /> Energy today</div>
-              {/* A shortcut to the Energy window — the one the bottom bar's
-                  Energy tile opens — for the day this figure comes from. */}
-              <button type="button" className="cockpit-energy-tile" onClick={() => setEnergyOpen(true)}
-                aria-label={`Energy today: ${energy.toFixed(1)} kWh — open the Energy window`}>
-                <span className="cockpit-energy-value">{energy.toFixed(1)} <span className="muted body-text">kWh</span></span>
-                <span className="cockpit-energy-open muted">Energy <ChevronRight size={16} /></span>
-              </button>
-            </>
-          )}
-
           {/* ── Recent activity ─────────────────────────────────────── */}
           <div className="settings-section-title"><Activity size={16} style={{ verticalAlign: -2 }} /> Recent activity</div>
           {villaActivity === "loading" && <p className="muted body-text">Loading…</p>}
@@ -298,22 +273,22 @@ export default function CockpitModal({ onClose, onOpenEntity }: CockpitModalProp
         </div>
 
         <div className="modal-footer">
-          {/* Two slots, space-between (see .modal-footer): an empty left one. */}
-          <span />
+          {/* Two slots, space-between (see .modal-footer). The left one is
+              the VESTA Agent's door when there is an agent — placed the way
+              Settings places "Advanced Settings" (ModalFooter's `leading`: a
+              ghost button that leaves the dialog, never beside Close) —
+              and an empty spacer otherwise. */}
+          {onOpenAgent ? (
+            <button className="btn ghost" onClick={() => { onClose(); onOpenAgent(); }}
+              title={`VESTA Agent — ${agentOnline ? "online" : "offline"}`
+                + (agentWaiting > 0 ? `, ${agentWaiting} message${agentWaiting === 1 ? "" : "s"} to answer` : "")}>
+              <Bot size={18} /> VESTA Agent{agentWaiting > 0 ? ` (${formatCountBadge(agentWaiting)})` : ""}
+            </button>
+          ) : <span />}
           <button className="btn primary" onClick={onClose}>Close</button>
         </div>
       </div>
     </div>
-    {energyOpen && (
-      <EnergyPanel onClose={() => setEnergyOpen(false)} fallback={() => (
-        <SummaryGroupPanel
-          group={{ title: "Energy", icon: Zap, entityIds: categoryTiles.find((t) => t.category === "energy")?.entityIds ?? [] }}
-          canControl={false}
-          onClose={() => setEnergyOpen(false)}
-          onOpenEntity={(id) => { setEnergyOpen(false); onOpenEntity(id); }}
-        />
-      )} />
-    )}
     {pivotDrill && (
       <SummaryGroupPanel
         group={{ title: pivotDrill.label, icon: pivotDrill.icon, entityIds: pivotDrill.entityIds }}

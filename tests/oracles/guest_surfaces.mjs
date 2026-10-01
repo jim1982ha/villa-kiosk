@@ -2,7 +2,9 @@
 // The guest profile excludes the energy category and motion sensors
 // (binary_sensor), but four surfaces that are not an entity's own panel
 // showed them anyway: the Energy tile (and the Energy window it opens), the
-// Cockpit's "Energy today", the motion toast and the motion room glow / beam.
+// Cockpit's "Energy today" (removed from the Cockpit in 2.496.242 — the
+// Energy window is the one place for it), the motion toast and the motion
+// room glow / beam.
 // Each now asks the permission matrix. Components are .tsx (Node cannot import
 // them), so the rule is driven by value and each surface is pinned by source.
 import { register } from "node:module";
@@ -25,10 +27,8 @@ console.log("\n  every surface asks:");
 ck("the Energy tile (and so the Energy window) exists only when the profile may see energy",
    /if \(facts\.power && can\("energy"\)\) \{/.test(src("config/summaryTiles.ts")));
 const cockpit = src("components/cockpit/CockpitModal.tsx");
-ck("the Cockpit does not even fetch Energy today for such a profile",
-   /const seesEnergy = role != null && isCategoryAllowed\(role, "energy"\);/.test(cockpit)
-   && /useHistory<EnergyWindowSetup \| null>\(\s*seesEnergy \? "energy-setup" : null,/.test(cockpit)
-   && /useHistorySource\(\s*seesEnergy && energySetup \?/.test(cockpit));
+ck("the Cockpit does not fetch energy at all (its 'Energy today' block is gone)",
+   !/fetchEnergySetup|useHistorySource|usedToday|EnergyPanel/.test(cockpit));
 ck("the motion toast is skipped for a profile denied motion sensors",
    /const who = roleRef\.current;\s*if \(!who \|\| !isTypeAllowed\(who, "binary_sensor"\)\) return;/.test(src("pages/Dashboard.tsx")));
 ck("the 3D motion glow / beam is skipped under the role-filtered config",

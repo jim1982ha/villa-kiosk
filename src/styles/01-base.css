@@ -198,6 +198,15 @@
      brand guidelines' 40px without this would have overflowed the pill by 2px.
      The compact query's 42 is the same arithmetic at a 32px chip. */
   --hud-pill-h: 50px;
+  /* The LEFT RAIL's one width (2.496.242): the app-icon tile at the top left
+     and the 1F/2F floor block under it are both this wide, with the same
+     radius and shadow, so they read as one column. The floor block's own
+     width (40px button + 2×4px padding + 2×1px border) — the narrower of the
+     two, and the one whose buttons fit it exactly. NOT redeclared on phones:
+     the floor block keeps its 40px buttons there, so the tile keeps this too
+     (the bar is 52px tall, so a 50px tile fits it at every tier). Each floor
+     button's TOUCH target is 44px regardless (.hud-floor-btn::before). */
+  --hud-rail-w: 50px;
   /* One labelled form field, one rhythm. Three surfaces had grown their own
      numbers for the same idea — the Settings body (6px under a 13px label),
      the slider fields (8px) and the Facility forms (5px under a 12px one) —

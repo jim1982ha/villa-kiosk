@@ -67,5 +67,22 @@ console.log("\n  who asks:");
      && /visibleTo\(role\)/.test(src("components/cockpit/useVillaAttention.ts")));
 }
 
+console.log("\n  the signed-in badge:");
+{
+  // The top bar's round badge (2.496.242) shows the role's letters, and does
+  // what the name + exit arrow did: the profile switch.
+  const { ROLE_INITIALS, ROLE_ORDER } = await import("@/auth/roles");
+  ck("O for the owner, FM for the facility manager, G for a guest",
+     ROLE_INITIALS.owner === "O" && ROLE_INITIALS.ops === "FM" && ROLE_INITIALS.guest === "G", ROLE_INITIALS);
+  ck("  ...every profile has one, and no two share it",
+     ROLE_ORDER.every((r) => ROLE_INITIALS[r]) && new Set(ROLE_ORDER.map((r) => ROLE_INITIALS[r])).size === ROLE_ORDER.length);
+  const hud = readFileSync(new URL("../../src/components/hud/HUD.tsx", import.meta.url), "utf8");
+  ck("  ...the badge is the role's letters, opens the profile switch, and comes after Settings",
+     /className="icon-btn hud-role-badge"\s*onClick=\{beginSwitch\}/.test(hud)
+     && /\{ROLE_INITIALS\[role\]\}/.test(hud)
+     && hud.indexOf('aria-label="Settings"') < hud.indexOf("hud-role-badge")
+     && !/hud-profile/.test(hud));
+}
+
 done("✅ one table answers every role question; counts match their lists");
 

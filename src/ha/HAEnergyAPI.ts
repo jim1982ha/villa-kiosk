@@ -1,6 +1,5 @@
 // src/ha/HAEnergyAPI.ts
-// Home Assistant's Energy dashboard, as the Energy window and the Cockpit read
-// it: its setup (energy/get_prefs), where it computes cost (energy/info), and
+// Home Assistant's Energy dashboard, as the Energy window reads it: its setup (energy/get_prefs), where it computes cost (energy/info), and
 // — through the history source — the recorder's per-bucket `change` for each
 // statistic, the same number HA's own dashboard graphs are built from. What
 // those numbers MEAN (consumption, untracked, "today") is config/energyModel's.
@@ -13,7 +12,7 @@
 // ⚠️ A CONFIGURED SOURCE IS NOT A WORKING ONE: on a real villa the dashboard's
 // `stat_energy_from` pointed at a statistic an entity rename had orphaned. It
 // then has no rows, which energyModel reads as "no reading" — never 0 kWh — so
-// a figure built only on orphans is not shown at all (usedToday → null).
+// a figure built only on orphans is not shown at all.
 
 import type { HAWebSocket } from "./HAWebSocket";
 import { energySetup, type EnergyCostSetup } from "@/config/energyModel";

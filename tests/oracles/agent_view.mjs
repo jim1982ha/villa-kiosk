@@ -74,6 +74,24 @@ const dash = src("pages/Dashboard.tsx");
 ck("the top-bar button exists only when the agent is visible",
    /onOpenAgent=\{agentVisible \? /.test(dash));
 ck("  ...and so does the window", /\{agentOpen && agentVisible && \(/.test(dash));
+{
+  // ONE icon for the agent (2.496.242): no robot button of its own — the
+  // Cockpit's button becomes the robot, and the agent's window opens from the
+  // Cockpit's footer, behind the same visibility answer (Dashboard passes
+  // onOpenAgent only when agentVisible; HUD hands it straight on).
+  const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+  const hud = strip(src("components/hud/HUD.tsx"));
+  const cockpit = strip(src("components/cockpit/CockpitModal.tsx"));
+  ck("the top bar opens the agent from nowhere but the Cockpit (no robot button of its own)",
+     !/onClick=\{onOpenAgent\}/.test(hud) && !/onOpenAgent\(\)/.test(hud)
+     && /onOpenAgent=\{onOpenAgent\}/.test(hud));
+  ck("  ...the Cockpit button shows the robot and the presence dot only with an agent, the ⚠ without",
+     /\{onOpenAgent \? <Bot size=\{24\} \/> : <TriangleAlert size=\{24\} \/>\}/.test(hud)
+     && /\{onOpenAgent && <span className=\{`agent-btn-dot /.test(hud));
+  ck("  ...and the Cockpit's footer offers 'VESTA Agent' only when it was handed onOpenAgent",
+     /\{onOpenAgent \? \(\s*<button className="btn ghost" onClick=\{\(\) => \{ onClose\(\); onOpenAgent\(\); \}\}/.test(cockpit)
+     && /VESTA Agent\{agentWaiting > 0/.test(cockpit) && /\) : <span \/>\}/.test(cockpit));
+}
 const ctx = src("agent/AgentContext.tsx");
 ck("a profile without viewAgent never fetches", /roleCan\(role, "viewAgent"\)/.test(ctx)
    && /const refresh = useCallback\(\(\) => \{\s*if \(!allowed\) return;/.test(ctx));

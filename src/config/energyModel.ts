@@ -15,7 +15,7 @@
 // tests/oracles/energy_model.mjs drives it with the villa's measured week.
 
 import { localMidnight, localMonthStart } from "@/utils/localDay";
-import { COMPILE_GRACE_MS, PERIOD_MS } from "@/utils/statisticsSeries";
+import { COMPILE_GRACE_MS } from "@/utils/statisticsSeries";
 import { toBaseUnit } from "./SensorClasses";
 
 /** One `energy/get_prefs` device-consumption entry. */
@@ -352,21 +352,4 @@ export function fmtMoney(v: number, unit: string | undefined, locale?: string): 
     } catch { /* not a currency Intl knows */ }
   }
   return `${Math.round(v).toLocaleString(locale)}${unit ? ` ${unit}` : ""}`;
-}
-
-/**
- * "Energy today", wherever the app says it: what the house CONSUMED since
- * local midnight (grid import + solar − export) — the Energy window's "Today
- * so far" — or null while no grid or solar source has a reading today.
- *
- * ⚠️ THE COCKPIT HAD ITS OWN DEFINITION: grid IMPORT only (HAEnergyAPI.
- * fetchEnergyToday). On an install with solar the Cockpit and the Energy
- * window then showed two different "today" figures for the same house. One
- * rule, from the same hourly buckets.
- */
-export function usedToday(
-  setup: EnergyCostSetup, hourly: Readonly<Record<string, EnergySeries | undefined>>, now: number,
-): number | null {
-  const p = energyPeriod(setup, hourly, periodStarts("hoursToday", now), PERIOD_MS.hour, now);
-  return p.readyCount > 0 ? p.whole.used : null;
 }

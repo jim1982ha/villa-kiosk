@@ -117,21 +117,6 @@
 .pinpad-key:disabled { opacity: 0.45; cursor: default; }
 .pinpad-key.spacer { visibility: hidden; }
 
-/* Profile label (current role + switch-profile action) — lives inside the
-   shared .hud-right-inline.hud-group pill now (see HUD.tsx), alongside the
-   Unavailable/Facility/Settings buttons, so it no longer needs its own
-   separate chip background/border; just the text + nested button layout. */
-.hud-profile {
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 0 4px 0 8px; /* room for the name on the left, snug on the button */
-  font-size: var(--text-sm); color: var(--text-secondary);
-  white-space: nowrap;
-}
-/* .hud-group .icon-btn already resets size/chrome for every button in the
-   shared pill (see that rule) — this just re-squares the logout button to
-   the same 38px so it doesn't read as a mismatched size next to it. */
-.hud-profile .icon-btn { width: 38px; height: 38px; }
-
 /* The compact-top-bar tier — the same compound breakpoint 05-layout.css
    uses; kept as two rules because the bodies style different screens. */
 @media (max-width: 640px), (max-height: 560px) {
@@ -139,8 +124,4 @@
   .profile-cards { gap: 12px; }
   .profile-card { min-height: 140px; flex-basis: 100%; max-width: 420px; }
   .pinpad-key { min-height: 54px; }
-  /* Hide the profile-name text on narrow screens; the icon button remains.
-     Drop the (now empty) left padding so the chip stays square around the icon. */
-  .hud-profile .hud-profile-name { display: none; }
-  .hud-profile { padding: 0 6px; }
 }
