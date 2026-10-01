@@ -117,7 +117,7 @@ function go(tab) {
 async function overview() {
   fill($view, h("p", { class: "muted" }, "Loading…"));
   const o = await api("GET", "api/overview");
-  document.getElementById("ver").textContent = `agent ${o.version} · ${o.instance}`;
+  document.getElementById("ver").textContent = `${o.app_version ? `app ${o.app_version} · ` : ""}agent ${o.version} · ${o.instance}`;
   const off = o.skills.filter((s) => !s.ok);
   const r = o.last_24h;
   const count = (k) => (r && r.counts[k]) || 0;

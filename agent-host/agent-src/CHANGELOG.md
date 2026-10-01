@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.3 (1 October 2026)
+
+- UI header: the app's version too (`VESTA_APP_VERSION`, given by the host to the UI process only).
+
 ## 0.6.2 (1 October 2026)
 
 - UI errors.js: a failed resource load counts only for the page's own files (same origin); the villa's Cloudflare

@@ -172,7 +172,8 @@ class UI:
                 report = status.report(State(self.s.state_path), self.s.store_path, 24)
             except Exception as e:  # noqa: BLE001 — the overview shows what it can
                 log.warning("UI: the agent's records could not be read (%s)", type(e).__name__)
-        return web.json_response({"version": __version__, "instance": self.s.instance,
+        return web.json_response({"version": __version__, "app_version": os.environ.get("VESTA_APP_VERSION", ""),
+                                  "instance": self.s.instance,
                                   "policy_problems": pol, "skills": self._skill_rows(), "last_24h": report,
                                   "jobs_not_set": [j["name"] for j in self._jobs() if not j["set"]]})
 

@@ -185,3 +185,13 @@ def test_the_page_sets_no_inline_style_its_csp_would_block():
     from vesta_agent.ui.server import STATIC
     js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
     assert not re.search(r"\bstyle\s*:", js)
+
+
+def test_the_overview_gives_the_apps_version_with_the_agents(ui, monkeypatch):
+    from vesta_agent import __version__
+    monkeypatch.setenv("VESTA_APP_VERSION", "9.9.9")
+
+    async def fn(c):
+        return await (await c.get("/api/overview")).json()
+    o = call(ui, fn)
+    assert (o["app_version"], o["version"]) == ("9.9.9", __version__)

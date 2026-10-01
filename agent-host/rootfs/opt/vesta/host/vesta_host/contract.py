@@ -97,4 +97,6 @@ UI_NAMES = ("VESTA_SKILLS_DIR", "VESTA_AGENT_CONFIG_DIR", "VESTA_DATA_DIR",
 def ui_env(contract: dict[str, str]) -> dict[str, str]:
     """The UI process's whole environment: the contract's folders and settings, its port."""
     return {**{k: v for k, v in process_env(contract).items() if k not in NAMES or k in UI_NAMES},
-            "VESTA_UI_PORT": str(UI_PORT)}
+            "VESTA_UI_PORT": str(UI_PORT),
+            # the app's own version, for the page's header ("app 0.12.3 · agent 0.6.3")
+            "VESTA_APP_VERSION": os.environ.get("VESTA_HOST_VERSION", "")}
