@@ -167,7 +167,9 @@ export default function HUD({
   // floors as chips inside the dial was a redundant extra step. Tap a room
   // to zoom there, tap outside to dismiss. See RadialRoomMenu.
   // ───────────────────────────────────────────────────────────────────────
-  type RadialState = { cx: number; cy: number; activeFloor: number | null };
+  /** `list`: the rooms do not fit the arc on this screen — they show as one
+   *  scrollable column beside the floor buttons instead (see roomFanFits). */
+  type RadialState = { cx: number; cy: number; activeFloor: number | null; list: boolean };
   // One ref per floor button — the dial anchors itself to whichever one was
   // actually held, so its screen position always matches the gesture.
   const floorBtnRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
@@ -188,6 +190,7 @@ export default function HUD({
   const ROOM_MIN_ARC_PX = 48; // safe arc-length per room AT that baseline (228px radius, ~12° steps)
   const ROOM_VIEWPORT_PAD = 40; // top/bottom breathing room — matches the cy-clamp margin below
   const ROOM_R_FLOOR = 90;    // sanity floor so an extreme case never collapses the fan onto the button
+  const RADIAL_CHIP_HALF_W = 95; // half the widest room chip (.radial-item max-width: 190px)
 
   /** Half-angle (deg) of the room fan for `n` rooms: unchanged from before —
    *  a tight ~12° step per room until the spread saturates at ±86°. */
@@ -225,6 +228,29 @@ export default function HUD({
     return Math.max(ROOM_R_FLOOR, Math.min(needed, maxForViewport));
   };
 
+  /**
+   * Whether `n` rooms fit the arc at their safe spacing on THIS screen, and the
+   * arc fits across it.
+   *
+   * ⚠️ OVERLAP IS NO LONGER THE FALLBACK (owner, 2026-10-01). Past the viewport
+   * cap the arc used to let labels overlap "as a deliberate, visible fallback":
+   * on a phone held upright, 17 rooms of 1F stacked Bedroom 1 on Guest Bathroom
+   * and WIC on Swimming Pool — unreadable, and a tap could land on the wrong
+   * room. When the arc does not fit, the same rooms show as one scrollable
+   * column instead; the arc stays wherever it fits (the wall tablet).
+   */
+  const roomFanFits = (n: number, cx: number): boolean => {
+    const half = roomFanHalfAngle(n);
+    let needed = ROOM_R;
+    if (n > 1) {
+      const stepRad = ((2 * half) / (n - 1)) * (Math.PI / 180);
+      if (stepRad > 0) needed = Math.max(ROOM_R, ROOM_MIN_ARC_PX / stepRad);
+    }
+    const tallEnough = needed <= window.innerHeight / 2 - ROOM_VIEWPORT_PAD;
+    const wideEnough = cx + needed + RADIAL_CHIP_HALF_W <= window.innerWidth - 8;
+    return tallEnough && wideEnough;
+  };
+
   const roomsForFloor = (f: number) =>
     config.teleportPoints
       .filter((p) => (p.floor ?? 1) === f)
@@ -239,6 +265,10 @@ export default function HUD({
     const arc = (i: number, n: number, half: number) =>
       n <= 1 ? 0 : -half + (2 * half) * (i / (n - 1));
     const rooms = roomsForFloor(r.activeFloor);
+    if (r.list) {
+      // one column: the menu lays it out (RadialRoomMenu), x/y unused
+      return rooms.map((p) => ({ key: `r${p.name}`, label: p.name, kind: "room" as const, x: 0, y: 0, active: false }));
+    }
     const half = roomFanHalfAngle(rooms.length);
     const radius = roomFanRadius(rooms.length);
     return rooms.map((p, i) => {
@@ -264,7 +294,7 @@ export default function HUD({
       Math.min(margin, window.innerHeight / 2),
       Math.min(b.top + b.height / 2, window.innerHeight - margin),
     );
-    setRadial({ cx, cy, activeFloor: f });
+    setRadial({ cx, cy, activeFloor: f, list: !roomFanFits(roomsForFloor(f).length, cx) });
   };
 
   // ── DELIBERATELY NOT useLongPress — do not "DRY" this into the hook ───────
@@ -431,6 +461,7 @@ export default function HUD({
       <RadialRoomMenu
         items={radialItems}
         open={!!radial}
+        listAt={radial?.list ? radial.cx : null}
         onPick={onRadialPick}
         onBackdrop={onRadialBackdrop}
       />

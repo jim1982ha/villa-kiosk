@@ -64,8 +64,9 @@ export const SURFACE_STATE: Record<BadgeKind, DeviceSurfaceState> = {
  * ── Why this is shared (2.206.0) ─────────────────────────────────────────
  * The map and the device-list panels drew the same badge from two different
  * rules. Both called classifyDeviceActivity, but only the map then applied
- * the LINKED-ENTITY override: an entity whose `linkedEntityId` is on rings as
- * "alert", which is how a pump's power sensor shows that its pump is running.
+ * the LINKED-ENTITY override: an entity whose `linkedEntityId` is on counts as
+ * "on" (2.496.240; it was "alert"), which is how a pump's power sensor shows that
+ * its pump is running.
  * The panel had no equivalent, so tapping a group of four pump-power sensors
  * showed four identical grey rows for badges that were red on the map two
  * pixels earlier — reported with exactly that pair of screenshots.
@@ -78,7 +79,11 @@ export const SURFACE_STATE: Record<BadgeKind, DeviceSurfaceState> = {
 export function badgeKindFor(r: DeviceReading): BadgeKind {
   if (UNKNOWN_STATES.has(r.entity.state)) return "unavailable";
   // Outranks the entity's own state vocabulary on purpose — see linkedEntityId.
-  if (r.linkedOn) return "alert";
+  // ⚠️ "ON", NEVER "ALERT" (owner, 2026-10-01): a pump's power sensor whose relay
+  // runs is a device ON. As "alert" it rang every room chip and count card that
+  // holds it red — the Map-colours legend's "Needs attention" — while nothing
+  // was wrong (the Swimming Pool chip, its jet pump running).
+  if (r.linkedOn) return "on";
   return classifyDeviceActivity(r);
 }
 

@@ -266,6 +266,20 @@
 .radial-item:active { transform: translate(-50%, -50%) scale(0.94); }
 .radial-item.active { background: var(--accent); color: var(--text-on-accent); border-color: var(--accent); }
 @keyframes radial-pop { from { opacity: 0; transform: translate(-50%, -50%) scale(0.8); } }
+/* The rooms as ONE scrollable column, when they do not fit the arc on this
+   screen (a phone held upright, a long room list): never overlapping, always
+   above the "Manage rooms" button. */
+.radial-list {
+  position: fixed; z-index: 1;
+  top: calc(var(--safe-top) + 64px);
+  bottom: calc(max(28px, var(--safe-bottom-float)) + 64px);
+  display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+  overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+  padding: 4px 8px 4px 4px; max-width: calc(100vw - 24px);
+}
+.radial-list .radial-item { position: static; transform: none; flex: 0 0 auto; animation: radial-pop-list 0.12s ease-out; }
+.radial-list .radial-item:active { transform: scale(0.94); }
+@keyframes radial-pop-list { from { opacity: 0; transform: scale(0.9); } }
 
 /* "Manage rooms" — the full Rooms list (create/edit/re-anchor), the one
    thing the old Rooms button's long-press reached that this dial's floor/

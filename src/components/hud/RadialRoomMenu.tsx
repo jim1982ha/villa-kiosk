@@ -31,26 +31,43 @@ interface Props {
   onPick: (item: RadialItem) => void;
   /** Press outside any chip → dismiss. */
   onBackdrop: () => void;
+  /** Left edge (px) of the one-column list shown when the rooms do not fit the
+   *  arc on this screen (HUD.roomFanFits); null: the arc. */
+  listAt?: number | null;
 }
 
-export default function RadialRoomMenu({ items, open, onPick, onBackdrop }: Props) {
+export default function RadialRoomMenu({ items, open, onPick, onBackdrop, listAt = null }: Props) {
   if (!open) return null;
+  // On the arc a room is picked on POINTERDOWN (see the header). In the column
+  // a finger that lands on a name may be starting a SCROLL: there a room is
+  // picked by a completed tap (click), never by the touch that begins a drag.
+  const chip = (it: RadialItem, style?: React.CSSProperties) => (
+    <button
+      key={it.key}
+      className={`radial-item radial-${it.kind}${it.active ? " active" : ""}`}
+      style={style}
+      {...(listAt != null
+        ? { onClick: () => onPick(it) }
+        : { onPointerDown: (e: React.PointerEvent) => { e.stopPropagation(); onPick(it); } })}
+    >
+      <span>{it.label}</span>
+    </button>
+  );
   return (
     <div
       className="radial-room-menu"
       onPointerDown={onBackdrop}
       onContextMenu={(e) => e.preventDefault()}
     >
-      {items.map((it) => (
-        <button
-          key={it.key}
-          className={`radial-item radial-${it.kind}${it.active ? " active" : ""}`}
-          style={{ left: `${it.x}px`, top: `${it.y}px` }}
-          onPointerDown={(e) => { e.stopPropagation(); onPick(it); }}
-        >
-          <span>{it.label}</span>
-        </button>
-      ))}
+      {listAt != null ? (
+        // A pointerdown on the column's empty space or while scrolling must not
+        // dismiss: only the backdrop around it does.
+        <div className="radial-list" style={{ left: `${listAt}px` }} onPointerDown={(e) => e.stopPropagation()}>
+          {items.map((it) => chip(it))}
+        </div>
+      ) : (
+        items.map((it) => chip(it, { left: `${it.x}px`, top: `${it.y}px` }))
+      )}
       {/* Full Rooms list (create / edit / re-anchor) — the one thing the old
           Rooms button's long-press used to reach that this dial's floor/room
           picking doesn't cover. Pinned at a fixed screen position (NOT part

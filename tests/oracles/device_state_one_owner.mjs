@@ -187,6 +187,9 @@ ck("the device_class table is still consulted", binarySensorClassInfo("moisture"
   ck("  ...while a face that IS alerting keeps its red ring", leakLinked.ring === "alert");
   const s = categorySurfaceRinged("energy", linked.face, linked.ring, "#123456");
   ck("  ...and a per-badge colour is the ring's colour", s.ring === "#123456");
+  // 2.496.240: the KIND a room chip or a count card reads — linked on is "on", never "alert"
+  const { badgeKindFor } = await import("@/utils/deviceActivity");
+  ck("a linked entity on counts as ON for a room chip, never as needs-attention", badgeKindFor({ ...read("sensor", power), linkedOn: true }) === "on");
 }
 ck("both members of UNKNOWN_STATES reach every reader the same way", bothMembersAgree);
 ck("no reader spells the pair out for itself", strayPairs.length === 0);
