@@ -237,3 +237,40 @@ def test_a_report_asked_for_in_a_chat_can_be_sent_there(agent):
     assert agent.tg.sent[-1][0] == PRIVATE != GROUP
     job = next(t for t in agent.toolbox().tool_objects(None, None, False) if t.name == "send_message")
     assert job.input_schema["properties"]["to"]["enum"] == ["owner", "fm"]      # a scheduled job names a chat
+
+
+def test_an_answer_settles_the_alert_in_every_chat_and_its_reminder(agent):
+    # owner, 2026-10-01: a P1 goes to the owner's chat AND the facility manager's, and a reminder repeats
+    # it; pressed in one, every copy loses its buttons and says who answered
+    with open(agent.s.policy_path) as f:
+        raw = yaml.safe_load(f)
+    raw["chats"] = {"owner": GROUP, "fm": FM}
+    with open(agent.s.policy_path, "w") as f:
+        yaml.safe_dump(raw, f)
+    from vesta_shared.store import Store
+    iid = Store(agent.s.store_path).new_incident("k", "automation.x", "lock.front_door", "P1", {"message": "m"})
+    alert = {"send": [{"to": "owner", "text": f"🔒 Door unlocked. Incident #{iid}.", "keyboard": True},
+                      {"to": "fm", "text": f"🔒 Door unlocked. Incident #{iid}.", "keyboard": True}], "incident_id": iid}
+    run(agent.outcome.carry_out(alert, "alert-desk"))
+    run(agent.outcome.carry_out({"send": [{"to": "fm", "text": f"Reminder, incident #{iid}: m.", "keyboard": True}],
+                                 "incident_id": iid}, "alert-desk"))
+    sent = {(c, t): None for c, t, kb in agent.tg.sent if kb}
+    assert len(sent) == 3
+    fm_mid = agent.tg.next_id - 1                                       # the reminder, pressed in the FM's chat
+    press = {"id": "cb9", "data": f"i:{iid}:done", "chat_id": FM, "user_id": FM,
+             "message": {"message_id": fm_mid, "chat": {"id": FM}, "text": f"Reminder, incident #{iid}: m."}, "bot": BOT}
+    run(agent.on_ha_event("telegram_callback", press))
+    edited = sorted((c, t.split("\n\n")[0]) for c, _, t in agent.tg.edits)
+    assert edited == sorted([(GROUP, f"🔒 Door unlocked. Incident #{iid}."), (FM, f"🔒 Door unlocked. Incident #{iid}."),
+                             (FM, f"Reminder, incident #{iid}: m.")])
+    assert all(re.search(r"\n\nDone — FM, \d\d:\d\d$", t) for _, _, t in agent.tg.edits)
+    assert agent.state.kv_prefix(f"incmsg:{iid}:") == {}                # settled once: nothing left to edit
+
+
+def test_an_incident_home_assistant_clears_settles_its_alerts(agent):
+    from vesta_shared.store import Store
+    iid = Store(agent.s.store_path).new_incident("k", "automation.x", "lock.front_door", "P2", {"message": "m"})
+    run(agent.outcome.carry_out({"send": [{"to": "fm", "text": f"Incident #{iid}.", "keyboard": True}], "incident_id": iid}, "alert-desk"))
+    run(agent.outcome.carry_out({"settle": [{"incident_id": iid, "note": "Cleared in Home Assistant, {time}. No reply needed."}]}, "alert-desk"))
+    (_, _, text), = agent.tg.edits
+    assert re.search(r"\n\nCleared in Home Assistant, \d\d:\d\d\. No reply needed\.$", text)

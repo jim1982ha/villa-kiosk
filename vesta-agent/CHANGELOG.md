@@ -1,3 +1,8 @@
+## 0.12.10
+
+### Changed
+- **An alert's buttons go away everywhere at once.** An alert can be in several chats (a P1 goes to the owner's chat and the facility manager's) and repeated by reminders. When someone presses Done, Not found, Need help or Mute on any of them, or types "#2 done", every copy loses its buttons and shows who answered and when ("Done — Jean-Marie, 08:31"). When Home Assistant clears the incident itself, every copy says "Cleared in Home Assistant, 08:40. No reply needed."
+
 ## 0.12.9
 
 ### Added

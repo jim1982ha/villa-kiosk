@@ -173,6 +173,8 @@ def resolved(store: Store, ev: dict, now: datetime) -> dict:
     if task:
         store.close_task(task["id"])
         out["actions"].append({"action": "ticket.resolve", "task_id": task["id"], "note": "Cleared: Home Assistant reports it is back to normal."})
+    # its alert and reminders, in every chat, lose their buttons: nobody presses for something already over
+    out["settle"] = [{"incident_id": inc["id"], "note": "Cleared in Home Assistant, {time}. No reply needed."}]
     if was_chasing:
         out["send"].append({"to": "fm", "text": f"Incident #{inc['id']} closed: Home Assistant reports it cleared. No reply needed."})
     store.audit("alert-desk", "resolved", {"incident": inc["id"]})
@@ -247,6 +249,11 @@ def reply(store: Store, iid: int, text: str, sender_role: str, now: datetime, pa
     else:
         store.update_incident(iid, reply=text)
         out["send"].append({"to": "here", "text": f"Noted on #{iid}: {text}"})
+    # the answer, on the alert and its reminders in every chat (a button press has already done it, by name)
+    said = next((w for w in ("Done", "Not found", "Need help", "Mute") if t.startswith(w.lower())), None)
+    if said:
+        who = {"owner": "the owner", "fm": "the facility manager"}.get(sender_role, sender_role)
+        out["settle"] = [{"incident_id": iid, "note": f"{said} — {who}, {{time}}"}]
     store.audit("alert-desk", "reply", {"incident": iid, "by": sender_role, "text": text})
     return out
 

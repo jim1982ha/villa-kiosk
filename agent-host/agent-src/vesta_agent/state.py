@@ -101,6 +101,11 @@ class State:
             self.db.execute("insert into kv(k, v) values(?,?) on conflict(k) do update set v=excluded.v", (k, v))
             self.db.commit()
 
+    def drop(self, k: str) -> None:
+        with self._lock:
+            self.db.execute("delete from kv where k=?", (k,))
+            self.db.commit()
+
     # ------------------------------------------------------------------ own messages
     # ⚠️ HOW A PRESS OR A REPLY IS KNOWN TO BE FOR THE AGENT. Home Assistant and the
     # agent share one bot, so "the bot sent it" says nothing: the agent keeps the id of

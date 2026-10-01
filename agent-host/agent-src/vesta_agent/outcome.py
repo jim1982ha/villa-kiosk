@@ -8,6 +8,8 @@ A skill script prints its decision in the standard form; this module does it:
               snapshot.get {entity_id, incident_id}
   siren_gate: {armed, prompt}  → an Approve / Refuse request to the owner for the policy's siren
   incident_id                  → which incident the alert buttons belong to
+  settle:     [{incident_id, note}]  → every message carrying that incident's buttons, in every chat,
+              loses them and shows the note ("{time}": the villa's time now)
 
 ⚠️ ONE PATH FOR EVERY CALLER (owner, 2026-10-01). Before, only the scheduler and the
 Home Assistant hooks carried a result out; a script the model ran in a chat had its
@@ -109,9 +111,15 @@ class Outcome:
                     doc = path
                 else:
                     log.warning("Skill %s attached %r, which is not a file of the out folder: sent without it", skill_name, att)
-            await self.send(chat, text, keyboard=kb, document=doc)
+            mid = await self.send(chat, text, keyboard=kb, document=doc)
+            if kb and mid:
+                # every message with this incident's buttons, in every chat: all of them settle together
+                self.state.put(f"incmsg:{iid}:{chat}:{mid}", text)
             chats.add(chat)
             done["sent"] += 1
+        for s in res.get("settle") or []:
+            if isinstance(s, dict) and str(s.get("incident_id") or "").isdigit():
+                await self.settle(int(s["incident_id"]), str(s.get("note") or ""))
         pol = self.policy()
         if gate_prompt and pol.siren_entity:
             answer, msg = await asyncio.to_thread(self.actions.request, "switch", "turn_on", pol.siren_entity, {}, None, None)
@@ -188,6 +196,23 @@ class Outcome:
         return made
 
     # ------------------------------------------------------------------ the alert buttons
+    async def settle(self, iid: int, note: str) -> int:
+        """Every message carrying incident `iid`'s buttons — the alert in each chat it went to, and each
+        reminder — loses them and shows `note` (who did what, when). Returns how many were edited.
+
+        ⚠️ ALL OF THEM, NOT THE ONE PRESSED (owner, 2026-10-01): a P1 goes to the owner's chat and the
+        facility manager's, and a reminder repeats it; pressed in one, the others kept buttons that
+        only answered "already closed"."""
+        note = note.replace("{time}", datetime.now(ZoneInfo(self.tz)).strftime("%H:%M"))
+        n = 0
+        for k, text in self.state.kv_prefix(f"incmsg:{iid}:").items():
+            _, _, chat, mid = k.split(":")
+            if self.edit and note:
+                await self.edit(int(chat), int(mid), f"{text.rstrip()}\n\n{note}"[:4096])
+                n += 1
+            self.state.drop(k)
+        return n
+
     async def press(self, q: dict, chat: int, data: str, person, toast: Callable[[str], Awaitable]) -> None:
         """Done / Not found / Need help / Mute on an alert: the skill's on_reply decides, answering `here`."""
         if person is None:
@@ -217,10 +242,13 @@ class Outcome:
         # the buttons go, and the message says who did what, when: nobody presses twice,
         # and the chat itself shows the incident was handled
         msg = q.get("message") or {}
-        if self.edit and msg.get("message_id"):
-            when = datetime.now(ZoneInfo(self.tz)).strftime("%H:%M")
+        note = f"{label} — {person.name}, {{time}}"
+        known = f"incmsg:{iid}:{chat}:{msg.get('message_id')}" in self.state.kv_prefix(f"incmsg:{iid}:")
+        await self.settle(int(iid), note)
+        if self.edit and msg.get("message_id") and not known:
+            # a message sent before its copies were remembered (an older version): it settles alone
             base = (msg.get("text") or msg.get("caption") or "").rstrip()
-            await self.edit(chat, msg["message_id"], f"{base}\n\n{label} — {person.name}, {when}"[:4096])
+            await self.edit(chat, msg["message_id"], f"{base}\n\n{note.replace('{time}', datetime.now(ZoneInfo(self.tz)).strftime('%H:%M'))}"[:4096])
         if self.run_job:
             await self.run_job(skill, skill.on_reply, 120, {"incident": iid, "text": label, "role": person.role},
                                Origin(chat))

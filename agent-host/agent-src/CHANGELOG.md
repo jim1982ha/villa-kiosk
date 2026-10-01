@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.10 (1 October 2026)
+
+- outcome: every message sent with an incident's buttons is remembered (`incmsg:<id>:<chat>:<message>`); `settle(id, note)` edits all of them (buttons removed, the note added) and forgets them. A press settles every copy, by name; the standard form gains `settle: [{incident_id, note}]` ("{time}": villa time).
+- alert-desk: a reply (Done / Not found / Need help / Mute, typed or pressed) and an incident Home Assistant clears emit `settle`.
+
 ## 0.6.9 (1 October 2026)
 
 - runner: each `run` record keeps the profile, the model, the tokens (input, output, cache read/write), turns, duration and the first 160 characters of what a person asked.

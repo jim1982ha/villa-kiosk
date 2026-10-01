@@ -340,7 +340,7 @@ class Toolbox:
                     res = json.loads(out or "{}")
                 except ValueError:
                     res = None
-                if isinstance(res, dict) and (res.get("send") or res.get("actions") or res.get("siren_gate")):
+                if isinstance(res, dict) and (res.get("send") or res.get("actions") or res.get("siren_gate") or res.get("settle")):
                     done = await self.carry_out(res, sk, origin)
                     out = (f"[Carried out by the VESTA Agent: {done['sent']} message(s) sent, {done['tickets']} ticket(s) "
                            f"created, {done['resolved']} closed. Do not send or create them again.]\n") + out

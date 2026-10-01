@@ -48,6 +48,7 @@ def test_resolved_closes_the_incident_and_its_ticket(store):
     assert store.incident(iid)["state"] == "resolved"
     assert [a for a in res["actions"] if a["action"] == "ticket.resolve"]
     assert "No reply needed" in res["send"][0]["text"]
+    assert res["settle"] == [{"incident_id": iid, "note": "Cleared in Home Assistant, {time}. No reply needed."}]
     # the chase stops: no reminder for it any more
     assert desk.tick(store, T0 + timedelta(minutes=30))["reasked"] == []
 
@@ -122,3 +123,12 @@ def test_the_cli_reads_an_event_file(tmp_path):
                        capture_output=True, text=True, env=env, timeout=60)
     assert r.returncode == 0, r.stderr
     assert json.loads(r.stdout)["decision"] == "new"
+
+
+def test_a_text_answer_settles_the_alerts_buttons_too(store):
+    # "#2 done" typed in a chat: the alert and its reminders lose their buttons, like a press
+    iid = desk.intake(store, event(), T0, mode_reader=lambda: "occupied")["incident_id"]
+    res = desk.reply(store, iid, "done, it was the gardener", "fm", T0 + timedelta(minutes=5))
+    assert res["settle"] == [{"incident_id": iid, "note": "Done — the facility manager, {time}"}]
+    assert "settle" not in desk.reply(store, iid, "what happened?", "fm", T0 + timedelta(minutes=6))
+
