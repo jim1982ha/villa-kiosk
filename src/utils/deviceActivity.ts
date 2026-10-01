@@ -102,6 +102,13 @@ export function badgeKindFor(r: DeviceReading): BadgeKind {
  * Assistant has lost contact with has no trustworthy state to paint a face
  * from, so claiming one — in any colour — would assert something never
  * observed. It takes the amber dashed ring AND the muted face together.
+ *
+ * ── The linked ring is the badge's OWN colour, never red (2.496.239) ───────
+ * It was "alert" — the --status-danger red the Map colours legend reserves for
+ * "Needs attention" (an unlocked door, a leak). A linked switch being on is
+ * not a problem, so a power badge whose relay was on wore the alarm colour.
+ * Owner: the ring takes the badge's category colour (or its own badge colour)
+ * — categorySurface's "active" ring, the same hue as its pictogram.
  */
 export function badgeFaceAndRing(
   r: DeviceReading,
@@ -109,7 +116,8 @@ export function badgeFaceAndRing(
   const own = badgeKindFor({ ...r, linkedOn: false });
   if (own === "unavailable") return { face: "unavailable", ring: "unavailable" };
   const face = SURFACE_STATE[own];
-  return { face, ring: r.linkedOn ? "alert" : face };
+  // A face already alerting keeps its red ring: that IS needs-attention.
+  return { face, ring: r.linkedOn && face !== "alert" ? "active" : face };
 }
 
 /* ⚠️ `badgeSurfaceFor` IS GONE (had zero callers). It resolved `badgeKindFor`

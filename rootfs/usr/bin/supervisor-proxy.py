@@ -3373,6 +3373,64 @@ async def agent_choices_put_handler(request: web.Request) -> web.Response:
     return web.json_response({"ok": True, "rev": rev})
 
 
+#: Exactly the ids _agent_validate_message has minted since the interface began.
+AGENT_MESSAGE_ID_RE = re.compile(r"msg_[0-9a-f]{16}")
+
+
+def _agent_messages_without(stored, ids: set) -> tuple[dict, list]:
+    """(the messages document without `ids`, the ids actually removed). An id
+    that names nothing is ignored; everything else in the document is kept."""
+    doc = stored if isinstance(stored, dict) else {}
+    kept, cleared = [], []
+    for m in doc.get("messages") or []:
+        if isinstance(m, dict) and m.get("id") in ids:
+            cleared.append(m["id"])
+        else:
+            kept.append(m)
+    return {**doc, "messages": kept}, cleared
+
+
+async def agent_messages_clear_handler(request: web.Request) -> web.Response:
+    """A person clears messages from the Kiosk's agent area: `{"ids": [...]}`.
+
+    The same gate as a button press (viewAgent: owner and facility manager,
+    never a guest, never cross-site). Each id must be of the msg_ form the
+    server mints; an id that names nothing (already cleared, pruned) is simply
+    ignored, so two devices clearing the same message both succeed.
+
+    ⚠️ THE CHOICES ARE LEFT ALONE. A cleared message stops being shown; an
+    answer a person gave stays in the agent's cursor (/agent/v1/choices),
+    which the agent may not have read yet. Not under /agent/v1: the agent
+    itself never clears what people read."""
+    if (refused := _refuse(request, "viewAgent",
+                           "You do not have permission to clear agent messages.")) is not None:
+        return refused
+    try:
+        body = await request.json()
+    except (ValueError, UnicodeDecodeError):
+        return web.json_response({"error": "invalid JSON"}, status=400)
+    ids = body.get("ids") if isinstance(body, dict) else None
+    if not isinstance(ids, list) or not ids or len(ids) > AGENT_MAX_MESSAGES or not all(
+            isinstance(i, str) and AGENT_MESSAGE_ID_RE.fullmatch(i) for i in ids):
+        return web.json_response(
+            {"error": f"ids must be a list of 1-{AGENT_MAX_MESSAGES} message ids (msg_…)"},
+            status=400)
+    cleared: list = []
+
+    def change(stored):
+        doc, gone = _agent_messages_without(stored, set(ids))
+        cleared.extend(gone)
+        return doc
+
+    try:
+        await AGENT_MESSAGES.update(change)
+    except StoreUnreadable:
+        return _store_unreadable_response("messages")
+    except StoreTooLarge:
+        return web.json_response({"error": "message store full"}, status=413)
+    return web.json_response({"ok": True, "cleared": cleared})
+
+
 async def agent_choices_handler(request: web.Request) -> web.Response:
     """Button presses made in the Kiosk after `since`, oldest first — the
     agent's cursor over people's answers (PLAN A4)."""
@@ -3651,6 +3709,7 @@ def build_app(data_dir: str | None = None) -> web.Application:
     # The Kiosk's side of the VESTA Agent (owner and facility manager).
     app.router.add_get("/agent-status", agent_status_handler)
     app.router.add_get("/agent-messages", agent_messages_get_handler)
+    app.router.add_post("/agent-messages/clear", agent_messages_clear_handler)
     app.router.add_get("/agent-choices", agent_choices_get_handler)
     app.router.add_put("/agent-choices", agent_choices_put_handler)
     app.router.add_put("/kiosk-rooms", kiosk_rooms_put_handler)

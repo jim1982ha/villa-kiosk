@@ -49,6 +49,27 @@ ck("ONE attention rule: open faults + tasks overdue or never — a task merely d
    att.openFaults.map((t) => t.id).join() === "t2" && att.lateTasks.map((s) => s.schedule.id).join() === "s1" && att.total === 2,
    { faults: att.openFaults.map((t) => t.id), late: att.lateTasks.map((s) => `${s.schedule.id}:${s.state}`) });
 
+// The one-step close, "no action needed" (2.496.239).
+{
+  const k = { now: "2026-09-30T10:00:00Z" };
+  const inProgress = { ...d, tickets: [...d.tickets, { id: "t3", title: "Old alert", status: "in_progress",
+    openedAt: "2026-09-05T00:00:00Z", photoIds: ["p1"], updates: [{ at: "2026-09-06T00:00:00Z", status: "in_progress", photoIds: [] }] }] };
+  const closed = E.withTicketClosed(d, "t2", k);
+  const t2 = closed.tickets.find((t) => t.id === "t2");
+  ck("closing an open fault in one step: resolved, stamped now, one 'Closed without action' update",
+     t2.status === "resolved" && t2.resolvedAt === k.now && t2.updates.length === 1
+     && t2.updates[0].at === k.now && t2.updates[0].status === "resolved"
+     && t2.updates[0].note === "Closed without action" && t2.updates[0].photoIds.length === 0, t2);
+  ck("  ...and NO completion or cost: nothing was done (it would count as work)",
+     closed.completions.length === d.completions.length && closed.costs.length === d.costs.length);
+  const t3 = E.withTicketClosed(inProgress, "t3", k).tickets.find((t) => t.id === "t3");
+  ck("  ...an in-progress one too, its history kept and appended to",
+     t3.status === "resolved" && t3.updates.length === 2 && t3.updates[0].status === "in_progress" && t3.photoIds.join() === "p1");
+  ck("  ...a resolved or unknown fault is left exactly as it is",
+     E.withTicketClosed(d, "t1", k) === d && E.withTicketClosed(d, "nope", k) === d);
+  ck("  ...and is never stamped resolved without a resolvedAt (the proxy refuses that)", !!t2.resolvedAt && !!t3.resolvedAt);
+}
+
 const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
 ck("the HUD, the Cockpit and the Today tab all count through fmAttention",
    /fmAttention\(fmData\)\.total/.test(src("components/hud/HUD.tsx")) && /const fm = fmAttention\(fmData\);/.test(src("components/cockpit/cockpitData.ts"))
@@ -57,5 +78,10 @@ ck("no screen parses an amount or ranks/moves a fault by itself",
    ["components/fm/TodayTab.tsx", "components/fm/SpendTab.tsx", "components/fm/FaultStageModal.tsx"].every((f) => /parseAmount\(/.test(src(f)) && !/replace\(\/\[\^\\d\]\/g, ""\)\) \|\| 0/.test(src(f)))
    && /ticketRank\(a\)/.test(src("components/fm/FaultsTab.tsx")) && !/const NEXT:/.test(src("components/fm/FaultsTab.tsx")));
 ck("the store erases a fault through withoutTicket", /mutate\(\(d\) => withoutTicket\(d, id\), elevation\)/.test(src("fm/FmDataContext.tsx")));
+ck("the one-step close goes through the store's one writer (mutate), and both screens call it",
+   /mutate\(\(d\) => withTicketClosed\(d, id, stamp\(\)\)\)/.test(src("fm/FmDataContext.tsx"))
+   && /closeTicket\(id\)/.test(src("components/fm/FaultsTab.tsx"))
+   && /closeTicket\(item\.ticketId/.test(src("components/cockpit/CockpitModal.tsx"))
+   && /ticketId: t\.id/.test(src("components/cockpit/cockpitData.ts")));
 
 done("✅ the Facility rules, in the engine");

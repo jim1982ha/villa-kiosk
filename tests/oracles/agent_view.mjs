@@ -11,7 +11,7 @@ register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import { readFileSync } from "node:fs";
 const { roleCan } = await import("@/auth/permissions");
-const { agentVisible, buttonsShown, awaitingAnswer, answerLine, roomsToShare } = await import("@/agent/agentView");
+const { agentVisible, buttonsShown, awaitingAnswer, answerLine, roomsToShare, clearNeedsConfirm, settledIds } = await import("@/agent/agentView");
 const { parseAgentMessages, parseAgentStatus } = await import("@/agent/agentApi");
 
 const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
@@ -42,6 +42,18 @@ const answered = msg({ state: "answered", can_answer: false,
   answer: { button_id: "approve", profile: "ops", at: "2026-09-29T01:00:00Z" } });
 ck("an answer reads who and which button, by its label",
    answerLine(answered, (p) => (p === "ops" ? "Facility manager" : p)) === "Answered by Facility manager · Approve");
+
+console.log("\n  clearing messages (2.496.239):");
+const expired = msg({ id: "msg_4", state: "expired", can_answer: false });
+const plain = msg({ id: "msg_5", buttons: [] });
+ck("an open question (buttons) asks before it is cleared — the agent would never get its answer",
+   clearNeedsConfirm(msg()) && clearNeedsConfirm(msg({ can_answer: false })));
+ck("  ...answered, expired or plain messages clear at once",
+   !clearNeedsConfirm(answered) && !clearNeedsConfirm(expired) && !clearNeedsConfirm(plain));
+ck("'Clear answered' takes exactly the answered and expired ones, never an open one",
+   settledIds([msg(), answered, expired, plain]).join() === [answered.id, expired.id].join());
+ck("the modal offers it only when there is something to clear, and asks through clearNeedsConfirm",
+   /settled\.length > 0/.test(src("components/agent/AgentModal.tsx")) && /clearNeedsConfirm\(m\)/.test(src("components/agent/AgentModal.tsx")));
 
 console.log("\n  what the add-on sends is narrowed:");
 const odd = parseAgentMessages({ messages: [

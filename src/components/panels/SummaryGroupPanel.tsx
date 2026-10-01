@@ -332,7 +332,7 @@ export default function SummaryGroupPanel({
     // deviceActivity.badgeSurfaceFor. This used to re-derive the surface from
     // classifyDeviceActivity plus its own unavailable check, which matched the
     // map for most devices and silently disagreed for any entity with a
-    // `linkedEntityId`: a pump's power sensor rings red on the map while its
+    // `linkedEntityId`: a pump's power sensor is ringed on the map while its
     // pump runs, and every one of them listed here as plain grey. Reported by
     // tapping an entity group of four pump-power badges — two red on the map,
     // four identical rows in the modal.

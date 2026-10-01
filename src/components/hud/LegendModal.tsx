@@ -6,7 +6,7 @@
 // place. A first-time user has to tap around and learn it by trial. This is
 // that reference, one tap away, not shown by default.
 
-import { CATEGORY_ORDER, CATEGORY_LABELS, categorySurface, type DeviceSurfaceState } from "@/config/EntityCategories";
+import { CATEGORY_ORDER, CATEGORY_LABELS, categorySurface, categorySurfaceRinged, type DeviceSurfaceState } from "@/config/EntityCategories";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { STATUS_COLOR } from "@/utils/stateColors";
@@ -26,11 +26,15 @@ import { overviewKeyHelp } from "@/babylon/overviewKeys";
  *  device something is stays true whether or not it is switched on. Keep this
  *  copy in step with that function — a legend that describes a badge the app
  *  no longer draws is worse than no legend. */
-const BADGE_ITEMS: { label: string; state: DeviceSurfaceState; note: string }[] = [
+const BADGE_ITEMS: { label: string; state: DeviceSurfaceState; ringState?: DeviceSurfaceState; note: string }[] = [
   { label: "Active / alerting", state: "active",
     note: "Filled with the device's own category colour — the device is on, or doing something" },
   { label: "Off / idle", state: "off",
     note: "Neutral square, category-coloured icon — the device is off or resting (the default look for most of the map)" },
+  // The ring a LINKED entity draws (deviceActivity.badgeFaceAndRing): the
+  // badge's own colour since 2.496.239 — it was the "Needs attention" red.
+  { label: "Linked device on", state: "off", ringState: "active",
+    note: "A ring in the device's own colour — the switch linked to it is on (a pump's relay, a camera's detection)" },
   { label: "Needs attention", state: "alert",
     note: "Filled red — the device needs attention (an unlocked door, a leak, low battery…)" },
   { label: "Unavailable", state: "unavailable",
@@ -102,7 +106,7 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
           </p>
           <div className="legend-grid">
             {BADGE_ITEMS.map((b) => {
-              const surface = categorySurface("light", b.state);
+              const surface = categorySurfaceRinged("light", b.state, b.ringState ?? b.state);
               return (
                 <div className="legend-row" key={b.label}>
                   <span

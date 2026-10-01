@@ -96,6 +96,30 @@ unreachable = sorted(asked - routes - {"/model"})
 ck("every path the app requests is answered", not unreachable,
    f"the app fetches these and nothing answers: {', '.join(unreachable)}")
 
+# ⚠️ THE CHECKS ABOVE COMPARE FIRST SEGMENTS, AND nginx's `location = /x` IS
+# EXACT (2.496.239). `/agent-messages/clear` shares its first segment with
+# `location = /agent-messages`, so it read as published while nginx would have
+# handed it to the SPA fallback. Each WHOLE literal path the app requests must
+# be matched by a location that reaches the proxy: equal to an exact one, or
+# under a prefix one.
+asked_full = set()
+for f in (ROOT / "src").rglob("*.ts*"):
+    for m in re.finditer(r'ingressPath\("([^"?]+)', f.read_text(encoding="utf-8")):
+        asked_full.add("/" + m.group(1).lstrip("/"))
+backend_locs = [(bool(m.group(1)), m.group(2)) for m in
+                re.finditer(r"location\s+(=\s*)?(\S+)\s*\{([^}]*)\}", ng)
+                if "127.0.0.1:8100" in m.group(3)]
+unpublished = sorted(p for p in asked_full if not any(
+    (p == loc) if exact else p.startswith(loc) for exact, loc in backend_locs))
+ck(f"every whole path the app requests ({len(asked_full)}) has an nginx location reaching the proxy",
+   bool(asked_full) and not unpublished,
+   f"nginx would not forward these: {', '.join(unpublished)}")
+proxy_full = [re.sub(r"\{[^}]*\}", "[^/]+", m.group(1)) for m in
+              re.finditer(r'app\.router\.add_\w+\(\s*(?:"[A-Z*]+"\s*,\s*)?"([^"]+)"', px)]
+unrouted = sorted(p for p in asked_full if not any(re.fullmatch(r, p) for r in proxy_full))
+ck("  ...and the proxy routes each whole path", bool(asked_full) and not unrouted,
+   f"no route for: {', '.join(unrouted)}")
+
 missing_dev = sorted(asked - dev - {"/model"})
 ck("the dev server forwards everything the app requests", not missing_dev,
    f"`npm run dev` would 404: {', '.join(missing_dev)}")

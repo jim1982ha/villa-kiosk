@@ -22,7 +22,7 @@
 import { useEffect, useMemo, useState, type ComponentType } from "react";
 import {
   TriangleAlert, AlertOctagon, MapPin, Building2, LayoutGrid,
-  Activity, Zap, RefreshCw, ChevronRight,
+  Activity, Zap, RefreshCw, ChevronRight, X,
 } from "lucide-react";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import SegmentedGroup from "@/components/common/SegmentedGroup";
@@ -30,6 +30,8 @@ import { fmtChartTime } from "@/components/panels/chartUtils";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
+import { useFmData, fmWriteProblem } from "@/fm/FmDataContext";
+import InlineConfirm from "@/components/common/InlineConfirm";
 import { isCategoryAllowed, roleCan } from "@/auth/permissions";
 import { CATEGORY_LABELS, CATEGORY_ICONS, categorySurface } from "@/config/EntityCategories";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
@@ -87,6 +89,8 @@ export default function CockpitModal({ onClose, onOpenEntity }: CockpitModalProp
   // The Energy window (the bottom bar's own), opened from "Energy today".
   const [energyOpen, setEnergyOpen] = useState(false);
   const canControl = roleCan(role, "controlEntities");
+  // Closing a fault from here is Facility work: the profiles that manage it.
+  const canCloseFaults = roleCan(role, "manageFacility");
 
   // Shared with HUD's own top-bar alert icon/overflow-menu badge — see
   // useVillaAttention's own docstring for why that sharing is load-bearing,
@@ -194,7 +198,8 @@ export default function CockpitModal({ onClose, onOpenEntity }: CockpitModalProp
               <div className="settings-section-title">Needs attention ({attentionItems.length})</div>
               <div className="cockpit-attention-list">
                 {attentionItems.map((item) => (
-                  <CockpitAttentionRow key={item.id} item={item} onOpenEntity={onOpenEntity} />
+                  <CockpitAttentionRow key={item.id} item={item} onOpenEntity={onOpenEntity}
+                    canCloseFault={canCloseFaults} />
                 ))}
               </div>
             </>
@@ -321,23 +326,63 @@ export default function CockpitModal({ onClose, onOpenEntity }: CockpitModalProp
   );
 }
 
-function CockpitAttentionRow({ item, onOpenEntity }: { item: AttentionItem; onOpenEntity: (id: string) => void }) {
+function CockpitAttentionRow({ item, onOpenEntity, canCloseFault }: {
+  item: AttentionItem;
+  onOpenEntity: (id: string) => void;
+  canCloseFault: boolean;
+}) {
+  const { closeTicket } = useFmData();
+  const [confirming, setConfirming] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
   const Icon = ATTENTION_ICON[item.kind];
   const tappable = !!item.entityId;
   const Row = tappable ? "button" : "div";
+  // A fault can be closed from here in one step ("no action needed" — the
+  // same write as the Faults tab's, FmDataContext.closeTicket). The button is
+  // BESIDE the row, never inside it: the row itself may be a <button>.
+  const closable = canCloseFault && item.kind === "fault" && !!item.ticketId;
+  const close = async () => {
+    setProblem(null);
+    const failed = fmWriteProblem(await closeTicket(item.ticketId as string));
+    // On success the fault leaves this list; only a failure stays to say so.
+    setConfirming(false);
+    setProblem(failed);
+  };
   return (
-    <Row
-      className={`cockpit-attention-row${tappable ? " tappable" : ""}`}
-      {...(tappable ? { onClick: () => onOpenEntity(item.entityId as string) } : {})}
-    >
-      <Icon size={16} className={`cockpit-attention-icon cockpit-attention-${item.kind}`} />
-      <span className="cockpit-attention-body">
-        <span className="cockpit-attention-title">{item.title}</span>
-        <span className="muted body-text" style={{ fontSize: "var(--text-2xs)" }}>
-          {item.detail}{item.room ? ` · ${item.room}` : ""}
-        </span>
-      </span>
-      {tappable && <ChevronRight size={16} className="muted" />}
-    </Row>
+    <div className="cockpit-attention-item">
+      <div className="cockpit-attention-line">
+        <Row
+          className={`cockpit-attention-row${tappable ? " tappable" : ""}`}
+          {...(tappable ? { onClick: () => onOpenEntity(item.entityId as string) } : {})}
+        >
+          <Icon size={16} className={`cockpit-attention-icon cockpit-attention-${item.kind}`} />
+          <span className="cockpit-attention-body">
+            <span className="cockpit-attention-title">{item.title}</span>
+            <span className="muted body-text" style={{ fontSize: "var(--text-2xs)" }}>
+              {item.detail}{item.room ? ` · ${item.room}` : ""}
+            </span>
+          </span>
+          {tappable && <ChevronRight size={16} className="muted" />}
+        </Row>
+        {closable && !confirming && (
+          <button type="button" className="btn ghost cockpit-attention-close"
+            aria-label={`Close the fault “${item.title}”`}
+            onClick={() => { setProblem(null); setConfirming(true); }}>
+            <X size={14} /> Close
+          </button>
+        )}
+      </div>
+      {confirming && (
+        <div className="cockpit-attention-confirm">
+          <InlineConfirm
+            question="Close this fault? No action needed."
+            confirmLabel="Close fault"
+            onConfirm={close}
+            onCancel={() => setConfirming(false)}
+          />
+        </div>
+      )}
+      {problem && <div className="fm-inline-error" role="alert">{problem}</div>}
+    </div>
   );
 }

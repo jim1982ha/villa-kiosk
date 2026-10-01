@@ -174,6 +174,20 @@ ck("the status table's alert words now reach the badge", nowAlerts);
 ck("no second alert word-list in the tree", privateLists.length === 0);
 ck("the device_class override is combined in exactly one module", overrideCombos.length === 0);
 ck("the device_class table is still consulted", binarySensorClassInfo("moisture").alarmState === "on");
+// The LINKED ring (2.496.239): the badge's own colour, never the
+// "Needs attention" red the legend reserves for alarms.
+{
+  const { categorySurfaceRinged } = await import("@/config/EntityCategories");
+  const power = ent("sensor.x", "12", "power");
+  const linked = badgeFaceAndRing({ ...read("sensor", power), linkedOn: true });
+  const rest = badgeFaceAndRing(read("sensor", power));
+  ck("a linked entity on rings the badge, the face unchanged", linked.face === rest.face && linked.ring !== rest.ring);
+  ck("  ...in the badge's category colour (the 'active' ring), not the alarm red", linked.ring === "active");
+  const leakLinked = badgeFaceAndRing({ ...read("binary_sensor", ent("binary_sensor.tank", "on", "moisture")), linkedOn: true });
+  ck("  ...while a face that IS alerting keeps its red ring", leakLinked.ring === "alert");
+  const s = categorySurfaceRinged("energy", linked.face, linked.ring, "#123456");
+  ck("  ...and a per-badge colour is the ring's colour", s.ring === "#123456");
+}
 ck("both members of UNKNOWN_STATES reach every reader the same way", bothMembersAgree);
 ck("no reader spells the pair out for itself", strayPairs.length === 0);
 ck("  ...and the deliberately wider set is still wider",

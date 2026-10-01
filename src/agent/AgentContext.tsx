@@ -12,7 +12,7 @@ import { useProfile } from "@/auth/ProfileContext";
 import { roleCan } from "@/auth/permissions";
 import { useStoreRefresh, STORE_ACTIVE_MS } from "@/hooks/useStoreRefresh";
 import {
-  answerAgentMessage, fetchAgentMessages, fetchAgentStatus,
+  answerAgentMessage, clearAgentMessages, fetchAgentMessages, fetchAgentStatus,
   type AgentMessage, type AgentStatus, type AnswerResult,
 } from "./agentApi";
 import { agentVisible } from "./agentView";
@@ -31,6 +31,8 @@ interface AgentContextValue {
   /** Show anything about the agent at all (profile may, and it is configured). */
   visible: boolean;
   answer: (messageId: string, buttonId: string) => Promise<AnswerResult>;
+  /** Clear these messages for everyone; null on success, else what went wrong. */
+  clear: (ids: readonly string[]) => Promise<string | null>;
   refresh: () => void;
   registerWatcher: () => () => void;
 }
@@ -71,10 +73,19 @@ export function AgentProvider({ children }: { children: ReactNode }) {
     return result;
   }, [refresh]);
 
+  const clear = useCallback(async (ids: readonly string[]) => {
+    if (ids.length === 0) return null;
+    const result = await clearAgentMessages(ids);
+    // Gone from this screen at once; the re-read below confirms it.
+    if (result.ok) setMessages((list) => list.filter((m) => !ids.includes(m.id)));
+    refresh();
+    return result.ok ? null : result.message;
+  }, [refresh]);
+
   const visible = allowed && agentVisible(status);
   const value = useMemo(
-    () => ({ status, messages, visible, answer, refresh, registerWatcher }),
-    [status, messages, visible, answer, refresh, registerWatcher],
+    () => ({ status, messages, visible, answer, clear, refresh, registerWatcher }),
+    [status, messages, visible, answer, clear, refresh, registerWatcher],
   );
   return (
     <AgentContext.Provider value={value}>

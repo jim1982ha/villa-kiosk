@@ -72,6 +72,10 @@
    ReadinessTab's "All devices reporting" card, the one check with an inline
    action. */
 .fm-row-title-action { margin-left: auto; }
+/* A row's own "sure?" (the fault's one-step close): a line of its own under
+   the record, its question and buttons wrapping on a phone. */
+.fm-row-confirm { flex: 1 1 100%; }
+.fm-row-confirm .modal-actions { flex-wrap: wrap; align-items: center; }
 .fm-row-sub { font-size: var(--text-xs); }
 
 /* A record that opens for editing when tapped. The cursor and hover lift are

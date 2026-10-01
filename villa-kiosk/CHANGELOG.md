@@ -1,3 +1,13 @@
+## 2.496.239
+
+### Added
+- **You can clear VESTA Agent messages.** Each message in the VESTA Agent window has a small "Clear" button, and when any message is answered or expired a "Clear answered (N)" button appears at the bottom left. A message that is still waiting for an answer asks "Clear it?" first, because once it is cleared nobody can answer it. Clearing removes the message for every device; the answers people already gave are kept for the agent.
+- **Close a fault in one step when nothing needs doing.** In the Faults tab, an open or in-progress fault now has "Close — no action needed" beside "Mark in progress" / "Mark resolved". In the Cockpit, each fault under "Needs attention" has a small "Close" button. Both ask once, then mark the fault resolved with the note "Closed without action" — no cost, and it is not counted as work done. The usual two-step way (in progress, then resolved with a cost) is unchanged.
+
+### Changed
+- **The ring a linked switch puts on a badge is now the badge's own colour, not red.** When a device's linked switch is on (for example a pump's power badge whose relay is on), its badge on the map, its list rows and the icon at the top of its window get a ring in the same colour as the badge's icon — blue for a power badge. Red stays only for "Needs attention" (an unlocked door, a leak, low battery). The Map colours guide (?) has a new line, "Linked device on", showing it.
+- **A room chip (or a group card showing a count) no longer turns red just because a device in it is on.** It turns red only when a device in it needs attention; a device that is merely on gives it a neutral ring.
+
 ## 2.496.238
 
 ### Changed

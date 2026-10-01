@@ -46,7 +46,8 @@ export interface RoomChip {
    */
   label: string;
   ids: string[]; centre: Vector3; rooms: number; roomNames: string[];
-  ringRed: boolean; unavailable: boolean;
+  /** red: a member needs attention; on: a member is on (and none needs attention) — never red for "on". */
+  ringRed: boolean; ringOn: boolean; unavailable: boolean;
   /** True-perspective screen position and half-extents — the merge test only.
    *  The collision test re-projects `centre` onto the view plane instead; see
    *  CHIP_COLLISION for why the two spaces are not the same one. */
@@ -71,22 +72,24 @@ export interface ChipMember {
 
 /**
  * One chip per CLUSTERED room, in first-seen order, unmeasured. A chip's centre
- * is its members' mean position; its ring is red if any member is on or
- * alerting; it is marked unavailable if any member is.
+ * is its members' mean position; its ring is red if any member is alerting
+ * (needs attention), the neutral "on" ring if any member is on, none otherwise;
+ * it is marked unavailable if any member is.
  */
 export function bucketRoomChips(
   members: readonly ChipMember[],
   clustered: (roomKey: string) => boolean,
   display: (roomKey: string) => string,
 ): RoomChip[] {
-  const groups = new Map<string, { ids: string[]; sum: Vector3; ringRed: boolean; unavailable: boolean }>();
+  const groups = new Map<string, { ids: string[]; sum: Vector3; ringRed: boolean; ringOn: boolean; unavailable: boolean }>();
   for (const m of members) {
     if (!clustered(m.room)) continue;
     let g = groups.get(m.room);
-    if (!g) { g = { ids: [], sum: Vector3.Zero(), ringRed: false, unavailable: false }; groups.set(m.room, g); }
+    if (!g) { g = { ids: [], sum: Vector3.Zero(), ringRed: false, ringOn: false, unavailable: false }; groups.set(m.room, g); }
     g.ids.push(m.id);
     g.sum.addInPlaceFromFloats(m.pos.x, m.pos.y, m.pos.z);
-    if (ringsSummary(m.kind)) g.ringRed = true;
+    if (m.kind === "alert") g.ringRed = true;
+    else if (m.kind === "on") g.ringOn = true;
     if (m.kind === "unavailable") g.unavailable = true;
   }
   const chips: RoomChip[] = [];
@@ -97,7 +100,7 @@ export function bucketRoomChips(
     chips.push({
       key, keys: [key], room, label: room, ids: g.ids.slice(),
       centre: g.sum.scale(1 / g.ids.length), rooms: 1, roomNames: [room],
-      ringRed: g.ringRed, unavailable: g.unavailable,
+      ringRed: g.ringRed, ringOn: g.ringOn && !g.ringRed, unavailable: g.unavailable,
       x: 0, y: 0, halfW: 0, halfH: 0,
     });
   }
@@ -131,11 +134,23 @@ export type RingMember = { kind?: string; ring?: string | null } | null;
  *     folds in plain "on" — three merely-connected cameras drew a red card
  *     round three idle chips. An unreported member is not alerting.
  *   DRAWING A COUNT      nothing inside says anything, so the room chip's rule:
- *     red if ANY member rings (ringsSummary).
+ *     red if ANY member alerts. A member merely ON rings it in the neutral
+ *     "on" colour instead (summaryRingOn).
+ *
+ * ⚠️ RED IS "NEEDS ATTENTION", NEVER "ON" (owner, 2026-10-01): a count chip
+ * went red because a pump was running, and red is the Map-colours legend's
+ * "Needs attention". A device on is a neutral ring; red stays for an alert.
  */
 export function summaryRingRed(members: readonly RingMember[], showingDevices: boolean): boolean {
   if (showingDevices) return members.length > 0 && members.every((m) => m?.ring === "alert");
-  return members.some((m) => ringsSummary(m?.kind));
+  return members.some((m) => m?.kind === "alert");
+}
+
+/** A count summary's neutral "on" ring: a member is on and none alerts. A card
+ *  showing its devices has none — each chip already carries its own ring. */
+export function summaryRingOn(members: readonly RingMember[], showingDevices: boolean): boolean {
+  if (showingDevices) return false;
+  return !members.some((m) => m?.kind === "alert") && members.some((m) => ringsSummary(m?.kind));
 }
 
 /**
@@ -155,5 +170,6 @@ export function combineChips(keep: RoomChip, drop: RoomChip): void {
   keep.roomNames = [...keep.roomNames, ...drop.roomNames];
   keep.keys = [...keep.keys, ...drop.keys];
   keep.ringRed = keep.ringRed || drop.ringRed;
+  keep.ringOn = (keep.ringOn || drop.ringOn) && !keep.ringRed;
   keep.unavailable = keep.unavailable || drop.unavailable;
 }

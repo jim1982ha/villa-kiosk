@@ -14,7 +14,7 @@ import { useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, Plus, Wrench } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
-import { useFmData } from "@/fm/FmDataContext";
+import { useFmData, fmWriteProblem } from "@/fm/FmDataContext";
 import { isTicketOpen, isTicketResolved, localStamp, ticketStats, ticketRank, TICKET_NEXT } from "@/fm/fmEngine";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
@@ -23,6 +23,7 @@ import FaultStageModal from "./FaultStageModal";
 import NotesField from "./NotesField";
 import DeviceSearchPicker, { type DeviceOption } from "./DeviceSearchPicker";
 import AgentMark from "./AgentMark";
+import InlineConfirm from "@/components/common/InlineConfirm";
 
 /** Read-only evidence strips never call back — a stable identity keeps the
  *  memoised row from re-rendering on every parent update. */
@@ -50,7 +51,7 @@ export default function FaultsTab(
     onFaultFormOpened?: () => void;
   },
 ) {
-  const { data, addTicket, updateTicket, removeTicket } = useFmData();
+  const { data, addTicket, updateTicket, removeTicket, closeTicket } = useFmData();
   const { resolvedRooms } = useConfig();
   const [adding, setAdding] = useState(false);
   /** Id of the fault being edited, or null when the form is raising a new one.
@@ -67,6 +68,17 @@ export default function FaultsTab(
   /** The fault whose stage change is being recorded, and where it's going. */
   const [staging, setStaging] = useState<{ ticket: FmTicket; to: FmTicketStatus } | null>(null);
   const [showBroken, setShowBroken] = useState(false);
+  /** The fault whose one-step close ("no action needed") is being confirmed,
+   *  and the reason the last close did not land. */
+  const [closingId, setClosingId] = useState<string | null>(null);
+  const [closeError, setCloseError] = useState<{ id: string; text: string } | null>(null);
+
+  const closeNoAction = async (id: string) => {
+    setCloseError(null);
+    const problem = fmWriteProblem(await closeTicket(id));
+    setClosingId(null);
+    if (problem) setCloseError({ id, text: problem });
+  };
 
   const resetForm = () => {
     setAdding(false); setEditingId(null);
@@ -322,7 +334,7 @@ export default function FaultsTab(
             <span className={`fm-badge ${isTicketResolved(t) ? "ok" : t.status === "open" ? "overdue" : "due-soon"}`}>
               {LABEL[t.status]}
             </span>
-            {TICKET_NEXT[t.status] && (
+            {closingId !== t.id && TICKET_NEXT[t.status] && (
               <button className="btn ghost"
                 // Never a bare status flip any more: every transition goes
                 // through the same dialog, so the record always carries who
@@ -330,6 +342,31 @@ export default function FaultsTab(
                 onClick={(e) => { e.stopPropagation(); setStaging({ ticket: t, to: TICKET_NEXT[t.status]! }); }}>
                 Mark {LABEL[TICKET_NEXT[t.status]!].toLowerCase()}
               </button>
+            )}
+            {/* ⚠️ THE ONE-STEP CLOSE, BESIDE THE TWO-STEP FLOW, NOT INSTEAD
+                OF IT. Many faults are obsolete — raised automatically and
+                since gone away — and walking each through "in progress" and
+                a cost dialog recorded work nobody did. This one leaves
+                "Closed without action" on the history, and no completion or
+                cost (fmEngine.withTicketClosed). */}
+            {closingId !== t.id && !isTicketResolved(t) && (
+              <button className="btn ghost"
+                onClick={(e) => { e.stopPropagation(); setCloseError(null); setClosingId(t.id); }}>
+                Close — no action needed
+              </button>
+            )}
+            {closingId === t.id && (
+              <div className="fm-row-confirm">
+                <InlineConfirm
+                  question="Close this fault? Nothing was done — no cost is recorded."
+                  confirmLabel="Close fault"
+                  onConfirm={() => closeNoAction(t.id)}
+                  onCancel={() => setClosingId(null)}
+                />
+              </div>
+            )}
+            {closeError?.id === t.id && (
+              <div className="fm-inline-error fm-row-confirm" role="alert">{closeError.text}</div>
             )}
           </ErasableRow>
         ))}

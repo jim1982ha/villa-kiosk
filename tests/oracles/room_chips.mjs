@@ -8,7 +8,7 @@
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
-const { bucketRoomChips, combineChips, chipSuffixOf, summaryRingRed } = await import("@/babylon/roomChips");
+const { bucketRoomChips, combineChips, chipSuffixOf, summaryRingRed, summaryRingOn } = await import("@/babylon/roomChips");
 const { mergeOverlapping } = await import("@/babylon/boxMerge");
 
 const M = (id, room, x, kind) => ({ id, room, pos: { x, y: 1, z: 0 }, kind });
@@ -25,7 +25,12 @@ const chips = bucketRoomChips(members, clustered, display);
 ck("one chip per CLUSTERED room, in first-seen order", chips.map((c) => c.key).join() === "kitchen,bedroom", chips.map((c) => c.key));
 ck("a chip prints the room's own spelling, not its key", chips[1].room === "Bedroom 1" && chips[1].label === "Bedroom 1");
 ck("its centre is its members' mean position", chips[0].centre.x === 1, chips[0].centre);
-ck("a member that is on rings the chip red", chips[0].ringRed === true);
+// owner, 2026-10-01: red is the legend's "Needs attention" — a device merely ON never rings red
+ck("a member that is on gives the chip the neutral 'on' ring, NOT red", chips[0].ringOn === true && chips[0].ringRed === false);
+{
+  const alerting = bucketRoomChips([M("lock.d", "door", 0, "alert"), M("light.d", "door", 1, "on")], () => true, (k) => k);
+  ck("a member that needs attention rings it red, and red wins over 'on'", alerting[0].ringRed === true && alerting[0].ringOn === false);
+}
 ck("an unavailable member dims it, and does NOT ring it", chips[1].unavailable === true && chips[1].ringRed === false);
 
 console.log("\n  merging:");
@@ -36,7 +41,7 @@ console.log("\n  merging:");
   ck("  ...its centre is weighted by members (2 at x=1, 1 at x=10 → 4)", Math.abs(k.centre.x - 4) < 1e-9, k.centre.x);
   ck("  ...it keeps the rooms' NAMES, so a tap can offer them", k.roomNames.join() === "Kitchen,Bedroom 1", k.roomNames);
   ck("  ...and every key it now stands for", k.keys.join() === "kitchen,bedroom", k.keys);
-  ck("  ...and either one's ring and dimming", k.ringRed && k.unavailable);
+  ck("  ...and either one's ring and dimming", k.ringOn && !k.ringRed && k.unavailable);
   ck("  ...and prints \"+1\" for the room it swallowed", k.rooms === 2 && chipSuffixOf(k) === "+1");
 }
 {
@@ -56,13 +61,18 @@ console.log("\n  a summary's ring (2.496.141 — was inline in EntityVisuals, un
   ck("  ...three merely-connected cameras (kind 'on', ring not alert) do not ring the card",
      !summaryRingRed([{ kind: "on", ring: "linked" }, { kind: "on", ring: "linked" }, { kind: "on", ring: "linked" }], true));
   ck("  ...a member HA has not reported is not alerting", !summaryRingRed([alert, null], true));
-  ck("drawing a count: red when ANY member is on or alerting", summaryRingRed([off, on], false) && summaryRingRed([{ kind: "alert" }], false));
+  ck("drawing a count: red only when a member ALERTS, never because one is on",
+     summaryRingRed([{ kind: "alert" }, on], false) && !summaryRingRed([off, on], false));
+  ck("  ...a member on gives the neutral 'on' ring instead", summaryRingOn([off, on], false) && !summaryRingOn([{ kind: "alert" }, on], false));
+  ck("  ...a card showing its devices has no 'on' ring (each chip carries its own)", !summaryRingOn([on, on], true));
   ck("  ...not for unavailable (dimming is its signal), off, or unreported", !summaryRingRed([na, off, null], false));
-  ck("the room chip keeps the count rule", bucketRoomChips([M("a", "r", 0, "on"), M("b", "r", 1, "off")], () => true, (k) => k)[0].ringRed
+  ck("the room chip keeps the count rule", bucketRoomChips([M("a", "r", 0, "on"), M("b", "r", 1, "off")], () => true, (k) => k)[0].ringOn
+     && bucketRoomChips([M("a", "r", 0, "alert"), M("b", "r", 1, "off")], () => true, (k) => k)[0].ringRed
      && !bucketRoomChips([M("a", "r", 0, "unavailable")], () => true, (k) => k)[0].ringRed);
   const ev = (await import("node:fs")).readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
   ck("the group card asks summaryRingRed and keeps no rule of its own",
-     /summaryRingRed\(g\.members\.map/.test(ev) && !/ringRed = true;|if \(ring !== "alert"\) ringRed = false/.test(ev));
+     /summaryRingRed\(ringMembers, showingDevices\)/.test(ev) && /summaryRingOn\(ringMembers, showingDevices\)/.test(ev)
+     && !/ringRed = true;|if \(ring !== "alert"\) ringRed = false/.test(ev));
 }
 
 done("✅ a room chip says who is in it, merged or not");

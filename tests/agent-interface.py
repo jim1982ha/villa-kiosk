@@ -393,6 +393,45 @@ async def main() -> None:
     ck("a client cannot rewrite an earlier answer", r.status == 400
        and stored_choices[0]["button_id"] == "approve", (r.status, stored_choices))
 
+    # ── a person clears messages (2.496.239) ─────────────────────────────
+    print("\n  clearing messages:")
+
+    async def clear(headers, payload):
+        r = await post("/agent-messages/clear", headers=headers, json=payload)
+        return r.status, await r.json()
+
+    def stored_ids():
+        return [m["id"] for m in json.loads((TMP / "data" / "agent-messages.json").read_text())["messages"]]
+
+    before = stored_ids()
+    status, _ = await clear(cookie("guest"), {"ids": [mid]})
+    ck("a guest cannot clear: 403", status == 403, status)
+    status, _ = await clear({**cookie("ops"), "Sec-Fetch-Site": "cross-site"}, {"ids": [mid]})
+    ck("  ...nor another site riding a session: 403", status == 403, status)
+    status, _ = await clear({}, {"ids": [mid]})
+    ck("  ...nor no session at all: 401", status == 401, status)
+    for bad in ({"ids": ["../agent-choices"]}, {"ids": [7]}, {"ids": []}, {"ids": mid}, {},
+                {"ids": ["msg_" + "0" * 15]}, {"ids": ["msg_" + "0" * 16] * (proxy.AGENT_MAX_MESSAGES + 1)}):
+        status, _ = await clear(cookie("ops"), bad)
+        ck(f"  ...an id list that is not msg_ ids: 400 ({json.dumps(bad)[:40]})", status == 400, status)
+    ck("  ...and none of that removed anything", stored_ids() == before)
+    status, body = await clear(cookie("ops"), {"ids": [mid, "msg_ffffffffffffffff"]})
+    ck("ops clears an answered message; an unknown id is ignored, not refused",
+       status == 200 and body.get("cleared") == [mid], (status, body))
+    ck("  ...gone from the store, every other message kept",
+       stored_ids() == [i for i in before if i != mid], stored_ids())
+    status, body = await jget("/agent-messages", cookie("owner"))
+    ck("  ...and from what the Kiosk reads", mid not in {m["id"] for m in body["data"]["messages"]})
+    choices_now = json.loads((TMP / "data" / "agent-choices.json").read_text())["choices"]
+    ck("  ...while its ANSWER stays in the agent's cursor", any(c["message_id"] == mid for c in choices_now))
+    status, body = await jget("/agent/v1/choices?since=0", bearer())
+    ck("  ...which the agent still reads", status == 200 and any(c["message_id"] == mid for c in body["choices"]))
+    status, body = await clear(INGRESS, {"ids": [mid]})
+    ck("clearing it again (another device): 200, nothing cleared", status == 200 and body.get("cleared") == [], (status, body))
+    status, body = await clear(cookie("owner"), {"ids": [owner_only, expired]})
+    ck("the owner clears an open question and an expired one together",
+       status == 200 and sorted(body.get("cleared", [])) == sorted([owner_only, expired]), (status, body))
+
     # ── presence (PLAN A7) ───────────────────────────────────────────────
     print("\n  presence:")
     status, body = await jget("/agent-status", cookie("ops"))

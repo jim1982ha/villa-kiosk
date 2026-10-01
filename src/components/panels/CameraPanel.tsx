@@ -658,7 +658,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
           {/* Linked entity on/off — the camera's stand-in for the switch
               BasePanel shows at the top of every other panel. Styled as an
               icon-btn so it sits in this cluster naturally; .on marks the
-              live state, matching the badge's red ring.
+              live state, matching the badge's ring.
               Vertical (phone-landscape) rail order deliberately differs from
               this DOM/portrait order — see vOrder: Close top, Fullscreen 2nd,
               Next above Previous, this detection toggle last. Portrait order

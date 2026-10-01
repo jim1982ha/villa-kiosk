@@ -113,6 +113,16 @@
 
 /* --- Cockpit page (CockpitModal) — villa-wide status report ------------- */
 .cockpit-attention-list { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+/* One item: the row, with a fault's "Close" BESIDE it (the row itself may be
+   a button), and its "sure?" on a line of its own beneath, wrapping on a phone. */
+.cockpit-attention-item { display: flex; flex-direction: column; gap: 4px; }
+.cockpit-attention-line { display: flex; align-items: stretch; gap: 6px; }
+.cockpit-attention-line > .cockpit-attention-row { flex: 1 1 auto; min-width: 0; }
+.cockpit-attention-close {
+  flex: none; display: inline-flex; align-items: center; gap: 2px;
+  min-height: 36px; padding: 0 var(--space-2); font-size: var(--text-xs);
+}
+.cockpit-attention-confirm .modal-actions { flex-wrap: wrap; align-items: center; }
 .cockpit-attention-row {
   display: flex; align-items: center; gap: 10px; width: 100%;
   padding: 10px 12px; border-radius: 10px; text-align: left;

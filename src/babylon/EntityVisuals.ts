@@ -112,7 +112,7 @@ import { FloorProbe } from "./floorProbe";
 import { axisWorldScale } from "./meshUnits";
 import type { LightReading } from "./lightPoolSet";
 import { OcclusionSweep } from "./occlusionSweep";
-import { summaryRingRed, type RoomChip } from "./roomChips";
+import { summaryRingOn, summaryRingRed, type RoomChip } from "./roomChips";
 import { rungAt, referenceDepthAt, iconZoomAt, viewportPx } from "./badgeScale";
 import { solveRoomZoom } from "./roomZoomSolver";
 import { RoomFocus } from "./roomFocus";
@@ -934,7 +934,7 @@ export class EntityVisuals {
   /** linkedEntityId -> device entity_ids whose badge ring it drives. Generic
    *  over ANY entity type on either side. */
   private linkedEntityIndex = new Map<string, string[]>();
-  /** Devices whose linkedEntityId is currently "on" — rings red, applied
+  /** Devices whose linkedEntityId is currently "on" — ringed in the badge's own colour, applied
    *  uniformly for every entity type in badgeKind (see there). */
   private linkActiveIds = new Set<string>();
   /** Floor-glow overlay for physical (non-camera) motion/presence sensors —
@@ -2501,7 +2501,7 @@ export class EntityVisuals {
   }
 
   /** Counterpart to applyMotionRouting for EntityMapping.linkedEntityId: when
-   *  a linked entity changes state, ring red every device that references it
+   *  a linked entity changes state, ring every device that references it
    *  (that device's OWN badge, not the linked entity's — e.g. a camera whose
    *  detection switch was just armed). Fully independent of the beam path
    *  above: different source field, different visual, no shared state. */
@@ -5063,6 +5063,7 @@ export class EntityVisuals {
       // without a rebuild.
       const rest = categorySurface("others", "off");
       const alert = categorySurface("others", "alert");
+      const active = categorySurface("others", "active");   // "a member is on": never the attention red
       const surface = rest.fill;
       for (const g of groups) {
         // A summary whose every member is behind a wall is behind it too — the
@@ -5186,13 +5187,15 @@ export class EntityVisuals {
         // member rings when it draws a count — roomChips.summaryRingRed, which
         // carries the reasons. This only reads the members.
         const showingDevices = drawn >= 2;
-        const ringRed = summaryRingRed(g.members.map((i) => {
+        const ringMembers = g.members.map((i) => {
           const st = this.lastState.get(shown[i].id);
           if (!st) return null;
           return showingDevices
             ? { ring: badgeFaceAndRing(this.reading(shown[i].lbl.type, st, this.linkActiveIds.has(shown[i].id))).ring }
             : { kind: this.badgeKind(shown[i].lbl.type, st) };
-        }), showingDevices);
+        });
+        const ringRed = summaryRingRed(ringMembers, showingDevices);
+        const ringOn = summaryRingOn(ringMembers, showingDevices);
         // A badge is never ringless — even at rest it carries the hairline
         // the brand guidelines give the idle state, which is what keeps it a
         // deliberate object rather than a shape on the floor. Same here.
@@ -5201,7 +5204,7 @@ export class EntityVisuals {
         // one card or two with real space between them. `thickness` must be 0
         // as well as the background empty: a Rectangle insets its children by
         // its border, so a host with one would shift every pixel offset below.
-        const frame = badgeRing(ringRed ? alert : rest, this.metrics.cardHeightPx, this.metrics);
+        const frame = badgeRing(ringRed ? alert : ringOn ? active : rest, this.metrics.cardHeightPx, this.metrics);
         for (const sub of c.cards) {
           applyBadgeFrame(sub, frame, lay.pitch);
           sub.background = surface;
@@ -5489,6 +5492,7 @@ export class EntityVisuals {
     const scale = this.effectiveScale();
     const chipRest = categorySurface("others", "off");
     const chipAlert = categorySurface("others", "alert");
+    const chipOn = categorySurface("others", "active");
     for (const chip of chips) {
       // A chip whose every device is behind a wall is behind that wall too.
       //
@@ -5514,11 +5518,11 @@ export class EntityVisuals {
       // A chip that absorbed others says so with a "+N" suffix, so the count
       // pill's total is never mistaken for one room's device count.
       c.text.text = chip.label;
-      // The chip's own ring mirrors the individual badge ring rule exactly
-      // (BADGE_RING): red when at least one member is "on" or "alert",
-      // otherwise no ring — the only attention signal available once the
-      // individual badges are gone.
-      const frame = badgeRing(chip.ringRed ? chipAlert : chipRest, this.metrics.cardHeightPx, this.metrics);
+      // The chip's ring: red when a member needs attention ("alert"), the
+      // neutral "on" ring when a member is on, none otherwise — the only signal
+      // left once the individual badges are gone. Never red for "on" (owner,
+      // 2026-10-01: red is the legend's "Needs attention").
+      const frame = badgeRing(chip.ringRed ? chipAlert : chip.ringOn ? chipOn : chipRest, this.metrics.cardHeightPx, this.metrics);
       applyBadgeFrame(c.container, frame, this.summaryMetrics().size);
       // The count pill itself carries the room's REPORTING status — red if
       // at least one member is unavailable (HA has lost contact with it),

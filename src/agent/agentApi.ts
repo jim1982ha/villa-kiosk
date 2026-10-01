@@ -153,6 +153,27 @@ export async function answerAgentMessage(messageId: string, buttonId: string): P
   }
 }
 
+/** Clear messages from the agent area, for every device. An id the add-on no
+ *  longer has (cleared elsewhere) is ignored there, not refused. The answers
+ *  people gave are kept: the agent still reads them through its cursor. */
+export async function clearAgentMessages(
+  ids: readonly string[],
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    const r = await backendFetch(ingressPath("agent-messages/clear"), {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+    if (r.ok) return { ok: true };
+    const d = (await r.json().catch(() => ({}))) as { error?: unknown };
+    return { ok: false, message: str(d.error) || `The kiosk refused to clear (HTTP ${r.status}).` };
+  } catch {
+    return { ok: false, message: "The kiosk could not be reached." };
+  }
+}
+
 /** Share the rooms THIS device resolved for the villa's devices, so the
  *  agent's villa model can place a device Home Assistant has no area for
  *  exactly where the Kiosk shows it (see RoomShare). */

@@ -30,6 +30,9 @@ export interface AttentionItem {
    *  panel) — a fault/schedule with no device behind it (a whole-villa task,
    *  a free-text device description) has none, so it renders as read-only. */
   entityId?: string;
+  /** Set on a fault: the Facility ticket it is, so the row can close it in
+   *  one step (FmDataContext.closeTicket). */
+  ticketId?: string;
 }
 
 /**
@@ -73,6 +76,7 @@ export function buildAttentionItems(opts: {
       detail: t.status === "in_progress" ? "In progress" : "Open fault",
       room: t.room,
       entityId: t.entityId,
+      ticketId: t.id,
     });
   }
 

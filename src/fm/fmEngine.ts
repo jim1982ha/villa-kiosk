@@ -413,6 +413,32 @@ export function withTicketAdvanced(
   };
 }
 
+/** The note a one-step close leaves on the fault's history. */
+export const CLOSED_WITHOUT_ACTION = "Closed without action";
+
+/**
+ * Close a fault in ONE step, nothing done: an obsolete or duplicate fault
+ * (often one the VESTA Agent raised automatically and that has since gone
+ * away). Resolved, stamped now, with a "Closed without action" update — and
+ * deliberately NO completion and NO cost: nothing was done, and counting it
+ * as work would inflate every "work done" figure (see withTicketAdvanced).
+ * A fault already resolved, or unknown, is left exactly as it is.
+ */
+export function withTicketClosed(d: FmData, id: string, k: Pick<FmStamp, "now">): FmData {
+  const t = d.tickets.find((x) => x.id === id);
+  if (!t || isTicketResolved(t)) return d;
+  const at = k.now;
+  return {
+    ...d,
+    tickets: d.tickets.map((x) => (x.id !== id ? x : {
+      ...x,
+      status: "resolved",
+      resolvedAt: at,
+      updates: [...(x.updates ?? []), { at, status: "resolved", note: CLOSED_WITHOUT_ACTION, photoIds: [] }],
+    })),
+  };
+}
+
 
 // ── Rules that lived in the screens (round 13, 2.496.183) ─────────────────
 // Each was written in a component or the store's context, where only a regex

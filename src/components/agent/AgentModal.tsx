@@ -5,15 +5,16 @@
 // a profile with viewAgent and only while the agent is configured.
 
 import { useState } from "react";
-import { Bot, CircleAlert, Info, TriangleAlert, ChevronRight } from "lucide-react";
+import { Bot, CircleAlert, Info, TriangleAlert, ChevronRight, X } from "lucide-react";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { displayLabelFor } from "@/config/EntityMap";
 import { ROLE_LABELS, isRole } from "@/auth/roles";
 import ReportPreview from "@/components/fm/ReportPreview";
+import InlineConfirm from "@/components/common/InlineConfirm";
 import { useAgent, useAgentLiveView } from "@/agent/AgentContext";
-import { answerLine, buttonsShown } from "@/agent/agentView";
+import { answerLine, buttonsShown, clearNeedsConfirm, settledIds } from "@/agent/agentView";
 import type { AgentMessage, AgentSeverity, AgentStatus } from "@/agent/agentApi";
 
 export interface AgentModalProps {
@@ -53,8 +54,19 @@ function presenceLine(status: AgentStatus | null): string {
 
 export default function AgentModal({ onClose, onOpenEntity }: AgentModalProps) {
   const dialogRef = useModalA11y(onClose);
-  const { status, messages, answer } = useAgent();
+  const { status, messages, answer, clear } = useAgent();
   useAgentLiveView();
+  // "Clear answered": every answered or expired message at once — the old
+  // ones nobody needs to read again. Never an open question.
+  const settled = settledIds(messages);
+  const [clearingSettled, setClearingSettled] = useState(false);
+  const [footerError, setFooterError] = useState<string | null>(null);
+  const clearSettled = async () => {
+    setClearingSettled(true);
+    setFooterError(null);
+    setFooterError(await clear(settled));
+    setClearingSettled(false);
+  };
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -83,15 +95,23 @@ export default function AgentModal({ onClose, onOpenEntity }: AgentModalProps) {
               <div className="agent-message-list">
                 {messages.map((m) => (
                   <AgentMessageCard key={m.id} message={m} status={status}
-                    answer={answer} onOpenEntity={onOpenEntity} />
+                    answer={answer} clear={clear} onOpenEntity={onOpenEntity} />
                 ))}
               </div>
             )}
+          {footerError && <p className="body-text sev-warning" role="alert">{footerError}</p>}
         </div>
 
         <div className="modal-footer">
-          {/* Two slots, space-between (see .modal-footer): an empty left one. */}
-          <span />
+          {/* Two slots, space-between (see .modal-footer): "Clear answered"
+              on the left when there is anything settled, else an empty one. */}
+          {settled.length > 0
+            ? (
+              <button className="btn ghost" disabled={clearingSettled} onClick={() => void clearSettled()}>
+                <X size={16} /> Clear answered ({settled.length})
+              </button>
+            )
+            : <span />}
           <button className="btn primary" onClick={onClose}>Close</button>
         </div>
       </div>
@@ -99,16 +119,18 @@ export default function AgentModal({ onClose, onOpenEntity }: AgentModalProps) {
   );
 }
 
-function AgentMessageCard({ message: m, status, answer, onOpenEntity }: {
+function AgentMessageCard({ message: m, status, answer, clear, onOpenEntity }: {
   message: AgentMessage;
   status: AgentStatus | null;
   answer: ReturnType<typeof useAgent>["answer"];
+  clear: ReturnType<typeof useAgent>["clear"];
   onOpenEntity: (entityId: string) => void;
 }) {
   const { entities } = useHA();
   const { config } = useConfig();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
   const Icon = SEVERITY_ICON[m.severity];
   const shown = buttonsShown(m, status);
   const answered = answerLine(m, profileLabel);
@@ -125,13 +147,38 @@ function AgentMessageCard({ message: m, status, answer, onOpenEntity }: {
     }
   };
 
+  const doClear = async () => {
+    setBusy(true);
+    setError(null);
+    const problem = await clear([m.id]);
+    // On success the card is gone; only a failure needs this state again.
+    if (problem) { setBusy(false); setConfirming(false); setError(problem); }
+  };
+  // ⚠️ AN OPEN QUESTION ASKS FIRST: cleared, its buttons are gone for everyone
+  // and the agent never gets an answer (agentView.clearNeedsConfirm).
+  const askClear = () => (clearNeedsConfirm(m) ? setConfirming(true) : void doClear());
+
   return (
     <div className={`agent-message agent-sev-${m.severity} agent-state-${m.state}`}>
       <div className="agent-message-head">
         <Icon size={18} className={`agent-sev-icon agent-sev-icon-${m.severity}`} />
         <span className="agent-message-title">{m.title}</span>
         <span className="fm-clause agent">{KIND_LABEL[m.kind]}</span>
+        {!confirming && (
+          <button className="btn ghost agent-message-clear" disabled={busy} onClick={askClear}
+            aria-label={`Clear “${m.title}”`}>
+            <X size={14} /> Clear
+          </button>
+        )}
       </div>
+      {confirming && (
+        <InlineConfirm
+          question="Clear it? It still waits for an answer — the agent will never get one."
+          confirmLabel="Clear"
+          onConfirm={doClear}
+          onCancel={() => setConfirming(false)}
+        />
+      )}
       <div className="muted body-text agent-message-meta">
         <Bot size={12} /> {when(m.createdAt)}
         {m.state === "expired" && " · expired"}

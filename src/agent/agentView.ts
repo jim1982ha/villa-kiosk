@@ -32,6 +32,18 @@ export function answerLine(message: AgentMessage, profileLabel: (p: string) => s
   return `Answered by ${profileLabel(message.answer.profile)} · ${button?.label || message.answer.buttonId}`;
 }
 
+/** Does clearing this message need a "sure?" first? Only while it is still
+ *  OPEN with buttons: cleared, its question is gone and the agent never gets
+ *  an answer. Answered, expired or plain messages clear at once. */
+export function clearNeedsConfirm(message: AgentMessage): boolean {
+  return message.state === "open" && message.buttons.length > 0;
+}
+
+/** The ids "Clear answered" removes: every answered or expired message. */
+export function settledIds(messages: readonly AgentMessage[]): string[] {
+  return messages.filter((m) => m.state === "answered" || m.state === "expired").map((m) => m.id);
+}
+
 /** What RoomShare should send, or null when nothing needs sending: the rooms
  *  this device resolved (empty ones dropped, in a stable order), unless they
  *  are exactly what this device last sent — kept across reloads, so the list
