@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.9 (1 October 2026)
+
+- runner: each `run` record keeps the profile, the model, the tokens (input, output, cache read/write), turns, duration and the first 160 characters of what a person asked.
+- status.costs: the Costs tab's reading (runs, by work, by model, by day, today/7 days/month); UI `/api/costs?days=7|30|90`, a "Costs" tab, a shared 10-row paged table (also "Scheduled jobs run").
+- UI `/api/entities` (the knowledge pack's entities): device pickers for the protected devices and the allowed lists; `policy.LANGUAGES` is the one language list (app and the page's menu).
+- UI: cost limits say per reply / per run, jobs say their cadence, the scheduled runs' monthly maximum; skills show "not working" only.
+
 ## 0.6.8 (1 October 2026)
 
 - send_message: with a chat (a person answered, or a job asked for), `here` only, and any other name is held to that chat; without one (a scheduled job), owner or fm.

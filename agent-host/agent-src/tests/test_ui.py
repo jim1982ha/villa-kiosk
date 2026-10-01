@@ -195,3 +195,91 @@ def test_the_overview_gives_the_apps_version_with_the_agents(ui, monkeypatch):
         return await (await c.get("/api/overview")).json()
     o = call(ui, fn)
     assert (o["app_version"], o["version"]) == ("9.9.9", __version__)
+
+
+def test_the_rules_choose_devices_from_the_villas_own_by_name(ui):
+    # owner, 2026-10-01: "free form text inputs are not suitable" — the pickers list the pack's entities
+    import json
+    with open(ui.pack_path, "w") as f:
+        json.dump({"families": {"security": [{"entity_id": "lock.example_door", "name": "Front door", "area": "Entrance"}],
+                                "power": [{"entity_id": "lock.example_door", "name": "Front door", "area": "Entrance"}]},
+                   "unclassified": [{"entity_id": "scene.example_evening", "name": "Evening", "area": ""}],
+                   "generated_at": "2026-10-01T02:00:00+00:00"}, f)
+
+    async def fn(c):
+        return await (await c.get("/api/entities")).json(), await (await c.get("/api/policy")).json()
+    ents, doc = call(ui, fn)
+    assert ents["entities"] == [{"id": "scene.example_evening", "name": "Evening", "area": ""},
+                                {"id": "lock.example_door", "name": "Front door", "area": "Entrance"}]
+    from vesta_agent.app import LANG
+    from vesta_agent.policy import LANGUAGES
+    assert doc["languages"] == LANGUAGES and LANG is LANGUAGES                  # one list: the agent's and the menu's
+
+
+def test_the_costs_tab_reads_every_run_from_the_agents_records(ui):
+    import json
+    from datetime import datetime, timedelta, timezone
+    from vesta_agent.state import State
+    with open(ui.policy_path) as f:
+        raw = yaml.safe_load(f)
+    owner = -100777
+    raw["chats"] = {**(raw.get("chats") or {}), "owner": owner}
+    with open(ui.policy_path, "w") as f:
+        yaml.safe_dump(raw, f)
+    st = State(ui.state_path)
+    now = datetime.now(timezone.utc)
+    rows = [((now - timedelta(hours=1)), {"who": "job:fm-weekly", "cost_usd": 1.25, "profile": "auto", "model": "claude-sonnet-5",
+                                          "tokens": {"input_tokens": 1000, "output_tokens": 500, "cache_read_input_tokens": 9000}}),
+            ((now - timedelta(days=2)), {"who": f"Ann@{owner}", "cost_usd": 0.2, "profile": "economy", "model": "claude-haiku-4-5",
+                                         "tokens": {"input_tokens": 300, "output_tokens": 50}, "asked": "is the pool ok?"}),
+            ((now - timedelta(days=40)), {"who": "Ann@1", "cost_usd": 9.0}),                              # outside 30 days
+            ((now - timedelta(days=3)), {"who": "Bob@2", "cost_usd": 0.05})]                              # before 0.6.9: no model
+    for at, d in rows:
+        st.db.execute("insert into calls(at, kind, detail) values (?, 'run', ?)", (at.isoformat(), json.dumps(d)))
+    st.db.execute("insert into calls(at, kind, detail) values (?, 'executed', '{}')", (now.isoformat(),))
+    st.db.commit()
+
+    async def fn(c):
+        return await (await c.get("/api/costs?days=30")).json(), await (await c.get("/api/costs?days=999")).json()
+    c, other = call(ui, fn)
+    assert other["days"] == 30 and c["runs_count"] == 3 and c["period"] == 1.5
+    assert [(g["name"], g["runs"], g["cost"]) for g in c["by_work"]] == [("fm-weekly", 1, 1.25), ("Chat replies", 2, 0.25)]
+    assert {g["name"] for g in c["by_model"]} == {"claude-sonnet-5", "claude-haiku-4-5", "not recorded"}
+    reply = next(r for r in c["runs"] if r["person"] == "Ann")
+    assert reply["chat"] == "owner chat" and reply["asked"] == "is the pool ok?" and reply["tokens_in"] == 300
+    bob = next(r for r in c["runs"] if r["person"] == "Bob")
+    assert bob["model"] is None and bob["tokens_in"] is None and bob["chat"] == "private chat"   # recorded before 0.6.9
+    assert len(c["by_day"]) == 30 and sum(d["cost"] for d in c["by_day"]) == 1.5
+
+
+def test_a_run_records_its_brain_model_tokens_and_what_was_asked(ui, monkeypatch):
+    # the Costs tab's source: before 0.6.9 a run kept only who and the cost
+    from claude_agent_sdk import ResultMessage
+    from vesta_agent import runner
+    from vesta_agent.state import State
+
+    class Fake:
+        def __init__(self, options):
+            self.options = options
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def query(self, prompt):
+            pass
+
+        async def receive_response(self):
+            yield ResultMessage(subtype="success", duration_ms=4200, duration_api_ms=4000, is_error=False, num_turns=3,
+                                session_id="s1", total_cost_usd=0.12,
+                                usage={"input_tokens": 800, "output_tokens": 90, "cache_read_input_tokens": 5000})
+    monkeypatch.setattr(runner, "ClaudeSDKClient", Fake)
+    st = State(ui.state_path)
+    asyncio.run(runner.run(ui, "sys", "prompt", None, set(), st, who="job:fm-weekly", profile="economy", asked="x" * 300))
+    import json
+    (d,) = [json.loads(c["detail"]) for c in st.calls_since("2000-01-01") if c["kind"] == "run"]
+    assert d["profile"] == "economy" and d["model"] == runner.PROFILES["economy"][0] and d["turns"] == 3 and d["ms"] == 4200
+    assert d["tokens"] == {"input_tokens": 800, "output_tokens": 90, "cache_read_input_tokens": 5000}
+    assert d["cost_usd"] == 0.12 and len(d["asked"]) == 160

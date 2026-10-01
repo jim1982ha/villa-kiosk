@@ -36,7 +36,7 @@ def agent(tmp_path, monkeypatch):
     v.bot_username = BOT["username"]
     v.runs, v.code = [], []
 
-    async def fake_run(settings_, system, prompt, server, allowed, state, who, resume=None, limit_usd=None, profile=None):
+    async def fake_run(settings_, system, prompt, server, allowed, state, who, resume=None, limit_usd=None, profile=None, asked=None):
         v.runs.append({"who": who, "limit": limit_usd, "profile": profile, "prompt": prompt})
         return runner.RunResult("", None, v.stop_at_limit, 2.5, [], None)
     v.stop_at_limit = False

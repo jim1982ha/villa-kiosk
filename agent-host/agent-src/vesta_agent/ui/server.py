@@ -19,6 +19,7 @@ must not be able to edit the rules that bind it. Standalone: loopback only.
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import os
 import shutil
@@ -118,6 +119,8 @@ class UI:
         r.add_put("/api/policy/form", self.policy_form)
         r.add_put("/api/policy/text", self.policy_text)
         r.add_get("/api/jobs", self.jobs)
+        r.add_get("/api/entities", self.entities)
+        r.add_get("/api/costs", self.costs)
         r.add_get("/api/skills", self.skills_list)
         r.add_post("/api/skills", self.skill_create)
         r.add_delete("/api/skills/{name}", self.skill_delete)
@@ -194,6 +197,40 @@ class UI:
     async def jobs(self, _request):
         return web.json_response({"jobs": self._jobs()})
 
+    # ------------------------------------------------------------------ what the AI cost
+    async def costs(self, request):
+        """The Costs tab: every AI run of the last `days` (7, 30 or 90), from the agent's own records."""
+        from zoneinfo import ZoneInfo
+        from ..policy import Policy
+        from ..routing import Routing
+        days = request.query.get("days", "30")
+        days = int(days) if days in ("7", "30", "90") else 30
+        if not os.path.exists(self.s.state_path):
+            return web.json_response({"days": days, "runs": [], "none": True})
+        try:
+            zone = ZoneInfo(self.s.timezone)
+        except Exception:  # noqa: BLE001 — an unknown zone: UTC days
+            zone = None
+        route = Routing(Policy.load(self.s.policy_path))
+        return web.json_response(status.costs(State(self.s.state_path), days, zone=zone,
+                                              chat_label=lambda cid: route.label(int(cid))))
+
+    # ------------------------------------------------------------------ the villa's devices
+    async def entities(self, _request):
+        """Every entity of the knowledge pack (id, name, area), for the pickers of the rules: chosen by name, not
+        typed as ids. The UI has no Home Assistant token: the pack is what the agent last read (nightly)."""
+        try:
+            pack = json.loads(_read(self.s.pack_path) or b"{}")
+        except (OSError, ValueError):
+            pack = {}
+        seen: dict[str, dict] = {}
+        rows = [r for rs in (pack.get("families") or {}).values() for r in rs] + list(pack.get("unclassified") or [])
+        for r in rows:
+            if isinstance(r, dict) and r.get("entity_id") and r["entity_id"] not in seen:
+                seen[r["entity_id"]] = {"id": r["entity_id"], "name": r.get("name") or r["entity_id"], "area": r.get("area") or ""}
+        return web.json_response({"entities": sorted(seen.values(), key=lambda e: (e["name"].lower(), e["id"])),
+                                  "built": pack.get("generated_at")})
+
     # ------------------------------------------------------------------ policy.yaml
     def _policy(self) -> tuple[str, str]:
         data = _read(self.s.policy_path)
@@ -205,7 +242,8 @@ class UI:
             form, probs = to_form(text), policy_problems(yaml.safe_load(text) if text else {})
         except yaml.YAMLError as e:
             form, probs = None, [f"The file cannot be read as YAML: {e}"]
-        return web.json_response({"text": text, "rev": r, "form": form, "problems": probs})
+        from ..policy import LANGUAGES
+        return web.json_response({"text": text, "rev": r, "form": form, "problems": probs, "languages": LANGUAGES})
 
     def _save_policy(self, new_text: str, base_rev: str) -> dict:
         text, r = self._policy()

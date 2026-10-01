@@ -112,12 +112,14 @@ def build_options(settings, system_prompt: str, server, allowed: set[str], state
 
 
 async def run(settings, system_prompt: str, prompt: str, server, allowed: set[str], state, who: str,
-              resume: str | None = None, limit_usd: float | None = None, profile: str | None = None) -> RunResult:
+              resume: str | None = None, limit_usd: float | None = None, profile: str | None = None,
+              asked: str | None = None) -> RunResult:
     clean_environ()
     opts, denied = build_options(settings, system_prompt, server, allowed, state, who, resume,
                                  limit_usd if limit_usd is not None else settings.reply_limit_usd, profile)
     texts: list[str] = []
     session_id, stopped, cost, err = resume, False, None, None
+    usage, turns, ms = {}, None, None
     try:
         async with ClaudeSDKClient(options=opts) as client:
             await client.query(prompt)
@@ -129,13 +131,20 @@ async def run(settings, system_prompt: str, prompt: str, server, allowed: set[st
                 elif isinstance(msg, ResultMessage):
                     session_id = msg.session_id or session_id
                     cost = msg.total_cost_usd
+                    usage, turns, ms = msg.usage or {}, msg.num_turns, msg.duration_ms
                     stopped = msg.subtype == "error_max_budget_usd"
                     if msg.is_error and not stopped:
                         err = msg.subtype if msg.subtype != "success" else f"api error {msg.api_error_status}"
     except Exception as e:  # noqa: BLE001
         log.exception("agent run failed")
         err = type(e).__name__
-    state.log("run", {"who": who, "cost_usd": cost, "stopped_at_limit": stopped, "denied": denied, "error": err})
+    # ⚠️ WHAT THE COSTS TAB SHOWS (owner, 2026-10-01): the brain, the model and the tokens of each run, with
+    # what was asked — never the answer, never a secret. Before 0.6.9 only who and the cost were kept.
+    tokens = {k: usage.get(k) for k in ("input_tokens", "output_tokens", "cache_read_input_tokens",
+                                         "cache_creation_input_tokens") if isinstance(usage.get(k), int)}
+    state.log("run", {"who": who, "cost_usd": cost, "stopped_at_limit": stopped, "denied": denied, "error": err,
+                      "profile": profile if profile in PROFILES else getattr(settings, "profile", None), "model": opts.model, "tokens": tokens,
+                      "turns": turns, "ms": ms, "asked": (asked or "")[:160] or None})
     if err and resume and not texts:
         # the session could not be resumed (lost, or from an older version): answer in a new one
         return await run(settings, system_prompt, prompt, server, allowed, state, who, None, limit_usd, profile)

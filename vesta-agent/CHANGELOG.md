@@ -1,3 +1,15 @@
+## 0.12.9
+
+### Added
+- **Costs** tab: what the AI cost today, over 7 days, this month and the chosen period (7, 30 or 90 days); a bar per day; the cost by work (chat replies, each AI job) and by model; and every run (when, what it was and who asked, the brain and model, the tokens, the cost, whether it stopped at its limit), 10 to a page. The model and the tokens are recorded from this version on.
+
+### Changed
+- **Devices are chosen by name, not typed.** Protected devices and the allowed lists offer the villa's own devices (name and room, from the agent's nightly reading of Home Assistant); each chosen one shows as a tag with ×.
+- **Language** is a menu of the languages the agent writes in, not a text box.
+- **The AI:** each limit says what it is for ("for each reply", "for each run") and each job says when it runs ("every Monday at 08:00, or when asked in a chat"). Below the table: the most the scheduled runs can cost a month at their limits.
+- **Skills:** the green "on" label is gone; a skill whose files have a problem shows "not working" (it was never a switch).
+- **Overview:** "Scheduled jobs run" is a table, 10 to a page.
+
 ## 0.12.8
 
 ### Fixed

@@ -172,3 +172,22 @@ table.rows td select, table.rows td input { width: 100%; min-width: 0; }
   table.rows.ai td:first-child { grid-column: 1 / -1; }
   table.rows.ai td[colspan] { grid-column: span 2; }
 }
+/* a device picker: the chosen devices as tags (name, room · id, ×), then a box to add one by name */
+.picker { display: grid; gap: 8px; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag { display: inline-flex; align-items: center; gap: 6px; padding: 4px 4px 4px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--text-primary); font-size: var(--text-sm); max-width: 100%; }
+.tag small { color: var(--text-dim); font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tag button { border: 0; background: none; cursor: pointer; color: var(--text-secondary); width: 24px; height: 24px; border-radius: 50%; font-size: 14px; }
+.tag button:hover { background: var(--hairline); }
+.tag.unknown { background: rgba(178, 66, 50, 0.12); }
+/* a paged table (10 rows) and its pager */
+table.data td, table.data th { padding: 8px 10px 8px 0; border-bottom: 1px solid var(--hairline); }
+table.data .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pager { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; }
+.pager .btn[disabled] { opacity: .4; cursor: default; }
+.asked { font-size: var(--text-xs); max-width: 420px; }
+/* the cost per day */
+svg.bars { width: 100%; height: auto; display: block; }
+svg.bars .bar { fill: var(--accent); }
+svg.bars .axis { fill: var(--text-dim); font-size: 10px; }
+.tbl { overflow-x: auto; }

@@ -30,6 +30,11 @@ import yaml
 
 # ------------------------------------------------------------------ constants
 # Refused even with an approval record. Not configurable.
+# The languages a person can be answered in: the agent writes in them, and the VESTA Agent page offers
+# exactly these in its menu (owner, 2026-10-01: no free text).
+LANGUAGES = {"en": "English", "fr": "French", "id": "Indonesian", "de": "German", "es": "Spanish", "it": "Italian",
+             "nl": "Dutch"}
+
 NEVER_DOMAINS = {
     "homeassistant", "hassio", "shell_command", "rest_command", "python_script",
     "pyscript", "command_line", "logger", "recorder", "system_log", "update",

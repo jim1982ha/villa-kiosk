@@ -43,7 +43,7 @@ from .tools import Toolbox, scrub
 
 log = logging.getLogger("vesta")
 
-LANG = {"en": "English", "fr": "French", "id": "Indonesian", "de": "German", "es": "Spanish", "it": "Italian", "nl": "Dutch"}
+from .policy import LANGUAGES as LANG  # noqa: E402 — one list, also the VESTA Agent page's menu
 #: Commands the agent answers. Any other command belongs to Home Assistant's automations.
 OWN_COMMANDS = {"/ask", "/new", "/whoami"}
 
@@ -443,7 +443,8 @@ class Vesta:
             server = tb.server(person, cid, include_web)
             allowed = set(tb.model_tool_names(include_web))
             res = await runner.run(self.s, self.system_prompt(), prompt, server, allowed, self.state,
-                                   who=f"{person.name if person else 'system'}@{cid}", resume=resume)
+                                   who=f"{person.name if person else 'system'}@{cid}", resume=resume,
+                                   asked=None if is_continue else text)
             if res.session_id:
                 self.state.set_session(cid, res.session_id)
             log.info("Answered %s in chat %s (%s)%s", person.name if person else "system", cid,

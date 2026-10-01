@@ -55,3 +55,64 @@ def report(state, store_path: str, hours: int = 24, now: datetime | None = None)
     return {"since": since.isoformat(), "until": now.isoformat(), "scheduled_jobs": jobs,
             "counts": counts, "ai_cost_usd": round(cost, 3), "events": events[-60:],
             "incidents": incidents[-40:]}
+
+
+def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_label=None) -> dict:
+    """What the AI cost, run by run, from the agent's own records (the cost the Anthropic API reported for each
+    run): the VESTA Agent page's Costs tab. Each run: when, the work (a chat reply, or an AI job), who asked
+    and what, the brain and model, the tokens, the cost. Read-only; never a chat id (`chat_label` names the chat)."""
+    now = now or datetime.now(timezone.utc)
+    since = now - timedelta(days=days)
+    local = (lambda t: t.astimezone(zone)) if zone else (lambda t: t)
+    runs = []
+    for c in state.calls_since(since.isoformat()):
+        if c["kind"] != "run":
+            continue
+        try:
+            d = json.loads(c["detail"] or "{}")
+        except ValueError:
+            d = {}
+        who = str(d.get("who") or "")
+        if who.startswith("job:"):
+            kind, work, person, chat = "job", who[4:], None, None
+        else:
+            name, _, cid = who.partition("@")
+            kind, work, person = "chat", "Chat replies", name or None
+            chat = chat_label(cid) if chat_label and cid.lstrip("-").isdigit() else None
+        tok = d.get("tokens") or {}
+        cost = d.get("cost_usd") if isinstance(d.get("cost_usd"), (int, float)) else 0.0
+        runs.append({"at": c["at"], "kind": kind, "work": work, "person": person, "chat": chat, "asked": d.get("asked"),
+                     "profile": d.get("profile"), "model": d.get("model"),
+                     "tokens_in": tok.get("input_tokens"), "tokens_out": tok.get("output_tokens"),
+                     "cache_read": tok.get("cache_read_input_tokens"), "cache_write": tok.get("cache_creation_input_tokens"),
+                     "cost": round(cost, 4), "stopped": bool(d.get("stopped_at_limit")), "error": d.get("error"),
+                     "turns": d.get("turns"), "seconds": round(d["ms"] / 1000) if isinstance(d.get("ms"), (int, float)) else None})
+    runs.sort(key=lambda r: r["at"], reverse=True)
+
+    def total(rs):
+        return round(sum(r["cost"] for r in rs), 2)
+
+    def group(key):
+        out: dict[str, dict] = {}
+        for r in runs:
+            k = r[key] or "not recorded"
+            g = out.setdefault(k, {"name": k, "runs": 0, "cost": 0.0, "tokens_in": 0, "tokens_out": 0})
+            g["runs"] += 1
+            g["cost"] += r["cost"]
+            g["tokens_in"] += (r["tokens_in"] or 0) + (r["cache_read"] or 0) + (r["cache_write"] or 0)
+            g["tokens_out"] += r["tokens_out"] or 0
+        return sorted(({**g, "cost": round(g["cost"], 2)} for g in out.values()), key=lambda g: -g["cost"])
+
+    today = local(now).date()
+    by_day: dict[str, float] = {}
+    for r in runs:
+        day = local(datetime.fromisoformat(r["at"])).date().isoformat()
+        by_day[day] = by_day.get(day, 0.0) + r["cost"]
+    days_list = [(today - timedelta(days=k)).isoformat() for k in range(days - 1, -1, -1)]
+    in_last = lambda n: [r for r in runs if local(datetime.fromisoformat(r["at"])).date() > today - timedelta(days=n)]  # noqa: E731
+    month = [r for r in runs if local(datetime.fromisoformat(r["at"])).date().replace(day=1) == today.replace(day=1)]
+    return {"days": days, "today": total(in_last(1)), "last_7_days": total(in_last(7)), "this_month": total(month),
+            "period": total(runs), "runs_count": len(runs),
+            "by_day": [{"day": d, "cost": round(by_day.get(d, 0.0), 2)} for d in days_list],
+            "by_work": group("work"), "by_model": group("model"), "runs": runs[:300]}
+
