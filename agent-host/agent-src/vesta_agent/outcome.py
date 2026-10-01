@@ -177,12 +177,38 @@ class Outcome:
         return False
 
     async def repair_tickets(self) -> int:
-        """Every open task without its Kiosk ticket gets one (owner, 2026-10-01): a task stored while the
-        Kiosk was off, or by a script whose result was dropped, is never left without a ticket."""
+        """The open tasks and the Kiosk's tickets agree (at each start and each night, owner, 2026-10-01):
+          - a task whose ticket a person resolved in the Kiosk is closed;
+          - a task whose finding is closed (the check no longer sees it) is closed, its ticket resolved —
+            the night check does it as it closes a finding; this catches the ones from before it did;
+          - an open task without its ticket gets one (a task stored while the Kiosk was off, or by a
+            script whose result was dropped).
+        ⚠️ Without the first two the Kiosk's Cockpit only ever grew: 22 "Open fault" for problems gone."""
         if not self.kiosk.enabled:
             return 0
+        store = self._store()
+        try:
+            states = await self.kiosk.ticket_states()
+        except Exception as e:  # noqa: BLE001 — the next start or night tries again
+            log.warning("The Kiosk's tickets could not be read (%s)", type(e).__name__)
+            return 0
+        closed = cleared = 0
+        for t in store.tasks("open"):
+            uid = t.get("todo_uid")
+            if uid and states.get(uid) == "resolved":
+                store.close_task(t["id"], "done_in_kiosk")
+                closed += 1
+                continue
+            rows = [f for f in store.findings() if f["rule_id"] == t["rule_id"] and f["entity_id"] == t["entity_id"]]
+            if rows and not any(f["status"] == "open" for f in rows):
+                store.close_task(t["id"], "cleared")
+                if uid and states.get(uid) not in (None, "resolved"):
+                    await self.kiosk.resolve_ticket(uid, note="Cleared: the check no longer sees it.")
+                cleared += 1
+        if closed or cleared:
+            log.info("Kiosk tickets reconciled: %d task(s) closed in the Kiosk, %d cleared with their ticket", closed, cleared)
         made = 0
-        for t in self._store().tasks("open"):
+        for t in store.tasks("open"):
             if t.get("todo_uid"):
                 continue
             try:

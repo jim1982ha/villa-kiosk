@@ -332,3 +332,30 @@ def test_a_sensor_that_reports_the_same_value_is_not_silent(tmp_path):
     from vesta_shared.store import Store
     silent = [f["entity_id"] for f in Store(str(tmp_path / "s.sqlite")).findings("open") if f["rule_id"] == "PM-SILENT"]
     assert silent == ["sensor.example_level"]
+
+
+def test_a_finding_the_night_no_longer_sees_closes_its_task_and_its_ticket(tmp_path):
+    # villa, 2026-10-01: the finding closed, its task and its Kiosk ticket stayed open for ever
+    nightly = os.path.join(STARTER_SKILLS, "preventive-maintenance", "scripts", "nightly.py")
+    fx = tmp_path / "fx"
+    fx.mkdir()
+    row = {"entity_id": "sensor.example_level", "name": "Tank level", "area": "Garden", "family": "level", "asset": "tank"}
+    (tmp_path / "pack.json").write_text(json.dumps({"villa": "Example Villa", "time_zone": "UTC", "generated_at": "x",
+        "ha_version": None, "areas": [], "people": [], "channels": {}, "unknown_area": [], "unclassified": [],
+        "retention": {"raw_history_days": 10}, "families": {"level": [row]}, "assets": {}}))
+
+    def night(day, reported):
+        (fx / "states.json").write_text(json.dumps({"states": {"sensor.example_level": {
+            "state": "41", "attributes": {}, "last_changed": "2026-09-20T07:00:00+00:00", "last_reported": reported}}}))
+        r = _run(nightly, "--pack", str(tmp_path / "pack.json"), "--store", str(tmp_path / "s.sqlite"),
+                 "--fixture-dir", str(fx), "--as-of", day, "--skip-raw")
+        assert r.returncode == 0, r.stderr
+        return json.loads(r.stdout)
+    first = night("2026-10-01", "2026-09-27T07:00:00+00:00")                       # silent four days: a task
+    (made,) = [a for a in first["actions"] if a["action"] == "ticket"]
+    second = night("2026-10-02", "2026-10-02T01:55:00+00:00")                      # reporting again
+    assert [a for a in second["actions"] if a["action"] == "ticket.resolve"] == [
+        {"action": "ticket.resolve", "task_id": made["task_id"], "note": "Cleared: the nightly check no longer sees it."}]
+    from vesta_shared.store import Store
+    assert Store(str(tmp_path / "s.sqlite")).task(made["task_id"])["status"] == "cleared"
+

@@ -33,6 +33,10 @@ class FakeKiosk:
         self.resolved.append(uid)
         return True
 
+    async def ticket_states(self):
+        return {uid: "resolved" if uid in self.resolved or uid in getattr(self, "closed_by_hand", ()) else "open"
+                for uid in [f"t{i + 1}" for i in range(len(self.tickets))] + list(getattr(self, "known", ()))}
+
 
 def run(coro):
     return asyncio.run(coro)
@@ -107,6 +111,23 @@ def test_an_open_task_without_its_ticket_gets_one_once(agent):
     assert kiosk.tickets == [("Battery low", "sensor.example_battery")]
     assert st.task(lost)["todo_uid"] == "t1"
     assert run(v.outcome.repair_tickets()) == 0                            # nothing left to repair
+
+
+def test_the_tasks_and_the_kiosks_tickets_agree(agent):
+    # villa, 2026-10-01: findings closed every night, their tickets stayed "Open fault" for ever and the
+    # Kiosk's Cockpit only grew (22 faults for problems gone)
+    v, kiosk = agent
+    kiosk.known, kiosk.closed_by_hand = ["t-hand", "t-gone", "t-alert"], ["t-hand"]
+    st = Store(v.s.store_path)
+    by_hand = st.add_task("PM-A", "sensor.example_a", "Closed in the Kiosk"); st.set_task_uid(by_hand, "t-hand")
+    gone = st.add_task("PM-SILENT", "sensor.example_rain", "Rain gauge silent"); st.set_task_uid(gone, "t-gone")
+    st.raise_finding("PM-SILENT", "sensor.example_rain", "level", "2026-09-30", "P3", "silent", {})
+    st.close_finding("PM-SILENT", "sensor.example_rain", "2026-10-01")             # the check no longer sees it
+    alert = st.add_task("automation.example_door", "lock.example_door", "Door left open"); st.set_task_uid(alert, "t-alert")
+    run(v.outcome.repair_tickets())
+    assert st.task(by_hand)["status"] == "done_in_kiosk"                            # a person closed it there
+    assert st.task(gone)["status"] == "cleared" and kiosk.resolved == ["t-gone"]    # gone: closed with its ticket
+    assert st.task(alert)["status"] == "open"                                       # no finding: an alert's task stays
 
 
 def test_the_routing_rule():

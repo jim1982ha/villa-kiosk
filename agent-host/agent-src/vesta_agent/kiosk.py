@@ -131,6 +131,15 @@ class Kiosk:
             return tid
         return await self._edit(change)
 
+    async def ticket_states(self) -> dict[str, str]:
+        """{ticket id: status} of the Facility records, as the Kiosk holds them now."""
+        status, got = await self._req("GET", "/agent/v1/fm-data")
+        if status != 200:
+            raise KioskError(f"reading the Facility records answered {status}")
+        data = got.get("data") if isinstance(got.get("data"), dict) else {}
+        return {t["id"]: str(t.get("status") or "") for t in data.get("tickets") or []
+                if isinstance(t, dict) and isinstance(t.get("id"), str)}
+
     async def resolve_ticket(self, tid: str, note: str | None = None) -> bool:
         """Mark one of the agent's tickets resolved (the FM answered Done). False when it is gone or closed."""
         def change(data: dict) -> bool:

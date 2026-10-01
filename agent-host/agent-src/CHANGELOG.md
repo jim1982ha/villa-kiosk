@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.14 (1 October 2026)
+
+- preventive-maintenance: a state finding closed by the night closes its task ("cleared") and emits ticket.resolve.
+- outcome.repair_tickets reconciles: a task whose Kiosk ticket is resolved is closed ("done_in_kiosk"); a task whose findings are all closed is closed with its ticket resolved; tasks without a finding (alerts) are left alone. kiosk.ticket_states().
+
 ## 0.6.13 (1 October 2026)
 
 - UI: theme switch (theme.js in the head; `data-theme` light/dark, none = auto; tokens for both in app.css).
