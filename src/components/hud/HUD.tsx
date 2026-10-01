@@ -697,7 +697,7 @@ export default function HUD({
                 title={`Signed in as ${ROLE_LABELS[role]} — switch profile`}
                 aria-label={`Signed in as ${ROLE_LABELS[role]} — switch profile`}
               >
-                <span aria-hidden="true">{ROLE_INITIALS[role]}</span>
+                <span aria-hidden="true" className={ROLE_INITIALS[role].length > 1 ? "two" : undefined}>{ROLE_INITIALS[role]}</span>
               </button>
             )}
           </div>

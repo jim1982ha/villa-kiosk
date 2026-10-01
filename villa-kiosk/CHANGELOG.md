@@ -1,3 +1,10 @@
+## 2.496.243
+
+### Changed
+- **The signed-in badge looks like the other top-bar icons.** A thin circle drawn like the gear beside it, the same size and colour, with its letter(s) centred — O, FM or G. It was a large filled disc with the letter off-centre.
+- **The time is part of the title line.** The villa name's own font and soft halo, a little smaller and lighter, instead of a separate pill.
+- **The V of the app icon sits in the middle of its tile.** A little smaller and lower, so it looks centred (a V is heavy at the top), everywhere the app icon appears.
+
 ## 2.496.242
 
 ### Changed
