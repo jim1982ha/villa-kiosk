@@ -11,6 +11,11 @@
      OWN icon+label were centred fine internally. */
   display: flex; align-items: center; gap: 4px; padding: 10px 22px; overflow-x: auto;
   scrollbar-width: none; border-bottom: 1px solid var(--hairline);
+  /* ⚠️ NEVER SHRINKS (owner, 2026-10-01). The modal is a flex column: with a
+     long tab (Faults) the row was squeezed below its own height, and since
+     overflow-x:auto clips vertically too, the active pill showed cut in half
+     with the cards scrolling right under it. Short tabs (Today) never showed it. */
+  flex-shrink: 0;
 }
 .fm-tabs::-webkit-scrollbar { display: none; }
 .fm-tab {
@@ -77,6 +82,18 @@
 .fm-row-confirm { flex: 1 1 100%; }
 .fm-row-confirm .modal-actions { flex-wrap: wrap; align-items: center; }
 .fm-row-sub { font-size: var(--text-xs); }
+/* A fault card: the title across the card with its status at the right, the
+   record under it, the actions on their own row at the right (owner,
+   2026-10-01). Grid, not the row's flex: three stacked rows whatever the
+   width, so a long title is never squeezed beside the buttons. */
+.fm-row.fm-fault { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 8px; padding: 14px 16px; }
+.fm-fault-head { display: flex; align-items: flex-start; gap: 12px; padding-right: 10px; }
+.fm-fault-head .fm-row-title { flex: 1 1 auto; min-width: 0; }
+.fm-fault-head .fm-row-title strong { font-weight: 600; font-size: var(--text-md); line-height: 1.35; overflow-wrap: anywhere; }
+.fm-fault-head .fm-badge { flex: 0 0 auto; margin-top: 2px; }
+.fm-fault .fm-row-main { flex: none; }
+.fm-fault-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.fm-fault .fm-row-confirm .modal-actions { justify-content: flex-end; }
 
 /* A record that opens for editing when tapped. The cursor and hover lift are
    the whole affordance — a per-row "Edit" button would compete with the status

@@ -271,12 +271,18 @@ export default function FaultsTab(
         {openFirst.map((t) => (
           <ErasableRow
             key={t.id}
-            className={`state-${isTicketResolved(t) ? "ok" : t.status === "open" ? "overdue" : "due-soon"}`}
+            className={`fm-fault state-${isTicketResolved(t) ? "ok" : t.status === "open" ? "overdue" : "due-soon"}`}
             intent={{ title: "Erase this fault", detail: t.title }}
             erase={(token) => removeTicket(t.id, token)}
             onOpen={() => openEditor(t)}
           >
-            <div className="fm-row-main">
+            {/* ⚠️ ONE CARD, THREE ROWS (owner, 2026-10-01: "the style of the cards
+                is very bad"). The status pill and both buttons used to share
+                the title's row, which squeezed a long title into a column six
+                lines tall. Now: the title across the card with its status at
+                the right; the record under it; the actions on a row of their
+                own, at the right — or the close question in their place. */}
+            <div className="fm-fault-head">
               <div className="fm-row-title">
                 <strong>{t.title}</strong>
                 {t.room && <span className="fm-clause">{t.room}</span>}
@@ -285,6 +291,11 @@ export default function FaultsTab(
                 {t.reportedBy === "guest" && <span className="fm-clause guest">guest report</span>}
                 <AgentMark record={t} />
               </div>
+              <span className={`fm-badge ${isTicketResolved(t) ? "ok" : t.status === "open" ? "overdue" : "due-soon"}`}>
+                {LABEL[t.status]}
+              </span>
+            </div>
+            <div className="fm-row-main">
               <div className="fm-row-sub muted">
                 Opened {localStamp(t.openedAt)}
                 {t.resolvedAt && ` · resolved ${localStamp(t.resolvedAt)}`}
@@ -297,8 +308,10 @@ export default function FaultsTab(
               )}
               {/* The fault's own history. Rendered on the card rather than
                   behind another tap: "what has actually been done about this"
-                  is the question anyone opening the Faults tab is asking. */}
-              {(t.updates?.length ?? 0) > 0 && (
+                  is the question anyone opening the Faults tab is asking.
+                  A history of ONE plain "Open" entry only repeats "Opened …"
+                  above, so it shows once something has happened. */}
+              {(t.updates?.length ?? 0) > (t.updates?.[0]?.note || t.updates?.[0]?.photoIds?.length ? 0 : 1) && (
                 <ol className="fm-timeline">
                   {t.updates!.map((u, i) => (
                     <li key={i}>
@@ -331,29 +344,30 @@ export default function FaultsTab(
                 </div>
               )}
             </div>
-            <span className={`fm-badge ${isTicketResolved(t) ? "ok" : t.status === "open" ? "overdue" : "due-soon"}`}>
-              {LABEL[t.status]}
-            </span>
-            {closingId !== t.id && TICKET_NEXT[t.status] && (
-              <button className="btn ghost"
-                // Never a bare status flip any more: every transition goes
-                // through the same dialog, so the record always carries who
-                // and what behind the change.
-                onClick={(e) => { e.stopPropagation(); setStaging({ ticket: t, to: TICKET_NEXT[t.status]! }); }}>
-                Mark {LABEL[TICKET_NEXT[t.status]!].toLowerCase()}
-              </button>
-            )}
-            {/* ⚠️ THE ONE-STEP CLOSE, BESIDE THE TWO-STEP FLOW, NOT INSTEAD
-                OF IT. Many faults are obsolete — raised automatically and
-                since gone away — and walking each through "in progress" and
-                a cost dialog recorded work nobody did. This one leaves
-                "Closed without action" on the history, and no completion or
-                cost (fmEngine.withTicketClosed). */}
-            {closingId !== t.id && !isTicketResolved(t) && (
-              <button className="btn ghost"
-                onClick={(e) => { e.stopPropagation(); setCloseError(null); setClosingId(t.id); }}>
-                Close — no action needed
-              </button>
+            {closingId !== t.id && (TICKET_NEXT[t.status] || !isTicketResolved(t)) && (
+              <div className="fm-fault-actions">
+                {TICKET_NEXT[t.status] && (
+                  <button className="btn ghost"
+                    // Never a bare status flip any more: every transition goes
+                    // through the same dialog, so the record always carries who
+                    // and what behind the change.
+                    onClick={(e) => { e.stopPropagation(); setStaging({ ticket: t, to: TICKET_NEXT[t.status]! }); }}>
+                    Mark {LABEL[TICKET_NEXT[t.status]!].toLowerCase()}
+                  </button>
+                )}
+                {/* ⚠️ THE ONE-STEP CLOSE, BESIDE THE TWO-STEP FLOW, NOT INSTEAD
+                    OF IT. Many faults are obsolete — raised automatically and
+                    since gone away — and walking each through "in progress" and
+                    a cost dialog recorded work nobody did. This one leaves
+                    "Closed without action" on the history, and no completion or
+                    cost (fmEngine.withTicketClosed). */}
+                {!isTicketResolved(t) && (
+                  <button className="btn ghost"
+                    onClick={(e) => { e.stopPropagation(); setCloseError(null); setClosingId(t.id); }}>
+                    Close — no action needed
+                  </button>
+                )}
+              </div>
             )}
             {closingId === t.id && (
               <div className="fm-row-confirm">
