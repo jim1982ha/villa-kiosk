@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.15 (1 October 2026)
+
+- outcome.create_ticket: "<finding> Check: <what>" becomes the ticket's title and its note.
+
 ## 0.6.14 (1 October 2026)
 
 - preventive-maintenance: a state finding closed by the night closes its task ("cleared") and emits ticket.resolve.

@@ -161,6 +161,11 @@ class Outcome:
         if not self.kiosk.enabled:
             self.state.log("ticket_skipped", {"reason": "no Kiosk configured", "summary": (title or "")[:80]})
             return None
+        # ⚠️ THE TITLE SAYS WHAT IS WRONG; WHAT TO CHECK IS THE NOTE (owner, 2026-10-01). A task's text is
+        # "<finding> Check: <what to check>", and as one title it filled a fault card with a paragraph.
+        if note is None and " Check: " in (title or ""):
+            title, check = title.split(" Check: ", 1)
+            note = "Check: " + check.strip()
         tid = await self.kiosk.add_ticket(ticket_title(title)[:200], entity_id=entity_id, note=note)
         log.info("Kiosk ticket %s created: %s", tid, ticket_title(title)[:80])
         if task_id:

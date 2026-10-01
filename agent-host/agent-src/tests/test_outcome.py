@@ -27,6 +27,7 @@ class FakeKiosk:
 
     async def add_ticket(self, title, entity_id=None, note=None):
         self.tickets.append((title, entity_id))
+        self.notes = getattr(self, "notes", []) + [note]
         return f"t{len(self.tickets)}"
 
     async def resolve_ticket(self, uid, note=None):
@@ -128,6 +129,14 @@ def test_the_tasks_and_the_kiosks_tickets_agree(agent):
     assert st.task(by_hand)["status"] == "done_in_kiosk"                            # a person closed it there
     assert st.task(gone)["status"] == "cleared" and kiosk.resolved == ["t-gone"]    # gone: closed with its ticket
     assert st.task(alert)["status"] == "open"                                       # no finding: an alert's task stays
+
+
+def test_a_fault_title_says_what_is_wrong_and_its_note_what_to_check(agent):
+    # owner, 2026-10-01: "<finding> Check: <what>" as one title filled a fault card with a paragraph
+    v, kiosk = agent
+    run(v.outcome.create_ticket("Rain gauge has not reported for 2.0 days. Check: Check the sensor: battery.", "sensor.example_rain"))
+    assert kiosk.tickets[-1] == ("Rain gauge has not reported for 2.0 days.", "sensor.example_rain")
+    assert kiosk.notes[-1] == "Check: Check the sensor: battery."
 
 
 def test_the_routing_rule():
