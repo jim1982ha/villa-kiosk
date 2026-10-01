@@ -1,3 +1,8 @@
+## 0.12.5
+
+### Changed
+- The "AI jobs" card on the VESTA Agent page now looks like "The AI" above it: each job with its own Brain and Limit per run fields, and Set / Stop buttons.
+
 ## 0.12.4
 
 ### Fixed

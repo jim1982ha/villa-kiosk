@@ -214,20 +214,25 @@ function rulesForms(doc, tabs, jobs = []) {
 
   // AI jobs: each skill's scheduled AI work, with its own brain and spending limit
   f.settings.jobs = f.settings.jobs || {};
-  const jobsBody = h("tbody");
-  const drawJobs = () => jobsBody.replaceChildren(...jobs.map((j) => {
+  // the same fields as "The AI" (label above, same grid), one block per job
+  const jobsList = h("div", { class: "jobs" });
+  const drawJobs = () => jobsList.replaceChildren(...jobs.map((j) => {
     const cur = f.settings.jobs[j.name];
-    return h("tr", {},
-      h("td", {}, h("b", {}, j.name), h("div", { class: "muted" }, `${j.skill} · ${j.when}${j.on_request ? " · can be asked for in a chat" : ""}`)),
-      cur ? h("td", {}, sel(PROFILES, cur.profile, (v) => (cur.profile = v))) : h("td", { class: "muted" }, "not set: does not run"),
-      cur ? h("td", {}, h("input", { type: "number", step: "0.5", min: 0.05, value: cur.limit_usd, "aria-label": "Limit (USD)",
-                                    oninput: on((t) => (cur.limit_usd = num(t.value))) }))
-          : h("td", {}, h("button", { class: "btn ghost", onclick: () => { f.settings.jobs[j.name] = { ...j.default }; drawJobs(); markDirty(); } }, "Set")),
-      h("td", { class: "x" }, cur ? h("button", { class: "btn icon ghost", title: "Stop this job", onclick: () => { delete f.settings.jobs[j.name]; drawJobs(); markDirty(); } }, "×") : null));
+    const head = h("div", { class: "job-head" },
+      h("div", {}, h("h3", {}, j.name), h("div", { class: "muted" }, `${j.skill} · ${j.when}${j.on_request ? " · can be asked for in a chat" : ""}`)),
+      cur ? h("button", { class: "btn ghost", title: "Stop this job", onclick: () => { delete f.settings.jobs[j.name]; drawJobs(); markDirty(); } }, "Stop")
+          : h("button", { class: "btn primary", onclick: () => { f.settings.jobs[j.name] = { ...j.default }; drawJobs(); markDirty(); } }, "Set"));
+    if (!cur) return h("div", { class: "job" }, head, h("p", { class: "muted" }, "Not set: this job does not run."));
+    return h("div", { class: "job" }, head,
+      h("div", { class: "grid" },
+        field("Brain", sel(PROFILES, cur.profile, (v) => (cur.profile = v))),
+        field("Limit per run (USD)", h("input", { type: "number", step: "0.5", min: 0.05, value: cur.limit_usd,
+                                                  oninput: on((t) => (cur.limit_usd = num(t.value))) }),
+              "A run that reaches it stops; a report is still sent.")));
   }));
   drawJobs();
-  const jobsCard = card("AI jobs", "The skills' scheduled work done by the AI: each with its own brain and spending limit per run. A job that is not set does not run. When a report reaches its limit, it is still sent with what is done.",
-    h("table", { class: "rows" }, h("thead", {}, h("tr", {}, ["Job", "Brain", "Limit (USD)", ""].map((x) => h("th", {}, x)))), jobsBody));
+  const jobsCard = card("AI jobs", "The skills' scheduled work done by the AI, each with its own brain and spending limit per run. A job that is not set does not run.",
+    jobsList);
   const missing = jobs.filter((j) => !(f.settings.jobs || {})[j.name]).map((j) => j.name);
 
   // people

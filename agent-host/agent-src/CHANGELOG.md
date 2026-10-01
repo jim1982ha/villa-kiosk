@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.5 (1 October 2026)
+
+- UI: the AI jobs card uses The AI card's fields and grid (one block per job, Set / Stop) instead of a table.
+
 ## 0.6.4 (1 October 2026)
 
 - UI: the page's files are linked as `static/<version>/…` (a path), not `?v=` — on the villa, behind Cloudflare,

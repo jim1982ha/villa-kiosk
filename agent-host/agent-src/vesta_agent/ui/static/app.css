@@ -150,3 +150,10 @@ ul.plain li:last-child { border-bottom: 0; }
 /* layout helpers: the page's CSP refuses style attributes, so spacing lives here */
 .spaced { margin-top: 18px; }
 .push-right { margin-left: auto; }
+
+/* AI jobs: the same fields and grid as "The AI", one block per job */
+.jobs { display: grid; gap: 18px; }
+.job { display: grid; gap: 12px; padding-top: 16px; border-top: 1px solid var(--hairline); }
+.job:first-child { padding-top: 0; border-top: 0; }
+.job-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.job-head h3 { margin: 0; font-family: var(--font-display); font-weight: 500; font-size: var(--text-md); }
