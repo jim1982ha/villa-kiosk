@@ -321,7 +321,7 @@ class McpClient(HABase):
         for i in range(0, len(ids), 100):
             chunk = ids[i:i + 100]
             body = self.tool("ha_get_state", {"entity_id": chunk if len(chunk) > 1 else chunk[0],
-                                              "fields": ["entity_id", "state", "attributes", "last_changed"]})
+                                              "fields": ["entity_id", "state", "attributes", "last_changed", "last_reported"]})
             if isinstance(body, dict) and "states" in body:
                 out.update(body["states"] or {})
             elif isinstance(body, dict) and body.get("entity_id"):

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.7 (1 October 2026)
+
+- reports: one list (`todo`: clues and open tasks merged by device, grouped by kind when reports.yaml gives the kind a group line, "same time" detected); `noticed`, `tasks`, `maintenance` sections removed. Alerts grouped per alert with a count; alert names from `alert_words`.
+- reports: HA's logbook counts as alerts only the runs of the blueprints in `alert_on_every_run` (a schedule rule's run is a check, not an alert); `nothing_happened` only for what was watched (`listening_since`).
+- reports: 6 files — templates/report.html holds the style and every section; charts.py merged into compose.py.
+- reports: power_step needs `min_hours` of running a day; circuits cap `circuit_change_max_pct`.
+- preventive-maintenance: PM-SILENT reads `last_reported` (ha_client asks for it), not `last_changed`.
+
 ## 0.6.6 (1 October 2026)
 
 - A job asked for in a chat sends only to that chat: `Origin.requested` makes routing send every `to` (here, owner, fm) there, for send_message and for its scripts' results; send_message offers only `here`.

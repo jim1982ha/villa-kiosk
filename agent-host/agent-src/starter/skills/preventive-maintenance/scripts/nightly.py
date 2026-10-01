@@ -174,7 +174,17 @@ def run(args) -> dict:
                 if hours is not None and (g["hours"] is None or hours > g["hours"]):
                     g["hours"] = hours
             elif fam == "level":
-                findings += R.silence_rules(asset, row["entity_id"], hours, params)
+                # ⚠️ SILENT MEANS NOT REPORTING, NOT UNCHANGED (villa, 2026-10-01): a rain gauge at 0 or a
+                # curtain nobody moved keeps its value for days while it reports every minute; by its last
+                # change, 14 such sensors were tasks. last_reported moves at each report (HA 2024.3+).
+                lr = st.get("last_reported") or lc
+                quiet = None
+                if lr:
+                    try:
+                        quiet = (now_ref - datetime.fromisoformat(lr).astimezone(Z)).total_seconds() / 3600
+                    except ValueError:
+                        quiet = None
+                findings += R.silence_rules(asset, row["entity_id"], quiet, params)
     # three or more devices of one integration offline together = the integration is down, one finding
     by_platform: dict[str, list[str]] = {}
     for key, g in unavailable_groups.items():

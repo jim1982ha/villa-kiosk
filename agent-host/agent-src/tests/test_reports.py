@@ -155,19 +155,131 @@ def test_a_report_stopped_at_its_limit_is_still_sent_and_says_what_is_missing(tm
     assert "attachment" not in item and "before its figures were ready" in item["text"]
 
 
-def test_the_playbook_turns_the_villas_data_into_clues(tmp_path):
+def test_the_playbook_turns_the_villas_data_into_one_list_of_what_needs_doing(tmp_path):
     fx = _villa(tmp_path)
     _, facts = _facts(tmp_path, fx)
-    clues = facts["sections"]["noticed"]["rows"]
-    step = next(c for c in clues if c["entry"] == "running power stepped down")
-    assert step["subject"] == "Garden pump"
-    assert step["figures"]["step_date"] == "2026-10-02" and step["figures"]["after_w"] == 740      # the drop, dated
-    assert step["figures"]["hours_before"] == step["figures"]["hours_after"] == 8                  # same running time
-    assert step["playbook"]["ask"] == "was anything done in the pump room on 2 Oct or the day before?"
-    offline = [c["subject"] for c in clues if c["entry"] == "a safety device offline"]
-    assert offline == ["Front door lock"]
-    assert facts["sections"]["quiet"]["did_not_happen"][0] == "no leak or electrical trip"
+    rows = facts["sections"]["todo"]["rows"]
+    step = next(r for r in rows if r["kind"] == "pumps/running power stepped down")
+    assert step["title"] == "Garden pump: running power down 13% since 2 Oct"                     # reports.yaml's title
+    assert step["figures"]["after_w"] == 740 and step["figures"]["hours_before"] == step["figures"]["hours_after"] == 8
+    assert step["ask"] == "was anything done in the pump room on 2 Oct or the day before?"
+    lock = next(r for r in rows if r["kind"] == "locks_and_doors/a safety device offline")
+    assert lock["title"] == "Front door lock offline since 4 Oct, 10:00"
+    # no record of the agent listening that week: only the rules whose every run is an alert can say so
+    assert facts["sections"]["quiet"]["did_not_happen"] == ["no door left unlocked and no supply left open"]
     assert {w["id"] for w in facts["to_write"]} >= {f"{step['id']}.reading", f"{step['id']}.ask", "quiet"}
+
+
+def test_what_did_not_happen_is_said_only_for_what_was_watched(tmp_path):
+    # villa, 2026-10-01: "no equipment missed its schedule" for a week the agent never listened to
+    import sqlite3
+    facts, c, _ = _ctx(tmp_path)
+    c.cli = _Book([], [])
+    assert facts.s_quiet(c)["did_not_happen"] == ["no door left unlocked and no supply left open"]
+    db = sqlite3.connect(tmp_path / "state.sqlite")
+    db.execute("create table calls(id integer primary key, at text, kind text, detail text)")
+    db.execute("insert into calls(at, kind, detail) values ('2026-09-20T00:00:00+00:00', 'run', '{}')")
+    db.commit(); db.close()
+    c.state_path = str(tmp_path / "state.sqlite")                       # the agent listened all week
+    assert "no equipment missed its schedule" in facts.s_quiet(c)["did_not_happen"]
+
+
+def test_a_kind_without_a_group_line_stays_one_line_per_device(tmp_path):
+    # four pumps that each lost power are four problems: no group line in reports.yaml, no grouping
+    facts, c, _ = _ctx(tmp_path)
+    c._clues = ([{"id": f"clue-{k}", "group": "pumps", "entry": "running power stepped down", "subject": f"Pump {k}",
+                  "figures": {"step_date": "2026-10-02", "subject": f"Pump {k}", "entity_id": f"sensor.example_p{k}"},
+                  "horizon": "Now", "severity": None, "title": f"Pump {k}: running power down", "group_title": None,
+                  "playbook": {"means": "m"}} for k in range(4)], [])
+    rows = [r for r in facts.todo(c) if r["kind"] == "pumps/running power stepped down"]
+    assert [r["title"] for r in rows] == [f"Pump {k}: running power down" for k in range(4)]
+
+
+def _ctx(tmp_path, ha=None, now=datetime(2026, 10, 5, 7, tzinfo=timezone.utc)):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("facts", FACTS)
+    facts = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(facts)
+    from vesta_shared.ha_client import FixtureClient
+    from vesta_shared.knowledge_pack import KnowledgePack
+    from vesta_shared.store import Store
+    fx = _villa(tmp_path) if not (tmp_path / "fx").exists() else tmp_path / "fx"
+    store = Store(str(tmp_path / "s.sqlite"))
+    c = facts.Ctx("fm-weekly", KnowledgePack.load(str(tmp_path / "pack.json")), store, ha or FixtureClient(str(fx)),
+                  json.load(open(tmp_path / "week.json")), facts.load_cfg(), "UTC", now, None)
+    return facts, c, store
+
+
+def test_one_device_is_one_line_and_many_of_a_kind_are_one_line(tmp_path):
+    # villa, 2026-10-01: the same offline device was shown three times (a clue, a task, the monitoring
+    # table) and 14 "has not reported" tasks filled the page — the mock-ups say each thing once
+    facts, c, store = _ctx(tmp_path)
+    store.raise_finding("PM-UNAVAILABLE", "lock.example_door", "availability", "2026-10-04", "P2",
+                        "Front door lock has been offline for 3 h.", {"hours": 3})
+    for k in range(4):
+        store.raise_finding("PM-SILENT", f"sensor.example_rain_{k}", "level", "2026-10-03", "P3",
+                            f"Rain {k} has not reported for 2.0 days although it is online.", {"hours": 48})
+    rows = facts.todo(c)
+    lock = [r for r in rows if "Front door lock" in r["title"]]
+    assert len(lock) == 1 and lock[0]["severity"] == "P2" and lock[0]["task_ids"]             # the clue, with the task's id
+    silent = [r for r in rows if r["kind"] == "PM-SILENT"]
+    assert len(silent) == 1 and silent[0]["title"] == "4 sensors have not reported"
+    assert silent[0]["members"] == ["Rain 0", "Rain 1", "Rain 2", "Rain 3"]
+
+
+def test_a_group_that_started_in_the_same_minute_says_one_cause(tmp_path):
+    facts, c, _ = _ctx(tmp_path)
+    c.cfg["thresholds"]["todo"]["group_from"] = 1
+    c._clues = ([{"id": f"clue-{k}", "group": "monitoring", "entry": "a device of the monitoring offline",
+                  "subject": f"Meter {k}", "figures": {"since": f"2026-10-01T09:2{8 + k % 2}", "subject": f"Meter {k}"},
+                  "horizon": "Soon", "severity": None, "title": f"Meter {k} offline", "group_title": "{n} monitoring devices offline",
+                  "playbook": {"means": "m", "check": "c"}} for k in range(4)], [])
+    (row,) = [r for r in facts.todo(c) if r["kind"] == "monitoring/a device of the monitoring offline"]
+    assert row["title"] == "4 monitoring devices offline"
+    assert "All since 1 Oct, 09:28: one cause is likely" in row["why"]
+
+
+class _Book:
+    """Home Assistant's logbook for two VESTA rules: a condition rule (each run is an alert) and a schedule
+    rule (it runs every day to check, and alerts rarely: the villa, 2026-10-01)."""
+    def __init__(self, condition_runs, schedule_runs):
+        self.runs = {"automation.example_door": condition_runs, "automation.example_pump": schedule_runs}
+
+    def all_entity_ids(self):
+        return [*self.runs, "automation.example_lights"]
+
+    def tool(self, name, args):
+        assert name == "ha_config_get_automation"
+        bp, alias = {"automation.example_door": ("critical_condition", "critical_condition---entrance_unlocked"),
+                     "automation.example_pump": ("critical_schedule", "critical_schedule---garden_pump")}.get(
+            args["identifier"], ("motion_light", "Lights"))
+        return {"config": {"alias": alias, "use_blueprint": {"path": f"vesta/{bp}.yaml"}}}
+
+    def states(self, entity_ids):
+        return {e: {"state": "on"} for e in entity_ids}
+
+    def logbook(self, start, end, entity_id=None):
+        rows = [{"when": w, "entity_id": entity_id, "message": "triggered by lock.example_door"} for w in self.runs.get(entity_id, [])]
+        return rows + [{"when": "2026-09-30T12:00:00+00:00", "entity_id": entity_id, "message": "turned off"}]
+
+
+def test_an_alert_is_a_run_only_for_a_rule_that_alerts_on_every_run(tmp_path):
+    # villa, 2026-10-01: 71 runs of the schedule rules (a daily check) showed as 71 "critical alerts"
+    daily = [f"2026-09-{d:02d}T07:30:00+00:00" for d in range(28, 31)]
+    facts, c, store = _ctx(tmp_path, _Book(["2026-09-30T07:41:00+00:00"], daily))
+    assert set(c.vesta_rules()) == {"automation.example_door", "automation.example_pump"}
+    rows = facts._alert_rows(c)
+    assert [(r["what"], r["source"]) for r in rows] == [("Entrance unlocked", "home_assistant")]
+    # the same alert, followed by the agent: shown once, as the agent's
+    store.new_incident("k", "automation.example_door", "lock.example_door", "P2",
+                       {"message": "Entrance left unlocked"}, at="2026-09-30T07:41:00+00:00")
+    assert [r["source"] for r in facts._alert_rows(c)] == ["agent"]
+
+
+def test_the_same_alert_repeated_is_one_row_with_its_count(tmp_path):
+    facts, c, _ = _ctx(tmp_path, _Book(["2026-09-28T07:41:00+00:00", "2026-09-29T07:41:00+00:00"], []))
+    (row,) = facts.s_alerts(c)["rows"]
+    assert row["times"] == 2 and row["what"] == "Entrance unlocked"
 
 
 def test_the_order_of_the_page_is_reports_yaml_s(tmp_path):
@@ -178,43 +290,6 @@ def test_the_order_of_the_page_is_reports_yaml_s(tmp_path):
     _run(COMPOSE, "fm-weekly", "--facts", str(tmp_path / "facts.json"), "--out", str(tmp_path / "page.html"))
     page = (tmp_path / "page.html").read_text()
     assert page.index("Circuit") < page.index("<h1>") and "Batteries" not in page
-
-
-def test_alerts_the_agent_did_not_follow_come_from_home_assistants_own_record(tmp_path):
-    # owner, 2026-10-01: a report shows what happened in the villa, not only what the agent saw
-    import importlib.util
-    spec = importlib.util.spec_from_file_location("facts", FACTS)
-    facts = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(facts)
-    from vesta_shared.knowledge_pack import KnowledgePack
-    from vesta_shared.store import Store
-    _villa(tmp_path)
-    when = "2026-09-30T21:53:00+00:00"
-
-    class HA:
-        def all_entity_ids(self):
-            return ["automation.example_watchdog", "automation.example_lights"]
-
-        def tool(self, name, args):
-            assert name == "ha_config_get_automation"
-            bp = "critical_watchdog.yaml" if args["identifier"] == "automation.example_watchdog" else "motion_light.yaml"
-            return {"config": {"alias": "Meter unreachable", "use_blueprint": {"path": f"vesta/{bp}"}}}
-
-        def logbook(self, start, end, entity_id=None):
-            return [{"when": when, "entity_id": entity_id, "message": "triggered"}] if entity_id == "automation.example_watchdog" else []
-
-    store = Store(str(tmp_path / "s.sqlite"))
-    c = facts.Ctx("fm-weekly", KnowledgePack.load(str(tmp_path / "pack.json")), store, HA(),
-                  json.load(open(tmp_path / "week.json")), facts.load_cfg(), "UTC",
-                  datetime(2026, 10, 5, 7, tzinfo=timezone.utc), None)
-    assert c.vesta_rules() == {"automation.example_watchdog": "Meter unreachable"}   # by the alert desk's blueprints
-    rows = facts._alert_rows(c)
-    assert [(r["what"], r["source"]) for r in rows] == [("Meter unreachable", "home_assistant")]
-    # the same alert, followed by the agent: shown once, as the agent's
-    store.new_incident("k", "automation.example_watchdog", "sensor.example_meter", "P2",
-                       {"message": "Meter unreachable"}, at=when)
-    rows = facts._alert_rows(c)
-    assert [r["source"] for r in rows] == ["agent"]
 
 
 def test_the_villas_own_playbook_and_cards_are_added_to_the_shipped_ones(tmp_path):
@@ -233,3 +308,27 @@ def test_the_villas_own_playbook_and_cards_are_added_to_the_shipped_ones(tmp_pat
     assert "Garden pump energy" in [c["title"] for c in facts["sections"]["equipment"]["cards"]]
     assert facts["sections"]["batteries"]["replace_below_pct"] == 15                          # the villa's threshold
     assert facts["sections"]["batteries"]["rows"][0]["level"] == "replace"                    # 12 % < 15 %
+
+
+def test_a_sensor_that_reports_the_same_value_is_not_silent(tmp_path):
+    # villa, 2026-10-01: a rain gauge at 0 and curtains nobody moved were 14 "has not reported" tasks:
+    # silence was read from the last CHANGE; a sensor that reports an unchanged value is not silent
+    nightly = os.path.join(STARTER_SKILLS, "preventive-maintenance", "scripts", "nightly.py")
+    fx = tmp_path / "fx"
+    fx.mkdir()
+    old, now = "2026-09-28T07:00:00+00:00", "2026-10-01T06:50:00+00:00"
+    (fx / "states.json").write_text(json.dumps({"states": {
+        "sensor.example_rain": {"state": "0.0", "attributes": {}, "last_changed": old, "last_reported": now},
+        "sensor.example_level": {"state": "41", "attributes": {}, "last_changed": old, "last_reported": old}}}))
+    row = lambda eid, name: {"entity_id": eid, "name": name, "area": "Garden", "family": "level", "asset": eid.split(".")[1]}  # noqa: E731
+    pack = {"villa": "Example Villa", "time_zone": "UTC", "generated_at": now, "ha_version": None, "areas": [], "people": [],
+            "channels": {}, "unknown_area": [], "unclassified": [], "retention": {"raw_history_days": 10},
+            "families": {"level": [row("sensor.example_rain", "Rain gauge"), row("sensor.example_level", "Tank level")]},
+            "assets": {}}
+    (tmp_path / "pack.json").write_text(json.dumps(pack))
+    r = _run(nightly, "--pack", str(tmp_path / "pack.json"), "--store", str(tmp_path / "s.sqlite"), "--fixture-dir", str(fx),
+             "--as-of", "2026-10-01", "--skip-raw", "--out", str(tmp_path / "res.json"))
+    assert r.returncode == 0, r.stderr
+    from vesta_shared.store import Store
+    silent = [f["entity_id"] for f in Store(str(tmp_path / "s.sqlite")).findings("open") if f["rule_id"] == "PM-SILENT"]
+    assert silent == ["sensor.example_level"]

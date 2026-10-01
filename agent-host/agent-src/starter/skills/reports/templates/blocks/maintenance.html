@@ -1,7 +1,0 @@
-<section>
-  <h2>Preventive maintenance</h2>
-  <div class="tasks">
-  {% for t in s.rows %}<div class="task {{ t.severity|lower }}"><span class="pill {{ 'P2' if t.horizon == 'Now' else ('P3' if t.horizon == 'Soon' else 'P4') }}">{{ t.horizon }}</span><div><b>{{ t.title.split("\n")[0] }}</b><div class="why">{{ reading(t.id ~ ".when") or ("Since " ~ day(t.since) ~ "." ~ ((" " ~ t.check) if t.check else "")) }}</div></div></div>
-  {% else %}<p class="note">Nothing due.</p>{% endfor %}
-  </div>
-</section>

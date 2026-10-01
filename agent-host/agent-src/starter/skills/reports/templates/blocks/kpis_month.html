@@ -1,7 +1,0 @@
-<section class="kpis">
-  <div class="kpi"><div class="n">{{ num(s.kwh, 0) }}</div><div class="l">kWh</div><div class="d {{ 'up' if (s.vs_prev_pct or 0) > 0 else 'down' }}">{{ pct(s.vs_prev_pct) }} vs previous month</div></div>
-  <div class="kpi"><div class="n">—</div><div class="l">avoidable</div><div class="d flat">not measured yet</div></div>
-  <div class="kpi"><div class="n">{{ s.incidents }}</div><div class="l">incidents</div><div class="d flat">{{ s.incidents_closed }} closed</div></div>
-  <div class="kpi"><div class="n">{{ s.tasks_closed }} / {{ s.tasks_made }}</div><div class="l">tasks closed</div><div class="d flat">{% if s.median_days is not none %}median {{ s.median_days }} days{% else %}no closing time yet{% endif %}</div></div>
-  <div class="kpi"><div class="n">—</div><div class="l">monitoring uptime</div><div class="d flat">not measured yet</div></div>
-</section>

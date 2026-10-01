@@ -241,7 +241,7 @@ echo "== 6b. The agent in the image: its libraries, its code, nothing else"
 # browser stayed out.
 got=$(docker run --rm "${PLATFORM[@]}" --entrypoint sh "$IMAGE" -c '
 cd /opt/vesta/agent && .venv/bin/python -c "import vesta_agent, claude_agent_sdk, jinja2, aiohttp, yaml; print(\"IMPORTS\")"
-test -f starter/shipped-skills.json && test -f starter/skills/reports/templates/vesta.css && echo STARTER
+test -f starter/shipped-skills.json && test -f starter/skills/reports/templates/report.html && echo STARTER
 test ! -e tests && test ! -e README.md && test ! -e install.sh && echo CLEAN
 command -v chromium-headless-shell chromium >/dev/null || echo NOBROWSER' 2>&1)
 for w in IMPORTS STARTER CLEAN NOBROWSER; do

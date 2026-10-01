@@ -1,4 +1,0 @@
-<section class="card tbl"><table><tr><th>Circuit</th><th class="num">kWh</th><th class="num">Share</th><th class="num">vs last</th><th>Basis</th></tr>
-{% for r in s.rows %}<tr><td>{{ r.name }}</td><td class="num">{{ num(r.kwh) }}</td><td class="num">{{ num(r.share_pct, 0) }}%</td>
-<td class="num {{ 'up' if (r.vs_prev_pct or 0) > 0 else 'down' }}">{{ pct(r.vs_prev_pct) if r.vs_prev_pct is not none else "" }}</td><td class="basis">{{ r.basis }}</td></tr>{% endfor %}
-</table></section>

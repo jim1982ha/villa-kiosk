@@ -1,9 +1,0 @@
-<section>
-  <h2>Trends</h2>
-  <div class="grid2">
-  {% for c in s.charts %}<div class="asset"><div class="s">{{ c.title }}</div>
-    {% if c.kind == "bars" %}{{ chart_bars(c.bars) }}{% else %}{{ chart_line(c.series, c.unit, none, true) }}{% endif %}
-    {% set r = reading(c.id ~ ".reading") %}{% if r %}<div class="s">{{ r }}</div>{% endif %}</div>{% endfor %}
-  {% if s.standby %}<div class="asset"><div class="s">{{ s.standby }}</div></div>{% endif %}
-  </div>
-</section>

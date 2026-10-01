@@ -19,6 +19,10 @@ thresholds:
     watch_drop_pct: 10         # Watch when the running power of the last 3 days is this much under the days before
     run_min_w: 15              # an hour whose mean power is above this counts as running
   circuits_show: 8             # rows of the circuit table, largest first
+  circuit_change_max_pct: 300  # a change bigger than this (from almost nothing) shows as ">+300%", not "+10900%"
+  todo:                        # the one list of what needs doing
+    group_from: 3              # this many items of one kind become one line ("4 monitoring devices offline")
+    same_time_minutes: 10      # a group whose items all started within this many minutes: one cause, says todo_groups.same_time
   card_days: 14                # days drawn in an equipment card
   trend_weeks: 10              # weeks drawn in the monthly electricity trend
   horizon:                    # preventive maintenance: when, from the finding's severity
@@ -63,7 +67,9 @@ not_measured_yet:
 # The villa adds its own entries (its pool, its onsen, its cabinet...) in villa.reports.yaml.
 # An entry without `when` is knowledge only: no clue, but the AI reads it with the clues (for what
 # no figure shows yet, e.g. "the onsen pump's power slides for two hours before it runs dry").
-#   when kinds:  power_step {drop_pct, min_days, days}         a motor's running power steps down
+#   when kinds:  power_step {drop_pct, min_days, days, min_hours}  a motor's running power steps down
+#                (min_hours: hours a day it runs, before and after: a pump that runs a few minutes now and
+#                then has hourly means diluted by its stops, so its "power" follows its use, not its water)
 #                run_change {change_pct, min_days, days, min_hours}  a motor's hours of running per day change
 #                battery_trend {below_pct, days}               a battery falling: weeks left
 #                offline {families}                            a watched device not answering now
@@ -71,7 +77,8 @@ not_measured_yet:
 playbook:
   pumps:
     - name: running power stepped down
-      when: {kind: power_step, drop_pct: 10, min_days: 3, days: 30}
+      title: "{subject}: running power down {drop_pct}% since {step_date}"
+      when: {kind: power_step, drop_pct: 10, min_days: 3, days: 30, min_hours: 3}
       look_at: "the pump's hourly power over 30 days around {step_date}, its hours of running per day, the logbook of that day"
       means: "at the same running hours, less power usually means less water moved — a full skimmer basket, a low water level, a valve half closed, a clogged filter, air in the line"
       check: "water level and air at the skimmer, empty the basket, valve positions, photograph the filter gauge before any backwash"
@@ -79,6 +86,7 @@ playbook:
       horizon: "Now"
       cost_of_ignoring: "cheap to fix now; the motor strains and the water turns if it is left"
     - name: running time changed
+      title: "{subject}: {hours_before} h a day before {change_date}, {hours_after} h since"
       when: {kind: run_change, change_pct: 30, min_days: 3, days: 30, min_hours: 2}
       look_at: "the pump's hours of running per day, its timer or schedule helper, the logbook for who changed it"
       means: "a timer changed, a float switch, or a pump stopping early (dry run, overheating)"
@@ -88,6 +96,7 @@ playbook:
       cost_of_ignoring: "a pump that stops early leaves the water untreated; one that runs longer costs electricity"
   batteries:
     - name: battery falling
+      title: "{subject}: battery {level_pct}%, about {weeks_left} weeks left"
       when: {kind: battery_trend, below_pct: 35, days: 30}
       look_at: "the battery's daily level over 30 days"
       means: "falling {fall_per_week} points a week: it reaches {replace_below_pct}% in about {weeks_left} weeks"
@@ -96,6 +105,8 @@ playbook:
       cost_of_ignoring: "the device goes silent and the rules that watch it go blind"
   locks_and_doors:
     - name: a safety device offline
+      title: "{subject} offline since {since}"
+      group_title: "{n} safety devices offline"
       when: {kind: offline, families: [security]}
       look_at: "its history over the last days, its battery, its last change"
       means: "a lock or a sensor no rule can see: often a battery or a radio drop"
@@ -105,6 +116,7 @@ playbook:
       cost_of_ignoring: "the unlocked-door and intrusion rules are blind for this door"
   energy_and_occupancy:
     - name: electricity used while the villa is empty
+      title: "Electricity used while the villa was empty: {kwh_per_empty_day} kWh a day"
       when: {kind: use_while_empty, mode_entity: input_select.villa_mode, empty: [vacant, away], days: 10}
       look_at: "the main meter per hour on empty days, which circuits ran, lights and air conditioning left on"
       means: "something left on, or a load that should be off when nobody is there"
@@ -114,12 +126,38 @@ playbook:
       cost_of_ignoring: "paid every empty day until it is found"
   monitoring:
     - name: a device of the monitoring offline
+      title: "{subject} offline since {since}"
+      group_title: "{n} monitoring devices offline"
       when: {kind: offline, families: [power, energy, battery, level, network, runtime]}
       look_at: "when it stopped answering, its battery or power, the Wi-Fi of its area"
       means: "a reading the report and the rules no longer have"
       check: "its power or battery, its network"
       horizon: "Soon"
       cost_of_ignoring: "the problems it would have shown go unseen"
+
+# The one list's grouped lines: only a kind with a group line is grouped (a playbook entry's group_title,
+# or an open task's rule here) — several devices offline at once share a cause; four pumps that each lost
+# power are four problems, each its own line. {n}: how many; {since}: when they started, for same_time.
+todo_groups:
+  PM-SILENT: "{n} sensors have not reported"
+  PM-UNAVAILABLE: "{n} devices offline"
+  same_time: "All since {since}: one cause is likely (a restart, an integration, a hub or the network), not {n} separate faults."
+
+# The VESTA rules whose every run IS an alert (they run only once their condition has held): their runs
+# in Home Assistant's logbook count as alerts for the times the agent was not listening. Not the others:
+# a schedule rule runs every day to check, a presence rule mostly stops at its conditions; their alerts
+# come from the agent's own record (the event they raise when they alert).
+alert_on_every_run: [critical_condition]
+
+# A VESTA rule in the alerts table: per blueprint, the words for an alert it SENT. {subject}: the rule's
+# name after its blueprint prefix ("critical_schedule---garden_pump" → "Garden pump").
+alert_words:
+  critical_binary_trip: "{subject} tripped"
+  critical_presence_guard: "{subject}"
+  critical_condition: "{subject}"
+  critical_watchdog: "{subject}: a watched device lost"
+  critical_schedule: "{subject} did not run as scheduled"
+  critical_system: "{subject}"
 
 # What "nothing else happened" says: per VESTA rule blueprint (alert-desk), the sentence when it did not fire.
 nothing_happened:
@@ -131,8 +169,9 @@ nothing_happened:
   critical_system: no safety rule switched off
 
 # ---------------------------------------------------------------- the reports
-# Each section: `id` (its layout block in templates/blocks/<id>.html) and the sentences the AI writes for
-# it: `write` (one for the section) or `write_each` (one per item: a task, a card, a clue). A sentence is a
+# Each section: `id` (its part of templates/report.html, `{% elif sid == "<id>" %}`), `style` if it has
+# several (todo: the weekly's task list, or `plan` for the monthly's), and the sentences the AI writes for
+# it: `write` (one for the section) or `write_each` (one per item: a line of the list, a card). A sentence is a
 # READING (marked "VESTA's reading", the AI's own numbers) unless the slot says `checked: true`: then
 # compose.py refuses it if a number in it is not one of the section's figures.
 reports:
@@ -143,18 +182,18 @@ reports:
       - id: header
       - id: headline
         write: >-
-          One or two sentences for the facility manager: what needs them this week and why, from the clues,
-          the tasks and the alerts — the conclusion, not a list. Say that everything else ran normally if it did.
+          One or two sentences for the facility manager: what needs them this week and why, from the list
+          and the alerts — the conclusion, not a list. The coloured light above your sentence is computed
+          from what is open: agree with it, never call the week quiet or green when it is not. Say that
+          everything else ran normally only if it did.
       - id: kpis
-      - id: noticed
+      - id: todo
         write_each:
-          reading: "What it is and what it means, from the clue and what you found in Home Assistant: one or two sentences."
+          reading: >-
+            What was seen, with your numbers and dates from Home Assistant, and what it most likely means:
+            one or two sentences. For a grouped line, the common cause if the data shows one.
           check: "What to check or do on site, concrete, from the playbook entry."
           ask: "The question to the facility manager, if the entry has one, with the date filled in."
-      - id: tasks
-        write_each:
-          why: "What was seen and since when, and what it most likely means."
-          check: "What to check or do on site, concrete."
       - id: alerts
       - id: quiet
         write: >-
@@ -182,14 +221,12 @@ reports:
       - id: quiet
         write: "One sentence: what did not happen this month, and how many safety rules were on."
       - id: money
-      - id: noticed
-        write_each:
-          reading: "What it is and what it means for the owner: one or two sentences."
-          check: "What is being done or should be done, and by whom."
       - id: fixed_suggest
-      - id: maintenance
+      - id: todo
+        style: plan
         write_each:
-          when: "When to act and why (this week, by a date, next year), with the cost of ignoring it."
+          reading: "What it is and what it means for the owner: one sentence, with the cost of ignoring it."
+          when: "When to act, in two or three words: this week, by a date, a month, a year."
       - id: trends
         write_each:
           reading: "One line under the chart: the trend and anything that stands out, and why it matters."

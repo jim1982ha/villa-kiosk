@@ -11,11 +11,11 @@ figures; compose.py lays the page out and checks your sentences.
 
 ## Files
 
-- `reports.yaml`         the reports: sections and their order, thresholds, the sentences you write, "what would help"
+- `reports.yaml`         the reports: sections and their order, thresholds, the playbook, the words, the sentences you write
 - `scripts/facts.py`     every figure of a weekly or monthly page (Home Assistant, the store, the energy period)
-- `scripts/compose.py`   fm-daily and owner-weekly (chat text); fm-weekly and owner-monthly (the page, from facts + notes)
-- `scripts/charts.py`    the page's charts (inline SVG)
-- `templates/`           `report.html`, one `blocks/<section>.html` per section, `vesta.css`
+- `scripts/compose.py`   fm-daily and owner-weekly (chat text); fm-weekly and owner-monthly (the page, from facts + notes, charts inline)
+- `templates/report.html` the page: its style, then one part per section
+- `villa.reports.yaml`   (the villa's, optional) its own playbook entries, cards and thresholds; app updates keep it
 - Inputs: `energy_period.py` JSON (roi-energy), `proposals.py` (roi-energy, writes the proposals to the store)
 
 ## Cadence and readers
@@ -44,14 +44,16 @@ the conclusions are yours.
    `filtration_optimiser.py --out optimiser.json` and `proposals.py --period-json month.json
    --optimiser-json optimiser.json` (it records the proposals the page shows).
 2. `reports` `facts.py fm-weekly --energy week.json --out facts.json` (or `owner-monthly --energy
-   month.json`). It prints the CLUES (what the playbook found in the villa's data, each with its
-   playbook entry: what to look at, what it means, what to check, what to ask) and `to_write`:
-   every sentence the page needs, with its instruction.
-3. For each clue, before you write: look at what its entry's `look_at` says, in Home Assistant
+   month.json`). It prints `to_do`: THE ONE LIST of what needs doing — the playbook's clues and the
+   open tasks, merged by device and grouped by kind (one line per device; "4 monitoring devices
+   offline" rather than four lines) — each with its playbook guidance (what to look at, what it means,
+   what to check, what to ask), and `to_write`: every sentence the page needs, with its instruction.
+3. For each line of `to_do`, before you write: look at what its `look_at` says, in Home Assistant
    (ha_get_history for statistics or history, ha_get_logs for the logbook, ha_get_automation_traces,
-   ha_get_state). Confirm it, date it, explain it; tie clues together (a pump drawing less power AND
-   running as long as before means less water moved, not less running). Drop what the data does not
-   support — say so in the reading rather than inventing a cause.
+   ha_get_state). Confirm it, date it, explain it; tie lines together (a pump drawing less power AND
+   running as long as before means less water moved, not less running; many devices stopping in the
+   same minute is one cause, not many faults). Drop what the data does not support — say so in the
+   reading rather than inventing a cause. Say each thing ONCE: the page repeats nothing.
 4. Write every sentence of `to_write` in the reader's language: conclusions, not descriptions —
    what it is, what it means, what to do, when, and the question to ask. Your numbers may be your
    own (what you read in Home Assistant); write them as you would to the owner, rounded and dated.
