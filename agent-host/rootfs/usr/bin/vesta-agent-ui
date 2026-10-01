@@ -20,6 +20,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)),
                                 "..", "..", "opt", "vesta", "host"))
 
 from vesta_host import contract, manifest as agent_manifest, paths, supervise  # noqa: E402
+from vesta_host.host_state import HostState  # noqa: E402
 from vesta_host.log import configure, log  # noqa: E402
 from vesta_host.redact import Redactor  # noqa: E402
 
@@ -44,7 +45,11 @@ def main() -> int:
         log("info", "UI: this agent has none" + (f" ({problem})" if problem else ""))
         stop.wait()
         return 0
-    env = contract.ui_env(full)
+    try:
+        app_version = HostState.read(paths.HOST_STATE).host_version or ""
+    except (OSError, ValueError):
+        app_version = ""
+    env = contract.ui_env(full, app_version)
     venv = folder / ".venv" / "bin"
     if venv.is_dir():
         env["PATH"] = f"{venv}:{env['PATH']}"

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.4 (1 October 2026)
+
+- UI: the page's files are linked as `static/<version>/…` (a path), not `?v=` — on the villa, behind Cloudflare,
+  0.12.3's page still ran 0.6.1's code. The app's version comes from the host (host.json), not the environment.
+
 ## 0.6.3 (1 October 2026)
 
 - UI header: the app's version too (`VESTA_APP_VERSION`, given by the host to the UI process only).

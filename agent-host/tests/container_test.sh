@@ -92,11 +92,14 @@ except urllib.error.HTTPError as e:
     print(e.code)' 2>&1)
 [ "$(tail -1 <<<"$ui")" = "403" ] && ok "the UI refuses a process inside the container (not the Ingress gateway)" \
   || bad "the UI answered a local process: $(tail -1 <<<"$ui")"
+# ⚠️ THE UI'S OWN PROCESS, BY ITS ARGUMENTS: this probe's command line contains the words too, and matching
+# on a substring once read this probe's own environment — both checks below passed on the wrong process.
 uienv=$(docker exec vesta-ct python3 -c '
 import os
 for pid in os.listdir("/proc"):
     try:
-        if b"vesta_agent.ui" in open(f"/proc/{pid}/cmdline", "rb").read():
+        args = open(f"/proc/{pid}/cmdline", "rb").read().split(b"\0")
+        if pid != str(os.getpid()) and b"-m" in args and b"vesta_agent.ui" in args:
             print(open(f"/proc/{pid}/environ", "rb").read().replace(b"\0", b"\n").decode()); break
     except OSError:
         pass')
@@ -104,6 +107,8 @@ if [ -z "$uienv" ]; then bad "the UI process was not found"
 elif grep -qF "$HATOKEN" <<<"$uienv" || grep -qF "$TGTOKEN" <<<"$uienv" || grep -q "SUPERVISOR_TOKEN" <<<"$uienv"; then
   bad "a secret in the UI's environment"
 else ok "no secret in the UI's environment"; fi
+grep -q "^VESTA_APP_VERSION=[0-9]" <<<"$uienv" && ok "the UI knows the app's version" \
+  || bad "the UI process has no VESTA_APP_VERSION (the page cannot show the app's version)"
 env_json=$(docker exec vesta-ct cat /run/vesta/agent-env.json)
 grep -q '"VESTA_TELEGRAM_ENABLED": "false"' <<<"$env_json" && ! grep -qF "$TGTOKEN" <<<"$env_json" \
   && ok "Telegram token not exported" || bad "Telegram token exported with takeover off"

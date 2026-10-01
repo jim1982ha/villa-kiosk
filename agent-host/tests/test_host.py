@@ -139,9 +139,10 @@ class Host(unittest.TestCase):
         from vesta_host import contract
         self.ha_options(telegram_takeover=True, telegram_bot_token=SECRETS["telegram_bot_token"])
         self.assertEqual(self.start().returncode, 0)
-        ui = contract.ui_env(self.contract())
+        ui = contract.ui_env(self.contract(), "1.2.3")
         self.assertEqual(set(ui) - {"PATH", "HOME", "LANG", "VESTA_UI_PORT", "VESTA_APP_VERSION"}, set(contract.UI_NAMES))
         self.assertEqual(ui["VESTA_UI_PORT"], str(contract.UI_PORT))
+        self.assertEqual(ui["VESTA_APP_VERSION"], "1.2.3")
         dumped = json.dumps(ui)
         for name, value in SECRETS.items():
             self.assertNotIn(value, dumped, name)

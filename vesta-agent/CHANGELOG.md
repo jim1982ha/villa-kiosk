@@ -1,3 +1,9 @@
+## 0.12.4
+
+### Fixed
+- **The VESTA Agent page still used old page code** through Cloudflare (no app version in the corner, the old "page met an error" line). The page's files now carry the version in their path, which no cache can ignore.
+- The app's version did not reach the page; it now does ("app 0.12.4 · agent 0.6.4").
+
 ## 0.12.3
 
 ### Changed

@@ -170,12 +170,12 @@ def test_the_page_names_its_files_with_the_version_and_reports_its_errors_to_the
 
     async def fn(c):
         html = await (await c.get("/")).text()
-        js = await c.get(f"/static/app.js?v={__version__}")
+        js = await c.get(f"/static/{__version__}/app.js")
         err = await c.post("/api/client-error", json={"message": "TypeError: x is undefined at app.js:12"}, headers=HDR)
         return html, js.status, err.status
     html, js, err = call(ui, fn)
-    assert f'src="static/app.js?v={__version__}"' in html and f'href="static/app.css?v={__version__}"' in html
-    assert "{version}" not in html and js == 200 and err == 200
+    assert f'src="static/{__version__}/app.js"' in html and f'href="static/{__version__}/app.css"' in html
+    assert "{static}" not in html and js == 200 and err == 200
     assert any("UI: page error: TypeError: x is undefined at app.js:12" in r.getMessage() for r in caplog.records)
 
 

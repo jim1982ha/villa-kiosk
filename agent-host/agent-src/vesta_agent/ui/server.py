@@ -109,6 +109,9 @@ class UI:
         r = a.router
         r.add_get("/", self.index)
         r.add_static("/static/", STATIC, follow_symlinks=False)
+        # the same files under a path that names the version: a cache that ignores "?v=" (a proxy's setting)
+        # cannot ignore a path — 0.12.2/0.12.3 still got old code with ?v= on the villa
+        r.add_static(f"/static/{__version__}/", STATIC, follow_symlinks=False)
         r.add_get("/api/overview", self.overview)
         r.add_post("/api/client-error", self.client_error)
         r.add_get("/api/policy", self.policy_get)
@@ -150,7 +153,7 @@ class UI:
         # anywhere between the app and the screen (Home Assistant's frame, a phone's web view) can serve
         # the previous page's code with the new data — seen on 0.12.0: no banner, no AI jobs card.
         with open(os.path.join(STATIC, "index.html"), encoding="utf-8") as f:
-            html = f.read().replace("{version}", __version__)
+            html = f.read().replace("{static}", f"static/{__version__}")
         log.info("UI: page opened (agent %s)", __version__)
         return web.Response(text=html, content_type="text/html")
 
