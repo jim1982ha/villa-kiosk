@@ -216,6 +216,8 @@ def test_one_device_is_one_line_and_many_of_a_kind_are_one_line(tmp_path):
     facts, c, store = _ctx(tmp_path)
     store.raise_finding("PM-UNAVAILABLE", "lock.example_door", "availability", "2026-10-04", "P2",
                         "Front door lock has been offline for 3 h.", {"hours": 3})
+    c.pack.families["level"] = [{"entity_id": f"sensor.example_rain_{k}", "name": f"Rain {k}", "family": "level"}
+                                for k in range(4)]                 # a line names its device as the pack does
     for k in range(4):
         store.raise_finding("PM-SILENT", f"sensor.example_rain_{k}", "level", "2026-10-03", "P3",
                             f"Rain {k} has not reported for 2.0 days although it is online.", {"hours": 48})
@@ -359,3 +361,59 @@ def test_a_finding_the_night_no_longer_sees_closes_its_task_and_its_ticket(tmp_p
     from vesta_shared.store import Store
     assert Store(str(tmp_path / "s.sqlite")).task(made["task_id"])["status"] == "cleared"
 
+
+
+def test_every_state_the_alert_desk_gives_has_its_words(tmp_path):
+    # architecture review, 2026-10-01: 6 of the desk's states reached the page raw ("asked", "reasked")
+    import re
+    import yaml
+    desk = open(os.path.join(STARTER_SKILLS, "alert-desk", "scripts", "desk.py"), encoding="utf-8").read()
+    owner = open(os.path.join(ROOT, "vesta_shared", "problems.py"), encoding="utf-8").read()
+    states = set(re.findall(r'state="([a-z_]+)"', desk + owner)) | {"new"}         # "new": the store's default
+    words = yaml.safe_load(open(os.path.join(STARTER_SKILLS, "reports", "reports.yaml"), encoding="utf-8"))["incident_words"]
+    assert states and states <= set(words), states - set(words)
+
+
+def test_an_alert_state_without_words_is_named_not_shown_raw(tmp_path):
+    facts, c, store = _ctx(tmp_path)
+    c.cfg["incident_words"] = {"done": "Done"}
+    iid = store.new_incident("k", "automation.example_door", "lock.example_door", "P2", {"message": "Door open"},
+                             at="2026-09-30T08:00:00+00:00")
+    store.update_incident(iid, state="reasked")
+    c.ha_alerts = lambda: []
+    (row,) = facts._alert_rows(c)
+    assert c.problems == ["reports.yaml: incident_words has no words for the state 'reasked'"]
+
+
+def test_a_logbook_run_close_to_an_incident_of_its_rule_is_that_incident():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("facts", FACTS)
+    facts = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(facts)
+    t = datetime(2026, 9, 30, 8, 0, tzinfo=timezone.utc)
+    known = [("automation.door", t)]
+    assert facts.followed_by_agent("automation.door", t + timedelta(minutes=10), known, 900)
+    assert not facts.followed_by_agent("automation.door", t + timedelta(minutes=20), known, 900)
+    assert not facts.followed_by_agent("automation.gate", t, known, 900)
+
+
+def test_the_one_list_is_built_from_plain_inputs():
+    # architecture review, 2026-10-01: the merge and grouping rules, tested with lists — no villa, store or HA
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("facts", FACTS)
+    facts = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(facts)
+    clue = {"id": "clue-1", "group": "pumps", "entry": "running power stepped down", "subject": "Pump",
+            "figures": {"entity_id": "sensor.pump_power", "step_date": "2026-09-20"}, "horizon": "Now", "severity": None,
+            "title": "Pump: power down", "group_title": None, "playbook": {"means": "less water", "check": "the basket"}}
+    pump_task = {"id": "finding-1", "kind": "PM-POWER-CHANGE", "entity_id": "sensor.pump_power", "severity": "P3",
+                 "title": "Pump draws less", "since": "2026-09-21", "figures": {}, "check": ""}
+    silent = [{"id": f"finding-{k}", "kind": "PM-SILENT", "entity_id": f"sensor.s{k}", "severity": "P3",
+               "title": f"S{k} silent", "since": "2026-10-01T09:28", "figures": {}} for k in range(2, 5)]
+    rows = facts.one_list([clue], [pump_task, *silent], lambda eid, fb: {"sensor.pump_power": "pump"}.get(eid, eid or fb),
+                          lambda eid: {"sensor.s2": "S2", "sensor.s3": "S3", "sensor.s4": "S4"}.get(eid),
+                          {"P1": "Now", "P2": "Now", "P3": "Soon", "P4": "Plan"}, 3, 10,
+                          {"PM-SILENT": "{n} sensors silent", "same_time": "All since {since}: one cause."})
+    assert [r["title"] for r in rows] == ["Pump: power down", "3 sensors silent"]      # clue + task merged; 3 grouped
+    assert rows[0]["severity"] == "P2" and rows[0]["task_ids"] == ["finding-1"]       # Now → P2; the task kept with it
+    assert rows[1]["members"] == ["S2", "S3", "S4"] and "All since 1 Oct, 09:28: one cause." in rows[1]["why"]

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.16 (1 October 2026)
+
+Architecture review (all five candidates):
+- vesta_shared.problems: one owner of a problem's lifecycle (finding / incident / task / Kiosk ticket). Status words DONE / CLEARED / CLOSED_IN_KIOSK; a task keeps its source and its check (store migration adds tasks.source, tasks.check_text); open_problems() is the one "still open" for facts, compose (fm-daily, owner-weekly) and concierge. A fault closed in the Kiosk closes its incident and settles its messages. alert-desk, preventive-maintenance and the reconcile go through it; outcome.create_ticket no longer parses "Check:".
+- routing.Origin(kind=conversation|job|press): Routing.offered / target / is_conversation answer every "where may it go" question; a conversation holds every message, scripts' included, to its chat. Toolbox.tool_objects(person, origin, include_web).
+- vesta_shared.agent_records: the one reader of the agent's records (cost, listening since) for status.py and the reports; reports.yaml incident_words (every desk state) and alert_follow_window_min; facts.followed_by_agent.
+- reports: one_list(...) builds the "Do this week" list from plain inputs; a line names its device from the pack.
+- UI: /api/jobs gives when_words and runs_per_month (scheduler.describe), /api/policy and /api/costs the brain labels (policy.profile_labels); app.js keeps no copy.
+
 ## 0.6.15 (1 October 2026)
 
 - outcome.create_ticket: "<finding> Check: <what>" becomes the ticket's title and its note.

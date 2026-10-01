@@ -158,23 +158,23 @@ class Toolbox:
         return out
 
     # ------------------------------------------------------------------ build
-    def tool_objects(self, person: Person | None, chat_id: int | None, include_web: bool,
-                     requested: bool = False) -> list:
-        """`requested`: a job a person asked for in chat_id; all it sends goes there (routing.Origin)."""
-        origin = Origin(chat_id, requested) if chat_id is not None else None
+    def tool_objects(self, person: Person | None, origin: Origin | None, include_web: bool) -> list:
+        """The AI's tools for one occasion: `origin` says who is asking (routing.Origin; None: a scheduled
+        job or an alert hook), `person` who they are. What each tool allows follows from it, in routing."""
+        chat_id = origin.chat if origin else None
         tools = [self._proxy(n) for n in self.read_tool_names()]
-        tools += [self._call_service(person, chat_id), self._read_skill(), self._run_script(origin, person is not None), self._send(origin),
+        tools += [self._call_service(person, chat_id), self._read_skill(), self._run_script(origin), self._send(origin),
                   self._status(), self._save_file()]
-        if person is not None and chat_id is not None and self.start_job:
+        if origin and origin.is_conversation and person is not None and self.start_job:
             # a person asking, in a chat: never a job (even one started from a chat), so no job starts another
             tools.append(self._start_job(chat_id))
         if self.ticket:
             tools.append(self._ticket())
         return tools
 
-    def server(self, person: Person | None, chat_id: int | None, include_web: bool, requested: bool = False):
+    def server(self, person: Person | None, origin: Origin | None, include_web: bool):
         return create_sdk_mcp_server(name=SERVER, version=__version__,
-                                     tools=self.tool_objects(person, chat_id, include_web, requested))
+                                     tools=self.tool_objects(person, origin, include_web))
 
     def _proxy(self, name: str):
         t = self.server_tools[name]
@@ -295,7 +295,7 @@ class Toolbox:
             return _ok(SKILL_PREFACE + f"Scripts you may run for this skill: {', '.join(scripts) or 'none'}.\n\n" + body)
         return handler
 
-    def _run_script(self, origin: Origin | None, in_chat: bool = False):
+    def _run_script(self, origin: Origin | None):
         schema = {"type": "object", "properties": {
             "skill": {"type": "string"}, "script": {"type": "string"},
             "args": {"type": "array", "items": {"type": "string"}},
@@ -307,7 +307,7 @@ class Toolbox:
             sk, sc = args.get("skill", ""), args.get("script", "")
             skill = self.skills.get(sk)
             job = ((skill.scripts.get(sc) or {}).get("job_only") or {}).get(str((args.get("args") or [""])[0])) \
-                if skill and in_chat else None
+                if skill and origin and origin.is_conversation else None
             if job:
                 # ⚠️ A REPORT ASKED FOR IN A CHAT RUNS AS ITS JOB (owner, 2026-10-01): made here, inside the
                 # conversation, it used the chat's brain and limit, and the AI followed the job's own steps
@@ -398,19 +398,15 @@ class Toolbox:
         return handler
 
     def _send(self, origin: Origin | None):
-        # ⚠️ "HERE" IS THE CHAT A PERSON ASKED IN. Without it a report asked for in the
-        # group went to the fm chat (a private chat on the villa) and the group got only
-        # "report sent" (2026-09-30). A scheduled job has no such chat: owner or fm only.
-        # ⚠️ ANSWERING A PERSON, OR DOING WHAT THEY ASKED: ONLY THEIR CHAT (owner, 2026-10-01). Offered
-        # owner and fm too, the AI followed a skill's "send it to fm" and the group that asked got
-        # nothing but "Done". Scheduled jobs (no chat) send to owner or fm.
-        chat_id = origin.chat if origin else None
-        targets = ["here"] if origin else ["owner", "fm"]
+        # ⚠️ "HERE" IS THE CHAT A PERSON ASKED IN. Without it a report asked for in the group went to the
+        # fm chat (a private chat on the villa) and the group got only "report sent" (2026-09-30). Which
+        # destinations are offered, and where each lands, is routing's answer (Routing.offered / target).
+        targets = Routing.offered(origin)
         schema = {"type": "object", "properties": {
             "to": {"type": "string", "enum": targets}, "text": {"type": "string"},
             "attachment": {"type": "string", "description": "A file name in the out folder (an HTML report page), optional."}},
             "required": ["to", "text"]}
-        if origin:
+        if origin and origin.holds:
             desc = ("Send a message, with a file attached if needed (an HTML report page), to=here: the chat of the "
                     "person you are answering, or the chat this job was asked for in. Nothing goes to another chat. "
                     "A plain answer needs no tool: your reply is sent for you.")
@@ -421,8 +417,8 @@ class Toolbox:
         @tool("send_message", desc, schema)
         async def handler(args: dict) -> dict:
             to = args.get("to")
-            # the menu offers only `here` with a chat; a model that writes another name anyway is held to it
-            chat = origin.chat if origin else Routing(self.policy).target(to, origin)
+            # a model that writes a destination it was not offered is held to the asker's chat by routing
+            chat = Routing(self.policy).target(to, origin)
             if not chat:
                 return _err(f"No {to} chat is configured.")
             att = args.get("attachment")

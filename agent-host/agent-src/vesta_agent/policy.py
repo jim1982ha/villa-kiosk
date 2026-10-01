@@ -66,6 +66,12 @@ PROFILES = {
     "performance": ("opus", "high"),
 }
 CONVERSATION_RESETS = ("daily_04_00", "after_8h_silence", "never")
+
+
+def profile_labels() -> dict[str, str]:
+    """Each brain as the VESTA Agent page shows it — "Auto (Sonnet)" — from PROFILES, so the page never
+    keeps its own copy of which model a brain is."""
+    return {p: f"{p.capitalize()} ({model.capitalize()})" for p, (model, _effort) in PROFILES.items()}
 DEFAULT_BEHAVIOUR = {"profile": "auto", "reply_limit_usd": 1.0, "web_search": True, "conversation_reset": "daily_04_00"}
 #: A value the file leaves out. The starter policy.example.yaml writes the same ones.
 DEFAULTS = {"act_enabled": False, "approval_ttl_minutes": 15, "siren_auto_off_min": 3}

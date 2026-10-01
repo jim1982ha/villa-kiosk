@@ -283,3 +283,19 @@ def test_a_run_records_its_brain_model_tokens_and_what_was_asked(ui, monkeypatch
     assert d["profile"] == "economy" and d["model"] == runner.PROFILES["economy"][0] and d["turns"] == 3 and d["ms"] == 4200
     assert d["tokens"] == {"input_tokens": 800, "output_tokens": 90, "cache_read_input_tokens": 5000}
     assert d["cost_usd"] == 0.12 and len(d["asked"]) == 160
+
+
+def test_the_page_is_told_the_schedules_and_the_brains_and_keeps_no_copy(ui):
+    # architecture review, 2026-10-01: app.js re-parsed the schedule grammar and named the models itself
+    async def fn(c):
+        return (await (await c.get("/api/jobs")).json())["jobs"], await (await c.get("/api/policy")).json()
+    jobs, doc = call(ui, fn)
+    weekly = next(j for j in jobs if j["name"] == "fm-weekly")
+    assert (weekly["when_words"], weekly["runs_per_month"]) == ("every Monday at 08:00", 4.35)
+    daily = next(j for j in jobs if j["name"] == "fm-daily")
+    assert (daily["when_words"], daily["runs_per_month"]) == ("every day at 07:00", 30.0)
+    from vesta_agent.policy import PROFILES
+    assert set(doc["profiles"]) == set(PROFILES) and doc["profiles"]["economy"] == "Economy (Haiku)"
+    from vesta_agent.ui.server import STATIC
+    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
+    assert "Sonnet" not in js and "Monday" not in js                       # no copy of either in the page

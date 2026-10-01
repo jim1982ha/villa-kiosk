@@ -27,7 +27,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import sqlite3
 import statistics
 import sys
 from datetime import date, datetime, time, timedelta, timezone
@@ -41,6 +40,8 @@ sys.path.insert(0, os.path.join(HERE, "..", "..", "_shared"))
 from vesta_shared.ha_client import client_from_args  # noqa: E402
 from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
 from vesta_shared.store import Store  # noqa: E402
+from vesta_shared import agent_records  # noqa: E402  (the agent's records: one reader)
+from vesta_shared.problems import Problems  # noqa: E402  (what is still open: one owner)
 
 OFF = {"unavailable", "unknown"}
 
@@ -90,6 +91,12 @@ def _ms_day(ms: int, Z) -> date:
     return datetime.fromtimestamp(ms / 1000, timezone.utc).astimezone(Z).date()
 
 
+def followed_by_agent(rule_eid: str, when: datetime, known: list[tuple[str, datetime]], window_s: float) -> bool:
+    """Whether an alert Home Assistant's logbook shows is one the agent already recorded as an incident
+    (the same rule, within the window): then it is shown once, as the agent's."""
+    return any(rid == rule_eid and abs((when - at).total_seconds()) < window_s for rid, at in known)
+
+
 def _when(row: dict) -> datetime | None:
     try:
         return datetime.fromisoformat(str(row.get("when") or ""))
@@ -116,6 +123,7 @@ class Ctx:
         self._rules = None
         self._clues = None
         self._todo = None
+        self.problems: list[str] = []     # what a section could not say, for facts.json's problems
         self._states = None
 
     def need(self, *path):
@@ -189,6 +197,7 @@ class Ctx:
         notify entities' messages instead was tried and failed: the wall tablet gets every automation's
         messages, and nothing in the record says which rule sent one."""
         every_run = {str(b).removesuffix(".yaml") for b in self.cfg.get("alert_on_every_run") or []}
+        window = float(self.need("alert_follow_window_min")) * 60
         out = []
         known = [(i.get("rule_id"), datetime.fromisoformat(i["opened_at"])) for i in self.incidents() if i.get("opened_at")]
         for eid, rinfo in self.vesta_rule_info().items():
@@ -202,7 +211,7 @@ class Ctx:
                 t = _when(r)
                 if t is None or not str(r.get("message") or "").startswith("triggered"):
                     continue                         # switched on or off, reloaded: not a run
-                if any(rid == eid and abs((t - at).total_seconds()) < 900 for rid, at in known):
+                if followed_by_agent(eid, t, known, window):
                     continue                         # the agent followed it: shown once, as the agent's
                 out.append({"when": t.isoformat(), "what": self.alert_words(rinfo), "lasted": None, "severity": None,
                             "blueprint": rinfo["blueprint"], "outcome": "Alerted by Home Assistant", "source": "home_assistant"})
@@ -240,35 +249,12 @@ class Ctx:
         return [(d.isoformat(), round(statistics.mean(v))) for d, v in sorted(per.items())]
 
     def ai_cost(self) -> float | None:
-        if not self.state_path or not os.path.exists(self.state_path):
-            return None
         s, e = self.s_dt.astimezone(timezone.utc).isoformat(), self.e_dt.astimezone(timezone.utc).isoformat()
-        db = sqlite3.connect(f"file:{self.state_path}?mode=ro", uri=True)
-        try:
-            total = 0.0
-            for (detail,) in db.execute("select detail from calls where kind='run' and at>=? and at<?", (s, e)):
-                c = (json.loads(detail or "{}") or {}).get("cost_usd")
-                if isinstance(c, (int, float)):
-                    total += c
-            return round(total, 2)
-        finally:
-            db.close()
+        return agent_records.cost_between(self.state_path, s, e)
 
     def listening_since(self) -> datetime | None:
-        """When the agent's own record starts (its first run or event), from VESTA_STATE; None without one."""
-        if not self.state_path or not os.path.exists(self.state_path):
-            return None
-        db = sqlite3.connect(f"file:{self.state_path}?mode=ro", uri=True)
-        try:
-            row = db.execute("select min(at) from calls").fetchone()
-        except sqlite3.Error:
-            return None
-        finally:
-            db.close()
-        try:
-            return datetime.fromisoformat(row[0]) if row and row[0] else None
-        except ValueError:
-            return None
+        """When the agent's own record starts (its first run or event); None without one."""
+        return agent_records.listening_since(self.state_path)
 
     def light(self, tasks: list[dict]) -> dict:
         light = self.need("light")
@@ -281,24 +267,10 @@ class Ctx:
         return {"colour": "good", "text": "Green: nothing open"}
 
     def tasks(self) -> list[dict]:
-        rows = []
-        for f in self.store.findings(status="open"):
-            if f["severity"] not in ("P1", "P2", "P3", "P4"):
-                continue
-            d = json.loads(f.get("detail") or "{}")
-            figures = {k: v for k, v in d.items() if isinstance(v, (int, float, str)) and k != "check"}
-            rows.append({"id": f"finding-{f['id']}", "kind": f.get("rule_id") or "finding", "severity": f["severity"], "title": _no_code(f["summary"]),
-                         "since": f["opened_day"], "check": d.get("check") or "", "entity_id": f["entity_id"],
-                         "figures": figures, "opened_day": f["opened_day"]})
-        for i in self.store.incidents(open_only=True):
-            p = json.loads(i.get("payload") or "{}")
-            rows.append({"id": f"incident-{i['id']}", "kind": f"incident-{i['id']}", "severity": i["severity"], "title": _no_code(p.get("message") or i["rule_id"]),
-                         "since": i["opened_at"][:10], "check": p.get("check") or "", "entity_id": i["entity_id"],
-                         "figures": {"incident": i["id"], "occurrences": i["count"], "state": i["state"]},
-                         "opened_day": i["opened_at"][:10]})
-        order = {"P1": 0, "P2": 1, "P3": 2, "P4": 3}
-        rows.sort(key=lambda r: (order.get(r["severity"], 9), r["opened_day"]))
-        return rows
+        """What is still open, as vesta_shared.problems answers it for every reader (the daily digest,
+        the owner's lines and the concierge ask the same module)."""
+        return [{**p, "kind": p["rule_id"] if p["source"].startswith("finding") else p["id"], "opened_day": p["since"]}
+                for p in Problems(self.store).open_problems()]
 
     def offline(self) -> list[dict]:
         crit = set(self.cfg.get("critical_families") or [])
@@ -519,21 +491,38 @@ def _device(c: "Ctx", entity_id: str | None, fallback: str) -> str:
     return fallback
 
 
-def _severity_of(c: "Ctx", horizon: str | None) -> str:
-    """A playbook entry's horizon as a severity: the LAST severity reports.yaml maps to it (Now → P2, not P1:
-    a clue is never an emergency by itself)."""
-    hz = c.need("horizon")
-    found = [sev for sev, h in hz.items() if h == horizon]
-    return found[-1] if found else "P4"
-
-
 def todo(c: "Ctx") -> list[dict]:
-    """What needs doing, ONCE: the playbook's clues and the open tasks, merged by device (a clue and a
-    task about one device are one item), then the items of one kind grouped when there are many
-    (thresholds.todo.group_from) and reports.yaml gives that kind a group line. The PDF mock-ups'
-    "Do this week": one list, no repeats."""
+    """The report's one list for this period: Ctx reads its inputs, one_list builds it."""
     if c._todo is not None:
         return c._todo
+
+    def device_of(entity_id, fallback):
+        return _device(c, entity_id, fallback)
+
+    def name_of(entity_id):
+        # the device's name as the knowledge pack has it; an entity it does not know keeps its own sentence
+        for rows in c.pack.families.values():
+            for r in rows:
+                if r.get("entity_id") == entity_id and r.get("name"):
+                    return r["name"]
+        return None
+
+    c._todo = one_list(clues(c)[0], c.tasks(), device_of, name_of, c.need("horizon"),
+                       int(c.need("todo", "group_from")), float(c.need("todo", "same_time_minutes")),
+                       c.cfg.get("todo_groups") or {})
+    return c._todo
+
+
+def one_list(clue_rows: list[dict], problems: list[dict], device_of, name_of, horizon: dict,
+             group_from: int, same_minutes: float, group_words: dict) -> list[dict]:
+    """What needs doing, ONCE: the playbook's clues and the open problems (vesta_shared.problems), merged
+    by device (a clue and a problem about one device are one item), then the items of one kind grouped
+    when there are at least `group_from` and `group_words` (reports.yaml todo_groups) or the playbook
+    entry gives that kind a group line. The PDF mock-ups' "Do this week": one list, no repeats.
+
+    ⚠️ PLAIN INPUTS (architecture review, 2026-10-01): it reads nothing itself — `device_of(entity_id,
+    fallback)` and `name_of(entity_id)` are the only questions it asks — so its rules are tested with
+    lists, without a villa, a store or Home Assistant."""
     order = {"P1": 0, "P2": 1, "P3": 2, "P4": 3}
     items: dict[str, dict] = {}
 
@@ -548,30 +537,33 @@ def todo(c: "Ctx") -> list[dict]:
         keep["also"] = keep["also"] + [other["title"]] + other["also"]
         items[it["device"]] = keep
 
-    hz = c.need("horizon")
-    for cl in clues(c)[0]:
+    def severity_for(h):
+        # a playbook entry's horizon as a severity: the LAST one reports.yaml maps to it (Now → P2, not
+        # P1: a clue is never an emergency by itself)
+        found = [sev for sev, hz in horizon.items() if hz == h]
+        return found[-1] if found else "P4"
+
+    for cl in clue_rows:
         f = cl["figures"]
-        sev = cl.get("severity") or _severity_of(c, cl.get("horizon"))
-        add({"from": "clue", "kind": f"{cl['group']}/{cl['entry']}", "device": _device(c, f.get("entity_id"), cl["subject"] or cl["id"]),
-             "subject": cl["subject"], "title": cl["title"], "severity": sev, "horizon": cl.get("horizon") or hz.get(sev),
+        sev = cl.get("severity") or severity_for(cl.get("horizon"))
+        add({"from": "clue", "kind": f"{cl['group']}/{cl['entry']}", "device": device_of(f.get("entity_id"), cl["subject"] or cl["id"]),
+             "subject": cl["subject"], "title": cl["title"], "severity": sev, "horizon": cl.get("horizon") or horizon.get(sev),
              "why": cl["playbook"].get("means", ""), "check": cl["playbook"].get("check", ""), "ask": cl["playbook"].get("ask", ""),
              "cost": cl["playbook"].get("cost_of_ignoring", ""), "since": str(f.get("since") or f.get("step_date") or f.get("change_date") or ""),
              "figures": f, "task_ids": [], "also": [], "group_title": cl.get("group_title"), "look_at": cl["playbook"].get("look_at", "")})
-    for tk in c.tasks():
-        add({"from": "task", "kind": tk["kind"], "device": _device(c, tk.get("entity_id"), tk["id"]),
-             "subject": tk["title"].split(" has ")[0].split(":")[0], "title": tk["title"].split("\n")[0], "severity": tk["severity"],
-             "horizon": hz.get(tk["severity"]), "why": "", "check": tk.get("check") or "", "ask": "", "cost": "",
-             "since": tk["since"], "figures": tk["figures"], "task_ids": [tk["id"]], "also": [], "group_title": None})
+    for pr in problems:
+        title = pr["title"].split("\n")[0]
+        add({"from": "task", "kind": pr["kind"], "device": device_of(pr.get("entity_id"), pr["id"]),
+             "subject": name_of(pr.get("entity_id")) or title, "title": title, "severity": pr["severity"],
+             "horizon": horizon.get(pr["severity"]), "why": "", "check": pr.get("check") or "", "ask": "", "cost": "",
+             "since": pr["since"], "figures": pr["figures"], "task_ids": [pr["id"]], "also": [], "group_title": None})
 
-    group_from = int(c.need("todo", "group_from"))
-    same_min = float(c.need("todo", "same_time_minutes"))
-    words = c.cfg.get("todo_groups") or {}
     kinds: dict[str, list[dict]] = {}
     for it in items.values():
         kinds.setdefault(it["kind"], []).append(it)
     out = []
     for kind, its in kinds.items():
-        title = its[0].get("group_title") or words.get(kind)
+        title = its[0].get("group_title") or group_words.get(kind)
         if len(its) < group_from or not title:
             out += its                               # a kind with no group line: each is its own problem
             continue
@@ -583,8 +575,8 @@ def todo(c: "Ctx") -> list[dict]:
         times = [_when({"when": x["since"]}) for x in its]
         if all(t_ is not None and len(x["since"]) > 10 for t_, x in zip(times, its)):
             spread = (max(times) - min(times)).total_seconds() / 60
-            if spread <= same_min and words.get("same_time"):
-                why += " " + words["same_time"].format(n=n, since=min(times).strftime("%d %b, %H:%M").lstrip("0"))
+            if spread <= same_minutes and group_words.get("same_time"):
+                why += " " + group_words["same_time"].format(n=n, since=min(times).strftime("%d %b, %H:%M").lstrip("0"))
         out.append({**its[0], "title": title.format(n=n, kind=kind.split("/")[-1]), "subject": f"{n} items", "why": why,
                     "ask": "", "severity": min((x["severity"] for x in its), key=lambda s: order.get(s, 9)),
                     "task_ids": [i for x in its for i in x["task_ids"]], "also": [], "members": names,
@@ -592,7 +584,6 @@ def todo(c: "Ctx") -> list[dict]:
     out.sort(key=lambda x: (order.get(x["severity"], 9), x["since"]))
     for k, it in enumerate(out):
         it["id"] = f"todo-{k + 1}"
-    c._todo = out
     return out
 
 
@@ -652,6 +643,7 @@ def s_todo(c: Ctx) -> dict:
 
 
 def _alert_rows(c: Ctx) -> list[dict]:
+    words = c.cfg.get("incident_words") or {}
     rows = []
     for i in c.incidents():
         p = json.loads(i.get("payload") or "{}")
@@ -659,8 +651,11 @@ def _alert_rows(c: Ctx) -> list[dict]:
         if i.get("closed_at"):
             secs = (datetime.fromisoformat(i["closed_at"]) - datetime.fromisoformat(i["opened_at"])).total_seconds()
             lasted = f"{int(secs)} s" if secs < 120 else (f"{int(secs // 60)} min" if secs < 7200 else f"{secs / 3600:.1f} h")
-        outcome = {"done": "Done", "resolved": "Cleared in Home Assistant", "not_found": "Not found",
-                   "escalated": "Escalated to the owner", "abandoned": "Stopped being watched"}.get(i.get("state"), i.get("state") or "")
+        state = i.get("state") or ""
+        if state not in words:
+            # a state with no words is named, not shown raw to the reader
+            c.problems.append(f"reports.yaml: incident_words has no words for the state {state!r}")
+        outcome = words.get(state, state)
         if i.get("reply"):
             outcome += f" ({i['reply']})" if i["reply"].lower() not in outcome.lower() else ""
         rows.append({"when": i["opened_at"], "what": _no_code(p.get("message") or p.get("label") or i["rule_id"]).split("\n")[0],
@@ -888,6 +883,7 @@ def facts(kind: str, c: Ctx) -> dict:
         raise SystemExit(f"reports.yaml has no report {kind!r}")
     out = {"kind": kind, "eyebrow": rep.get("eyebrow", ""), "villa": c.pack.villa,
            "order": [], "sections": {}, "to_write": [], "problems": []}
+    c.problems = out["problems"]       # a section that cannot say something names it here
     for sec in rep.get("sections") or []:
         sid = sec.get("id")
         fn = BUILD.get(sid)

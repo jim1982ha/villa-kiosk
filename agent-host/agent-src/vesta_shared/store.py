@@ -5,7 +5,9 @@ Tables:
   features    nightly per-asset numbers (the feature store, kept 24 months)
   findings    open and closed maintenance findings, one row per incident
   incidents   alert-desk records with the chase ladder state
-  tasks       FM tasks, each mirrored as a VESTA Kiosk ticket (its id in todo_uid), with their rule id
+  tasks       FM tasks, each mirrored as a VESTA Kiosk ticket (its id in todo_uid), with their rule id,
+              their source ("finding:N" / "incident:N") and what to check — opened and closed through
+              vesta_shared.problems, the one owner of a problem's lifecycle
   proposals   "VESTA suggests" items and their accept / later / ignore status
   mutes       rule + entity snoozed until a date
   cache       rendered reports and computed periods, keyed
@@ -72,6 +74,17 @@ class Store:
         self.db = sqlite3.connect(self.path)
         self.db.row_factory = sqlite3.Row
         self.db.executescript(SCHEMA)
+        # ⚠️ A FORMAT CHANGE CARRIES ITS MIGRATION: a store written before 0.6.16 has tasks without
+        # these columns, and outlives the release that adds them.
+        cols = {r["name"] for r in self.db.execute("PRAGMA table_info(tasks)")}
+        for col in ("source", "check_text"):
+            if col not in cols:
+                self.db.execute(f"ALTER TABLE tasks ADD COLUMN {col} TEXT")
+        self.db.commit()
+
+    @staticmethod
+    def now() -> str:
+        return _now()
 
     # features ------------------------------------------------------------
     def put_feature(self, day: str, entity_id: str, family: str, name: str, value: float | None, meta: dict | None = None):
@@ -152,9 +165,11 @@ class Store:
         return self.db.execute("SELECT COUNT(*) FROM incidents WHERE rule_id=? AND opened_at>=?", (rule_id, since_iso)).fetchone()[0]
 
     # tasks -----------------------------------------------------------------
-    def add_task(self, rule_id: str, entity_id: str, summary: str, todo_uid: str | None = None) -> int:
-        c = self.db.execute("INSERT INTO tasks (rule_id, entity_id, todo_uid, summary, created_at) VALUES (?,?,?,?,?)",
-                            (rule_id, entity_id, todo_uid, summary, _now()))
+    def add_task(self, rule_id: str, entity_id: str, summary: str, todo_uid: str | None = None,
+                 source: str | None = None, check_text: str | None = None) -> int:
+        """Opening a task is vesta_shared.problems.Problems.open_task's job; this only writes the row."""
+        c = self.db.execute("INSERT INTO tasks (rule_id, entity_id, todo_uid, summary, created_at, source, check_text) "
+                            "VALUES (?,?,?,?,?,?,?)", (rule_id, entity_id, todo_uid, summary, _now(), source, check_text))
         self.db.commit()
         return c.lastrowid
 

@@ -13,6 +13,7 @@ import yaml
 
 from helpers import copy_skill, settings
 from vesta_agent.app import Vesta
+from vesta_agent.routing import CONVERSATION, Origin
 from vesta_agent.kiosk import Kiosk
 
 OWNER, FM, STRANGER = 111, 222, 999
@@ -222,7 +223,7 @@ def test_a_failed_skill_script_is_in_the_apps_log_with_its_reason(agent, caplog)
     open(os.path.join(d, "skill.yaml"), "w").write(yaml.safe_dump({"description": "t", "scripts": {"check.py": {}}}))
     open(os.path.join(d, "scripts", "check.py"), "w").write(
         "import sys\nprint('Traceback...', file=sys.stderr)\nprint('check needs --energy', file=sys.stderr)\nsys.exit(1)\n")
-    tool = next(t for t in agent.toolbox().tool_objects(None, PRIVATE, False) if t.name == "run_skill_script")
+    tool = next(t for t in agent.toolbox().tool_objects(None, Origin(PRIVATE, CONVERSATION), False) if t.name == "run_skill_script")
     res = run(tool.handler({"skill": "pool-care", "script": "check.py", "args": []}))
     assert res.get("is_error")
     assert any("pool-care: check.py failed (exit 1): check needs --energy" in r.getMessage() for r in caplog.records)
@@ -231,7 +232,7 @@ def test_a_failed_skill_script_is_in_the_apps_log_with_its_reason(agent, caplog)
 def test_a_report_asked_for_in_a_chat_can_be_sent_there(agent):
     # 2026-09-30: asked in the group, the weekly page went to the fm chat (a private chat)
     # asked in a private chat; owner and fm are both the group in this policy
-    here = next(t for t in agent.toolbox().tool_objects(None, PRIVATE, False) if t.name == "send_message")
+    here = next(t for t in agent.toolbox().tool_objects(None, Origin(PRIVATE, CONVERSATION), False) if t.name == "send_message")
     assert "here" in here.input_schema["properties"]["to"]["enum"]
     run(here.handler({"to": "here", "text": "Weekly page"}))
     assert agent.tg.sent[-1][0] == PRIVATE != GROUP

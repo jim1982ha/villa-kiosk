@@ -14,7 +14,7 @@ from vesta_agent import runner
 from vesta_agent.app import Vesta
 from vesta_agent.kiosk import Kiosk
 from vesta_agent.policy import Person, Policy, problems
-from vesta_agent.routing import Origin
+from vesta_agent.routing import CONVERSATION, JOB, Origin
 from vesta_agent.skills import SkillError, Skills, ai_jobs
 
 GROUP, ASKER = -100555, 444
@@ -74,10 +74,10 @@ def test_at_its_limit_a_report_job_still_sends_its_page(agent):
     (cmd, values, origin), = agent.code
     assert cmd == "compose.py" and values["to"] == "fm" and values["limit"] == "2.5" and values["started"]
     agent.code.clear()
-    run(agent.run_model_job(agent.skills.get("reports"), job(agent, "fm-weekly"), Origin(ASKER)))
+    run(agent.run_model_job(agent.skills.get("reports"), job(agent, "fm-weekly"), Origin(ASKER, JOB)))
     (cmd, values, origin), = agent.code
-    assert values["to"] == "here" and origin == Origin(ASKER)               # asked in a chat: back to that chat
-    assert "everything you send goes to that chat" in agent.runs[-1]["prompt"]
+    assert values["to"] == "here" and origin == Origin(ASKER, JOB)               # asked in a chat: back to that chat
+    assert "asked for in a chat" in agent.runs[-1]["prompt"]
 
 
 def test_a_report_asked_for_in_a_chat_runs_as_its_job(agent):
@@ -91,8 +91,10 @@ def test_a_report_asked_for_in_a_chat_runs_as_its_job(agent):
     assert "not set up yet" in run(agent.start_job("fm-daily", ASKER))                # asked for, not in policy.yaml
     tb = agent.toolbox()
     person = Person(ASKER, "Asker", "fm")
-    assert "start_job" in [t.name for t in tb.tool_objects(person, ASKER, False)]
-    assert "start_job" not in [t.name for t in tb.tool_objects(None, ASKER, False)]    # a job never starts a job
+    assert "start_job" in [t.name for t in tb.tool_objects(person, Origin(ASKER, CONVERSATION), False)]
+    assert "start_job" not in [t.name for t in tb.tool_objects(None, Origin(ASKER, JOB), False)]
+    # only a conversation may start a job — never a job, even one a person asked for
+    assert "start_job" not in [t.name for t in tb.tool_objects(person, Origin(ASKER, JOB), False)]    # a job never starts a job
 
 
 def test_a_job_asked_for_in_a_chat_sends_only_to_that_chat(agent):
@@ -103,17 +105,17 @@ def test_a_job_asked_for_in_a_chat_sends_only_to_that_chat(agent):
         await asyncio.sleep(0.05)
     run(go())
     tb = agent.toolbox()
-    send = next(t for t in tb.tool_objects(None, ASKER, False, requested=True) if t.name == "send_message")
+    send = next(t for t in tb.tool_objects(None, Origin(ASKER, JOB), False) if t.name == "send_message")
     assert send.input_schema["properties"]["to"]["enum"] == ["here"]
     for to in ("fm", "owner", "here"):
         assert not run(send.handler({"to": to, "text": f"weekly for {to}"})).get("is_error")
     assert [c for c, text, _ in agent.tg.sent if text.startswith("weekly")] == [ASKER, ASKER, ASKER]
     # a script's own messages too (outcome.carry_out through the same rule)
     agent.tg.sent.clear()
-    run(agent.outcome.carry_out({"send": [{"to": "fm", "text": "from the script"}]}, "reports", Origin(ASKER, requested=True)))
+    run(agent.outcome.carry_out({"send": [{"to": "fm", "text": "from the script"}]}, "reports", Origin(ASKER, JOB)))
     assert [c for c, *_ in agent.tg.sent] == [ASKER]
     # a person answered in a chat: their chat only, whatever the skill's steps name (villa, 2026-10-01 17:31)
-    plain = next(t for t in tb.tool_objects(Person(ASKER, "Asker", "fm"), ASKER, False) if t.name == "send_message")
+    plain = next(t for t in tb.tool_objects(Person(ASKER, "Asker", "fm"), Origin(ASKER, CONVERSATION), False) if t.name == "send_message")
     assert plain.input_schema["properties"]["to"]["enum"] == ["here"]
     agent.tg.sent.clear()
     assert not run(plain.handler({"to": "fm", "text": "the weekly"})).get("is_error")
@@ -127,11 +129,11 @@ def test_a_report_asked_for_in_a_chat_cannot_be_made_inside_the_conversation(age
     # villa, 2026-10-01 17:31: the AI made the weekly itself in the group's conversation instead of starting
     # the job; the skill marks the report commands job_only, so in a chat they point to start_job
     tb = agent.toolbox()
-    script = next(t for t in tb.tool_objects(Person(ASKER, "Asker", "fm"), ASKER, False) if t.name == "run_skill_script")
+    script = next(t for t in tb.tool_objects(Person(ASKER, "Asker", "fm"), Origin(ASKER, CONVERSATION), False) if t.name == "run_skill_script")
     res = run(script.handler({"skill": "reports", "script": "facts.py", "args": ["fm-weekly", "--energy", "week.json"]}))
     assert res.get("is_error") and "call start_job with name fm-weekly" in res["content"][0]["text"]
     # the job itself (no person) runs it
-    job = next(t for t in tb.tool_objects(None, ASKER, False, requested=True) if t.name == "run_skill_script")
+    job = next(t for t in tb.tool_objects(None, Origin(ASKER, JOB), False) if t.name == "run_skill_script")
     res = run(job.handler({"skill": "reports", "script": "facts.py", "args": ["fm-weekly", "--energy", "week.json"]}))
     assert "start_job" not in res["content"][0]["text"]
 

@@ -138,6 +138,7 @@ const brain = (p, m) => [p ? (PROFILES[p] || p).replace(/ \(.*/, "") : null, m ?
 async function costs(days = 30) {
   fill($view, h("p", { class: "muted" }, "Loading…"));
   const c = await api("GET", `api/costs?days=${days}`);
+  PROFILES = c.profiles || PROFILES;
   if (c.none) return fill($view, card("Costs", "The agent has not recorded anything yet (it has not run in agent mode)."));
   const period = h("select", { "aria-label": "Period", onchange: (e) => costs(Number(e.target.value)) },
     [[7, "Last 7 days"], [30, "Last 30 days"], [90, "Last 90 days"]].map(([v, l]) => h("option", { value: v, selected: v === days }, l)));
@@ -254,7 +255,8 @@ const RULES = {
   listed: "only the devices in the lists below, then approval",
   direct: "no approval when a registered person asks",
 };
-const PROFILES = { auto: "Auto (Sonnet)", economy: "Economy (Haiku)", performance: "Performance (Opus)" };
+// the brains as the server names them (policy.profile_labels): filled by the rules and costs pages
+let PROFILES = {};
 const RESETS = { daily_04_00: "Every day at 04:00", after_8h_silence: "After 8 hours of silence", never: "Never (/new only)" };
 const LISTS = [
   ["switch_entities", "Switches it may turn on or off", ["switch"], "Only for the switch services set to \"listed\"."],
@@ -271,6 +273,7 @@ const ENT = { list: [], byId: {} };
 async function rules(sub = "forms") {
   fill($view, h("p", { class: "muted" }, "Loading…"));
   let doc = await api("GET", "api/policy");
+  PROFILES = doc.profiles || PROFILES;
   const { jobs } = await api("GET", "api/jobs");
   const { entities } = await api("GET", "api/entities");
   ENT.list = entities; ENT.byId = Object.fromEntries(entities.map((e) => [e.id, e]));
@@ -320,13 +323,10 @@ function rulesForms(doc, jobs = []) {
   const limitInput = (value, set, label, per) => h("div", {},
     h("input", { type: "number", step: "0.05", min: 0.05, value, "aria-label": label, oninput: on((t) => { set(num(t.value)); drawTotal(); }) }),
     h("div", { class: "muted" }, per));
-  // how often a job runs on schedule, in words, and per month (for the most the schedule can cost)
-  const cadence = (when) => /^\d{1,2}:\d{2}$/.test(when) ? ["every day at " + when, 30]
-    : /^[A-Z][a-z]{2} /.test(when) ? [`every ${({ Mon: "Monday", Tue: "Tuesday", Wed: "Wednesday", Thu: "Thursday", Fri: "Friday", Sat: "Saturday", Sun: "Sunday" })[when.slice(0, 3)] || when.slice(0, 3)} at ${when.slice(4)}`, 4.35]
-    : [`on day ${when.split(" ")[0]} of each month at ${when.split(" ")[1]}`, 1];
+  // how often a job runs, in words and per month: the scheduler's answer (/api/jobs), not re-parsed here
   const total = h("p", { class: "muted spaced" });
   const drawTotal = () => {
-    const n = jobs.reduce((s, j) => s + ((f.settings.jobs[j.name] || {}).limit_usd || 0) * cadence(j.when)[1], 0);
+    const n = jobs.reduce((s, j) => s + ((f.settings.jobs[j.name] || {}).limit_usd || 0) * j.runs_per_month, 0);
     total.textContent = `At their limits, the scheduled runs cost at most about US$ ${n.toFixed(2)} a month. `
       + "Chat replies, and reports asked for in a chat, come on top: see the Costs tab for what was really spent.";
   };
@@ -339,7 +339,7 @@ function rulesForms(doc, jobs = []) {
     ...jobs.map((j) => {
       const cur = f.settings.jobs[j.name];
       const what = h("td", {}, h("b", {}, j.name),
-        h("div", { class: "muted" }, `${j.skill} · ${cadence(j.when)[0]}${j.on_request ? ", or when asked in a chat" : ""}`));
+        h("div", { class: "muted" }, `${j.skill} · ${j.when_words}${j.on_request ? ", or when asked in a chat" : ""}`));
       if (!cur) {
         return h("tr", {}, what, h("td", { colspan: 2, class: "muted" }, "Not set: this job does not run."),
           h("td", { class: "x" }, h("button", { class: "btn icon ghost", title: "Set this job", onclick: () => { f.settings.jobs[j.name] = { ...j.default }; drawAi(); drawTotal(); markDirty(); } }, "+")));

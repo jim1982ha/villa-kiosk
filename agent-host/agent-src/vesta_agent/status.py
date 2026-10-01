@@ -9,6 +9,8 @@ import json
 import os
 from datetime import datetime, timedelta, timezone
 
+from vesta_shared.agent_records import run_cost   # what a run cost: one reading, shared with the skills
+
 # agent_status: the records worth telling a person about, and the fields of each (never a chat id or a token)
 STATUS_KINDS = ("critical_event", "ladder", "executed", "requested", "approved", "refused_by_person", "failed",
                 "action_failed", "send_failed", "code_script_failed", "script_refused", "pack", "ticket_skipped")
@@ -37,8 +39,8 @@ def report(state, store_path: str, hours: int = 24, now: datetime | None = None)
             d = json.loads(c["detail"] or "{}")
         except ValueError:
             d = {}
-        if c["kind"] == "run" and isinstance(d.get("cost_usd"), (int, float)):
-            cost += d["cost_usd"]
+        if c["kind"] == "run":
+            cost += run_cost(d)
         if c["kind"] in STATUS_KINDS:
             events.append({"at": c["at"], "what": c["kind"], **{k: v for k, v in d.items() if k in STATUS_FIELDS}})
     incidents = []
@@ -80,7 +82,7 @@ def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_la
             kind, work, person = "chat", "Chat replies", name or None
             chat = chat_label(cid) if chat_label and cid.lstrip("-").isdigit() else None
         tok = d.get("tokens") or {}
-        cost = d.get("cost_usd") if isinstance(d.get("cost_usd"), (int, float)) else 0.0
+        cost = run_cost(d)
         runs.append({"at": c["at"], "kind": kind, "work": work, "person": person, "chat": chat, "asked": d.get("asked"),
                      "profile": d.get("profile"), "model": d.get("model"),
                      "tokens_in": tok.get("input_tokens"), "tokens_out": tok.get("output_tokens"),

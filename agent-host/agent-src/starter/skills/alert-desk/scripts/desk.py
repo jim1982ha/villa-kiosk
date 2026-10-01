@@ -36,6 +36,7 @@ import yaml
 HERE = os.path.dirname(os.path.abspath(__file__))
 from vesta_shared.store import Store  # noqa: E402  (PYTHONPATH is set by the engine)
 from vesta_shared.params import VillaParams  # noqa: E402
+from vesta_shared.problems import DONE, Problems  # noqa: E402  (a problem's lifecycle: one owner)
 
 RULES = yaml.safe_load(open(os.path.join(HERE, "..", "rules.yaml"), encoding="utf-8"))
 LADDER_OPTIONS = ["Done", "Not found", "Need help", "Mute"]
@@ -140,7 +141,7 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
         out["send"].append(msg)
     if sev in ("P1", "P2") and route.get("ladder", True):
         store.update_incident(iid, state="asked", asked_at=now.isoformat(), assignee="fm")
-        tid = store.add_task(rule_id, eid, ev["message"][:250])
+        tid, _ = Problems(store).open_task("incident", iid, rule_id, eid, ev["message"][:250], route.get("check") or "")
         out["actions"].append({"action": "ticket", "summary": ev["message"][:200], "task_id": tid,
                                "entity_id": eid if eid and "," not in eid else None, "note": route.get("check")})
     elif sev == "P3":
@@ -169,10 +170,8 @@ def resolved(store: Store, ev: dict, now: datetime) -> dict:
     was_chasing = inc["state"] in ("asked", "reasked", "escalated")
     store.update_incident(inc["id"], state="resolved", closed_at=now.isoformat())
     out["incident_id"], out["decision"] = inc["id"], "resolved"
-    task = store.open_task(inc["rule_id"], inc["entity_id"])
-    if task:
-        store.close_task(task["id"])
-        out["actions"].append({"action": "ticket.resolve", "task_id": task["id"], "note": "Cleared: Home Assistant reports it is back to normal."})
+    for tid in Problems(store).clear_source("incident", inc["id"], inc["rule_id"], inc["entity_id"]):
+        out["actions"].append({"action": "ticket.resolve", "task_id": tid, "note": "Cleared: Home Assistant reports it is back to normal."})
     # its alert and reminders, in every chat, lose their buttons: nobody presses for something already over
     out["settle"] = [{"incident_id": inc["id"], "note": "Cleared in Home Assistant, {time}. No reply needed."}]
     if was_chasing:
@@ -228,10 +227,8 @@ def reply(store: Store, iid: int, text: str, sender_role: str, now: datetime, pa
         out["send"].append({"to": "here", "text": f"Incident #{iid} is already closed."}); return out
     if t.startswith("done"):
         store.update_incident(iid, state="done", reply=text, closed_at=now.isoformat())
-        task = store.open_task(inc["rule_id"], inc["entity_id"])
-        if task:
-            store.close_task(task["id"])
-            out["actions"].append({"action": "ticket.resolve", "task_id": task["id"], "note": f"Done, answered by the {sender_role}."})
+        for tid in Problems(store).clear_source("incident", iid, inc["rule_id"], inc["entity_id"], status=DONE):
+            out["actions"].append({"action": "ticket.resolve", "task_id": tid, "note": f"Done, answered by the {sender_role}."})
         out["send"].append({"to": "here", "text": f"Thanks, incident #{iid} closed. The VESTA Agent will check it stays quiet."})
     elif t.startswith("not found"):
         store.update_incident(iid, state="not_found", reply=text)

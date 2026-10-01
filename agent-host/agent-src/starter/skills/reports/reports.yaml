@@ -19,6 +19,7 @@ thresholds:
     watch_drop_pct: 10         # Watch when the running power of the last 3 days is this much under the days before
     run_min_w: 15              # an hour whose mean power is above this counts as running
   circuits_show: 8             # rows of the circuit table, largest first
+  alert_follow_window_min: 15  # a logbook run this close to an incident of the same rule is that incident (shown once)
   circuit_change_max_pct: 300  # a change bigger than this (from almost nothing) shows as ">+300%", not "+10900%"
   todo:                        # the one list of what needs doing
     group_from: 3              # this many items of one kind become one line ("4 monitoring devices offline")
@@ -148,6 +149,22 @@ todo_groups:
 # a schedule rule runs every day to check, a presence rule mostly stops at its conditions; their alerts
 # come from the agent's own record (the event they raise when they alert).
 alert_on_every_run: [critical_condition]
+
+# What became of an alert, in the alerts table: per state the alert desk gives an incident. A state with no
+# words here is named in the report's problems, never shown raw.
+incident_words:
+  new: Received
+  asked: The facility manager was asked
+  reasked: Reminder sent
+  escalated: Escalated to the owner
+  done: Done
+  resolved: Cleared in Home Assistant
+  not_found: Not found
+  abandoned: Stopped being watched
+  digest: In the morning digest
+  logged: Recorded
+  muted: Muted
+  recovered: Back to normal
 
 # A VESTA rule in the alerts table: per blueprint, the words for an alert it SENT. {subject}: the rule's
 # name after its blueprint prefix ("critical_schedule---garden_pump" → "Garden pump").

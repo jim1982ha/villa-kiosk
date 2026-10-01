@@ -189,7 +189,9 @@ class UI:
         from ..policy import Policy
         from ..skills import ai_jobs
         set_ = Policy.load(self.s.policy_path).jobs
+        from ..scheduler import describe
         return [{"name": j["name"], "skill": sk.name, "when": j["when"], "to": j.get("to"),
+                 "when_words": describe(j["when"])[0], "runs_per_month": describe(j["when"])[1],
                  "on_request": j.get("on_request", False), "description": j.get("description") or "",
                  "default": j.get("default") or {}, "set": j["name"] in set_, "current": set_.get(j["name"])}
                 for sk, j in ai_jobs(self.skills.all())]
@@ -212,8 +214,10 @@ class UI:
         except Exception:  # noqa: BLE001 — an unknown zone: UTC days
             zone = None
         route = Routing(Policy.load(self.s.policy_path))
-        return web.json_response(status.costs(State(self.s.state_path), days, zone=zone,
-                                              chat_label=lambda cid: route.label(int(cid))))
+        from ..policy import profile_labels
+        return web.json_response({**status.costs(State(self.s.state_path), days, zone=zone,
+                                                 chat_label=lambda cid: route.label(int(cid))),
+                                  "profiles": profile_labels()})
 
     # ------------------------------------------------------------------ the villa's devices
     async def entities(self, _request):
@@ -242,8 +246,9 @@ class UI:
             form, probs = to_form(text), policy_problems(yaml.safe_load(text) if text else {})
         except yaml.YAMLError as e:
             form, probs = None, [f"The file cannot be read as YAML: {e}"]
-        from ..policy import LANGUAGES
-        return web.json_response({"text": text, "rev": r, "form": form, "problems": probs, "languages": LANGUAGES})
+        from ..policy import LANGUAGES, profile_labels
+        return web.json_response({"text": text, "rev": r, "form": form, "problems": probs, "languages": LANGUAGES,
+                                  "profiles": profile_labels()})
 
     def _save_policy(self, new_text: str, base_rev: str) -> dict:
         text, r = self._policy()

@@ -13,7 +13,7 @@ from helpers import settings
 from test_telegram_events import BOT, FakeReader, FakeTelegram
 from vesta_agent.app import Vesta
 from vesta_agent.policy import Policy
-from vesta_agent.routing import Origin, Routing
+from vesta_agent.routing import CONVERSATION, Origin, Routing
 from vesta_shared.store import Store
 
 GROUP, FM_PRIVATE, ASKER = -100777, 222, 333
@@ -71,7 +71,7 @@ def agent(tmp_path):
 
 def script_tool(v, chat):
     """The model's run_skill_script, as one conversation holds it (one toolbox per conversation)."""
-    return next(t for t in v.toolbox().tool_objects(None, chat, False) if t.name == "run_skill_script")
+    return next(t for t in v.toolbox().tool_objects(None, Origin(chat, CONVERSATION), False) if t.name == "run_skill_script")
 
 
 def model_runs(v, chat, part=1, tool=None):
@@ -87,7 +87,9 @@ def test_a_script_the_model_runs_in_a_chat_is_carried_out_like_a_scheduled_one(a
     assert kiosk.tickets == [("Pump draws less power", "sensor.example_pump_power")]
     task = Store(v.s.store_path).tasks("open")[0]
     assert task["todo_uid"] == "t1"                                        # the task knows its ticket
-    assert [c for c, _, _ in v.tg.sent] == [FM_PRIVATE]                    # its message: the fm chat, as on schedule
+    # its message: the chat of the conversation, not the fm chat (architecture review, 2026-10-01: the AI's
+    # own messages were held to the asker's chat while the script's went to the fm chat, in one conversation)
+    assert [c for c, _, _ in v.tg.sent] == [GROUP]
 
 
 def test_the_next_part_of_a_long_answer_does_not_run_the_script_again(agent, monkeypatch):
@@ -117,26 +119,54 @@ def test_an_open_task_without_its_ticket_gets_one_once(agent):
 def test_the_tasks_and_the_kiosks_tickets_agree(agent):
     # villa, 2026-10-01: findings closed every night, their tickets stayed "Open fault" for ever and the
     # Kiosk's Cockpit only grew (22 faults for problems gone)
+    from vesta_shared.problems import Problems
     v, kiosk = agent
-    kiosk.known, kiosk.closed_by_hand = ["t-hand", "t-gone", "t-alert"], ["t-hand"]
-    st = Store(v.s.store_path)
-    by_hand = st.add_task("PM-A", "sensor.example_a", "Closed in the Kiosk"); st.set_task_uid(by_hand, "t-hand")
-    gone = st.add_task("PM-SILENT", "sensor.example_rain", "Rain gauge silent"); st.set_task_uid(gone, "t-gone")
-    st.raise_finding("PM-SILENT", "sensor.example_rain", "level", "2026-09-30", "P3", "silent", {})
+    kiosk.known, kiosk.closed_by_hand = ["t-hand", "t-gone", "t-alert", "t-old"], ["t-hand", "t-alert"]
+    st, pb = Store(v.s.store_path), Problems(Store(v.s.store_path))
+    fid, _ = st.raise_finding("PM-A", "sensor.example_a", "level", "2026-09-30", "P3", "A", {})
+    by_hand, _ = pb.open_task("finding", fid, "PM-A", "sensor.example_a", "Closed in the Kiosk"); st.set_task_uid(by_hand, "t-hand")
+    gid, _ = st.raise_finding("PM-SILENT", "sensor.example_rain", "level", "2026-09-30", "P3", "silent", {})
+    gone, _ = pb.open_task("finding", gid, "PM-SILENT", "sensor.example_rain", "Rain gauge silent"); st.set_task_uid(gone, "t-gone")
     st.close_finding("PM-SILENT", "sensor.example_rain", "2026-10-01")             # the check no longer sees it
-    alert = st.add_task("automation.example_door", "lock.example_door", "Door left open"); st.set_task_uid(alert, "t-alert")
+    iid = st.new_incident("k", "automation.example_door", "lock.example_door", "P2", {"message": "Door left open"})
+    st.update_incident(iid, state="asked")
+    alert, _ = pb.open_task("incident", iid, "automation.example_door", "lock.example_door", "Door left open")
+    st.set_task_uid(alert, "t-alert")
+    run(v.outcome.carry_out({"send": [{"to": "fm", "text": f"Door left open. Incident #{iid}.", "keyboard": True}],
+                             "incident_id": iid}, "alert-desk"))
+    old = st.add_task("PM-B", "sensor.example_b", "Before sources were kept"); st.set_task_uid(old, "t-old")   # 0.6.15
     run(v.outcome.repair_tickets())
-    assert st.task(by_hand)["status"] == "done_in_kiosk"                            # a person closed it there
+    assert st.task(by_hand)["status"] == "closed_in_kiosk"                          # a person closed it there
     assert st.task(gone)["status"] == "cleared" and kiosk.resolved == ["t-gone"]    # gone: closed with its ticket
-    assert st.task(alert)["status"] == "open"                                       # no finding: an alert's task stays
+    # an alert's fault closed in the Kiosk: its incident closes too — the desk stops chasing it — and the
+    # alert's message loses its buttons (villa, 2026-10-01: it kept reminding, then escalated to the owner)
+    assert st.task(alert)["status"] == "closed_in_kiosk" and st.incident(iid)["closed_at"]
+    assert any("Closed in the VESTA Kiosk" in text for _, _, text in v.tg.edits)
+    assert st.task(old)["status"] == "open"                                         # no finding of its own: stays
 
 
-def test_a_fault_title_says_what_is_wrong_and_its_note_what_to_check(agent):
-    # owner, 2026-10-01: "<finding> Check: <what>" as one title filled a fault card with a paragraph
+def test_a_task_from_before_sources_keeps_its_title_and_check_apart(agent):
+    # owner, 2026-10-01: "<finding> Check: <what>" as one title filled a fault card with a paragraph. A task
+    # written before 0.6.16 still has the sentence: its missing ticket is made with the two apart.
     v, kiosk = agent
-    run(v.outcome.create_ticket("Rain gauge has not reported for 2.0 days. Check: Check the sensor: battery.", "sensor.example_rain"))
+    st = Store(v.s.store_path)
+    st.add_task("PM-X", "sensor.example_rain", "Rain gauge has not reported for 2.0 days. Check: Check the sensor: battery.")
+    run(v.outcome.repair_tickets())
     assert kiosk.tickets[-1] == ("Rain gauge has not reported for 2.0 days.", "sensor.example_rain")
     assert kiosk.notes[-1] == "Check: Check the sensor: battery."
+
+
+def test_one_occasion_answers_every_routing_question():
+    # architecture review, 2026-10-01: "who is asking" read in one place — what the AI is offered, where
+    # each message lands, whether it may start a job — as a table, without building any tool
+    from vesta_agent.routing import JOB, PRESS
+    r = Routing(Policy({"chats": {"owner": GROUP, "fm": FM_PRIVATE}}))
+    scheduled, talk, job, press = None, Origin(ASKER, CONVERSATION), Origin(ASKER, JOB), Origin(ASKER, PRESS)
+    assert [Routing.offered(o) for o in (scheduled, talk, job, press)] == [
+        ["owner", "fm"], ["here"], ["here"], ["here", "owner", "fm"]]
+    assert [r.target("fm", o) for o in (scheduled, talk, job, press)] == [FM_PRIVATE, ASKER, ASKER, FM_PRIVATE]
+    assert [r.target("owner", o) for o in (scheduled, talk, press)] == [GROUP, ASKER, GROUP]   # a button may escalate
+    assert talk.is_conversation and not job.is_conversation and not press.is_conversation
 
 
 def test_the_routing_rule():
@@ -170,7 +200,7 @@ def test_the_alert_skill_cannot_be_run_by_the_model_to_raise_an_alert():
 
 def test_the_model_saves_its_sentences_but_never_over_a_scripts_file(agent):
     v, _ = agent
-    tool = next(t for t in v.toolbox().tool_objects(None, GROUP, False) if t.name == "save_file")
+    tool = next(t for t in v.toolbox().tool_objects(None, Origin(GROUP, CONVERSATION), False) if t.name == "save_file")
     ok = run(tool.handler({"name": "notes.json", "content": json.dumps({"headline": "All quiet."})}))
     assert not ok.get("is_error") and json.load(open(os.path.join(v.s.out_dir, "notes.json"))) == {"headline": "All quiet."}
     assert not run(tool.handler({"name": "notes.json", "content": "{}"})).get("is_error")      # its own file: again

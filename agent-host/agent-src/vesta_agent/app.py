@@ -34,7 +34,7 @@ from .ha_events import HaEvents
 from .kiosk import Kiosk, KioskError
 from .outcome import Outcome
 from .policy import Person, Policy, problems as policy_problems
-from .routing import Origin, Routing
+from .routing import CONVERSATION, JOB, Origin, Routing
 from .scheduler import Scheduler
 from .skills import Skills, run_command, script_env
 from .state import State
@@ -440,7 +440,7 @@ class Vesta:
                 await self.refresh_server_tools()
             tb = self.toolbox()
             include_web = self.s.web_search
-            server = tb.server(person, cid, include_web)
+            server = tb.server(person, Origin(cid, CONVERSATION), include_web)
             allowed = set(tb.model_tool_names(include_web))
             res = await runner.run(self.s, self.system_prompt(), prompt, server, allowed, self.state,
                                    who=f"{person.name if person else 'system'}@{cid}", resume=resume,
@@ -556,13 +556,14 @@ class Vesta:
         except (KeyError, IndexError, ValueError):
             pass                        # a prompt with other braces is used as written
         if origin:
-            prompt += ("\n\nThis was asked for in a chat, not on schedule: everything you send goes to that chat "
-                       "(send_message to=here), including what the steps above address to owner or fm.")
+            # where it all goes is routing's (Origin JOB holds every message to that chat); the AI is only told
+            # it was asked for, so it does not write "as scheduled"
+            prompt += "\n\nThis was asked for in a chat, not on schedule."
         if not self.server_tools:
             await self.refresh_server_tools()
         started = datetime.now(timezone.utc).isoformat()
         tb = self.toolbox()
-        server = tb.server(None, origin.chat if origin else None, False, requested=origin is not None)
+        server = tb.server(None, origin, False)
         allowed = set(tb.model_tool_names(False))
         log.info("AI job %s started (%s, limit %g USD)%s", name, cfg["profile"], cfg["limit_usd"],
                  " on request" if origin else "")
@@ -584,7 +585,7 @@ class Vesta:
         if name not in self.policy().jobs:
             return f"The {name} job is not set up yet (VESTA Agent page → Rules → AI jobs): it cannot run."
         sk, job = found[0]
-        asyncio.create_task(self._safe(self.run_model_job(sk, job, Origin(int(chat), requested=True))))
+        asyncio.create_task(self._safe(self.run_model_job(sk, job, Origin(int(chat), JOB))))
         return f"Started {name}: the result will be sent here when it is ready (a few minutes)."
 
     async def housekeeping(self) -> None:

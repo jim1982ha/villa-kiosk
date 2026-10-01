@@ -27,3 +27,8 @@ _Avoid_: insight, analysis, comment
 **Clue**:
 An observation a skill's script finds in the villa's data from a playbook entry's condition, handed to the AI as the starting point of a reading.
 _Avoid_: hint, signal, alert
+
+**Problem**:
+Something wrong in the villa that someone has to deal with: seen by the night check (a finding) or raised by a VESTA rule (an incident), with the facility manager's task about it and its fault in the VESTA Kiosk. Open until it clears by itself, or a person answers it (Done) or closes its fault in the Kiosk.
+_Avoid_: issue, ticket (the Kiosk's record of it), task (the facility manager's job about it)
+

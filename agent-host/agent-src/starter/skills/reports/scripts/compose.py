@@ -46,6 +46,7 @@ sys.path.insert(0, HERE)
 from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
 from vesta_shared.messaging import fmt_money, split_message  # noqa: E402
 from vesta_shared.store import Store  # noqa: E402
+from vesta_shared.problems import Problems  # noqa: E402  (what is still open: one owner)
 
 TPL = Environment(loader=FileSystemLoader(os.path.join(HERE, "..", "templates")), autoescape=True)
 NUM = re.compile(r"(?<![\w.])-?\d{1,3}(?:,\d{3})+(?:\.\d+)?|(?<![\w.])-?\d+(?:\.\d+)?")
@@ -56,7 +57,7 @@ def fm_daily(pack: KnowledgePack, store: Store, as_of: date) -> str:
     yesterday = (as_of - timedelta(days=1)).isoformat()
     new = [f for f in store.findings(since_day=yesterday) if f["severity"] in ("P2", "P3")]
     digest_inc = [i for i in store.incidents(open_only=True) if i["state"] == "digest" and i["opened_at"][:10] >= yesterday]
-    open_tasks = store.tasks("open")
+    open_now = Problems(store).open_problems()
     lines = [f"{pack.villa}, {as_of.strftime('%a %d %b')} morning."]
     if new:
         lines.append("New:")
@@ -64,9 +65,12 @@ def fm_daily(pack: KnowledgePack, store: Store, as_of: date) -> str:
     if digest_inc:
         lines.append("Also noted (no action needed yet):")
         lines += [f"- {json.loads(i['payload'] or '{}').get('message') or i['rule_id']}" for i in digest_inc]
-    if open_tasks:
-        lines.append(f"Still open: {len(open_tasks)} task(s). Reply with the number and Done, Not found or Need help.")
-        lines += [f"- #{t['id']} {t['summary'].split(' Check: ')[0][:160]}" for t in open_tasks[:8]]
+    if open_now:
+        # ⚠️ "#N" ONLY WHERE "#N done" WORKS: an alert's incident number. It used to print task numbers,
+        # which no reply could close; a maintenance finding is closed in the VESTA Kiosk instead.
+        lines.append(f"Still open: {len(open_now)}. An alert: reply with its number and Done, Not found or Need help; "
+                     "the rest: close it in the VESTA Kiosk (Facility → Faults) when it is done.")
+        lines += [f"- {'#' + str(p['incident']) + ' ' if p['incident'] else ''}{p['title'][:160]}" for p in open_now[:8]]
     if len(lines) == 1:
         lines.append("Nothing new, nothing open.")
     return "\n".join(lines)
@@ -75,7 +79,7 @@ def fm_daily(pack: KnowledgePack, store: Store, as_of: date) -> str:
 def owner_weekly(pack: KnowledgePack, store: Store, energy: dict) -> str:
     inc = [i for i in store.incidents(open_only=False) if i["opened_at"][:10] >= energy["start"]]
     p1 = sum(1 for i in inc if i["severity"] == "P1")
-    open_tasks = len(store.tasks("open"))
+    open_tasks = len(Problems(store).open_problems())
     kwh = f"{energy['total_kwh']:.0f} kWh" if energy.get("total_kwh") is not None else "kWh n/a"
     vs = f" ({energy['total_vs_prev_pct']:+.0f}%)" if energy.get("total_vs_prev_pct") is not None else ""
     cost = f", {fmt_money(energy['total_cost'], energy['currency'])}" if energy.get("total_cost") else ""

@@ -30,6 +30,8 @@ from datetime import datetime
 from typing import Awaitable, Callable
 from zoneinfo import ZoneInfo
 
+from vesta_shared.problems import CLEARED, Problems
+
 from .routing import Origin, Routing
 
 log = logging.getLogger("vesta.outcome")
@@ -161,11 +163,6 @@ class Outcome:
         if not self.kiosk.enabled:
             self.state.log("ticket_skipped", {"reason": "no Kiosk configured", "summary": (title or "")[:80]})
             return None
-        # ⚠️ THE TITLE SAYS WHAT IS WRONG; WHAT TO CHECK IS THE NOTE (owner, 2026-10-01). A task's text is
-        # "<finding> Check: <what to check>", and as one title it filled a fault card with a paragraph.
-        if note is None and " Check: " in (title or ""):
-            title, check = title.split(" Check: ", 1)
-            note = "Check: " + check.strip()
         tid = await self.kiosk.add_ticket(ticket_title(title)[:200], entity_id=entity_id, note=note)
         log.info("Kiosk ticket %s created: %s", tid, ticket_title(title)[:80])
         if task_id:
@@ -183,41 +180,44 @@ class Outcome:
 
     async def repair_tickets(self) -> int:
         """The open tasks and the Kiosk's tickets agree (at each start and each night, owner, 2026-10-01):
-          - a task whose ticket a person resolved in the Kiosk is closed;
-          - a task whose finding is closed (the check no longer sees it) is closed, its ticket resolved —
-            the night check does it as it closes a finding; this catches the ones from before it did;
+          - a task whose ticket a person resolved in the Kiosk is closed, with the incident it came from
+            (vesta_shared.problems decides; here only the Kiosk is read and the alert's messages settled);
+          - a task that outlived its finding or incident is closed, its ticket resolved;
           - an open task without its ticket gets one (a task stored while the Kiosk was off, or by a
             script whose result was dropped).
         ⚠️ Without the first two the Kiosk's Cockpit only ever grew: 22 "Open fault" for problems gone."""
         if not self.kiosk.enabled:
             return 0
         store = self._store()
+        problems = Problems(store)
         try:
             states = await self.kiosk.ticket_states()
         except Exception as e:  # noqa: BLE001 — the next start or night tries again
             log.warning("The Kiosk's tickets could not be read (%s)", type(e).__name__)
             return 0
         closed = cleared = 0
-        for t in store.tasks("open"):
+        for t in problems.open_tasks():
             uid = t.get("todo_uid")
             if uid and states.get(uid) == "resolved":
-                store.close_task(t["id"], "done_in_kiosk")
+                iid = problems.closed_in_kiosk(t["id"])
+                if iid:
+                    await self.settle(iid, "Closed in the VESTA Kiosk, {time}.")
                 closed += 1
-                continue
-            rows = [f for f in store.findings() if f["rule_id"] == t["rule_id"] and f["entity_id"] == t["entity_id"]]
-            if rows and not any(f["status"] == "open" for f in rows):
-                store.close_task(t["id"], "cleared")
+            elif problems.source_gone(t):
+                problems.close(t["id"], CLEARED)
                 if uid and states.get(uid) not in (None, "resolved"):
                     await self.kiosk.resolve_ticket(uid, note="Cleared: the check no longer sees it.")
                 cleared += 1
         if closed or cleared:
             log.info("Kiosk tickets reconciled: %d task(s) closed in the Kiosk, %d cleared with their ticket", closed, cleared)
         made = 0
-        for t in store.tasks("open"):
+        for t in problems.open_tasks():
             if t.get("todo_uid"):
                 continue
             try:
-                if await self.create_ticket(t.get("summary") or "", t.get("entity_id") or None, None, t["id"]):
+                check = problems.check_of(t)
+                if await self.create_ticket(problems.title_of(t), t.get("entity_id") or None,
+                                            f"Check: {check}" if check else None, t["id"]):
                     made += 1
             except Exception as e:  # noqa: BLE001 — the next start or night tries again
                 log.warning("A missing Kiosk ticket could not be created (%s)", type(e).__name__)

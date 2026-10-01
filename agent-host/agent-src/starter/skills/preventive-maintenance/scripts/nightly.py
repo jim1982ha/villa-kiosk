@@ -36,6 +36,7 @@ from vesta_shared.ha_client import client_from_args  # noqa: E402
 from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
 from vesta_shared.params import VillaParams, MissingParameter  # noqa: E402
 from vesta_shared.store import Store  # noqa: E402
+from vesta_shared.problems import Problems  # noqa: E402  (a problem's lifecycle: one owner)
 from vesta_shared.stats import med  # noqa: E402
 from vesta_shared.timeutil import schedule_hours_per_day  # noqa: E402
 import features as F  # noqa: E402
@@ -252,6 +253,7 @@ def run(args) -> dict:
                 d["worsened"] = True
                 f.detail["last_reported_pct"] = f.detail.get("change_pct")
                 store.db.execute("UPDATE findings SET detail=? WHERE id=?", (json.dumps(f.detail), fid)); store.db.commit()
+    problems = Problems(store)
     resolved_tasks = []
     for o in store.findings(status="open"):
         if o["rule_id"] in STATE_RULES and (o["rule_id"], o["entity_id"]) not in fired:
@@ -259,18 +261,16 @@ def run(args) -> dict:
             closed.append(o)
             # ⚠️ ITS TASK AND ITS KIOSK TICKET CLOSE WITH IT (villa, 2026-10-01): the finding closed, the
             # ticket stayed "Open fault" for ever, and the Kiosk's Cockpit filled with faults long gone
-            task = store.open_task(o["rule_id"], o["entity_id"])
-            if task:
-                store.close_task(task["id"], "cleared")
-                resolved_tasks.append(task["id"])
+            resolved_tasks += problems.clear_source("finding", o["id"], o["rule_id"], o["entity_id"])
 
     # ---- tasks for the FM (P2 and P3 new findings) --------------------------------
     tasks = []
     for d in new:
-        if d["severity"] in ("P2", "P3") and not store.open_task(d["rule_id"], d["entity_id"]):
-            text = f"{d['summary']} Check: {d['check']}"
-            tid = store.add_task(d["rule_id"], d["entity_id"], text)
-            tasks.append({"task_id": tid, "todo_summary": text[:250], "severity": d["severity"], "entity_id": d["entity_id"]})
+        if d["severity"] in ("P2", "P3"):
+            tid, created = problems.open_task("finding", d["id"], d["rule_id"], d["entity_id"], d["summary"], d.get("check") or "")
+            if created:
+                tasks.append({"task_id": tid, "todo_summary": d["summary"][:250], "check": d.get("check") or "",
+                              "severity": d["severity"], "entity_id": d["entity_id"]})
     store.beat("maintenance_nightly", day_end.astimezone(timezone.utc).isoformat())
     store.audit("preventive-maintenance", "nightly", {"as_of": today.isoformat(), "new": len(new), "closed": len(closed)})
 
@@ -306,7 +306,9 @@ def main(argv=None):
     out = {k: res[k] for k in ("as_of", "features_written", "digest_lines", "tasks_to_create", "notes")}
     # The engine's standard output: each task a Facility ticket in the VESTA Kiosk, and a P2
     # finding sent to the facility manager at once rather than at the 07:00 digest.
+    # the ticket's title says what is wrong, its note what to check (two fields, not one sentence)
     out["actions"] = [{"action": "ticket", "summary": t["todo_summary"], "task_id": t["task_id"],
+                       "note": f"Check: {t['check']}" if t.get("check") else None,
                        "entity_id": t.get("entity_id")} for t in res["tasks_to_create"]]
     out["actions"] += [{"action": "ticket.resolve", "task_id": tid,
                         "note": "Cleared: the nightly check no longer sees it."} for tid in res["tasks_resolved"]]

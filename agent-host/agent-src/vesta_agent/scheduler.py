@@ -45,6 +45,21 @@ def slot_for(spec: str, now: datetime) -> datetime | None:
     return slot
 
 
+DAYS = {"Mon": "Monday", "Tue": "Tuesday", "Wed": "Wednesday", "Thu": "Thursday", "Fri": "Friday",
+        "Sat": "Saturday", "Sun": "Sunday"}
+
+
+def describe(spec: str) -> tuple[str, float]:
+    """A schedule in words, and how many times it runs in a month — for the VESTA Agent page, which used to
+    re-parse this grammar itself (architecture review, 2026-10-01: one owner of "07:00 / Mon 08:00 / 1 08:00")."""
+    parts = spec.split()
+    if len(parts) == 1:
+        return f"every day at {parts[0]}", 30.0
+    if parts[0].isdigit():
+        return f"on day {parts[0]} of each month at {parts[1]}", 1.0
+    return f"every {DAYS.get(parts[0], parts[0])} at {parts[1]}", 4.35
+
+
 class Scheduler:
     def __init__(self, settings, skills, state, run_code, run_model, rebuild_pack, housekeeping=None):
         self.s = settings

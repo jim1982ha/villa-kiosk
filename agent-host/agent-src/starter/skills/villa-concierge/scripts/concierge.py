@@ -28,6 +28,7 @@ sys.path.insert(0, os.path.join(HERE, "..", "..", "_shared"))
 from vesta_shared.ha_client import client_from_args  # noqa: E402
 from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
 from vesta_shared.params import VillaParams  # noqa: E402
+from vesta_shared.problems import Problems  # noqa: E402  (what is still open: one owner)
 from vesta_shared.store import Store  # noqa: E402
 
 CAT = yaml.safe_load(open(os.path.join(HERE, "..", "catalogue.yaml"), encoding="utf-8"))
@@ -55,7 +56,8 @@ def status(pack: KnowledgePack, states: dict, store: Store | None) -> dict:
                 except (TypeError, ValueError):
                     pass
     incidents = store.incidents() if store else []
-    tasks = store.tasks("open") if store else []
+    # the maintenance problems still open (the alerts are the incidents above), as every reader counts them
+    tasks = [p for p in Problems(store).open_problems() if not p["incident"]] if store else []
     colour = "red" if problems else ("amber" if (watch or incidents) else "green")
     lines = [f"{pack.villa}: {colour.upper()}"]
     if problems:
@@ -63,7 +65,7 @@ def status(pack: KnowledgePack, states: dict, store: Store | None) -> dict:
     if incidents:
         lines.append(f"Open incidents: {len(incidents)}")
     if tasks:
-        lines.append(f"Open FM tasks: {len(tasks)}")
+        lines.append(f"Other open problems: {len(tasks)}")
     if watch:
         lines.append("Watch: " + "; ".join(watch[:6]))
     if colour == "green":
