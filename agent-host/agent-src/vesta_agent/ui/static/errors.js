@@ -14,6 +14,16 @@
     } catch (e) { /* nothing more can be done */ }
   }
   window.addEventListener("error", function (e) {
+    var t = e.target;
+    if (t && t !== window) {
+      // A file that failed to load. Only this page's own files count: a proxy in front of Home
+      // Assistant (Cloudflare) inserts its own analytics script, which the page's security rule
+      // blocks on purpose (seen on the villa, 2026-10-01: "page error: error").
+      var src = t.src || t.href || "";
+      if (!src || src.indexOf(location.origin) !== 0) return;
+      report("could not load " + src.split("/").pop());
+      return;
+    }
     report((e.message || "error") + (e.filename ? " at " + e.filename.split("/").pop() + ":" + e.lineno : ""));
   }, true);
   window.addEventListener("unhandledrejection", function (e) {

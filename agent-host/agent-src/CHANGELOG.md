@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.2 (1 October 2026)
+
+- UI errors.js: a failed resource load counts only for the page's own files (same origin); the villa's Cloudflare
+  inserts beacon.min.js, which the CSP blocks, and it was reported as "page error: error".
+
 ## 0.6.1 (1 October 2026)
 
 - UI: index.html is served with the version in its files' addresses (`static/app.js?v=…`): on the villa, 0.12.0's

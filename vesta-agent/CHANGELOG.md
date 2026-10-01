@@ -1,3 +1,8 @@
+## 0.12.2
+
+### Fixed
+- The VESTA Agent page showed "The page met an error: error" when Home Assistant is reached through Cloudflare: Cloudflare adds its own analytics script to every page, which the page blocks on purpose. Only the page's own files now count as errors.
+
 ## 0.12.1
 
 ### Fixed
