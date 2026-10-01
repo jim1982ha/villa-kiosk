@@ -1,3 +1,8 @@
+## 0.12.15
+
+### Changed
+- A fault the agent files in the VESTA Kiosk has a short title saying what is wrong ("Rain gauge has not reported for 2.0 days."), and what to check as its note, instead of both in one long title.
+
 ## 0.12.14
 
 ### Fixed
