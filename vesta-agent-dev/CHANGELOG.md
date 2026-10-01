@@ -1,3 +1,14 @@
+## 0.12.16
+
+### Fixed
+- **A fault closed in the VESTA Kiosk stops being chased.** Closing an alert's fault in the Kiosk closed the agent's task but not the alert itself: the agent kept reminding the facility manager and escalated to the owner. Now the alert closes with it, and its Telegram messages lose their buttons ("Closed in the VESTA Kiosk").
+- **In a chat, everything the agent sends goes to that chat.** A check the agent ran while answering someone could still send its messages to the facility manager's chat; now, as for the agent's own answers, only the chat that asked receives them.
+- **The reports, the morning digest and the concierge agree on what is still open.** The morning digest counted the facility manager's tasks while the weekly page listed the problems themselves; a fault closed in the Kiosk now leaves both. The digest no longer asks to reply with numbers that no reply could close: an alert keeps its "#N", the rest is closed in the Kiosk.
+- An alert's outcome in a report is always in words ("Reminder sent", "In the morning digest"…), never the agent's internal word.
+
+### Changed
+- Under the hood (no visible change otherwise): one place decides whether a problem is still open, one decides where a message goes and what the AI may do in each situation, and the agent page asks the agent for the brain names and the schedules instead of keeping its own copy.
+
 ## 0.12.15
 
 ### Changed
