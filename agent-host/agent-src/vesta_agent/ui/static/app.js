@@ -59,7 +59,9 @@ function card(title, lead, ...kids) {
 }
 
 function field(label, input, hint) {
-  return h("label", { class: "field" }, label, input, hint ? h("span", { class: "hint" }, hint) : null);
+  // a <label> forwards a click inside it to its first control: a picker (a box and a list) is in a <div>
+  const tag = input && input.classList && input.classList.contains("picker") ? "div" : "label";
+  return h(tag, { class: "field" }, h("span", {}, label), input, hint ? h("span", { class: "hint" }, hint) : null);
 }
 
 // A table of many rows, 10 to a page (owner, 2026-10-01): `head` the column titles, `rows` arrays of cells;
@@ -139,19 +141,33 @@ async function costs(days = 30) {
   if (c.none) return fill($view, card("Costs", "The agent has not recorded anything yet (it has not run in agent mode)."));
   const period = h("select", { "aria-label": "Period", onchange: (e) => costs(Number(e.target.value)) },
     [[7, "Last 7 days"], [30, "Last 30 days"], [90, "Last 90 days"]].map(([v, l]) => h("option", { value: v, selected: v === days }, l)));
-  const kpis = h("div", { class: "grid" }, [["Today", c.today], ["Last 7 days", c.last_7_days], ["This month", c.this_month],
-    [`Last ${days} days`, c.period]].map(([l, v]) => h("div", { class: "kpi" }, h("div", { class: "n" }, usd(v)), h("div", { class: "l" }, l))));
-  // the cost of each day: bars drawn in SVG
-  const W = 600, H = 120, n = c.by_day.length, max = Math.max(0.01, ...c.by_day.map((d) => d.cost)), slot = W / n;
-  const chart = svg("svg", { viewBox: `0 0 ${W} ${H + 18}`, class: "bars", role: "img", "aria-label": "Cost per day" },
+  const kpis = h("div", { class: "grid" }, [["Today", usd(c.today)], ["Last 7 days", usd(c.last_7_days)], ["This month", usd(c.this_month)],
+    [`Per run, last ${days} days (${c.runs_count} runs)`, usd(c.runs_count ? c.period / c.runs_count : 0)]]
+    .map(([l, v]) => h("div", { class: "kpi" }, h("div", { class: "n" }, v), h("div", { class: "l" }, l))));
+  // the cost of each day: bars drawn in SVG, with a Y axis (US$) and its grid lines (owner, 2026-10-01: "always
+  // the Y axis and grid lines"), and a date under every bar for a week, every few days for longer
+  const W = 640, H = 150, L = 52, T = 8, n = c.by_day.length;
+  const top = Math.max(0.01, ...c.by_day.map((d) => d.cost));
+  const raw = top / 4, mag = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 2.5, 5, 10].map((k) => k * mag).find((s) => s >= raw);
+  const max = step * Math.ceil(top / step), slot = (W - L) / n;
+  const y = (v) => T + H - (v / max) * H;
+  const ticks = []; for (let v = 0; v <= max + step / 2; v += step) ticks.push(v);
+  const every = n <= 7 ? 1 : Math.ceil(n / 8);
+  const money = (v) => "$" + (step < 0.1 ? v.toFixed(2) : step < 1 ? v.toFixed(1) : v.toFixed(0));
+  const chart = svg("svg", { viewBox: `0 0 ${W} ${T + H + 22}`, class: "bars", role: "img", "aria-label": "Cost per day, US$" },
+    ...ticks.map((v) => svg("line", { x1: L, x2: W, y1: y(v).toFixed(1), y2: y(v).toFixed(1), class: v ? "grid" : "base" })),
+    ...ticks.map((v) => svg("text", { x: L - 6, y: (y(v) + 3.5).toFixed(1), class: "axis", "text-anchor": "end" }, money(v))),
     ...c.by_day.map((d, i) => {
-      const bh = Math.max(d.cost > 0 ? 2 : 0, (d.cost / max) * H);
-      return svg("rect", { x: (i * slot + slot * 0.15).toFixed(1), y: (H - bh).toFixed(1), width: (slot * 0.7).toFixed(1), height: bh.toFixed(1), rx: 2, class: "bar" },
-        svg("title", {}, `${d.day}: ${usd(d.cost)}`));
+      const bh = d.cost > 0 ? Math.max(1.5, (d.cost / max) * H) : 0;
+      return svg("rect", { x: (L + i * slot + slot * 0.18).toFixed(1), y: (T + H - bh).toFixed(1), width: (slot * 0.64).toFixed(1),
+                           height: bh.toFixed(1), rx: 2, class: "bar" }, svg("title", {}, `${d.day}: ${usd(d.cost)}`));
     }),
-    svg("text", { x: 0, y: H + 14, class: "axis" }, c.by_day[0].day.slice(5)),
-    svg("text", { x: W, y: H + 14, class: "axis", "text-anchor": "end" }, c.by_day[n - 1].day.slice(5)),
-    svg("text", { x: W, y: 10, class: "axis", "text-anchor": "end" }, "max " + usd(max)));
+    // a date every `every` days, and the last day too unless it would sit on top of the one before
+    ...c.by_day.map((d, i) => i % every === 0 || (i === n - 1 && (n - 1) % every >= every / 2)
+      ? svg("text", { x: (L + i * slot + slot / 2).toFixed(1), y: T + H + 16, class: "axis", "text-anchor": "middle" },
+            n <= 7 ? new Date(d.day + "T12:00:00").toLocaleDateString([], { weekday: "short", day: "numeric" }) : d.day.slice(5).replace("-", "/"))
+      : null).filter(Boolean));
   const groupTable = (rows, title) => paged([title, { v: "Runs", cls: "num" }, { v: "Tokens in", cls: "num" }, { v: "Tokens out", cls: "num" },
     { v: "Cost", cls: "num" }, { v: "Per run", cls: "num" }], rows.map((g) => [g.name.replace(/^claude-/, ""), { v: g.runs, cls: "num" },
     { v: g.name === "not recorded" ? "—" : ktok(g.tokens_in), cls: "num" }, { v: g.name === "not recorded" ? "—" : ktok(g.tokens_out), cls: "num" }, { v: usd(g.cost), cls: "num" }, { v: usd(g.cost / g.runs), cls: "num" }]));
@@ -172,6 +188,19 @@ async function costs(days = 30) {
     card("Every run", `${c.runs_count} runs, newest first. The model and tokens are recorded from agent 0.6.9 on; older runs show —.`,
       paged(["When", "What", "Brain · model", { v: "Tokens in / out", cls: "num" }, { v: "Cost", cls: "num" }, ""], runRows)));
 }
+
+// ---------------------------------------------------------------- theme (Light / Auto / Dark)
+function setTheme(mode) {
+  if (mode === "light" || mode === "dark") document.documentElement.setAttribute("data-theme", mode);
+  else document.documentElement.removeAttribute("data-theme");
+  try { localStorage.setItem("vesta-agent-theme", mode); } catch (e) { /* kept for this visit only */ }
+  document.querySelectorAll("[data-theme-set]").forEach((b) => {
+    b.classList.toggle("on", b.dataset.themeSet === mode);
+    b.setAttribute("aria-checked", String(b.dataset.themeSet === mode));
+  });
+}
+document.querySelectorAll("[data-theme-set]").forEach((b) => b.addEventListener("click", () => setTheme(b.dataset.themeSet)));
+setTheme(document.documentElement.getAttribute("data-theme") || "auto");
 
 // ---------------------------------------------------------------- tabs
 // one "Rules (file)" tab (owner, 2026-10-01): "Rules" opens the forms, "(file)" the file itself
@@ -364,32 +393,64 @@ function rulesForms(doc, jobs = []) {
     h("table", { class: "rows" }, h("thead", {}, h("tr", {}, ["Service", "Rule", ""].map((x) => h("th", {}, x)))), svcBody),
     h("div", { class: "actions" }, h("button", { class: "btn ghost", onclick: () => { svcRows.push(["", "any"]); drawSvc(); markDirty(); } }, "Add a service")));
 
-  // devices: chosen from the villa's own, by name; each chosen one a tag with its × (owner, 2026-10-01:
-  // "free form text inputs are not suitable")
+  // devices: chosen from the villa's own, by name (owner, 2026-10-01: "free form text inputs are not
+  // suitable"). A box like a menu shows what is chosen; it opens a list with a search and a checkbox per
+  // device (name, room · id). `one`: a single device (the siren), chosen by a click.
   const picker = (get, set, domains, one = false) => {
     const box = h("div", { class: "picker" });
-    const listId = "dl-" + Math.random().toString(36).slice(2);
-    const draw = () => {
+    const shown = h("button", { type: "button", class: "picker-box", "aria-haspopup": "listbox" });
+    const panel = h("div", { class: "picker-panel", hidden: true });
+    const search = h("input", { type: "search", placeholder: "Search by name, room or id…", "aria-label": "Search devices" });
+    const list = h("div", { class: "picker-list", role: "listbox", "aria-multiselectable": String(!one) });
+    const pool = ENT.list.filter((e) => !domains || domains.includes(e.id.split(".")[0]));
+    const label = (id) => (ENT.byId[id] ? ENT.byId[id].name : id);
+    const drawShown = () => {
       const cur = get();
-      const input = h("input", { type: "text", list: listId, "aria-label": "Add a device",
-                                 placeholder: one && cur.length ? "Choose another…" : "Type a name to add a device…" });
-      input.addEventListener("change", () => {
-        const m = input.value.match(/\(([a-z_]+\.[\w-]+)\)$/);
-        if (!m) return;
-        set(one ? [m[1]] : [...cur.filter((x) => x !== m[1]), m[1]]); draw(); markDirty();
-      });
-      const choices = ENT.list.filter((e) => (!domains || domains.includes(e.id.split(".")[0])) && !cur.includes(e.id));
-      box.replaceChildren(
-        cur.length ? h("div", { class: "tags" }, cur.map((id) => {
-          const e = ENT.byId[id];
-          return h("span", { class: "tag" + (e ? "" : " unknown") }, e ? e.name : id,
-            h("small", {}, e ? (e.area ? `${e.area} · ${id}` : id) : "not found in Home Assistant"),
-            h("button", { title: "Remove", "aria-label": `Remove ${e ? e.name : id}`, onclick: () => { set(cur.filter((x) => x !== id)); draw(); markDirty(); } }, "×"));
-        })) : h("div", { class: "muted" }, "None."),
-        input,
-        h("datalist", { id: listId }, choices.map((e) => h("option", { value: `${e.name}${e.area ? " · " + e.area : ""} (${e.id})` }))));
+      shown.replaceChildren(cur.length
+        ? h("span", { class: "picker-chosen" }, cur.map((id) => h("span", { class: "tag" + (ENT.byId[id] ? "" : " unknown"), title: id }, label(id))))
+        : h("span", { class: "muted" }, one ? "None — choose one…" : "None — choose…"),
+        h("span", { class: "caret" }, "▾"));
     };
-    draw();
+    const drawList = () => {
+      const cur = get();
+      const q = search.value.trim().toLowerCase();
+      const rows = [...cur.filter((id) => !ENT.byId[id]).map((id) => ({ id, name: id, area: "not found in Home Assistant" })),
+                    ...pool].filter((e) => !q || `${e.name} ${e.area} ${e.id}`.toLowerCase().includes(q));
+      list.replaceChildren(...rows.slice(0, 300).map((e) => {
+        const on = cur.includes(e.id);
+        const cb = h("input", { type: one ? "radio" : "checkbox", checked: on, tabindex: -1, "aria-hidden": "true" });
+        return h("div", { class: "picker-row" + (on ? " on" : ""), role: "option", "aria-selected": String(on) }, cb,
+          h("span", { class: "picker-text" }, h("b", {}, e.name), h("small", {}, [e.area, e.id].filter(Boolean).join(" · "))));
+      }));
+      [...list.children].forEach((row, i) => row.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        const id = rows[i].id;
+        const now = get();
+        set(one ? (now.includes(id) ? [] : [id]) : (now.includes(id) ? now.filter((x) => x !== id) : [...now, id]));
+        markDirty(); drawShown();
+        if (one) close(); else drawList();
+      }));
+      if (!rows.length) list.append(h("p", { class: "muted pad" }, "No device matches."));
+      if (rows.length > 300) list.append(h("p", { class: "muted pad" }, `${rows.length - 300} more: type to narrow the list.`));
+    };
+    const outside = (ev) => { if (!box.contains(ev.target)) close(); };
+    const keys = (ev) => { if (ev.key === "Escape") close(); };
+    function close() {
+      panel.hidden = true; shown.setAttribute("aria-expanded", "false");
+      document.removeEventListener("mousedown", outside); document.removeEventListener("keydown", keys);
+    }
+    shown.addEventListener("click", () => {
+      if (!panel.hidden) return close();
+      panel.hidden = false; shown.setAttribute("aria-expanded", "true");
+      search.value = ""; drawList(); search.focus();
+      document.addEventListener("mousedown", outside); document.addEventListener("keydown", keys);
+    });
+    search.addEventListener("input", drawList);
+    panel.append(search, list,
+      one ? null : h("div", { class: "picker-foot" }, h("span", { class: "muted" }, "Tick as many as needed."),
+                                                    h("button", { type: "button", class: "btn ghost", onclick: close }, "Done")));
+    drawShown();
+    box.append(shown, panel);
     return box;
   };
   const many = (key, domains) => picker(() => f[key] || [], (v) => (f[key] = v), domains);

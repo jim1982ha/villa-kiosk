@@ -32,8 +32,10 @@
   --touch-min: 44px;
   --text-xs: 12px; --text-sm: 13px; --text-base: 14px; --text-md: 15px; --text-lg: 18px; --text-xl: 20px;
 }
+/* the theme (owner, 2026-10-01): Auto follows the device; Light or Dark, chosen in the header, is kept
+   in this browser and set as data-theme on <html> */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg-base: #101311;
     --bg-card: rgba(26, 31, 27, 0.88);
     --bg-input: rgba(240, 238, 230, 0.10);
@@ -50,7 +52,27 @@
     --hairline: rgba(241, 239, 232, 0.12);
     --hairline-strong: rgba(241, 239, 232, 0.24);
     --shadow: rgba(0, 0, 0, 0.55);
+  
   }
+}
+:root[data-theme="dark"] {
+    --bg-base: #101311;
+    --bg-card: rgba(26, 31, 27, 0.88);
+    --bg-input: rgba(240, 238, 230, 0.10);
+    --accent: #62B584;
+    --accent-strong: #4C9A5E;
+    --accent-soft: rgba(98, 181, 132, 0.16);
+    --text-primary: #F1EFE8;
+    --text-secondary: #A5AAA3;
+    --text-dim: #6C726B;
+    --text-on-accent: #0B1710;
+    --status-on: #4FC07E;
+    --status-warning: #E0A93A;
+    --status-danger: #E2685A;
+    --hairline: rgba(241, 239, 232, 0.12);
+    --hairline-strong: rgba(241, 239, 232, 0.24);
+    --shadow: rgba(0, 0, 0, 0.55);
+  
 }
 
 [hidden] { display: none !important; }
@@ -60,7 +82,7 @@ html, body { margin: 0; background: var(--bg-base); color: var(--text-primary); 
 body { min-height: 100vh; padding-bottom: 96px; }
 
 /* ---- header and tabs */
-.top { display: flex; align-items: baseline; gap: 14px; padding: 20px 20px 8px; max-width: 1100px; margin: 0 auto; }
+.top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 14px; padding: 20px 20px 8px; max-width: 1100px; margin: 0 auto; }
 .brand { display: flex; align-items: baseline; gap: 12px; }
 .mark { font-family: var(--font-display); font-weight: 500; font-size: var(--text-xl); letter-spacing: var(--tracking-brand); }
 .eyebrow { font-family: var(--font-display); text-transform: uppercase; letter-spacing: var(--tracking-eyebrow); font-size: var(--text-xs); color: var(--accent); }
@@ -82,8 +104,8 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px 20px; }
 .kpi .l { color: var(--text-secondary); font-size: var(--text-sm); }
 
 /* ---- form controls */
-label.field { display: flex; flex-direction: column; gap: 6px; font-size: var(--text-sm); color: var(--text-secondary); }
-label.field .hint { color: var(--text-dim); font-size: var(--text-xs); }
+.field { display: flex; flex-direction: column; gap: 6px; font-size: var(--text-sm); color: var(--text-secondary); }
+.field .hint { color: var(--text-dim); font-size: var(--text-xs); }
 input[type=text], input[type=number], select, textarea {
   background: var(--bg-input); border: 1px solid var(--hairline); border-radius: var(--radius);
   padding: 10px 12px; min-height: var(--touch-min); color: var(--text-primary); width: 100%;
@@ -160,7 +182,7 @@ ul.plain li:last-child { border-bottom: 0; }
 /* AI jobs: the same fields and grid as "The AI", one block per job */
 /* a switch and a field side by side on one line; they stack when the screen is too narrow */
 .inline { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 32px; }
-.inline label.field { min-width: 220px; }
+.inline .field { min-width: 220px; }
 /* the AI table: the brain menu and the limit stay usable on a phone */
 table.rows td select, table.rows td input { width: 100%; min-width: 0; }
 /* on a phone each AI row puts the work on its own line, its brain and limit below it */
@@ -172,13 +194,7 @@ table.rows td select, table.rows td input { width: 100%; min-width: 0; }
   table.rows.ai td:first-child { grid-column: 1 / -1; }
   table.rows.ai td[colspan] { grid-column: span 2; }
 }
-/* a device picker: the chosen devices as tags (name, room · id, ×), then a box to add one by name */
-.picker { display: grid; gap: 8px; }
-.tags { display: flex; flex-wrap: wrap; gap: 6px; }
 .tag { display: inline-flex; align-items: center; gap: 6px; padding: 4px 4px 4px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--text-primary); font-size: var(--text-sm); max-width: 100%; }
-.tag small { color: var(--text-dim); font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tag button { border: 0; background: none; cursor: pointer; color: var(--text-secondary); width: 24px; height: 24px; border-radius: 50%; font-size: 14px; }
-.tag button:hover { background: var(--hairline); }
 .tag.unknown { background: rgba(178, 66, 50, 0.12); }
 /* a paged table (10 rows) and its pager */
 table.data td, table.data th { padding: 8px 10px 8px 0; border-bottom: 1px solid var(--hairline); }
@@ -189,9 +205,36 @@ table.data .num { text-align: right; font-variant-numeric: tabular-nums; white-s
 /* the cost per day */
 svg.bars { width: 100%; height: auto; display: block; }
 svg.bars .bar { fill: var(--accent); }
-svg.bars .axis { fill: var(--text-dim); font-size: 10px; }
+svg.bars .axis { fill: var(--text-secondary); font-size: 9px; font-variant-numeric: tabular-nums; }
+svg.bars .grid { stroke: var(--hairline); stroke-dasharray: 3 3; }
+svg.bars .base { stroke: var(--text-dim); }
 .tbl { overflow-x: auto; }
 /* "(file)" inside the Rules tab: its own click, opening policy.yaml itself */
 .tab-file { color: var(--text-dim); font-weight: 400; padding: 2px 2px; border-radius: 4px; }
 .tab-file:hover { color: var(--text-primary); text-decoration: underline; }
 .tab-file.on { color: var(--accent); text-decoration: underline; }
+/* the theme switch in the header */
+.themes { display: inline-flex; gap: 2px; padding: 2px; border-radius: 999px; border: 1px solid var(--hairline); align-self: center; }
+.themes button { border: 0; background: none; color: var(--text-secondary); font-size: var(--text-xs); padding: 4px 10px; border-radius: 999px; cursor: pointer; min-height: 28px; }
+.themes button.on { background: var(--accent-soft); color: var(--text-primary); }
+/* a device picker: a box like a menu (what is chosen), opening a list with a search and a checkbox each */
+.grid > * { min-width: 0; }
+.picker { position: relative; }
+.picker-box { width: 100%; min-height: var(--touch-min); display: flex; align-items: center; gap: 8px; text-align: left; cursor: pointer;
+  padding: 6px 12px; border-radius: var(--radius); border: 1px solid var(--hairline); background: var(--bg-input); color: var(--text-primary); font: inherit; }
+.picker-box .caret { margin-left: auto; color: var(--text-dim); }
+.picker-chosen { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.picker-chosen .tag { padding: 2px 8px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; }
+.picker-panel { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; width: max(100%, 340px); max-width: calc(100vw - 32px);
+  background: var(--bg-base); border: 1px solid var(--hairline); border-radius: var(--radius); box-shadow: 0 12px 32px rgba(0, 0, 0, .28); padding: 8px; }
+.picker-panel input[type=search] { width: 100%; box-sizing: border-box; margin-bottom: 6px; }
+.picker-list { max-height: 300px; overflow-y: auto; }
+.picker-row { display: flex; align-items: flex-start; gap: 10px; padding: 7px 8px; border-radius: 8px; cursor: pointer; }
+.picker-row:hover { background: var(--hairline); }
+.picker-row.on { background: var(--accent-soft); }
+.picker-row input { margin-top: 3px; accent-color: var(--accent); pointer-events: none; }
+.picker-text { display: grid; min-width: 0; }
+.picker-text b { font-weight: 500; color: var(--text-primary); }
+.picker-text small { color: var(--text-dim); font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.picker-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 8px; border-top: 1px solid var(--hairline); margin-top: 6px; }
+.pad { padding: 8px; }

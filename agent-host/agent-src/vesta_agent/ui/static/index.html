@@ -6,11 +6,17 @@
 <title>VESTA Agent</title>
 <link rel="stylesheet" href="{static}/app.css">
 <script src="{static}/errors.js"></script>
+<script src="{static}/theme.js"></script>
 </head>
 <body>
 <header class="top">
   <div class="brand"><span class="mark">VESTA</span><span class="eyebrow">Agent</span></div>
   <span id="ver" class="ver"></span>
+  <div class="themes" role="radiogroup" aria-label="Theme">
+    <button data-theme-set="light" role="radio" title="Light">Light</button>
+    <button data-theme-set="auto" role="radio" title="Follow this device">Auto</button>
+    <button data-theme-set="dark" role="radio" title="Dark">Dark</button>
+  </div>
 </header>
 <nav class="tabs" role="tablist">
   <button data-tab="overview" class="on">Overview</button>

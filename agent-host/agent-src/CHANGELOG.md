@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.13 (1 October 2026)
+
+- UI: theme switch (theme.js in the head; `data-theme` light/dark, none = auto; tokens for both in app.css).
+- UI: the device picker is a dropdown (search, checkboxes, single choice for the siren); fields holding a picker are a <div> (a <label> forwards clicks to its first control); grid items `min-width: 0`.
+- UI: the Costs chart has Y ticks (1/2/2.5/5 × 10^k), grid lines and dated bars; the 4th KPI is the average per run.
+- reports: compose.py charts (line, bars, pairs) draw a Y axis with grid lines (`_ticks`, `_axis`).
+
 ## 0.6.12 (1 October 2026)
 
 - policy.LANGUAGES: zh (Chinese), ja (Japanese), ko (Korean).

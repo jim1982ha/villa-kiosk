@@ -95,6 +95,35 @@ def _scale(lo: float, hi: float, top: float, bottom: float):
     return lambda v: bottom - (v - lo) / span * (bottom - top)
 
 
+def _ticks(lo: float, hi: float, n: int = 4) -> tuple[float, float, list[float]]:
+    """A readable Y axis (owner, 2026-10-01: "always the Y axis and grid lines"): about `n` steps of 1, 2,
+    2.5 or 5 times a power of ten, from a round value at or under `lo` to one at or over `hi`."""
+    import math
+    span = (hi - lo) or abs(hi) or 1.0
+    raw = span / n
+    mag = 10 ** math.floor(math.log10(raw))
+    step = next(k * mag for k in (1, 2, 2.5, 5, 10) if k * mag >= raw)
+    first, last = math.floor(lo / step) * step, math.ceil(hi / step) * step
+    ticks, v = [], first
+    while v <= last + step / 2:
+        ticks.append(round(v, 10))
+        v += step
+    return first, last, ticks
+
+
+def _axis(ticks: list[float], y, x0: float, x1: float) -> list[str]:
+    """The grid lines and their values, left of the chart: the base line solid, the others dashed."""
+    import math
+    step = ticks[1] - ticks[0] if len(ticks) > 1 else 1
+    digits = max(0, -math.floor(math.log10(step) + 1e-9)) if step < 1 else (1 if step % 1 else 0)   # 0.5 → 1, 2.5 → 1
+    out = []
+    for i, v in enumerate(ticks):
+        dash = "" if i == 0 else ' stroke-dasharray="3 3"'
+        out.append(f'<line x1="{x0}" x2="{x1}" y1="{y(v):.1f}" y2="{y(v):.1f}" stroke="var(--grid)"{dash}/>'
+                   f'<text x="{x0 - 4}" y="{y(v) + 3.5:.1f}" font-size="10" text-anchor="end" fill="var(--ink2)">{v:,.{digits}f}</text>')
+    return out
+
+
 def _nice(v: float) -> str:
     return f"{v:,.0f}" if abs(v) >= 10 else f"{v:.2f}".rstrip("0").rstrip(".")
 
@@ -114,16 +143,12 @@ def line(series: list, unit: str = "", ref: float | None = None, area: bool = Fa
     vals = [v for _, v in pts] + ([ref] if ref is not None else [])
     lo, hi = min(vals), max(vals)
     pad = (hi - lo) * 0.15 or abs(hi) * 0.1 or 1
-    lo, hi = (0 if lo >= 0 and lo - pad < 0 else lo - pad), hi + pad
+    lo, hi, ticks = _ticks(0 if lo >= 0 and lo - pad < 0 else lo - pad, hi + pad)
     y = _scale(lo, hi, PAD_T, H - PAD_B)
     step = (W - PAD_L - PAD_R) / (len(pts) - 1)
     xy = [(PAD_L + i * step, y(v)) for i, (_, v) in enumerate(pts)]
     path = " ".join(f"{'M' if i == 0 else 'L'}{x:.1f},{yy:.1f}" for i, (x, yy) in enumerate(xy))
-    out = [f'<svg viewBox="0 0 {W} {H}" role="img" aria-label="{_esc(unit)} per day">',
-           f'<line x1="{PAD_L}" x2="{W - PAD_R}" y1="{y(hi):.1f}" y2="{y(hi):.1f}" stroke="var(--grid)"/>',
-           f'<line x1="{PAD_L}" x2="{W - PAD_R}" y1="{y(lo):.1f}" y2="{y(lo):.1f}" stroke="var(--grid)"/>',
-           f'<text x="{PAD_L - 4}" y="{y(hi) + 4:.1f}" font-size="10" text-anchor="end" fill="var(--ink2)">{_nice(hi)}</text>',
-           f'<text x="{PAD_L - 4}" y="{y(lo) + 4:.1f}" font-size="10" text-anchor="end" fill="var(--ink2)">{_nice(lo)}</text>']
+    out = [f'<svg viewBox="0 0 {W} {H}" role="img" aria-label="{_esc(unit)} per day">', *_axis(ticks, y, PAD_L, W - PAD_R)]
     if ref is not None:
         out.append(f'<line x1="{PAD_L}" x2="{W - PAD_R}" y1="{y(ref):.1f}" y2="{y(ref):.1f}" stroke="var(--crit)" stroke-dasharray="4 4"/>')
     if area:
@@ -144,13 +169,11 @@ def bars(items: list, highlight_last: bool = True) -> str:
     got = [b for b in items if b.get("value") is not None]
     if not got:
         return '<p class="note">Not enough data to draw.</p>'
-    hi = max(b["value"] for b in got) * 1.15 or 1
+    _, hi, ticks = _ticks(0, max(b["value"] for b in got) or 1)
     y = _scale(0, hi, PAD_T, H - PAD_B)
     n = len(items)
     slot = (W - PAD_L - PAD_R) / n
-    out = [f'<svg viewBox="0 0 {W} {H}" role="img" aria-label="bars">',
-           f'<text x="{PAD_L - 4}" y="{y(hi) + 4:.1f}" font-size="10" text-anchor="end" fill="var(--ink2)">{_nice(hi)}</text>',
-           f'<text x="{PAD_L - 4}" y="{y(0) + 4:.1f}" font-size="10" text-anchor="end" fill="var(--ink2)">0</text>']
+    out = [f'<svg viewBox="0 0 {W} {H}" role="img" aria-label="bars">', *_axis(ticks, y, PAD_L, W - PAD_R)]
     for i, b in enumerate(items):
         x = PAD_L + i * slot + slot * 0.18
         w = slot * 0.64
@@ -171,13 +194,11 @@ def pairs(rows: list) -> str:
     vals = [v for r in rows for v in (r.get("kwh"), r.get("prev_kwh")) if v is not None]
     if not vals:
         return '<p class="note">Not enough data to draw.</p>'
-    hi = max(vals) * 1.15
+    _, hi, ticks = _ticks(0, max(vals))
     w_, h = 2 * W, 220                       # a full-width chart: twice the cards' width, same text size
     y = _scale(0, hi, PAD_T, h - PAD_B)
     slot = (w_ - PAD_L - PAD_R) / len(rows)
-    out = [f'<svg viewBox="0 0 {w_} {h}" role="img" aria-label="kWh per day, this period and the last">',
-           f'<text x="{PAD_L - 4}" y="{y(hi) + 4:.1f}" font-size="10" text-anchor="end" fill="var(--ink2)">{_nice(hi)}</text>',
-           f'<text x="{PAD_L - 4}" y="{y(0) + 4:.1f}" font-size="10" text-anchor="end" fill="var(--ink2)">0</text>']
+    out = [f'<svg viewBox="0 0 {w_} {h}" role="img" aria-label="kWh per day, this period and the last">', *_axis(ticks, y, PAD_L, w_ - PAD_R)]
     for i, r in enumerate(rows):
         x0 = PAD_L + i * slot + slot * 0.12
         w = slot * 0.36

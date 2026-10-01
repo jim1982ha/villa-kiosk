@@ -1,3 +1,14 @@
+## 0.12.13
+
+### Added
+- **Light / Auto / Dark** switch in the page's header, like the VESTA Kiosk (Auto follows the device). The choice is kept in that browser.
+
+### Changed
+- **Choosing devices:** each box opens a list with a search and a checkbox per device (name, room · id); tick as many as needed. The chosen devices show inside the box. The siren is chosen with a single click.
+- The fields of a card line up ("Siren stops after" sat higher than the others), and a long device name no longer spills into the next field.
+- **Charts have a Y axis with grid lines and values:** the Costs tab's cost per day (with a date under the bars) and every chart of the weekly and monthly reports.
+- Costs: the fourth figure is the average cost per run for the period (it repeated "Last 7 days").
+
 ## 0.12.12
 
 ### Changed
