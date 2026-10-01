@@ -1,3 +1,8 @@
+## 0.12.3
+
+### Changed
+- The VESTA Agent page shows both versions in its top right corner: the app's (as on Home Assistant's app page) and the agent's inside it, for example "app 0.12.3 · agent 0.6.3 · dev".
+
 ## 0.12.2
 
 ### Fixed
