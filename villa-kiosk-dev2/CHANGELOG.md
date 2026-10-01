@@ -1,3 +1,14 @@
+## 2.496.242
+
+### Changed
+- **One icon for the Cockpit and the VESTA Agent.** When a VESTA Agent is set up, the top bar no longer has a separate robot icon: the Cockpit button itself shows the robot, with the red "needs attention" number at its top right and the agent's online/offline dot at its bottom right. Tap it to open the Cockpit as before. The VESTA Agent window now opens from a "VESTA Agent" button at the bottom left of the Cockpit, in the same place Settings has its "Advanced Settings" button. Without an agent nothing changes: the ⚠ icon, and no extra button.
+- **Who is signed in is one round badge.** The figure, the word "Owner" and the exit arrow at the top right are replaced by one round badge the size of the other icons, last on the right after Settings: "O" for the Owner, "FM" for the Facility Manager, "G" for a Guest. Tapping it does what the arrow did: it opens the profile picker to switch profile. The first-person / bird's-eye view button stays where it was.
+- **The time at the top left is easy to read.** It is now the same colour as the villa name, a little larger, on its own small rounded backing so it stays readable over any part of the map, in the light, dark and night themes. The digits no longer shift when the minute changes.
+- **The "V" logo and the 1F/2F floor buttons line up as one column.** Both are now the same width, with the same rounded corners and the same shadow, on the tablet and on a phone. The floor buttons are also easier to hit with a finger.
+
+### Removed
+- **"Energy today" is no longer in the Cockpit.** The Energy window, from the bottom bar, already shows today's energy.
+
 ## 2.496.241
 
 ### Fixed
