@@ -174,15 +174,18 @@ async function costs(days = 30) {
 }
 
 // ---------------------------------------------------------------- tabs
-document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => {
-  if (b.dataset.tab === current || !guard()) return;
-  go(b.dataset.tab);
+// one "Rules (file)" tab (owner, 2026-10-01): "Rules" opens the forms, "(file)" the file itself
+document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", (e) => {
+  const tab = e.target.closest(".tab-file") ? "rules-file" : b.dataset.tab;
+  if (tab === current || !guard()) return;
+  go(tab);
 }));
 
 function go(tab) {
   current = tab; dirty = false; setBar(null);
   history.replaceState(null, "", "#" + tab);
-  document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
+  document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab.replace("-file", "")));
+  document.querySelector(".tab-file").classList.toggle("on", tab === "rules-file");
   ({ overview, rules, "rules-file": () => rules("file"), skills, costs })[tab]();
 }
 

@@ -191,3 +191,7 @@ svg.bars { width: 100%; height: auto; display: block; }
 svg.bars .bar { fill: var(--accent); }
 svg.bars .axis { fill: var(--text-dim); font-size: 10px; }
 .tbl { overflow-x: auto; }
+/* "(file)" inside the Rules tab: its own click, opening policy.yaml itself */
+.tab-file { color: var(--text-dim); font-weight: 400; padding: 2px 2px; border-radius: 4px; }
+.tab-file:hover { color: var(--text-primary); text-decoration: underline; }
+.tab-file.on { color: var(--accent); text-decoration: underline; }

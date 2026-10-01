@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.11 (1 October 2026)
+
+- UI: one "Rules (file)" tab; its "(file)" part opens the file view (`#rules-file`).
+
 ## 0.6.10 (1 October 2026)
 
 - outcome: every message sent with an incident's buttons is remembered (`incmsg:<id>:<chat>:<message>`); `settle(id, note)` edits all of them (buttons removed, the note added) and forgets them. A press settles every copy, by name; the standard form gains `settle: [{incident_id, note}]` ("{time}": villa time).
