@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.12 (1 October 2026)
+
+- policy.LANGUAGES: zh (Chinese), ja (Japanese), ko (Korean).
+
 ## 0.6.11 (1 October 2026)
 
 - UI: one "Rules (file)" tab; its "(file)" part opens the file view (`#rules-file`).

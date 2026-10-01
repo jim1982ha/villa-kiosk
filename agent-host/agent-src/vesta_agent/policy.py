@@ -33,7 +33,7 @@ import yaml
 # The languages a person can be answered in: the agent writes in them, and the VESTA Agent page offers
 # exactly these in its menu (owner, 2026-10-01: no free text).
 LANGUAGES = {"en": "English", "fr": "French", "id": "Indonesian", "de": "German", "es": "Spanish", "it": "Italian",
-             "nl": "Dutch"}
+             "nl": "Dutch", "zh": "Chinese", "ja": "Japanese", "ko": "Korean"}
 
 NEVER_DOMAINS = {
     "homeassistant", "hassio", "shell_command", "rest_command", "python_script",

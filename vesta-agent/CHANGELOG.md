@@ -1,3 +1,8 @@
+## 0.12.12
+
+### Changed
+- People can be answered in Chinese, Japanese and Korean too (Rules → People → Language).
+
 ## 0.12.11
 
 ### Changed
