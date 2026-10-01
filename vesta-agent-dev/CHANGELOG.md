@@ -1,3 +1,8 @@
+## 0.12.11
+
+### Changed
+- One **Rules (file)** tab instead of two: a click on "Rules" opens the forms, a click on "(file)" opens policy.yaml itself.
+
 ## 0.12.10
 
 ### Changed
