@@ -1,3 +1,15 @@
+## 0.12.8
+
+### Fixed
+- **A report asked for in a chat came back in another chat.** Asked in the group, the weekly was made inside the conversation and sent to the facility manager's chat; the group only got "Done". Now:
+  - whatever the agent sends while answering a person goes to that person's chat, never to another one;
+  - a report asked for in a chat always runs as its AI job (its own brain and spending limit), never inside the conversation. This holds for every report a person may ask for: the daily digest, the weekly and the monthly.
+
+### Changed
+- The daily digest can now be asked for in a chat too, like the weekly and the monthly (it runs once it is set under Rules → The AI).
+- **Rules (file)** is its own tab next to **Rules**: the "Forms / The file" sub-menu is gone.
+- **Overview:** the Rules and Skills cards are gone (their tabs are one click away); a problem in the rules or a switched-off skill is still shown there. A line now separates "Scheduled jobs run".
+
 ## 0.12.7
 
 ### Changed
