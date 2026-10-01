@@ -152,13 +152,16 @@
    beside it (owner, 2026-10-01: the filled 40px disc "feels completely not
    integrated" and its letter sat off-centre). The BUTTON is a plain icon-btn —
    same size, hover and halo as the gear; only the glyph inside is the circle,
-   the size of a 24px icon with the icons' own stroke, in their colour. The
+   about the size of a 24px icon, filled like the category buttons. The
    letter is centred on its cap height, not its line box, so "O" and "FM"
    sit in the middle of the ring. */
 .hud-group .icon-btn.hud-role-badge > span {
   display: inline-grid; place-items: center;
-  width: 24px; height: 24px; box-sizing: border-box; border-radius: 50%;
-  border: 1.75px solid currentColor;
+  width: 26px; height: 26px; box-sizing: border-box; border-radius: 50%;
+  /* Filled with the category buttons' own green and their icon colour, in
+     every theme (owner, 2026-10-01): var(--accent) / var(--text-on-accent),
+     the pair .hud-group .icon-btn.active paints. */
+  background: var(--accent); color: var(--text-on-accent);
   font-family: var(--font-ui); font-size: 11px; font-weight: 700; letter-spacing: 0.01em;
   line-height: 1; text-box: trim-both cap alphabetic;
 }

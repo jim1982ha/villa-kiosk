@@ -1,3 +1,8 @@
+## 2.496.244
+
+### Changed
+- **The signed-in badge is filled with the same green as the category buttons**, its letter(s) in their icon colour — white on green in the light theme, dark on light green in the dark and night themes.
+
 ## 2.496.243
 
 ### Changed
