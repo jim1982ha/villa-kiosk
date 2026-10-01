@@ -143,9 +143,26 @@ Telegram button.
 
 These times come from the skills (below): changing them is a skill edit.
 
-The weekly and monthly reports arrive as a message with the headline and the
-key numbers, and the full report as an attached page (`.html`): tap it and the
-phone opens it in its browser, which can also print it or save it as PDF.
+The weekly and monthly reports arrive as a message with the headline, and the
+full report as an attached page (`.html`): tap it and the phone opens it in its
+browser, which can also print it or save it as PDF.
+
+**What a report shows** is set in the reports skill's `reports.yaml` (VESTA
+Agent page → Skills → reports): the sections of each report and their order,
+the thresholds (a battery to replace, a pump to watch…), the sentences the AI
+writes, and "what would help". Every figure is computed from Home Assistant
+(its statistics, states and, for the VESTA rules that fired, its logbook — kept
+about 10 days) and the agent's records. The AI writes only the sentences
+`reports.yaml` asks for, and a sentence with a number that is not among its
+section's figures is refused. A threshold missing from the file is named in the
+report ("parameter missing"), never guessed. Money left on the table, night
+standby and monitoring uptime show "not measured yet" for now.
+
+**A skill run from a chat behaves exactly like a scheduled one**: its Kiosk
+faults are created and its messages go to their usual chats, and the agent also
+answers in the chat where it was asked. A fault that a task never got (the
+Kiosk was off, for example) is created at the next start and every night. An
+alert always starts from Home Assistant: the AI cannot run the alert desk.
 
 If Home Assistant cannot be reached for 30 minutes, both chats get "Villa
 silent"; the next contact closes it.
@@ -208,6 +225,8 @@ lights without an approval.
 | `Button Done on incident #… pressed by …` | someone answered an alert |
 | `Kiosk ticket … created / resolved` | a fault in the Kiosk's Facility records |
 | `Answered … in chat … (0.012 USD)` | a conversation reply and what it cost |
+| `Kiosk tickets created for N open task(s) that had none` | missing faults repaired (at start, every night) |
+| `A message for 'fm' had nowhere to go` | a skill addressed a chat `policy.yaml` does not set |
 | `Skill <name>: <script> failed (exit …): …` | a skill's script stopped; the end says why |
 | `policy.yaml: …` | something in the file the agent ignores (a misspelt section, a person without an id) |
 | `UI: policy.yaml saved` · `UI: skill …` | a change made on the VESTA Agent page |
