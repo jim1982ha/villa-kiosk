@@ -1,3 +1,9 @@
+## 2.496.241
+
+### Fixed
+- **Facility → Faults: the cards are laid out cleanly.** A card is now the title across its width with its status at the right, then what happened, then its buttons on their own row at the right (or the "Close this fault?" question in their place). Before, the status and both buttons sat beside the title and squeezed a long title into a narrow column six lines tall. A fault whose history is just "Open" no longer repeats it under "Opened …".
+- **Facility: the tab bar no longer gets cut.** On a long tab (Faults) the bar was squeezed and the highlighted tab showed cut in half, with the cards scrolling right under it; it now keeps its full height on every tab, like Today.
+
 ## 2.496.240
 
 ### Fixed
