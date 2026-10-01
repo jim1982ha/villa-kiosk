@@ -149,14 +149,33 @@ browser, which can also print it or save it as PDF.
 
 **What a report shows** is set in the reports skill's `reports.yaml` (VESTA
 Agent page → Skills → reports): the sections of each report and their order,
-the thresholds (a battery to replace, a pump to watch…), the sentences the AI
-writes, and "what would help". Every figure is computed from Home Assistant
-(its statistics, states and, for the VESTA rules that fired, its logbook — kept
-about 10 days) and the agent's records. The AI writes only the sentences
-`reports.yaml` asks for, and a sentence with a number that is not among its
-section's figures is refused. A threshold missing from the file is named in the
-report ("parameter missing"), never guessed. Money left on the table, night
-standby and monitoring uptime show "not measured yet" for now.
+the thresholds, the sentences the AI writes, and the **playbook** — the
+situations the agent recognises in the villa's data (a pump's power stepping
+down, a battery falling, a lock offline, electricity used while the villa is
+empty…), each with what to look at, what it means, what to check, what to ask,
+when, and what ignoring it costs.
+
+A report has two kinds of number. **Figures** (tiles, tables, charts) are
+computed from Home Assistant and the agent's records, the same every time.
+**VESTA's readings** are the AI's conclusions: it starts from the clues the
+playbook found, looks at Home Assistant itself to confirm and explain them, and
+writes what they mean — with its own numbers, marked "VESTA's reading". A
+threshold missing from the file is named ("parameter missing"), never guessed.
+Money left on the table, night standby and monitoring uptime show "not measured
+yet" for now.
+
+The villa's own entries and cards go in `villa.reports.yaml`, a file of the
+reports skill (Skills → reports → New file): it is added to the shipped one,
+and app updates keep it while still updating the shipped file.
+
+**AI jobs.** The daily digest, the weekly and the monthly report are the skills'
+AI jobs. Each has its own brain and spending limit per run, set on the VESTA
+Agent page → Rules → **AI jobs** (`settings.jobs` in `policy.yaml`). **A job
+that is not set does not run**: the page shows a banner with **Add them**, and
+the log says so. A report can be asked for in a chat (`/ask make the weekly
+report`): it runs as its job, with the same brain and limit, and the page comes
+back to that chat. If a report reaches its limit, it is still sent with what is
+done, and says which readings are missing.
 
 **A skill run from a chat behaves exactly like a scheduled one**: its Kiosk
 faults are created and its messages go to their usual chats, and the agent also
@@ -225,6 +244,8 @@ lights without an approval.
 | `Button Done on incident #… pressed by …` | someone answered an alert |
 | `Kiosk ticket … created / resolved` | a fault in the Kiosk's Facility records |
 | `Answered … in chat … (0.012 USD)` | a conversation reply and what it cost |
+| `AI job … is not set in policy.yaml: it does not run` | set it on the VESTA Agent page → Rules → AI jobs (Add them) |
+| `AI job … done (… USD, stopped at its limit)` | a report reached its spending limit; it was still sent with what was done |
 | `Kiosk tickets created for N open task(s) that had none` | missing faults repaired (at start, every night) |
 | `A message for 'fm' had nowhere to go` | a skill addressed a chat `policy.yaml` does not set |
 | `Skill <name>: <script> failed (exit …): …` | a skill's script stopped; the end says why |
