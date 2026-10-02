@@ -1,3 +1,8 @@
+## 2.496.250
+
+### Changed
+- Nothing changes in the app itself. The release command now shows its progress as it goes, and waits a moment instead of stopping when two releases are prepared at the same time.
+
 ## 2.496.249
 
 ### Changed

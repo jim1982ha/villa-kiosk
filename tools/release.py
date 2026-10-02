@@ -192,7 +192,13 @@ class ReleaseError(RuntimeError):
 
 
 def git(*args: str, check: bool = True) -> str:
-    p = subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True)
+    for attempt in range(4):
+        p = subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True)
+        # Worktrees share one set of remote refs: a fetch running in another (the Agent's own ship)
+        # holds their lock for a moment. Wait it out rather than fail the release (seen 2026-10-02).
+        if not (args[0] == "fetch" and "cannot lock ref" in p.stderr) or attempt == 3:
+            break
+        time.sleep(2 + attempt * 3)
     if check and p.returncode != 0:
         raise ReleaseError(f"git {' '.join(args)}: {p.stderr.strip() or p.stdout.strip()}")
     return p.stdout
@@ -276,6 +282,9 @@ def ship(message: str | None, dry_run: bool, wait_minutes: float, poll_seconds: 
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Line by line even into a file or a pipe: 2.496.249's own ship, logged to a file, showed
+    # nothing between the last gate and "PUBLISHED" — the summary sat in Python's buffer.
+    sys.stdout.reconfigure(line_buffering=True)
     ap = argparse.ArgumentParser(prog="release.py", description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     g = sub.add_parser("gates", help="run every gate CI runs (plus the local-only ones off CI)")
