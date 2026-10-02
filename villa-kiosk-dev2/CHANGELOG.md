@@ -1,3 +1,12 @@
+## 2.496.245
+
+### Fixed
+- **A device list now rings a device exactly as the map does.** A device whose linked entity is a lock or a blind (for example a gate sensor linked to its lock) had a coloured ring on the map while the lock was unlocked or the blind open, but showed plain in the device lists (a room's list, a bottom-bar tile's list, the Cockpit's lists). The row now has the same ring as its map badge.
+- **Everything red on the map is in the Cockpit's "Needs attention".** It listed only sensors such as a leak or a lost connection. An unlocked door, a jammed lock, a sensor reporting a fault, and a sensor whose state your configuration marks as a problem were red on the map but missing from the list and from the number on the Cockpit button. They are listed now, with what they say ("Unlocked", "Jammed", …), and the number counts them.
+
+### Changed
+- Nothing else looks different: the rest of this release is internal tidying (how a device's look, a room chip, a group card, the windows each profile may open and the Facility record's words are worked out), so each is decided in one place.
+
 ## 2.496.244
 
 ### Changed
