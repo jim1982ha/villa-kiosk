@@ -1,3 +1,8 @@
+## 0.12.19
+
+### Changed
+- Nothing changes for you. New checks make sure the agent and the app that starts it always agree on every setting passed between them (names, folders, and the version of the agreement with the VESTA Kiosk), so a renamed setting can no longer leave the agent silently without its Kiosk or Home Assistant access.
+
 ## 0.12.18
 
 ### Changed
