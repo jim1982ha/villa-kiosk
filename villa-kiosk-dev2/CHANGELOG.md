@@ -1,3 +1,10 @@
+## 2.496.246
+
+### Changed
+- **The Cockpit's "Needs attention" shows each device once.** When the same device had more than one problem, it appeared twice: an unlocked entrance door was listed as "Unlocked", and once the VESTA Agent turned the "door unlocked" alert into a fault, the same door appeared a second time and the number on the Cockpit button went up. An offline device and its "device offline" fault did the same. Now a device with several problems is one entry, under the device's name and room, with one line per problem below it ("Unlocked", "Open fault: Entrance door unlocked"). Each fault keeps its own Close button. The number on the Cockpit button and in the phone menu counts devices, so a fault arriving for a door already listed no longer raises it. A device with a single problem looks exactly as before. A problem raised on another part of the same device (for example its battery) joins the device's entry. Faults and maintenance tasks that name no device keep an entry of their own. The most serious problems come first and an entry no longer moves when a new problem joins it.
+- **Phone menu: "Label size (?)".** The (?) now sits beside "Label size". Tap "Label size" or the (?) to open the map colours explanation that the "Map colours" row used to open; that row is gone. The − and + buttons still change the label size.
+- **Phone menu: "Log out".** The last row shows the same round badge as the top bar on a tablet (O for the Owner, FM for the Facility Manager, G for a Guest) and reads "Log out". It does what "Switch profile" did: it opens the profile picker.
+
 ## 2.496.245
 
 ### Fixed
