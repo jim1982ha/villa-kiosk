@@ -43,7 +43,7 @@ import { useVillaAttention } from "./useVillaAttention";
 import { storeLookSource } from "@/utils/deviceActivity";
 import {
   buildCategoryTiles, buildRoomGroups, buildFloorGroups,
-  buildActivityFeed, tileStats, tileLine, type TileStats, type AttentionItem, type AttentionKind, type ActivityEntry,
+  buildActivityFeed, tileStats, tileLine, attentionLine, type TileStats, type AttentionGroup, type AttentionItem, type AttentionKind, type ActivityEntry,
 } from "./cockpitData";
 import type { Category } from "@/types/scene.types";
 
@@ -105,7 +105,7 @@ export default function CockpitModal({
   // Shared with HUD's own top-bar alert icon/overflow-menu badge — see
   // useVillaAttention's own docstring for why that sharing is load-bearing,
   // not just tidiness (the two used to disagree).
-  const { selectableIds, attentionItems } = useVillaAttention();
+  const { selectableIds, attentionGroups } = useVillaAttention();
   const categoryTiles = useMemo(
     () => buildCategoryTiles(selectableIds, entities, config.entityMap),
     [selectableIds, entities, config.entityMap],
@@ -189,12 +189,12 @@ export default function CockpitModal({
               its count in its title — and when nothing needs attention, the
               Cockpit simply starts with the villa's rooms. */}
           {/* ── Needs attention ────────────────────────────────────── */}
-          {attentionItems.length > 0 && (
+          {attentionGroups.length > 0 && (
             <>
-              <div className="settings-section-title">Needs attention ({attentionItems.length})</div>
+              <div className="settings-section-title">Needs attention ({attentionGroups.length})</div>
               <div className="cockpit-attention-list">
-                {attentionItems.map((item) => (
-                  <CockpitAttentionRow key={item.id} item={item} onOpenEntity={onOpenEntity}
+                {attentionGroups.map((group) => (
+                  <CockpitAttentionRow key={group.key} group={group} onOpenEntity={onOpenEntity}
                     canCloseFault={canCloseFaults} />
                 ))}
               </div>
@@ -308,63 +308,103 @@ export default function CockpitModal({
   );
 }
 
-function CockpitAttentionRow({ item, onOpenEntity, canCloseFault }: {
-  item: AttentionItem;
+/** One device's row: its name, room and most serious problem's icon. With
+ *  more than one problem, each is a line of its own under it — a fault keeps
+ *  its own Close (cockpitData.groupAttention, 2.496.246). With one, the row
+ *  reads exactly as it did before grouping. */
+function CockpitAttentionRow({ group, onOpenEntity, canCloseFault }: {
+  group: AttentionGroup;
   onOpenEntity: (id: string) => void;
   canCloseFault: boolean;
 }) {
-  const { closeTicket } = useFmData();
-  const [confirming, setConfirming] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
-  const Icon = ATTENTION_ICON[item.kind];
-  const tappable = !!item.entityId;
+  const Icon = ATTENTION_ICON[group.kind];
+  const tappable = !!group.entityId;
   const Row = tappable ? "button" : "div";
-  // A fault can be closed from here in one step ("no action needed" — the
-  // same write as the Faults tab's, FmDataContext.closeTicket). The button is
-  // BESIDE the row, never inside it: the row itself may be a <button>.
-  const closable = canCloseFault && item.kind === "fault" && !!item.ticketId;
-  const close = async () => {
-    setProblem(null);
-    const failed = fmWriteProblem(await closeTicket(item.ticketId as string));
-    // On success the fault leaves this list; only a failure stays to say so.
-    setConfirming(false);
-    setProblem(failed);
-  };
+  const lone = group.items.length === 1 ? group.items[0] : null;
+  const loneClose = useFaultClose(lone, canCloseFault);
   return (
     <div className="cockpit-attention-item">
       <div className="cockpit-attention-line">
         <Row
           className={`cockpit-attention-row${tappable ? " tappable" : ""}`}
-          {...(tappable ? { onClick: () => onOpenEntity(item.entityId as string) } : {})}
+          {...(tappable ? { onClick: () => onOpenEntity(group.entityId as string) } : {})}
         >
-          <Icon size={16} className={`cockpit-attention-icon cockpit-attention-${item.kind}`} />
+          <Icon size={16} className={`cockpit-attention-icon cockpit-attention-${group.kind}`} />
           <span className="cockpit-attention-body">
-            <span className="cockpit-attention-title">{item.title}</span>
+            <span className="cockpit-attention-title">{group.title}</span>
             <span className="muted body-text" style={{ fontSize: "var(--text-2xs)" }}>
-              {item.detail}{item.room ? ` · ${item.room}` : ""}
+              {lone ? lone.detail : `${group.items.length} problems`}{group.room ? ` · ${group.room}` : ""}
             </span>
           </span>
           {tappable && <ChevronRight size={16} className="muted" />}
         </Row>
-        {closable && !confirming && (
-          <button type="button" className="btn ghost cockpit-attention-close"
-            aria-label={`Close the fault “${item.title}”`}
-            onClick={() => { setProblem(null); setConfirming(true); }}>
-            <X size={14} /> Close
-          </button>
-        )}
+        {loneClose.button}
       </div>
-      {confirming && (
-        <div className="cockpit-attention-confirm">
-          <InlineConfirm
-            question="Close this fault? No action needed."
-            confirmLabel="Close fault"
-            onConfirm={close}
-            onCancel={() => setConfirming(false)}
-          />
-        </div>
+      {loneClose.panel}
+      {!lone && (
+        <ul className="cockpit-attention-subs">
+          {group.items.map((item) => (
+            <CockpitAttentionSub key={item.id} item={item} canCloseFault={canCloseFault} />
+          ))}
+        </ul>
       )}
-      {problem && <div className="fm-inline-error" role="alert">{problem}</div>}
     </div>
   );
+}
+
+function CockpitAttentionSub({ item, canCloseFault }: { item: AttentionItem; canCloseFault: boolean }) {
+  const Icon = ATTENTION_ICON[item.kind];
+  const close = useFaultClose(item, canCloseFault);
+  return (
+    <li className="cockpit-attention-sub">
+      <div className="cockpit-attention-sub-line">
+        <Icon size={14} className={`cockpit-attention-icon cockpit-attention-${item.kind}`} />
+        <span className="cockpit-attention-sub-text">{attentionLine(item)}</span>
+        {close.button}
+      </div>
+      {close.panel}
+    </li>
+  );
+}
+
+/** A fault can be closed from its line in one step ("no action needed" — the
+ *  same write as the Faults tab's, FmDataContext.closeTicket). The button is
+ *  BESIDE the row, never inside it: the row itself may be a <button>. */
+function useFaultClose(item: AttentionItem | null, canCloseFault: boolean) {
+  const { closeTicket } = useFmData();
+  const [confirming, setConfirming] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const closable = !!item && canCloseFault && item.kind === "fault" && !!item.ticketId;
+  const close = async () => {
+    if (!item?.ticketId) return;
+    setProblem(null);
+    const failed = fmWriteProblem(await closeTicket(item.ticketId));
+    // On success the fault leaves this list; only a failure stays to say so.
+    setConfirming(false);
+    setProblem(failed);
+  };
+  return {
+    button: closable && !confirming ? (
+      <button type="button" className="btn ghost cockpit-attention-close"
+        aria-label={`Close the fault “${item?.title}”`}
+        onClick={() => { setProblem(null); setConfirming(true); }}>
+        <X size={14} /> Close
+      </button>
+    ) : null,
+    panel: (
+      <>
+        {confirming && (
+          <div className="cockpit-attention-confirm">
+            <InlineConfirm
+              question="Close this fault? No action needed."
+              confirmLabel="Close fault"
+              onConfirm={close}
+              onCancel={() => setConfirming(false)}
+            />
+          </div>
+        )}
+        {problem && <div className="fm-inline-error" role="alert">{problem}</div>}
+      </>
+    ),
+  };
 }

@@ -14,7 +14,7 @@ import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { deviceLook, mapLookSource } = await import("@/utils/deviceActivity");
-const { buildAttentionItems, attentionFor, villaHealthFrom } = await import("@/components/cockpit/cockpitData");
+const { buildAttentionItems, attentionFor, villaHealthFrom, groupAttention } = await import("@/components/cockpit/cockpitData");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
 
 const ent = (id, state, attributes = {}) => ({ entity_id: id, state, attributes });
@@ -41,7 +41,7 @@ const resolvedRooms = {};
 
 const map = mapLookSource(new Map(Object.entries(entities)), new Map(Object.entries(entityMap)), () => ({ entityMap, alertThresholds }));
 const redOnMap = selectableIds.filter((id) => deviceLook(id, map).face === "alert").sort();
-const items = buildAttentionItems({ unavailableIds, entities, entityMap, alertThresholds, resolvedRooms, fmData: EMPTY_FM_DATA, selectableIds });
+const items = buildAttentionItems({ unavailableIds, entities, entityMap, alertThresholds, resolvedRooms, fmData: EMPTY_FM_DATA, selectableIds, folding: new Map() });
 const listed = items.filter((i) => i.kind === "alarm").map((i) => i.entityId).sort();
 
 console.log(`  red on the map: ${redOnMap.join(", ")}`);
@@ -63,7 +63,7 @@ ck("a device merely on, active, linked or in motion is never an alarm",
 ck("an unavailable device is listed ONCE, as unavailable — never also as an alarm",
    unavailableIds.every((id) => items.filter((i) => i.entityId === id).map((i) => i.kind).join() === "unavailable"));
 ck("only selectable devices are listed (never a raw domain scan)",
-   buildAttentionItems({ unavailableIds: [], entities, entityMap, alertThresholds, resolvedRooms, fmData: EMPTY_FM_DATA, selectableIds: ["lock.back"] }).length === 0);
+   buildAttentionItems({ unavailableIds: [], entities, entityMap, alertThresholds, resolvedRooms, fmData: EMPTY_FM_DATA, selectableIds: ["lock.back"], folding: new Map() }).length === 0);
 const word = (id) => items.find((i) => i.entityId === id)?.detail;
 ck("the detail reads as the device says it: a leak \"Leak detected\", a lost link \"Disconnected\", a door \"Unlocked\"",
    word("binary_sensor.leak") === "Leak detected" && word("binary_sensor.ap") === "Disconnected" && word("lock.front") === "Unlocked", items.map((i) => [i.entityId, i.detail]));
@@ -72,17 +72,18 @@ console.log("\n  every count of attention reads this one list:");
 const att = { unavailableIds, selectableIds, attentionItems: items };
 const all = attentionFor(att, () => true);
 ck("a profile that may open everything sees every item; the health line says so",
-   all.attentionItems.length === items.length && all.health.level === "danger" && all.health.summary.startsWith(`${items.length} things`));
+   all.attentionItems.length === items.length && all.health.level === "danger" && all.health.summary.startsWith(`${all.attentionGroups.length} things`));
 const some = attentionFor(att, (id) => id !== "lock.front");
 ck("  ...a profile that may not open a device does not count it", some.attentionItems.length === items.length - 1 && !some.attentionItems.some((i) => i.entityId === "lock.front"));
 ck("an unlocked door alone is 'danger' (red on the map, red here)",
-   villaHealthFrom(items.filter((i) => i.entityId === "lock.front")).level === "danger");
+   villaHealthFrom(groupAttention(items.filter((i) => i.entityId === "lock.front"))).level === "danger");
 const src = (f) => readFileSync(new URL(`../../src/${f}`, import.meta.url), "utf8");
 const hud = src("components/hud/HUD.tsx"), cockpit = src("components/cockpit/CockpitModal.tsx"), vm = src("config/VillaModel.tsx");
-ck("the top-bar badge, the phone menu's \"Cockpit (N)\" and the Cockpit list all read useVillaAttention's attentionItems",
-   /const \{ attentionItems, health \} = useVillaAttention\(\);/.test(hud) && /formatCountBadge\(attentionItems\.length\)\}/.test(hud)
-   && /Cockpit\{attentionItems\.length > 0 \? ` \(\$\{formatCountBadge\(attentionItems\.length\)\}\)` : ""\}/.test(hud)
-   && /const \{ selectableIds, attentionItems \} = useVillaAttention\(\);/.test(cockpit) && /Needs attention \(\{attentionItems\.length\}\)/.test(cockpit));
+ck("the top-bar badge, the phone menu's \"Cockpit (N)\" and the Cockpit list all read useVillaAttention's attentionGroups (one row per device, 2.496.246)",
+   /const \{ attentionGroups, health \} = useVillaAttention\(\);/.test(hud) && /formatCountBadge\(attentionGroups\.length\)\}/.test(hud)
+   && /Cockpit\{attentionGroups\.length > 0 \? ` \(\$\{formatCountBadge\(attentionGroups\.length\)\}\)` : ""\}/.test(hud)
+   && !/attentionItems/.test(hud)
+   && /const \{ selectableIds, attentionGroups \} = useVillaAttention\(\);/.test(cockpit) && /Needs attention \(\{attentionGroups\.length\}\)/.test(cockpit));
 ck("  ...and the villa model hands buildAttentionItems the alert overrides the map paints from",
    /alertThresholds: config\.alertThresholds/.test(vm));
 

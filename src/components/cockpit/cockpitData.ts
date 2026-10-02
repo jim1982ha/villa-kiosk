@@ -35,6 +35,81 @@ export interface AttentionItem {
   /** Set on a fault: the Facility ticket it is, so the row can close it in
    *  one step (FmDataContext.closeTicket). */
   ticketId?: string;
+  /** The villa DEVICE the entity belongs to (deviceGroups.deviceFolding: the
+   *  owner's device groups, then Home Assistant's device registry) — what
+   *  groupAttention folds on. Set exactly when `entityId` is. */
+  device?: { key: string; label: string; room?: string };
+}
+
+/**
+ * One row of "Needs attention": a DEVICE and everything wrong with it, or one
+ * problem that names no device (a whole-villa fault, a schedule).
+ *
+ * ⚠️ THE SAME DOOR WAS TWO ROWS (2.496.246). An unlocked entrance door was red
+ * on the map — one row, "Unlocked" — and ten minutes later the VESTA rule's
+ * alert became the agent's Kiosk ticket on that same lock — a second row, and
+ * the count went up for a door already listed. An offline device and its
+ * watchdog ticket did the same. The badge counts these rows, not the problems
+ * inside them.
+ */
+export interface AttentionGroup {
+  /** Stable across state pushes — the device, or the lone problem's own id. */
+  key: string;
+  /** The most serious problem in the row (ATTENTION_RANK): its icon. */
+  kind: AttentionKind;
+  title: string;
+  room?: string;
+  /** What tapping the row opens: the most serious problem's device entity. */
+  entityId?: string;
+  /** Every problem in the row, most serious first; never empty. */
+  items: AttentionItem[];
+}
+
+/** Most serious first: red on the map now, then gone silent, then a fault
+ *  someone has to deal with, then late maintenance. */
+const ATTENTION_RANK: Record<AttentionKind, number> = { alarm: 0, unavailable: 1, fault: 2, schedule: 3 };
+
+/**
+ * Fold problems into one row per device. Pure, and it only GROUPS: every item
+ * given comes back exactly once (the oracle checks it), so a fault's Close
+ * button and ticket survive inside its device's row.
+ *
+ * Rows are ordered by their most serious problem, then by title, then by key —
+ * never by which problem arrived first, so a ticket landing on a door already listed
+ * as Unlocked leaves the row where it is.
+ */
+export function groupAttention(items: readonly AttentionItem[]): AttentionGroup[] {
+  const byKey = new Map<string, AttentionItem[]>();
+  for (const i of items) {
+    const key = i.device ? `device:${i.device.key}` : `item:${i.id}`;
+    const list = byKey.get(key);
+    if (list) list.push(i); else byKey.set(key, [i]);
+  }
+  const groups: AttentionGroup[] = [];
+  for (const [key, list] of byKey) {
+    const sorted = [...list].sort((a, b) => ATTENTION_RANK[a.kind] - ATTENTION_RANK[b.kind]);
+    const worst = sorted[0];
+    // A device with ONE problem reads exactly as it did before grouping.
+    const one = sorted.length === 1;
+    groups.push({
+      key,
+      kind: worst.kind,
+      title: one || !worst.device ? worst.title : worst.device.label,
+      room: one || !worst.device ? worst.room ?? worst.device?.room : worst.device.room ?? worst.room,
+      entityId: worst.entityId,
+      items: sorted,
+    });
+  }
+  return groups.sort((a, b) => ATTENTION_RANK[a.kind] - ATTENTION_RANK[b.kind]
+    || a.title.localeCompare(b.title) || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+}
+
+/** One problem's line inside a device's row. A state needs no more than its
+ *  word ("Unlocked", "Unavailable"); a fault or a schedule names itself, since
+ *  its title is what is wrong, not the device ("Open fault: Entrance door
+ *  unlocked"). */
+export function attentionLine(item: AttentionItem): string {
+  return item.kind === "fault" || item.kind === "schedule" ? `${item.detail}: ${item.title}` : item.detail;
 }
 
 /**
@@ -55,8 +130,12 @@ export function buildAttentionItems(opts: {
   resolvedRooms: Record<string, string>;
   fmData: FmData;
   selectableIds: readonly string[];
+  /** member entity → the entity standing for its device
+   *  (deviceGroups.deviceFolding), so groupAttention folds a lock's own
+   *  alarm and a ticket raised on its battery sensor into ONE row. */
+  folding: ReadonlyMap<string, string>;
 }): AttentionItem[] {
-  const { unavailableIds, entities, entityMap, alertThresholds, resolvedRooms, fmData, selectableIds } = opts;
+  const { unavailableIds, entities, entityMap, alertThresholds, resolvedRooms, fmData, selectableIds, folding } = opts;
   const items: AttentionItem[] = [];
 
   for (const id of unavailableIds) {
@@ -127,6 +206,19 @@ export function buildAttentionItems(opts: {
     });
   }
 
+  // Each problem's device. An entity the fold does not know (a helper, a
+  // template — no device in the registry, no owner group) is its own device:
+  // the worst case is a row of its own, as before grouping. Never by name.
+  for (const i of items) {
+    if (!i.entityId) continue;
+    const key = folding.get(i.entityId) ?? i.entityId;
+    i.device = {
+      key,
+      label: displayLabelFor(key, entityMap[key]?.label, entities[key]?.attributes.friendly_name as string | undefined),
+      room: resolvedRooms[key] ?? resolvedRooms[i.entityId] ?? i.room,
+    };
+  }
+
   return items;
 }
 
@@ -151,21 +243,27 @@ export interface VillaHealth {
  */
 export function attentionFor<T extends { unavailableIds: readonly string[]; selectableIds: readonly string[]; attentionItems: AttentionItem[] }>(
   att: T, may: (entityId: string) => boolean,
-): T & { health: VillaHealth } {
+): T & { attentionGroups: AttentionGroup[]; health: VillaHealth } {
   const attentionItems = att.attentionItems.filter((i) => !i.entityId || may(i.entityId));
+  // Grouped AFTER the profile's filter, never before: a row is built only
+  // from problems this profile may open, so it cannot name a hidden one.
+  const attentionGroups = groupAttention(attentionItems);
   return {
     ...att,
     unavailableIds: att.unavailableIds.filter(may),
     selectableIds: att.selectableIds.filter(may),
     attentionItems,
-    health: villaHealthFrom(attentionItems),
+    attentionGroups,
+    health: villaHealthFrom(attentionGroups),
   };
 }
 
-export function villaHealthFrom(items: AttentionItem[]): VillaHealth {
-  if (items.length === 0) return { level: "ok", summary: "Everything looks fine." };
-  const hasDanger = items.some((i) => i.kind === "unavailable" || i.kind === "alarm");
-  const n = items.length;
+/** The level is read from EVERY problem (a fault beside an unavailable device
+ *  is still danger); the count is the ROWS, the number the badge shows. */
+export function villaHealthFrom(groups: readonly AttentionGroup[]): VillaHealth {
+  if (groups.length === 0) return { level: "ok", summary: "Everything looks fine." };
+  const hasDanger = groups.some((g) => g.items.some((i) => i.kind === "unavailable" || i.kind === "alarm"));
+  const n = groups.length;
   return {
     level: hasDanger ? "danger" : "warn",
     summary: `${n} thing${n === 1 ? "" : "s"} need${n === 1 ? "s" : ""} attention.`,

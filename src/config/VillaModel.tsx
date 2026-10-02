@@ -22,13 +22,16 @@ import { effectiveMapped, visibleEntitiesOf, visibleTo } from "./villaVisibility
 import type { Role } from "@/auth/roles";
 import type { HassEntity } from "@/types/ha.types";
 import {
-  buildAttentionItems, villaHealthFrom, type AttentionItem, type VillaHealth,
+  buildAttentionItems, groupAttention, villaHealthFrom, type AttentionGroup, type AttentionItem, type VillaHealth,
 } from "@/components/cockpit/cockpitData";
 
 export interface VillaAttention {
   unavailableIds: string[];
   selectableIds: string[];
   attentionItems: AttentionItem[];
+  /** The same problems, one row per device (cockpitData.groupAttention) —
+   *  what the badge, the phone menu and the Cockpit list COUNT and show. */
+  attentionGroups: AttentionGroup[];
   health: VillaHealth;
 }
 
@@ -94,9 +97,10 @@ export function VillaModelProvider({ sets, children }: { sets: VillaSets; childr
     const unavailableIds = devices.unavailable as string[];
     const selectableIds = devices.ids as string[];
     const attentionItems = buildAttentionItems({
-      unavailableIds, entities, entityMap, alertThresholds: config.alertThresholds, resolvedRooms, fmData, selectableIds });
-    return { unavailableIds, selectableIds, attentionItems, health: villaHealthFrom(attentionItems) };
-  }, [devices, entities, entityMap, config.alertThresholds, resolvedRooms, fmData]);
+      unavailableIds, entities, entityMap, alertThresholds: config.alertThresholds, resolvedRooms, fmData, selectableIds, folding });
+    const attentionGroups = groupAttention(attentionItems);
+    return { unavailableIds, selectableIds, attentionItems, attentionGroups, health: villaHealthFrom(attentionGroups) };
+  }, [devices, entities, entityMap, config.alertThresholds, resolvedRooms, fmData, folding]);
 
   const value = useMemo(
     (): VillaModel => ({

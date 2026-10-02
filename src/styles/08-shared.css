@@ -147,6 +147,19 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   font-size: var(--text-sm); color: var(--text-primary);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+/* A device with several problems (cockpitData.groupAttention): one line per
+   problem under its row, indented to the row's title (12px padding + 16px
+   icon + 10px gap), each fault with its own Close beside it. */
+.cockpit-attention-subs {
+  list-style: none; margin: 0; padding: 0 0 0 38px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.cockpit-attention-sub { display: flex; flex-direction: column; gap: 4px; }
+.cockpit-attention-sub-line { display: flex; align-items: center; gap: 8px; min-height: 36px; }
+.cockpit-attention-sub-text {
+  flex: 1 1 auto; min-width: 0; font-size: var(--text-xs); color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
 
 /* Room/Floor/Category selector header: wraps onto its own line below the
    "By ___" label on a narrow phone rather than clipping or overflowing —

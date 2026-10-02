@@ -82,6 +82,17 @@ console.log("\n  the signed-in badge:");
      && /\{ROLE_INITIALS\[role\]\}/.test(hud)
      && hud.indexOf('aria-label="Settings"') < hud.indexOf("hud-role-badge")
      && !/hud-profile/.test(hud));
+  // The phone menu (2.496.246): the same badge on a "Log out" row, and the
+  // colour legend reached from "Label size (?)" instead of its own row.
+  const menu = hud.slice(hud.indexOf('className="hud-menu"'));
+  const logout = menu.slice(menu.lastIndexOf("{role && ("), menu.indexOf("<span>Log out</span>") + 1);
+  ck("the phone menu's last row is the same round badge and 'Log out', opening the profile switch",
+     menu.includes("<span>Log out</span>") && !menu.includes("Switch profile")
+     && /beginSwitch\(\)/.test(logout) && /className=\{`role-glyph\$\{ROLE_INITIALS\[role\]\.length > 1/.test(logout)
+     && /className=\{`role-glyph/.test(hud.slice(hud.indexOf("hud-role-badge"))), logout.slice(0, 300));
+  const help = menu.slice(menu.indexOf('className="hud-menu-help"') - 200, menu.indexOf("<span>Label size</span>") + 80);
+  ck("  ...and 'Label size (?)' opens the map-colours legend; the 'Map colours' row is gone",
+     /setLegendOpen\(true\)/.test(help) && /<CircleHelp size=\{18\}/.test(help) && !menu.includes("<span>Map colours</span>"), help);
 }
 
 done("✅ one table answers every role question; counts match their lists");

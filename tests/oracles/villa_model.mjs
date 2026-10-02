@@ -17,6 +17,6 @@ ck("the bottom bar counts the VISIBLE devices; the Facility the full set",
    /const \{ visibleDevices, mappedEntityIds, visibleEntities \} = useVillaModel\(\)/.test(src("components/hud/SummaryBar.tsx")) && /const \{ devices \} = useVillaModel\(\);/.test(src("components/fm/FacilityModal.tsx")));
 const cockpit = src("components/cockpit/CockpitModal.tsx");
 ck("the Cockpit says 'needs attention' once: the count in the list's title, and no headline (2.496.237)",
-   /Needs attention \(\{attentionItems\.length\}\)/.test(cockpit) && !/cockpit-health/.test(cockpit));
+   /Needs attention \(\{attentionGroups\.length\}\)/.test(cockpit) && !/cockpit-health/.test(cockpit));
 if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
 console.log("\n✅ the villa's device model, owned once");

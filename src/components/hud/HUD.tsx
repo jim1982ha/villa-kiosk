@@ -28,7 +28,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   // MapIcon, not Map: the bare name shadows the global Map constructor,
   // which this file also uses.
-  Settings, LogOut, Map as MapIcon, PersonStanding,
+  Settings, Map as MapIcon, PersonStanding,
   Minus, Plus, CircleHelp, TriangleAlert, ClipboardList, Bot,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
@@ -135,7 +135,7 @@ export default function HUD({
   // alone, computed separately here from before Needs Attention was
   // unified — reported as "the button says 4, the modal says 5 things need
   // attention" once the two definitions had quietly drifted apart.
-  const { attentionItems, health } = useVillaAttention();
+  const { attentionGroups, health } = useVillaAttention();
   // Opens Cockpit (the villa-wide status report), not the bare unavailable-
   // devices list directly any more — that list is now a drill-down INSIDE
   // Cockpit's Needs Attention section (see CockpitModal), reached the same
@@ -641,17 +641,17 @@ export default function HUD({
                 bottom right — and the agent's own window opens from the
                 Cockpit's footer. Without one, the ⚠ as before. */}
             <button
-              className={`icon-btn${doors.agent ? " agent-btn" : ""}${attentionItems.length > 0 ? " has-alert" : ""}`}
+              className={`icon-btn${doors.agent ? " agent-btn" : ""}${attentionGroups.length > 0 ? " has-alert" : ""}`}
               onClick={() => setCockpitOpen(true)}
-              title={(attentionItems.length > 0 ? health.summary : "Cockpit — villa status at a glance")
+              title={(attentionGroups.length > 0 ? health.summary : "Cockpit — villa status at a glance")
                 + (doors.agent ? ` · ${agentTitle}` : "")}
               aria-label={`Open Cockpit — villa status at a glance${doors.agent ? ` (${agentTitle})` : ""}`}
             >
               {doors.agent ? <Bot size={24} /> : <TriangleAlert size={24} />}
               {doors.agent && <span className={`agent-btn-dot ${agentOnline ? "online" : "offline"}`} aria-hidden="true" />}
-              {attentionItems.length > 0 && (
+              {attentionGroups.length > 0 && (
                 <span className="icon-btn-count" aria-hidden="true">
-                  {formatCountBadge(attentionItems.length)}
+                  {formatCountBadge(attentionGroups.length)}
                 </span>
               )}
             </button>
@@ -698,7 +698,7 @@ export default function HUD({
                 title={`Signed in as ${ROLE_LABELS[role]} — switch profile`}
                 aria-label={`Signed in as ${ROLE_LABELS[role]} — switch profile`}
               >
-                <span aria-hidden="true" className={ROLE_INITIALS[role].length > 1 ? "two" : undefined}>{ROLE_INITIALS[role]}</span>
+                <span aria-hidden="true" className={`role-glyph${ROLE_INITIALS[role].length > 1 ? " two" : ""}`}>{ROLE_INITIALS[role]}</span>
               </button>
             )}
           </div>
@@ -758,7 +758,7 @@ export default function HUD({
                 >
                   {doors.agent ? <Bot size={18} /> : <TriangleAlert size={18} />}
                   <span>
-                    Cockpit{attentionItems.length > 0 ? ` (${formatCountBadge(attentionItems.length)})` : ""}
+                    Cockpit{attentionGroups.length > 0 ? ` (${formatCountBadge(attentionGroups.length)})` : ""}
                     {doors.agent ? ` · agent ${agentOnline ? "online" : "offline"}` : ""}
                   </span>
                 </button>
@@ -780,7 +780,20 @@ export default function HUD({
                     re-opening the dropdown after every click would be far
                     more annoying than leaving it open. */}
                 <div className="hud-menu-item hud-menu-stepper" role="none">
-                  <span>Label size</span>
+                  {/* "Label size (?)": the title is the way to the map-colours
+                      legend on a phone (owner, 2.496.246) — it replaced the
+                      menu's own "Map colours" row. Only the title opens it;
+                      the −/+ beside it still only step the size. */}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="hud-menu-help"
+                    onClick={() => { setMenuOpen(false); setLegendOpen(true); }}
+                    aria-label="Label size — what the map colours mean"
+                  >
+                    <span>Label size</span>
+                    <CircleHelp size={18} aria-hidden="true" />
+                  </button>
                   <div className="row" style={{ gap: 6 }}>
                     <button
                       className="icon-btn"
@@ -822,22 +835,17 @@ export default function HUD({
                     <span>Settings</span>
                   </button>
                 )}
-                <button
-                  role="menuitem"
-                  className="hud-menu-item"
-                  onClick={() => { setMenuOpen(false); setLegendOpen(true); }}
-                >
-                  <CircleHelp size={18} />
-                  <span>Map colours</span>
-                </button>
+                {/* The same round badge as the desktop bar's (O, FM, G), and
+                    the same action: back to the PIN pad (beginSwitch). */}
                 {role && (
                   <button
                     role="menuitem"
                     className="hud-menu-item"
                     onClick={() => { setMenuOpen(false); beginSwitch(); }}
+                    aria-label={`Signed in as ${ROLE_LABELS[role]} — log out`}
                   >
-                    <LogOut size={18} />
-                    <span>Switch profile</span>
+                    <span aria-hidden="true" className={`role-glyph${ROLE_INITIALS[role].length > 1 ? " two" : ""}`}>{ROLE_INITIALS[role]}</span>
+                    <span>Log out</span>
                   </button>
                 )}
               </div>
