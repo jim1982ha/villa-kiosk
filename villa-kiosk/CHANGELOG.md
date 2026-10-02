@@ -1,3 +1,8 @@
+## 2.496.248
+
+### Changed
+- **On a tablet or computer, the first-person / bird's-eye view button is under 1F and 2F.** It has moved out of the top bar's right-hand icons and into the 1F/2F section on the left, below a thin line, with the same size and look as the floor buttons. On a phone nothing changes: the switch is still in the menu.
+
 ## 2.496.247
 
 ### Changed

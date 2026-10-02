@@ -679,14 +679,8 @@ export default function HUD({
             )}
             {/* (The colour-legend button moved into the category row — it
                 explains those very colours. See .hud-cat-help.) */}
-            {/* First-person / bird's-eye switch, right after Facility — both
-                are app-level "how am I looking at/managing this villa"
-                controls rather than map content, so they sit together ahead
-                of the profile chip and Settings. It used to sit right before
-                Settings instead; moved at the user's request. On a phone
-                this whole row collapses into the overflow menu, which
-                carries its own copy (see .hud-menu). */}
-            <ViewControls viewMode={viewMode} onToggleViewMode={onToggleViewMode} />
+            {/* (The first-person / bird's-eye switch moved to the left
+                column, under 1F/2F — see .hud-left-col below.) */}
             {doors.settings && (
               <button className="icon-btn" onClick={onOpenSettings} title="Settings" aria-label="Settings">
                 <Settings size={24} />
@@ -908,6 +902,12 @@ export default function HUD({
             </button>
           ))}
           <span id="floor-btn-hint" className="sr-only">Hold (or hold Enter/Space) for this floor's rooms</span>
+          {/* The first-person / bird's-eye switch, last in the floor section
+              and drawn like 1F/2F (owner, 2.496.248). Roomy screens only: on
+              a phone it stays in the overflow menu (.hud-view-btn's media
+              query, the same breakpoints as .hud-right-inline). */}
+          <span className="hud-stack-sep hud-view-btn" aria-hidden="true" />
+          <ViewControls className="hud-view-btn" viewMode={viewMode} onToggleViewMode={onToggleViewMode} />
         </div>
       </div>
 

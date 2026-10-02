@@ -236,6 +236,10 @@
      so it cannot drift from the category section beside it. */
   .hud-right-inline { display: none; }
   .hud-overflow { display: flex; }
+  /* The view switch under 1F/2F goes with the inline controls: a phone has
+     it in the overflow menu. Scoped through .hud-left-col to outrank
+     `.icon-btn { display: flex }`. */
+  .hud-left-col .hud-view-btn { display: none; }
   /* The label-size stepper's whole pill (not just its two now-hidden
      buttons) — an empty .hud-group still renders its own padding/border/
      background, which read as a stray blank rounded box sitting between the
@@ -342,6 +346,8 @@
    leaving every height-driven size reduction in place. */
 @media (min-width: 641px) and (max-height: 560px) {
   .hud-right-inline { display: flex; }
+  .hud-left-col .hud-view-btn.icon-btn { display: flex; }
+  .hud-left-col .hud-stack-sep.hud-view-btn { display: block; }
   .hud-labelsize-group { display: flex; }
   .hud-center .hud-labelsize-btn { display: flex; }
   .hud-center .hud-cat-help { display: block; }

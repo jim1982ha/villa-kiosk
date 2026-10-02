@@ -316,6 +316,9 @@
    the invisible 44px touch target — ::after is .has-hold-action's dot. */
 .hud-left-col .hud-stack { width: var(--hud-rail-w); }
 .hud-left-col .hud-stack .icon-btn { width: 100%; }
+/* Between 1F/2F and the view switch under them: the floor section's own
+   hairline, horizontal (.hud-cat-sep is the category row's, vertical). */
+.hud-stack-sep { flex: 0 0 auto; height: 1px; margin: 0 4px; background: var(--hairline-strong); }
 .hud-floor-btn::before {
   content: ""; position: absolute; top: 50%; left: 50%;
   width: var(--touch-min); height: var(--touch-min);
@@ -520,13 +523,9 @@
 }
 .bottom-bar > * { pointer-events: auto; }
 
-/* The first-person/bird's-eye toggle's own layout (used both in its
-   .hud-left-col home and, "stacked" false, inside the SummaryBar in the past
-   — see ViewControls' docstring). (Only in overview) the "jump to default
-   view" button sits in a DIFFERENT section (hud-left-col's floor/rooms
-   stack) — not part of this class. */
+/* The overview hint's layout. (The first-person/bird's-eye switch itself is
+   the last button of .hud-left-col's floor section — see ViewControls.) */
 .overview-help { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
-.overview-help-buttons { display: flex; flex-direction: column; gap: 8px; }
 .overview-hint {
   max-width: min(60vw, 460px);
   background: var(--bg-overlay); color: var(--text-secondary);

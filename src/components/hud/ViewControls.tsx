@@ -1,37 +1,32 @@
 // src/components/hud/ViewControls.tsx
-// The first-person / bird's-eye view toggle — its own dedicated section in
-// HUD's left column, right below the floor/rooms stack. Its former
-// companion, the saved default-view "anchor" button, has moved onto the
-// brand icon in the top bar (see HUD.tsx's .hud-brand + useHomeAnchor) —
-// always visible there instead of only in overview mode, so "go home" no
-// longer depends on which mode you're already in.
+// The first-person / bird's-eye view toggle. On a roomy screen it is the last
+// button of the left column's floor section, under 1F/2F (owner, 2.496.248 —
+// it had moved to the top bar's right-hand icons); a phone carries its own
+// row in the overflow menu instead (HUD.tsx, .hud-menu), and hides this one
+// with the rest of the inline controls (05-layout.css, .hud-view-btn).
 
 import { Map, PersonStanding } from "lucide-react";
 
 export interface ViewControlsProps {
   viewMode: "first-person" | "overview";
   onToggleViewMode: () => void;
-  /** Wrap the button in the shared .hud-stack section — the same glass block
-   *  the floor toggle uses — so it reads as its own HUD section rather than a
-   *  loose button. Always on at the current (left-column) call site. */
-  stacked?: boolean;
+  /** Extra classes for the button — its place in the HUD. */
+  className: string;
 }
 
-export default function ViewControls({ viewMode, onToggleViewMode, stacked }: ViewControlsProps) {
+export default function ViewControls({ viewMode, onToggleViewMode, className }: ViewControlsProps) {
   const overviewActive = viewMode === "overview";
+  // No `.active` (accent) styling — unlike the floor buttons above it, this is
+  // a plain mode SWITCH, not a lit "this is on" state, so it stays neutral in
+  // both modes.
   return (
-    <div className={`overview-help-buttons${stacked ? " hud-stack" : ""}`}>
-      {/* No `.active` (accent) styling — unlike the floor/rooms buttons above
-          it, this is a plain mode SWITCH, not a lit "this is on" state
-          indicator, so it stays neutral in both modes. */}
-      <button
-        className="icon-btn"
-        onClick={onToggleViewMode}
-        title={overviewActive ? "Switch to first-person view" : "Switch to overview (bird's-eye) view"}
-        aria-label={overviewActive ? "Switch to first-person view" : "Switch to overview (bird's-eye) view"}
-      >
-        {overviewActive ? <PersonStanding size={19} /> : <Map size={18} />}
-      </button>
-    </div>
+    <button
+      className={`icon-btn ${className}`}
+      onClick={onToggleViewMode}
+      title={overviewActive ? "Switch to first-person view" : "Switch to overview (bird's-eye) view"}
+      aria-label={overviewActive ? "Switch to first-person view" : "Switch to overview (bird's-eye) view"}
+    >
+      {overviewActive ? <PersonStanding size={19} /> : <Map size={18} />}
+    </button>
   );
 }
