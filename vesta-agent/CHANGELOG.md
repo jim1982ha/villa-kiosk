@@ -1,3 +1,8 @@
+## 0.12.17
+
+### Fixed
+- **The agent's reports have the VESTA icon.** A report opened from Telegram showed a blank icon in the browser's tab and bookmarks. Every HTML page the agent sends now carries the VESTA "V" (the same one as the VESTA Kiosk, light or dark to match your phone's theme). The icon is stored inside the page, so it shows with no internet. This applies to every report, including ones from skills you add later. A page that sets its own icon keeps it.
+
 ## 0.12.16
 
 ### Fixed

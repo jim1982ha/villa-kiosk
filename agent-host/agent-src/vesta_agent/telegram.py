@@ -20,6 +20,8 @@ import aiohttp
 
 from vesta_shared.messaging import split_message
 
+from .favicon import document_bytes
+
 log = logging.getLogger("vesta.telegram")
 
 
@@ -67,7 +69,8 @@ class Telegram:
             form = aiohttp.FormData()
             form.add_field("chat_id", str(chat_id))
             form.add_field("caption", text[:1000])
-            form.add_field("document", open(document, "rb"), filename=os.path.basename(document))
+            # An HTML page leaves with the VESTA mark inside it (favicon.py).
+            form.add_field("document", document_bytes(document), filename=os.path.basename(document))
             async with self.http.post(f"{self.base}/sendDocument", data=form) as r:
                 body = await r.json(content_type=None)
             if not body.get("ok"):
