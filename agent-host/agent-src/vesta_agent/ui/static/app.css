@@ -82,11 +82,13 @@ html, body { margin: 0; background: var(--bg-base); color: var(--text-primary); 
 body { min-height: 100vh; padding-bottom: 96px; }
 
 /* ---- header and tabs */
-.top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 14px; padding: 20px 20px 8px; max-width: 1100px; margin: 0 auto; }
-.brand { display: flex; align-items: baseline; gap: 12px; }
+/* One line: the title (with its short version) on the left, the theme toggle on the right
+   (owner, 2026-10-03) — it fits a 320px phone; wider content would wrap the toggle, still right-aligned. */
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 20px 20px 8px; max-width: 1100px; margin: 0 auto; }
+.brand { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
 .mark { font-family: var(--font-display); font-weight: 500; font-size: var(--text-xl); letter-spacing: var(--tracking-brand); }
 .eyebrow { font-family: var(--font-display); text-transform: uppercase; letter-spacing: var(--tracking-eyebrow); font-size: var(--text-xs); color: var(--accent); }
-.ver { margin-left: auto; color: var(--text-dim); font-size: var(--text-xs); }
+.ver { color: var(--text-dim); font-size: var(--text-xs); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .tabs { display: flex; gap: 6px; overflow-x: auto; padding: 8px 20px 0; max-width: 1100px; margin: 0 auto; border-bottom: 1px solid var(--hairline); }
 .tabs button {
   background: none; border: 0; padding: 10px 14px; cursor: pointer; color: var(--text-secondary);
@@ -219,7 +221,7 @@ svg.bars .base { stroke: var(--text-dim); }
 .tab-file:hover { color: var(--text-primary); text-decoration: underline; }
 .tab-file.on { color: var(--accent); text-decoration: underline; }
 /* the theme switch in the header */
-.themes { display: inline-flex; gap: 2px; padding: 2px; border-radius: 999px; border: 1px solid var(--hairline); align-self: center; }
+.themes { display: inline-flex; gap: 2px; padding: 2px; border-radius: 999px; border: 1px solid var(--hairline); align-self: center; margin-left: auto; }
 .themes button { border: 0; background: none; color: var(--text-secondary); font-size: var(--text-xs); padding: 4px 10px; border-radius: 999px; cursor: pointer; min-height: 28px; }
 .themes button.on { background: var(--accent-soft); color: var(--text-primary); }
 /* a device picker: a box like a menu (what is chosen), opening a list with a search and a checkbox each */

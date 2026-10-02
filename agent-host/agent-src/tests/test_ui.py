@@ -311,3 +311,18 @@ def test_every_set_of_figures_is_drawn_once_and_sits_two_to_a_row_on_a_phone():
     assert js.count('class: "kpi"') == 1 and js.count("figures([") == 2   # one builder, both tabs call it
     rule = re.search(r"\.figures \{[^}]*grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(min\((\d+)px", css)
     assert rule and 2 * int(rule.group(1)) + 12 <= 320 - 2 * 20, "two figures must fit a 320px phone's card"
+
+
+def test_the_title_line_holds_the_short_version_and_the_theme_toggle_on_the_right():
+    # Owner, 2026-10-03: the version sat between the title and the toggle with margin-left:auto,
+    # which pushed the toggle onto a line of its own on a phone.
+    import re
+    from vesta_agent.ui.server import STATIC
+    html = open(os.path.join(STATIC, "index.html"), encoding="utf-8").read()
+    css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
+    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
+    brand = re.search(r'<div class="brand">(.*?)</div>', html).group(1)
+    assert 'id="ver"' in brand                                   # inline with the title
+    assert html.index('class="brand"') < html.index('class="themes"')
+    assert re.search(r"\.themes \{[^}]*margin-left: auto", css) and not re.search(r"\.ver \{[^}]*margin-left", css)
+    assert "ver.textContent = `v${" in js and "ver.title = " in js   # short on screen, the full line on hover

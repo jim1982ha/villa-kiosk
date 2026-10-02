@@ -1,3 +1,8 @@
+## 0.12.20
+
+### Changed
+- **The agent page's title line holds everything.** The version now sits right after "VESTA Agent", shorter ("v0.12.20 · dev"; hold or hover over it for the full detail), and the Light / Auto / Dark switch sits on the same line, at the right. On a phone the switch no longer takes a line of its own.
+
 ## 0.12.19
 
 ### Changed

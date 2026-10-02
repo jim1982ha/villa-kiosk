@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.19 (3 October 2026)
+
+- UI header: the short version (app version · channel, full line as the title attribute) inside .brand; the theme toggle margin-left:auto on the same line. tests/test_ui.py pins it.
+
 ## 0.6.18 (2 October 2026)
 
 - UI: one figures() builder for every set of figures (Overview's last 24 hours, Costs), its own .figures grid: two 120px columns on a phone instead of .grid's one 220px column. tests/test_ui.py pins it.

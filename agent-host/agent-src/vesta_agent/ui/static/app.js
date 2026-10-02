@@ -231,7 +231,12 @@ function go(tab) {
 async function overview() {
   fill($view, h("p", { class: "muted" }, "Loading…"));
   const o = await api("GET", "api/overview");
-  document.getElementById("ver").textContent = `${o.app_version ? `app ${o.app_version} · ` : ""}agent ${o.version} · ${o.instance}`;
+  // Short, on the title's line (owner, 2026-10-03): the app's version, and the
+  // channel when it is not the released one. The whole statement stays one
+  // hover/long-press away.
+  const ver = document.getElementById("ver");
+  ver.textContent = `v${o.app_version || o.version}${o.instance && o.instance !== "prod" ? ` · ${o.instance}` : ""}`;
+  ver.title = `${o.app_version ? `app ${o.app_version} · ` : ""}agent ${o.version} · ${o.instance}`;
   const off = o.skills.filter((s) => !s.ok);
   const r = o.last_24h;
   const count = (k) => (r && r.counts[k]) || 0;
