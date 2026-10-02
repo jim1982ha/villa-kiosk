@@ -54,6 +54,7 @@ GATES: list[tuple[str, list[str], str]] = [   # (name, command, working director
     ("The sidecar, the restart policy and the stop grace", [PY, "agent-host/tests/test_supervise.py"], "."),
     ("The update check moves only forward", [PY, "agent-host/tests/test_updates.py"], "."),
     ("The agreement with the VESTA Kiosk is the Kiosk's own", [PY, "agent-host/tests/test_kiosk_contract.py"], "."),
+    ("What the host sends is what the agent reads", [PY, "agent-host/tests/test_env_contract.py"], "."),
     ("The agent's manifest and the host state", [PY, "agent-host/tests/test_manifest.py"], "."),
     ("The release module", [PY, "agent-host/tests/test_release.py"], "."),
     # The synthetic tests. tests/villa/ (real data, gitignored) is collected too wherever it exists.
