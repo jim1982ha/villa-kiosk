@@ -100,8 +100,10 @@ export function deriveTiles(
       // point: the bar's real constraint is horizontal space, so the all-good
       // case says the same word the single-lock tile says and no more.
       // Same shape as the single-lock branch above and the light tile's "2 On".
+      // The single lock's word is lockFacts' too — which list it is in — never
+      // a second reading of its raw state beside the facts the tile already has.
       value: single
-        ? (locks[0].state === "locked" ? "Locked" : locks[0].state === "unlocked" ? "Unlocked" : locks[0].state)
+        ? (f.locked.length ? "Locked" : f.unlocked.length ? "Unlocked" : locks[0].state)
         : allLocked ? "Locked"
           : unlockedN > 0 ? `${unlockedN} Unlocked`
             // Not all locked, yet none actually UNLOCKED: every remainder is

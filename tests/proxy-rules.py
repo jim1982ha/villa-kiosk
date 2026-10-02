@@ -906,6 +906,34 @@ ck("readDomains comes from the shared table, and holds the drawn domains plus su
    proxy.READ_DOMAINS == frozenset(table["readDomains"]) and {"light", "sensor", "sun", "scene", "weather"} <= proxy.READ_DOMAINS
    and not {"person", "device_tracker", "alarm_control_panel", "update", "calendar"} & proxy.READ_DOMAINS)
 
+# THE FACILITY VOCABULARY IS ONE TABLE (2.496.245): fm-records.json, read by
+# the proxy and by the app (tests/oracles/fm_records.mjs holds the app side).
+# Driven through _fm_record_errors, not read off the source.
+fm_table = _json.loads((ROOT / "rootfs" / "usr" / "share" / "vesta" / "fm-records.json").read_text())
+_tk = lambda st: {"id": "t1", "status": st, "resolvedAt": "2026-01-01" if st == "resolved" else None}
+_co = lambda cat: {"id": "c1", "amountIdr": 5, "category": cat}
+ck("fm-records.json: every fault status it names is one the proxy accepts, and only those",
+   proxy.FM_TICKET_STATUSES == tuple(fm_table["ticketStatuses"])
+   and all(not proxy._fm_record_errors("tickets", _tk(st)) for st in fm_table["ticketStatuses"])
+   and proxy._fm_record_errors("tickets", _tk("closed")))
+ck("  ...every cost category, and only those",
+   proxy.FM_COST_CATEGORIES == tuple(fm_table["costCategories"])
+   and all(not proxy._fm_record_errors("costs", _co(c)) for c in fm_table["costCategories"])
+   and proxy._fm_record_errors("costs", _co("other")))
+ck("  ...and the proxy's own collection list (a literal, so it cannot fail open) equals the table's",
+   proxy.FM_RECORD_COLLECTIONS == tuple(fm_table["collections"]))
+_saved = (proxy.FM_RECORDS_TABLE, proxy.FM_TICKET_STATUSES, proxy.FM_COST_CATEGORIES)
+try:
+    proxy.FM_RECORDS_TABLE = {}
+    proxy.FM_TICKET_STATUSES, proxy.FM_COST_CATEGORIES = proxy._fm_words("ticketStatuses"), proxy._fm_words("costCategories")
+    ck("  ...an unreadable table accepts NO status or category (fails closed)",
+       proxy.FM_TICKET_STATUSES == () and proxy.FM_COST_CATEGORIES == ()
+       and proxy._fm_record_errors("tickets", _tk("open")) and proxy._fm_record_errors("costs", _co("minor")))
+    proxy.FM_RECORDS_TABLE = {"ticketStatuses": "open", "costCategories": [1]}
+    ck("  ...and so does a malformed one", proxy._fm_words("ticketStatuses") == () and proxy._fm_words("costCategories") == ())
+finally:
+    proxy.FM_RECORDS_TABLE, proxy.FM_TICKET_STATUSES, proxy.FM_COST_CATEGORIES = _saved
+
 print()
 print("✅ the proxy's pure rules hold" if FAIL == 0
       else "❌ A PROXY RULE IS BROKEN")

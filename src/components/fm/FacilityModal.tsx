@@ -26,6 +26,7 @@ import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { roleCan } from "@/auth/permissions";
+import type { Doors } from "@/auth/doors";
 import { useFmData, useFacilityLiveView } from "@/fm/FmDataContext";
 import { buildReadiness, type ReadinessCheck } from "@/fm/readiness";
 import { locksGroup, lightsGroup } from "@/config/summaryGroups";
@@ -56,8 +57,11 @@ const TABS: ModalTab<Tab>[] = [
 ];
 
 export default function FacilityModal({
-  onClose, onOpenEntity, reportFaultFor, onFaultFormOpened,
+  doors, onClose, onOpenEntity, reportFaultFor, onFaultFormOpened,
 }: {
+  /** Which windows this profile may open (auth/doors) — handed on to the
+   *  Cockpit this workspace can open. */
+  doors: Doors;
   onClose: () => void;
   /** Open on Faults with a blank fault already pointed at this device — set
    *  when the operator came here from a device panel's fault shortcut. */
@@ -228,6 +232,10 @@ export default function FacilityModal({
 
       {cockpitOpen && (
         <CockpitModal
+          // The Cockpit opened from inside Facility has never offered the
+          // agent's window (nothing here can open it) — said, not implied.
+          doors={{ ...doors, agent: false }}
+          onOpenAgent={() => {}}
           onClose={() => setCockpitOpen(false)}
           onOpenEntity={(id) => { setCockpitOpen(false); onOpenEntity(id); }}
         />

@@ -48,6 +48,7 @@ import { useHomeAnchor } from "./useHomeAnchor";
 import RadialRoomMenu, { type RadialItem } from "./RadialRoomMenu";
 import LegendModal from "./LegendModal";
 import CockpitModal from "@/components/cockpit/CockpitModal";
+import type { Doors } from "@/auth/doors";
 import { useVillaAttention } from "@/components/cockpit/useVillaAttention";
 import { useFmData } from "@/fm/FmDataContext";
 import { fmAttention } from "@/fm/fmEngine";
@@ -72,9 +73,11 @@ interface Props {
   /** Rooms-dial navigation: jump straight to a room (switches floor + zooms in),
    *  bypassing the full Rooms list. */
   onNavigateRoom: (point: TeleportPoint) => void;
+  /** Which windows this profile may open (auth/doors) — Settings, Facility,
+   *  the agent. Every button below that leads to one is drawn by it, never by
+   *  whether its callback was passed. */
+  doors: Doors;
   onOpenSettings: () => void;
-  /** RBAC: whether the active profile may open Settings at all. */
-  canOpenSettings: boolean;
   onMove: (x: number, y: number) => void;
   viewMode: "first-person" | "overview";
   onToggleViewMode: () => void;
@@ -93,13 +96,11 @@ interface Props {
   /** Drill into an entity's full panel from the unavailable-devices list —
    *  wired to Dashboard's setActivePanel, same callback SummaryBar uses. */
   onOpenEntity: (entityId: string) => void;
-  /** Open the Facility Manager workspace. Undefined when the profile lacks
-   *  `manageFacility` — the button is then not rendered at all. */
-  onOpenFacility?: () => void;
-  /** Open the VESTA Agent area. Undefined when the profile lacks `viewAgent`
-   *  or the agent is not configured — the Cockpit button then keeps its ⚠
-   *  icon and the Cockpit's footer has no "VESTA Agent" button. */
-  onOpenAgent?: () => void;
+  /** Open the Facility Manager workspace — drawn only with `doors.facility`. */
+  onOpenFacility: () => void;
+  /** Open the VESTA Agent area. Without `doors.agent` the Cockpit button
+   *  keeps its ⚠ icon and the Cockpit's footer has no "VESTA Agent" button. */
+  onOpenAgent: () => void;
   /** Long-press (or hold Enter/Space) a category filter icon — list every
    *  device in that category, the same group-modal every SummaryBar tile
    *  already opens. A plain tap keeps toggling that category's visibility. */
@@ -114,7 +115,7 @@ function useClock(): string {
 
 export default function HUD({
   currentFloor, floorsAvailable, onShowFloor, onOpenTeleport, onNavigateRoom,
-  onOpenSettings, canOpenSettings, onMove,
+  doors, onOpenSettings, onMove,
   viewMode, onToggleViewMode,
   hasOverviewDefault, onApplyOverviewDefault, onSaveOverviewDefault,
   onOpenEntity, onOpenFacility, onOpenAgent, onOpenCategory,
@@ -640,21 +641,21 @@ export default function HUD({
                 bottom right — and the agent's own window opens from the
                 Cockpit's footer. Without one, the ⚠ as before. */}
             <button
-              className={`icon-btn${onOpenAgent ? " agent-btn" : ""}${attentionItems.length > 0 ? " has-alert" : ""}`}
+              className={`icon-btn${doors.agent ? " agent-btn" : ""}${attentionItems.length > 0 ? " has-alert" : ""}`}
               onClick={() => setCockpitOpen(true)}
               title={(attentionItems.length > 0 ? health.summary : "Cockpit — villa status at a glance")
-                + (onOpenAgent ? ` · ${agentTitle}` : "")}
-              aria-label={`Open Cockpit — villa status at a glance${onOpenAgent ? ` (${agentTitle})` : ""}`}
+                + (doors.agent ? ` · ${agentTitle}` : "")}
+              aria-label={`Open Cockpit — villa status at a glance${doors.agent ? ` (${agentTitle})` : ""}`}
             >
-              {onOpenAgent ? <Bot size={24} /> : <TriangleAlert size={24} />}
-              {onOpenAgent && <span className={`agent-btn-dot ${agentOnline ? "online" : "offline"}`} aria-hidden="true" />}
+              {doors.agent ? <Bot size={24} /> : <TriangleAlert size={24} />}
+              {doors.agent && <span className={`agent-btn-dot ${agentOnline ? "online" : "offline"}`} aria-hidden="true" />}
               {attentionItems.length > 0 && (
                 <span className="icon-btn-count" aria-hidden="true">
                   {formatCountBadge(attentionItems.length)}
                 </span>
               )}
             </button>
-            {onOpenFacility && (
+            {doors.facility && (
               <button
                 className={`icon-btn${facilityAttention > 0 ? " has-alert" : ""}`}
                 onClick={onOpenFacility}
@@ -681,7 +682,7 @@ export default function HUD({
                 this whole row collapses into the overflow menu, which
                 carries its own copy (see .hud-menu). */}
             <ViewControls viewMode={viewMode} onToggleViewMode={onToggleViewMode} />
-            {canOpenSettings && (
+            {doors.settings && (
               <button className="icon-btn" onClick={onOpenSettings} title="Settings" aria-label="Settings">
                 <Settings size={24} />
               </button>
@@ -755,13 +756,13 @@ export default function HUD({
                   className="hud-menu-item"
                   onClick={() => { setMenuOpen(false); setCockpitOpen(true); }}
                 >
-                  {onOpenAgent ? <Bot size={18} /> : <TriangleAlert size={18} />}
+                  {doors.agent ? <Bot size={18} /> : <TriangleAlert size={18} />}
                   <span>
                     Cockpit{attentionItems.length > 0 ? ` (${formatCountBadge(attentionItems.length)})` : ""}
-                    {onOpenAgent ? ` · agent ${agentOnline ? "online" : "offline"}` : ""}
+                    {doors.agent ? ` · agent ${agentOnline ? "online" : "offline"}` : ""}
                   </span>
                 </button>
-                {onOpenFacility && (
+                {doors.facility && (
                   <button
                     role="menuitem"
                     className="hud-menu-item"
@@ -811,7 +812,7 @@ export default function HUD({
                   {viewMode === "overview" ? <PersonStanding size={18} /> : <MapIcon size={18} />}
                   <span>{viewMode === "overview" ? "First-person view" : "Bird's-eye view"}</span>
                 </button>
-                {canOpenSettings && (
+                {doors.settings && (
                   <button
                     role="menuitem"
                     className="hud-menu-item"
@@ -851,6 +852,7 @@ export default function HUD({
         <CockpitModal
           onClose={() => setCockpitOpen(false)}
           onOpenEntity={(id) => { setCockpitOpen(false); onOpenEntity(id); }}
+          doors={doors}
           onOpenAgent={onOpenAgent}
           agentOnline={agentOnline}
           agentWaiting={agentWaiting}

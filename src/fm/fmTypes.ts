@@ -19,6 +19,14 @@
 // replace is far easier to reason about than four stores that can disagree
 // mid-edit.
 
+// ⚠️ THE VOCABULARY IS ONE TABLE, SHARED WITH THE ADD-ON (2.496.245): a fault's
+// statuses, a cost's categories and the record's collections live in
+// rootfs/usr/share/vesta/fm-records.json, which supervisor-proxy.py reads to
+// judge every write (_fm_record_errors). They were two literal copies, one per
+// side. The literal union TYPES stay below — the compiler needs words — and
+// tests/oracles/fm_records.mjs fails when they and the table part.
+import FM_RECORDS from "../../rootfs/usr/share/vesta/fm-records.json" with { type: "json" };
+
 /** Who last created or changed a record, when it was not a person
  *  (docs/agent-integration/PLAN.md F6). Set by the ADD-ON, never by this app:
  *  every record the VESTA Agent writes is stamped server-side, so the mark
@@ -93,7 +101,7 @@ export interface FmCost extends FmProvenance {
    *  and major spend — lost their "Idr" in 2.496.163). */
   amountIdr: number;
   label: string;
-  category: "minor" | "major";
+  category: FmCostCategory;
   /** Free note — what the spend was actually for, beyond its one-line label.
    *  The same field faults have, for the same reason: the person reading this
    *  in six months is not the person who typed it. */
@@ -110,6 +118,13 @@ export interface FmCost extends FmProvenance {
 }
 
 export type FmTicketStatus = "open" | "in_progress" | "resolved";
+/** Every status, in the table's order (fm-records.json). */
+export const FM_TICKET_STATUSES = FM_RECORDS.ticketStatuses as readonly FmTicketStatus[];
+
+/** A cost's category — see FmCost. */
+export type FmCostCategory = "minor" | "major";
+/** Every category, in the table's order (fm-records.json). */
+export const FM_COST_CATEGORIES = FM_RECORDS.costCategories as readonly FmCostCategory[];
 
 /** One recorded step in a fault's life — raised, picked up, resolved.
  *
@@ -177,6 +192,12 @@ export interface FmData {
   tickets: FmTicket[];
   savedDocuments: FmSavedDocument[];
 }
+
+/** One of the record's collections — each a list of records with an `id`. */
+export type FmCollection = keyof FmData;
+/** Every collection, in the table's order (fm-records.json) — the add-on's
+ *  FM_RECORD_COLLECTIONS is held to the same table by tests/proxy-rules.py. */
+export const FM_COLLECTIONS = FM_RECORDS.collections as readonly FmCollection[];
 
 export const EMPTY_FM_DATA: FmData = {
   schedules: [], completions: [], costs: [], tickets: [], savedDocuments: [],

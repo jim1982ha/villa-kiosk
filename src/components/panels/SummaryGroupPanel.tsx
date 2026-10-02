@@ -23,16 +23,14 @@ import { badgeImage } from "@/babylon/badgeIcons";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
 import { effectiveCategory, subjectOf } from "@/config/EntityCategories";
-import { badgeFaceAndRing } from "@/utils/deviceActivity";
-import { alertStateFor } from "@/config/BinarySensorClasses";
+import { deviceLook, groupLook, storeLookSource } from "@/utils/deviceActivity";
 import { switchPosition } from "@/utils/entityState";
-import { bulkSwitchPlan, isActive } from "@/config/activeDevices";
-import { inferTypeFromEntityId } from "@/config/EntityMap";
+import { bulkSwitchPlan } from "@/config/activeDevices";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { phantomEntity } from "@/utils/phantomEntity";
 import { TOGGLEABLE_DOMAINS } from "@/utils/quickAction";
 import type { HassEntity } from "@/types/ha.types";
-import type { Category, EntityType } from "@/types/scene.types";
+import type { Category } from "@/types/scene.types";
 import { NO_ROOM_LABEL } from "@/config/roomKey";
 
 // The group's shape is config/summaryGroups' (this screen only draws one).
@@ -117,11 +115,12 @@ export default function SummaryGroupPanel({
   const { config, resolvedRooms } = useConfig();
   // Each row's badge is a PNG baked from the theme's tokens — see the hook.
   const theme = useResolvedTheme();
-  /** The live state of an entity another one is LINKED to, if any — the input
-   *  badgeSurfaceFor needs to paint a row exactly as the map paints its badge.
-   *  A linked entity is frequently not itself in this group (a pump's switch
+  /** How every row looks — utils/deviceActivity's deviceLook over the store,
+   *  the SAME rule and the same inputs the map badge is painted from (its
+   *  linked entity through devicePower, its alert override from config). A
+   *  linked entity is frequently not itself in this group (a pump's switch
    *  lives elsewhere), so this reads the whole store, not the group's list. */
-  const linkedStateOf = (linkedId?: string) => (linkedId ? entities[linkedId]?.state : undefined);
+  const looks = storeLookSource(entities, config);
   const { role } = useProfile();
   const entityLabel = useEntityLabel();
   // Bulk-toggling an entire group (potentially dozens of devices) from one
@@ -183,13 +182,10 @@ export default function SummaryGroupPanel({
   // and the row could never reflect it either way.
   const toggleables = [...onMap, ...offMap]
     .filter((e) => TOGGLEABLE_DOMAINS.has(e.entity_id.split(".")[0]));
-  // "On" and the bulk switch are config/activeDevices' rules: one meaning of
-  // on for the whole app, and one call PER DOMAIN (the first row's domain
-  // used to be sent for every row — a light command to a switch).
-  const anyOn = toggleables.some((e) => isActive(e, e.entity_id));
-
-  const typeOf = (id: string): EntityType =>
-    (config.entityMap[id]?.type ?? inferTypeFromEntityId(id) ?? "sensor");
+  // "On" is POWER (a group's onCount — devices switched on), and the bulk
+  // switch is config/activeDevices': one call PER DOMAIN (the first row's
+  // domain used to be sent for every row — a light command to a switch).
+  const anyOn = groupLook(toggleables.map((e) => deviceLook(e.entity_id, looks)), { showingDevices: true }).onCount > 0;
 
   const Icon = group.icon;
 
@@ -301,7 +297,8 @@ export default function SummaryGroupPanel({
   function renderRow(e: NonNullable<(typeof all)[number]>) {
     const id = e.entity_id;
     const domain = id.split(".")[0];
-    const type = typeOf(id);
+    const look = deviceLook(id, looks);
+    const type = look.type;
     const cat: Category = effectiveCategory(subjectOf(id, config.entityMap[id], e, type));
     const label = entityLabel(id);
     // ⚠️ ONE OWNER, AND THIS ROW USED NOT TO USE IT. This was written out here
@@ -328,24 +325,16 @@ export default function SummaryGroupPanel({
     const position = switchPosition(e, domain);
     const canToggle = canControl && rowInHa && position !== "unknown"
       && (TOGGLEABLE_DOMAINS.has(domain) || isLock);
-    // EXACTLY what the map paints, via the one shared rule — see
-    // deviceActivity.badgeSurfaceFor. This used to re-derive the surface from
+    // EXACTLY what the map paints: `look` above is deviceLook, the map's own
+    // rule with the map's own inputs. This used to re-derive the surface from
     // classifyDeviceActivity plus its own unavailable check, which matched the
     // map for most devices and silently disagreed for any entity with a
     // `linkedEntityId`: a pump's power sensor is ringed on the map while its
-    // pump runs, and every one of them listed here as plain grey. Reported by
-    // tapping an entity group of four pump-power badges — two red on the map,
-    // four identical rows in the modal.
-    const badge = badgeFaceAndRing({
-      type, entity: e,
-      // "Is the entity this one is linked to switched on" — the map holds the
-      // same fact as a live set fed by state events (linkActiveIds); here the
-      // store already has every state, so it is one lookup.
-      linkedOn: linkedStateOf(config.entityMap[id]?.linkedEntityId) === "on",
-      alertState: alertStateFor(
-        e.attributes.device_class as string | undefined,
-        config.alertThresholds[id]?.alertState),
-    });
+    // pump runs, and every one of them listed here as plain grey. And until
+    // 2.496.245 it resolved the LINKED entity as a raw `state === "on"`, where
+    // the map asks devicePower — so a device linked to a lock that was
+    // UNLOCKED, or a cover that was OPEN, was ringed on the map and plain here.
+    const badge = look;
     const notInHaRow = !rowInHa;
     // An id HA has no entity for is reported as THAT, not as "not on the map"
     // — it may well have geometry, and saying it is missing from the model

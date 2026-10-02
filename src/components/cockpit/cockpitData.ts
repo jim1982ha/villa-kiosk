@@ -7,9 +7,11 @@
 // summary would be actively misleading, not just noisy. See the Cockpit plan
 // memory for how this was verified.
 
-import { binarySensorClassInfo } from "@/config/BinarySensorClasses";
-import { categoryCounts, isActive } from "@/config/activeDevices";
-import { isUnavailable } from "@/utils/stateColors";
+import { binarySensorClassInfo, stateLabelFor } from "@/config/BinarySensorClasses";
+import { categoryCounts } from "@/config/activeDevices";
+import { deviceLook, groupLook, storeLookSource, type LookSource } from "@/utils/deviceActivity";
+import { deviceRowText } from "@/utils/entityValue";
+import type { Threshold } from "@/config/ThresholdConfig";
 import { displayLabelFor } from "@/config/EntityMap";
 import { roomKey, NO_ROOM_LABEL } from "@/config/roomKey";
 import { fmAttention } from "@/fm/fmEngine";
@@ -40,19 +42,21 @@ export interface AttentionItem {
  * HUD's unavailable-devices badge and Facility's separate attention badge.
  * Four sources, each already tracked somewhere in the app, just never
  * combined: unavailable devices, open faults, overdue/never-recorded
- * maintenance, and any binary_sensor currently in its device_class's alarm
- * state (leak/smoke/tamper/etc — BinarySensorClasses' `alarmState`, computed
- * per class already, just never aggregated across the villa before).
+ * maintenance, and every device the map paints RED (its deviceLook is
+ * `alert`).
  */
 export function buildAttentionItems(opts: {
   unavailableIds: readonly string[];
   entities: Record<string, HassEntity>;
   entityMap: Record<string, EntityMapping>;
+  /** The villa's per-entity alert overrides — what makes a reading red on
+   *  the map, so it is what makes it an alarm here (deviceLook). */
+  alertThresholds: Record<string, Threshold>;
   resolvedRooms: Record<string, string>;
   fmData: FmData;
   selectableIds: readonly string[];
 }): AttentionItem[] {
-  const { unavailableIds, entities, entityMap, resolvedRooms, fmData, selectableIds } = opts;
+  const { unavailableIds, entities, entityMap, alertThresholds, resolvedRooms, fmData, selectableIds } = opts;
   const items: AttentionItem[] = [];
 
   for (const id of unavailableIds) {
@@ -91,23 +95,33 @@ export function buildAttentionItems(opts: {
     });
   }
 
-  // Every binary_sensor currently reporting its own device_class's "problem"
-  // state — a leak, a tamper trip, low battery, a disconnected sensor.
+  // ── A RED BADGE IS ALWAYS HERE (2.496.245) ─────────────────────────────
+  // Every device the map paints red: its deviceLook — the badge's own rule,
+  // the villa's alert overrides included — says `alert`. This was its own
+  // rule, binary_sensors only and blind to config.alertThresholds: an
+  // unlocked door, a sensor past its threshold, a binary_sensor the villa had
+  // overridden were red on the map and absent from "Needs attention".
   // Restricted to selectableIds (never a raw HA domain scan): a bare
   // Zigbee2MQTT relay-lock/config sub-entity is technically a binary_sensor
-  // too, and was never meant to be villa-facing.
+  // too, and was never meant to be villa-facing. An unavailable device is
+  // never `alert` (its face is the amber "unavailable"), so it is listed once,
+  // above, as that.
+  const looks = storeLookSource(entities, { entityMap, alertThresholds });
   for (const id of selectableIds) {
-    if (!id.startsWith("binary_sensor.")) continue;
     const entity = entities[id];
-    if (!entity) continue;
-    const info = binarySensorClassInfo(entity.attributes.device_class as string | undefined);
-    if (info.alarmState === "none" || entity.state !== info.alarmState) continue;
+    if (!entity || !deviceLook(id, looks).alert) continue;
     const mapping = entityMap[id];
+    const domain = id.split(".")[0];
     items.push({
       id: `alarm:${id}`,
       kind: "alarm",
       title: displayLabelFor(id, mapping?.label, entity.attributes.friendly_name as string | undefined),
-      detail: info.alarmState === "on" ? info.onLabel : info.offLabel,
+      // A binary_sensor's own words for its state ("Leak detected",
+      // "Disconnected"); anything else, what its list row says ("Unlocked",
+      // "Jammed", "92 %").
+      detail: domain === "binary_sensor"
+        ? stateLabelFor(id, entity.attributes.device_class as string | undefined)(entity.state)
+        : deviceRowText(entity, domain),
       room: resolvedRooms[id],
       entityId: id,
     });
@@ -167,17 +181,13 @@ export interface CategoryTile {
 }
 
 /** What a Cockpit tile (room, floor or category) counts: its devices, how
- *  many are on (activeDevices.isActive — a locked lock is not "on"), and how
- *  many Home Assistant has lost. */
+ *  many are on — POWER, a group's `onCount` (a locked lock is not "on", a
+ *  motion sensor never is) — and how many Home Assistant has lost. */
 export interface TileStats { total: number; onCount: number; offline: number }
 
-export function tileStats(entityIds: readonly string[], entities: Record<string, HassEntity>): TileStats {
-  let onCount = 0, offline = 0;
-  for (const id of entityIds) {
-    if (isActive(entities[id], id)) onCount++;
-    if (isUnavailable(entities[id])) offline++;
-  }
-  return { total: entityIds.length, onCount, offline };
+export function tileStats(entityIds: readonly string[], source: LookSource): TileStats {
+  const g = groupLook(entityIds.map((id) => deviceLook(id, source)), { showingDevices: false });
+  return { total: entityIds.length, onCount: g.onCount, offline: g.offline };
 }
 
 /** The line under a tile's name — ONE wording for rooms, floors and

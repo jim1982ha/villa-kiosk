@@ -27,6 +27,7 @@ import { useEntityLabel } from "@/hooks/useEntityLabel";
 import RoomChoiceSheet, { type RoomChoice } from "@/components/hud/RoomChoiceSheet";
 import { useProfile } from "@/auth/ProfileContext";
 import { isTypeAllowed, panelMapping, roleCan } from "@/auth/permissions";
+import { doorsFor } from "@/auth/doors";
 import { patchMapping } from "@/config/mappingEdits";
 import FacilityModal from "@/components/fm/FacilityModal";
 import AgentModal from "@/components/agent/AgentModal";
@@ -36,9 +37,8 @@ import { useHA } from "@/ha/HAStateStore";
 import { displayLabelFor, resolveRooms } from "@/config/EntityMap";
 import { deriveHaScenes, scenesForRoom } from "@/config/haScenes";
 import { effectiveCategory, subjectOf, categoryColor, CATEGORY_ICONS, CATEGORY_LABELS } from "@/config/EntityCategories";
-import { badgeFaceAndRing } from "@/utils/deviceActivity";
-import { alertStateFor, isMotionSensor } from "@/config/BinarySensorClasses";
-import { phantomEntity } from "@/utils/phantomEntity";
+import { deviceLook, storeLookSource } from "@/utils/deviceActivity";
+import { isMotionSensor } from "@/config/BinarySensorClasses";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
 import { isQuickToggle } from "@/utils/quickAction";
 import { useOptimisticToggle } from "@/hooks/useOptimisticToggle";
@@ -66,9 +66,7 @@ export default function Dashboard() {
   const canControl = roleCan(role, "controlEntities");
   // Facility workspace: the facility manager (whose job it is) and the owner
   // (accountable for the property, signs off the monthly report).
-  const canManageFacility = roleCan(role, "manageFacility");
   const canReportFault = roleCan(role, "reportFault");
-  const canOpenSettings = roleCan(role, "openSettings");
   const canEditConfig = roleCan(role, "editConfig");
   // Read inside the onScene effect below (which intentionally
   // only depends on [manager], so its closure would otherwise see a stale
@@ -91,6 +89,10 @@ export default function Dashboard() {
   // True only for a profile with viewAgent AND a configured agent — see
   // AgentProvider. Nothing about the agent renders otherwise (PLAN A8).
   const { visible: agentVisible } = useAgent();
+  // Which windows this profile may open — Settings, Facility, the agent — said
+  // ONCE (auth/doors) and handed to the top bar and the Cockpit, rather than
+  // implied by which callbacks happen to be passed.
+  const doors = useMemo(() => doorsFor(role, agentVisible), [role, agentVisible]);
   /** Device the Facility modal should open a blank fault for — set by a
    *  panel's "report a fault" shortcut, cleared as soon as the modal has
    *  consumed it so reopening Facility later doesn't resurrect the form. */
@@ -720,7 +722,7 @@ export default function Dashboard() {
         onClusterTapped={handleClusterTapped}
         onFloorChange={(f) => setCurrentFloor(f)}
         onRoomChange={setRoom}
-        onNeedModel={() => { if (canOpenSettings) setSettingsOpen(true); }}
+        onNeedModel={() => { if (doors.settings) setSettingsOpen(true); }}
         onModelUploaded={() => setModelKey((k) => k + 1)}
       />
 
@@ -746,8 +748,8 @@ export default function Dashboard() {
         onShowFloor={handleShowFloor}
         onOpenTeleport={() => setTeleportOpen(true)}
         onNavigateRoom={handleTeleport}
-        onOpenSettings={() => { if (canOpenSettings) setSettingsOpen(true); }}
-        canOpenSettings={canOpenSettings}
+        doors={doors}
+        onOpenSettings={() => { if (doors.settings) setSettingsOpen(true); }}
         onMove={(x, y) => manager?.camera.setMovement(x, y)}
         viewMode={viewMode}
         onToggleViewMode={toggleViewMode}
@@ -755,8 +757,8 @@ export default function Dashboard() {
         onApplyOverviewDefault={applyOverviewDefault}
         onSaveOverviewDefault={saveOverviewDefault}
         onOpenEntity={openEntityPanel}
-        onOpenFacility={canManageFacility ? () => setFacilityOpen(true) : undefined}
-        onOpenAgent={agentVisible ? () => setAgentOpen(true) : undefined}
+        onOpenFacility={() => { if (doors.facility) setFacilityOpen(true); }}
+        onOpenAgent={() => { if (doors.agent) setAgentOpen(true); }}
         onOpenCategory={setCategoryGroup}
       />
 
@@ -799,7 +801,7 @@ export default function Dashboard() {
             onReportFault: canReportFault
               ? () => {
                   setActivePanel(null);
-                  if (canManageFacility) {
+                  if (doors.facility) {
                     setFaultForEntity(activePanel.entityId);
                     setFacilityOpen(true);
                   } else {
@@ -819,33 +821,30 @@ export default function Dashboard() {
               const category = effectiveCategory(subjectOf(
                 entityId, { ...mapping, ...liveMapping }, ent, mapping.type));
               // motionEntityId is deliberately NOT an alert source here — it
-              // drives the map's detection beam, never a ring (see badgeKind).
-              const linkedAlert = !!liveMapping.linkedEntityId && linkedToggle.isOn;
+              // drives the map's detection beam, never a ring (deviceLook).
               return {
                 category,
                 iconKey: iconKeyFor(mapping.type, ent),
                 color: liveMapping.badgeColor,
                 categoryColor: categoryColor(category),
-                // The ONE shared rule (deviceActivity.badgeSurfaceFor), same as
-                // the map badge and the device lists — it already folds in the
-                // unavailable check every status pill uses and the linked-entity
-                // alert, both of which were hand-written here.
+                // The ONE shared look (deviceActivity.deviceLook), same as the
+                // map badge and the device lists — it resolves the linked
+                // entity and the alert override itself.
                 //
-                // `linkedAlert` is deliberately the OPTIMISTIC toggle state, not
-                // the confirmed one: this header sits directly above the switch
-                // the user just pressed, and the two are one thing, so a ring
-                // lagging seconds behind its own switch would look like the bug
-                // this was written to fix. The MAP badge stays on confirmed
-                // state only — it is Babylon-side, and predicting scene
-                // appearance is the thing that was rightly reverted before.
+                // The linked switch is deliberately the OPTIMISTIC toggle
+                // state (`pendingPower`), not the confirmed one: this header
+                // sits directly above the switch the user just pressed, and
+                // the two are one thing, so a ring lagging seconds behind its
+                // own switch would look like the bug this was written to fix.
+                // The MAP badge stays on confirmed state only — it is
+                // Babylon-side, and predicting scene appearance is the thing
+                // that was rightly reverted before.
                 ...(() => {
-                  const e0 = ent ?? phantomEntity(entityId);
-                  const b = badgeFaceAndRing({
-                    type: mapping.type, entity: e0, linkedOn: linkedAlert,
-                    alertState: alertStateFor(
-                      e0.attributes.device_class as string | undefined,
-                      config.alertThresholds[entityId]?.alertState),
-                  });
+                  const linkedId = liveMapping.linkedEntityId;
+                  const b = deviceLook(entityId, storeLookSource(entities, config, {
+                    drawnAs: { entityId, type: mapping.type },
+                    pendingPower: (id) => (linkedId && id === linkedId ? linkedToggle.isOn : undefined),
+                  }));
                   return { state: b.face, ringState: b.ring };
                 })(),
               };
@@ -958,15 +957,16 @@ export default function Dashboard() {
         />
       )}
 
-      {agentOpen && agentVisible && (
+      {agentOpen && doors.agent && (
         <AgentModal
           onClose={() => setAgentOpen(false)}
           onOpenEntity={(id) => { setAgentOpen(false); openEntityPanel(id); }}
         />
       )}
 
-      {facilityOpen && canManageFacility && (
+      {facilityOpen && doors.facility && (
         <FacilityModal
+          doors={doors}
           onClose={() => { setFacilityOpen(false); setFaultForEntity(null); }}
           onOpenEntity={(id) => { setFacilityOpen(false); openEntityPanel(id); }}
           reportFaultFor={faultForEntity ?? undefined}
@@ -981,7 +981,7 @@ export default function Dashboard() {
         />
       )}
 
-      {settingsOpen && canOpenSettings && (
+      {settingsOpen && doors.settings && (
         <SettingsModal
           manager={manager}
           onClose={() => setSettingsOpen(false)}
@@ -1001,7 +1001,7 @@ export default function Dashboard() {
 
       {/* Config Editor as a modal OVER the live villa (not a route) — leaving
           it returns to Settings with no GLB reload; edits already applied live. */}
-      {configEditorOpen && canOpenSettings && (
+      {configEditorOpen && doors.settings && (
         <ConfigEditorModal
           focusEntityId={configEditorFocus ?? undefined}
           onBack={() => {

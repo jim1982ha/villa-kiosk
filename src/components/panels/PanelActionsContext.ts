@@ -54,7 +54,7 @@ export interface PanelActions {
    *  is configured and the profile may control it. Renders as an on/off switch
    *  in the shared panel chrome, so EVERY device type gets it for free the
    *  moment that field is set — no per-panel wiring, no type checks. Toggling
-   *  it is what drives the badge's ring (see EntityVisuals' linkActiveIds),
+   *  it is what drives the badge's ring (see deviceActivity.deviceLook),
    *  which is why the two live and die together. Undefined = no linked entity
    *  configured, or read-only profile: the switch is then not rendered. */
   linked?: {

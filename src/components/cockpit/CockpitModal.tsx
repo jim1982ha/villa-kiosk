@@ -33,12 +33,14 @@ import { useProfile } from "@/auth/ProfileContext";
 import { useFmData, fmWriteProblem } from "@/fm/FmDataContext";
 import InlineConfirm from "@/components/common/InlineConfirm";
 import { roleCan } from "@/auth/permissions";
+import type { Doors } from "@/auth/doors";
 import { CATEGORY_LABELS, CATEGORY_ICONS, categorySurface } from "@/config/EntityCategories";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { fetchLogbookEvents } from "@/ha/HALogbookAPI";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import { formatCountBadge } from "@/utils/countBadge";
 import { useVillaAttention } from "./useVillaAttention";
+import { storeLookSource } from "@/utils/deviceActivity";
 import {
   buildCategoryTiles, buildRoomGroups, buildFloorGroups,
   buildActivityFeed, tileStats, tileLine, type TileStats, type AttentionItem, type AttentionKind, type ActivityEntry,
@@ -48,10 +50,12 @@ import type { Category } from "@/types/scene.types";
 export interface CockpitModalProps {
   onClose: () => void;
   onOpenEntity: (entityId: string) => void;
-  /** Open the VESTA Agent window. Undefined when no agent is configured or
-   *  the profile may not see it (AgentContext's `visible`, the rule the
-   *  top-bar robot icon used) — the footer button is then not rendered. */
-  onOpenAgent?: () => void;
+  /** Which windows this profile may open (auth/doors): the footer's "VESTA
+   *  Agent" is drawn only with `doors.agent`, the updates count only with
+   *  `doors.updates`. */
+  doors: Doors;
+  /** Open the VESTA Agent window. */
+  onOpenAgent: () => void;
   /** The agent's presence and what waits for this profile's answer, for the
    *  footer button's label. */
   agentOnline?: boolean;
@@ -77,10 +81,13 @@ interface PivotTile {
 }
 
 export default function CockpitModal({
-  onClose, onOpenEntity, onOpenAgent, agentOnline = false, agentWaiting = 0,
+  onClose, onOpenEntity, doors, onOpenAgent, agentOnline = false, agentWaiting = 0,
 }: CockpitModalProps) {
   const { entities, ws, entityFloorNumbers } = useHA();
   const { config, resolvedRooms } = useConfig();
+  // How every device looks, read from the store (utils/deviceActivity) — a
+  // tile's "N on" is its POWER count.
+  const looks = useMemo(() => storeLookSource(entities, config), [entities, config]);
   const { role } = useProfile();
   const dialogRef = useModalA11y(onClose);
   // Category tiles below composite their colours in JS — see the hook.
@@ -134,9 +141,9 @@ export default function CockpitModal({
   // Owner-only count, not a version list — this is a maintenance signal, not
   // something a guest needs to see or act on.
   const updatesAvailable = useMemo(() => {
-    if (!roleCan(role, "seeUpdates")) return null;
+    if (!doors.updates) return null;
     return Object.values(entities).filter((e) => e.entity_id.startsWith("update.") && e.state === "on").length;
-  }, [entities, role]);
+  }, [entities, doors.updates]);
 
   // "Other" (not "Unplaced" or any other invented word) for the no-floor
   // bucket — the SAME label the room pivot's own no-room bucket already
@@ -151,7 +158,7 @@ export default function CockpitModal({
     if (pivot === "category") {
       return categoryTiles.map((t) => ({
         key: t.category, label: CATEGORY_LABELS[t.category], icon: CATEGORY_ICONS[t.category],
-        category: t.category, entityIds: t.entityIds, stats: tileStats(t.entityIds, entities),
+        category: t.category, entityIds: t.entityIds, stats: tileStats(t.entityIds, looks),
       }));
     }
     const rows = pivot === "room"
@@ -159,8 +166,8 @@ export default function CockpitModal({
       // "Other" for the no-floor bucket — the room pivot's own word for it.
       : floorGroups.map((g) => ({ key: String(g.floor), label: g.floor != null ? `Floor ${g.floor}` : "Other", entityIds: g.entityIds }));
     const icon = pivot === "room" ? MapPin : Building2;
-    return rows.map((r) => ({ ...r, icon, category: null, stats: tileStats(r.entityIds, entities) }));
-  }, [pivot, categoryTiles, roomGroups, floorGroups, entities]);
+    return rows.map((r) => ({ ...r, icon, category: null, stats: tileStats(r.entityIds, looks) }));
+  }, [pivot, categoryTiles, roomGroups, floorGroups, looks]);
 
   return (
     <>
@@ -278,7 +285,7 @@ export default function CockpitModal({
               Settings places "Advanced Settings" (ModalFooter's `leading`: a
               ghost button that leaves the dialog, never beside Close) —
               and an empty spacer otherwise. */}
-          {onOpenAgent ? (
+          {doors.agent ? (
             <button className="btn ghost" onClick={() => { onClose(); onOpenAgent(); }}
               title={`VESTA Agent — ${agentOnline ? "online" : "offline"}`
                 + (agentWaiting > 0 ? `, ${agentWaiting} message${agentWaiting === 1 ? "" : "s"} to answer` : "")}>

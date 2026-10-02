@@ -10,6 +10,9 @@ import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const A = await import("@/config/activeDevices");
+// POWER ("is it switched on") is deviceActivity's since 2.496.245 — the module
+// that owns both meanings of "on".
+const { isSwitchedOn } = await import("@/utils/deviceActivity");
 const V = await import("@/config/villaVisibility");
 const S = await import("@/config/sensorReading");
 
@@ -17,19 +20,19 @@ const e = (id, state, attributes = {}) => ({ entity_id: id, state, attributes })
 
 console.log("  is it on:");
 ck("a light that is on, an unlocked lock, an open blind, a heating A/C, a playing speaker: on",
-   A.isActive(e("light.a", "on"), "light.a") && A.isActive(e("lock.d", "unlocked"), "lock.d")
-   && A.isActive(e("cover.b", "open"), "cover.b") && A.isActive(e("climate.c", "heat"), "climate.c")
-   && A.isActive(e("media_player.m", "playing"), "media_player.m"));
+   isSwitchedOn(e("light.a", "on"), "light.a") && isSwitchedOn(e("lock.d", "unlocked"), "lock.d")
+   && isSwitchedOn(e("cover.b", "open"), "cover.b") && isSwitchedOn(e("climate.c", "heat"), "climate.c")
+   && isSwitchedOn(e("media_player.m", "playing"), "media_player.m"));
 ck("a LOCKED lock and a CLOSED blind are not on (the Cockpit counted both)",
-   !A.isActive(e("lock.d", "locked"), "lock.d") && !A.isActive(e("cover.b", "closed"), "cover.b"));
+   !isSwitchedOn(e("lock.d", "locked"), "lock.d") && !isSwitchedOn(e("cover.b", "closed"), "cover.b"));
 ck("a motion or door sensor detecting is NOT on (only what a person can switch counts — 2.496.238)",
-   !A.isActive(e("binary_sensor.motion4_occupancy", "on", { device_class: "occupancy" }), "binary_sensor.motion4_occupancy")
-   && !A.isActive(e("binary_sensor.front_door", "on", { device_class: "door" }), "binary_sensor.front_door"));
+   !isSwitchedOn(e("binary_sensor.motion4_occupancy", "on", { device_class: "occupancy" }), "binary_sensor.motion4_occupancy")
+   && !isSwitchedOn(e("binary_sensor.front_door", "on", { device_class: "door" }), "binary_sensor.front_door"));
 ck("a sensor reading, a camera, a weather station are never on",
-   !A.isActive(e("sensor.t", "24"), "sensor.t") && !A.isActive(e("camera.g", "recording"), "camera.g")
-   && !A.isActive(e("weather.home", "sunny"), "weather.home"));
+   !isSwitchedOn(e("sensor.t", "24"), "sensor.t") && !isSwitchedOn(e("camera.g", "recording"), "camera.g")
+   && !isSwitchedOn(e("weather.home", "sunny"), "weather.home"));
 ck("unavailable, unknown or missing is not on",
-   !A.isActive(e("light.a", "unavailable"), "light.a") && !A.isActive(undefined, "light.a") && !A.isActive(e("lock.d", "unlocking"), "lock.d"));
+   !isSwitchedOn(e("light.a", "unavailable"), "light.a") && !isSwitchedOn(undefined, "light.a") && !isSwitchedOn(e("lock.d", "unlocking"), "lock.d"));
 
 console.log("\n  how many are on, per category:");
 {
@@ -90,11 +93,13 @@ console.log("\n  the Cockpit's tiles (rooms, floors, categories — one wording)
 {
   const { tileStats, tileLine } = await import("@/components/cockpit/cockpitData");
   const ents = { "lock.a": e("lock.a", "locked"), "lock.b": e("lock.b", "unlocked"), "sensor.t": e("sensor.t", "unavailable"), "light.x": e("light.x", "on") };
-  const s = tileStats(["lock.a", "lock.b", "sensor.t", "light.x"], ents);
+  const { storeLookSource } = await import("@/utils/deviceActivity");
+  const src = storeLookSource(ents, { entityMap: {}, alertThresholds: {} });
+  const s = tileStats(["lock.a", "lock.b", "sensor.t", "light.x"], src);
   ck("counts devices, those on (a locked lock is not), and those offline", s.total === 4 && s.onCount === 2 && s.offline === 1, JSON.stringify(s));
   ck("  ...worded once: \"4 devices · 2 on · 1 offline\"", tileLine(s) === "4 devices · 2 on · 1 offline", tileLine(s));
-  ck("  ...a quiet room says only its size", tileLine(tileStats(["lock.a"], ents)) === "1 device");
-  ck("  ...and an empty one \"None\"", tileLine(tileStats([], ents)) === "None");
+  ck("  ...a quiet room says only its size", tileLine(tileStats(["lock.a"], src)) === "1 device");
+  ck("  ...and an empty one \"None\"", tileLine(tileStats([], src)) === "None");
   const counts = A.categoryCounts(["lock.a", "lock.b"], ents, { "lock.a": { type: "lock", category: "access_control" }, "lock.b": { type: "lock", category: "access_control" } });
   ck("a category tile knows its devices (it opens their list now)", counts.find((c) => c.category === "access_control").entityIds.join() === "lock.a,lock.b");
 }

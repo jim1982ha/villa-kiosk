@@ -20,7 +20,9 @@
 // Energy total.
 
 import type { HassEntity } from "@/types/ha.types";
-import { isActive } from "./activeDevices";
+// POWER, by name: "N on" counts a device switched on (deviceActivity owns both
+// meanings of "on"; a lights/AC tile counts this one).
+import { isSwitchedOn } from "@/utils/deviceActivity";
 import { isUnavailable } from "@/utils/stateColors";
 import { effectiveSensorClass, toBaseUnit } from "./SensorClasses";
 import { levelForValue, type Threshold } from "./ThresholdConfig";
@@ -93,13 +95,13 @@ export function lockFacts(entities: Record<string, HassEntity>, allowed?: Allowe
 
 export function lightFacts(entities: Record<string, HassEntity>, allowed?: Allowed, index?: DomainIndex): OnOffFacts | null {
   const lights = ofDomain(entities, "light", allowed, index);
-  return lights.length ? { ids: idsOf(lights), on: idsOf(lights.filter((e) => isActive(e, e.entity_id))) } : null;
+  return lights.length ? { ids: idsOf(lights), on: idsOf(lights.filter((e) => isSwitchedOn(e, e.entity_id))) } : null;
 }
 
 export function climateFacts(entities: Record<string, HassEntity>, allowed?: Allowed, index?: DomainIndex): ClimateFacts | null {
   const units = ofDomain(entities, "climate", allowed, index);
   if (!units.length) return null;
-  const active = units.filter((e) => isActive(e, e.entity_id));
+  const active = units.filter((e) => isSwitchedOn(e, e.entity_id));
   const temps = active
     .map((e) => e.attributes.current_temperature)
     .filter((t): t is number => typeof t === "number");

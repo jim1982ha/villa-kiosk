@@ -1,0 +1,5 @@
+{
+  "collections": ["schedules", "completions", "costs", "tickets", "savedDocuments"],
+  "ticketStatuses": ["open", "in_progress", "resolved"],
+  "costCategories": ["minor", "major"]
+}

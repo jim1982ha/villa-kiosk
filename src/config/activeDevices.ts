@@ -15,31 +15,17 @@
 
 import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping } from "@/types/scene.types";
-import { devicePower } from "@/utils/devicePower";
+import { isSwitchedOn } from "@/utils/deviceActivity";
 import { CATEGORY_ORDER, effectiveCategory, subjectOf } from "./EntityCategories";
 
-/** Domains a person can SWITCH, whose "on" is what a tile counts: power
- *  switches, locks (unlocked), covers (open), climate (running), speakers.
- *  ⚠️ NOT SENSORS (owner, 2.496.238): a motion sensor "on" is someone passing,
- *  not something left on — under Access Control it read as "2 on" beside one
- *  unlocked door, and flickered every few seconds. A sensor adds to a tile's
- *  device count, never to its "on". */
-const ON_OFF_DOMAINS: ReadonlySet<string> = new Set([
-  "light", "switch", "fan", "input_boolean", "media_player", "lock", "cover", "climate",
-]);
+// ⚠️ POWER IS deviceActivity's (2.496.245). `hasOnOff` / `isActive` lived
+// here while the badge's ACTIVITY lived there — two meanings of "on" in two
+// modules, each summary picking one by which file it happened to import. Both
+// meanings are owned by utils/deviceActivity now (isSwitchedOn = POWER,
+// DeviceLook.active = ACTIVITY); this module keeps the counting and the bulk
+// switch, and counts POWER, by name.
 
 const domainOf = (id: string) => id.split(".")[0];
-
-/** Whether this device has an on/off at all. */
-export function hasOnOff(entityId: string): boolean {
-  return ON_OFF_DOMAINS.has(domainOf(entityId));
-}
-
-/** Whether this device is on (active) right now. Unknown or unavailable is
- *  not on; a device without an on/off is never on. */
-export function isActive(entity: HassEntity | undefined, entityId: string): boolean {
-  return hasOnOff(entityId) && devicePower(entity, entityId).position === "on";
-}
 
 export interface CategoryCount { category: Category; total: number; onCount: number; entityIds: string[] }
 
@@ -56,7 +42,7 @@ export function categoryCounts(
     const entity = entities[id];
     const cat = effectiveCategory(subjectOf(id, mapping, entity));
     members.get(cat)?.push(id);
-    if (isActive(entity, id)) ons.set(cat, (ons.get(cat) ?? 0) + 1);
+    if (isSwitchedOn(entity, id)) ons.set(cat, (ons.get(cat) ?? 0) + 1);
   }
   return CATEGORY_ORDER.map((category) => {
     const entityIds = members.get(category) ?? [];

@@ -93,9 +93,10 @@ export function VillaModelProvider({ sets, children }: { sets: VillaSets; childr
   const attention = useMemo((): VillaAttention => {
     const unavailableIds = devices.unavailable as string[];
     const selectableIds = devices.ids as string[];
-    const attentionItems = buildAttentionItems({ unavailableIds, entities, entityMap, resolvedRooms, fmData, selectableIds });
+    const attentionItems = buildAttentionItems({
+      unavailableIds, entities, entityMap, alertThresholds: config.alertThresholds, resolvedRooms, fmData, selectableIds });
     return { unavailableIds, selectableIds, attentionItems, health: villaHealthFrom(attentionItems) };
-  }, [devices, entities, entityMap, resolvedRooms, fmData]);
+  }, [devices, entities, entityMap, config.alertThresholds, resolvedRooms, fmData]);
 
   const value = useMemo(
     (): VillaModel => ({

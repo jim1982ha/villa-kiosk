@@ -1536,7 +1536,9 @@ async def auth_elevate_handler(request: web.Request) -> web.Response:
 # Collections in the FM document whose records are individually addressable by
 # `id`. Kept here (not imported from the frontend) because the server must be
 # able to tell "a record was removed" on its own — a rule that only the client
-# knows is not a rule.
+# knows is not a rule. Equal to fm-records.json's "collections" (the app reads
+# that; tests/proxy-rules.py fails when the two differ) — a literal, not a
+# load, because an unreadable table must not empty it (see _load_fm_records).
 FM_RECORD_COLLECTIONS = ("schedules", "completions", "costs", "tickets", "savedDocuments")
 
 # The subset whose records are EVIDENCE of something that happened: a fault
@@ -1617,8 +1619,41 @@ def _fm_referenced_photo_ids(doc) -> set:
     return ids
 
 
-FM_TICKET_STATUSES = ("open", "in_progress", "resolved")
-FM_COST_CATEGORIES = ("minor", "major")
+# THE FACILITY RECORD'S VOCABULARY: /usr/share/vesta/fm-records.json (the
+# roles.json precedent) — a fault's statuses, a cost's categories and the
+# record collections, read here AND by the app (src/fm/fmTypes.ts), so the
+# words the kiosk writes and the words this server accepts cannot drift apart.
+# tests/proxy-rules.py and tests/oracles/fm_records.mjs hold both sides to it.
+#
+# FAIL CLOSED: unreadable, there are no valid statuses or categories, so every
+# new or edited fault and cost is refused as invalid — never everything
+# accepted. FM_RECORD_COLLECTIONS above stays a literal ON PURPOSE: an empty
+# collection list would make the protected-record and guest-shape guards see
+# nothing removed or changed, which fails OPEN. The test pins it to the table.
+def _load_fm_records() -> dict:
+    here = os.path.dirname(os.path.abspath(__file__))
+    for path in ("/usr/share/vesta/fm-records.json",
+                 os.path.join(here, "..", "share", "vesta", "fm-records.json")):
+        try:
+            with open(path, encoding="utf-8") as f:
+                return json.load(f)
+        except (OSError, ValueError):
+            continue
+    print("[proxy] fm-records.json unreadable: every new or edited fault and cost is refused", flush=True)
+    return {}
+
+
+FM_RECORDS_TABLE = _load_fm_records()
+
+
+def _fm_words(key: str) -> tuple:
+    """One list of words from the table; anything but a list of strings is none."""
+    words = FM_RECORDS_TABLE.get(key) if isinstance(FM_RECORDS_TABLE, dict) else None
+    return tuple(words) if isinstance(words, list) and all(isinstance(w, str) for w in words) else ()
+
+
+FM_TICKET_STATUSES = _fm_words("ticketStatuses")
+FM_COST_CATEGORIES = _fm_words("costCategories")
 
 
 def _fm_record_errors(name: str, record) -> set:

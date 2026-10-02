@@ -36,8 +36,21 @@ ck("the power panels read and throw through devicePower, none by `state === \"on
 const d = src("pages/Dashboard.tsx");
 ck("the quick tap and the linked switch throw through it; the linked switch knows 'unknown'",
    /HAServices\.power\(ws, entity, entityId\)/.test(d) && /HAServices\.power\(ws, entities\[linkedEntityId\], linkedEntityId\)/.test(d) && /known: linkedPower\?\.position !== "unknown"/.test(d));
-ck("the map's linked ring and the device-list rows ask it",
-   (src("babylon/EntityVisuals.ts").match(/devicePower\(/g) ?? []).length >= 2 && /devicePower\(e, id\)\.flip/.test(src("components/panels/SummaryGroupPanel.tsx")));
+// The linked ring is deviceActivity.readingOf's, which asks devicePower — driven
+// by value: a device LINKED to an unlocked lock / an open cover rings, linked to a
+// locked one / a closed one does not (a raw `state === "on"` said neither).
+{
+  const { readingOf, storeLookSource } = await import("@/utils/deviceActivity");
+  const cfg = { entityMap: { "sensor.p": { entityId: "sensor.p", type: "sensor", linkedEntityId: "lock.l" },
+                             "sensor.q": { entityId: "sensor.q", type: "sensor", linkedEntityId: "cover.c" } }, alertThresholds: {} };
+  const linked = (lock, cover) => {
+    const src = storeLookSource({ "sensor.p": e("sensor.p", "5"), "sensor.q": e("sensor.q", "5"), "lock.l": e("lock.l", lock), "cover.c": e("cover.c", cover) }, cfg);
+    return [readingOf("sensor.p", src).linkedOn, readingOf("sensor.q", src).linkedOn];
+  };
+  ck("the linked ring asks it: an UNLOCKED lock and an OPEN cover ring their devices, locked / closed do not",
+     linked("unlocked", "open").join() === "true,true" && linked("locked", "closed").join() === "false,false", [linked("unlocked", "open"), linked("locked", "closed")]);
+}
+ck("the device-list rows throw through it", /devicePower\(e, id\)\.flip/.test(src("components/panels/SummaryGroupPanel.tsx")));
 ck("HAServices keeps no per-domain toggle of its own", !/toggle(Light|Fan|Switch|Entity|Media)\b/.test(src("ha/HAServiceCalls.ts")));
 
 done("✅ a device's power, decided once");

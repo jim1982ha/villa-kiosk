@@ -93,9 +93,7 @@ import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 import { resolveMeshToMapping, extractVariantSuffix, hasVariantSuffix, inferTypeFromEntityId } from "@/config/EntityMap";
 import { groupMemberIds, groupForPrimary } from "@/config/deviceGroups";
 import { effectiveCategory, subjectOf, categorySurface, categorySurfaceRinged } from "@/config/EntityCategories";
-import { badgeKindFor, badgeFaceAndRing, meshLookFor, type DeviceReading } from "@/utils/deviceActivity";
-import { alertStateFor } from "@/config/BinarySensorClasses";
-import type { BadgeKind } from "@/utils/deviceActivity";
+import { deviceLook, mapLookSource, meshLookFor, readingOf, type LookSource } from "@/utils/deviceActivity";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
 import { compactValue, VALUE_CAPABLE_TYPES } from "@/utils/entityValue";
 import { phantomEntity } from "@/utils/phantomEntity";
@@ -103,7 +101,6 @@ import { channelEnabled, tapDebug } from "@/utils/tapDebug";
 import { debugFlagEnabled } from "@/utils/devLog";
 import { beginSpan } from "@/utils/perfSpans";
 import { pointInPolygon } from "@/utils/geometry";
-import { formatCountBadge } from "@/utils/countBadge";
 import { RoomHighlight } from "./RoomHighlight";
 import { CameraBeams, type BeamSource } from "./CameraBeams";
 import { blocksCameraBeam, isResolvedCeiling, isHelperMesh } from "./meshRoles";
@@ -112,7 +109,8 @@ import { FloorProbe } from "./floorProbe";
 import { axisWorldScale } from "./meshUnits";
 import type { LightReading } from "./lightPoolSet";
 import { OcclusionSweep } from "./occlusionSweep";
-import { summaryRingOn, summaryRingRed, type RoomChip } from "./roomChips";
+import type { RoomChip } from "./roomChips";
+import { groupCardModel, roomChipModel, type SummaryFrame } from "./summaryLook";
 import { rungAt, referenceDepthAt, iconZoomAt, viewportPx } from "./badgeScale";
 import { solveRoomZoom } from "./roomZoomSolver";
 import { RoomFocus } from "./roomFocus";
@@ -151,7 +149,6 @@ import { BulbSet, WARM_GLOW, STRIP_MIN_LENGTH, type BulbReading } from "./bulbSe
 import { lightingModeFor, type LightingMode } from "./lightingMode";
 import "./babylonSideEffects";
 import { onActiveFloor, stampedFloor } from "./floorOf";
-import { devicePower } from "@/utils/devicePower";
 
 // Baseline emissive for an UNWIRED light marker (no HA state yet). SweetHome
 // ceiling spots / LED strips export as small placeholder spheres; at the old
@@ -801,6 +798,11 @@ export class EntityVisuals {
   /** Last seen HA state per entity, so a label rebuild (toggle on / icon edit)
    *  can repaint badges immediately instead of waiting for the next push. */
   private lastState = new Map<string, HassEntity>();
+  /** The map's LookSource (utils/deviceActivity): every badge, card cell,
+   *  room-chip member and mesh here is painted from deviceLook / readingOf
+   *  through this — the live cache above, the mesh-resolved mappings, and the
+   *  current config (read through a getter: the object is replaced per edit). */
+  private readonly lookSource: LookSource = mapLookSource(this.lastState, this.mapping, () => this.config);
   /** User size multiplier (Settings slider) and live bird's-eye zoom factor;
    *  the badge container is scaled by their product. */
   /** Last line emitted by logPlacement, so the pass logs only on CHANGE. */
@@ -934,9 +936,11 @@ export class EntityVisuals {
   /** linkedEntityId -> device entity_ids whose badge ring it drives. Generic
    *  over ANY entity type on either side. */
   private linkedEntityIndex = new Map<string, string[]>();
-  /** Devices whose linkedEntityId is currently "on" — ringed in the badge's own colour, applied
-   *  uniformly for every entity type in badgeKind (see there). */
-  private linkActiveIds = new Set<string>();
+  // ⚠️ `linkActiveIds` IS GONE (2.496.245). It was this layer's private copy of
+  // "is my linked entity on", fed by state events — a third way of resolving
+  // it beside the panel's and the device list's. utils/deviceActivity's
+  // deviceLook resolves it now, from `lookSource` (the live cache below); the
+  // index above only says WHICH badges to repaint when a linked entity moves.
   /** Floor-glow overlay for physical (non-camera) motion/presence sensors —
    *  a room, not a direction, is the natural signal for those. */
   private roomHighlight: RoomHighlight;
@@ -1137,12 +1141,12 @@ export class EntityVisuals {
       relight = this.refreshCosmeticMappings();
       this.buildMotionToCameraIndex();
       this.buildLinkedEntityIndex();
-      // buildLinkedEntityIndex already SEEDS linkActiveIds from each linked
-      // entity's cached last-known state (so a link added while the linked
-      // entity is already "on" doesn't need to wait for a fresh state_changed
-      // event that may never come) — but seeding the Set alone doesn't redraw
-      // anything. Without this, "I just linked a device that's already on"
-      // showed no ring until something else happened to touch that badge.
+      // A badge's ring reads its linked entity's cached last-known state
+      // through deviceLook (so a link added while the linked entity is
+      // already "on" doesn't need to wait for a fresh state_changed event
+      // that may never come) — but nothing redraws by itself. Without this,
+      // "I just linked a device that's already on" showed no ring until
+      // something else happened to touch that badge.
       needsRepaint = true;
     }
     // Entity-light wall occlusion is always-on: walls block lamp light out of
@@ -1692,19 +1696,11 @@ export class EntityVisuals {
   }
 
   private buildLinkedEntityIndex(): void {
+    // Which badges to repaint when a linked entity moves. The ring itself is
+    // deviceLook's, read from the live cache on every paint — there is no
+    // seeded set to resync (it outlived an unlinked device, ringing it until
+    // the next reload).
     this.buildLinkIndex(this.linkedEntityIndex, (m) => m.linkedEntityId);
-    // Seed the ring set from whatever state already arrived — unlike the
-    // camera beam index (which needs a REBUILT beam mesh before it can
-    // replay), this is just a Set, so it's always safe to resync here rather
-    // than waiting on the next state_changed event, which may never come
-    // again if the linked entity was already on before this index existed.
-    for (const [linkedId, ids] of this.linkedEntityIndex) {
-      const on = devicePower(this.lastState.get(linkedId), linkedId).position === "on";
-      for (const id of ids) {
-        if (on) this.linkActiveIds.add(id);
-        else this.linkActiveIds.delete(id);
-      }
-    }
   }
 
   // axisWorldScale moved to ./meshUnits — shared with SceneManager's outline
@@ -2289,18 +2285,20 @@ export class EntityVisuals {
 
   /** Called for every state change. */
   apply(entity: HassEntity): void {
+    // Cache EVERY entity's latest state up front — even one with no badge of
+    // its own (a hidden device-group member, e.g. the humidity half of a
+    // temp+humidity combo). That lets its group PRIMARY's badge read and show
+    // the member's reading (see groupedValue), and refreshes that primary
+    // badge when only the member changed. FIRST, before the linked routing
+    // below: the badges it repaints read their linked entity from this cache
+    // (deviceLook), so caching after would paint them from the old state.
+    this.lastState.set(entity.entity_id, entity);
+
     // Motion/presence routing (camera beam or room glow) runs regardless of
     // whether THIS entity has a mesh of its own — a plain HA binary_sensor
     // driving either effect typically isn't a modelled 3D object at all.
     this.applyMotionRouting(entity);
     this.applyLinkedEntityRouting(entity);
-
-    // Cache EVERY entity's latest state up front — even one with no badge of
-    // its own (a hidden device-group member, e.g. the humidity half of a
-    // temp+humidity combo). That lets its group PRIMARY's badge read and show
-    // the member's reading (see groupedValue), and refreshes that primary
-    // badge when only the member changed.
-    this.lastState.set(entity.entity_id, entity);
     const owningGroup = this.config.deviceGroups.find((g) =>
       g.memberEntityIds.includes(entity.entity_id));
     if (owningGroup && this.labels.has(owningGroup.primaryEntityId)) {
@@ -2508,11 +2506,9 @@ export class EntityVisuals {
   private applyLinkedEntityRouting(entity: HassEntity): void {
     const linkedIds = this.linkedEntityIndex.get(entity.entity_id);
     if (!linkedIds) return;
-    // A linked lock rings when UNLOCKED, a cover when open (devicePower).
-    const on = devicePower(entity).position === "on";
+    // A linked lock rings when UNLOCKED, a cover when open — deviceLook's rule
+    // (devicePower), read from the cache apply() has just updated.
     for (const id of linkedIds) {
-      if (on) this.linkActiveIds.add(id);
-      else this.linkActiveIds.delete(id);
       const st = this.lastState.get(id);
       const map = this.mapping.get(id);
       if (st && map) this.updateLabel(id, map.type, st);
@@ -3305,12 +3301,10 @@ export class EntityVisuals {
       subjectOf(entityId, this.config.entityMap[entityId], entity, type));
     // FACE from this device's own state, RING from its linked entity — two
     // independent facts, two independent sets of pixels. See badgeFaceAndRing.
-    // (badgeKind still folds the linked signal into ONE value for everything
-    // else that reads it — the alert pulse, a room chip's ring, an entity
-    // group's — because those all mean "is anything here demanding attention",
-    // which a linked entity being on genuinely is.)
-    const { face: state, ring: ringState } =
-      badgeFaceAndRing(this.reading(type, entity, this.linkActiveIds.has(entityId)));
+    // (deviceLook's `kind` still folds the linked signal into ONE value for
+    // what a COUNT summary reads — a room chip's ring, a count card's — see
+    // deviceActivity.groupLook.)
+    const { face: state, ring: ringState } = deviceLook(entityId, this.lookSource);
     const iconKey = iconKeyFor(type, entity);
     const override = this.config.entityMap[entityId]?.badgeColor;
 
@@ -4327,7 +4321,7 @@ export class EntityVisuals {
       const st = this.lastState.get(sh.id);
       const p = sh.lbl.anchor.getAbsolutePosition();
       return { id: sh.id, room: roomKey(this.roomOf(sh.id)), pos: { x: p.x, y: p.y, z: p.z },
-               kind: st ? this.badgeKind(sh.lbl.type, st) : undefined };
+               look: st ? deviceLook(sh.id, this.lookSource) : undefined };
     });
     return {
       ...this.cardShape(),
@@ -5062,26 +5056,34 @@ export class EntityVisuals {
       // meant. Re-read every pass, like the badges', so a theme change lands
       // without a rebuild.
       const rest = categorySurface("others", "off");
-      const alert = categorySurface("others", "alert");
-      const active = categorySurface("others", "active");   // "a member is on": never the attention red
+      const frames: Record<SummaryFrame, typeof rest> = {
+        alert: categorySurface("others", "alert"),
+        active: categorySurface("others", "active"),   // "a member is on": never the attention red
+        rest,
+      };
       const surface = rest.fill;
       for (const g of groups) {
-        // A summary whose every member is behind a wall is behind it too — the
-        // same rule the room chip applies below, at the same tier (the render
-        // set, after every placement decision is final), so a card and a chip
-        // standing for the same hidden devices cannot disagree. `every`, not
-        // `some`: one visible member and the card still has something to show,
-        // and its other cells are the honest statement that those devices are
-        // co-located with it.
-        if (this.firstPerson && g.members.length > 0
-          && g.members.every((i) => shown[i].occluded)) {
+        // ── WHAT THE CARD SHOWS IS summaryLook.groupCardModel's ─────────────
+        // Hidden behind a wall, its cells' faces and rings, its frame — decided
+        // there from the members' deviceLook, and only drawn here. A summary
+        // whose every member is behind a wall is behind it too — the same rule
+        // the room chip applies below, at the same tier (the render set, after
+        // every placement decision is final), so a card and a chip standing for
+        // the same hidden devices cannot disagree.
+        const model = groupCardModel(g.members.map((i) => ({
+          id: shown[i].id,
+          look: deviceLook(shown[i].id, this.lookSource),
+          reported: this.lastState.has(shown[i].id),
+          occluded: shown[i].occluded,
+        })), drawnCells(g, g.members.length), this.firstPerson);
+        if (model.hidden) {
           const stale = this.entityGroups.get(g.key);
           if (stale) stale.container.isVisible = false;
           continue;
         }
         live.add(g.key);
         const c = this.ensureEntityGroup(g.key, layer);
-        c.entityIds = g.members.map((i) => shown[i].id);
+        c.entityIds = model.entityIds;
         c.room = g.room;
         c.node.position.set(g.wx, g.wy, g.wz);
         // ── PAIR CARD, or the count ────────────────────────────────────────
@@ -5098,9 +5100,8 @@ export class EntityVisuals {
         // that tapping a room shows its devices — there a pile of three
         // co-located devices becomes one card of three chips rather than
         // three badges the top of which is the only one anybody can tap.
-        const n = c.entityIds.length;
-        const drawn = drawnCells(g, n);
-        c.gridN = drawn >= 2 ? drawn : 0;
+        const drawn = model.drawn;
+        c.gridN = model.gridN;
         // ONE unit, always: a card is an integer number of badge boxes on both
         // axes, and a count badge is the degenerate 1x1 — so every summary,
         // whatever it draws, is laid out by one function.
@@ -5160,8 +5161,7 @@ export class EntityVisuals {
             c.zones[k].top = `${lay.cellTop(k)}px`;
             const s2 = shown[g.members[k]];
             const st = this.lastState.get(s2.id) ?? phantomEntity(s2.id);
-            const { face, ring } = badgeFaceAndRing(
-              this.reading(s2.lbl.type, st, this.linkActiveIds.has(s2.id)));
+            const { face, ring } = model.cells[k];
             const color = this.config.entityMap[s2.id]?.badgeColor;
             c.chips[k].source = badgeImage({
               category: s2.lbl.category, iconKey: iconKeyFor(s2.lbl.type, st), state: face, ringState: ring, color,
@@ -5184,18 +5184,8 @@ export class EntityVisuals {
         }
         // ── A SUMMARY'S RING NEVER REPEATS A MEMBER'S OWN SIGNAL ────────────
         // Red iff every member alerts when the card shows its devices, iff any
-        // member rings when it draws a count — roomChips.summaryRingRed, which
-        // carries the reasons. This only reads the members.
-        const showingDevices = drawn >= 2;
-        const ringMembers = g.members.map((i) => {
-          const st = this.lastState.get(shown[i].id);
-          if (!st) return null;
-          return showingDevices
-            ? { ring: badgeFaceAndRing(this.reading(shown[i].lbl.type, st, this.linkActiveIds.has(shown[i].id))).ring }
-            : { kind: this.badgeKind(shown[i].lbl.type, st) };
-        });
-        const ringRed = summaryRingRed(ringMembers, showingDevices);
-        const ringOn = summaryRingOn(ringMembers, showingDevices);
+        // member rings when it draws a count — deviceActivity.groupLook, which
+        // carries the reasons; `model.frame` is its answer.
         // A badge is never ringless — even at rest it carries the hairline
         // the brand guidelines give the idle state, which is what keeps it a
         // deliberate object rather than a shape on the floor. Same here.
@@ -5204,7 +5194,7 @@ export class EntityVisuals {
         // one card or two with real space between them. `thickness` must be 0
         // as well as the background empty: a Rectangle insets its children by
         // its border, so a host with one would shift every pixel offset below.
-        const frame = badgeRing(ringRed ? alert : ringOn ? active : rest, this.metrics.cardHeightPx, this.metrics);
+        const frame = badgeRing(frames[model.frame], this.metrics.cardHeightPx, this.metrics);
         for (const sub of c.cards) {
           applyBadgeFrame(sub, frame, lay.pitch);
           sub.background = surface;
@@ -5491,9 +5481,13 @@ export class EntityVisuals {
     if (!layer) return; // no GUI layer yet — nothing to attach chips to
     const scale = this.effectiveScale();
     const chipRest = categorySurface("others", "off");
-    const chipAlert = categorySurface("others", "alert");
-    const chipOn = categorySurface("others", "active");
+    const chipFrames: Record<SummaryFrame, typeof chipRest> = {
+      alert: categorySurface("others", "alert"),
+      active: categorySurface("others", "active"),
+      rest: chipRest,
+    };
     for (const chip of chips) {
+      // ── WHAT THE CHIP SHOWS IS summaryLook.roomChipModel's ───────────────
       // A chip whose every device is behind a wall is behind that wall too.
       //
       // RENDER SET ONLY, exactly like the merge and the focused-room yield
@@ -5503,26 +5497,26 @@ export class EntityVisuals {
       // one visible device in that room is reason enough to keep the room's
       // label on the glass. the occluded set is empty in overview, so this is a
       // set lookup that can never fire there.
-      if (this.firstPerson && chip.ids.length > 0
-        && chip.ids.every((id) => this.occlusion.occluded.has(id))) {
+      const model = roomChipModel(chip, this.firstPerson, (id) => this.occlusion.occluded.has(id));
+      if (model.hidden) {
         const stale = this.clusters.get(chip.key);
         if (stale) stale.container.isVisible = false;
         continue;
       }
       const c = this.ensureCluster(chip.key, layer);
-      c.entityIds = chip.ids;
-      c.displayName = chip.room;
-      c.roomNames = chip.roomNames;
+      c.entityIds = model.entityIds;
+      c.displayName = model.displayName;
+      c.roomNames = model.roomNames;
       c.node.position.copyFrom(chip.centre);
       // Room name and count render as separate controls (see ensureCluster).
       // A chip that absorbed others says so with a "+N" suffix, so the count
       // pill's total is never mistaken for one room's device count.
-      c.text.text = chip.label;
+      c.text.text = model.label;
       // The chip's ring: red when a member needs attention ("alert"), the
       // neutral "on" ring when a member is on, none otherwise — the only signal
       // left once the individual badges are gone. Never red for "on" (owner,
       // 2026-10-01: red is the legend's "Needs attention").
-      const frame = badgeRing(chip.ringRed ? chipAlert : chip.ringOn ? chipOn : chipRest, this.metrics.cardHeightPx, this.metrics);
+      const frame = badgeRing(chipFrames[model.frame], this.metrics.cardHeightPx, this.metrics);
       applyBadgeFrame(c.container, frame, this.summaryMetrics().size);
       // The count pill itself carries the room's REPORTING status — red if
       // at least one member is unavailable (HA has lost contact with it),
@@ -5534,8 +5528,8 @@ export class EntityVisuals {
       // it is no longer a Rectangle and a TextBlock.
       const csm = this.summaryMetrics();
       c.countBadge.source = countBadgeImage({
-        text: formatCountBadge(chip.ids.length),
-        fill: chip.unavailable ? ALERT_RED_HEX : AVAILABLE_GREEN_HEX,
+        text: model.count,
+        fill: model.reporting === "unavailable" ? ALERT_RED_HEX : AVAILABLE_GREEN_HEX,
         ink: "#ffffff",
         drawnPx: csm.countSize * scale,
         fontOfSize: csm.countFont / csm.countSize,
@@ -5826,33 +5820,10 @@ export class EntityVisuals {
     return null;
   }
 
-  /** Distil any entity's live state into one of the colour-coded badge kinds.
-   *  The per-type "on" vocabulary lives in utils/deviceActivity's
-   *  classifyDeviceActivity — shared with Dashboard.tsx's modal-header badge
-   *  and SummaryGroupPanel's device list, so all three read a device's
-   *  activity identically. Only the linkActiveIds overlay below is specific
-   *  to the map (a Babylon-side, confirmed-state-only signal). */
-  /** The ONE place this module assembles a `DeviceReading`, so the villa's
-   *  per-entity alert override reaches the map by the same route it reaches
-   *  the panel. Every badge drawn here goes through it. */
-  private reading(type: EntityType, s: HassEntity, linkedOn: boolean): DeviceReading {
-    return {
-      type, entity: s, linkedOn,
-      alertState: alertStateFor(
-        s.attributes.device_class as string | undefined,
-        this.config.alertThresholds[s.entity_id]?.alertState),
-    };
-  }
-
-  private badgeKind(type: EntityType, s: HassEntity): BadgeKind {
-    // The rule itself lives in utils/deviceActivity (badgeKindFor), shared with
-    // every DOM list that draws the same squircle — this method only supplies
-    // the one input the map holds differently: a live set of "your linked
-    // entity is on", fed by state events. A camera's MOTION sensor is
-    // deliberately NOT part of it: that drives the beam/room glow
-    // (applyMotionRouting), never the ring, so the two read independently.
-    return badgeKindFor(this.reading(type, s, this.linkActiveIds.has(s.entity_id)));
-  }
+  // ⚠️ `reading()` AND `badgeKind()` ARE GONE (2.496.245): this layer assembled
+  // its own DeviceReading — its own alertStateFor lookup, its own linked set.
+  // utils/deviceActivity.deviceLook / readingOf do both, through
+  // `this.lookSource`, exactly as every panel and list does through the store.
 
   /** For a device-group PRIMARY, combine its own reading with its members'
    *  (e.g. a temp+humidity combo shows "24°C · 58%" on its one badge instead
@@ -5984,7 +5955,7 @@ export class EntityVisuals {
     // What the mesh shows is utils/deviceActivity's meshLookFor — the SAME
     // classification the badge is painted from (device_class, the villa's
     // alert override, in-between states). Only the painting is here.
-    const look = meshLookFor(this.reading(map.type, state, false));
+    const look = meshLookFor(readingOf(state.entity_id, this.lookSource));
     // A device authored as POSE meshes (lock.foo__locked / __unlocked, a
     // door "__open"/"__closed") shows its state by which pose is visible
     // (applyMeshVariant); tinting or pulsing that same mesh on top is
@@ -6036,7 +6007,7 @@ export class EntityVisuals {
         // whose baked glow must be overridden or it reads "lit like a light".
         setEmissive?.(Color3.Black());
         if (map.type === "climate") {
-          this.applyClimateOutline(mesh, badgeKindFor(this.reading("climate", state, false)) === "on");
+          this.applyClimateOutline(mesh, deviceLook(state.entity_id, this.lookSource).own === "on");
         }
         break;
     }
