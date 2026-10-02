@@ -132,7 +132,7 @@ function AgentMessageCard({ message: m, status, answer, clear, onOpenEntity }: {
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const Icon = SEVERITY_ICON[m.severity];
-  const shown = buttonsShown(m, status);
+  const shown = buttonsShown(m);
   const answered = answerLine(m, profileLabel);
 
   const press = async (buttonId: string) => {

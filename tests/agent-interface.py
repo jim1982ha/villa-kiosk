@@ -322,6 +322,21 @@ async def main() -> None:
         "title": "Too late", "buttons": [{"id": "ok", "label": "OK"}], "expires_at": "2020-01-01T00:00:00Z"})
     expired = (await r.json())["id"]
 
+    # ── "answerable now" is the proxy's alone, presence included (2.496.251) ──
+    # No heartbeat yet: the agent is offline, so nobody would act on an answer.
+    status, body = await jget("/agent-messages", cookie("ops"))
+    offline_view = {m["id"]: m for m in body["data"]["messages"]} if status == 200 else {}
+    ck("agent offline: an open message ops may answer is NOT answerable (the page no longer decides)",
+       offline_view.get(mid, {}).get("state") == "open" and offline_view[mid]["can_answer"] is False, offline_view.get(mid))
+    r = await put("/agent-choices", headers=cookie("ops"),
+                  json={"data": {"choices": [{"message_id": mid, "button_id": "approve"}]}})
+    refused = await r.json()
+    ck("  ...and a press from a tab opened earlier is refused, 409 'offline', nothing stored",
+       r.status == 409 and "offline" in refused.get("error", "") and not (await jget("/agent/v1/choices?since=0", bearer()))[1].get("choices"),
+       (r.status, refused))
+    r = await post("/agent/v1/heartbeat", headers=bearer(), json={"status": "here"})
+    ck("  ...a heartbeat brings it online for what follows", r.status == 200, r.status)
+
     status, body = await jget("/agent-messages", cookie("ops"))
     msgs = {m["id"]: m for m in body["data"]["messages"]} if status == 200 else {}
     ck("a facility manager reads the messages, newest first",
@@ -434,8 +449,9 @@ async def main() -> None:
 
     # ── presence (PLAN A7) ───────────────────────────────────────────────
     print("\n  presence:")
+    (TMP / "data" / "agent-presence.json").unlink(missing_ok=True)   # the messages section sent one
     status, body = await jget("/agent-status", cookie("ops"))
-    ck("before any heartbeat: offline", body.get("state") == "offline", body)
+    ck("no heartbeat on record: offline", body.get("state") == "offline", body)
     r = await post("/agent/v1/heartbeat", headers=bearer(), json={"status": "all quiet"})
     ck("a heartbeat: 200", r.status == 200, r.status)
     status, body = await jget("/agent-status", cookie("ops"))

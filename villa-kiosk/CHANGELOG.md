@@ -1,3 +1,12 @@
+## 2.496.251
+
+### Fixed
+- **An answer to the VESTA Agent can no longer be given while the agent is offline.** The Kiosk hid an alert's buttons while the agent was offline, but a screen opened earlier could still press one, and the answer was kept for an agent that was not there to act on it. The add-on now refuses that press itself and says why ("The VESTA Agent is offline"), and every screen shows the buttons only when the add-on says the alert can be answered.
+- **With the sky-time preview (`?skyTime=`), the light/dark/night theme now follows the previewed hour**, as the sky does. It kept following the real clock.
+
+### Changed
+- Nothing else looks different. The rest of this release makes three things testable without a browser, so future changes can be checked before they reach the wall: where the sun and the moon are drawn in the overview (proved to draw exactly as before), what the phone's Back gesture closes, and the passcode lengths (now stated once and compared with the add-on's own rule).
+
 ## 2.496.250
 
 ### Changed

@@ -37,6 +37,7 @@
 // it to the native dialogs AskDialog replaced, which cannot suffer it because
 // they are browser-modal. Here it was real.
 
+import { SUPERADMIN_PIN_LENGTH } from "./pinShape";
 import {
   createContext, useCallback, useContext, useRef, useState, type ReactNode,
 } from "react";
@@ -156,7 +157,7 @@ function SuperadminPrompt({
           <PinPad
             roleLabel="Authorisation required"
             subtitle="Enter the 6-digit superadmin code"
-            length={6}
+            length={SUPERADMIN_PIN_LENGTH}
             backLabel="Cancel"
             helpText="This code is held by whoever is accountable for the villa's records. It authorises this one deletion and nothing else."
             onSubmit={onSubmit}

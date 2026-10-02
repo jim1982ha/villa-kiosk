@@ -3304,6 +3304,13 @@ def _agent_messages_view(request: web.Request, stored):
     role = _role_for(request)
     answers = _agent_answers()
     now = time.time()
+    # ⚠️ "ANSWERABLE NOW" IS DECIDED HERE, ONCE (2.496.251). The page used to
+    # AND this with its own `status.state === "online"`, and the press door
+    # below never asked: a press from a tab opened before the agent went
+    # offline was stored for an agent that was not there to act on it. The
+    # agent's presence is part of the answer, and _agent_press_refusal asks
+    # the same question.
+    agent_here = _agent_presence()["state"] == "online"
     out = []
     for m in reversed(_agent_prune_messages(list((stored or {}).get("messages") or []), now)):
         answer = answers.get(m.get("id"))
@@ -3311,7 +3318,7 @@ def _agent_messages_view(request: web.Request, stored):
         state = "answered" if answer else ("expired" if exp is not None and exp <= now else "open")
         out.append({**m, "state": state,
                     "answer": {k: answer.get(k) for k in ("button_id", "profile", "at")} if answer else None,
-                    "can_answer": state == "open" and bool(m.get("buttons"))
+                    "can_answer": state == "open" and bool(m.get("buttons")) and agent_here
                     and role in (m.get("allowed_profiles") or [])})
     return {"messages": out}
 
@@ -3324,7 +3331,7 @@ def _agent_press_refusal(stored, message_id: str, button_id: str, profile: str):
     """Why this press may not be recorded, as the answer to send — or None.
 
     One press, on an open message, with one of its buttons, by a profile it
-    allows. First press wins; a later one gets 409 and who answered. Judged
+    allows, while the agent is online. First press wins; a later one gets 409 and who answered. Judged
     against `stored`, the choices read under the store's lock, so two presses
     racing each other cannot both win."""
     messages = AGENT_MESSAGES.read().get("messages") or []
@@ -3345,6 +3352,10 @@ def _agent_press_refusal(stored, message_id: str, button_id: str, profile: str):
         return web.json_response({"error": "no such button on this message"}, status=400)
     if profile not in (message.get("allowed_profiles") or []):
         return _forbidden("This profile may not answer this message.")
+    if _agent_presence()["state"] != "online":
+        # Nobody would act on it (PLAN A8): the same rule can_answer applies.
+        return web.json_response({"error": "The VESTA Agent is offline: nobody would act on this answer now."},
+                                 status=409)
     return None
 
 

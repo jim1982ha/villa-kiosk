@@ -12,16 +12,21 @@ export function agentVisible(status: AgentStatus | null): boolean {
   return status != null && status.state !== "not_configured";
 }
 
-/** May THIS device offer a message's buttons right now? The server says
- *  whether the profile may (canAnswer); buttons are hidden while the agent is
- *  offline too, because nobody would act on the answer (A8). */
-export function buttonsShown(message: AgentMessage, status: AgentStatus | null): boolean {
-  return message.canAnswer && status?.state === "online" && message.buttons.length > 0;
+/** May THIS device offer a message's buttons right now? The SERVER decides
+ *  (canAnswer): open, this profile allowed, and the agent online — nobody
+ *  would act on an answer while it is offline (A8).
+ *
+ *  ⚠️ THE PAGE USED TO ADD THE "ONLINE" HALF ITSELF (until 2.496.251), from
+ *  its own status poll, and the proxy's press door never asked it: a press
+ *  from a tab opened before the agent went offline was stored for nobody.
+ *  One owner per predicate — the proxy's _agent_messages_view. */
+export function buttonsShown(message: AgentMessage): boolean {
+  return message.canAnswer && message.buttons.length > 0;
 }
 
 /** The count on the top-bar button: open messages this profile can answer. */
-export function awaitingAnswer(messages: readonly AgentMessage[], status: AgentStatus | null): number {
-  return messages.filter((m) => buttonsShown(m, status)).length;
+export function awaitingAnswer(messages: readonly AgentMessage[]): number {
+  return messages.filter((m) => buttonsShown(m)).length;
 }
 
 /** "Answered by Facility manager · Approve" — the button's label if it still

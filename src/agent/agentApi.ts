@@ -20,7 +20,6 @@ export interface AgentStatus {
   lastSeen: string | null;
   /** The agent's own one-line status, if it sent one. */
   statusText: string | null;
-  offlineAfterMinutes: number;
 }
 
 export type AgentMessageKind = "message" | "report" | "recommendation";
@@ -67,7 +66,6 @@ export function parseAgentStatus(raw: unknown): AgentStatus {
     state: oneOf(b.state, STATUS_STATES, "not_configured"),
     lastSeen: typeof b.last_seen === "string" ? b.last_seen : null,
     statusText: typeof b.status === "string" && b.status ? b.status : null,
-    offlineAfterMinutes: typeof b.offline_after_minutes === "number" ? b.offline_after_minutes : 5,
   };
 }
 
@@ -189,4 +187,20 @@ export async function shareKioskRooms(rooms: Record<string, string>): Promise<bo
   } catch {
     return false;
   }
+}
+
+/** What one poll learned, as what the screen should hold — `null` means "keep
+ *  what you have". The sequence the context used to run inside a React hook,
+ *  now a plain function an oracle drives with fake fetches (2.496.251):
+ *  status first; unreachable keeps the last status AND messages (a blip must
+ *  not blank the panel); not configured empties the messages without asking
+ *  for them; otherwise the messages, kept as they were if that read fails. */
+export async function readAgent(io: {
+  status: () => Promise<AgentStatus | null>;
+  messages: () => Promise<AgentMessage[] | null>;
+}): Promise<{ status: AgentStatus | null; messages: AgentMessage[] | null }> {
+  const status = await io.status();
+  if (!status) return { status: null, messages: null };
+  if (status.state === "not_configured") return { status, messages: [] };
+  return { status, messages: await io.messages() };
 }

@@ -15,7 +15,7 @@
 
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
-import { SkyDome } from "./SkyDome";
+import { bodyFade, lift, liftFor, type SkyCamera } from "./skyFraming";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
@@ -65,7 +65,9 @@ export class NightSky {
    *  a 1% band repaints a handful of times a night rather than 1440. */
   private drawnKey = "";
 
-  constructor(scene: Scene) {
+  /** SkyDome's camera object (SceneManager hands it over), so the moon is framed
+   *  against the very pose the sun is. */
+  constructor(scene: Scene, private readonly camera: SkyCamera) {
     // ── Stars ──────────────────────────────────────────────────────────────
     // GL POINTS, not a textured sphere — and that is the whole fix (2.228.0).
     //
@@ -134,12 +136,12 @@ export class NightSky {
    * empty-sky bug 2.388.0 fixed for the sun, one body over.
    */
   setHorizonDrop(units: number): void {
-    this.lift = SkyDome.liftFor(units);
+    this.lift = liftFor(units);
   }
 
   /** The last look handed to update(), so the moon can be re-placed when the
    *  CAMERA moves rather than only when the sky clock ticks. The arc is framed
-   *  against the camera now (SkyDome.BAND_LOW), so a tilt changes the answer. */
+   *  against the camera now (skyFraming.BAND_LOW), so a tilt changes the answer. */
   private lastLook: MoonLook | null = null;
 
   /** Re-place from the stored look. Called by SkyDome's framing hook, so sun
@@ -160,15 +162,16 @@ export class NightSky {
     //
     // ⚠️ "Has it set?" is asked of the TRUE altitude, never of the lifted one
     // this same line computes. The overview's band is negative (see
-    // SkyDome.BAND_MIN), so every DRAWN altitude is below the horizon: the old
+    // skyFraming.BAND_LOW), so every DRAWN altitude is below the horizon: the old
     // test on `dir.y` would now be false always and the moon would never be
-    // drawn at all. SkyDome.horizonFade owns the rule for both bodies.
-    const dir = SkyDome.lift(look.dir.x, look.dir.y, look.dir.z, this.lift);
-    const fade = SkyDome.horizonFade(
-      Math.atan2(look.dir.y, Math.hypot(look.dir.x, look.dir.z)))
-      // The same cover for the azimuth cut the sun gets — the moon rides the
-      // identical dome, so it meets the identical seam directly behind you.
-      * SkyDome.azimuthFade(look.dir.x, look.dir.z, this.lift);
+    // drawn at all. skyFraming.horizonFade owns the rule for both bodies.
+    // The same expressions the sun is placed and faded by (skyFraming), against
+    // the same camera object SkyDome tracks — the moon rides the identical dome,
+    // so it meets the identical cut directly behind you.
+    const { x, y, z } = look.dir;
+    const d = lift(x, y, z, this.lift, this.camera);
+    const dir = new Vector3(d.x, d.y, d.z);
+    const fade = bodyFade(x, y, z, this.lift, this.camera);
     const visible = night > 0 && fade > 0;
     this.moonMat.alpha = visible ? night * fade : 0;
     this.moon.setEnabled(visible);

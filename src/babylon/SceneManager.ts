@@ -405,7 +405,7 @@ export class SceneManager {
     // Moon + stars. Entirely optional to the rest of the scene, and computed
     // from date/lat/lng — an install without HA's opt-in Moon integration gets
     // exactly the same night sky, which is the requirement.
-    this.nightSky = new NightSky(this.scene);
+    this.nightSky = new NightSky(this.scene, this.sky.camera);
     this.sun.setNightSky(this.nightSky);
     // Sun and moon are framed against the camera, so a tilt re-places both —
     // through ONE observer (SkyDome's), because two would race for ordering and

@@ -10,12 +10,12 @@
 // is a prop, so the keypad behaviour, lockout countdown and keyboard handling
 // stay identical in both.
 
+import { PIN_LENGTH } from "@/auth/pinShape";
 import type { PinOutcome } from "@/auth/pinOutcome";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useInterval } from "@/hooks/useInterval";
 import { ArrowLeft, Delete } from "lucide-react";
 
-const DEFAULT_PIN_LENGTH = 4;
 const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
 
 interface Props {
@@ -37,7 +37,7 @@ interface Props {
 
 export default function PinPad({
   roleLabel, onSubmit, onAccepted, onBack,
-  length = DEFAULT_PIN_LENGTH, backLabel = "Profiles", subtitle, helpText,
+  length = PIN_LENGTH, backLabel = "Profiles", subtitle, helpText,
 }: Props) {
   const PIN_LENGTH = length;
   const [digits, setDigits] = useState("");

@@ -31,13 +31,34 @@ ck("  ...nor before the first answer (no flash of 'offline')", !agentVisible(nul
 ck("configured: shown, online or offline", agentVisible(online) && agentVisible(offline));
 
 console.log("\n  buttons:");
-ck("an open message this profile may answer, agent online: offered", buttonsShown(msg(), online));
-ck("agent offline: hidden (nobody would act on the answer)", !buttonsShown(msg(), offline));
-ck("the server says this profile may not: hidden", !buttonsShown(msg({ can_answer: false }), online));
-ck("no buttons on the message: nothing offered", !buttonsShown(msg({ buttons: [] }), online));
+ck("the server says answerable (open, allowed, agent online): offered", buttonsShown(msg()));
+ck("the server says not (e.g. the agent is offline): hidden — the page adds no rule of its own",
+   !buttonsShown(msg({ can_answer: false })));
+ck("no buttons on the message: nothing offered", !buttonsShown(msg({ buttons: [] })));
+ck("  ...buttonsShown takes the message alone (2.496.251: presence is the proxy's half, tests/agent-interface.py)",
+   buttonsShown.length === 1 && awaitingAnswer.length === 1);
 ck("the top-bar count is exactly the messages whose buttons are offered",
-   awaitingAnswer([msg(), msg({ id: "msg_2", can_answer: false }), msg({ id: "msg_3" })], online) === 2
-   && awaitingAnswer([msg()], offline) === 0);
+   awaitingAnswer([msg(), msg({ id: "msg_2", can_answer: false }), msg({ id: "msg_3" })]) === 2);
+
+console.log("\n  one poll (readAgent):");
+{
+  const { readAgent } = await import("@/agent/agentApi");
+  const calls = [];
+  const io = (status, messages) => ({
+    status: async () => { calls.push("status"); return status; },
+    messages: async () => { calls.push("messages"); return messages; },
+  });
+  const m1 = parseAgentMessages({ messages: [{ id: "msg_1", title: "t", state: "open", can_answer: true, buttons: [] }] });
+  calls.length = 0; let r = await readAgent(io(null, m1));
+  ck("unreachable: keep the last status AND messages, and do not ask for messages",
+     r.status === null && r.messages === null && calls.join() === "status");
+  calls.length = 0; r = await readAgent(io(off, m1));
+  ck("not configured: messages emptied, never asked for", r.status === off && Array.isArray(r.messages) && r.messages.length === 0 && calls.join() === "status");
+  calls.length = 0; r = await readAgent(io(online, m1));
+  ck("configured: status, then messages", r.status === online && r.messages === m1 && calls.join() === "status,messages");
+  calls.length = 0; r = await readAgent(io(offline, null));
+  ck("  ...a failed messages read keeps the panel as it was", r.status === offline && r.messages === null);
+}
 const answered = msg({ state: "answered", can_answer: false,
   answer: { button_id: "approve", profile: "ops", at: "2026-09-29T01:00:00Z" } });
 ck("an answer reads who and which button, by its label",

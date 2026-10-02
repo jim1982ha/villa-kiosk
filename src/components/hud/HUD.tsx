@@ -154,8 +154,7 @@ export default function HUD({
   // an answer THIS profile can give (agentView.awaitingAnswer).
   const { status: agentStatus, messages: agentMessages } = useAgent();
   const agentOnline = agentStatus?.state === "online";
-  const agentWaiting = useMemo(() => awaitingAnswer(agentMessages, agentStatus),
-    [agentMessages, agentStatus]);
+  const agentWaiting = useMemo(() => awaitingAnswer(agentMessages), [agentMessages]);
   const agentTitle = `VESTA Agent — ${agentOnline ? "online" : "offline"}`
     + (agentWaiting > 0 ? `, ${agentWaiting} message${agentWaiting === 1 ? "" : "s"} to answer` : "");
   // The agent's presence as the dot on its robot — the top bar's and the

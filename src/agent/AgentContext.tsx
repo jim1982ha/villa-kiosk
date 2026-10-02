@@ -12,7 +12,7 @@ import { useProfile } from "@/auth/ProfileContext";
 import { roleCan } from "@/auth/permissions";
 import { useStoreRefresh, STORE_ACTIVE_MS } from "@/hooks/useStoreRefresh";
 import {
-  answerAgentMessage, clearAgentMessages, fetchAgentMessages, fetchAgentStatus,
+  answerAgentMessage, clearAgentMessages, fetchAgentMessages, fetchAgentStatus, readAgent,
   type AgentMessage, type AgentStatus, type AnswerResult,
 } from "./agentApi";
 import { agentVisible } from "./agentView";
@@ -48,11 +48,10 @@ export function AgentProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(() => {
     if (!allowed) return;
-    void fetchAgentStatus().then((s) => {
-      if (!s) return;                    // unreachable: keep what we know
-      setStatus(s);
-      if (s.state === "not_configured") { setMessages([]); return; }
-      void fetchAgentMessages().then((m) => { if (m) setMessages(m); });
+    // The sequence is agentApi.readAgent's; this only applies its answer.
+    void readAgent({ status: fetchAgentStatus, messages: fetchAgentMessages }).then((r) => {
+      if (r.status) setStatus(r.status);
+      if (r.messages) setMessages(r.messages);
     });
   }, [allowed]);
 

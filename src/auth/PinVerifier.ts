@@ -10,11 +10,10 @@
 
 import { ingressPath } from "@/ha/ingress";
 import { askPin, type PinOutcome } from "./pinOutcome";
+import { PIN_LENGTH, isPinShape } from "./pinShape";
 import { ROLE_ORDER, isRole, type Role } from "./roles";
 import type { ServerSession } from "./sessionLost";
 
-
-const PIN_SHAPE = /^[0-9]{4}$/;
 
 /** What the picker needs to know about a profile: whether it asks for a
  *  passcode, and whether it can be entered from here at all. A profile with
@@ -40,23 +39,6 @@ export async function profileAccess(): Promise<Record<Role, ProfileAccess>> {
   return parseProfileAccess(await resp.json());
 }
 
-/** Which profile the server's own session cookie already authorizes, if any.
- *
- *  The cookie — not anything this browser stores — is what actually authorizes
- *  /core, /model and the config stores, and it outlives the document (its life
- *  is the add-on's `session_days`). Asking the server on boot is what stops a
- *  relaunched PWA re-prompting for a passcode it has already answered; see the
- *  server's auth_session_handler for why it reads the cookie rather than
- *  treating an Ingress request as owner.
- *
- *  Never throws: any failure (offline, older add-on with no such route, bad
- *  payload) resolves to null, which simply means "show the profile picker" —
- *  the pre-existing behaviour, so a stale add-on degrades instead of breaking. */
-export async function currentSession(): Promise<Role | null> {
-  const s = await serverSession();
-  return typeof s === "object" ? (s.role as Role) : null;
-}
-
 /** The same question, answered in three (sessionLost.ServerSession): a role,
  *  definitely none (the server answered and named no role), or unknown (it
  *  could not be asked). Signing out needs "none" — see sessionLostDecision. */
@@ -74,7 +56,7 @@ export async function serverSession(): Promise<ServerSession> {
 /** Check a PIN-gated profile's passcode; sets the session cookie on success.
  *  Never throws — see pinOutcome. */
 export async function verify(role: Role, pin: string): Promise<PinOutcome> {
-  if (!PIN_SHAPE.test(pin)) return { kind: "wrong" };
+  if (!isPinShape(pin, PIN_LENGTH)) return { kind: "wrong" };
   return askPin(ingressPath("auth/verify"), { role, pin });
 }
 
