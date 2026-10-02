@@ -94,6 +94,12 @@ const SWITCH_ICON_KEY: Record<string, string> = {
  *  the per-type default. ONE resolver for every surface that draws an entity
  *  icon (3D badges, panel headers, the bottom-bar group modals), so a device
  *  reads the same glyph everywhere. */
+/** The tables, read-only, for tests/oracles/icon_identity.mjs — every key must
+ *  have drawing data (badgeIconNodes) and name the same glyph the panels show. */
+export const BADGE_ICON_TABLES = {
+  type: TYPE_ICON_KEY, binarySensor: BINARY_SENSOR_ICON_KEY, sensor: SENSOR_ICON_KEY, switch: SWITCH_ICON_KEY,
+} as const;
+
 export function iconKeyFor(type: EntityType, entity?: HassEntity): string {
   const dc = entity?.attributes?.device_class as string | undefined;
   if (type === "binary_sensor" && dc) {

@@ -19,6 +19,7 @@ import { useState, type ReactNode } from "react";
 import { useInterval } from "@/hooks/useInterval";
 import { CloudSun } from "lucide-react";
 import { fmtChartValue, fmtChartTick, fmtChartTime, fmtChartStamp } from "./chartUtils";
+import { formatUnitValue } from "@/utils/entityValue";
 import BarChart from "./BarChart";
 import { DataWindow, Figure, LiveNote, ObservationCards } from "./WindowPieces";
 import { localMidnight } from "@/utils/localDay";
@@ -463,7 +464,7 @@ function RainTile({ s, win, status, perDay, unit }: {
         ? <ChartEmpty status={status} />
         : (
           <BarChart label="Rain history" buckets={buckets} height={CHART_PX} unit={unit} note={note}
-            fmt={(v) => `${fmtChartValue(v)} ${unit}`}
+            fmt={(v) => (unit ? formatUnitValue(v, unit) : fmtChartValue(v))}
             stamp={(t) => `${perDay ? "day of " : "hour from "}${fmtChartStamp(t, spanH)}`}
             ticks={[{ i: 0, label: fmtChartTick(buckets[0].t, spanH) }, { i: Math.floor(n / 2), label: fmtChartTick(buckets[Math.floor(n / 2)].t, spanH) }, { i: n - 1, label: "now" }]} />
         )}

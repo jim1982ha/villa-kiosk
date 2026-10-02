@@ -29,25 +29,10 @@ import {
   type FmTicket, type FmTicketStatus,
 } from "./fmTypes";
 
-/**
- * What happened to one Facility write — returned by EVERY mutator, so a screen
- * can say it (round 13, 2.496.184). They all returned nothing: a guest was
- * told "that's been reported" and the report dialogs said "Saved" whatever
- * the add-on did.
- *   saved     — on the add-on.
- *   refused   — the add-on said no (the reason is in saveError); undone here.
- *   offline   — could not reach it; kept on this device and re-sent on the
- *               next refresh.
- *   unchanged — nothing to send.
- */
-export type FmWriteResult = "saved" | "refused" | "offline" | "unchanged";
-
-/** What a screen says when a write did NOT land — null when it did. */
-export function fmWriteProblem(r: FmWriteResult): string | null {
-  if (r === "refused") return "The add-on refused this — nothing was saved.";
-  if (r === "offline") return "Couldn't reach the add-on — nothing was sent. Check the connection and try again.";
-  return null;
-}
+// The write's result and what a screen does with it live in fm/fmSave.ts (pure,
+// so an oracle can drive them); re-exported here for the screens.
+export { fmSaveOutcome, type FmWriteResult } from "./fmSave";
+import type { FmWriteResult } from "./fmSave";
 
 interface FmDataContextValue {
   data: FmData;

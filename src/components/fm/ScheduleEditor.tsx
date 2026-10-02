@@ -10,7 +10,7 @@
 import { useState } from "react";
 import { Plus, Pencil, Trash2, Check, X } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
-import { useFmData } from "@/fm/FmDataContext";
+import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
 import { scheduleStatus, shortDate } from "@/fm/fmEngine";
 import type { FmSchedule } from "@/fm/fmTypes";
 import AgentMark from "./AgentMark";
@@ -47,6 +47,8 @@ export default function ScheduleEditor() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState<Draft>(EMPTY);
+  /** Why the last save was refused — the draft is kept (2.496.252). */
+  const [formError, setFormError] = useState<string | null>(null);
 
   const rooms = [...new Set(
     config.teleportPoints.map((p) => p.name).filter(Boolean),
@@ -57,7 +59,7 @@ export default function ScheduleEditor() {
 
   const startAdd = () => { setDraft(EMPTY); setEditingId(null); setAdding(true); };
   const startEdit = (s: FmSchedule) => { setDraft(toDraft(s)); setAdding(false); setEditingId(s.id); };
-  const cancel = () => { setAdding(false); setEditingId(null); setDraft(EMPTY); };
+  const cancel = () => { setFormError(null); setAdding(false); setEditingId(null); setDraft(EMPTY); };
 
   const save = async () => {
     const payload = {
@@ -67,9 +69,10 @@ export default function ScheduleEditor() {
       room: draft.room || undefined,
       enabled: true,
     };
-    if (editingId) await updateSchedule(editingId, payload);
-    else await addSchedule(payload);
-    cancel();
+    const { done, note: why } = fmSaveOutcome(
+      editingId ? await updateSchedule(editingId, payload) : await addSchedule(payload));
+    // Close only when saved or queued; a refused save keeps the draft (2.496.252).
+    if (done) cancel(); else setFormError(why);
   };
 
   const form = (
@@ -115,6 +118,7 @@ export default function ScheduleEditor() {
           placeholder="e.g. 3.7(i)" />
       </label>
 
+      {formError && <div className="fm-inline-error" role="alert">{formError}</div>}
       <div className="modal-actions" style={{ marginTop: 8 }}>
         <button className="btn ghost" onClick={cancel}><X size={16} /> Cancel</button>
         <button className="btn primary" disabled={!valid} onClick={() => void save()}>

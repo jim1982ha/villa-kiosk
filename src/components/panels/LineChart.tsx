@@ -19,6 +19,7 @@ import { chartGeometry, type ChartGeometry } from "@/utils/chartGeometry";
 import { emptyHistoryText, type HistoryStatus } from "@/utils/statisticsSeries";
 import { STATUS_COLOR } from "@/utils/stateColors";
 import { fmtChartValue, fmtChartTick, fmtChartStamp, fmtOutage } from "./chartUtils";
+import { formatUnitValue } from "@/utils/entityValue";
 import { useChartPointer } from "./useChartPointer";
 import ChartTip from "./ChartTip";
 import YAxis, { type AxisTick } from "./ChartAxis";
@@ -138,7 +139,11 @@ export default function LineChart({ lines, window, height = 150, status, label }
                 const who = lines.length > 1 ? `${l.label} ` : "";
                 // An outage under the pointer says so — its span and length.
                 if (out) return [{ key: `${i}`, marker: keyOf(l), text: `${who}${fmtOutage(out, g.window.to)}` }];
-                return r ? [{ key: `${i}`, marker: keyOf(l), text: `${who}${fmtChartValue(r.v)}${l.unit ?? ""}` }] : [];
+                // A reading reads as the badge says it ("6.6 kW", not "6571W", 2.496.252):
+                // formatUnitValue is the one rule; a unitless line keeps the chart's number.
+                if (!r) return [];
+                const value = l.unit?.trim() ? formatUnitValue(r.v, l.unit.trim()) : fmtChartValue(r.v);
+                return [{ key: `${i}`, marker: keyOf(l), text: `${who}${value}` }];
               })} />
           )}
         </div>

@@ -14,7 +14,7 @@ import { useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, Plus, Wrench } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
-import { useFmData, fmWriteProblem } from "@/fm/FmDataContext";
+import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
 import { isTicketOpen, isTicketResolved, localStamp, ticketStats, ticketRank, TICKET_NEXT } from "@/fm/fmEngine";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
@@ -72,15 +72,18 @@ export default function FaultsTab(
    *  and the reason the last close did not land. */
   const [closingId, setClosingId] = useState<string | null>(null);
   const [closeError, setCloseError] = useState<{ id: string; text: string } | null>(null);
+  /** Why the last raise/edit was refused — the form keeps what was typed. */
+  const [formError, setFormError] = useState<string | null>(null);
 
   const closeNoAction = async (id: string) => {
     setCloseError(null);
-    const problem = fmWriteProblem(await closeTicket(id));
+    const { done, note: why } = fmSaveOutcome(await closeTicket(id));
     setClosingId(null);
-    if (problem) setCloseError({ id, text: problem });
+    if (!done && why) setCloseError({ id, text: why });
   };
 
   const resetForm = () => {
+    setFormError(null);
     setAdding(false); setEditingId(null);
     setTitle(""); setDeviceText(""); setEntityId(""); setNote(""); setPhotoIds([]);
   };
@@ -231,6 +234,7 @@ export default function FaultsTab(
             <span>Photo evidence</span>
             <EvidenceRow photoIds={photoIds} onChange={setPhotoIds} />
           </div>
+          {formError && <div className="fm-inline-error" role="alert">{formError}</div>}
           <div className="modal-actions" style={{ marginTop: 8 }}>
             <button className="btn ghost" onClick={resetForm}>Cancel</button>
             <button
@@ -248,9 +252,11 @@ export default function FaultsTab(
                 // Same fields either way — updateTicket leaves status,
                 // openedAt and resolvedAt alone, so correcting a description
                 // never rewrites the fault's history.
-                if (editingId) await updateTicket(editingId, fields);
-                else await addTicket(fields);
-                resetForm();
+                const { done, note: why } = fmSaveOutcome(
+                  editingId ? await updateTicket(editingId, fields) : await addTicket(fields));
+                // Empty the form only when saved or queued: a refused save
+                // used to throw away what was typed (2.496.252).
+                if (done) resetForm(); else setFormError(why);
               }}
             >{editingId ? "Save changes" : "Raise fault"}</button>
           </div>

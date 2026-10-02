@@ -8,7 +8,7 @@
 
 import { useState } from "react";
 import { Check, CalendarClock, Trash2 } from "lucide-react";
-import { useFmData } from "@/fm/FmDataContext";
+import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
 import { formatMoney, isTicketOpen, localStamp, scheduleBoard, shortDate, type ScheduleStatus, parseAmount, fmAttention } from "@/fm/fmEngine";
 import { budgetStatus, wouldExceedCap } from "@/fm/fmEngine";
 import { useFmTerms } from "@/fm/useFmTerms";
@@ -154,8 +154,10 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
           scheduleId={openId}
           onCancel={() => setOpenId(null)}
           onSave={async (payload, cost) => {
-            await logCompletion(payload, cost);
-            setOpenId(null);
+            // Close only when saved or queued; a refused save keeps the form (2.496.252).
+            const { done, note: why } = fmSaveOutcome(await logCompletion(payload, cost));
+            if (done) setOpenId(null);
+            return done ? null : why;
           }}
           onOpenEntity={onOpenEntity}
         />
@@ -177,7 +179,7 @@ function LogCompletion({
   onSave: (
     c: { scheduleId: string; at: string; by: string; note?: string; photoIds: string[] },
     cost?: { amountIdr: number; label: string; category: "minor" | "major" },
-  ) => Promise<void>;
+  ) => Promise<string | null>;   // null = saved/queued; else why it was refused
   onOpenEntity: (id: string) => void;
 }) {
   const { data } = useFmData();
@@ -187,6 +189,8 @@ function LogCompletion({
   const [photoIds, setPhotoIds] = useState<string[]>([]);
   const [amount, setAmount] = useState("");
   const [saving, setSaving] = useState(false);
+  /** Why the save was refused — the form keeps what was typed (2.496.252). */
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const terms = useFmTerms();
   const amountIdr = parseAmount(amount);
@@ -228,6 +232,7 @@ function LogCompletion({
         <EvidenceRow photoIds={photoIds} onChange={setPhotoIds} />
       </div>
 
+      {saveError && <div className="fm-inline-error" role="alert">{saveError}</div>}
       <div className="modal-actions" style={{ marginTop: 8 }}>
         <button className="btn ghost" onClick={onCancel}>Cancel</button>
         <button
@@ -235,13 +240,15 @@ function LogCompletion({
           disabled={saving}
           onClick={async () => {
             setSaving(true);
-            await onSave(
+            setSaveError(null);
+            const refused = await onSave(
               { scheduleId, at: new Date().toISOString(), by: by.trim(), note: note.trim() || undefined, photoIds },
               amountIdr > 0
                 ? { amountIdr, label: schedule?.title ?? "Maintenance", category: "minor" }
                 : undefined,
             );
             setSaving(false);
+            if (refused) setSaveError(refused);
           }}
         >
           {saving ? "Saving…" : "Save completion"}

@@ -30,7 +30,7 @@ import { fmtChartTime } from "@/components/panels/chartUtils";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
-import { useFmData, fmWriteProblem } from "@/fm/FmDataContext";
+import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
 import InlineConfirm from "@/components/common/InlineConfirm";
 import { roleCan } from "@/auth/permissions";
 import type { Doors } from "@/auth/doors";
@@ -378,7 +378,8 @@ function useFaultClose(item: AttentionItem | null, canCloseFault: boolean) {
   const close = async () => {
     if (!item?.ticketId) return;
     setProblem(null);
-    const failed = fmWriteProblem(await closeTicket(item.ticketId));
+    const { done, note: why } = fmSaveOutcome(await closeTicket(item.ticketId));
+    const failed = done ? null : why;
     // On success the fault leaves this list; only a failure stays to say so.
     setConfirming(false);
     setProblem(failed);

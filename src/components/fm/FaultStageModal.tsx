@@ -22,8 +22,8 @@
 
 import { useState } from "react";
 
-import { useFmData, fmWriteProblem } from "@/fm/FmDataContext";
-import { formatMoney, parseAmount } from "@/fm/fmEngine";
+import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
+import { formatMoney, parseAmount, wouldExceedCap } from "@/fm/fmEngine";
 import { useFmTerms } from "@/fm/useFmTerms";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
@@ -50,7 +50,7 @@ export default function FaultStageModal({
   to: FmTicketStatus;
   onClose: () => void;
 }) {
-  const { advanceTicket } = useFmData();
+  const { advanceTicket, data } = useFmData();
   const terms = useFmTerms();
   // Escape + Back + focus trap + focus restore, from ONE hook — see
   // useModalA11y. It registers useBackToClose itself, so calling both would
@@ -88,9 +88,9 @@ export default function FaultStageModal({
         : undefined,
     );
     setBusy(false);
-    // Closes only on a real save; otherwise stays, with what went wrong.
-    const problem = fmWriteProblem(result);
-    if (problem) setFailed(problem); else onClose();
+    // Closes when saved or queued; stays, with the reason, only when refused.
+    const { done, note: why } = fmSaveOutcome(result);
+    if (done) onClose(); else setFailed(why);
   };
 
   return (
@@ -149,6 +149,14 @@ export default function FaultStageModal({
               <div className="fm-row-sub muted">
                 Records {formatMoney(amountIdr, terms.currency)} against this fault.
               </div>
+              {/* The same cap warning the Today and Spend forms give — this was
+                  the one place a cost could be recorded without it (2.496.252). */}
+              {category === "minor" && wouldExceedCap(data.costs, amountIdr, terms) && (
+                <div className="fm-banner warn">
+                  This takes the month past the {formatMoney(terms.monthlyCap, terms.currency)} monthly
+                  cap. Spend beyond it belongs to {terms.uncappedName}.
+                </div>
+              )}
             </>
           )}
         </div>

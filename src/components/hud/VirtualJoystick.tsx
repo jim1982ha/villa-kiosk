@@ -57,6 +57,11 @@ export default function VirtualJoystick({ onMove }: Props) {
       }}
       onPointerUp={end}
       onPointerCancel={end}
+      // ⚠️ WebKit can lose a sequence without a pointerup (babylon/pointerRoster
+      // records it): the capture is dropped instead, and without this the knob
+      // stayed deflected and the walker kept walking with no finger on the
+      // glass (2.496.252).
+      onLostPointerCapture={end}
     >
       <div
         className="joystick-knob"

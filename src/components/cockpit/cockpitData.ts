@@ -7,7 +7,7 @@
 // summary would be actively misleading, not just noisy. See the Cockpit plan
 // memory for how this was verified.
 
-import { binarySensorClassInfo, stateLabelFor } from "@/config/BinarySensorClasses";
+import { stateLabelFor } from "@/config/BinarySensorClasses";
 import { categoryCounts } from "@/config/activeDevices";
 import { deviceLook, groupLook, storeLookSource, type LookSource } from "@/utils/deviceActivity";
 import { deviceRowText } from "@/utils/entityValue";
@@ -428,11 +428,12 @@ export function describeLogbookEntry(
   const mapping = entityMap[raw.entity_id];
   const name = displayLabelFor(raw.entity_id, mapping?.label, raw.name ?? (entity?.attributes.friendly_name as string | undefined));
 
-  if (raw.entity_id.startsWith("binary_sensor.")) {
-    const info = binarySensorClassInfo(entity?.attributes.device_class as string | undefined);
-    return { t, name, message: raw.state === "on" ? info.onLabel : info.offLabel };
-  }
-  return { t, name, message: raw.state.charAt(0).toUpperCase() + raw.state.slice(1) };
+  // ⚠️ THE SHARED WORDS, NOT ITS OWN (2.496.252). This line worded binary
+  // states by hand — anything but "on" took the OFF word, so a leak sensor
+  // that went OFFLINE read "No leak" — and capitalised the rest by hand, so
+  // "not_home" read "Not_home". stateLabelFor and prettyState are the rules
+  // every other surface (the pill, the history bars) already reads.
+  return { t, name, message: stateLabelFor(raw.entity_id, entity?.attributes.device_class as string | undefined)(raw.state) };
 }
 
 /** Describe + filter to the villa's own selectable devices (HA's raw

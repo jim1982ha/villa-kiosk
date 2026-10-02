@@ -12,7 +12,7 @@ import { Plus, Sparkles, Save, Download } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { resolveSiteTitle } from "@/config/AppConfig";
-import { useFmData } from "@/fm/FmDataContext";
+import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
 import { budgetStatus, formatMoney, monthKey, monthLabel, localStamp, parseAmount, projectedSpend } from "@/fm/fmEngine";
 import { categoryName } from "@/fm/fmTypes";
 import { useFmTerms } from "@/fm/useFmTerms";
@@ -48,6 +48,8 @@ export default function SpendTab(
   /** Id of the entry being corrected, or null when recording a new one — one
    *  form for both, same reasoning as the Faults tab. */
   const [editingId, setEditingId] = useState<string | null>(null);
+  /** Why the last save was refused — the form keeps what was typed (2.496.252). */
+  const [formError, setFormError] = useState<string | null>(null);
   const [label, setLabel] = useState("");
   const [deviceText, setDeviceText] = useState("");
   const [entityId, setEntityId] = useState("");
@@ -66,6 +68,7 @@ export default function SpendTab(
   const selectDevice = (id: string, name: string) => { setEntityId(id); setDeviceText(name); };
   const clearDevice = () => { setEntityId(""); setDeviceText(""); };
   const resetForm = () => {
+    setFormError(null);
     setAdding(false); setEditingId(null);
     setLabel(""); setDeviceText(""); setEntityId("");
     setAmount(""); setNote(""); setPhotoIds([]); setCategory("minor");
@@ -228,6 +231,7 @@ export default function SpendTab(
             <EvidenceRow photoIds={photoIds} onChange={setPhotoIds} />
           </div>
 
+          {formError && <div className="fm-inline-error" role="alert">{formError}</div>}
           <div className="modal-actions" style={{ marginTop: 8 }}>
             <button className="btn ghost" onClick={resetForm}>Cancel</button>
             <button
@@ -244,9 +248,11 @@ export default function SpendTab(
                 // `at` is set once, when the spend happened, and is never
                 // rewritten by a later correction — it is what the monthly
                 // total and the cap are computed from.
-                if (editingId) await updateCost(editingId, fields);
-                else await addCost({ ...fields, at: new Date().toISOString() });
-                resetForm();
+                const { done, note: why } = fmSaveOutcome(editingId
+                  ? await updateCost(editingId, fields)
+                  : await addCost({ ...fields, at: new Date().toISOString() }));
+                // Empty the form only when saved or queued (2.496.252).
+                if (done) resetForm(); else setFormError(why);
               }}
             >{editingId ? "Save changes" : "Save"}</button>
           </div>

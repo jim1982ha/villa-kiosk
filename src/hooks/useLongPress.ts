@@ -20,20 +20,15 @@
 //     mouse-and-finger only.
 
 import { useCallback, useRef } from "react";
+import { HOLD_MS_DESTRUCTIVE, HOLD_MS_HUD, HOLD_SCROLL_TOL_PX } from "@/utils/tapThresholds";
 
-/** Default hold. The HUD's own convention is shorter (see HOLD_MS_HUD) — a
- *  hold on a top-bar icon competes with nothing, whereas the destructive
- *  gates this hook was written for should not be easy to trip. */
-const LONG_PRESS_MS = 600;
-/** The duration the HUD category icons, the floor buttons and the camera
- *  picker have always used. Exported so a migration onto this hook CONVERGES
- *  THE CODE WITHOUT CHANGING THE GESTURE — 600 on those controls is a 25%
- *  slower hold on the app's most-used buttons, which is a product decision and
- *  not a refactor's to make. */
-export const HOLD_MS_HUD = 480;
+// Every hold's timing is in utils/tapThresholds.ts, one table (2.496.252).
+// The default is the DESTRUCTIVE hold, because the gates this hook was written
+// for should not be easy to trip; HUD controls pass HOLD_MS_HUD.
+export { HOLD_MS_HUD };
 
 export interface LongPressOptions {
-  /** How long the hold must last. Defaults to LONG_PRESS_MS. */
+  /** How long the hold must last. Defaults to HOLD_MS_DESTRUCTIVE. */
   holdMs?: number;
   /**
    * The element is a NATIVE `<button>`, so arm the keyboard hold on Space only.
@@ -51,8 +46,6 @@ export interface LongPressOptions {
    */
   nativeButton?: boolean;
 }
-/** Pixels of drift tolerated before the press is treated as a scroll/drag. */
-const MOVE_TOLERANCE_PX = 10;
 
 export interface LongPressHandlers {
   /** Swallows the click the browser fires after a completed hold. Without it
@@ -73,7 +66,7 @@ export interface LongPressHandlers {
 export function useLongPress(
   onLongPress: () => void, opts: LongPressOptions = {},
 ): LongPressHandlers {
-  const { holdMs = LONG_PRESS_MS, nativeButton = false } = opts;
+  const { holdMs = HOLD_MS_DESTRUCTIVE, nativeButton = false } = opts;
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const origin = useRef<{ x: number; y: number } | null>(null);
   /** Set when a hold completes, cleared by the click that follows it. */
@@ -109,8 +102,8 @@ export function useLongPress(
     onPointerMove: (e) => {
       const from = origin.current;
       if (!from) return;
-      if (Math.abs(e.clientX - from.x) > MOVE_TOLERANCE_PX
-        || Math.abs(e.clientY - from.y) > MOVE_TOLERANCE_PX) cancel();
+      if (Math.abs(e.clientX - from.x) > HOLD_SCROLL_TOL_PX
+        || Math.abs(e.clientY - from.y) > HOLD_SCROLL_TOL_PX) cancel();
     },
     // Holding Enter/Space auto-repeats, so ignore the repeats and let the
     // first press start the same timer a finger would.

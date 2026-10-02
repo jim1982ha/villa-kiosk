@@ -65,11 +65,33 @@ const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf
 const ctx = src("fm/FmDataContext.tsx");
 ck("mutate returns saved / refused / offline / unchanged, and undoes a refusal",
    /Promise<FmWriteResult>/.test(ctx) && /return "saved";/.test(ctx) && /if \(outcome\.reason === "refused"\) \{\s*setData\(before\);/.test(ctx) && /return "offline";/.test(ctx));
-ck("the guest's 'thank you' only when the report was saved",
-   /const problem = fmWriteProblem\(result\);\s*if \(problem\) setSendError\(problem\); else setSent\(true\);/.test(src("components/fm/GuestReportModal.tsx")));
-ck("the fault step closes only on a save; the three 'Saved' labels only when saved",
-   /if \(problem\) setFailed\(problem\); else onClose\(\);/.test(src("components/fm/FaultStageModal.tsx"))
-   && /if \(result !== "saved"\) return;/.test(src("components/fm/ReadinessTab.tsx"))
+// ── What a screen DOES with the result: fmSaveOutcome, one decision (2.496.252) ──
+// Offline is DONE (the write is queued on this device and re-sent on its own):
+// the old "nothing was sent… try again" made a guest file the same report twice.
+// Refused is the ONLY result that keeps the form — four forms emptied
+// themselves whatever happened, throwing away what was typed.
+const { fmSaveOutcome } = await import("@/fm/fmSave");
+const o = Object.fromEntries(["saved", "unchanged", "offline", "refused"].map((r) => [r, fmSaveOutcome(r)]));
+ck("saved / unchanged: done, nothing to say", o.saved.done && o.saved.note === null && o.unchanged.done && o.unchanged.note === null);
+ck("offline: DONE (queued), and the person is told it will be sent — never 'try again'",
+   o.offline.done === true && /sent automatically/.test(o.offline.note) && !/try again/i.test(o.offline.note), o.offline);
+ck("refused: NOT done — the form keeps what was typed, and says so", o.refused.done === false && /still here/.test(o.refused.note), o.refused);
+
+const SAVES = ["components/fm/GuestReportModal.tsx", "components/fm/FaultStageModal.tsx", "components/fm/FaultsTab.tsx",
+  "components/fm/SpendTab.tsx", "components/fm/ScheduleEditor.tsx", "components/fm/TodayTab.tsx", "components/cockpit/CockpitModal.tsx"];
+const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+ck("every Facility save asks fmSaveOutcome; the old wording is gone",
+   SAVES.every((f) => /fmSaveOutcome\(/.test(src(f))) && !SAVES.some((f) => /fmWriteProblem/.test(src(f))) && !/fmWriteProblem/.test(ctx + src("fm/fmSave.ts")),
+   SAVES.filter((f) => !/fmSaveOutcome\(/.test(src(f))));
+// The defect's shape: a mutator awaited as a statement, then the form emptied regardless.
+const blind = SAVES.filter((f) => /await (add|update|log|advance|close)[A-Za-z]*\([^;]*\);\s*(resetForm|cancel|setOpenId\(null\))/.test(strip(src(f))));
+ck("  ...and no form empties itself after a save it did not look at", blind.length === 0, blind);
+ck("the guest's thank-you says when the report is only queued on this tablet",
+   /queued\s*\?\s*"This tablet will send it on its own/.test(src("components/fm/GuestReportModal.tsx")));
+ck("the fault step warns about the monthly cap, as the Today and Spend forms do",
+   /category === "minor" && wouldExceedCap\(data\.costs, amountIdr, terms\)/.test(src("components/fm/FaultStageModal.tsx")));
+ck("the three 'Saved' labels still show only when saved (not when queued)",
+   /if \(result !== "saved"\) return;/.test(src("components/fm/ReadinessTab.tsx"))
    && /=== "saved"\) setSaved\(true\);/.test(src("components/fm/ReportTab.tsx"))
    && /=== "saved"\) setStatementSaved\(true\);/.test(src("components/fm/SpendTab.tsx")));
 

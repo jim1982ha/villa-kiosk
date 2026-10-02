@@ -24,7 +24,7 @@ import { useState } from "react";
 import { Camera, Check, Wrench } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
-import { useFmData, fmWriteProblem } from "@/fm/FmDataContext";
+import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
 import { uploadEvidence } from "@/fm/fmApi";
 import NotesField from "./NotesField";
 import { useModalA11y } from "@/hooks/useModalA11y";
@@ -49,6 +49,8 @@ export default function GuestReportModal({
   const [busy, setBusy] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
+  /** Sent while the add-on was unreachable: queued on this device. */
+  const [queued, setQueued] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
 
   const deviceLabel = entityId ? label(entityId) : undefined;
@@ -83,8 +85,10 @@ export default function GuestReportModal({
     setBusy(false);
     // "Thank you — reported" ONLY when it was (2.496.184): it was shown
     // whatever the write did, and a guest cannot check afterwards.
-    const problem = fmWriteProblem(result);
-    if (problem) setSendError(problem); else setSent(true);
+    // Offline counts as sent: it is queued and goes on its own — telling the
+    // guest to try again filed the report twice (2.496.252).
+    const { done, note: why } = fmSaveOutcome(result);
+    if (done) { setQueued(why !== null); setSent(true); } else setSendError(why);
   };
 
   return (
@@ -110,8 +114,9 @@ export default function GuestReportModal({
               <Check size={28} />
               <h3>Thank you — that&apos;s been reported.</h3>
               <p className="muted body-text">
-                Whoever looks after this villa can see it now. You don&apos;t need
-                to do anything else.
+                {queued
+                  ? "This tablet will send it on its own as soon as it reaches the villa's system. You don't need to do anything else."
+                  : "Whoever looks after this villa can see it now. You don't need to do anything else."}
               </p>
             </div>
             <div className="modal-footer">
