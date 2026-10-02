@@ -24,10 +24,10 @@ def report(state, store_path: str, hours: int = 24, now: datetime | None = None)
     now = now or datetime.now(timezone.utc)
     since = now - timedelta(hours=hours)
     jobs = []
-    for k, slot in sorted(state.kv_prefix("job:").items(), key=lambda kv: kv[1]):
+    for job, slot in state.jobs_run():
         try:
             if datetime.fromisoformat(slot) >= since:
-                jobs.append({"job": k[4:], "ran_at": slot})
+                jobs.append({"job": job, "ran_at": slot})
         except ValueError:
             continue
     counts: dict[str, int] = {}

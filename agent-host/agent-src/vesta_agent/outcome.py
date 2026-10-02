@@ -103,7 +103,7 @@ class Outcome:
                 iid = res.get("incident_id") or (int(m.group(1)) if m else None)
                 if iid:
                     kb = {"inline_keyboard": [[{"text": a, "callback_data": f"i:{iid}:{b}"} for a, b in LADDER]]}
-                    self.state.put(f"inc:{iid}:{chat}", skill_name)
+                    self.state.set_alert_skill(iid, chat, skill_name)
             doc = None
             att = item.get("attachment")
             if att:
@@ -116,7 +116,7 @@ class Outcome:
             mid = await self.send(chat, text, keyboard=kb, document=doc)
             if kb and mid:
                 # every message with this incident's buttons, in every chat: all of them settle together
-                self.state.put(f"incmsg:{iid}:{chat}:{mid}", text)
+                self.state.remember_alert_message(iid, chat, mid, text)
             chats.add(chat)
             done["sent"] += 1
         for s in res.get("settle") or []:
@@ -236,12 +236,11 @@ class Outcome:
         only answered "already closed"."""
         note = note.replace("{time}", datetime.now(ZoneInfo(self.tz)).strftime("%H:%M"))
         n = 0
-        for k, text in self.state.kv_prefix(f"incmsg:{iid}:").items():
-            _, _, chat, mid = k.split(":")
+        for chat, mid, text in self.state.alert_messages(iid):
             if self.edit and note:
-                await self.edit(int(chat), int(mid), f"{text.rstrip()}\n\n{note}"[:4096])
+                await self.edit(chat, mid, f"{text.rstrip()}\n\n{note}"[:4096])
                 n += 1
-            self.state.drop(k)
+            self.state.forget_alert_message(iid, chat, mid)
         return n
 
     async def press(self, q: dict, chat: int, data: str, person, toast: Callable[[str], Awaitable]) -> None:
@@ -256,7 +255,7 @@ class Outcome:
         options = {b: a for a, b in LADDER}
         if opt not in options:
             return await toast("Unknown button.")
-        skill_name = self.state.get(f"inc:{iid}:{chat}")
+        skill_name = self.state.alert_skill(iid, chat)
         skill = self.skills.get(skill_name) if skill_name else None
         if skill is None or not skill.on_reply:
             self.state.log("press_refused", {"incident": iid, "by": person.telegram_id, "reason": "not sent to this chat, or its skill is gone"})
@@ -274,7 +273,7 @@ class Outcome:
         # and the chat itself shows the incident was handled
         msg = q.get("message") or {}
         note = f"{label} — {person.name}, {{time}}"
-        known = f"incmsg:{iid}:{chat}:{msg.get('message_id')}" in self.state.kv_prefix(f"incmsg:{iid}:")
+        known = bool(msg.get("message_id")) and self.state.is_alert_message(iid, chat, msg["message_id"])
         await self.settle(int(iid), note)
         if self.edit and msg.get("message_id") and not known:
             # a message sent before its copies were remembered (an older version): it settles alone

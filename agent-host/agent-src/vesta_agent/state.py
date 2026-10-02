@@ -106,6 +106,61 @@ class State:
             self.db.execute("delete from kv where k=?", (k,))
             self.db.commit()
 
+    # ------------------------------------------------------------------ named records
+    # ⚠️ THE KEY LAYOUTS LIVE HERE, AND ONLY HERE (0.6.21). Four prefixes were
+    # invented by four modules — inc: and incmsg: by outcome.py, job: by
+    # scheduler.py (and sliced back by status.py, `k[4:]`), saved_by_model: by
+    # tools.py — each parsing its own. The stored keys are unchanged, so the
+    # records an agent already holds keep working with no migration.
+
+    # A scheduled job's last slot: claimed once per slot, by one tick.
+    def claim_job_slot(self, job: str, slot_iso: str) -> bool:
+        """True if this tick claims `job` for `slot_iso`; False if it already ran in that slot.
+        Under the lock: a read then a write would let two ticks both claim it."""
+        with self._lock:
+            k = f"job:{job}"
+            r = self.db.execute("select v from kv where k=?", (k,)).fetchone()
+            if r and r["v"] == slot_iso:
+                return False
+            self.db.execute("insert into kv(k, v) values(?,?) on conflict(k) do update set v=excluded.v", (k, slot_iso))
+            self.db.commit()
+            return True
+
+    def jobs_run(self) -> list[tuple[str, str]]:
+        """(job, last slot) for every scheduled job, oldest slot first."""
+        return sorted(((k[len("job:"):], v) for k, v in self.kv_prefix("job:").items()), key=lambda kv: kv[1])
+
+    # An alert's buttons in the chats: which skill answers them there, and every message carrying them.
+    def set_alert_skill(self, incident: int | str, chat: int | str, skill: str) -> None:
+        self.put(f"inc:{incident}:{chat}", skill)
+
+    def alert_skill(self, incident: int | str, chat: int | str) -> str | None:
+        return self.get(f"inc:{incident}:{chat}")
+
+    def remember_alert_message(self, incident: int | str, chat: int | str, message_id: int | str, text: str) -> None:
+        self.put(f"incmsg:{incident}:{chat}:{message_id}", text)
+
+    def alert_messages(self, incident: int | str) -> list[tuple[int, int, str]]:
+        """(chat, message id, text) of every message still carrying this incident's buttons."""
+        out = []
+        for k, text in self.kv_prefix(f"incmsg:{incident}:").items():
+            _, _, chat, mid = k.split(":")
+            out.append((int(chat), int(mid), text))
+        return out
+
+    def is_alert_message(self, incident: int | str, chat: int | str, message_id: int | str) -> bool:
+        return self.get(f"incmsg:{incident}:{chat}:{message_id}") is not None
+
+    def forget_alert_message(self, incident: int | str, chat: int | str, message_id: int | str) -> None:
+        self.drop(f"incmsg:{incident}:{chat}:{message_id}")
+
+    # A file in the out folder that the MODEL saved (a script's output may not be overwritten by it).
+    def mark_saved_by_model(self, name: str) -> None:
+        self.put(f"saved_by_model:{name}", name)
+
+    def saved_by_model(self, name: str) -> bool:
+        return self.get(f"saved_by_model:{name}") is not None
+
     # ------------------------------------------------------------------ own messages
     # ⚠️ HOW A PRESS OR A REPLY IS KNOWN TO BE FOR THE AGENT. Home Assistant and the
     # agent share one bot, so "the bot sent it" says nothing: the agent keeps the id of

@@ -387,12 +387,12 @@ class Toolbox:
             path = os.path.join(self.s.out_dir, name)
             # ⚠️ ONLY ITS OWN FILES: a file a script wrote (facts.json, a report page) is that script's
             # output; the model saving over it would put its own figures in a report.
-            if os.path.exists(path) and self.state.get("saved_by_model:" + name) is None:
+            if os.path.exists(path) and not self.state.saved_by_model(name):
                 return _err(f"{name} was made by a script: choose another name.")
             os.makedirs(self.s.out_dir, exist_ok=True)
             with open(path, "w", encoding="utf-8") as f:
                 f.write(content)
-            self.state.put("saved_by_model:" + name, name)
+            self.state.mark_saved_by_model(name)
             self.state.log("saved_file", {"name": name, "bytes": len(content)})
             return _ok(f"Saved {name}.")
         return handler

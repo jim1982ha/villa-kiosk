@@ -1,3 +1,8 @@
+## 0.12.22
+
+### Changed
+- Nothing changes for you. The agent's own records (which scheduled jobs already ran, which messages carry an alert's buttons, which files the AI saved) are now kept through one set of named operations instead of loose keys; what the agent already holds is read as before. A scheduled job can no longer be started twice in the same slot if two checks run at once.
+
 ## 0.12.21
 
 ### Changed

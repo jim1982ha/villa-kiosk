@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.21 (3 October 2026)
+
+- State: named records — claim_job_slot (atomic under the lock; was get-then-put) / jobs_run, set_alert_skill / alert_skill, remember / alert_messages / is_alert_message / forget_alert_message, mark_saved_by_model / saved_by_model. Same stored keys (no migration). outcome, scheduler, status, tools use them. tests/test_state_records.py (incl. old-key compatibility and ownership); 3 mutations red.
+
 ## 0.6.20 (3 October 2026)
 
 - UI Costs: Period as a one-line field (.field.row), the figures in a .divided block. tests/test_ui.py pins it.

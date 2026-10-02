@@ -71,11 +71,8 @@ class Scheduler:
         self.housekeeping = housekeeping    # async () -> None, every tick
         self._last_every: datetime | None = None
 
-    def _claim(self, key: str, slot: datetime) -> bool:
-        if self.state.get(key) == slot.isoformat():
-            return False
-        self.state.put(key, slot.isoformat())
-        return True
+    def _claim(self, job: str, slot: datetime) -> bool:
+        return self.state.claim_job_slot(job, slot.isoformat())
 
     async def tick(self, now: datetime | None = None) -> list[str]:
         """One pass. Returns what it started, for the log and the tests."""
@@ -89,13 +86,13 @@ class Scheduler:
                     await self.run_code(sk, sk.every_5_min, 300)
                     started.append(f"{sk.name}:every_5_min")
         slot = slot_for(PACK_AT, now)
-        if slot and self._claim("job:engine:pack", slot):
+        if slot and self._claim("engine:pack", slot):
             await self.rebuild_pack()
             started.append("engine:pack")
         for sk in skills.values():
             for i, job in enumerate(sk.schedule):
                 slot = slot_for(job["when"], now)
-                if not slot or not self._claim(f"job:{sk.name}:{i}:{job['when']}", slot):
+                if not slot or not self._claim(f"{sk.name}:{i}:{job['when']}", slot):
                     continue
                 name = f"{sk.name}:{job['when']}"
                 if job.get("run"):
