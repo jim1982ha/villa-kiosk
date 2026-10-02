@@ -1,3 +1,8 @@
+## 2.496.249
+
+### Changed
+- Nothing changes in the app itself. This release only changes how VESTA releases are made: one command now writes the version everywhere, runs every check, sends the release and waits until Home Assistant can actually offer it, so a release can no longer be reported as done before it reaches you.
+
 ## 2.496.248
 
 ### Changed
