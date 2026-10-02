@@ -1,3 +1,9 @@
+## 0.12.18
+
+### Changed
+- **The figures on the agent page use the whole width of a phone.** On the Overview ("The last 24 hours") and on Costs, the numbers were stacked one below the other down the screen. They now sit two to a row on a phone, and more side by side on a wider screen.
+- How agent releases are made is now one command that writes the versions, runs every check and waits until Home Assistant can offer the update. Nothing else changes for you.
+
 ## 0.12.17
 
 ### Fixed
