@@ -93,6 +93,15 @@ console.log("\n  the signed-in badge:");
   const help = menu.slice(menu.indexOf('className="hud-menu-help"') - 200, menu.indexOf("<span>Label size</span>") + 80);
   ck("  ...and 'Label size (?)' opens the map-colours legend; the 'Map colours' row is gone",
      /setLegendOpen\(true\)/.test(help) && /<CircleHelp size=\{18\}/.test(help) && !menu.includes("<span>Map colours</span>"), help);
+  // 2.496.247: no "Signed in as …" header — the badge says who, its dot the
+  // connection; the robot's dot says the agent, as in the top bar. ONE dot.
+  ck("  ...no 'Signed in as' header; the badge carries the connection as the shared status dot",
+     !menu.includes("hud-menu-header") && !/Signed in as \{ROLE_LABELS/.test(menu)
+     && /<span className=\{`status-dot \$\{connTone\}`\} \/>/.test(logout), logout.slice(0, 400));
+  const cockpitRow = menu.slice(menu.indexOf("setCockpitOpen(true)"), menu.indexOf("Cockpit{"));
+  ck("  ...and the menu's robot wears the top bar's own agentDot, with no 'agent online' text",
+     /\{doors\.agent && agentDot\}/.test(cockpitRow) && !/agent \$\{agentOnline/.test(hud)
+     && (hud.match(/className=\{`status-dot /g) || []).length === 2 && !/agent-btn-dot/.test(hud), cockpitRow);
 }
 
 done("✅ one table answers every role question; counts match their lists");

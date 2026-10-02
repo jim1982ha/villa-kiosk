@@ -1,3 +1,9 @@
+## 2.496.247
+
+### Changed
+- **Phone menu: no more "Signed in as Owner" line.** The badge on the "Log out" row (O, FM or G) already shows who is signed in. The dot that showed the connection to Home Assistant on that line now sits at the bottom right of the badge: green when connected, flashing amber while connecting, red when the connection is lost.
+- **Phone menu: the VESTA Agent's status is a dot on the robot.** The Cockpit row no longer says "· agent online". As in the top bar on a tablet, the robot has a small dot at its bottom right: green when the agent is online, amber when it is offline. The phone menu and the top bar now use the same dot.
+
 ## 2.496.246
 
 ### Changed

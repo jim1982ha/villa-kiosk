@@ -88,7 +88,7 @@ ck("  ...and so is the window", /\{agentOpen && doors\.agent && \(/.test(dash));
      && /doors=\{doors\}\s*onOpenAgent=\{onOpenAgent\}/.test(hud));
   ck("  ...the Cockpit button shows the robot and the presence dot only with the agent's door, the ⚠ without",
      /\{doors\.agent \? <Bot size=\{24\} \/> : <TriangleAlert size=\{24\} \/>\}/.test(hud)
-     && /\{doors\.agent && <span className=\{`agent-btn-dot /.test(hud) && !/onOpenAgent \?|onOpenAgent &&/.test(hud));
+     && /\{doors\.agent && agentDot\}/.test(hud) && /const agentDot = <span className=\{`status-dot \$\{agentOnline/.test(hud) && !/onOpenAgent \?|onOpenAgent &&/.test(hud));
   ck("  ...and the Cockpit's footer offers 'VESTA Agent' only with that door",
      /\{doors\.agent \? \(\s*<button className="btn ghost" onClick=\{\(\) => \{ onClose\(\); onOpenAgent\(\); \}\}/.test(cockpit)
      && /VESTA Agent\{agentWaiting > 0/.test(cockpit) && /\) : <span \/>\}/.test(cockpit));

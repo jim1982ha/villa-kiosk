@@ -215,7 +215,7 @@
     /* Purely a hit area — never paints, never affects layout. */
   }
   /* Dropped, not just visually redundant: it's ALREADY duplicated in the
-     overflow menu's header (see HUD.tsx, the hud-menu-header conn-dot) so
+     overflow menu, as the dot on its Log out row's role badge (HUD.tsx) so
      reachability doesn't regress, and removing it is what actually frees
      enough width for the brand chip to stop colliding with the centred
      category row at this tier — the real fix, not a cosmetic one. */

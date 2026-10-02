@@ -41,7 +41,7 @@
      Reduced-motion asks for no VESTIBULAR motion, not for no feedback, so
      these keep animating with the movement taken out: a slow opacity breath
      conveys "still working" while nothing travels, rotates or scales. */
-  .spinner, .conn-dot.connecting .dot, .state-timeline-skeleton {
+  .spinner, .conn-dot.connecting .dot, .status-dot.pending, .state-timeline-skeleton {
     animation: reduced-motion-breathe 1.6s ease-in-out infinite !important;
   }
   /* The skeleton's own look is a moving GRADIENT, so the breath above has to

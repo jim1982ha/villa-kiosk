@@ -280,6 +280,23 @@
 }
 
 /* Connection status sits right next to the villa name — just a coloured dot. */
+/* A status dot on a glyph's lower right — ONE look for every glyph that
+   carries a status (2.496.247): the agent's presence on the robot (top bar
+   and phone menu), the connection on the phone menu's role badge. Placed by
+   its parent (position: relative); the tone is the status vocabulary's. */
+.status-dot {
+  position: absolute; right: var(--status-dot-inset, 6px); bottom: var(--status-dot-inset, 6px);
+  width: 9px; height: 9px; border-radius: 50%;
+  box-shadow: 0 0 0 1.5px var(--bg-overlay);
+  background: var(--status-off);
+}
+.status-dot.on { background: var(--status-on); }
+.status-dot.warn { background: var(--status-warning); }
+.status-dot.danger { background: var(--status-danger); }
+.status-dot.pending { background: var(--status-pending); animation: pulse 1s infinite; }
+/* A phone-menu row's glyph that carries a .status-dot: the dot sits on the
+   glyph's own corner, not the row's. */
+.hud-menu-glyph { position: relative; display: inline-grid; place-items: center; flex: 0 0 auto; --status-dot-inset: -3px; }
 .conn-dot { display: inline-flex; align-items: center; }
 .conn-dot .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--status-off); }
 .conn-dot.online .dot { background: var(--status-on); box-shadow: 0 0 8px var(--status-on); }

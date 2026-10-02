@@ -158,6 +158,9 @@ export default function HUD({
     [agentMessages, agentStatus]);
   const agentTitle = `VESTA Agent — ${agentOnline ? "online" : "offline"}`
     + (agentWaiting > 0 ? `, ${agentWaiting} message${agentWaiting === 1 ? "" : "s"} to answer` : "");
+  // The agent's presence as the dot on its robot — the top bar's and the
+  // phone menu's are this one element (.status-dot, 2.496.247).
+  const agentDot = <span className={`status-dot ${agentOnline ? "on" : "warn"}`} aria-hidden="true" />;
 
   // ── Floor buttons now do double duty, no separate Rooms button any more:
   // a normal tap/click keeps the original behaviour (switch to that floor,
@@ -414,6 +417,8 @@ export default function HUD({
 
   const connClass =
     connection === "connected" ? "online" : connection === "connecting" ? "connecting" : "offline";
+  // The same status as a .status-dot's tone — the phone menu's role badge.
+  const connTone = connClass === "online" ? "on" : connClass === "connecting" ? "pending" : "danger";
 
   const toggleCategory = (cat: Category) =>
     update({
@@ -648,7 +653,7 @@ export default function HUD({
               aria-label={`Open Cockpit — villa status at a glance${doors.agent ? ` (${agentTitle})` : ""}`}
             >
               {doors.agent ? <Bot size={24} /> : <TriangleAlert size={24} />}
-              {doors.agent && <span className={`agent-btn-dot ${agentOnline ? "online" : "offline"}`} aria-hidden="true" />}
+              {doors.agent && agentDot}
               {attentionGroups.length > 0 && (
                 <span className="icon-btn-count" aria-hidden="true">
                   {formatCountBadge(attentionGroups.length)}
@@ -728,23 +733,6 @@ export default function HUD({
             </button>
             {menuOpen && (
               <div className="hud-menu" role="menu" aria-label="Settings and profile">
-                {/* Connection status, repeated here (the top-bar .hud-brand
-                    chip always shows its own dot too, phone included — see
-                    its media queries) since this dropdown is the one place
-                    Settings/profile live on a phone, and the profile line
-                    is a natural spot for it — as a bare icon (no
-                    "Connection: " text) sharing the line, not its own row. */}
-                <div className="hud-menu-header">
-                  {role && <span>Signed in as {ROLE_LABELS[role]}</span>}
-                  <span
-                    className={`conn-dot ${connClass}`}
-                    title={`Connection: ${connection}`}
-                    role="img"
-                    aria-label={`Connection: ${connection}`}
-                  >
-                    <span className="dot" />
-                  </span>
-                </div>
                 {/* Cockpit/Facility — the same two buttons that sit beside
                     the profile chip on a roomy screen (see
                     .hud-right-inline), collapsed into menu items here so a
@@ -755,11 +743,17 @@ export default function HUD({
                   role="menuitem"
                   className="hud-menu-item"
                   onClick={() => { setMenuOpen(false); setCockpitOpen(true); }}
+                  title={doors.agent ? agentTitle : undefined}
                 >
-                  {doors.agent ? <Bot size={18} /> : <TriangleAlert size={18} />}
+                  {/* The agent's presence is the dot on its robot, as in the
+                      top bar (owner, 2.496.247) — no "· agent online" text. */}
+                  <span className="hud-menu-glyph">
+                    {doors.agent ? <Bot size={18} /> : <TriangleAlert size={18} />}
+                    {doors.agent && agentDot}
+                  </span>
                   <span>
                     Cockpit{attentionGroups.length > 0 ? ` (${formatCountBadge(attentionGroups.length)})` : ""}
-                    {doors.agent ? ` · agent ${agentOnline ? "online" : "offline"}` : ""}
+                    {doors.agent && <span className="sr-only">{` — ${agentTitle}`}</span>}
                   </span>
                 </button>
                 {doors.facility && (
@@ -836,15 +830,22 @@ export default function HUD({
                   </button>
                 )}
                 {/* The same round badge as the desktop bar's (O, FM, G), and
-                    the same action: back to the PIN pad (beginSwitch). */}
+                    the same action: back to the PIN pad (beginSwitch). Who is
+                    signed in and the connection to Home Assistant are said by
+                    the badge and its dot (owner, 2.496.247) — the menu's
+                    "Signed in as …" header line repeated both and is gone. */}
                 {role && (
                   <button
                     role="menuitem"
                     className="hud-menu-item"
                     onClick={() => { setMenuOpen(false); beginSwitch(); }}
-                    aria-label={`Signed in as ${ROLE_LABELS[role]} — log out`}
+                    title={`Signed in as ${ROLE_LABELS[role]} · Connection: ${connection}`}
+                    aria-label={`Signed in as ${ROLE_LABELS[role]}, connection ${connection} — log out`}
                   >
-                    <span aria-hidden="true" className={`role-glyph${ROLE_INITIALS[role].length > 1 ? " two" : ""}`}>{ROLE_INITIALS[role]}</span>
+                    <span className="hud-menu-glyph" aria-hidden="true">
+                      <span className={`role-glyph${ROLE_INITIALS[role].length > 1 ? " two" : ""}`}>{ROLE_INITIALS[role]}</span>
+                      <span className={`status-dot ${connTone}`} />
+                    </span>
                     <span>Log out</span>
                   </button>
                 )}

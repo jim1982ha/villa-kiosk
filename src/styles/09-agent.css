@@ -11,16 +11,10 @@
   background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
-/* Top-bar button: presence as a small dot on the glyph's lower right, clear of
-   the count badge in the upper right (.icon-btn-count). */
+/* Top-bar button: presence as the shared .status-dot (02-hud.css) on the
+   glyph's lower right, clear of the count badge in the upper right
+   (.icon-btn-count). */
 .agent-btn { position: relative; }
-.agent-btn-dot {
-  position: absolute; right: 6px; bottom: 6px;
-  width: 9px; height: 9px; border-radius: 50%;
-  box-shadow: 0 0 0 1.5px var(--bg-overlay);
-}
-.agent-btn-dot.online { background: var(--status-on); }
-.agent-btn-dot.offline { background: var(--status-warning); }
 
 .agent-presence {
   display: flex; align-items: center; gap: var(--space-2);
