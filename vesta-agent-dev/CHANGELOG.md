@@ -1,3 +1,8 @@
+## 0.12.21
+
+### Changed
+- **Costs: the period selector sits on the same line as "Period"**, at its natural width, instead of a wide box on a line of its own. A thin line now separates it from the key figures below.
+
 ## 0.12.20
 
 ### Changed
