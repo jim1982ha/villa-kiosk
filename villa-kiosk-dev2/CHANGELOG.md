@@ -1,3 +1,16 @@
+## 2.496.252
+
+### Fixed
+- **A guest's report is no longer filed twice when the connection drops.** If the tablet could not reach the add-on, the report was already kept on the tablet and sent automatically later, but the window said "nothing was sent… try again", and pressing Send again created a second report. It now thanks the guest and says the tablet will send it on its own. The same applies to moving a fault to its next stage and to closing a fault.
+- **The Facility forms keep what you typed when a save is refused.** Raising or editing a fault, recording a cost, logging a completed task and editing a maintenance task emptied the form after Save even when the add-on refused it, so the text was lost. The form now stays filled and says why it was not saved.
+- **Recording a cost when a fault is resolved now warns about the monthly cap**, as the Today and Spend forms already did.
+- **The Cockpit's activity feed words states correctly.** A leak sensor that went offline was listed as "No leak"; it now reads "Unavailable". Words such as "not_home" read "Not home".
+- **Chart tooltips show a reading as its badge does**, for example "6.6 kW" instead of "6571W".
+- **The on-screen joystick stops when the phone loses the finger.** On iPhone and iPad the walk could carry on with no finger on the screen.
+
+### Changed
+- Nothing else looks different: every press-and-hold timing is now stated in one place (unchanged), and new checks make sure a device's map icon is always its panel icon.
+
 ## 2.496.251
 
 ### Fixed
