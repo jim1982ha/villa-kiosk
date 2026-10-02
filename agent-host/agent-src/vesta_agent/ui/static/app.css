@@ -113,6 +113,9 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px 20px; }
 /* ---- form controls */
 .field { display: flex; flex-direction: column; gap: 6px; font-size: var(--text-sm); color: var(--text-secondary); }
 .field .hint { color: var(--text-dim); font-size: var(--text-xs); }
+/* A field whose label sits BESIDE its control (the Costs' Period): one line, the control its natural width. */
+.field.row { flex-direction: row; align-items: center; gap: 12px; }
+.field.row > select { width: auto; flex: 0 1 auto; }
 input[type=text], input[type=number], select, textarea {
   background: var(--bg-input); border: 1px solid var(--hairline); border-radius: var(--radius);
   padding: 10px 12px; min-height: var(--touch-min); color: var(--text-primary); width: 100%;

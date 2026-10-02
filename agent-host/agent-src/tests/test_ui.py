@@ -326,3 +326,13 @@ def test_the_title_line_holds_the_short_version_and_the_theme_toggle_on_the_righ
     assert html.index('class="brand"') < html.index('class="themes"')
     assert re.search(r"\.themes \{[^}]*margin-left: auto", css) and not re.search(r"\.ver \{[^}]*margin-left", css)
     assert "ver.textContent = `v${" in js and "ver.title = " in js   # short on screen, the full line on hover
+
+
+def test_the_costs_period_sits_beside_its_label_and_a_separator_comes_before_the_figures():
+    # Owner, 2026-10-03: "Period" above a full-width selector, the figures straight under it.
+    from vesta_agent.ui.server import STATIC
+    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
+    css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
+    assert 'h("label", { class: "field row" }, h("span", {}, "Period"), period)' in js
+    assert 'h("div", { class: "divided" }, kpis)' in js
+    assert ".field.row { flex-direction: row;" in css

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.20 (3 October 2026)
+
+- UI Costs: Period as a one-line field (.field.row), the figures in a .divided block. tests/test_ui.py pins it.
+
 ## 0.6.19 (3 October 2026)
 
 - UI header: the short version (app version · channel, full line as the title attribute) inside .brand; the theme toggle margin-left:auto on the same line. tests/test_ui.py pins it.

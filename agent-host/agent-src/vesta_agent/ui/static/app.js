@@ -191,7 +191,9 @@ async function costs(days = 30) {
     r.stopped ? h("span", { class: "chip off" }, "stopped at its limit") : r.error ? h("span", { class: "chip off" }, r.error) : ""]);
   fill($view,
     card("What the AI cost", "As the Anthropic API reported it for each run: a chat reply, or a run of an AI job. Tokens in count what the agent re-read from its cache too.",
-      h("div", { class: "inline" }, field("Period", period)), kpis, h("div", { class: "divided" }, h("h2", {}, "Per day"), chart)),
+      // The period's label and its selector on one line, the figures below a separator (owner, 2026-10-03).
+      h("label", { class: "field row" }, h("span", {}, "Period"), period),
+      h("div", { class: "divided" }, kpis), h("div", { class: "divided" }, h("h2", {}, "Per day"), chart)),
     card("By work", "Chat replies, and each AI job.", groupTable(c.by_work, "Work")),
     card("By model", "Which model did the work.", groupTable(c.by_model, "Model")),
     card("Every run", `${c.runs_count} runs, newest first. The model and tokens are recorded from agent 0.6.9 on; older runs show —.`,
