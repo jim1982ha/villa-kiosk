@@ -58,6 +58,15 @@ function card(title, lead, ...kids) {
   return h("section", { class: "card" }, h("h2", {}, title), lead ? h("p", { class: "lead" }, lead) : null, ...kids);
 }
 
+// A set of figures, each a number over its label: THE one way the page shows them (Overview's last
+// 24 hours, the Costs). They sit side by side, as many to a row as the width allows — two on a
+// phone, never one per line (owner, 2026-10-02: six figures stacked down a phone screen). The
+// form fields keep .grid, one per line on a phone, which is right for inputs.
+function figures(pairs) {
+  return h("div", { class: "figures" },
+    pairs.map(([label, value]) => h("div", { class: "kpi" }, h("div", { class: "n" }, value), h("div", { class: "l" }, label))));
+}
+
 function field(label, input, hint) {
   // a <label> forwards a click inside it to its first control: a picker (a box and a list) is in a <div>
   const tag = input && input.classList && input.classList.contains("picker") ? "div" : "label";
@@ -142,9 +151,8 @@ async function costs(days = 30) {
   if (c.none) return fill($view, card("Costs", "The agent has not recorded anything yet (it has not run in agent mode)."));
   const period = h("select", { "aria-label": "Period", onchange: (e) => costs(Number(e.target.value)) },
     [[7, "Last 7 days"], [30, "Last 30 days"], [90, "Last 90 days"]].map(([v, l]) => h("option", { value: v, selected: v === days }, l)));
-  const kpis = h("div", { class: "grid" }, [["Today", usd(c.today)], ["Last 7 days", usd(c.last_7_days)], ["This month", usd(c.this_month)],
-    [`Per run, last ${days} days (${c.runs_count} runs)`, usd(c.runs_count ? c.period / c.runs_count : 0)]]
-    .map(([l, v]) => h("div", { class: "kpi" }, h("div", { class: "n" }, v), h("div", { class: "l" }, l))));
+  const kpis = figures([["Today", usd(c.today)], ["Last 7 days", usd(c.last_7_days)], ["This month", usd(c.this_month)],
+    [`Per run, last ${days} days (${c.runs_count} runs)`, usd(c.runs_count ? c.period / c.runs_count : 0)]]);
   // the cost of each day: bars drawn in SVG, with a Y axis (US$) and its grid lines (owner, 2026-10-01: "always
   // the Y axis and grid lines"), and a date under every bar for a week, every few days for longer
   const W = 640, H = 150, L = 52, T = 8, n = c.by_day.length;
@@ -235,11 +243,9 @@ async function overview() {
   ];
   if (r) {
     kids.push(card("The last 24 hours", "From the agent's own records.",
-      h("div", { class: "grid" },
-        [["alerts followed", count("critical_event")], ["buttons pressed", count("ladder")],
-         ["actions done", count("executed") + count("direct")], ["replies written", count("run")],
-         ["AI cost (USD)", r.ai_cost_usd.toFixed(2)], ["failures", count("failed") + count("code_script_failed") + count("send_failed")]]
-          .map(([l, n]) => h("div", { class: "kpi" }, h("div", { class: "n" }, n), h("div", { class: "l" }, l)))),
+      figures([["alerts followed", count("critical_event")], ["buttons pressed", count("ladder")],
+        ["actions done", count("executed") + count("direct")], ["replies written", count("run")],
+        ["AI cost (USD)", r.ai_cost_usd.toFixed(2)], ["failures", count("failed") + count("code_script_failed") + count("send_failed")]]),
       r.scheduled_jobs.length ? h("div", { class: "divided" }, h("h2", {}, "Scheduled jobs run"),
         paged(["Job", "Ran at"], [...r.scheduled_jobs].reverse().map((j) => [j.job, new Date(j.ran_at).toLocaleString()]))) : null));
   } else {

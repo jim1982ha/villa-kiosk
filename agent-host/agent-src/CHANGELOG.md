@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.18 (2 October 2026)
+
+- UI: one figures() builder for every set of figures (Overview's last 24 hours, Costs), its own .figures grid: two 120px columns on a phone instead of .grid's one 220px column. tests/test_ui.py pins it.
+- tests/test_engine_version.py: vesta-agent.yaml, __version__ and this file's top entry are one version (nothing compared them).
+- tests/test_favicon.py reads the Kiosk's icons from dev2 in git (as the contract test does), not this branch's stale public/.
+
 ## 0.6.17 (2 October 2026)
 
 - vesta_agent.favicon: every HTML document sent (telegram.Telegram.send, the one path) carries the VESTA mark inline as data: URIs (light/dark SVG + 32 px PNG, the Kiosk's own files; tests/test_favicon.py fails if they drift). A page declaring its own icon keeps it; non-HTML and non-UTF-8 files are sent untouched. No skill edited.

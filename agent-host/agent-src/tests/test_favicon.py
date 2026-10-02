@@ -9,6 +9,7 @@ import base64
 import json
 import os
 import re
+import subprocess
 from urllib.parse import unquote
 
 import pytest
@@ -19,16 +20,28 @@ from vesta_agent.telegram import Telegram
 
 from test_reports import COMPOSE, _facts, _run, _villa
 
-KIOSK_PUBLIC = os.path.join(os.path.dirname(__file__), "..", "..", "..", "public")
 ICONS = re.compile(r'<link rel="icon"[^>]*>')
+
+
+def kiosk_file(path: str) -> bytes:
+    """The Kiosk's own file, from ITS branch in git — the way agent-host/tests/test_kiosk_contract.py
+    reads the contract. Never this branch's working tree: agent-dev's public/ is main's, as old as the
+    fork, so a Kiosk icon changed on dev2 would pass unseen. Never skipped: a check that cannot read
+    what it compares fails."""
+    for ref in [os.environ.get("KIOSK_REF"), os.environ.get("KIOSK_CONTRACT_REF"), "origin/dev2", "dev2"]:
+        if not ref:
+            continue
+        r = subprocess.run(["git", "show", f"{ref}:{path}"], cwd=os.path.dirname(__file__), capture_output=True)
+        if r.returncode == 0:
+            return r.stdout
+    raise AssertionError(f"the Kiosk's {path} could not be read from git (fetch dev2)")
 
 
 def test_the_mark_is_the_vesta_kiosks_own():
     # The agent's image has no Kiosk in it, so the icons are copies: this is what keeps them the same.
-    read = lambda name: open(os.path.join(KIOSK_PUBLIC, name), "rb").read()
-    assert favicon.FAVICON_SVG.encode() == read("favicon.svg")
-    assert favicon.FAVICON_DARK_SVG.encode() == read("favicon-dark.svg")
-    assert base64.b64decode(favicon.FAVICON_PNG_32_B64) == read(os.path.join("icons", "favicon-32x32.png"))
+    assert favicon.FAVICON_SVG.encode() == kiosk_file("public/favicon.svg")
+    assert favicon.FAVICON_DARK_SVG.encode() == kiosk_file("public/favicon-dark.svg")
+    assert base64.b64decode(favicon.FAVICON_PNG_32_B64) == kiosk_file("public/icons/favicon-32x32.png")
 
 
 def test_the_links_are_well_formed_and_carry_the_icon_itself():

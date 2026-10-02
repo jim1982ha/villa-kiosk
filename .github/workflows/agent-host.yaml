@@ -30,42 +30,18 @@ jobs:
           # The isolation check needs main's history to find the fork point.
           fetch-depth: 0
 
-      - name: The VESTA Kiosk is untouched
-        run: agent-host/tests/check_isolation.sh origin/main
-
-      - name: The app manifest agrees with what the Supervisor reads
+      - name: What the gates import
         run: |
-          python3 -c "import yaml" 2>/dev/null || pip3 install --quiet pyyaml
-          python3 agent-host/tests/check_manifest.py
+          python3 -m pip install --quiet pyyaml pytest -r agent-host/agent-src/requirements.txt
 
-      - name: The host's start-up, contract, folders and redaction
-        # Runs the real rootfs programs against a temporary root (test_host.py).
-        run: agent-host/tests/ci_run.sh python3 agent-host/tests/test_host.py
-
-      - name: The self-test reports each link correctly
-        # Against a local fake of every remote end; no request leaves the runner.
-        run: agent-host/tests/ci_run.sh python3 agent-host/tests/test_selftest.py
-
-      - name: The sidecar, the restart policy and the stop grace
-        run: agent-host/tests/ci_run.sh python3 agent-host/tests/test_supervise.py
-
-      - name: The update check moves only forward, one release per change
-        run: agent-host/tests/ci_run.sh python3 agent-host/tests/test_updates.py
-
-      - name: The agreement with the VESTA Kiosk is the Kiosk's own
-        # Compares this host's copy with the Kiosk's file on its dev2 branch
-        # (fetched above: fetch-depth 0 brings every branch).
-        run: agent-host/tests/ci_run.sh python3 agent-host/tests/test_kiosk_contract.py
-
-      - name: The agent's manifest and the host state, without a process
-        run: agent-host/tests/ci_run.sh python3 agent-host/tests/test_manifest.py
-
-      - name: The VESTA Agent's own tests
-        # The synthetic ones (agent-src/tests/*.py). Its villa tests
-        # (tests/villa/, real data) are never in the repository and run locally.
-        run: |
-          python3 -m pip install --quiet -r agent-host/agent-src/requirements.txt pytest
-          cd agent-host/agent-src && python3 -m pytest tests -q -p no:cacheprovider
+      - name: The gates
+        # ⚠️ LISTED ONCE, IN agent-host/tools/release.py (0.12.18). This job
+        # named nine steps and no local runner existed, so "run what CI runs"
+        # meant retyping them. The module runs every gate even after a red one,
+        # one log group each and an annotation per failure (what ci_run.sh did),
+        # and is the same command `ship` and a developer run.
+        # agent-host/tests/test_release.py fails if a gate reappears here.
+        run: python3 agent-host/tools/release.py gates
 
   build:
     needs: [tests]

@@ -299,3 +299,15 @@ def test_the_page_is_told_the_schedules_and_the_brains_and_keeps_no_copy(ui):
     from vesta_agent.ui.server import STATIC
     js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
     assert "Sonnet" not in js and "Monday" not in js                       # no copy of either in the page
+
+
+def test_every_set_of_figures_is_drawn_once_and_sits_two_to_a_row_on_a_phone():
+    # Owner, 2026-10-02: Overview's "last 24 hours" and the Costs stacked one figure per line down a
+    # phone. Both now go through figures(); its grid fits two 120px columns in a 320px card.
+    import re
+    from vesta_agent.ui.server import STATIC
+    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
+    css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
+    assert js.count('class: "kpi"') == 1 and js.count("figures([") == 2   # one builder, both tabs call it
+    rule = re.search(r"\.figures \{[^}]*grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(min\((\d+)px", css)
+    assert rule and 2 * int(rule.group(1)) + 12 <= 320 - 2 * 20, "two figures must fit a 320px phone's card"
