@@ -39,13 +39,14 @@
 
 import { fetchAddonConfig, centralModelUrl } from "./centralModel";
 import { fetchModelWithRetry } from "./fetchProgress";
+import { keepModel, keptModel } from "./modelCache";
 
 type ProgressListener = (frac: number) => void;
 type RetryListener = (attempt: number, waitMs: number) => void;
 
 interface PrefetchEntry {
   url: string;
-  promise: Promise<ArrayBuffer>;
+  promise: Promise<{ data: ArrayBuffer; kept: boolean }>;
   progress: number;
   listeners: Set<ProgressListener>;
   retryListeners: Set<RetryListener>;
@@ -71,7 +72,7 @@ export function startModelPrefetch(): void {
     const url = centralModelUrl(addonCfg);
     const e: PrefetchEntry = {
       url, progress: 0, listeners: new Set(), retryListeners: new Set(),
-      promise: null as unknown as Promise<ArrayBuffer>,
+      promise: null as unknown as PrefetchEntry["promise"],
     };
     // ⚠️ THE SAME FETCH AS THE FOREGROUND ONE (round 10, 2.496.162). This was
     // a plain fetch + stall watchdog while the canvas used fetchModelWithRetry
@@ -79,13 +80,13 @@ export function startModelPrefetch(): void {
     // file, and 9cd91cb3 had already fixed the stall on the path the failure
     // was NOT on. A stalled or dropped prefetch now rides the same retries;
     // its "reconnecting" reaches whoever claims it.
-    e.promise = fetchModelWithRetry(
+    e.promise = getModel(
       url,
       (f) => { e.progress = f; e.listeners.forEach((l) => l(f)); },
       (attempt, wait) => e.retryListeners.forEach((l) => l(attempt, wait)),
-    ).then(({ resp, data }) => {
-      if (!resp.ok) throw new Error(`prefetch HTTP ${resp.status}`);
-      return data;
+    ).then((got) => {
+      if (!got.ok) throw new Error(`prefetch HTTP ${got.status}`);
+      return { data: got.data, kept: got.kept };
     }).catch((err) => {
       // A transient failure (e.g. dropped connection while still on the PIN
       // screen) shouldn't permanently block a later retry — but only reset
@@ -121,8 +122,31 @@ function claimPrefetch(url: string): PrefetchEntry | null {
 }
 
 export type ModelBytes =
-  | { ok: true; data: ArrayBuffer; prefetched: boolean }
+  /** `kept`: read from the copy this device kept, not downloaded. */
+  | { ok: true; data: ArrayBuffer; prefetched: boolean; kept: boolean }
   | { ok: false; status: number };
+
+/**
+ * The model at `url`: the copy this device kept (modelCache.keptModel), else a
+ * download with retries, which is then kept for the next open. Under Home
+ * Assistant nothing else keeps it — see modelCache.
+ */
+async function getModel(
+  url: string, onProgress: ProgressListener, onRetrying?: RetryListener,
+): Promise<{ ok: true; data: ArrayBuffer; kept: boolean } | { ok: false; status: number }> {
+  const kept = await keptModel(url);
+  if (kept) {
+    onProgress(1);
+    return { ok: true, data: kept, kept: true };
+  }
+  const { resp, data } = await fetchModelWithRetry(url, onProgress, onRetrying);
+  if (!resp.ok) return { ok: false, status: resp.status };
+  // Kept at once, not after a delay: a phone opened for a few seconds and put
+  // away would otherwise never keep it. The write is the browser's own disk
+  // work, off this thread; the rig measured the load with and without it.
+  void keepModel(url, data);
+  return { ok: true, data, kept: false };
+}
 
 /**
  * The model's bytes at `url` — THE one way to get them: the profile screen's
@@ -140,7 +164,7 @@ export async function modelBytes(
     claimed.listeners.add(onProgress);
     if (onRetrying) claimed.retryListeners.add(onRetrying);
     try {
-      return { ok: true, data: await claimed.promise, prefetched: true };
+      return { ok: true, ...(await claimed.promise), prefetched: true };
     } catch {
       // The prefetch failed (after its own retries, or an HTTP status) —
       // fetch afresh below, which reports its own outcome.
@@ -149,6 +173,6 @@ export async function modelBytes(
       if (onRetrying) claimed.retryListeners.delete(onRetrying);
     }
   }
-  const { resp, data } = await fetchModelWithRetry(url, onProgress, onRetrying);
-  return resp.ok ? { ok: true, data, prefetched: false } : { ok: false, status: resp.status };
+  const got = await getModel(url, onProgress, onRetrying);
+  return got.ok ? { ...got, prefetched: false } : got;
 }

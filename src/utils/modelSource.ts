@@ -25,7 +25,7 @@
 import { centralModelUrl, type AddonConfig, type AddonConfigAnswer } from "./centralModel";
 
 export type ModelSource =
-  | { ok: true; data: ArrayBuffer; cfg: AddonConfig; source: string; prefetched: boolean }
+  | { ok: true; data: ArrayBuffer; cfg: AddonConfig; source: string; prefetched: boolean; kept: boolean }
   | { ok: false; reason: "none" }
   | { ok: false; reason: "cancelled" }
   | { ok: false; reason: "http"; status: number; code: string; message: string };
@@ -33,7 +33,7 @@ export type ModelSource =
 export interface ModelSourceDeps {
   readAddonConfig(): Promise<AddonConfigAnswer>;
   modelBytes(url: string, onProgress: (f: number) => void, onRetrying?: () => void):
-    Promise<{ ok: true; data: ArrayBuffer; prefetched: boolean } | { ok: false; status: number }>;
+    Promise<{ ok: true; data: ArrayBuffer; prefetched: boolean; kept: boolean } | { ok: false; status: number }>;
   /** Deletes a model an older version kept in this browser, if any. */
   forgetBrowserModel(): Promise<void>;
   wait(ms: number): Promise<void>;
@@ -78,5 +78,5 @@ export async function acquireModel(
         + "Re-upload it from Settings → Advanced Settings (Owner profile).",
     };
   }
-  return { ok: true, data: got.data, cfg, source: url, prefetched: got.prefetched };
+  return { ok: true, data: got.data, cfg, source: url, prefetched: got.prefetched, kept: got.kept };
 }

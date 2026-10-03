@@ -312,7 +312,7 @@ export default function BabylonCanvas({
           setStatus("no-model");
           return;
         }
-        const { data, cfg: addonCfg, source: loadedSource, prefetched: usedPrefetch } = got;
+        const { data, cfg: addonCfg, source: loadedSource, prefetched: usedPrefetch, kept: modelKept } = got;
         noteModel({ bytes: data.byteLength });
         // Bytes are in hand — clear any lingering reconnecting notice even if
         // the successful fetch happened to report no progress fractions (a
@@ -434,6 +434,10 @@ export default function BabylonCanvas({
           // public_model_access off, an unauthorised /model/, or a model
           // replaced between the two).
           prefetched: usedPrefetch,
+          // Read from the copy this device kept (utils/modelCache) rather than
+          // downloaded. The field showed a phone downloading all 17 MB on every
+          // open under Home Assistant; this says whether that is over.
+          modelKept: modelKept,
           bytes: data.byteLength,
           meshes: meshNames.length,
           fetchMs: Math.round(tFetchDone - tFetchStart),

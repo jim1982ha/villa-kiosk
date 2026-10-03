@@ -49,7 +49,12 @@ ck("an HTTP error comes back as it is, unretried (a real 'nothing there')", !mis
 
 const { readFileSync } = await import("node:fs");
 const mp = readFileSync(new URL("../../src/utils/modelPrefetch.ts", import.meta.url), "utf8").replace(/\/\/.*$|\/\*[\s\S]*?\*\//gm, "");
-ck("ONE fetch strategy: the background download uses fetchModelWithRetry, never a bare fetch", /e\.promise = fetchModelWithRetry\(/.test(mp) && !/\bfetch\(/.test(mp));
+// Through getModel since 2.496.255 (the kept copy first, then the download):
+// the background download and the canvas's own both go through it, and it
+// downloads only with fetchModelWithRetry.
+ck("ONE fetch strategy: the background download uses fetchModelWithRetry (via getModel), never a bare fetch",
+   /e\.promise = getModel\(/.test(mp) && /await fetchModelWithRetry\(url,/.test(mp) && !/\bfetch\(/.test(mp)
+   && (mp.match(/fetchModelWithRetry\(/g) ?? []).length === 1);
 const bc = readFileSync(new URL("../../src/components/canvas/BabylonCanvas.tsx", import.meta.url), "utf8");
 // Through utils/modelSource since 2.496.172: the canvas hands it modelBytes,
 // and modelSource makes the one call.
