@@ -1,3 +1,11 @@
+## 2.496.256
+
+### Changed
+- **The installed app (the home-screen VESTA) opens faster.** It now opens from the copy it keeps on the device instead of first checking the network for the page, which your iPhone spent 0.15 to 0.5 seconds on at every open.
+- **It no longer re-downloads its own code on every open.** Each open quietly downloaded about 4 MB of app code again in the background (the 3D engine, the app and its decoder), although nothing had changed. Those files are now kept until an update replaces them.
+- **Updates arrive differently.** A new version now downloads in the background while you use the app. When it is ready, a notice says "A new version of VESTA is ready — tap to reload". If you don't tap, the next open uses it. The wall tablet picks it up at its nightly 04:00 refresh. The first open after an update no longer waits for the new code to download, which took your iPhone 1 to 1.5 seconds extra.
+- Opening VESTA inside the Home Assistant app is not affected by this change.
+
 ## 2.496.255
 
 ### Fixed
