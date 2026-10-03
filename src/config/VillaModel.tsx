@@ -16,7 +16,7 @@ import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "./ConfigContext";
 import { useFmData } from "@/fm/FmDataContext";
-import { villaDevices, deviceFolding, type VillaDevices } from "./deviceGroups";
+import { villaDevices, deviceFolding, deviceOf, deviceReadings, type VillaDevices } from "./deviceGroups";
 import { dismissedEntitySet } from "./dismissedEntities";
 import { effectiveMapped, visibleEntitiesOf, visibleTo } from "./villaVisibility";
 import type { Role } from "@/auth/roles";
@@ -84,7 +84,7 @@ export function VillaModelProvider({ sets, children }: { sets: VillaSets; childr
 
   // Which entity stands for which device — a function of CONFIG and the
   // registry, so it is computed when those change, not on every state push.
-  const folding = useMemo(() => deviceFolding(entityMap, deviceGroups, entityDeviceIds), [entityMap, deviceGroups, entityDeviceIds]);
+  const { folding } = useDeviceIdentity();
   const devices = useMemo(
     () => villaDevices({ entityMap, deviceGroups, dismissedEntityIds, mappedEntityIds, entities, entityDeviceIds, folding }),
     [entityMap, deviceGroups, dismissedEntityIds, mappedEntityIds, entities, entityDeviceIds, folding],
@@ -110,6 +110,28 @@ export function VillaModelProvider({ sets, children }: { sets: VillaSets; childr
     [sets, mappedEntityIds, devices, visibleDevices, attention, entityMap, entities],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
+/**
+ * "Which device is this entity, and what else does it read?" — for every
+ * opener (the map, Cockpit, the Agent, Facility, the lists) and for Settings
+ * (2.496.260). A hook rather than a field of the villa model because the
+ * Dashboard, which opens panels, is what PROVIDES that model. The fold is a
+ * function of config and the registry only, so it is rebuilt when those
+ * change, never on a state push.
+ */
+export function useDeviceIdentity() {
+  const { entities, entityDeviceIds, suppressedEntityIds } = useHA();
+  const { config } = useConfig();
+  const { entityMap, deviceGroups } = config;
+  const folding = useMemo(() => deviceFolding(entityMap, deviceGroups, entityDeviceIds), [entityMap, deviceGroups, entityDeviceIds]);
+  return useMemo(() => ({
+    folding,
+    /** What a tap on anything of `id`'s device opens. */
+    deviceOf: (id: string) => deviceOf(folding, id),
+    /** The device's other readings, listed under its panel. */
+    readingsOf: (rep: string) => deviceReadings(rep, folding, entities, suppressedEntityIds, deviceGroups),
+  }), [folding, entities, suppressedEntityIds, deviceGroups]);
 }
 
 export function useVillaModel(): VillaModel {

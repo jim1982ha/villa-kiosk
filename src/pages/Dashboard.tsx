@@ -49,7 +49,8 @@ import { installDailyAutoReload } from "@/utils/autoReload";
 import type { SceneManager } from "@/babylon/SceneManager";
 import type { ActivePanel } from "@/types/panel.types";
 import type { Category, TeleportPoint } from "@/types/scene.types";
-import { VillaModelProvider, useVillaSets } from "@/config/VillaModel";
+import { VillaModelProvider, useVillaSets, useDeviceIdentity } from "@/config/VillaModel";
+import { deviceRowText } from "@/utils/entityValue";
 import { categoryMembers } from "@/config/villaVisibility";
 import { deviceSwitch } from "@/utils/devicePower";
 import { useAskFirst } from "@/hooks/useAskFirst";
@@ -381,6 +382,25 @@ export default function Dashboard() {
     },
     [config.entityMap, entities, role],
   );
+
+  // ⚠️ A DEVICE, NOT AN ENTITY (2.496.260). Cockpit, the Agent, Facility and
+  // the summary bar speak of a DEVICE — a fault on a pump plug's energy meter
+  // is about the pump — so they open what the map's badge for that device
+  // opens (deviceGroups.deviceOf), and the reading they named is listed in it
+  // ("Also on this device"). A device list's row and the camera's next/prev
+  // name ONE entity and still open exactly it.
+  const identity = useDeviceIdentity();
+  const openDevicePanel = useCallback(
+    (entityId: string) => openEntityPanel(identity.deviceOf(entityId)),
+    [openEntityPanel, identity],
+  );
+  const panelReadings = activePanel
+    ? identity.readingsOf(activePanel.entityId).map((id) => ({
+        id,
+        label: displayLabelFor(id, config.entityMap[id]?.label, entities[id]?.attributes.friendly_name as string | undefined),
+        text: entities[id] ? deviceRowText(entities[id], id.split(".")[0]) : "",
+      }))
+    : [];
 
   // The open panel's LINKED entity (EntityMapping.linkedEntityId) — resolved
   // at top level rather than inside the provider's value below, because its
@@ -782,7 +802,7 @@ export default function Dashboard() {
         hasOverviewDefault={hasOverviewDefault}
         onApplyOverviewDefault={applyOverviewDefault}
         onSaveOverviewDefault={saveOverviewDefault}
-        onOpenEntity={openEntityPanel}
+        onOpenEntity={openDevicePanel}
         onOpenFacility={() => { if (doors.facility) setFacilityOpen(true); }}
         onOpenAgent={() => { if (doors.agent) setAgentOpen(true); }}
         onOpenCategory={setCategoryGroup}
@@ -792,7 +812,7 @@ export default function Dashboard() {
           auto-derived from live entities. Centred so it sits between the
           bottom bar's corner controls (view toggle / joystick). */}
       <SummaryBar
-        onOpenEntity={openEntityPanel}
+        onOpenEntity={openDevicePanel}
         scenes={haScenes}
       />
 
@@ -809,6 +829,8 @@ export default function Dashboard() {
         <PanelActionsProvider
           value={{
             entityId: activePanel.entityId,
+            readings: panelReadings,
+            onOpenReading: openEntityPanel,
             // Owner-only: jump straight to this device's row in Advanced Settings.
             onEdit: canEditConfig
               ? () => {
@@ -988,7 +1010,7 @@ export default function Dashboard() {
       {agentOpen && doors.agent && (
         <AgentModal
           onClose={() => setAgentOpen(false)}
-          onOpenEntity={(id) => { setAgentOpen(false); openEntityPanel(id); }}
+          onOpenEntity={(id) => { setAgentOpen(false); openDevicePanel(id); }}
         />
       )}
 
@@ -996,7 +1018,7 @@ export default function Dashboard() {
         <FacilityModal
           doors={doors}
           onClose={() => { setFacilityOpen(false); setFaultForEntity(null); }}
-          onOpenEntity={(id) => { setFacilityOpen(false); openEntityPanel(id); }}
+          onOpenEntity={(id) => { setFacilityOpen(false); openDevicePanel(id); }}
           reportFaultFor={faultForEntity ?? undefined}
           onFaultFormOpened={() => setFaultForEntity(null)}
         />

@@ -12,7 +12,7 @@
 // for room.
 
 import { useState, type ReactNode } from "react";
-import { Wrench } from "lucide-react";
+import { ChevronRight, Wrench } from "lucide-react";
 import { linkedSwitchProps, usePanelActions } from "./PanelActionsContext";
 import { badgeImage } from "@/babylon/badgeIcons";
 import { useModalA11y } from "@/hooks/useModalA11y";
@@ -49,12 +49,15 @@ interface Props {
    *  (GenericPanel). Anything else should take the shared one: the default is
    *  what guarantees a new panel type can't quietly ship without history. */
   history?: false;
+  /** Opt OUT of "Also on this device" (PanelActions.readings) — only for a
+   *  panel that already shows every reading of the device (DeviceGroupPanel). */
+  deviceReadings?: false;
   onClose: () => void;
   children: ReactNode;
 }
 
-export default function BasePanel({ title, entityId, icon, className, headerActions, footerLeading, history, onClose, children }: Props) {
-  const { onEdit, onReportFault, badge, onSetBadgeColor, linked, motion } = usePanelActions();
+export default function BasePanel({ title, entityId, icon, className, headerActions, footerLeading, history, deviceReadings, onClose, children }: Props) {
+  const { onEdit, onReportFault, badge, onSetBadgeColor, linked, motion, readings, onOpenReading } = usePanelActions();
   const { resolvedRooms } = useConfig();
   const room = entityId ? resolvedRooms[entityId] : undefined;
   const [colorOpen, setColorOpen] = useState(false);
@@ -179,6 +182,22 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
             </div>
           )}
           {children}
+          {/* The device's other readings — the same physical device, one place
+              (2.496.260). A grouped lock kept only a read-only summary, and a
+              pump plug's energy meter had no panel of its own to be found in. */}
+          {deviceReadings !== false && readings && readings.length > 0 && (
+            <div className="panel-readings">
+              <div className="panel-readings-title">Also on this device</div>
+              {readings.map((r) => (
+                <button key={r.id} type="button" className="panel-reading-row"
+                  onClick={onOpenReading ? () => onOpenReading(r.id) : undefined} disabled={!onOpenReading}>
+                  <span className="panel-reading-label" title={r.label}>{r.label}</span>
+                  <span className="panel-reading-value">{r.text}</span>
+                  {onOpenReading && <ChevronRight size={16} aria-hidden />}
+                </button>
+              ))}
+            </div>
+          )}
           {/* The "last N hours" history section — rendered HERE, in the shared
               chrome, for the same reason the linked-entity switch above is:
               so every panel about a device gets it identically and a NEW panel

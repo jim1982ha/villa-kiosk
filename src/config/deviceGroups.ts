@@ -309,3 +309,111 @@ export function villaDevices(input: VillaDeviceInput): VillaDevices {
     has: (id) => set.has(id),
   };
 }
+
+// ── One identity for every opener (2.496.260) ──────────────────────────────
+// ⚠️ THREE ANSWERS TO "WHICH DEVICE IS THIS". The panel router and the map
+// knew explicit groups only; Cockpit and the counts the full fold above; and
+// every other opener — the Agent, Facility, the device lists — the raw entity
+// id. So the Onsen pump's energy-meter fault opened the meter in one place
+// and the pump in another, Settings listed that meter as "not shown
+// anywhere", and accepting a group swapped a lock's controls for a read-only
+// summary. These answer it once, from the fold.
+
+/** The entity that stands for `id`'s device — what a tap on anything of that
+ *  device opens. Itself when it is its own device. */
+export function deviceOf(folding: ReadonlyMap<string, string>, id: string): string {
+  return folding.get(id) ?? id;
+}
+
+const READING_DOMAINS = new Set(["sensor", "binary_sensor"]);
+
+/**
+ * The OTHER readings of the device `rep` stands for, shown under its own
+ * panel: its group's members, and the registry siblings nobody placed (a
+ * pump plug's energy and current). Readings only — a restart button or a
+ * network tracker is not something to read — and Home Assistant's hidden and
+ * diagnostic entities only when the owner grouped them on purpose.
+ */
+export function deviceReadings(
+  rep: string,
+  folding: ReadonlyMap<string, string>,
+  entities: Record<string, HassEntity>,
+  suppressed: ReadonlySet<string>,
+  deviceGroups: readonly DeviceGroup[],
+): string[] {
+  const chosen = new Set(deviceGroups.find((g) => g.primaryEntityId === rep)?.memberEntityIds ?? []);
+  const out: string[] = [];
+  for (const [id, to] of folding) {
+    if (to !== rep || id === rep || !entities[id]) continue;
+    if (!READING_DOMAINS.has(id.split(".")[0])) continue;
+    if (suppressed.has(id) && !chosen.has(id)) continue;
+    out.push(id);
+  }
+  return out.sort();
+}
+
+/**
+ * Home Assistant entities the villa cannot show ANYWHERE — Advanced
+ * Settings' audit. Not one that belongs to a placed device (it is shown, in
+ * that device's panel), not one HA hides. (A dismissal applies only to an id
+ * Home Assistant no longer knows — dismissedEntitySet — so it can never touch
+ * this list, which is built from the entities HA does know.)
+ */
+export function unshownEntities(input: {
+  entities: Record<string, HassEntity>;
+  entityMap: Record<string, EntityMapping>;
+  folding: ReadonlyMap<string, string>;
+  suppressed: ReadonlySet<string>;
+  /** A type this app can draw (EntityMap.inferTypeFromEntityId). */
+  knownType: (id: string) => boolean;
+}): string[] {
+  return Object.keys(input.entities)
+    .filter((id) => input.knownType(id) && !input.entityMap[id] && !input.suppressed.has(id) && !input.folding.has(id))
+    .sort();
+}
+
+/** A change to the owner's groups. */
+export type GroupEdit =
+  | { kind: "create"; primaryEntityId: string; id: string }
+  | { kind: "add"; groupId: string; memberEntityId: string }
+  | { kind: "accept"; primaryEntityId: string; memberEntityId: string; id: string }
+  | { kind: "remove-member"; groupId: string; memberEntityId: string };
+
+/**
+ * Apply `edit` to the groups in `c`, or say why not. ONE ENTITY, ONE GROUP is
+ * enforced here, against the config the edit is applied to — it lived in the
+ * Settings component, checked against the list that render saw, and accepting
+ * a suggestion did not check it at all.
+ */
+export function groupEdit(c: Pick<AppConfig, "deviceGroups">, edit: GroupEdit): Pick<AppConfig, "deviceGroups"> | string {
+  const taken = groupedEntityIds(c.deviceGroups);
+  const withGroups = (deviceGroups: DeviceGroup[]) => ({ deviceGroups });
+  const put = (g: DeviceGroup) => upsertGroup(c as AppConfig, g);
+  switch (edit.kind) {
+    case "create":
+      if (taken.has(edit.primaryEntityId)) return "This entity is already part of another group.";
+      return put({ id: edit.id, primaryEntityId: edit.primaryEntityId, memberEntityIds: [] });
+    case "add": {
+      const g = c.deviceGroups.find((x) => x.id === edit.groupId);
+      if (!g) return "That group no longer exists.";
+      if (!edit.memberEntityId || edit.memberEntityId === g.primaryEntityId) return withGroups([...c.deviceGroups]);
+      if (taken.has(edit.memberEntityId)) return "This entity is already part of a group.";
+      return put({ ...g, memberEntityIds: [...g.memberEntityIds, edit.memberEntityId] });
+    }
+    case "accept": {
+      const existing = c.deviceGroups.find((g) => g.primaryEntityId === edit.primaryEntityId);
+      if (taken.has(edit.memberEntityId)) return "This entity is already part of a group.";
+      if (!existing && taken.has(edit.primaryEntityId)) return "This entity is already part of another group.";
+      // A primary's second suggestion ADDS to its group rather than making a
+      // second, orphaned group under the same primary.
+      return put(existing
+        ? { ...existing, memberEntityIds: [...existing.memberEntityIds, edit.memberEntityId] }
+        : { id: edit.id, primaryEntityId: edit.primaryEntityId, memberEntityIds: [edit.memberEntityId] });
+    }
+    case "remove-member": {
+      const g = c.deviceGroups.find((x) => x.id === edit.groupId);
+      if (!g) return withGroups([...c.deviceGroups]);
+      return put({ ...g, memberEntityIds: g.memberEntityIds.filter((id) => id !== edit.memberEntityId) });
+    }
+  }
+}

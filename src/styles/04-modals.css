@@ -633,3 +633,13 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .legend-keys { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 10px; }
 .legend-keys .legend-row { display: grid; grid-template-columns: minmax(0, 15em) 1fr; gap: 12px; align-items: baseline; }
 .legend-keys kbd { font: 600 var(--text-xs) var(--font-ui); padding: 3px 8px; border-radius: 6px; background: var(--bg-input); border: 1px solid var(--hairline); white-space: nowrap; justify-self: start; }
+
+/* A device panel's "Also on this device" (BasePanel, PanelActions.readings):
+   the device's other readings, each a row that opens its own panel. */
+.panel-readings { margin-top: 18px; border-top: 1px solid var(--hairline); padding-top: 12px; }
+.panel-readings-title { font-size: var(--text-2xs); font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 6px; }
+.panel-reading-row { display: flex; align-items: center; gap: 10px; width: 100%; min-height: var(--touch-min); padding: 6px 4px; border: none; background: none; color: var(--text-primary); text-align: left; cursor: pointer; border-radius: 10px; }
+.panel-reading-row + .panel-reading-row { border-top: 1px solid var(--hairline); border-radius: 0; }
+.panel-reading-row:hover:not(:disabled) { background: var(--bg-input); }
+.panel-reading-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.panel-reading-value { flex: 0 0 auto; color: var(--text-secondary); font-variant-numeric: tabular-nums; }

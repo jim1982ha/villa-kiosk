@@ -53,7 +53,7 @@ export function useTruncated<T>(items: T[], rows = TRUNCATED_ROWS): Truncated<T>
 
 /** The button under the rows. Renders nothing when nothing is hidden — a
  *  control that says "Show all 0 more" is noise on every short list. */
-export function ShowAll<T>({ list, noun }: { list: Truncated<T>; noun: string }) {
+export function ShowAll<T>({ list, noun, plural = `${noun}s` }: { list: Truncated<T>; noun: string; plural?: string }) {
   if (list.hidden === 0) return null;
   return (
     <button className="btn ghost mt" onClick={list.toggle}
@@ -62,7 +62,7 @@ export function ShowAll<T>({ list, noun }: { list: Truncated<T>; noun: string })
                    style={{ transform: list.expanded ? "rotate(180deg)" : undefined }} />
       {list.expanded
         ? "Show fewer"
-        : `Show all — ${list.hidden} more ${noun}${list.hidden === 1 ? "" : "s"}`}
+        : `Show all — ${list.hidden} more ${list.hidden === 1 ? noun : plural}`}
     </button>
   );
 }

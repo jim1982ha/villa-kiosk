@@ -12,7 +12,7 @@ import EntityPicker from "./EntityPicker";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
 import {
-  suggestDeviceGroups, upsertGroup, removeGroup, newGroupId, groupedEntityIds,
+  suggestDeviceGroups, removeGroup, newGroupId, groupEdit, type GroupEdit,
 } from "@/config/deviceGroups";
 import type { DeviceGroup } from "@/config/AppConfig";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
@@ -42,56 +42,26 @@ export default function GroupedDevices() {
     () => suggestDeviceGroups(config.entityMap, config.deviceGroups, entityDeviceIds),
     [config.entityMap, config.deviceGroups, entityDeviceIds],
   );
-  // Every entity already spoken for by some group (either role) — guards
-  // against adding the same entity to two groups at once.
-  const grouped = useMemo(() => groupedEntityIds(config.deviceGroups), [config.deviceGroups]);
-
-  // A device_id-linked device can have more than 2 sibling entities (e.g. a
-  // combo sensor's temperature/humidity/battery/…), which suggestDeviceGroups
-  // surfaces as one suggestion row PER sibling against the same primary —
-  // accepting a second row for a primary that already has a group must ADD
-  // to it, not silently create a second, orphaned group under the same
-  // primaryEntityId (only the first would ever be found by groupForPrimary).
-  // Every change is computed from the config update() applies it to, not
-  // the one this render saw: accepting two suggestions in a row used to
-  // build the second from a list that did not yet hold the first.
-  const acceptSuggestion = (primaryEntityId: string, memberEntityId: string) => {
-    const id = newGroupId();
-    update((c) => {
-      const existing = c.deviceGroups.find((g) => g.primaryEntityId === primaryEntityId);
-      return upsertGroup(c, existing
-        ? { ...existing, memberEntityIds: [...existing.memberEntityIds, memberEntityId] }
-        : { id, primaryEntityId, memberEntityIds: [memberEntityId] });
-    });
+  // Every edit goes through deviceGroups.groupEdit, which enforces "one
+  // entity, one group" (2.496.260). It is asked TWICE: once against what this
+  // render shows, to explain a refusal, and again inside update() against
+  // the config the change is applied to — so two edits in a row, or a change
+  // from another device, can never sneak a duplicate past the first check.
+  const edit = (e: GroupEdit) => {
+    const now = groupEdit(config, e);
+    if (typeof now === "string") { setNotice(now); return false; }
+    update((c) => { const r = groupEdit(c, e); return typeof r === "string" ? {} : r; });
+    return true;
   };
-
+  const acceptSuggestion = (primaryEntityId: string, memberEntityId: string) =>
+    edit({ kind: "accept", primaryEntityId, memberEntityId, id: newGroupId() });
   const createGroup = (primaryEntityId: string) => {
-    if (grouped.has(primaryEntityId)) {
-      setNotice("This entity is already part of another group.");
-      return;
-    }
-    const id = newGroupId();
-    update((c) => upsertGroup(c, { id, primaryEntityId, memberEntityIds: [] }));
-    setNewPrimary(undefined);
+    if (edit({ kind: "create", primaryEntityId, id: newGroupId() })) setNewPrimary(undefined);
   };
-
-  const addMember = (group: DeviceGroup, memberEntityId: string) => {
-    if (!memberEntityId || memberEntityId === group.primaryEntityId) return;
-    if (grouped.has(memberEntityId)) {
-      setNotice("This entity is already part of a group.");
-      return;
-    }
-    update((c) => {
-      const now = c.deviceGroups.find((g) => g.id === group.id) ?? group;
-      return upsertGroup(c, { ...now, memberEntityIds: [...now.memberEntityIds, memberEntityId] });
-    });
-  };
-
+  const addMember = (group: DeviceGroup, memberEntityId: string) =>
+    edit({ kind: "add", groupId: group.id, memberEntityId });
   const removeMember = (group: DeviceGroup, memberEntityId: string) =>
-    update((c) => {
-      const now = c.deviceGroups.find((g) => g.id === group.id) ?? group;
-      return upsertGroup(c, { ...now, memberEntityIds: now.memberEntityIds.filter((id) => id !== memberEntityId) });
-    });
+    edit({ kind: "remove-member", groupId: group.id, memberEntityId });
 
   const deleteGroup = (groupId: string) => update((c) => removeGroup(c, groupId));
 

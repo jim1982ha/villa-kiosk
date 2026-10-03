@@ -24,6 +24,9 @@ import { useHA } from "@/ha/HAStateStore";
 import { addMapping, bindMesh, patchMapping, unbindMesh } from "@/config/mappingEdits";
 import { loadMeshCatalog } from "@/utils/meshCatalog";
 import { inferTypeFromEntityId } from "@/config/EntityMap";
+import { unshownEntities } from "@/config/deviceGroups";
+import { useDeviceIdentity } from "@/config/VillaModel";
+import { ShowAll, useTruncated } from "@/components/common/TruncatedList";
 import type { EntityMapping } from "@/types/scene.types";
 
 export default function BindingsTable() {
@@ -60,12 +63,18 @@ export default function BindingsTable() {
   // excludes anything already hidden/diagnostic in HA (suppressedEntityIds
   // — the same filter the summary tiles use), since those are entities the
   // installer already told HA don't belong on a main dashboard.
+  // deviceGroups.unshownEntities (2.496.260): NOT one that belongs to a placed
+  // device — a pump plug's energy meter is shown, under the pump's panel. This
+  // list offered it as lost.
+  const { folding } = useDeviceIdentity();
   const unmappedHaEntities = useMemo(
-    () => Object.keys(entities)
-      .filter((id) => inferTypeFromEntityId(id) && !config.entityMap[id] && !suppressedEntityIds.has(id))
-      .sort(),
-    [entities, config.entityMap, suppressedEntityIds],
+    () => unshownEntities({
+      entities, entityMap: config.entityMap, folding, suppressed: suppressedEntityIds,
+      knownType: (id) => !!inferTypeFromEntityId(id),
+    }),
+    [entities, config.entityMap, folding, suppressedEntityIds],
   );
+  const unmappedShown = useTruncated(unmappedHaEntities);
 
   // Latest entities via a ref, read inside the stable callbacks below (the
   // config edits read the latest config themselves, inside update()) — see
@@ -231,7 +240,7 @@ export default function BindingsTable() {
             one in the 3D model (or bind an existing unbound object above) to
             make it controllable from the villa.
           </p>
-          {unmappedHaEntities.map((id) => (
+          {unmappedShown.visible.map((id) => (
             <div
               key={id}
               className="row spread"
@@ -250,6 +259,7 @@ export default function BindingsTable() {
               )}
             </div>
           ))}
+          <ShowAll list={unmappedShown} noun="entity" plural="entities" />
         </>
       )}
     </div>

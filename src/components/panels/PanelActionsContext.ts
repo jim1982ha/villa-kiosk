@@ -67,6 +67,12 @@ export interface PanelActions {
     known: boolean;
     toggle: () => void;
   };
+  /** The open device's OTHER readings (deviceGroups.deviceReadings: its
+   *  group's members and the registry siblings nobody placed — a pump plug's
+   *  energy and current), listed under its controls; tapping one opens that
+   *  reading's own panel (2.496.260). Empty or undefined: nothing listed. */
+  readings?: { id: string; label: string; text: string }[];
+  onOpenReading?: (entityId: string) => void;
   /** The open camera's MOTION sensor (EntityMapping.motionEntityId), when one
    *  is configured — camera-only, unlike linkedEntityId above. Read-only: it
    *  reports what HA already knows (and drives the map's detection beam), not
