@@ -77,4 +77,28 @@ console.log("\n  the frame:");
 ck("red outranks on; neither is rest", summaryFrame({ ringRed: true, ringOn: true }) === "alert"
    && summaryFrame({ ringRed: false, ringOn: true }) === "active" && summaryFrame({ ringRed: false, ringOn: false }) === "rest");
 
+console.log("\n  the count pill's colour (colors.reportingPill):");
+{
+  // A device offline wore the ring's "needs attention" red: a red ring beside
+  // a green count, and no ring beside a red one, read as one signal
+  // contradicting itself (owner, 2026-10-04).
+  const { reportingPill, ALERT_RED_HEX } = await import("@/babylon/colors");
+  const { categorySurface } = await import("@/config/EntityCategories");
+  const lost = reportingPill("unavailable"), ok = reportingPill("available");
+  ck("a room with a device offline: AMBER — the badge's own lost-contact colour, never the ring's red",
+     lost.fill.toUpperCase() === String(categorySurface("others", "unavailable").ring).toUpperCase()
+     && lost.fill.toUpperCase() !== ALERT_RED_HEX.toUpperCase() && ok.fill.toUpperCase() !== ALERT_RED_HEX.toUpperCase(), { lost, ok });
+  const lum = (h) => { const c = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((v) => v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+  const contrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+  ck("  ...and its number readable on both (4.5:1 or better)",
+     contrast(lost.fill, lost.ink) >= 4.5 && contrast(ok.fill, ok.ink) >= 4.5,
+     { lost: contrast(lost.fill, lost.ink).toFixed(2), ok: contrast(ok.fill, ok.ink).toFixed(2) });
+  const { readFileSync } = await import("node:fs");
+  const rd = (f) => readFileSync(new URL(`../../src/${f}`, import.meta.url), "utf8");
+  const ev = rd("babylon/EntityVisuals.ts"), sheet = rd("components/hud/RoomChoiceSheet.tsx");
+  ck("  ...the map chip and the \"Which room?\" row both ask it, neither picks its own",
+     /\.\.\.reportingPill\(model\.reporting\),/.test(ev) && /reportingPill\(c\.reporting\)\.fill/.test(sheet) && /reportingPill\(c\.reporting\)\.ink/.test(sheet)
+     && !/AVAILABLE_GREEN_HEX/.test(ev + sheet));
+}
+
 done("✅ a summary on the map is a model; EntityVisuals only draws it");

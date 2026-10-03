@@ -134,7 +134,7 @@ import {
   type CardArrangement,
 } from "./badgeCard";
 import { iconKeyFor } from "./badgeIconKeys";
-import { ALERT_RED, ALERT_RED_HEX, UNAVAILABLE_AMBER, AVAILABLE_GREEN_HEX, SECURE_GREEN, ACTIVE_GLOW } from "./colors";
+import { ALERT_RED, UNAVAILABLE_AMBER, reportingPill, SECURE_GREEN, ACTIVE_GLOW } from "./colors";
 import { COSMETIC_MAPPING_FIELDS, type EntityMapDelta } from "./entityMapDiff";
 // Pose-word resolution (which "__<word>" mesh variant a live state asks for)
 // — pure logic, extracted to keep this file to the things that actually touch
@@ -5509,9 +5509,9 @@ export class EntityVisuals {
       // 2026-10-01: red is the legend's "Needs attention").
       const frame = badgeRing(chipFrames[model.frame], this.metrics.cardHeightPx, this.metrics);
       applyBadgeFrame(c.container, frame, this.summaryMetrics().size);
-      // The count pill itself carries the room's REPORTING status — red if
+      // The count pill itself carries the room's REPORTING status — amber if
       // at least one member is unavailable (HA has lost contact with it),
-      // the same "available" green everywhere else otherwise. Separate
+      // green otherwise (colors.reportingPill). Separate
       // signal from the ring above: a room can be fully reporting AND have
       // something on (red ring, green pill) at the same time.
       // A baked picture, number ink-centred inside it — see
@@ -5529,8 +5529,7 @@ export class EntityVisuals {
       const csm = this.summaryMetrics();
       c.countBadge.source = countBadgeImage({
         text: model.count,
-        fill: model.reporting === "unavailable" ? ALERT_RED_HEX : AVAILABLE_GREEN_HEX,
-        ink: "#ffffff",
+        ...reportingPill(model.reporting),
         drawnPx: badgeBakePx(csm.countSize, this.iconUserScale, this.bestCssToGui()),
         fontOfSize: csm.countFont / csm.countSize,
       });

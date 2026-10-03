@@ -12,6 +12,7 @@ import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { STATUS_COLOR } from "@/utils/stateColors";
 import { useConfig } from "@/config/ConfigContext";
 import { overviewKeyHelp } from "@/babylon/overviewKeys";
+import { reportingPill } from "@/babylon/colors";
 import ModalFooter from "@/components/common/ModalFooter";
 
 /** What the MAP badge actually does per state — mirrors config/
@@ -40,6 +41,18 @@ const BADGE_ITEMS: { label: string; state: DeviceSurfaceState; ringState?: Devic
     note: "Filled red — the device needs attention (an unlocked door, a leak, low battery…)" },
   { label: "Unavailable", state: "unavailable",
     note: "Neutral square, dashed amber ring — Home Assistant has lost contact with this device" },
+];
+
+/** A room chip's border (summaryLook.summaryFrame) and its count's colour
+ *  (colors.reportingPill) — two separate signals. */
+const CHIP_RINGS: { label: string; frame: "alert" | "active" | "rest"; note: string }[] = [
+  { label: "Red border", frame: "alert", note: "Something in the room needs attention (an unlocked door, a leak…)" },
+  { label: "Light border", frame: "active", note: "Something in the room is on" },
+  { label: "No border", frame: "rest", note: "Everything in the room is off or resting" },
+];
+const CHIP_COUNTS: { label: string; reporting: "available" | "unavailable"; note: string }[] = [
+  { label: "Green number", reporting: "available", note: "Every device in the room is reporting to Home Assistant" },
+  { label: "Amber number", reporting: "unavailable", note: "Home Assistant has lost contact with at least one device in the room" },
 ];
 
 /** The coloured status pill each device PANEL shows, and the colours of the
@@ -126,6 +139,43 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
                 </div>
               );
             })}
+          </div>
+
+          {/* A room chip carries TWO signals — its ring and its count — and
+              nothing explained either; a red ring beside a red count (the
+              count was red for "lost contact" until 2.496.265) read as a
+              contradiction. Drawn from the same owners as the chip:
+              categorySurface("others", …) for the ring, reportingPill for the
+              count. */}
+          <div className="settings-section-title">Room chips (zoomed out)</div>
+          <p className="muted body-text" style={{ marginTop: 4 }}>
+            A room's name with its number of devices. The border and the number
+            say two different things, and a room can show both.
+          </p>
+          <div className="legend-grid">
+            {CHIP_RINGS.map((r) => (
+              <div className="legend-row" key={r.label}>
+                <span className="legend-swatch" style={{
+                  background: categorySurface("others", "off").fill,
+                  border: `1.5px solid ${r.frame === "rest" ? "var(--hairline)" : categorySurface("others", r.frame).ring}`,
+                }} />
+                <span>
+                  <strong>{r.label}</strong>
+                  <span className="muted" style={{ display: "block", fontSize: "var(--text-xs)" }}>{r.note}</span>
+                </span>
+              </div>
+            ))}
+            {CHIP_COUNTS.map((n) => (
+              <div className="legend-row" key={n.label}>
+                <span className="legend-swatch legend-swatch-round legend-count" style={{
+                  background: reportingPill(n.reporting).fill, color: reportingPill(n.reporting).ink,
+                }}>3</span>
+                <span>
+                  <strong>{n.label}</strong>
+                  <span className="muted" style={{ display: "block", fontSize: "var(--text-xs)" }}>{n.note}</span>
+                </span>
+              </div>
+            ))}
           </div>
 
           {/* The keyboard, as the current Natural Scroll setting makes it act

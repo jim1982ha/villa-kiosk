@@ -39,7 +39,7 @@ import { MapPin } from "lucide-react";
 import BasePanel from "@/components/panels/BasePanel";
 import { categorySurface } from "@/config/EntityCategories";
 import type { RoomChipModel } from "@/babylon/summaryLook";
-import { ALERT_RED_HEX, AVAILABLE_GREEN_HEX } from "@/babylon/colors";
+import { reportingPill } from "@/babylon/colors";
 
 /** One room a merged chip stands for. `frame` and `reporting` are what that
  *  room's own chip wears on the map (summaryLook.roomLook): the row repeats
@@ -88,7 +88,7 @@ export default function RoomChoiceSheet({
             <span className="room-choice-name">{c.room}</span>
             <span
               className="room-choice-count"
-              style={{ background: c.reporting === "unavailable" ? ALERT_RED_HEX : AVAILABLE_GREEN_HEX }}
+              style={{ background: reportingPill(c.reporting).fill, color: reportingPill(c.reporting).ink }}
             >{c.count}</span>
           </button>
         ))}

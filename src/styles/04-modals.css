@@ -214,6 +214,8 @@
 .legend-row { display: flex; align-items: center; gap: 10px; font-size: var(--text-sm); }
 .legend-swatch { width: 20px; height: 20px; border-radius: 7px; flex-shrink: 0; border: 1px solid var(--hairline); }
 .legend-swatch-round { border-radius: 50%; }
+/* The room chip's count, drawn as the chip draws it (colors.reportingPill). */
+.legend-count { display: inline-flex; align-items: center; justify-content: center; font-size: var(--text-2xs); font-weight: 700; }
 @media (max-width: 480px) {
   .legend-grid { grid-template-columns: 1fr; }
 }
