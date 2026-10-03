@@ -1,3 +1,14 @@
+## 2.496.260
+
+### Changed
+- **A device's panel now lists its other readings.** Under a device's controls, a new "Also on this device" section lists the readings Home Assistant reports for the same device: a pump plug's energy and current, a lock's battery. Tap one to open its own chart. These readings had no place in VESTA unless they were placed on the map.
+- **Cockpit, the VESTA Agent, Facility and the summary bar open the device.** Anything they mention about a device, such as a fault on the Onsen pump's energy meter, now opens the same panel as the device's badge on the map, and the reading they mentioned is listed in it. A row in a room or category list still opens exactly that row.
+
+### Fixed
+- **Grouping a device no longer removes its controls.** A group whose main entity can be switched (a lock, a switch, a plug) opened a summary with readings only, so a grouped lock could no longer be locked from its badge. It now opens the device's own controls, with the group's members under "Also on this device". A group of readings (a temperature and humidity sensor) keeps its combined chart.
+- **Advanced Settings no longer lists a device's own readings as "not shown anywhere".** A reading of a device that is on the map (the pump's energy meter) is shown, in that device's panel. The list also shows the first few with a "Show all" button instead of every entry at once.
+- **One entity can only be in one group, everywhere in Settings.** Accepting a suggested grouping did not check whether the entity was already in another group. Every group change is now checked against your latest settings.
+
 ## 2.496.259
 
 ### Fixed
