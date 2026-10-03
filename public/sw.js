@@ -1,14 +1,24 @@
 /* VESTA service worker.
  *
  * Strategy:
- *  - HTML navigation (the unhashed app shell): NETWORK-FIRST with a cache
- *    fallback. The shell references content-hashed assets, so serving a stale
- *    cached shell after an update would pin the whole app to old asset hashes
- *    (the same stale-UI failure the nginx `no-cache` header guards against).
- *    Network-first keeps the UI fresh online while still booting from cache if
- *    HA is briefly unreachable after a reboot.
- *  - Other static assets (hashed JS/CSS, fonts, icons): cache-first with a
- *    background refresh — they are immutable, so this is safe and fast.
+ *  - HTML navigation (the unhashed app shell): THIS WORKER'S OWN COPY FIRST
+ *    (2.496.256). Each worker precaches the shell and every hashed asset of its
+ *    own build at install, so the shell it serves always matches chunks it
+ *    holds — the stale-UI failure the old network-first rule guarded against
+ *    (a shell pinned to hashes nobody has) cannot happen. A new build reaches
+ *    the page as a new WORKER: the browser installs it in the background, and
+ *    the page switches to it on its next start or when the person taps the
+ *    update notice (src/utils/swUpdate.ts) — the page asks, this worker
+ *    skips waiting, the page reloads at once.
+ *    Network-first cost every open of the installed app a round trip for the
+ *    page (field: 150-540 ms on an iPhone), and the first open after each
+ *    update downloaded the new app code live (+1-1.5 s).
+ *  - Content-hashed assets (/assets/): cache-first and NEVER refreshed — a
+ *    hashed file cannot change. The background refresh this used to run
+ *    re-downloaded ~3.9 MB (the 3D engine, the app, the decoder) on every
+ *    open, invisibly to the page's own timings (rig, 2.496.256).
+ *  - Other static files (fonts, icons, manifest): cache-first with a
+ *    background refresh.
  *  - Everything else (HA WebSocket is not HTTP; camera proxy, REST history):
  *    network-only — we never want to serve a stale camera frame or sensor value.
  */
@@ -202,11 +212,30 @@ self.addEventListener("fetch", (event) => {
     return res;
   };
 
-  // The unhashed HTML shell must stay fresh: network-first, fall back to cache
-  // only when offline. (Hashed assets below are immutable, so cache-first.)
+  // The shell: THIS worker's own copy first — see the strategy note at the
+  // top. Its own cache, not `caches.match` across all of them: an older
+  // generation's cache can still hold an older shell, and the shell served
+  // must be the one whose chunks this worker precached.
   if (route === "page") {
+    event.respondWith((async () => {
+      try {
+        const own = await caches.open(CACHE);
+        const hit = (await own.match(req, { ignoreSearch: true })) || (await own.match("./index.html"));
+        if (hit) return hit;
+      } catch { /* storage unavailable — the network below */ }
+      try {
+        return cacheCopy(await fetch(req));
+      } catch {
+        return (await caches.match(req)) || caches.match("./index.html");
+      }
+    })());
+    return;
+  }
+
+  // A content-hashed asset never changes: the cached copy, or one download.
+  if (url.pathname.includes("/assets/")) {
     event.respondWith(
-      fetch(req).then(cacheCopy).catch(() => caches.match(req).then((c) => c || caches.match("./index.html"))),
+      caches.match(req).then((cached) => cached || fetch(req).then(cacheCopy)),
     );
     return;
   }
@@ -217,6 +246,14 @@ self.addEventListener("fetch", (event) => {
       return cached || network;
     }),
   );
+});
+
+// The page asks for this when it is about to reload into the new build (its
+// next start, or a tap on the update notice) — never on its own initiative.
+// The rule against seizing an OPEN page stands: the page that asks reloads at
+// once, and no clients.claim() hands a running page a cache it did not load.
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
 });
 
 // Cache-first for the central model. The ?v=<etag> stamp makes each version a

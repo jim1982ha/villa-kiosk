@@ -90,6 +90,27 @@
   pointer-events: none;
 }
 .connection-banner svg { flex: 0 0 auto; color: var(--status-warning); }
+
+/* The installed app's update notice (UpdateBanner): the connection banner's
+   pill, one row below it so the two never overlap (the bottom edge is the
+   category bar's), in the accent colour (news, not a fault), and a button —
+   the whole pill is the tap target. */
+.update-banner {
+  position: absolute;
+  top: calc(var(--safe-top) + 52px + 8px + 48px);
+  left: 50%; transform: translateX(-50%); z-index: 75;
+  max-width: min(560px, calc(100% - 32px));
+  min-height: var(--touch-min);
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 8px 16px;
+  background: color-mix(in srgb, var(--accent) 16%, var(--bg-modal));
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 999px;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+.update-banner svg { flex: 0 0 auto; color: var(--accent); }
 .conn-banner-short { display: none; }
 
 /* Phone: the full sentence wrapped to five lines inside a shrink-to-fit pill,

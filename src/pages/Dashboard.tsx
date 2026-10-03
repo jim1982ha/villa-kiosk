@@ -11,6 +11,7 @@ import HUD from "@/components/hud/HUD";
 import RoomLabel from "@/components/hud/RoomLabel";
 import ServiceErrorToast from "@/components/hud/ServiceErrorToast";
 import ConnectionBanner from "@/components/hud/ConnectionBanner";
+import UpdateBanner from "@/components/hud/UpdateBanner";
 import AppNotice from "@/components/hud/AppNotice";
 import FirstRunTips from "@/components/hud/FirstRunTips";
 import SummaryBar from "@/components/hud/SummaryBar";
@@ -749,6 +750,7 @@ export default function Dashboard() {
       {/* Persistent while the HA socket is down — the only connection signal
           that survives the phone tier, where the top bar's dot is hidden. */}
       <ConnectionBanner />
+      <UpdateBanner />
 
       <HUD
         currentFloor={currentFloor}
