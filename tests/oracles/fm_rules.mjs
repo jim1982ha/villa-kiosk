@@ -72,7 +72,7 @@ ck("ONE attention rule: open faults + tasks overdue or never — a task merely d
 
 const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
 ck("the HUD, the Cockpit and the Today tab all count through fmAttention",
-   /fmAttention\(fmData\)\.total/.test(src("components/hud/HUD.tsx")) && /const fm = fmAttention\(fmData\);/.test(src("components/cockpit/cockpitData.ts"))
+   /fmAttention\(fmData\)\.total/.test(src("components/hud/HUD.tsx")) && /const fm = fmAttention\(fmData\);/.test(src("config/attention.ts"))
    && /fmAttention\(data\)\.lateTasks/.test(src("components/fm/TodayTab.tsx")));
 ck("no screen parses an amount or ranks/moves a fault by itself",
    ["components/fm/TodayTab.tsx", "components/fm/SpendTab.tsx", "components/fm/FaultStageModal.tsx"].every((f) => /parseAmount\(/.test(src(f)) && !/replace\(\/\[\^\\d\]\/g, ""\)\) \|\| 0/.test(src(f)))
@@ -82,6 +82,6 @@ ck("the one-step close goes through the store's one writer (mutate), and both sc
    /mutate\(\(d\) => withTicketClosed\(d, id, stamp\(\)\)\)/.test(src("fm/FmDataContext.tsx"))
    && /closeTicket\(id\)/.test(src("components/fm/FaultsTab.tsx"))
    && /closeTicket\(item\.ticketId/.test(src("components/cockpit/CockpitModal.tsx"))
-   && /ticketId: t\.id/.test(src("components/cockpit/cockpitData.ts")));
+   && /ticketId: t\.id/.test(src("config/attention.ts")));
 
 done("✅ the Facility rules, in the engine");

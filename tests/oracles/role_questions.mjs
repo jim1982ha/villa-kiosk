@@ -1,5 +1,5 @@
 // Every role question through the permission table, and every count from the
-// set its list shows (auth/permissions.ts, cockpit/cockpitData.attentionFor).
+// set its list shows (auth/permissions.ts, config/attention.attentionFor).
 //
 // Before 2.496.191 five files compared role NAMES (`role === "owner"`), and a
 // guest's counts disagreed with their lists: the attention badge counted
@@ -11,7 +11,7 @@ import { ck, done, tsFiles } from "../consistency/check.mjs";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 const { roleCan, listedDevices, hasCapability } = await import("@/auth/permissions");
-const { attentionFor } = await import("@/components/cockpit/cockpitData");
+const { attentionFor } = await import("@/config/attention");
 
 
 console.log("  the table:");
@@ -98,7 +98,7 @@ console.log("\n  the signed-in badge:");
   ck("  ...no 'Signed in as' header; the badge carries the connection as the shared status dot",
      !menu.includes("hud-menu-header") && !/Signed in as \{ROLE_LABELS/.test(menu)
      && /<span className=\{`status-dot \$\{connTone\}`\} \/>/.test(logout), logout.slice(0, 400));
-  const cockpitRow = menu.slice(menu.indexOf("setCockpitOpen(true)"), menu.indexOf("Cockpit{"));
+  const cockpitRow = menu.slice(menu.indexOf("onOpenCockpit();"), menu.indexOf("Cockpit{"));
   ck("  ...and the menu's robot wears the top bar's own agentDot, with no 'agent online' text",
      /\{doors\.agent && agentDot\}/.test(cockpitRow) && !/agent \$\{agentOnline/.test(hud)
      && (hud.match(/className=\{`status-dot /g) || []).length === 2 && !/agent-btn-dot/.test(hud), cockpitRow);

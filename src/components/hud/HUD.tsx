@@ -45,9 +45,9 @@ import VirtualJoystick from "./VirtualJoystick";
 import ViewControls from "./ViewControls";
 import { useLongPress, HOLD_MS_HUD } from "@/hooks/useLongPress";
 import { useHomeAnchor } from "./useHomeAnchor";
-import RadialRoomMenu, { type RadialItem } from "./RadialRoomMenu";
+import RadialRoomMenu from "./RadialRoomMenu";
+import { openRoomDial, roomDialItems, roomsOnFloor, type RadialItem, type RoomDial } from "./roomDial";
 import LegendModal from "./LegendModal";
-import CockpitModal from "@/components/cockpit/CockpitModal";
 import type { Doors } from "@/auth/doors";
 import { useVillaAttention } from "@/components/cockpit/useVillaAttention";
 import { useFmData } from "@/fm/FmDataContext";
@@ -93,14 +93,11 @@ interface Props {
    *  overview camera's current angle/tilt/zoom/pan. Returns false when not
    *  currently in overview (nothing to capture). */
   onSaveOverviewDefault: () => boolean;
-  /** Drill into an entity's full panel from the unavailable-devices list —
-   *  wired to Dashboard's setActivePanel, same callback SummaryBar uses. */
-  onOpenEntity: (entityId: string) => void;
+  /** Open the Cockpit — mounted by the Dashboard beside the other windows
+   *  (pages/surfaces); with `doors.agent` its button is the robot. */
+  onOpenCockpit: () => void;
   /** Open the Facility Manager workspace — drawn only with `doors.facility`. */
   onOpenFacility: () => void;
-  /** Open the VESTA Agent area. Without `doors.agent` the Cockpit button
-   *  keeps its ⚠ icon and the Cockpit's footer has no "VESTA Agent" button. */
-  onOpenAgent: () => void;
   /** Long-press (or hold Enter/Space) a category filter icon — list every
    *  device in that category, the same group-modal every SummaryBar tile
    *  already opens. A plain tap keeps toggling that category's visibility. */
@@ -118,7 +115,7 @@ export default function HUD({
   doors, onOpenSettings, onMove,
   viewMode, onToggleViewMode,
   hasOverviewDefault, onApplyOverviewDefault, onSaveOverviewDefault,
-  onOpenEntity, onOpenFacility, onOpenAgent, onOpenCategory,
+  onOpenCockpit, onOpenFacility, onOpenCategory,
 }: Props) {
   const { connection, haConfig } = useHA();
   const { config, update } = useConfig();
@@ -136,12 +133,6 @@ export default function HUD({
   // unified — reported as "the button says 4, the modal says 5 things need
   // attention" once the two definitions had quietly drifted apart.
   const { attentionGroups, health } = useVillaAttention();
-  // Opens Cockpit (the villa-wide status report), not the bare unavailable-
-  // devices list directly any more — that list is now a drill-down INSIDE
-  // Cockpit's Needs Attention section (see CockpitModal), reached the same
-  // way. Name kept close to its old meaning since this is still the "how
-  // many devices need attention" alert icon; only what it opens changed.
-  const [cockpitOpen, setCockpitOpen] = useState(false);
 
   // Facility attention count: overdue/never-recorded maintenance plus unresolved
   // faults. Surfaced ON the button because the whole point of a schedule is
@@ -172,13 +163,10 @@ export default function HUD({
   // floors as chips inside the dial was a redundant extra step. Tap a room
   // to zoom there, tap outside to dismiss. See RadialRoomMenu.
   // ───────────────────────────────────────────────────────────────────────
-  /** `list`: the rooms do not fit the arc on this screen — they show as one
-   *  scrollable column beside the floor buttons instead (see roomFanFits). */
-  type RadialState = { cx: number; cy: number; activeFloor: number | null; list: boolean };
   // One ref per floor button — the dial anchors itself to whichever one was
   // actually held, so its screen position always matches the gesture.
   const floorBtnRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
-  const [radial, setRadial] = useState<RadialState | null>(null);
+  const [radial, setRadial] = useState<RoomDial | null>(null);
   useBackToClose(() => setRadial(null), radial !== null);
   const floorLongTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const floorLongFired = useRef(false);
@@ -191,117 +179,15 @@ export default function HUD({
   // Sorted because the detection order is the mesh index's, not the reader's.
   const availFloors = useMemo(
     () => [...floorsAvailable].sort((a, b) => a - b), [floorsAvailable]);
-  const ROOM_R = 228;         // baseline outer-arc radius — the original, always-fine "few rooms" size
-  const ROOM_MIN_ARC_PX = 48; // safe arc-length per room AT that baseline (228px radius, ~12° steps)
-  const ROOM_VIEWPORT_PAD = 40; // top/bottom breathing room — matches the cy-clamp margin below
-  const ROOM_R_FLOOR = 90;    // sanity floor so an extreme case never collapses the fan onto the button
-  const RADIAL_CHIP_HALF_W = 95; // half the widest room chip (.radial-item max-width: 190px)
-
-  /** Half-angle (deg) of the room fan for `n` rooms: unchanged from before —
-   *  a tight ~12° step per room until the spread saturates at ±86°. */
-  const roomFanHalfAngle = (n: number): number =>
-    n <= 1 ? 0 : Math.min(86, ((n - 1) * 12) / 2);
-
-  /** The radius `n` rooms need for their safe label spacing on the arc —
-   *  asked by both the radius and the does-it-fit test (2.496.263). */
-  const roomFanNeeded = (n: number): number => {
-    const half = roomFanHalfAngle(n);
-    let needed = ROOM_R;
-    if (n > 1) {
-      const stepRad = ((2 * half) / (n - 1)) * (Math.PI / 180);
-      if (stepRad > 0) needed = Math.max(ROOM_R, ROOM_MIN_ARC_PX / stepRad);
-    }
-    return needed;
-  };
-
-  /**
-   * Outer arc radius for `n` rooms.
-   *
-   * The baseline (228px) reproduces the original "few rooms" look exactly,
-   * unchanged. Past ~15 rooms the fan's angular spread saturates at ±86°, so
-   * each ADDITIONAL room shrinks the angular slice between chips below the
-   * safe arc-length that kept them apart at the baseline — this is what let
-   * a long room list stack its labels on top of each other. Growing the
-   * radius instead restores that same safe per-room spacing by giving the
-   * (now-fixed) angular spread more physical arc to spend it on.
-   *
-   * That growth is capped by how much vertical room the CURRENT viewport
-   * actually has, so the dial can never be pushed off-screen. Only once even
-   * that cap can't fit the ideal spacing do labels start to overlap — a
-   * deliberate, visible fallback for an unusually long room list, not a bug.
-   */
-  const roomFanRadius = (n: number): number => {
-    const needed = roomFanNeeded(n);
-    const maxForViewport = window.innerHeight / 2 - ROOM_VIEWPORT_PAD;
-    // ⚠️ NOT clamp(needed, ROOM_R_FLOOR, maxForViewport), which it looks like.
-    // The FLOOR wins here: on a short viewport maxForViewport can fall below
-    // ROOM_R_FLOOR, and clamp() would let the ceiling win and collapse the fan
-    // to something unreadable. Written this way on purpose — do not converge.
-    return Math.max(ROOM_R_FLOOR, Math.min(needed, maxForViewport));
-  };
-
-  /**
-   * Whether `n` rooms fit the arc at their safe spacing on THIS screen, and the
-   * arc fits across it.
-   *
-   * ⚠️ OVERLAP IS NO LONGER THE FALLBACK (owner, 2026-10-01). Past the viewport
-   * cap the arc used to let labels overlap "as a deliberate, visible fallback":
-   * on a phone held upright, 17 rooms of 1F stacked Bedroom 1 on Guest Bathroom
-   * and WIC on Swimming Pool — unreadable, and a tap could land on the wrong
-   * room. When the arc does not fit, the same rooms show as one scrollable
-   * column instead; the arc stays wherever it fits (the wall tablet).
-   */
-  const roomFanFits = (n: number, cx: number): boolean => {
-    const needed = roomFanNeeded(n);
-    const tallEnough = needed <= window.innerHeight / 2 - ROOM_VIEWPORT_PAD;
-    const wideEnough = cx + needed + RADIAL_CHIP_HALF_W <= window.innerWidth - 8;
-    return tallEnough && wideEnough;
-  };
-
-  const roomsForFloor = (f: number) =>
-    config.teleportPoints
-      .filter((p) => (p.floor ?? 1) === f)
-      // Alphabetical, not model/creation order — reads as a deliberately
-      // organised list rather than whatever order rooms happened to be added.
-      .sort((a, b) => a.name.localeCompare(b.name));
-
-  const buildRadialItems = (r: RadialState): RadialItem[] => {
-    if (r.activeFloor == null) return [];
-    const cosd = (d: number) => Math.cos((d * Math.PI) / 180);
-    const sind = (d: number) => Math.sin((d * Math.PI) / 180);
-    const arc = (i: number, n: number, half: number) =>
-      n <= 1 ? 0 : -half + (2 * half) * (i / (n - 1));
-    const rooms = roomsForFloor(r.activeFloor);
-    if (r.list) {
-      // one column: the menu lays it out (RadialRoomMenu), x/y unused
-      return rooms.map((p) => ({ key: `r${p.name}`, label: p.name, kind: "room" as const, x: 0, y: 0, active: false }));
-    }
-    const half = roomFanHalfAngle(rooms.length);
-    const radius = roomFanRadius(rooms.length);
-    return rooms.map((p, i) => {
-      const a = arc(i, rooms.length, half);
-      return {
-        key: `r${p.name}`, label: p.name, kind: "room",
-        x: r.cx + radius * cosd(a), y: r.cy + radius * sind(a), active: false,
-      };
-    });
-  };
-
   const closeRadial = () => setRadial(null);
   /** Open the dial anchored to floor `f`'s OWN button, pre-expanded to `f`'s
-   *  rooms regardless of which floor is actually showing right now. */
+   *  rooms regardless of which floor is actually showing right now — where it
+   *  sits and whether it is an arc or a column is roomDial's. */
+  const viewport = () => ({ width: window.innerWidth, height: window.innerHeight });
   const openRadialForFloor = (f: number) => {
     const b = floorBtnRefs.current.get(f)?.getBoundingClientRect();
     if (!b) return;
-    const radius = roomFanRadius(roomsForFloor(f).length);
-    const cx = b.right + 16;
-    // Clamp the centre so the tall outer arc always fits (never clipped top/bottom).
-    const margin = radius + ROOM_VIEWPORT_PAD;
-    const cy = Math.max(
-      Math.min(margin, window.innerHeight / 2),
-      Math.min(b.top + b.height / 2, window.innerHeight - margin),
-    );
-    setRadial({ cx, cy, activeFloor: f, list: !roomFanFits(roomsForFloor(f).length, cx) });
+    setRadial(openRoomDial(f, roomsOnFloor(config.teleportPoints, f).length, b, viewport()));
   };
 
   // ── DELIBERATELY NOT useLongPress — do not "DRY" this into the hook ───────
@@ -384,7 +270,7 @@ export default function HUD({
     closeRadial();
   };
 
-  const radialItems = radial ? buildRadialItems(radial) : [];
+  const radialItems = radial ? roomDialItems(roomsOnFloor(config.teleportPoints, radial.floor), radial, viewport()) : [];
   // Only the categories this profile may see get a filter button; the scene
   // enforces the same set (see filterConfigForRole), so the HUD never offers
   // a toggle that could reveal a denied category.
@@ -648,7 +534,7 @@ export default function HUD({
                 Cockpit's footer. Without one, the ⚠ as before. */}
             <button
               className={`icon-btn${doors.agent ? " agent-btn" : ""}${attentionGroups.length > 0 ? " has-alert" : ""}`}
-              onClick={() => setCockpitOpen(true)}
+              onClick={onOpenCockpit}
               title={(attentionGroups.length > 0 ? health.summary : "Cockpit — villa status at a glance")
                 + (doors.agent ? ` · ${agentTitle}` : "")}
               aria-label={`Open Cockpit — villa status at a glance${doors.agent ? ` (${agentTitle})` : ""}`}
@@ -737,7 +623,7 @@ export default function HUD({
                 <button
                   role="menuitem"
                   className="hud-menu-item"
-                  onClick={() => { setMenuOpen(false); setCockpitOpen(true); }}
+                  onClick={() => { setMenuOpen(false); onOpenCockpit(); }}
                   title={doors.agent ? agentTitle : undefined}
                 >
                   {/* The agent's presence is the dot on its robot, as in the
@@ -852,16 +738,6 @@ export default function HUD({
 
       {legendOpen && <LegendModal onClose={() => setLegendOpen(false)} />}
 
-      {cockpitOpen && (
-        <CockpitModal
-          onClose={() => setCockpitOpen(false)}
-          onOpenEntity={(id) => { setCockpitOpen(false); onOpenEntity(id); }}
-          doors={doors}
-          onOpenAgent={onOpenAgent}
-          agentOnline={agentOnline}
-          agentWaiting={agentWaiting}
-        />
-      )}
 
       {/* Left column: the floor toggle (1F / 2F — the ONLY entry to the
           rooms dial, no separate Rooms button any more). A plain tap/click
@@ -886,7 +762,7 @@ export default function HUD({
             <button
               key={f}
               ref={(el) => { if (el) floorBtnRefs.current.set(f, el); else floorBtnRefs.current.delete(f); }}
-              className={`icon-btn hud-floor-btn has-hold-action${currentFloor === f || radial?.activeFloor === f ? " active" : ""}`}
+              className={`icon-btn hud-floor-btn has-hold-action${currentFloor === f || radial?.floor === f ? " active" : ""}`}
               title={`Show floor ${f} — hold for its rooms`}
               aria-label={`Show floor ${f} — hold for its rooms`}
               aria-describedby="floor-btn-hint"

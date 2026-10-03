@@ -3,7 +3,7 @@
 
 import { overlayOpen } from "@/hooks/useBackToClose";
 import { useInterval } from "@/hooks/useInterval";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import BabylonCanvas from "@/components/canvas/BabylonCanvas";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import { Layers } from "lucide-react";
@@ -23,7 +23,6 @@ import { PanelActionsProvider } from "@/components/panels/PanelActionsContext";
 import SettingsModal from "@/components/settings/SettingsModal";
 import ConfigEditorModal from "@/components/settings/ConfigEditorModal";
 import { useConfig } from "@/config/ConfigContext";
-import { roomKey } from "@/config/roomKey";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import RoomChoiceSheet, { type RoomChoice } from "@/components/hud/RoomChoiceSheet";
 import { useProfile } from "@/auth/ProfileContext";
@@ -39,7 +38,8 @@ import { displayLabelFor, resolveRooms, labelOf } from "@/config/EntityMap";
 import { deriveHaScenes, scenesForRoom } from "@/config/haScenes";
 import { effectiveCategory, subjectOf, categoryColor, CATEGORY_ICONS, CATEGORY_LABELS } from "@/config/EntityCategories";
 import { deviceLook, storeLookSource } from "@/utils/deviceActivity";
-import { roomLook } from "@/babylon/summaryLook";
+import { NO_SURFACES, chipRooms, shown as surfaceShown, mergeTeleportPoints, roomChoicesFor, surfacesReducer, type Surface } from "./surfaces";
+import CockpitModal from "@/components/cockpit/CockpitModal";
 import { isMotionSensor } from "@/config/BinarySensorClasses";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
 import { isQuickToggle } from "@/utils/quickAction";
@@ -87,11 +87,6 @@ export default function Dashboard() {
 
   const [manager, setManager] = useState<SceneManager | null>(null);
   const [activePanel, setActivePanel] = useState<ActivePanel | null>(null);
-  const [teleportOpen, setTeleportOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [configEditorOpen, setConfigEditorOpen] = useState(false);
-  const [facilityOpen, setFacilityOpen] = useState(false);
-  const [agentOpen, setAgentOpen] = useState(false);
   // True only for a profile with viewAgent AND a configured agent — see
   // AgentProvider. Nothing about the agent renders otherwise (PLAN A8).
   const { visible: agentVisible } = useAgent();
@@ -99,6 +94,12 @@ export default function Dashboard() {
   // ONCE (auth/doors) and handed to the top bar and the Cockpit, rather than
   // implied by which callbacks happen to be passed.
   const doors = useMemo(() => doorsFor(role, agentVisible), [role, agentVisible]);
+  // Which windows are open over the map, and what may open — one owner
+  // (pages/surfaces), every opener asking it.
+  const [open, dispatchSurface] = useReducer(surfacesReducer, NO_SURFACES);
+  const openSurface = useCallback((surface: Surface) => dispatchSurface({ type: "open", surface, doors }), [doors]);
+  const closeSurface = useCallback((surface: Surface) => dispatchSurface({ type: "close", surface }), []);
+  const shown = (surface: Surface) => surfaceShown(open, surface, doors);
   /** Device the Facility modal should open a blank fault for — set by a
    *  panel's "report a fault" shortcut, cleared as soon as the modal has
    *  consumed it so reopening Facility later doesn't resurrect the form. */
@@ -395,6 +396,12 @@ export default function Dashboard() {
     (entityId: string) => openEntityPanel(identity.deviceOf(entityId)),
     [openEntityPanel, identity],
   );
+  /** A window hands a device over: it closes, and the device's panel opens
+   *  (the Cockpit, the VESTA Agent and Facility all do this). */
+  const handOver = useCallback((from: Surface, entityId: string) => {
+    closeSurface(from);
+    openDevicePanel(entityId);
+  }, [closeSurface, openDevicePanel]);
   const panelReadings = activePanel
     ? identity.readingsOf(activePanel.entityId).map((id) => ({
         id,
@@ -534,27 +541,10 @@ export default function Dashboard() {
       setMappedEntityIds(new Set(manager.mappedEntityIds()));
       const pts = manager.getCalibratedTeleportPoints();
       if (pts) {
-        // Rooms fitted from the sh3d plan always refresh to the new fit
-        // (that's the point of re-adopting after a mirror-flip toggle). Any
-        // OTHER existing room — one the user added via "Add room here" that
-        // has no sh3d counterpart, e.g. a staircase landing — has no fresh
-        // entry to refresh from, so it must be preserved rather than dropped.
-        // (Nothing to carry forward onto a refreshed point any more: a room's
-        // bird's-eye framing is derived from its polygon on arrival rather
-        // than stored, so the fresh fit already IS the whole truth.)
-        const freshNames = new Set(pts.map((p) => p.name));
-        const custom = configRef.current.teleportPoints.filter((p) => !freshNames.has(p.name));
-        const next = [...pts, ...custom];
-        // Only write when the fit actually MOVED something. This runs on every
-        // model load and every re-calibration, and an unconditional update()
-        // is never free even when the values are identical: it hands React a
-        // new array, which re-persists the whole config to localStorage (see
-        // ConfigContext's save effect) and re-runs everything downstream of
-        // teleportPoints. The fitted geometry is quantised at the source
-        // (SceneManager's `mm`), so equal geometry compares equal here.
-        if (JSON.stringify(next) !== JSON.stringify(configRef.current.teleportPoints)) {
-          update({ teleportPoints: next });
-        }
+        // Fitted rooms refresh; a room the owner added is kept; nothing is
+        // written when nothing moved (surfaces.mergeTeleportPoints).
+        const next = mergeTeleportPoints(pts, configRef.current.teleportPoints);
+        if (next) update({ teleportPoints: next });
       }
     };
     // Once shown (at once if it already is), and again whenever the scene
@@ -612,9 +602,9 @@ export default function Dashboard() {
         onFloorChange(point.floor);
       }
       manager.navigateTo(point);
-      setTeleportOpen(false);
+      closeSurface("rooms");
     },
-    [manager, currentFloor, onFloorChange],
+    [manager, currentFloor, onFloorChange, closeSurface],
   );
 
   // Tapping a room-cluster chip on the map does the SAME thing tapping that
@@ -659,27 +649,11 @@ export default function Dashboard() {
    */
   const handleClusterHeld = useCallback(
     (room: string, entityIds: string[], roomNames: string[]) => {
-      const merged = [...new Set(roomNames)].filter(Boolean);
+      const merged = chipRooms(roomNames, room);
       if (merged.length > 1) {
-        setRoomChoices(merged.map((r) => {
-          // The FIXED side, normalised ONCE outside the filter — the convention
-          // roomKey.ts documents, and the reason a two-argument `sameRoom(a, b)`
-          // was deleted rather than kept: it would re-normalise the fixed side
-          // on every iteration, which is exactly what this site was doing (once
-          // per entity, per room, inside a map over rooms).
-          const key = roomKey(r);
-          const ids = entityIds.filter((id) => roomKey(resolvedRooms[id] ?? "") === key);
-          // Each row wears the frame and pill its room's chip shows when it
-          // stands alone (summaryLook.roomLook) — so the list still says which
-          // room has something on and which one needs attention. A device HA
-          // has not reported rings nothing, as on the map.
-          const looks = storeLookSource(entities, config);
-          return {
-            room: r,
-            count: ids.length,
-            ...roomLook(ids.map((id) => (entities[id] ? deviceLook(id, looks) : undefined))),
-          };
-        }));
+        const looks = storeLookSource(entities, config);
+        setRoomChoices(roomChoicesFor(merged, entityIds, (id) => resolvedRooms[id],
+          (id) => (entities[id] ? deviceLook(id, looks) : undefined)));
         return;
       }
       setClusterGroup({ room, entityIds });
@@ -702,8 +676,7 @@ export default function Dashboard() {
       // chooser is still there for when narrowing to ONE room is what you
       // want — it moved to press-and-hold, which is where this app puts every
       // "give me the options" action.
-      const merged = [...new Set(roomNames)].filter(Boolean);
-      goToRooms(merged.length > 0 ? merged : [room]);
+      goToRooms(chipRooms(roomNames, room));
     },
     [goToRooms],
   );
@@ -767,7 +740,7 @@ export default function Dashboard() {
         onClusterTapped={handleClusterTapped}
         onFloorChange={(f) => setCurrentFloor(f)}
         onRoomChange={setRoom}
-        onNeedModel={() => { if (doors.settings) setSettingsOpen(true); }}
+        onNeedModel={() => openSurface("settings")}
         onModelUploaded={() => setModelKey((k) => k + 1)}
       />
 
@@ -792,19 +765,18 @@ export default function Dashboard() {
         currentFloor={currentFloor}
         floorsAvailable={floorsAvailable}
         onShowFloor={handleShowFloor}
-        onOpenTeleport={() => setTeleportOpen(true)}
+        onOpenTeleport={() => openSurface("rooms")}
         onNavigateRoom={handleTeleport}
         doors={doors}
-        onOpenSettings={() => { if (doors.settings) setSettingsOpen(true); }}
+        onOpenSettings={() => openSurface("settings")}
         onMove={(x, y) => manager?.camera.setMovement(x, y)}
         viewMode={viewMode}
         onToggleViewMode={toggleViewMode}
         hasOverviewDefault={hasOverviewDefault}
         onApplyOverviewDefault={applyOverviewDefault}
         onSaveOverviewDefault={saveOverviewDefault}
-        onOpenEntity={openDevicePanel}
-        onOpenFacility={() => { if (doors.facility) setFacilityOpen(true); }}
-        onOpenAgent={() => { if (doors.agent) setAgentOpen(true); }}
+        onOpenCockpit={() => openSurface("cockpit")}
+        onOpenFacility={() => openSurface("facility")}
         onOpenCategory={setCategoryGroup}
       />
 
@@ -816,11 +788,11 @@ export default function Dashboard() {
         scenes={haScenes}
       />
 
-      {teleportOpen && (
+      {shown("rooms") && (
         <TeleportMenu
           manager={manager}
           currentFloor={currentFloor}
-          onClose={() => setTeleportOpen(false)}
+          onClose={() => closeSurface("rooms")}
           onTeleport={handleTeleport}
         />
       )}
@@ -836,7 +808,7 @@ export default function Dashboard() {
               ? () => {
                   setActivePanel(null);
                   setConfigEditorFocus(activePanel.entityId);
-                  setConfigEditorOpen(true);
+                  openSurface("configEditor");
                 }
               : undefined,
             // Same capability that gates the Facility workspace itself —
@@ -851,7 +823,7 @@ export default function Dashboard() {
                   setActivePanel(null);
                   if (doors.facility) {
                     setFaultForEntity(activePanel.entityId);
-                    setFacilityOpen(true);
+                    openSurface("facility");
                   } else {
                     setGuestReportFor(activePanel.entityId);
                   }
@@ -1005,18 +977,27 @@ export default function Dashboard() {
         />
       )}
 
-      {agentOpen && doors.agent && (
-        <AgentModal
-          onClose={() => setAgentOpen(false)}
-          onOpenEntity={(id) => { setAgentOpen(false); openDevicePanel(id); }}
+      {shown("cockpit") && (
+        <CockpitModal
+          onClose={() => closeSurface("cockpit")}
+          onOpenEntity={(id) => handOver("cockpit", id)}
+          doors={doors}
+          onOpenAgent={() => openSurface("agent")}
         />
       )}
 
-      {facilityOpen && doors.facility && (
+      {shown("agent") && (
+        <AgentModal
+          onClose={() => closeSurface("agent")}
+          onOpenEntity={(id) => handOver("agent", id)}
+        />
+      )}
+
+      {shown("facility") && (
         <FacilityModal
           doors={doors}
-          onClose={() => { setFacilityOpen(false); setFaultForEntity(null); }}
-          onOpenEntity={(id) => { setFacilityOpen(false); openDevicePanel(id); }}
+          onClose={() => { closeSurface("facility"); setFaultForEntity(null); }}
+          onOpenEntity={(id) => handOver("facility", id)}
           reportFaultFor={faultForEntity ?? undefined}
           onFaultFormOpened={() => setFaultForEntity(null)}
         />
@@ -1029,10 +1010,10 @@ export default function Dashboard() {
         />
       )}
 
-      {settingsOpen && doors.settings && (
+      {shown("settings") && (
         <SettingsModal
           manager={manager}
-          onClose={() => setSettingsOpen(false)}
+          onClose={() => closeSurface("settings")}
           // ── ADVANCED SETTINGS NESTS OVER SETTINGS, IT DOES NOT REPLACE IT ──
           // Settings STAYS MOUNTED underneath. Until 2.337.0 this closed it in
           // the same commit that opened Advanced — a SWAP — and that one line
@@ -1043,20 +1024,20 @@ export default function Dashboard() {
           // was answered by a handler belonging to a component that no longer
           // existed. Nesting is what the stack was built for, so the hazard is
           // deleted rather than worked around.
-          onOpenConfigEditor={() => { setConfigEditorFocus(null); setConfigEditorOpen(true); }}
+          onOpenConfigEditor={() => { setConfigEditorFocus(null); openSurface("configEditor"); }}
         />
       )}
 
       {/* Config Editor as a modal OVER the live villa (not a route) — leaving
           it returns to Settings with no GLB reload; edits already applied live. */}
-      {configEditorOpen && doors.settings && (
+      {shown("configEditor") && (
         <ConfigEditorModal
           focusEntityId={configEditorFocus ?? undefined}
           onBack={() => {
             // Just close this one. Settings is still mounted underneath if it
             // was the way in, and was never opened if a device panel was — so
             // there is nothing to restore and nothing to decide.
-            setConfigEditorOpen(false);
+            closeSurface("configEditor");
             setConfigEditorFocus(null);
           }}
           onModelChanged={() => setModelKey((k) => k + 1)}

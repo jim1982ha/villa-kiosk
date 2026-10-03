@@ -11,9 +11,9 @@
 // a guest's badge counted devices their list would not show (2.496.191).
 
 import { useMemo } from "react";
-import { useVillaModel, type VillaAttention } from "@/config/VillaModel";
+import { useVillaModel } from "@/config/VillaModel";
 import { useProfile } from "@/auth/ProfileContext";
-import { attentionFor } from "./cockpitData";
+import { attentionFor, type VillaAttention } from "@/config/attention";
 
 export type { VillaAttention };
 

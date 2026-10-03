@@ -1,7 +1,7 @@
 // A red badge on the map is always in "Needs attention" — and nothing else is
 // listed as an alarm (2.496.245).
 //
-// cockpitData built its alarm items from binary_sensors and their
+// config/attention (then cockpitData) built its alarm items from binary_sensors and their
 // device_class only, blind to config.alertThresholds and to every other red
 // the map paints: an UNLOCKED door, a sensor reporting a fault word
 // (statusKeyFor), a binary_sensor the villa had overridden. Red on the map,
@@ -14,7 +14,7 @@ import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { deviceLook, mapLookSource } = await import("@/utils/deviceActivity");
-const { buildAttentionItems, attentionFor, villaHealthFrom, groupAttention } = await import("@/components/cockpit/cockpitData");
+const { buildAttentionItems, attentionFor, villaHealthFrom, groupAttention } = await import("@/config/attention");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
 
 const ent = (id, state, attributes = {}) => ({ entity_id: id, state, attributes });

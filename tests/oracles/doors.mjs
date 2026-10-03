@@ -43,8 +43,8 @@ const src = (f) => strip(readFileSync(new URL(`../../src/${f}`, import.meta.url)
 const dash = src("pages/Dashboard.tsx"), hud = src("components/hud/HUD.tsx"), cockpit = src("components/cockpit/CockpitModal.tsx");
 ck("Dashboard computes it once and mounts every window behind it",
    (dash.match(/doorsFor\(/g) ?? []).length === 1
-   && /\{agentOpen && doors\.agent && \(/.test(dash) && /\{facilityOpen && doors\.facility && \(/.test(dash)
-   && /\{settingsOpen && doors\.settings && \(/.test(dash) && /\{configEditorOpen && doors\.settings && \(/.test(dash));
+   && ["agent", "facility", "settings", "configEditor"].every((s) => new RegExp(`\\{shown\\("${s}"\\) && \\(`).test(dash))
+   && /const shown = \(surface: Surface\) => surfaceShown\(open, surface, doors\);/.test(dash));
 ck("  ...and no longer re-asks those capabilities itself",
    !/roleCan\(role, "(openSettings|manageFacility|viewAgent)"\)/.test(dash) && !/agentVisible \?/.test(dash));
 ck("no window's visibility is implied by a callback being passed (no `? () => … : undefined`)",

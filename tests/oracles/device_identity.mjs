@@ -60,9 +60,10 @@ ck("removing a member", typeof rm !== "string" && rm.deviceGroups[0].memberEntit
 console.log("\n  the callers:");
 const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
 const d = src("pages/Dashboard.tsx"), router = src("components/panels/PanelRouter.tsx"), base = src("components/panels/BasePanel.tsx");
-ck("Cockpit (HUD), the summary bar, the Agent and Facility open the DEVICE",
-   (d.match(/onOpenEntity=\{openDevicePanel\}/g) ?? []).length === 2
-   && /setAgentOpen\(false\); openDevicePanel\(id\)/.test(d) && /setFacilityOpen\(false\); openDevicePanel\(id\)/.test(d)
+ck("the Cockpit, the summary bar, the Agent and Facility open the DEVICE",
+   (d.match(/onOpenEntity=\{openDevicePanel\}/g) ?? []).length === 1
+   && /const handOver = useCallback\(\(from: Surface, entityId: string\) => \{\s*closeSurface\(from\);\s*openDevicePanel\(entityId\);/.test(d)
+   && ["cockpit", "agent", "facility"].every((w) => d.includes(`onOpenEntity={(id) => handOver("${w}", id)}`))
    && /openEntityPanel\(identity\.deviceOf\(entityId\)\)/.test(d));
 ck("  ...a list row and the camera's next/prev open exactly the entity they name",
    /setClusterGroup\(null\); openEntityPanel\(id\)/.test(d) && /setCategoryGroup\(null\); openEntityPanel\(id\)/.test(d));

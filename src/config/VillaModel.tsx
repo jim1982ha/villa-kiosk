@@ -21,19 +21,11 @@ import { dismissedEntitySet } from "./dismissedEntities";
 import { effectiveMapped, visibleEntitiesOf, visibleTo } from "./villaVisibility";
 import type { Role } from "@/auth/roles";
 import type { HassEntity } from "@/types/ha.types";
-import {
-  buildAttentionItems, groupAttention, villaHealthFrom, type AttentionGroup, type AttentionItem, type VillaHealth,
-} from "@/components/cockpit/cockpitData";
+import { buildAttentionItems, type VillaProblems } from "./attention";
 
-export interface VillaAttention {
-  unavailableIds: string[];
-  selectableIds: string[];
-  attentionItems: AttentionItem[];
-  /** The same problems, one row per device (cockpitData.groupAttention) —
-   *  what the badge, the phone menu and the Cockpit list COUNT and show. */
-  attentionGroups: AttentionGroup[];
-  health: VillaHealth;
-}
+/** The villa's problems, role-blind; a profile's view (grouped, with its
+ *  health line) is attention.attentionFor — see useVillaAttention. */
+export type { VillaProblems };
 
 /** The sets the villa model is built on — from useVillaSets, which the
  *  Dashboard calls (it also reads them itself, above the provider it renders). */
@@ -65,9 +57,10 @@ export interface VillaModel extends VillaSets {
   /** The same, over the entities a profile can SEE (hidden and diagnostic
    *  ones left out) — what the bottom bar counts. */
   visibleDevices: VillaDevices;
-  /** What needs attention: unavailable devices, open faults, overdue
-   *  schedules, active alarms — the HUD badge and Cockpit read this ONE. */
-  attention: VillaAttention;
+  /** What needs attention, role-blind: unavailable devices, open faults,
+   *  overdue schedules, active alarms. Shown only through a profile's view
+   *  (useVillaAttention → attention.attentionFor), never counted directly. */
+  attention: VillaProblems;
   /** The devices this profile's lists may name (villaVisibility.visibleTo) —
    *  the attention badge, the Cockpit list and anything else that asks. */
   visibleTo: (role: Role | null) => { has(id: string): boolean };
@@ -93,13 +86,14 @@ export function VillaModelProvider({ sets, children }: { sets: VillaSets; childr
     () => villaDevices({ entityMap, deviceGroups, dismissedEntityIds, mappedEntityIds, entities: visibleEntities, entityDeviceIds, folding }),
     [entityMap, deviceGroups, dismissedEntityIds, mappedEntityIds, visibleEntities, entityDeviceIds, folding],
   );
-  const attention = useMemo((): VillaAttention => {
+  const attention = useMemo((): VillaProblems => {
     const unavailableIds = devices.unavailable as string[];
     const selectableIds = devices.ids as string[];
     const attentionItems = buildAttentionItems({
       unavailableIds, entities, entityMap, alertThresholds: config.alertThresholds, resolvedRooms, fmData, selectableIds, folding });
-    const attentionGroups = groupAttention(attentionItems);
-    return { unavailableIds, selectableIds, attentionItems, attentionGroups, health: villaHealthFrom(attentionGroups) };
+    // NOT grouped here: grouping is per profile (attentionFor), and a
+    // role-blind grouping had no reader (until 2.496.268 it ran anyway).
+    return { unavailableIds, selectableIds, attentionItems };
   }, [devices, entities, entityMap, config.alertThresholds, resolvedRooms, fmData, folding]);
 
   const value = useMemo(

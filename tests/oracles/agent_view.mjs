@@ -96,7 +96,7 @@ const dash = src("pages/Dashboard.tsx");
 // whether Dashboard passed onOpenAgent. doors.mjs drives doorsFor by value.
 ck("the agent's door is the one doors answer, from the role AND agentVisible",
    /const doors = useMemo\(\(\) => doorsFor\(role, agentVisible\), \[role, agentVisible\]\);/.test(dash));
-ck("  ...and so is the window", /\{agentOpen && doors\.agent && \(/.test(dash));
+ck("  ...and so is the window (shown: open AND allowed, pages/surfaces)", /\{shown\("agent"\) && \(/.test(dash));
 {
   // ONE icon for the agent (2.496.242): no robot button of its own — the
   // Cockpit's button becomes the robot, and the agent's window opens from the
@@ -105,8 +105,8 @@ ck("  ...and so is the window", /\{agentOpen && doors\.agent && \(/.test(dash));
   const hud = strip(src("components/hud/HUD.tsx"));
   const cockpit = strip(src("components/cockpit/CockpitModal.tsx"));
   ck("the top bar opens the agent from nowhere but the Cockpit (no robot button of its own)",
-     !/onClick=\{onOpenAgent\}/.test(hud) && !/onOpenAgent\(\)/.test(hud)
-     && /doors=\{doors\}\s*onOpenAgent=\{onOpenAgent\}/.test(hud));
+     !/onOpenAgent/.test(hud)
+     && /doors=\{doors\}\s*onOpenAgent=\{\(\) => openSurface\("agent"\)\}/.test(src("pages/Dashboard.tsx")));
   ck("  ...the Cockpit button shows the robot and the presence dot only with the agent's door, the ⚠ without",
      /\{doors\.agent \? <Bot size=\{24\} \/> : <TriangleAlert size=\{24\} \/>\}/.test(hud)
      && /\{doors\.agent && agentDot\}/.test(hud) && /const agentDot = <span className=\{`status-dot \$\{agentOnline/.test(hud) && !/onOpenAgent \?|onOpenAgent &&/.test(hud));

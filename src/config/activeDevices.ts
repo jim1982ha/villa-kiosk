@@ -15,7 +15,6 @@
 
 import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping } from "@/types/scene.types";
-import { isSwitchedOn } from "@/utils/deviceActivity";
 import { CATEGORY_ORDER, effectiveCategory, subjectOf } from "./EntityCategories";
 import { domainOf } from "@/utils/entityDomain";
 
@@ -27,27 +26,27 @@ import { domainOf } from "@/utils/entityDomain";
 // switch, and counts POWER, by name.
 
 
-export interface CategoryCount { category: Category; total: number; onCount: number; entityIds: string[] }
+export interface CategoryMembers { category: Category; entityIds: string[] }
 
-/** Per category: how many of these devices, and how many are on. Devices
- *  without a mapping are not counted (a category comes from the mapping). */
-export function categoryCounts(
+/** Per category: which of these devices are in it. Devices without a mapping
+ *  are left out (a category comes from the mapping).
+ *
+ *  ⚠️ IT ALSO COUNTED "ON" (until 2.496.268), with isSwitchedOn — and nothing
+ *  read it: the Cockpit tile recounts its devices through tileStats
+ *  (groupLook's POWER count, the same rule), so one rule ran twice and only
+ *  one answer was ever shown. Counting is the tile's. */
+export function categoryMembers(
   ids: readonly string[], entities: Record<string, HassEntity>, entityMap: Record<string, EntityMapping>,
-): CategoryCount[] {
+): CategoryMembers[] {
   const members = new Map<Category, string[]>(CATEGORY_ORDER.map((c) => [c, []]));
-  const ons = new Map<Category, number>(CATEGORY_ORDER.map((c) => [c, 0]));
   for (const id of ids) {
     const mapping = entityMap[id];
     if (!mapping) continue;
     const entity = entities[id];
     const cat = effectiveCategory(subjectOf(id, mapping, entity));
     members.get(cat)?.push(id);
-    if (isSwitchedOn(entity, id)) ons.set(cat, (ons.get(cat) ?? 0) + 1);
   }
-  return CATEGORY_ORDER.map((category) => {
-    const entityIds = members.get(category) ?? [];
-    return { category, total: entityIds.length, onCount: ons.get(category) ?? 0, entityIds };
-  });
+  return CATEGORY_ORDER.map((category) => ({ category, entityIds: members.get(category) ?? [] }));
 }
 
 /** One service call of a bulk switch. */

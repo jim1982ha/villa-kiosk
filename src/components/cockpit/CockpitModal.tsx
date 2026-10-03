@@ -34,6 +34,8 @@ import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
 import InlineConfirm from "@/components/common/InlineConfirm";
 import { roleCan } from "@/auth/permissions";
 import type { Doors } from "@/auth/doors";
+import { useAgent } from "@/agent/AgentContext";
+import { awaitingAnswer } from "@/agent/agentView";
 import { CATEGORY_LABELS, CATEGORY_ICONS, categorySurface } from "@/config/EntityCategories";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { fetchLogbookEvents } from "@/ha/HALogbookAPI";
@@ -43,8 +45,9 @@ import { useVillaAttention } from "./useVillaAttention";
 import { storeLookSource } from "@/utils/deviceActivity";
 import {
   buildCategoryTiles, buildRoomGroups, buildFloorGroups,
-  buildActivityFeed, tileStats, tileLine, attentionLine, type TileStats, type AttentionGroup, type AttentionItem, type AttentionKind, type ActivityEntry,
+  buildActivityFeed, tileStats, tileLine, type TileStats, type ActivityEntry,
 } from "./cockpitData";
+import { attentionLine, type AttentionGroup, type AttentionItem, type AttentionKind } from "@/config/attention";
 import type { Category } from "@/types/scene.types";
 import ModalFooter from "@/components/common/ModalFooter";
 
@@ -57,10 +60,6 @@ export interface CockpitModalProps {
   doors: Doors;
   /** Open the VESTA Agent window. */
   onOpenAgent: () => void;
-  /** The agent's presence and what waits for this profile's answer, for the
-   *  footer button's label. */
-  agentOnline?: boolean;
-  agentWaiting?: number;
 }
 
 const ATTENTION_ICON: Record<AttentionKind, typeof TriangleAlert> = {
@@ -82,8 +81,14 @@ interface PivotTile {
 }
 
 export default function CockpitModal({
-  onClose, onOpenEntity, doors, onOpenAgent, agentOnline = false, agentWaiting = 0,
+  onClose, onOpenEntity, doors, onOpenAgent,
 }: CockpitModalProps) {
+  // The agent's presence and what waits for this profile's answer, for the
+  // footer button's label — read here, as the top bar reads them for its dot
+  // (agentView.awaitingAnswer), instead of being handed across (2.496.268).
+  const { status: agentStatus, messages: agentMessages } = useAgent();
+  const agentOnline = agentStatus?.state === "online";
+  const agentWaiting = useMemo(() => awaitingAnswer(agentMessages), [agentMessages]);
   const { entities, ws, entityFloorNumbers } = useHA();
   const { config, resolvedRooms } = useConfig();
   // How every device looks, read from the store (utils/deviceActivity) — a

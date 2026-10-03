@@ -42,10 +42,16 @@ console.log("\n  how many are on, per category:");
   };
   const entities = { "lock.front": e("lock.front", "locked"), "lock.back": e("lock.back", "unlocked"),
     "light.a": e("light.a", "on"), "sensor.t": e("sensor.t", "24") };
-  const counts = Object.fromEntries(A.categoryCounts(Object.keys(entityMap), entities, entityMap).map((c) => [c.category, c]));
-  ck("two locks, one unlocked: 2 devices · 1 on (was 2 on)", counts.access_control.total === 2 && counts.access_control.onCount === 1, JSON.stringify(counts.access_control));
-  ck("a temperature reading adds a device, not an 'on'", counts.comfort.total === 1 && counts.comfort.onCount === 0, JSON.stringify(counts.comfort));
-  ck("an unmapped device is not counted", A.categoryCounts(["switch.x"], { "switch.x": e("switch.x", "on") }, {}).every((c) => c.total === 0));
+  // "On" per category is the TILE's count (cockpitData.tileStats → groupLook), over the category's
+  // members — the one rule; categoryMembers only says which devices a category holds (2.496.268).
+  const { tileStats } = await import("@/components/cockpit/cockpitData");
+  const { storeLookSource } = await import("@/utils/deviceActivity");
+  const src = storeLookSource(entities, { entityMap, alertThresholds: {} });
+  const members = Object.fromEntries(A.categoryMembers(Object.keys(entityMap), entities, entityMap).map((c) => [c.category, c.entityIds]));
+  const ac = tileStats(members.access_control, src), co = tileStats(members.comfort, src);
+  ck("two locks, one unlocked: 2 devices · 1 on (was 2 on)", ac.total === 2 && ac.onCount === 1, JSON.stringify(ac));
+  ck("a temperature reading adds a device, not an 'on'", co.total === 1 && co.onCount === 0, JSON.stringify(co));
+  ck("an unmapped device is not counted", A.categoryMembers(["switch.x"], { "switch.x": e("switch.x", "on") }, {}).every((c) => c.entityIds.length === 0));
 }
 
 console.log("\n  switching a mixed list:");
@@ -100,7 +106,7 @@ console.log("\n  the Cockpit's tiles (rooms, floors, categories — one wording)
   ck("  ...worded once: \"4 devices · 2 on · 1 offline\"", tileLine(s) === "4 devices · 2 on · 1 offline", tileLine(s));
   ck("  ...a quiet room says only its size", tileLine(tileStats(["lock.a"], src)) === "1 device");
   ck("  ...and an empty one \"None\"", tileLine(tileStats([], src)) === "None");
-  const counts = A.categoryCounts(["lock.a", "lock.b"], ents, { "lock.a": { type: "lock", category: "access_control" }, "lock.b": { type: "lock", category: "access_control" } });
+  const counts = A.categoryMembers(["lock.a", "lock.b"], ents, { "lock.a": { type: "lock", category: "access_control" }, "lock.b": { type: "lock", category: "access_control" } });
   ck("a category tile knows its devices (it opens their list now)", counts.find((c) => c.category === "access_control").entityIds.join() === "lock.a,lock.b");
 }
 

@@ -13,17 +13,8 @@
 
 import { Settings2 } from "lucide-react";
 
-export interface RadialItem {
-  key: string;
-  label: string;
-  /** Viewport coordinates (position: fixed) of the chip centre. */
-  x: number;
-  y: number;
-  kind: "room" | "manage";
-  /** Highlighted state, currently unused by either kind — kept so a future
-   *  "you're already here" indicator doesn't need a shape change. */
-  active: boolean;
-}
+import type { RadialItem } from "./roomDial";
+export type { RadialItem };
 
 interface Props {
   items: RadialItem[];
@@ -32,7 +23,7 @@ interface Props {
   /** Press outside any chip → dismiss. */
   onBackdrop: () => void;
   /** Left edge (px) of the one-column list shown when the rooms do not fit the
-   *  arc on this screen (HUD.roomFanFits); null: the arc. */
+   *  arc on this screen (roomDial.openRoomDial); null: the arc. */
   listAt?: number | null;
 }
 

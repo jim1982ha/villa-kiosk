@@ -4,7 +4,7 @@
 // ten minutes later the VESTA rule's alert became the agent's Kiosk ticket on
 // that same lock: a second row, and the count went up for a door already
 // listed. An offline device and its watchdog ticket did the same.
-// cockpitData.groupAttention folds the problems of one device into one row;
+// config/attention.groupAttention folds the problems of one device into one row;
 // this drives values through it and through buildAttentionItems, and checks
 // the corner cases the design named: nothing lost or doubled, every fault
 // keeps its Close, no-device problems stand alone, an unknown entity is its
@@ -14,7 +14,7 @@ import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
-const { buildAttentionItems, groupAttention, attentionFor, attentionLine } = await import("@/components/cockpit/cockpitData");
+const { buildAttentionItems, groupAttention, attentionFor, attentionLine } = await import("@/config/attention");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
 
 const ent = (id, state, name) => ({ entity_id: id, state, attributes: { friendly_name: name } });
@@ -156,8 +156,11 @@ const hud = src("components/hud/HUD.tsx");
 const counted = [...hud.matchAll(/formatCountBadge\(([^)]*)\)/g)].map((m) => m[1]).filter((a) => a !== "facilityAttention");
 ck("every Cockpit count in the top bar and the phone menu is the number of ROWS",
    counted.length === 2 && counted.every((a) => a === "attentionGroups.length"), counted);
-ck("the villa model hands buildAttentionItems the device fold, and groups what it builds",
-   /selectableIds, folding \}\);/.test(vm) && /const attentionGroups = groupAttention\(attentionItems\);/.test(vm) && /villaHealthFrom\(attentionGroups\)/.test(vm));
+// 2.496.268: grouped ONCE, per profile — the villa model's role-blind
+// grouping had no reader and ran on every state push anyway.
+ck("the villa model hands buildAttentionItems the device fold, and leaves the grouping to the profile's view",
+   /selectableIds, folding \}\);/.test(vm) && !/groupAttention|villaHealthFrom/.test(vm)
+   && /return attentionFor\(attention, \(id\) => sees\.has\(id\)\);/.test(src("components/cockpit/useVillaAttention.ts")));
 ck("the Cockpit draws one row per group, and every fault line inside a row has its own Close",
    /attentionGroups\.map\(\(group\) => \(\s*<CockpitAttentionRow key=\{group\.key\} group=\{group\}/.test(cockpit)
    && /function CockpitAttentionSub[\s\S]*?useFaultClose\(item, canCloseFault\)/.test(cockpit));
