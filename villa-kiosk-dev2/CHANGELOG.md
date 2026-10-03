@@ -1,3 +1,9 @@
+## 2.496.265
+
+### Changed
+- **A room's device count is amber, not red, when a device there has gone offline.** On a room chip, red already meant "something here needs attention" (the border). The count used the same red for "Home Assistant has lost contact with a device", so a red border with a green count, or a red count with no border, looked contradictory. The count is now amber, the colour VESTA already uses for a lost device everywhere else, so red on a room chip only ever means "needs attention". The same applies in the "Which room?" list.
+- **The map colours key now explains room chips**: what the red and light borders mean, and what the green and amber numbers mean.
+
 ## 2.496.264
 
 ### Fixed
