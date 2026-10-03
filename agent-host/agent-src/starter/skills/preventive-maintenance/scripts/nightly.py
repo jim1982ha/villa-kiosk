@@ -73,7 +73,10 @@ def run(args) -> dict:
     helpers, hstates = cli.helpers()
     params = VillaParams(helpers, hstates)
     store = Store(args.store)
-    today = date.fromisoformat(args.as_of) if args.as_of else datetime.now(Z).date()
+    # ⚠️ THE DAY JUDGED IS THE LAST FINISHED ONE (villa, 2026-10-04): the batch runs at 02:00 and judged
+    # the date it ran on — two hours of data — so a pump's "last 2 days" were yesterday and a 2-hour
+    # stub: "Onsen pump used 0.09 kWh/day against a normal 0.48". --as-of names the day to judge.
+    today = date.fromisoformat(args.as_of) if args.as_of else datetime.now(Z).date() - timedelta(days=1)
     day_end = datetime.combine(today + timedelta(days=1), time(0, 0), tzinfo=Z)
     baseline_days = int(params.behaviour("baseline_days")) + int(params.behaviour("confirm_days")) + 2
     win_start = day_end - timedelta(days=baseline_days)
@@ -113,6 +116,20 @@ def run(args) -> dict:
                     features_written += 1
         if e_eid:
             e_series = F.energy_daily_features(day_stats.get(e_eid, []), zone)
+            if p_eid:
+                # ⚠️ A DAY THE METER WAS OFFLINE IS NOT A DAY OF LOW USE (villa, 2026-10-04): the plug was
+                # off Wi-Fi for 10 h and its day's kWh read as an 80 % collapse. Offline is PM-UNAVAILABLE's.
+                # A day with NO power row counts as offline only from the plug's first data to the day judged:
+                # before its first day the plug's history simply was not there (a newer sensor), and
+                # dropping those days starved the baseline (villa replay: a real collapse found 16 days late).
+                gap_limit = params.behaviour_text_default("energy_gap_hours", 3)
+                covered = (min(p_series), today) if p_series else None
+
+                def offline(d):
+                    if d in p_series:
+                        return (p_series[d].get("gap_hours") or 0) >= gap_limit
+                    return covered is not None and covered[0] <= d <= covered[1]
+                e_series = {d: v for d, v in e_series.items() if not offline(d)}
             if today in e_series:
                 store.put_feature(today.isoformat(), e_eid, "energy", "kwh", e_series[today]["kwh"])
                 features_written += 1
@@ -153,6 +170,7 @@ def run(args) -> dict:
     # one availability finding per physical device (device_id when the registry gives it,
     # otherwise the integration + asset), never one per entity
     unavailable_groups: dict[str, dict] = {}
+    quiet_rows: list[tuple[dict, dict, datetime]] = []
     for fam in ("power", "energy", "security", "level", "runtime", "water", "generation"):
         for row in pack.entities(fam):
             st = states.get(row["entity_id"])
@@ -166,7 +184,9 @@ def run(args) -> dict:
                     hours = (now_ref - datetime.fromisoformat(lc).astimezone(Z)).total_seconds() / 3600
                 except ValueError:
                     hours = None
-            if st.get("state") in ("unavailable", "unknown"):
+            # ⚠️ "unknown" IS NOT OFFLINE (villa, 2026-10-04): it is a sensor with no value to give — a
+            # wind chill on a warm day — while its device reports. Lost is "unavailable".
+            if st.get("state") == "unavailable":
                 key = row.get("device_id") or f"{row.get('platform') or 'x'}:{row['asset']}"
                 g = unavailable_groups.setdefault(key, {"asset": asset, "entity_id": row["entity_id"], "hours": hours,
                                                         "state": st.get("state"), "names": [], "critical": asset.get("critical", False),
@@ -174,18 +194,40 @@ def run(args) -> dict:
                 g["names"].append(row["name"]); g["critical"] = g["critical"] or asset.get("critical", False)
                 if hours is not None and (g["hours"] is None or hours > g["hours"]):
                     g["hours"] = hours
-            elif fam == "level":
-                # ⚠️ SILENT MEANS NOT REPORTING, NOT UNCHANGED (villa, 2026-10-01): a rain gauge at 0 or a
-                # curtain nobody moved keeps its value for days while it reports every minute; by its last
-                # change, 14 such sensors were tasks. last_reported moves at each report (HA 2024.3+).
+            elif fam == "level" and st.get("state") != "unknown":
+                # ⚠️ SILENT MEANS NOT REPORTING, NOT UNCHANGED (villa, 2026-10-01): last_reported moves at
+                # each report (HA 2024.3+). But many integrations write only on a CHANGE, and every
+                # restart stamps all of them (villa, 2026-10-04) — so quiet alone proves nothing; the
+                # sensor's own history decides below whether it normally reports all the time.
                 lr = st.get("last_reported") or lc
-                quiet = None
-                if lr:
-                    try:
-                        quiet = (now_ref - datetime.fromisoformat(lr).astimezone(Z)).total_seconds() / 3600
-                    except ValueError:
-                        quiet = None
-                findings += R.silence_rules(asset, row["entity_id"], quiet, params)
+                try:
+                    since = datetime.fromisoformat(lr).astimezone(Z) if lr else None
+                except ValueError:
+                    since = None
+                if since is not None:
+                    quiet_rows.append((row, asset, since))
+    # silence: one finding per device, and only for a sensor that normally reports all the time
+    silence_hours = params.behaviour("silence_hours")
+    long_quiet = [(r, a, t) for r, a, t in quiet_rows if (now_ref - t).total_seconds() / 3600 >= silence_hours]
+    if long_quiet:
+        hist_days = int(params.behaviour_text_default("silence_history_days", 14))
+        share_min = params.behaviour_text_default("silence_reporting_share", 0.5)
+        q_stats = cli.statistics([r["entity_id"] for r, _, _ in long_quiet], now_ref - timedelta(days=hist_days),
+                                 now_ref, "hour", ("mean", "min", "max"))
+        silent_groups: dict[str, dict] = {}
+        for row, asset, since in long_quiet:
+            share, hours = F.reporting_share(q_stats.get(row["entity_id"], []), int(since.timestamp() * 1000))
+            if share is None or hours < 48 or share < share_min:
+                continue                  # reports on change only, or too little history to say: not a fault
+            key = row.get("device_id") or f"{row.get('platform') or 'x'}:{row['asset']}"
+            g = silent_groups.setdefault(key, {"asset": asset, "entity_id": row["entity_id"], "since": since, "names": []})
+            g["names"].append(row["name"])
+            g["since"] = min(g["since"], since)
+        for g in silent_groups.values():
+            a = dict(g["asset"])
+            a["name"] = g["names"][0] + (f" (+{len(g['names']) - 1} entities of the same device)" if len(g["names"]) > 1 else "")
+            findings += R.silence_rules(a, g["entity_id"], (now_ref - g["since"]).total_seconds() / 3600, params)
+
     # three or more devices of one integration offline together = the integration is down, one finding
     by_platform: dict[str, list[str]] = {}
     for key, g in unavailable_groups.items():
@@ -219,11 +261,23 @@ def run(args) -> dict:
         lb = cli.logbook(day_end - timedelta(days=3), day_end)
     except Exception:  # logbook is optional
         lb = []
-    flips = F.flips_per_day(lb, zone)
+    flips = F.flips_per_day(lb, zone, int(params.behaviour_text_default("restart_crowd_entities", 20)))
+    # ONE finding per DEVICE, named as a person reads it (villa, 2026-10-04: a relay, its firmware
+    # entity and its uptime sensor were three lines, two of them raw entity ids)
+    rows_by_eid = {r["entity_id"]: r for fam in pack.families for r in pack.entities(fam)}
+    by_device: dict[str, dict] = {}
     for eid, per_day in flips.items():
-        slug = next((s for s, a in pack.assets.items() if eid in a["entities"].values()), None)
-        asset = pack.assets.get(slug, {"slug": slug or eid, "name": eid})
-        findings += R.flap_rules(asset, eid, per_day, today, params)
+        row = rows_by_eid.get(eid, {})
+        slug = row.get("asset") or next((s for s, a in pack.assets.items() if eid in a["entities"].values()), None)
+        key = row.get("device_id") or slug or eid
+        g = by_device.setdefault(key, {"eid": eid, "slug": slug, "name": row.get("name"), "per_day": {}})
+        for d, n in per_day.items():
+            g["per_day"][d] = max(g["per_day"].get(d, 0), n)      # the device's drops, not the sum of its entities'
+        g["name"] = g["name"] or row.get("name")
+    for g in by_device.values():
+        asset = dict(pack.assets.get(g["slug"], {"slug": g["slug"] or g["eid"]}))
+        asset["name"] = asset.get("name") or g["name"] or _plain_name(g["eid"])
+        findings += R.flap_rules(asset, g["eid"], g["per_day"], today, params)
 
     # ---- persist findings, dedup, close, mute ---------------------------------
     new, still_open, closed, muted = [], [], [], []
@@ -284,6 +338,11 @@ def run(args) -> dict:
         with open(args.out, "w", encoding="utf-8") as fh:
             json.dump(result, fh, indent=1, default=str)
     return result
+
+
+def _plain_name(entity_id: str) -> str:
+    """An entity id as words when nothing names it better (sensor.pool_relay_uptime -> "Pool relay uptime")."""
+    return entity_id.split(".", 1)[-1].replace("_", " ").strip().capitalize()
 
 
 def _no_code(s: str) -> str:

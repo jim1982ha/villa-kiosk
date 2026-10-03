@@ -52,16 +52,43 @@ TPL = Environment(loader=FileSystemLoader(os.path.join(HERE, "..", "templates"))
 NUM = re.compile(r"(?<![\w.])-?\d{1,3}(?:,\d{3})+(?:\.\d+)?|(?<![\w.])-?\d+(?:\.\d+)?")
 
 
+def _grouped(lines: list[tuple[str, str, str]], group_from: int, words: dict) -> list[str]:
+    """(kind, severity, text) -> chat lines: a kind with at least `group_from` items and a group line in
+    reports.yaml (todo_groups) is ONE line naming its members, the way the weekly page groups them."""
+    kinds: dict[str, list[tuple[str, str]]] = {}
+    for kind, sev, text in lines:
+        kinds.setdefault(kind, []).append((sev, text))
+    out = []
+    for kind, items in kinds.items():
+        title = words.get(kind)
+        if len(items) >= group_from and title:
+            names = [t.split(" has ")[0].split(" dropped ")[0] for _, t in items]
+            shown = ", ".join(names[:8]) + (f" and {len(names) - 8} more" if len(names) > 8 else "")
+            out.append(f"- {items[0][0]} {title.format(n=len(items))}: {shown}.")
+        else:
+            out += [f"- {sev} {text}" for sev, text in items]
+    return out
+
+
 def fm_daily(pack: KnowledgePack, store: Store, as_of: date) -> str:
-    """The 07:00 digest: what is new since yesterday, what is still open, nothing else."""
+    """The 07:00 digest: what is new since yesterday, what is still open, nothing else.
+
+    ⚠️ EACH THING ONCE (villa, 2026-10-04): "Still open" re-listed the night's new findings right under
+    "New", and 21 silent sensors were 21 lines. New ones are not repeated, and a kind with enough items
+    is one line (reports.yaml todo.group_from / todo_groups — the weekly page's own grouping)."""
+    from facts import load_cfg
+    cfg = load_cfg()
+    group_from = int(((cfg.get("thresholds") or {}).get("todo") or {}).get("group_from") or 3)
+    words = {k: v for k, v in (cfg.get("todo_groups") or {}).items() if k != "same_time"}
     yesterday = (as_of - timedelta(days=1)).isoformat()
     new = [f for f in store.findings(since_day=yesterday) if f["severity"] in ("P2", "P3")]
     digest_inc = [i for i in store.incidents(open_only=True) if i["state"] == "digest" and i["opened_at"][:10] >= yesterday]
-    open_now = Problems(store).open_problems()
+    shown_new = {f"finding:{f['id']}" for f in new}
+    open_now = [p for p in Problems(store).open_problems() if p["source"] not in shown_new]
     lines = [f"{pack.villa}, {as_of.strftime('%a %d %b')} morning."]
     if new:
         lines.append("New:")
-        lines += [f"- {f['severity']} {f['summary']}" for f in new]
+        lines += _grouped([(f["rule_id"], f["severity"], f["summary"]) for f in new], group_from, words)
     if digest_inc:
         lines.append("Also noted (no action needed yet):")
         lines += [f"- {json.loads(i['payload'] or '{}').get('message') or i['rule_id']}" for i in digest_inc]
@@ -70,7 +97,10 @@ def fm_daily(pack: KnowledgePack, store: Store, as_of: date) -> str:
         # which no reply could close; a maintenance finding is closed in the VESTA Kiosk instead.
         lines.append(f"Still open: {len(open_now)}. An alert: reply with its number and Done, Not found or Need help; "
                      "the rest: close it in the VESTA Kiosk (Facility → Faults) when it is done.")
-        lines += [f"- {'#' + str(p['incident']) + ' ' if p['incident'] else ''}{p['title'][:160]}" for p in open_now[:8]]
+        alerts = [p for p in open_now if p["incident"]]
+        lines += [f"- #{p['incident']} {p['title'][:160]}" for p in alerts]
+        lines += _grouped([(p["rule_id"], p["severity"], p["title"][:160]) for p in open_now if not p["incident"]],
+                          group_from, words)[:8]
     if len(lines) == 1:
         lines.append("Nothing new, nothing open.")
     return "\n".join(lines)

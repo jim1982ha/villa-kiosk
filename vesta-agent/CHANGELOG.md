@@ -1,3 +1,15 @@
+## 0.12.23
+
+### Fixed
+- **Far fewer false maintenance alerts, in Telegram and in the Kiosk's Cockpit.** One morning message listed 24 "new" problems, then repeated them under "Still open". Most were not problems:
+  - **"Has not reported" now means a sensor that normally reports all the time has stopped.** Curtains report only when they move and rain gauges only when it rains; after a Home Assistant restart they looked "silent" for days. A sensor is now judged against its own history, so the Temp and Humidity sensor that really stopped sending is still reported, and the curtains and rain gauges are not.
+  - **One device is one line.** A sensor's temperature, pressure and battery were three alerts; a relay, its firmware and its uptime were three more, two of them shown as technical names.
+  - **A Home Assistant restart no longer counts as a device dropping off.** Every restart takes every device offline for a moment; that was counted as the device's own Wi-Fi or power problem.
+  - **Pump energy is judged on whole days.** The nightly check ran at 02:00 and counted that night's two hours as a full day, and counted a day the plug was offline as a day of low use ("Onsen pump used 0.09 kWh/day … −80 %").
+  - **"Unknown" is no longer "offline".** A wind chill has no value on a warm day while the weather station reports normally.
+- **The morning message says each thing once**: what is new is not repeated under "Still open", and several of one kind are one line ("4 sensors have not reported: …").
+- The tickets these alerts opened in the Kiosk close by themselves after the first night with this version.
+
 ## 0.12.22
 
 ### Changed

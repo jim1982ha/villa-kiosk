@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.22 (4 October 2026)
+
+preventive-maintenance and reports (villa, 2026-10-04: a morning message of 24 "new" lines, repeated under "Still open"; the Kiosk's Cockpit filled with the same tickets):
+- nightly.py judges the LAST FINISHED day (live: yesterday). It ran at 02:00 and judged its own date — a 2-hour stub — so "the last 2 days" of a pump were yesterday and that stub.
+- PM-SILENT only for a sensor that normally reports all the time: features.reporting_share over its hourly statistics before it went quiet (silence_history_days 14, silence_reporting_share 0.5, overridable as vesta_<name>). A curtain, a rain gauge at 0, a sensor with no history: never silent. One finding per device.
+- PM-RECONNECT-LOOP: a minute in which restart_crowd_entities (20) or more entities drop together is a restart, not counted against any of them; one finding per device, named in words (never a raw entity id).
+- PM-UNAVAILABLE: "unknown" is not offline (a wind chill on a warm day).
+- PM-ENERGY-CHANGE: a day the plug had energy_gap_hours (3) or more without data, from its first data to the day judged, is left out of the comparison.
+- compose fm-daily: a new finding is not repeated under "Still open"; a kind with todo.group_from items and a todo_groups line is one line (PM-RECONNECT-LOOP added).
+- tests/test_maintenance_noise.py (9; each fix mutated red); two silence tests given hourly history. Villa replay: 54 pass (it caught a first version of the offline-day filter that starved a baseline).
+
 ## 0.6.21 (3 October 2026)
 
 - State: named records — claim_job_slot (atomic under the lock; was get-then-put) / jobs_run, set_alert_skill / alert_skill, remember / alert_messages / is_alert_message / forget_alert_message, mark_saved_by_model / saved_by_model. Same stored keys (no migration). outcome, scheduler, status, tools use them. tests/test_state_records.py (incl. old-key compatibility and ownership); 3 mutations red.

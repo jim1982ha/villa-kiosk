@@ -142,6 +142,7 @@ playbook:
 todo_groups:
   PM-SILENT: "{n} sensors have not reported"
   PM-UNAVAILABLE: "{n} devices offline"
+  PM-RECONNECT-LOOP: "{n} devices keep dropping off the network"
   same_time: "All since {since}: one cause is likely (a restart, an integration, a hub or the network), not {n} separate faults."
 
 # The VESTA rules whose every run IS an alert (they run only once their condition has held): their runs

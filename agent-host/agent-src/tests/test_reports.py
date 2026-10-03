@@ -312,6 +312,18 @@ def test_the_villas_own_playbook_and_cards_are_added_to_the_shipped_ones(tmp_pat
     assert facts["sections"]["batteries"]["rows"][0]["level"] == "replace"                    # 12 % < 15 %
 
 
+def _hours(fx, name, series):
+    """Hourly statistics as HA serves them: {entity_id: (start, hours, moving)}; a moving sensor's value
+    changes every hour, a still one never does."""
+    ents = []
+    for eid, (start, n, moving) in series.items():
+        t0 = int(datetime.fromisoformat(start).timestamp() * 1000)
+        rows = [{"start": t0 + h * 3600_000, "mean": 20.0 + (h % 5 if moving else 0),
+                 "min": 20.0 + (h % 5 if moving else 0), "max": 20.5 + (h % 5) if moving else 20.0} for h in range(n)]
+        ents.append({"entity_id": eid, "statistics": rows})
+    (fx / f"stats_hour_{name}.json").write_text(json.dumps({"period_type": "hour", "entities": ents}))
+
+
 def test_a_sensor_that_reports_the_same_value_is_not_silent(tmp_path):
     # villa, 2026-10-01: a rain gauge at 0 and curtains nobody moved were 14 "has not reported" tasks:
     # silence was read from the last CHANGE; a sensor that reports an unchanged value is not silent
@@ -322,6 +334,9 @@ def test_a_sensor_that_reports_the_same_value_is_not_silent(tmp_path):
     (fx / "states.json").write_text(json.dumps({"states": {
         "sensor.example_rain": {"state": "0.0", "attributes": {}, "last_changed": old, "last_reported": now},
         "sensor.example_level": {"state": "41", "attributes": {}, "last_changed": old, "last_reported": old}}}))
+    # the tank level moved every hour until it stopped; the rain gauge never moves (no rain)
+    _hours(fx, "a", {"sensor.example_level": ("2026-09-18T00:00:00+00:00", 10 * 24, True),
+                     "sensor.example_rain": ("2026-09-18T00:00:00+00:00", 13 * 24, False)})
     row = lambda eid, name: {"entity_id": eid, "name": name, "area": "Garden", "family": "level", "asset": eid.split(".")[1]}  # noqa: E731
     pack = {"villa": "Example Villa", "time_zone": "UTC", "generated_at": now, "ha_version": None, "areas": [], "people": [],
             "channels": {}, "unknown_area": [], "unclassified": [], "retention": {"raw_history_days": 10},
@@ -345,6 +360,8 @@ def test_a_finding_the_night_no_longer_sees_closes_its_task_and_its_ticket(tmp_p
     (tmp_path / "pack.json").write_text(json.dumps({"villa": "Example Villa", "time_zone": "UTC", "generated_at": "x",
         "ha_version": None, "areas": [], "people": [], "channels": {}, "unknown_area": [], "unclassified": [],
         "retention": {"raw_history_days": 10}, "families": {"level": [row]}, "assets": {}}))
+
+    _hours(fx, "a", {"sensor.example_level": ("2026-09-13T00:00:00+00:00", 14 * 24, True)})   # reports all the time
 
     def night(day, reported):
         (fx / "states.json").write_text(json.dumps({"states": {"sensor.example_level": {

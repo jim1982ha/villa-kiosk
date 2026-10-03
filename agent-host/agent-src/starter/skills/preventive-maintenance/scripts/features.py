@@ -112,15 +112,45 @@ def runs_from_history(states: list[dict], on_threshold_w: float, zone: str, min_
     return out
 
 
-def flips_per_day(logbook: list[dict], zone: str) -> dict[str, dict[date, int]]:
-    """Count unavailable <-> available transitions per entity per day from logbook rows."""
+def flips_per_day(logbook: list[dict], zone: str, mass: int = 0) -> dict[str, dict[date, int]]:
+    """Count unavailable <-> available transitions per entity per day from logbook rows.
+
+    ⚠️ A MINUTE IN WHICH `mass` OR MORE ENTITIES DROP TOGETHER IS NOT THEIR FAULT (villa, 2026-10-04):
+    every Home Assistant restart takes every entity through "unavailable", so three restarts in three
+    days read as "dropped and reconnected 10 times: a Wi-Fi or power problem on its side" for a relay
+    that never moved. A drop shared by that many entities in one minute is the restart's (or the
+    integration's), and is not counted against any of them. mass=0 counts everything."""
+    drops = [r for r in logbook if str(r.get("state", "")) in ("unavailable", "unknown") or r.get("from_unavailable")]
+    crowd: dict[str, set] = defaultdict(set)
+    for r in drops:
+        crowd[str(r["when"])[:16]].add(r["entity_id"])
     out: dict[str, dict[date, int]] = defaultdict(lambda: defaultdict(int))
-    for r in logbook:
-        st = str(r.get("state", ""))
-        if st in ("unavailable", "unknown") or r.get("from_unavailable"):
-            d = datetime.fromisoformat(r["when"]).astimezone(ZoneInfo(zone)).date()
-            out[r["entity_id"]][d] += 1
+    for r in drops:
+        if mass and len(crowd[str(r["when"])[:16]]) >= mass:
+            continue
+        d = datetime.fromisoformat(r["when"]).astimezone(ZoneInfo(zone)).date()
+        out[r["entity_id"]][d] += 1
     return {k: dict(v) for k, v in out.items()}
+
+
+def reporting_share(hour_rows: list[dict], until_ms: int | None = None) -> tuple[float | None, int]:
+    """How regularly a sensor reports, from its hourly statistics: the share of hours in which its value
+    moved (max above min, or a mean unlike the hour before), over the hours before `until_ms`. Returns
+    (share, hours); share is None with no rows.
+
+    ⚠️ ONLY A SENSOR THAT REPORTS ALL THE TIME CAN BE "SILENT" (villa, 2026-10-04): a curtain reports when
+    it moves, a rain gauge when rain falls; quiet for days is their normal, and 18 of 21 "has not reported"
+    tasks were such sensors. A temperature that moved in most hours and then stops is the real case."""
+    rows = sorted((r for r in hour_rows if until_ms is None or r["start"] < until_ms), key=lambda r: r["start"])
+    if not rows:
+        return None, 0
+    moved, prev = 0, None
+    for r in rows:
+        mn, mx, mean = r.get("min"), r.get("max"), r.get("mean")
+        if (mn is not None and mx is not None and mx > mn) or (prev is not None and mean is not None and mean != prev):
+            moved += 1
+        prev = mean if mean is not None else prev
+    return moved / len(rows), len(rows)
 
 
 def days_back(end: date, n: int) -> list[date]:
