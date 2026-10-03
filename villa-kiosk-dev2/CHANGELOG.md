@@ -1,3 +1,13 @@
+## 2.496.266
+
+### Changed
+- **A room chip now shows whether the room is all right in one place: its number.** Before, "needs attention" was a red border around the chip while the number stayed green, which read as two answers to one question. Now the number's colour says it all:
+  - **red** — something in the room needs attention (an unlocked door, a leak…);
+  - **amber** — Home Assistant has lost contact with a device in the room;
+  - **green** — all right.
+
+  If a room has both, red is shown. The chip's border no longer turns red; it only shows a light border when something in the room is on, as before. The "Which room?" list and the map colours key follow the same rule.
+
 ## 2.496.265
 
 ### Changed
