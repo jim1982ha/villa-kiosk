@@ -53,5 +53,28 @@ console.log("\n  no copies left:");
   const css = ["03-panels", "07-facility"].map((n) => readFileSync(join(SRC, `styles/${n}.css`), "utf8")).join("\n");
   ck("chip scrims over media are tokens, not literals", !/background: rgba\(0, ?0, ?0, ?(0?\.45|0?\.5|0?\.6|0?\.65|0?\.7|0?\.88)\)/.test(css) && (css.match(/var\(--chip-scrim/g) ?? []).length === 7);
 }
+{
+  // ⚠️ A HOVER LOOK STICKS ON A TOUCHSCREEN. After a tap, Android (and iOS)
+  // keep a pretend pointer where the finger lifted, and whatever opens under
+  // it wears :hover until the next tap: the "Which room?" sheet opened with
+  // its first row green as if chosen (owner screenshot, 2026-10-04). Every
+  // :hover lives inside @media (hover: hover) — a real pointer only.
+  const SRC = new URL("../../src/", import.meta.url).pathname;
+  const files = ["styles.css", ...readdirSync(join(SRC, "styles")).filter((f) => f.endsWith(".css")).map((f) => `styles/${f}`)];
+  const loose = [];
+  for (const f of files) {
+    const text = readFileSync(join(SRC, f), "utf8").replace(/\/\*[\s\S]*?\*\//g, (c) => c.replace(/[^\n]/g, " "));
+    const stack = [];
+    let head = "", line = 1;
+    for (const ch of text) {
+      if (ch === "\n") line++;
+      if (ch === "{") { stack.push(head.trim()); if (head.includes(":hover") && !stack.slice(0, -1).some((h) => /^@media[^{]*\(hover:\s*hover\)/.test(h))) loose.push(`${f}:${line} ${head.trim().slice(0, 60)}`); head = ""; }
+      else if (ch === "}") { stack.pop(); head = ""; }
+      else if (ch === ";") head = "";
+      else head += ch;
+    }
+  }
+  ck(":hover only for a real pointer — every hover look inside @media (hover: hover), so none sticks after a tap", loose.length === 0, loose);
+}
 done("✅ one segmented group, one save button, one outside-close, one ticker");
 

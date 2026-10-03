@@ -143,8 +143,10 @@
 }
 /* Hover/active still need a readable plate under them, and an active filter
    would smear the fill rather than outline it. */
-.hud-right-inline .icon-btn:hover,
 .hud-right-inline .icon-btn.active { filter: none; }
+@media (hover: hover) {
+  .hud-right-inline .icon-btn:hover { filter: none; }
+}
 
 .hud-right-inline { display: flex; align-items: center; gap: 8px; }
 
@@ -199,13 +201,19 @@
   cursor: pointer;
 }
 .hud-menu-item svg { flex: 0 0 auto; color: var(--text-secondary); }
-.hud-menu-item:hover, .hud-menu-item:active { background: var(--bg-input); }
+.hud-menu-item:active { background: var(--bg-input); }
+@media (hover: hover) {
+  .hud-menu-item:hover { background: var(--bg-input); }
+}
 /* Label-size row: same padding/row shape as a normal .hud-menu-item, but it
    isn't itself a button (its two child icon-btns are) — space-between
    instead of the icon+text left-aligned layout, and no hover fill (nothing
    to click on the row itself). */
 .hud-menu-stepper { justify-content: space-between; cursor: default; }
-.hud-menu-stepper:hover, .hud-menu-stepper:active { background: transparent; }
+.hud-menu-stepper:active { background: transparent; }
+@media (hover: hover) {
+  .hud-menu-stepper:hover { background: transparent; }
+}
 .hud-menu-stepper .icon-btn { width: 32px; height: 32px; }
 /* "Label size (?)": the row's title is itself a button, opening the colour
    legend — text and (?) inline, no row chrome of its own. */
@@ -214,7 +222,10 @@
   margin: -6px -6px; padding: 6px; border: none; border-radius: 8px;
   background: transparent; color: inherit; font: inherit; cursor: pointer;
 }
-.hud-menu-help:hover, .hud-menu-help:active { background: var(--bg-input); }
+.hud-menu-help:active { background: var(--bg-input); }
+@media (hover: hover) {
+  .hud-menu-help:hover { background: var(--bg-input); }
+}
 /* The currently-open camera's own row in .camera-picker-menu below — reused
    nowhere else, so scoped there rather than added to the base .hud-menu-item
    (every other menu in the app is a one-shot action list, nothing in it is
@@ -343,7 +354,9 @@
 .radial-item > span { overflow: hidden; text-overflow: ellipsis; }
 /* Hover = the solid accent (same as the active/selected state), not a faint
    translucent wash — matches every other button's highlight. */
-.radial-item:hover { background: var(--accent); color: var(--text-on-accent); border-color: var(--accent); }
+@media (hover: hover) {
+  .radial-item:hover { background: var(--accent); color: var(--text-on-accent); border-color: var(--accent); }
+}
 .radial-item:active { transform: translate(-50%, -50%) scale(0.94); }
 .radial-item.active { background: var(--accent); color: var(--text-on-accent); border-color: var(--accent); }
 @keyframes radial-pop { from { opacity: 0; transform: translate(-50%, -50%) scale(0.8); } }
@@ -379,7 +392,9 @@
   box-shadow: 0 6px 20px var(--shadow); backdrop-filter: blur(8px);
   animation: radial-pop 0.12s ease-out;
 }
-.radial-manage-btn:hover { background: var(--accent); color: var(--text-on-accent); border-color: var(--accent); }
+@media (hover: hover) {
+  .radial-manage-btn:hover { background: var(--accent); color: var(--text-on-accent); border-color: var(--accent); }
+}
 .radial-manage-btn:active { transform: translateX(-50%) scale(0.96); }
 
 /* Left-side control column: floor switch, then the Room + Switch View stack,
@@ -434,7 +449,10 @@
   border-radius: var(--panel-radius);
   box-shadow: var(--elev-2), inset 0 0 0 1px var(--hairline);
 }
-.hud-home-btn:hover, .hud-home-btn:focus-visible { background: var(--bg-input); }
+.hud-home-btn:focus-visible { background: var(--bg-input); }
+@media (hover: hover) {
+  .hud-home-btn:hover { background: var(--bg-input); }
+}
 .hud-home-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* Invisible 44px hit area (see the phone touch-target overlay further down
    for the same technique) — on ::before, not ::after, because ::after is
@@ -610,7 +628,9 @@
   transition: background 0.15s ease;
 }
 .summary-tile:not(:last-child) { border-right: 1px solid var(--hairline); }
-.summary-tile:hover:not(:disabled) { background: var(--bg-input); }
+@media (hover: hover) {
+  .summary-tile:hover:not(:disabled) { background: var(--bg-input); }
+}
 .summary-tile.is-info, .summary-tile:disabled { cursor: default; }
 .summary-tile:disabled { opacity: 0.9; }
 
@@ -698,7 +718,9 @@
   color: var(--text-primary); font-size: var(--text-md); font-weight: 600;
   text-align: left; white-space: nowrap;
 }
-.summary-scene-item:hover { background: var(--bg-input); }
+@media (hover: hover) {
+  .summary-scene-item:hover { background: var(--bg-input); }
+}
 .summary-scene-item svg { color: var(--text-secondary); flex: 0 0 auto; }
 
 /* --- SummaryGroupPanel: the modal a bottom-bar tile opens (entity list) --- */
@@ -773,7 +795,9 @@
   background: transparent; border: none; cursor: pointer;
   color: var(--text-primary); text-align: left;
 }
-.summary-entity-main:hover { background: var(--bg-card); }
+@media (hover: hover) {
+  .summary-entity-main:hover { background: var(--bg-card); }
+}
 .summary-entity-badge { width: 38px; height: 38px; flex: 0 0 auto; border-radius: 11px; }
 .summary-entity-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
 /* Row wrapper so the "hidden in HA" icon (if any) stays fixed-width and

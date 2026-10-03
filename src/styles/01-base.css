@@ -587,7 +587,9 @@ button {
   color: var(--device-ink, var(--text-primary));
   border-color: var(--device-ring, var(--hairline-strong));
 }
-.panel-modal .row-buttons .btn.ghost:hover { background: var(--device-fill, var(--bg-input)); }
+@media (hover: hover) {
+  .panel-modal .row-buttons .btn.ghost:hover { background: var(--device-fill, var(--bg-input)); }
+}
 .panel-modal .row-buttons .btn.active,
 .panel-modal .btn.active {
   background: var(--device-fill, var(--accent-soft));
@@ -717,6 +719,10 @@ button {
 }
 .hud-group .icon-btn { width: 40px; height: 40px; }
 .hud-stack .icon-btn { width: 40px; height: 38px; }
-.hud-group .icon-btn:hover, .hud-stack .icon-btn:hover { background: var(--bg-input); }
+@media (hover: hover) {
+  .hud-group .icon-btn:hover, .hud-stack .icon-btn:hover { background: var(--bg-input); }
+}
 .hud-group .icon-btn.active, .hud-stack .icon-btn.active { background: var(--accent); color: var(--text-on-accent); }
-.hud-group .icon-btn.active:hover { background: var(--accent); }
+@media (hover: hover) {
+  .hud-group .icon-btn.active:hover { background: var(--accent); }
+}

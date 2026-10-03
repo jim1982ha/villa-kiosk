@@ -1,3 +1,8 @@
+## 2.496.267
+
+### Fixed
+- **Nothing looks selected after a tap any more.** On a phone or tablet, the browser keeps an invisible pointer where your finger lifted. Whatever opened under that spot took on its "mouse over" look and kept it, so the "Which room?" list could open with its first room highlighted in green as if it were already chosen. The "mouse over" look now appears only on devices with a real mouse or trackpad. This applies to every button and list in the app, not only that one.
+
 ## 2.496.266
 
 ### Changed

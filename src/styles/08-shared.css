@@ -150,7 +150,9 @@
   background: var(--bg-input); border: none; color: inherit; font: inherit;
 }
 button.cockpit-attention-row.tappable { cursor: pointer; }
-button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var(--accent) 12%, var(--bg-input)); }
+@media (hover: hover) {
+  button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var(--accent) 12%, var(--bg-input)); }
+}
 .cockpit-attention-icon { flex: 0 0 auto; }
 /* These two were SWAPPED, which inverted the one distinction the status
    vocabulary exists to protect (utils/stateColors, babylon/colors): amber is
@@ -198,8 +200,13 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   background: var(--bg-input); border: none; width: 100%; min-width: 0;
   color: inherit; font: inherit; text-align: left; cursor: pointer;
 }
-.cockpit-category-tile:hover, .cockpit-category-tile:focus-visible {
+.cockpit-category-tile:focus-visible {
   background: color-mix(in srgb, var(--accent) 12%, var(--bg-input));
+}
+@media (hover: hover) {
+  .cockpit-category-tile:hover {
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-input));
+}
 }
 .cockpit-category-icon {
   flex: 0 0 auto; width: 34px; height: 34px; border-radius: 10px;
@@ -321,9 +328,13 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   border: 2px solid transparent;
   font-size: var(--text-md); color: var(--text-primary); text-align: left;
 }
-.room-choice-row:hover { background: var(--accent-soft); color: var(--accent); }
+@media (hover: hover) {
+  .room-choice-row:hover { background: var(--accent-soft); color: var(--accent); }
+}
 .room-choice-icon { flex: 0 0 auto; color: var(--text-dim); }
-.room-choice-row:hover .room-choice-icon { color: var(--accent); }
+@media (hover: hover) {
+  .room-choice-row:hover .room-choice-icon { color: var(--accent); }
+}
 .room-choice-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The count is why one row is distinguishable from the next, so it reuses the
    count-pill treatment the chip itself carries on the map. */

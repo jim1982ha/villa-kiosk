@@ -28,7 +28,9 @@
      couple px off-centre against the icon despite both being flex-centred. */
   font-size: var(--text-base); line-height: 1; cursor: pointer;
 }
-.fm-tab:hover { background: var(--bg-input); }
+@media (hover: hover) {
+  .fm-tab:hover { background: var(--bg-input); }
+}
 .fm-tab.active { background: var(--accent); color: var(--text-on-accent); }
 /* Keeps the Report tab's own height roughly stable across the empty-
    placeholder <-> generated-report swap — see ReportTab's docstring on the
@@ -99,7 +101,9 @@
    the whole affordance — a per-row "Edit" button would compete with the status
    action already in these rows, and on a phone there is no width for both. */
 .fm-openable { cursor: pointer; }
-.fm-openable:hover { border-color: var(--hairline-strong); }
+@media (hover: hover) {
+  .fm-openable:hover { border-color: var(--hairline-strong); }
+}
 .fm-openable:active { transform: translateY(1px); }
 
 /* Evidence thumbnails are buttons (they open the viewer), so they must not
@@ -138,7 +142,9 @@
 .fm-lightbox-close { top: calc(env(safe-area-inset-top, 0px) + 12px); right: 12px; }
 .fm-lightbox-nav.prev { left: 12px; }
 .fm-lightbox-nav.next { right: 12px; }
-.fm-lightbox-close:hover, .fm-lightbox-nav:hover { background: var(--chip-scrim-strong); }
+@media (hover: hover) {
+  .fm-lightbox-close:hover, .fm-lightbox-nav:hover { background: var(--chip-scrim-strong); }
+}
 .fm-lightbox-count {
   position: absolute; bottom: max(14px, var(--safe-bottom));
   left: 50%; transform: translateX(-50%);
@@ -185,7 +191,9 @@
   color: var(--text-secondary); font-size: var(--text-xs); text-align: left;
   min-height: var(--touch-min);
 }
-.fm-disclosure:hover { color: var(--text-primary); }
+@media (hover: hover) {
+  .fm-disclosure:hover { color: var(--text-primary); }
+}
 
 /* Marks a report filed by a guest: a symptom noticed from inside the villa,
    not a diagnosis — which is how the row should be read when triaging. */
@@ -319,7 +327,9 @@
   background: var(--bg-input); color: var(--text-primary);
   border: 1px solid var(--hairline);
 }
-.fm-entity-chip:hover { border-color: var(--accent); }
+@media (hover: hover) {
+  .fm-entity-chip:hover { border-color: var(--accent); }
+}
 .fm-entity-chip.on { background: var(--accent); color: var(--text-on-accent); border-color: transparent; }
 
 .fm-form {
@@ -413,7 +423,9 @@
   gap: 3px; cursor: pointer; color: var(--text-secondary);
   border-style: dashed; font-size: var(--text-2xs);
 }
-.fm-thumb-add:hover { border-color: var(--accent); color: var(--accent); }
+@media (hover: hover) {
+  .fm-thumb-add:hover { border-color: var(--accent); color: var(--accent); }
+}
 
 .fm-empty {
   display: flex; flex-direction: column; align-items: center; gap: 10px;
