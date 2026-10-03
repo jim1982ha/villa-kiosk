@@ -1,3 +1,9 @@
+## 2.496.257
+
+### Fixed
+- **VESTA inside the Home Assistant app now really keeps the 3D model on the device.** Your load reports after 2.496.255 still showed the model downloaded on every open (marked "not kept"). Inside Home Assistant the page is looked after by Home Assistant's own background helper, and VESTA mistook it for its own and skipped saving the model. It now saves it. The first open after this update downloads it once more, and later opens reuse it.
+- **The Save and Close buttons at the bottom of Settings (and every other dialog) show their icon and their word again on tablet-sized screens.** On screens 641 to 720 pixels wide, such as a tablet held upright, the two round buttons showed only a speck: the icon was squeezed to a few pixels and the word was hidden. They now read "Save" and "Close" there. Phones keep the round icon-only buttons, now drawn at full size.
+
 ## 2.496.256
 
 ### Changed
