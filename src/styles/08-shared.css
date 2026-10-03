@@ -295,6 +295,9 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   display: flex; align-items: center; gap: 10px;
   min-height: var(--touch-min); padding: 0 12px;
   border-radius: 12px; background: var(--bg-input);
+  /* Always 2px so a framed row and a plain one are the same size; the colour
+     (set inline from the room's chip frame) is transparent when it rests. */
+  border: 2px solid transparent;
   font-size: var(--text-md); color: var(--text-primary); text-align: left;
 }
 .room-choice-row:hover { background: var(--accent-soft); color: var(--accent); }
@@ -305,9 +308,11 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    count-pill treatment the chip itself carries on the map. */
 .room-choice-count {
   flex: 0 0 auto; min-width: 24px; padding: 2px 8px;
-  border-radius: 999px; background: var(--bg-modal);
-  font-size: var(--text-xs); font-variant-numeric: tabular-nums;
-  color: var(--text-secondary); text-align: center;
+  border-radius: 999px;
+  font-size: var(--text-xs); font-weight: 600; font-variant-numeric: tabular-nums;
+  /* Background set inline: green when every device reports, red when one has
+     dropped — the map chip's count pill. */
+  color: #fff; text-align: center;
 }
 
 /* --- Badge hover tooltip (Dashboard) -------------------------------------

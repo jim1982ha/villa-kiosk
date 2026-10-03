@@ -38,6 +38,7 @@ import { displayLabelFor, resolveRooms } from "@/config/EntityMap";
 import { deriveHaScenes, scenesForRoom } from "@/config/haScenes";
 import { effectiveCategory, subjectOf, categoryColor, CATEGORY_ICONS, CATEGORY_LABELS } from "@/config/EntityCategories";
 import { deviceLook, storeLookSource } from "@/utils/deviceActivity";
+import { roomLook } from "@/babylon/summaryLook";
 import { isMotionSensor } from "@/config/BinarySensorClasses";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
 import { isQuickToggle } from "@/utils/quickAction";
@@ -630,16 +631,23 @@ export default function Dashboard() {
           // on every iteration, which is exactly what this site was doing (once
           // per entity, per room, inside a map over rooms).
           const key = roomKey(r);
+          const ids = entityIds.filter((id) => roomKey(resolvedRooms[id] ?? "") === key);
+          // Each row wears the frame and pill its room's chip shows when it
+          // stands alone (summaryLook.roomLook) — so the list still says which
+          // room has something on and which one needs attention. A device HA
+          // has not reported rings nothing, as on the map.
+          const looks = storeLookSource(entities, config);
           return {
             room: r,
-            count: entityIds.filter((id) => roomKey(resolvedRooms[id] ?? "") === key).length,
+            count: ids.length,
+            ...roomLook(ids.map((id) => (entities[id] ? deviceLook(id, looks) : undefined))),
           };
         }));
         return;
       }
       setClusterGroup({ room, entityIds });
     },
-    [resolvedRooms],
+    [resolvedRooms, entities, config],
   );
 
   const handleClusterTapped = useCallback(

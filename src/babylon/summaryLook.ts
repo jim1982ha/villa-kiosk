@@ -116,3 +116,13 @@ export function roomChipModel(chip: RoomChip, walking: boolean, occluded: (id: s
     reporting: chip.unavailable ? "unavailable" : "available",
   };
 }
+
+/** What ONE room's chip would wear — its frame and its pill's colour — from
+ *  that room's members' looks (undefined: not yet reported, rings nothing).
+ *  The same groupLook count rule bucketRoomChips applies, so a row in the
+ *  merged chip's "Which room?" list carries exactly the border and pill the
+ *  room's own chip shows on the map when it stands alone. */
+export function roomLook(looks: readonly (DeviceLook | undefined)[]): Pick<RoomChipModel, "frame" | "reporting"> {
+  const ring = groupLook(looks, { showingDevices: false });
+  return { frame: summaryFrame(ring), reporting: ring.unavailable ? "unavailable" : "available" };
+}

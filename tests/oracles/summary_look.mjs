@@ -8,7 +8,7 @@
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
-const { groupCardModel, roomChipModel, summaryFrame } = await import("@/babylon/summaryLook");
+const { groupCardModel, roomChipModel, roomLook, summaryFrame } = await import("@/babylon/summaryLook");
 const { bucketRoomChips, combineChips } = await import("@/babylon/roomChips");
 const { deviceLook, storeLookSource } = await import("@/utils/deviceActivity");
 
@@ -58,6 +58,12 @@ console.log("\n  a room chip:");
   ck("  ...the 'on' frame for a light on, the pill 'available'", km.frame === "active" && km.reporting === "available");
   const bm = roomChipModel(b, false, () => false);
   ck("  ...red for an unlocked lock, the pill 'unavailable' for a lost light", bm.frame === "alert" && bm.reporting === "unavailable");
+  const lookOf = (ids) => roomLook(ids.map((id) => (id in ENTITIES ? deviceLook(id, src) : undefined)));
+  const kr = lookOf(k.ids), br = lookOf(b.ids);
+  ck("a room's row in \"Which room?\" wears that room's own chip frame and pill (roomLook = roomChipModel)",
+     kr.frame === km.frame && kr.reporting === km.reporting && br.frame === bm.frame && br.reporting === bm.reporting, { kr, br });
+  ck("  ...a plain room rests, a room nobody reported rests and reads available",
+     lookOf(["light.off"]).frame === "rest" && lookOf(["light.ghost"]).frame === "rest" && lookOf(["light.ghost"]).reporting === "available");
   combineChips(k, b);
   const merged = roomChipModel(k, false, () => false);
   ck("merged: every room's devices, both names, red wins", merged.count === "4" && merged.roomNames.join() === "KITCHEN,BED" && merged.frame === "alert");
