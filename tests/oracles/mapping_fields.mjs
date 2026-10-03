@@ -8,7 +8,7 @@ import { register } from "node:module";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 register("../consistency/alias-hook.mjs", import.meta.url);
-import { ck, done } from "../consistency/check.mjs";
+import { ck, done, tsFiles } from "../consistency/check.mjs";
 const { ENTITY_DOMAINS } = await import("@/types/ha.types");
 const { inferTypeFromEntityId } = await import("@/config/EntityMap");
 
@@ -16,7 +16,7 @@ const { inferTypeFromEntityId } = await import("@/config/EntityMap");
 ck("every listed type is inferred from its entity_id domain, and nothing else is",
    ENTITY_DOMAINS.every((d) => inferTypeFromEntityId(`${d}.x`) === d) && inferTypeFromEntityId("vacuum.x") === null);
 const SRC = new URL("../../src/", import.meta.url).pathname;
-const walk = (d, out = []) => { for (const e of readdirSync(d)) { const p = join(d, e); statSync(p).isDirectory() ? walk(p, out) : /\.tsx?$/.test(p) && out.push(p); } return out; };
+const walk = tsFiles;
 const copies = walk(SRC).filter((f) => /"media_player",\s*"switch",\s*"input_boolean"/.test(readFileSync(f, "utf8"))).map((f) => f.slice(SRC.length));
 ck("the type list is written once (types/ha.types)", copies.length === 1 && copies[0] === "types/ha.types.ts", copies);
 

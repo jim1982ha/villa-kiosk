@@ -45,8 +45,12 @@ ck("not while typing, nor with a dialog open; otherwise the camera's",
 const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
 const oc = src("babylon/OverviewController.ts"), cc = src("babylon/CameraController.ts"), lg = src("components/hud/LegendModal.tsx");
 ck("the overview listens only while it is the active view, and lets go on blur",
-   /enable\(\): void \{[\s\S]*?window\.addEventListener\("keydown", this\.onKey\);[\s\S]*?window\.addEventListener\("blur", this\.releaseKeys\);/.test(oc)
-   && /disable\(\): void \{[\s\S]*?window\.removeEventListener\("keydown", this\.onKey\);[\s\S]*?this\.releaseKeys\(\);/.test(oc));
+   // The set is canvasInput's (2.496.263, canvas_input.mjs drives it): the
+   // keys and the blur release come with it, attached in enable, removed in
+   // disable, and disable lets go of anything held.
+   /onKey: this\.onKey, onBlur: this\.releaseKeys/.test(oc)
+   && /enable\(\): void \{\s*this\.input\(\)\.attach\(\);/.test(oc)
+   && /disable\(\): void \{[\s\S]*?this\.inputSet\.detach\(\);\s*this\.releaseKeys\(\);/.test(oc));
 ck("  ...and moves through the gestures' own primitives, with the Natural Scroll setting",
    /overviewKeyStep\(this\.held, this\.naturalScrolling,/.test(oc) && /this\.applyPan\(k\.dragX, k\.dragY, DRAG_SENS\)/.test(oc) && /this\.applyTilt\(k\.tilt\)/.test(oc) && /clampRadius\(this\.camera\.radius \* k\.zoom/.test(oc));
 ck("walking shares the guard (arrow keys in a field no longer walk the villa)", /if \(!keyIsForCamera\(e\.target\) && e\.type === "keydown"\) return;/.test(cc));

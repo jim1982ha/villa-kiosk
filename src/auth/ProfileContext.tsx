@@ -18,6 +18,7 @@ import { ingressPath } from "@/ha/ingress";
 import { purgeModelCache } from "@/utils/modelCache";
 import { markBoot } from "@/utils/bootTimeline";
 import { startModelPrefetch } from "@/utils/modelPrefetch";
+import { readJson, writeJson, removeStored } from "@/utils/storedJson";
 
 const SESSION_KEY = "villa-kiosk:profile:v1";
 /** A session-lost report waiting for a session to send it with: the proxy
@@ -84,14 +85,12 @@ function browserAdapters(): SessionAdapters {
     },
     pendingLost: {
       take: () => {
-        try {
-          const raw = localStorage.getItem(PENDING_LOST_KEY);
-          if (!raw) return null;
-          localStorage.removeItem(PENDING_LOST_KEY);
-          return JSON.parse(raw) as LostReport;
-        } catch { return null; }
+        const r = readJson<LostReport>(PENDING_LOST_KEY);
+        if (r) removeStored(PENDING_LOST_KEY);
+        return r;
       },
-      put: (r) => { try { localStorage.setItem(PENDING_LOST_KEY, JSON.stringify(r)); } catch { /* the sign-out still happens */ } },
+      // A refused write is fine: the sign-out still happens.
+      put: (r) => { writeJson(PENDING_LOST_KEY, r); },
     },
     askServer: serverSession,
     signOut: () => {

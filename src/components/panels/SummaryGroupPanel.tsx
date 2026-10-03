@@ -39,6 +39,7 @@ import { useVillaModel } from "@/config/VillaModel";
 import { deviceSwitch } from "@/utils/devicePower";
 import InlineConfirm from "@/components/common/InlineConfirm";
 import { NOT_SENT } from "@/ha/serviceOutcome";
+import { domainOf } from "@/utils/entityDomain";
 
 interface Props {
   group: SummaryGroup;
@@ -180,7 +181,7 @@ export default function SummaryGroupPanel({
   // Assistant does not have. The service call would be rejected for that id
   // and the row could never reflect it either way.
   const toggleables = [...onMap, ...offMap]
-    .filter((e) => TOGGLEABLE_DOMAINS.has(e.entity_id.split(".")[0]));
+    .filter((e) => TOGGLEABLE_DOMAINS.has(domainOf(e.entity_id)));
   // "On" is POWER (a group's onCount — devices switched on), and the bulk
   // switch is config/activeDevices': one call PER DOMAIN (the first row's
   // domain used to be sent for every row — a light command to a switch).
@@ -229,23 +230,13 @@ export default function SummaryGroupPanel({
       {/* On-map devices first, ROOM-grouped, then (if any, and not Guest) the
           HA-only ones under their own heading, ALSO room-grouped — one
           renderer for both, so the two lists can't drift. */}
-      {onMap.length > 0 && groupByRoom(onMap, roomOf).map(([room, list]) => (
-        <div key={room}>
-          <div className="summary-room-heading">{room}</div>
-          <div className="summary-entity-grid">{list.map(renderRow)}</div>
-        </div>
-      ))}
+      {onMap.length > 0 && renderRooms(onMap)}
       {offMap.length > 0 && (
         <>
           <div className="summary-offmap-heading" title="These devices exist in Home Assistant but have no 3D geometry in this villa model">
             Not on the map
           </div>
-          {groupByRoom(offMap, roomOf).map(([room, list]) => (
-            <div key={room}>
-              <div className="summary-room-heading">{room}</div>
-              <div className="summary-entity-grid">{list.map(renderRow)}</div>
-            </div>
-          ))}
+          {renderRooms(offMap)}
         </>
       )}
       {notInHa.length > 0 && (
@@ -256,12 +247,7 @@ export default function SummaryGroupPanel({
           >
             Not in Home Assistant
           </div>
-          {groupByRoom(notInHa, roomOf).map(([room, list]) => (
-            <div key={room}>
-              <div className="summary-room-heading">{room}</div>
-              <div className="summary-entity-grid">{list.map(renderRow)}</div>
-            </div>
-          ))}
+          {renderRooms(notInHa)}
         </>
       )}
 
@@ -293,9 +279,20 @@ export default function SummaryGroupPanel({
     </BasePanel>
   );
 
+  /** One list, ROOM-grouped — the renderer the on-map, off-map and not-in-HA
+   *  sections share (each had the same block written out until 2.496.263). */
+  function renderRooms(list: typeof rows) {
+    return groupByRoom(list, roomOf).map(([room, members]) => (
+      <div key={room}>
+        <div className="summary-room-heading">{room}</div>
+        <div className="summary-entity-grid">{members.map(renderRow)}</div>
+      </div>
+    ));
+  }
+
   function renderRow(e: NonNullable<(typeof all)[number]>) {
     const id = e.entity_id;
-    const domain = id.split(".")[0];
+    const domain = domainOf(id);
     const look = deviceLook(id, looks);
     const type = look.type;
     const cat: Category = effectiveCategory(subjectOf(id, config.entityMap[id], e, type));

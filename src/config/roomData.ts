@@ -19,6 +19,7 @@ import type { AppConfig } from "./AppConfig";
 import { isFittedPoint } from "./deviceConfig";
 import { sliceChanged } from "@/babylon/entityMapDiff";
 import { ENTITY_ID_RE, type ParsedEntity, type ParsedRoom, type ParsedRoomData } from "@/utils/sh3dParser";
+import { backendFetch } from "@/auth/sessionLost";
 
 /** The document an upload stores when a GLB arrives with no room data of its
  *  own: the explicit reset, so devices drop the previous model's rooms rather
@@ -121,8 +122,9 @@ const ROOM_DATA_TIMEOUT_MS = 5000;
 export async function fetchRoomData(
   url: string,
   // A wrapper, never `= fetch`: an unbound browser builtin throws "Illegal
-  // invocation" when called as a plain function (2.496.197-203).
-  fetchFn: (url: string, init: RequestInit) => Promise<Response> = (u, i) => fetch(u, i),
+  // invocation" when called as a plain function (2.496.197-203). backendFetch:
+  // the room data is behind the session, so a 401 reports it lost.
+  fetchFn: (url: string, init: RequestInit) => Promise<Response> = (u, i) => backendFetch(u, i),
 ): Promise<RoomDataFetch> {
   const ctrl = new AbortController();
   const tid = setTimeout(() => ctrl.abort(), ROOM_DATA_TIMEOUT_MS);

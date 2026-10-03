@@ -46,6 +46,7 @@ import {
   buildActivityFeed, tileStats, tileLine, attentionLine, type TileStats, type AttentionGroup, type AttentionItem, type AttentionKind, type ActivityEntry,
 } from "./cockpitData";
 import type { Category } from "@/types/scene.types";
+import ModalFooter from "@/components/common/ModalFooter";
 
 export interface CockpitModalProps {
   onClose: () => void;
@@ -279,21 +280,16 @@ export default function CockpitModal({
           )}
         </div>
 
-        <div className="modal-footer">
-          {/* Two slots, space-between (see .modal-footer). The left one is
-              the VESTA Agent's door when there is an agent — placed the way
-              Settings places "Advanced Settings" (ModalFooter's `leading`: a
-              ghost button that leaves the dialog, never beside Close) —
-              and an empty spacer otherwise. */}
-          {doors.agent ? (
-            <button className="btn ghost" onClick={() => { onClose(); onOpenAgent(); }}
-              title={`VESTA Agent — ${agentOnline ? "online" : "offline"}`
-                + (agentWaiting > 0 ? `, ${agentWaiting} message${agentWaiting === 1 ? "" : "s"} to answer` : "")}>
-              <Bot size={18} /> VESTA Agent{agentWaiting > 0 ? ` (${formatCountBadge(agentWaiting)})` : ""}
-            </button>
-          ) : <span />}
-          <button className="btn primary" onClick={onClose}>Close</button>
-        </div>
+        {/* The VESTA Agent's door on the left when there is an agent — placed
+            the way Settings places "Advanced Settings": a ghost button that
+            leaves the dialog, never beside Close. */}
+        <ModalFooter onClose={onClose} leading={doors.agent ? (
+          <button className="btn ghost" onClick={() => { onClose(); onOpenAgent(); }}
+            title={`VESTA Agent — ${agentOnline ? "online" : "offline"}`
+              + (agentWaiting > 0 ? `, ${agentWaiting} message${agentWaiting === 1 ? "" : "s"} to answer` : "")}>
+            <Bot size={18} /> VESTA Agent{agentWaiting > 0 ? ` (${formatCountBadge(agentWaiting)})` : ""}
+          </button>
+        ) : undefined} />
       </div>
     </div>
     {pivotDrill && (

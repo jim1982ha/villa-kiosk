@@ -36,15 +36,53 @@ export interface HAConfig {
  *  so a reference comparison says whether anything moved. */
 export interface EntityStoreState {
   entities: Record<string, HassEntity>;
+  /** entity_ids kept out of every auto-populated list (SummaryBar tiles,
+   *  SummaryGroupPanel) the same way HA's own auto-generated dashboards do:
+   *  either the user marked the entity "hidden" (Settings > Entities >
+   *  Visible toggle), or HA itself filed it under entity_category
+   *  "config"/"diagnostic" (still fully visible on the entity's own HA page —
+   *  this only affects the kiosk's own auto-built lists). Empty until the
+   *  one-shot registry fetch on connect resolves. */
   suppressedEntityIds: Set<string>;
+  /** The subset of suppressedEntityIds suppressed SPECIFICALLY because a user
+   *  hid it in HA (registry hidden_by != null) — not merely because HA itself
+   *  filed it under entity_category config/diagnostic. Lets a UI surface that
+   *  chooses to still show a suppressed-but-mapped entity (see
+   *  Dashboard.tsx's category browse) mark THIS specific reason explicitly
+   *  ("Hidden in HA") rather than presenting it as an ordinary device with no
+   *  indication the user made a deliberate choice about it elsewhere. */
   hiddenInHaEntityIds: Set<string>;
+  /** entity_id -> HA's own Area name (this entity's registry row, falling
+   *  back to its device's) — LIVE: re-resolved on connect and again every
+   *  time HA reports an entity/device/area registry change (see the
+   *  `*_registry_updated` subscriptions below), so renaming or assigning a
+   *  device's Area in Home Assistant reaches every kiosk session without a
+   *  reload. Empty for any entity HA has no area assigned to. This is now
+   *  the AUTHORITATIVE room source for a device (see config/EntityMap.ts's
+   *  resolveEntityRoom) — geometric room-polygon detection is the fallback
+   *  for whatever this doesn't cover, not the other way around. */
   entityAreaNames: Record<string, string>;
+  /** entity_id -> HA's own Floor NUMBER (via the entity's resolved Area's
+   *  floor_id — see HassAreaRegistryEntry/HassFloorRegistryEntry), live the
+   *  same way entityAreaNames is. Absent for any entity whose Area has no
+   *  Floor assigned (or that resolves to no Area at all) — see
+   *  cockpitData.ts's buildRoomGroups for the geometric (sh3dRooms) fallback
+   *  this feeds into, same precedence as room resolution itself. */
   entityFloorNumbers: Record<string, number>;
+  /** entity_id -> HA's own device_id (from the entity registry) — the
+   *  authoritative "these entities belong to the same physical device"
+   *  signal, used to suggest device groups (see config/deviceGroups.ts)
+   *  without guessing from entity_id naming conventions. Empty until the
+   *  registry fetch resolves; entities with no device behind them (helpers,
+   *  templates) are simply absent as keys. */
   entityDeviceIds: Record<string, string>;
   connection: ConnectionState;
+  /** HA instance config (location, name, unit system, currency), fetched on
+   *  connect. Null until then. */
   haConfig: HAConfig | null;
   lastError: string | null;
-  /** Wrapped in an object so firing the SAME error twice still re-triggers. */
+  /** Most recent failed service call (tap did nothing) — shown as a toast.
+   *  Wrapped in an object so firing the SAME error twice still re-triggers. */
   serviceError: { message: string; at: number } | null;
 }
 

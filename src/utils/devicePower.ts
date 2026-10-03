@@ -22,6 +22,7 @@
 import type { HassEntity } from "@/types/ha.types";
 import { isUnavailable } from "@/utils/stateColors";
 import { switchPosition, type SwitchPosition } from "@/utils/entityState";
+import { domainOf } from "./entityDomain";
 
 export interface DevicePower {
   /** "unknown": not observed (unavailable, a lock in motion) — no switch. */
@@ -37,7 +38,7 @@ const OWN_TOGGLE = new Set(["light", "switch", "fan", "input_boolean", "media_pl
 
 export function devicePower(e: HassEntity | undefined, entityId?: string): DevicePower {
   const id = e?.entity_id ?? entityId ?? "";
-  const domain = id.split(".")[0];
+  const domain = domainOf(id);
   let position: SwitchPosition;
   if (domain === "media_player") {
     position = isUnavailable(e) || !e ? "unknown" : MEDIA_POWERED.has(e.state) ? "on" : "off";

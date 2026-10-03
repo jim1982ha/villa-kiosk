@@ -111,8 +111,8 @@ ck("  ...and so is the window", /\{agentOpen && doors\.agent && \(/.test(dash));
      /\{doors\.agent \? <Bot size=\{24\} \/> : <TriangleAlert size=\{24\} \/>\}/.test(hud)
      && /\{doors\.agent && agentDot\}/.test(hud) && /const agentDot = <span className=\{`status-dot \$\{agentOnline/.test(hud) && !/onOpenAgent \?|onOpenAgent &&/.test(hud));
   ck("  ...and the Cockpit's footer offers 'VESTA Agent' only with that door",
-     /\{doors\.agent \? \(\s*<button className="btn ghost" onClick=\{\(\) => \{ onClose\(\); onOpenAgent\(\); \}\}/.test(cockpit)
-     && /VESTA Agent\{agentWaiting > 0/.test(cockpit) && /\) : <span \/>\}/.test(cockpit));
+     /leading=\{doors\.agent \? \(\s*<button className="btn ghost" onClick=\{\(\) => \{ onClose\(\); onOpenAgent\(\); \}\}/.test(cockpit)
+     && /VESTA Agent\{agentWaiting > 0/.test(cockpit) && /\) : undefined\} \/>/.test(cockpit));
 }
 const ctx = src("agent/AgentContext.tsx");
 ck("a profile without viewAgent never fetches", /roleCan\(role, "viewAgent"\)/.test(ctx)

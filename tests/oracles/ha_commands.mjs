@@ -12,14 +12,14 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
-import { ck, done } from "../consistency/check.mjs";
+import { ck, done, tsFiles } from "../consistency/check.mjs";
 
 const table = JSON.parse(readFileSync(new URL("../../rootfs/usr/share/vesta/ha-commands.json", import.meta.url), "utf8"));
 const types = new Set([...table.websocket, ...table.camera]);
 const domains = new Set(table.serviceDomains);
 
 const SRC = new URL("../../src/", import.meta.url).pathname;
-const walk = (d, out = []) => { for (const e of readdirSync(d)) { const p = join(d, e); statSync(p).isDirectory() ? walk(p, out) : /\.tsx?$/.test(p) && out.push(p); } return out; };
+const walk = tsFiles;
 const files = walk(SRC).map((f) => ({ f: f.slice(SRC.length), src: readFileSync(f, "utf8") }));
 
 // Websocket commands: every sendMessage/subscribeCommand literal, and every

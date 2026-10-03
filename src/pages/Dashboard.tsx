@@ -35,7 +35,7 @@ import AgentModal from "@/components/agent/AgentModal";
 import { useAgent } from "@/agent/AgentContext";
 import GuestReportModal from "@/components/fm/GuestReportModal";
 import { useHA } from "@/ha/HAStateStore";
-import { displayLabelFor, resolveRooms } from "@/config/EntityMap";
+import { displayLabelFor, resolveRooms, labelOf } from "@/config/EntityMap";
 import { deriveHaScenes, scenesForRoom } from "@/config/haScenes";
 import { effectiveCategory, subjectOf, categoryColor, CATEGORY_ICONS, CATEGORY_LABELS } from "@/config/EntityCategories";
 import { deviceLook, storeLookSource } from "@/utils/deviceActivity";
@@ -56,6 +56,7 @@ import { deviceSwitch } from "@/utils/devicePower";
 import { useAskFirst } from "@/hooks/useAskFirst";
 import AskDialog from "@/components/common/AskDialog";
 import { readSceneMirror } from "./sceneMirror";
+import { domainOf } from "@/utils/entityDomain";
 
 
 export default function Dashboard() {
@@ -397,8 +398,8 @@ export default function Dashboard() {
   const panelReadings = activePanel
     ? identity.readingsOf(activePanel.entityId).map((id) => ({
         id,
-        label: displayLabelFor(id, config.entityMap[id]?.label, entities[id]?.attributes.friendly_name as string | undefined),
-        text: entities[id] ? deviceRowText(entities[id], id.split(".")[0]) : "",
+        label: labelOf(id, config.entityMap, entities),
+        text: entities[id] ? deviceRowText(entities[id], domainOf(id)) : "",
       }))
     : [];
 
@@ -417,8 +418,7 @@ export default function Dashboard() {
   // linked device the owner set to "ask before switching" — this switch asked
   // nothing before 2.496.259.
   const linkedLabel = linkedEntityId
-    ? displayLabelFor(linkedEntityId, config.entityMap[linkedEntityId]?.label,
-        entities[linkedEntityId]?.attributes.friendly_name as string | undefined)
+    ? labelOf(linkedEntityId, config.entityMap, entities)
     : "";
   const linkedPower = linkedEntityId
     ? deviceSwitch(entities[linkedEntityId], linkedEntityId,
@@ -921,9 +921,7 @@ export default function Dashboard() {
             // wired up is not a control action).
             motion: motionEntityId
               ? {
-                  label: displayLabelFor(
-                    motionEntityId, config.entityMap[motionEntityId]?.label,
-                    entities[motionEntityId]?.attributes.friendly_name),
+                  label: labelOf(motionEntityId, config.entityMap, entities),
                   isOn: entities[motionEntityId]?.state === "on",
                 }
               : undefined,

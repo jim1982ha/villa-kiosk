@@ -47,6 +47,15 @@ const roots = tsx.filter(([, s]) => /className=(["`{])[^"`]*\bmodal\b(?![\w-])[^
 const missing = roots.filter(([, s]) => !(/modal-header/.test(s) && /modal-body/.test(s) && (/modal-footer/.test(s) || /<ModalFooter\b/.test(s))))
   .map(([f]) => f.slice(root.length));
 ck(`all ${roots.length} dialogs have a header, a body and a footer from the shell`, roots.length >= 10 && missing.length === 0, missing);
+// ⚠️ ONE FOOTER, NOT A CONVENTION (2.496.263). Eight dialogs wrote the
+// `<span />`-then-Close markup by hand, and the check above accepted either
+// form. Now only the shared footer writes it — bar the dialogs whose footer is
+// an ANSWER rather than an exit (AskDialog's choices, a form's Cancel ·
+// Submit), reviewed and listed here.
+const OWN_FOOTER = new Set(["components/common/ModalFooter.tsx", "components/common/AskDialog.tsx",
+  "components/fm/FaultStageModal.tsx", "components/fm/GuestReportModal.tsx"]);
+const handFooters = tsx.filter(([, s]) => /className="modal-footer"/.test(s)).map(([f]) => f.slice(root.length).replace(/^src\//, "")).filter((f) => !OWN_FOOTER.has(f));
+ck("no dialog writes the footer markup itself — it renders <ModalFooter>", handFooters.length === 0, handFooters);
 const cornerX = roots.filter(([, s]) => /modal-header[\s\S]{0,300}aria-label="Close"/.test(s)).map(([f]) => f.slice(root.length));
 ck("no dialog hides its exit as a corner ✕ — Close is in the footer, as everywhere", cornerX.length === 0, cornerX);
 

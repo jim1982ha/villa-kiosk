@@ -37,6 +37,23 @@ import { stampedFloor } from "./floorOf";
 // ground rooms are the plan's lowest storey, stairwells excluded
 // (Storeys.groundRooms, 2.496.91).
 
+/** Visit every triangle of `m` in WORLD space (the three Vector3s are reused
+ *  between calls — copy one to keep it). Was written out in both area
+ *  functions below until 2.496.263. */
+function forEachWorldTriangle(m: AbstractMesh, visit: (a: Vector3, b: Vector3, c: Vector3) => void): void {
+  const pos = m.getVerticesData(VertexBuffer.PositionKind);
+  const idx = m.getIndices();
+  if (!pos || !idx) return;
+  const w = m.computeWorldMatrix(true);
+  const a = Vector3.Zero(); const b = Vector3.Zero(); const c = Vector3.Zero();
+  for (let i = 0; i + 2 < idx.length; i += 3) {
+    for (const [j, v] of [[idx[i], a], [idx[i + 1], b], [idx[i + 2], c]] as const) {
+      Vector3.TransformCoordinatesFromFloatsToRef(pos[j * 3], pos[j * 3 + 1], pos[j * 3 + 2], w, v);
+    }
+    visit(a, b, c);
+  }
+}
+
 /**
  * The area a mesh's triangles actually COVER, projected onto the ground plane,
  * in m². Not its bounding box.
@@ -54,22 +71,13 @@ import { stampedFloor } from "./floorOf";
  * mistake — it is the number that says whether there is anything overhead.
  */
 function projectedAreaXZ(m: AbstractMesh): number {
-  const pos = m.getVerticesData(VertexBuffer.PositionKind);
-  const idx = m.getIndices();
-  if (!pos || !idx) return 0;
-  const w = m.computeWorldMatrix(true);
-  const a = Vector3.Zero(); const b = Vector3.Zero(); const c = Vector3.Zero();
   let area = 0;
-  for (let i = 0; i + 2 < idx.length; i += 3) {
-    for (const [j, v] of [[idx[i], a], [idx[i + 1], b], [idx[i + 2], c]] as const) {
-      Vector3.TransformCoordinatesFromFloatsToRef(
-        pos[j * 3], pos[j * 3 + 1], pos[j * 3 + 2], w, v);
-    }
+  forEachWorldTriangle(m, (a, b, c) => {
     // Half the cross product's Y component — the triangle's own area projected
     // straight down, which is what "covers the floor below" means. Absolute,
     // so a downward-facing ceiling counts the same as an upward-facing one.
     area += Math.abs((b.x - a.x) * (c.z - a.z) - (c.x - a.x) * (b.z - a.z)) / 2;
-  }
+  });
   return area;
 }
 
@@ -106,18 +114,9 @@ function horizontalAreaInBand(
   const out = { down: 0, up: 0, byHeight: new Map<number, number>() };
   const bb = m.getBoundingInfo().boundingBox;
   if (bb.maximumWorld.y < loY || bb.minimumWorld.y > hiY) return out;
-  const pos = m.getVerticesData(VertexBuffer.PositionKind);
-  const idx = m.getIndices();
-  if (!pos || !idx) return out;
-  const w = m.computeWorldMatrix(true);
-  const a = Vector3.Zero(); const b = Vector3.Zero(); const c = Vector3.Zero();
-  for (let i = 0; i + 2 < idx.length; i += 3) {
-    for (const [j, v] of [[idx[i], a], [idx[i + 1], b], [idx[i + 2], c]] as const) {
-      Vector3.TransformCoordinatesFromFloatsToRef(
-        pos[j * 3], pos[j * 3 + 1], pos[j * 3 + 2], w, v);
-    }
+  forEachWorldTriangle(m, (a, b, c) => {
     const cy = (a.y + b.y + c.y) / 3;
-    if (cy < loY || cy > hiY) continue;
+    if (cy < loY || cy > hiY) return;
     // Cross product of the two edges: its Y component is the projected area
     // (signed by facing), its length is twice the true area.
     const ux = b.x - a.x, uy = b.y - a.y, uz = b.z - a.z;
@@ -126,10 +125,10 @@ function horizontalAreaInBand(
     const ny = uz * vx - ux * vz;
     const nz = ux * vy - uy * vx;
     const len = Math.hypot(nx, ny, nz);
-    if (len === 0) continue;
+    if (len === 0) return;
     // Same 0.85 threshold the pipeline's own mask uses, so the two answers are
     // comparable rather than merely similar.
-    if (Math.abs(ny) / len <= 0.85) continue;
+    if (Math.abs(ny) / len <= 0.85) return;
     if (ny < 0) out.down += len / 2; else out.up += len / 2;
     // Which HEIGHTS the unpeeled area sits at, in 10 cm buckets. This is the
     // number the pipeline's band has to be set from: its lower edge is
@@ -140,7 +139,7 @@ function horizontalAreaInBand(
       const k = Math.round(cy * 10) / 10;
       out.byHeight.set(k, (out.byHeight.get(k) ?? 0) + len / 2);
     }
-  }
+  });
   return out;
 }
 

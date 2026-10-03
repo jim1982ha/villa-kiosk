@@ -9,14 +9,15 @@
 import { useState } from "react";
 import { Check, CalendarClock, Trash2 } from "lucide-react";
 import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
-import { formatMoney, isTicketOpen, localStamp, scheduleBoard, shortDate, type ScheduleStatus, parseAmount, fmAttention } from "@/fm/fmEngine";
-import { budgetStatus, wouldExceedCap } from "@/fm/fmEngine";
-import { useFmTerms } from "@/fm/useFmTerms";
+import { budgetStatus, isTicketOpen, localStamp, scheduleBoard, shortDate, type ScheduleStatus, parseAmount, fmAttention } from "@/fm/fmEngine";
 import EvidenceRow from "./EvidenceRow";
 import RecentWorkList from "./RecentWorkList";
 import NotesField from "./NotesField";
 import InlineConfirm from "@/components/common/InlineConfirm";
 import AgentMark from "./AgentMark";
+import { formatMoney } from "@/utils/money";
+import CostFields from "./CostFields";
+import FormActions from "./FormActions";
 
 const STATE_LABEL: Record<ScheduleStatus["state"], string> = {
   overdue: "Overdue",
@@ -192,9 +193,7 @@ function LogCompletion({
   /** Why the save was refused — the form keeps what was typed (2.496.252). */
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const terms = useFmTerms();
   const amountIdr = parseAmount(amount);
-  const willExceed = amountIdr > 0 && wouldExceedCap(data.costs, amountIdr, terms);
 
   return (
     <div className="fm-form">
@@ -213,32 +212,18 @@ function LogCompletion({
         placeholder="What was done, anything found or worth flagging for next time"
       />
 
-      <label className="fm-field">
-        <span>Cost (optional{terms.currency ? `, ${terms.currency}` : ""})</span>
-        <input value={amount} inputMode="numeric"
-          onChange={(e) => setAmount(e.target.value)} placeholder="e.g. 450000" />
-      </label>
-
-      {willExceed && (
-        <div className="fm-banner warn">
-          This takes the month past the {formatMoney(terms.monthlyCap, terms.currency)} monthly
-          cap. Spend beyond it belongs to {terms.uncappedName} — record it there instead
-          if that's what your own agreement calls for.
-        </div>
-      )}
+      {/* A completion's cost is always the capped kind (CostFields). */}
+      <CostFields amount={amount} onAmount={setAmount} optional />
 
       <div className="fm-field">
         <span>Photo evidence</span>
         <EvidenceRow photoIds={photoIds} onChange={setPhotoIds} />
       </div>
 
-      {saveError && <div className="fm-inline-error" role="alert">{saveError}</div>}
-      <div className="modal-actions" style={{ marginTop: 8 }}>
-        <button className="btn ghost" onClick={onCancel}>Cancel</button>
-        <button
-          className="btn primary"
-          disabled={saving}
-          onClick={async () => {
+      <FormActions
+        error={saveError} onCancel={onCancel} disabled={saving}
+        saveLabel={saving ? "Saving…" : "Save completion"}
+        onSave={async () => {
             setSaving(true);
             setSaveError(null);
             const refused = await onSave(
@@ -250,10 +235,7 @@ function LogCompletion({
             setSaving(false);
             if (refused) setSaveError(refused);
           }}
-        >
-          {saving ? "Saving…" : "Save completion"}
-        </button>
-      </div>
+      />
     </div>
   );
 }

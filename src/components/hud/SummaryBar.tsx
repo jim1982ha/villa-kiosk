@@ -237,6 +237,21 @@ export default function SummaryBar({ onOpenEntity, scenes }: Props) {
   // so this bar goes back to being purely the device/scene tiles.)
   if (config.showSummaryBar === false || (!deviceTiles.length && !scenes.length)) return null;
 
+  /** A tile's device list. ⚠️ Drilling into one of its rows does NOT close
+   *  it: it stays mounted underneath the entity's own panel (rendered later in
+   *  Dashboard's tree, so stacked on top on the same .modal-backdrop system),
+   *  and closing that panel reveals the group again with no "return to
+   *  parent" bookkeeping. Only the group's OWN close clears it. One element for
+   *  the plain tiles and Energy's fallback (written out twice until 2.496.263). */
+  const groupList = (tile: SummaryTile) => (
+    <SummaryGroupPanel
+      group={{ title: tile.title, icon: tile.icon, entityIds: tile.entityIds }}
+      canControl={tile.canControl}
+      onClose={() => setOpenGroup(null)}
+      onOpenEntity={onOpenEntity}
+    />
+  );
+
   return (
     <>
       <div className="summary-bar" role="toolbar" aria-label="Quick controls and summaries">
@@ -260,32 +275,11 @@ export default function SummaryBar({ onOpenEntity, scenes }: Props) {
       {/* Energy: Home Assistant's Energy dashboard, laid out (EnergyPanel) — or,
           on an install with none, the list of power sensors as before. */}
       {openGroup?.kind === "energy" && (
-        <EnergyPanel onClose={() => setOpenGroup(null)} fallback={() => (
-          <SummaryGroupPanel
-            group={{ title: openGroup.title, icon: openGroup.icon, entityIds: openGroup.entityIds }}
-            canControl={openGroup.canControl}
-            onClose={() => setOpenGroup(null)}
-            onOpenEntity={onOpenEntity}
-          />
-        )} />
+        <EnergyPanel onClose={() => setOpenGroup(null)} fallback={() => groupList(openGroup)} />
       )}
-      {openGroup && openGroup.kind !== "weather" && openGroup.kind !== "energy" && (
-        <SummaryGroupPanel
-          group={{ title: openGroup.title, icon: openGroup.icon, entityIds: openGroup.entityIds }}
-          canControl={openGroup.canControl}
-          onClose={() => setOpenGroup(null)}
-          // Deliberately DON'T close the group when drilling into one of its
-          // rows — leave this modal mounted underneath. Both this panel and
-          // the entity's own detail panel (rendered later in Dashboard's
-          // tree, so it stacks visually on top at the same z-index) share the
-          // same .modal-backdrop system, so the group modal is genuinely
-          // still there, just covered — closing the entity panel (its own X,
-          // unrelated to this component) reveals the group again with no
-          // extra "return to parent" bookkeeping needed. Only the group's OWN
-          // X (onClose above) actually clears this state.
-          onOpenEntity={onOpenEntity}
-        />
-      )}
+      {/* Deliberately DON'T close the group when drilling into one of its
+          rows — leave this modal mounted underneath (groupList). */}
+      {openGroup && openGroup.kind !== "weather" && openGroup.kind !== "energy" && groupList(openGroup)}
     </>
   );
 }

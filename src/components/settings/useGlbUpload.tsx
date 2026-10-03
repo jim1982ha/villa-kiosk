@@ -1,4 +1,4 @@
-// src/components/settings/useGlbUpload.ts
+// src/components/settings/useGlbUpload.tsx
 // Central GLB/room-data upload — pushes straight into the add-on's /data
 // store via the supervisor-proxy (no SSH/Samba, no path to configure).
 // Used by ConfigEditorModal's header and by the no-model screen (Owner only).
@@ -89,4 +89,21 @@ export function useGlbUpload(enabled: boolean, onModelChanged: () => void) {
     uploadGlbAndRooms,
     openPicker: () => glbUploadRef.current?.click(),
   };
+}
+
+/** The hidden file input every upload entry point opens (openPicker): a lone
+ *  .glb, a .glb with its .rooms.json, or a lone .rooms.json. One element for
+ *  Settings and the no-model screen (written out in both until 2.496.263). */
+export function ModelFileInput({ upload }: { upload: ReturnType<typeof useGlbUpload> }) {
+  return (
+    <input
+      ref={upload.glbUploadRef} type="file" multiple hidden
+      accept=".glb,.json,application/json,model/gltf-binary"
+      onChange={(e) => {
+        const files = Array.from(e.target.files ?? []);
+        e.target.value = "";
+        if (files.length) void upload.uploadGlbAndRooms(files);
+      }}
+    />
+  );
 }

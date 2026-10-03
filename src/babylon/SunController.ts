@@ -17,6 +17,7 @@ import type { FrameRequests } from "./frameScheduler";
 import type { SceneLook } from "./sceneLook";
 import type { LightingMode } from "./lightingMode";
 import { sunGeometry, sunLights } from "./sunState";
+import { clockTime } from "@/utils/dateText";
 
 export class SunController {
   /** The scene's sun — a directional light this controller alone drives.
@@ -240,7 +241,7 @@ export class SunController {
   ): void {
     const deg = (r: number) => Math.round((r * 180) / Math.PI);
     const s = this.sky?.sunReport();
-    const clock = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const clock = clockTime(date);
     const line = `sky: ${clock}${skySimActive() ? " (sim)" : ""}`
       + ` alt=${deg(alt)}° real=${deg(real)}° az=${deg(azimuth)}°`
       + ` day=${alt > 0 ? "y" : "n"} nightT=${nightT.toFixed(2)} preview=${preview}`

@@ -8,9 +8,11 @@
 import { useState } from "react";
 import { Settings2 } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
-import { formatMoney, parseAmount } from "@/fm/fmEngine";
+import { parseAmount } from "@/fm/fmEngine";
 import { useFmTerms } from "@/fm/useFmTerms";
 import { validWarnPercent } from "@/fm/fmTypes";
+import { formatMoney } from "@/utils/money";
+import FormActions from "./FormActions";
 
 export default function ContractTermsEditor() {
   const { config, update } = useConfig();
@@ -78,10 +80,7 @@ export default function ContractTermsEditor() {
         <span>Warn when the month reaches (% of the cap)</span>
         <input value={warnAt} inputMode="numeric" onChange={(e) => setWarnAt(e.target.value)} placeholder="80" />
       </label>
-      <div className="modal-actions" style={{ marginTop: 8 }}>
-        <button className="btn ghost" onClick={() => setOpen(false)}>Cancel</button>
-        <button className="btn primary" onClick={save}>Save</button>
-      </div>
+      <FormActions onCancel={() => setOpen(false)} onSave={save} saveLabel="Save" />
     </div>
   );
 }

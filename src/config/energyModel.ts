@@ -343,13 +343,3 @@ export function fmtKwh(v: number): string {
   return v >= 100 ? String(Math.round(v)) : v >= 10 ? v.toFixed(1) : v.toFixed(2);
 }
 
-/** A cost in the cost statistic's own currency (HA writes it as the unit, an
- *  ISO code such as IDR or EUR); a unit that is not one is written after. */
-export function fmtMoney(v: number, unit: string | undefined, locale?: string): string {
-  if (unit && /^[A-Z]{3}$/.test(unit)) {
-    try {
-      return new Intl.NumberFormat(locale, { style: "currency", currency: unit, maximumFractionDigits: v >= 100 ? 0 : 2 }).format(v);
-    } catch { /* not a currency Intl knows */ }
-  }
-  return `${Math.round(v).toLocaleString(locale)}${unit ? ` ${unit}` : ""}`;
-}

@@ -10,7 +10,7 @@ import { register } from "node:module";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 register("../consistency/alias-hook.mjs", import.meta.url);
-import { ck, done } from "../consistency/check.mjs";
+import { ck, done, tsFiles } from "../consistency/check.mjs";
 const A = await import("@/config/AppConfig");
 
 
@@ -35,7 +35,7 @@ const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf
 ck("EVERY patch is completed, maps migrated only when carried",
    /setConfig\(\(prev\) => \{[\s\S]*?const patch = typeof change === "function" \? change\(prev\) : change;[\s\S]*?return normaliseConfig\(\{ \.\.\.prev, \.\.\.patch \}, \{ maps \}\);/.test(src("config/ConfigContext.tsx")));
 const SRC = new URL("../../src/", import.meta.url).pathname;
-const walk = (d, out = []) => { for (const e of readdirSync(d)) { const p = join(d, e); statSync(p).isDirectory() ? walk(p, out) : /\.tsx?$/.test(p) && out.push(p); } return out; };
+const walk = tsFiles;
 const keys = Object.keys(A.DEFAULT_CONFIG).join("|");
 const fallbacks = walk(SRC).flatMap((f) => [...readFileSync(f, "utf8").replace(/\/\/.*$/gm, "").matchAll(new RegExp(`config\\.(${keys})\\s*\\?\\?`, "g"))].map((m) => `${f.slice(SRC.length)}: ${m[1]}`));
 ck("no reader re-defaults a setting normaliseConfig already guarantees", fallbacks.length === 0, fallbacks);

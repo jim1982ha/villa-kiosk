@@ -21,6 +21,7 @@ import { categorySurface } from "@/config/EntityCategories";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import BadgeColorModal from "./BadgeColorModal";
 import LastDayTimeline from "./LastDayTimeline";
+import ModalFooter from "@/components/common/ModalFooter";
 
 interface Props {
   title: string;
@@ -212,9 +213,9 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
               structural rather than fixed twice. */}
           {history !== false && entityId && <LastDayTimeline entityId={entityId} />}
         </div>
-        {/* The modal shell's footer (04-modals.css) — the left group is always
-            there, empty or not, so Close sits right as in every dialog. */}
-        <div className="modal-footer">
+        {/* The shared footer (ModalFooter): the left group is always there,
+            empty or not, so Close sits right as in every dialog. */}
+        <ModalFooter onClose={onClose} leading={
           <div className="modal-footer-group">
             {footerLeading}
             {onEdit && <button className="btn ghost" onClick={onEdit}>Edit</button>}
@@ -231,8 +232,7 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
               ><Wrench size={16} /></button>
             )}
           </div>
-          <button className="btn primary" onClick={onClose}>Close</button>
-        </div>
+        } />
       </div>
 
       {colorOpen && badge && onSetBadgeColor && (

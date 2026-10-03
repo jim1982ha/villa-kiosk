@@ -41,6 +41,7 @@ import SpendTab from "./SpendTab";
 import ReportTab from "./ReportTab";
 import ScheduleEditor from "./ScheduleEditor";
 import { useVillaModel } from "@/config/VillaModel";
+import ModalFooter from "@/components/common/ModalFooter";
 
 type Tab = "today" | "readiness" | "faults" | "spend" | "schedule" | "report";
 
@@ -221,12 +222,7 @@ export default function FacilityModal({
             )}
           </div>
 
-          <div className="modal-footer">
-            <span className="muted body-text" style={{ fontSize: "var(--text-xs)" }}>
-              Maintenance intervals are set in the Schedule tab
-            </span>
-            <button className="btn primary" onClick={onClose}>Close</button>
-          </div>
+          <ModalFooter onClose={onClose} note="Maintenance intervals are set in the Schedule tab" />
         </div>
       </div>
 

@@ -12,6 +12,7 @@ import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { STATUS_COLOR } from "@/utils/stateColors";
 import { useConfig } from "@/config/ConfigContext";
 import { overviewKeyHelp } from "@/babylon/overviewKeys";
+import ModalFooter from "@/components/common/ModalFooter";
 
 /** What the MAP badge actually does per state — mirrors config/
  *  EntityCategories.categorySurface exactly (VESTA-DESIGN.md §0): neutral by
@@ -158,10 +159,7 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
             ))}
           </div>
         </div>
-        <div className="modal-footer">
-          <span />
-          <button className="btn primary" onClick={onClose}>Close</button>
-        </div>
+        <ModalFooter onClose={onClose} />
       </div>
     </div>
   );

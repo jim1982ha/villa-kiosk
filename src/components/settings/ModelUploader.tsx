@@ -10,21 +10,13 @@
 // profile with "manageModel").
 
 import { Upload } from "lucide-react";
-import { useGlbUpload } from "./useGlbUpload";
+import { useGlbUpload, ModelFileInput } from "./useGlbUpload";
 
 export default function ModelUploader({ onUploaded }: { onUploaded: () => void }) {
   const up = useGlbUpload(true, onUploaded);
   return (
     <div>
-      <input
-        ref={up.glbUploadRef} type="file" multiple hidden
-        accept=".glb,.json,application/json,model/gltf-binary"
-        onChange={(e) => {
-          const files = Array.from(e.target.files ?? []);
-          e.target.value = "";
-          if (files.length) void up.uploadGlbAndRooms(files);
-        }}
-      />
+      <ModelFileInput upload={up} />
       <button className="btn primary" style={{ width: "100%" }} disabled={up.uploadBusy !== null} onClick={up.openPicker}>
         <Upload size={18} />{" "}
         {up.uploadBusy === null

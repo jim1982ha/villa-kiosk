@@ -12,12 +12,13 @@ import { categoryCounts } from "@/config/activeDevices";
 import { deviceLook, groupLook, storeLookSource, type LookSource } from "@/utils/deviceActivity";
 import { deviceRowText } from "@/utils/entityValue";
 import type { Threshold } from "@/config/ThresholdConfig";
-import { displayLabelFor } from "@/config/EntityMap";
+import { displayLabelFor, labelOf } from "@/config/EntityMap";
 import { roomKey, NO_ROOM_LABEL } from "@/config/roomKey";
 import { fmAttention } from "@/fm/fmEngine";
 import type { FmData } from "@/fm/fmTypes";
 import type { HassEntity, RawLogbookEntry } from "@/types/ha.types";
 import type { Category, EntityMapping } from "@/types/scene.types";
+import { domainOf } from "@/utils/entityDomain";
 
 export type AttentionKind = "unavailable" | "fault" | "schedule" | "alarm";
 
@@ -142,11 +143,10 @@ export function buildAttentionItems(opts: {
   const items: AttentionItem[] = [];
 
   for (const id of unavailableIds) {
-    const mapping = entityMap[id];
     items.push({
       id: `unavailable:${id}`,
       kind: "unavailable",
-      title: displayLabelFor(id, mapping?.label, entities[id]?.attributes.friendly_name as string | undefined),
+      title: labelOf(id, entityMap, entities),
       detail: "Unavailable",
       room: resolvedRooms[id],
       entityId: id,
@@ -192,12 +192,11 @@ export function buildAttentionItems(opts: {
   for (const id of selectableIds) {
     const entity = entities[id];
     if (!entity || !deviceLook(id, looks).alert) continue;
-    const mapping = entityMap[id];
-    const domain = id.split(".")[0];
+    const domain = domainOf(id);
     items.push({
       id: `alarm:${id}`,
       kind: "alarm",
-      title: displayLabelFor(id, mapping?.label, entity.attributes.friendly_name as string | undefined),
+      title: labelOf(id, entityMap, entities),
       // A binary_sensor's own words for its state ("Leak detected",
       // "Disconnected"); anything else, what its list row says ("Unlocked",
       // "Jammed", "92 %").
@@ -217,7 +216,7 @@ export function buildAttentionItems(opts: {
     const key = folding.get(i.entityId) ?? i.entityId;
     i.device = {
       key,
-      label: displayLabelFor(key, entityMap[key]?.label, entities[key]?.attributes.friendly_name as string | undefined),
+      label: labelOf(key, entityMap, entities),
       room: resolvedRooms[key] ?? resolvedRooms[i.entityId] ?? i.room,
     };
   }

@@ -74,7 +74,7 @@ console.log("\n  who uploads through it:");
 {
   const { readFileSync } = await import("node:fs");
   const src = (f) => readFileSync(new URL(`../../src/${f}`, import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\/|(^|[^:])\/\/.*$/gm, "$1");
-  const hook = src("components/settings/useGlbUpload.ts");
+  const hook = src("components/settings/useGlbUpload.tsx");
   const planAt = hook.indexOf("await planModelUpload(files)"), runAt = hook.indexOf("await runModelUpload(plan.steps");
   ck("the hook plans (checks everything) before it writes, and writes only through runModelUpload",
      planAt > 0 && runAt > planAt && (hook.match(/uploadCentralModel\(/g) ?? []).length === 1 && hook.indexOf("uploadCentralModel(") > runAt);

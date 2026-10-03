@@ -11,6 +11,7 @@
 import { Armchair, Compass, Info } from "lucide-react";
 import { markFirstRunTipsSeen } from "@/utils/viewPrefs";
 import { useModalA11y } from "@/hooks/useModalA11y";
+import ModalFooter from "@/components/common/ModalFooter";
 
 export default function FirstRunTips({ onClose }: { onClose: () => void }) {
   const dismiss = () => { markFirstRunTipsSeen(); onClose(); };
@@ -64,10 +65,7 @@ export default function FirstRunTips({ onClose }: { onClose: () => void }) {
             </li>
           </ul>
         </div>
-        <div className="modal-footer">
-          <span />
-          <button className="btn primary" onClick={dismiss}>Got it, thanks</button>
-        </div>
+        <ModalFooter onClose={dismiss} closeLabel="Got it, thanks" />
       </div>
     </div>
   );

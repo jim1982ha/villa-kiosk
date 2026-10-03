@@ -13,7 +13,7 @@ import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { resolveSiteTitle } from "@/config/AppConfig";
 import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
-import { budgetStatus, formatMoney, monthKey, monthLabel, localStamp, parseAmount, projectedSpend } from "@/fm/fmEngine";
+import { budgetStatus, monthKey, localStamp, parseAmount } from "@/fm/fmEngine";
 import { categoryName } from "@/fm/fmTypes";
 import { useFmTerms } from "@/fm/useFmTerms";
 import { useProfile } from "@/auth/ProfileContext";
@@ -28,6 +28,10 @@ import NotesField from "./NotesField";
 import ReportPreview from "./ReportPreview";
 import SavedDocumentsList from "./SavedDocumentsList";
 import AgentMark from "./AgentMark";
+import { formatMoney } from "@/utils/money";
+import CostFields from "./CostFields";
+import { useDeviceChoice } from "./useDeviceChoice";
+import FormActions from "./FormActions";
 
 export default function SpendTab(
   { onOpenEntity, deviceOptions }: {
@@ -51,8 +55,9 @@ export default function SpendTab(
   /** Why the last save was refused — the form keeps what was typed (2.496.252). */
   const [formError, setFormError] = useState<string | null>(null);
   const [label, setLabel] = useState("");
-  const [deviceText, setDeviceText] = useState("");
-  const [entityId, setEntityId] = useState("");
+  // The device the entry is about — its search text and match, as one (useDeviceChoice).
+  const device = useDeviceChoice();
+  const { deviceText, entityId, selectDevice, clearDevice } = device;
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [category, setCategory] = useState<"minor" | "major">("minor");
@@ -65,12 +70,10 @@ export default function SpendTab(
   const [statementSaved, setStatementSaved] = useState(false);
   const villaName = resolveSiteTitle(config, haConfig?.location_name);
 
-  const selectDevice = (id: string, name: string) => { setEntityId(id); setDeviceText(name); };
-  const clearDevice = () => { setEntityId(""); setDeviceText(""); };
   const resetForm = () => {
     setFormError(null);
     setAdding(false); setEditingId(null);
-    setLabel(""); setDeviceText(""); setEntityId("");
+    setLabel(""); clearDevice();
     setAmount(""); setNote(""); setPhotoIds([]); setCategory("minor");
   };
 
@@ -82,8 +85,7 @@ export default function SpendTab(
     setNote(c.note ?? "");
     setCategory(c.category);
     setPhotoIds(c.photoIds);
-    setEntityId(c.entityId ?? "");
-    setDeviceText(c.deviceLabel ?? "");
+    selectDevice(c.entityId ?? "", c.deviceLabel ?? "");
   };
 
   const b = budgetStatus(data.costs, month, terms);
@@ -111,12 +113,6 @@ export default function SpendTab(
     setStatement(doc.markdown);
     setStatementSaved(true);
   };
-  // The engine's one cap check. An edited entry's OWN old amount is taken out
-  // first (it used to be counted twice), and the month is the one the entry
-  // lands in — a new one is stamped today, whichever month is on screen.
-  const projection = projectedSpend(
-    data.costs, { amount: amountIdr, category, replacing: editingId ?? undefined }, terms);
-
   // Months that actually have entries, newest first — plus the current month so
   // it's always selectable even before anything is recorded in it.
   const months = [...new Set([monthKey(Date.now()), ...data.costs.map((c) => monthKey(c.at))])]
@@ -179,12 +175,8 @@ export default function SpendTab(
           <div className="fm-field">
             <span>Device (search, or type one not listed — leave blank for a whole-villa expense)</span>
             <DeviceSearchPicker
-              value={deviceText}
+              {...device.pickerProps}
               options={deviceOptions}
-              matchedEntityId={entityId || undefined}
-              onChangeText={(text) => { setDeviceText(text); setEntityId(""); }}
-              onSelect={(opt) => selectDevice(opt.entityId, opt.label)}
-              onClear={clearDevice}
             />
           </div>
           <label className="fm-field">
@@ -201,43 +193,18 @@ export default function SpendTab(
             onChange={setNote}
             placeholder="e.g. Second refill this quarter — check for a leak"
           />
-          <label className="fm-field">
-            <span>Amount{terms.currency ? ` (${terms.currency})` : ""}</span>
-            <input value={amount} inputMode="numeric"
-              onChange={(e) => setAmount(e.target.value)} placeholder="450000" />
-          </label>
-          <label className="fm-field">
-            <span>Category</span>
-            <select value={category} onChange={(e) => setCategory(e.target.value as "minor" | "major")}>
-              {/* Neutral words: which contract clause or account a category
-                  maps to is one villa's arrangement (hard-rules.py, 3b). */}
-              <option value="minor">{terms.cappedName}{terms.monthlyCap > 0 ? " — counts against the monthly cap" : ""}</option>
-              <option value="major">{terms.uncappedName}{terms.monthlyCap > 0 ? " — outside the cap" : ""}</option>
-            </select>
-          </label>
-
-          {category === "minor" && amountIdr > 0 && projection.cap > 0 && (
-            <div className={`fm-banner ${projection.over ? "warn" : ""}`}>
-              {/* Shown only with a cap set: with none there is nothing to be over
-                  (an unconfigured install once read "…of IDR 0"). */}
-              {projection.month === monthKey(Date.now()) ? "This month" : monthLabel(projection.month)} would
-              come to {money(projection.minorSpend)} of {money(projection.cap)}
-              {projection.over && ` — over the cap. Consider recording it as ${terms.uncappedName} instead.`}
-            </div>
-          )}
+          <CostFields amount={amount} onAmount={setAmount} category={category} onCategory={setCategory}
+            replacing={editingId ?? undefined} />
 
           <div className="fm-field">
             <span>Receipt / photo</span>
             <EvidenceRow photoIds={photoIds} onChange={setPhotoIds} />
           </div>
 
-          {formError && <div className="fm-inline-error" role="alert">{formError}</div>}
-          <div className="modal-actions" style={{ marginTop: 8 }}>
-            <button className="btn ghost" onClick={resetForm}>Cancel</button>
-            <button
-              className="btn primary"
-              disabled={!label.trim() || amountIdr <= 0}
-              onClick={async () => {
+          <FormActions
+            error={formError} onCancel={resetForm} disabled={!label.trim() || amountIdr <= 0}
+            saveLabel={editingId ? "Save changes" : "Save"}
+            onSave={async () => {
                 const fields = {
                   amountIdr, label: label.trim(), category, photoIds,
                   note: note.trim() || undefined,
@@ -254,8 +221,7 @@ export default function SpendTab(
                 // Empty the form only when saved or queued (2.496.252).
                 if (done) resetForm(); else setFormError(why);
               }}
-            >{editingId ? "Save changes" : "Save"}</button>
-          </div>
+          />
         </div>
       )}
 

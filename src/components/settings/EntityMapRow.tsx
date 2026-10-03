@@ -21,10 +21,9 @@
 import { memo, type RefObject } from "react";
 import { Pencil, Trash2, Check, X, ChevronDown, ChevronRight } from "lucide-react";
 import EntityPicker from "./EntityPicker";
-import { useDraftCommit } from "@/hooks/useDraftCommit";
 import type { EntityMapping } from "@/types/scene.types";
 import type { HassEntity } from "@/types/ha.types";
-import MappingFields from "./MappingFields";
+import MappingFields, { useMappingDraft } from "./MappingFields";
 
 
 interface Props {
@@ -69,13 +68,8 @@ function EntityMapRow({
   // the general instant-echo/debounced-commit pattern this follows.
   // The show-in-3D toggle is this row's own field; every other field is
   // MappingFields', shared with the bound-objects table.
-  const field = useDraftCommit<Partial<EntityMapping>>((_k, change) => onPatch(entryKey, change));
-  const draftField = (change: Partial<EntityMapping>) =>
-    field.draft("v", { ...field.drafts.v, ...change });
-
-  // Merge in any not-yet-committed edit so the control reflects the click
-  // instantly, even while the heavy commit is pending.
-  const m = field.drafts.v ? { ...mapping, ...field.drafts.v } : mapping;
+  // Not-yet-committed edits show at once (MappingFields.useMappingDraft).
+  const { draftField, m } = useMappingDraft(mapping, (change) => onPatch(entryKey, change));
 
   return (
     <tr

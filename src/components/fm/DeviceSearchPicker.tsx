@@ -26,7 +26,7 @@ import { useMemo, useRef, useState } from "react";
 import { useOutsideClose } from "@/hooks/useOutsideClose";
 import { Search, X } from "lucide-react";
 import type { EntityMapping } from "@/types/scene.types";
-import { displayLabelFor } from "@/config/EntityMap";
+import { labelOf } from "@/config/EntityMap";
 import type { VillaDevices } from "@/config/deviceGroups";
 import { isUnavailable } from "@/utils/stateColors";
 import type { HassEntity } from "@/types/ha.types";
@@ -61,7 +61,7 @@ export function buildDeviceOptions(
   return [...devices.ids]
     .map((id) => ({
       entityId: id,
-      label: displayLabelFor(id, entityMap[id]?.label, entities[id]?.attributes.friendly_name),
+      label: labelOf(id, entityMap, entities),
       room: resolvedRooms[id],
       offline: isUnavailable(entities[id]),
     }))
@@ -141,13 +141,7 @@ export default function DeviceSearchPicker({
       )}
 
       {open && value.trim() && (
-        <div
-          style={{
-            position: "absolute", zIndex: 20, left: 0, right: 0, marginTop: 6,
-            maxHeight: 260, overflowY: "auto", background: "var(--bg-overlay)",
-            border: "1px solid var(--hairline-strong)", borderRadius: 10,
-          }}
-        >
+        <div className="picker-dropdown">
           {results.length === 0 && (
             <div className="muted body-text" style={{ padding: 12, fontSize: "var(--text-sm)" }}>
               No device matches "{value.trim()}" — it will be saved as free text.

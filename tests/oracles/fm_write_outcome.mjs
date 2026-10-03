@@ -88,8 +88,9 @@ const blind = SAVES.filter((f) => /await (add|update|log|advance|close)[A-Za-z]*
 ck("  ...and no form empties itself after a save it did not look at", blind.length === 0, blind);
 ck("the guest's thank-you says when the report is only queued on this tablet",
    /queued\s*\?\s*"This tablet will send it on its own/.test(src("components/fm/GuestReportModal.tsx")));
-ck("the fault step warns about the monthly cap, as the Today and Spend forms do",
-   /category === "minor" && wouldExceedCap\(data\.costs, amountIdr, terms\)/.test(src("components/fm/FaultStageModal.tsx")));
+ck("the fault step, the Spend tab and logging a completion all ask for a cost with ONE CostFields (one cap line) — 2.496.263",
+   ["components/fm/FaultStageModal.tsx", "components/fm/SpendTab.tsx", "components/fm/TodayTab.tsx"].every((f) => /<CostFields amount=\{amount\} onAmount=\{setAmount\}/.test(src(f)))
+   && /projectedSpend\(data\.costs, \{ amount: value, category, replacing \}, terms\)/.test(src("components/fm/CostFields.tsx")));
 ck("the three 'Saved' labels still show only when saved (not when queued)",
    /if \(result !== "saved"\) return;/.test(src("components/fm/ReadinessTab.tsx"))
    && /=== "saved"\) setSaved\(true\);/.test(src("components/fm/ReportTab.tsx"))

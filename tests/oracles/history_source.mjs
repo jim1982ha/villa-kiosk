@@ -13,7 +13,7 @@ import { register } from "node:module";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 register("../consistency/alias-hook.mjs", import.meta.url);
-import { ck, done } from "../consistency/check.mjs";
+import { ck, done, tsFiles } from "../consistency/check.mjs";
 const { statisticsSeries, seriesTotal, seriesExtent, PERIOD_MS } = await import("@/utils/statisticsSeries");
 const { loadOne, loadHistory, historyKey, requestWindow } = await import("@/ha/historySource");
 const fakePort = (over = {}) => ({ stateRows: async () => [], getStatisticsDuringPeriod: async () => ({}), ...over });
@@ -97,7 +97,7 @@ console.log("\n  one window, from one clock reading:");
 console.log("\n  the callers:");
 {
   const SRC = new URL("../../src/", import.meta.url).pathname;
-  const walk = (d, out = []) => { for (const e of readdirSync(d)) { const p = join(d, e); statSync(p).isDirectory() ? walk(p, out) : /\.tsx?$/.test(p) && out.push(p); } return out; };
+  const walk = tsFiles;
   const files = walk(SRC).filter((f) => /\/(components|hooks)\//.test(f));
   const readers = files.filter((f) => /\buseHistorySource\(/.test(readFileSync(f, "utf8"))).map((f) => f.slice(SRC.length)).sort();
   ck(`found every reader of history, all through the source (${readers.length})`,

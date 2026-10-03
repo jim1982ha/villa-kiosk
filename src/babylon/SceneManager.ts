@@ -48,7 +48,7 @@ import { ENTITY_CALIBRATION_CM, ROOM_POLYGONS_CM, polygonCentroid } from "@/conf
 import { solvePlanToWorld, planAngleToDir } from "./roomCalibration";
 import { rayTargets } from "./meshRoles";
 import type { PlanWorldPair } from "@/utils/affineFit";
-import { pointInPolygon, type Pt2 } from "@/utils/geometry";
+import { pointInPolygon, type Pt2, boundsXZ } from "@/utils/geometry";
 import { devLog } from "@/utils/devLog";
 import { tapDebug } from "@/utils/tapDebug";
 import { loadOverviewView, saveOverviewView } from "@/utils/viewPrefs";
@@ -1086,13 +1086,7 @@ export class SceneManager {
     // A saved per-device default (see saveOverviewDefault) overrides the
     // auto-fit angle/tilt/zoom/pan — fitTo() still ran first so the pan
     // bounds and icon-zoom reference are correct for THIS model.
-    const saved = loadOverviewView();
-    if (saved) {
-      this.overview.applyPose({
-        alpha: saved.alpha, beta: saved.beta, radius: saved.radius,
-        target: { x: saved.targetX, y: saved.targetY, z: saved.targetZ },
-      });
-    }
+    this.applySavedOverview();
     // The badge-shrink reference is a function of the fit radius, so it is
     // republished here rather than only where the overview is enabled.
     this.visuals.setIconZoomFit(
@@ -1304,6 +1298,18 @@ export class SceneManager {
     });
   }
 
+  /** This device's saved default overview framing, applied; false when none
+   *  is saved. (Written out at load and at "go home" until 2.496.263.) */
+  private applySavedOverview(): boolean {
+    const saved = loadOverviewView();
+    if (!saved) return false;
+    this.overview.applyPose({
+      alpha: saved.alpha, beta: saved.beta, radius: saved.radius,
+      target: { x: saved.targetX, y: saved.targetY, z: saved.targetZ },
+    });
+    return true;
+  }
+
   /** Flip to the other view mode; returns the mode now active. */
   toggleViewMode(): "first-person" | "overview" {
     const next = this.viewMode === "overview" ? "first-person" : "overview";
@@ -1344,13 +1350,7 @@ export class SceneManager {
    */
   applyOverviewDefault(): boolean {
     if (this.viewMode !== "overview") return false;
-    const saved = loadOverviewView();
-    if (!saved) return false;
-    this.overview.applyPose({
-      alpha: saved.alpha, beta: saved.beta, radius: saved.radius,
-      target: { x: saved.targetX, y: saved.targetY, z: saved.targetZ },
-    });
-    return true;
+    return this.applySavedOverview();
   }
 
   /**
@@ -1531,11 +1531,9 @@ export class SceneManager {
     const cacheKey = polygonKey(pts, floor);
     if (this.conformCache.has(cacheKey)) return this.conformCache.get(cacheKey) ?? null;
 
-    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-    for (const p of pts) {
-      minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
-      minZ = Math.min(minZ, p.z); maxZ = Math.max(maxZ, p.z);
-    }
+    const box = boundsXZ(pts);
+    if (!box) return null;
+    const { minX, maxX, minZ, maxZ } = box;
     const STEP = 0.25;
     const nx = Math.max(2, Math.ceil((maxX - minX) / STEP) + 1);
     const nz = Math.max(2, Math.ceil((maxZ - minZ) / STEP) + 1);

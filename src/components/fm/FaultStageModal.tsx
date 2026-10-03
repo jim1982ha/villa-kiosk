@@ -23,12 +23,12 @@
 import { useState } from "react";
 
 import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
-import { formatMoney, parseAmount, wouldExceedCap } from "@/fm/fmEngine";
-import { useFmTerms } from "@/fm/useFmTerms";
+import { parseAmount } from "@/fm/fmEngine";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
 import NotesField from "./NotesField";
 import { useModalA11y } from "@/hooks/useModalA11y";
+import CostFields from "./CostFields";
 
 const STAGE_COPY: Record<FmTicketStatus, { title: string; cta: string; note: string }> = {
   open: { title: "Reopen fault", cta: "Reopen", note: "Why it's being reopened (optional)" },
@@ -50,8 +50,7 @@ export default function FaultStageModal({
   to: FmTicketStatus;
   onClose: () => void;
 }) {
-  const { advanceTicket, data } = useFmData();
-  const terms = useFmTerms();
+  const { advanceTicket } = useFmData();
   // Escape + Back + focus trap + focus restore, from ONE hook — see
   // useModalA11y. It registers useBackToClose itself, so calling both would
   // push this surface onto the dismissal stack twice.
@@ -129,35 +128,10 @@ export default function FaultStageModal({
                 pair lives on one record instead of scattered across steps. */}
             <EvidenceRow photoIds={photoIds} onChange={setPhotoIds} />
           </div>
+          {/* The same cost fields and cap line as the Today and Spend forms
+              (CostFields) — this was once the one place without the warning. */}
           {asksCost && (
-            <label className="fm-field">
-              <span>What it cost{terms.currency ? ` (${terms.currency})` : ""} (optional — leave blank if nothing was spent)</span>
-              <input value={amount} inputMode="numeric"
-                onChange={(e) => setAmount(e.target.value)} placeholder="450000" />
-            </label>
-          )}
-          {amountIdr > 0 && (
-            <>
-              <label className="fm-field">
-                <span>Category</span>
-                <select value={category}
-                  onChange={(e) => setCategory(e.target.value as "minor" | "major")}>
-                  <option value="minor">{terms.cappedName}{terms.monthlyCap > 0 ? " — counts against the monthly cap" : ""}</option>
-                  <option value="major">{terms.uncappedName}{terms.monthlyCap > 0 ? " — outside the cap" : ""}</option>
-                </select>
-              </label>
-              <div className="fm-row-sub muted">
-                Records {formatMoney(amountIdr, terms.currency)} against this fault.
-              </div>
-              {/* The same cap warning the Today and Spend forms give — this was
-                  the one place a cost could be recorded without it (2.496.252). */}
-              {category === "minor" && wouldExceedCap(data.costs, amountIdr, terms) && (
-                <div className="fm-banner warn">
-                  This takes the month past the {formatMoney(terms.monthlyCap, terms.currency)} monthly
-                  cap. Spend beyond it belongs to {terms.uncappedName}.
-                </div>
-              )}
-            </>
+            <CostFields amount={amount} onAmount={setAmount} category={category} onCategory={setCategory} optional />
           )}
         </div>
         {failed && <div className="fm-inline-error" role="alert" style={{ margin: "0 28px 8px" }}>{failed}</div>}

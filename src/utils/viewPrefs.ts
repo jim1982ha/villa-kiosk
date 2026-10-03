@@ -4,6 +4,7 @@
 // (round 10, 2.496.162).
 
 import { readJson, readString, writeJson, writeString } from "./storedJson";
+import { storageWorks } from "@/utils/storedJson";
 // ── Per-device overview camera default ──────────────────────────────────────
 // Deliberately NOT part of AppConfig, which is shared across devices: the
 // whole reason a saved overview pose is needed is that different devices (a
@@ -29,10 +30,6 @@ export function hasSeenFirstRunTips(): boolean {
   // disabled, so the write is probed instead.)
   return readString(FIRST_RUN_TIPS_KEY) === "1" || !storageWorks();
 }
-function storageWorks(): boolean {
-  try { localStorage.setItem(PROBE_KEY, "1"); localStorage.removeItem(PROBE_KEY); return true; } catch { return false; }
-}
-const PROBE_KEY = "villa-kiosk:storage-probe";
 
 export function markFirstRunTipsSeen(): void {
   writeString(FIRST_RUN_TIPS_KEY, "1");

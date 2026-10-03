@@ -17,6 +17,7 @@ import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping } from "@/types/scene.types";
 import { isSwitchedOn } from "@/utils/deviceActivity";
 import { CATEGORY_ORDER, effectiveCategory, subjectOf } from "./EntityCategories";
+import { domainOf } from "@/utils/entityDomain";
 
 // ⚠️ POWER IS deviceActivity's (2.496.245). `hasOnOff` / `isActive` lived
 // here while the badge's ACTIVITY lived there — two meanings of "on" in two
@@ -25,7 +26,6 @@ import { CATEGORY_ORDER, effectiveCategory, subjectOf } from "./EntityCategories
 // DeviceLook.active = ACTIVITY); this module keeps the counting and the bulk
 // switch, and counts POWER, by name.
 
-const domainOf = (id: string) => id.split(".")[0];
 
 export interface CategoryCount { category: Category; total: number; onCount: number; entityIds: string[] }
 

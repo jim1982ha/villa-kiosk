@@ -126,6 +126,13 @@ export class PickHandler {
     canvas.style.cursor = interactive ? "pointer" : "";
   }
 
+  /** The scene pick under these CSS client coordinates (canvas-relative).
+   *  One conversion for the asking and the acting pick (2.496.263). */
+  private pickAt(clientX: number, clientY: number) {
+    const rect = this.scene.getEngine().getRenderingCanvas()?.getBoundingClientRect();
+    return this.scene.pick(clientX - (rect?.left ?? 0), clientY - (rect?.top ?? 0));
+  }
+
   /**
    * Which entity (if any) the 3D geometry at these client coordinates resolves
    * to — the same question `pickAtScreen` answers, ASKED instead of ACTED on.
@@ -135,9 +142,7 @@ export class PickHandler {
    * before was to call pickAtScreen and watch what it did to the UI.
    */
   entityAtScreen(clientX: number, clientY: number): string | null {
-    const canvas = this.scene.getEngine().getRenderingCanvas();
-    const rect = canvas?.getBoundingClientRect();
-    const pick = this.scene.pick(clientX - (rect?.left ?? 0), clientY - (rect?.top ?? 0));
+    const pick = this.pickAt(clientX, clientY);
     if (!pick?.hit || !pick.pickedMesh) return null;
     return this.resolveMesh(pick.pickedMesh)?.entityId ?? null;
   }
@@ -149,9 +154,7 @@ export class PickHandler {
    * resolved entity to onLongPicked (the full panel).
    */
   pickAtScreen(clientX: number, clientY: number, longPress = false): void {
-    const canvas = this.scene.getEngine().getRenderingCanvas();
-    const rect = canvas?.getBoundingClientRect();
-    const pick = this.scene.pick(clientX - (rect?.left ?? 0), clientY - (rect?.top ?? 0));
+    const pick = this.pickAt(clientX, clientY);
     if (!pick?.hit || !pick.pickedMesh) {
       tapDebug("3D pick: no hit");
       return;

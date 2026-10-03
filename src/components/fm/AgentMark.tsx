@@ -6,12 +6,13 @@
 // open to a guest, so neither is this.
 
 import type { FmProvenance } from "@/fm/fmTypes";
+import { stampText } from "@/utils/dateText";
 
 export default function AgentMark({ record }: { record: FmProvenance }) {
   if (record.source !== "vesta_agent") return null;
   return (
     <span className="fm-clause agent" title={record.updatedAt
-      ? `Created or last changed by the VESTA Agent, ${new Date(record.updatedAt).toLocaleString()}`
+      ? `Created or last changed by the VESTA Agent, ${stampText(record.updatedAt)}`
       : "Created or last changed by the VESTA Agent"}>
       by VESTA Agent
     </span>

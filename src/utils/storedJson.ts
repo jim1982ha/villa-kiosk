@@ -47,13 +47,27 @@ export function removeStored(key: string): void {
   try { localStorage.removeItem(key); } catch { /* nothing to forget */ }
 }
 
-/** Forget every key that starts with `prefix` — a family of keys an older
- *  version wrote (e.g. one per file) and nothing reads any more. */
-export function removeStoredPrefix(prefix: string): void {
+/** Forget every stored key `drop` says yes to. */
+export function removeStoredWhere(drop: (key: string) => boolean): void {
   try {
     for (let i = localStorage.length - 1; i >= 0; i--) {
       const k = localStorage.key(i);
-      if (k?.startsWith(prefix)) localStorage.removeItem(k);
+      if (k && drop(k)) localStorage.removeItem(k);
     }
   } catch { /* nothing to forget */ }
+}
+
+/** Forget every key that starts with `prefix` — a family of keys an older
+ *  version wrote (e.g. one per file) and nothing reads any more. */
+export function removeStoredPrefix(prefix: string): void {
+  removeStoredWhere((k) => k.startsWith(prefix));
+}
+
+/** Can anything be kept at all? A WRITE probe: reading cannot tell "absent"
+ *  from "storage disabled" (private mode, a kiosk profile with storage off). */
+export function storageWorks(): boolean {
+  const probe = "villa-kiosk:storage-probe";
+  if (!writeString(probe, "1")) return false;
+  removeStored(probe);
+  return true;
 }

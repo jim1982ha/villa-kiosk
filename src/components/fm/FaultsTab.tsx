@@ -24,6 +24,8 @@ import NotesField from "./NotesField";
 import DeviceSearchPicker, { type DeviceOption } from "./DeviceSearchPicker";
 import AgentMark from "./AgentMark";
 import InlineConfirm from "@/components/common/InlineConfirm";
+import { useDeviceChoice } from "./useDeviceChoice";
+import FormActions from "./FormActions";
 
 /** Read-only evidence strips never call back — a stable identity keeps the
  *  memoised row from re-rendering on every parent update. */
@@ -61,8 +63,9 @@ export default function FaultsTab(
    *  the two drift apart. */
   const [editingId, setEditingId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
-  const [deviceText, setDeviceText] = useState("");
-  const [entityId, setEntityId] = useState("");
+  // The device the fault is about — its search text and match, as one (useDeviceChoice).
+  const device = useDeviceChoice();
+  const { deviceText, entityId, clearDevice } = device;
   const [note, setNote] = useState("");
   const [photoIds, setPhotoIds] = useState<string[]>([]);
   /** The fault whose stage change is being recorded, and where it's going. */
@@ -85,15 +88,14 @@ export default function FaultsTab(
   const resetForm = () => {
     setFormError(null);
     setAdding(false); setEditingId(null);
-    setTitle(""); setDeviceText(""); setEntityId(""); setNote(""); setPhotoIds([]);
+    setTitle(""); clearDevice(); setNote(""); setPhotoIds([]);
   };
 
   const openEditor = (t: FmTicket) => {
     setEditingId(t.id);
     setAdding(true);
     setTitle(t.title);
-    setEntityId(t.entityId ?? "");
-    setDeviceText(t.deviceLabel ?? (t.entityId ? label(t.entityId) : ""));
+    device.selectDevice(t.entityId ?? "", t.deviceLabel ?? (t.entityId ? label(t.entityId) : ""));
     setNote(t.note ?? "");
     setPhotoIds(t.photoIds);
   };
@@ -116,10 +118,9 @@ export default function FaultsTab(
   // box) — both write here, so picking one never leaves the other showing a
   // stale answer.
   const selectDevice = (id: string, name: string) => {
-    setEntityId(id); setDeviceText(name);
+    device.selectDevice(id, name);
     if (!title) setTitle(`${name} offline`);
   };
-  const clearDevice = () => { setEntityId(""); setDeviceText(""); };
 
   // Arrived from a device panel's fault shortcut: open the form with that
   // device already chosen. Runs once per request — the parent clears it — so
@@ -132,8 +133,7 @@ export default function FaultsTab(
     if (!reportFaultFor) return;
     setAdding(true);
     setEditingId(null);
-    setEntityId(reportFaultFor);
-    setDeviceText(label(reportFaultFor));
+    device.selectDevice(reportFaultFor, label(reportFaultFor));
     setTitle("");
     setNote("");
     setPhotoIds([]);
@@ -207,12 +207,10 @@ export default function FaultsTab(
           <div className="fm-field">
             <span>Device (search, or type one not listed)</span>
             <DeviceSearchPicker
-              value={deviceText}
-              options={deviceOptions}
-              matchedEntityId={entityId || undefined}
-              onChangeText={(text) => { setDeviceText(text); setEntityId(""); }}
+              {...device.pickerProps}
+              // A search pick also suggests the title, as a shortlist pick does.
               onSelect={(opt) => selectDevice(opt.entityId, opt.label)}
-              onClear={clearDevice}
+              options={deviceOptions}
             />
           </div>
           <label className="fm-field">
@@ -234,13 +232,10 @@ export default function FaultsTab(
             <span>Photo evidence</span>
             <EvidenceRow photoIds={photoIds} onChange={setPhotoIds} />
           </div>
-          {formError && <div className="fm-inline-error" role="alert">{formError}</div>}
-          <div className="modal-actions" style={{ marginTop: 8 }}>
-            <button className="btn ghost" onClick={resetForm}>Cancel</button>
-            <button
-              className="btn primary"
-              disabled={!title.trim()}
-              onClick={async () => {
+          <FormActions
+            error={formError} onCancel={resetForm} disabled={!title.trim()}
+            saveLabel={editingId ? "Save changes" : "Raise fault"}
+            onSave={async () => {
                 const fields = {
                   title: title.trim(),
                   entityId: entityId || undefined,
@@ -258,8 +253,7 @@ export default function FaultsTab(
                 // used to throw away what was typed (2.496.252).
                 if (done) resetForm(); else setFormError(why);
               }}
-            >{editingId ? "Save changes" : "Raise fault"}</button>
-          </div>
+          />
         </div>
       )}
 

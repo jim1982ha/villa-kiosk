@@ -23,6 +23,19 @@ import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 /** One field's place in the row's layout. */
 export type FieldCell = (key: string, label: string, field: ReactNode, opts?: { wide?: boolean; pair?: boolean }) => ReactNode;
 
+/**
+ * A mapping row's pending edits: `draftField` stages a change (committed after
+ * the draft delay) and `m` is the mapping WITH those edits, so a control
+ * reflects a click at once while the commit is pending. Shared by this table
+ * and the entity map's own row (written out in both until 2.496.263).
+ */
+export function useMappingDraft(mapping: EntityMapping, onPatch: (change: Partial<EntityMapping>) => void) {
+  const field = useDraftCommit<Partial<EntityMapping>>((_k, change) => onPatch(change));
+  const draftField = (change: Partial<EntityMapping>) => field.draft("v", { ...field.drafts.v, ...change });
+  const m = field.drafts.v ? { ...mapping, ...field.drafts.v } : mapping;
+  return { field, draftField, m };
+}
+
 export default function MappingFields({ entityId, mapping, entity, onPatch, cell, selectStyle }: {
   entityId: string;
   mapping: EntityMapping;
@@ -35,10 +48,7 @@ export default function MappingFields({ entityId, mapping, entity, onPatch, cell
 }) {
   const label = useDraftCommit<string>((_k, value) => onPatch({ label: value }), 500);
   const intensity = useDraftCommit<number>((_k, ratio) => onPatch({ lightIntensityRatio: ratio }), 500);
-  const field = useDraftCommit<Partial<EntityMapping>>((_k, change) => onPatch(change));
-  const draftField = (change: Partial<EntityMapping>) => field.draft("v", { ...field.drafts.v, ...change });
-  // Not-yet-committed edits show at once, even while the commit is pending.
-  const m = field.drafts.v ? { ...mapping, ...field.drafts.v } : mapping;
+  const { draftField, m } = useMappingDraft(mapping, onPatch);
 
   const ratio = intensity.drafts.v ?? m.lightIntensityRatio ?? 0;
   const pct = Math.round(ratio * 100);

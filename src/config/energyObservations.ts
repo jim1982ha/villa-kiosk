@@ -11,11 +11,12 @@
 // PURE; tests/oracles/energy_observations.mjs.
 
 import {
-  typicalDay, standoutDay, risers, deviceRanking, todayHeadline, fmtKwh, fmtMoney,
+  typicalDay, standoutDay, risers, deviceRanking, todayHeadline, fmtKwh,
   type EnergyPeriod, type EnergySetup, type EnergySplit,
 } from "./energyModel";
 import { localMidnight } from "@/utils/localDay";
 import type { Observation } from "./observation";
+import { formatMoney } from "@/utils/money";
 
 /** Devices adding up to more than this share OVER what was used: some are set
  *  up beside the meter they belong to. */
@@ -79,7 +80,7 @@ export function energyToday(
     cards.push({
       tone: "caution",
       title: `${new Date(t).toLocaleDateString(locale, { weekday: "short" })}: ${standout.ratio.toFixed(1)}× usual`,
-      detail: `${fmtKwh(daily[standout.index] ?? 0)} kWh${dayCost !== undefined && dayCost > 0 ? `, ${fmtMoney(dayCost, costUnit, locale)}` : ""}.`
+      detail: `${fmtKwh(daily[standout.index] ?? 0)} kWh${dayCost !== undefined && dayCost > 0 ? `, ${formatMoney(dayCost, costUnit, locale)}` : ""}.`
         + (rose.length ? ` ${rose.join(" and ")} ran more than usual.` : " No device meter shows why."),
     });
   }
@@ -121,7 +122,7 @@ export function historyFigures(
   const b = p.busiest >= 0 ? p.buckets[p.busiest] : null;
   return [
     { label: "Energy", value: `${fmtKwh(p.whole.used)} kWh` },
-    { label: "Cost", value: p.cost !== undefined ? fmtMoney(p.cost, costUnit, locale) : "—" },
+    { label: "Cost", value: p.cost !== undefined ? formatMoney(p.cost, costUnit, locale) : "—" },
     // Over the buckets WITH a reading: a missing hour is not a 0 kWh hour.
     { label: `Per ${unit}`, value: p.readyCount ? `${fmtKwh(p.whole.used / p.readyCount)} kWh` : "—" },
     { label: `Busiest ${unit}`, value: b?.split ? `${bucketLabel(b.t)} · ${fmtKwh(b.split.used)}` : "—" },

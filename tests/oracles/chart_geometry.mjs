@@ -13,7 +13,7 @@ import { register } from "node:module";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 register("../consistency/alias-hook.mjs", import.meta.url);
-import { ck, done } from "../consistency/check.mjs";
+import { ck, done, tsFiles } from "../consistency/check.mjs";
 const { chartGeometry, readingAt } = await import("@/utils/chartGeometry");
 
 const P = 300_000, H = 3_600_000, t0 = 1_700_000_000_000;
@@ -83,7 +83,7 @@ console.log("\n  the scales and the axis:");
 console.log("\n  the callers:");
 {
   const SRC = new URL("../../src/", import.meta.url).pathname;
-  const walk = (d, out = []) => { for (const e of readdirSync(d)) { const p = join(d, e); statSync(p).isDirectory() ? walk(p, out) : /\.tsx?$/.test(p) && out.push(p); } return out; };
+  const walk = tsFiles;
   const files = walk(SRC);
   // ⚠️ "A CHART" USED TO BE WHATEVER HAD <polyline OR className="chart-bar",
   // and the scan shrank silently: the Energy bars (energy-bar) and the state

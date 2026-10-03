@@ -12,6 +12,7 @@ register("../consistency/alias-hook.mjs", import.meta.url);
 const { Storeys, isStairwell } = await import("@/babylon/storeys");
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import { tsFiles } from "../consistency/check.mjs";
 
 let fail = 0;
 const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
@@ -88,7 +89,7 @@ console.log("\n  the plan's other answers (one villa plan, 2.496.91):");
 console.log("\n  one plan, held once:");
 {
   const SRC = new URL("../../src/", import.meta.url).pathname;
-  const walk = (d, out = []) => { for (const e of readdirSync(d)) { const p = join(d, e); statSync(p).isDirectory() ? walk(p, out) : /\.tsx?$/.test(p) && out.push(p); } return out; };
+  const walk = tsFiles;
   const files = walk(SRC).map((f) => ({ f: f.slice(SRC.length), src: readFileSync(f, "utf8") }));
   const builders = files.filter(({ src }) => /new Storeys(?:<[^>]*>)?\((?!\[\]\))/.test(src)).map(({ f }) => f);
   ck("only SceneManager builds a plan with rooms in it; everyone else is handed it",

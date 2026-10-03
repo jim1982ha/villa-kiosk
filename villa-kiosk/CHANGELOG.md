@@ -1,3 +1,18 @@
+## 2.496.263
+
+### Changed
+- **Money is written in Home Assistant's currency, the same way everywhere.** Facility, Energy and the monthly report each wrote amounts their own way: Facility as "IDR 450,000", Energy in a style taken from the cost sensor's own unit. Every amount now uses the currency set in Home Assistant (Settings → System → General → Currency), written in your language's usual style. Change it there once and every screen follows. Amounts of 100 or more show whole units; smaller ones show cents.
+- **The Facility forms look and behave the same.** Logging a fault, recording a spend, closing a job and editing a schedule or contract now share one cost field (labelled with the currency, for example "Cost (EUR)"), one device picker and one Cancel / Save row with its error line.
+- **Close buttons are the same on every window.** The legend, Cockpit, Facility, the VESTA Agent, the first-run tips and the colour and settings windows now share one footer.
+- **Dates and times read the same everywhere.** A "last changed" moment no longer shows seconds on some screens and not others.
+
+### Fixed
+- **Walking no longer carries on after you switch apps.** If you left VESTA while holding a walking key, the camera kept walking when you came back. Held keys are now released when the app loses focus.
+- **An expired login is now noticed by history charts, the 3D model download and room data.** Before, only some requests noticed it and the others failed silently. They now show the same "signed out" prompt.
+
+### Changed (behind the scenes)
+- Duplicated code went from 5,028 tokens (1.60 %) to 712 (0.23 %). New checks stop it from growing again and keep each shared job (money, dates, saved settings, requests to the add-on) in one place.
+
 ## 2.496.262
 
 ### Changed

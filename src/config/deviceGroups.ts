@@ -9,6 +9,7 @@ import type { EntityMapping } from "@/types/scene.types";
 import type { HassEntity } from "@/types/ha.types";
 import { isUnavailable } from "@/utils/stateColors";
 import { dismissedEntitySet } from "./dismissedEntities";
+import { domainOf } from "@/utils/entityDomain";
 
 /** Every entity_id folded into some group as a (non-primary) member — these
  *  never get their own badge; see EntityVisuals.rebuildLabels. */
@@ -345,7 +346,7 @@ export function deviceReadings(
   const out: string[] = [];
   for (const [id, to] of folding) {
     if (to !== rep || id === rep || !entities[id]) continue;
-    if (!READING_DOMAINS.has(id.split(".")[0])) continue;
+    if (!READING_DOMAINS.has(domainOf(id))) continue;
     if (suppressed.has(id) && !chosen.has(id)) continue;
     out.push(id);
   }

@@ -78,7 +78,7 @@ export interface ModalCommit {
 }
 
 export default function ModalFooter({
-  note, leading, commit, onClose, busy = false,
+  note, leading, commit, onClose, busy = false, closeLabel,
 }: {
   /** The left-hand hint. Yields its width to the buttons. */
   note?: ReactNode;
@@ -87,9 +87,17 @@ export default function ModalFooter({
    *  navigates somewhere else, and a button that leaves the dialog must not sit
    *  in the row where Save and Close are. Wins over `note`. */
   leading?: ReactNode;
+  /** The dialog's draft. ⚠️ OMITTED (undefined) = a dialog with NOTHING TO
+   *  SAVE — the legend, a colour picker, the Cockpit, a device panel: the
+   *  footer is then the left slot and ONE primary exit (`closeLabel`, "Close"
+   *  by default), the shape eight dialogs wrote out by hand with their own
+   *  `<span />` spacer until 2.496.263. `null` keeps Save · Close with Save
+   *  explaining that changes apply as they are made. */
   commit?: ModalCommit | null;
   onClose: () => void;
   busy?: boolean;
+  /** The one exit's word in a nothing-to-save footer ("Got it, thanks"). */
+  closeLabel?: ReactNode;
 }) {
   const dirty = commit?.dirty === true;
   const saving = commit?.saving === true;
@@ -101,21 +109,30 @@ export default function ModalFooter({
   // question `close` raises. The draft is thrown away and the dialog goes.
   const discardAndClose = () => { commit?.discard?.(); onClose(); };
 
+  // ⚠️ THE EMPTY SPACER IS LOAD-BEARING. `.modal-footer` is `space-between`,
+  // so the right-hand group renders on the LEFT without a first child to push
+  // against — a bug CockpitModal shipped and every other single-button footer
+  // worked around by hand.
+  const left = commit?.error
+    ? <span className="body-text sev-warning" role="alert">{commit.error}</span>
+    : leading !== undefined && leading !== null && leading !== false
+    ? leading
+    : note
+      ? <span className="muted body-text" style={{ fontSize: "var(--text-xs)" }}>{note}</span>
+      : <span />;
+
+  if (commit === undefined) {
+    return (
+      <div className="modal-footer">
+        {left}
+        <button className="btn primary" onClick={onClose}>{closeLabel ?? "Close"}</button>
+      </div>
+    );
+  }
+
   return (
     <div className="modal-footer">
-      {commit?.error
-        ? <span className="body-text sev-warning" role="alert">{commit.error}</span>
-        : leading !== undefined
-        ? leading
-        : note
-          ? <span className="muted body-text" style={{ fontSize: "var(--text-xs)" }}>
-              {note}
-            </span>
-          // ⚠️ THE EMPTY SPACER IS LOAD-BEARING. `.modal-footer` is
-          // `space-between`, so the group renders on the LEFT without a first
-          // child to push against — a bug CockpitModal shipped and every other
-          // single-button footer worked around by hand.
-          : <span />}
+      {left}
 
       {/* ⚠️ TITLE AND ARIA-LABEL ON BOTH, INDEPENDENTLY OF THE VISIBLE LABEL.
           The text is hidden at the phone tier, so a name that came from the

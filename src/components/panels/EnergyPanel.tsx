@@ -40,9 +40,10 @@ import { useHistorySource } from "@/hooks/useHistorySource";
 import { PERIOD_MS } from "@/utils/statisticsSeries";
 import { localMidnight } from "@/utils/localDay";
 import {
-  energyPeriod, periodStarts, costUnitOf, fmtKwh, fmtMoney, powerKw,
+  energyPeriod, periodStarts, costUnitOf, fmtKwh, powerKw,
   type EnergyBucket, type EnergySplit,
 } from "@/config/energyModel";
+import { formatMoney } from "@/utils/money";
 
 
 export default function EnergyPanel({ onClose, fallback }: { onClose: () => void; fallback: () => ReactNode }) {
@@ -62,9 +63,12 @@ export default function EnergyPanel({ onClose, fallback }: { onClose: () => void
   // Every device's colour, once, from HA's setup (energyFlow.deviceColours).
   const colourOf = useMemo(() => (setup ? deviceColours(setup) : () => UNTRACKED_CLS), [setup]);
   if (status === "ready" && setup === null) return <>{fallback()}</>;
-  const costUnit = setup
+  // Money is in Home Assistant's OWN currency (Settings → System → General),
+  // like every amount in the app (utils/money); the cost statistic's unit is
+  // only a fallback for an install that reports none.
+  const costUnit = haConfig?.currency || (setup
     ? costUnitOf(setup, (c) => entities[c]?.attributes.unit_of_measurement as string | undefined)
-    : undefined;
+    : undefined);
 
   // Until HA's Energy setup arrives there is nothing to draw — and if it
   // FAILED, saying so: this was a skeleton forever (2.496.188).
@@ -123,7 +127,7 @@ function NowView({ setup, costUnit, house, colourOf }: { setup: EnergyWindowSetu
         </div>
         <div className="energy-hero">
           <div className="weather-big">{fmtKwh(split.used)}</div>
-          <div className="energy-hero-sub">kWh{cost !== undefined ? ` · ${fmtMoney(cost, costUnit)}` : ""}</div>
+          <div className="energy-hero-sub">kWh{cost !== undefined ? ` · ${formatMoney(cost, costUnit)}` : ""}</div>
         </div>
       </div>
 
@@ -317,14 +321,14 @@ function HistoryView({ setup, costUnit, range: rangeKey, colourOf }: { setup: En
           <div className="weather-eyebrow">{hasCost ? `Energy and cost per ${unit}` : "Energy used, by device"}</div>
           <div className="weather-legend">
             {series.map((s) => <span key={s.id}><i className={`key ${s.cls}`} />{s.label}</span>)}
-            {hasCost && <span><i className="key cost line" />Cost · {fmtMoney(costTotal, costUnit)}</span>}
+            {hasCost && <span><i className="key cost line" />Cost · {formatMoney(costTotal, costUnit)}</span>}
           </div>
         </div>
         {/* ONE chart for the energy and what it cost (owner, 2026-09-26): the
             devices stacked in kWh on the left axis, the cost plotted over them
             on its own right axis, both in one tooltip. */}
         <BarChart label={hasCost ? `Energy and cost per ${unit}` : "Energy used, by device"} height={220} fmt={kwh} unit="kWh"
-          line={hasCost ? { values: p.buckets.map((b, i) => (b.state === "pending" ? undefined : costs[i])), label: "Cost", cls: "cost", unit: costUnit, fmt: (v) => fmtMoney(v, costUnit) } : undefined}
+          line={hasCost ? { values: p.buckets.map((b, i) => (b.state === "pending" ? undefined : costs[i])), label: "Cost", cls: "cost", unit: costUnit, fmt: (v) => formatMoney(v, costUnit) } : undefined}
           buckets={p.buckets.map((b) => ({
             t: b.t,
             segs: segsOf(b, () => seriesSegs(series, b.split!)),

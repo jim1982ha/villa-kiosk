@@ -12,6 +12,7 @@ import {
   type FmTerms,
   type FmCompletion, type FmCost, type FmData, type FmSchedule, type FmTicket, type FmTicketStatus,
 } from "./fmTypes";
+import { fullDate, monthYear } from "@/utils/dateText";
 
 const DAY_MS = 86_400_000;
 
@@ -282,14 +283,6 @@ export function localStamp(at: string | number | Date = Date.now()): string {
     + `${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-/** Write a money amount for display, in the install's currency (FmTerms.
- *  currency, which is Home Assistant's own; "" prints the number alone rather
- *  than mislabelling it). `[]` hands the digit grouping to the viewer's own
- *  locale. The rounding is unchanged — these are whole-unit amounts. */
-export function formatMoney(n: number, currency = ""): string {
-  const amount = Math.round(n).toLocaleString([]);
-  return currency ? `${currency} ${amount}` : amount;
-}
 
 /** Short human date, local time (e.g. "24 Jul 2026") — for a target/due date
  *  or a report table row, where the full time-of-day in localStamp() is more
@@ -304,8 +297,7 @@ export function shortDate(at: string | number | Date): string {
   // the app already asks the platform. The FIELDS stay fixed — day, short
   // month, year — so the shape is stable and unambiguous wherever it renders;
   // only the ordering and spelling follow the reader.
-  const d = new Date(at);
-  return d.toLocaleDateString([], { day: "2-digit", month: "short", year: "numeric" });
+  return fullDate(at);
 }
 
 /** The month a report covers, spelled for a heading (e.g. "July 2026").
@@ -316,7 +308,7 @@ export function monthLabel(month: string): string {
   // A malformed month key would otherwise render "Invalid Date" into the
   // report's own Period heading; say what was actually stored instead.
   if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) return month;
-  return new Date(y, m - 1, 1).toLocaleDateString([], { month: "long", year: "numeric" });
+  return monthYear(new Date(y, m - 1, 1));
 }
 
 // ── How a record changes (round 10, 2.496.159) ──────────────────────────────

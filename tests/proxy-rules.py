@@ -398,8 +398,16 @@ ck("  ...still never a system service or a write frame",
    refuse("guest", "call_service", domain="homeassistant", service="restart") is not None
    and refuse("guest", "call_service", domain="script", service="turn_on") is not None
    and refuse("guest", "fire_event") is not None)
+# Driven by value (2.496.263): the ONE table loader, asked for a table that is
+# not there, grants nothing — and every table the proxy reads goes through it.
 ck("an unreadable table fails CLOSED (no non-owner access), never open",
-   'return {}' in inspect.getsource(proxy._load_ha_commands) and 'HA_COMMANDS.get("websocket", ())' in inspect.getsource(proxy))
+   proxy._load_vesta_table("no-such-table.json", "test") == {}
+   and 'HA_COMMANDS.get("websocket", ())' in inspect.getsource(proxy))
+ck("  ...for every table: roles, ha-commands, fm-records and agent-contract all load through it",
+   all(f'_load_vesta_table("{n}",' in inspect.getsource(fn) for n, fn in (
+       ("roles.json", proxy._load_roles), ("ha-commands.json", proxy._load_ha_commands),
+       ("fm-records.json", proxy._load_fm_records), ("agent-contract.json", proxy._load_agent_contract)))
+   and inspect.getsource(proxy).count('for path in ("/usr/share/vesta/"') == 1)
 ck("an unlisted command is refused for ops",
    refuse("ops", "config/entity_registry/update") is not None)
 ck("  ...and for guest",

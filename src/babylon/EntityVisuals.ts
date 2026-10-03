@@ -100,13 +100,13 @@ import { phantomEntity } from "@/utils/phantomEntity";
 import { channelEnabled, tapDebug } from "@/utils/tapDebug";
 import { debugFlagEnabled } from "@/utils/devLog";
 import { beginSpan } from "@/utils/perfSpans";
-import { pointInPolygon } from "@/utils/geometry";
+import { pointInPolygon, boundsXZ } from "@/utils/geometry";
 import { RoomHighlight } from "./RoomHighlight";
 import { CameraBeams, type BeamSource } from "./CameraBeams";
 import { blocksCameraBeam, isResolvedCeiling, isHelperMesh } from "./meshRoles";
 import { Storeys, WALL_TOLERANCE_M } from "./storeys";
 import { FloorProbe } from "./floorProbe";
-import { axisWorldScale } from "./meshUnits";
+import { axisWorldScale, stripExtent } from "./meshUnits";
 import type { LightReading } from "./lightPoolSet";
 import { OcclusionSweep } from "./occlusionSweep";
 import type { RoomChip } from "./roomChips";
@@ -1639,16 +1639,9 @@ export class EntityVisuals {
         // re-runs on config changes — without this flag every re-index would
         // stretch the strip another 2 cm per end.
         if (m.metadata?.__stripJointExtended) continue;
-        const bb = m.getBoundingInfo().boundingBox;
-        const size = bb.maximum.subtract(bb.minimum);
-        const unit = axisWorldScale(m);
-        const axes: Array<"x" | "y" | "z"> = ["x", "y", "z"];
         // World metres for the checks, local units for the vertex edit — the
-        // local data is in the model's own (cm) units, see axisWorldScale.
-        const worldSize = {
-          x: size.x * unit.x, y: size.y * unit.y, z: size.z * unit.z,
-        };
-        const longAxis = axes.reduce((a, b) => (worldSize[b] > worldSize[a] ? b : a));
+        // local data is in the model's own (cm) units (meshUnits.stripExtent).
+        const { bb, unit, worldSize, longAxis } = stripExtent(m);
         if (worldSize[longAxis] < STRIP_MIN_LENGTH || unit[longAxis] <= 0) continue; // not a strip piece (e.g. a small marker)
 
         const positions = m.getVerticesData(VertexBuffer.PositionKind);
@@ -1742,15 +1735,9 @@ export class EntityVisuals {
    *  the mesh it was supposed to gently thicken. A fixed target offset is
    *  bounded for any input, including exactly zero, so it can't recur. */
   private inflateThinStrip(mesh: AbstractMesh): void {
-    const bb = mesh.getBoundingInfo().boundingBox;
-    const size = bb.maximum.subtract(bb.minimum);
-    const unit = axisWorldScale(mesh);
+    // Compare in WORLD metres — local sizes are in the model's own (cm) units.
+    const { bb, unit, worldSize, longAxis } = stripExtent(mesh);
     const axes: Array<"x" | "y" | "z"> = ["x", "y", "z"];
-    // Compare in WORLD metres — local sizes are in the model's own units (cm).
-    const worldSize = {
-      x: size.x * unit.x, y: size.y * unit.y, z: size.z * unit.z,
-    };
-    const longAxis = axes.reduce((a, b) => (worldSize[b] > worldSize[a] ? b : a));
     const thinAxes = axes.filter(
       (a) => a !== longAxis && unit[a] > 0 && worldSize[a] < MIN_STRIP_THICKNESS);
     if (thinAxes.length === 0) return;
@@ -1956,22 +1943,14 @@ export class EntityVisuals {
     room: string,
   ): { minX: number; maxX: number; minZ: number; maxZ: number; floorY: number } | null {
     const key = roomKey(room);
-    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    const at: { x: number; y: number; z: number }[] = [];
+    for (const [id, lbl] of this.labels) {
+      if (roomKey(this.roomOf(id)) === key) at.push(lbl.anchor.getAbsolutePosition());
+    }
+    const box = boundsXZ(at);
     // Anchors hang above their device, so the LOWEST one is the closest
     // available stand-in for the room's floor.
-    let minY = Infinity;
-    let found = false;
-    for (const [id, lbl] of this.labels) {
-      if (roomKey(this.roomOf(id)) !== key) continue;
-      const p = lbl.anchor.getAbsolutePosition();
-      if (p.x < minX) minX = p.x;
-      if (p.x > maxX) maxX = p.x;
-      if (p.z < minZ) minZ = p.z;
-      if (p.z > maxZ) maxZ = p.z;
-      if (p.y < minY) minY = p.y;
-      found = true;
-    }
-    return found ? { minX, maxX, minZ, maxZ, floorY: minY } : null;
+    return box && { ...box, floorY: Math.min(...at.map((p) => p.y)) };
   }
 
   /**
@@ -5267,6 +5246,22 @@ export class EntityVisuals {
     return c;
   }
 
+  /** A tap's CSS client coords in the GUI layer's pixels, or null with no
+   *  canvas to measure. The GUI renders at the engine's render-target size,
+   *  which differs from client pixels whenever hardware scaling != 1 (see
+   *  SceneManager's setHardwareScalingLevel). One conversion for the three
+   *  pickers that each wrote it out (2.496.263). */
+  private guiPoint(clientX: number, clientY: number): { px: number; py: number; scaleX: number; scaleY: number } | null {
+    const eng = this.scene.getEngine();
+    const canvas = eng.getRenderingCanvas();
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return null;
+    const scaleX = eng.getRenderWidth() / rect.width;
+    const scaleY = eng.getRenderHeight() / rect.height;
+    return { px: (clientX - rect.left) * scaleX, py: (clientY - rect.top) * scaleY, scaleX, scaleY };
+  }
+
   /** Entity ids behind the entity-group badge at these CSS-pixel client
    *  coords, or null. Same Control.contains() hit test as pickClusterAt /
    *  pickBadgeAt — see pickBadgeAt's docstring for why asking the rendered
@@ -5277,13 +5272,9 @@ export class EntityVisuals {
     clientX: number, clientY: number,
   ): { room: string; entityIds: string[]; entityId: string | null } | null {
     if (this.entityGroups.size === 0) return null;
-    const eng = this.scene.getEngine();
-    const canvas = eng.getRenderingCanvas();
-    if (!canvas) return null;
-    const rect = canvas.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return null;
-    const px = (clientX - rect.left) * (eng.getRenderWidth() / rect.width);
-    const py = (clientY - rect.top) * (eng.getRenderHeight() / rect.height);
+    const at = this.guiPoint(clientX, clientY);
+    if (!at) return null;
+    const { px, py } = at;
     for (const c of this.entityGroups.values()) {
       if (!c.container.isVisible) continue;
       if (!c.container.contains(px, py)) continue;
@@ -5675,13 +5666,9 @@ export class EntityVisuals {
    *  chip can never steal a tap from a badge the user can actually see. */
   pickClusterAt(clientX: number, clientY: number): { room: string; entityIds: string[]; roomNames: string[] } | null {
     if (this.clusters.size === 0) return null;
-    const eng = this.scene.getEngine();
-    const canvas = eng.getRenderingCanvas();
-    if (!canvas) return null;
-    const rect = canvas.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return null;
-    const px = (clientX - rect.left) * (eng.getRenderWidth() / rect.width);
-    const py = (clientY - rect.top) * (eng.getRenderHeight() / rect.height);
+    const at = this.guiPoint(clientX, clientY);
+    if (!at) return null;
+    const { px, py } = at;
     for (const c of this.clusters.values()) {
       if (!c.container.isVisible) continue;
       // displayName, never the Map key: this string is shown in the room
@@ -5743,19 +5730,9 @@ export class EntityVisuals {
       if (verbose) tapDebug(`pickBadgeAt: no badges (labels=${this.labels.size})`);
       return null;
     }
-    const eng = this.scene.getEngine();
-    const canvas = eng.getRenderingCanvas();
-    if (!canvas) return null;
-    const rect = canvas.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return null;
-    // The GUI layer renders at the engine's render-target size, which differs
-    // from CSS client pixels whenever hardware scaling != 1 (see
-    // SceneManager's setHardwareScalingLevel) — convert the incoming client
-    // coords into that space before hit-testing.
-    const scaleX = eng.getRenderWidth() / rect.width;
-    const scaleY = eng.getRenderHeight() / rect.height;
-    const px = (clientX - rect.left) * scaleX;
-    const py = (clientY - rect.top) * scaleY;
+    const at = this.guiPoint(clientX, clientY);
+    if (!at) return null;
+    const { px, py, scaleX } = at;
 
     // Exact hit first, then two widening rings of samples around the tap
     // point so a slightly-off finger still lands — every sample uses the same

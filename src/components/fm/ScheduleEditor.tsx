@@ -8,13 +8,14 @@
 // overdue work actually is.
 
 import { useState } from "react";
-import { Plus, Pencil, Trash2, Check, X } from "lucide-react";
+import { Plus, Pencil, Trash2 } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
 import { scheduleStatus, shortDate } from "@/fm/fmEngine";
 import type { FmSchedule } from "@/fm/fmTypes";
 import AgentMark from "./AgentMark";
 import { EMPTY_SCHEDULE_DRAFT as EMPTY, scheduleToDraft as toDraft, draftDays, scheduleWrite, type ScheduleDraft as Draft } from "@/fm/scheduleDraft";
+import FormActions from "./FormActions";
 
 /** How the obligation is usually WRITTEN, mapped to days. Anything that isn't a
  *  whole number of days rounds DOWN (twice a week -> 3, not 4) so a genuinely
@@ -103,16 +104,11 @@ export default function ScheduleEditor() {
           placeholder="e.g. 3.7(i)" />
       </label>
 
-      {formError && <div className="fm-inline-error" role="alert">{formError}</div>}
       {!write.ok && draft.everyDays.trim() !== "" && days === null && (
         <div className="fm-inline-error" role="alert">{write.problem}</div>
       )}
-      <div className="modal-actions" style={{ marginTop: 8 }}>
-        <button className="btn ghost" onClick={cancel}><X size={16} /> Cancel</button>
-        <button className="btn primary" disabled={!valid} onClick={() => void save()}>
-          <Check size={16} /> {editingId ? "Save changes" : "Add task"}
-        </button>
-      </div>
+      <FormActions error={formError} onCancel={cancel} onSave={save} disabled={!valid}
+        saveLabel={editingId ? "Save changes" : "Add task"} />
     </div>
   );
 

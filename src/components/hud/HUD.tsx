@@ -202,6 +202,18 @@ export default function HUD({
   const roomFanHalfAngle = (n: number): number =>
     n <= 1 ? 0 : Math.min(86, ((n - 1) * 12) / 2);
 
+  /** The radius `n` rooms need for their safe label spacing on the arc —
+   *  asked by both the radius and the does-it-fit test (2.496.263). */
+  const roomFanNeeded = (n: number): number => {
+    const half = roomFanHalfAngle(n);
+    let needed = ROOM_R;
+    if (n > 1) {
+      const stepRad = ((2 * half) / (n - 1)) * (Math.PI / 180);
+      if (stepRad > 0) needed = Math.max(ROOM_R, ROOM_MIN_ARC_PX / stepRad);
+    }
+    return needed;
+  };
+
   /**
    * Outer arc radius for `n` rooms.
    *
@@ -219,12 +231,7 @@ export default function HUD({
    * deliberate, visible fallback for an unusually long room list, not a bug.
    */
   const roomFanRadius = (n: number): number => {
-    const half = roomFanHalfAngle(n);
-    let needed = ROOM_R;
-    if (n > 1) {
-      const stepRad = ((2 * half) / (n - 1)) * (Math.PI / 180);
-      if (stepRad > 0) needed = Math.max(ROOM_R, ROOM_MIN_ARC_PX / stepRad);
-    }
+    const needed = roomFanNeeded(n);
     const maxForViewport = window.innerHeight / 2 - ROOM_VIEWPORT_PAD;
     // ⚠️ NOT clamp(needed, ROOM_R_FLOOR, maxForViewport), which it looks like.
     // The FLOOR wins here: on a short viewport maxForViewport can fall below
@@ -245,12 +252,7 @@ export default function HUD({
    * column instead; the arc stays wherever it fits (the wall tablet).
    */
   const roomFanFits = (n: number, cx: number): boolean => {
-    const half = roomFanHalfAngle(n);
-    let needed = ROOM_R;
-    if (n > 1) {
-      const stepRad = ((2 * half) / (n - 1)) * (Math.PI / 180);
-      if (stepRad > 0) needed = Math.max(ROOM_R, ROOM_MIN_ARC_PX / stepRad);
-    }
+    const needed = roomFanNeeded(n);
     const tallEnough = needed <= window.innerHeight / 2 - ROOM_VIEWPORT_PAD;
     const wideEnough = cx + needed + RADIAL_CHIP_HALF_W <= window.innerWidth - 8;
     return tallEnough && wideEnough;
@@ -322,14 +324,19 @@ export default function HUD({
   // this" note protects the shape of a gesture, and is exactly the thing that
   // lets a NUMBER inside it drift unread — the two decisions are separate and
   // only the first one was ever made here.
-  const onFloorPointerDown = (f: number) => (e: React.PointerEvent<HTMLButtonElement>) => {
-    if (e.button !== undefined && e.button !== 0) return;
+  /** Start the hold that opens floor `f`'s room dial — one timer for the
+   *  finger and the key (written out in both until 2.496.263). */
+  const armFloorHold = (f: number) => {
     floorLongFired.current = false;
     if (floorLongTimer.current) clearTimeout(floorLongTimer.current);
     floorLongTimer.current = setTimeout(() => {
       floorLongFired.current = true;
       openRadialForFloor(f);
     }, HOLD_MS_HUD);
+  };
+  const onFloorPointerDown = (f: number) => (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (e.button !== undefined && e.button !== 0) return;
+    armFloorHold(f);
   };
   const onFloorPointerUp = (f: number) => () => {
     if (floorLongTimer.current) { clearTimeout(floorLongTimer.current); floorLongTimer.current = null; }
@@ -351,12 +358,7 @@ export default function HUD({
     if (e.key !== "Enter" && e.key !== " ") return;
     e.preventDefault();
     if (e.repeat) return; // ignore OS key-repeat while held, same as a still finger
-    floorLongFired.current = false;
-    if (floorLongTimer.current) clearTimeout(floorLongTimer.current);
-    floorLongTimer.current = setTimeout(() => {
-      floorLongFired.current = true;
-      openRadialForFloor(f);
-    }, HOLD_MS_HUD);
+    armFloorHold(f);
   };
   const onFloorKeyUp = (f: number) => (e: React.KeyboardEvent<HTMLButtonElement>) => {
     if (e.key !== "Enter" && e.key !== " ") return;

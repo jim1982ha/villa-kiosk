@@ -328,6 +328,25 @@ def _role_for(request: web.Request) -> str:
     return _session_role(request.cookies.get(SESSION_COOKIE)) or "guest"
 
 
+def _load_vesta_table(name: str, refusal: str) -> dict:
+    """One of the add-on's own JSON tables (/usr/share/vesta/<name>, or the
+    repo's rootfs copy beside this file when run from a checkout).
+
+    FAIL CLOSED, for every table: unreadable or unparsable returns {} — which
+    grants nothing — and says what is refused because of it. Written out four
+    times (roles, ha-commands, fm-records, agent-contract) until 2.496.263."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    for path in ("/usr/share/vesta/" + name,
+                 os.path.join(here, "..", "share", "vesta", name)):
+        try:
+            with open(path, encoding="utf-8") as f:
+                return json.load(f)
+        except (OSError, ValueError):
+            continue
+    print(f"[proxy] {name} unreadable: {refusal}", flush=True)
+    return {}
+
+
 # ── WHAT EACH ROLE MAY DO — ONE TABLE, READ HERE AND BY THE APP ──────────
 # Every authorization decision below asks `_may(role, capability)`; none names
 # a role. The rights themselves live in /usr/share/vesta/roles.json
@@ -349,16 +368,7 @@ def _role_for(request: web.Request) -> str:
 #
 # FAIL CLOSED: an unreadable table grants nothing to anyone.
 def _load_roles() -> dict:
-    here = os.path.dirname(os.path.abspath(__file__))
-    for path in ("/usr/share/vesta/roles.json",
-                 os.path.join(here, "..", "share", "vesta", "roles.json")):
-        try:
-            with open(path, encoding="utf-8") as f:
-                return json.load(f)
-        except (OSError, ValueError):
-            continue
-    print("[proxy] roles.json unreadable: every profile refused", flush=True)
-    return {}
+    return _load_vesta_table("roles.json", "every profile refused")
 
 
 def _role_capabilities(table: dict) -> dict:
@@ -395,16 +405,7 @@ def _may(role: str, capability: str) -> bool:
 # FAIL CLOSED: an unreadable table allows nothing beyond the owner's
 # exemption — never everything.
 def _load_ha_commands() -> dict:
-    here = os.path.dirname(os.path.abspath(__file__))
-    for path in ("/usr/share/vesta/ha-commands.json",
-                 os.path.join(here, "..", "share", "vesta", "ha-commands.json")):
-        try:
-            with open(path, encoding="utf-8") as f:
-                return json.load(f)
-        except (OSError, ValueError):
-            continue
-    print("[proxy] ha-commands.json unreadable: non-owner Home Assistant access refused", flush=True)
-    return {}
+    return _load_vesta_table("ha-commands.json", "non-owner Home Assistant access refused")
 
 
 HA_COMMANDS = _load_ha_commands()
@@ -1648,16 +1649,7 @@ def _fm_referenced_photo_ids(doc) -> set:
 # collection list would make the protected-record and guest-shape guards see
 # nothing removed or changed, which fails OPEN. The test pins it to the table.
 def _load_fm_records() -> dict:
-    here = os.path.dirname(os.path.abspath(__file__))
-    for path in ("/usr/share/vesta/fm-records.json",
-                 os.path.join(here, "..", "share", "vesta", "fm-records.json")):
-        try:
-            with open(path, encoding="utf-8") as f:
-                return json.load(f)
-        except (OSError, ValueError):
-            continue
-    print("[proxy] fm-records.json unreadable: every new or edited fault and cost is refused", flush=True)
-    return {}
+    return _load_vesta_table("fm-records.json", "every new or edited fault and cost is refused")
 
 
 FM_RECORDS_TABLE = _load_fm_records()
@@ -2991,16 +2983,7 @@ AGENT = "agent"
 #: compares the two). FAIL CLOSED: unreadable, the agent door answers nothing
 #: (version 0, no kinds).
 def _load_agent_contract() -> dict:
-    here = os.path.dirname(os.path.abspath(__file__))
-    for path in ("/usr/share/vesta/agent-contract.json",
-                 os.path.join(here, "..", "share", "vesta", "agent-contract.json")):
-        try:
-            with open(path, encoding="utf-8") as f:
-                return json.load(f)
-        except (OSError, ValueError):
-            continue
-    print("[proxy] agent-contract.json unreadable: the agent interface refuses every message", flush=True)
-    return {}
+    return _load_vesta_table("agent-contract.json", "the agent interface refuses every message")
 
 
 AGENT_CONTRACT_TABLE = _load_agent_contract()

@@ -9,13 +9,15 @@ import { Bot, CircleAlert, Info, TriangleAlert, ChevronRight, X } from "lucide-r
 import { useModalA11y } from "@/hooks/useModalA11y";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
-import { displayLabelFor } from "@/config/EntityMap";
+import { labelOf } from "@/config/EntityMap";
 import { ROLE_LABELS, isRole } from "@/auth/roles";
 import ReportPreview from "@/components/fm/ReportPreview";
 import InlineConfirm from "@/components/common/InlineConfirm";
 import { useAgent, useAgentLiveView } from "@/agent/AgentContext";
 import { answerLine, buttonsShown, clearNeedsConfirm, settledIds } from "@/agent/agentView";
 import type { AgentMessage, AgentSeverity, AgentStatus } from "@/agent/agentApi";
+import { dayTime } from "@/utils/dateText";
+import ModalFooter from "@/components/common/ModalFooter";
 
 export interface AgentModalProps {
   onClose: () => void;
@@ -38,10 +40,7 @@ const profileLabel = (p: string) => (isRole(p) ? ROLE_LABELS[p] : p);
 
 function when(iso: string | null): string {
   if (!iso) return "";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "" : d.toLocaleString([], {
-    day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
-  });
+  return dayTime(iso);
 }
 
 function presenceLine(status: AgentStatus | null): string {
@@ -102,18 +101,12 @@ export default function AgentModal({ onClose, onOpenEntity }: AgentModalProps) {
           {footerError && <p className="body-text sev-warning" role="alert">{footerError}</p>}
         </div>
 
-        <div className="modal-footer">
-          {/* Two slots, space-between (see .modal-footer): "Clear answered"
-              on the left when there is anything settled, else an empty one. */}
-          {settled.length > 0
-            ? (
-              <button className="btn ghost" disabled={clearingSettled} onClick={() => void clearSettled()}>
-                <X size={16} /> Clear answered ({settled.length})
-              </button>
-            )
-            : <span />}
-          <button className="btn primary" onClick={onClose}>Close</button>
-        </div>
+        {/* "Clear answered" on the left when there is anything settled. */}
+        <ModalFooter onClose={onClose} leading={settled.length > 0 ? (
+          <button className="btn ghost" disabled={clearingSettled} onClick={() => void clearSettled()}>
+            <X size={16} /> Clear answered ({settled.length})
+          </button>
+        ) : undefined} />
       </div>
     </div>
   );
@@ -188,8 +181,7 @@ function AgentMessageCard({ message: m, status, answer, clear, onOpenEntity }: {
         <div className="agent-message-entities">
           {m.entities.map((id) => (
             <button key={id} className="agent-entity-chip" onClick={() => onOpenEntity(id)}>
-              {displayLabelFor(id, config.entityMap[id]?.label,
-                entities[id]?.attributes.friendly_name as string | undefined)}
+              {labelOf(id, config.entityMap, entities)}
               <ChevronRight size={14} />
             </button>
           ))}

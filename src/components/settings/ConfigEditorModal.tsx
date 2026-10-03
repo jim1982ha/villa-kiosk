@@ -16,12 +16,13 @@ import ModalTabs, { type ModalTab } from "@/components/common/ModalTabs";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import CentralModelInfo from "./CentralModelInfo";
-import { useGlbUpload } from "./useGlbUpload";
+import { useGlbUpload, ModelFileInput } from "./useGlbUpload";
 import ConfigEditor from "./ConfigEditor";
 import BindingsTable from "./BindingsTable";
 import TelemetryPanel from "./TelemetryPanel";
 import GroupedDevices from "./GroupedDevices";
 import InlineConfirm from "@/components/common/InlineConfirm";
+import ModalFooter from "@/components/common/ModalFooter";
 
 /** ⚠️ EVERY TAB CARRIES TWO PANELS, AND THAT IS A RULE RATHER THAN AN
  *  ACCIDENT. This screen was a stack of six collapsible sections and read as
@@ -174,15 +175,7 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
               {glbUpload.addonCfg?.model_path && (
                 <CentralModelInfo addonCfg={glbUpload.addonCfg} loadedModel={glbUpload.loadedModel} editable />
               )}
-              <input
-                ref={glbUpload.glbUploadRef} type="file" multiple hidden
-                accept=".glb,.json,application/json,model/gltf-binary"
-                onChange={(e) => {
-                  const files = Array.from(e.target.files ?? []);
-                  e.target.value = "";
-                  if (files.length) void glbUpload.uploadGlbAndRooms(files);
-                }}
-              />
+              <ModelFileInput upload={glbUpload} />
               <button
                 className="icon-btn header-icon-btn"
                 onClick={glbUpload.openPicker}
@@ -274,10 +267,7 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
         {/* No Save: every tab here applies LIVE to the 3D scene through
             `ConfigContext`, which is why the strip above is passed no `commit`
             and a tab switch can lose nothing. */}
-        <div className="modal-footer">
-          <span className="muted body-text" style={{ fontSize: "var(--text-xs)" }}>v{__APP_VERSION__}</span>
-          <button className="btn primary" onClick={onBack}>Close</button>
-        </div>
+        <ModalFooter onClose={onBack} note={`v${__APP_VERSION__}`} />
       </div>
     </div>
   );

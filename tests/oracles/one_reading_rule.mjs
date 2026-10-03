@@ -21,9 +21,11 @@
 // So this oracle does not pin behaviour. It pins OWNERSHIP, across the whole
 // tracked source tree, by reading it as text. Behaviour lives in
 // entity_value.mjs, which the first of these made load-bearing.
+import { register } from "node:module";
+register("../consistency/alias-hook.mjs", import.meta.url);
 import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { deviceRowText } from "../../src/utils/entityValue.ts";
+const { deviceRowText } = await import("../../src/utils/entityValue.ts");
 
 let fail = 0;
 const eq = (name, got, want) => {

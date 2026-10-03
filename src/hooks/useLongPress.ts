@@ -38,8 +38,8 @@ export interface LongPressOptions {
    * KEYUP. So on a native button, arming this timer on Enter means the tap
    * action runs immediately AND the hold action runs `holdMs` later while the
    * key is still down: both gestures, from one press. Only Space's keyup can
-   * time a genuine hold on a native button. `useHomeAnchor` records the same
-   * finding, which is why it stayed hand-rolled.
+   * time a genuine hold on a native button (the brand icon's useHomeAnchor is
+   * the consumer this mode exists for).
    *
    * A `role="button"` div gets no native click on Enter at all, which is why
    * the default (both keys) is correct for the hook's original consumers.

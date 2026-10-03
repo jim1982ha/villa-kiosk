@@ -6,6 +6,7 @@
 
 import type { HistoryPort, StateRow } from "./historySource";
 import { ingressApiBase } from "./ingress";
+import { backendFetch } from "@/auth/sessionLost";
 
 /** Anything that can read the recorder's statistics — the HA websocket. */
 export type StatisticsPort = Pick<HistoryPort, "getStatisticsDuringPeriod">;
@@ -23,7 +24,9 @@ export function haHistoryPort(ws: StatisticsPort): HistoryPort {
         `${ingressApiBase()}/history/period/${encodeURIComponent(new Date(from).toISOString())}` +
         `?filter_entity_id=${encodeURIComponent(entityId)}` +
         `&end_time=${encodeURIComponent(new Date(to).toISOString())}&minimal_response&no_attributes`;
-      const res = await fetch(url);
+      // backendFetch: a 401 here is the session gone, reported as such (it
+      // read as "History request failed" until 2.496.263).
+      const res = await backendFetch(url);
       if (!res.ok) throw new Error(`History request failed: ${res.status}`);
       const data = (await res.json()) as StateRow[][];
       return data[0] ?? [];

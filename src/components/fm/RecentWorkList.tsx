@@ -16,11 +16,12 @@
 import { useMemo } from "react";
 import { CalendarCheck, Wrench } from "lucide-react";
 import { useFmData } from "@/fm/FmDataContext";
-import { localStamp, formatMoney, completionSource } from "@/fm/fmEngine";
+import { localStamp, completionSource } from "@/fm/fmEngine";
 import { useFmTerms } from "@/fm/useFmTerms";
 import EvidenceRow from "./EvidenceRow";
 import ErasableRow from "./ErasableRow";
 import AgentMark from "./AgentMark";
+import { formatMoney } from "@/utils/money";
 
 export default function RecentWorkList({ limit = 12 }: { limit?: number }) {
   const { data, removeCompletion } = useFmData();

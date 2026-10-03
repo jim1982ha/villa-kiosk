@@ -18,7 +18,7 @@
 import { useCallback } from "react";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
-import { displayLabelFor } from "@/config/EntityMap";
+import { labelOf } from "@/config/EntityMap";
 
 /** Resolve any entity_id to its display name. Stable across renders unless the
  *  entity map or the live entities actually change, so it is safe in a
@@ -27,11 +27,7 @@ export function useEntityLabel(): (entityId: string) => string {
   const { config } = useConfig();
   const { entities } = useHA();
   return useCallback(
-    (entityId: string) => displayLabelFor(
-      entityId,
-      config.entityMap[entityId]?.label,
-      entities[entityId]?.attributes.friendly_name,
-    ),
+    (entityId: string) => labelOf(entityId, config.entityMap, entities),
     [config.entityMap, entities],
   );
 }

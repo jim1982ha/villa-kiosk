@@ -8,7 +8,8 @@ import type { ComponentType } from "react";
 import { Snowflake, Zap, CloudSun } from "lucide-react";
 import type { Threshold } from "./ThresholdConfig";
 import { locksGroup, lightsGroup } from "./summaryGroups";
-import { villaSummary, fmtClimateTemp } from "./villaSummary";
+import { villaSummary } from "./villaSummary";
+import { fmtTemp } from "@/utils/panelRules";
 import { formatUnitValue, formatSensorParts } from "@/utils/entityValue";
 import type { WeatherStation } from "./weatherStation";
 import { onOffSummary } from "@/utils/entityState";
@@ -168,7 +169,7 @@ export function deriveTiles(
       // In Home Assistant's own unit (its unit_system) — the readings are in
       // it; this said "°C" on every install, a °F one included.
       value: active.length && avg !== null
-        ? fmtClimateTemp(avg, tempUnit)
+        ? fmtTemp(avg, tempUnit)
         : onOffSummary(active.length, f.ids.length),
       tone: active.length ? "on" : "off", category: "comfort",
       entityIds: f.ids, title: "Climate", canControl: can("comfort"),

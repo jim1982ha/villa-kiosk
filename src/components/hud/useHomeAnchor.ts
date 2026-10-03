@@ -9,31 +9,30 @@
 // has to render OUTSIDE .hud-brand (which clips overflow to stop a long
 // villa name from wrapping) while the button itself renders INSIDE it.
 //
-// Deliberately hand-rolled rather than the shared useLongPress hook: this is
-// a real <button>, and a native button fires its click on ENTER'S KEYDOWN —
-// arming useLongPress's hold timer on Enter too would then, ~480ms later
-// while the key is still down, ALSO fire the hold action right after the tap
-// already fired. Only Space's keyup can time a genuine "hold" on a native
-// button. useLongPress's own consumers so far are role="button" divs, which
-// don't get a native click on Enter at all, so the hook is correct there and
-// wrong here.
+// The hold is the shared useLongPress (2.496.263) in its NATIVE-BUTTON mode:
+// this is a real <button>, whose click fires on ENTER'S KEYDOWN, so only
+// Space's keyup can time a genuine hold — `nativeButton` arms the keyboard
+// hold on Space only, which is exactly the finding this file used to hand-roll
+// a second timer (and a copy of the HUD hold time) for. Its drift tolerance
+// also means a finger that slides off no longer saves by accident.
 
 import { useRef, useState } from "react";
+import { useLongPress, HOLD_MS_HUD } from "@/hooks/useLongPress";
 
-const HOLD_MS = 480;
 const FLASH_MS = 1800;
 
 export type HomeAnchorFlash = "applied" | "none" | "saved" | "unavailable";
 
 export interface HomeAnchorButtonProps {
-  onPointerDown: () => void;
+  onPointerDown: (e: React.PointerEvent) => void;
   onPointerUp: () => void;
   onPointerLeave: () => void;
   onPointerCancel: () => void;
+  onPointerMove: (e: React.PointerEvent) => void;
   onClick: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
-  onKeyUp: (e: React.KeyboardEvent) => void;
+  onKeyUp: () => void;
 }
 
 /**
@@ -46,41 +45,23 @@ export interface HomeAnchorButtonProps {
 export function useHomeAnchor(onApply: () => boolean, onSave: () => boolean) {
   const [flash, setFlash] = useState<HomeAnchorFlash | null>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const longFired = useRef(false);
 
   const flashView = (kind: HomeAnchorFlash) => {
     setFlash(kind);
     if (flashTimer.current) clearTimeout(flashTimer.current);
     flashTimer.current = setTimeout(() => setFlash(null), FLASH_MS);
   };
-  const cancelPress = () => {
-    if (pressTimer.current) { clearTimeout(pressTimer.current); pressTimer.current = null; }
-  };
   const doSave = () => flashView(onSave() ? "saved" : "unavailable");
-  const onDown = () => {
-    longFired.current = false;
-    cancelPress();
-    pressTimer.current = setTimeout(() => {
-      longFired.current = true;
-      doSave();
-    }, HOLD_MS);
-  };
+  const { consumeClick, ...hold } = useLongPress(doSave, { holdMs: HOLD_MS_HUD, nativeButton: true });
 
   const buttonProps: HomeAnchorButtonProps = {
-    onPointerDown: onDown,
-    onPointerUp: cancelPress,
-    onPointerLeave: cancelPress,
-    onPointerCancel: cancelPress,
+    ...hold,
     onClick: () => {
-      cancelPress();
-      if (longFired.current) { longFired.current = false; return; }
+      // The click a completed hold leaves behind is the hold's, not a tap.
+      if (consumeClick()) return;
       flashView(onApply() ? "applied" : "none");
     },
     onContextMenu: (e) => { e.preventDefault(); doSave(); },
-    // Space-only (not Enter) — see the file header for why.
-    onKeyDown: (e) => { if (e.key === " " && !e.repeat) onDown(); },
-    onKeyUp: (e) => { if (e.key === " ") cancelPress(); },
   };
 
   return { flash, buttonProps };

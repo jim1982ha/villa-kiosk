@@ -16,6 +16,7 @@
 
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 import { ENTITY_DOMAINS } from "@/types/ha.types";
+import { domainOf } from "@/utils/entityDomain";
 
 export type { EntityMapping, EntityType };
 
@@ -53,7 +54,7 @@ const MESH_ALIASES: Record<string, string> = {};
 
 /** Infer a panel/entity type from an entity_id domain prefix. */
 export function inferTypeFromEntityId(entityId: string): EntityType | null {
-  const domain = entityId.split(".")[0];
+  const domain = domainOf(entityId);
   return (ENTITY_DOMAINS as readonly string[]).includes(domain) ? (domain as EntityType) : null;
 }
 
@@ -164,6 +165,19 @@ export function displayLabelFor(
   const fn = friendlyName?.trim();
   if (fn) return looksLikeRawSlug(fn) ? prettifyRaw(fn) : fn;
   return prettifyEntitySlug(entityId);
+}
+
+/**
+ * THE name a device is shown by: displayLabelFor fed from the entity map and
+ * the live entity table — the two lookups every screen kept writing out
+ * (2.496.263). useEntityLabel is this, for components.
+ */
+export function labelOf(
+  entityId: string,
+  entityMap: Record<string, { label?: string } | undefined>,
+  entities: Record<string, { attributes: Record<string, unknown> } | undefined>,
+): string {
+  return displayLabelFor(entityId, entityMap[entityId]?.label, entities[entityId]?.attributes.friendly_name as string | undefined);
 }
 
 /**

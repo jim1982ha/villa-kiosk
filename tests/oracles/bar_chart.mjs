@@ -10,7 +10,8 @@ import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const B = await import("@/utils/barChart");
-const { fmtMoney, fmtKwh } = await import("@/config/energyModel");
+const { fmtKwh } = await import("@/config/energyModel");
+const { formatMoney } = await import("@/utils/money");
 
 const seg = (v, key = "used") => ({ key, label: key === "cost" ? "Cost" : "Used", v, cls: "e-used" });
 
@@ -41,7 +42,7 @@ ck("labels: flush at the ends, centred between",
    B.barTick(0, 7).align === "start" && B.barTick(6, 7).align === "end" && B.barTick(3, 7).align === "middle" && B.barTick(3, 7).at === 3.5 / 7);
 
 console.log("\n  the tooltip, in the CHART's unit:");
-const money = (v) => fmtMoney(v, "IDR", "en-US");
+const money = (v) => formatMoney(v, "IDR", "en-US");
 const costRows = B.barTipRows({ t: 0, segs: [seg(45000, "cost")] }, money);
 ck("the cost chart's row is money — not 'Cost 45,000 kWh'", costRows.length === 1 && /IDR|Rp/.test(costRows[0].text) && !/kWh/.test(costRows[0].text), costRows);
 const kwh = (v) => `${fmtKwh(v)} kWh`;
@@ -91,7 +92,7 @@ console.log("\n  the callers:");
 const read = (p) => readFileSync(new URL(p, import.meta.url), "utf8");
 const energy = read("../../src/components/panels/EnergyPanel.tsx");
 ck("the cost is plotted OVER the energy bars, in money, on its own right axis (owner, 2026-09-26: one chart)",
-   /line=\{hasCost \? \{ values: p\.buckets\.map\(\(b, i\) => \(b\.state === "pending" \? undefined : costs\[i\]\)\), label: "Cost", cls: "cost", unit: costUnit, fmt: \(v\) => fmtMoney\(v, costUnit\) \} : undefined\}/.test(energy)
+   /line=\{hasCost \? \{ values: p\.buckets\.map\(\(b, i\) => \(b\.state === "pending" \? undefined : costs\[i\]\)\), label: "Cost", cls: "cost", unit: costUnit, fmt: \(v\) => formatMoney\(v, costUnit\) \} : undefined\}/.test(energy)
      && !/Cost per \{unit\}<\/div>/.test(energy));
 ck("an Energy bucket with no reading is a band (null), pending is a stub ([])",
    /return b\.state === "ready" \? ready\(\) : b\.state === "pending" \? \[\] : null;/.test(energy));

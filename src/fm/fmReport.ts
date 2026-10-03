@@ -14,13 +14,12 @@
 // document unchanged, needs no viewer, and stays readable if it is ever
 // archived as plain text years later for a dispute.
 
-import {
-  budgetStatus, completionsInMonth, formatMoney, localStamp, monthKey, monthLabel,
-  scheduleStatus, shortDate, ticketStats,
-} from "./fmEngine";
+import { budgetStatus, completionsInMonth, localStamp, monthKey, monthLabel, scheduleStatus, shortDate, ticketStats } from "./fmEngine";
 import { categoryName, NO_FM_TERMS, type FmData, type FmTerms } from "./fmTypes";
 import type { BudgetStatus } from "./fmEngine";
 import type { ReadinessReport } from "./readiness";
+import { stampText } from "@/utils/dateText";
+import { formatMoney } from "@/utils/money";
 
 export interface ReportInput {
   fm: FmData;
@@ -293,7 +292,7 @@ export function buildReadinessSnapshot(report: ReadinessReport, villaName: strin
     "",
     `**${verdict}** — ${report.passed} of ${report.total} checks passing.`,
     "",
-    `Taken ${now.toLocaleString()}.`,
+    `Taken ${stampText(now)}.`,
     "",
     "| Check | Result | Finding |",
     "| --- | --- | --- |",

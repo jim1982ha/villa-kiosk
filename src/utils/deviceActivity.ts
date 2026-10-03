@@ -25,6 +25,7 @@ import { TRANSITIONAL_STATES, UNKNOWN_STATES, statusKeyFor } from "@/utils/state
 import { devicePower } from "@/utils/devicePower";
 import type { SwitchPosition } from "@/utils/entityState";
 import { phantomEntity } from "@/utils/phantomEntity";
+import { domainOf } from "./entityDomain";
 
 export type DeviceActivity = "on" | "off" | "alert" | "info";
 
@@ -283,7 +284,7 @@ const ON_OFF_DOMAINS: ReadonlySet<string> = new Set([
 
 /** POWER: whether this device has an on/off at all. */
 export function hasOnOff(entityId: string): boolean {
-  return ON_OFF_DOMAINS.has(entityId.split(".")[0]);
+  return ON_OFF_DOMAINS.has(domainOf(entityId));
 }
 
 /** POWER: whether this device is switched on right now (devicePower's

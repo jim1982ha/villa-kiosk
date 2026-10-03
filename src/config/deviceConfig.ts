@@ -39,6 +39,7 @@ import {
   keyBy, diffKeyed, applyKeyed, keyedDiffIsEmpty,
   type Keyed, type KeyedDiff,
 } from "@/utils/keyedSync";
+import { readJson, writeJson } from "@/utils/storedJson";
 
 // ── THE SHARED KEYS: ONE ROW EACH ──────────────────────────────────────────
 // Every shared key, described once: how its value is indexed item by item for
@@ -286,9 +287,9 @@ const BASELINE_KEY = "villa-kiosk:shared-config-baseline";
 
 export function loadSyncBaseline(): SharedDeviceConfig | null {
   try {
-    const raw = localStorage.getItem(BASELINE_KEY);
-    if (!raw) return null;
-    const parsed = parseSharedConfig(JSON.parse(raw));
+    const raw = readJson<unknown>(BASELINE_KEY);
+    if (raw === null) return null;
+    const parsed = parseSharedConfig(raw);
     // Only usable as a baseline if it carries every shared key — a partial
     // one would read as "this device deleted the missing keys".
     return SHARED_CONFIG_KEYS.every((k) => k in parsed)
@@ -300,9 +301,8 @@ export function loadSyncBaseline(): SharedDeviceConfig | null {
 }
 
 export function saveSyncBaseline(config: SharedDeviceConfig): void {
-  try {
-    localStorage.setItem(BASELINE_KEY, JSON.stringify(config));
-  } catch { /* storage full/disabled — degrades to the old in-memory behaviour */ }
+  // Storage full/disabled degrades to the old in-memory behaviour.
+  writeJson(BASELINE_KEY, config);
 }
 
 /**

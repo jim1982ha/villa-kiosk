@@ -28,6 +28,7 @@ import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
 import { uploadEvidence } from "@/fm/fmApi";
 import NotesField from "./NotesField";
 import { useModalA11y } from "@/hooks/useModalA11y";
+import ModalFooter from "@/components/common/ModalFooter";
 
 export default function GuestReportModal({
   entityId, onClose,
@@ -119,10 +120,7 @@ export default function GuestReportModal({
                   : "Whoever looks after this villa can see it now. You don't need to do anything else."}
               </p>
             </div>
-            <div className="modal-footer">
-              <span />
-              <button className="btn primary" onClick={onClose}>Close</button>
-            </div>
+            <ModalFooter onClose={onClose} />
           </>
         ) : (
           <>

@@ -7,7 +7,7 @@
 // devices the list it opened left out.
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
-import { ck, done } from "../consistency/check.mjs";
+import { ck, done, tsFiles } from "../consistency/check.mjs";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 const { roleCan, listedDevices, hasCapability } = await import("@/auth/permissions");
@@ -53,7 +53,7 @@ console.log("\n  the attention a profile is shown:");
 console.log("\n  who asks:");
 {
   const SRC = new URL("../../src/", import.meta.url).pathname;
-  const walk = (d, out = []) => { for (const e of readdirSync(d)) { const p = join(d, e); statSync(p).isDirectory() ? walk(p, out) : /\.tsx?$/.test(p) && out.push(p); } return out; };
+  const walk = tsFiles;
   const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
   const offenders = walk(SRC).filter((f) => !/\/src\/auth\//.test(f))
     .filter((f) => /\brole(Ref\.current)?\s*[!=]==\s*"(owner|guest|ops)"/.test(strip(readFileSync(f, "utf8")))).map((f) => f.slice(SRC.length));

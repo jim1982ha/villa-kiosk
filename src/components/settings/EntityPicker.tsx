@@ -19,6 +19,7 @@ import { useOutsideClose } from "@/hooks/useOutsideClose";
 import { Search, X } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { ENTITY_ID_RE } from "@/utils/sh3dParser";
+import { domainOf } from "@/utils/entityDomain";
 
 interface Props {
   value?: string;
@@ -59,7 +60,7 @@ export default function EntityPicker({
   const list = useMemo(() => {
     const q = query.toLowerCase();
     return Object.values(entities)
-      .filter((e) => !domains || domains.includes(e.entity_id.split(".")[0]))
+      .filter((e) => !domains || domains.includes(domainOf(e.entity_id)))
       .filter(
         (e) =>
           e.entity_id.toLowerCase().includes(q) ||
@@ -113,13 +114,7 @@ export default function EntityPicker({
       )}
 
       {open && (
-        <div
-          style={{
-            position: "absolute", zIndex: 20, left: 0, right: 0, marginTop: 6,
-            maxHeight: 260, overflowY: "auto", background: "var(--bg-overlay)",
-            border: "1px solid var(--hairline-strong)", borderRadius: 10,
-          }}
-        >
+        <div className="picker-dropdown">
           {allowCustom && ENTITY_ID_RE.test(query.trim()) && !entities[query.trim()] && (
             <button
               className="row"

@@ -21,8 +21,9 @@ import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 
 const {
-  ticketStats, scheduleStatus, budgetStatus, monthLabel, shortDate, formatMoney,
+  ticketStats, scheduleStatus, budgetStatus, monthLabel, shortDate,
 } = await import("@/fm/fmEngine");
+const { formatMoney } = await import("@/utils/money");
 const { spendSummary } = await import("@/fm/fmReport");
 
 let fail = 0;
@@ -94,8 +95,12 @@ eq("month 13 is refused", monthLabel("2026-13"), "2026-13");
 eq("a real month renders", /2026/.test(monthLabel("2026-07")), true);
 
 console.log("\n  nothing prints a currency nobody configured:");
-eq("no currency configured shows the amount alone", formatMoney(450000, ""), "450,000");
-eq("a configured one prefixes it", formatMoney(450000, "EUR"), "EUR 450,000");
+// ONE money look (utils/money, 2.496.263): Home Assistant's currency, the
+// reader's locale's currency style — Facility wrote "EUR 450,000", Energy "€".
+eq("no currency configured shows the amount alone", formatMoney(450000, "", "en-US"), "450,000");
+eq("a configured one in the locale's currency style", formatMoney(450000, "EUR", "en-US"), "€450,000");
+eq("  ...whole units from 100 up, cents below", formatMoney(12.5, "EUR", "en-US"), "€12.50");
+eq("  ...an unfamiliar code is written AS the code, never as a wrong symbol", formatMoney(1500, "XQZ", "en-US").replace(/\s/g, " "), "XQZ 1,500");
 eq("a short date renders without throwing", typeof shortDate("2026-07-24T00:00:00Z"), "string");
 
 console.log(`\n${fail ? `❌ ${fail} failed` : "✅ the owner's numbers hold"}`);

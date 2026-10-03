@@ -406,6 +406,11 @@ export function planeOf(
 /** A pass's clearance: the glass, plus the solver's gap and minimum separation. */
 export type PassClearance = GlassClearance & { gap: number; minSep: number };
 
+/** A pooled placement item before it is filled in (built twice until 2.496.263). */
+function blankItem(): PlacementItem {
+  return { sx: 0, sy: 0, sz: 0, reach: 0, reachY: 0, rank: 0, sortKey: "", category: "", room: "", exempt: false };
+}
+
 /** The solver's input: every shown badge on the glass, with its rank, room and
  *  whether it is exempt (its room is focused). Fills `pool`, and stamps each
  *  badge's glass position (s.sx/sy/sz) for the steps after the solve. */
@@ -418,7 +423,7 @@ export function placementItems(
     const s = shown[i];
     let it = pool[i];
     if (!it) {
-      it = { sx: 0, sy: 0, sz: 0, reach: 0, reachY: 0, rank: 0, sortKey: "", category: "", room: "", exempt: false };
+      it = blankItem();
       pool[i] = it;
     }
     const m = measuredAt(clearance, s.wx, s.wy, s.wz, scratch.measure);
@@ -870,16 +875,16 @@ export class PlacementPass {
         // a chip it never needed, an escalation cascade driven by geometry
         // nobody could see. Safe to read both here: every solver decision is
         // final by the time this runs.
-        if (!this.drawnBadge(shown[j].id)) continue;
-        // A FOCUSED room's badge blocks nobody — the same contract the `others`
+        //
+        // And a FOCUSED room's badge blocks nobody — the same contract the `others`
         // loop below already honours for focused groups, and the one
         // PlacementItem.exempt states in the solver: "accepted unconditionally,
         // AND never counted as a blocker for anyone else". This loop was the
         // one place it was not honoured, so a focused room could push a
         // NEIGHBOURING room's group to its chip while the focus lasted — the
         // focus renegotiating the rest of the map, which is exactly what the
-        // exemption exists to prevent.
-        if (focus.has(roomKey(roomOfEntity(this.f.rooms, shown[j].id)))) continue;
+        // exemption exists to prevent. Both questions are canBlock's.
+        if (!this.canBlock(shown[j].id, focus)) continue;
         // The SAME rule as everywhere else on the glass since 2.406.0: boxes,
         // per axis, not a radius against a scalar distance — a radius judged a
         // wide badge's vertical clearance by its width. `ground` is the
@@ -1004,8 +1009,7 @@ export class PlacementPass {
         const inkY = cardCentreY(g);
         const take: number[] = [];
         for (let j = 0; j < shown.length; j++) {
-          if (!this.drawnBadge(shown[j].id)) continue;
-          if (focus.has(roomKey(roomOfEntity(this.f.rooms, shown[j].id)))) continue;
+          if (!this.canBlock(shown[j].id, focus)) continue;
           // ── BOX vs BOX, ON EACH AXIS ─────────────────────────────────
           // Burial is a question about two rectangles of ink, and it has to be
           // tested as one. Two earlier shapes of this were both wrong in the
@@ -1313,6 +1317,14 @@ export class PlacementPass {
     return !this.entityGrouped.has(id) && !this.roomClustered.get(roomKey(roomOfEntity(this.f.rooms, id)));
   }
 
+  /** Can this badge stand in a summary's way? Only if it is DRAWN (drawnBadge)
+   *  and not in a FOCUSED room — a focused room's badge blocks nobody
+   *  (PlacementItem.exempt's contract). Both summary loops asked the two
+   *  questions in turn, each written out (2.496.263). */
+  private canBlock(id: string, focus: ReadonlySet<string>): boolean {
+    return this.drawnBadge(id) && !focus.has(roomKey(roomOfEntity(this.f.rooms, id)));
+  }
+
   /**
    * The solver's deferral buckets, as cards to seat. Every member leaves the
    * badge tier (`entityGrouped`); the card stands at the members' WORLD
@@ -1405,7 +1417,7 @@ export class PlacementPass {
       const src = items[i];
       let it = sub[idx.length];
       if (!it) {
-        it = { sx: 0, sy: 0, sz: 0, reach: 0, reachY: 0, rank: 0, sortKey: "", category: "", room: "", exempt: false };
+        it = blankItem();
         sub[idx.length] = it;
       }
       it.sx = src.sx; it.sy = src.sy; it.sz = src.sz;

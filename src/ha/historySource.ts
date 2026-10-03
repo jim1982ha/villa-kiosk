@@ -29,6 +29,7 @@ import { fiveMinuteSeries } from "@/utils/trendInterval";
 import { windowEndingAt } from "@/utils/lineChart";
 import { UNKNOWN_STATES } from "@/utils/stateColors";
 import type { HistorySeries, StateHistoryPoint, StatisticPeriod } from "@/types/ha.types";
+import { dayTime } from "@/utils/dateText";
 
 /** One row of Home Assistant's state history, as the REST endpoint sends it. */
 export interface StateRow {
@@ -201,7 +202,7 @@ async function stateWindow(port: HistoryPort, id: string, hours: number, now: nu
  *  different period is worse than no chart. */
 export function historyTitle(rangeTitle: string, lastSeen: number | undefined): string {
   return lastSeen
-    ? `${rangeTitle} before ${new Date(lastSeen).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`
+    ? `${rangeTitle} before ${dayTime(lastSeen)}`
     : rangeTitle;
 }
 

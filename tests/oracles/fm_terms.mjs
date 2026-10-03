@@ -55,10 +55,10 @@ console.log("\n  the report speaks the owner's terms:");
   const b = E.budgetStatus(costs, "2026-09", t);
   const text = [...R.spendSummary(b, t), ...R.spendTable(b, t)].join("\n");
   ck("the owner's category names and currency, not \"Minor\"/\"Major\"",
-     text.includes("Routine") && text.includes("Capital") && text.includes("EUR ") && !/\bMinor\b|\bMajor\b/.test(text), text);
+     text.includes("Routine") && text.includes("Capital") && /€|EUR/.test(text) && !/\bMinor\b|\bMajor\b/.test(text), text);
   ck("no account is named that the owner did not name", !/Owner's account/.test(text));
   const statement = R.buildSpendStatement({ costs, schedules: [], completions: [], tickets: [], savedDocuments: [] }, "2026-09", "V", t);
-  ck("the spend statement uses the same terms", statement.includes("Routine") && statement.includes("EUR "));
+  ck("the spend statement uses the same terms", statement.includes("Routine") && /€|EUR/.test(statement));
 }
 
 done("✅ the contract terms are the owner's; one cap check, an edit counted once");

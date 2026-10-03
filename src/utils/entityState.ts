@@ -8,6 +8,7 @@
 
 import type { HassEntity } from "@/types/ha.types";
 import { TRANSITIONAL_STATES, isUnavailable } from "@/utils/stateColors";
+import { domainOf } from "./entityDomain";
 
 export const OFF_STATES = new Set(["off", "unavailable", "unknown", ""]);
 
@@ -39,7 +40,7 @@ export type SwitchPosition = "on" | "off" | "unknown";
  */
 export function switchPosition(e: HassEntity | undefined, domain?: string): SwitchPosition {
   if (isUnavailable(e) || e == null) return "unknown";
-  const d = (domain ?? e.entity_id.split(".")[0]).split(".")[0];
+  const d = domainOf(domain ?? e.entity_id);
   if (d === "lock") {
     if (TRANSITIONAL_STATES.has(e.state)) return "unknown";
     // ⚠️ `jammed` IS NOT `unknown`, AND THE DIFFERENCE IS WHETHER ANYTHING WAS

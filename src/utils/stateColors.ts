@@ -4,6 +4,7 @@
 // used elsewhere in the same panels.
 
 import type { HassEntity } from "@/types/ha.types";
+import { domainOf } from "./entityDomain";
 
 /** HA reports "unavailable" when it has lost contact with the device
  *  (offline, integration reload, …) and "unknown" when it's never reported a
@@ -210,7 +211,7 @@ export function statusKeyFor(state: string, domain?: string): StatusKey {
     return "unavailable";
   }
   if (domain) {
-    const d = domain.split(".")[0];
+    const d = domainOf(domain);
     const hit = DOMAIN_STATES[d]?.[s];
     if (hit) return hit;
   }
