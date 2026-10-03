@@ -1,3 +1,8 @@
+## 2.496.253
+
+### Changed
+- **"Which room?" shows each room's status.** When you press and hold a room badge that stands for several rooms, each room in the list now has the same border as its badge on the map: red when something there needs attention, the "on" colour when something is running. Its device count is green, or red when a device in that room has stopped reporting.
+
 ## 2.496.252
 
 ### Fixed
