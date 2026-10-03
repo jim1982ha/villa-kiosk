@@ -21,22 +21,66 @@ export const FLOOR_SPLIT_Y = 2.8;
 /** What FloorManager needs from the storey plan: Storeys.levelAt. */
 export interface FloorPlan { readonly count: number; levelAt(y: number): number | null }
 
+/** A storey the MODEL's own structure shows: its 1-based floor and the height
+ *  of its slab (the lowest point of its structure). */
+export interface StructureFloor { floor: number; y: number }
+
+/** How far above a slab a thing must stand to be ON that storey — the plan's
+ *  own clearance (storeys.STOREY_MIN_MOUNT), restated here only because this
+ *  module is import-free; tests/oracles/floor_of.mjs holds the two equal. */
+export const FLOOR_MIN_MOUNT = 0.30;
+
 /**
  * The 1-based floor of a mesh. Structure carries its pipeline level (0-based).
  * Anything else stands on the storey the plan puts its centre on — the same
  * clearance rule the plan gives a light fixture (a ceiling lamp hangs
- * centimetres under the slab above and is still downstairs) — and on the
- * height split when the plan knows fewer than two storeys.
+ * centimetres under the slab above and is still downstairs).
+ *
+ * ⚠️ NO PLAN USED TO MEAN TWO FLOORS (2.496.261). Without a plan of two
+ * storeys or more, everything above 2.8 m was 2F and nothing could be 3F — a
+ * three-storey villa with no rooms drawn put its top floor's devices on the
+ * second. The model's own structure knows its storeys (`structure`, one slab
+ * per pipeline level), so that decides next, with the same clearance; the
+ * fixed split is left only for a model that carries neither.
  */
 export function floorOf(
   role: { isStructure: boolean; level: number }, centreY: number, plan?: FloorPlan | null,
+  structure?: readonly StructureFloor[],
 ): number {
   if (role.isStructure) return role.level + 1;
   if (plan && plan.count >= 2) {
     const level = plan.levelAt(centreY);
     if (level !== null) return level;
   }
+  if (structure && structure.length >= 2) {
+    let pick = structure[0].floor;
+    for (const s of structure) if (s.y <= centreY - FLOOR_MIN_MOUNT) pick = s.floor;
+    return pick;
+  }
   return centreY > FLOOR_SPLIT_Y ? 2 : 1;
+}
+
+/** The storeys `meshes` of structure show, lowest first (one entry per
+ *  floor, at its lowest point) — what floorOf falls back on. */
+export function structureFloors(meshes: readonly { role: { isStructure: boolean; level: number }; minY: number }[]): StructureFloor[] {
+  const low = new Map<number, number>();
+  for (const { role, minY } of meshes) {
+    if (!role.isStructure) continue;
+    const f = role.level + 1;
+    low.set(f, Math.min(low.get(f) ?? Infinity, minY));
+  }
+  return [...low].map(([floor, y]) => ({ floor, y })).sort((a, b) => a.floor - b.floor);
+}
+
+/**
+ * Where a stair trigger takes the walker: the next floor the model HAS above
+ * (or below) the active one, or null at the top (bottom). The triggers jumped
+ * 1 → 2 and 2 → 1 only, so a third storey could never be walked to.
+ */
+export function stairTarget(floors: readonly number[], current: number, up: boolean): number | null {
+  const sorted = [...floors].sort((a, b) => a - b);
+  const next = up ? sorted.find((f) => f > current) : [...sorted].reverse().find((f) => f < current);
+  return next ?? null;
 }
 
 /** Anything that can carry the stamp: a mesh, an anchor node. */

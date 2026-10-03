@@ -32,11 +32,10 @@ import { ResolutionGovernor, startingScale, VALVE_SAMPLE_MIN } from "./resolutio
 import { SceneLook } from "./sceneLook";
 import { StructureSet } from "./structureSet";
 import { Storeys, isStairwell } from "./storeys";
-import { eyeHeightOf, pickSpawn, roomSpawn, stairFoot, flightBottom, type SpawnWorld } from "./walkerSpawn";
+import { eyeHeightOf, pickSpawn, roomSpawn, stairSpawn, type SpawnWorld } from "./walkerSpawn";
 import { ScenePhases, type ScenePhase } from "./scenePhases";
 import { RenderEnhancements } from "./RenderEnhancements";
 import { lightingModeFor, type LightingMode } from "./lightingMode";
-import { BETA_MIN } from "./overviewPose";
 import { loadModelInto } from "./ModelLoader";
 import { resetLightPoolTextureCache } from "./LightPools";
 import { resolveMeshToMapping } from "@/config/EntityMap";
@@ -60,7 +59,7 @@ import { sceneConfigPlan } from "./sceneConfigPlan";
 import { onActiveFloor, stampedFloor } from "./floorOf";
 import { ModelKeyedStore } from "./modelStore";
 import { cameraFrame } from "./cameraFrame";
-import { roomWallFit, MIN_ROOM_FIT_RADIUS } from "./roomZoomSolver";
+import { roomShot } from "./roomShot";
 // Babylon prototype patches this module depends on — see babylonSideEffects.
 import "./babylonSideEffects";
 
@@ -1232,6 +1231,11 @@ export class SceneManager {
       stairwellAt: (x, z) => this.plan.stairwellAt(x, z),
       groundRooms: () => this.plan.groundRooms(),
       openestFacing: (x, y, z) => this.bestFacing(x, z, y),
+      castDownStair: (x, fromY, z, len) => {
+        const hit = this.scene.pickWithRay(new Ray(new Vector3(x, fromY, z), new Vector3(0, -1, 0), len),
+          (mm) => mm.metadata?.isStair === true);
+        return hit?.hit && hit.pickedPoint ? hit.pickedPoint.y : null;
+      },
     };
   }
 
@@ -1267,77 +1271,37 @@ export class SceneManager {
   }
 
   /**
-   * A spawn at the FOOT of the staircase on the ground floor. In this pipeline
-   * stairs are baked into the fused `Structure` mesh, so there's no stair mesh to
-   * measure — the reliable signal is a stair-NAMED element (a plan room, or an
-   * entity mesh like `camera.staircase_2f_cam`). We take its plan XZ and ground
-   * it on floor 1 → the 1F spot beneath/beside the stairwell. Falls back to real
-   * stair GEOMETRY (split-structure GLBs) and finally null.
+   * Where the villa's stairs are, for walkerSpawn.stairSpawn — the plan's
+   * stairwell, a stair-named mesh, or real stair geometry. Measuring only;
+   * the candidate itself is decided there (2.496.261).
    */
   private staircaseSpawn(w: SpawnWorld): TeleportPoint | null {
-    const eye = w.eyeHeight;
-    const groundAt = (x: number, z: number): TeleportPoint => {
-      const y = this.estimateFloorY(x, z, 1) + eye;
-      return { name: "Staircase", floor: 1, position: { x, y, z }, target: this.bestFacing(x, z, y - 0.1) };
-    };
-
-    // 1. A room the plan names as a staircase.
-    const namedRoom = this.calibratedPoints?.find((p) => isStairwell(p.name));
-    if (namedRoom) {
-      // stairFoot, NOT the centroid — the centroid of a stairwell is mid-flight.
-      const foot = stairFoot(w, namedRoom.position.x, namedRoom.position.z);
-      return groundAt(foot.x, foot.z);
+    const named = this.calibratedPoints?.find((p) => isStairwell(p.name));
+    const mesh = this.loadedMeshes.find((m) => isStairwell(m.name));
+    let meshAt: { x: number; z: number } | null = null;
+    if (mesh) {
+      mesh.computeWorldMatrix(true);
+      const c = mesh.getBoundingInfo().boundingBox.centerWorld;
+      meshAt = { x: c.x, z: c.z };
     }
-
-    // 2. A stair-named entity/structure mesh marks the stairwell's plan XZ —
-    //    named by the plan's own stair words (storeys.isStairwell), not a
-    //    second, shorter list of them.
-    const stairMesh = this.loadedMeshes.find((m) => isStairwell(m.name));
-    if (stairMesh) {
-      stairMesh.computeWorldMatrix(true);
-      const c = stairMesh.getBoundingInfo().boundingBox.centerWorld;
-      const foot = stairFoot(w, c.x, c.z);
-      return groundAt(foot.x, foot.z);
+    const stairs = this.loadedMeshes.filter((m) => m.metadata?.isStair === true && m.getTotalVertices() > 0);
+    let geometry: { min: Vector3; max: Vector3 } | null = null;
+    if (stairs.length) {
+      let min = new Vector3(Infinity, Infinity, Infinity);
+      let max = new Vector3(-Infinity, -Infinity, -Infinity);
+      for (const m of stairs) {
+        m.computeWorldMatrix(true);
+        const bb = m.getBoundingInfo().boundingBox;
+        min = Vector3.Minimize(min, bb.minimumWorld);
+        max = Vector3.Maximize(max, bb.maximumWorld);
+      }
+      geometry = { min, max };
     }
-
-    // 3. Real stair geometry (only present in split-structure GLBs).
-    const stairs = this.loadedMeshes.filter(
-      (m) => m.metadata?.isStair === true && m.getTotalVertices() > 0);
-    if (!stairs.length) return null;
-    let min = new Vector3(Infinity, Infinity, Infinity);
-    let max = new Vector3(-Infinity, -Infinity, -Infinity);
-    for (const m of stairs) {
-      m.computeWorldMatrix(true);
-      const bb = m.getBoundingInfo().boundingBox;
-      min = Vector3.Minimize(min, bb.minimumWorld);
-      max = Vector3.Maximize(max, bb.maximumWorld);
-    }
-    const alongX = max.x - min.x >= max.z - min.z;
-    const crossC = alongX ? (min.z + max.z) / 2 : (min.x + max.x) / 2;
-    const loEnd = alongX ? min.x : min.z;
-    const hiEnd = alongX ? max.x : max.z;
-    const span = hiEnd - loEnd || 1;
-    const surfaceY = (along: number): number => {
-      const ox = alongX ? along : crossC;
-      const oz = alongX ? crossC : along;
-      const hit = this.scene.pickWithRay(
-        new Ray(new Vector3(ox, max.y + 2, oz), new Vector3(0, -1, 0), max.y - min.y + 4),
-        (mm) => mm.metadata?.isStair === true);
-      return hit?.hit && hit.pickedPoint ? hit.pickedPoint.y : Infinity;
-    };
-    const loY = surfaceY(loEnd + span * 0.1);
-    const hiY = surfaceY(hiEnd - span * 0.1);
-    const { bottom, up: dir } = flightBottom(loEnd, hiEnd, loY, hiY);
-    const standAlong = bottom - dir * 1.2;
-    const px = alongX ? standAlong : crossC;
-    const pz = alongX ? crossC : standAlong;
-    const tAlong = standAlong + dir * 3;
-    return {
-      name: "Staircase",
-      floor: 1,
-      position: { x: px, y: min.y + eye, z: pz },
-      target: { x: alongX ? tAlong : crossC, y: min.y + eye + 0.3, z: alongX ? crossC : tAlong },
-    };
+    return stairSpawn(w, {
+      namedRoom: named ? { x: named.position.x, z: named.position.z } : null,
+      namedMesh: meshAt,
+      geometry,
+    });
   }
 
   /** Flip to the other view mode; returns the mode now active. */
@@ -1394,7 +1358,7 @@ export class SceneManager {
    * overview → EXACTLY what tapping the room's badge does, via focusRooms.
    *
    * The two used to share only half the work. Both framed the shot through
-   * `computeRoomOverviewPose`, so the camera agreed — but only the badge tap
+   * the room shot (roomShot.ts), so the camera agreed — but only the badge tap
    * called `setFocusedRooms`, and that is the half that exempts the room's
    * badges from grouping. Same camera, different picture: the menu arrived to
    * chips and summary cards where the badge tap arrived to individual devices.
@@ -1440,7 +1404,24 @@ export class SceneManager {
     // First, and unconditionally: the part that is a guarantee.
     this.visuals.setFocusedRooms(roomNames);
     if (this.viewMode !== "overview") return;
-    const framed = this.computeRoomOverviewPose(roomNames);
+    // The shot is roomShot's (2.496.261): union, zenithal tilt, wall fit,
+    // badge rung AND the camera's own limits — the pose the camera takes.
+    // This only measures the rooms and lends it the badge solver.
+    const cam = this.overview.camera;
+    const { vHalf, hHalf } = cameraFrame(this.scene, cam);
+    const view = { alpha: cam.alpha, vFov: 2 * vHalf, hFov: 2 * hHalf };
+    const framed = roomShot({
+      rooms: roomNames.map((name) => {
+        const real = this.camera.getRoomBounds(name);
+        return { bounds: real ?? this.visuals.getRoomEntityBounds(name), real: !!real };
+      }),
+      view,
+      limits: this.overview.getRadiusLimits(),
+      pan: this.overview.getPanBounds(),
+      solve: (shot) => this.visuals.solveRoomZoomRadius(roomNames[0], {
+        vpH: this.engine.getRenderHeight(), vpW: this.engine.getRenderWidth(), vFov: view.vFov, ...shot,
+      }),
+    });
     // ── THE SAME NUMBERS, ON THE DEBUG LINE (2.426.0) ─────────────────────
     // Every field above already existed and every one of them went ONLY to
     // telemetry, so four screenshots of a bad room shot arrived with no way to
@@ -1450,11 +1431,13 @@ export class SceneManager {
     // in it. `radius` equal to `wallFit` means the framing IS the fit, so the
     // fraction is the dial; smaller means something is still pulling in.
     if (framed) {
+      // `radius` is the one the camera TAKES (roomShot clamps); `asked` is
+      // before the camera's limits — they differ exactly when a limit bound.
       tapDebug(
         `focus [${roomNames.join("+")}] rooms=${roomNames.length}`
-        + ` radius=${framed.radius.toFixed(2)} wallFit=${framed.wallFit.toFixed(2)}`
+        + ` radius=${framed.pose.radius.toFixed(2)} asked=${framed.requested.toFixed(2)} wallFit=${framed.wallFit.toFixed(2)}`
         + ` tightenedBy=${(framed.wallFit > 0
-          ? framed.radius / framed.wallFit : 1).toFixed(3)}x`
+          ? framed.requested / framed.wallFit : 1).toFixed(3)}x`
         + ` solved=${framed.solved} declutters=${framed.declutters}`
         + ` real=${framed.real} halfW=${framed.halfW.toFixed(2)}`
         + ` halfH=${framed.halfH.toFixed(2)}`
@@ -1464,155 +1447,13 @@ export class SceneManager {
     }
     // `declutters` is now advisory, not a veto: it says whether the shot also
     // separates the badges or merely frames them. Either way they are drawn.
-    if (framed) this.overview.applyPose(framed);
+    if (framed) this.overview.applyPose(framed.pose);
     // A room with neither a polygon nor a registered entity cannot be measured,
     // so there is nothing to frame — a caller that knows where it is anyway (the
     // teleport menu carries a position) can still be taken there.
     else if (fallback) this.overview.panTo(fallback.x, fallback.z);
   }
 
-  private computeRoomOverviewPose(
-    roomNames: readonly string[],
-  ): {
-    alpha: number; beta: number; radius: number;
-    /** The WALL fit before anything else could narrow it, and whether the rung
-     *  solver returned at all. `radius / wallFit` is the whole verdict on a
-     *  room shot that reads wrong: 1.0 means the framing IS the fit, so
-     *  ROOM_FIT_VIEWPORT_FRACTION is the dial; below it, something is pulling
-     *  in. Guessing between those two is what three releases did wrong before
-     *  2.361.0 measured it, and 2.426.0 is the fourth — it read 0.53x for a
-     *  long thin room and ~1.0 after. NOT temporary: focusRooms prints these on
-     *  the debug channel, which is the instrument the owner actually has. */
-    wallFit: number; solved: boolean;
-    /** The fit's INPUTS, so a shot that still reads wrong is attributable
-     *  without another measurement round: whether every room had a real wall
-     *  polygon (false ⇒ the wider entity-anchor fraction), and the footprint's
-     *  half-extents on the view plane. Those two say which SCREEN AXIS bound
-     *  the fit — recompute halfW/tan(hFov/2) against halfH/tan(vFov/2) and the
-     *  larger one won — which is how the same one number is checked on a
-     *  portrait phone and a landscape laptop. */
-    real: boolean; halfW: number; halfH: number;
-    target: { x: number; y: number; z: number };
-    /** False when NO zoom this camera allows can separate the room's badges —
-     *  two devices on one 3D point, or a pair that only clears past the zoom
-     *  limit. The caller shows the device list instead. */
-    declutters: boolean;
-  } | null {
-    // The UNION of every room asked for. A merged chip ("Master Bedroom +1")
-    // stands for several rooms at once, and a short tap on it frames all of
-    // them — so the box to fit is their union, not whichever room happened to
-    // win the chip's label.
-    let bounds: { minX: number; maxX: number; minZ: number; maxZ: number; floorY: number } | null = null;
-    // Real wall polygons where every room has one; the entity-anchor fallback
-    // is per room, so one room without a polygon only loosens ITS contribution.
-    let allReal = true;
-    for (const name of roomNames) {
-      const real = this.camera.getRoomBounds(name);
-      if (!real) allReal = false;
-      const b = real ?? this.visuals.getRoomEntityBounds(name);
-      if (!b) continue;
-      bounds = bounds ? {
-        minX: Math.min(bounds.minX, b.minX), maxX: Math.max(bounds.maxX, b.maxX),
-        minZ: Math.min(bounds.minZ, b.minZ), maxZ: Math.max(bounds.maxZ, b.maxZ),
-        // The lower floor of the two: framing has to clear the deeper one.
-        floorY: Math.min(bounds.floorY, b.floorY),
-      } : { ...b };
-    }
-    if (!bounds) return null;
-    // (Entity anchors mark devices, not walls, so their box under-states the
-    // room: roomWallFit gives that fallback more headroom — `allReal`.)
-    const cam = this.overview.camera;
-    // Which of the two angles `fov` actually is belongs to cameraFrame.ts —
-    // this file used to assume it was the vertical one, as three other readers
-    // separately did.
-    const { vHalf, hHalf } = cameraFrame(this.scene, cam);
-    const vFov = 2 * vHalf;
-    const hFov = 2 * hHalf;
-    // ── The shot is ZENITHAL, whatever the camera was doing before ──────────
-    // A floor plan seen from straight above is the view that shows a room's
-    // devices best, and it is the same view every time — tapping two rooms in
-    // a row used to give two different pictures purely because of where the
-    // tilt happened to be left. Only the TILT is forced: alpha is kept, so the
-    // room does not also spin under the user, and the villa keeps the
-    // orientation they built their sense of it from.
-    //
-    // The camera's own tilt limit (overviewPose.BETA_MIN, which is what it is
-    // set to), so "as far over as this camera goes" cannot drift from what
-    // the camera actually allows.
-    //
-    // It is computed HERE, above the fit, because the fit is measured through
-    // it — see the anisotropy note below.
-    const destBeta = BETA_MIN;
-    // The footprint fitted per screen axis, through the destination's own
-    // view — roomZoomSolver.roomWallFit, beside the rung ladder it bounds.
-    const fit = roomWallFit(bounds, allReal, { alpha: cam.alpha, beta: destBeta, vFov, hFov });
-    const { cx, cz, destDir, frame, halfW, halfH } = fit;
-    let radius = fit.radius;
-
-    // ── Now ask the badges, by TESTING rather than deriving ───────────────
-    // The wall fit above frames the ROOM. It says nothing about whether the
-    // room's badges will be legible once the camera arrives, and those are
-    // different distances: an elongated or multi-device room can need to back
-    // off further for its footprint than its tightest badge pair can tolerate,
-    // which is "tapped the chip and it stayed a chip" even though the camera
-    // visibly moved.
-    //
-    // Three releases tried to close that gap with a formula, and all three
-    // were exact arithmetic on a wrong input (see solveRoomZoomRadius's
-    // docstring for the list). The derivation is gone: the solver walks the
-    // renderer's own quantised zoom ladder and asks, at each rung, the two
-    // questions literally — does anything group here, and is every badge
-    // inside the frame — returning the closest rung where both hold.
-    //
-    // Bounded BELOW by the camera's own zoom-in limit rather than by any
-    // constant of ours, because that limit is the real one: a room whose
-    // badges only separate at maximum zoom should be taken to maximum zoom,
-    // not to whatever floor a heuristic thought was reasonable.
-    //
-    // ONE room only. With several, the wall fit IS the answer: any tighter rung
-    // the badge solver could return is by definition a shot that no longer
-    // frames every room, and "show me all of these rooms" is the whole of what
-    // a merged chip's tap asked for. The badges are not left to chance either —
-    // the EXEMPTION above is unconditional and is what guarantees they are
-    // drawn individually, at whatever distance the framing lands on.
-    const vpH = this.engine.getRenderHeight();
-    const solved = roomNames.length === 1 ? this.visuals.solveRoomZoomRadius(roomNames[0], {
-      vpH,
-      vpW: this.engine.getRenderWidth(),
-      vFov,
-      frame,
-      cx, cy: bounds.floorY, cz,
-      dir: destDir,
-      minRadius: this.overview.getRadiusLimits().lo,
-      // The wall fit is the widest shot worth considering: past it the room no
-      // longer fills the frame, and nothing about badges improves by backing
-      // further away.
-      maxRadius: Math.max(radius, this.overview.getRadiusLimits().lo),
-    }) : null;
-    const wallFit = radius;
-    let declutters = true;
-    if (solved) {
-      radius = solved.radius;
-      declutters = solved.declutters;
-    }
-    radius = Math.max(radius, MIN_ROOM_FIT_RADIUS);
-
-    return {
-      alpha: cam.alpha,
-      beta: destBeta,
-      radius,
-      wallFit,
-      solved: !!solved,
-      declutters,
-      real: allReal,
-      halfW,
-      halfH,
-      // Orbit about the room's own CENTRE, at the height the room's floor
-      // actually sits at — a teleport point stores the first-person EYE
-      // position, so reusing its y tilted the framing up by eye height.
-      target: { x: cx, y: bounds.floorY, z: cz },
-    };
-  }
 
   private worldExtends(meshes: AbstractMesh[]) {
     meshes.forEach((m) => m.computeWorldMatrix(true));

@@ -28,7 +28,27 @@ const three = new Storeys([
 ck("a third storey exists (the fixed split capped at 2F)", F.floorOf(entity, 7, three) === 3 && F.floorOf(entity, 7, null) === 2);
 const one = new Storeys([{ name: "a", floorY: 0, storey: 1, pts: sq(0, 5, 0, 5) }]);
 ck("a plan of ONE storey cannot say: the height split decides (upstairs stays upstairs)", F.floorOf(entity, 4, one) === 2);
-ck("no plan: the height split", F.floorOf(entity, 2.9, null) === 2 && F.floorOf(entity, 2.7, null) === 1);
+ck("no plan, no structure levels: the height split", F.floorOf(entity, 2.9, null) === 2 && F.floorOf(entity, 2.7, null) === 1);
+
+console.log("\n  no plan, but the model's own storeys (2.496.261 — no plan meant two floors):");
+const struct = F.structureFloors([
+  { role: { isStructure: true, level: 0 }, minY: -0.1 }, { role: { isStructure: true, level: 0 }, minY: 0 },
+  { role: { isStructure: true, level: 1 }, minY: 3.1 }, { role: { isStructure: true, level: 2 }, minY: 6.2 },
+  { role: { isStructure: false, level: 0 }, minY: 9 },
+]);
+ck("the structure's storeys, lowest point each, lowest first (non-structure ignored)",
+   JSON.stringify(struct) === JSON.stringify([{ floor: 1, y: -0.1 }, { floor: 2, y: 3.1 }, { floor: 3, y: 6.2 }]), struct);
+ck("a top-floor lamp is on 3F (the fixed split said 2F)", F.floorOf(entity, 7, null, struct) === 3 && F.floorOf(entity, 7, null) === 2);
+ck("  ...with the plan's clearance: a ceiling lamp just under the 3F slab stays on 2F", F.floorOf(entity, 6.3, null, struct) === 2);
+ck("  ...a plan of two storeys or more still decides first", F.floorOf(entity, 7, three, [{ floor: 1, y: 0 }, { floor: 2, y: 100 }]) === 3);
+ck("  ...one structure level says nothing: the height split", F.floorOf(entity, 4, null, [{ floor: 1, y: 0 }]) === 2);
+const { STOREY_MIN_MOUNT } = await import("@/babylon/storeys");
+ck("  ...the clearance IS the plan's (import-free copy held equal)", F.FLOOR_MIN_MOUNT === STOREY_MIN_MOUNT);
+
+console.log("\n  the stairs:");
+ck("a stair trigger goes one floor up / down among the floors the model has, any number of them",
+   F.stairTarget([1, 2, 3], 2, true) === 3 && F.stairTarget([1, 2, 3], 2, false) === 1 && F.stairTarget([3, 1, 2], 1, true) === 2);
+ck("  ...and nowhere past the top or the bottom", F.stairTarget([1, 2], 2, true) === null && F.stairTarget([1, 2], 1, false) === null);
 
 console.log("\n  finding the stamp:");
 const stamped = (f, parent = null) => ({ metadata: f === undefined ? {} : { floorIndex: f }, parent });
@@ -47,8 +67,11 @@ ck("rendered: the active floor and every one below it", F.isRenderedFloor(1, 2) 
 console.log("\n  the callers:");
 const src = (p) => readFileSync(new URL(`../../src/babylon/${p}`, import.meta.url), "utf8");
 const fm = src("FloorManager.ts"), sm = src("SceneManager.ts");
-ck("FloorManager decides through floorOf with the plan, and holds no height constant of its own",
-   /floorOf\(role, centreY, this\.plan\)/.test(fm) && !/FLOOR_SPLIT_Y\s*=/.test(fm));
+ck("FloorManager decides through floorOf with the plan AND the structure's storeys, and holds no height constant of its own",
+   /floorOf\(role, centreY, this\.plan, structure\)/.test(fm) && /const structure = structureFloors\(this\.indexed\);/.test(fm) && !/FLOOR_SPLIT_Y\s*=/.test(fm));
+ck("the stair triggers go through stairTarget; no floor number is written into them",
+   /stairTarget\(this\.floorsDetected, this\.currentFloor, true\)/.test(fm) && /stairTarget\(this\.floorsDetected, this\.currentFloor, false\)/.test(fm)
+   && !/currentFloor === [12]/.test(fm) && !/switchToFloor\([12]\)/.test(fm));
 ck("the pipeline's texture carriers are on no floor (the lightmap ones were filed under 2F)",
    /\/\^BAKED_\.\*Carrier\/\.test\(m\.name\)\) continue;/.test(fm));
 ck("SceneManager hands FloorManager the plan it builds", /this\.floors\.setPlan\(plan\)/.test(sm));

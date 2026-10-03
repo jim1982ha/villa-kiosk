@@ -55,6 +55,10 @@ export interface SpawnWorld {
   groundRooms(): readonly { pts: Pt2[] }[];
   /** A look-target down the most open direction from an eye at (x, y, z). */
   openestFacing(x: number, y: number, z: number): { x: number; y: number; z: number };
+  /** A ray straight DOWN onto stair geometry (split-structure GLBs mark their
+   *  treads `isStair`) from (x, fromY, z), `len` long: the tread's height, or
+   *  null. Only the stair candidate asks. */
+  castDownStair?(x: number, fromY: number, z: number, len: number): number | null;
 }
 
 export type Stand = { ok: true; y: number } | { ok: false; why: string };
@@ -145,6 +149,54 @@ export function flightBottom(loEnd: number, hiEnd: number, loY: number, hiY: num
   const bottom = loY <= hiY ? loEnd : hiEnd;
   const up = Math.sign((loY <= hiY ? hiEnd : loEnd) - bottom) || 1;
   return { bottom, up };
+}
+
+/** Where the stairs are, as the villa can say it — most trusted first. */
+export interface StairSigns {
+  /** A room the plan names as a staircase (its centroid is mid-flight). */
+  namedRoom?: { x: number; z: number } | null;
+  /** A stair-NAMED mesh's plan centre (an entity like camera.staircase_2f_cam). */
+  namedMesh?: { x: number; z: number } | null;
+  /** The box around real stair geometry (split-structure GLBs only). */
+  geometry?: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } } | null;
+}
+
+/**
+ * The stair candidate of the default spawn — the FOOT of the flight, on the
+ * ground floor. Lived in SceneManager (2.496.261), casting its own rays and
+ * computing an eye height pickSpawn then overwrote; now it is one more
+ * candidate behind SpawnWorld, and its height is the floor's, like the rest.
+ */
+export function stairSpawn(w: SpawnWorld, signs: StairSigns): TeleportPoint | null {
+  const groundAt = (x: number, z: number, target?: { x: number; y: number; z: number }): TeleportPoint => {
+    const y = w.floorAt(x, z, 1) + w.eyeHeight;
+    return { name: "Staircase", floor: 1, position: { x, y, z }, target: target ?? w.openestFacing(x, y - 0.1, z) };
+  };
+  // 1-2. A named stairwell or stair mesh marks the plan XZ — stairFoot, NOT
+  //      the centre: the centre of a stairwell is mid-flight.
+  for (const at of [signs.namedRoom, signs.namedMesh]) {
+    if (!at) continue;
+    const foot = stairFoot(w, at.x, at.z);
+    return groundAt(foot.x, foot.z);
+  }
+  // 3. Real stair geometry: find which end of the flight is its bottom from
+  //    the tread heights near each end, and stand 1.2 m before it, facing up.
+  const g = signs.geometry;
+  if (!g || !w.castDownStair) return null;
+  const alongX = g.max.x - g.min.x >= g.max.z - g.min.z;
+  const crossC = alongX ? (g.min.z + g.max.z) / 2 : (g.min.x + g.max.x) / 2;
+  const loEnd = alongX ? g.min.x : g.min.z;
+  const hiEnd = alongX ? g.max.x : g.max.z;
+  const span = hiEnd - loEnd || 1;
+  const tread = (along: number): number =>
+    w.castDownStair!(alongX ? along : crossC, g.max.y + 2, alongX ? crossC : along, g.max.y - g.min.y + 4) ?? Infinity;
+  const { bottom, up } = flightBottom(loEnd, hiEnd, tread(loEnd + span * 0.1), tread(hiEnd - span * 0.1));
+  const standAlong = bottom - up * 1.2;
+  const x = alongX ? standAlong : crossC;
+  const z = alongX ? crossC : standAlong;
+  const ahead = standAlong + up * 3;
+  const eyeY = w.floorAt(x, z, 1) + w.eyeHeight;
+  return groundAt(x, z, { x: alongX ? ahead : crossC, y: eyeY + 0.3, z: alongX ? crossC : ahead });
 }
 
 /** The ground-floor rooms a walker would expect to arrive in first, by the

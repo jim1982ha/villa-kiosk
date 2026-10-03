@@ -130,6 +130,8 @@ export class OverviewController {
    *  camera's own limits mirror it for its internal per-frame clamp). */
   private radiusLimits: RadiusLimits = { lo: 3, hi: 200 };
   getRadiusLimits(): RadiusLimits { return this.radiusLimits; }
+  /** Where the orbit centre may go — what applyPose clamps the target to. */
+  getPanBounds(): PanBounds { return this.bounds; }
   private setRadiusLimits(l: RadiusLimits): void {
     this.radiusLimits = l;
     this.camera.lowerRadiusLimit = l.lo;

@@ -2117,7 +2117,7 @@ export class EntityVisuals {
       members.map((m, i) => ({ wx: m.wx, wy: m.wy, wz: m.wz, mine: m.mine, halfW: boxes[i].halfW, halfH: boxes[i].halfH, cy: boxes[i].cy })),
       {
         vpH: view.vpH, vpW: view.vpW, vFov: view.vFov, frame: view.frame,
-        // The DESTINATION's grouping basis: computeRoomOverviewPose keeps the
+        // The DESTINATION's grouping basis: roomShot keeps the
         // current alpha but forces a top-down beta, so the ladder is walked
         // through the direction the camera will ARRIVE at (roomZoomSolver.ts).
         grouping: this.currentViewBasis(view.dir),

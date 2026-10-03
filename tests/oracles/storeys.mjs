@@ -35,7 +35,7 @@ for (const numbered of [true, false]) {
   // only the plan's number can place it, which is why the numbers win.
   if (numbered) ck("  ...and, by the plan's number, so is the upper staircase (1.11 m)", s.storeyOf(byName("Staircase", 1)) === up);
   ck("a storey's floor is what its rooms agree on — 0 and 2.56, not a tread",
-     s.floorOf(g) === 0 && s.floorOf(up) === 2.56, [s.floorOf(g), s.floorOf(up)]);
+     s.floorY(g) === 0 && s.floorY(up) === 2.56, [s.floorY(g), s.floorY(up)]);
   ck("above the ground storey: 2.56 (not the staircase's 0.85)", s.floorAbove(g) === 2.56, s.floorAbove(g));
   ck("above the top storey: nothing", s.floorAbove(up) === Infinity);
   ck("a ceiling lamp at 2.3 m is on the GROUND storey", s.storeyAt(2.3) === g, s.storeyAt(2.3));

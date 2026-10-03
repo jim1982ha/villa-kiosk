@@ -1,3 +1,12 @@
+## 2.496.261
+
+### Fixed
+- **VESTA now works with villas of three storeys or more.** The stairs in the 3D model could only take you between floor 1 and floor 2, and a model without a room plan put everything above 2.8 m on floor 2. The stairs now go one floor up or down among the floors the model has. Without a room plan, each device's floor is taken from the model's own floor slabs. A two-storey villa like this one behaves as before.
+- **The debug line for a room tap now shows the zoom the camera actually uses.** When the camera's own zoom limits changed the result, the line printed the value from before the limit. It now prints both. Tapping a room gives the same view as before; on this villa it frames the Living Room identically.
+
+### Changed
+- Behind the scenes: the room-tap camera calculation and the walking-mode start point at the foot of the stairs are each one testable piece, checked by value. Behaviour is unchanged.
+
 ## 2.496.260
 
 ### Changed

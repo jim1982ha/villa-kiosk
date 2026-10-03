@@ -161,8 +161,10 @@ export class Storeys<R extends StoreyRoomIn = StoreyRoomIn> {
   /** The storey a room is on. */
   storeyOf(room: R): number | null { return this.of.get(room) ?? null; }
 
-  /** A storey's floor: the height its rooms agree on. */
-  floorOf(storey: number): number { return this.floor.get(storey) ?? 0; }
+  /** A storey's floor HEIGHT: the one its rooms agree on. (Was `floorOf`,
+   *  which collided with floorOf.ts's floorOf — a 1-based floor NUMBER —
+   *  2.496.261.) */
+  floorY(storey: number): number { return this.floor.get(storey) ?? 0; }
 
   /**
    * The storey of a point an UNKNOWN height above its floor — a light
