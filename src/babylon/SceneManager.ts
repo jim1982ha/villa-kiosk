@@ -28,7 +28,7 @@ import { PickHandler } from "./PickHandler";
 import { EntityVisuals } from "./EntityVisuals";
 import { resolveHit, type HitPickers } from "./hitResolution";
 import { FrameScheduler } from "./frameScheduler";
-import { ResolutionGovernor, startingScale, VALVE_SAMPLE_MIN } from "./resolutionGovernor";
+import { ResolutionGovernor, startingScale } from "./resolutionGovernor";
 import { SceneLook } from "./sceneLook";
 import { StructureSet } from "./structureSet";
 import { Storeys, isStairwell } from "./storeys";
@@ -920,7 +920,7 @@ export class SceneManager {
     };
     const check = () => {
       if (this.disposed) { unpin(); return; }
-      if (this.governor.sampleCount >= VALVE_SAMPLE_MIN) { finish(); return; }
+      if (this.governor.hasEnoughSamples) { finish(); return; }
       if (performance.now() - started > maxWaitMs) { finish(); return; }
       setTimeout(check, 250);
     };

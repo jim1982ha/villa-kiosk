@@ -90,6 +90,10 @@ export class ResolutionGovernor implements ResolutionPort {
 
   /** Gaps collected in the current burst. */
   get sampleCount(): number { return this.gaps.length; }
+  /** Enough frame gaps for the valve to act on (VALVE_SAMPLE_MIN) — asked by
+   *  SceneManager's calibration loop, which used to compare the count to the
+   *  constant itself (2.496.262). */
+  get hasEnoughSamples(): boolean { return this.gaps.length >= VALVE_SAMPLE_MIN; }
 
   /**
    * Measure how long INTERACTIVE frames actually take, and report a summary.

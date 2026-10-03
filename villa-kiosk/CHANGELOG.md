@@ -1,3 +1,8 @@
+## 2.496.262
+
+### Changed
+- Behind the scenes, nothing changes on screen. The figures VESTA reports about how long it took to open, and its "the app froze" reports, are now built by one piece of code that is checked against known cases. These figures were behind two earlier misleading readings: a 21-second "mount" on a 2-second load, and a load's own drawing time counted as a freeze. Building the report twice could also re-file a freeze as loading time; it no longer can. The 3D floor switching is now tested on a three-storey model.
+
 ## 2.496.261
 
 ### Fixed
