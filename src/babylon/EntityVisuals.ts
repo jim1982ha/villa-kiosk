@@ -95,7 +95,9 @@ import { groupMemberIds, groupForPrimary } from "@/config/deviceGroups";
 import { effectiveCategory, subjectOf, categorySurface, categorySurfaceRinged } from "@/config/EntityCategories";
 import { deviceLook, mapLookSource, meshLookFor, readingOf, type LookSource } from "@/utils/deviceActivity";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
-import { compactValue, VALUE_CAPABLE_TYPES } from "@/utils/entityValue";
+import { compactValue } from "@/utils/entityValue";
+import { badgeBox, dropTouchingValues, valuesWithText } from "./badgeBox";
+import { buildCardBadge, growGroupCard, placeGroupCard, setValueParts } from "./badgeControls";
 import { phantomEntity } from "@/utils/phantomEntity";
 import { channelEnabled, tapDebug } from "@/utils/tapDebug";
 import { debugFlagEnabled } from "@/utils/devLog";
@@ -760,6 +762,9 @@ export class EntityVisuals {
   private shown: ShownLabel[] = [];
   private boxesPool: { halfW: number; halfH: number; cy: number }[] = [];
   private boxes: { halfW: number; halfH: number; cy: number }[] = [];
+  /** The placement pass's answer: does badge i (of this pass's `shown`) draw
+   *  its value? Reused per frame, like the box buffers. */
+  private valueShown: boolean[] = [];
   /** Scratch for Vector3.ProjectToRef — avoids a Vector3 per badge per frame. */
   private projTmp = new Vector3();
   /** Scratch for currentViewBasis()'s camera forward direction. */
@@ -2071,13 +2076,13 @@ export class EntityVisuals {
     //     where this shot always lands. Measuring at the live scale sized the
     //     badges up to 1.43x too small, so the camera flew to a distance
     //     computed for badges that then grew on arrival and re-collided.
-    const wasVisible = members.map((m) => m.lbl.valueWrap.isVisible);
-    for (const m of members) this.setValueVisible(m.lbl, false);
+    // Icon-only is an ANSWER passed in (all false), not a state forced onto
+    // the controls and restored afterwards (until 2.496.269 it hid every
+    // member's value, measured, and put the old visibility back).
     // Destination scale: the zoom cap is 1 where this shot lands, so only
     // the user size and the CSS→GUI conversion apply.
     const mScale = this.iconUserScale * this.cssToGui();
-    const boxes = this.labelBoxes(members, [], [], mScale);
-    for (let i = 0; i < members.length; i++) this.setValueVisible(members[i].lbl, wasVisible[i]);
+    const boxes = this.labelBoxes(members, members.map(() => false), [], [], mScale);
 
     const allow = 1 - GROUP_OVERLAP_ALLOW_WIDTHS;
     const gapPx = this.metrics.minGapPx * mScale;
@@ -2856,17 +2861,8 @@ export class EntityVisuals {
       // icon in the active state only — the state nobody screenshots, because
       // the badge looks fine at rest.
       const glyphPx = this.glyphPxFor(card);
-      // Half the card's leftover height: the same clear space on all four
-      // sides of the chip, and it makes a bare-icon card square (see below).
-      // ⚠️ `iconPadX` AND `inkInset` ARE GONE FROM HERE. Both now live inside
-      // `cardStruts`, which is the whole point: the two expressions that
-      // computed a card's width shared one term out of six, and `tsc` reporting
-      // these as unused is the proof the second copy has no reader left.
-      // ⚠️ ONE OWNER FOR THE CARD'S WIDTH TERMS — see badgeCard.cardStruts.
-      // These four strut widths and the layout's estimate were two disjoint
-      // expressions until 2.496.28; they are the same six numbers now, so the
-      // solver cannot reserve a size the renderer does not draw.
-      const st = card ? cardStruts(m.cardHeightPx, glyphPx, 1) : null;
+      // The card's struts (badgeCard.cardStruts — one owner for its width
+      // terms, shared with the layout's estimate) are badgeControls'.
 
       const container = new StackPanel(`lbl_${entityId}`);
       container.isVertical = true;
@@ -2890,102 +2886,10 @@ export class EntityVisuals {
       // card: a SOLID state-coloured rounded card (neutral by default, see
       // categorySurface) holding an icon chip + value inline (its fill/ring
       // are driven in updateLabel).
-      const badge = new DashableRectangle(`lbl_badge_${entityId}`);
-      badge.height = `${card ? m.cardHeightPx : m.badgeDiameterPx}px`;
-      badge.cornerRadius = (card ? m.cardHeightPx : m.badgeDiameterPx) * BADGE_CORNER_FRACTION;
-      badge.thickness = 0;
-      // Apply the style's resting fill NOW, not only in updateLabel: an entity
-      // that has never reported (or is UNAVAILABLE and so never pushed a state
-      // this session) would otherwise keep the transparent default and render
-      // with NO card at all — reading as "this badge ignores the card style".
-      // updateLabel re-applies the same value whenever a state does arrive.
-      badge.background = card
-        ? categorySurface(category, "off", this.config.entityMap[entityId]?.badgeColor).fill
-        : "transparent";
-      // Symmetric halo, in device pixels — the two facts behind that, and why
-      // they are a function rather than four copies of two numbers, are in
-      // badgeShadow.ts. This block is where the reasoning was written; it moved
-      // there when /dry-audit found the other two controls ignoring it.
-      badgeShadow(badge);
-      // Tap/long-press handling is NOT wired here — see pickBadgeAt()'s
-      // docstring for why. The badge is a purely visual control now.
-      if (card) {
-        // The card hugs its icon+value row. Top/bottom breathing room is the
-        // glyph image's baked-in margin (BADGE_INSET_CARD); left/right come
-        // from the padding below.
-        badge.adaptWidthToChildren = true;
-        // ── PADDING IN BABYLON GUI SUBTRACTS. THIS FLAG IS WHAT ADDS IT ────
-        // The single defect behind ~15 releases of "the icon and the text have
-        // no padding and are not centred in the card", and it is not a number
-        // anywhere — it is which side of the box the padding lands on.
-        //
-        // Babylon's default is an INSET: control.js:1645-1674 subtracts a
-        // control's own padding from its own _currentMeasure. Meanwhile
-        // container.js:369 ADDS that same padding to the width PROPERTY when
-        // adaptWidthToChildren is on. The two cancel at a stable fixed point
-        // that is silently wrong — the property read 28 while the card was
-        // DRAWN 22 wide against a fixed 28 height. Portrait, 0.79 aspect, with
-        // cornerRadius computed off the height (7.9px = 36% of the 22 actually
-        // drawn) so it rounded like a vertical capsule instead of a squircle.
-        // Inside it, the chip sat flush on the left border with 0px of margin
-        // and 3px on the right of the value: exactly the report, and exactly
-        // why adjusting the icon's SIZE, the ring, the inset or the fraction
-        // never helped. Every one of those fixes computed a correct number
-        // that was then subtracted instead of added.
-        //
-        // descendantsOnlyPadding is Babylon's CSS-padding mode
-        // (control.js:1536-1541): the padding is applied to the measure handed
-        // to the CHILDREN and left out of this control's own box. The property
-        // and the drawing now agree, so a bare-icon card is 28x28 — square by
-        // construction at any icon size, on either pointer class — and a card
-        // with a value reads pad | chip | gap | value | pad.
-        badge.descendantsOnlyPadding = true;
-        // Half the card's leftover height, so the chip's clear space is the
-        // same on all four sides and width equals height when there is no
-        // value. The icon-to-text gap is a different measurement and lives on
-        // the value below.
-        // ⚠️ ZERO. THE CARD'S OUTER MARGINS ARE SPACER CONTROLS TOO (2.452.0),
-        // and this is measurement, not another theory. The `badge` line printed
-        // `glyph.left === badge.left` EXACTLY while the badge's width still
-        // included both paddings (1 + 16 + 3 + 17 + 2.25 = 39.25, drawn 39) — so
-        // under `descendantsOnlyPadding` + `adaptWidthToChildren` the padding
-        // sizes the box and does NOT offset the children. Every pixel of it
-        // therefore piled up as dead space on the RIGHT: visL=1.60, which is only
-        // the baked ink, against visR=3.00, which was all the padding. Five
-        // attempts at this bug were five different padding values feeding a
-        // mechanism that never positioned anything.
-        //
-        // The gap spacer, by contrast, measured EXACTLY the 3 px it was set to —
-        // a StackPanel lays children out by their widths and gets it right. So
-        // the outer margins become spacers as well, and the whole card is now
-        // positioned by one mechanism that is proven to work.
-        badge.paddingLeft = "0px";
-        badge.paddingRight = "0px";
-      } else {
-        badge.width = `${m.badgeDiameterPx}px`;
-      }
-      container.addControl(badge);
-
-      // Card mode lays the icon + value in a horizontal row INSIDE the card;
-      // classic keeps the glyph as the badge's full fill and the value in a
-      // separate pill below.
-      const row = card ? new StackPanel(`lbl_row_${entityId}`) : null;
-      let barePad: Rectangle | null = null;
-      let padL: Rectangle | null = null;
-      if (row) {
-        row.isVertical = false;
-        // ONE height for everything inside the card, and it is the glyph's
-        // own size. It used to be `cardHeightPx - 2 * ringThicknessPx`
-        // computed separately here and again for the value box — two
-        // derivations of one quantity that happened to agree, and that stopped
-        // describing the drawn card at all in 2.252.0, when the ring became
-        // 0px, 1px or ringThicknessPx depending on state. The glyph is what
-        // this box exists to hold, so the glyph is what sizes it.
-        row.height = `${glyphPx}px`;
-        row.adaptWidthToChildren = true;
-        badge.addControl(row);
-      }
-
+      // BOTH styles use the SAME baked squircle image (badgeImageDataUrl) at
+      // the SAME inset — 0, so the art fills its control. The card used to
+      // bake a margin of its own on top of the border it already draws, which
+      // is two frames around one icon; see the glyph source below.
       // BOTH styles use the SAME baked squircle image (badgeImageDataUrl) at
       // the SAME inset — 0, so the art fills its control. The card used to
       // bake a margin of its own on top of the border it already draws, which
@@ -3013,133 +2917,37 @@ export class EntityVisuals {
           bakePx: this.glyphBakePx(card),
         }));
 
-      glyph.width = `${glyphPx}px`;
-      glyph.height = `${glyphPx}px`;
-      glyph.stretch = Image.STRETCH_UNIFORM;
-      /** A transparent, sized gap — the ONE mechanism in this row that measures
-       *  what it is set to (see the badge's zeroed padding above). */
-      const strut = (name: string, w: number): Rectangle => {
-        const r = new Rectangle(`lbl_${name}_${entityId}`);
-        r.thickness = 0;
-        r.background = "";
-        r.width = `${Math.max(0, w)}px`;
-        r.height = `${glyphPx}px`;
-        r.isPointerBlocker = false;
-        return r;
-      };
-      if (row) {
-        // The LEFT margin is short by the baked ink the chip already contributes,
-        // so the two VISIBLE margins match: visL = padL + ink, visR = padR.
-        // Whole pixels (cardStruts, 2.496.137): Babylon floors every width, so
-        // the fractional struts this once kept "unrounded" drew a pixel short —
-        // a 0.8 left margin drew as 0 (measured on a real GUI).
-        // Two left margins, one shown at a time (setValueVisible): a bare
-        // icon's is the SAME number as its right margin, so the chip is
-        // centred whatever Babylon's whole-pixel flooring does; beside a value
-        // it is short by the ink — see cardStruts.
-        barePad = strut("barepad", st!.barepad);
-        row.addControl(barePad);
-        padL = strut("padl", st!.padl);
-        padL.isVisible = false;
-        row.addControl(padL);
-      }
-      (row ?? badge).addControl(glyph);
 
-      // Value: classic → a dark rounded pill BELOW the badge; card → inline
-      // text to the RIGHT of the icon chip, on the coloured card itself.
-      // Declared out here so the label record can carry it: the classic style
-      // has no gap to hold (its value is a pill BELOW the badge), so null.
+      // Tap/long-press handling is NOT wired here — see pickBadgeAt()'s
+      // docstring for why. The badge is a purely visual control now.
+      // CARD: built by badgeControls.buildCardBadge — the SAME builder
+      // tests/oracles/badge_drawn.mjs lays out on a NullEngine, so the test
+      // measures what ships. CLASSIC: the glyph fills a round badge and the
+      // value is a dark pill below it.
+      let badge: DashableRectangle;
+      let barePad: Rectangle | null = null;
+      let padL: Rectangle | null = null;
       let valueSpacer: Rectangle | null = null;
-      /** The value's right-hand margin, shown and hidden with it — see where it
-       *  is added for why it is the value's and not the card's. */
       let valueTail: Rectangle | null = null;
-      const valueWrap = new Rectangle(`lbl_valwrap_${entityId}`);
-      valueWrap.thickness = 0;
-      valueWrap.adaptWidthToChildren = true;
-      // Same reason as the card above, and it bit BOTH styles: this wrap is an
-      // adaptWidthToChildren container with its own left/right padding, so
-      // without this its padding cancelled to nothing. The classic style's
-      // dark pill was drawn exactly as wide as its text — pillPadXPx: 10 was
-      // being subtracted straight back out, which is why the value looked like
-      // it was touching the stadium's rounded ends.
-      valueWrap.descendantsOnlyPadding = true;
+      let valueWrap: Rectangle;
       if (card) {
-        valueWrap.height = `${glyphPx}px`;
-        valueWrap.background = "transparent";
-        // The icon-to-text gap, as a fraction of the CHIP rather than a flat
-        // constant — the bottom bar's tiles run a 46px chip with a 13px gap,
-        // i.e. 28% of the chip, and that is the proportion this is measured
-        // against because it is the same object drawn in the DOM. A flat 4px
-        // came out at 18% and read as the text crowding the chip's edge.
-        // ── THE GAP IS A SPACER CONTROL, NOT PADDING (2.446.0) ───────────────
-        // Third attempt at "the number sits too far right", and the first two
-        // failed the same way: the gap was expressed as PADDING on this wrap,
-        // and a padding here interacts with `descendantsOnlyPadding` and
-        // `adaptWidthToChildren` in a way I mis-modelled twice — predicting the
-        // text left of centre while the owner's screenshot measured it 20 px
-        // from the icon and 10 px from the pill's edge, i.e. the opposite.
-        //
-        // A StackPanel lays its children out by their WIDTHS. A transparent
-        // Rectangle of width G therefore puts exactly G between the icon and the
-        // text, with no padding semantics involved at all — the gap becomes a
-        // thing with a size instead of an inset whose sign I have to reason
-        // about. The wrap now carries NO horizontal padding, so the pill hugs
-        // the number and the only space to its right is the card's own
-        // `iconPadX`, matching the icon's inset on the left.
-        valueWrap.paddingLeft = "0px";
-        // ⚠️ ZERO, and see the spacer note above for why this is not the dial.
-        valueWrap.paddingRight = "0px";
-        valueWrap.isVisible = false;
-        // Added BEFORE the wrap so the row reads glyph | spacer | value. It
-        // shares the wrap's visibility: a badge with no value must not carry a
-        // gap to nothing, or every valueless card would be that much wider.
-        valueSpacer = strut("valgap", 0);
-        // ⚠️ THE CHIP'S INK IS SMALLER THAN ITS BOX, and missing that is why two
-        // attempts at this looked right on paper and wrong on screen (2.447.0).
-        // `badgeImageDataUrl` bakes the squircle at BADGE_INSET_CARD (10%) inside
-        // the image, so the VISIBLE chip stops 0.1·glyphPx short of the control's
-        // edge on every side. Every gap I computed was therefore measured from a
-        // boundary nobody can see, and the drawn gap was that plus the inset —
-        // which is exactly the "still too far right" the owner kept reporting
-        // while the arithmetic said otherwise.
-        //
-        // So the target is stated where it can be checked: the value's visible
-        // clear space on the LEFT (this spacer plus the baked inset) equals its
-        // visible clear space on the RIGHT (the card's own iconPadX). Solve for
-        // the spacer and it is a subtraction, not a fraction — and on this
-        // villa's metrics it comes out at ~1 CSS px, which is why every
-        // fraction-of-the-gap value I tried was too wide.
-        // ⚠️ THE OWNER STATED THE TARGET AND IT REVERSES THE 2x RULE (2.454.0):
-        // "I want the 100% to appear centered between the end of the entity
-        // icon and the end of the badge graph". That is VISIBLE gap == VISIBLE
-        // right margin, and both are printed on the `badge` line as `gap=` and
-        // `visR=` — so this stopped being a number to argue and became an
-        // equation to satisfy. See CARD_VALUE_MARGIN_OF_ICON_PAD for why the
-        // multiple is 1.5 (it preserves the card's width) and for the six
-        // attempts that were argued from the DOM twin instead of measured.
-        //
-        // Whole pixels, from cardStruts: Babylon floors a control's width, so a
-        // fractional strut was drawn short and never as the model said.
-        valueSpacer.width = `${st!.valgap}px`;
-        valueSpacer.isVisible = false;
-        row!.addControl(valueSpacer);
-        row!.addControl(valueWrap);
-        // The value's TAIL, and it rides the value's own visibility for the
-        // same reason the gap spacer does — a bare-icon card must keep its
-        // visible margins equal (with `bareink`, 2.496.130: this comment used to
-        // claim visL == visR here while the drawn margins were 3.0 and 5.2), so the extra
-        // margin the owner's centring asks for belongs to the VALUE, not to the
-        // card. With a value: visR = this + padr = 1.5·iconPadX, which is the
-        // visible gap on the other side of the text. Without one: it collapses
-        // and the card is symmetric exactly as before.
-        valueTail = strut("valtail", st!.valtail);
-        valueTail.isVisible = false;
-        row!.addControl(valueTail);
-        // The right margin proper, LAST in the row. It is the counterpart of
-        // `padl` above and the reason the card no longer collects its padding
-        // on one side. Always present.
-        row!.addControl(strut("padr", st!.padr));
+        ({ badge, barePad, padL, valueSpacer, valueWrap, valueTail } = buildCardBadge(entityId, m, glyphPx, glyph));
       } else {
+        badge = new DashableRectangle(`lbl_badge_${entityId}`);
+        badge.height = `${m.badgeDiameterPx}px`;
+        badge.cornerRadius = m.badgeDiameterPx * BADGE_CORNER_FRACTION;
+        badge.thickness = 0;
+        badge.width = `${m.badgeDiameterPx}px`;
+        glyph.width = `${glyphPx}px`;
+        glyph.height = `${glyphPx}px`;
+        glyph.stretch = Image.STRETCH_UNIFORM;
+        badge.addControl(glyph);
+        valueWrap = new Rectangle(`lbl_valwrap_${entityId}`);
+        valueWrap.thickness = 0;
+        valueWrap.adaptWidthToChildren = true;
+        // An adaptWidthToChildren container with its own padding cancels it to
+        // nothing unless the padding is the children's (badgeControls' badge).
+        valueWrap.descendantsOnlyPadding = true;
         valueWrap.height = `${m.valueChipHeightPx}px`;
         valueWrap.cornerRadius = m.valueChipHeightPx / 2;
         valueWrap.background = "rgba(15,23,42,0.85)";
@@ -3163,8 +2971,15 @@ export class EntityVisuals {
         valueWrap.paddingRight = `${m.pillPadXPx}px`;
         badgeShadow(valueWrap, "pill");
         valueWrap.isVisible = false;
-        container.addControl(valueWrap);
       }
+      badge.background = card
+        ? categorySurface(category, "off", this.config.entityMap[entityId]?.badgeColor).fill
+        : "transparent";
+      badgeShadow(badge);
+      container.addControl(badge);
+      // Classic: the pill hangs below the badge, in the container's column.
+      if (!card) container.addControl(valueWrap);
+
 
       // Card: the surface's glyph colour, so it stays legible on a neutral
       // badge and shifts with state exactly as the icon does. Classic: white,
@@ -3584,9 +3399,9 @@ export class EntityVisuals {
     // first — the same order every map engine degrades in, where the marker
     // survives and its label is the thing that goes. The badge does not move
     // or shrink; it just stops carrying its number.
-    for (const s of shown) {
-      this.setValueVisible(s.lbl, s.lbl.valueText.text.length > 0);
-    }
+    // The pass's own answer for each value, decided here and written to the
+    // controls from it — the boxes read the answer, never the controls.
+    const valueShown = valuesWithText(shown.map((s) => s.lbl.valueText.text.length), this.valueShown);
     // Before ANY measurement this pass: the icon scale is derived from the rung
     // (see syncIconZoomToRung) and resizing controls after `labelBoxes` has read
     // them would break the file's oldest rule — layout geometry equals render
@@ -3594,20 +3409,18 @@ export class EntityVisuals {
     this.syncIconZoomToRung(shown);
     const clearance = this.screenClearance(shown);
     if (clearance) {
-      const withText = this.placementItems(shown, this.labelBoxes(shown), clearance);
-      const touching = markContacts(withText, clearance.gap, clearance.minSep, this.placeScratch);
-      for (let i = 0; i < shown.length; i++) {
-        if (touching[i]) this.setValueVisible(shown[i].lbl, false);
-      }
+      const withText = this.placementItems(shown, this.labelBoxes(shown, valueShown), clearance);
+      dropTouchingValues(valueShown, markContacts(withText, clearance.gap, clearance.minSep, this.placeScratch));
     }
+    for (let i = 0; i < shown.length; i++) this.setValueVisible(shown[i].lbl, valueShown[i]);
     // ── Tier 2 → 3: only now, if the ICONS THEMSELVES still collide ───────
     // Re-measured AFTER the readouts above are hidden, so this pass sees the
     // boxes that will actually be drawn rather than the ones that would have
     // been — the 2.152.0 rule that a layout decision may never use different
-    // geometry from the renderer. labelBoxes reads valueWrap.isVisible for its
+    // geometry from the renderer. labelBoxes reads the pass's valueShown for its
     // width, so hiding the value IS the icon-only measurement; there is no
     // second, parallel definition of a badge's size to drift out of step.
-    const boxes = this.labelBoxes(shown);
+    const boxes = this.labelBoxes(shown, valueShown);
 
     // ── The last tiers: the entity group, then the room's chip ────────────
     // Four tiers, in order, and a badge holds its SIZE through all of them —
@@ -4028,15 +3841,7 @@ export class EntityVisuals {
    * forgot it, which is the whole reason this is a method and not two lines.
    */
   private setValueVisible(lbl: LabelControls, on: boolean): void {
-    lbl.valueWrap.isVisible = on;
-    if (lbl.valueSpacer) lbl.valueSpacer.isVisible = on;
-    // BOTH margins around the value ride its visibility, or a valueless card
-    // pays for space around text it is not drawing — the same dead-width bug
-    // the gap spacer above was written to avoid, on the other side.
-    if (lbl.valueTail) lbl.valueTail.isVisible = on;
-    // …and the left margin: `padl` beside a value, `barePad` without one.
-    if (lbl.padL) lbl.padL.isVisible = on;
-    if (lbl.barePad) lbl.barePad.isVisible = !on;
+    setValueParts(lbl, on);      // badgeControls — the oracle toggles a value the same way
   }
 
   /**
@@ -4769,6 +4574,9 @@ export class EntityVisuals {
    *  coupling that stops being true after some later edit. */
   private labelBoxes(
     shown: { lbl: LabelControls }[],
+    /** Whether each badge's value is drawn — the PASS's answer (badgeBox
+     *  header), never read back from the controls. */
+    valueShown: readonly boolean[],
     out: { halfW: number; halfH: number; cy: number }[] = this.boxes,
     pool: { halfW: number; halfH: number; cy: number }[] = this.boxesPool,
     /** Measure at a scale OTHER than the live one. Only "zoom to this room"
@@ -4777,66 +4585,18 @@ export class EntityVisuals {
   ): { halfW: number; halfH: number; cy: number }[] {
     const scale = scaleOverride ?? this.effectiveScale();
     const card = this.isCardStyle();
-    const m = this.metrics;
-
-    // Classic layout (unscaled, anchor at 0, y grows downward, hangs ABOVE):
-    //   badge  → centre −56, half 20         (BADGE_DIAMETER 40, container 76 tall)
-    //   pill   → centre −24, half 9          (VALUE_CHIP_HEIGHT 18, under the badge)
-    // Card layout: one horizontal card (CARD_HEIGHT tall inside a
-    // CARD_LABEL_HEIGHT container), hanging above the anchor; width = the
-    // glyph (rendered at the card height) + left pad + any inline value.
     // Filled in place from a grow-only pool (see boxesPool) instead of a fresh
-    // .map() array of fresh objects every frame — same values, no allocation
-    // in the steady state.
-    const boxes = out;
+    // array of fresh objects every frame — same values, no allocation in the
+    // steady state. The size itself is badgeBox's (one definition).
     for (let i = 0; i < shown.length; i++) {
-      const s = shown[i];
-      let b = pool[i];
-      if (!b) { b = { halfW: 0, halfH: 0, cy: 0 }; pool[i] = b; }
-      boxes[i] = b;
-      if (card) {
-        const hasVal = s.lbl.valueWrap.isVisible;
-        // ⚠️ THE RENDERER'S OWN STRUTS — see badgeCard.cardStruts. This read
-        // `cardPadLeftPx + cardHeightPx + valW`, which shares exactly one term
-        // with what `rebuildLabels` actually builds, and over-reserved about
-        // 10 CSS px per card: three to five times `minGapPx`, on the very
-        // estimate the gap constants are tuned against.
-        const valW = hasVal ? s.lbl.valueText.text.length * m.cardValueCharPx : 0;
-        const cardW = cardStruts(m.cardHeightPx, this.glyphPxFor(true), valW).width;
-        b.halfW = (cardW / 2) * scale;
-        b.halfH = (m.cardHeightPx / 2 + 1) * scale;
-        // The card IS the container now, so its centre is the container's
-        // centre: exactly half a card above the anchor. No magic constant to
-        // approximate a gap that no longer exists.
-        b.cy = -(m.cardHeightPx / 2) * scale;
-        continue;
-      }
-      const hasPill = s.lbl.valueWrap.isVisible;
-      // Reserve the WITH-PILL footprint (halfH/cy) for any type that can EVER
-      // grow one (see compactValue) even while it currently has none — not
-      // just when hasPill is true right now. Two fixtures mounted close
-      // together in the model (e.g. a ceiling fan + its own temperature
-      // sensor) sit fine when both are pill-less, but the moment the fan
-      // (pill-capable) turns off and drops its pill, ITS box shrank while the
-      // sensor's didn't, so they got pushed apart less than before and ended
-      // up nearly touching/overlapping — reading as "the badge got smaller"
-      // when it was really "got less clearance from its neighbour". Sizing
-      // the box off pill-CAPABILITY instead of current visibility keeps the
-      // same spacing regardless of which of a pair happens to have a reading
-      // at this exact moment. Only the WIDTH still adapts to the actual pill
-      // text when one is shown (a wide value still needs proportionally more
-      // horizontal room than a narrow one).
-      const pillCapable = VALUE_CAPABLE_TYPES.has(s.lbl.type);
-      const pillHalfW = hasPill
-        ? (s.lbl.valueText.text.length * m.pillValueCharPx + m.pillValuePadPx) / 2
-        : 0;
-      b.halfW = Math.max(m.badgeDiameterPx / 2, pillHalfW) * scale;
-      b.halfH = (pillCapable ? m.classicHalfHWithPillPx : m.classicHalfHPx) * scale;
-      // Box centre Y relative to the anchor.
-      b.cy = (pillCapable ? m.classicCyWithPillPx : m.classicCyPx) * scale;
+      const lbl = shown[i].lbl;
+      let bx = pool[i];
+      if (!bx) { bx = { halfW: 0, halfH: 0, cy: 0 }; pool[i] = bx; }
+      out[i] = badgeBox({ card, type: lbl.type, valueChars: lbl.valueText.text.length, valueShown: valueShown[i] },
+        this.metrics, scale, bx);
     }
-    boxes.length = shown.length;
-    return boxes;
+    out.length = shown.length;
+    return out;
   }
 
   // ── Entity groups (tier 4 — several of a room's badges as one) ────────────
@@ -4969,53 +4729,6 @@ export class EntityVisuals {
     return passLayoutOf({ ...this.cardShape(), cardBudget: this.cardBudget() }, g, memberCount);
   }
 
-  /**
-   * Make sure this group has at least `n` chip+zone pairs, creating any that
-   * are missing.
-   *
-   * Grow-only and never shrunk: a group's membership moves as devices come
-   * and go and as the zoom rung changes what fits, and disposing controls on
-   * that boundary would flicker for no benefit. Surplus ones are hidden.
-   */
-  private growGrid(
-    c: EntityGroupControls, cells: number, cards: number,
-  ): void {
-    // ── Z-ORDER IS EXPLICIT, BECAUSE CREATION ORDER IS NOT ────────────────
-    // Container.addControl inserts by zIndex and APPENDS within a tie, and
-    // these pools are grown lazily — a second sub-card created the first time
-    // a group reaches five members would otherwise be appended after the chips
-    // and paint straight over them. Cards below, pictograms above.
-    for (let k = c.cards.length; k < cards; k++) {
-      const r = new Rectangle(`egroupCard${k}_${c.container.name}`);
-      r.zIndex = 0;
-      r.isPointerBlocker = false;
-      r.isVisible = false;
-      c.container.addControl(r);
-      c.cards.push(r);
-    }
-    for (let k = c.chips.length; k < cells; k++) {
-      const img = new Image(`egroupChip${k}_${c.container.name}`);
-      img.zIndex = 1;
-      img.stretch = Image.STRETCH_UNIFORM;
-      img.isVisible = false;
-      c.container.addControl(img);
-      c.chips.push(img);
-
-      // Every dimension is written per pass (see updateEntityGroups), in
-      // PIXELS from the arrangement's centre — one code path whether the
-      // summary is one card or two. The zones TILE each card, so every point
-      // on a card belongs to exactly one device; the gap BETWEEN cards belongs
-      // to none, and a tap there falls through to whatever is underneath.
-      const z = new Rectangle(`egroupZone${k}_${c.container.name}`);
-      z.zIndex = 1;
-      z.thickness = 0;
-      z.background = "";
-      z.isPointerBlocker = false;
-      c.container.addControl(z);
-      c.zones.push(z);
-    }
-  }
-
   /** Draw (or hide) one badge-sized control per surviving entity group. */
   private updateEntityGroups(shown: ShownLabel[], groups: PendingEntityGroup[]): void {
     const layer = this.labelLayer;
@@ -5088,18 +4801,10 @@ export class EntityVisuals {
         // "layout geometry must equal render geometry" rule, and a focused
         // card drawn at the ordinary cap would be a different object.
         const lay = this.cardOf(drawn, cellMax(g), this.cardBudget());
-        c.container.width = `${lay.width}px`;
-        // HEIGHT IS PER-PASS, like the width. It used to be written once at
-        // construction, which was invisible while every card was one row tall
-        // and would have left a stale two-row box the moment a group shrank
-        // from four members to two — and a group's membership changing under a
-        // stable key is the common path, not an exotic one.
-        c.container.height = `${lay.height}px`;
-        this.growGrid(c, drawn, lay.cards.length);
-        for (let k = 0; k < c.chips.length; k++) {
-          c.chips[k].isVisible = k < drawn;
-          c.zones[k].isVisible = k < drawn;
-        }
+        growGroupCard(c, drawn, lay.cards.length);
+        // Sizes and positions: badgeControls.placeGroupCard — the same layout
+        // tests/oracles/badge_drawn.mjs runs on a NullEngine.
+        placeGroupCard(c, lay, drawn);
         // ── The visible card(s) ──────────────────────────────────────────
         // Every property written every pass, on every pooled control: `m` can
         // fall from two to one when a group loses a member, and a stale box
@@ -5107,12 +4812,7 @@ export class EntityVisuals {
         for (let k = 0; k < c.cards.length; k++) {
           const sub = c.cards[k];
           const src = lay.cards[k];
-          sub.isVisible = !!src;
           if (!src) continue;
-          sub.width = `${src.width}px`;
-          sub.height = `${src.height}px`;
-          sub.left = `${src.left}px`;
-          sub.top = `${src.top}px`;
           // WAS `shadowOffsetY = 2` — a directional skirt on a control drawn
           // beside badges that have none. See badgeShadow.ts.
           badgeShadow(sub, "surface");
@@ -5126,18 +4826,6 @@ export class EntityVisuals {
           // that laid out a 2x2 last pass keeps its half-height and its
           // quarter offset unless this overwrites them.
           for (let k = 0; k < drawn; k++) {
-            c.chips[k].width = `${lay.chip}px`;
-            c.chips[k].height = `${lay.chip}px`;
-            c.chips[k].left = `${lay.cellLeft(k)}px`;
-            c.chips[k].top = `${lay.cellTop(k)}px`;
-            // One badge box, centred on its own chip — in PIXELS, like
-            // everything else here, so one code path serves a single card and
-            // a split. Percentages could not: half of a two-card arrangement
-            // is not a cell.
-            c.zones[k].width = `${lay.zoneW}px`;
-            c.zones[k].height = `${lay.zoneH}px`;
-            c.zones[k].left = `${lay.cellLeft(k)}px`;
-            c.zones[k].top = `${lay.cellTop(k)}px`;
             const s2 = shown[g.members[k]];
             const st = this.lastState.get(s2.id) ?? phantomEntity(s2.id);
             const { face, ring } = model.cells[k];
