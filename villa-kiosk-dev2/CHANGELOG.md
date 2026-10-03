@@ -1,3 +1,9 @@
+## 2.496.255
+
+### Fixed
+- **Opening VESTA inside the Home Assistant app no longer downloads the whole 3D model every time.** Your phone's load reports showed every open re-downloading the 17 MB villa (2 to 22 seconds), even twice in a row on the same version, while turning it into the 3D view took under 2 seconds. VESTA now keeps the model on the device after the first download and reuses it until a new model is uploaded. The first open after this update still downloads it once.
+- The copy is removed when someone signs out of a shared tablet, as before.
+
 ## 2.496.254
 
 ### Fixed
