@@ -242,18 +242,25 @@ export interface FmTerms {
 
 const WARN_DEFAULT_PERCENT = 80;
 
+/** A usable "warn at" percentage (1–99), or null — so a blank or out-of-range
+ *  value falls back to the default. One rule for the stored terms (fmTerms)
+ *  and the Spend tab's editor, which restated it and read "8.5" as 85. */
+export function validWarnPercent(v: unknown): number | null {
+  const n = typeof v === "string" ? (v.trim() === "" ? NaN : Number(v.trim())) : Number(v);
+  return Number.isFinite(n) && n >= 1 && n <= 99 ? n : null;
+}
+
 /** Resolve stored terms (any shape an older or hand-edited store may hold). */
 export function fmTerms(contract: Partial<FmContract> | undefined, haCurrency: string | undefined): FmTerms {
   const c = contract ?? {};
   const cap = Number(c.monthlyCap);
-  const pct = Number(c.warnAtPercent);
   const name = (v: unknown, fallback: string) => (typeof v === "string" && v.trim() ? v.trim() : fallback);
   return {
     monthlyCap: Number.isFinite(cap) && cap > 0 ? cap : 0,
     currency: typeof haCurrency === "string" ? haCurrency.trim() : "",
     cappedName: name(c.cappedName, "Minor"),
     uncappedName: name(c.uncappedName, "Major"),
-    warnAt: (Number.isFinite(pct) && pct >= 1 && pct <= 99 ? pct : WARN_DEFAULT_PERCENT) / 100,
+    warnAt: (validWarnPercent(c.warnAtPercent) ?? WARN_DEFAULT_PERCENT) / 100,
   };
 }
 

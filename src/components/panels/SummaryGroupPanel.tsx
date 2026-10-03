@@ -24,7 +24,6 @@ import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
 import { effectiveCategory, subjectOf } from "@/config/EntityCategories";
 import { deviceLook, groupLook, storeLookSource } from "@/utils/deviceActivity";
-import { switchPosition } from "@/utils/entityState";
 import { bulkSwitchPlan } from "@/config/activeDevices";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { phantomEntity } from "@/utils/phantomEntity";
@@ -37,7 +36,7 @@ import { NO_ROOM_LABEL } from "@/config/roomKey";
 export type { SummaryGroup } from "@/config/summaryGroups";
 import type { SummaryGroup } from "@/config/summaryGroups";
 import { useVillaModel } from "@/config/VillaModel";
-import { devicePower } from "@/utils/devicePower";
+import { deviceSwitch } from "@/utils/devicePower";
 import InlineConfirm from "@/components/common/InlineConfirm";
 import { NOT_SENT } from "@/ha/serviceOutcome";
 
@@ -321,8 +320,12 @@ export default function SummaryGroupPanel({
     // "Unavailable" and its badge was amber. A switch has two positions and
     // the villa did not know which one was true, so it now offers none —
     // the same reasoning `rowInHa` already applies one line up. See
-    // entityState.switchPosition.
-    const position = switchPosition(e, domain);
+    // entityState.switchPosition, through devicePower.deviceSwitch — the one
+    // answer for which way it sits, what throws it, and whether to ask first
+    // (2.496.259: this row's switch unlocked a door in one tap, and ignored
+    // the owner's "ask before switching").
+    const sw = deviceSwitch(e, id, { label, requireConfirm: config.entityMap[id]?.requireConfirm });
+    const position = sw.position;
     const canToggle = canControl && rowInHa && position !== "unknown"
       && (TOGGLEABLE_DOMAINS.has(domain) || isLock);
     // EXACTLY what the map paints: `look` above is deviceLook, the map's own
@@ -347,9 +350,9 @@ export default function SummaryGroupPanel({
     // tell "HA itself says this is hidden" from an ordinary device at a
     // glance, not just infer it silently.
     const hiddenInHa = hiddenInHaEntityIds.has(id);
-    // The flip is devicePower's (lock/unlock, open/close, a domain's toggle).
+    // The flip is deviceSwitch's (lock/unlock, open/close, a domain's toggle).
     const doToggle = () => {
-      const f = devicePower(e, id).flip;
+      const f = sw.flip;
       return f ? callService(f.domain, f.service, {}, { entity_id: id }) : Promise.resolve(NOT_SENT);
     };
 
@@ -387,6 +390,7 @@ export default function SummaryGroupPanel({
           <EntityRowToggle
             entityId={id}
             actualOn={position === "on"}
+            ask={sw.ask}
             label={label}
             onToggle={doToggle}
           />

@@ -10,6 +10,7 @@ import { Settings2 } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { formatMoney, parseAmount } from "@/fm/fmEngine";
 import { useFmTerms } from "@/fm/useFmTerms";
+import { validWarnPercent } from "@/fm/fmTypes";
 
 export default function ContractTermsEditor() {
   const { config, update } = useConfig();
@@ -29,13 +30,13 @@ export default function ContractTermsEditor() {
     setOpen(true);
   };
   const save = () => {
-    const pct = Number(warnAt.replace(/[^\d]/g, ""));
     update({
       fmContract: {
         monthlyCap: parseAmount(cap),
         cappedName: cappedName.trim(),
         uncappedName: uncappedName.trim(),
-        warnAtPercent: pct >= 1 && pct <= 99 ? pct : 0,
+        // 0 = "not set": fmTerms reads it as the default (validWarnPercent).
+        warnAtPercent: validWarnPercent(warnAt) ?? 0,
       },
     });
     setOpen(false);

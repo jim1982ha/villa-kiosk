@@ -16,7 +16,7 @@ import UnavailableNotice from "./UnavailableNotice";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { isUnavailable } from "@/utils/stateColors";
-import { devicePower } from "@/utils/devicePower";
+import { deviceSwitch } from "@/utils/devicePower";
 import type { HassEntity } from "@/types/ha.types";
 import type { EntityMapping } from "@/types/scene.types";
 
@@ -25,7 +25,7 @@ interface Props {
   mapping: EntityMapping;
   /** Noun for the notice's description ("light", "fan", "AC"…). */
   device: string;
-  /** Draw the power button (devicePower's flip; confirm when the mapping asks). */
+  /** Draw the power button (devicePower.deviceSwitch: its flip, and its ask). */
   power?: boolean;
   /** Shown whatever the state (a reading that is informative offline too). */
   always?: ReactNode;
@@ -39,13 +39,16 @@ export default function ControlFrame({ entity, mapping, device, power, always, c
   }
   return (
     <>
-      {power && (
-        <PowerToggle
-          on={devicePower(entity, mapping.entityId).position === "on"}
-          onClick={() => HAServices.power(ws, entity, mapping.entityId)}
-          label={mapping.label} requireConfirm={mapping.requireConfirm}
-        />
-      )}
+      {power && (() => {
+        const sw = deviceSwitch(entity, mapping.entityId, mapping);
+        return (
+          <PowerToggle
+            on={sw.position === "on"}
+            onClick={() => HAServices.power(ws, entity, mapping.entityId)}
+            ask={sw.ask}
+          />
+        );
+      })()}
       {always}
       {children}
     </>

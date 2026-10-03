@@ -1,3 +1,11 @@
+## 2.496.259
+
+### Fixed
+- **A door can no longer be unlocked with one tap from a device list.** In a room or category list (Cockpit, the summary bar), a lock's switch unlocked the door at once. The lock's own screen asks "Unlock …?" first. Now every switch asks the same question before an unlock: the list's switch (the question opens under the row), the device screen and a device's linked switch.
+- **"Ask before switching" is now respected everywhere.** A device you set to ask first (in Advanced Settings) was only asked about on its own screen and on the map. Its switch in a room or category list, and as another device's linked switch, acted straight away. They now ask too, in words that say where it is going ("Turn off Gate?").
+- **Editing a paused maintenance task no longer restarts it.** Fixing a paused task's name or interval switched it back on. It now stays paused until you press Resume.
+- **The task interval is read as you typed it.** "1.5" was saved as 15 days, and a blank or mistyped interval was saved as every day. The form now asks for a whole number of days and keeps the Add button off until there is one. The Spend tab's warning percentage had a similar problem ("8.5" read as 85) and is fixed too.
+
 ## 2.496.258
 
 ### Fixed

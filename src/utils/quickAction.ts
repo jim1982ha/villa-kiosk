@@ -12,6 +12,7 @@
 
 import type { EntityMapping } from "@/types/scene.types";
 import type { HassEntity } from "@/types/ha.types";
+import { deviceSwitch } from "@/utils/devicePower";
 
 /**
  * Domains whose primary interaction is a plain on/off toggle. A tap toggles
@@ -45,13 +46,14 @@ export const CONFIRM_GATE_TYPES: ReadonlySet<string> =
  * something HA doesn't currently expose). Dimmable lights are included: a tap
  * toggles them, and their brightness/colour panel is reached via long-press.
  *
- * mapping.requireConfirm always wins over the type check: a device the owner
- * has explicitly flagged as needing confirmation (a door relay modelled as a
- * plain switch, say) opens its panel on tap like any rich control, where its
- * own PowerToggle asks before acting — see EntityMapping.requireConfirm.
+ * A device whose switch must be confirmed (devicePower.deviceSwitch's `ask`:
+ * the owner's "ask before switching", say on a door relay modelled as a plain
+ * switch) opens its panel on tap like any rich control, where its own
+ * PowerToggle asks the same question before acting. One answer, read here and
+ * by every switch (2.496.259).
  */
 export function isQuickToggle(mapping: EntityMapping, entity: HassEntity | undefined): boolean {
   if (!entity) return false; // unmapped / not yet loaded → show the panel
-  if (mapping.requireConfirm) return false;
-  return TOGGLEABLE_DOMAINS.has(mapping.type);
+  if (!TOGGLEABLE_DOMAINS.has(mapping.type)) return false;
+  return deviceSwitch(entity, mapping.entityId, mapping).ask === null;
 }

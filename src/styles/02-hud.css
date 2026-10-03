@@ -763,7 +763,7 @@
 .summary-entity-row.is-notinha .summary-entity-name,
 .summary-entity-row.is-notinha .summary-entity-state { color: var(--status-warning); }
 .summary-entity-row {
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   border-radius: 14px; background: var(--bg-input);
 }
 .summary-entity-main {
@@ -800,6 +800,9 @@
   background: var(--status-off); transition: background 0.15s ease;
 }
 .summary-entity-toggle.on { background: var(--status-on); }
+/* The row switch's "Unlock …?" — on its own line under the row, full width
+   (EntityRowToggle; the row wraps only while it is open). */
+.summary-entity-confirm { flex: 1 1 100%; padding: 0 12px 12px; }
 .summary-entity-toggle .knob {
   position: absolute; top: 3px; left: 3px; width: 22px; height: 22px;
   border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.35);

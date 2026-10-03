@@ -51,7 +51,9 @@ import type { ActivePanel } from "@/types/panel.types";
 import type { Category, TeleportPoint } from "@/types/scene.types";
 import { VillaModelProvider, useVillaSets } from "@/config/VillaModel";
 import { categoryMembers } from "@/config/villaVisibility";
-import { devicePower } from "@/utils/devicePower";
+import { deviceSwitch } from "@/utils/devicePower";
+import { useAskFirst } from "@/hooks/useAskFirst";
+import AskDialog from "@/components/common/AskDialog";
 import { readSceneMirror } from "./sceneMirror";
 
 
@@ -391,7 +393,17 @@ export default function Dashboard() {
     : undefined;
   // Its power is devicePower's: a linked LOCK is "on" when unlocked and is
   // flipped with lock/unlock (it has no toggle); unknown when HA lost it.
-  const linkedPower = linkedEntityId ? devicePower(entities[linkedEntityId], linkedEntityId) : null;
+  // deviceSwitch adds whether to ask first: a linked lock's unlock, or a
+  // linked device the owner set to "ask before switching" — this switch asked
+  // nothing before 2.496.259.
+  const linkedLabel = linkedEntityId
+    ? displayLabelFor(linkedEntityId, config.entityMap[linkedEntityId]?.label,
+        entities[linkedEntityId]?.attributes.friendly_name as string | undefined)
+    : "";
+  const linkedPower = linkedEntityId
+    ? deviceSwitch(entities[linkedEntityId], linkedEntityId,
+        { label: linkedLabel, requireConfirm: config.entityMap[linkedEntityId]?.requireConfirm })
+    : null;
   const linkedSend = useCallback(
     () => (linkedEntityId ? HAServices.power(ws, entities[linkedEntityId], linkedEntityId) : undefined),
     [ws, linkedEntityId, entities]);
@@ -400,6 +412,10 @@ export default function Dashboard() {
     linkedPower?.position === "on",
     linkedSend,
   );
+  // The panel row and the camera's rail both draw this switch; the question
+  // is asked HERE, as a dialog, so neither can skip it and the camera's
+  // narrow rail needs no room for an inline prompt.
+  const linkedAsk = useAskFirst(linkedPower?.ask ?? null, linkedToggle.toggle);
 
   // The open panel's MOTION sensor (EntityMapping.motionEntityId) — camera-
   // only, and read-only: unlike linkedEntityId this drives the map's
@@ -871,12 +887,10 @@ export default function Dashboard() {
             // instant it's clicked instead of waiting on a slow device.
             linked: linkedEntityId && canControl
               ? {
-                  label: displayLabelFor(
-                    linkedEntityId, config.entityMap[linkedEntityId]?.label,
-                    entities[linkedEntityId]?.attributes.friendly_name),
+                  label: linkedLabel,
                   isOn: linkedToggle.isOn,
                   known: linkedPower?.position !== "unknown",
-                  toggle: linkedToggle.toggle,
+                  toggle: linkedAsk.request,
                 }
               : undefined,
             // Read-only — see motionEntityId's own comment above for why this
@@ -900,6 +914,10 @@ export default function Dashboard() {
             onOpenEntity={openEntityPanel}
           />
         </PanelActionsProvider>
+      )}
+      {linkedAsk.asking && (
+        <AskDialog title={linkedAsk.asking.question} confirmLabel={linkedAsk.asking.confirmLabel} danger
+          onConfirm={linkedAsk.confirm} onCancel={linkedAsk.cancel} />
       )}
 
       {/* Hover tooltip: the badge's name, follows the pointer. pointer-events

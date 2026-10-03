@@ -1,5 +1,4 @@
 // src/components/panels/LockPanel.tsx
-import { useState } from "react";
 import { Lock, Unlock } from "lucide-react";
 import BasePanel from "./BasePanel";
 import type { PanelProps } from "@/types/panel.types";
@@ -10,6 +9,8 @@ import { statusKeyFor, STATUS_PILL_CLASS } from "@/utils/stateColors";
 import { tapFeedback, successFeedback } from "@/utils/haptics";
 import ControlFrame from "./ControlFrame";
 import InlineConfirm from "@/components/common/InlineConfirm";
+import { useAskFirst } from "@/hooks/useAskFirst";
+import { switchAsk } from "@/utils/devicePower";
 
 export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
   const { ws } = useHA();
@@ -21,7 +22,6 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
   // "UNLOCKED": an alarming claim about a door that was in fact busy securing
   // itself. Reporting the state HA actually sent is both truer and shorter.
   const lockStatus = statusKeyFor(entity?.state ?? "", mapping.entityId);
-  const [confirming, setConfirming] = useState(false);
   // A deadbolt is the SLOWEST device class in the villa — a Z-Wave/Zigbee
   // lock routinely takes seconds to report back, and unlike a light there is
   // usually no way to see the result from where you're standing. This panel
@@ -32,19 +32,20 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
   // "unlocking" report clears the pulse as soon as the motor actually moves.
   const { pending, markPending } = usePendingAck(entity?.state);
 
-  const doLock = () => {
+  // Both buttons ask what every switch asks (devicePower.switchAsk): an
+  // unlock always, a lock only when the owner set "ask before switching".
+  // They name their direction rather than flipping, so a re-lock stays a lock.
+  const lock = useAskFirst(switchAsk({ domain: "lock", service: "lock" }, mapping), () => {
     tapFeedback();
     markPending(HAServices.lockDoor(ws, mapping.entityId));
-  };
-
-  const doUnlock = () => {
+  });
+  const unlock = useAskFirst(switchAsk({ domain: "lock", service: "unlock" }, mapping), () => {
     // successFeedback, not tapFeedback: unlocking is the consequential,
     // deliberately-confirmed action of the two — the haptic should feel
     // different from an ordinary acknowledgment.
     successFeedback();
     markPending(HAServices.unlockDoor(ws, mapping.entityId));
-    setConfirming(false);
-  };
+  });
 
   return (
     <BasePanel
@@ -68,10 +69,13 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
           {(entity?.state ?? "unknown").replace(/_/g, " ").toUpperCase()}
         </span>
       </div>
-      {locked ? (
+      {lock.asking ? (
+        <InlineConfirm flush={false} question={lock.asking.question}
+          confirmLabel={lock.asking.confirmLabel} onConfirm={lock.confirm} onCancel={lock.cancel} />
+      ) : locked ? (
         <button
           className={`big-toggle${pending ? " pending" : ""}`}
-          onClick={doLock}
+          onClick={lock.request}
           aria-busy={pending}
         >
           <Lock size={22} /> Already locked — re-lock
@@ -84,7 +88,7 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
           // is active", that borrowing would have read as a state report of
           // the opposite of the truth.
           className={`big-toggle cta${pending ? " pending" : ""}`}
-          onClick={doLock}
+          onClick={lock.request}
           aria-busy={pending}
         >
           <Lock size={22} /> Lock door
@@ -92,13 +96,13 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
       )}
 
         <div className="mt">
-          {!confirming ? (
-            <button className="btn ghost" style={{ width: "100%" }} onClick={() => setConfirming(true)}>
+          {!unlock.asking ? (
+            <button className="btn ghost" style={{ width: "100%" }} onClick={unlock.request}>
               <Unlock size={18} /> Unlock door…
             </button>
           ) : (
-            <InlineConfirm flush={false} question={<>Unlock {mapping.label}?</>}
-              confirmLabel="Confirm unlock" onConfirm={doUnlock} onCancel={() => setConfirming(false)} />
+            <InlineConfirm flush={false} question={unlock.asking.question}
+              confirmLabel={unlock.asking.confirmLabel} onConfirm={unlock.confirm} onCancel={unlock.cancel} />
           )}
         </div>
 

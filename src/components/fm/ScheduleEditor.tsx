@@ -14,6 +14,7 @@ import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
 import { scheduleStatus, shortDate } from "@/fm/fmEngine";
 import type { FmSchedule } from "@/fm/fmTypes";
 import AgentMark from "./AgentMark";
+import { EMPTY_SCHEDULE_DRAFT as EMPTY, scheduleToDraft as toDraft, draftDays, scheduleWrite, type ScheduleDraft as Draft } from "@/fm/scheduleDraft";
 
 /** How the obligation is usually WRITTEN, mapped to days. Anything that isn't a
  *  whole number of days rounds DOWN (twice a week -> 3, not 4) so a genuinely
@@ -28,19 +29,6 @@ const PRESETS: { label: string; days: number }[] = [
   { label: "Every 12 months", days: 365 },
 ];
 
-type Draft = { title: string; clause: string; everyDays: string; room: string };
-
-const EMPTY: Draft = { title: "", clause: "", everyDays: "90", room: "" };
-
-function toDraft(s: FmSchedule): Draft {
-  return {
-    title: s.title,
-    clause: s.clause ?? "",
-    everyDays: String(s.everyDays),
-    room: s.room ?? "",
-  };
-}
-
 export default function ScheduleEditor() {
   const { data, addSchedule, updateSchedule, removeSchedule } = useFmData();
   const { config } = useConfig();
@@ -54,23 +42,20 @@ export default function ScheduleEditor() {
     config.teleportPoints.map((p) => p.name).filter(Boolean),
   )].sort();
 
-  const days = Math.max(1, Number(draft.everyDays.replace(/[^\d]/g, "")) || 0);
-  const valid = draft.title.trim().length > 0 && days >= 1;
+  // The form's rules are scheduleDraft's (2.496.259): an edit never resumes
+  // a paused task, "1.5" is not 15, and a mistyped interval is not "every day".
+  const days = draftDays(draft.everyDays);
+  const write = scheduleWrite(draft, editingId);
+  const valid = write.ok;
 
   const startAdd = () => { setDraft(EMPTY); setEditingId(null); setAdding(true); };
   const startEdit = (s: FmSchedule) => { setDraft(toDraft(s)); setAdding(false); setEditingId(s.id); };
   const cancel = () => { setFormError(null); setAdding(false); setEditingId(null); setDraft(EMPTY); };
 
   const save = async () => {
-    const payload = {
-      title: draft.title.trim(),
-      clause: draft.clause.trim() || undefined,
-      everyDays: days,
-      room: draft.room || undefined,
-      enabled: true,
-    };
+    if (!write.ok) { setFormError(write.problem); return; }
     const { done, note: why } = fmSaveOutcome(
-      editingId ? await updateSchedule(editingId, payload) : await addSchedule(payload));
+      write.kind === "edit" ? await updateSchedule(write.id, write.patch) : await addSchedule(write.fields));
     // Close only when saved or queued; a refused save keeps the draft (2.496.252).
     if (done) cancel(); else setFormError(why);
   };
@@ -119,6 +104,9 @@ export default function ScheduleEditor() {
       </label>
 
       {formError && <div className="fm-inline-error" role="alert">{formError}</div>}
+      {!write.ok && draft.everyDays.trim() !== "" && days === null && (
+        <div className="fm-inline-error" role="alert">{write.problem}</div>
+      )}
       <div className="modal-actions" style={{ marginTop: 8 }}>
         <button className="btn ghost" onClick={cancel}><X size={16} /> Cancel</button>
         <button className="btn primary" disabled={!valid} onClick={() => void save()}>

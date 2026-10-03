@@ -3,32 +3,27 @@
 // One component so the markup, the "on" styling and the Power icon live in a
 // single place instead of being copy-pasted into every panel.
 
-import { useState } from "react";
 import { Power } from "lucide-react";
 import { usePendingAck } from "@/hooks/usePendingAck";
+import { useAskFirst } from "@/hooks/useAskFirst";
+import type { SwitchAsk } from "@/utils/devicePower";
 import { tapFeedback } from "@/utils/haptics";
 import InlineConfirm from "@/components/common/InlineConfirm";
 
 interface Props {
   on: boolean;
   onClick: () => unknown;
-  /** Device label, used in the confirm prompt below — only meaningful
-   *  together with requireConfirm. */
-  label?: string;
-  /** EntityMapping.requireConfirm — an explicit per-device opt-in (set in
-   *  Advanced Settings, never inferred from the entity_id) for a device
-   *  where an accidental tap has a real physical consequence (a door
-   *  release, a gate motor, modelled as a plain switch/light/fan with no
-   *  domain-level "this is critical" signal of its own). First tap shows
-   *  an inline "Turn on/off?" confirm instead of acting — the exact same
-   *  Cancel/Confirm pattern SummaryGroupPanel's "Turn all on/off" already
-   *  uses, not a second bespoke one. Combined with quickAction.ts's
-   *  isQuickToggle also honouring this flag, a tap on this device's map
-   *  badge can't act at all without first landing here. */
-  requireConfirm?: boolean;
+  /** devicePower.deviceSwitch's `ask` — the device's own answer to "ask
+   *  before throwing it": always for an unlock, and whenever the owner set
+   *  "ask before switching" (EntityMapping.requireConfirm, an explicit opt-in
+   *  for a door release or gate motor modelled as a plain switch). First tap
+   *  shows the inline confirm instead of acting. quickAction.isQuickToggle
+   *  reads the same answer, so a tap on such a device's map badge opens this
+   *  panel rather than acting. */
+  ask?: SwitchAsk | null;
 }
 
-export default function PowerToggle({ on, onClick, label, requireConfirm }: Props) {
+export default function PowerToggle({ on, onClick, ask = null }: Props) {
   // `on` is derived purely from HA's live entity state, so the button gave no
   // feedback at all for the round-trip between a tap and the real
   // state_changed event landing — on a slow link that read as "did that even
@@ -40,7 +35,6 @@ export default function PowerToggle({ on, onClick, label, requireConfirm }: Prop
   // state, only "something is happening". The rules for that live in
   // usePendingAck now, shared with the lock panel.
   const { pending, markPending } = usePendingAck(on);
-  const [confirming, setConfirming] = useState(false);
 
   // The "on" look is the device's OWN category colour, not the app accent —
   // but the colour is not read here. BasePanel puts --device-fill/-ink/-ring
@@ -49,24 +43,19 @@ export default function PowerToggle({ on, onClick, label, requireConfirm }: Prop
   // that grows another stateful control gets it without wiring. See
   // .big-toggle.on in styles.css.
 
-  const act = () => {
+  const { asking, request, confirm, cancel } = useAskFirst(ask, () => {
     tapFeedback();
     markPending(onClick());
-    setConfirming(false);
-  };
+  });
 
-  if (requireConfirm && confirming) {
-    return (
-      <InlineConfirm
-        question={<>Turn {on ? "off" : "on"}{label ? ` ${label}` : ""}?</>}
-        confirmLabel="Confirm" onConfirm={act} onCancel={() => setConfirming(false)} />
-    );
+  if (asking) {
+    return <InlineConfirm question={asking.question} confirmLabel={asking.confirmLabel} onConfirm={confirm} onCancel={cancel} />;
   }
 
   return (
     <button
       className={`big-toggle ${on ? "on" : ""}${pending ? " pending" : ""}`}
-      onClick={() => (requireConfirm ? setConfirming(true) : act())}
+      onClick={request}
       aria-busy={pending}
     >
       <Power size={24} /> {on ? "On" : "Off"}

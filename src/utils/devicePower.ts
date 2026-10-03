@@ -62,3 +62,66 @@ export function devicePower(e: HassEntity | undefined, entityId?: string): Devic
 /** Every domain a flip can be sent to — held to the one table of what the
  *  kiosk may send (ha-commands.json) by tests/oracles/device_power.mjs. */
 export const POWER_DOMAINS = ["lock", "cover", ...OWN_TOGGLE, "homeassistant"] as const;
+
+// ── Asking first ──────────────────────────────────────────────────────────
+// ⚠️ THE CONFIRM RULE HAD THREE OWNERS AND TWO OMISSIONS (2.496.259). The
+// lock panel asked before unlocking; the power button and the map's quick tap
+// read the owner's per-device "ask before switching" (requireConfirm); and
+// the device lists' row switch and a panel's linked switch asked nothing — so
+// ONE TAP in a room list unlocked a door, and a door relay the owner had
+// flagged could be thrown from any list. The question is now the device's,
+// answered here, and every place that throws a switch renders this answer
+// (hooks/useAskFirst).
+
+export interface SwitchAsk {
+  /** "Unlock Front door?" */
+  question: string;
+  /** The danger button's word. */
+  confirmLabel: string;
+}
+
+/** What the owner's device settings say about asking (EntityMapping). */
+export interface AskPolicy {
+  label?: string;
+  /** EntityMapping.requireConfirm — "ask before switching". */
+  requireConfirm?: boolean;
+}
+
+/**
+ * Should a person be asked before sending `action`? Unlocking always asks: it
+ * opens a door, and nothing on screen shows whether anyone is standing there.
+ * Anything else asks only when the owner flagged the device. null = act now.
+ */
+export function switchAsk(action: { domain: string; service: string } | null, policy: AskPolicy = {}): SwitchAsk | null {
+  if (!action) return null;
+  const name = policy.label?.trim() || "this device";
+  if (action.domain === "lock" && (action.service === "unlock" || action.service === "open")) {
+    return { question: `Unlock ${name}?`, confirmLabel: "Confirm unlock" };
+  }
+  if (!policy.requireConfirm) return null;
+  const verb = action.service === "lock" ? "Lock"
+    : action.service === "open_cover" ? "Open"
+    : action.service === "close_cover" ? "Close"
+    : action.service === "turn_off" ? "Turn off"
+    : action.service === "turn_on" ? "Turn on"
+    : null;
+  return { question: verb ? `${verb} ${name}?` : `Switch ${name}?`, confirmLabel: "Confirm" };
+}
+
+export interface DeviceSwitch extends DevicePower {
+  /** Ask before throwing it the other way; null = a tap acts at once. */
+  ask: SwitchAsk | null;
+}
+
+/**
+ * THE answer to "what happens when a person throws this device's switch":
+ * which way it sits, the service that throws it, and whether to ask first.
+ * A toggle is worded by where it is going ("Turn off Pump?"), not as a toggle.
+ */
+export function deviceSwitch(e: HassEntity | undefined, entityId?: string, policy: AskPolicy = {}): DeviceSwitch {
+  const power = devicePower(e, entityId);
+  const toward = power.flip && power.flip.service === "toggle"
+    ? { domain: power.flip.domain, service: power.position === "on" ? "turn_off" : "turn_on" }
+    : power.flip;
+  return { ...power, ask: switchAsk(toward, policy) };
+}
