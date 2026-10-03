@@ -47,13 +47,32 @@ export async function keptModel(url: string): Promise<ArrayBuffer | null> {
   }
 }
 
+/** Whether THIS app's own service worker (public/sw.js, registered by
+ *  utils/swUpdate as "./sw.js") controls the page — it then keeps the model
+ *  itself. Any other worker does not count.
+ *
+ *  ⚠️ IT USED TO ASK "IS ANY WORKER IN CONTROL?" (2.496.255), and inside Home
+ *  Assistant one always is: Home Assistant's own (/service_worker.js), which
+ *  knows nothing of the model. So the copy was never kept there — the phone's
+ *  next open still downloaded it (field, 2.496.256: modelKept false, swMs 190). */
+export function ownWorkerControls(): boolean {
+  try {
+    const script = globalThis.navigator?.serviceWorker?.controller?.scriptURL;
+    if (!script || !globalThis.location) return false;
+    return new URL(script).pathname === new URL("./sw.js", globalThis.location.href).pathname;
+  } catch {
+    return false;
+  }
+}
+
 /** Keep `data` as the model at `url`, dropping every other version of the
  *  same file first (only one copy of a many-MB model may ever be kept). Skips
- *  when a service worker controls the page: it keeps the file itself. Never
- *  throws — a model that could not be kept is downloaded again next time. */
+ *  when this app's own service worker controls the page: it keeps the file
+ *  itself. Never throws — a model that could not be kept is downloaded again
+ *  next time. */
 export async function keepModel(url: string, data: ArrayBuffer): Promise<boolean> {
   try {
-    if (globalThis.navigator?.serviceWorker?.controller) return false;
+    if (ownWorkerControls()) return false;
     const cache = await globalThis.caches?.open(MODEL_CACHE_NAME);
     if (!cache) return false;
     const file = (u: string) => new URL(u, globalThis.location?.href).pathname.split("/").pop();

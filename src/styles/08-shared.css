@@ -395,10 +395,17 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    "this is a warning" in text rather than in a badge. */
 .sev-warning { color: var(--status-warning); }
 
-@media (max-width: 720px) {
+@media (max-width: 640px) {
   /* ⚠️ ICON-ONLY AT THE PHONE TIER, where two labelled buttons plus a hint do
      not fit a 360px footer — the row wraps, and a wrapped footer is what makes
-     a dialog look broken. Square, --touch-min on both axes. */
-  .modal-footer-actions > button { width: var(--touch-min); padding: 0; }
+     a dialog look broken. Square, --touch-min on both axes. 640px is the
+     layout's phone tier (05-layout.css); a 641-720px screen — a tablet in
+     portrait — has room for the words, and showed bare glyphs (2.496.257).
+     ⚠️ `.modal-footer` IN THE SELECTOR IS LOAD-BEARING: `.modal-footer .btn`
+     (04-modals.css, padding 10px 20px) outranks a bare
+     `.modal-footer-actions > button`, so its side padding would stay in a
+     44px button and squeeze the icon to a 4px speck wherever nothing else
+     trims it — which is what the 641-720px screens showed. */
+  .modal-footer .modal-footer-actions > button { width: var(--touch-min); padding: 0; }
   .btn-label { display: none; }
 }

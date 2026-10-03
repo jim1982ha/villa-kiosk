@@ -60,10 +60,14 @@ stores.get(MODEL_CACHE_NAME).set(abs("/other/rooms.json"), new ArrayBuffer(1));
 await keepModel(V1, GLB.buffer);
 ck("  ...other files in the cache are left alone", stores.get(MODEL_CACHE_NAME).has(abs("/other/rooms.json")));
 
-navigator.serviceWorker.controller = {};
+navigator.serviceWorker.controller = { scriptURL: "http://localhost/api/hassio_ingress/TOK/sw.js" };
 stores.clear();
-ck("a page a service worker controls leaves the keeping to it (one copy, not two)",
+ck("a page THIS app's worker controls leaves the keeping to it (one copy, not two)",
    (await keepModel(V1, GLB.buffer)) === false && !stores.size);
+navigator.serviceWorker.controller = { scriptURL: "http://localhost/service_worker.js" };
+ck("A PAGE HOME ASSISTANT'S WORKER CONTROLS STILL KEEPS IT — that worker knows nothing of the model (field, 2.496.256)",
+   (await keepModel(V1, GLB.buffer)) === true && (await keptModel(V1)) !== null);
+stores.clear();
 navigator.serviceWorker.controller = null;
 
 const saved = globalThis.caches;
