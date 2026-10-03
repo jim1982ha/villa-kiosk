@@ -134,7 +134,7 @@ import {
   type CardArrangement,
 } from "./badgeCard";
 import { iconKeyFor } from "./badgeIconKeys";
-import { ALERT_RED, UNAVAILABLE_AMBER, reportingPill, SECURE_GREEN, ACTIVE_GLOW } from "./colors";
+import { ALERT_RED, UNAVAILABLE_AMBER, healthPill, SECURE_GREEN, ACTIVE_GLOW } from "./colors";
 import { COSMETIC_MAPPING_FIELDS, type EntityMapDelta } from "./entityMapDiff";
 // Pose-word resolution (which "__<word>" mesh variant a live state asks for)
 // — pure logic, extracted to keep this file to the things that actually touch
@@ -5503,17 +5503,15 @@ export class EntityVisuals {
       // A chip that absorbed others says so with a "+N" suffix, so the count
       // pill's total is never mistaken for one room's device count.
       c.text.text = model.label;
-      // The chip's ring: red when a member needs attention ("alert"), the
-      // neutral "on" ring when a member is on, none otherwise — the only signal
-      // left once the individual badges are gone. Never red for "on" (owner,
-      // 2026-10-01: red is the legend's "Needs attention").
+      // The chip's ring: the neutral "on" ring when a member is on, none
+      // otherwise. Never red: whether the room is all right is the COUNT's
+      // job (summaryLook.roomHealth) — one place for it, not a red border
+      // beside a green number (owner, 2026-10-04).
       const frame = badgeRing(chipFrames[model.frame], this.metrics.cardHeightPx, this.metrics);
       applyBadgeFrame(c.container, frame, this.summaryMetrics().size);
-      // The count pill itself carries the room's REPORTING status — amber if
-      // at least one member is unavailable (HA has lost contact with it),
-      // green otherwise (colors.reportingPill). Separate
-      // signal from the ring above: a room can be fully reporting AND have
-      // something on (red ring, green pill) at the same time.
+      // The count pill carries the room's HEALTH (colors.healthPill): red if a
+      // member needs attention, amber if Home Assistant lost one, green
+      // otherwise.
       // A baked picture, number ink-centred inside it — see
       // badgeText.countBadgeImage for why it is no longer a Rectangle and a
       // TextBlock.
@@ -5529,7 +5527,7 @@ export class EntityVisuals {
       const csm = this.summaryMetrics();
       c.countBadge.source = countBadgeImage({
         text: model.count,
-        ...reportingPill(model.reporting),
+        ...healthPill(model.health),
         drawnPx: badgeBakePx(csm.countSize, this.iconUserScale, this.bestCssToGui()),
         fontOfSize: csm.countFont / csm.countSize,
       });
@@ -5619,10 +5617,9 @@ export class EntityVisuals {
     // function both sides call. Added to `container` (not the room-name row)
     // and LAST, so it paints on top as a true overlay instead of sharing the
     // row's flow — the earlier version put it inline in the row, which read
-    // as "a second word next to the room name", not a badge. Its background
-    // colour is REPORTING status (red = something unavailable, green =
-    // everything reporting), set every update in updateClusters — the value
-    // here is just the pre-first-update placeholder.
+    // as "a second word next to the room name", not a badge. Its colour is
+    // the room's HEALTH (colors.healthPill), set every update in
+    // renderChips.
     const countBadge = new Image(`clusterCount_${key}`);
     countBadge.width = `${sm.countSize}px`;
     countBadge.height = `${sm.countSize}px`;

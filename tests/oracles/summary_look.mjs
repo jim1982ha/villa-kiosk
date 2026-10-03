@@ -55,18 +55,36 @@ console.log("\n  a room chip:");
     () => true, (r) => r.toUpperCase());
   const km = roomChipModel(k, false, () => false);
   ck("prints its label, names its room, counts its devices", km.label === "KITCHEN" && km.displayName === "KITCHEN" && km.count === "2" && km.entityIds.join() === "light.on,light.off");
-  ck("  ...the 'on' frame for a light on, the pill 'available'", km.frame === "active" && km.reporting === "available");
+  ck("  ...the 'on' border for a light on, a GREEN count (all right)", km.frame === "active" && km.health === "ok");
   const bm = roomChipModel(b, false, () => false);
-  ck("  ...red for an unlocked lock, the pill 'unavailable' for a lost light", bm.frame === "alert" && bm.reporting === "unavailable");
+  // The owner's screenshot (2026-10-04): a red border beside a green count.
+  // "Is this room all right?" is the NUMBER's answer alone; the border only says on.
+  ck("  ...an unlocked lock and a lost light: a RED count — attention outranks lost contact — and NO red border",
+     bm.health === "alert" && bm.frame === "rest", bm);
+  {
+    const [lost] = bucketRoomChips([M("light.lost", "x", 0), M("light.off", "x", 1)], () => true, (r) => r);
+    const [onAndAlert] = bucketRoomChips([M("light.on", "y", 0), M("lock.open", "y", 1)], () => true, (r) => r);
+    ck("  ...a room with only a lost device: an AMBER count", roomChipModel(lost, false, () => false).health === "unavailable");
+    const oa = roomChipModel(onAndAlert, false, () => false);
+    ck("  ...a light on beside an unlocked door keeps its 'on' border (red no longer hides it) and counts red",
+       oa.frame === "active" && oa.health === "alert", oa);
+  }
   const lookOf = (ids) => roomLook(ids.map((id) => (id in ENTITIES ? deviceLook(id, src) : undefined)));
   const kr = lookOf(k.ids), br = lookOf(b.ids);
   ck("a room's row in \"Which room?\" wears that room's own chip frame and pill (roomLook = roomChipModel)",
-     kr.frame === km.frame && kr.reporting === km.reporting && br.frame === bm.frame && br.reporting === bm.reporting, { kr, br });
+     kr.frame === km.frame && kr.health === km.health && br.frame === bm.frame && br.health === bm.health, { kr, br });
   ck("  ...a plain room rests, a room nobody reported rests and reads available",
-     lookOf(["light.off"]).frame === "rest" && lookOf(["light.ghost"]).frame === "rest" && lookOf(["light.ghost"]).reporting === "available");
+     lookOf(["light.off"]).frame === "rest" && lookOf(["light.ghost"]).frame === "rest" && lookOf(["light.ghost"]).health === "ok");
   combineChips(k, b);
   const merged = roomChipModel(k, false, () => false);
-  ck("merged: every room's devices, both names, red wins", merged.count === "4" && merged.roomNames.join() === "KITCHEN,BED" && merged.frame === "alert");
+  ck("merged: every room's devices, both names; the worst health wins and an 'on' survives",
+     merged.count === "4" && merged.roomNames.join() === "KITCHEN,BED" && merged.health === "alert" && merged.frame === "active", merged);
+  {
+    // The chip that KEEPS is resting; only the room it swallows has a light on.
+    const [rest, lit] = bucketRoomChips([M("light.off", "a", 0), M("light.on", "b", 9)], () => true, (r) => r);
+    combineChips(rest, lit);
+    ck("  ...merging a resting room with a lit one: the merged chip shows 'on'", roomChipModel(rest, false, () => false).frame === "active");
+  }
   ck("hidden while walking only when EVERY device is behind a wall",
      roomChipModel(k, true, () => true).hidden && !roomChipModel(k, true, (id) => id !== "light.on").hidden && !roomChipModel(k, false, () => true).hidden);
   const many = bucketRoomChips(Array.from({ length: 120 }, (_, i) => M(`light.off`, "hall", i)), () => true, (r) => r)[0];
@@ -77,28 +95,26 @@ console.log("\n  the frame:");
 ck("red outranks on; neither is rest", summaryFrame({ ringRed: true, ringOn: true }) === "alert"
    && summaryFrame({ ringRed: false, ringOn: true }) === "active" && summaryFrame({ ringRed: false, ringOn: false }) === "rest");
 
-console.log("\n  the count pill's colour (colors.reportingPill):");
+console.log("\n  the count's colour (colors.healthPill):");
 {
-  // A device offline wore the ring's "needs attention" red: a red ring beside
-  // a green count, and no ring beside a red one, read as one signal
-  // contradicting itself (owner, 2026-10-04).
-  const { reportingPill, ALERT_RED_HEX } = await import("@/babylon/colors");
+  const { healthPill, ALERT_RED_HEX } = await import("@/babylon/colors");
   const { categorySurface } = await import("@/config/EntityCategories");
-  const lost = reportingPill("unavailable"), ok = reportingPill("available");
-  ck("a room with a device offline: AMBER — the badge's own lost-contact colour, never the ring's red",
-     lost.fill.toUpperCase() === String(categorySurface("others", "unavailable").ring).toUpperCase()
-     && lost.fill.toUpperCase() !== ALERT_RED_HEX.toUpperCase() && ok.fill.toUpperCase() !== ALERT_RED_HEX.toUpperCase(), { lost, ok });
+  const up = (h) => String(h).toUpperCase();
+  const red = healthPill("alert"), lost = healthPill("unavailable"), ok = healthPill("ok");
+  ck("red = the legend's 'Needs attention' red; amber = the badge's own lost-contact amber; green otherwise — three different colours",
+     up(red.fill) === up(ALERT_RED_HEX) && up(red.fill) === up(categorySurface("others", "alert").ring)
+     && up(lost.fill) === up(categorySurface("others", "unavailable").ring)
+     && new Set([red.fill, lost.fill, ok.fill].map(up)).size === 3, { red, lost, ok });
   const lum = (h) => { const c = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((v) => v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
   const contrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
-  ck("  ...and its number readable on both (4.5:1 or better)",
-     contrast(lost.fill, lost.ink) >= 4.5 && contrast(ok.fill, ok.ink) >= 4.5,
-     { lost: contrast(lost.fill, lost.ink).toFixed(2), ok: contrast(ok.fill, ok.ink).toFixed(2) });
+  ck("  ...its number readable on all three (4.5:1 or better)",
+     [red, lost, ok].every((p) => contrast(p.fill, p.ink) >= 4.5), [red, lost, ok].map((p) => contrast(p.fill, p.ink).toFixed(2)));
   const { readFileSync } = await import("node:fs");
   const rd = (f) => readFileSync(new URL(`../../src/${f}`, import.meta.url), "utf8");
-  const ev = rd("babylon/EntityVisuals.ts"), sheet = rd("components/hud/RoomChoiceSheet.tsx");
-  ck("  ...the map chip and the \"Which room?\" row both ask it, neither picks its own",
-     /\.\.\.reportingPill\(model\.reporting\),/.test(ev) && /reportingPill\(c\.reporting\)\.fill/.test(sheet) && /reportingPill\(c\.reporting\)\.ink/.test(sheet)
-     && !/AVAILABLE_GREEN_HEX/.test(ev + sheet));
+  const ev = rd("babylon/EntityVisuals.ts"), sheet = rd("components/hud/RoomChoiceSheet.tsx"), legend = rd("components/hud/LegendModal.tsx");
+  ck("  ...the map chip, the \"Which room?\" row and the legend all ask it, none picks its own",
+     /\.\.\.healthPill\(model\.health\),/.test(ev) && /healthPill\(c\.health\)\.fill/.test(sheet) && /healthPill\(c\.health\)\.ink/.test(sheet)
+     && /healthPill\(n\.health\)\.fill/.test(legend) && !/AVAILABLE_GREEN_HEX|ALERT_RED_HEX/.test(ev + sheet + legend));
 }
 
 done("✅ a summary on the map is a model; EntityVisuals only draws it");

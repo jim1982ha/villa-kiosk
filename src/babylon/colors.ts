@@ -32,23 +32,22 @@ export const AVAILABLE_GREEN_HEX = "#34845A";
 // hex for the pill below.
 export const UNAVAILABLE_AMBER_HEX = "#B8801F";
 
-/** A room's count pill — the colour of "is every device here reporting?".
- *  ONE answer for the map chip (EntityVisuals.renderChips) and the "Which
- *  room?" list (RoomChoiceSheet).
+/** A room's count pill, by the room's HEALTH (summaryLook.roomHealth): red —
+ *  something needs attention; amber — Home Assistant lost a device; green —
+ *  all right. ONE answer for the map chip (EntityVisuals.renderChips), the
+ *  "Which room?" list (RoomChoiceSheet) and the legend.
  *
- *  ⚠️ IT WAS THE "NEEDS ATTENTION" RED. A room with a device offline wore the
- *  same red as the chip's ring for an unlocked door, so a red ring with a green
- *  count and no ring with a red count read as one signal contradicting itself
- *  (owner, 2026-10-04). Lost contact is AMBER everywhere else — the dashed ring
- *  on a badge, the panel's "Unavailable" — and the legend says so. Red now
- *  means one thing on a chip: the ring.
+ *  The vocabulary's own colours: red is "Needs attention" and amber "lost
+ *  contact" everywhere else (badge rings, panel status, legend). 2.496.265
+ *  briefly had red for the BORDER and amber/green here — two signals on one
+ *  chip, which read as contradicting each other (owner, 2026-10-04).
  *
  *  Dark ink on the amber: white on it is 3.4:1 against the green's 4.6:1, too
  *  faint for a digit this small; dark is 5.2:1, and dark-on-amber is the usual
  *  look of a warning. */
-export function reportingPill(reporting: "unavailable" | "available"): { fill: string; ink: string } {
-  return reporting === "unavailable"
-    ? { fill: UNAVAILABLE_AMBER_HEX, ink: "#17191A" }
+export function healthPill(health: "alert" | "unavailable" | "ok"): { fill: string; ink: string } {
+  return health === "alert" ? { fill: ALERT_RED_HEX, ink: "#ffffff" }
+    : health === "unavailable" ? { fill: UNAVAILABLE_AMBER_HEX, ink: "#17191A" }
     : { fill: AVAILABLE_GREEN_HEX, ink: "#ffffff" };
 }
 

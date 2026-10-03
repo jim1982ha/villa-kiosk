@@ -431,6 +431,10 @@ export interface GroupLook {
   ringRed: boolean;
   /** The neutral "a member is on" ring (ACTIVITY), only when nothing is red. */
   ringOn: boolean;
+  /** A member is on, whatever else is true — a ROOM CHIP's border, which no
+   *  longer carries "needs attention" (that moved to its count, see
+   *  summaryLook.roomHealth), so it must not lose "on" to a red it never draws. */
+  anyOn: boolean;
   /** A member is unavailable — dimming is its own signal, never a ring. */
   unavailable: boolean;
   /** POWER: how many are switched on ("N on"). */
@@ -474,6 +478,7 @@ export function groupLook(
   return {
     ringRed,
     ringOn: !opts.showingDevices && !ringRed && anyActive,
+    anyOn: anyActive,
     unavailable, onCount, activeCount, offline,
   };
 }

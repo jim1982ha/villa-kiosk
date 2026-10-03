@@ -167,7 +167,7 @@ export function badgeText(name: string, opts: BadgeTextOptions): TextBlock {
 export interface CountBadgeSpec {
   /** The count as displayed (utils/countBadge.formatCountBadge). */
   text: string;
-  /** Circle fill — the room's reporting status colour. */
+  /** Circle fill — the room's health colour (colors.healthPill). */
   fill: string;
   /** Number colour. */
   ink: string;

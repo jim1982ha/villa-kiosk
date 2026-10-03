@@ -12,7 +12,7 @@ import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { STATUS_COLOR } from "@/utils/stateColors";
 import { useConfig } from "@/config/ConfigContext";
 import { overviewKeyHelp } from "@/babylon/overviewKeys";
-import { reportingPill } from "@/babylon/colors";
+import { healthPill } from "@/babylon/colors";
 import ModalFooter from "@/components/common/ModalFooter";
 
 /** What the MAP badge actually does per state — mirrors config/
@@ -43,16 +43,16 @@ const BADGE_ITEMS: { label: string; state: DeviceSurfaceState; ringState?: Devic
     note: "Neutral square, dashed amber ring — Home Assistant has lost contact with this device" },
 ];
 
-/** A room chip's border (summaryLook.summaryFrame) and its count's colour
- *  (colors.reportingPill) — two separate signals. */
-const CHIP_RINGS: { label: string; frame: "alert" | "active" | "rest"; note: string }[] = [
-  { label: "Red border", frame: "alert", note: "Something in the room needs attention (an unlocked door, a leak…)" },
+/** A room chip: its border says whether something is on; its number's colour
+ *  is the room's health (summaryLook.roomHealth → colors.healthPill). */
+const CHIP_RINGS: { label: string; frame: "active" | "rest"; note: string }[] = [
   { label: "Light border", frame: "active", note: "Something in the room is on" },
   { label: "No border", frame: "rest", note: "Everything in the room is off or resting" },
 ];
-const CHIP_COUNTS: { label: string; reporting: "available" | "unavailable"; note: string }[] = [
-  { label: "Green number", reporting: "available", note: "Every device in the room is reporting to Home Assistant" },
-  { label: "Amber number", reporting: "unavailable", note: "Home Assistant has lost contact with at least one device in the room" },
+const CHIP_COUNTS: { label: string; health: "alert" | "unavailable" | "ok"; note: string }[] = [
+  { label: "Green number", health: "ok", note: "All right — every device is reporting and nothing needs attention" },
+  { label: "Amber number", health: "unavailable", note: "Home Assistant has lost contact with a device in the room" },
+  { label: "Red number", health: "alert", note: "Something in the room needs attention (an unlocked door, a leak…) — shown before amber" },
 ];
 
 /** The coloured status pill each device PANEL shows, and the colours of the
@@ -141,16 +141,12 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
             })}
           </div>
 
-          {/* A room chip carries TWO signals — its ring and its count — and
-              nothing explained either; a red ring beside a red count (the
-              count was red for "lost contact" until 2.496.265) read as a
-              contradiction. Drawn from the same owners as the chip:
-              categorySurface("others", …) for the ring, reportingPill for the
-              count. */}
+          {/* Drawn from the same owners as the chip: categorySurface("others", …)
+              for the border, healthPill for the number. */}
           <div className="settings-section-title">Room chips (zoomed out)</div>
           <p className="muted body-text" style={{ marginTop: 4 }}>
-            A room's name with its number of devices. The border and the number
-            say two different things, and a room can show both.
+            A room's name with its number of devices. The number's colour says
+            whether the room is all right; the border, whether something is on.
           </p>
           <div className="legend-grid">
             {CHIP_RINGS.map((r) => (
@@ -168,7 +164,7 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
             {CHIP_COUNTS.map((n) => (
               <div className="legend-row" key={n.label}>
                 <span className="legend-swatch legend-swatch-round legend-count" style={{
-                  background: reportingPill(n.reporting).fill, color: reportingPill(n.reporting).ink,
+                  background: healthPill(n.health).fill, color: healthPill(n.health).ink,
                 }}>3</span>
                 <span>
                   <strong>{n.label}</strong>

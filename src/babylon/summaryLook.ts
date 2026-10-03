@@ -94,12 +94,34 @@ export interface RoomChipModel {
   /** The room a tap names, and every room a merged chip swallowed. */
   displayName: string;
   roomNames: string[];
+  /** The border: "active" when something in the room is on, else "rest" —
+   *  NEVER "alert" (see roomHealth). */
   frame: SummaryFrame;
   /** The corner pill's number, capped ("99+"). */
   count: string;
-  /** The corner pill's colour, by REPORTING status — a separate signal from
-   *  the ring: a room can be fully reporting and have something on. */
-  reporting: "unavailable" | "available";
+  /** The corner pill's colour — the room's HEALTH (roomHealth). */
+  health: RoomHealth;
+}
+
+/** A room's health, worst first: "alert" — something needs attention (an
+ *  unlocked door, a leak); "unavailable" — Home Assistant has lost contact with
+ *  a device; "ok" — neither.
+ *
+ *  ⚠️ IT WAS TWO SIGNALS ON ONE CHIP. "Needs attention" was the chip's red
+ *  BORDER and "lost contact" its count's colour, so a red border sat beside a
+ *  green count (owner, 2026-10-04: "confusing"). One place answers "is this
+ *  room all right?" now — the number — and the border only says something is
+ *  on. Attention outranks lost contact: an unlocked door is the thing to act
+ *  on first, and a room with both still reads "not all right". */
+export type RoomHealth = "alert" | "unavailable" | "ok";
+
+export function roomHealth(ring: { ringRed: boolean; unavailable: boolean }): RoomHealth {
+  return ring.ringRed ? "alert" : ring.unavailable ? "unavailable" : "ok";
+}
+
+/** A room chip's border: on, or resting — "needs attention" is roomHealth's. */
+function roomFrame(ring: { anyOn: boolean }): SummaryFrame {
+  return ring.anyOn ? "active" : "rest";
 }
 
 /** A room chip, from the chip the placement derived (bucketRoomChips, whose
@@ -111,9 +133,9 @@ export function roomChipModel(chip: RoomChip, walking: boolean, occluded: (id: s
     entityIds: chip.ids,
     displayName: chip.room,
     roomNames: chip.roomNames,
-    frame: summaryFrame(chip),
+    frame: roomFrame(chip),
     count: formatCountBadge(chip.ids.length),
-    reporting: chip.unavailable ? "unavailable" : "available",
+    health: roomHealth(chip),
   };
 }
 
@@ -122,7 +144,7 @@ export function roomChipModel(chip: RoomChip, walking: boolean, occluded: (id: s
  *  The same groupLook count rule bucketRoomChips applies, so a row in the
  *  merged chip's "Which room?" list carries exactly the border and pill the
  *  room's own chip shows on the map when it stands alone. */
-export function roomLook(looks: readonly (DeviceLook | undefined)[]): Pick<RoomChipModel, "frame" | "reporting"> {
+export function roomLook(looks: readonly (DeviceLook | undefined)[]): Pick<RoomChipModel, "frame" | "health"> {
   const ring = groupLook(looks, { showingDevices: false });
-  return { frame: summaryFrame(ring), reporting: ring.unavailable ? "unavailable" : "available" };
+  return { frame: roomFrame(ring), health: roomHealth(ring) };
 }

@@ -39,14 +39,14 @@ import { MapPin } from "lucide-react";
 import BasePanel from "@/components/panels/BasePanel";
 import { categorySurface } from "@/config/EntityCategories";
 import type { RoomChipModel } from "@/babylon/summaryLook";
-import { reportingPill } from "@/babylon/colors";
+import { healthPill } from "@/babylon/colors";
 
-/** One room a merged chip stands for. `frame` and `reporting` are what that
+/** One room a merged chip stands for. `frame` and `health` are what that
  *  room's own chip wears on the map (summaryLook.roomLook): the row repeats
- *  its border — red = needs attention, the "on" ring = something is on — and
- *  its count pill's colour, so choosing a room does not mean losing the one
- *  thing the chip was telling you. */
-export interface RoomChoice extends Pick<RoomChipModel, "frame" | "reporting"> {
+ *  its border — the "on" ring = something is on — and its count's colour —
+ *  red / amber / green, the room's health — so choosing a room does not mean
+ *  losing what the chip was telling you. */
+export interface RoomChoice extends Pick<RoomChipModel, "frame" | "health"> {
   room: string;
   count: number;
 }
@@ -88,7 +88,7 @@ export default function RoomChoiceSheet({
             <span className="room-choice-name">{c.room}</span>
             <span
               className="room-choice-count"
-              style={{ background: reportingPill(c.reporting).fill, color: reportingPill(c.reporting).ink }}
+              style={{ background: healthPill(c.health).fill, color: healthPill(c.health).ink }}
             >{c.count}</span>
           </button>
         ))}

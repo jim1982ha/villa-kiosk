@@ -50,6 +50,8 @@ export interface RoomChip {
   /** red: a member needs attention; on: a member is on (and none needs attention) — never red for "on".
    *  deviceActivity.groupLook's count rule; combineChips ORs them on a merge. */
   ringRed: boolean; ringOn: boolean; unavailable: boolean;
+  /** A member is on, even when one needs attention (groupLook.anyOn). */
+  anyOn: boolean;
   /** True-perspective screen position and half-extents — the merge test only.
    *  The collision test re-projects `centre` onto the view plane instead; see
    *  CHIP_COLLISION for why the two spaces are not the same one. */
@@ -103,7 +105,7 @@ export function bucketRoomChips(
     chips.push({
       key, keys: [key], room, label: room, ids: g.ids.slice(),
       centre: g.sum.scale(1 / g.ids.length), rooms: 1, roomNames: [room],
-      ringRed: look.ringRed, ringOn: look.ringOn, unavailable: look.unavailable,
+      ringRed: look.ringRed, ringOn: look.ringOn, unavailable: look.unavailable, anyOn: look.anyOn,
       x: 0, y: 0, halfW: 0, halfH: 0,
     });
   }
@@ -135,4 +137,5 @@ export function combineChips(keep: RoomChip, drop: RoomChip): void {
   keep.ringRed = keep.ringRed || drop.ringRed;
   keep.ringOn = (keep.ringOn || drop.ringOn) && !keep.ringRed;
   keep.unavailable = keep.unavailable || drop.unavailable;
+  keep.anyOn = keep.anyOn || drop.anyOn;
 }
