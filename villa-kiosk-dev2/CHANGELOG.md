@@ -1,3 +1,17 @@
+## 2.496.254
+
+### Fixed
+- **Uploading a model without room data now clears the old rooms everywhere.** The upload already meant to reset them, but every device refused the empty room list and kept the previous model's rooms, with "Failed to refresh room names…".
+- **A wrong room-data file is refused before anything is saved.** Picking the wrong .json in Settings used to show an error while the file was already saved for every device. Now nothing is uploaded, not even the model picked with it.
+- **A brief add-on restart no longer shows "No 3D model loaded yet".** If the tablet cannot reach the add-on for a moment (a restart, an expired sign-in, a dropped connection), it now shows "reconnecting" and keeps trying until the villa loads, instead of offering an upload on a villa that has a model.
+- **Rooms added with "Add room here" are no longer at risk when a new or reset tablet opens.** Opening the villa never deletes them now; only a new model upload replaces the rooms.
+- **If a model uploads but its room data does not, you are told**, and the villa reloads to the new model. It used to stay silent.
+- **The first upload on a fresh install reaches every device.** The upload button on the "No 3D model loaded yet" screen saved the model in that one browser only. It now uploads to the add-on, with its room data, like Settings.
+
+### Changed
+- Opening the villa makes one request fewer: the add-on now tells each tablet which version of the model it holds. Models already saved on a tablet are kept and not downloaded again.
+- A model left in a browser by older versions is deleted to free the space.
+
 ## 2.496.253
 
 ### Changed
