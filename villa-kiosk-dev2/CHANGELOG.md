@@ -1,3 +1,11 @@
+## 2.496.268
+
+### Changed
+- Behind the scenes, nothing changes on screen. Three pieces were made easier to test and harder to break:
+  - **The room dial** (hold a floor button): where it sits and whether the rooms show as an arc or as one column is now worked out in one place and checked at real screen sizes (a narrow phone, your phone, the unfolded phone and the wall tablet).
+  - **The windows over the map** (Cockpit, Facility, VESTA Agent, Settings, Rooms): one place now decides which are open and which this profile may open. Before, the Cockpit was handled by the top bar and the others by the page, each in its own way.
+  - **"Needs attention"** is worked out once per profile instead of twice, beside the villa's other data.
+
 ## 2.496.267
 
 ### Fixed
