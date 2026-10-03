@@ -124,6 +124,31 @@ ck("the health line counts ROWS (the badge's number) but reads its level from ev
    owner.health.summary.startsWith(`${owner.attentionGroups.length} thing`) && owner.attentionGroups.length < owner.attentionItems.length && owner.health.level === "danger",
    [owner.health, owner.attentionGroups.length, owner.attentionItems.length]);
 
+console.log("\n  a reading nobody placed on the map (2.496.258):");
+// A pump: its power sensor is placed, its energy meter is not. The agent's
+// energy-drop ticket names the meter. Driven through the REAL fold.
+const { deviceFolding } = await import("@/config/deviceGroups");
+const pumpEntities = { ...entities, "sensor.pump_power": ent("sensor.pump_power", "34", "Pump power"),
+  "sensor.pump_energy": ent("sensor.pump_energy", "21.6", "Pump energy") };
+const pumpMap = { ...entityMap, "sensor.pump_power": { entityId: "sensor.pump_power", type: "sensor" } };
+const registry = { "sensor.pump_power": "dev-pump", "sensor.pump_energy": "dev-pump", "lock.door": "dev-door" };
+const pumpFold = deviceFolding(pumpMap, [], registry);
+const pumpRows = groupAttention(buildAttentionItems({
+  unavailableIds: [], entities: pumpEntities, entityMap: pumpMap, alertThresholds: {},
+  resolvedRooms: { ...resolvedRooms, "sensor.pump_power": "Pool" },
+  fmData: { ...EMPTY_FM_DATA, tickets: [ticket("pm-1", "Pump used 0.09 kWh/day", "sensor.pump_energy")] },
+  selectableIds: Object.keys(pumpMap), folding: pumpFold,
+}));
+const pumpRow = pumpRows.find((g) => g.items.some((i) => i.id === "fault:pm-1"));
+ck("the fold puts an unplaced entity on its Home Assistant device's placed one",
+   pumpFold.get("sensor.pump_energy") === "sensor.pump_power", [...pumpFold]);
+ck("  ...so the meter's ticket is the pump's row, with the pump's room",
+   pumpRow?.key === "device:sensor.pump_power" && pumpRow.room === "Pool", pumpRow);
+ck("  ...and tapping it opens the pump the map shows, not the meter",
+   pumpRow?.entityId === "sensor.pump_power", pumpRow?.entityId);
+ck("  ...while a placed entity is never re-folded and a device with nothing placed adds nothing",
+   !pumpFold.has("sensor.pump_power") && deviceFolding(entityMap, [], { "sensor.x": "dev-none" }).size === 0);
+
 console.log("\n  the callers:");
 const src = (f) => readFileSync(new URL(`../../src/${f}`, import.meta.url), "utf8");
 const vm = src("config/VillaModel.tsx"), cockpit = src("components/cockpit/CockpitModal.tsx");

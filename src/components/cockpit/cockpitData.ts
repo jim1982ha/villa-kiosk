@@ -96,7 +96,10 @@ export function groupAttention(items: readonly AttentionItem[]): AttentionGroup[
       kind: worst.kind,
       title: one || !worst.device ? worst.title : worst.device.label,
       room: one || !worst.device ? worst.room ?? worst.device?.room : worst.device.room ?? worst.room,
-      entityId: worst.entityId,
+      // The DEVICE, as the map opens it — not the entity the problem names. A
+      // ticket on a pump's energy meter opened the meter's chart while the
+      // map's pump badge opens its power (2.496.258).
+      entityId: worst.device?.key ?? worst.entityId,
       items: sorted,
     });
   }

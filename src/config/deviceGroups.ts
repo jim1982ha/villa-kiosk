@@ -223,6 +223,25 @@ export function deviceFolding(
   for (const s of suggestDeviceGroups(entityMap, [...deviceGroups], entityDeviceIds)) {
     if (!repOf.has(s.memberEntityId)) repOf.set(s.memberEntityId, s.primaryEntityId);
   }
+  // ⚠️ AN ENTITY THAT IS NOT ON THE MAP STILL BELONGS TO ITS DEVICE (2.496.258).
+  // The fold used to cover only entityMap keys, so a reading the owner never
+  // placed — a pump's energy meter beside its placed power sensor — was a
+  // device of its own: the agent's "used 0.09 kWh/day" ticket on it stood
+  // alone in Cockpit with no room, and tapping it opened the meter instead of
+  // the pump the map shows. Home Assistant's registry says which device it is;
+  // it folds to that device's representative. Only unplaced ids are added, and
+  // every count (selectableDeviceIds) walks placed ids, so no number moves.
+  const repOfDevice = new Map<string, string>();
+  for (const id of Object.keys(entityMap).sort()) {
+    const deviceId = entityDeviceIds[id];
+    if (!deviceId || entityMap[id]?.disabled || repOfDevice.has(deviceId)) continue;
+    repOfDevice.set(deviceId, repOf.get(id) ?? id);
+  }
+  for (const [id, deviceId] of Object.entries(entityDeviceIds)) {
+    if (entityMap[id] || repOf.has(id)) continue;
+    const rep = repOfDevice.get(deviceId);
+    if (rep && rep !== id) repOf.set(id, rep);
+  }
   return repOf;
 }
 

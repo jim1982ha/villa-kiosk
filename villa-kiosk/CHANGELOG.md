@@ -1,3 +1,8 @@
+## 2.496.258
+
+### Fixed
+- **A fault about one reading of a device now opens that device, the same as on the map.** The Onsen pump's energy-drop fault in Cockpit opened the pump's energy chart, while the pump on the map opens its power. The fault was raised on the pump's energy meter, a reading that isn't placed on the map, so Cockpit treated it as a separate device: no room under it, and a tap opened the meter. Cockpit now uses Home Assistant's own list of which readings belong to which device. The fault sits under the Onsen pump with its room (Onsen Outdoor), and a tap opens the pump as the map does. Other faults raised on an unplaced reading of a placed device, such as a battery level, behave the same way.
+
 ## 2.496.257
 
 ### Fixed
