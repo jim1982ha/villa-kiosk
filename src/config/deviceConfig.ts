@@ -142,7 +142,7 @@ function row<K extends SharedConfigKey>(key: K): SharedKeyRow<AppConfig[K], Shar
 // removes the derived items on the way out, mergeSharedConfig puts this
 // device's own back on the way in. Keeping them together is what stops a pull
 // blanking the fitted rooms until the next calibration.
-const isFittedPoint = (p: TeleportPoint): boolean => p.fitted === true;
+export const isFittedPoint = (p: TeleportPoint): boolean => p.fitted === true;
 
 /** Extract just the shared slice of a full config — authored data only. */
 export function pickSharedConfig(config: AppConfig): SharedDeviceConfig {

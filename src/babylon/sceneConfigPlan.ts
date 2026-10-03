@@ -51,7 +51,7 @@ export function sceneConfigPlan(prev: AppConfig, next: AppConfig): SceneConfigPl
   // for a config that did not change.
   const render = prev.render !== next.render || prev.latitude !== next.latitude || prev.longitude !== next.longitude;
   // A re-uploaded central .sh3d lands asynchronously (BabylonCanvas's central
-  // SH3D refresh) and must re-run the room fit; parseRoomData returns fresh
+  // SH3D refresh) and must re-run the room fit; readRoomData returns fresh
   // arrays every open, so by content.
   const sh3d = sliceChanged(prev.sh3dRooms, next.sh3dRooms) || sliceChanged(prev.sh3dEntities, next.sh3dEntities);
   // Three outcomes, not two (entityMapDelta): a same-content replacement is

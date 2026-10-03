@@ -2,7 +2,8 @@
 //   utils/storedJson — the one way a value is kept in localStorage: absent,
 //     corrupt, wrong shape and storage-disabled all read as null, a refused
 //     write is false. localModel.getModelMeta had a bare JSON.parse on the
-//     boot path; five other files each carried their own guard.
+//     boot path (gone with the per-browser model, 2.496.254); five other
+//     files each carried their own guard.
 //   utils/deviceWake — the one "device woke up" signal (visible, focus,
 //     online) the HA socket and the store refresh both subscribe to; each
 //     used to listen for a different two of the three.
@@ -18,9 +19,10 @@ globalThis.localStorage = {
   getItem: (k) => { if (disabled) throw new Error("SecurityError"); return store.has(k) ? store.get(k) : null; },
   setItem: (k, v) => { if (disabled) throw new Error("SecurityError"); if (full) throw new Error("QuotaExceeded"); store.set(k, String(v)); },
   removeItem: (k) => { if (disabled) throw new Error("SecurityError"); store.delete(k); },
+  get length() { return store.size; },
+  key: (i) => [...store.keys()][i] ?? null,
 };
-const { readJson, writeJson, readString, writeString, removeStored } = await import("@/utils/storedJson");
-const { getModelMeta } = await import("@/utils/localModel");
+const { readJson, writeJson, readString, writeString, removeStored, removeStoredPrefix } = await import("@/utils/storedJson");
 const { loadMeshCatalog } = await import("@/utils/meshCatalog");
 
 console.log("  stored JSON:");
@@ -35,8 +37,9 @@ ck("storage disabled: null and false, no throw", readJson("k") === null && write
 disabled = false; full = true;
 ck("storage full: the write says so", writeJson("k", 1) === false);
 full = false;
-store.set("villa-kiosk:model-meta", "{corrupt");
-ck("the model metadata (the boot path) reads a corrupt value as 'no stored model'", getModelMeta() === null);
+store.set("villa-kiosk:model-tag:a.glb", "1"); store.set("villa-kiosk:model-tag:b.json", "2"); store.set("villa-kiosk:keep", "3");
+removeStoredPrefix("villa-kiosk:model-tag:");
+ck("a family of keys is forgotten by prefix, and nothing else", !store.has("villa-kiosk:model-tag:a.glb") && !store.has("villa-kiosk:model-tag:b.json") && store.has("villa-kiosk:keep"));
 store.set("villa-kiosk:mesh-catalog", JSON.stringify([1, 2]));
 ck("a mesh catalogue of the wrong shape is empty, not a crash later", loadMeshCatalog().length === 0);
 

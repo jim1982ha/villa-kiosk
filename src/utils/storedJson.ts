@@ -46,3 +46,14 @@ export function writeString(key: string, value: string): boolean {
 export function removeStored(key: string): void {
   try { localStorage.removeItem(key); } catch { /* nothing to forget */ }
 }
+
+/** Forget every key that starts with `prefix` — a family of keys an older
+ *  version wrote (e.g. one per file) and nothing reads any more. */
+export function removeStoredPrefix(prefix: string): void {
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k?.startsWith(prefix)) localStorage.removeItem(k);
+    }
+  } catch { /* nothing to forget */ }
+}

@@ -1127,7 +1127,24 @@ def _effective_paths() -> dict:
         "model_path": model_rel,
         "model_upload": _upload_meta(model_rel) if model_rel else None,
         "rooms_upload": _upload_meta(_rooms_rel(model_rel)) if model_rel else None,
+        "model_version": _file_version(model_rel) if model_rel else "",
+        "rooms_version": _file_version(_rooms_rel(model_rel)) if model_rel else "",
     }
+
+
+def _file_version(rel: str) -> str:
+    """The version of a central file as the Kiosk stamps its URL (?v=), "" when
+    it does not exist. Exactly nginx's ETag for the same file — "<mtime in
+    seconds, hex>-<size, hex>" (ngx_http_set_etag) — which is what the Kiosk
+    read from a HEAD request before the add-on reported it here: a device's
+    cached model keeps its URL across that change and is not downloaded again.
+    A replaced file changes its mtime (an upload writes a new file), so the
+    version changes with it."""
+    try:
+        st = os.stat(os.path.join(_data(WWW_NAME), rel))
+    except OSError:
+        return ""
+    return f"{int(st.st_mtime):x}-{st.st_size:x}"
 
 
 def _resolve_upload_target(kind: str) -> str:

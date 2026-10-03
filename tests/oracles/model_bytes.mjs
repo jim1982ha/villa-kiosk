@@ -17,22 +17,22 @@ const GLB = new Uint8Array([103, 108, 84, 70, 2, 0, 0, 0]);
 let dropNext = 0; const calls = [];
 globalThis.fetch = async (url, init = {}) => {
   const u = String(url); calls.push(`${init.method ?? "GET"} ${u.replace(/^.*\//, "")}`);
-  if (u.endsWith("addon-config")) return new Response(JSON.stringify({ model_path: "villa.glb" }), { status: 200 });
+  if (u.endsWith("addon-config")) return new Response(JSON.stringify({ model_path: "villa.glb", model_version: "65f0-1a2b" }), { status: 200 });
   if (u.includes("missing.glb")) return new Response("", { status: 404 });
-  if (init.method === "HEAD") return new Response(null, { status: 200, headers: { ETag: '"e1"' } });
   if (dropNext > 0) { dropNext--; throw new TypeError("Failed to fetch"); }   // a network blip
   return new Response(GLB, { status: 200, headers: { "content-length": String(GLB.length) } });
 };
 
 const P = await import("@/utils/modelPrefetch");
-const { versionedModelUrl } = await import("@/utils/centralModel");
+const { centralModelUrl, fetchAddonConfig } = await import("@/utils/centralModel");
 
 const until = async (pred, ms = 8000) => { const t0 = Date.now(); while (!pred() && Date.now() - t0 < ms) await new Promise((r) => setTimeout(r, 20)); return pred(); };
 
 // The profile screen starts the download; it hits a network blip first.
 dropNext = 1;
 P.startModelPrefetch();
-const url = await versionedModelUrl("villa.glb");
+const url = centralModelUrl(await fetchAddonConfig());
+ck("the model's URL carries the version the add-on reported, and no HEAD request is made", url.endsWith("model/villa.glb?v=65f0-1a2b") && !calls.some((c) => c.startsWith("HEAD")), { url, calls });
 await until(() => calls.filter((c) => c.startsWith("GET villa.glb")).length >= 1);
 let retried = 0; const progress = [];
 const got = await P.modelBytes(url, (f) => progress.push(f), () => { retried++; });
@@ -55,7 +55,7 @@ const bc = readFileSync(new URL("../../src/components/canvas/BabylonCanvas.tsx",
 // and modelSource makes the one call.
 const ms = readFileSync(new URL("../../src/utils/modelSource.ts", import.meta.url), "utf8");
 ck("the canvas makes one call for the bytes (through modelSource)",
-   /versionedModelUrl, modelBytes,/.test(bc) && (ms.match(/deps\.modelBytes\(/g) ?? []).length === 1
+   /readAddonConfig, modelBytes,/.test(bc) && (ms.match(/deps\.modelBytes\(/g) ?? []).length === 1
    && !/claimPrefetch|fetchModelWithRetry\(/.test(bc + ms));
 
 done("✅ one way to the model's bytes");

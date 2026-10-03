@@ -934,6 +934,37 @@ try:
 finally:
     proxy.FM_RECORDS_TABLE, proxy.FM_TICKET_STATUSES, proxy.FM_COST_CATEGORIES = _saved
 
+# ── The model's version is nginx's ETag (2.496.254) ──────────────────────────
+# The Kiosk stamped the model's URL (?v=) from a HEAD request's ETag; the
+# add-on now reports the version in /addon-config instead. It must be the SAME
+# string nginx sends (ngx_http_set_etag: "<mtime hex>-<size hex>"), or every
+# device's cached multi-MB model would be fetched again under a new URL.
+print("\n  the model's version:")
+with tempfile.TemporaryDirectory() as d:
+    _saved_data = proxy._data
+    proxy._data = lambda name="": os.path.join(d, name)
+    try:
+        os.makedirs(os.path.join(d, proxy.WWW_NAME))
+        eff0 = proxy._effective_paths()
+        ck("no model: no path, no versions",
+           (eff0["model_path"], eff0["model_version"], eff0["rooms_version"]) == ("", "", ""))
+        glb = os.path.join(d, proxy.WWW_NAME, proxy.MANAGED_PATH["glb"])
+        with open(glb, "wb") as f:
+            f.write(b"glTF" + b"\0" * 300)
+        os.utime(glb, (1_700_000_000, 1_700_000_000))
+        eff = proxy._effective_paths()
+        ck("a model's version is nginx's ETag for it: mtime and size in hex",
+           eff["model_version"] == f"{1_700_000_000:x}-{304:x}" == "6553f100-130")
+        ck("  ...its room data, absent, has none (and is not mistaken for the model)", eff["rooms_version"] == "")
+        with open(os.path.join(d, proxy.WWW_NAME, proxy._rooms_rel(proxy.MANAGED_PATH["glb"])), "w") as f:
+            f.write('{"rooms": []}')
+        os.utime(glb, (1_700_000_100, 1_700_000_100))
+        eff2 = proxy._effective_paths()
+        ck("a replaced model gets a new version; the room data its own",
+           eff2["model_version"] != eff["model_version"] and eff2["rooms_version"].endswith("-d"))
+    finally:
+        proxy._data = _saved_data
+
 print()
 print("✅ the proxy's pure rules hold" if FAIL == 0
       else "❌ A PROXY RULE IS BROKEN")

@@ -37,7 +37,7 @@
 // no-cache-on-failure behaviour) and the state resets so a later authorized
 // call still works.
 
-import { fetchAddonConfig, versionedModelUrl } from "./centralModel";
+import { fetchAddonConfig, centralModelUrl } from "./centralModel";
 import { fetchModelWithRetry } from "./fetchProgress";
 
 type ProgressListener = (frac: number) => void;
@@ -68,7 +68,7 @@ export function startModelPrefetch(): void {
       state = "idle"; // not authorized yet, or no central model — retry later
       return;
     }
-    const url = await versionedModelUrl(addonCfg.model_path);
+    const url = centralModelUrl(addonCfg);
     const e: PrefetchEntry = {
       url, progress: 0, listeners: new Set(), retryListeners: new Set(),
       promise: null as unknown as Promise<ArrayBuffer>,
