@@ -171,7 +171,8 @@ export interface CountBadgeSpec {
   fill: string;
   /** Number colour. */
   ink: string;
-  /** How large the pill is DRAWN, render px (its size × the chip's scale). */
+  /** How large to bake it, render px: its size at this device's BEST scale
+   *  (badgeLook.badgeBakePx), never the live zoom — see the chip's caller. */
   drawnPx: number;
   /** The number's font size as a fraction of the pill's diameter. */
   fontOfSize: number;

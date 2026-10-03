@@ -45,7 +45,13 @@ ck("the pill is baked at its DRAWN size on the glyphs' ladder, number centred by
 ck("the chip draws it as ONE image — no TextBlock, no Rectangle for the count",
    /const countBadge = new Image\(`clusterCount_\$\{key\}`\);/.test(ev) && !/clusterCountText_/.test(ev)
    && /countBadge: Image;/.test(ev));
-ck("  ...baked from the badge metrics and the chip's scale — no size of its own",
-   /drawnPx: csm\.countSize \* scale,/.test(ev) && /fontOfSize: csm\.countFont \/ csm\.countSize,/.test(ev));
+ck("  ...baked from the badge metrics — no size of its own",
+   /fontOfSize: csm\.countFont \/ csm\.countSize,/.test(ev));
+// The count blinked out of every chip while the camera moved: baked at the
+// LIVE scale (zoom × the resolution valve), each rung was a new picture and
+// Babylon draws nothing until a new source decodes. The glyphs' rule instead.
+const drawn = ev.match(/c\.countBadge\.source = countBadgeImage\(\{[\s\S]*?drawnPx: ([^\n]*),\n/)?.[1] ?? "";
+ck("  ...for this device's BEST case (badgeBakePx, bestCssToGui), never the live zoom — a camera move must not re-bake it",
+   drawn === "badgeBakePx(csm.countSize, this.iconUserScale, this.bestCssToGui())", drawn);
 
 done("✅ the count pill is a baked picture, its number centred by its ink");

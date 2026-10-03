@@ -1,3 +1,8 @@
+## 2.496.264
+
+### Fixed
+- **Room chips keep their number while you move the camera.** The small circle with a room's device count went blank for a moment while the view was turning or zooming, then came back. The circle was redrawn at a new size each time the zoom changed, and stayed empty until the new drawing was ready. It is now drawn once, at the largest size this screen can show, so moving the camera only resizes it.
+
 ## 2.496.263
 
 ### Changed

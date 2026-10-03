@@ -5514,15 +5514,24 @@ export class EntityVisuals {
       // the same "available" green everywhere else otherwise. Separate
       // signal from the ring above: a room can be fully reporting AND have
       // something on (red ring, green pill) at the same time.
-      // Baked at the size it is DRAWN (its size × the chip's scale), number
-      // ink-centred inside the picture — see badgeText.countBadgeImage for why
-      // it is no longer a Rectangle and a TextBlock.
+      // A baked picture, number ink-centred inside it — see
+      // badgeText.countBadgeImage for why it is no longer a Rectangle and a
+      // TextBlock.
+      //
+      // ⚠️ BAKED FOR THE BEST CASE, LIKE THE GLYPHS — NOT AT THE LIVE SCALE.
+      // It was `countSize * scale`, and `scale` carries the zoom and the live
+      // resolution (which the valve moves every time the camera starts or
+      // stops). Every rung crossed was a new picture, and Babylon's Image
+      // draws NOTHING from a new source until it has decoded: the count
+      // blinked out of every chip while the camera moved (owner's recording,
+      // 2.496.263). Baked once for this device's best case, a zoom costs a
+      // container re-scale and nothing else — glyphBakePx's rule.
       const csm = this.summaryMetrics();
       c.countBadge.source = countBadgeImage({
         text: model.count,
         fill: model.reporting === "unavailable" ? ALERT_RED_HEX : AVAILABLE_GREEN_HEX,
         ink: "#ffffff",
-        drawnPx: csm.countSize * scale,
+        drawnPx: badgeBakePx(csm.countSize, this.iconUserScale, this.bestCssToGui()),
         fontOfSize: csm.countFont / csm.countSize,
       });
       // Themed here rather than at creation: a chip outlives a theme change,
