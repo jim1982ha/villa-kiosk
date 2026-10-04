@@ -169,19 +169,22 @@ def test_every_report_a_person_may_ask_for_runs_as_its_job():
 
 
 
-def _asked_in_chat(agent, tmp_path, monkeypatch, page: bool):
+def _asked_in_chat(agent, tmp_path, monkeypatch, page: bool, job_name: str = "fm-weekly", text_only: bool = False):
     """The person asks in the chat; the conversation starts the job and replies; the job (a moment later)
     sends its page — or ends without one."""
-    page_path = tmp_path / "fm_weekly.html"
-    page_path.write_text("<html></html>")
+    page_path = os.path.join(agent.s.out_dir, "fm_weekly.html")
+    open(page_path, "w").write("<html></html>")
 
     async def fake_run(settings_, system, prompt, server, allowed, state, who, resume=None, limit_usd=None, profile=None, asked=None):
         if who.startswith("job:"):
             await asyncio.sleep(0.02)                    # the job takes a while
             if page:
-                await agent.send(ASKER, "Three things need attention.", document=str(page_path))
+                # through the job's own send_message tool, as the model sends its result
+                send = next(t for t in agent.toolbox().tool_objects(None, Origin(ASKER, JOB), False) if t.name == "send_message")
+                await send.handler({"to": "here", "text": "Three things need attention.",
+                                    **({} if text_only else {"attachment": "fm_weekly.html"})})
             return runner.RunResult("", None, False, 0.1, [], None)
-        await agent.start_job("fm-weekly", ASKER)        # what the start_job tool does
+        await agent.start_job(job_name, ASKER)           # what the start_job tool does
         return runner.RunResult("Your weekly report is on its way.", None, False, 0.01, [], None)
     monkeypatch.setattr(runner, "run", fake_run)
 
@@ -214,3 +217,22 @@ def test_a_requested_weekly_sends_only_the_page():
     jobs = _y.safe_load(open(os.path.join(STARTER_SKILLS, "reports", "skill.yaml")))["schedule"]
     weekly = next(j for j in jobs if j["name"] == "fm-weekly")["prompt"]
     assert "On schedule only" in weekly and "send nothing else" in weekly
+
+
+def test_every_report_asked_for_in_a_chat_replaces_its_waiting_message(agent, tmp_path, monkeypatch):
+    # owner, 2026-10-04: "make sure this is applied for all report messages": the daily digest is TEXT, not
+    # a page, and its waiting message must go all the same
+    agent.policy().jobs["fm-daily"] = {"profile": "economy", "limit_usd": 1}
+    tg = _asked_in_chat(agent, tmp_path, monkeypatch, page=True, job_name="fm-daily", text_only=True)
+    assert len(tg.deleted) == 1 and [t for _, t, _ in tg.sent] == ["Your weekly report is on its way.", "Three things need attention."]
+
+
+def test_every_job_asked_for_in_a_chat_uses_the_same_one_message_rule():
+    # all of them, by construction: the rule is the engine's, keyed on the job, not on a report
+    from helpers import STARTER_SKILLS
+    import yaml as _y
+    names = [j["name"] for f in sorted(os.listdir(STARTER_SKILLS))
+             if os.path.exists(os.path.join(STARTER_SKILLS, f, "skill.yaml"))
+             for j in (_y.safe_load(open(os.path.join(STARTER_SKILLS, f, "skill.yaml"))) or {}).get("schedule") or []
+             if isinstance(j, dict) and j.get("on_request")]
+    assert names == ["fm-daily", "fm-weekly", "owner-monthly"], names

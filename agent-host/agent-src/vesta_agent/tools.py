@@ -31,7 +31,7 @@ from claude_agent_sdk import create_sdk_mcp_server, tool
 
 from . import __version__, status
 from .policy import Person, Policy
-from .routing import Origin, Routing
+from .routing import JOB, Origin, Routing
 from .runner import WEB_SEARCH
 from .skills import FILE_NAME, Skills, ToolError, run_script, validate_script_args
 
@@ -427,7 +427,8 @@ class Toolbox:
                 if not FILE_NAME.match(att) or not os.path.exists(os.path.join(self.s.out_dir, att)):
                     return _err(f"{att} is not a file in the out folder.")
                 path = os.path.join(self.s.out_dir, att)
-            await self.send(int(chat), args.get("text", ""), document=path)
+            await self.send(int(chat), args.get("text", ""), document=path,
+                            from_job=bool(origin and origin.kind == JOB))
             self.state.log("sent", {"to": to, "chars": len(args.get("text", "")), "attachment": att})
             return _ok("Sent.")
         return handler

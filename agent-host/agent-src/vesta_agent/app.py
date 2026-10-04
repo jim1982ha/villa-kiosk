@@ -114,7 +114,7 @@ class Vesta:
         self._locks: dict[int, asyncio.Lock] = {}
         # ⚠️ ONE MESSAGE WHILE A JOB ASKED FOR IN A CHAT RUNS, REPLACED BY ITS RESULT (owner, 2026-10-04:
         # "I don't want to see 3 messages"): the reply that started the job is remembered here per chat,
-        # and deleted when the job's page arrives (Telegram cannot turn a text into a file message).
+        # and deleted when the job's first result arrives (Telegram cannot turn a text into a file message).
         self._job_notices: dict[int, dict] = {}
         self._names: dict[str, str] = {}
         self._names_mtime = None
@@ -190,7 +190,10 @@ class Vesta:
 
     # ------------------------------------------------------------------ sending
     async def send(self, chat_id: int, text: str, keyboard: dict | None = None, approval_id: str | None = None,
-                   document: str | None = None, photo_b64=None) -> int | None:
+                   document: str | None = None, photo_b64=None, from_job: bool = False) -> int | None:
+        """`from_job`: sent by a job asked for in a chat — its result replaces the chat's "being prepared"
+        message, whatever form it takes (a page, the daily digest's text: owner, 2026-10-04, "all report
+        messages")."""
         if self.tg is None:
             self.state.log("send_skipped", {"chat": chat_id, "reason": "Telegram is off (telegram_takeover false)"})
             log.info("Telegram off: a message for chat %s was not sent", chat_id)
@@ -198,7 +201,7 @@ class Vesta:
         text = plain_text(text)
         try:
             mid = await self.tg.send(int(chat_id), text, keyboard=keyboard, document=document, photo_b64=photo_b64)
-            if document and mid:
+            if from_job and mid:
                 await self._replace_job_notice(int(chat_id))
         except TelegramError as e:
             log.warning("send failed: %s", e)
@@ -212,7 +215,7 @@ class Vesta:
         return mid
 
     async def _replace_job_notice(self, chat_id: int) -> None:
-        """A job's page reached the chat it was asked in: its "being prepared" message goes."""
+        """A job's result reached the chat it was asked in: its "being prepared" message goes."""
         notice = self._job_notices.pop(chat_id, None)
         if notice and notice.get("mid") and self.tg is not None:
             await self.tg.delete(chat_id, notice["mid"])

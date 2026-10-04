@@ -1,3 +1,8 @@
+## 0.12.26
+
+### Changed
+- **Every report you ask for in a chat works the same way: one waiting message, replaced by the report.** This now includes the daily digest, which arrives as text rather than a page (0.12.25 replaced the waiting message only when a page arrived). The weekly and monthly reports behave as in 0.12.25.
+
 ## 0.12.25
 
 ### Changed

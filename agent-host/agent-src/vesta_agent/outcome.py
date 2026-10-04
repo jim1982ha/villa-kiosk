@@ -32,7 +32,7 @@ from zoneinfo import ZoneInfo
 
 from vesta_shared.problems import CLEARED, Problems
 
-from .routing import Origin, Routing
+from .routing import JOB, Origin, Routing
 
 log = logging.getLogger("vesta.outcome")
 
@@ -113,7 +113,7 @@ class Outcome:
                     doc = path
                 else:
                     log.warning("Skill %s attached %r, which is not a file of the out folder: sent without it", skill_name, att)
-            mid = await self.send(chat, text, keyboard=kb, document=doc)
+            mid = await self.send(chat, text, keyboard=kb, document=doc, from_job=bool(origin and origin.kind == JOB))
             if kb and mid:
                 # every message with this incident's buttons, in every chat: all of them settle together
                 self.state.remember_alert_message(iid, chat, mid, text)

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.25 (4 October 2026)
+
+- Every report asked for in a chat (owner, 2026-10-04: "all report messages"): the waiting message is replaced by the job's FIRST result whatever its form — the daily digest is text, not a page, and 0.6.24 replaced only on a page. app.send(from_job=…), passed by send_message and outcome.carry_out for an Origin JOB. tests/test_jobs.py: the daily digest's case (red when keyed on the page again) and the list of on-request jobs (fm-daily, fm-weekly, owner-monthly) the rule covers.
+
 ## 0.6.24 (4 October 2026)
 
 - A job asked for in a chat is ONE message, then its result (owner, 2026-10-04: "I don't want to see 3 messages"). The conversation reply that started it is remembered per chat (app._job_notices) and deleted when a page is sent to that chat (Telegram cannot turn a text message into a file message: telegram.delete, deleteMessage on the bot's own message); a job that ends without a page edits it to say so. reports skill.yaml fm-weekly: the owner-weekly lines on schedule only; asked in a chat, the page is the whole answer. tests/test_jobs.py: 3 new, each red under its mutation.
