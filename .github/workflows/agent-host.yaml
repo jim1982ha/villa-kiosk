@@ -45,7 +45,10 @@ jobs:
 
   build:
     needs: [tests]
-    runs-on: ubuntu-latest
+    # ⚠️ EACH ARCH ON ITS OWN HARDWARE (2026-10-05): aarch64 ran on an amd64 runner under QEMU, and its
+    # container test took 206-312 s against 68-74 s natively — the whole release's critical path. GitHub's
+    # arm64 runner (free for a public repository) runs it natively, still on the arch the Yellow runs.
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       packages: write
@@ -55,8 +58,10 @@ jobs:
         include:
           - arch: amd64
             platform: linux/amd64
+            runner: ubuntu-latest
           - arch: aarch64
             platform: linux/arm64
+            runner: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
@@ -146,7 +151,7 @@ jobs:
           echo "\`$ref\`" >> "$GITHUB_STEP_SUMMARY"
 
       - name: The image starts the way the Supervisor runs it
-        # ⚠️ EACH ARCH RUNS ITS OWN IMAGE (aarch64 under QEMU): the Yellow runs
+        # ⚠️ EACH ARCH RUNS ITS OWN IMAGE (natively, on its own runner): the Yellow runs
         # the aarch64 one, and a green amd64 run says nothing about it. Runs
         # before the manifest sync, so a failure here never reaches the store.
         run: |

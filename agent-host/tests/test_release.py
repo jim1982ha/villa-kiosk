@@ -170,5 +170,20 @@ class Ship(unittest.TestCase):
         self.assertIsNone(code); self.assertIn("on main", err)
 
 
+
+class CiFailures(unittest.TestCase):
+    """ship says a red CI run at once (2026-10-05: it waited out the full --wait)."""
+
+    def test_a_failed_run_is_named_and_a_running_one_is_not(self):
+        red = {"workflow_runs": [{"name": "Build", "status": "completed", "conclusion": "failure"},
+                                 {"name": "Tests", "status": "in_progress", "conclusion": None}]}
+        self.assertEqual(release.ci_failures("x", fetch=lambda: red), ["Build"])
+
+    def test_github_unreachable_is_not_a_failure(self):
+        def down():
+            raise OSError("offline")
+        self.assertIsNone(release.ci_failures("x", fetch=down))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

@@ -204,6 +204,33 @@ def _newer(changelog: str, released: str, label: str) -> str:
 
 
 # ── ship ─────────────────────────────────────────────────────────────────────
+
+def ci_failures(sha: str, fetch=None) -> list[str] | None:
+    """The CI runs for `sha` that ended in failure, by name — [] when none has (yet), None when GitHub could
+    not be asked (offline, rate-limited: the wait simply goes on, as before).
+
+    ⚠️ ship USED TO WAIT OUT A RED RUN (2026-10-05): it only watched main for the published version, so a
+    failed CI run kept it waiting the full --wait (30-40 min) before saying "not published". The repository
+    is public: its Actions runs are readable without a token."""
+    import json as _json
+    import urllib.request
+    if fetch is None:
+        url = git("remote", "get-url", "origin").strip()
+        m = re.search(r"github\.com[:/]([^/]+)/([^/.]+?)(?:\.git)?$", url)
+        if not m:
+            return None
+        api = f"https://api.github.com/repos/{m.group(1)}/{m.group(2)}/actions/runs?head_sha={sha}&per_page=20"
+
+        def fetch():
+            with urllib.request.urlopen(urllib.request.Request(api, headers={"Accept": "application/vnd.github+json"}),
+                                        timeout=10) as r:
+                return _json.load(r)
+    try:
+        runs = fetch().get("workflow_runs") or []
+    except Exception:  # noqa: BLE001 — not knowing is not failing
+        return None
+    return [str(r.get("name") or r.get("id")) for r in runs if r.get("status") == "completed" and r.get("conclusion") == "failure"]
+
 def ship(message: str | None, dry_run: bool, wait_minutes: float, poll_seconds: float, gates=run_gates) -> int:
     git("fetch", "-q", "origin", BRANCH, "main")
     if git("rev-parse", "--abbrev-ref", "HEAD").strip() == "main":
@@ -260,10 +287,18 @@ def ship(message: str | None, dry_run: bool, wait_minutes: float, poll_seconds: 
 
     # 4. Published, or say plainly that it is not.
     deadline = time.monotonic() + wait_minutes * 60
+    sha = git("rev-parse", "HEAD").strip()
+    polls = 0
     while time.monotonic() < deadline:
         if published_version() == app:
             print(f"✅ PUBLISHED: Home Assistant offers {APP} {app}")
             return 0
+        # a red run is said at once, not waited out (every third poll: the API allows 60 calls an hour)
+        polls += 1
+        failed = ci_failures(sha) if polls % 3 == 0 else None
+        if failed:
+            print(f"❌ pushed, NOT published: CI failed ({', '.join(failed)}) for {sha[:8]}. Read that run, fix, ship again.")
+            return 3
         time.sleep(poll_seconds)
     print(f"⏳ pushed, NOT published after {wait_minutes:g} min: main's {CHANNEL_DIR}/ is still "
           f"{published_version()}. Read the CI run for this commit before calling it shipped.")
@@ -286,7 +321,7 @@ def main(argv: list[str] | None = None) -> int:
         if a.cmd == "gates":
             return 0 if print_summary(run_gates()) else 1
         message = Path(a.file).read_text() if a.file else a.message
-        return ship(message, a.dry_run, a.wait, poll_seconds=30)
+        return ship(message, a.dry_run, a.wait, poll_seconds=10)
     except ReleaseError as e:
         print(f"❌ {e}", file=sys.stderr)
         return 2

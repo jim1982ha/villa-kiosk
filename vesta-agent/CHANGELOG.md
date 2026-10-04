@@ -1,3 +1,8 @@
+## 0.12.40
+
+### Changed
+- Behind the scenes: updates are published faster. The ARM image (the one your Home Assistant Yellow runs) is now built and checked on ARM hardware instead of being emulated, which took 4-6 minutes off each release. Nothing in the app changes.
+
 ## 0.12.39
 
 ### Changed
