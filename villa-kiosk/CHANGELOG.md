@@ -1,3 +1,8 @@
+## 2.496.281
+
+### Changed
+- **A closed door, window or gate is green.** Closed (and locked, for a lock sensor) is the secure, expected state, so its status and history bar are now green. When it's open, it's grey, not red: an open window isn't a fault. To have an open door flagged (a server room, for example), give that sensor an alert state in Settings: open then turns red and closed stays green. The Map colours legend says so.
+
 ## 2.496.280
 
 ### Changed

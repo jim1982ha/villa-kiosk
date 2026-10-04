@@ -146,6 +146,13 @@ export const OPENING_DEVICE_CLASSES: ReadonlySet<string> = new Set([
   "door", "garage_door", "window", "opening",
 ]);
 
+/** The state a binary_sensor is SECURE in, when its kind has one: an opening
+ *  (OPENING_DEVICE_CLASSES) closed, a lock locked — both "off". Undefined for
+ *  every other kind (stateColors.binaryStatus). */
+export function secureStateFor(deviceClass: string | undefined): "off" | undefined {
+  return deviceClass !== undefined && (OPENING_DEVICE_CLASSES.has(deviceClass) || deviceClass === "lock") ? "off" : undefined;
+}
+
 /** binary_sensor device_classes whose "on" means someone or something MOVED.
  *  ⚠️ ONE LIST. Dashboard's motion toast and EntityCategories' access bucket
  *  each carried their own copy, and the toast's comment claimed its id hints

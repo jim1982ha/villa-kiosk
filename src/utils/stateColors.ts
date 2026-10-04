@@ -256,17 +256,26 @@ export const STATUS_PILL_CLASS: Record<StatusKey, string> = {
  * off, when it is watching and finding nothing — the state an owner wants to
  * see. Only a sensor with no problem state (motion, a door nobody watches)
  * keeps on = active, off = idle. Unavailable/unknown keep their own meaning.
+ *
+ * ⚠️ AND A CLOSED DOOR IS GREEN (owner, 2026-10-05, a server door reading
+ * grey while closed). A sensor with a SECURE state (`secureState`:
+ * BinarySensorClasses.secureStateFor — an opening closed, a lock locked) and
+ * no problem state reads that state as active; the other is idle, NOT an
+ * alert: an open window is not a fault, and the map and the Cockpit do not
+ * flag it. An owner who wants it flagged sets an alert state on it — the
+ * problem state then wins.
  */
-export function binaryStatus(state: string, alertState?: string): StatusKey {
+export function binaryStatus(state: string, alertState?: string, secureState?: "on" | "off"): StatusKey {
   const plain = statusKeyFor(state, "binary_sensor");
-  if (alertState !== "on" && alertState !== "off") return plain;
-  if (state === alertState) return "alert";
-  return state === "on" || state === "off" ? "active" : plain;
+  if (state !== "on" && state !== "off") return plain;
+  if (alertState === "on" || alertState === "off") return state === alertState ? "alert" : "active";
+  if (secureState) return state === secureState ? "active" : "idle";
+  return plain;
 }
 
 /** binary_sensor: binaryStatus as a colour — the history bar's. */
-export function binarySensorColor(state: string, alertState?: string): string {
-  return STATUS_COLOR[binaryStatus(state, alertState)];
+export function binarySensorColor(state: string, alertState?: string, secureState?: "on" | "off"): string {
+  return STATUS_COLOR[binaryStatus(state, alertState, secureState)];
 }
 
 const PALETTE = [ON_COLOR, "var(--accent)", WARN_COLOR, DANGER_COLOR, "var(--accent-strong)"];
