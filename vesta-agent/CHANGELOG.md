@@ -1,3 +1,9 @@
+## 0.12.39
+
+### Changed
+- **Dates in reports and maintenance messages are written one way: "5 Oct".** Some said "05 Oct" and others "5 Oct", sometimes in the same report. (The reports and maintenance skills update by themselves on the villa unless you have edited them.)
+- Behind the scenes: the checks run before each release take about 39 s instead of 77 s, and some unused code was removed.
+
 ## 0.12.38
 
 ### Fixed

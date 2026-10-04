@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.38 (5 October 2026)
+
+- Workflow and DRY passes 1–2:
+  - vesta_shared.timeutil.day_label / day_time_label: the one day format ("5 Oct"), used by the 7 hand-written strftime("%d %b") calls in the reports and preventive-maintenance skills (mixed "05 Oct"/"5 Oct"). A test forbids a new hand-written one.
+  - Removed helpers with no caller: timeutil ms_to_local, parse_iso, local_now, day_of, fmt_dt, fmt_day, daterange; stats.mad; messaging.fmt_kwh, fmt_pct.
+  - tests: the stop tests wait for the agent's own readiness line, not a fixed 3/6 s (suite 45 → 38 s).
+  - Starter skills recorded.
+
 ## 0.6.37 (5 October 2026)
 
 - Architecture review round 3:

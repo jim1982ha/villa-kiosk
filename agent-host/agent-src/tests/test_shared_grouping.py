@@ -77,3 +77,20 @@ def test_float_noise_never_hangs_an_axis():
     first, last, ticks = compose._ticks(21.4, 21.400000000000002)
     assert 2 <= len(ticks) <= 12 and last - first >= 0.5          # a readable axis, not 100 ticks of noise
     assert "<svg" in compose.line([("2026-10-01", 21.4), ("2026-10-02", 21.400000000000002)], "°C")
+
+
+def test_one_day_format_everywhere():
+    # 2026-10-05: four skills wrote "5 Oct", three "05 Oct" — sometimes in the same report
+    import re
+    from datetime import date, datetime
+    from helpers import STARTER_SKILLS
+    from vesta_shared.timeutil import day_label, day_time_label
+    assert day_label(date(2026, 10, 5)) == "5 Oct" and day_label(date(2026, 10, 15)) == "15 Oct"
+    assert day_time_label(datetime(2026, 10, 5, 9, 30)) == "5 Oct, 09:30"
+    hand = []
+    for root, _d, files in os.walk(STARTER_SKILLS):
+        for f in files:
+            if f.endswith(".py"):
+                src = open(os.path.join(root, f), encoding="utf-8").read()
+                hand += [f for _ in re.findall(r'strftime\("%d %b', src)]
+    assert hand == [], hand

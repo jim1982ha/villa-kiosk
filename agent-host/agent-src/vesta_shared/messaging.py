@@ -41,14 +41,6 @@ def fmt_money(amount: float, currency: str) -> str:
     return f"{amount:,.2f} {currency}"
 
 
-def fmt_kwh(v: float) -> str:
-    return f"{v:,.1f} kWh"
-
-
-def fmt_pct(v: float | None) -> str:
-    return "n/a" if v is None else f"{v:+.0f}%"
-
-
 def reply_keyboard(options: list[str]) -> dict:
     """Telegram inline keyboard payload for the chase loop."""
     return {"inline_keyboard": [[{"text": o, "callback_data": o.lower().replace(" ", "_")} for o in options]]}

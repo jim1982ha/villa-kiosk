@@ -4,7 +4,7 @@ UTC never reaches a chat message."""
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone, date
+from datetime import datetime, date
 from zoneinfo import ZoneInfo
 
 
@@ -12,31 +12,18 @@ def tz(name: str) -> ZoneInfo:
     return ZoneInfo(name)
 
 
-def ms_to_local(ms: int, zone: str) -> datetime:
-    return datetime.fromtimestamp(ms / 1000, tz=timezone.utc).astimezone(tz(zone))
+def day_label(d: date) -> str:
+    """A day as every message and report writes it: "5 Oct", never "05 Oct".
+
+    ⚠️ ONE FORMAT (2026-10-05): seven hand-written strftime("%d %b") calls in the skills, four stripping
+    the leading zero and three not, so the same report said "05 Oct" in one line and "5 Oct" in the next.
+    (Seven helpers here — ms_to_local, parse_iso, fmt_day… — had no caller at all; they went.)"""
+    return d.strftime("%d %b").lstrip("0")
 
 
-def parse_iso(s: str, zone: str) -> datetime:
-    d = datetime.fromisoformat(s.replace("Z", "+00:00"))
-    if d.tzinfo is None:
-        d = d.replace(tzinfo=tz(zone))
-    return d.astimezone(tz(zone))
-
-
-def local_now(zone: str) -> datetime:
-    return datetime.now(tz(zone))
-
-
-def day_of(d: datetime) -> date:
-    return d.date()
-
-
-def fmt_dt(d: datetime) -> str:
-    return d.strftime("%a %d %b %H:%M")
-
-
-def fmt_day(d: date) -> str:
-    return d.strftime("%a %d %b")
+def day_time_label(d: datetime) -> str:
+    """A day and a time: "5 Oct, 09:30"."""
+    return d.strftime("%d %b, %H:%M").lstrip("0")
 
 
 def hhmm_to_minutes(s: str) -> int:
@@ -61,10 +48,3 @@ WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", 
 
 def weekday_name(d: date) -> str:
     return WEEKDAYS[d.weekday()]
-
-
-def daterange(start: date, end: date):
-    d = start
-    while d <= end:
-        yield d
-        d += timedelta(days=1)

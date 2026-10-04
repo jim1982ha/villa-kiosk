@@ -47,6 +47,7 @@ from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
 from vesta_shared.messaging import fmt_money, split_message  # noqa: E402
 from vesta_shared.axis import is_flat, label as axis_label, nice_axis  # noqa: E402  (the one axis rule)
 from vesta_shared.store import Store  # noqa: E402
+from vesta_shared.timeutil import day_label  # noqa: E402  (the one day format)
 from vesta_shared.problems import Problems  # noqa: E402  (what is still open: one owner)
 
 TPL = Environment(loader=FileSystemLoader(os.path.join(HERE, "..", "templates")), autoescape=True)
@@ -157,7 +158,7 @@ def _nice(v: float) -> str:
 
 def _day(s: str) -> str:
     try:
-        return date.fromisoformat(s).strftime("%d %b").lstrip("0")
+        return day_label(date.fromisoformat(s))
     except ValueError:
         return s
 

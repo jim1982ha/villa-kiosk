@@ -103,18 +103,33 @@ def _env(tmp, **extra):
     return env
 
 
-def _stop_time(env, settle):
-    p = subprocess.Popen([sys.executable, "-m", "vesta_agent"], cwd=ROOT, env=env,
+def _stop_time(env, ready: str, limit: float = 20):
+    """Start the agent, wait until it prints `ready` (at most `limit` s), SIGTERM it, and time the stop.
+
+    It waited a fixed 3 or 6 s instead (2026-10-05: 9 s of the suite's 45); the agent says when it is up."""
+    import threading
+    p = subprocess.Popen([sys.executable, "-u", "-m", "vesta_agent"], cwd=ROOT, env={**env, "PYTHONUNBUFFERED": "1"},
                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-    time.sleep(settle)
+    lines, up = [], threading.Event()
+
+    def read():
+        for line in p.stdout:
+            lines.append(line)
+            if ready in line:
+                up.set()
+    reader = threading.Thread(target=read, daemon=True)
+    reader.start()
+    up.wait(limit)
     t0 = time.monotonic()
     p.send_signal(signal.SIGTERM)
-    out, _ = p.communicate(timeout=30)
-    return p.returncode, time.monotonic() - t0, out
+    p.wait(timeout=30)
+    took = time.monotonic() - t0
+    reader.join(5)
+    return p.returncode, took, "".join(lines)
 
 
 def test_sigterm_while_waiting_for_settings(tmp_path):
-    code, took, out = _stop_time(_env(str(tmp_path)), 3)
+    code, took, out = _stop_time(_env(str(tmp_path)), "is waiting")
     assert "is waiting" in out and code == 0 and took < 5, out
 
 
@@ -122,7 +137,7 @@ def test_sigterm_while_running_stops_within_the_grace(tmp_path):
     env = _env(str(tmp_path), ANTHROPIC_API_KEY="sk-ant-TEST-000000000000",
                VESTA_HA_MCP_URL="http://127.0.0.1:9/mcp", VESTA_HA_URL="http://127.0.0.1:9",
                VESTA_HA_TOKEN="ha-TEST-000000000000")
-    code, took, out = _stop_time(env, 6)
+    code, took, out = _stop_time(env, "Home Assistant events")     # its loops are running
     assert "Stopped" in out and code == 0 and took < 20, out
     assert "ha-TEST-000000000000" not in out and "sk-ant-TEST" not in out
 

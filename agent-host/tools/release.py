@@ -70,22 +70,45 @@ class GateResult:
     note: str = ""
 
 
+# ⚠️ THREE LANES SIDE BY SIDE (2026-10-05): one gate at a time was 77 s, 38 of them the agent's own tests.
+# A lane runs its gates in order; lanes run at once. Gates that bind the fixed sidecar port
+# (contract.SIDECAR_PORT) share the "sidecar" lane, so two never bind it together. Output is still printed
+# in GATES order, whole, with its group — only the waiting is shared.
+LANES = {"The host's start-up, contract, folders and redaction": "sidecar",
+         "The self-test reports each link correctly": "sidecar",
+         "The VESTA Agent's own tests": "agent"}
+
+
+def _run_one(cmd: list[str], cwd: str) -> tuple[int, str, float]:
+    start = time.monotonic()
+    proc = subprocess.run(cmd, cwd=ROOT / cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    return proc.returncode, proc.stdout or "", time.monotonic() - start
+
+
 def run_gates() -> list[GateResult]:
     """Run every gate, even after a failure; return what each did."""
+    from concurrent.futures import ThreadPoolExecutor
+    lanes: dict[str, list[int]] = {}
+    for i, (name, _cmd, _cwd) in enumerate(GATES):
+        lanes.setdefault(LANES.get(name, "rest"), []).append(i)
+    done: dict[int, tuple[int, str, float]] = {}
+
+    def lane(indices: list[int]) -> None:
+        for i in indices:
+            done[i] = _run_one(GATES[i][1], GATES[i][2])
+    with ThreadPoolExecutor(max_workers=len(lanes)) as pool:
+        list(pool.map(lane, lanes.values()))
     results: list[GateResult] = []
-    for name, cmd, cwd in GATES:
+    for i, (name, _cmd, _cwd) in enumerate(GATES):
         print(f"::group::{name}" if IN_CI else f"\n═══ {name} ═══", flush=True)
-        start = time.monotonic()
-        proc = subprocess.run(cmd, cwd=ROOT / cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-        out = proc.stdout or ""
+        returncode, out, took = done[i]
         sys.stdout.write(out)
-        took = time.monotonic() - start
         if IN_CI:
             print("::endgroup::", flush=True)
-        if proc.returncode == 0:
+        if returncode == 0:
             results.append(GateResult(name, "pass", took))
             continue
-        results.append(GateResult(name, "FAIL", took, f"exit {proc.returncode}"))
+        results.append(GateResult(name, "FAIL", took, f"exit {returncode}"))
         if IN_CI:
             # The job log needs a signed-in account; an annotation does not (was tests/ci_run.sh).
             for line in _failure_lines(out):

@@ -12,13 +12,6 @@ def med(xs: Sequence[float]) -> float | None:
     return median(xs) if xs else None
 
 
-def mad(xs: Sequence[float]) -> float | None:
-    m = med(xs)
-    if m is None:
-        return None
-    return med([abs(x - m) for x in xs])
-
-
 def pct_change(new: float, base: float) -> float | None:
     if base in (None, 0) or new is None:
         return None

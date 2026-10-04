@@ -41,6 +41,7 @@ from vesta_shared.ha_client import client_from_args  # noqa: E402
 from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
 from vesta_shared.messaging import no_code as _no_code  # noqa: E402
 from vesta_shared.store import Store  # noqa: E402
+from vesta_shared.timeutil import day_label, day_time_label  # noqa: E402  (the one day format)
 from vesta_shared import agent_records  # noqa: E402  (the agent's records: one reader)
 from vesta_shared.problems import Problems  # noqa: E402  (what is still open: one owner)
 
@@ -293,12 +294,12 @@ def _fill(text, figures: dict) -> str:
     def show(v):
         if isinstance(v, str) and len(v) == 16 and v[10] == "T":
             try:
-                return datetime.fromisoformat(v).strftime("%d %b, %H:%M").lstrip("0")
+                return day_time_label(datetime.fromisoformat(v))
             except ValueError:
                 return v
         if isinstance(v, str) and len(v) == 10 and v[4] == "-" and v[7] == "-":
             try:
-                return date.fromisoformat(v).strftime("%d %b").lstrip("0")
+                return day_label(date.fromisoformat(v))
             except ValueError:
                 return v
         return v
@@ -596,7 +597,7 @@ def one_list(clue_rows: list[dict], problems: list[dict], device_of, name_of, ho
         if all(t_ is not None and len(x["since"]) > 10 for t_, x in zip(times, its)):
             spread = (max(times) - min(times)).total_seconds() / 60
             if spread <= same_minutes and group_words.get("same_time"):
-                why += " " + group_words["same_time"].format(n=n, since=min(times).strftime("%d %b, %H:%M").lstrip("0"))
+                why += " " + group_words["same_time"].format(n=n, since=day_time_label(min(times)))
         out.append({**its[0], "title": group["title"], "subject": f"{n} items", "why": why,
                     "ask": "", "severity": group["severity"],
                     "task_ids": [i for x in its for i in x["task_ids"]], "also": [], "members": group["names"],
@@ -830,7 +831,7 @@ def s_trends(c: Ctx) -> dict:
             ws = first + timedelta(days=7 * w)
             vals = [per.get(ws + timedelta(days=k)) for k in range(7)]
             got = [v for v in vals if v is not None]
-            bars.append({"label": ws.strftime("%d %b"), "value": round(sum(got)) if got else None})
+            bars.append({"label": day_label(ws), "value": round(sum(got)) if got else None})
         charts.append({"id": "trend-weeks", "kind": "bars", "title": f"Electricity per week, kWh (last {weeks} weeks)",
                        "bars": bars, "figures": {"weeks": [b["value"] for b in bars]}})
     for slug, a in sorted(c.pack.assets.items()):

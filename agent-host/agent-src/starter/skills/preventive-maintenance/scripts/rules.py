@@ -21,7 +21,7 @@ from typing import Any
 
 from vesta_shared.params import VillaParams, MissingParameter
 from vesta_shared.stats import med, pct_change, step_index
-from vesta_shared.timeutil import schedule_hours_per_day, weekday_name
+from vesta_shared.timeutil import day_label, schedule_hours_per_day, weekday_name
 
 P2, P3, INFO = "P2", "P3", "INFO"
 
@@ -94,10 +94,10 @@ def power_rules(asset: dict, entity_id: str, series: dict[date, dict], today: da
                 idx, step_pct = step_index(all_vals)
                 if idx is not None:
                     kind, when = "step", [d for d in days if series[d].get("running_power")][idx]
-                    how = "sudden change on " + when.strftime("%d %b")
+                    how = "sudden change on " + day_label(when)
                 else:
                     kind, when = ("drift", recent_days[0]) if len(rec_vals) >= 3 else ("new", recent_days[0])
-                    how = "gradual drift" if kind == "drift" else "started on " + when.strftime("%d %b")
+                    how = "gradual drift" if kind == "drift" else "started on " + day_label(when)
                 direction = "lower" if change < 0 else "higher"
                 summary = (f"{asset['name']} draws {abs(change):.0f}% {direction} than its 30-day normal "
                            f"({rec:.0f} W vs {base:.0f} W) at the same running hours, {how}.")
