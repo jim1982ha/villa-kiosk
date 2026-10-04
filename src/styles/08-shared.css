@@ -428,3 +428,33 @@ button.cockpit-attention-row.tappable { cursor: pointer; }
   max-height: 260px; overflow-y: auto; background: var(--bg-overlay);
   border: 1px solid var(--hairline-strong); border-radius: 10px;
 }
+
+/* ── THE DROPDOWN (common/Dropdown.tsx) ──────────────────────────────────
+   The app's own list in place of the platform's picker (2.496.275). The
+   button wears the form-field look every input in a dialog has; the list is
+   a --bg-modal sheet with 44 px rows (dropdownPlacement.DROPDOWN_ROW_PX) —
+   above every window (z 400: the topmost layer is 300). */
+.dropdown {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: 100%; min-height: 44px; padding: 10px 14px; border-radius: 10px;
+  background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--hairline);
+  font: inherit; font-size: var(--text-md); text-align: left; cursor: pointer;
+}
+.dropdown:focus-visible, .dropdown.is-open { border-color: var(--accent); outline: none; }
+.dropdown:disabled { opacity: 0.5; cursor: default; }
+.dropdown-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.dropdown-caret { flex: none; color: var(--text-secondary); transition: transform 0.15s ease; }
+.dropdown.is-open .dropdown-caret { transform: rotate(180deg); }
+.dropdown-list {
+  z-index: 400; overflow-y: auto; overscroll-behavior: contain; padding: 4px;
+  background: var(--bg-modal); color: var(--text-primary);
+  border: 1px solid var(--hairline-strong); border-radius: 12px; box-shadow: var(--elev-3);
+  outline: none; animation: modal-backdrop-in 0.12s ease-out;
+}
+.dropdown-option {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  min-height: 44px; box-sizing: border-box; padding: 10px 12px; border-radius: 8px;
+  font-size: var(--text-md); cursor: pointer;
+}
+.dropdown-option.is-active { background: var(--bg-input); }
+.dropdown-option.is-chosen { color: var(--accent); font-weight: 600; }

@@ -19,6 +19,7 @@
 // someone asked for it, not "whenever this component happened to re-render".
 
 import { useState } from "react";
+import Dropdown from "@/components/common/Dropdown";
 import SaveButton from "@/components/common/SaveButton";
 import { Sparkles, Download, Save } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
@@ -110,9 +111,8 @@ export default function RecapTab({
       <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
         <label className="fm-field" style={{ maxWidth: 200 }}>
           <span>Period</span>
-          <select value={month} onChange={(e) => { setMonth(e.target.value); setMarkdown(null); setSaved(false); }}>
-            {months.map((m) => <option key={m} value={m}>{m}</option>)}
-          </select>
+          <Dropdown value={month} ariaLabel="Period" onChange={(m) => { setMonth(m); setMarkdown(null); setSaved(false); }}
+            options={months.map((m) => ({ value: m, label: m }))} />
         </label>
       </div>
 

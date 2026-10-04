@@ -9,6 +9,7 @@
 // currency. One component; the cap arithmetic is fmEngine.projectedSpend's.
 
 import { useFmData } from "@/fm/FmDataContext";
+import Dropdown from "@/components/common/Dropdown";
 import { useFmTerms } from "@/fm/useFmTerms";
 import { monthKey, monthLabel, parseAmount, projectedSpend } from "@/fm/fmEngine";
 import { formatMoney } from "@/utils/money";
@@ -45,10 +46,10 @@ export default function CostFields({ amount, onAmount, category = "minor", onCat
           <span>Category</span>
           {/* Neutral words: which contract clause or account a category maps
               to is one villa's arrangement (hard-rules.py, 3b). */}
-          <select value={category} onChange={(e) => onCategory(e.target.value as Category)}>
-            <option value="minor">{terms.cappedName}{terms.monthlyCap > 0 ? " — counts against the monthly cap" : ""}</option>
-            <option value="major">{terms.uncappedName}{terms.monthlyCap > 0 ? " — outside the cap" : ""}</option>
-          </select>
+          <Dropdown<Category> value={category} onChange={onCategory} ariaLabel="Category" options={[
+            { value: "minor", label: `${terms.cappedName}${terms.monthlyCap > 0 ? " — counts against the monthly cap" : ""}` },
+            { value: "major", label: `${terms.uncappedName}${terms.monthlyCap > 0 ? " — outside the cap" : ""}` },
+          ]} />
         </label>
       )}
       {/* Only with a cap set: with none there is nothing to be over (an

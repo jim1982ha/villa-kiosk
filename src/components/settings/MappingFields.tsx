@@ -13,6 +13,7 @@
 // each table supplies only its layout — a cell per field (`cell`).
 
 import type { ReactNode } from "react";
+import Dropdown from "@/components/common/Dropdown";
 import EntityPicker from "./EntityPicker";
 import { useDraftCommit } from "@/hooks/useDraftCommit";
 import { CATEGORY_ORDER, CATEGORY_LABELS, effectiveCategory, subjectOf } from "@/config/EntityCategories";
@@ -55,20 +56,18 @@ export default function MappingFields({ entityId, mapping, entity, onPatch, cell
   return (
     <>
       {cell("type", "Type", (
-        <select style={selectStyle} value={m.type} title="Panel type"
-          onChange={(e) => draftField({ type: e.target.value as EntityType })}>
-          {ENTITY_DOMAINS.map((t) => <option key={t} value={t}>{t}</option>)}
-        </select>
+        <Dropdown<EntityType> style={selectStyle} value={m.type} title="Panel type" ariaLabel="Panel type"
+          onChange={(type) => draftField({ type })}
+          options={ENTITY_DOMAINS.map((t) => ({ value: t, label: t }))} />
       ))}
       {cell("category", "Category", (
-        <select style={selectStyle} value={effectiveCategory(subjectOf(entityId, m, entity))}
+        <Dropdown<Category> style={selectStyle} value={effectiveCategory(subjectOf(entityId, m, entity))}
           // `categoryPicked` records that this was CHOSEN. Without it the pick
           // round-trips through the legacy-default discard and the dropdown
           // snaps straight back — six of the options were unselectable.
-          onChange={(e) => draftField({ category: e.target.value as Category, categoryPicked: true })}
-          title="Which map filter group this device belongs to">
-          {CATEGORY_ORDER.map((c) => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
-        </select>
+          onChange={(category) => draftField({ category, categoryPicked: true })}
+          title="Which map filter group this device belongs to" ariaLabel="Category"
+          options={CATEGORY_ORDER.map((c) => ({ value: c, label: CATEGORY_LABELS[c] }))} />
       ))}
       {cell("label", "Label", (
         // Saved half a second after typing stops, or at once on leaving the field.

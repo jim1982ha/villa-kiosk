@@ -1,3 +1,8 @@
+## 2.496.275
+
+### Changed
+- **Every dropdown in VESTA now opens VESTA's own list, in its colours.** This covers the Recap period, the Spend month, a cost's category, a maintenance task's room, and a device's type and category in Advanced Settings. They used to open the phone's own picker (on Android, a grey sheet of radio buttons; on iPhone, a wheel). The list opens under the field, or above it near the bottom of the screen, and the current choice is ticked. Back or Escape closes the list without closing the window behind it.
+
 ## 2.496.274
 
 ### Changed

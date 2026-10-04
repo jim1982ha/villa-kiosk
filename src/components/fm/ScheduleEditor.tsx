@@ -8,6 +8,7 @@
 // overdue work actually is.
 
 import { useState } from "react";
+import Dropdown from "@/components/common/Dropdown";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
@@ -92,10 +93,8 @@ export default function ScheduleEditor() {
 
       <label className="fm-field" style={{ maxWidth: 260 }}>
         <span>Room (optional)</span>
-        <select value={draft.room} onChange={(e) => setDraft({ ...draft, room: e.target.value })}>
-          <option value="">Whole villa</option>
-          {rooms.map((r) => <option key={r} value={r}>{r}</option>)}
-        </select>
+        <Dropdown value={draft.room} ariaLabel="Room" onChange={(room) => setDraft({ ...draft, room })}
+          options={[{ value: "", label: "Whole villa" }, ...rooms.map((r) => ({ value: r, label: r }))]} />
       </label>
 
       <label className="fm-field" style={{ maxWidth: 260 }}>

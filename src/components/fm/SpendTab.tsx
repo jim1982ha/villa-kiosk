@@ -7,6 +7,7 @@
 // which is why the entry form projects the new total as you type.
 
 import { useState } from "react";
+import Dropdown from "@/components/common/Dropdown";
 import SaveButton from "@/components/common/SaveButton";
 import { Plus, Sparkles, Save, Download } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
@@ -125,9 +126,8 @@ export default function SpendTab(
       {roleCan(role, "editConfig") && <ContractTermsEditor />}
       <label className="fm-field" style={{ maxWidth: 220 }}>
         <span>Month</span>
-        <select value={month} onChange={(e) => { setMonth(e.target.value); setStatement(null); setStatementSaved(false); }}>
-          {months.map((m) => <option key={m} value={m}>{m}</option>)}
-        </select>
+        <Dropdown value={month} ariaLabel="Month" onChange={(m) => { setMonth(m); setStatement(null); setStatementSaved(false); }}
+          options={months.map((m) => ({ value: m, label: m }))} />
       </label>
 
       <div className={`fm-cap ${b.state}`}>
