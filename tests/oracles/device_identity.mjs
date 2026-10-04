@@ -96,7 +96,7 @@ const d = src("pages/Dashboard.tsx"), router = src("components/panels/PanelRoute
 ck("the Cockpit, the summary bar, the Agent and Facility open the DEVICE",
    /onOpenEntity=\{\(id\) => \{ setCameFrom\(\[\]\); openDevicePanel\(id\); \}\}/.test(d)
    && /const handOver = useCallback\(\(from: Surface, entityId: string\) => \{[\s\S]*?openDevicePanel\(entityId\);/.test(d)
-   && ["cockpit", "agent", "facility"].every((w) => d.includes(`onOpenEntity={(id) => handOver("${w}", id)}`))
+   && ["cockpit", "agent"].every((w) => d.includes(`onOpenEntity={(id) => handOver("${w}", id)}`))
    && /openEntityPanel\(identity\.deviceOf\(entityId\)\)/.test(d));
 ck("  ...a list row and the camera's next/prev open exactly the entity they name",
    // 2.496.270: through openFromList, which records the list for Back and opens exactly the entity

@@ -29,7 +29,7 @@ import { useProfile } from "@/auth/ProfileContext";
 import { isTypeAllowed, panelMapping, roleCan } from "@/auth/permissions";
 import { doorsFor } from "@/auth/doors";
 import { patchMapping } from "@/config/mappingEdits";
-import FacilityModal from "@/components/fm/FacilityModal";
+import type { CockpitTab } from "@/components/cockpit/CockpitModal";
 import AgentModal from "@/components/agent/AgentModal";
 import { useAgent } from "@/agent/AgentContext";
 import GuestReportModal from "@/components/fm/GuestReportModal";
@@ -92,6 +92,9 @@ export default function Dashboard() {
   // list, the Cockpit, the VESTA Agent, Facility. Every fresh open from the
   // map or the bottom bar empties it; Close empties it.
   const [cameFrom, setCameFrom] = useState<CameFrom[]>([]);
+  // The Cockpit's open tab, held here: "report a fault" opens it on Faults,
+  // and Back from a device returns to the tab it left (2.496.273).
+  const [cockpitTab, setCockpitTab] = useState<CockpitTab>("overview");
   const closePanel = useCallback(() => { setActivePanel(null); setCameFrom([]); }, []);
   // True only for a profile with viewAgent AND a configured agent — see
   // AgentProvider. Nothing about the agent renders otherwise (PLAN A8).
@@ -800,8 +803,7 @@ export default function Dashboard() {
         hasOverviewDefault={hasOverviewDefault}
         onApplyOverviewDefault={applyOverviewDefault}
         onSaveOverviewDefault={saveOverviewDefault}
-        onOpenCockpit={() => openSurface("cockpit")}
-        onOpenFacility={() => openSurface("facility")}
+        onOpenCockpit={() => { setCockpitTab("overview"); openSurface("cockpit"); }}
         onOpenCategory={setCategoryGroup}
       />
 
@@ -848,8 +850,10 @@ export default function Dashboard() {
               ? () => {
                   closePanel();
                   if (doors.facility) {
+                    // the Cockpit's Faults tab, the device filled in
                     setFaultForEntity(activePanel.entityId);
-                    openSurface("facility");
+                    setCockpitTab("faults");
+                    openSurface("cockpit");
                   } else {
                     setGuestReportFor(activePanel.entityId);
                   }
@@ -1013,10 +1017,14 @@ export default function Dashboard() {
 
       {shown("cockpit") && (
         <CockpitModal
-          onClose={() => closeSurface("cockpit")}
+          onClose={() => { closeSurface("cockpit"); setFaultForEntity(null); }}
           onOpenEntity={(id) => handOver("cockpit", id)}
           doors={doors}
           onOpenAgent={() => openSurface("agent")}
+          tab={cockpitTab}
+          onTab={setCockpitTab}
+          reportFaultFor={faultForEntity ?? undefined}
+          onFaultFormOpened={() => setFaultForEntity(null)}
         />
       )}
 
@@ -1024,16 +1032,6 @@ export default function Dashboard() {
         <AgentModal
           onClose={() => closeSurface("agent")}
           onOpenEntity={(id) => handOver("agent", id)}
-        />
-      )}
-
-      {shown("facility") && (
-        <FacilityModal
-          doors={doors}
-          onClose={() => { closeSurface("facility"); setFaultForEntity(null); }}
-          onOpenEntity={(id) => handOver("facility", id)}
-          reportFaultFor={faultForEntity ?? undefined}
-          onFaultFormOpened={() => setFaultForEntity(null)}
         />
       )}
 

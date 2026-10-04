@@ -111,7 +111,7 @@ ck("  ...and so is the window (shown: open AND allowed, pages/surfaces)", /\{sho
      /\{doors\.agent \? <Bot size=\{24\} \/> : <TriangleAlert size=\{24\} \/>\}/.test(hud)
      && /\{doors\.agent && agentDot\}/.test(hud) && /const agentDot = <span className=\{`status-dot \$\{agentOnline/.test(hud) && !/onOpenAgent \?|onOpenAgent &&/.test(hud));
   ck("  ...and the Cockpit's footer offers 'VESTA Agent' only with that door",
-     /leading=\{doors\.agent \? \(\s*<button className="btn ghost" onClick=\{\(\) => \{ onClose\(\); onOpenAgent\(\); \}\}/.test(cockpit)
+     /leading=\{shownTab === "overview" && doors\.agent \? \(\s*<button className="btn ghost" onClick=\{\(\) => \{ onClose\(\); onOpenAgent\(\); \}\}/.test(cockpit)
      && /VESTA Agent\{agentWaiting > 0/.test(cockpit) && /\) : undefined\} \/>/.test(cockpit));
 }
 const ctx = src("agent/AgentContext.tsx");

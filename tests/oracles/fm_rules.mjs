@@ -71,8 +71,8 @@ ck("ONE attention rule: open faults + tasks overdue or never — a task merely d
 }
 
 const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
-ck("the HUD, the Cockpit and the Today tab all count through fmAttention",
-   /fmAttention\(fmData\)\.total/.test(src("components/hud/HUD.tsx")) && /const fm = fmAttention\(fmData\);/.test(src("config/attention.ts"))
+ck("the Cockpit (whose count the top bar shows) and the Today tab count through fmAttention; the top bar keeps no count of its own",
+   !/fmAttention/.test(src("components/hud/HUD.tsx")) && /const fm = fmAttention\(fmData\);/.test(src("config/attention.ts"))
    && /fmAttention\(data\)\.lateTasks/.test(src("components/fm/TodayTab.tsx")));
 ck("no screen parses an amount or ranks/moves a fault by itself",
    ["components/fm/TodayTab.tsx", "components/fm/SpendTab.tsx", "components/fm/FaultStageModal.tsx"].every((f) => /parseAmount\(/.test(src(f)) && !/replace\(\/\[\^\\d\]\/g, ""\)\) \|\| 0/.test(src(f)))

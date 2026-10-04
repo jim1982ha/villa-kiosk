@@ -43,16 +43,18 @@ const src = (f) => strip(readFileSync(new URL(`../../src/${f}`, import.meta.url)
 const dash = src("pages/Dashboard.tsx"), hud = src("components/hud/HUD.tsx"), cockpit = src("components/cockpit/CockpitModal.tsx");
 ck("Dashboard computes it once and mounts every window behind it",
    (dash.match(/doorsFor\(/g) ?? []).length === 1
-   && ["agent", "facility", "settings", "configEditor"].every((s) => new RegExp(`\\{shown\\("${s}"\\) && \\(`).test(dash))
+   && ["agent", "settings", "configEditor"].every((s) => new RegExp(`\\{shown\\("${s}"\\) && \\(`).test(dash))
+   // 2.496.273: Facility is the Cockpit's tabs, behind the same door
+   && /const tabs: ModalTab<CockpitTab>\[\] = doors\.facility \? \[OVERVIEW_TAB, \.\.\.FACILITY_TABS\] : \[OVERVIEW_TAB\];/.test(cockpit)
    && /const shown = \(surface: Surface\) => surfaceShown\(open, surface, doors\);/.test(dash));
 ck("  ...and no longer re-asks those capabilities itself",
    !/roleCan\(role, "(openSettings|manageFacility|viewAgent)"\)/.test(dash) && !/agentVisible \?/.test(dash));
 ck("no window's visibility is implied by a callback being passed (no `? () => … : undefined`)",
    !/onOpen(Agent|Facility)=\{[^}]*\? /.test(dash) && !/onOpen(Agent|Facility)\?:/.test(hud) && !/onOpenAgent\?:/.test(cockpit));
-ck("the top bar draws Facility, Settings and the agent's robot from doors",
-   (hud.match(/\{doors\.facility && \(/g) ?? []).length === 2 && (hud.match(/\{doors\.settings && \(/g) ?? []).length === 2
+ck("the top bar draws Settings and the agent's robot from doors — and no Facility button (its tabs are the Cockpit's)",
+   (hud.match(/\{doors\.facility && \(/g) ?? []).length === 0 && (hud.match(/\{doors\.settings && \(/g) ?? []).length === 2
    && !/\{onOpenFacility && \(|\{canOpenSettings && \(/.test(hud));
 ck("the Cockpit's updates count and agent footer read doors, not roleCan",
-   /if \(!doors\.updates\) return null;/.test(cockpit) && !/roleCan\(role, "seeUpdates"\)/.test(cockpit) && /\{doors\.agent \? \(/.test(cockpit));
+   /if \(!doors\.updates\) return null;/.test(cockpit) && !/roleCan\(role, "seeUpdates"\)/.test(cockpit) && /doors\.agent \? \(/.test(cockpit));
 
 done("✅ which doors a profile has is said once");

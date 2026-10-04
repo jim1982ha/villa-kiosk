@@ -28,7 +28,7 @@ ck("a reading opened from its device: Back reopens the device (and pops one step
    && /go: \(\) => \{ setCameFrom\(\(s2\) => s2\.slice\(0, -1\)\); setActivePanel\(parent\); \}/.test(dash));
 ck("a device from the Cockpit, the VESTA Agent or Facility: Back reopens that window",
    /setCameFrom\(\[\{ label: SURFACE_LABEL\[from\], go: \(\) => \{ closePanel\(\); openSurface\(from\); \} \}\]\);/.test(dash)
-   && ["cockpit", "agent", "facility"].every((w) => dash.includes(`onOpenEntity={(id) => handOver("${w}", id)}`)));
+   && ["cockpit", "agent"].every((w) => dash.includes(`onOpenEntity={(id) => handOver("${w}", id)}`)));
 ck("a device from a room list or a category list: Back reopens the list",
    /openFromList\(id, g\.room, \(\) => setClusterGroup\(g\)\)/.test(dash)
    && /openFromList\(id, CATEGORY_LABELS\[c\], \(\) => setCategoryGroup\(c\)\)/.test(dash));
@@ -41,5 +41,5 @@ ck("opened from the map (tap, long-press) or the bottom bar: no Back",
 ck("Close (and Edit / Report a fault, which leave the panel) empties it — no bare setActivePanel(null)",
    (dash.match(/setActivePanel\(null\)/g) ?? []).length === 1 && /onClose=\{closePanel\}/.test(dash));
 ck("every window a device can be handed from has words for its Back",
-   ["cockpit", "agent", "facility"].every((w) => typeof SURFACE_LABEL[w] === "string" && SURFACE_LABEL[w].length > 0));
+   ["cockpit", "agent"].every((w) => typeof SURFACE_LABEL[w] === "string" && SURFACE_LABEL[w].length > 0));
 done("✅ a panel opened from another window can go back to it");

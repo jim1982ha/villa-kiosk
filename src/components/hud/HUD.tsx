@@ -29,7 +29,7 @@ import {
   // MapIcon, not Map: the bare name shadows the global Map constructor,
   // which this file also uses.
   Settings, Map as MapIcon, PersonStanding,
-  Minus, Plus, CircleHelp, TriangleAlert, ClipboardList, Bot,
+  Minus, Plus, CircleHelp, TriangleAlert, Bot,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
@@ -52,8 +52,6 @@ import { openRoomDial, roomDialItems, roomsOnFloor, type RadialItem, type RoomDi
 import LegendModal from "./LegendModal";
 import type { Doors } from "@/auth/doors";
 import { useVillaAttention } from "@/components/cockpit/useVillaAttention";
-import { useFmData } from "@/fm/FmDataContext";
-import { fmAttention } from "@/fm/fmEngine";
 import { formatCountBadge } from "@/utils/countBadge";
 import { useAgent } from "@/agent/AgentContext";
 import { awaitingAnswer } from "@/agent/agentView";
@@ -98,8 +96,6 @@ interface Props {
   /** Open the Cockpit — mounted by the Dashboard beside the other windows
    *  (pages/surfaces); with `doors.agent` its button is the robot. */
   onOpenCockpit: () => void;
-  /** Open the Facility Manager workspace — drawn only with `doors.facility`. */
-  onOpenFacility: () => void;
   /** Long-press (or hold Enter/Space) a category filter icon — list every
    *  device in that category, the same group-modal every SummaryBar tile
    *  already opens. A plain tap keeps toggling that category's visibility. */
@@ -117,7 +113,7 @@ export default function HUD({
   doors, onOpenSettings, onMove,
   viewMode, onToggleViewMode,
   hasOverviewDefault, onApplyOverviewDefault, onSaveOverviewDefault,
-  onOpenCockpit, onOpenFacility, onOpenCategory,
+  onOpenCockpit, onOpenCategory,
 }: Props) {
   const { connection, haConfig } = useHA();
   const { config, update } = useConfig();
@@ -136,13 +132,8 @@ export default function HUD({
   // attention" once the two definitions had quietly drifted apart.
   const { attentionGroups, health } = useVillaAttention();
 
-  // Facility attention count: overdue/never-recorded maintenance plus unresolved
-  // faults. Surfaced ON the button because the whole point of a schedule is
-  // that you find out you're late WITHOUT having to go looking — an operator
-  // who must open a modal to discover overdue work will discover it late.
-  const { data: fmData } = useFmData();
-  // The Facility's attention rule (fmEngine.fmAttention) — the Cockpit's too.
-  const facilityAttention = useMemo(() => fmAttention(fmData).total, [fmData]);
+  // (Facility's own button and count are gone, 2.496.273: its tabs live in the
+  // Cockpit, and the Cockpit's count already includes faults and overdue work.)
   // The VESTA Agent: its presence dot, and how many of its messages wait for
   // an answer THIS profile can give (agentView.awaitingAnswer).
   const { status: agentStatus, messages: agentMessages } = useAgent();
@@ -557,23 +548,6 @@ export default function HUD({
                 </span>
               )}
             </button>
-            {doors.facility && (
-              <button
-                className={`icon-btn${facilityAttention > 0 ? " has-alert" : ""}`}
-                onClick={onOpenFacility}
-                title={facilityAttention > 0
-                  ? `${facilityAttention} maintenance item${facilityAttention === 1 ? "" : "s"} need attention`
-                  : "Facility — maintenance, readiness, faults"}
-                aria-label="Open the facility workspace"
-              >
-                <ClipboardList size={24} />
-                {facilityAttention > 0 && (
-                  <span className="icon-btn-count" aria-hidden="true">
-                    {formatCountBadge(facilityAttention)}
-                  </span>
-                )}
-              </button>
-            )}
             {/* (The colour-legend button moved into the category row — it
                 explains those very colours. See .hud-cat-help.) */}
             {/* (The first-person / bird's-eye switch moved to the left
@@ -647,16 +621,6 @@ export default function HUD({
                     {doors.agent && <span className="sr-only">{` — ${agentTitle}`}</span>}
                   </span>
                 </button>
-                {doors.facility && (
-                  <button
-                    role="menuitem"
-                    className="hud-menu-item"
-                    onClick={() => { setMenuOpen(false); onOpenFacility(); }}
-                  >
-                    <ClipboardList size={18} />
-                    <span>Facility{facilityAttention > 0 ? ` (${formatCountBadge(facilityAttention)})` : ""}</span>
-                  </button>
-                )}
                 {/* Same control as the (hidden-on-mobile) inline Minus/Plus
                     — one row, not two menu items, since it's a single
                     stepper rather than two independent actions. Doesn't

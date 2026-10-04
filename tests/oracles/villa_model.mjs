@@ -6,7 +6,7 @@ let fail = 0;
 const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
 const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
 const readers = ["components/hud/HUD.tsx", "components/hud/SummaryBar.tsx", "components/cockpit/CockpitModal.tsx",
-  "components/fm/FacilityModal.tsx", "components/panels/SummaryGroupPanel.tsx"];
+  "components/fm/FacilitySections.tsx", "components/panels/SummaryGroupPanel.tsx"];
 const threaded = readers.filter((f) => /mappedEntityIds[=:]\s*(\{|Set<)/.test(src(f).replace(/\/\/.*$|\/\*[\s\S]*?\*\//gm, "")));
 ck("no reader takes or passes mappedEntityIds as a prop", threaded.length === 0, threaded);
 ck("the Dashboard provides the model once, from the villa's own sets", /<VillaModelProvider sets=\{villaSets\}>/.test(src("pages/Dashboard.tsx")) && /const villaSets = useVillaSets\(mappedEntityIds\);/.test(src("pages/Dashboard.tsx")));
@@ -14,7 +14,7 @@ const hook = src("components/cockpit/useVillaAttention.ts");
 ck("the attention count is the model's — computed once, for the HUD badge and the Cockpit alike",
    /const \{ attention, visibleTo \} = useVillaModel\(\);/.test(hook) && !/buildAttentionItems\(/.test(hook) && /buildAttentionItems\(/.test(src("config/VillaModel.tsx")));
 ck("the bottom bar counts the VISIBLE devices; the Facility the full set",
-   /const \{ visibleDevices, mappedEntityIds, visibleEntities \} = useVillaModel\(\)/.test(src("components/hud/SummaryBar.tsx")) && /const \{ devices \} = useVillaModel\(\);/.test(src("components/fm/FacilityModal.tsx")));
+   /const \{ visibleDevices, mappedEntityIds, visibleEntities \} = useVillaModel\(\)/.test(src("components/hud/SummaryBar.tsx")) && /const \{ devices \} = useVillaModel\(\);/.test(src("components/fm/FacilitySections.tsx")));
 const cockpit = src("components/cockpit/CockpitModal.tsx");
 ck("the Cockpit says 'needs attention' once: the count in the list's title, and no headline (2.496.237)",
    /Needs attention \(\{attentionGroups\.length\}\)/.test(cockpit) && !/cockpit-health/.test(cockpit));

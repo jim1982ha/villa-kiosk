@@ -1,3 +1,13 @@
+## 2.496.273
+
+### Changed
+- **Facility now lives inside the Cockpit: one button, one window, seven tabs.** The Facility button has left the top bar (and the phone menu). The Cockpit opens on **Overview** (what it showed before), followed by Facility's six tabs: **Today, Readiness, Faults, Spend, Schedule, Report**. Everything works as before:
+  - "Report a fault" on a device opens the Cockpit on **Faults** with the device already filled in.
+  - A device opened from any tab has a "‹ Back" button that returns to that same tab.
+  - Readiness's "devices offline" link now switches to Overview, instead of opening a second Cockpit on top.
+  - The Cockpit button's number already counted open faults and overdue maintenance, so the Facility button's own number isn't lost.
+- Guests (who never had Facility) see the Cockpit as before, without the tabs.
+
 ## 2.496.272
 
 ### Changed

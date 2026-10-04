@@ -15,7 +15,7 @@ const open = (st, s, d) => S.surfacesReducer(st, { type: "open", surface: s, doo
 
 console.log("  what may open:");
 ck("a profile without the door never opens it — whichever opener asks",
-   ["settings", "configEditor", "facility", "agent"].every((s) => !open(S.NO_SURFACES, s, guest)[s]));
+   ["settings", "configEditor", "agent"].every((s) => !open(S.NO_SURFACES, s, guest)[s]));
 ck("  ...the Cockpit and the Rooms list are open to every profile",
    open(S.NO_SURFACES, "cockpit", guest).cockpit && open(S.NO_SURFACES, "rooms", guest).rooms);
 const stacked = open(open(S.NO_SURFACES, "settings", all), "configEditor", all);
@@ -25,7 +25,7 @@ ck("  ...an unchanged state is the same object (no re-render for nothing)",
    open(stacked, "settings", all) === stacked && S.surfacesReducer(S.NO_SURFACES, { type: "close", surface: "agent" }) === S.NO_SURFACES);
 
 ck("a window open when the profile switches to one without its door is no longer shown",
-   S.shown(open(S.NO_SURFACES, "facility", all), "facility", all) && !S.shown(open(S.NO_SURFACES, "facility", all), "facility", guest));
+   S.shown(open(S.NO_SURFACES, "agent", all), "agent", all) && !S.shown(open(S.NO_SURFACES, "agent", all), "agent", guest));
 
 console.log("\n  a chip's rooms and its chooser:");
 ck("a chip's rooms: distinct, no blanks; none named → its own room",
@@ -53,8 +53,8 @@ const rd = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8
 const dash = rd("pages/Dashboard.tsx"), hud = rd("components/hud/HUD.tsx");
 ck("the Dashboard holds the windows in ONE reducer — no window flag of its own",
    /useReducer\(surfacesReducer, NO_SURFACES\)/.test(dash) && !/set(Teleport|Settings|ConfigEditor|Facility|Agent)Open/.test(dash));
-ck("  ...the Cockpit, the Agent and Facility hand a device over the same way",
-   (dash.match(/onOpenEntity=\{\(id\) => handOver\("(cockpit|agent|facility)", id\)\}/g) ?? []).length === 3);
+ck("  ...the Cockpit (Facility's tabs included) and the Agent hand a device over the same way",
+   (dash.match(/onOpenEntity=\{\(id\) => handOver\("(cockpit|agent)", id\)\}/g) ?? []).length === 2);
 ck("the top bar mounts no window: it asks the Dashboard to open the Cockpit",
    !/CockpitModal|cockpitOpen/.test(hud) && /onClick=\{onOpenCockpit\}/.test(hud) && !/onOpenAgent|onOpenEntity/.test(hud));
 done("✅ one owner for the windows over the map");

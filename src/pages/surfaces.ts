@@ -18,13 +18,13 @@ import type { DeviceLook } from "@/utils/deviceActivity";
 
 /** A window over the map. Several may be open at once: Advanced Settings
  *  opens over Settings, the VESTA Agent over the Cockpit. */
-export type Surface = "rooms" | "cockpit" | "facility" | "agent" | "settings" | "configEditor";
+export type Surface = "rooms" | "cockpit" | "agent" | "settings" | "configEditor";
 
 export type Surfaces = Readonly<Record<Surface, boolean>>;
 
 /** What a window is called on a "Back to …" button. */
 export const SURFACE_LABEL: Readonly<Record<Surface, string>> = {
-  rooms: "Rooms", cockpit: "Cockpit", facility: "Facility", agent: "VESTA Agent", settings: "Settings",
+  rooms: "Rooms", cockpit: "Cockpit", agent: "VESTA Agent", settings: "Settings",
   configEditor: "Advanced Settings",
 };
 
@@ -32,14 +32,13 @@ export const SURFACE_LABEL: Readonly<Record<Surface, string>> = {
 export interface CameFrom { label: string; go: () => void }
 
 export const NO_SURFACES: Surfaces = {
-  rooms: false, cockpit: false, facility: false, agent: false, settings: false, configEditor: false,
+  rooms: false, cockpit: false, agent: false, settings: false, configEditor: false,
 };
 
 /** May this profile open `s`? The doors (auth/doors) say, once — every
  *  opener asks here, so a window a profile may not see never opens. */
 export function mayOpen(s: Surface, doors: Doors): boolean {
   switch (s) {
-    case "facility": return doors.facility;
     case "agent": return doors.agent;
     case "settings":
     case "configEditor": return doors.settings;

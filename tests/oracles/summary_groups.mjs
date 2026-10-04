@@ -30,7 +30,7 @@ ck("the AC temperature in Home Assistant's unit: 24°C, 75°F, a bare degree whe
    R.fmtTemp(24, "°C") === "24°C" && R.fmtTemp(75, "°F") === "75°F" && R.fmtTemp(24) === "24°" && R.fmtTemp(24, "") === "24°");
 
 const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
-const sb = src("config/summaryTiles.ts"), bar = src("components/hud/SummaryBar.tsx"), fm = src("components/fm/FacilityModal.tsx"), sg = src("config/summaryGroups.ts");
+const sb = src("config/summaryTiles.ts"), bar = src("components/hud/SummaryBar.tsx"), fm = src("components/fm/FacilitySections.tsx"), sg = src("config/summaryGroups.ts");
 ck("the tile and the Facility shortcut build the groups from the facts", /locksGroup\(facts\.locks,/.test(sb) && /lightsGroup\(facts\.lights\)/.test(sb) && /locksGroup\(lockFacts\(entities, devices\)/.test(fm));
 ck("summaryGroups selects no domain itself and imports no screen", !/startsWith\("lock\.|startsWith\("light\./.test(sg) && !/@\/components\//.test(sg));
 // The tiles are config/summaryTiles.ts since 2.496.232 (summary_tiles.mjs
