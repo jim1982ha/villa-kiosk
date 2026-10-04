@@ -1,3 +1,8 @@
+## 2.496.284
+
+### Fixed
+- **No more coloured border round a device window's icon when it opens.** As the Owner, the icon at the top of a device window is a button for changing its colour, and it took the window's first focus. On a phone, the browser then drew its own focus ring round it, in the phone's theme colour (amber on yours). It looked like a device state, and it wasn't one. The window's title now takes that first focus. Keyboard focus on the icon shows VESTA's own green outline.
+
 ## 2.496.283
 
 ### Changed
