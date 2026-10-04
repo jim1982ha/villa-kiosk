@@ -1,3 +1,11 @@
+## 0.12.36
+
+### Fixed
+- **Chart axes show exact values.** Steps of 2.5 or 0.25 were rounded on the axis: the Costs chart read "$3" and "$8" for $2.50 and $7.50, and a report chart read "0.2" and "0.8" for 0.25 and 0.75. Every axis now shows its values exactly ("$2.5", "0.25"). (The reports skill updates by itself on the villa unless you have edited it.)
+
+### Changed
+- Behind the scenes: the reports and the Costs page now share one rule for chart axes.
+
 ## 0.12.35
 
 ### Changed

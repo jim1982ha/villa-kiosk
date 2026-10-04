@@ -256,17 +256,13 @@ async function costs(days = 30) {
   // the cost of each day: bars drawn in SVG, with a Y axis (US$) and its grid lines (owner, 2026-10-01: "always
   // the Y axis and grid lines"), and a date under every bar for a week, every few days for longer
   const W = 640, H = 150, L = 52, T = 8, n = c.by_day.length;
-  const top = Math.max(0.01, ...c.by_day.map((d) => d.cost));
-  const raw = top / 4, mag = 10 ** Math.floor(Math.log10(raw));
-  const step = [1, 2, 2.5, 5, 10].map((k) => k * mag).find((s) => s >= raw);
-  const max = step * Math.ceil(top / step), slot = (W - L) / n;
+  // the Y axis is the server's (status.costs → vesta_shared.axis, the reports' own rule): this only draws it
+  const max = c.axis.top, ticks = c.axis.ticks, slot = (W - L) / n;
   const y = (v) => T + H - (v / max) * H;
-  const ticks = []; for (let v = 0; v <= max + step / 2; v += step) ticks.push(v);
   const every = n <= 7 ? 1 : Math.ceil(n / 8);
-  const money = (v) => "$" + (step < 0.1 ? v.toFixed(2) : step < 1 ? v.toFixed(1) : v.toFixed(0));
   const chart = svg("svg", { viewBox: `0 0 ${W} ${T + H + 22}`, class: "bars", role: "img", "aria-label": "Cost per day, US$" },
     ...ticks.map((v) => svg("line", { x1: L, x2: W, y1: y(v).toFixed(1), y2: y(v).toFixed(1), class: v ? "grid" : "base" })),
-    ...ticks.map((v) => svg("text", { x: L - 6, y: (y(v) + 3.5).toFixed(1), class: "axis", "text-anchor": "end" }, money(v))),
+    ...ticks.map((v, i) => svg("text", { x: L - 6, y: (y(v) + 3.5).toFixed(1), class: "axis", "text-anchor": "end" }, c.axis.labels[i])),
     ...c.by_day.map((d, i) => {
       const bh = d.cost > 0 ? Math.max(1.5, (d.cost / max) * H) : 0;
       return svg("rect", { x: (L + i * slot + slot * 0.18).toFixed(1), y: (T + H - bh).toFixed(1), width: (slot * 0.64).toFixed(1),

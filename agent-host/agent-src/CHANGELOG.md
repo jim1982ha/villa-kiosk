@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.35 (5 October 2026)
+
+- Architecture review round 1: vesta_shared/axis.py (nice_axis, label, is_flat). It is the one Y-axis rule: reports compose._ticks/_axis/line delegate to it, and status.costs serves the Costs chart's `axis` (app.js only draws it). Both old copies took decimals from the step's size and mislabelled 2.5 and 0.25 steps; app.js had no tick bound and no flatness rule. tests/test_axis.py, mutation-checked; reports starter skill recorded.
+
 ## 0.6.34 (5 October 2026)
 
 - status.costs(job_names=…): a run recorded before 0.12.0 as "job:skill:when" is counted under the job's name (the UI server maps skill:when → name from the skills). paged(): a head cell's `half` pairs columns on a phone (Every run: When/What, Tokens/Cost). tests/test_ui.py, mutation-checked.

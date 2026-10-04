@@ -45,6 +45,7 @@ sys.path.insert(0, os.path.join(HERE, "..", "..", "_shared"))
 sys.path.insert(0, HERE)
 from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
 from vesta_shared.messaging import fmt_money, split_message  # noqa: E402
+from vesta_shared.axis import is_flat, label as axis_label, nice_axis  # noqa: E402  (the one axis rule)
 from vesta_shared.store import Store  # noqa: E402
 from vesta_shared.problems import Problems  # noqa: E402  (what is still open: one owner)
 
@@ -132,34 +133,21 @@ def _scale(lo: float, hi: float, top: float, bottom: float):
 
 
 def _ticks(lo: float, hi: float, n: int = 4) -> tuple[float, float, list[float]]:
-    """A readable Y axis (owner, 2026-10-01: "always the Y axis and grid lines"): about `n` steps of 1, 2,
-    2.5 or 5 times a power of ten, from a round value at or under `lo` to one at or over `hi`."""
-    import math
-    # ⚠️ A SPAN OF FLOAT NOISE IS FLAT, AND EACH TICK COMES FROM ITS INDEX (2026-10-05, the Kiosk's own
-    # crash on the same shape of data): readings 21.4 and 21.400000000000002 gave a step below 21.4's own
-    # precision, `v += step` never moved, and this loop never ended — the report job hung.
-    span = hi - lo
-    if not span > max(abs(lo), abs(hi), 1.0) * 1e-9:
-        span = abs(hi) or 1.0
-    raw = span / n
-    mag = 10 ** math.floor(math.log10(raw))
-    step = next(k * mag for k in (1, 2, 2.5, 5, 10) if k * mag >= raw)
-    first, last = math.floor(lo / step) * step, math.ceil(hi / step) * step
-    count = min(round((last - first) / step), 100)
-    ticks = [round(first + i * step, 10) for i in range(count + 1)]
-    return first, last, ticks
+    """A readable Y axis (owner, 2026-10-01: "always the Y axis and grid lines"): vesta_shared.axis, the one
+    axis rule the Costs page's chart uses too."""
+    a = nice_axis(lo, hi, n)
+    return a["first"], a["last"], a["ticks"]
 
 
 def _axis(ticks: list[float], y, x0: float, x1: float) -> list[str]:
     """The grid lines and their values, left of the chart: the base line solid, the others dashed."""
-    import math
+    # each label with exactly the step's decimals (vesta_shared.axis.label): 0.25 is "0.25", not "0.2"
     step = ticks[1] - ticks[0] if len(ticks) > 1 else 1
-    digits = max(0, -math.floor(math.log10(step) + 1e-9)) if step < 1 else (1 if step % 1 else 0)   # 0.5 → 1, 2.5 → 1
     out = []
     for i, v in enumerate(ticks):
         dash = "" if i == 0 else ' stroke-dasharray="3 3"'
         out.append(f'<line x1="{x0}" x2="{x1}" y1="{y(v):.1f}" y2="{y(v):.1f}" stroke="var(--grid)"{dash}/>'
-                   f'<text x="{x0 - 4}" y="{y(v) + 3.5:.1f}" font-size="10" text-anchor="end" fill="var(--ink2)">{v:,.{digits}f}</text>')
+                   f'<text x="{x0 - 4}" y="{y(v) + 3.5:.1f}" font-size="10" text-anchor="end" fill="var(--ink2)">{axis_label(v, step)}</text>')
     return out
 
 
@@ -181,8 +169,8 @@ def line(series: list, unit: str = "", ref: float | None = None, area: bool = Fa
         return '<p class="note">Not enough data to draw.</p>'
     vals = [v for _, v in pts] + ([ref] if ref is not None else [])
     lo, hi = min(vals), max(vals)
-    if not hi - lo > max(abs(lo), abs(hi), 1.0) * 1e-9:
-        hi = lo                                   # float noise is a flat line (see _ticks)
+    if is_flat(lo, hi):
+        hi = lo                                   # float noise is a flat line (vesta_shared.axis)
     pad = (hi - lo) * 0.15 or abs(hi) * 0.1 or 1
     # ⚠️ A PERCENTAGE STAYS WITHIN 0–100 WHILE ITS VALUES DO (owner, 2026-10-05: a battery at 100 % under a
     # 101 % axis) — never a cap: a "%" series above 100 (an energy change) keeps its own range.

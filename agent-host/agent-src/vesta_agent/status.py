@@ -120,5 +120,13 @@ def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_la
     return {"days": days, "today": total(in_last(1)), "last_7_days": total(in_last(7)), "this_month": total(month),
             "period": total(runs), "runs_count": len(runs),
             "by_day": [{"day": d, "cost": round(by_day.get(d, 0.0), 2)} for d in days_list],
+            # the daily chart's Y axis, from the one axis rule (vesta_shared.axis): the page only draws it
+            "axis": _cost_axis(max([by_day.get(d, 0.0) for d in days_list] + [0.01])),
             "by_work": group("work"), "by_model": group("model"), "runs": runs[:300]}
 
+
+def _cost_axis(top: float) -> dict:
+    """The Costs chart's axis, 0 to a round value at or over `top`, labelled in US$ (vesta_shared.axis)."""
+    from vesta_shared.axis import nice_axis
+    a = nice_axis(0.0, top)
+    return {"top": a["last"], "ticks": a["ticks"], "labels": ["$" + t for t in a["labels"]]}
