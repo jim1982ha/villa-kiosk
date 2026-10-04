@@ -102,11 +102,11 @@ import { phantomEntity } from "@/utils/phantomEntity";
 import { channelEnabled, tapDebug } from "@/utils/tapDebug";
 import { debugFlagEnabled } from "@/utils/devLog";
 import { beginSpan } from "@/utils/perfSpans";
-import { pointInPolygon, boundsXZ } from "@/utils/geometry";
+import { boundsXZ } from "@/utils/geometry";
 import { RoomHighlight } from "./RoomHighlight";
 import { CameraBeams, type BeamSource } from "./CameraBeams";
 import { blocksCameraBeam, isResolvedCeiling, isHelperMesh } from "./meshRoles";
-import { Storeys, WALL_TOLERANCE_M } from "./storeys";
+import { Storeys } from "./storeys";
 import { FloorProbe } from "./floorProbe";
 import { axisWorldScale, stripExtent } from "./meshUnits";
 import type { LightReading } from "./lightPoolSet";
@@ -120,7 +120,7 @@ import { PlacementCheck, type ScreenBox } from "./placementCheck";
 import { FanRigs } from "./fanRigs";
 import {
   PlacementPass, GROUP_OVERLAP_ALLOW_WIDTHS, BADGE_PLACEMENT, cardOf as passCardOf, cellMax, drawnCells,
-  layoutOf as passLayoutOf, roomOfEntity, placementItems as passItems, glassScratch,
+  layoutOf as passLayoutOf, roomOfEntity, placementItems as passItems, glassScratch, viewportBudget, cellCapFor, drawableMaxOf,
   type ShownLabel, type PendingEntityGroup, type PlacementFrame, type CardShapeInput,
 } from "./placementPass";
 import { glyphDrawPx, glyphBakePx, type GlassClearance } from "./badgeLayout";
@@ -1908,33 +1908,10 @@ export class EntityVisuals {
     const anchor = this.labels.get(entityId)?.anchor;
     if (!anchor) return null;
     const p = anchor.getAbsolutePosition();
-    // The anchor's OWN height decides the storey — a 2F device is not in the
-    // 1F room its outline happens to sit over (Storeys.roomAt: containment,
-    // on the storey a point at an unknown height above its floor is on).
-    const onMyStorey = this.plan.roomAt(p.x, p.y, p.z);
-    if (onMyStorey) return onMyStorey.name;
-    // ⚠️ THE STOREY FILTER MAY REFINE AN ANSWER, NEVER DELETE ONE (2.440.0).
-    //
-    // A device inside a drawn room got a room name before 2.434.0 and must
-    // still get one: an entity with no room falls into the NO_ROOM_LABEL
-    // bucket, and that bucket is what puts an "Other" pile on the map. The
-    // storey rule is a preference between polygons that BOTH contain the
-    // point, and this villa reports three distinct floor heights — enough for
-    // the clearance test to name a storey none of whose rooms contain a given
-    // anchor, which used to turn a perfectly good room into "Other".
-    //
-    // Deliberately NOT pushed down into Storeys.roomAt: the light pool wants the
-    // opposite when its storey has no room here — it falls through to bounding
-    // the pool by the nearest boundary, which is a better answer than a room
-    // one floor up. Same lookup, two right answers, so the fallback belongs to
-    // the caller that wants it.
-    for (const room of this.plan.rooms) {
-      if (pointInPolygon(p.x, p.z, room.pts)) return room.name;
-    }
-    // Contained by nothing: a device IN a wall (a speaker, a TV, a switch)
-    // belongs to the room whose wall it is — the nearest polygon, a wall's
-    // thickness away at most (storeys.WALL_TOLERANCE_M and its story).
-    return this.plan.roomNear(p.x, p.y, p.z, WALL_TOLERANCE_M)?.name ?? null;
+    // Its own storey, then any room containing it (never "Other" for a
+    // device inside a drawn room), then the room whose wall it is in —
+    // Storeys.deviceRoomAt, where each step is explained and tested.
+    return this.plan.deviceRoomAt(p.x, p.y, p.z)?.name ?? null;
   }
 
   /** World-space XZ bounding box (plus a floor height) of a room's registered
@@ -4123,7 +4100,7 @@ export class EntityVisuals {
         // How wide a chip may be DRAWN, in chipWidthPx's units: the viewport's
         // share divided back through the scale the renderer multiplies by —
         // the device-pixel ratio cancels (see CHIP_MAX_VIEWPORT_FRACTION).
-        budget: scale > 0 ? (eng.getRenderWidth() * CHIP_MAX_VIEWPORT_FRACTION) / scale : 0,
+        budget: viewportBudget(eng.getRenderWidth(), scale, CHIP_MAX_VIEWPORT_FRACTION),
       },
     };
   }
@@ -4624,7 +4601,7 @@ export class EntityVisuals {
   private cardBudget(): number {
     const width = this.scene.getEngine().getRenderWidth();
     const scale = this.effectiveScale();
-    return scale > 0 && width > 0 ? (width * CARD_MAX_VIEWPORT_FRACTION) / scale : 0;
+    return viewportBudget(width, scale, CARD_MAX_VIEWPORT_FRACTION);
   }
 
   /**
@@ -4655,43 +4632,12 @@ export class EntityVisuals {
     const scale = this.effectiveScale();
     if (width === this.capWidth && scale === this.capScale && max === this.capMax) return this.capCells;
     this.capWidth = width; this.capScale = scale; this.capMax = max;
-    // ⚠️ ONE answer to "how many cells fit on this screen", and it is MEASURED,
-    // not guessed: the loop below asks `cardOf` — the function that lays the
-    // card out — whether the arrangement is inside CARD_MAX_VIEWPORT_FRACTION.
-    // `perCardCap` already makes a phone's cards pairs, so the shapes this
-    // walks are the shapes the phone will actually draw. A second, screen-blind
-    // ceiling used to sit in front of it and that is what this cache-line's
-    // earlier comment defended; it outlived the count badge that made it safe.
-    let cells = max;
-    if (scale > 0 && width > 0) {
-      const budget = this.cardBudget();
-      // Down to 2 and no further: a pair card is two badge boxes, which fits
-      // any screen this app can run on, and stopping there keeps the "a group
-      // of two is ALWAYS the full-size card" promise the one-pass placement
-      // rests on.
-      while (cells > 2 && this.cardOf(cells, max).width > budget) cells--;
-    }
+    // The measured answer (placementPass.cellCapFor, tested by value).
+    const cells = cellCapFor(this.cardShape(), this.cardBudget(), max);
     this.capCells = cells;
     return cells;
   }
 
-  /**
-   * The largest bucket this renderer can actually draw as a card showing every
-   * one of its devices — what `solvePlacement`'s `drawableMax` asks for, and
-   * what it must be handed.
-   *
-   * It used to be handed a bare MAX_TOTAL_CHIPS, which is the cap in BADGE
-   * units and is blind to the screen. So the solver kept buckets the renderer
-   * then refused at `drawnCells`' viewport cap, and a refused bucket draws a
-   * number. Two caps disagreeing about the same question is how a count badge
-   * survived on a narrow phone even at three members.
-   *
-   * Still a plain integer and still camera-INVARIANT: render width and
-   * `effectiveScale` are properties of the device and the label-size setting,
-   * constant across a frame, and neither is a function of where the camera is
-   * or how far away it stands. That is the property `drawableMax`'s docstring
-   * protects, and this does not spend it.
-   */
   /** The one reading of the badge-style setting. Five sites asked
    *  `config.badgeStyle === "card"` independently, which is fine until a sixth
    *  has to agree with them — the summary card's own cells, which is exactly
@@ -4700,8 +4646,9 @@ export class EntityVisuals {
     return this.config.badgeStyle === "card";
   }
 
+  /** placementPass.drawableMaxOf — the solver asks the same function. */
   private drawableMax(): number {
-    return Math.min(MAX_TOTAL_CHIPS, this.cardCellCap());
+    return drawableMaxOf(this.cardCellCap());
   }
 
   /** This group's arrangement — see babylon/badgeCard. A count badge is the

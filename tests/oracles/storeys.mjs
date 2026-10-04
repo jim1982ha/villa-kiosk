@@ -132,7 +132,18 @@ console.log("\n  a device in a wall (2.496.201):");
   ck("open ground two metres from any room is still no room", s.roomNear(5, 1.2, -2, WALL_TOLERANCE_M) === null);
   ck("the tolerance is a wall, not a garden", WALL_TOLERANCE_M >= 0.3 && WALL_TOLERANCE_M <= 1);
   const ev = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
-  ck("roomForEntity falls through containment to the nearest wall's room", /return this\.plan\.roomNear\(p\.x, p\.y, p\.z, WALL_TOLERANCE_M\)\?\.name \?\? null;/.test(ev));
+  ck("roomForEntity asks the plan's device ladder", /return this\.plan\.deviceRoomAt\(p\.x, p\.y, p\.z\)\?\.name \?\? null;/.test(ev));
+}
+
+console.log("\n  a device's room, the whole ladder by value (Storeys.deviceRoomAt, 2.496.287):");
+{
+  // a ground room at 0 m, an upper room at 3 m over a different part of the plan
+  const p = new Storeys([{ name: "Ground", floorY: 0, pts: sq(0, 5, 0, 5) }, { name: "Upper", floorY: 3, pts: sq(10, 15, 0, 5) }]);
+  ck("1. contained on its own storey", p.deviceRoomAt(2, 0.5, 2)?.name === "Ground" && p.deviceRoomAt(12, 3.5, 2)?.name === "Upper");
+  ck("2. its storey has no room there, yet a drawn room contains it: that room, never 'Other' (2.440.0)",
+     p.roomAt(2, 3.5, 2) === null && p.deviceRoomAt(2, 3.5, 2)?.name === "Ground");
+  ck("3. contained by nothing, in a wall: the room behind it", p.deviceRoomAt(5.3, 0.5, 2)?.name === "Ground");
+  ck("  ...and open ground is no room", p.deviceRoomAt(7.5, 0.5, 2) === null);
 }
 }
 

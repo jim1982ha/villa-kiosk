@@ -343,6 +343,42 @@ export function cardOf(f: CardShapeInput, cells: number, max = MAX_TOTAL_CHIPS, 
     f.perCardCap);
 }
 
+// ── HOW MUCH FITS ON THIS SCREEN (2.496.287) ────────────────────────────────
+// Derived inside EntityVisuals (5,700 lines) behind a hand-written cache, so
+// every oracle handed the pass FIXED caps (cardBudget 10_000, cellCap 6) and
+// the "how many cells fit" loop never ran in a test; `drawableMax` was written
+// twice (the renderer's invariant checker and the solver's call). Pure here.
+
+/** The widest a chip or a card may be drawn, in arrangement units: `fraction`
+ *  of the render width, divided back through the scale the renderer
+ *  multiplies by (the device-pixel ratio cancels). 0 before there is a screen. */
+export function viewportBudget(renderWidth: number, scale: number, fraction: number): number {
+  return scale > 0 && renderWidth > 0 ? (renderWidth * fraction) / scale : 0;
+}
+
+/** ONE answer to "how many cells fit on this screen", MEASURED: the card the
+ *  layout would draw (cardOf) must be inside `budget`. Down to 2 and no
+ *  further: a pair card is two badge boxes, which fits any screen this app
+ *  runs on, and keeps the "a group of two is ALWAYS the full-size card"
+ *  promise the one-pass placement rests on. No screen yet (budget 0): `max`. */
+export function cellCapFor(shape: CardShapeInput, budget: number, max = MAX_TOTAL_CHIPS): number {
+  let cells = max;
+  if (budget > 0) while (cells > 2 && cardOf(shape, cells, max).width > budget) cells--;
+  return cells;
+}
+
+/**
+ * The largest bucket the renderer can actually draw as a card showing every
+ * one of its devices — the solver's `drawableMax`, and the renderer's own
+ * invariant check: ONE function, so the two cannot disagree. A bare
+ * MAX_TOTAL_CHIPS (badge units, screen-blind) used to be handed to the solver,
+ * which kept buckets the renderer then refused and drew as a count badge.
+ * Camera-invariant: render width and scale do not move with the camera.
+ */
+export function drawableMaxOf(cellCap: number): number {
+  return Math.min(MAX_TOTAL_CHIPS, cellCap);
+}
+
 /** How many cells a group's card may hold: a focused room's whole pile, else
  *  the ordinary ceiling (see MAX_TOTAL_CHIPS). */
 export function cellMax(g: PendingEntityGroup): number {
@@ -528,7 +564,7 @@ export class PlacementPass {
       const items = placementItems(shown, boxes, clearance, frame.rooms, frame.focus.rooms, this.items, this.glass);
       const result = solvePlacement(
         items, clearance.gap, clearance.minSep, BADGE_PLACEMENT, this.scratch,
-        Math.min(MAX_TOTAL_CHIPS, frame.cellCap),
+        drawableMaxOf(frame.cellCap),
       );
       solved = result.stats;
       // ── Every PAIR the solver formed, with the numbers behind it ─────────

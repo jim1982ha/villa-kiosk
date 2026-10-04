@@ -218,6 +218,26 @@ export class Storeys<R extends StoreyRoomIn = StoreyRoomIn> {
     return null;
   }
 
+  /**
+   * The room a DEVICE is in (EntityVisuals.roomForEntity) — three steps, in
+   * this order, each a rule this repo learned:
+   *  1. containing it on its own storey (roomAt);
+   *  2. else ANY polygon containing it — the storey filter may refine an
+   *     answer, never delete one (2.440.0: a storey none of whose rooms
+   *     contain the point turned a good room into "Other");
+   *  3. else the room whose wall it is in, within WALL_TOLERANCE_M (2.496.201).
+   * Not roomAt itself: the light pool wants the opposite fallback (its storey,
+   * then the nearest boundary), so this ladder belongs to devices alone.
+   * Pure — tests/oracles/storeys.mjs drives all three steps (2.496.287; the
+   * ladder lived in the 5,700-line EntityVisuals and only step 3 was pinned).
+   */
+  deviceRoomAt(x: number, y: number, z: number): R | null {
+    const own = this.roomAt(x, y, z);
+    if (own) return own;
+    for (const r of this.rooms) if (pointInPolygon(x, z, r.pts)) return r;
+    return this.roomNear(x, y, z, WALL_TOLERANCE_M);
+  }
+
   /** The room whose BOUNDARY is nearest a point that no room contains, on the
    *  point's storey, if it is within `withinM` (WALL_TOLERANCE_M: a device in
    *  a wall belongs to the room behind that wall). Null when every room is

@@ -1,3 +1,8 @@
+## 2.496.287
+
+### Changed
+- Behind the scenes: two rules of the 3D map now each live in one tested place: which room a device belongs to, and how many badges a room card can show on your screen. Nothing you see changes.
+
 ## 2.496.286
 
 ### Changed
