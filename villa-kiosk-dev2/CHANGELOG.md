@@ -1,3 +1,10 @@
+## 2.496.269
+
+### Changed
+- Behind the scenes, nothing changes on screen (checked: the villa and its badges draw pixel for pixel as in 2.496.268). The code that draws the map's badges was made testable:
+  - **How much room a badge needs, with or without its number**, is now worked out in one place. "Zoom to this room" no longer hides every badge's number, measures and puts the numbers back to find its distance.
+  - **The test that lays badges out with the 3D engine's own layout now uses the very code the map draws with**, instead of its own copy of it, so a drawing mistake can no longer pass the test unseen.
+
 ## 2.496.268
 
 ### Changed
