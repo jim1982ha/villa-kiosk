@@ -17,6 +17,7 @@
 // the sensible starting point for a class the user hasn't customised.
 
 import { prettyState } from "@/utils/entityValue";
+import { BINARY_WORDS } from "./binarySensorWords";
 import {
   Activity, AlertTriangle, BatteryCharging, BatteryWarning, DoorOpen, Droplets,
   Eye, Flame, Home, Lightbulb, Plug, RefreshCw, ShieldAlert, Snowflake,
@@ -38,38 +39,41 @@ const DEFAULT_INFO: BinarySensorClassInfo = {
   onLabel: "On", offLabel: "Off", icon: Activity, alarmState: "on",
 };
 
+/** A class's on/off words: config/binarySensorWords, the one table. */
+const words = (c: string) => ({ onLabel: BINARY_WORDS[c][0], offLabel: BINARY_WORDS[c][1] });
+
 const BINARY_SENSOR_CLASSES: Record<string, BinarySensorClassInfo> = {
   // Actual hazards — "on" is the problem.
-  moisture:        { onLabel: "Leak detected", offLabel: "No leak", icon: Droplets, alarmState: "on" },
-  smoke:           { onLabel: "Smoke detected", offLabel: "Clear", icon: Flame, alarmState: "on" },
-  gas:             { onLabel: "Gas detected", offLabel: "Clear", icon: Wind, alarmState: "on" },
-  carbon_monoxide: { onLabel: "CO detected", offLabel: "Clear", icon: Wind, alarmState: "on" },
-  safety:          { onLabel: "Unsafe", offLabel: "Safe", icon: ShieldAlert, alarmState: "on" },
-  problem:         { onLabel: "Problem", offLabel: "OK", icon: AlertTriangle, alarmState: "on" },
-  tamper:          { onLabel: "Tampered", offLabel: "Clear", icon: ShieldAlert, alarmState: "on" },
-  heat:            { onLabel: "Hot", offLabel: "Normal", icon: Thermometer, alarmState: "on" },
-  cold:            { onLabel: "Cold", offLabel: "Normal", icon: Snowflake, alarmState: "on" },
-  battery:         { onLabel: "Low", offLabel: "Normal", icon: BatteryWarning, alarmState: "on" },
+  moisture: { ...words("moisture"), icon: Droplets, alarmState: "on" },
+  smoke: { ...words("smoke"), icon: Flame, alarmState: "on" },
+  gas: { ...words("gas"), icon: Wind, alarmState: "on" },
+  carbon_monoxide: { ...words("carbon_monoxide"), icon: Wind, alarmState: "on" },
+  safety: { ...words("safety"), icon: ShieldAlert, alarmState: "on" },
+  problem: { ...words("problem"), icon: AlertTriangle, alarmState: "on" },
+  tamper: { ...words("tamper"), icon: ShieldAlert, alarmState: "on" },
+  heat: { ...words("heat"), icon: Thermometer, alarmState: "on" },
+  cold: { ...words("cold"), icon: Snowflake, alarmState: "on" },
+  battery: { ...words("battery"), icon: BatteryWarning, alarmState: "on" },
   // Concerning when OFF, not on.
-  connectivity:    { onLabel: "Connected", offLabel: "Disconnected", icon: Wifi, alarmState: "off" },
+  connectivity: { ...words("connectivity"), icon: Wifi, alarmState: "off" },
 
   // Informational — presence/state, not a fault, so never auto-alerts.
-  motion:            { onLabel: "Motion detected", offLabel: "Clear", icon: Activity, alarmState: "none" },
-  moving:            { onLabel: "Moving", offLabel: "Not moving", icon: Activity, alarmState: "none" },
-  occupancy:         { onLabel: "Occupied", offLabel: "Clear", icon: Eye, alarmState: "none" },
-  presence:          { onLabel: "Home", offLabel: "Away", icon: Home, alarmState: "none" },
-  sound:             { onLabel: "Sound detected", offLabel: "Clear", icon: Volume2, alarmState: "none" },
-  vibration:         { onLabel: "Vibration detected", offLabel: "Clear", icon: Vibrate, alarmState: "none" },
-  light:             { onLabel: "Light detected", offLabel: "No light", icon: Lightbulb, alarmState: "none" },
-  door:              { onLabel: "Open", offLabel: "Closed", icon: DoorOpen, alarmState: "none" },
-  garage_door:       { onLabel: "Open", offLabel: "Closed", icon: DoorOpen, alarmState: "none" },
-  window:            { onLabel: "Open", offLabel: "Closed", icon: DoorOpen, alarmState: "none" },
-  opening:           { onLabel: "Open", offLabel: "Closed", icon: DoorOpen, alarmState: "none" },
-  lock:              { onLabel: "Unlocked", offLabel: "Locked", icon: Unlock, alarmState: "none" },
-  plug:              { onLabel: "Plugged in", offLabel: "Unplugged", icon: Plug, alarmState: "none" },
-  running:           { onLabel: "Running", offLabel: "Not running", icon: Activity, alarmState: "none" },
-  battery_charging:  { onLabel: "Charging", offLabel: "Not charging", icon: BatteryCharging, alarmState: "none" },
-  update:            { onLabel: "Update available", offLabel: "Up to date", icon: RefreshCw, alarmState: "none" },
+  motion: { ...words("motion"), icon: Activity, alarmState: "none" },
+  moving: { ...words("moving"), icon: Activity, alarmState: "none" },
+  occupancy: { ...words("occupancy"), icon: Eye, alarmState: "none" },
+  presence: { ...words("presence"), icon: Home, alarmState: "none" },
+  sound: { ...words("sound"), icon: Volume2, alarmState: "none" },
+  vibration: { ...words("vibration"), icon: Vibrate, alarmState: "none" },
+  light: { ...words("light"), icon: Lightbulb, alarmState: "none" },
+  door: { ...words("door"), icon: DoorOpen, alarmState: "none" },
+  garage_door: { ...words("garage_door"), icon: DoorOpen, alarmState: "none" },
+  window: { ...words("window"), icon: DoorOpen, alarmState: "none" },
+  opening: { ...words("opening"), icon: DoorOpen, alarmState: "none" },
+  lock: { ...words("lock"), icon: Unlock, alarmState: "none" },
+  plug: { ...words("plug"), icon: Plug, alarmState: "none" },
+  running: { ...words("running"), icon: Activity, alarmState: "none" },
+  battery_charging: { ...words("battery_charging"), icon: BatteryCharging, alarmState: "none" },
+  update: { ...words("update"), icon: RefreshCw, alarmState: "none" },
 };
 
 export function binarySensorClassInfo(deviceClass?: string): BinarySensorClassInfo {

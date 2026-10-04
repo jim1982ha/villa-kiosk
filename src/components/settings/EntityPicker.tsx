@@ -20,6 +20,7 @@ import { Search, X } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { ENTITY_ID_RE } from "@/utils/sh3dParser";
 import { domainOf } from "@/utils/entityDomain";
+import { deviceRowText } from "@/utils/entityValue";
 
 interface Props {
   value?: string;
@@ -144,7 +145,8 @@ export default function EntityPicker({
                 {e.attributes.friendly_name ?? e.entity_id}
                 <div className="muted" style={{ fontSize: "var(--text-2xs)" }}>{e.entity_id}</div>
               </span>
-              <span className="muted" style={{ fontSize: "var(--text-2xs)" }}>{e.state}</span>
+              {/* Worded as every other row (deviceRowText): "Normal", "21.4 °C" — not "off", "21.4" */}
+              <span className="muted" style={{ fontSize: "var(--text-2xs)" }}>{deviceRowText(e, domainOf(e.entity_id))}</span>
             </button>
           ))}
         </div>

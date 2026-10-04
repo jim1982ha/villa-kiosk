@@ -19,6 +19,7 @@
 import type { HassEntity } from "@/types/ha.types";
 import type { EntityType } from "@/types/scene.types";
 import { isUnavailable } from "./stateColors.ts";
+import { binaryWord } from "@/config/binarySensorWords";
 
 /** Status/enum SENSOR states meaning "all good, nothing to report".
  *
@@ -119,7 +120,9 @@ export function formatSensorParts(
   if (s.state.trim() === "" || !Number.isFinite(n)) {
     if (opts.hideNominal && SENSOR_NOMINAL_STATES.has(s.state.trim().toLowerCase()))
       return { value: "", unit: "" };
-    const pretty = prettyState(s.state);
+    // A binary sensor in its class's words, as Home Assistant shows it
+    // ("Normal", not "Off", for a battery) — config/binarySensorWords.
+    const pretty = binaryWord(s.entity_id, s.attributes.device_class, s.state) ?? prettyState(s.state);
     return { value: opts.clamp ? clampPill(pretty) : pretty, unit: "" };
   }
   const parts = formatUnitParts(n, unit);

@@ -1,3 +1,8 @@
+## 2.496.279
+
+### Fixed
+- **Sensors that are either on or off now read as Home Assistant words them, everywhere.** A leak sensor's battery read "Off" where Home Assistant says "Normal" (and "Low" when it needs changing). Tamper reads "Clear", a door "Open"/"Closed", moisture "No leak"/"Leak detected", and so on for every kind of sensor. This applies in "Also on this device", every device list, the map badges and the entity search in Settings. The device window's own status already used these words. "Unavailable" and "Unknown" keep their own words.
+
 ## 2.496.278
 
 ### Changed
