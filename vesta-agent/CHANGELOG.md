@@ -1,3 +1,8 @@
+## 0.12.32
+
+### Fixed
+- **A report can no longer get stuck drawing a chart.** When a sensor's readings were identical except for a tiny rounding difference in the last decimal place, drawing that chart's axis never finished, and the report never arrived. Such readings are now drawn as a flat line. (The reports skill updates by itself on the villa unless you have edited it.)
+
 ## 0.12.31
 
 ### Fixed

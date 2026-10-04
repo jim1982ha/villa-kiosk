@@ -68,3 +68,12 @@ def test_a_percentage_line_stays_within_0_to_100_while_its_values_do():
     assert top(compose.line([("2026-10-01", 40), ("2026-10-02", 97)], "%")) == 100
     assert top(compose.line([("2026-10-01", 80), ("2026-10-02", 135)], "%")) > 135          # an energy change: no cap
     assert top(compose.line([("2026-10-01", 100), ("2026-10-02", 100)], "kWh")) > 100       # other units unchanged
+
+
+def test_float_noise_never_hangs_an_axis():
+    # 2026-10-05: readings 21.4 and 21.400000000000002 looped forever in the axis ticks (the Kiosk's own
+    # chart crashed on the same shape of data)
+    import compose
+    first, last, ticks = compose._ticks(21.4, 21.400000000000002)
+    assert 2 <= len(ticks) <= 12 and last - first >= 0.5          # a readable axis, not 100 ticks of noise
+    assert "<svg" in compose.line([("2026-10-01", 21.4), ("2026-10-02", 21.400000000000002)], "°C")
