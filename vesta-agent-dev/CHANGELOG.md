@@ -1,3 +1,8 @@
+## 0.12.31
+
+### Fixed
+- **Percentage charts in the reports stay within 0–100 %.** A line ending at 100 % used to be drawn under an axis going up to 110 or 115. The axis now stops at 100 while every value is between 0 and 100. A % figure that really goes above 100 keeps its full range. (The reports skill updates by itself on the villa unless you have edited it.)
+
 ## 0.12.30
 
 ### Fixed
