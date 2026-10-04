@@ -1,3 +1,11 @@
+## 0.12.37
+
+### Fixed
+- **A mistyped "may act" setting can no longer switch acting on.** If the rules file said `act_enabled: "false"` (in quotes, as hand edits sometimes do), the page correctly called it a mistake, but the VESTA Agent read it as ON and could act on the villa. Anything that isn't a plain true now means OFF.
+- **A mistyped chat id no longer stops the VESTA Agent.** A chat id written as text (not a number) in the rules file made every message, button and job fail until the file was fixed. That chat is now skipped, and the page names the mistake.
+- **A person with an invalid Telegram id is really ignored,** as the page says. Before, they were still registered.
+- **Only the person who asked can press "Continue"** on an answer that stopped at its spending limit. In a group chat, someone else could continue it, in their own role and on their own budget.
+
 ## 0.12.36
 
 ### Fixed
