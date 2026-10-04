@@ -1,3 +1,8 @@
+## 0.12.28
+
+### Changed
+- **Every dropdown on the VESTA Agent page now opens the page's own list, in its colours.** This covers Language, Role, Brain, New conversation, Rule and the Costs period. They used to open the phone's own picker (on Android, a grey sheet of radio buttons). The list opens under the field, or above it near the bottom of the screen, and the current choice is ticked.
+
 ## 0.12.27
 
 ### Changed
