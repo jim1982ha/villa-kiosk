@@ -174,7 +174,8 @@ export function chartGeometry(
       ? naturalBounds(units[0]) : null;
     const held = b !== null && lo >= b.min && hi <= b.max;
     // A flat series gets a span of 1 — below it when it sits on the ceiling.
-    if (hi - lo <= 0) { if (held && hi >= b!.max) lo = hi - 1; else hi = lo + 1; }
+    // (A span of float noise is flat too: isFlat — 21.4 against 21.400000000000002.)
+    if (isFlat(lo, hi)) { if (held && hi >= b!.max) lo = hi - 1; else hi = lo + 1; }
     if (!fromZero && pad > 0) { const p = (hi - lo) * pad; lo -= p; hi += p; }
     if (held) { lo = Math.max(lo, b!.min); hi = Math.min(hi, b!.max); }
     return [lo, hi];
@@ -243,15 +244,32 @@ export function chartGeometry(
  * the chart shows can be read").
  */
 export function niceTicks(lo: number, hi: number, n = 3): { ticks: number[]; bottom: number; top: number; step: number } {
-  if (!(hi > lo)) hi = lo + 1;
+  if (!Number.isFinite(lo) || !Number.isFinite(hi)) return { ticks: [], bottom: 0, top: 1, step: 1 };
+  if (isFlat(lo, hi)) hi = lo + 1;
   const raw = (hi - lo) / Math.max(1, n);
   const mag = Math.pow(10, Math.floor(Math.log10(raw)));
   const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw * 0.999) ?? 10 * mag;
   const bottom = Math.floor(lo / step + 1e-9) * step;
   const top = Math.ceil(hi / step - 1e-9) * step;
+  // ⚠️ EACH TICK FROM ITS INDEX, AND A BOUNDED COUNT (owner, 2026-10-05: the
+  // error screen opening a temperature & humidity sensor, "Invalid array
+  // length", three times since 2.496.269). The loop added `step` to `v` until
+  // it passed `top`: with readings differing by float noise (21.4 and
+  // 21.400000000000002) the step was smaller than v's own precision, v + step
+  // === v, and it pushed until the browser refused the array.
+  const count = Math.min(Math.round((top - bottom) / step), MAX_TICKS);
   const ticks: number[] = [];
-  for (let v = bottom; v <= top + step * 1e-6; v += step) ticks.push(Math.round(v / step) * step);
+  for (let i = 0; i <= count; i++) ticks.push(Math.round((bottom + i * step) / step) * step);
   return { ticks, bottom, top, step };
+}
+
+/** More ticks than any axis draws: a guard, never a layout choice. */
+const MAX_TICKS = 100;
+
+/** A span too small to be anything but floating-point noise around the value
+ *  (or none at all): drawn as a flat line, not stretched across the chart. */
+export function isFlat(lo: number, hi: number): boolean {
+  return !(hi - lo > Math.max(Math.abs(lo), Math.abs(hi), 1) * 1e-9);
 }
 
 /** An axis label: no trailing zeros, thousands as k and millions as M. */

@@ -1,3 +1,8 @@
+## 2.496.282
+
+### Fixed
+- **Opening some sensors' windows no longer shows the error screen.** When a sensor's readings were identical except for a tiny rounding difference in the last decimal place, drawing its chart axis never finished, and the window fell over with "Invalid array length". This happened, for example, with the Guest bathroom temperature & humidity sensor, three times since 2.496.269. Such readings are now drawn as the flat line they are, and an axis can no longer run on forever.
+
 ## 2.496.281
 
 ### Changed
