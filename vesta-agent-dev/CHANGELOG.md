@@ -1,3 +1,12 @@
+## 0.12.30
+
+### Fixed
+- **A siren device can sound in an alert.** The Siren choice offered devices of the "siren" kind, but during an alert the VESTA Agent always asked for a switch, so a real siren device was refused ("The siren cannot be requested"). The siren now turns on and off with its own kind of service. As with every action, that service must be allowed in "What the agent may do", and the timed switch-off in the agent's system actions.
+- **"Buttons it may press" offers only buttons it can actually press.** It also offered Home Assistant helper buttons, which saving then refused.
+
+### Changed
+- The rules, lists and kinds of devices on the Rules page now come from the VESTA Agent itself, so the page and the checks can no longer disagree.
+
 ## 0.12.29
 
 ### Fixed
