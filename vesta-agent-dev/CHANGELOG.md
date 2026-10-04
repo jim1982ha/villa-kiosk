@@ -1,3 +1,9 @@
+## 0.12.35
+
+### Changed
+- **Costs → "Every run" is shorter on a phone.** Each run takes three lines: when and what, the brain, then tokens and cost.
+- **Old runs count under today's job names.** Runs from before 1 October were recorded as "reports:07:00" and "reports:1 08:00". They now show as fm-daily and owner-monthly, so each job is one line in "By work".
+
 ## 0.12.34
 
 ### Fixed
