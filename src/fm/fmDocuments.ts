@@ -1,9 +1,9 @@
-// src/fm/fmReport.ts
+// src/fm/fmDocuments.ts
 // Builds an OPERATIONAL annex, suitable for handing to whoever a villa's
-// owner report already goes to — device uptime, maintenance performed
+// owner statement already goes to — device uptime, maintenance performed
 // against the configured schedule, spend against the configured Minor
 // Maintenance cap, fault resolution. Deliberately does NOT attempt a
-// financial report (revenue, OTA commissions, payout): that ledger belongs
+// financial statement (revenue, OTA commissions, payout): that ledger belongs
 // to whatever booking/accounting system the property already uses, and
 // duplicating it badly here would be worse than leaving it out. Any
 // clause/contract reference shown per task is free-text the operator typed
@@ -17,16 +17,16 @@
 import { budgetStatus, completionsInMonth, localStamp, monthKey, monthLabel, scheduleStatus, shortDate, ticketStats } from "./fmEngine";
 import { categoryName, NO_FM_TERMS, type FmData, type FmTerms } from "./fmTypes";
 import type { BudgetStatus } from "./fmEngine";
-import type { ReadinessReport } from "./readiness";
+import type { ReadinessResult } from "./readiness";
 import { stampText } from "@/utils/dateText";
 import { formatMoney } from "@/utils/money";
 
-export interface ReportInput {
+export interface RecapInput {
   fm: FmData;
   month: string;
   villaName: string;
   /** Optional live readiness snapshot, included as the closing section. */
-  readiness?: ReadinessReport;
+  readiness?: ReadinessResult;
   /** Devices currently unavailable, for the uptime section. */
   offlineDeviceCount?: number;
   totalDeviceCount?: number;
@@ -38,7 +38,7 @@ export interface ReportInput {
  * The maintenance-spend lines, for whichever document is asking.
  *
  * ⚠️ WRITTEN TWICE, AND ONLY ONE COPY WOULD HAVE BEEN FIXED. The facility
- * report and the standalone spend statement each carried this block verbatim —
+ * recap and the standalone spend statement each carried this block verbatim —
  * the cap line, the major-maintenance line and the cap warning — so the two
  * documents an owner receives could describe one month's money two ways.
  *
@@ -57,7 +57,7 @@ export interface ReportInput {
  *
  * A guest types ticket titles. A pipe would end the CELL; a line break would
  * end the ROW, and whatever followed it — "## Paid in full", "_no faults this
- * month_" — would be laid out as a heading or a notice in the owner's report,
+ * month_" — would be laid out as a heading or a notice in the owner's recap,
  * authored by the guest. Before 2.496.206 the pipe was replaced in five
  * hand-written copies and the line break nowhere; the check labels had neither.
  */
@@ -102,10 +102,10 @@ export function spendTable(b: BudgetStatus, terms: FmTerms = NO_FM_TERMS): strin
 }
 
 export 
-/** Shared `# title` / Period / Generated / Scope preamble both report flavours below
+/** Shared `# title` / Period / Generated / Scope preamble both document flavours below
  *  open with — kept in one place so the financial-reporting disclaimer can't drift
  *  between them. */
-function reportHeader(titleSuffix: string, villaName: string, month: string, scopeDescription: string): string[] {
+function documentHeader(titleSuffix: string, villaName: string, month: string, scopeDescription: string): string[] {
   return [
     `# ${villaName} — ${titleSuffix}`,
     `**Period:** ${monthLabel(month)}  `,
@@ -118,13 +118,13 @@ function reportHeader(titleSuffix: string, villaName: string, month: string, sco
   ];
 }
 
-export function buildMonthlyReport(input: ReportInput): string {
+export function buildMonthlyRecap(input: RecapInput): string {
   const { fm, month, villaName, readiness } = input;
   const now = Date.now();
   const L: string[] = [];
 
-  L.push(...reportHeader(
-    "operational report", villaName, month,
+  L.push(...documentHeader(
+    "operations recap", villaName, month,
     "operational status only — maintenance, spend, faults and device uptime.",
   ));
 
@@ -147,7 +147,7 @@ export function buildMonthlyReport(input: ReportInput): string {
 
   // Current standing against the schedule — the evidence trail for whether the
   // villa is being kept to the agreed maintenance standard.
-  L.push(`### Standing against schedule (as at report date)`);
+  L.push(`### Standing against schedule (as at recap date)`);
   const active = fm.schedules.filter((s) => s.enabled);
   if (active.length === 0) {
     L.push(`_No maintenance schedule configured._`);
@@ -215,7 +215,7 @@ export function buildMonthlyReport(input: ReportInput): string {
   if (input.totalDeviceCount) {
     const off = input.offlineDeviceCount ?? 0;
     const pct = ((input.totalDeviceCount - off) / input.totalDeviceCount) * 100;
-    L.push(`## 4. Device availability (at report date)`);
+    L.push(`## 4. Device availability (at recap date)`);
     L.push(`- **${input.totalDeviceCount - off} of ${input.totalDeviceCount}** devices reporting `
       + `(${pct.toFixed(1)}%)`);
     if (off > 0) L.push(`- ${off} device(s) currently offline — see the faults section above.`);
@@ -224,7 +224,7 @@ export function buildMonthlyReport(input: ReportInput): string {
 
   // ── 5. Readiness ─────────────────────────────────────────────────────────
   if (readiness) {
-    L.push(`## 5. Guest-readiness check (at report date)`);
+    L.push(`## 5. Guest-readiness check (at recap date)`);
     L.push(`| Check | Result | Detail |`);
     L.push(`|---|---|---|`);
     for (const c of readiness.checks) {
@@ -241,7 +241,7 @@ export function buildMonthlyReport(input: ReportInput): string {
 }
 
 /** A standalone spend statement for one month — the maintenance spend
- *  section of buildMonthlyReport, on its own, for whenever the operator wants
+ *  section of buildMonthlyRecap, on its own, for whenever the operator wants
  *  that handed over without the rest of the operational annex. Same data,
  *  same section, deliberately not re-derived separately so the two can never
  *  disagree about what a given month's capped total is. */
@@ -251,7 +251,7 @@ export function buildSpendStatement(
   const L: string[] = [];
   const b = budgetStatus(fm.costs, month, terms);
 
-  L.push(...reportHeader(
+  L.push(...documentHeader(
     "maintenance spend statement", villaName, month,
     "maintenance spend against the configured monthly cap.",
   ));
@@ -278,26 +278,26 @@ export function buildSpendStatement(
  * Readiness is computed live from device state, which makes it useless as
  * evidence: "was the villa ready before the last guest arrived?" cannot be
  * answered after the fact, because the answer is recomputed every time anyone
- * looks. Saving one freezes it, exactly like the monthly report and the spend
+ * looks. Saving one freezes it, exactly like the monthly recap and the spend
  * statement — same store, same "generate then save" shape, so a handover pack
  * can include the check that was actually run on the day.
  */
-export function buildReadinessSnapshot(report: ReadinessReport, villaName: string): string {
+export function buildReadinessSnapshot(readiness: ReadinessResult, villaName: string): string {
   const now = new Date();
-  const verdict = report.overall === "pass"
+  const verdict = readiness.overall === "pass"
     ? "READY"
-    : report.overall === "warn" ? "READY, WITH FINDINGS" : "NOT READY";
+    : readiness.overall === "warn" ? "READY, WITH FINDINGS" : "NOT READY";
   const lines = [
     `# Readiness snapshot — ${villaName}`,
     "",
-    `**${verdict}** — ${report.passed} of ${report.total} checks passing.`,
+    `**${verdict}** — ${readiness.passed} of ${readiness.total} checks passing.`,
     "",
     `Taken ${stampText(now)}.`,
     "",
     "| Check | Result | Finding |",
     "| --- | --- | --- |",
   ];
-  for (const c of report.checks) {
+  for (const c of readiness.checks) {
     const state = c.state === "pass" ? "Pass" : c.state === "warn" ? "Warning" : "Fail";
     lines.push(`| ${cell(c.label)} | ${state} | ${cell(c.detail)} |`);
   }

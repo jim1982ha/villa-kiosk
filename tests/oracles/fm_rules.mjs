@@ -7,7 +7,7 @@ register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const E = await import("@/fm/fmEngine");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
-const R = await import("@/fm/fmReport");
+const R = await import("@/fm/fmDocuments");
 
 
 ck("a fault goes open → in progress → resolved, and resolved is final on the Faults tab",
@@ -38,7 +38,7 @@ ck("  ...and nothing else", gone.tickets.length === 1 && gone.completions.length
 ck("what a completion answered: a fault by its title, a task by its title, a removed one as undefined",
    E.completionSource(d, d.completions[0]).kind === "fault" && E.completionSource(d, d.completions[0]).title === "AC leaking"
    && E.completionSource(d, d.completions[1]).title === "Pool filter" && E.completionSource(d, { scheduleId: "gone" }).title === undefined);
-const report = R.buildMonthlyReport({ fm: d, month: "2026-09", villaName: "V", readiness: null });
+const report = R.buildMonthlyRecap({ fm: d, month: "2026-09", villaName: "V", readiness: null });
 ck("the monthly report's preventive maintenance lists scheduled work only — no '(removed task)' for a fault's resolution",
    !report.includes("(removed task)") && report.includes("Pool filter"), report.split("\n").filter((l) => l.includes("removed")));
 
@@ -81,7 +81,7 @@ ck("the store erases a fault through withoutTicket", /mutate\(\(d\) => withoutTi
 ck("the one-step close goes through the store's one writer (mutate), and both screens call it",
    /mutate\(\(d\) => withTicketClosed\(d, id, stamp\(\)\)\)/.test(src("fm/FmDataContext.tsx"))
    && /closeTicket\(id\)/.test(src("components/fm/FaultsTab.tsx"))
-   && /closeTicket\(item\.ticketId/.test(src("components/cockpit/CockpitModal.tsx"))
+   && /closeTicket\(item\.ticketId/.test((src("components/cockpit/CockpitModal.tsx") + src("components/cockpit/CockpitOverview.tsx")))
    && /ticketId: t\.id/.test(src("config/attention.ts")));
 
 done("✅ the Facility rules, in the engine");

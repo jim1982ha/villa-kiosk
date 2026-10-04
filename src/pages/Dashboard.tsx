@@ -38,7 +38,7 @@ import { displayLabelFor, resolveRooms, labelOf } from "@/config/EntityMap";
 import { deriveHaScenes, scenesForRoom } from "@/config/haScenes";
 import { effectiveCategory, subjectOf, categoryColor, CATEGORY_ICONS, CATEGORY_LABELS } from "@/config/EntityCategories";
 import { deviceLook, storeLookSource } from "@/utils/deviceActivity";
-import { NO_SURFACES, SURFACE_LABEL, chipRooms, shown as surfaceShown, type CameFrom, mergeTeleportPoints, roomChoicesFor, surfacesReducer, type Surface } from "./surfaces";
+import { NO_SURFACES, SURFACE_LABEL, chipRooms, shown as surfaceShown, mergeTeleportPoints, roomChoicesFor, surfacesReducer, type Surface } from "./surfaces";
 import CockpitModal from "@/components/cockpit/CockpitModal";
 import { isMotionSensor } from "@/config/BinarySensorClasses";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
@@ -48,6 +48,7 @@ import { HAServices } from "@/ha/HAServiceCalls";
 import { installDailyAutoReload } from "@/utils/autoReload";
 import type { SceneManager } from "@/babylon/SceneManager";
 import type { ActivePanel } from "@/types/panel.types";
+import { NO_PANEL, panelNavReducer, reopenOf, type BackStep } from "./panelNav";
 import type { Category, TeleportPoint } from "@/types/scene.types";
 import { VillaModelProvider, useVillaSets, useDeviceIdentity } from "@/config/VillaModel";
 import { deviceRowText } from "@/utils/entityValue";
@@ -86,16 +87,15 @@ export default function Dashboard() {
   resolvedRoomsRef.current = resolvedRooms;
 
   const [manager, setManager] = useState<SceneManager | null>(null);
-  const [activePanel, setActivePanel] = useState<ActivePanel | null>(null);
-  // Where the open panel was opened FROM, innermost last — its "Back" (owner,
-  // 2026-10-04): a reading from its device, a device from a room or category
-  // list, the Cockpit, the VESTA Agent, Facility. Every fresh open from the
-  // map or the bottom bar empties it; Close empties it.
-  const [cameFrom, setCameFrom] = useState<CameFrom[]>([]);
+  // The open device panel and where its "Back" goes (owner, 2026-10-04): a
+  // reading from its device, a device from a room or category list, the
+  // Cockpit, the VESTA Agent — one owner, pages/panelNav.
+  const [nav, dispatchNav] = useReducer(panelNavReducer, NO_PANEL);
+  const activePanel = nav.panel;
   // The Cockpit's open tab, held here: "report a fault" opens it on Faults,
   // and Back from a device returns to the tab it left (2.496.273).
   const [cockpitTab, setCockpitTab] = useState<CockpitTab>("overview");
-  const closePanel = useCallback(() => { setActivePanel(null); setCameFrom([]); }, []);
+  const closePanel = useCallback(() => dispatchNav({ type: "close" }), []);
   // True only for a profile with viewAgent AND a configured agent — see
   // AgentProvider. Nothing about the agent renders otherwise (PLAN A8).
   const { visible: agentVisible } = useAgent();
@@ -304,8 +304,7 @@ export default function Dashboard() {
       }
 
       // Rich entities (sliders, streams, info) open their control panel as before.
-      setCameFrom([]);
-      setActivePanel({ entityId, mapping });
+      dispatchNav({ type: "open", panel: { entityId, mapping } });
     },
     [config.entityMap, entities, ws, role, spawnRipple],
   );
@@ -335,8 +334,7 @@ export default function Dashboard() {
       // distinct quick action, so tap and long-press already land on the same
       // panel with no flag needed — see ActivePanel's docstring for the full
       // reasoning.
-      setCameFrom([]);
-      setActivePanel({ entityId, mapping, detail: mapping.type === "camera" });
+      dispatchNav({ type: "open", panel: { entityId, mapping, detail: mapping.type === "camera" } });
     },
     // `entities` is read (the category — and so the permission — can depend
     // on a device's device_class); it was missing, so this judged a stale one.
@@ -385,13 +383,14 @@ export default function Dashboard() {
     });
   }, [subscribeAll]);
 
-  // Open an entity's control panel from a SummaryBar tile (a lock/climate
-  // "open" tile) — to LOOK: the category decides (the same gate, without
-  // control); the panel's own controls enforce RBAC for any action inside.
-  const openEntityPanel = useCallback(
-    (entityId: string) => {
+  // The panel an entity opens to LOOK: the category decides (the same gate,
+  // without control); the panel's own controls enforce RBAC for any action
+  // inside. Null when this profile may not see it — and then nothing opens,
+  // no window closes and no Back step is recorded (panelNav).
+  const panelFor = useCallback(
+    (entityId: string): ActivePanel | null => {
       const mapping = panelMapping(entityId, config.entityMap, role, entities[entityId], { control: false });
-      if (mapping) setActivePanel({ entityId, mapping });
+      return mapping ? { entityId, mapping } : null;
     },
     [config.entityMap, entities, role],
   );
@@ -403,33 +402,40 @@ export default function Dashboard() {
   // ("Also on this device"). A device list's row and the camera's next/prev
   // name ONE entity and still open exactly it.
   const identity = useDeviceIdentity();
+  /** A device from the bottom bar: a fresh open. */
   const openDevicePanel = useCallback(
-    (entityId: string) => openEntityPanel(identity.deviceOf(entityId)),
-    [openEntityPanel, identity],
+    (entityId: string) => dispatchNav({ type: "open", panel: panelFor(identity.deviceOf(entityId)) }),
+    [panelFor, identity],
   );
-  /** A window hands a device over: it closes, and the device's panel opens
-   *  (the Cockpit, the VESTA Agent and Facility all do this). */
+  /** A window hands a device over: the device's panel opens and the window
+   *  closes — only when there IS a panel to open. */
   const handOver = useCallback((from: Surface, entityId: string) => {
+    const panel = panelFor(identity.deviceOf(entityId));
+    if (!panel) return;
     closeSurface(from);
-    setCameFrom([{ label: SURFACE_LABEL[from], go: () => { closePanel(); openSurface(from); } }]);
-    openDevicePanel(entityId);
-  }, [closeSurface, openDevicePanel, closePanel, openSurface]);
+    dispatchNav({ type: "openFrom", panel, from: { kind: "surface", surface: from } });
+  }, [panelFor, identity, closeSurface]);
   /** A device's reading, opened from the device's panel: Back returns to it. */
-  const openReading = useCallback((entityId: string) => {
-    const parent = activePanel;
-    if (parent) {
-      setCameFrom((st) => [...st, {
-        label: labelOf(parent.entityId, config.entityMap, entities),
-        go: () => { setCameFrom((s2) => s2.slice(0, -1)); setActivePanel(parent); },
-      }]);
-    }
-    openEntityPanel(entityId);
-  }, [activePanel, config.entityMap, entities, openEntityPanel]);
-  /** A device opened from a room or category list: Back reopens the list. */
-  const openFromList = useCallback((entityId: string, label: string, reopen: () => void) => {
-    setCameFrom([{ label, go: () => { closePanel(); reopen(); } }]);
-    openEntityPanel(entityId);
-  }, [closePanel, openEntityPanel]);
+  const openReading = useCallback(
+    (entityId: string) => dispatchNav({ type: "drill", panel: panelFor(entityId) }), [panelFor]);
+  /** A device opened from a room or category list (the list closes first). */
+  const openFromList = useCallback(
+    (entityId: string, list: BackStep & { kind: "list" }) => dispatchNav({ type: "openFrom", panel: panelFor(entityId), from: list }),
+    [panelFor]);
+  /** Back: one step — a panel step reopens that panel inside panelNav; a
+   *  window or list is reopened here. */
+  const goBack = useCallback(() => {
+    const step = reopenOf(nav);
+    dispatchNav({ type: "back" });
+    if (step?.kind === "surface") openSurface(step.surface);
+    else if (step?.list.kind === "room") setClusterGroup({ room: step.list.room, entityIds: [...step.list.entityIds] });
+    else if (step?.list.kind === "category") setCategoryGroup(step.list.category);
+  }, [nav, openSurface]);
+  const backStep = nav.back[nav.back.length - 1];
+  const backLabel = !backStep ? null
+    : backStep.kind === "surface" ? SURFACE_LABEL[backStep.surface]
+    : backStep.kind === "panel" ? labelOf(backStep.panel.entityId, config.entityMap, entities)
+    : backStep.list.kind === "room" ? backStep.list.room : CATEGORY_LABELS[backStep.list.category];
   const panelReadings = activePanel
     ? identity.readingsOf(activePanel.entityId).map((id) => ({
         id,
@@ -811,7 +817,7 @@ export default function Dashboard() {
           auto-derived from live entities. Centred so it sits between the
           bottom bar's corner controls (view toggle / joystick). */}
       <SummaryBar
-        onOpenEntity={(id) => { setCameFrom([]); openDevicePanel(id); }}
+        onOpenEntity={openDevicePanel}
         scenes={haScenes}
       />
 
@@ -830,7 +836,7 @@ export default function Dashboard() {
             entityId: activePanel.entityId,
             readings: panelReadings,
             onOpenReading: openReading,
-            back: cameFrom.length > 0 ? cameFrom[cameFrom.length - 1] : undefined,
+            back: backLabel ? { label: backLabel, go: goBack } : undefined,
             // Owner-only: jump straight to this device's row in Advanced Settings.
             onEdit: canEditConfig
               ? () => {
@@ -933,7 +939,7 @@ export default function Dashboard() {
             active={activePanel}
             onClose={closePanel}
             pinContinuous={pinContinuous}
-            onOpenEntity={openEntityPanel}
+            onOpenEntity={(id) => dispatchNav({ type: "switch", panel: panelFor(id) })}
           />
         </PanelActionsProvider>
       )}
@@ -971,7 +977,7 @@ export default function Dashboard() {
           onOpenEntity={(id) => {
             const g = clusterGroup;
             setClusterGroup(null);
-            openFromList(id, g.room, () => setClusterGroup(g));
+            openFromList(id, { kind: "list", list: { kind: "room", room: g.room, entityIds: g.entityIds } });
           }}
           roomScenes={scenesForRoom(haScenes, clusterGroup.room)}
           // Same rule as the category browse (Dashboard.tsx's categoryGroup,
@@ -994,7 +1000,7 @@ export default function Dashboard() {
           onOpenEntity={(id) => {
             const c = categoryGroup;
             setCategoryGroup(null);
-            openFromList(id, CATEGORY_LABELS[c], () => setCategoryGroup(c));
+            openFromList(id, { kind: "list", list: { kind: "category", category: c } });
           }}
           // categoryGroupEntityIds has ALREADY applied the precise
           // suppressed/diagnostic filtering (mapped-on-the-map entities kept,

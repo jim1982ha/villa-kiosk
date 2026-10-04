@@ -19,13 +19,13 @@ import { useFmTerms } from "@/fm/useFmTerms";
 import { useProfile } from "@/auth/ProfileContext";
 import { roleCan } from "@/auth/permissions";
 import ContractTermsEditor from "./ContractTermsEditor";
-import { buildSpendStatement } from "@/fm/fmReport";
+import { buildSpendStatement } from "@/fm/fmDocuments";
 import type { FmCost, FmSavedDocument } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
 import DeviceSearchPicker, { type DeviceOption } from "./DeviceSearchPicker";
 import ErasableRow from "./ErasableRow";
 import NotesField from "./NotesField";
-import ReportPreview from "./ReportPreview";
+import MarkdownPreview from "./MarkdownPreview";
 import SavedDocumentsList from "./SavedDocumentsList";
 import AgentMark from "./AgentMark";
 import { formatMoney } from "@/utils/money";
@@ -63,7 +63,7 @@ export default function SpendTab(
   const [category, setCategory] = useState<"minor" | "major">("minor");
   const [photoIds, setPhotoIds] = useState<string[]>([]);
   // The saved-statement workflow — same "explicit Generate, then optionally
-  // Save" shape as ReportTab, so a statement is a point-in-time record of
+  // Save" shape as RecapTab, so a statement is a point-in-time record of
   // this month's spend rather than something that silently changes if an
   // entry is edited or deleted afterwards.
   const [statement, setStatement] = useState<string | null>(null);
@@ -270,7 +270,7 @@ export default function SpendTab(
       </div>
 
       {/* A standalone statement for this month — same explicit Generate ->
-          Save shape as the Report tab (see fmReport.buildSpendStatement),
+          Save shape as the Recap tab (see fmDocuments.buildSpendStatement),
           for handing THIS month's spend over on its own without the rest of
           the operational annex, and for keeping a point-in-time copy even
           after entries above are later edited or removed. */}
@@ -284,7 +284,7 @@ export default function SpendTab(
           <Download size={16} /> Download .md
         </button>
       </div>
-      {statement && <ReportPreview markdown={statement} />}
+      {statement && <MarkdownPreview markdown={statement} />}
 
       <SavedDocumentsList kind="spend" onOpen={reopenStatement} />
     </div>

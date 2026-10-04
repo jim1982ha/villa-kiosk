@@ -151,7 +151,7 @@ ck("  ...while a placed entity is never re-folded and a device with nothing plac
 
 console.log("\n  the callers:");
 const src = (f) => readFileSync(new URL(`../../src/${f}`, import.meta.url), "utf8");
-const vm = src("config/VillaModel.tsx"), cockpit = src("components/cockpit/CockpitModal.tsx");
+const vm = src("config/VillaModel.tsx"), cockpit = (src("components/cockpit/CockpitModal.tsx") + src("components/cockpit/CockpitOverview.tsx"));
 const hud = src("components/hud/HUD.tsx");
 const counted = [...hud.matchAll(/formatCountBadge\(([^)]*)\)/g)].map((m) => m[1]).filter((a) => a !== "facilityAttention");
 ck("every Cockpit count in the top bar and the phone menu is the number of ROWS",

@@ -41,7 +41,7 @@ export interface FmProvenance {
 export interface FmSchedule extends FmProvenance {
   id: string;
   title: string;
-  /** Free-text clause reference, shown in the UI and the report annex. */
+  /** Free-text clause reference, shown in the UI and the monthly recap. */
   clause?: string;
   everyDays: number;
   /** Optional binding so the task can highlight a room on the 3D map. */
@@ -170,19 +170,27 @@ export interface FmTicket extends FmProvenance {
 }
 
 /** A generated markdown document the operator chose to keep — the monthly
- *  owner-report annex (ReportTab), a spend statement (SpendTab), or a
+ *  monthly recap (RecapTab), a spend statement (SpendTab), or a
  *  point-in-time readiness snapshot (ReadinessTab). Kept
  *  verbatim as generated (not recomputed live) so a saved document stays a
  *  point-in-time record even if the underlying schedules/costs/tickets
- *  change afterwards — the same reasoning ReportTab's own "Generate" button
+ *  change afterwards — the same reasoning RecapTab's own "Generate" button
  *  (an explicit action, not a live re-render) already follows. */
 export interface FmSavedDocument extends FmProvenance {
   id: string;
-  kind: "report" | "spend" | "readiness";
+  kind: "recap" | "spend" | "readiness";
   /** The period the document is ABOUT ("2026-06"), not when it was saved. */
   month: string;
   markdown: string;
   generatedAt: string;
+}
+
+/** ⚠️ A RECAP SAVED BEFORE 2.496.274 IS STORED AS kind "report" (the tab was
+ *  renamed: "report" is what the VESTA Agent sends). It is read as "recap"
+ *  in fmApi.parseFmData, the one door every stored record comes in by, so the saved list
+ *  keeps showing it and no screen ever meets the old word. */
+export function recapKind(d: FmSavedDocument): FmSavedDocument {
+  return (d.kind as string) === "report" ? { ...d, kind: "recap" } : d;
 }
 
 export interface FmData {

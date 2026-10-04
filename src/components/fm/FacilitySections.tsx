@@ -10,7 +10,7 @@
 //   Faults     the work queue
 //   Spend      this month against the owner's monthly cap
 //   Schedule   what the Today board measures against — configured, then acted on
-//   Report     the operational annex for whatever monthly owner report already exists
+//   Recap      the month's operations recap, the annex to whatever owner report already exists
 //
 // Fixed height (every .settings-modal, 04-modals.css) on desktop/tablet: this modal switches
 // between views with wildly different content — Spend can be two rows,
@@ -36,11 +36,11 @@ import TodayTab from "./TodayTab";
 import ReadinessTab from "./ReadinessTab";
 import FaultsTab from "./FaultsTab";
 import SpendTab from "./SpendTab";
-import ReportTab from "./ReportTab";
+import RecapTab from "./RecapTab";
 import ScheduleEditor from "./ScheduleEditor";
 import { useVillaModel } from "@/config/VillaModel";
 
-export type FacilityTab = "today" | "readiness" | "faults" | "spend" | "schedule" | "report";
+export type FacilityTab = "today" | "readiness" | "faults" | "spend" | "schedule" | "recap";
 
 /** The Facility tabs, shown in the Cockpit after its own view (2.496.273). */
 export const FACILITY_TABS: ModalTab<FacilityTab>[] = [
@@ -48,11 +48,11 @@ export const FACILITY_TABS: ModalTab<FacilityTab>[] = [
   { id: "readiness", label: "Readiness", icon: ClipboardCheck },
   { id: "faults", label: "Faults", icon: Wrench },
   { id: "spend", label: "Spend", icon: Wallet },
-  // Before Report: configuring the schedule is what the report and the Today
+  // Before Recap: configuring the schedule is what the recap and the Today
   // board both read from, so it belongs upstream of the annex that summarises
   // them, not after it.
   { id: "schedule", label: "Schedule", icon: CalendarCog },
-  { id: "report", label: "Report", icon: FileText },
+  { id: "recap", label: "Recap", icon: FileText },
 ];
 
 /**
@@ -108,7 +108,7 @@ export default function FacilitySections({
       {!ready && <p className="muted body-text">Loading the maintenance record…</p>}
       {ready && tab === "today" && <TodayTab onOpenEntity={onOpenEntity} />}
       {ready && tab === "readiness" && (
-        <ReadinessTab report={readiness} onOpenEntity={onOpenEntity}
+        <ReadinessTab readiness={readiness} onOpenEntity={onOpenEntity}
           onOpenUnavailableDevices={onOpenOverview} onOpenCheckDevices={openCheckDevices} />
       )}
       {ready && tab === "faults" && (
@@ -118,8 +118,8 @@ export default function FacilitySections({
       )}
       {ready && tab === "spend" && <SpendTab onOpenEntity={onOpenEntity} deviceOptions={deviceOptions} />}
       {ready && tab === "schedule" && <ScheduleEditor />}
-      {ready && tab === "report" && (
-        <ReportTab readiness={readiness}
+      {ready && tab === "recap" && (
+        <RecapTab readiness={readiness}
           offlineDeviceCount={readiness.checks.find((c) => c.id === "devices-online")?.entityIds?.length ?? 0}
           totalDeviceCount={totalDeviceCount} />
       )}

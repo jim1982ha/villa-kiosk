@@ -24,7 +24,7 @@ const {
   ticketStats, scheduleStatus, budgetStatus, monthLabel, shortDate,
 } = await import("@/fm/fmEngine");
 const { formatMoney } = await import("@/utils/money");
-const { spendSummary } = await import("@/fm/fmReport");
+const { spendSummary } = await import("@/fm/fmDocuments");
 
 let fail = 0;
 const eq = (name, got, want) => {
@@ -74,7 +74,7 @@ console.log("\n  an unconfigured cap is not a cap of zero:");
 // cap <= 0 as "not configured" — state ok, fraction 0 — and the two report
 // documents printed the unset value anyway: "0 of the 0 monthly cap (0%)".
 // SpendTab and TodayTab were corrected in 2.496.31; the pin written with them
-// named only those two files, which is how fmReport survived it.
+// named only those two files, which is how fmDocuments survived it.
 const noCap = budgetStatus([], "2026-09", { monthlyCap: 0, warnAt: 0.8 });
 eq("no cap configured reads as ok, not exceeded", noCap.state, "ok");
 eq("...with fraction 0, never NaN or Infinity", noCap.fraction, 0);

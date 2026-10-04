@@ -286,7 +286,7 @@ export function localStamp(at: string | number | Date = Date.now()): string {
 
 /** Short human date, local time (e.g. "24 Jul 2026") — for a target/due date
  *  or a report table row, where the full time-of-day in localStamp() is more
- *  precision than the reader needs. Was previously private to fmReport.ts;
+ *  precision than the reader needs. Was previously private to fmDocuments.ts;
  *  moved here (and imported back from there) so TodayTab and ScheduleEditor
  *  can show the exact same date format the report annex uses, rather than
  *  each screen inventing its own. */
@@ -302,7 +302,7 @@ export function shortDate(at: string | number | Date): string {
 
 /** The month a report covers, spelled for a heading (e.g. "July 2026").
  *  Same reasoning as shortDate: fixed fields, reader's locale. Lived in
- *  fmReport.ts with its own hardcoded "en-GB". */
+ *  fmDocuments.ts with its own hardcoded "en-GB". */
 export function monthLabel(month: string): string {
   const [y, m] = month.split("-").map(Number);
   // A malformed month key would otherwise render "Invalid Date" into the

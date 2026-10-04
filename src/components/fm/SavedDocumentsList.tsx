@@ -1,5 +1,5 @@
 // src/components/fm/SavedDocumentsList.tsx
-// The saved-reports / saved-statements list shown under both ReportTab and
+// The saved-recaps / saved-statements list shown under both RecapTab and
 // SpendTab — one renderer so "save, reopen, delete a generated document"
 // reads and behaves identically in both places instead of two bespoke lists
 // that could drift apart.
@@ -26,7 +26,7 @@ export default function SavedDocumentsList({
 
   if (docs.length === 0) return null;
 
-  const noun = kind === "report" ? "reports" : "statements";
+  const noun = kind === "recap" ? "recaps" : "statements";
 
   return (
     <div className="fm-stack">
@@ -49,7 +49,7 @@ export default function SavedDocumentsList({
             <button
               className="icon-btn"
               onClick={() => void removeDocument(doc.id)}
-              aria-label={`Delete saved ${kind === "report" ? "report" : "statement"} for ${monthLabel(doc.month)}`}
+              aria-label={`Delete saved ${kind === "recap" ? "recap" : "statement"} for ${monthLabel(doc.month)}`}
               title="Delete this saved document"
             >
               <Trash2 size={16} />

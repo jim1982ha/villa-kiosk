@@ -14,11 +14,11 @@ import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { resolveSiteTitle } from "@/config/AppConfig";
 import { useFmData } from "@/fm/FmDataContext";
 import { monthKey } from "@/fm/fmEngine";
-import { buildReadinessSnapshot } from "@/fm/fmReport";
+import { buildReadinessSnapshot } from "@/fm/fmDocuments";
 import type { FmSavedDocument } from "@/fm/fmTypes";
 import SavedDocumentsList from "./SavedDocumentsList";
-import ReportPreview from "./ReportPreview";
-import type { CheckState, ReadinessCheck, ReadinessReport } from "@/fm/readiness";
+import MarkdownPreview from "./MarkdownPreview";
+import type { CheckState, ReadinessCheck, ReadinessResult } from "@/fm/readiness";
 
 const ICON: Record<CheckState, typeof CheckCircle2> = {
   pass: CheckCircle2, warn: AlertTriangle, fail: XCircle,
@@ -47,9 +47,9 @@ const SHORTCUT_LABEL: Partial<Record<string, string>> = {
 };
 
 export default function ReadinessTab({
-  report, onOpenEntity, onOpenUnavailableDevices, onOpenCheckDevices,
+  readiness, onOpenEntity, onOpenUnavailableDevices, onOpenCheckDevices,
 }: {
-  report: ReadinessReport;
+  readiness: ReadinessResult;
   onOpenEntity: (id: string) => void;
   /** Opens the shared Unavailable-devices panel — same list, same count as
    *  the HUD badge (see config/deviceGroups.unavailableDeviceIds). */
@@ -65,32 +65,32 @@ export default function ReadinessTab({
   const [saved, setSaved] = useState(false);
   const [viewing, setViewing] = useState<FmSavedDocument | null>(null);
 
-  const headline = report.overall === "pass"
+  const headline = readiness.overall === "pass"
     ? "Ready for the next guest"
-    : report.overall === "warn"
+    : readiness.overall === "warn"
       ? "Ready, with things worth fixing"
       : "Not ready";
 
-  const HeadlineIcon = ICON[report.overall];
+  const HeadlineIcon = ICON[readiness.overall];
 
   return (
     <div className="fm-stack">
       {/* Freezing the check turns it from a live readout into evidence — see
-          buildReadinessSnapshot. Same generate-and-keep shape as the report
+          buildReadinessSnapshot. Same generate-and-keep shape as the recap
           and spend statement, and it lands in the same saved-documents store,
           so a handover pack can include the check actually run on the day. */}
-      <div className={`fm-headline ${report.overall}`}>
+      <div className={`fm-headline ${readiness.overall}`}>
         <span className="fm-headline-icon"><HeadlineIcon size={22} /></span>
         <div className="fm-headline-text">
           <strong>{headline}</strong>
-          <span className="muted">{report.passed} of {report.total} checks passing</span>
+          <span className="muted">{readiness.passed} of {readiness.total} checks passing</span>
         </div>
         <SaveButton saved={saved} label="Save snapshot" icon={<Camera size={16} />} style={{ marginLeft: "auto" }}
           onClick={async () => {
             const result = await saveDocument({
               kind: "readiness",
               month: monthKey(Date.now()),
-              markdown: buildReadinessSnapshot(report, resolveSiteTitle(config, haConfig?.location_name)),
+              markdown: buildReadinessSnapshot(readiness, resolveSiteTitle(config, haConfig?.location_name)),
             });
             if (result !== "saved") return;   // the store's banner says why
             setSaved(true);
@@ -100,7 +100,7 @@ export default function ReadinessTab({
       </div>
 
       <div className="fm-list">
-        {report.checks.map((c) => {
+        {readiness.checks.map((c) => {
           const Icon = ICON[c.state];
           const isDeviceList = c.id === DEVICE_LIST_CHECK_ID;
           const shortcutLabel = SHORTCUT_LABEL[c.id];
@@ -151,7 +151,7 @@ export default function ReadinessTab({
         <div className="fm-stack">
           <button className="btn ghost" style={{ alignSelf: "flex-start" }}
             onClick={() => setViewing(null)}>Close snapshot</button>
-          <ReportPreview markdown={viewing.markdown} />
+          <MarkdownPreview markdown={viewing.markdown} />
         </div>
       )}
     </div>

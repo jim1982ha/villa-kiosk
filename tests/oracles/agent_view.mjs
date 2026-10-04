@@ -103,7 +103,7 @@ ck("  ...and so is the window (shown: open AND allowed, pages/surfaces)", /\{sho
   // Cockpit's footer, behind the same door (doors.agent; HUD hands both on).
   const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
   const hud = strip(src("components/hud/HUD.tsx"));
-  const cockpit = strip(src("components/cockpit/CockpitModal.tsx"));
+  const cockpit = strip((src("components/cockpit/CockpitModal.tsx") + src("components/cockpit/CockpitOverview.tsx")));
   ck("the top bar opens the agent from nowhere but the Cockpit (no robot button of its own)",
      !/onOpenAgent/.test(hud)
      && /doors=\{doors\}\s*onOpenAgent=\{\(\) => openSurface\("agent"\)\}/.test(src("pages/Dashboard.tsx")));

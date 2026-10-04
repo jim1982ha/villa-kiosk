@@ -40,7 +40,7 @@ ck("the agent's door needs BOTH the right and an agent: never open with no agent
 console.log("\n  every surface reads the one answer:");
 const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
 const src = (f) => strip(readFileSync(new URL(`../../src/${f}`, import.meta.url), "utf8"));
-const dash = src("pages/Dashboard.tsx"), hud = src("components/hud/HUD.tsx"), cockpit = src("components/cockpit/CockpitModal.tsx");
+const dash = src("pages/Dashboard.tsx"), hud = src("components/hud/HUD.tsx"), cockpit = (src("components/cockpit/CockpitModal.tsx") + src("components/cockpit/CockpitOverview.tsx"));
 ck("Dashboard computes it once and mounts every window behind it",
    (dash.match(/doorsFor\(/g) ?? []).length === 1
    && ["agent", "settings", "configEditor"].every((s) => new RegExp(`\\{shown\\("${s}"\\) && \\(`).test(dash))

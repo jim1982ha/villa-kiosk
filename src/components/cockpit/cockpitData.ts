@@ -13,7 +13,7 @@ import { deviceLook, groupLook, type LookSource } from "@/utils/deviceActivity";
 import { displayLabelFor } from "@/config/EntityMap";
 import { roomKey, NO_ROOM_LABEL } from "@/config/roomKey";
 import type { HassEntity, RawLogbookEntry } from "@/types/ha.types";
-import type { EntityMapping } from "@/types/scene.types";
+import type { Category, EntityMapping } from "@/types/scene.types";
 
 /** A category's devices — what its tile counts (tileStats) and opens. */
 export type CategoryTile = CategoryMembers;
@@ -195,4 +195,40 @@ export function buildActivityFeed(
     .filter((e): e is ActivityEntry => e !== null)
     .sort((a, b) => b.t - a.t);
   return described.slice(0, limit);
+}
+
+/** How the Cockpit's grid is grouped. */
+export type Pivot = "room" | "floor" | "category";
+
+/** One tile of the Room / Floor / Category grid. Its icon is the screen's
+ *  (by `pivot`, or the category's own). */
+export interface PivotTile {
+  key: string;
+  label: string;
+  pivot: Pivot;
+  /** Set for a category tile: it takes that category's colour. */
+  category: Category | null;
+  entityIds: string[];
+  stats: TileStats;
+}
+
+/**
+ * The grid's tiles for one grouping. ONE tile for every grouping (2.496.235):
+ * rooms and floors were bars, the categories tiles — the same question ("what
+ * is in here, how much is on, is any of it lost?") drawn two ways. "Other"
+ * names the no-floor bucket, the room grouping's own word (NO_ROOM_LABEL).
+ * Pure (2.496.274: it was a useMemo inside the Cockpit window, untestable).
+ */
+export function pivotTiles(
+  pivot: Pivot,
+  groups: { categories: readonly CategoryTile[]; rooms: readonly RoomGroup[]; floors: readonly FloorGroup[] },
+  categoryLabels: Readonly<Record<Category, string>>,
+  looks: LookSource,
+): PivotTile[] {
+  const rows = pivot === "category"
+    ? groups.categories.map((t) => ({ key: t.category, label: categoryLabels[t.category], category: t.category, entityIds: t.entityIds }))
+    : pivot === "room"
+      ? groups.rooms.map((g) => ({ key: g.room, label: g.room, category: null, entityIds: g.entityIds }))
+      : groups.floors.map((g) => ({ key: String(g.floor), label: g.floor != null ? `Floor ${g.floor}` : NO_ROOM_LABEL, category: null, entityIds: g.entityIds }));
+  return rows.map((r) => ({ ...r, pivot, stats: tileStats(r.entityIds, looks) }));
 }

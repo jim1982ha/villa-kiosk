@@ -3,7 +3,7 @@
 //
 // Pure: takes the live entity snapshot plus the FM store and returns a list of
 // checks. No React, no network, so the rules can be tested and so the same
-// answer can be rendered in the operator panel, the report annex, or (later)
+// answer can be rendered in the operator panel, the monthly recap, or (later)
 // an owner-facing summary.
 //
 // Why this matters commercially: a failed check-in costs a review, and
@@ -29,7 +29,7 @@ export interface ReadinessCheck {
   entityIds?: string[];
 }
 
-export interface ReadinessReport {
+export interface ReadinessResult {
   checks: ReadinessCheck[];
   passed: number;
   total: number;
@@ -38,7 +38,7 @@ export interface ReadinessReport {
 }
 
 // "Off" is OFF_STATES, through villaSummary — the same set every other surface
-// counts "on" against, so this report cannot disagree with the HUD.
+// counts "on" against, so this check cannot disagree with the HUD.
 
 /**
  * Build the readiness checks.
@@ -56,7 +56,7 @@ export function buildReadiness(
    *  so a caller that forgot one silently resurrected dismissed devices and
    *  unfolded every combo sensor rather than failing. */
   devices: VillaDevices,
-): ReadinessReport {
+): ReadinessResult {
   const checks: ReadinessCheck[] = [];
 
   // ⚠️ THE VILLA'S OWN DEVICES, NOT EVERYTHING HOME ASSISTANT KNOWS. The old
@@ -96,7 +96,7 @@ export function buildReadiness(
   // `state !== "locked"` and reported an unavailable or jammed lock as "not
   // locked" while the tile, for the same lock, said "Unknown". Still a warning
   // — a door nobody can confirm is not a secured door — but named for what it
-  // is, so the report never claims a door is open when nothing said so.
+  // is, so the check never claims a door is open when nothing said so.
   const locks = lockFacts(entities, devices);
   if (locks) {
     const notLocked = [...locks.unlocked, ...locks.unknown];

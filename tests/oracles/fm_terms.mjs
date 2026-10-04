@@ -10,7 +10,7 @@ register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const T = await import("@/fm/fmTypes");
 const E = await import("@/fm/fmEngine");
-const R = await import("@/fm/fmReport");
+const R = await import("@/fm/fmDocuments");
 
 console.log("  the stored terms, resolved:");
 {

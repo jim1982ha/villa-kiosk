@@ -111,7 +111,7 @@ for (const f of screens) {
      /minorSpend\s*\+/.test(code(f)), false);
 }
 // ⚠️ THE WHOLE OF src/fm/, NOT THE ONE FILE THE LAST DEFECT WAS IN. This read
-// only fmEngine.ts and matched only `toLocaleString(` — so fmReport.ts's
+// only fmEngine.ts and matched only `toLocaleString(` — so fmDocuments.ts's
 // `toLocaleDateString("en-GB")` and `toLocaleString("en-GB")`, in the file that
 // writes the owner's report, were outside the ban on both counts. hard-rules.py
 // names this exact failure in its own header: "a guard scoped to where the last

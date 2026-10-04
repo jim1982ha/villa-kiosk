@@ -4,7 +4,7 @@
 //
 // ⚠️ FIVE HAND-ROLLED COPIES EXISTED BEFORE THIS FILE, and the fifth was
 // written on 2026-08-28 by somebody (me) who had just audited four others for a
-// living. `SpendTab`, `ReportTab`, `TelemetryPanel`, `UsagePanel` and
+// living. `SpendTab`, `RecapTab`, `TelemetryPanel`, `UsagePanel` and
 // `FlagTypesPanel` each carried the identical seven lines — create a Blob, make
 // an anchor, set href and download, click it, revoke the URL. Found by
 // /dry-audit Part 1, which is the "roll a rule out by what it APPLIES to"

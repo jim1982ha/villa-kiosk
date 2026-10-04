@@ -32,10 +32,10 @@
   .fm-tab:hover { background: var(--bg-input); }
 }
 .fm-tab.active { background: var(--accent); color: var(--text-on-accent); }
-/* Keeps the Report tab's own height roughly stable across the empty-
-   placeholder <-> generated-report swap — see ReportTab's docstring on the
+/* Keeps the Recap tab's own height roughly stable across the empty-
+   placeholder <-> generated-recap swap — see RecapTab's docstring on the
    button. */
-.fm-report-preview-area { min-height: 260px; }
+.fm-doc-preview-area { min-height: 260px; }
 
 .fm-stack { display: flex; flex-direction: column; gap: 16px; }
 
@@ -434,37 +434,37 @@
 .fm-empty h3 { margin: 0; font-size: var(--text-lg); color: var(--text-primary); }
 .fm-empty p { max-width: 46ch; }
 
-/* The generated report, rendered as a document (ReportPreview) rather than a
+/* A generated recap or statement, rendered as a document (MarkdownPreview) rather than a
    monospace dump of raw Markdown — the underlying string is unchanged and is
    exactly what "Download .md" writes; only how it looks on screen differs. */
-.fm-report-doc {
+.fm-doc-doc {
   padding: 16px 18px; border-radius: 12px; max-height: 45vh; overflow: auto;
   background: var(--bg-input); border: 1px solid var(--hairline);
   font-size: var(--text-sm); line-height: 1.55; word-break: break-word;
 }
-.fm-report-h1 {
+.fm-doc-h1 {
   font-family: var(--font-display); font-weight: 400; font-size: var(--text-xl);
   margin: 0 0 10px;
 }
-.fm-report-h2 {
+.fm-doc-h2 {
   font-size: var(--text-md); font-weight: 700; margin: 20px 0 8px;
   padding-top: 14px; border-top: 1px solid var(--hairline);
 }
-.fm-report-doc > .fm-report-h2:first-child { margin-top: 0; padding-top: 0; border-top: none; }
-.fm-report-h3 { font-size: var(--text-sm); font-weight: 600; margin: 14px 0 6px; color: var(--text-secondary); }
-.fm-report-p { margin: 0 0 8px; }
-.fm-report-note { margin: 0 0 8px; }
-.fm-report-hr { border: none; border-top: 1px solid var(--hairline); margin: 16px 0; }
-.fm-report-ul { margin: 0 0 10px; padding-left: 20px; }
-.fm-report-ul li { margin: 3px 0; }
-.fm-report-table-wrap { overflow-x: auto; margin: 0 0 12px; }
-.fm-report-table { width: 100%; border-collapse: collapse; font-size: var(--text-xs); }
-.fm-report-table th, .fm-report-table td {
+.fm-doc-doc > .fm-doc-h2:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+.fm-doc-h3 { font-size: var(--text-sm); font-weight: 600; margin: 14px 0 6px; color: var(--text-secondary); }
+.fm-doc-p { margin: 0 0 8px; }
+.fm-doc-note { margin: 0 0 8px; }
+.fm-doc-hr { border: none; border-top: 1px solid var(--hairline); margin: 16px 0; }
+.fm-doc-ul { margin: 0 0 10px; padding-left: 20px; }
+.fm-doc-ul li { margin: 3px 0; }
+.fm-doc-table-wrap { overflow-x: auto; margin: 0 0 12px; }
+.fm-doc-table { width: 100%; border-collapse: collapse; font-size: var(--text-xs); }
+.fm-doc-table th, .fm-doc-table td {
   text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--hairline);
   white-space: nowrap;
 }
-.fm-report-table th { color: var(--text-secondary); font-weight: 600; }
-.fm-report-table td:first-child, .fm-report-table th:first-child { padding-left: 0; }
+.fm-doc-table th { color: var(--text-secondary); font-weight: 600; }
+.fm-doc-table td:first-child, .fm-doc-table th:first-child { padding-left: 0; }
 
 /* Config Editor: a row whose entity Home Assistant no longer knows about, and
    the banner offering to clear them out in one go. Flagged rather than

@@ -78,7 +78,7 @@ ck("offline: DONE (queued), and the person is told it will be sent — never 'tr
 ck("refused: NOT done — the form keeps what was typed, and says so", o.refused.done === false && /still here/.test(o.refused.note), o.refused);
 
 const SAVES = ["components/fm/GuestReportModal.tsx", "components/fm/FaultStageModal.tsx", "components/fm/FaultsTab.tsx",
-  "components/fm/SpendTab.tsx", "components/fm/ScheduleEditor.tsx", "components/fm/TodayTab.tsx", "components/cockpit/CockpitModal.tsx"];
+  "components/fm/SpendTab.tsx", "components/fm/ScheduleEditor.tsx", "components/fm/TodayTab.tsx", "components/cockpit/CockpitOverview.tsx"];
 const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
 ck("every Facility save asks fmSaveOutcome; the old wording is gone",
    SAVES.every((f) => /fmSaveOutcome\(/.test(src(f))) && !SAVES.some((f) => /fmWriteProblem/.test(src(f))) && !/fmWriteProblem/.test(ctx + src("fm/fmSave.ts")),
@@ -93,7 +93,7 @@ ck("the fault step, the Spend tab and logging a completion all ask for a cost wi
    && /projectedSpend\(data\.costs, \{ amount: value, category, replacing \}, terms\)/.test(src("components/fm/CostFields.tsx")));
 ck("the three 'Saved' labels still show only when saved (not when queued)",
    /if \(result !== "saved"\) return;/.test(src("components/fm/ReadinessTab.tsx"))
-   && /=== "saved"\) setSaved\(true\);/.test(src("components/fm/ReportTab.tsx"))
+   && /=== "saved"\) setSaved\(true\);/.test(src("components/fm/RecapTab.tsx"))
    && /=== "saved"\) setStatementSaved\(true\);/.test(src("components/fm/SpendTab.tsx")));
 
 done("✅ a Facility write says what happened");

@@ -11,7 +11,7 @@ import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { labelOf } from "@/config/EntityMap";
 import { ROLE_LABELS, isRole } from "@/auth/roles";
-import ReportPreview from "@/components/fm/ReportPreview";
+import MarkdownPreview from "@/components/fm/MarkdownPreview";
 import InlineConfirm from "@/components/common/InlineConfirm";
 import { useAgent, useAgentLiveView } from "@/agent/AgentContext";
 import { answerLine, buttonsShown, clearNeedsConfirm, settledIds } from "@/agent/agentView";
@@ -176,7 +176,7 @@ function AgentMessageCard({ message: m, status, answer, clear, onOpenEntity }: {
         <Bot size={12} /> {when(m.createdAt)}
         {m.state === "expired" && " · expired"}
       </div>
-      {m.body && <div className="agent-message-body"><ReportPreview markdown={m.body} /></div>}
+      {m.body && <div className="agent-message-body"><MarkdownPreview markdown={m.body} /></div>}
       {m.entities.length > 0 && (
         <div className="agent-message-entities">
           {m.entities.map((id) => (

@@ -8,7 +8,7 @@ register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import { readFileSync } from "node:fs";
 
-const R = await import("@/fm/fmReport");
+const R = await import("@/fm/fmDocuments");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
 
 console.log("  cell():");
@@ -25,7 +25,7 @@ const fm = { ...EMPTY_FM_DATA,
 };
 const readiness = { at: "2026-09-04T00:00:00Z", checks: [{ id: "c", label: evil, state: "warn", detail: evil }] };
 for (const [name, doc] of [
-  ["the monthly report", R.buildMonthlyReport({ fm, month: "2026-09", villaName: "V", readiness })],
+  ["the monthly report", R.buildMonthlyRecap({ fm, month: "2026-09", villaName: "V", readiness })],
   ["the spend statement", R.buildSpendStatement(fm, "2026-09", "V")],
   ["the readiness snapshot", R.buildReadinessSnapshot(readiness, "V")],
 ]) {
@@ -34,7 +34,7 @@ for (const [name, doc] of [
 }
 
 console.log("\n  one owner:");
-const src = readFileSync(new URL("../../src/fm/fmReport.ts", import.meta.url), "utf8");
+const src = readFileSync(new URL("../../src/fm/fmDocuments.ts", import.meta.url), "utf8");
 ck("no cell escapes on its own any more", !/\.replace\(\/\\\|\/g/.test(src.replace(/export function cell[\s\S]*?\n}/, "")));
 
 done("✅ report text is data, never structure");

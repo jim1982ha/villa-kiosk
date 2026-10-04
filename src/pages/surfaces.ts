@@ -17,7 +17,8 @@ import { roomLook } from "@/babylon/summaryLook";
 import type { DeviceLook } from "@/utils/deviceActivity";
 
 /** A window over the map. Several may be open at once: Advanced Settings
- *  opens over Settings, the VESTA Agent over the Cockpit. */
+ *  opens over Settings. (The Cockpit footer's "VESTA Agent" LEAVES the
+ *  Cockpit — its button says so — so those two are never stacked.) */
 export type Surface = "rooms" | "cockpit" | "agent" | "settings" | "configEditor";
 
 export type Surfaces = Readonly<Record<Surface, boolean>>;
@@ -27,9 +28,6 @@ export const SURFACE_LABEL: Readonly<Record<Surface, string>> = {
   rooms: "Rooms", cockpit: "Cockpit", agent: "VESTA Agent", settings: "Settings",
   configEditor: "Advanced Settings",
 };
-
-/** One step back from a panel opened from another window (PanelActions.back). */
-export interface CameFrom { label: string; go: () => void }
 
 export const NO_SURFACES: Surfaces = {
   rooms: false, cockpit: false, agent: false, settings: false, configEditor: false,
