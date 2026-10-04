@@ -535,12 +535,13 @@ class Vesta:
         """The siren switches itself off after a few minutes (alert-desk rules)."""
         pol = self.policy()
         act = ap["action"]
-        if pol.siren_entity and act["domain"] == "switch" and act["service"] == "turn_on" and pol.siren_entity in act["entity_ids"]:
+        siren_domain = pol.siren_entity.split(".")[0] if pol.siren_entity else None
+        if pol.siren_entity and act["domain"] == siren_domain and act["service"] == "turn_on" and pol.siren_entity in act["entity_ids"]:
             minutes = pol.siren_auto_off_min
 
             async def off():
                 await asyncio.sleep(minutes * 60)
-                ok = await asyncio.to_thread(self.actions.system, "switch", "turn_off", pol.siren_entity)
+                ok = await asyncio.to_thread(self.actions.system, siren_domain, "turn_off", pol.siren_entity)
                 owner = Routing(pol).target("owner")
                 if owner:
                     await self.send(owner, "Siren switched off." if ok else "The siren could not be switched off: check it now.")

@@ -82,6 +82,25 @@ function dropdown(options, value, pick, label) {
   return box;
 }
 
+// ⚠️ ONE EDITABLE TABLE (architecture review, 0.12.30): People and the services were each built by hand — their
+// own tbody, redraw, remove button, Add button, markDirty — and their phone layouts were CSS keyed by
+// nth-child to the column order written here, so moving a column broke the phone silently. Each column now
+// says its width (a <col>, which the page's CSP allows where a style attribute is blocked) and where it goes
+// on a phone: "a" / "b" the first line's two halves, "ab" both, "c" / "d" the second line's, "cd" all of it.
+// The remove button is always at the end of the first line. Returns [table, its Add button].
+function editTable(rows, { cls, columns, cell, blank, add, changed = () => {} }) {
+  const body = h("tbody");
+  const touched = () => { changed(); markDirty(); };
+  const draw = () => body.replaceChildren(...rows.map((row, i) => h("tr", {},
+    columns.map((c, k) => h("td", { class: `ph-${c.phone}` }, cell(row, k, touched))),
+    h("td", { class: "x ph-x" }, h("button", { class: "btn icon ghost", title: "Remove", onclick: () => { rows.splice(i, 1); draw(); touched(); } }, "×")))));
+  draw();
+  const table = h("table", { class: `rows edit ${cls}` },
+    h("colgroup", {}, columns.map((c) => h("col", { width: c.width || null })), h("col", { width: "44" })),
+    h("thead", {}, h("tr", {}, columns.map((c) => h("th", {}, c.title)), h("th", {}, ""))), body);
+  return [table, h("div", { class: "actions" }, h("button", { class: "btn ghost", onclick: () => { rows.push(blank()); draw(); touched(); } }, add))];
+}
+
 async function api(method, path, body) {
   const opts = { method, headers: {} };
   if (body !== undefined) {
@@ -320,30 +339,19 @@ async function overview() {
 }
 
 // ---------------------------------------------------------------- rules (policy.yaml)
-const RULES = {
-  any: "the owner or the facility manager approves",
-  owner: "only the owner approves",
-  listed: "only the devices in the lists below, then approval",
-  direct: "no approval when a registered person asks",
-};
+// the rules, the lists and their domains, the siren's domains: policy.form_schema(), served with the file —
+// the page keeps no copy (two copies had drifted: input_button offered, then refused on save)
+let SCHEMA = { rules: {}, lists: [], actionable: [], siren_domains: [] };
 // the brains as the server names them (policy.profile_labels): filled by the rules and costs pages
 let PROFILES = {};
 const RESETS = { daily_04_00: "Every day at 04:00", after_8h_silence: "After 8 hours of silence", never: "Never (/new only)" };
-const LISTS = [
-  ["switch_entities", "Switches it may turn on or off", ["switch"], "Only for the switch services set to \"listed\"."],
-  ["scene_allowlist", "Scenes it may start", ["scene"], "A scene can do anything: add one only after reading it."],
-  ["script_allowlist", "Scripts it may run", ["script"], "Same care as scenes."],
-  ["button_allowlist", "Buttons it may press", ["button", "input_button"], "Never a restart button."],
-];
-// what an action can be asked on: the devices "owner only" makes sense for
-const ACTIONABLE = ["lock", "cover", "switch", "light", "fan", "climate", "script", "scene", "button", "input_button",
-                    "siren", "input_boolean", "media_player", "valve", "water_heater", "vacuum", "alarm_control_panel"];
 // the villa's devices, from the agent's knowledge pack: chosen by name, never typed as ids
 const ENT = { list: [], byId: {} };
 
 async function rules(sub = "forms") {
   fill($view, h("p", { class: "muted" }, "Loading…"));
   let doc = await api("GET", "api/policy");
+  SCHEMA = doc.schema || SCHEMA;
   PROFILES = doc.profiles || PROFILES;
   const { jobs } = await api("GET", "api/jobs");
   const { entities } = await api("GET", "api/entities");
@@ -429,18 +437,20 @@ function rulesForms(doc, jobs = []) {
   const missing = jobs.filter((j) => !(f.settings.jobs || {})[j.name]).map((j) => j.name);
 
   // people
-  const peopleBody = h("tbody");
-  const drawPeople = () => peopleBody.replaceChildren(...f.people.map((p, i) => h("tr", {},
-    h("td", {}, h("input", { type: "text", value: p.name ?? "", "aria-label": "Name", oninput: on((t) => (p.name = t.value)) })),
-    h("td", {}, h("input", { type: "text", inputmode: "numeric", value: p.telegram_id ?? "", "aria-label": "Telegram id", oninput: on((t) => (p.telegram_id = /^-?\d+$/.test(t.value.trim()) ? Number(t.value.trim()) : t.value)) })),
-    h("td", {}, sel({ owner: "Owner", fm: "Facility manager" }, p.role, (v) => (p.role = v), "Role")),
-    h("td", {}, sel({ ...doc.languages, ...(p.language && !(p.language in doc.languages) ? { [p.language]: p.language } : {}) },
-                    p.language ?? "en", (v) => (p.language = v), "Language")),
-    h("td", { class: "x" }, h("button", { class: "btn icon ghost", title: "Remove", onclick: () => { f.people.splice(i, 1); drawPeople(); markDirty(); } }, "×")))));
-  drawPeople();
+  const languages = (p) => ({ ...doc.languages, ...(p.language && !(p.language in doc.languages) ? { [p.language]: p.language } : {}) });
   const people = card("People", "Who the agent answers. Each person sends /whoami to the bot to read their Telegram id.",
-    h("table", { class: "rows people" }, h("thead", {}, h("tr", {}, ["Name", "Telegram id", "Role", "Language", ""].map((x) => h("th", {}, x)))), peopleBody),
-    h("div", { class: "actions" }, h("button", { class: "btn ghost", onclick: () => { f.people.push({ telegram_id: "", name: "", role: "fm", language: "en" }); drawPeople(); markDirty(); } }, "Add a person")));
+    ...editTable(f.people, {
+      cls: "people", add: "Add a person", blank: () => ({ telegram_id: "", name: "", role: "fm", language: "en" }),
+      columns: [{ title: "Name", width: "26%", phone: "a" }, { title: "Telegram id", width: "22%", phone: "b" },
+                { title: "Role", width: "22%", phone: "c" }, { title: "Language", phone: "d" }],
+      cell: (p, k, touched) => [
+        () => h("input", { type: "text", value: p.name ?? "", "aria-label": "Name", oninput: (e) => { p.name = e.target.value; touched(); } }),
+        () => h("input", { type: "text", inputmode: "numeric", value: p.telegram_id ?? "", "aria-label": "Telegram id",
+                          oninput: (e) => { const t = e.target.value.trim(); p.telegram_id = /^-?\d+$/.test(t) ? Number(t) : e.target.value; touched(); } }),
+        () => sel({ owner: "Owner", fm: "Facility manager" }, p.role, (v) => (p.role = v), "Role"),
+        () => sel(languages(p), p.language ?? "en", (v) => (p.language = v), "Language"),
+      ][k](),
+    }));
 
   // chats
   const chatId = (role) => h("input", { type: "text", inputmode: "numeric", value: f.chats[role] ?? "", oninput: on((t) => (f.chats[role] = t.value.trim() === "" ? null : (/^-?\d+$/.test(t.value.trim()) ? Number(t.value.trim()) : t.value))) });
@@ -450,17 +460,17 @@ function rulesForms(doc, jobs = []) {
       field("Facility manager chat", chatId("fm"), "Alerts, reminders, daily digest, weekly page.")));
 
   // services and their rule
-  const svcBody = h("tbody");
-  let svcRows = Object.entries(f.allowed_services);
-  const syncSvc = () => { f.allowed_services = Object.fromEntries(svcRows.filter(([k]) => k)); };
-  const drawSvc = () => svcBody.replaceChildren(...svcRows.map((row, i) => h("tr", {},
-    h("td", {}, h("input", { type: "text", value: row[0], placeholder: "light.turn_on", "aria-label": "Service", oninput: on((t) => { row[0] = t.value.trim(); syncSvc(); }) })),
-    h("td", {}, dropdown(Object.entries(RULES).map(([k, l]) => [k, `${k} — ${l}`]), row[1], (v) => { row[1] = v; syncSvc(); markDirty(); }, "Rule")),
-    h("td", { class: "x" }, h("button", { class: "btn icon ghost", title: "Remove", onclick: () => { svcRows.splice(i, 1); syncSvc(); drawSvc(); markDirty(); } }, "×")))));
-  drawSvc();
+  const svcRows = Object.entries(f.allowed_services);
+  const ruleChoices = Object.entries(SCHEMA.rules).map(([k, l]) => [k, `${k} — ${l}`]);
   const services = card("What the agent may do", "One line per Home Assistant service, and who decides. Anything not listed is refused. Restarts, shell commands, toggles and the like are refused whatever this says.",
-    h("table", { class: "rows svc" }, h("thead", {}, h("tr", {}, ["Service", "Rule", ""].map((x) => h("th", {}, x)))), svcBody),
-    h("div", { class: "actions" }, h("button", { class: "btn ghost", onclick: () => { svcRows.push(["", "any"]); drawSvc(); markDirty(); } }, "Add a service")));
+    ...editTable(svcRows, {
+      cls: "svc", add: "Add a service", blank: () => ["", "any"],
+      changed: () => { f.allowed_services = Object.fromEntries(svcRows.filter(([k]) => k)); },
+      columns: [{ title: "Service", width: "38%", phone: "ab" }, { title: "Rule", phone: "cd" }],
+      cell: (row, k, touched) => k === 0
+        ? h("input", { type: "text", value: row[0], placeholder: "light.turn_on", "aria-label": "Service", oninput: (e) => { row[0] = e.target.value.trim(); touched(); } })
+        : dropdown(ruleChoices, row[1], (v) => { row[1] = v; touched(); }, "Rule"),
+    }));
 
   // devices: chosen from the villa's own, by name (owner, 2026-10-01: "free form text inputs are not
   // suitable"). A box like a menu shows what is chosen; it opens a list with a search and a checkbox per
@@ -525,13 +535,13 @@ function rulesForms(doc, jobs = []) {
   const many = (key, domains) => picker(() => f[key] || [], (v) => (f[key] = v), domains);
   const devices = card("Protected devices", "Devices that need more care than the rules above give them.",
     h("div", { class: "grid" },
-      field("Only the owner may approve", many("owner_only_entities", ACTIONABLE), "An action on these waits for the owner's Approve, whoever asks (locks, the gate, the siren)."),
+      field("Only the owner may approve", many("owner_only_entities", SCHEMA.actionable), "An action on these waits for the owner's Approve, whoever asks (locks, the gate, the siren)."),
       field("Left alone", many("excluded_entities", null), "Never acted on, never reported (a test device)."),
-      field("Siren", picker(() => (f.siren_entity ? [f.siren_entity] : []), (v) => (f.siren_entity = v[0] || null), ["switch", "siren"], true),
+      field("Siren", picker(() => (f.siren_entity ? [f.siren_entity] : []), (v) => (f.siren_entity = v[0] || null), SCHEMA.siren_domains, true),
             "The siren the alert desk may ask the owner to sound."),
       field("Siren stops after (minutes)", h("input", { type: "number", min: 1, max: 60, value: f.siren_auto_off_min, oninput: on((t) => (f.siren_auto_off_min = num(t.value))) }))));
   const lists = card("Allowed lists", "For a service whose rule above is \"only the devices in the lists below\": the agent may act only on the devices chosen here, and still asks for approval.",
-    h("div", { class: "grid" }, LISTS.map(([key, label, domains, hint]) => field(label, many(key, domains), hint))));
+    h("div", { class: "grid" }, SCHEMA.lists.map((l) => field(l.label, many(l.key, l.domains), l.hint))));
 
   const save = async () => {
     try {

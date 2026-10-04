@@ -199,12 +199,8 @@ ul.plain li:last-child { border-bottom: 0; }
    "cove". Fixed widths: a long choice ends in "…" inside its own column; on a phone each row stacks below. */
 table.rows { table-layout: fixed; }
 table.rows td .dropdown, table.rows td input { width: 100%; min-width: 0; }
-table.rows.svc th:nth-child(1) { width: 38%; }
-table.rows.people th:nth-child(1) { width: 26%; }
-table.rows.people th:nth-child(2) { width: 22%; }
-table.rows.people th:nth-child(3) { width: 22%; }
 table.rows.ai th:nth-child(2), table.rows.ai th:nth-child(3) { width: 22%; }
-table.rows th:last-child { width: 44px; }
+table.rows.ai th:last-child { width: 44px; }
 /* on a phone each AI row puts the work on its own line, its brain and limit below it */
 @media (max-width: 600px) {
   table.rows.ai thead { display: none; }
@@ -213,18 +209,18 @@ table.rows th:last-child { width: 44px; }
   table.rows.ai td { padding: 0; }
   table.rows.ai td:first-child { grid-column: 1 / -1; }
   table.rows.ai td[colspan] { grid-column: span 2; }
-  /* services: the service and its remove button on one line, the rule under them, full width */
-  table.rows.svc thead, table.rows.people thead { display: none; }
-  table.rows.svc tr, table.rows.people tr { display: grid; gap: 6px 8px; padding: 10px 0; border-top: 1px solid var(--hairline); }
-  table.rows.svc tr:first-child, table.rows.people tr:first-child { border-top: 0; }
-  table.rows.svc td, table.rows.people td { padding: 0; min-width: 0; }
-  table.rows.svc tr { grid-template-columns: 1fr 44px; }
-  table.rows.svc td:nth-child(2) { grid-column: 1 / -1; grid-row: 2; }
-  /* people: name and Telegram id, then role and language; remove at the end of the first line */
-  table.rows.people tr { grid-template-columns: 1fr 1fr 44px; }
-  table.rows.people td:nth-child(3) { grid-column: 1; grid-row: 2; }
-  table.rows.people td:nth-child(4) { grid-column: 2 / -1; grid-row: 2; }
-  table.rows.people td:nth-child(5) { grid-column: 3; grid-row: 1; }
+  /* an editable table (app.js editTable): each column says where it goes, the remove button ends line one */
+  table.rows.edit thead, table.rows.edit colgroup { display: none; }
+  table.rows.edit tr { display: grid; grid-template-columns: 1fr 1fr 44px; gap: 6px 8px; padding: 10px 0; border-top: 1px solid var(--hairline); }
+  table.rows.edit tr:first-child { border-top: 0; }
+  table.rows.edit td { padding: 0; min-width: 0; }
+  table.rows.edit td.ph-a { grid-area: 1 / 1; }
+  table.rows.edit td.ph-b { grid-area: 1 / 2; }
+  table.rows.edit td.ph-ab { grid-area: 1 / 1 / 2 / 3; }
+  table.rows.edit td.ph-c { grid-area: 2 / 1; }
+  table.rows.edit td.ph-d { grid-area: 2 / 2 / 3 / 4; }
+  table.rows.edit td.ph-cd { grid-area: 2 / 1 / 3 / 4; }
+  table.rows.edit td.ph-x { grid-area: 1 / 3; }
 }
 .tag { display: inline-flex; align-items: center; gap: 6px; padding: 4px 4px 4px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--text-primary); font-size: var(--text-sm); max-width: 100%; }
 .tag.unknown { background: rgba(178, 66, 50, 0.12); }

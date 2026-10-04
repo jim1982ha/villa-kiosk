@@ -348,9 +348,38 @@ class Policy:
 
 
 # ------------------------------------------------------------------ the file's own checks
-RULES = ("any", "owner", "listed", "direct")
+# ⚠️ ONE SCHEMA FOR THE FILE, ITS CHECKS AND THE PAGE'S FORM (architecture review, 0.12.30). The page kept
+# its own copies of the rules, the lists and their domains, and they drifted: "Buttons it may press" offered
+# input_button entities this file's check refuses, and the siren picker offered siren entities the alert desk
+# then called switch.turn_on on. The page now draws its forms from FORM_SCHEMA (served by /api/policy).
+RULE_WORDS = {
+    "any": "the owner or the facility manager approves",
+    "owner": "only the owner approves",
+    "listed": "only the devices in the lists below, then approval",
+    "direct": "no approval when a registered person asks",
+}
+RULES = tuple(RULE_WORDS)
 ENTITY_LISTS = {"owner_only_entities": None, "excluded_entities": None, "switch_entities": "switch",
                 "scene_allowlist": "scene", "script_allowlist": "script", "button_allowlist": "button"}
+#: The siren: turned on and off with its OWN domain's service (switch.turn_on, siren.turn_on), checked like
+#: any other action against allowed_services / system_actions.
+SIREN_DOMAINS = ("switch", "siren")
+#: What an action can be asked on: the devices "only the owner may approve" makes sense for.
+ACTIONABLE = ("lock", "cover", "switch", "light", "fan", "climate", "script", "scene", "button", "input_button",
+              "siren", "input_boolean", "media_player", "valve", "water_heater", "vacuum", "alarm_control_panel")
+_LIST_WORDS = {
+    "switch_entities": ("Switches it may turn on or off", 'Only for the switch services set to "listed".'),
+    "scene_allowlist": ("Scenes it may start", "A scene can do anything: add one only after reading it."),
+    "script_allowlist": ("Scripts it may run", "Same care as scenes."),
+    "button_allowlist": ("Buttons it may press", "Never a restart button."),
+}
+
+
+def form_schema() -> dict:
+    """What the page's forms offer, from the same tables the checks below read."""
+    return {"rules": RULE_WORDS, "actionable": list(ACTIONABLE), "siren_domains": list(SIREN_DOMAINS),
+            "lists": [{"key": k, "label": _LIST_WORDS[k][0], "hint": _LIST_WORDS[k][1], "domains": [d]}
+                      for k, d in ENTITY_LISTS.items() if d]}
 SECTIONS = {"settings", "act_enabled", "approval_ttl_minutes", "people", "chats", "siren_entity",
             "siren_auto_off_min", "allowed_services", "notify_recipients", "system_actions", "ha_read_tools",
             *ENTITY_LISTS}
@@ -474,6 +503,8 @@ def problems(raw: Any) -> list[str]:
     siren = raw.get("siren_entity")
     if siren is not None and (not isinstance(siren, str) or not ENTITY_ID.match(siren)):
         out.append("siren_entity must be an entity id, or null.")
+    elif siren is not None and siren.split(".")[0] not in SIREN_DOMAINS:
+        out.append(f"siren_entity: {siren} is not a {' or '.join(SIREN_DOMAINS)} entity.")
 
     services = raw.get("allowed_services")
     if services is not None:

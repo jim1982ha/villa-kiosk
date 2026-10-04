@@ -124,7 +124,9 @@ class Outcome:
                 await self.settle(int(s["incident_id"]), str(s.get("note") or ""))
         pol = self.policy()
         if gate_prompt and pol.siren_entity:
-            answer, msg = await asyncio.to_thread(self.actions.request, "switch", "turn_on", pol.siren_entity, {}, None, None)
+            # its own domain's turn_on (a switch or a siren entity: policy.SIREN_DOMAINS)
+            answer, msg = await asyncio.to_thread(self.actions.request, pol.siren_entity.split(".")[0], "turn_on",
+                                                  pol.siren_entity, {}, None, None)
             head = gate_prompt
             if msg:
                 await self.send(msg.chat_id, head + "\n\n" + msg.text, keyboard=msg.keyboard, approval_id=msg.approval_id)

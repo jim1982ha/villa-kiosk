@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.29 (4 October 2026)
+
+- Architecture review (fourth pass):
+  - policy.form_schema(): the rule words, the entity lists with their domains and labels, the siren's domains and the actionable domains, from the tables the checks read (RULE_WORDS, ENTITY_LISTS, SIREN_DOMAINS, ACTIONABLE). Served by /api/policy as `schema`; app.js keeps no copy, and policy_doc.LISTS is ENTITY_LISTS.
+  - Two drifts fixed: button_allowlist offered input_button (refused on save), and siren_entity offered siren.* while outcome asked switch.turn_on. The siren now uses its own domain for turn_on and auto-off, and problems() names a siren outside SIREN_DOMAINS.
+  - app.js editTable(): People and services from one builder. Columns carry their <col> width and phone place; generic .rows.edit grid CSS replaces the nth-child blocks.
+  - tests/test_policy_schema.py (every offered domain accepted, siren asked with its own domain) and test_ui, all mutation-checked.
+
 ## 0.6.28 (4 October 2026)
 
 - UI: editable tables (table.rows) use table-layout: fixed with per-table column widths (svc, people, ai). An automatic table sized a column to its longest unbreakable dropdown label and overflowed a phone. On ≤ 600 px the svc and people rows stack as a grid, as the ai rows did. tests/test_ui.py pins it.

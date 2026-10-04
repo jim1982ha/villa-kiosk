@@ -246,9 +246,9 @@ class UI:
             form, probs = to_form(text), policy_problems(yaml.safe_load(text) if text else {})
         except yaml.YAMLError as e:
             form, probs = None, [f"The file cannot be read as YAML: {e}"]
-        from ..policy import LANGUAGES, profile_labels
+        from ..policy import LANGUAGES, form_schema, profile_labels
         return web.json_response({"text": text, "rev": r, "form": form, "problems": probs, "languages": LANGUAGES,
-                                  "profiles": profile_labels()})
+                                  "profiles": profile_labels(), "schema": form_schema()})
 
     def _save_policy(self, new_text: str, base_rev: str) -> dict:
         text, r = self._policy()

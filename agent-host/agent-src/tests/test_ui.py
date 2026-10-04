@@ -199,13 +199,17 @@ def test_every_choice_is_the_pages_own_dropdown_never_the_platforms_picker():
 
 
 def test_editable_tables_keep_their_columns_on_a_phone():
-    # owner, 2026-10-04 (a phone screenshot): one long rule widened the services table off the screen
+    # owner, 2026-10-04 (a phone screenshot): one long rule widened the services table off the screen. One
+    # builder (editTable): fixed columns from <col> widths, and each column's phone place named by the column
+    # itself — no CSS keyed to a column's position.
+    import re
     from vesta_agent.ui.server import STATIC
     css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
     js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
     assert "table.rows { table-layout: fixed; }" in css
-    assert 'class: "rows svc"' in js and 'class: "rows people"' in js
-    assert "table.rows.svc tr { grid-template-columns: 1fr 44px; }" in css and "table.rows.people tr { grid-template-columns: 1fr 1fr 44px; }" in css
+    assert js.count("...editTable(") == 2 and not re.search(r"rows\.(svc|people)", css)
+    places = set(re.findall(r'phone: "(\w+)"', js))
+    assert places and all(f"td.ph-{p_} {{ grid-area:" in css for p_ in places | {"x"}), places
 
 
 def test_the_overview_gives_the_apps_version_with_the_agents(ui, monkeypatch):

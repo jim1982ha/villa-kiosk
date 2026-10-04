@@ -14,15 +14,14 @@ import yaml
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 
-from ..policy import DEFAULT_BEHAVIOUR, DEFAULTS
+from ..policy import DEFAULT_BEHAVIOUR, DEFAULTS, ENTITY_LISTS
 
 #: What the forms edit. Everything else (ha_read_tools, system_actions,
 #: notify_recipients...) is edited in the file itself and never touched here.
 FORM_KEYS = ("settings", "act_enabled", "approval_ttl_minutes", "people", "chats", "allowed_services",
              "owner_only_entities", "excluded_entities", "siren_entity", "siren_auto_off_min",
              "switch_entities", "scene_allowlist", "script_allowlist", "button_allowlist")
-LISTS = ("owner_only_entities", "excluded_entities", "switch_entities", "scene_allowlist",
-         "script_allowlist", "button_allowlist")
+LISTS = tuple(ENTITY_LISTS)     # policy.py's own table, not a copy
 
 
 def _yaml() -> YAML:
