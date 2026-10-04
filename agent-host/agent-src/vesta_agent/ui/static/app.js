@@ -158,9 +158,12 @@ function paged(head, rows, per = 10) {
   const nav = h("div", { class: "pager" });
   const pages = Math.max(1, Math.ceil(rows.length / per));
   let page = 0;
-  const cell = (c, tag) => (c && typeof c === "object" && "v" in c ? h(tag, { class: c.cls }, c.v) : h(tag, {}, c));
+  // each cell carries its column's name: on a phone the row becomes a card, every value labelled (app.css)
+  const label = head.map((c) => String(c && typeof c === "object" && "v" in c ? c.v : c || ""));
+  const cell = (c, tag, i) => (c && typeof c === "object" && "v" in c ? h(tag, { class: c.cls, "data-label": tag === "td" ? label[i] : null }, c.v)
+                                                                      : h(tag, { "data-label": tag === "td" ? label[i] : null }, c));
   const draw = () => {
-    body.replaceChildren(...rows.slice(page * per, page * per + per).map((cells) => h("tr", {}, cells.map((c) => cell(c, "td")))));
+    body.replaceChildren(...rows.slice(page * per, page * per + per).map((cells) => h("tr", {}, cells.map((c, i) => cell(c, "td", i)))));
     nav.replaceChildren(...(pages > 1 ? [
       h("button", { class: "btn ghost", disabled: page === 0, onclick: () => { page--; draw(); } }, "‹ Newer"),
       h("span", { class: "muted" }, `Page ${page + 1} of ${pages} · ${rows.length} rows`),
@@ -168,7 +171,7 @@ function paged(head, rows, per = 10) {
   };
   draw();
   return h("div", {}, h("div", { class: "tbl" }, h("table", { class: "rows data" },
-    h("thead", {}, h("tr", {}, head.map((c) => cell(c, "th")))), body)), nav);
+    h("thead", {}, h("tr", {}, head.map((c, i) => cell(c, "th", i)))), body)), nav);
 }
 
 // an SVG element (the bars of a chart: sizes are attributes, never a style — the page's rule allows no inline style)

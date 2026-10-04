@@ -197,7 +197,7 @@ ul.plain li:last-child { border-bottom: 0; }
    screen). An automatic table sizes a column to its longest unbreakable text, so one long rule ("listed — only
    the devices in the lists below, then approval") widened the whole table and squeezed the service ids to
    "cove". Fixed widths: a long choice ends in "…" inside its own column; on a phone each row stacks below. */
-table.rows { table-layout: fixed; }
+table.rows.edit, table.rows.ai { table-layout: fixed; }   /* NOT the paged data tables: their numbers never wrap */
 table.rows td .dropdown, table.rows td input { width: 100%; min-width: 0; }
 table.rows.ai th:nth-child(2), table.rows.ai th:nth-child(3) { width: 22%; }
 table.rows.ai th:last-child { width: 44px; }
@@ -284,3 +284,15 @@ svg.bars .base { stroke: var(--text-dim); }
 .what-tip b { text-decoration: underline dotted var(--text-dim); text-underline-offset: 3px; }
 .what-tip .what-detail { display: none; font-size: var(--text-xs); margin-top: 2px; }
 .what-tip[aria-expanded="true"] .what-detail { display: block; }
+
+/* A paged data table (app.js paged) on a phone (owner, 2026-10-05: columns overlapped): each row a card,
+   each value on its own line with its column's name; an empty value (a row's last chip column) takes no line. */
+@media (max-width: 600px) {
+  table.data thead { display: none; }
+  table.data, table.data tbody, table.data tr, table.data td { display: block; width: 100%; box-sizing: border-box; }
+  table.data tr { padding: 10px 0; border-bottom: 1px solid var(--hairline); }
+  table.data td { border: 0; padding: 2px 0; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; text-align: right; }
+  table.data td::before { content: attr(data-label); color: var(--text-dim); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .06em; text-align: left; flex: none; }
+  table.data td:empty, table.data td[data-label=""]:empty { display: none; }
+  table.data td[data-label=""]::before { content: none; }
+}

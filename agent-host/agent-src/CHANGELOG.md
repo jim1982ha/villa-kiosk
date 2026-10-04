@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.33 (5 October 2026)
+
+- UI: table-layout: fixed only for the editable tables (.edit, .ai); 0.6.28 had applied it to every table.rows, so the paged data tables overlapped. paged() labels each cell (data-label); on ≤ 600 px a data table is labelled cards. tests/test_ui.py pins it.
+
 ## 0.6.32 (5 October 2026)
 
 - UI, Costs → Every run: app.js runWhat() keeps a run's label in the cell, with the chat and the asked text as its title tooltip and a tap-to-expand detail (no hover on a phone). tests/test_ui.py pins it.

@@ -206,7 +206,7 @@ def test_editable_tables_keep_their_columns_on_a_phone():
     from vesta_agent.ui.server import STATIC
     css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
     js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
-    assert "table.rows { table-layout: fixed; }" in css
+    assert "table.rows.edit, table.rows.ai { table-layout: fixed; }" in css and "table.rows { table-layout" not in css   # never the data tables
     assert js.count("...editTable(") == 2 and not re.search(r"rows\.(svc|people)", css)
     places = set(re.findall(r'phone: "(\w+)"', js))
     assert places and all(f"td.ph-{p_} {{ grid-area:" in css for p_ in places | {"x"}), places
@@ -373,3 +373,13 @@ def test_a_runs_details_are_its_tooltip_not_table_text():
     assert 'title: details.join("\\n")' in what and '"aria-expanded"' in what
     assert ".what-tip .what-detail { display: none;" in css and '.what-tip[aria-expanded="true"] .what-detail { display: block; }' in css
     assert "runWhat(r)," in js and 'class: "muted asked"' not in js
+
+
+def test_a_data_table_becomes_labelled_cards_on_a_phone():
+    # owner, 2026-10-05 (a phone screenshot): Every run's columns overlapped — fixed widths had reached the
+    # paged data tables, whose numbers never wrap
+    from vesta_agent.ui.server import STATIC
+    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
+    css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
+    assert '"data-label": tag === "td" ? label[i] : null' in js
+    assert "table.data td::before { content: attr(data-label);" in css and "table.data thead { display: none; }" in css
