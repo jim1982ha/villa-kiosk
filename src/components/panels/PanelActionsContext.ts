@@ -73,6 +73,13 @@ export interface PanelActions {
    *  reading's own panel (2.496.260). Empty or undefined: nothing listed. */
   readings?: { id: string; label: string; text: string }[];
   onOpenReading?: (entityId: string) => void;
+  /** Where this panel was opened FROM, when that was another window — a
+   *  device's reading opened from the device, a device from a room list, the
+   *  Cockpit, the VESTA Agent or Facility. Drawn as "Back" at the header's
+   *  top right, and Escape / the phone's back gesture take it too; Close still
+   *  closes everything (owner, 2026-10-04: "no way to come back to the main
+   *  device"). Undefined: opened from the map, nothing to go back to. */
+  back?: { label: string; go: () => void };
   /** The open camera's MOTION sensor (EntityMapping.motionEntityId), when one
    *  is configured — camera-only, unlike linkedEntityId above. Read-only: it
    *  reports what HA already knows (and drives the map's detection beam), not

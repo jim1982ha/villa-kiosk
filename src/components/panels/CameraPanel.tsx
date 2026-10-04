@@ -7,7 +7,7 @@
 // camera picker and the status bar.
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { X, VideoOff, Maximize2, Minimize2, ZoomOut, ChevronLeft, ChevronRight, Power, Check, Video } from "lucide-react";
+import { ArrowLeft, X, VideoOff, Maximize2, Minimize2, ZoomOut, ChevronLeft, ChevronRight, Power, Check, Video } from "lucide-react";
 import type { PanelProps } from "@/types/panel.types";
 import { useRailLayout } from "@/utils/railLayout";
 import { linkedSwitchProps, usePanelActions } from "./PanelActionsContext";
@@ -63,7 +63,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // chrome — this panel is the one that doesn't use BasePanel (it's a
   // fullscreen feed, not a modal card), so it reads the identical context and
   // renders the control in its own bottom bar instead of re-deriving anything.
-  const { linked } = usePanelActions();
+  const { linked, back } = usePanelActions();
   // ── The feed ─────────────────────────────────────────────────────────────
   // One player per camera, made in an EFFECT rather than a memo: StrictMode
   // runs effect cleanups once on mount, and a memoised player would be
@@ -110,7 +110,8 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // trap and the chrome/fullscreen logic below cannot drift onto two nodes.
   // useModalA11y registers the Back entry too (see its docstring), so the feed
   // is on the dismissal stack from this one call — no second registration.
-  const rootRef = useModalA11y(onClose);
+  // Back (when it was opened from another window) — as BasePanel does.
+  const rootRef = useModalA11y(back ? back.go : onClose);
   const zoom = useMediaZoom<HTMLDivElement>();
   const [isFs, setIsFs] = useState(false);
   // The status/controls row now OVERLAYS the feed and auto-hides (see
@@ -716,6 +717,12 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
               style={vOrder(2)}
             >
               {isFs ? <Minimize2 /> : <Maximize2 />}
+            </button>
+          )}
+          {back && (
+            <button className="icon-btn" onClick={back.go} title={`Back to ${back.label}`}
+              aria-label={`Back to ${back.label}`} style={vOrder(1)}>
+              <ArrowLeft />
             </button>
           )}
           <button className="icon-btn close" onClick={onClose} style={vOrder(1)}>

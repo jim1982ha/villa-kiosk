@@ -22,6 +22,15 @@ export type Surface = "rooms" | "cockpit" | "facility" | "agent" | "settings" | 
 
 export type Surfaces = Readonly<Record<Surface, boolean>>;
 
+/** What a window is called on a "Back to …" button. */
+export const SURFACE_LABEL: Readonly<Record<Surface, string>> = {
+  rooms: "Rooms", cockpit: "Cockpit", facility: "Facility", agent: "VESTA Agent", settings: "Settings",
+  configEditor: "Advanced Settings",
+};
+
+/** One step back from a panel opened from another window (PanelActions.back). */
+export interface CameFrom { label: string; go: () => void }
+
 export const NO_SURFACES: Surfaces = {
   rooms: false, cockpit: false, facility: false, agent: false, settings: false, configEditor: false,
 };

@@ -12,6 +12,15 @@
    title row's device-specific parts are here. */
 .modal-header .title { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1 1 auto; }
 .modal-header-actions { flex: 0 0 auto; }
+/* "Back" — the panel was opened from another window (a device's reading, a room
+   list, the Cockpit…). Top right of the header, beside any header actions; a
+   quiet pill so it reads as navigation, not as the panel's primary action. */
+.modal-header-actions { display: flex; align-items: center; gap: 8px; }
+.panel-back {
+  display: inline-flex; align-items: center; gap: 2px;
+  min-height: 36px; padding: 0 12px 0 6px;
+  font-size: var(--text-sm); font-weight: 600; white-space: nowrap;
+}
 /* A device name is unbounded: single line, truncated with an ellipsis. Same
    size and weight as every modal title (.modal h2). */
 .modal-header .title h2 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }

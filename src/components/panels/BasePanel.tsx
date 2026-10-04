@@ -12,7 +12,7 @@
 // for room.
 
 import { useState, type ReactNode } from "react";
-import { ChevronRight, Wrench } from "lucide-react";
+import { ChevronLeft, ChevronRight, Wrench } from "lucide-react";
 import { linkedSwitchProps, usePanelActions } from "./PanelActionsContext";
 import { badgeImage } from "@/babylon/badgeIcons";
 import { useModalA11y } from "@/hooks/useModalA11y";
@@ -58,7 +58,7 @@ interface Props {
 }
 
 export default function BasePanel({ title, entityId, icon, className, headerActions, footerLeading, history, deviceReadings, onClose, children }: Props) {
-  const { onEdit, onReportFault, badge, onSetBadgeColor, linked, motion, readings, onOpenReading } = usePanelActions();
+  const { onEdit, onReportFault, badge, onSetBadgeColor, linked, motion, readings, onOpenReading, back } = usePanelActions();
   const { resolvedRooms } = useConfig();
   const room = entityId ? resolvedRooms[entityId] : undefined;
   const [colorOpen, setColorOpen] = useState(false);
@@ -67,7 +67,9 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
   // panels sits the live villa canvas and HUD, so a Tab out of an open panel
   // used to walk straight into controls the user couldn't see behind the
   // scrim.
-  const dialogRef = useModalA11y(onClose);
+  // With somewhere to go back to, Escape and the phone's back gesture go back
+  // (one step), as the Back button does; Close and a tap outside close.
+  const dialogRef = useModalA11y(back ? back.go : onClose);
   // The header badge is a PNG baked from the theme's tokens and the tint below
   // is composited in JS, so neither re-themes through the cascade — a panel
   // left open across a dusk theme flip would keep its old-theme colours.
@@ -137,7 +139,17 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
               {room && <div className="room">{room}</div>}
             </div>
           </div>
-          {headerActions && <div className="modal-header-actions">{headerActions}</div>}
+          {(headerActions || back) && (
+            <div className="modal-header-actions">
+              {headerActions}
+              {back && (
+                <button type="button" className="btn panel-back" onClick={back.go}
+                  title={`Back to ${back.label}`} aria-label={`Back to ${back.label}`}>
+                  <ChevronLeft size={18} aria-hidden /> Back
+                </button>
+              )}
+            </div>
+          )}
         </div>
         <div className="modal-body">
           {/* The device's linked entity, if one is configured (Advanced

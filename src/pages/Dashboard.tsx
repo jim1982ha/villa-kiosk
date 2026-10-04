@@ -38,7 +38,7 @@ import { displayLabelFor, resolveRooms, labelOf } from "@/config/EntityMap";
 import { deriveHaScenes, scenesForRoom } from "@/config/haScenes";
 import { effectiveCategory, subjectOf, categoryColor, CATEGORY_ICONS, CATEGORY_LABELS } from "@/config/EntityCategories";
 import { deviceLook, storeLookSource } from "@/utils/deviceActivity";
-import { NO_SURFACES, chipRooms, shown as surfaceShown, mergeTeleportPoints, roomChoicesFor, surfacesReducer, type Surface } from "./surfaces";
+import { NO_SURFACES, SURFACE_LABEL, chipRooms, shown as surfaceShown, type CameFrom, mergeTeleportPoints, roomChoicesFor, surfacesReducer, type Surface } from "./surfaces";
 import CockpitModal from "@/components/cockpit/CockpitModal";
 import { isMotionSensor } from "@/config/BinarySensorClasses";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
@@ -87,6 +87,12 @@ export default function Dashboard() {
 
   const [manager, setManager] = useState<SceneManager | null>(null);
   const [activePanel, setActivePanel] = useState<ActivePanel | null>(null);
+  // Where the open panel was opened FROM, innermost last — its "Back" (owner,
+  // 2026-10-04): a reading from its device, a device from a room or category
+  // list, the Cockpit, the VESTA Agent, Facility. Every fresh open from the
+  // map or the bottom bar empties it; Close empties it.
+  const [cameFrom, setCameFrom] = useState<CameFrom[]>([]);
+  const closePanel = useCallback(() => { setActivePanel(null); setCameFrom([]); }, []);
   // True only for a profile with viewAgent AND a configured agent — see
   // AgentProvider. Nothing about the agent renders otherwise (PLAN A8).
   const { visible: agentVisible } = useAgent();
@@ -295,6 +301,7 @@ export default function Dashboard() {
       }
 
       // Rich entities (sliders, streams, info) open their control panel as before.
+      setCameFrom([]);
       setActivePanel({ entityId, mapping });
     },
     [config.entityMap, entities, ws, role, spawnRipple],
@@ -325,6 +332,7 @@ export default function Dashboard() {
       // distinct quick action, so tap and long-press already land on the same
       // panel with no flag needed — see ActivePanel's docstring for the full
       // reasoning.
+      setCameFrom([]);
       setActivePanel({ entityId, mapping, detail: mapping.type === "camera" });
     },
     // `entities` is read (the category — and so the permission — can depend
@@ -400,8 +408,25 @@ export default function Dashboard() {
    *  (the Cockpit, the VESTA Agent and Facility all do this). */
   const handOver = useCallback((from: Surface, entityId: string) => {
     closeSurface(from);
+    setCameFrom([{ label: SURFACE_LABEL[from], go: () => { closePanel(); openSurface(from); } }]);
     openDevicePanel(entityId);
-  }, [closeSurface, openDevicePanel]);
+  }, [closeSurface, openDevicePanel, closePanel, openSurface]);
+  /** A device's reading, opened from the device's panel: Back returns to it. */
+  const openReading = useCallback((entityId: string) => {
+    const parent = activePanel;
+    if (parent) {
+      setCameFrom((st) => [...st, {
+        label: labelOf(parent.entityId, config.entityMap, entities),
+        go: () => { setCameFrom((s2) => s2.slice(0, -1)); setActivePanel(parent); },
+      }]);
+    }
+    openEntityPanel(entityId);
+  }, [activePanel, config.entityMap, entities, openEntityPanel]);
+  /** A device opened from a room or category list: Back reopens the list. */
+  const openFromList = useCallback((entityId: string, label: string, reopen: () => void) => {
+    setCameFrom([{ label, go: () => { closePanel(); reopen(); } }]);
+    openEntityPanel(entityId);
+  }, [closePanel, openEntityPanel]);
   const panelReadings = activePanel
     ? identity.readingsOf(activePanel.entityId).map((id) => ({
         id,
@@ -784,7 +809,7 @@ export default function Dashboard() {
           auto-derived from live entities. Centred so it sits between the
           bottom bar's corner controls (view toggle / joystick). */}
       <SummaryBar
-        onOpenEntity={openDevicePanel}
+        onOpenEntity={(id) => { setCameFrom([]); openDevicePanel(id); }}
         scenes={haScenes}
       />
 
@@ -802,11 +827,12 @@ export default function Dashboard() {
           value={{
             entityId: activePanel.entityId,
             readings: panelReadings,
-            onOpenReading: openEntityPanel,
+            onOpenReading: openReading,
+            back: cameFrom.length > 0 ? cameFrom[cameFrom.length - 1] : undefined,
             // Owner-only: jump straight to this device's row in Advanced Settings.
             onEdit: canEditConfig
               ? () => {
-                  setActivePanel(null);
+                  closePanel();
                   setConfigEditorFocus(activePanel.entityId);
                   openSurface("configEditor");
                 }
@@ -820,7 +846,7 @@ export default function Dashboard() {
             // the destination differs only by what the profile can act on.
             onReportFault: canReportFault
               ? () => {
-                  setActivePanel(null);
+                  closePanel();
                   if (doors.facility) {
                     setFaultForEntity(activePanel.entityId);
                     openSurface("facility");
@@ -901,7 +927,7 @@ export default function Dashboard() {
         >
           <PanelRouter
             active={activePanel}
-            onClose={() => setActivePanel(null)}
+            onClose={closePanel}
             pinContinuous={pinContinuous}
             onOpenEntity={openEntityPanel}
           />
@@ -938,7 +964,11 @@ export default function Dashboard() {
           group={{ title: clusterGroup.room, icon: Layers, entityIds: clusterGroup.entityIds }}
           canControl={canControl}
           onClose={() => setClusterGroup(null)}
-          onOpenEntity={(id) => { setClusterGroup(null); openEntityPanel(id); }}
+          onOpenEntity={(id) => {
+            const g = clusterGroup;
+            setClusterGroup(null);
+            openFromList(id, g.room, () => setClusterGroup(g));
+          }}
           roomScenes={scenesForRoom(haScenes, clusterGroup.room)}
           // Same rule as the category browse (Dashboard.tsx's categoryGroup,
           // below) and for the same reason: every id in clusterGroup.entityIds
@@ -957,7 +987,11 @@ export default function Dashboard() {
           group={{ title: CATEGORY_LABELS[categoryGroup], icon: CATEGORY_ICONS[categoryGroup], entityIds: categoryGroupEntityIds }}
           canControl={canControl}
           onClose={() => setCategoryGroup(null)}
-          onOpenEntity={(id) => { setCategoryGroup(null); openEntityPanel(id); }}
+          onOpenEntity={(id) => {
+            const c = categoryGroup;
+            setCategoryGroup(null);
+            openFromList(id, CATEGORY_LABELS[c], () => setCategoryGroup(c));
+          }}
           // categoryGroupEntityIds has ALREADY applied the precise
           // suppressed/diagnostic filtering (mapped-on-the-map entities kept,
           // orphan diagnostic sensors dropped) — this modal's own blanket

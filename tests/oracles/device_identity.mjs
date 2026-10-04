@@ -61,14 +61,16 @@ console.log("\n  the callers:");
 const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
 const d = src("pages/Dashboard.tsx"), router = src("components/panels/PanelRouter.tsx"), base = src("components/panels/BasePanel.tsx");
 ck("the Cockpit, the summary bar, the Agent and Facility open the DEVICE",
-   (d.match(/onOpenEntity=\{openDevicePanel\}/g) ?? []).length === 1
-   && /const handOver = useCallback\(\(from: Surface, entityId: string\) => \{\s*closeSurface\(from\);\s*openDevicePanel\(entityId\);/.test(d)
+   /onOpenEntity=\{\(id\) => \{ setCameFrom\(\[\]\); openDevicePanel\(id\); \}\}/.test(d)
+   && /const handOver = useCallback\(\(from: Surface, entityId: string\) => \{[\s\S]*?openDevicePanel\(entityId\);/.test(d)
    && ["cockpit", "agent", "facility"].every((w) => d.includes(`onOpenEntity={(id) => handOver("${w}", id)}`))
    && /openEntityPanel\(identity\.deviceOf\(entityId\)\)/.test(d));
 ck("  ...a list row and the camera's next/prev open exactly the entity they name",
-   /setClusterGroup\(null\); openEntityPanel\(id\)/.test(d) && /setCategoryGroup\(null\); openEntityPanel\(id\)/.test(d));
+   // 2.496.270: through openFromList, which records the list for Back and opens exactly the entity
+   /setClusterGroup\(null\);\s*openFromList\(id, /.test(d) && /setCategoryGroup\(null\);\s*openFromList\(id, /.test(d)
+   && /const openFromList = useCallback\([\s\S]*?openEntityPanel\(entityId\);/.test(d));
 ck("the open panel lists its device's readings, each opening its own panel",
-   /identity\.readingsOf\(activePanel\.entityId\)/.test(d) && /readings: panelReadings,/.test(d) && /onOpenReading: openEntityPanel,/.test(d)
+   /identity\.readingsOf\(activePanel\.entityId\)/.test(d) && /readings: panelReadings,/.test(d) && /onOpenReading: openReading,/.test(d) && /const openReading = useCallback\([\s\S]*?openEntityPanel\(entityId\);/.test(d)
    && /readings\.map\(\(r\) =>/.test(base) && /onOpenReading\(r\.id\)/.test(base));
 ck("grouping never trades controls for a summary: only a READING-led group opens the combined view",
    /if \(group && \(mapping\.type === "sensor" \|\| mapping\.type === "binary_sensor"\)\)/.test(router)

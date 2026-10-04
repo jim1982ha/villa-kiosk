@@ -1,3 +1,8 @@
+## 2.496.270
+
+### Added
+- **A "Back" button on any window opened from another one.** Opening a reading from "Also on this device" used to replace the device's window, and the only way out was Close, back to the map. Now a "‹ Back" button at the top right returns to where you came from: the device a reading belongs to, the room or category list a device was picked from, or the Cockpit, the VESTA Agent or Facility. The phone's back gesture and the Escape key do the same. Close still closes everything. A window opened straight from the map or the bottom bar has no Back button, since there is nothing to go back to.
+
 ## 2.496.269
 
 ### Changed
