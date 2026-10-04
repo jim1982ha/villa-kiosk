@@ -1,3 +1,8 @@
+## 0.12.38
+
+### Fixed
+- **A long job no longer pauses the alert chase.** The scheduled jobs ran one after another, so while the 02:00 maintenance check worked (up to 30 minutes), or a morning AI report ran, the every-5-minute alert chase and the "villa silent" watch did not run at all. A real alert in that window was not followed up until the job finished. Every job now runs alongside the others: the chase keeps its 5-minute rhythm, a job still running is never started twice, and the night's checks still wait for the knowledge pack to be rebuilt first.
+
 ## 0.12.37
 
 ### Fixed

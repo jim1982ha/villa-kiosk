@@ -53,18 +53,23 @@ def test_the_schedule_comes_from_the_skills_and_runs_once_per_slot(tmp_path):
 
     async def go():
         await sch.tick(at(1, 35))
+        await sch.idle()
         assert packs == [1]                                              # the engine's own 01:30 job
         await sch.tick(at(2, 1))
+        await sch.idle()
         assert ("preventive-maintenance", "nightly.py --out nightly.json") in code
         assert ("alert-desk", "desk.py tick") in code
         n = len(code)
         await sch.tick(at(2, 2))                                         # same slot: not again
+        await sch.idle()
         assert [c for c in code[n:] if c[0] == "preventive-maintenance"] == []
         await sch.tick(at(7, 3))
+        await sch.idle()
         assert model == ["reports:07:00"]
         import shutil
         shutil.rmtree(os.path.join(s.skills_dir, "reports"))            # a deleted skill's schedule stops
         await sch.tick(at(7, 4, day=2))
+        await sch.idle()
         assert model == ["reports:07:00"]
     asyncio.run(go())
 
@@ -120,3 +125,36 @@ def test_sigterm_while_running_stops_within_the_grace(tmp_path):
     code, took, out = _stop_time(env, 6)
     assert "Stopped" in out and code == 0 and took < 20, out
     assert "ha-TEST-000000000000" not in out and "sk-ant-TEST" not in out
+
+
+def test_a_long_job_never_holds_the_alert_chase(tmp_path):
+    # round 3 (0.12.38): the tick awaited each job, so the 02:00 nightly check (30 min allowed) stopped the
+    # alert chase — every_5_min did not run until it finished
+    s = settings(str(tmp_path))
+    copy_skill("preventive-maintenance", s.skills_dir)
+    copy_skill("alert-desk", s.skills_dir)
+    chase, nightly_done = [], asyncio.Event()
+
+    async def run_code(skill, command, timeout):
+        if skill.name == "preventive-maintenance":
+            await nightly_done.wait()                    # the nightly check takes its time
+        else:
+            chase.append(command)
+
+    async def nothing(*a):
+        return None
+
+    sch = Scheduler(s, Skills(s.skills_dir), State(s.state_path), run_code, nothing, nothing)
+
+    async def go():
+        await asyncio.wait_for(sch.tick(at(2, 1)), 1)     # the tick returns at once, the check still running
+        await asyncio.sleep(0)
+        n = len(chase)
+        await asyncio.wait_for(sch.tick(at(2, 7)), 1)     # five minutes on: the chase runs again
+        await asyncio.sleep(0)
+        assert len(chase) == n + 1
+        started = await sch.tick(at(2, 13))
+        assert "preventive-maintenance:02:00" not in started          # still running: never twice
+        nightly_done.set()
+        await sch.idle()
+    asyncio.run(go())

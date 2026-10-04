@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.37 (5 October 2026)
+
+- Architecture review round 3:
+  - Scheduler.tick starts every job as a task (_start, keyed; a job still running is not restarted; a scheduled job awaits a running pack rebuild) instead of awaiting each in turn. The nightly check, up to 1,800 s, held every_5_min (the alert chase) and could let other slots' windows close. Scheduler.idle() for tests and a clean stop. Test test_a_long_job_never_holds_the_alert_chase, mutation-checked.
+  - outcome.CARRIED_KEYS / has_work(): the keys carry_out reads, used by run_skill_script, which kept its own copy. A drift test reads carry_out's source.
+
 ## 0.6.36 (5 October 2026)
 
 - Architecture review round 2: Policy and problems() read values through shared readers (read_bool, read_int_in, _id): the agent uses the default exactly when problems() names the value. Fixes `act_enabled: "false"` read as True, a non-numeric chat id crashing Policy(), and a negative person id registered. Also: State.use_continuation(by=) refuses (without using it) a Continue pressed by someone other than requested_by, which was written and never read. tests/test_policy_agreement.py (29 cases), each fix mutation-checked.

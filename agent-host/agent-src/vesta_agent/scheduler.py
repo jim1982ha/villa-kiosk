@@ -10,6 +10,13 @@ counts at once) and starts:
 
 A slot is run once: its time is written in the state database before it starts,
 so a restart inside the slot's 30-minute window does not run it twice.
+
+⚠️ EVERY JOB RUNS BESIDE THE TICK, NEVER INSIDE IT (architecture review, 0.12.38). The tick
+awaited each job in turn, so the 02:00 nightly check (allowed 30 minutes) or a 07:00 AI job
+held the whole scheduler: the alert chase (every_5_min) did not run while it worked, and a
+slot whose window closed meanwhile was lost. Each job is now a task the tick starts and
+leaves; a job still running is not started again; a scheduled job waits for a pack rebuild
+still in progress, so the night's checks never read a half-built pack.
 """
 
 from __future__ import annotations
@@ -70,6 +77,34 @@ class Scheduler:
         self.rebuild_pack = rebuild_pack    # async () -> None
         self.housekeeping = housekeeping    # async () -> None, every tick
         self._last_every: datetime | None = None
+        self._running: dict[str, asyncio.Task] = {}     # job key → its task, while it runs
+
+    def _start(self, key: str, make) -> bool:
+        """Start `make()` as a task unless the same job is still running. True if started."""
+        t = self._running.get(key)
+        if t is not None and not t.done():
+            log.info("%s is still running: not started again", key)
+            return False
+        task = asyncio.create_task(self._guard(key, make))
+        self._running[key] = task
+        return True
+
+    async def _guard(self, key: str, make) -> None:
+        try:
+            await make()
+        except Exception:  # noqa: BLE001 — one job's failure never stops the others
+            log.exception("%s failed", key)
+
+    async def _after_pack(self) -> None:
+        """A scheduled job's first step: the pack rebuild, if one is running, finishes first."""
+        t = self._running.get("engine:pack")
+        if t is not None and not t.done():
+            await asyncio.shield(t)
+
+    async def idle(self) -> None:
+        """Every job started so far, finished (the tests and a clean stop)."""
+        while any(not t.done() for t in self._running.values()):
+            await asyncio.gather(*[t for t in self._running.values() if not t.done()], return_exceptions=True)
 
     def _claim(self, job: str, slot: datetime) -> bool:
         return self.state.claim_job_slot(job, slot.isoformat())
@@ -82,12 +117,11 @@ class Scheduler:
         if self._last_every is None or now - self._last_every >= EVERY:
             self._last_every = now
             for sk in skills.values():
-                if sk.every_5_min:
-                    await self.run_code(sk, sk.every_5_min, 300)
+                if sk.every_5_min and self._start(f"{sk.name}:every_5_min",
+                                                  lambda sk=sk: self.run_code(sk, sk.every_5_min, 300)):
                     started.append(f"{sk.name}:every_5_min")
         slot = slot_for(PACK_AT, now)
-        if slot and self._claim("engine:pack", slot):
-            await self.rebuild_pack()
+        if slot and self._claim("engine:pack", slot) and self._start("engine:pack", self.rebuild_pack):
             started.append("engine:pack")
         for sk in skills.values():
             for i, job in enumerate(sk.schedule):
@@ -95,11 +129,15 @@ class Scheduler:
                 if not slot or not self._claim(f"{sk.name}:{i}:{job['when']}", slot):
                     continue
                 name = f"{sk.name}:{job['when']}"
-                if job.get("run"):
-                    await self.run_code(sk, job["run"], job["timeout"])
-                else:
-                    await self.run_model(sk, job)
-                started.append(name)
+
+                async def run(sk=sk, job=job):
+                    await self._after_pack()
+                    if job.get("run"):
+                        await self.run_code(sk, job["run"], job["timeout"])
+                    else:
+                        await self.run_model(sk, job)
+                if self._start(name, run):
+                    started.append(name)
         if self.housekeeping:
             await self.housekeeping()
         return started

@@ -49,3 +49,20 @@ def test_only_the_person_who_asked_can_continue_an_answer(tmp_path):
     assert st.use_continuation(cid, -100, by=11) is None                         # used once
     legacy = st.new_continuation(-100, "sess-2", requested_by=None)
     assert st.use_continuation(legacy, -100, by=22)["session_id"] == "sess-2"     # an old one with no asker: as before
+
+
+def test_the_tool_carries_out_what_carry_out_reads():
+    # round 3 (0.12.38): run_skill_script kept its own copy of the keys — a fifth would have been carried out
+    # on schedule and skipped when the model ran the same script
+    import re
+    from vesta_agent import outcome
+    from vesta_agent.outcome import CARRIED_KEYS, has_work
+    src = open(outcome.__file__, encoding="utf-8").read()
+    body = src[src.index("async def carry_out"):]
+    body = body[:body.index("\n    async def ", 10)] if "\n    async def " in body[10:] else body
+    read = set(re.findall(r'res\.get\("(\w+)"\)', body))
+    # incident_id only qualifies a message being sent (its buttons' incident): alone it carries nothing out
+    assert read - {"incident_id"} == set(CARRIED_KEYS), read
+    assert has_work({"settle": [1]}) and not has_work({"notes": "x"}) and not has_work(None)
+    tools = open(outcome.__file__.replace("outcome.py", "tools.py"), encoding="utf-8").read()
+    assert "if has_work(res):" in tools and 'res.get("siren_gate") or res.get("settle")' not in tools

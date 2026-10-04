@@ -51,6 +51,17 @@ def ticket_title(s: str) -> str:
     return re.sub(r"^[^\w(\"']+", "", clean_summary(s)).strip()
 
 
+#: What a script result can ask the engine to carry out — the keys carry_out reads. ⚠️ ONE LIST
+#: (architecture review, 0.12.38): the model's run_skill_script tool kept its own copy, so a key added here
+#: would be carried out on schedule and silently skipped when the model ran the same script.
+CARRIED_KEYS = ("send", "actions", "siren_gate", "settle")
+
+
+def has_work(res) -> bool:
+    """Whether a script's result asks for anything carry_out does."""
+    return isinstance(res, dict) and any(res.get(k) for k in CARRIED_KEYS)
+
+
 class Outcome:
     def __init__(self, *, policy: Callable, state, store_path: str, timezone: str, send: Callable[..., Awaitable],
                  out_dir: str = "",

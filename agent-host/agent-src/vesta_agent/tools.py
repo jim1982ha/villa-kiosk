@@ -32,6 +32,7 @@ from claude_agent_sdk import create_sdk_mcp_server, tool
 from . import __version__, status
 from .policy import Person, Policy
 from .routing import JOB, Origin, Routing
+from .outcome import has_work
 from .runner import WEB_SEARCH
 from .skills import FILE_NAME, Skills, ToolError, run_script, validate_script_args
 
@@ -340,7 +341,7 @@ class Toolbox:
                     res = json.loads(out or "{}")
                 except ValueError:
                     res = None
-                if isinstance(res, dict) and (res.get("send") or res.get("actions") or res.get("siren_gate") or res.get("settle")):
+                if has_work(res):                                   # outcome.CARRIED_KEYS: carry_out's own list
                     done = await self.carry_out(res, sk, origin)
                     out = (f"[Carried out by the VESTA Agent: {done['sent']} message(s) sent, {done['tickets']} ticket(s) "
                            f"created, {done['resolved']} closed. Do not send or create them again.]\n") + out
