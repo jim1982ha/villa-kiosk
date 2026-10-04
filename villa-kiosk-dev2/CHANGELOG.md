@@ -1,3 +1,12 @@
+## 2.496.274
+
+### Changed
+- **The Cockpit's "Report" tab is now "Recap".** "Report" now means only what the VESTA Agent sends you. The tab's buttons read **Generate recap** and **Save recap**, and the document is titled "operations recap". Recaps you saved before still appear in the list.
+
+### Fixed
+- **Opening a device you're not allowed to see no longer closes the window you were in.** Before, tapping such a device in the Cockpit or the VESTA Agent closed that window and opened nothing. Now nothing happens, and you stay where you were.
+- **"‹ Back" always leads somewhere.** Opening a reading that couldn't be shown used to leave a Back button pointing at the device you were already looking at.
+
 ## 2.496.273
 
 ### Changed
