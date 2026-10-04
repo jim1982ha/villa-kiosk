@@ -1,3 +1,8 @@
+## 2.496.288
+
+### Changed
+- Behind the scenes: the checks run before each release are faster (about 108 s down to about 60 s): the code tests run side by side instead of one after another, the slowest test no longer redoes its work, and the type check reuses its last run. Nothing in the app changes.
+
 ## 2.496.287
 
 ### Changed

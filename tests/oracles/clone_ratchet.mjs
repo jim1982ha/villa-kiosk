@@ -38,10 +38,14 @@ const docs = files.map((f) => {
   // Comments out, LINE BREAKS KEPT — so the line numbers --list prints are the file's.
   const text = readFileSync(f, "utf8").replace(/\/\*[\s\S]*?\*\//g, (c) => c.replace(/[^\n]/g, " ")).replace(/(^|[^:"'`\\])\/\/.*$/gm, "$1");
   const toks = [], lines = [];
+  // The line number by a running count: re-splitting the file up to every
+  // token was quadratic — 9 s of the 74 s oracle run (2026-10-05).
+  let line = 1, at = 0;
   for (const m of text.matchAll(TOKEN)) {
     if (!ids.has(m[0])) ids.set(m[0], ids.size + 1);
     toks.push(ids.get(m[0]));
-    lines.push(text.slice(0, m.index).split("\n").length);
+    for (let nl = text.indexOf("\n", at); nl !== -1 && nl < m.index; nl = text.indexOf("\n", nl + 1)) { line++; at = nl + 1; }
+    lines.push(line);
   }
   return { f: relative(ROOT, f), toks, lines, dup: new Uint8Array(toks.length) };
 });
