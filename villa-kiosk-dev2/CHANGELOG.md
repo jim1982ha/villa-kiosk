@@ -1,3 +1,8 @@
+## 2.496.272
+
+### Changed
+- **The category buttons in the top bar are coloured like the Cockpit's category tiles.** Each category shown on the map now has its own colour (comfort orange, light amber, network green, energy blue, access purple, others grey), instead of the same green for all of them. A category you hide turns neutral and dimmed. Both places use the same colouring code, so they can no longer drift apart.
+
 ## 2.496.271
 
 ### Changed
