@@ -1,3 +1,8 @@
+## 0.12.33
+
+### Changed
+- **"Every run" on the Costs page shows one line per run.** The table now shows only what each run was ("fm-weekly", "Reply to …"). Where a reply came from and what was asked are in a tooltip: hover a dotted-underlined name, or tap it on a phone to show the details under it.
+
 ## 0.12.32
 
 ### Fixed
