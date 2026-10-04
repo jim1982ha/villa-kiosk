@@ -22,8 +22,8 @@ and their check by the " Check: " their text was written with — in this module
 from __future__ import annotations
 
 import json
-import re
 
+from .messaging import no_code as _no_code
 from .store import Store
 
 DONE = "done"                          # a person answered Done (a button, or "#N done")
@@ -33,11 +33,6 @@ STATUSES = (DONE, CLEARED, CLOSED_IN_KIOSK)
 
 _LEGACY_CHECK = " Check: "
 _ORDER = {"P1": 0, "P2": 1, "P3": 2, "P4": 3}
-
-
-def _no_code(s: str) -> str:
-    """No rule code in what a person reads ("[PM-02] Pump ..." -> "Pump ...")."""
-    return re.sub(r"^\s*\[[^\]]{2,80}\]\s*", "", s or "").strip()
 
 
 class Problems:

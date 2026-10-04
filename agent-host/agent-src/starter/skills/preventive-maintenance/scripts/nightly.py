@@ -34,6 +34,7 @@ sys.path.insert(0, HERE)
 
 from vesta_shared.ha_client import client_from_args  # noqa: E402
 from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
+from vesta_shared.messaging import no_code as _no_code  # noqa: E402
 from vesta_shared.params import VillaParams, MissingParameter  # noqa: E402
 from vesta_shared.store import Store  # noqa: E402
 from vesta_shared.problems import Problems  # noqa: E402  (a problem's lifecycle: one owner)
@@ -187,7 +188,7 @@ def run(args) -> dict:
             # ⚠️ "unknown" IS NOT OFFLINE (villa, 2026-10-04): it is a sensor with no value to give — a
             # wind chill on a warm day — while its device reports. Lost is "unavailable".
             if st.get("state") == "unavailable":
-                key = row.get("device_id") or f"{row.get('platform') or 'x'}:{row['asset']}"
+                key = F.device_key(row, row["entity_id"])
                 g = unavailable_groups.setdefault(key, {"asset": asset, "entity_id": row["entity_id"], "hours": hours,
                                                         "state": st.get("state"), "names": [], "critical": asset.get("critical", False),
                                                         "platform": row.get("platform") or "x"})
@@ -220,13 +221,13 @@ def run(args) -> dict:
             share, hours = F.reporting_share(q_stats.get(row["entity_id"], []), int(since.timestamp() * 1000), hist_hours)
             if share is None or hours < 48 or share < share_min:
                 continue                  # reports on change only, or too little history to say: not a fault
-            key = row.get("device_id") or f"{row.get('platform') or 'x'}:{row['asset']}"
+            key = F.device_key(row, row["entity_id"])
             g = silent_groups.setdefault(key, {"asset": asset, "entity_id": row["entity_id"], "since": since, "names": []})
             g["names"].append(row["name"])
             g["since"] = min(g["since"], since)
         for g in silent_groups.values():
             a = dict(g["asset"])
-            a["name"] = g["names"][0] + (f" (+{len(g['names']) - 1} entities of the same device)" if len(g["names"]) > 1 else "")
+            a["name"] = F.device_name(g["names"])
             findings += R.silence_rules(a, g["entity_id"], (now_ref - g["since"]).total_seconds() / 3600, params)
 
     # three or more devices of one integration offline together = the integration is down, one finding
@@ -245,7 +246,7 @@ def run(args) -> dict:
     for key, g in unavailable_groups.items():
         a = dict(g["asset"]); a["critical"] = g["critical"]
         if len(g["names"]) > 1 and not a["slug"].startswith("integration_"):
-            a["name"] = f"{g['names'][0]} (+{len(g['names']) - 1} entities of the same device)"
+            a["name"] = F.device_name(g["names"])
         findings += R.availability_rules(a, g["entity_id"], g["state"], g["hours"], params)
 
     level_rows = [r for r in pack.entities("level")
@@ -270,7 +271,7 @@ def run(args) -> dict:
     for eid, per_day in flips.items():
         row = rows_by_eid.get(eid, {})
         slug = row.get("asset") or next((s for s, a in pack.assets.items() if eid in a["entities"].values()), None)
-        key = row.get("device_id") or slug or eid
+        key = F.device_key({**row, "asset": row.get("asset") or slug}, eid)
         g = by_device.setdefault(key, {"eid": eid, "slug": slug, "name": row.get("name"), "per_day": {}})
         for d, n in per_day.items():
             g["per_day"][d] = max(g["per_day"].get(d, 0), n)      # the device's drops, not the sum of its entities'
@@ -304,19 +305,18 @@ def run(args) -> dict:
         else:
             still_open.append(d)
             # a finding that worsens by 15 points earns a digest line again
-            if f.detail.get("change_pct") is not None and abs(f.detail["change_pct"]) - abs(f.detail.get("last_reported_pct") or 0) >= 15:
+            if F.worsened(f.detail.get("change_pct"), f.detail.get("last_reported_pct")):
                 d["worsened"] = True
                 f.detail["last_reported_pct"] = f.detail.get("change_pct")
                 store.db.execute("UPDATE findings SET detail=? WHERE id=?", (json.dumps(f.detail), fid)); store.db.commit()
     problems = Problems(store)
     resolved_tasks = []
-    for o in store.findings(status="open"):
-        if o["rule_id"] in STATE_RULES and (o["rule_id"], o["entity_id"]) not in fired:
-            store.close_finding(o["rule_id"], o["entity_id"], today.isoformat())
-            closed.append(o)
-            # ⚠️ ITS TASK AND ITS KIOSK TICKET CLOSE WITH IT (villa, 2026-10-01): the finding closed, the
-            # ticket stayed "Open fault" for ever, and the Kiosk's Cockpit filled with faults long gone
-            resolved_tasks += problems.clear_source("finding", o["id"], o["rule_id"], o["entity_id"])
+    for o in F.to_close(store.findings(status="open"), fired, STATE_RULES):
+        store.close_finding(o["rule_id"], o["entity_id"], today.isoformat())
+        closed.append(o)
+        # ⚠️ ITS TASK AND ITS KIOSK TICKET CLOSE WITH IT (villa, 2026-10-01): the finding closed, the
+        # ticket stayed "Open fault" for ever, and the Kiosk's Cockpit filled with faults long gone
+        resolved_tasks += problems.clear_source("finding", o["id"], o["rule_id"], o["entity_id"])
 
     # ---- tasks for the FM (P2 and P3 new findings) --------------------------------
     tasks = []
@@ -344,12 +344,6 @@ def run(args) -> dict:
 def _plain_name(entity_id: str) -> str:
     """An entity id as words when nothing names it better (sensor.pool_relay_uptime -> "Pool relay uptime")."""
     return entity_id.split(".", 1)[-1].replace("_", " ").strip().capitalize()
-
-
-def _no_code(s: str) -> str:
-    """No rule code in what a person reads ("[PM-02] Pump ..." -> "Pump ...")."""
-    import re
-    return re.sub(r"^\s*\[[^\]]{2,80}\]\s*", "", s or "").strip()
 
 
 def main(argv=None):

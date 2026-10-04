@@ -52,21 +52,16 @@ TPL = Environment(loader=FileSystemLoader(os.path.join(HERE, "..", "templates"))
 NUM = re.compile(r"(?<![\w.])-?\d{1,3}(?:,\d{3})+(?:\.\d+)?|(?<![\w.])-?\d+(?:\.\d+)?")
 
 
-def _grouped(lines: list[tuple[str, str, str]], group_from: int, words: dict) -> list[str]:
-    """(kind, severity, text) -> chat lines: a kind with at least `group_from` items and a group line in
-    reports.yaml (todo_groups) is ONE line naming its members, the way the weekly page groups them."""
-    kinds: dict[str, list[tuple[str, str]]] = {}
-    for kind, sev, text in lines:
-        kinds.setdefault(kind, []).append((sev, text))
+def _grouped(items: list[dict], group_from: int, words: dict) -> list[str]:
+    """Items ({kind, severity, subject, title}) -> chat lines, grouped the way the weekly page groups them
+    (facts.group_kinds: one grouping for both)."""
+    from facts import group_kinds
     out = []
-    for kind, items in kinds.items():
-        title = words.get(kind)
-        if len(items) >= group_from and title:
-            names = [t.split(" has ")[0].split(" dropped ")[0] for _, t in items]
-            shown = ", ".join(names[:8]) + (f" and {len(names) - 8} more" if len(names) > 8 else "")
-            out.append(f"- {items[0][0]} {title.format(n=len(items))}: {shown}.")
+    for group, its in group_kinds(items, group_from, words):
+        if group is None:
+            out.append(f"- {its[0]['severity']} {its[0]['title']}")
         else:
-            out += [f"- {sev} {text}" for sev, text in items]
+            out.append(f"- {group['severity']} {group['title']}: {group['shown']}.")
     return out
 
 
@@ -80,6 +75,12 @@ def fm_daily(pack: KnowledgePack, store: Store, as_of: date) -> str:
     cfg = load_cfg()
     group_from = int(((cfg.get("thresholds") or {}).get("todo") or {}).get("group_from") or 3)
     words = {k: v for k, v in (cfg.get("todo_groups") or {}).items() if k != "same_time"}
+    names = {r["entity_id"]: r["name"] for rows in pack.families.values() for r in rows if r.get("name")}
+
+    def name_of(entity_id, text):
+        # the device's name from the knowledge pack; the summary's own words for an entity it does not know
+        return names.get(entity_id) or text.split("\n")[0][:60]
+
     yesterday = (as_of - timedelta(days=1)).isoformat()
     new = [f for f in store.findings(since_day=yesterday) if f["severity"] in ("P2", "P3")]
     digest_inc = [i for i in store.incidents(open_only=True) if i["state"] == "digest" and i["opened_at"][:10] >= yesterday]
@@ -88,7 +89,8 @@ def fm_daily(pack: KnowledgePack, store: Store, as_of: date) -> str:
     lines = [f"{pack.villa}, {as_of.strftime('%a %d %b')} morning."]
     if new:
         lines.append("New:")
-        lines += _grouped([(f["rule_id"], f["severity"], f["summary"]) for f in new], group_from, words)
+        lines += _grouped([{"kind": f["rule_id"], "severity": f["severity"], "subject": name_of(f["entity_id"], f["summary"]),
+                            "title": f["summary"]} for f in new], group_from, words)
     if digest_inc:
         lines.append("Also noted (no action needed yet):")
         lines += [f"- {json.loads(i['payload'] or '{}').get('message') or i['rule_id']}" for i in digest_inc]
@@ -99,8 +101,8 @@ def fm_daily(pack: KnowledgePack, store: Store, as_of: date) -> str:
                      "the rest: close it in the VESTA Kiosk (Facility → Faults) when it is done.")
         alerts = [p for p in open_now if p["incident"]]
         lines += [f"- #{p['incident']} {p['title'][:160]}" for p in alerts]
-        lines += _grouped([(p["rule_id"], p["severity"], p["title"][:160]) for p in open_now if not p["incident"]],
-                          group_from, words)[:8]
+        lines += _grouped([{"kind": p["rule_id"], "severity": p["severity"], "subject": name_of(p["entity_id"], p["title"]),
+                            "title": p["title"][:160]} for p in open_now if not p["incident"]], group_from, words)[:8]
     if len(lines) == 1:
         lines.append("Nothing new, nothing open.")
     return "\n".join(lines)

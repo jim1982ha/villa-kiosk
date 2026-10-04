@@ -161,3 +161,34 @@ def reporting_share(hour_rows: list[dict], until_ms: int | None = None, hours: i
 
 def days_back(end: date, n: int) -> list[date]:
     return [end - timedelta(days=i) for i in range(n)][::-1]
+
+
+def device_key(row: dict, fallback: str) -> str:
+    """Which physical device a knowledge-pack row belongs to: its device_id when the registry gives one,
+    else its integration + asset, else `fallback` (an entity the pack does not know).
+
+    ⚠️ ONE KEY FOR EVERY RULE (architecture review, 0.12.27): "offline" and "silent" keyed on
+    device_id or platform:asset while "keeps dropping" keyed on device_id or asset slug — one device without
+    a registry id was one finding to the first two and another to the third."""
+    if row.get("device_id"):
+        return str(row["device_id"])
+    if row.get("asset"):
+        return f"{row.get('platform') or 'x'}:{row['asset']}"
+    return fallback
+
+
+def device_name(names: list[str]) -> str:
+    """A device found through several of its entities, as one name: the first, and how many more."""
+    return names[0] + (f" (+{len(names) - 1} entities of the same device)" if len(names) > 1 else "")
+
+
+def worsened(change_pct: float | None, last_reported_pct: float | None, step: float = 15) -> bool:
+    """A still-open finding earns a digest line again when it moved `step` points further from normal
+    than when it was last reported."""
+    return change_pct is not None and abs(change_pct) - abs(last_reported_pct or 0) >= step
+
+
+def to_close(open_rows: list[dict], fired: set[tuple[str, str]], state_rules: set[str] | frozenset[str]) -> list[dict]:
+    """The open findings that close tonight: a STATE rule (a condition that holds or not) that did not fire
+    for its entity. An event rule closes the night it fires, never here."""
+    return [o for o in open_rows if o["rule_id"] in state_rules and (o["rule_id"], o["entity_id"]) not in fired]

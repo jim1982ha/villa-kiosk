@@ -1,3 +1,10 @@
+## 0.12.27
+
+### Changed
+- **The waiting message of a report you ask for in a chat is now always dealt with.** It is removed when the report arrives, even if the report arrives before the waiting message itself. If the job ends with no report, the waiting message says so, even if the job ends very fast. When one request starts two jobs, the waiting message waits for both.
+- **The morning message groups problems exactly as the weekly report does.** Devices are named as in Home Assistant, not guessed from the sentence. A group line shows its most urgent item's priority.
+- **The nightly check counts a device once, whichever rule raises it.** "Offline", "not reporting" and "keeps dropping off" now recognise the same device the same way.
+
 ## 0.12.26
 
 ### Changed

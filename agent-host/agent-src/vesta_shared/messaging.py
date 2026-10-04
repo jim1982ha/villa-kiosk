@@ -7,7 +7,15 @@ page, attached, instead (the reports skill decides).
 
 from __future__ import annotations
 
+import re
+
 TELEGRAM_LIMIT = 4096
+
+
+def no_code(s: str) -> str:
+    """No rule code in what a person reads ("[PM-02] Pump ..." -> "Pump ..."). One copy: the nightly
+    check, the report facts and the problems list each had their own until 0.12.27."""
+    return re.sub(r"^\s*\[[^\]]{2,80}\]\s*", "", s or "").strip()
 
 
 def split_message(text: str, limit: int = TELEGRAM_LIMIT) -> list[str]:

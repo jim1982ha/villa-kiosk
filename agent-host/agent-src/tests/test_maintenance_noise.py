@@ -225,7 +225,8 @@ def test_the_night_judges_the_last_finished_day(tmp_path):
 # ------------------------------------------------------------------------------------------ the morning
 def test_the_morning_message_says_each_thing_once(tmp_path):
     from vesta_shared.store import Store
-    _pack(tmp_path, {})
+    # names come from the knowledge pack, as on the villa — not cut out of the summary's words
+    _pack(tmp_path, {"level": [_row(f"sensor.example_{k}", f"Sensor {k}") for k in range(4)]})
     store = Store(str(tmp_path / "s.sqlite"))
     for k in range(4):
         store.raise_finding("PM-SILENT", f"sensor.example_{k}", "level", AS_OF, "P3",

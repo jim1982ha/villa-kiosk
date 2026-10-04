@@ -39,6 +39,7 @@ SKILL = os.path.dirname(HERE)
 sys.path.insert(0, os.path.join(HERE, "..", "..", "_shared"))
 from vesta_shared.ha_client import client_from_args  # noqa: E402
 from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
+from vesta_shared.messaging import no_code as _no_code  # noqa: E402
 from vesta_shared.store import Store  # noqa: E402
 from vesta_shared import agent_records  # noqa: E402  (the agent's records: one reader)
 from vesta_shared.problems import Problems  # noqa: E402  (what is still open: one owner)
@@ -286,11 +287,6 @@ class Ctx:
         return out
 
 
-def _no_code(s: str) -> str:
-    import re
-    return re.sub(r"^\s*\[[^\]]{2,80}\]\s*", "", s or "").strip()
-
-
 # ---------------------------------------------------------------- the clues (reports.yaml playbook)
 def _fill(text, figures: dict) -> str:
     """A playbook text with the clue's figures in it; a date as a person writes it ("23 Sep")."""
@@ -513,6 +509,37 @@ def todo(c: "Ctx") -> list[dict]:
     return c._todo
 
 
+SEVERITY_ORDER = {"P1": 0, "P2": 1, "P3": 2, "P4": 3}
+
+
+def group_kinds(items: list[dict], group_from: int, group_words: dict) -> list[tuple[dict | None, list[dict]]]:
+    """Items of one KIND made one line: at least `group_from` of them, and a group line for the kind (the
+    item's own `group_title`, else reports.yaml todo_groups). Each item has `kind`, `severity`, `subject`
+    (its name) and may have `since` (members are listed oldest first). Returns, in first-seen order,
+    (group, members) — group None for an item that stands alone — where group is {title, names, shown,
+    severity (the worst member's)}.
+
+    ⚠️ ONE GROUPING (architecture review, 0.12.27): the 07:00 digest grouped with its own copy, which
+    guessed each name by cutting the summary at " has " / " dropped ", took the FIRST member's severity
+    and formatted the line without {kind} — a group line naming {kind} raised KeyError there only."""
+    kinds: dict[str, list[dict]] = {}
+    for it in items:
+        kinds.setdefault(it["kind"], []).append(it)
+    out: list[tuple[dict | None, list[dict]]] = []
+    for kind, its in kinds.items():
+        title = its[0].get("group_title") or group_words.get(kind)
+        if len(its) < group_from or not title:
+            out += [(None, [it]) for it in its]
+            continue
+        its.sort(key=lambda x: x.get("since") or "")
+        n = len(its)
+        names = [x["subject"] for x in its]
+        out.append(({"title": title.format(n=n, kind=kind.split("/")[-1]), "names": names,
+                     "shown": ", ".join(names[:8]) + (f" and {n - 8} more" if n > 8 else ""),
+                     "severity": min((x["severity"] for x in its), key=lambda s_: SEVERITY_ORDER.get(s_, 9))}, its))
+    return out
+
+
 def one_list(clue_rows: list[dict], problems: list[dict], device_of, name_of, horizon: dict,
              group_from: int, same_minutes: float, group_words: dict) -> list[dict]:
     """What needs doing, ONCE: the playbook's clues and the open problems (vesta_shared.problems), merged
@@ -523,7 +550,7 @@ def one_list(clue_rows: list[dict], problems: list[dict], device_of, name_of, ho
     ⚠️ PLAIN INPUTS (architecture review, 2026-10-01): it reads nothing itself — `device_of(entity_id,
     fallback)` and `name_of(entity_id)` are the only questions it asks — so its rules are tested with
     lists, without a villa, a store or Home Assistant."""
-    order = {"P1": 0, "P2": 1, "P3": 2, "P4": 3}
+    order = SEVERITY_ORDER
     items: dict[str, dict] = {}
 
     def add(it: dict):
@@ -558,28 +585,21 @@ def one_list(clue_rows: list[dict], problems: list[dict], device_of, name_of, ho
              "horizon": horizon.get(pr["severity"]), "why": "", "check": pr.get("check") or "", "ask": "", "cost": "",
              "since": pr["since"], "figures": pr["figures"], "task_ids": [pr["id"]], "also": [], "group_title": None})
 
-    kinds: dict[str, list[dict]] = {}
-    for it in items.values():
-        kinds.setdefault(it["kind"], []).append(it)
     out = []
-    for kind, its in kinds.items():
-        title = its[0].get("group_title") or group_words.get(kind)
-        if len(its) < group_from or not title:
+    for group, its in group_kinds(list(items.values()), group_from, group_words):
+        if group is None:
             out += its                               # a kind with no group line: each is its own problem
             continue
-        its.sort(key=lambda x: x["since"])
         n = len(its)
-        names = [x["subject"] for x in its]
-        shown = ", ".join(names[:8]) + (f" and {n - 8} more" if n > 8 else "")
-        why = shown + "."
+        why = group["shown"] + "."
         times = [_when({"when": x["since"]}) for x in its]
         if all(t_ is not None and len(x["since"]) > 10 for t_, x in zip(times, its)):
             spread = (max(times) - min(times)).total_seconds() / 60
             if spread <= same_minutes and group_words.get("same_time"):
                 why += " " + group_words["same_time"].format(n=n, since=min(times).strftime("%d %b, %H:%M").lstrip("0"))
-        out.append({**its[0], "title": title.format(n=n, kind=kind.split("/")[-1]), "subject": f"{n} items", "why": why,
-                    "ask": "", "severity": min((x["severity"] for x in its), key=lambda s: order.get(s, 9)),
-                    "task_ids": [i for x in its for i in x["task_ids"]], "also": [], "members": names,
+        out.append({**its[0], "title": group["title"], "subject": f"{n} items", "why": why,
+                    "ask": "", "severity": group["severity"],
+                    "task_ids": [i for x in its for i in x["task_ids"]], "also": [], "members": group["names"],
                     "devices": [x["device"] for x in its]})
     out.sort(key=lambda x: (order.get(x["severity"], 9), x["since"]))
     for k, it in enumerate(out):

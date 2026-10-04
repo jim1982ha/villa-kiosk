@@ -31,6 +31,7 @@ from . import runner
 from .actions import Actions
 from .config import STARTER_DIR
 from .ha_events import HaEvents
+from .job_notices import JobNotices
 from .kiosk import Kiosk, KioskError
 from .outcome import Outcome
 from .policy import Person, Policy, problems as policy_problems
@@ -112,10 +113,8 @@ class Vesta:
         self.server_tools: list[dict] = []
         self.bot_username: str | None = None
         self._locks: dict[int, asyncio.Lock] = {}
-        # ⚠️ ONE MESSAGE WHILE A JOB ASKED FOR IN A CHAT RUNS, REPLACED BY ITS RESULT (owner, 2026-10-04:
-        # "I don't want to see 3 messages"): the reply that started the job is remembered here per chat,
-        # and deleted when the job's first result arrives (Telegram cannot turn a text into a file message).
-        self._job_notices: dict[int, dict] = {}
+        # The "being prepared" message of a job asked for in a chat (job_notices.py decides, this file sends).
+        self._job_notices = JobNotices()
         self._names: dict[str, str] = {}
         self._names_mtime = None
 
@@ -202,7 +201,7 @@ class Vesta:
         try:
             mid = await self.tg.send(int(chat_id), text, keyboard=keyboard, document=document, photo_b64=photo_b64)
             if from_job and mid:
-                await self._replace_job_notice(int(chat_id))
+                await self._job_notice_step(int(chat_id), self._job_notices.result(int(chat_id)))
         except TelegramError as e:
             log.warning("send failed: %s", e)
             self.state.log("send_failed", {"chat": chat_id, "error": str(e)})
@@ -214,17 +213,15 @@ class Vesta:
             self.state.set_approval_message(approval_id, mid)
         return mid
 
-    async def _replace_job_notice(self, chat_id: int) -> None:
-        """A job's result reached the chat it was asked in: its "being prepared" message goes."""
-        notice = self._job_notices.pop(chat_id, None)
-        if notice and notice.get("mid") and self.tg is not None:
-            await self.tg.delete(chat_id, notice["mid"])
-
-    def _note_job_notice(self, chat_id: int, mid: int | None) -> None:
-        """The reply that started a job is its "being prepared" message (see _job_notices)."""
-        notice = self._job_notices.get(chat_id)
-        if notice is not None and notice.get("mid") is None and mid:
-            notice["mid"] = mid
+    async def _job_notice_step(self, chat_id: int, step) -> None:
+        """Carry out what job_notices.py decided about a "being prepared" message."""
+        if step is None or self.tg is None:
+            return
+        what, mid, job = step
+        if what == "delete":
+            await self.tg.delete(chat_id, mid)
+        else:
+            await self.tg.edit(chat_id, mid, f"The {job} job ended without a result this time. Ask again in a moment.")
 
     # ------------------------------------------------------------------ start
     async def start(self):
@@ -482,7 +479,7 @@ class Vesta:
                 keyboard = {"inline_keyboard": [[{"text": "Continue", "callback_data": f"c:{cont}"}]]}
             if answer or keyboard:
                 mid = await self.send(cid, answer or "…", keyboard=keyboard)
-                self._note_job_notice(cid, mid)
+                await self._job_notice_step(cid, self._job_notices.replied(cid, mid))
 
     # ------------------------------------------------------------------ button presses
     async def handle_callback(self, q: dict):
@@ -607,7 +604,7 @@ class Vesta:
         if name not in self.policy().jobs:
             return f"The {name} job is not set up yet (VESTA Agent page → Rules → AI jobs): it cannot run."
         sk, job = found[0]
-        self._job_notices[int(chat)] = {"job": name, "mid": None}
+        self._job_notices.started(int(chat), name)
         asyncio.create_task(self._safe(self._requested_job(sk, job, int(chat))))
         return f"Started {name}: the result will be sent here when it is ready (a few minutes)."
 
@@ -617,12 +614,7 @@ class Vesta:
         try:
             await self.run_model_job(skill, job, Origin(chat, JOB))
         finally:
-            notice = self._job_notices.get(chat)
-            if notice and notice.get("job") == job["name"]:
-                self._job_notices.pop(chat, None)
-                if notice.get("mid") and self.tg is not None:
-                    await self.tg.edit(chat, notice["mid"], f"The {job['name']} job ended without a result this time. "
-                                                            "Ask again in a moment.")
+            await self._job_notice_step(chat, self._job_notices.ended(chat, job["name"]))
 
     async def housekeeping(self) -> None:
         if not self.server_tools and _now_local(self.s.timezone).minute % 10 == 0:

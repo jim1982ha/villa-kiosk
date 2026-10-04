@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.26 (4 October 2026)
+
+- Architecture review (third pass), behaviour-preserving apart from the drifts it closes:
+  - vesta_agent/job_notices.py: the "being prepared" message is a pure JobNotices (started / replied / result / ended → delete or edit), replacing a dict app.py edited in three places. It fixes the result arriving before the reply (the reply stayed), the end before the reply (the reply promised a report), and two jobs in one turn. tests/test_job_notices.py drives each order.
+  - preventive-maintenance features.device_key / device_name: one device key for offline, silent and flapping (flaps keyed on asset slug, the others on platform:asset). features.worsened / to_close: the persist loop's two decisions, now pure.
+  - reports facts.group_kinds: one grouping for the weekly list and the 07:00 digest. The digest's own copy guessed names from the summary text, used the first member's severity, and raised KeyError on a {kind} group line. Names now come from the knowledge pack.
+  - vesta_shared.messaging.no_code: one copy, where there were three.
+  - tests/test_shared_grouping.py, all mutation-checked.
+
 ## 0.6.25 (4 October 2026)
 
 - Every report asked for in a chat (owner, 2026-10-04: "all report messages"): the waiting message is replaced by the job's FIRST result whatever its form — the daily digest is text, not a page, and 0.6.24 replaced only on a page. app.send(from_job=…), passed by send_message and outcome.carry_out for an Origin JOB. tests/test_jobs.py: the daily digest's case (red when keyed on the page again) and the list of on-request jobs (fm-daily, fm-weekly, owner-monthly) the rule covers.
