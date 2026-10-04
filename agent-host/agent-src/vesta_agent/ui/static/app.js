@@ -222,6 +222,21 @@ const usd = (v) => "US$ " + (v || 0).toFixed((v || 0) > 0 && v < 0.01 ? 4 : 2);
 const ktok = (n) => (n === null || n === undefined ? "—" : n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1000 ? (n / 1000).toFixed(n >= 1e5 ? 0 : 1) + "k" : String(n));
 const brain = (p, m) => [p ? (PROFILES[p] || p).replace(/ \(.*/, "") : null, m ? m.replace(/^claude-/, "") : null].filter(Boolean).join(" · ") || "—";
 
+// A run's "What": its label alone in the table; where it came from and what was asked as its tooltip
+// (owner, 2026-10-04: "don't show the details directly in the table"). A tap shows the same lines under
+// it — a phone has no hover, and the detail must stay reachable there.
+function runWhat(r) {
+  const label = r.kind === "job" ? r.work : `Reply to ${r.person || "someone"}`;
+  const details = [r.kind === "chat" && r.chat ? r.chat : null, r.asked ? `“${r.asked}”` : null].filter(Boolean);
+  if (!details.length) return h("b", {}, label);
+  const box = h("div", { class: "what-tip", title: details.join("\n"), tabindex: "0", role: "button", "aria-expanded": "false" },
+    h("b", {}, label), h("div", { class: "muted what-detail" }, details.map((d) => h("div", {}, d))));
+  const toggle = () => box.setAttribute("aria-expanded", String(box.getAttribute("aria-expanded") !== "true"));
+  box.addEventListener("click", toggle);
+  box.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
+  return box;
+}
+
 async function costs(days = 30) {
   fill($view, h("p", { class: "muted" }, "Loading…"));
   const c = await api("GET", `api/costs?days=${days}`);
@@ -259,9 +274,7 @@ async function costs(days = 30) {
     { v: g.name === "not recorded" ? "—" : ktok(g.tokens_in), cls: "num" }, { v: g.name === "not recorded" ? "—" : ktok(g.tokens_out), cls: "num" }, { v: usd(g.cost), cls: "num" }, { v: usd(g.cost / g.runs), cls: "num" }]));
   const runRows = c.runs.map((r) => [
     new Date(r.at).toLocaleString([], { dateStyle: "short", timeStyle: "short" }),
-    h("div", {}, h("b", {}, r.kind === "job" ? r.work : `Reply to ${r.person || "someone"}`),
-      r.kind === "chat" && r.chat ? h("span", { class: "muted" }, " · " + r.chat) : null,
-      r.asked ? h("div", { class: "muted asked" }, "“" + r.asked + "”") : null),
+    runWhat(r),
     brain(r.profile, r.model),
     { v: r.tokens_in === null || r.tokens_in === undefined ? "—" : `${ktok((r.tokens_in || 0) + (r.cache_read || 0) + (r.cache_write || 0))} / ${ktok(r.tokens_out)}`, cls: "num" },
     { v: usd(r.cost), cls: "num" },

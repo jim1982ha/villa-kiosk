@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.32 (5 October 2026)
+
+- UI, Costs → Every run: app.js runWhat() keeps a run's label in the cell, with the chat and the asked text as its title tooltip and a tap-to-expand detail (no hover on a phone). tests/test_ui.py pins it.
+
 ## 0.6.31 (5 October 2026)
 
 - reports compose._ticks/line(): a span of float noise (≤ 1e-9 of the values) is flat, and ticks come from their index, at most 100. `v += step` never moved for readings like 21.4 and 21.400000000000002 and the report job hung (the Kiosk crashed on the same data, 2.496.282). tests/test_shared_grouping.py, mutation-checked; starter skill recorded.

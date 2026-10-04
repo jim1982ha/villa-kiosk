@@ -229,7 +229,6 @@ table.data td, table.data th { padding: 8px 10px 8px 0; border-bottom: 1px solid
 table.data .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .pager { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; }
 .pager .btn[disabled] { opacity: .4; cursor: default; }
-.asked { font-size: var(--text-xs); max-width: 420px; }
 /* the cost per day */
 svg.bars { width: 100%; height: auto; display: block; }
 svg.bars .bar { fill: var(--accent); }
@@ -279,3 +278,9 @@ svg.bars .base { stroke: var(--text-dim); }
 .dropdown-option.active { background: var(--hairline); }
 .dropdown-option.on { color: var(--accent); font-weight: 600; }
 .dropdown-option.on::after { content: "\2713"; margin-left: auto; padding-left: 12px; }
+
+/* A run's "What" (app.js runWhat): the details are its tooltip, and a tap shows them under it */
+.what-tip { cursor: help; }
+.what-tip b { text-decoration: underline dotted var(--text-dim); text-underline-offset: 3px; }
+.what-tip .what-detail { display: none; font-size: var(--text-xs); margin-top: 2px; }
+.what-tip[aria-expanded="true"] .what-detail { display: block; }

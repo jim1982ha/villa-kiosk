@@ -361,3 +361,15 @@ def test_the_costs_period_sits_beside_its_label_and_a_separator_comes_before_the
     assert 'h("label", { class: "field row" }, h("span", {}, "Period"), period)' in js
     assert 'h("div", { class: "divided" }, kpis)' in js
     assert ".field.row { flex-direction: row;" in css
+
+
+def test_a_runs_details_are_its_tooltip_not_table_text():
+    # owner, 2026-10-04: "don't show the details description directly in the table (like chat content), but
+    # add it as tooltip" — and a tap shows them, since a phone has no hover
+    from vesta_agent.ui.server import STATIC
+    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
+    css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
+    what = js[js.index("function runWhat(r)"):js.index("async function costs(")]
+    assert 'title: details.join("\\n")' in what and '"aria-expanded"' in what
+    assert ".what-tip .what-detail { display: none;" in css and '.what-tip[aria-expanded="true"] .what-detail { display: block; }' in css
+    assert "runWhat(r)," in js and 'class: "muted asked"' not in js
