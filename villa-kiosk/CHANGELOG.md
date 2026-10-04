@@ -1,3 +1,8 @@
+## 2.496.283
+
+### Changed
+- **Motion and occupancy sensors: green while quiet, red bars for a detection.** In the sensor's window, its status and history bar are now green while nothing is detected (the sensor is watching) and red where something was, as the camera's motion bar already shows it. The map and the alerts still treat motion as information, not a problem. The Map colours legend says so.
+
 ## 2.496.282
 
 ### Fixed

@@ -153,6 +153,21 @@ export function secureStateFor(deviceClass: string | undefined): "off" | undefin
   return deviceClass !== undefined && (OPENING_DEVICE_CLASSES.has(deviceClass) || deviceClass === "lock") ? "off" : undefined;
 }
 
+/** The state in which a DETECTOR reports something, for its window's colours
+ *  (stateColors.binaryStatus): a motion or occupancy sensor's "on". Shown red
+ *  there, as the camera's motion bar shows a detection, and its quiet "off"
+ *  green — the sensor watching. Colours only: it is not a problem state, so the
+ *  map and the alerts still treat motion as information (alertStateFor). */
+export function detectionStateFor(deviceClass: string | undefined): "on" | undefined {
+  return deviceClass === "motion" || deviceClass === "occupancy" ? "on" : undefined;
+}
+
+/** The state a sensor's WINDOW colours red: its problem state (alertStateFor),
+ *  else, for a detector, its detection (detectionStateFor). */
+export function colourAlertStateFor(deviceClass: string | undefined, override: string | undefined): string | undefined {
+  return alertStateFor(deviceClass, override) ?? detectionStateFor(deviceClass);
+}
+
 /** binary_sensor device_classes whose "on" means someone or something MOVED.
  *  ⚠️ ONE LIST. Dashboard's motion toast and EntityCategories' access bucket
  *  each carried their own copy, and the toast's comment claimed its id hints

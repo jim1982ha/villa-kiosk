@@ -13,7 +13,7 @@ import type { PanelProps } from "@/types/panel.types";
 import { useConfig } from "@/config/ConfigContext";
 import type { AlertLevel } from "@/config/ThresholdConfig";
 import { readingKind, readingLevel } from "@/config/sensorReading";
-import { stateLabelFor, binarySensorClassInfo, alertStateFor, secureStateFor } from "@/config/BinarySensorClasses";
+import { stateLabelFor, binarySensorClassInfo, alertStateFor, secureStateFor, colourAlertStateFor } from "@/config/BinarySensorClasses";
 import { effectiveSensorClass, SENSOR_CLASS_ICON } from "@/config/SensorClasses";
 import { binarySensorColor, binaryStatus, isUnavailable, STATUS_PILL_CLASS } from "@/utils/stateColors";
 
@@ -58,7 +58,10 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
   // The pill reads the state as its history bar does (binaryStatus): a leak
   // sensor finding no leak is green, not "off"; so is a closed door.
   const secureState = secureStateFor(entity?.attributes.device_class as string | undefined);
-  const binaryPillTone = level === "danger" ? "danger" : STATUS_PILL_CLASS[binaryStatus(entity?.state === "on" ? "on" : "off", alertState, secureState)];
+  // A detector's detection is red here, as on the camera's bar (owner, 2026-10-05) —
+  // its colours only; `level` and the map keep motion as information.
+  const colourAlert = colourAlertStateFor(entity?.attributes.device_class as string | undefined, threshold?.alertState);
+  const binaryPillTone = level === "danger" ? "danger" : STATUS_PILL_CLASS[binaryStatus(entity?.state === "on" ? "on" : "off", colourAlert, secureState)];
 
   // ONE of two history sections, by what the sensor reports: raw states for a
   // binary or text sensor (a numeric parse would drop every row) — the shared
@@ -98,7 +101,7 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
                 : level === "danger" ? binaryStateText.toUpperCase() : binaryStateText}
             </div>
           </div>
-          <LastDayTimeline entityId={mapping.entityId} colorFor={(s) => binarySensorColor(s, alertState, secureState)} />
+          <LastDayTimeline entityId={mapping.entityId} colorFor={(s) => binarySensorColor(s, colourAlert, secureState)} />
         </>
       ) : (
         <>

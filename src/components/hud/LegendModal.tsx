@@ -60,12 +60,12 @@ const CHIP_COUNTS: { label: string; health: "alert" | "unavailable" | "ok"; note
  *  finer vocabulary than the map badge above, because a panel has room for
  *  the distinction and a history bar genuinely needs it). */
 const STATUS_ITEMS: { label: string; swatch: string; note: string }[] = [
-  { label: "On / active", swatch: STATUS_COLOR.active, note: "Device is on, locked-secure, or open — or a detector finding nothing wrong (no leak, no smoke), a door or window closed" },
+  { label: "On / active", swatch: STATUS_COLOR.active, note: "Device is on, locked-secure, or open — or a detector finding nothing wrong (no leak, no smoke, no motion), a door or window closed" },
   { label: "Off / idle", swatch: STATUS_COLOR.idle, note: "Device is off or in its resting state — or a door or window standing open" },
   { label: "In progress", swatch: STATUS_COLOR.transitional,
     note: "Moving between the two — opening, closing, locking, arming" },
   { label: "Unavailable", swatch: STATUS_COLOR.unavailable, note: "Home Assistant has lost contact — state unknown" },
-  { label: "Alert", swatch: STATUS_COLOR.alert, note: "Needs attention (e.g. unlocked door, jammed lock, leak)" },
+  { label: "Alert", swatch: STATUS_COLOR.alert, note: "Needs attention (e.g. unlocked door, jammed lock, leak) — or, in a sensor's history, a detection (motion, occupancy)" },
 ];
 
 export default function LegendModal({ onClose }: { onClose: () => void }) {

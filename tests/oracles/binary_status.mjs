@@ -19,8 +19,16 @@ ck("unavailable stays unavailable, never green", binaryStatus("unavailable", "on
 ck("the history bar paints the same meaning", binarySensorColor("off", "on") === STATUS_COLOR.active && binarySensorColor("on", "on") === STATUS_COLOR.alert);
 const panel = readFileSync(new URL("../../src/components/panels/SensorPanel.tsx", import.meta.url), "utf8");
 ck("the status pill reads the same rule as its history bar",
-   /STATUS_PILL_CLASS\[binaryStatus\(entity\?\.state === "on" \? "on" : "off", alertState, secureState\)\]/.test(panel)
-   && /colorFor=\{\(s\) => binarySensorColor\(s, alertState, secureState\)\}/.test(panel));
+   /STATUS_PILL_CLASS\[binaryStatus\(entity\?\.state === "on" \? "on" : "off", colourAlert, secureState\)\]/.test(panel)
+   && /colorFor=\{\(s\) => binarySensorColor\(s, colourAlert, secureState\)\}/.test(panel));
+// owner, 2026-10-05: an occupancy sensor quiet = green, a detection = red bars, as the camera's motion bar
+const { detectionStateFor, alertStateFor } = await import("@/config/BinarySensorClasses");
+ck("a motion or occupancy sensor: quiet = active (green), detecting = alert (red), in its window",
+   ["motion", "occupancy"].every((c) => detectionStateFor(c) === "on")
+   && binaryStatus("off", detectionStateFor("occupancy")) === "active" && binaryStatus("on", detectionStateFor("motion")) === "alert");
+ck("  ...colours only: motion is still not a problem state for the map and alerts", alertStateFor("motion", undefined) === undefined
+   && /const colourAlert = colourAlertStateFor\(/.test(panel) && /readingLevel\(entity, kind, threshold, alertState\)/.test(panel));
+ck("  ...and only those two: a door, a leak sensor and a presence ('Home') are not detectors", ["door", "moisture", "presence", undefined].every((c) => detectionStateFor(c) === undefined));
 const { secureStateFor } = await import("@/config/BinarySensorClasses");
 ck("the secure state belongs to openings and locks only", ["door", "garage_door", "window", "opening", "lock"].every((c) => secureStateFor(c) === "off")
    && ["motion", "moisture", undefined].every((c) => secureStateFor(c) === undefined));
