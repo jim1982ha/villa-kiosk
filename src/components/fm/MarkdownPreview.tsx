@@ -19,72 +19,12 @@
 // relies on, with nothing extra to get wrong here.
 
 import type { ReactNode } from "react";
-
-type Block =
-  | { type: "h1" | "h2" | "h3"; text: string }
-  | { type: "hr" }
-  | { type: "ul"; items: string[] }
-  | { type: "table"; header: string[]; rows: string[][] }
-  | { type: "note"; text: string }
-  | { type: "p"; text: string };
-
-function splitRow(line: string): string[] {
-  return line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
-}
-
-function parseBlocks(markdown: string): Block[] {
-  const lines = markdown.split("\n");
-  const blocks: Block[] = [];
-  let i = 0;
-  while (i < lines.length) {
-    const line = lines[i].replace(/\s+$/, "");
-    if (line.trim() === "") { i++; continue; }
-    if (line.trim() === "---") { blocks.push({ type: "hr" }); i++; continue; }
-    if (line.startsWith("### ")) { blocks.push({ type: "h3", text: line.slice(4) }); i++; continue; }
-    if (line.startsWith("## ")) { blocks.push({ type: "h2", text: line.slice(3) }); i++; continue; }
-    if (line.startsWith("# ")) { blocks.push({ type: "h1", text: line.slice(2) }); i++; continue; }
-    if (line.startsWith("|")) {
-      const header = splitRow(line);
-      i++;
-      // The "|---|---|" separator row — skip it, it carries no content.
-      if (i < lines.length && /^\|[\s:|-]+\|?$/.test(lines[i].trim())) i++;
-      const rows: string[][] = [];
-      while (i < lines.length && lines[i].trim().startsWith("|")) {
-        rows.push(splitRow(lines[i]));
-        i++;
-      }
-      blocks.push({ type: "table", header, rows });
-      continue;
-    }
-    if (line.startsWith("- ")) {
-      const items: string[] = [];
-      while (i < lines.length && lines[i].replace(/\s+$/, "").startsWith("- ")) {
-        items.push(lines[i].replace(/\s+$/, "").slice(2));
-        i++;
-      }
-      blocks.push({ type: "ul", items });
-      continue;
-    }
-    if (line.length > 1 && line.startsWith("_") && line.endsWith("_")) {
-      blocks.push({ type: "note", text: line.slice(1, -1) });
-      i++;
-      continue;
-    }
-    blocks.push({ type: "p", text: line });
-    i++;
-  }
-  return blocks;
-}
+import { parseBlocks, inlineRuns } from "@/fm/docBlocks";
 
 /** `**bold**` -> <strong>; everything else passes through as plain React
  *  children (and is therefore escaped, never interpreted as markup). */
 function inline(text: string, key: string): ReactNode {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g).filter((p) => p !== "");
-  return parts.map((part, idx) =>
-    part.startsWith("**") && part.endsWith("**")
-      ? <strong key={`${key}-${idx}`}>{part.slice(2, -2)}</strong>
-      : part,
-  );
+  return inlineRuns(text).map((r, idx) => (r.bold ? <strong key={`${key}-${idx}`}>{r.text}</strong> : r.text));
 }
 
 export default function MarkdownPreview({ markdown }: { markdown: string }) {

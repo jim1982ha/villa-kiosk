@@ -1,3 +1,8 @@
+## 2.496.286
+
+### Changed
+- Behind the scenes: the code that lays out a saved Recap, spend statement or readiness check on screen is now checked by tests against the documents themselves. Nothing you see changes.
+
 ## 2.496.285
 
 ### Fixed
