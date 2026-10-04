@@ -1,3 +1,8 @@
+## 0.12.34
+
+### Fixed
+- **The Costs page's tables read properly on a phone.** "Every run", "By work" and "By model" had their columns running into each other. On a phone each row is now a small card, with every value labelled. On a wider screen the tables are as before. (0.12.29 caused this when it fixed the editable tables.)
+
 ## 0.12.33
 
 ### Changed
