@@ -723,6 +723,10 @@ button {
   .hud-group .icon-btn:hover, .hud-stack .icon-btn:hover { background: var(--bg-input); }
 }
 .hud-group .icon-btn.active, .hud-stack .icon-btn.active { background: var(--accent); color: var(--text-on-accent); }
+/* The category filter buttons take their colours from common/categoryChip (inline,
+   the Cockpit's own category colours); a category hidden from the map is the
+   neutral chip, dimmed, so "off" still reads as off at a glance. */
+.hud-cat-btn.is-hidden { opacity: 0.45; }
 @media (hover: hover) {
   .hud-group .icon-btn.active:hover { background: var(--accent); }
 }

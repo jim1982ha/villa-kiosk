@@ -36,7 +36,8 @@ import { roleCan } from "@/auth/permissions";
 import type { Doors } from "@/auth/doors";
 import { useAgent } from "@/agent/AgentContext";
 import { awaitingAnswer } from "@/agent/agentView";
-import { CATEGORY_LABELS, CATEGORY_ICONS, categorySurface } from "@/config/EntityCategories";
+import { CATEGORY_LABELS, CATEGORY_ICONS } from "@/config/EntityCategories";
+import { categoryChipStyle } from "@/components/common/categoryChip";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { fetchLogbookEvents } from "@/ha/HALogbookAPI";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
@@ -228,9 +229,7 @@ export default function CockpitModal({
               // (VESTA-DESIGN.md §0 — a house at rest reports nothing as
               // active); a room or floor neutral, amber while a device in it
               // is offline.
-              const surface = t.category
-                ? categorySurface(t.category, t.stats.onCount > 0 ? "active" : "off")
-                : null;
+              const chip = t.category ? categoryChipStyle(t.category, t.stats.onCount > 0) : null;
               const Icon = t.icon;
               return (
                 // Keyed by theme too: the category surface is composited in
@@ -243,8 +242,8 @@ export default function CockpitModal({
                   aria-label={`Show ${t.label}'s devices — ${tileLine(t.stats)}`}
                 >
                   <div
-                    className={`cockpit-category-icon${surface ? "" : t.stats.offline > 0 ? " is-warn" : " is-neutral"}`}
-                    style={surface ? { background: surface.fill, color: surface.glyph } : undefined}
+                    className={`cockpit-category-icon${chip ? "" : t.stats.offline > 0 ? " is-warn" : " is-neutral"}`}
+                    style={chip ?? undefined}
                   >
                     <Icon size={18} />
                   </div>

@@ -39,6 +39,8 @@ import { ROLE_LABELS, ROLE_INITIALS } from "@/auth/roles";
 import { resolveSiteTitle } from "@/config/AppConfig";
 import { VestaAppIcon } from "@/components/VestaMark";
 import { CATEGORY_ORDER, CATEGORY_LABELS, CATEGORY_ICONS } from "@/config/EntityCategories";
+import { categoryChipStyle } from "@/components/common/categoryChip";
+import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { ENTITY_ICON_SCALE_MIN, ENTITY_ICON_SCALE_MAX, clampIconScale } from "@/config/AppConfig";
 import type { Category, TeleportPoint } from "@/types/scene.types";
 import VirtualJoystick from "./VirtualJoystick";
@@ -274,6 +276,9 @@ export default function HUD({
   // Only the categories this profile may see get a filter button; the scene
   // enforces the same set (see filterConfigForRole), so the HUD never offers
   // a toggle that could reveal a denied category.
+  // The category buttons' colours are composited from the theme's tokens
+  // (common/categoryChip): re-render when the theme changes.
+  useResolvedTheme();
   const visibleCategories = role
     ? CATEGORY_ORDER.filter((c) => isCategoryAllowed(role, c))
     : CATEGORY_ORDER;
@@ -443,7 +448,12 @@ export default function HUD({
                   // full row of same-shaped neighbours, and the constant
                   // "you can hold this" hint read as visual clutter rather
                   // than a useful affordance, at the user's request.
-                  className={`icon-btn${hidden ? "" : " active"}`}
+                  // Coloured as the Cockpit colours its category tiles
+                  // (common/categoryChip): shown = the category's own tint,
+                  // hidden = the neutral surface, dimmed. Not `.active`, whose
+                  // accent fill would paint every category the same green.
+                  className={`icon-btn hud-cat-btn${hidden ? " is-hidden" : ""}`}
+                  style={categoryChipStyle(cat, !hidden)}
                   {...catHold}
                   onPointerDown={onCatPointerDown(cat)}
                   // Space-only, and that now comes from the hook's nativeButton
