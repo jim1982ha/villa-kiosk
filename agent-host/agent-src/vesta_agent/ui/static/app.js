@@ -23,6 +23,65 @@ function h(tag, attrs = {}, ...kids) {
   return el;
 }
 
+// ⚠️ THE ONE DROPDOWN (owner, 2026-10-04: "a lot of dropdown menus are badly rendered"). A native <select>
+// opens the platform's own list (Android: a grey sheet of radio buttons; iOS: a wheel) that no theme reaches.
+// This draws a button like the device picker's box and its own list, fixed on the page body so a table cell
+// or a card cannot clip it; under the button, or above when there is no room below. tests/test_ui.py refuses
+// a native select element. `options`: [[value, label], …]; `pick(value)` on a change.
+function dropdown(options, value, pick, label) {
+  const ROW = 44;
+  const textOf = (v) => (options.find(([k]) => String(k) === String(v)) || [null, ""])[1];
+  const box = h("button", { type: "button", class: "picker-box dropdown", "aria-haspopup": "listbox", "aria-expanded": "false",
+                            "aria-label": label ? `${label}: ${textOf(value)}` : null });
+  const draw = () => box.replaceChildren(h("span", { class: "dropdown-value" }, textOf(value)), h("span", { class: "caret" }, "▾"));
+  let list = null, active = 0;
+  const rows = () => [...list.children];
+  const mark = () => rows().forEach((r, i) => r.classList.toggle("active", i === active));
+  function close(refocus = true) {
+    if (!list) return;
+    list.remove(); list = null; box.setAttribute("aria-expanded", "false");
+    document.removeEventListener("pointerdown", outside, true); window.removeEventListener("scroll", moved, true);
+    window.removeEventListener("resize", moved);
+    if (refocus) box.focus();
+  }
+  const outside = (e) => { if (list && !list.contains(e.target) && !box.contains(e.target)) close(false); };
+  const moved = (e) => { if (list && !(e && e.target instanceof Node && list.contains(e.target))) close(false); };
+  const choose = (i) => {
+    const v = options[i][0];
+    if (String(v) !== String(value)) { value = v; draw(); pick(v); }
+    close();
+  };
+  function open() {
+    const b = box.getBoundingClientRect(), vw = window.innerWidth, vh = window.innerHeight;
+    const want = options.length * ROW + 8, below = vh - b.bottom - 12, above = b.top - 12;
+    const up = want > below && above > below;
+    const width = Math.min(Math.max(b.width, 180), vw - 16), left = Math.min(Math.max(b.left, 8), vw - 8 - width);
+    active = Math.max(0, options.findIndex(([k]) => String(k) === String(value)));
+    list = h("div", { class: "dropdown-list", role: "listbox", tabindex: "-1", "aria-label": label || null },
+      options.map(([k, l], i) => h("div", { class: "dropdown-option" + (i === active ? " on" : ""), role: "option",
+                                            "aria-selected": String(i === active), onclick: () => choose(i),
+                                            onpointerenter: () => { active = i; mark(); } }, l)));
+    Object.assign(list.style, { left: `${left}px`, width: `${width}px`, maxHeight: `${Math.max(2 * ROW, Math.min(want, up ? above : below))}px`,
+                                ...(up ? { bottom: `${vh - b.top + 4}px` } : { top: `${b.bottom + 4}px` }) });
+    list.addEventListener("keydown", (e) => {
+      const last = options.length - 1;
+      const step = { ArrowDown: active + 1, ArrowUp: active - 1, Home: 0, End: last }[e.key];
+      if (step !== undefined) { e.preventDefault(); active = Math.min(last, Math.max(0, step)); mark(); rows()[active].scrollIntoView({ block: "nearest" }); }
+      else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); choose(active); }
+      else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); }
+      else if (e.key === "Tab") close();
+    });
+    document.body.append(list); mark(); box.setAttribute("aria-expanded", "true");
+    rows()[active].scrollIntoView({ block: "nearest" }); list.focus();
+    document.addEventListener("pointerdown", outside, true); window.addEventListener("scroll", moved, true);
+    window.addEventListener("resize", moved);
+  }
+  box.addEventListener("click", () => (list ? close() : open()));
+  box.addEventListener("keydown", (e) => { if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); if (!list) open(); } });
+  draw();
+  return box;
+}
+
 async function api(method, path, body) {
   const opts = { method, headers: {} };
   if (body !== undefined) {
@@ -149,8 +208,7 @@ async function costs(days = 30) {
   const c = await api("GET", `api/costs?days=${days}`);
   PROFILES = c.profiles || PROFILES;
   if (c.none) return fill($view, card("Costs", "The agent has not recorded anything yet (it has not run in agent mode)."));
-  const period = h("select", { "aria-label": "Period", onchange: (e) => costs(Number(e.target.value)) },
-    [[7, "Last 7 days"], [30, "Last 30 days"], [90, "Last 90 days"]].map(([v, l]) => h("option", { value: v, selected: v === days }, l)));
+  const period = dropdown([[7, "Last 7 days"], [30, "Last 30 days"], [90, "Last 90 days"]], days, (v) => costs(Number(v)), "Period");
   const kpis = figures([["Today", usd(c.today)], ["Last 7 days", usd(c.last_7_days)], ["This month", usd(c.this_month)],
     [`Per run, last ${days} days (${c.runs_count} runs)`, usd(c.runs_count ? c.period / c.runs_count : 0)]]);
   // the cost of each day: bars drawn in SVG, with a Y axis (US$) and its grid lines (owner, 2026-10-01: "always
@@ -326,8 +384,7 @@ function rulesForms(doc, jobs = []) {
         h("input", { type: "number", min: 1, max: 1440, value: f.approval_ttl_minutes, oninput: on((t) => (f.approval_ttl_minutes = num(t.value))) }))));
 
   // the AI
-  const sel = (opts, value, set) => h("select", { onchange: on((t) => set(t.value)) },
-    Object.entries(opts).map(([k, l]) => h("option", { value: k, selected: k === value }, l)));
+  const sel = (opts, value, set, label) => dropdown(Object.entries(opts), value, (v) => { set(v); markDirty(); }, label);
   // AI jobs: each skill's scheduled AI work, with its own brain and spending limit
   f.settings.jobs = f.settings.jobs || {};
   // The AI: one table, one row per piece of AI work (chat answers, then each skill's AI job), like
@@ -346,7 +403,7 @@ function rulesForms(doc, jobs = []) {
   const drawAi = () => aiBody.replaceChildren(
     h("tr", {},
       h("td", {}, h("b", {}, "Chat answers"), h("div", { class: "muted" }, "replies in the chats; a reply at its limit offers Continue")),
-      h("td", {}, sel(PROFILES, f.settings.profile, (v) => (f.settings.profile = v))),
+      h("td", {}, sel(PROFILES, f.settings.profile, (v) => (f.settings.profile = v), "Brain")),
       h("td", {}, limitInput(f.settings.reply_limit_usd, (v) => (f.settings.reply_limit_usd = v), "Limit per reply (USD)", "for each reply")),
       h("td", { class: "x" })),
     ...jobs.map((j) => {
@@ -358,7 +415,7 @@ function rulesForms(doc, jobs = []) {
           h("td", { class: "x" }, h("button", { class: "btn icon ghost", title: "Set this job", onclick: () => { f.settings.jobs[j.name] = { ...j.default }; drawAi(); drawTotal(); markDirty(); } }, "+")));
       }
       return h("tr", {}, what,
-        h("td", {}, sel(PROFILES, cur.profile, (v) => (cur.profile = v))),
+        h("td", {}, sel(PROFILES, cur.profile, (v) => (cur.profile = v), "Brain")),
         h("td", {}, limitInput(cur.limit_usd, (v) => (cur.limit_usd = v), `Limit per run of ${j.name} (USD)`, "for each run")),
         h("td", { class: "x" }, h("button", { class: "btn icon ghost", title: "Stop this job", onclick: () => { delete f.settings.jobs[j.name]; drawAi(); drawTotal(); markDirty(); } }, "×")));
     }));
@@ -367,7 +424,7 @@ function rulesForms(doc, jobs = []) {
     h("table", { class: "rows ai" }, h("thead", {}, h("tr", {}, ["Work", "Brain", "Most it may cost (US$)", ""].map((x) => h("th", {}, x)))), aiBody),
     total,
     h("div", { class: "inline spaced" },
-      field("New conversation", sel(RESETS, f.settings.conversation_reset, (v) => (f.settings.conversation_reset = v))),
+      field("New conversation", sel(RESETS, f.settings.conversation_reset, (v) => (f.settings.conversation_reset = v), "New conversation")),
       h("label", { class: "switch" }, h("input", { type: "checkbox", checked: f.settings.web_search, onchange: on((t) => (f.settings.web_search = t.checked)) }), "Web search (weather warnings, manuals)")));
   const missing = jobs.filter((j) => !(f.settings.jobs || {})[j.name]).map((j) => j.name);
 
@@ -376,9 +433,9 @@ function rulesForms(doc, jobs = []) {
   const drawPeople = () => peopleBody.replaceChildren(...f.people.map((p, i) => h("tr", {},
     h("td", {}, h("input", { type: "text", value: p.name ?? "", "aria-label": "Name", oninput: on((t) => (p.name = t.value)) })),
     h("td", {}, h("input", { type: "text", inputmode: "numeric", value: p.telegram_id ?? "", "aria-label": "Telegram id", oninput: on((t) => (p.telegram_id = /^-?\d+$/.test(t.value.trim()) ? Number(t.value.trim()) : t.value)) })),
-    h("td", {}, sel({ owner: "Owner", fm: "Facility manager" }, p.role, (v) => (p.role = v))),
+    h("td", {}, sel({ owner: "Owner", fm: "Facility manager" }, p.role, (v) => (p.role = v), "Role")),
     h("td", {}, sel({ ...doc.languages, ...(p.language && !(p.language in doc.languages) ? { [p.language]: p.language } : {}) },
-                    p.language ?? "en", (v) => (p.language = v))),
+                    p.language ?? "en", (v) => (p.language = v), "Language")),
     h("td", { class: "x" }, h("button", { class: "btn icon ghost", title: "Remove", onclick: () => { f.people.splice(i, 1); drawPeople(); markDirty(); } }, "×")))));
   drawPeople();
   const people = card("People", "Who the agent answers. Each person sends /whoami to the bot to read their Telegram id.",
@@ -398,8 +455,7 @@ function rulesForms(doc, jobs = []) {
   const syncSvc = () => { f.allowed_services = Object.fromEntries(svcRows.filter(([k]) => k)); };
   const drawSvc = () => svcBody.replaceChildren(...svcRows.map((row, i) => h("tr", {},
     h("td", {}, h("input", { type: "text", value: row[0], placeholder: "light.turn_on", "aria-label": "Service", oninput: on((t) => { row[0] = t.value.trim(); syncSvc(); }) })),
-    h("td", {}, h("select", { "aria-label": "Rule", onchange: on((t) => { row[1] = t.value; syncSvc(); }) },
-      Object.entries(RULES).map(([k, l]) => h("option", { value: k, selected: k === row[1] }, `${k} — ${l}`)))),
+    h("td", {}, dropdown(Object.entries(RULES).map(([k, l]) => [k, `${k} — ${l}`]), row[1], (v) => { row[1] = v; syncSvc(); markDirty(); }, "Rule")),
     h("td", { class: "x" }, h("button", { class: "btn icon ghost", title: "Remove", onclick: () => { svcRows.splice(i, 1); syncSvc(); drawSvc(); markDirty(); } }, "×")))));
   drawSvc();
   const services = card("What the agent may do", "One line per Home Assistant service, and who decides. Anything not listed is refused. Restarts, shell commands, toggles and the like are refused whatever this says.",

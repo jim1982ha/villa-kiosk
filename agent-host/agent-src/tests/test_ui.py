@@ -187,6 +187,17 @@ def test_the_page_sets_no_inline_style_its_csp_would_block():
     assert not re.search(r"\bstyle\s*:", js)
 
 
+def test_every_choice_is_the_pages_own_dropdown_never_the_platforms_picker():
+    # owner, 2026-10-04: "a lot of dropdown menus are badly rendered" — a native <select> opens Android's grey
+    # radio sheet or iOS's wheel, which no theme reaches; app.js dropdown() draws its own list instead
+    import re
+    from vesta_agent.ui.server import STATIC
+    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
+    html = open(os.path.join(STATIC, "index.html"), encoding="utf-8").read()
+    assert not re.search(r"""h\(\s*["']select["']|createElement\(\s*["']select""", js) and "<select" not in html
+    assert js.count("dropdown(") >= 4 and "document.body.append(list)" in js
+
+
 def test_the_overview_gives_the_apps_version_with_the_agents(ui, monkeypatch):
     from vesta_agent import __version__
     monkeypatch.setenv("VESTA_APP_VERSION", "9.9.9")

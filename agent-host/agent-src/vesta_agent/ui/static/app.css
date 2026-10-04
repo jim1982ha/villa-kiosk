@@ -115,7 +115,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px 20px; }
 .field .hint { color: var(--text-dim); font-size: var(--text-xs); }
 /* A field whose label sits BESIDE its control (the Costs' Period): one line, the control its natural width. */
 .field.row { flex-direction: row; align-items: center; gap: 12px; }
-.field.row > select { width: auto; flex: 0 1 auto; }
+.field.row > .dropdown { width: auto; flex: 0 1 auto; }
 input[type=text], input[type=number], select, textarea {
   background: var(--bg-input); border: 1px solid var(--hairline); border-radius: var(--radius);
   padding: 10px 12px; min-height: var(--touch-min); color: var(--text-primary); width: 100%;
@@ -248,3 +248,16 @@ svg.bars .base { stroke: var(--text-dim); }
 .picker-text small { color: var(--text-dim); font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .picker-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 8px; border-top: 1px solid var(--hairline); margin-top: 6px; }
 .pad { padding: 8px; }
+
+/* THE DROPDOWN (app.js dropdown()): the device picker's box, and its own list on the page body in place of
+   the platform's picker. 44 px rows, the touch minimum. */
+.dropdown { padding: 6px 12px; }
+.dropdown:focus-visible, .dropdown[aria-expanded="true"] { outline: 2px solid var(--accent); outline-offset: 1px; }
+.dropdown-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.dropdown-list { position: fixed; z-index: 60; overflow-y: auto; overscroll-behavior: contain; padding: 4px; outline: none;
+  background: var(--bg-base); border: 1px solid var(--hairline); border-radius: var(--radius); box-shadow: 0 12px 32px rgba(0, 0, 0, .28); }
+.dropdown-option { display: flex; align-items: center; min-height: 44px; box-sizing: border-box; padding: 10px 12px; border-radius: 8px;
+  cursor: pointer; color: var(--text-primary); }
+.dropdown-option.active { background: var(--hairline); }
+.dropdown-option.on { color: var(--accent); font-weight: 600; }
+.dropdown-option.on::after { content: "\2713"; margin-left: auto; padding-left: 12px; }
