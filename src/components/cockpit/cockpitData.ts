@@ -12,6 +12,7 @@ import { categoryMembers, type CategoryMembers } from "@/config/activeDevices";
 import { deviceLook, groupLook, type LookSource } from "@/utils/deviceActivity";
 import { displayLabelFor } from "@/config/EntityMap";
 import { roomKey, NO_ROOM_LABEL } from "@/config/roomKey";
+import { byRoomOrder } from "@/config/summaryRows";
 import type { HassEntity, RawLogbookEntry } from "@/types/ha.types";
 import type { Category, EntityMapping } from "@/types/scene.types";
 
@@ -98,11 +99,7 @@ export function buildRoomGroups(
       const floor = room === NO_ROOM_LABEL ? null : (haFloor ?? floorByRoom.get(roomKey(room)) ?? null);
       return { room, count: entityIds.length, entityIds, floor };
     })
-    .sort((a, b) => {
-      if (a.room === NO_ROOM_LABEL) return b.room === NO_ROOM_LABEL ? 0 : 1;
-      if (b.room === NO_ROOM_LABEL) return -1;
-      return a.room.localeCompare(b.room);
-    });
+    .sort((a, b) => byRoomOrder(a.room, b.room));
 }
 
 export interface FloorGroup {

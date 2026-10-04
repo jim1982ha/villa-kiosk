@@ -26,11 +26,10 @@ import { effectiveCategory, subjectOf } from "@/config/EntityCategories";
 import { deviceLook, groupLook, storeLookSource } from "@/utils/deviceActivity";
 import { bulkSwitchPlan } from "@/config/activeDevices";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
-import { phantomEntity } from "@/utils/phantomEntity";
 import { TOGGLEABLE_DOMAINS } from "@/utils/quickAction";
 import type { HassEntity } from "@/types/ha.types";
 import type { Category } from "@/types/scene.types";
-import { NO_ROOM_LABEL } from "@/config/roomKey";
+import { bucketByRoom, summaryRows } from "@/config/summaryRows";
 
 // The group's shape is config/summaryGroups' (this screen only draws one).
 export type { SummaryGroup } from "@/config/summaryGroups";
@@ -82,28 +81,6 @@ interface Props {
 // three times: a rule copied beside the module that owns it, where nothing can
 // see the two drift apart.
 
-/** Bucket a list of entities by their resolved room (ConfigContext's
- *  resolvedRooms — HA's own Area assignment, falling back to GLB geometric
- *  detection), alphabetical with the no-room bucket always last — so scanning a long
- *  device group (e.g. every light in the villa) reads by physical location
- *  instead of one long flat list. */
-function groupByRoom(
-  rows: HassEntity[], roomOf: (id: string) => string,
-): [string, HassEntity[]][] {
-  const buckets = new Map<string, HassEntity[]>();
-  for (const e of rows) {
-    const room = roomOf(e.entity_id) || NO_ROOM_LABEL;
-    const list = buckets.get(room) ?? [];
-    list.push(e);
-    buckets.set(room, list);
-  }
-  return [...buckets.entries()].sort(([a], [b]) => {
-    if (a === NO_ROOM_LABEL) return b === NO_ROOM_LABEL ? 0 : 1;
-    if (b === NO_ROOM_LABEL) return -1;
-    return a.localeCompare(b);
-  });
-}
-
 export default function SummaryGroupPanel({
   group, canControl, onClose, onOpenEntity, hideBulkToggle,
   filterSuppressed = true, roomScenes,
@@ -131,57 +108,13 @@ export default function SummaryGroupPanel({
 
   const roomOf = (id: string) => resolvedRooms[id]?.trim() ?? "";
 
-  // Substitute a phantom "unavailable" stand-in for any id Home Assistant has
-  // no live entity for, rather than dropping it. Dropping was silently hiding
-  // exactly the devices most worth showing — one renamed/deleted in HA while
-  // the villa model still references it. It also made this list disagree with
-  // the count that opened it (badge said 30, list showed 3), since the caller
-  // counts ids and this counted live entities. Same stand-in the 3D badge
-  // layer uses, so a device faded on the map is now guaranteed to appear here.
-  // Entities the user hid in HA, or that HA itself filed under Configuration/
-  // Diagnostics (entity_category), are excluded regardless of which caller
-  // built `group` — HA's own auto-populated dashboards honour both the same
-  // way, and this modal IS this app's auto-populated device list. Neither is
-  // touched in HA itself — the entity stays exactly as visible there as before.
-  const all = group.entityIds
-    .filter((id) => !filterSuppressed || !suppressedEntityIds.has(id))
-    .map((id) => entities[id] ?? phantomEntity(id));
-  // Devices you can see in the villa first; HA-only ones (no geometry in this
-  // model) grouped after them under their own heading — HIDDEN entirely for
-  // Guest: a device with no map presence is exactly the kind of "behind the
-  // scenes" plumbing (a relay, a spare contact sensor…) a guest profile has
-  // no reason to see or toggle, on top of the RBAC control gating already
-  // covering whether they could act on it.
-  // ── THREE buckets, because there are three different facts ─────────────
-  // "on the map", "in HA but not modelled" and "modelled but HA has no such
-  // entity" were being answered with two headings, and the third case — a GLB
-  // object still named after a device whose integration was removed — was
-  // simply hidden. It was dismissible ("Remove", in the unavailable-devices
-  // flow) and a dismissal deleted it from every list AND from the map, which
-  // reported nothing at all: the mesh still glowed blue and still opened a
-  // panel, so the app knew about a device it refused to name anywhere.
-  //
-  // A phantom row IS the signal (see utils/phantomEntity — the same stand-in
-  // the 3D badge layer paints from), so the test is simply "did Home
-  // Assistant have an entity for this id".
-  const inHa = (e: HassEntity) => !!entities[e.entity_id];
-  // NOT hidden for Guest, unlike the off-map bucket below. An off-map device
-  // has no presence a guest could see, so omitting it creates no
-  // contradiction; a not-in-HA device is drawn on the map (unavailable, with
-  // the dashed amber ring) and is tappable, so leaving it out of the room's
-  // own list would put the two surfaces back into disagreement about a device
-  // one tap apart — the exact bug this section exists to end.
-  const notInHa = all.filter((e) => !inHa(e));
-  const onMap = all.filter((e) => inHa(e) && mappedEntityIds.has(e.entity_id));
-  const offMap = !roleCan(role, "listUnmappedDevices")
-    ? []
-    : all.filter((e) => inHa(e) && !mappedEntityIds.has(e.entity_id));
-  const rows = [...onMap, ...offMap, ...notInHa];
-  // Deliberately NOT `rows`: a bulk turn-on must never address an entity Home
-  // Assistant does not have. The service call would be rejected for that id
-  // and the row could never reflect it either way.
-  const toggleables = [...onMap, ...offMap]
-    .filter((e) => TOGGLEABLE_DOMAINS.has(domainOf(e.entity_id)));
+  // Which rows, in which buckets — config/summaryRows (the phantom stand-ins,
+  // the three buckets, the guest's off-map rule; tested by value). A guest
+  // never lists a device that has no presence on the map.
+  const { onMap, offMap, notInHa, rows, toggleables } = summaryRows(group.entityIds, {
+    entities, mapped: mappedEntityIds, suppressed: suppressedEntityIds, filterSuppressed,
+    mayListUnmapped: roleCan(role, "listUnmappedDevices"),
+  });
   // "On" is POWER (a group's onCount — devices switched on), and the bulk
   // switch is config/activeDevices': one call PER DOMAIN (the first row's
   // domain used to be sent for every row — a light command to a switch).
@@ -282,7 +215,7 @@ export default function SummaryGroupPanel({
   /** One list, ROOM-grouped — the renderer the on-map, off-map and not-in-HA
    *  sections share (each had the same block written out until 2.496.263). */
   function renderRooms(list: typeof rows) {
-    return groupByRoom(list, roomOf).map(([room, members]) => (
+    return bucketByRoom(list, (e) => e.entity_id, roomOf).map(([room, members]) => (
       <div key={room}>
         <div className="summary-room-heading">{room}</div>
         <div className="summary-entity-grid">{members.map(renderRow)}</div>
@@ -290,7 +223,7 @@ export default function SummaryGroupPanel({
     ));
   }
 
-  function renderRow(e: NonNullable<(typeof all)[number]>) {
+  function renderRow(e: HassEntity) {
     const id = e.entity_id;
     const domain = domainOf(id);
     const look = deviceLook(id, looks);
