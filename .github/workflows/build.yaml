@@ -44,15 +44,21 @@ jobs:
 
   build:
     needs: [checks]
-    runs-on: ubuntu-latest
+    # ⚠️ EACH ARCH ON ITS OWN HARDWARE (2026-10-05): aarch64 built on an amd64 runner, its nginx/apk
+    # stage under QEMU. GitHub's arm64 runner (free for a public repository) builds it natively; the
+    # npm stage runs on the runner's own platform either way (BUILDPLATFORM), and the lockfile carries
+    # the linux-arm64 musl binding it needs (@rolldown/binding-linux-arm64-musl).
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - arch: amd64
             platform: linux/amd64
+            runner: ubuntu-latest
           - arch: aarch64
             platform: linux/arm64
+            runner: ubuntu-24.04-arm
     steps:
       - name: Checkout
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -86,9 +92,8 @@ jobs:
             echo "__TAGS__"
           } >> "$GITHUB_OUTPUT"
 
-      # QEMU lets the arm64 runtime stage build on this amd64 runner. The heavy
-      # npm/Babylon build stage is pinned to BUILDPLATFORM in the Dockerfile, so
-      # it stays native and fast — only the light nginx layer is emulated.
+      # Kept for a run on a runner of the other arch; each arch now builds on its
+      # own hardware (runs-on above), so nothing is emulated.
       - name: Set up QEMU
         uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4
 

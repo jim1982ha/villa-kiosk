@@ -197,5 +197,15 @@ ck("package.json's gates/ship call this module, and no script points at an untra
 ck("the module is tracked (tools/ is not ignored)",
    subprocess.run(["git", "check-ignore", "-q", "tools/release.py"], cwd=HERE).returncode == 1)
 
+# ship says a red CI run at once (2026-10-05: it waited out the full --wait)
+red = {"workflow_runs": [{"name": "Build", "status": "completed", "conclusion": "failure"},
+                         {"name": "CI", "status": "in_progress", "conclusion": None},
+                         {"name": "Old", "status": "completed", "conclusion": "success"}]}
+ck("a failed run for the pushed commit is named; a running or green one is not",
+   release.ci_failures("x", fetch=lambda: red) == ["Build"])
+ck("  ...and GitHub unreachable is not a failure (the wait goes on)",
+   release.ci_failures("x", fetch=lambda: (_ for _ in ()).throw(OSError("offline"))) is None)
+ck("ship polls every 10 s", "poll_seconds=10)" in (HERE / "tools/release.py").read_text())
+
 print(f"\n{'❌ ' + str(FAIL) + ' failed' if FAIL else '✅ the release is one module, and its exit status means published'}")
 sys.exit(1 if FAIL else 0)

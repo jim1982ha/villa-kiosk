@@ -1,3 +1,8 @@
+## 2.496.289
+
+### Changed
+- Behind the scenes: updates are published faster. The ARM version (the one your Home Assistant Yellow runs) is now built on ARM hardware instead of being emulated. Nothing in the app changes.
+
 ## 2.496.288
 
 ### Changed
