@@ -133,15 +133,21 @@ def flips_per_day(logbook: list[dict], zone: str, mass: int = 0) -> dict[str, di
     return {k: dict(v) for k, v in out.items()}
 
 
-def reporting_share(hour_rows: list[dict], until_ms: int | None = None) -> tuple[float | None, int]:
+def reporting_share(hour_rows: list[dict], until_ms: int | None = None, hours: int | None = None) -> tuple[float | None, int]:
     """How regularly a sensor reports, from its hourly statistics: the share of hours in which its value
-    moved (max above min, or a mean unlike the hour before), over the hours before `until_ms`. Returns
-    (share, hours); share is None with no rows.
+    moved (max above min, or a mean unlike the hour before), over the `hours` before `until_ms` (all
+    rows before it when None). Returns (share, hours); share is None with no rows.
+
+    ⚠️ THE HOURS JUST BEFORE IT WENT QUIET, NOT A LONG WINDOW (villa, 2026-10-04): the one sensor that
+    really stopped had stopped once before (6 days frozen, then 6 reporting); over 14 days it "moved" in
+    45 % of hours and read as a change-only sensor — the real fault would have gone unreported.
 
     ⚠️ ONLY A SENSOR THAT REPORTS ALL THE TIME CAN BE "SILENT" (villa, 2026-10-04): a curtain reports when
     it moves, a rain gauge when rain falls; quiet for days is their normal, and 18 of 21 "has not reported"
     tasks were such sensors. A temperature that moved in most hours and then stops is the real case."""
-    rows = sorted((r for r in hour_rows if until_ms is None or r["start"] < until_ms), key=lambda r: r["start"])
+    lo = until_ms - hours * 3600_000 if (until_ms is not None and hours) else None
+    rows = sorted((r for r in hour_rows if (until_ms is None or r["start"] < until_ms) and (lo is None or r["start"] >= lo)),
+                  key=lambda r: r["start"])
     if not rows:
         return None, 0
     moved, prev = 0, None

@@ -85,6 +85,20 @@ def test_only_a_sensor_that_normally_reports_all_the_time_can_be_silent(tmp_path
     assert [f["entity_id"] for f in _open(tmp_path, "PM-SILENT")] == ["sensor.example_temperature"]
 
 
+def test_a_sensor_that_froze_once_before_is_judged_by_the_days_before_it_stopped(tmp_path):
+    # villa: frozen 6 days, reporting 6 days, then stopped — over 14 days it moved in under half its hours
+    fx = tmp_path / "fx"
+    fx.mkdir()
+    since = NOW - timedelta(hours=40)
+    (fx / "states.json").write_text(json.dumps({"states": {"sensor.example_th": {
+        "state": "28.45", "attributes": {}, "last_changed": since.isoformat(), "last_reported": since.isoformat()}}}))
+    _hourly(fx, "a", {"sensor.example_th": (since - timedelta(days=12), 8 * 24, False)})   # an earlier freeze
+    _hourly(fx, "b", {"sensor.example_th": (since - timedelta(days=4), 4 * 24, True)})    # then reporting; 1/3 overall
+    _pack(tmp_path, {"level": [_row("sensor.example_th", "TH temperature")]})
+    _night(tmp_path, "--as-of", AS_OF)
+    assert [f["entity_id"] for f in _open(tmp_path, "PM-SILENT")] == ["sensor.example_th"]
+
+
 def test_a_sensor_with_no_history_is_not_called_silent(tmp_path):
     # absence is not evidence: with nothing to compare, the check says nothing
     fx = tmp_path / "fx"

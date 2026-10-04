@@ -210,13 +210,14 @@ def run(args) -> dict:
     silence_hours = params.behaviour("silence_hours")
     long_quiet = [(r, a, t) for r, a, t in quiet_rows if (now_ref - t).total_seconds() / 3600 >= silence_hours]
     if long_quiet:
-        hist_days = int(params.behaviour_text_default("silence_history_days", 14))
+        # judged on the hours just BEFORE it went quiet (features.reporting_share)
+        hist_hours = int(params.behaviour_text_default("silence_history_hours", 72))
         share_min = params.behaviour_text_default("silence_reporting_share", 0.5)
-        q_stats = cli.statistics([r["entity_id"] for r, _, _ in long_quiet], now_ref - timedelta(days=hist_days),
-                                 now_ref, "hour", ("mean", "min", "max"))
+        q_from = min(t for _, _, t in long_quiet) - timedelta(hours=hist_hours)
+        q_stats = cli.statistics([r["entity_id"] for r, _, _ in long_quiet], q_from, now_ref, "hour", ("mean", "min", "max"))
         silent_groups: dict[str, dict] = {}
         for row, asset, since in long_quiet:
-            share, hours = F.reporting_share(q_stats.get(row["entity_id"], []), int(since.timestamp() * 1000))
+            share, hours = F.reporting_share(q_stats.get(row["entity_id"], []), int(since.timestamp() * 1000), hist_hours)
             if share is None or hours < 48 or share < share_min:
                 continue                  # reports on change only, or too little history to say: not a fault
             key = row.get("device_id") or f"{row.get('platform') or 'x'}:{row['asset']}"
