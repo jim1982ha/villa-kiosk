@@ -15,7 +15,7 @@ import type { AlertLevel } from "@/config/ThresholdConfig";
 import { readingKind, readingLevel } from "@/config/sensorReading";
 import { stateLabelFor, binarySensorClassInfo, alertStateFor } from "@/config/BinarySensorClasses";
 import { effectiveSensorClass, SENSOR_CLASS_ICON } from "@/config/SensorClasses";
-import { binarySensorColor, isUnavailable } from "@/utils/stateColors";
+import { binarySensorColor, binaryStatus, isUnavailable, STATUS_PILL_CLASS } from "@/utils/stateColors";
 
 const LEVEL_COLOR: Record<AlertLevel, string> = {
   normal: "var(--status-on)",
@@ -55,7 +55,9 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
   // (An unavailable sensor never reaches this: the pill shows "Unavailable" first.)
   const labelFor = stateLabelFor(mapping.entityId, entity?.attributes.device_class as string | undefined);
   const binaryStateText = labelFor(entity?.state === "on" ? "on" : "off");
-  const binaryPillTone = level === "danger" ? "danger" : entity?.state === "on" ? "on" : "off";
+  // The pill reads the state as its history bar does (binaryStatus): a leak
+  // sensor finding no leak is green, not "off".
+  const binaryPillTone = level === "danger" ? "danger" : STATUS_PILL_CLASS[binaryStatus(entity?.state === "on" ? "on" : "off", alertState)];
 
   // ONE of two history sections, by what the sensor reports: raw states for a
   // binary or text sensor (a numeric parse would drop every row) — the shared

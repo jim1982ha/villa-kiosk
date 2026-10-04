@@ -1,3 +1,8 @@
+## 2.496.280
+
+### Changed
+- **A detector finding nothing wrong now shows green.** "No leak", "Clear" (smoke, gas, tamper) and a battery reading "Normal" are the device doing its job, so its status and its history bar are now green ("On / active") instead of grey ("Off / idle"). The problem state stays red. The same applies to any sensor you've given an alert state in Settings (a server-room door you watch, for example): its safe state is green. Sensors that only report what's happening (motion, a door nobody watches) are unchanged. The Map colours legend says so.
+
 ## 2.496.279
 
 ### Fixed

@@ -245,11 +245,28 @@ export const STATUS_PILL_CLASS: Record<StatusKey, string> = {
   alert: "danger",
 };
 
-/** binary_sensor: like the plain map above, but the device_class's "problem" state (if
- *  configured — see ThresholdConfig/BinarySensorClasses) reads as danger. */
+/**
+ * A binary_sensor's meaning. When it has a PROBLEM state — its device class's
+ * (leak, smoke, gas, tamper, a low battery…) or the owner's own per-device
+ * setting (BinarySensorClasses.alertStateFor) — that state is an alert and
+ * the OTHER one is the device doing its job: "active", green.
+ *
+ * ⚠️ "NO LEAK" WAS GREY (owner, 2026-10-05): a leak sensor reporting no leak
+ * read "Off / idle" on its pill and its history bar, as if it were switched
+ * off, when it is watching and finding nothing — the state an owner wants to
+ * see. Only a sensor with no problem state (motion, a door nobody watches)
+ * keeps on = active, off = idle. Unavailable/unknown keep their own meaning.
+ */
+export function binaryStatus(state: string, alertState?: string): StatusKey {
+  const plain = statusKeyFor(state, "binary_sensor");
+  if (alertState !== "on" && alertState !== "off") return plain;
+  if (state === alertState) return "alert";
+  return state === "on" || state === "off" ? "active" : plain;
+}
+
+/** binary_sensor: binaryStatus as a colour — the history bar's. */
 export function binarySensorColor(state: string, alertState?: string): string {
-  if (alertState !== undefined && state === alertState) return DANGER_COLOR;
-  return STATUS_COLOR[statusKeyFor(state, "binary_sensor")];
+  return STATUS_COLOR[binaryStatus(state, alertState)];
 }
 
 const PALETTE = [ON_COLOR, "var(--accent)", WARN_COLOR, DANGER_COLOR, "var(--accent-strong)"];
