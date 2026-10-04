@@ -136,7 +136,12 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
           <div className="title">
             {headerIcon}
             <div style={{ minWidth: 0 }}>
-              <h2 title={title}>{title}</h2>
+              {/* The window's first focus (useModalA11y's data-autofocus), not the
+                  badge: the badge is the Owner's recolour BUTTON, and focusing it on
+                  open drew the phone's own focus ring round it — an amber border
+                  that read as a device state (owner, 2026-10-05). The heading is the
+                  conventional dialog-open target; tabIndex={-1} keeps it out of Tab. */}
+              <h2 title={title} tabIndex={-1} data-autofocus>{title}</h2>
               {room && <div className="room">{room}</div>}
             </div>
           </div>
