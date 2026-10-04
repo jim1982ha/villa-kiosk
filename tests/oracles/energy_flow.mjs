@@ -166,7 +166,7 @@ ck("  ...the chevron is on a MAIN device with devices inside — never on a devi
    /\{depth === 0 && \(toggle\s*\? <ChevronRight/.test(panel) && /aria-expanded/.test(panel) && !/depth > 0 && <ChevronRight/.test(panel));
 ck("the flow's head has no 'kWh today · now' (each row says kWh, and 'now' where it is power)", !/kWh today · now/.test(panel));
 ck("on a phone the bar stays, under the name (it was hidden)", /grid-template-areas: "name kwh pct" "bar bar bar";/.test(css) && !/\.energy-rank-bar \{ display: none; \}/.test(css));
-ck("'Every device' switches between the list and the pie", /shape === "pie"\s*\? <DevicePie split=\{whole\} colourOf=\{colourOf\} \/>/.test(panel) && /useSegmentedChoice\(SHAPES, "list"/.test(panel));
+ck("'Every device' switches between the list and the pie, opening on the pie (owner, 2026-10-05)", /shape === "pie"\s*\? <DevicePie split=\{whole\} colourOf=\{colourOf\} \/>/.test(panel) && /useSegmentedChoice\(SHAPES, "pie"/.test(panel));
 ck("the period picker is in the header, the Weather window's control", /live=\{<LiveNote>Home Assistant Energy<\/LiveNote>\} picker=\{picker\}/.test(panel)
    && /useSegmentedChoice\(RANGE_OPTIONS, "week", "Period", "weather-ranges"\)/.test(panel) && !/energy-history-head/.test(panel));
 const hr = readFileSync(new URL("../../src/components/panels/historyRange.tsx", import.meta.url), "utf8");

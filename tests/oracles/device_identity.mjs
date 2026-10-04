@@ -57,8 +57,14 @@ console.log("\n  the same on every panel (2.496.271):");
   ck("  ...but a battery a PERSON hid in Home Assistant stays hidden",
      !deviceReadings("sensor.pump_power", fold2, ents2, hidden, [], reg2, new Set(["sensor.pump_battery"])).includes("sensor.pump_battery"));
   const fromReading = deviceReadings("sensor.pump_energy", fold2, ents2, hidden, [], reg2);
-  ck("a READING opened by itself lists its device too — the device's main entity first, never itself",
-     fromReading[0] === "sensor.pump_power" && !fromReading.includes("sensor.pump_energy") && fromReading.includes("sensor.pump_temp"), fromReading);
+  // owner, 2026-10-05: "the main entity shall never be visible in 'Also on this device' when showing a
+  // sub-entity screen" — Back is the way to it; the list is what ELSE the device has
+  ck("a READING's panel lists the device's other readings — never the main entity, never itself",
+     !fromReading.includes("sensor.pump_power") && !fromReading.includes("sensor.pump_energy")
+     && fromReading.includes("sensor.pump_temp") && fromReading.includes("sensor.pump_battery"), fromReading);
+  ck("  ...for every entity of the device, the main entity is listed by none of them",
+     ["sensor.pump_energy", "sensor.pump_temp", "sensor.pump_battery", "sensor.pump_current"]
+       .every((r) => !deviceReadings(r, fold2, ents2, hidden, [], reg2).includes("sensor.pump_power")));
   ck("a device nobody placed on the map still lists its readings (from Home Assistant's device registry)",
      deviceReadings("sensor.solo_b", fold2, ents2, hidden, [], reg2).join() === "sensor.solo_a");
   const grouped = [{ id: "g", primaryEntityId: "light.hall", memberEntityIds: ["sensor.pump_temp"] }];

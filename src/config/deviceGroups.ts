@@ -343,9 +343,12 @@ const FIRST_CLASSES = ["power", "energy", "temperature"];
  * integrations, so a light or a lock usually listed nothing either.
  *
  * Now, for any open entity `id`:
- *  - its device's MAIN entity first, whatever it is (from a reading, the way to
- *    the device's controls), unless that is the open entity;
- *  - the device's readings — fold members (groups, registry siblings) and the
+ *  - NEVER the device's MAIN entity (owner, 2026-10-05: a battery opened from
+ *    "Smoke detector Smoke" listed "Smoke detector Smoke" again). Until
+ *    2.496.278 a reading's panel listed its main entity first, as the way back
+ *    to the device's controls; "‹ Back" (pages/panelNav) is that way now, and
+ *    the list is only what ELSE the device has;
+ *  - the device's other readings — fold members (groups, registry siblings) and the
  *    registry siblings of an unplaced device alike — power, energy and
  *    temperature first;
  *  - a reading Home Assistant files as hidden or diagnostic only when the owner
@@ -385,7 +388,7 @@ export function deviceReadings(
     return k < 0 ? FIRST_CLASSES.length : k;
   };
   readings.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
-  return rep !== id && entities[rep] ? [rep, ...readings] : readings;
+  return readings;
 }
 
 /**

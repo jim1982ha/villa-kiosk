@@ -1,3 +1,9 @@
+## 2.496.278
+
+### Changed
+- **The energy window's "Every device" opens on the pie chart.** The list is one tap away, on the same switch.
+- **"Also on this device" never lists the device's main entity.** Opening the battery of "Smoke Detector Smoke" listed "Smoke Detector Smoke" again. A reading's window now lists only what else the device has; "‹ Back" returns to the device itself. This applies to every device window.
+
 ## 2.496.277
 
 ### Fixed

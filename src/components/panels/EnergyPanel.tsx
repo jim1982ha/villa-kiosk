@@ -288,7 +288,8 @@ const SHAPES = [
 function HistoryView({ setup, costUnit, range: rangeKey, colourOf }: { setup: EnergyWindowSetup; costUnit: string | undefined; range: EnergyRangeKey; colourOf: (id: string) => string }) {
   const range = energyRange(rangeKey);
   // Every device as a list or as HA's pie — the app's one segmented control.
-  const { key: shape, picker: shapePicker } = useSegmentedChoice(SHAPES, "list", "Show every device as", "energy-shape");
+  // The pie first (owner, 2026-10-05: "show the pie chart by default").
+  const { key: shape, picker: shapePicker } = useSegmentedChoice(SHAPES, "pie", "Show every device as", "energy-shape");
   const now = Date.now();
   const starts = periodStarts(range.kind, now);
   const { data: answer, status } = useHistorySource({ p: energyRequest(setup, starts[0], range.period) });
