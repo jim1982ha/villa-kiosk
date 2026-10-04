@@ -1,3 +1,11 @@
+## 2.496.285
+
+### Fixed
+- **A sensor shown inside a grouped device window now looks the way it does on its own.** When a sensor is grouped with others (for example a smoke detector with its battery), its state used to show as plain grey text, with no colour and no history. It now has the same coloured status as in its own window ("Clear" in green, "Smoke detected" in red) and its own history bar underneath.
+
+### Changed
+- Behind the scenes: how a sensor's state looks (its words, colours, status and alert) is decided in one place that both windows use, and it is checked by tests on real values.
+
 ## 2.496.284
 
 ### Fixed
