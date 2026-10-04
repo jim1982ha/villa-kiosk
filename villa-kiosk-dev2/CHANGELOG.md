@@ -1,3 +1,13 @@
+## 2.496.271
+
+### Changed
+- **"Also on this device" now works the same on every device window.**
+  - **Opening a reading by itself** (for example a pump's apparent power) now lists the rest of its device, starting with the device itself, so its controls are one tap away.
+  - **A device that isn't placed on the map** still lists its other readings, taken from Home Assistant's own list of devices.
+  - **Batteries are listed** even though Home Assistant files most of them as "diagnostic": a battery level is something to act on. Signal strength, uptime and similar technical readings stay out, and so does anything you hid yourself in Home Assistant.
+  - **No clutter:** the most useful readings come first (power, energy, temperature). Only the first three show, with "Show all" for the rest, so a busy plug no longer pushes its controls off the screen.
+  - **Cameras:** the list appears in a camera's details window (press and hold its badge). The live video view stays clear.
+
 ## 2.496.270
 
 ### Added
