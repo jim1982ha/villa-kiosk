@@ -1,3 +1,8 @@
+## 0.12.24
+
+### Fixed
+- **A sensor that really stops is still reported, even if it stopped once before.** Checked against the villa's own history after 0.12.23: the Temp and Humidity sensor that went silent on 2 October had already been frozen for six days in September, and 0.12.23 would have mistaken it for a sensor that only reports on a change. A sensor is now judged on the three days before it went quiet.
+
 ## 0.12.23
 
 ### Fixed
