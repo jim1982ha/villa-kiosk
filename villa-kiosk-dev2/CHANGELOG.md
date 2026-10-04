@@ -1,3 +1,8 @@
+## 2.496.276
+
+### Changed
+- Behind the scenes: which devices a device list shows (a summary tile, a room, a Cockpit tile) and their order by room are now decided in one place, shared with the Cockpit's room tiles, and checked by tests. Nothing you see changes.
+
 ## 2.496.275
 
 ### Changed
