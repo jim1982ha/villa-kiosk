@@ -37,8 +37,9 @@ schedule:
       It is Monday 08:00. Read the reports skill and make the facility manager's weekly report, following its
       steps "A weekly or monthly report": the week's energy, facts.py fm-weekly, your readings from the clues,
       the playbook and Home Assistant, saved in notes.json (in {fm_language}), compose.py fm-weekly, then
-      send_message to fm with the page attached. Then send the owner the three owner-weekly lines
-      (compose.py owner-weekly --energy week.json), in {owner_language}.
+      send_message to fm with the page attached, its text the page's one-line summary. On schedule only, then send
+      the owner the three owner-weekly lines (compose.py owner-weekly --energy week.json), in {owner_language};
+      when the report was asked for in a chat, the page is the whole answer: send nothing else.
   - when: "1 08:00"
     name: owner-monthly
     to: owner

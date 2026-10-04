@@ -1,3 +1,8 @@
+## 0.12.25
+
+### Changed
+- **A report you ask for in a chat is one message.** The VESTA Agent answers once ("your weekly report is on its way"), and when the report is ready that message is replaced by the report itself. You no longer also get the owner's three weekly lines as a third message: those come only with the scheduled Monday report. If a report cannot be made, the waiting message says so instead of promising one.
+
 ## 0.12.24
 
 ### Fixed

@@ -167,3 +167,50 @@ def test_every_report_a_person_may_ask_for_runs_as_its_job():
             if j.get("on_request"):
                 assert j["name"] in tied, f"{sk.name}: {j['name']} may be asked for but no command is job_only for it"
 
+
+
+def _asked_in_chat(agent, tmp_path, monkeypatch, page: bool):
+    """The person asks in the chat; the conversation starts the job and replies; the job (a moment later)
+    sends its page — or ends without one."""
+    page_path = tmp_path / "fm_weekly.html"
+    page_path.write_text("<html></html>")
+
+    async def fake_run(settings_, system, prompt, server, allowed, state, who, resume=None, limit_usd=None, profile=None, asked=None):
+        if who.startswith("job:"):
+            await asyncio.sleep(0.02)                    # the job takes a while
+            if page:
+                await agent.send(ASKER, "Three things need attention.", document=str(page_path))
+            return runner.RunResult("", None, False, 0.1, [], None)
+        await agent.start_job("fm-weekly", ASKER)        # what the start_job tool does
+        return runner.RunResult("Your weekly report is on its way.", None, False, 0.01, [], None)
+    monkeypatch.setattr(runner, "run", fake_run)
+
+    async def go():
+        await agent.converse(ASKER, Person(ASKER, "Asker", "fm"), "/ask the weekly report")
+        await asyncio.sleep(0.1)
+    run(go())
+    return agent.tg
+
+
+def test_a_report_asked_for_in_a_chat_is_one_message_replaced_by_the_page(agent, tmp_path, monkeypatch):
+    # owner, 2026-10-04: "I don't want to see 3 messages … reply with 1 message when the report is being
+    # generated, and replace it with the final notification": the waiting message goes when the page comes
+    tg = _asked_in_chat(agent, tmp_path, monkeypatch, page=True)
+    waiting = next(i for i, (c, text, _) in enumerate(tg.sent) if "on its way" in text)
+    waiting_id = 1001 + waiting
+    assert tg.deleted == [(ASKER, waiting_id)]
+    assert [text for _, text, _ in tg.sent] == ["Your weekly report is on its way.", "Three things need attention."]
+
+
+def test_a_job_that_ends_without_its_page_says_so_in_the_waiting_message(agent, tmp_path, monkeypatch):
+    tg = _asked_in_chat(agent, tmp_path, monkeypatch, page=False)
+    assert tg.deleted == []
+    assert len(tg.edits) == 1 and "ended without a result" in tg.edits[0][2]
+
+
+def test_a_requested_weekly_sends_only_the_page():
+    import yaml as _y
+    from helpers import STARTER_SKILLS
+    jobs = _y.safe_load(open(os.path.join(STARTER_SKILLS, "reports", "skill.yaml")))["schedule"]
+    weekly = next(j for j in jobs if j["name"] == "fm-weekly")["prompt"]
+    assert "On schedule only" in weekly and "send nothing else" in weekly

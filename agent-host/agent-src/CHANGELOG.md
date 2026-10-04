@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.24 (4 October 2026)
+
+- A job asked for in a chat is ONE message, then its result (owner, 2026-10-04: "I don't want to see 3 messages"). The conversation reply that started it is remembered per chat (app._job_notices) and deleted when a page is sent to that chat (Telegram cannot turn a text message into a file message: telegram.delete, deleteMessage on the bot's own message); a job that ends without a page edits it to say so. reports skill.yaml fm-weekly: the owner-weekly lines on schedule only; asked in a chat, the page is the whole answer. tests/test_jobs.py: 3 new, each red under its mutation.
+
 ## 0.6.23 (4 October 2026)
 
 - PM-SILENT judges a sensor on the 72 hours BEFORE it went quiet (silence_history_hours, was a 14-day window). Checked against the villa's live history after 0.6.22 was installed: the one sensor that really stopped had been frozen once before (6 days), so over 14 days it moved in ~45 % of hours and 0.6.22 would have taken it for a change-only sensor. tests/test_maintenance_noise.py: the earlier-freeze case (fails with the 14-day window).

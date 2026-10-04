@@ -23,7 +23,7 @@ BOT = {"id": 8000, "username": "Villa_Test_bot"}
 
 class FakeTelegram:
     def __init__(self):
-        self.sent, self.toasts, self.edits, self.next_id = [], [], [], 1000
+        self.sent, self.toasts, self.edits, self.deleted, self.next_id = [], [], [], [], 1000
 
     async def open(self):
         return BOT
@@ -41,6 +41,10 @@ class FakeTelegram:
 
     async def edit(self, chat_id, message_id, text):
         self.edits.append((chat_id, message_id, text))
+
+    async def delete(self, chat_id, message_id):
+        self.deleted.append((chat_id, message_id))
+        return True
 
     def __getattr__(self, name):          # getUpdates, leaveChat... must never be reached
         raise AssertionError(f"Telegram.{name} must never be called")

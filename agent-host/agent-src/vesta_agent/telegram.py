@@ -107,6 +107,15 @@ class Telegram:
         except TelegramError as e:
             log.warning("answerCallbackQuery failed: %s", e)
 
+    async def delete(self, chat_id: int, message_id: int) -> bool:
+        """Delete one of the bot's own messages (a bot may, for 48 hours). False when Telegram refuses."""
+        try:
+            await self.api("deleteMessage", chat_id=chat_id, message_id=message_id)
+            return True
+        except TelegramError as e:
+            log.warning("deleteMessage failed: %s", e)
+            return False
+
     async def edit(self, chat_id: int, message_id: int, text: str):
         try:
             await self.api("editMessageText", chat_id=chat_id, message_id=message_id, text=text[:4096])
