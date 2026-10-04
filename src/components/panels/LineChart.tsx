@@ -90,7 +90,7 @@ export default function LineChart({ lines, window, height = 150, status, label }
   // A line with no readings still has its outage, and its band says so
   // (every line is kept); whether there is anything to draw is lineChart's.
   const w = drawableWindow(window, ...lines.map((l) => l.pts));
-  const g = w ? chartGeometry(w, lines.map((l) => ({ pts: l.pts, gaps: l.gaps ?? [], scale: l.scale ?? "shared" })), plot, 0.08) : null;
+  const g = w ? chartGeometry(w, lines.map((l) => ({ pts: l.pts, gaps: l.gaps ?? [], scale: l.scale ?? "shared", unit: l.unit })), plot, 0.08) : null;
   const { frac, handlers } = useChartPointer<SVGSVGElement>();
   if (!g) return <><ChartEmpty status={status} height={height} /><TimeAxis g={null} /></>;
 

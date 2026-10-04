@@ -1,3 +1,8 @@
+## 2.496.277
+
+### Fixed
+- **A percentage chart no longer goes above 100 %.** A battery at 100 % used to be drawn under an axis reading 100.5 and 101. The axis now stops at 100 and doesn't go below 0 for any % reading (batteries, humidity, the weather's Humidity chart), as long as the values stay between 0 and 100. A % reading that really goes above 100 keeps its full range, so nothing is cut off.
+
 ## 2.496.276
 
 ### Changed

@@ -31,6 +31,23 @@ export interface ChartSeriesInput {
   /** "shared": one y-scale with every other shared series (the default);
    *  "own": its own min–max (a second axis); "fromZero": its own 0–max. */
   scale?: "shared" | "own" | "fromZero";
+  /** Its unit: a "%" reading keeps its axis within 0–100 while its values do
+   *  (naturalBounds). */
+  unit?: string;
+}
+
+/**
+ * The range a unit's readings normally live in: a percentage between 0 and
+ * 100. The axis stops at those ends ONLY while every value lies inside them
+ * — never a cap: a "%" series that goes above 100 (an energy change, an
+ * efficiency) keeps its own range.
+ *
+ * ⚠️ OWNER, 2026-10-05 (a battery at 100 %): the axis read 100 / 100.5 / 101 —
+ * a flat series got "a span of 1 above its value" and the line chart's 8 %
+ * padding on top, so a full battery was drawn under a 101 % line.
+ */
+export function naturalBounds(unit: string | undefined): { min: number; max: number } | null {
+  return unit?.trim() === "%" ? { min: 0, max: 100 } : null;
 }
 
 export interface HoverReading { t: number; v: number; x: number; y: number }
@@ -148,18 +165,26 @@ export function chartGeometry(
   const span = window.to - window.from || 1;
   const tAt = (x: number) =>
     window.from + Math.max(0, Math.min(1, (x - plot.left) / ((plot.right - plot.left) || 1))) * span;
-  const range = (vs: number[], fromZero: boolean): [number, number] => {
+  const range = (vs: number[], fromZero: boolean, units: readonly (string | undefined)[]): [number, number] => {
     if (vs.length === 0) return [0, 1];
     let lo = fromZero ? 0 : Math.min(...vs), hi = Math.max(...vs);
-    if (hi - lo <= 0) hi = lo + 1;
+    // Every series on this scale in the same bounded unit, and every value
+    // inside its bounds: the axis may not pass them (naturalBounds).
+    const b = units.length > 0 && units.every((u) => naturalBounds(u) !== null && u?.trim() === units[0]?.trim())
+      ? naturalBounds(units[0]) : null;
+    const held = b !== null && lo >= b.min && hi <= b.max;
+    // A flat series gets a span of 1 — below it when it sits on the ceiling.
+    if (hi - lo <= 0) { if (held && hi >= b!.max) lo = hi - 1; else hi = lo + 1; }
     if (!fromZero && pad > 0) { const p = (hi - lo) * pad; lo -= p; hi += p; }
+    if (held) { lo = Math.max(lo, b!.min); hi = Math.min(hi, b!.max); }
     return [lo, hi];
   };
-  const shared = range(input.filter((s) => (s.scale ?? "shared") === "shared").flatMap((s) => s.pts.map((p) => p.v)), false);
+  const sharedInput = input.filter((s) => (s.scale ?? "shared") === "shared");
+  const shared = range(sharedInput.flatMap((s) => s.pts.map((p) => p.v)), false, sharedInput.map((s) => s.unit));
   const slice = (plot.bottom - plot.top) / Math.max(1, input.length);
   const series = input.map((s, i): SeriesGeometry => {
     const kind = s.scale ?? "shared";
-    const [lo, hi] = kind === "shared" ? shared : range(s.pts.map((p) => p.v), kind === "fromZero");
+    const [lo, hi] = kind === "shared" ? shared : range(s.pts.map((p) => p.v), kind === "fromZero", [s.unit]);
     const sy = (v: number) => plot.bottom - ((v - lo) / (hi - lo)) * (plot.bottom - plot.top);
     const minW = (plot.right - plot.left) * MIN_BAND_OF_PLOT;
     const bands = s.gaps.flatMap((gap) => {
