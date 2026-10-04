@@ -179,7 +179,11 @@ def line(series: list, unit: str = "", ref: float | None = None, area: bool = Fa
     vals = [v for _, v in pts] + ([ref] if ref is not None else [])
     lo, hi = min(vals), max(vals)
     pad = (hi - lo) * 0.15 or abs(hi) * 0.1 or 1
-    lo, hi, ticks = _ticks(0 if lo >= 0 and lo - pad < 0 else lo - pad, hi + pad)
+    # ⚠️ A PERCENTAGE STAYS WITHIN 0–100 WHILE ITS VALUES DO (owner, 2026-10-05: a battery at 100 % under a
+    # 101 % axis) — never a cap: a "%" series above 100 (an energy change) keeps its own range.
+    held = (unit or "").strip() == "%" and lo >= 0 and hi <= 100
+    top = min(hi + pad, 100) if held else hi + pad
+    lo, hi, ticks = _ticks(0 if lo >= 0 and lo - pad < 0 else lo - pad, top)
     y = _scale(lo, hi, PAD_T, H - PAD_B)
     step = (W - PAD_L - PAD_R) / (len(pts) - 1)
     xy = [(PAD_L + i * step, y(v)) for i, (_, v) in enumerate(pts)]

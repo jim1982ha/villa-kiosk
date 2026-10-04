@@ -57,3 +57,14 @@ def test_the_morning_digest_uses_the_same_grouping():
     lines = compose._grouped([{"kind": "K", "severity": s, "subject": n, "title": f"{n} is off"}
                               for s, n in (("P3", "a"), ("P2", "b"), ("P3", "c"))], 3, {"K": "{n} {kind} off"})
     assert lines == ["- P2 3 K off: a, b, c."]
+
+
+def test_a_percentage_line_stays_within_0_to_100_while_its_values_do():
+    # owner, 2026-10-05: "the Y axis shall never go above 100 % when the value is 100 %" — but never a cap
+    import re
+    import compose
+    top = lambda svg: max(float(v.replace(",", "")) for v in re.findall(r'text-anchor="end" fill="var\(--ink2\)">([-\d.,]+)<', svg))
+    assert top(compose.line([("2026-10-01", 100), ("2026-10-02", 100), ("2026-10-03", 100)], "%")) == 100
+    assert top(compose.line([("2026-10-01", 40), ("2026-10-02", 97)], "%")) == 100
+    assert top(compose.line([("2026-10-01", 80), ("2026-10-02", 135)], "%")) > 135          # an energy change: no cap
+    assert top(compose.line([("2026-10-01", 100), ("2026-10-02", 100)], "kWh")) > 100       # other units unchanged

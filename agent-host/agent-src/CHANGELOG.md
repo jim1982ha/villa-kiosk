@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.30 (5 October 2026)
+
+- reports compose.line(): a "%" series whose values all lie in 0–100 gets its axis top at 100 at most (the 15 % padding no longer passes it); any value outside keeps the old range, so nothing is capped. tests/test_shared_grouping.py, mutation-checked. Starter skill recorded.
+
 ## 0.6.29 (4 October 2026)
 
 - Architecture review (fourth pass):
