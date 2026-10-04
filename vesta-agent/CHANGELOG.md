@@ -1,3 +1,8 @@
+## 0.12.29
+
+### Fixed
+- **The service, people and AI tables on the VESTA Agent page fit the screen.** A long rule like "listed — only the devices in the lists below, then approval" pushed the services table off the right of a phone and cut the service names to a few letters. The columns now keep their width, and a long choice ends in "…" (open it to read the whole text). On a phone, each service shows its name with a remove button, and its rule on the line below. Each person shows name and Telegram id, then role and language.
+
 ## 0.12.28
 
 ### Changed

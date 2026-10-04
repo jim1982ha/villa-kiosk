@@ -439,7 +439,7 @@ function rulesForms(doc, jobs = []) {
     h("td", { class: "x" }, h("button", { class: "btn icon ghost", title: "Remove", onclick: () => { f.people.splice(i, 1); drawPeople(); markDirty(); } }, "×")))));
   drawPeople();
   const people = card("People", "Who the agent answers. Each person sends /whoami to the bot to read their Telegram id.",
-    h("table", { class: "rows" }, h("thead", {}, h("tr", {}, ["Name", "Telegram id", "Role", "Language", ""].map((x) => h("th", {}, x)))), peopleBody),
+    h("table", { class: "rows people" }, h("thead", {}, h("tr", {}, ["Name", "Telegram id", "Role", "Language", ""].map((x) => h("th", {}, x)))), peopleBody),
     h("div", { class: "actions" }, h("button", { class: "btn ghost", onclick: () => { f.people.push({ telegram_id: "", name: "", role: "fm", language: "en" }); drawPeople(); markDirty(); } }, "Add a person")));
 
   // chats
@@ -459,7 +459,7 @@ function rulesForms(doc, jobs = []) {
     h("td", { class: "x" }, h("button", { class: "btn icon ghost", title: "Remove", onclick: () => { svcRows.splice(i, 1); syncSvc(); drawSvc(); markDirty(); } }, "×")))));
   drawSvc();
   const services = card("What the agent may do", "One line per Home Assistant service, and who decides. Anything not listed is refused. Restarts, shell commands, toggles and the like are refused whatever this says.",
-    h("table", { class: "rows" }, h("thead", {}, h("tr", {}, ["Service", "Rule", ""].map((x) => h("th", {}, x)))), svcBody),
+    h("table", { class: "rows svc" }, h("thead", {}, h("tr", {}, ["Service", "Rule", ""].map((x) => h("th", {}, x)))), svcBody),
     h("div", { class: "actions" }, h("button", { class: "btn ghost", onclick: () => { svcRows.push(["", "any"]); drawSvc(); markDirty(); } }, "Add a service")));
 
   // devices: chosen from the villa's own, by name (owner, 2026-10-01: "free form text inputs are not

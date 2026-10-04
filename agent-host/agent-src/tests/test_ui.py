@@ -198,6 +198,16 @@ def test_every_choice_is_the_pages_own_dropdown_never_the_platforms_picker():
     assert js.count("dropdown(") >= 4 and "document.body.append(list)" in js
 
 
+def test_editable_tables_keep_their_columns_on_a_phone():
+    # owner, 2026-10-04 (a phone screenshot): one long rule widened the services table off the screen
+    from vesta_agent.ui.server import STATIC
+    css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
+    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
+    assert "table.rows { table-layout: fixed; }" in css
+    assert 'class: "rows svc"' in js and 'class: "rows people"' in js
+    assert "table.rows.svc tr { grid-template-columns: 1fr 44px; }" in css and "table.rows.people tr { grid-template-columns: 1fr 1fr 44px; }" in css
+
+
 def test_the_overview_gives_the_apps_version_with_the_agents(ui, monkeypatch):
     from vesta_agent import __version__
     monkeypatch.setenv("VESTA_APP_VERSION", "9.9.9")

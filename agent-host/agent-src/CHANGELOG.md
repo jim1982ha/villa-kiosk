@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.28 (4 October 2026)
+
+- UI: editable tables (table.rows) use table-layout: fixed with per-table column widths (svc, people, ai). An automatic table sized a column to its longest unbreakable dropdown label and overflowed a phone. On ≤ 600 px the svc and people rows stack as a grid, as the ai rows did. tests/test_ui.py pins it.
+
 ## 0.6.27 (4 October 2026)
 
 - The UI's dropdowns: app.js dropdown() (a picker-box button, its own listbox fixed on the page body, under or above the button, keyboard arrows/Home/End/Enter/Escape) replaces every native select (Costs period, sel(): brain, conversation reset, role, language; the service Rule). app.css .dropdown*. tests/test_ui.py refuses a native select in app.js or index.html.

@@ -193,8 +193,18 @@ ul.plain li:last-child { border-bottom: 0; }
 /* a switch and a field side by side on one line; they stack when the screen is too narrow */
 .inline { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 32px; }
 .inline .field { min-width: 220px; }
-/* the AI table: the brain menu and the limit stay usable on a phone */
-table.rows td select, table.rows td input { width: 100%; min-width: 0; }
+/* ⚠️ EDITABLE TABLES HAVE FIXED COLUMNS (owner, 2026-10-04, a phone screenshot: the services table ran off the
+   screen). An automatic table sizes a column to its longest unbreakable text, so one long rule ("listed — only
+   the devices in the lists below, then approval") widened the whole table and squeezed the service ids to
+   "cove". Fixed widths: a long choice ends in "…" inside its own column; on a phone each row stacks below. */
+table.rows { table-layout: fixed; }
+table.rows td .dropdown, table.rows td input { width: 100%; min-width: 0; }
+table.rows.svc th:nth-child(1) { width: 38%; }
+table.rows.people th:nth-child(1) { width: 26%; }
+table.rows.people th:nth-child(2) { width: 22%; }
+table.rows.people th:nth-child(3) { width: 22%; }
+table.rows.ai th:nth-child(2), table.rows.ai th:nth-child(3) { width: 22%; }
+table.rows th:last-child { width: 44px; }
 /* on a phone each AI row puts the work on its own line, its brain and limit below it */
 @media (max-width: 600px) {
   table.rows.ai thead { display: none; }
@@ -203,6 +213,18 @@ table.rows td select, table.rows td input { width: 100%; min-width: 0; }
   table.rows.ai td { padding: 0; }
   table.rows.ai td:first-child { grid-column: 1 / -1; }
   table.rows.ai td[colspan] { grid-column: span 2; }
+  /* services: the service and its remove button on one line, the rule under them, full width */
+  table.rows.svc thead, table.rows.people thead { display: none; }
+  table.rows.svc tr, table.rows.people tr { display: grid; gap: 6px 8px; padding: 10px 0; border-top: 1px solid var(--hairline); }
+  table.rows.svc tr:first-child, table.rows.people tr:first-child { border-top: 0; }
+  table.rows.svc td, table.rows.people td { padding: 0; min-width: 0; }
+  table.rows.svc tr { grid-template-columns: 1fr 44px; }
+  table.rows.svc td:nth-child(2) { grid-column: 1 / -1; grid-row: 2; }
+  /* people: name and Telegram id, then role and language; remove at the end of the first line */
+  table.rows.people tr { grid-template-columns: 1fr 1fr 44px; }
+  table.rows.people td:nth-child(3) { grid-column: 1; grid-row: 2; }
+  table.rows.people td:nth-child(4) { grid-column: 2 / -1; grid-row: 2; }
+  table.rows.people td:nth-child(5) { grid-column: 3; grid-row: 1; }
 }
 .tag { display: inline-flex; align-items: center; gap: 6px; padding: 4px 4px 4px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--text-primary); font-size: var(--text-sm); max-width: 100%; }
 .tag.unknown { background: rgba(178, 66, 50, 0.12); }
@@ -251,7 +273,7 @@ svg.bars .base { stroke: var(--text-dim); }
 
 /* THE DROPDOWN (app.js dropdown()): the device picker's box, and its own list on the page body in place of
    the platform's picker. 44 px rows, the touch minimum. */
-.dropdown { padding: 6px 12px; }
+.dropdown { padding: 6px 12px; min-width: 0; }
 .dropdown:focus-visible, .dropdown[aria-expanded="true"] { outline: 2px solid var(--accent); outline-offset: 1px; }
 .dropdown-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .dropdown-list { position: fixed; z-index: 60; overflow-y: auto; overscroll-behavior: contain; padding: 4px; outline: none;
