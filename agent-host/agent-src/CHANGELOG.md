@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.36 (5 October 2026)
+
+- Architecture review round 2: Policy and problems() read values through shared readers (read_bool, read_int_in, _id): the agent uses the default exactly when problems() names the value. Fixes `act_enabled: "false"` read as True, a non-numeric chat id crashing Policy(), and a negative person id registered. Also: State.use_continuation(by=) refuses (without using it) a Continue pressed by someone other than requested_by, which was written and never read. tests/test_policy_agreement.py (29 cases), each fix mutation-checked.
+
 ## 0.6.35 (5 October 2026)
 
 - Architecture review round 1: vesta_shared/axis.py (nice_axis, label, is_flat). It is the one Y-axis rule: reports compose._ticks/_axis/line delegate to it, and status.costs serves the Costs chart's `axis` (app.js only draws it). Both old copies took decimals from the step's size and mislabelled 2.5 and 0.25 steps; app.js had no tick bound and no flatness rule. tests/test_axis.py, mutation-checked; reports starter skill recorded.

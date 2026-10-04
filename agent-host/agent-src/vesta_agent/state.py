@@ -257,11 +257,16 @@ class State:
             self.db.commit()
         return cid
 
-    def use_continuation(self, cid: str, chat_id: int) -> dict | None:
+    def use_continuation(self, cid: str, chat_id: int, by: int | None = None) -> dict | None:
+        """The continuation, used up — or {"not_yours": True}, left as it is, when `by` is not the person who
+        asked (architecture review, 0.12.37: `requested_by` was written and never read, so anyone in a group
+        could resume another person's conversation under their own role)."""
         with self._lock:
             r = self.db.execute("select * from continuations where id=? and chat_id=? and used=0", (cid, int(chat_id))).fetchone()
             if not r:
                 return None
+            if r["requested_by"] is not None and by is not None and int(r["requested_by"]) != int(by):
+                return {"not_yours": True}
             self.db.execute("update continuations set used=1 where id=?", (cid,))
             self.db.commit()
             return dict(r)

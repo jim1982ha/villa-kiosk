@@ -521,9 +521,11 @@ class Vesta:
             person = pol.person(presser)
             if person is None:
                 return await toast("You are not registered with the VESTA Agent.")
-            cont = self.state.use_continuation(data[2:], cid)
+            cont = self.state.use_continuation(data[2:], cid, presser)
             if not cont:
                 return await toast("Already continued.")
+            if cont.get("not_yours"):
+                return await toast("Only the person who asked can continue this answer.")
             await toast("Continuing.")
             return await self.converse(cid, person, "", chat_role=pol.chat_role(cid) or "private",
                                        resume=cont["session_id"], is_continue=True)

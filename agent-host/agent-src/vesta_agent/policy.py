@@ -124,14 +124,27 @@ def _as_list(v: Any) -> list[str]:
     return out
 
 
+# ⚠️ ONE READER PER KIND OF VALUE, FOR THE AGENT AND FOR problems() ALIKE (architecture review, 0.12.37). The
+# file is read twice — leniently by Policy, strictly by problems() — and the two halves coerced each value their
+# own way and disagreed: `act_enabled: "false"` written by hand was flagged by problems() but read as ON by the
+# agent (bool("false") is True); a chat id written as text crashed Policy() (int("@villa")), and with it every
+# message and job; a person with a negative id was "ignored" in words and registered in fact. Each reader below
+# says whether the value is valid; the agent uses the default exactly when problems() names the value.
+
+def read_bool(v: Any, default: bool) -> tuple[bool, bool]:
+    """(value, valid): only a real true/false is valid; anything else is the default."""
+    return (v, True) if isinstance(v, bool) else (default, False)
+
+
+def read_int_in(v: Any, lo: int, hi: int, default: int) -> tuple[int, bool]:
+    """(value, valid): a whole number in [lo, hi]; anything else (text, a bool, out of range) is the default."""
+    if isinstance(v, bool) or not isinstance(v, int) or not lo <= v <= hi:
+        return default, False
+    return v, True
+
+
 def _int_in(v: Any, lo: int, hi: int, default: int) -> int:
-    if isinstance(v, bool):
-        return default
-    try:
-        v = int(v)
-    except (TypeError, ValueError):
-        return default
-    return v if lo <= v <= hi else default
+    return read_int_in(v, lo, hi, default)[0]
 
 
 def _behaviour(raw: Any) -> dict:
@@ -174,22 +187,23 @@ class Policy:
     def __init__(self, raw: dict):
         self.raw = raw or {}
         r = self.raw
-        self.act_enabled: bool = bool(r.get("act_enabled", DEFAULTS["act_enabled"]))
+        # an unreadable value is OFF (the default), never on: read_bool
+        self.act_enabled: bool = read_bool(r.get("act_enabled", DEFAULTS["act_enabled"]), DEFAULTS["act_enabled"])[0]
         self.approval_ttl_minutes: int = _int_in(r.get("approval_ttl_minutes"), 1, 1440, DEFAULTS["approval_ttl_minutes"])
         # ⚠️ A SAFETY STOP, SO NEVER ABSENT: an unreadable value still stops the siren (and problems() says so).
         self.siren_auto_off_min: int = _int_in(r.get("siren_auto_off_min"), 1, 60, DEFAULTS["siren_auto_off_min"])
         self.behaviour: dict = _behaviour(r.get("settings"))
         self.jobs: dict[str, dict] = _jobs(r.get("settings"))
         self.people: dict[int, Person] = {}
-        for p in r.get("people") or []:
-            try:
-                tid = int(p.get("telegram_id") or 0)
-            except (TypeError, ValueError):
-                tid = 0
-            if tid and p.get("role") in ROLES:
+        for p in r.get("people") or [] if isinstance(r.get("people"), list) else []:
+            if not isinstance(p, dict):
+                continue
+            tid = _id(p.get("telegram_id"))           # a person's id is positive, as problems() says
+            if tid and tid > 0 and p.get("role") in ROLES:
                 self.people[tid] = Person(tid, str(p.get("name") or tid), p["role"], str(p.get("language") or "en"))
-        chats = r.get("chats") or {}
-        self.chats: dict[str, int] = {k: int(v) for k, v in chats.items() if v not in (None, "", 0, "0")}
+        chats = r.get("chats") if isinstance(r.get("chats"), dict) else {}
+        # a chat id that is not a number is skipped (problems() names it), never a crash of every message
+        self.chats: dict[str, int] = {k: cid for k, v in chats.items() if (cid := _id(v))}
         self.owner_only = set(_as_list(r.get("owner_only_entities")))
         self.excluded = set(_as_list(r.get("excluded_entities")))
         self.allowed_services: dict[str, str] = {k: str(v) for k, v in (r.get("allowed_services") or {}).items()}
@@ -442,11 +456,11 @@ def problems(raw: Any) -> list[str]:
                             out.append(f"settings.jobs.{name}.limit_usd must be a number of at least 0.05.")
                 elif k not in ("profile", "reply_limit_usd", "web_search", "conversation_reset"):
                     out.append(f"Unknown setting {k!r}.")
-    if "act_enabled" in raw and not isinstance(raw["act_enabled"], bool):
+    if "act_enabled" in raw and not read_bool(raw["act_enabled"], False)[1]:
         out.append("act_enabled must be true or false.")
     for k, lo, hi in (("approval_ttl_minutes", 1, 1440), ("siren_auto_off_min", 1, 60)):
         v = raw.get(k)
-        if v is not None and (isinstance(v, bool) or not isinstance(v, int) or not lo <= v <= hi):
+        if v is not None and not read_int_in(v, lo, hi, 0)[1]:
             out.append(f"{k} must be a whole number from {lo} to {hi}.")
 
     people = raw.get("people")
