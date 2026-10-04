@@ -215,8 +215,11 @@ class UI:
             zone = None
         route = Routing(Policy.load(self.s.policy_path))
         from ..policy import profile_labels
+        from ..skills import ai_jobs
+        # a run recorded before jobs had names ("skill:when") under the job's name today
+        job_names = {f"{sk.name}:{j['when']}": j["name"] for sk, j in ai_jobs(self.skills.all()) if j.get("name")}
         return web.json_response({**status.costs(State(self.s.state_path), days, zone=zone,
-                                                 chat_label=lambda cid: route.label(int(cid))),
+                                                 chat_label=lambda cid: route.label(int(cid)), job_names=job_names),
                                   "profiles": profile_labels()})
 
     # ------------------------------------------------------------------ the villa's devices

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.34 (5 October 2026)
+
+- status.costs(job_names=…): a run recorded before 0.12.0 as "job:skill:when" is counted under the job's name (the UI server maps skill:when → name from the skills). paged(): a head cell's `half` pairs columns on a phone (Every run: When/What, Tokens/Cost). tests/test_ui.py, mutation-checked.
+
 ## 0.6.33 (5 October 2026)
 
 - UI: table-layout: fixed only for the editable tables (.edit, .ai); 0.6.28 had applied it to every table.rows, so the paged data tables overlapped. paged() labels each cell (data-label); on ≤ 600 px a data table is labelled cards. tests/test_ui.py pins it.

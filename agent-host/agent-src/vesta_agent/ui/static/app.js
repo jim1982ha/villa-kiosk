@@ -158,10 +158,15 @@ function paged(head, rows, per = 10) {
   const nav = h("div", { class: "pager" });
   const pages = Math.max(1, Math.ceil(rows.length / per));
   let page = 0;
-  // each cell carries its column's name: on a phone the row becomes a card, every value labelled (app.css)
+  // each cell carries its column's name: on a phone the row becomes a card, every value labelled (app.css);
+  // a column whose head says `half` shares its line there with the next half one (owner, 2026-10-05)
   const label = head.map((c) => String(c && typeof c === "object" && "v" in c ? c.v : c || ""));
-  const cell = (c, tag, i) => (c && typeof c === "object" && "v" in c ? h(tag, { class: c.cls, "data-label": tag === "td" ? label[i] : null }, c.v)
-                                                                      : h(tag, { "data-label": tag === "td" ? label[i] : null }, c));
+  const half = head.map((c) => !!(c && typeof c === "object" && c.half));
+  const cell = (c, tag, i) => {
+    const td = tag === "td";
+    const cls = [c && typeof c === "object" && "v" in c ? c.cls : null, td && half[i] ? "ph-half" : null].filter(Boolean).join(" ") || null;
+    return h(tag, { class: cls, "data-label": td ? label[i] : null }, c && typeof c === "object" && "v" in c ? c.v : c);
+  };
   const draw = () => {
     body.replaceChildren(...rows.slice(page * per, page * per + per).map((cells) => h("tr", {}, cells.map((c, i) => cell(c, "td", i)))));
     nav.replaceChildren(...(pages > 1 ? [
@@ -290,7 +295,8 @@ async function costs(days = 30) {
     card("By work", "Chat replies, and each AI job.", groupTable(c.by_work, "Work")),
     card("By model", "Which model did the work.", groupTable(c.by_model, "Model")),
     card("Every run", `${c.runs_count} runs, newest first. The model and tokens are recorded from agent 0.6.9 on; older runs show —.`,
-      paged(["When", "What", "Brain · model", { v: "Tokens in / out", cls: "num" }, { v: "Cost", cls: "num" }, ""], runRows)));
+      paged([{ v: "When", half: true }, { v: "What", half: true }, "Brain · model",
+             { v: "Tokens in / out", cls: "num", half: true }, { v: "Cost", cls: "num", half: true }, ""], runRows)));
 }
 
 // ---------------------------------------------------------------- theme (Light / Auto / Dark)

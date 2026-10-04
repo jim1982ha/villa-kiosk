@@ -59,7 +59,8 @@ def report(state, store_path: str, hours: int = 24, now: datetime | None = None)
             "incidents": incidents[-40:]}
 
 
-def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_label=None) -> dict:
+def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_label=None,
+          job_names: dict[str, str] | None = None) -> dict:
     """What the AI cost, run by run, from the agent's own records (the cost the Anthropic API reported for each
     run): the VESTA Agent page's Costs tab. Each run: when, the work (a chat reply, or an AI job), who asked
     and what, the brain and model, the tokens, the cost. Read-only; never a chat id (`chat_label` names the chat)."""
@@ -76,7 +77,10 @@ def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_la
             d = {}
         who = str(d.get("who") or "")
         if who.startswith("job:"):
+            # ⚠️ A RUN BEFORE 0.12.0 IS "skill:when" (jobs had no names then: "reports:07:00" is today's
+            # fm-daily). `job_names` maps it to the job's name, so one job is one line (owner, 2026-10-05).
             kind, work, person, chat = "job", who[4:], None, None
+            work = (job_names or {}).get(work, work)
         else:
             name, _, cid = who.partition("@")
             kind, work, person = "chat", "Chat replies", name or None

@@ -381,5 +381,36 @@ def test_a_data_table_becomes_labelled_cards_on_a_phone():
     from vesta_agent.ui.server import STATIC
     js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
     css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
-    assert '"data-label": tag === "td" ? label[i] : null' in js
+    assert '"data-label": td ? label[i] : null' in js
     assert "table.data td::before { content: attr(data-label);" in css and "table.data thead { display: none; }" in css
+
+
+def test_a_run_recorded_before_jobs_had_names_counts_under_its_name(tmp_path):
+    # owner, 2026-10-05: "reports:07:00" and "reports:1 08:00" were today's fm-daily and owner-monthly, shown
+    # as two other jobs — before 0.12.0 a run was recorded as "skill:when"
+    import json
+    from datetime import datetime, timedelta, timezone
+    from vesta_agent import status
+    from vesta_agent.state import State
+    st = State(str(tmp_path / "s.sqlite"))
+    now = datetime.now(timezone.utc)
+    for who, cost in (("job:reports:07:00", 0.04), ("job:fm-daily", 0.04), ("job:reports:1 08:00", 0.06), ("job:other:09:00", 0.01)):
+        st.db.execute("insert into calls(at, kind, detail) values (?, 'run', ?)",
+                      ((now - timedelta(hours=1)).isoformat(), json.dumps({"who": who, "cost_usd": cost})))
+    st.db.commit()
+    c = status.costs(st, 30, job_names={"reports:07:00": "fm-daily", "reports:1 08:00": "owner-monthly"})
+    by = {g["name"]: g["runs"] for g in c["by_work"]}
+    assert by == {"fm-daily": 2, "owner-monthly": 1, "other:09:00": 1}                # an unknown one keeps its label
+    from vesta_agent.ui.server import STATIC
+    src = open(os.path.join(os.path.dirname(STATIC), "server.py"), encoding="utf-8").read()
+    assert 'job_names = {f"{sk.name}:{j[\'when\']}": j["name"] for sk, j in ai_jobs(self.skills.all()) if j.get("name")}' in src
+
+
+def test_every_run_pairs_its_columns_on_a_phone():
+    # owner, 2026-10-05: "When" and "What" on one line, "Tokens in / out" and "Cost" on one line
+    from vesta_agent.ui.server import STATIC
+    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
+    css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
+    assert '{ v: "When", half: true }, { v: "What", half: true }, "Brain · model"' in js
+    assert '{ v: "Tokens in / out", cls: "num", half: true }, { v: "Cost", cls: "num", half: true }' in js
+    assert "table.data tr { display: grid; grid-template-columns: 1fr 1fr;" in css and "table.data td.ph-half { grid-column: auto;" in css

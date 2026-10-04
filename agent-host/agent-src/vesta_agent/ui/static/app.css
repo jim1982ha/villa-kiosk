@@ -295,4 +295,9 @@ svg.bars .base { stroke: var(--text-dim); }
   table.data td::before { content: attr(data-label); color: var(--text-dim); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .06em; text-align: left; flex: none; }
   table.data td:empty, table.data td[data-label=""]:empty { display: none; }
   table.data td[data-label=""]::before { content: none; }
+  /* two half columns on one line, each its label above its value */
+  table.data tr { display: grid; grid-template-columns: 1fr 1fr; column-gap: 16px; }
+  table.data td { grid-column: 1 / -1; }
+  table.data td.ph-half { grid-column: auto; flex-direction: column; align-items: flex-start; justify-content: flex-start; text-align: left; gap: 0; padding: 4px 0; }
+  table.data td.ph-half:nth-child(even of .ph-half) { align-items: flex-end; text-align: right; }
 }
