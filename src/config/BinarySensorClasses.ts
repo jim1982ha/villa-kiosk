@@ -17,7 +17,7 @@
 // the sensible starting point for a class the user hasn't customised.
 
 import { prettyState } from "@/utils/entityValue";
-import { BINARY_WORDS } from "./binarySensorWords";
+import { BINARY_WORDS, binaryWord } from "./binarySensorWords";
 import {
   Activity, AlertTriangle, BatteryCharging, BatteryWarning, DoorOpen, Droplets,
   Eye, Flame, Home, Lightbulb, Plug, RefreshCw, ShieldAlert, Snowflake,
@@ -93,9 +93,8 @@ export function binarySensorClassInfo(deviceClass?: string): BinarySensorClassIn
  * wording: an unavailable sensor is "Unavailable", never "No leak".
  */
 export function stateLabelFor(entityId: string, deviceClass?: string): (state: string) => string {
-  if (!entityId.startsWith("binary_sensor.")) return prettyState;
-  const info = binarySensorClassInfo(deviceClass);
-  return (state) => state === "on" ? info.onLabel : state === "off" ? info.offLabel : prettyState(state);
+  // the one table of words (binarySensorWords) — this used to read them a second way
+  return (state) => binaryWord(entityId, deviceClass, state) ?? prettyState(state);
 }
 
 /**

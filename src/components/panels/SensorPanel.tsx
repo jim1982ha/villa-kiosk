@@ -13,9 +13,10 @@ import type { PanelProps } from "@/types/panel.types";
 import { useConfig } from "@/config/ConfigContext";
 import type { AlertLevel } from "@/config/ThresholdConfig";
 import { readingKind, readingLevel } from "@/config/sensorReading";
-import { stateLabelFor, binarySensorClassInfo, alertStateFor, secureStateFor, colourAlertStateFor } from "@/config/BinarySensorClasses";
+import { binarySensorClassInfo } from "@/config/BinarySensorClasses";
+import { binaryLook } from "@/config/binaryLook";
 import { effectiveSensorClass, SENSOR_CLASS_ICON } from "@/config/SensorClasses";
-import { binarySensorColor, binaryStatus, isUnavailable, STATUS_PILL_CLASS } from "@/utils/stateColors";
+import { isUnavailable } from "@/utils/stateColors";
 
 const LEVEL_COLOR: Record<AlertLevel, string> = {
   normal: "var(--status-on)",
@@ -44,24 +45,14 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
   // wording/icon/danger-styling below matches what's actually being
   // monitored instead of assuming every binary_sensor is a leak alarm.
   const classInfo = binarySensorClassInfo(entity?.attributes.device_class);
-  // The same rule the map badge now reads — see BinarySensorClasses.alertStateFor.
-  // This combination (per-entity override wins, else the device_class default,
-  // "none" meaning never a fault) used to live here alone, which is why the
-  // badge and this panel disagreed about every motion sensor in the villa.
-  const alertState = alertStateFor(
-    entity?.attributes.device_class as string | undefined, threshold?.alertState);
-  const level: AlertLevel = readingLevel(entity, kind, threshold, alertState);
-  // The pill and the history tooltip word a state the same way — stateLabelFor.
-  // (An unavailable sensor never reaches this: the pill shows "Unavailable" first.)
-  const labelFor = stateLabelFor(mapping.entityId, entity?.attributes.device_class as string | undefined);
-  const binaryStateText = labelFor(entity?.state === "on" ? "on" : "off");
-  // The pill reads the state as its history bar does (binaryStatus): a leak
-  // sensor finding no leak is green, not "off"; so is a closed door.
-  const secureState = secureStateFor(entity?.attributes.device_class as string | undefined);
-  // A detector's detection is red here, as on the camera's bar (owner, 2026-10-05) —
-  // its colours only; `level` and the map keep motion as information.
-  const colourAlert = colourAlertStateFor(entity?.attributes.device_class as string | undefined, threshold?.alertState);
-  const binaryPillTone = level === "danger" ? "danger" : STATUS_PILL_CLASS[binaryStatus(entity?.state === "on" ? "on" : "off", colourAlert, secureState)];
+  // The binary sensor's whole look — words, colours, pill, problem state —
+  // from config/binaryLook (the grouped device window asks the same module).
+  const look = binaryLook(mapping.entityId, entity?.attributes.device_class as string | undefined, threshold?.alertState);
+  const level: AlertLevel = readingLevel(entity, kind, threshold, look.problem);
+  // (An unavailable sensor never reaches the pill's words: it shows "Unavailable" first.)
+  const binaryState = entity?.state === "on" ? "on" : "off";
+  const binaryStateText = look.word(binaryState);
+  const binaryPillTone = level === "danger" ? "danger" : look.tone(binaryState);
 
   // ONE of two history sections, by what the sensor reports: raw states for a
   // binary or text sensor (a numeric parse would drop every row) — the shared
@@ -101,7 +92,7 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
                 : level === "danger" ? binaryStateText.toUpperCase() : binaryStateText}
             </div>
           </div>
-          <LastDayTimeline entityId={mapping.entityId} colorFor={(s) => binarySensorColor(s, colourAlert, secureState)} />
+          <LastDayTimeline entityId={mapping.entityId} colorFor={look.color} />
         </>
       ) : (
         <>

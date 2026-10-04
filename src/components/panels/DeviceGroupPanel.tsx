@@ -17,6 +17,10 @@ import type { EntityMapping } from "@/types/scene.types";
 import { isUnavailable } from "@/utils/stateColors";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { readingKind } from "@/config/sensorReading";
+import { binaryLook } from "@/config/binaryLook";
+import { domainOf } from "@/utils/entityDomain";
+import { useConfig } from "@/config/ConfigContext";
+import LastDayTimeline from "./LastDayTimeline";
 
 interface Props {
   group: DeviceGroup;
@@ -44,6 +48,7 @@ const SERIES_COLORS = ["var(--accent-teal)", "var(--accent)", "var(--accent-warm
 
 export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Props) {
   const { entities } = useHA();
+  const { config } = useConfig();
   const entityLabel = useEntityLabel();
   const ids = [group.primaryEntityId, ...group.memberEntityIds];
 
@@ -63,7 +68,13 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
       display: entity ? formatSensorParts(entity) : { value: "", unit: "" },
       numeric: Number.isFinite(numeric) ? numeric : undefined,
       unavailable: isUnavailable(entity),
-      kind: readingKind(entity, "sensor"),
+      // A binary member is a binary reading, with the binary sensor window's own
+      // look (config/binaryLook) — it was read as "text": plain grey words, no
+      // colour, no history (a smoke detector grouped with its battery).
+      kind: readingKind(entity, domainOf(id) === "binary_sensor" ? "binary_sensor" : "sensor"),
+      look: domainOf(id) === "binary_sensor"
+        ? binaryLook(id, entity?.attributes.device_class as string | undefined, config.alertThresholds[id]?.alertState)
+        : null,
     };
   });
   // A reading with a unit is a measurement even while it is UNAVAILABLE —
@@ -98,7 +109,9 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
                     a bit smaller, matching how SensorPanel already does it. */}
                 {r.unavailable
                   ? <span className="status-pill unavailable">UNAVAILABLE</span>
-                  : <>{r.display.value || r.value}{r.display.unit && <span className="value-unit" style={{ fontSize: "var(--text-md)", marginLeft: 3 }}>{r.display.unit}</span>}</>}
+                  : r.look
+                    ? <span className={`status-pill ${r.look.tone(r.value)}`}>{r.look.word(r.value)}</span>
+                    : <>{r.display.value || r.value}{r.display.unit && <span className="value-unit" style={{ fontSize: "var(--text-md)", marginLeft: 3 }}>{r.display.unit}</span>}</>}
               </div>
               <div className="muted body-text">{r.label}</div>
             </div>
@@ -110,6 +123,13 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
           different windows would invite exactly the wrong comparison. */}
       <NumericHistory named series={numericRows.map((r, i) => ({
         id: r.id, label: r.label, unit: r.unit, color: SERIES_COLORS[i % SERIES_COLORS.length] }))} />
+      {/* each binary member's own state history, coloured as in its own window */}
+      {rows.filter((r) => r.look).map((r) => (
+        <div key={`h-${r.id}`}>
+          <div className="muted body-text" style={{ margin: "12px 0 4px" }}>{r.label}</div>
+          <LastDayTimeline entityId={r.id} colorFor={r.look!.color} />
+        </div>
+      ))}
     </BasePanel>
   );
 }

@@ -66,7 +66,7 @@ ck("numeric device charts (sensor, pumps, device groups) ask for the trend, thro
 // config/sensorReading.readingKind, driven by value in active_devices.mjs;
 // this pins that the grouped panel asks it (2.496.229).
 ck("a device-group member that is unavailable NOW still gets its chart",
-   /kind: readingKind\(entity, "sensor"\)/.test(src("components/panels/DeviceGroupPanel.tsx"))
+   /kind: readingKind\(entity, domainOf\(id\) === "binary_sensor" \? "binary_sensor" : "sensor"\)/.test(src("components/panels/DeviceGroupPanel.tsx"))
    && /r\.kind === "measurement" && \(r\.numeric !== undefined \|\| r\.unit !== ""\)/.test(src("components/panels/DeviceGroupPanel.tsx")));
 const { cameraBarState } = await import("@/components/panels/cameraStatusBar");
 ck("the camera bar paints a lost motion sensor as unavailable, not 'online'",
