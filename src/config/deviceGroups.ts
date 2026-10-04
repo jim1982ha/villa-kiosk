@@ -328,29 +328,64 @@ export function deviceOf(folding: ReadonlyMap<string, string>, id: string): stri
 
 const READING_DOMAINS = new Set(["sensor", "binary_sensor"]);
 
+/** Readings that say most about a device, first: what it draws and uses,
+ *  then what it measures. Everything else follows in id order. */
+const FIRST_CLASSES = ["power", "energy", "temperature"];
+
 /**
- * The OTHER readings of the device `rep` stands for, shown under its own
- * panel: its group's members, and the registry siblings nobody placed (a
- * pump plug's energy and current). Readings only — a restart button or a
- * network tracker is not something to read — and Home Assistant's hidden and
- * diagnostic entities only when the owner grouped them on purpose.
+ * What else is on the device of the entity whose panel is OPEN — "Also on this
+ * device" (2.496.260; the same for every panel since 2.496.271).
+ *
+ * ⚠️ IT ONLY EVER SHOWED ON SOME DEVICES (owner, 2026-10-04: "only applied to
+ * some specific devices"). Only the device's MAIN entity listed anything, so a
+ * reading opened by itself listed nothing; a device nobody placed on the map
+ * had no fold and listed nothing; and a battery is filed "diagnostic" by most
+ * integrations, so a light or a lock usually listed nothing either.
+ *
+ * Now, for any open entity `id`:
+ *  - its device's MAIN entity first, whatever it is (from a reading, the way to
+ *    the device's controls), unless that is the open entity;
+ *  - the device's readings — fold members (groups, registry siblings) and the
+ *    registry siblings of an unplaced device alike — power, energy and
+ *    temperature first;
+ *  - a reading Home Assistant files as hidden or diagnostic only when the owner
+ *    grouped it, or when it is a BATTERY HA filed as diagnostic (a level to act
+ *    on, not noise) — never one a person hid.
+ * Never a restart button, a setting or a network tracker. The panel shows the
+ * first few and "Show all" (BasePanel), so a busy plug does not bury its controls.
  */
 export function deviceReadings(
-  rep: string,
+  id: string,
   folding: ReadonlyMap<string, string>,
   entities: Record<string, HassEntity>,
   suppressed: ReadonlySet<string>,
   deviceGroups: readonly DeviceGroup[],
+  entityDeviceIds: Readonly<Record<string, string>> = {},
+  /** Hidden by a PERSON in Home Assistant (registry hidden_by) — kept hidden,
+   *  battery or not; the battery exception is for HA's own "diagnostic". */
+  userHidden: ReadonlySet<string> = new Set(),
 ): string[] {
+  const rep = deviceOf(folding, id);
   const chosen = new Set(deviceGroups.find((g) => g.primaryEntityId === rep)?.memberEntityIds ?? []);
-  const out: string[] = [];
-  for (const [id, to] of folding) {
-    if (to !== rep || id === rep || !entities[id]) continue;
-    if (!READING_DOMAINS.has(domainOf(id))) continue;
-    if (suppressed.has(id) && !chosen.has(id)) continue;
-    out.push(id);
+  const members = new Set<string>();
+  for (const [m, to] of folding) if (to === rep) members.add(m);
+  const dev = entityDeviceIds[rep] ?? entityDeviceIds[id];
+  if (dev) for (const [m, d] of Object.entries(entityDeviceIds)) if (d === dev) members.add(m);
+  const readings: string[] = [];
+  for (const m of members) {
+    if (m === id || m === rep || !entities[m]) continue;
+    if ((folding.get(m) ?? m) !== rep && folding.has(m)) continue;   // grouped under another device: listed there
+    if (!READING_DOMAINS.has(domainOf(m))) continue;
+    const battery = entities[m].attributes?.device_class === "battery";
+    if (suppressed.has(m) && !chosen.has(m) && (!battery || userHidden.has(m))) continue;
+    readings.push(m);
   }
-  return out.sort();
+  const rank = (m: string) => {
+    const k = FIRST_CLASSES.indexOf(String(entities[m]?.attributes?.device_class ?? ""));
+    return k < 0 ? FIRST_CLASSES.length : k;
+  };
+  readings.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+  return rep !== id && entities[rep] ? [rep, ...readings] : readings;
 }
 
 /**

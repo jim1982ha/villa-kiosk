@@ -115,7 +115,7 @@ export function VillaModelProvider({ sets, children }: { sets: VillaSets; childr
  * change, never on a state push.
  */
 export function useDeviceIdentity() {
-  const { entities, entityDeviceIds, suppressedEntityIds } = useHA();
+  const { entities, entityDeviceIds, suppressedEntityIds, hiddenInHaEntityIds } = useHA();
   const { config } = useConfig();
   const { entityMap, deviceGroups } = config;
   const folding = useMemo(() => deviceFolding(entityMap, deviceGroups, entityDeviceIds), [entityMap, deviceGroups, entityDeviceIds]);
@@ -123,9 +123,10 @@ export function useDeviceIdentity() {
     folding,
     /** What a tap on anything of `id`'s device opens. */
     deviceOf: (id: string) => deviceOf(folding, id),
-    /** The device's other readings, listed under its panel. */
-    readingsOf: (rep: string) => deviceReadings(rep, folding, entities, suppressedEntityIds, deviceGroups),
-  }), [folding, entities, suppressedEntityIds, deviceGroups]);
+    /** What else is on the open entity's device, listed under its panel. */
+    readingsOf: (id: string) => deviceReadings(id, folding, entities, suppressedEntityIds, deviceGroups, entityDeviceIds,
+      hiddenInHaEntityIds),
+  }), [folding, entities, suppressedEntityIds, deviceGroups, entityDeviceIds, hiddenInHaEntityIds]);
 }
 
 export function useVillaModel(): VillaModel {

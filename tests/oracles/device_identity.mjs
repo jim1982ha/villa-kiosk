@@ -30,13 +30,46 @@ ck("  ...a placed entity, and one with no device, is its own", deviceOf(fold, "s
 
 console.log("\n  also on this device:");
 const r = deviceReadings("sensor.pump_power", fold, entities, suppressed, []);
-ck("the pump's other READINGS, sorted — energy and current; not the restart button, not the network tracker, not itself",
-   r.join() === "sensor.pump_current,sensor.pump_energy", r);
+ck("the pump's other READINGS — energy and current; not the restart button, not the network tracker, not itself",
+   [...r].sort().join() === "sensor.pump_current,sensor.pump_energy", r);
 ck("  ...a reading HA hides as diagnostic is left out unless the owner grouped it on purpose",
    !r.includes("binary_sensor.pump_overheat")
    && deviceReadings("sensor.pump_power", deviceFolding(entityMap, [{ id: "g", primaryEntityId: "sensor.pump_power", memberEntityIds: ["binary_sensor.pump_overheat"] }], registry),
         entities, suppressed, [{ id: "g", primaryEntityId: "sensor.pump_power", memberEntityIds: ["binary_sensor.pump_overheat"] }]).includes("binary_sensor.pump_overheat"));
 ck("the lock lists its battery", deviceReadings("lock.door", fold, entities, suppressed, []).join() === "sensor.door_battery");
+
+console.log("\n  the same on every panel (2.496.271):");
+{
+  const E = (id, dc) => ({ entity_id: id, state: "1", attributes: { friendly_name: id, ...(dc ? { device_class: dc } : {}) } });
+  const ents2 = { ...entities,
+    "sensor.pump_energy": E("sensor.pump_energy", "energy"), "sensor.pump_current": E("sensor.pump_current", "current"),
+    "sensor.pump_temp": E("sensor.pump_temp", "temperature"), "sensor.pump_rssi": E("sensor.pump_rssi", "signal_strength"),
+    "sensor.pump_battery": E("sensor.pump_battery", "battery"),
+    "sensor.solo_a": E("sensor.solo_a", "power"), "sensor.solo_b": E("sensor.solo_b", "voltage") };
+  const reg2 = { ...registry, "sensor.pump_temp": "dev-pump", "sensor.pump_rssi": "dev-pump", "sensor.pump_battery": "dev-pump",
+    "sensor.solo_a": "dev-solo", "sensor.solo_b": "dev-solo" };
+  const fold2 = deviceFolding(entityMap, [], reg2);
+  const hidden = new Set(["binary_sensor.pump_overheat", "sensor.pump_rssi", "sensor.pump_battery"]);
+  const main = deviceReadings("sensor.pump_power", fold2, ents2, hidden, [], reg2);
+  ck("power, energy and temperature first, then the rest in order", main.slice(0, 2).join() === "sensor.pump_energy,sensor.pump_temp", main);
+  ck("a battery is listed though Home Assistant files it diagnostic; signal strength is not",
+     main.includes("sensor.pump_battery") && !main.includes("sensor.pump_rssi"), main);
+  ck("  ...but a battery a PERSON hid in Home Assistant stays hidden",
+     !deviceReadings("sensor.pump_power", fold2, ents2, hidden, [], reg2, new Set(["sensor.pump_battery"])).includes("sensor.pump_battery"));
+  const fromReading = deviceReadings("sensor.pump_energy", fold2, ents2, hidden, [], reg2);
+  ck("a READING opened by itself lists its device too — the device's main entity first, never itself",
+     fromReading[0] === "sensor.pump_power" && !fromReading.includes("sensor.pump_energy") && fromReading.includes("sensor.pump_temp"), fromReading);
+  ck("a device nobody placed on the map still lists its readings (from Home Assistant's device registry)",
+     deviceReadings("sensor.solo_b", fold2, ents2, hidden, [], reg2).join() === "sensor.solo_a");
+  const grouped = [{ id: "g", primaryEntityId: "light.hall", memberEntityIds: ["sensor.pump_temp"] }];
+  ck("a reading grouped under ANOTHER device is listed there, not here",
+     !deviceReadings("sensor.pump_power", deviceFolding(entityMap, grouped, reg2), ents2, hidden, grouped, reg2).includes("sensor.pump_temp"));
+  const rd = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
+  ck("every panel frame draws the one list, the first 3 then 'Show all'",
+     /\{deviceReadings !== false && <DeviceReadings \/>\}/.test(rd("components/panels/BasePanel.tsx"))
+     && /export const READINGS_SHOWN = 3;/.test(rd("components/panels/DeviceReadings.tsx"))
+     && /readingsOf: \(id: string\) => deviceReadings\(id, folding, entities, suppressedEntityIds, deviceGroups, entityDeviceIds,\s*hiddenInHaEntityIds\)/.test(rd("config/VillaModel.tsx")));
+}
 
 console.log("\n  not shown anywhere (Advanced Settings):");
 const un = unshownEntities({ entities, entityMap, folding: fold, suppressed, knownType: () => true });
@@ -71,7 +104,7 @@ ck("  ...a list row and the camera's next/prev open exactly the entity they name
    && /const openFromList = useCallback\([\s\S]*?openEntityPanel\(entityId\);/.test(d));
 ck("the open panel lists its device's readings, each opening its own panel",
    /identity\.readingsOf\(activePanel\.entityId\)/.test(d) && /readings: panelReadings,/.test(d) && /onOpenReading: openReading,/.test(d) && /const openReading = useCallback\([\s\S]*?openEntityPanel\(entityId\);/.test(d)
-   && /readings\.map\(\(r\) =>/.test(base) && /onOpenReading\(r\.id\)/.test(base));
+   && /rows\.map\(\(r\) =>/.test(src("components/panels/DeviceReadings.tsx")) && /onOpenReading\(r\.id\)/.test(src("components/panels/DeviceReadings.tsx")));
 ck("grouping never trades controls for a summary: only a READING-led group opens the combined view",
    /if \(group && \(mapping\.type === "sensor" \|\| mapping\.type === "binary_sensor"\)\)/.test(router)
    && /deviceReadings=\{false\}/.test(src("components/panels/DeviceGroupPanel.tsx")));
