@@ -15,7 +15,7 @@
 
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
-import { bodyFade, lift, liftFor, overDepth, type SkyCamera } from "./skyFraming";
+import { bodyFade, lift, liftFor, type SkyCamera } from "./skyFraming";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
@@ -137,7 +137,6 @@ export class NightSky {
    */
   setHorizonDrop(units: number): void {
     this.lift = liftFor(units);
-    this.moonMat.depthFunction = overDepth(units);
   }
 
   /** The last look handed to update(), so the moon can be re-placed when the

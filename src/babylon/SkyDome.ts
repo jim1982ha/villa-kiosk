@@ -7,7 +7,7 @@
 
 import { wrapAngle } from "@/utils/geometry";
 import {
-  bodyFade, defaultSkyCamera, lift, liftFor, overDepth, projectToFrame, sunWarmth,
+  bodyFade, defaultSkyCamera, lift, liftFor, projectToFrame, sunWarmth,
   type SkyCamera,
 } from "./skyFraming";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
@@ -292,7 +292,6 @@ export class SkyDome {
   setHorizonDrop(units: number): void {
     this.mat.cameraOffset.y = units;
     this.dropUnits = units;
-    this.sunMat.depthFunction = overDepth(units);
     this.placeSun();
   }
 

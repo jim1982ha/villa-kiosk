@@ -97,7 +97,9 @@ export const SET_HIGH = (3 * Math.PI) / 180;
  *   centre: it seemed to follow the camera (DOME_HIGH, ease()).
  * This one is a dome round the villa (DOME_SCALE): the sun east of the house
  * is drawn east of the house from every angle, a sun behind you is drawn on
- * your side of the house (lower in the frame), and nothing ever jumps.
+ * your side of the house (lower in the frame), and nothing ever jumps. The
+ * disc is still drawn at SKY distance, so wherever it overlaps the villa the
+ * villa covers it (owner, 2026-10-05: "never displayed over the villa").
  */
 export function lift(x: number, y: number, z: number, drop: number, cam: SkyCamera): { x: number; y: number; z: number } {
   if (drop <= 0) return { x, y, z };
@@ -175,19 +177,6 @@ export function horizonFade(alt: number): number {
  *  fully there — on the overview's dome it is never out of view. */
 export function bodyFade(x: number, y: number, z: number): number {
   return horizonFade(Math.atan2(y, Math.hypot(x, z)));
-}
-
-/**
- * The depth test a body's disc uses: in overview (`drop` > 0) it is drawn OVER
- * the villa, never hidden by it — the disc sits on a dome round the house
- * (lift), and a body behind the viewer is drawn on the viewer's side, across
- * the garden or the roof, which would otherwise cover it. Walking (0), the
- * ordinary test, so the moon stays behind walls and ceilings. 0 is the
- * engine's default test; 519 is GL ALWAYS (Constants.ALWAYS, kept as a number
- * so this module stays free of Babylon).
- */
-export function overDepth(drop: number): number {
-  return drop > 0 ? 519 : 0;
 }
 
 /** How much the sun's disc warms toward the horizon, over the last 25° of

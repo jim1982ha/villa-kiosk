@@ -1,3 +1,8 @@
+## 2.496.294
+
+### Fixed
+- The sun and the moon are never drawn over the house any more. Where one lines up with the house, it now goes behind it, the way the real sky does, and shows again as soon as it clears the walls or the roof.
+
 ## 2.496.293
 
 ### Fixed

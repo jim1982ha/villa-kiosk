@@ -139,17 +139,19 @@ console.log("\n  first person");
      f.liftFor(0) === 0 && Math.abs(f.liftFor(200) - deg(21.8)) < deg(0.1));
 }
 
-console.log("\n  drawn over the villa in overview only");
+console.log("\n  the villa covers the sun and the moon, never the reverse");
 {
-  const { Constants } = await import("@babylonjs/core/Engines/constants.js");
-  ck("overview: the disc is drawn OVER the villa (GL ALWAYS), so the house never hides it; walking: the ordinary test, so walls and ceilings do",
-     f.overDepth(f.liftFor(200)) === Constants.ALWAYS && f.overDepth(0) === 0);
+  // 2.496.292 drew both discs with the depth test OFF in overview, so a moon
+  // beside the house was painted over its walls (owner, 2026-10-05: "never
+  // displayed over the villa ... display it behind it"). They are billboards at
+  // SKY distance, far behind the villa, under the ordinary depth test.
   const fs = await import("node:fs");
   const src = (n) => fs.readFileSync(new URL(`../../src/babylon/${n}`, import.meta.url), "utf8");
-  const setter = (t) => (t.match(/setHorizonDrop\(units: number\): void \{[\s\S]*?\n  \}/) || [""])[0];
-  ck("  ...and BOTH discs take it from the drop they are handed (sun and moon alike)",
-     /this\.sunMat\.depthFunction = overDepth\(units\)/.test(setter(src("SkyDome.ts")))
-     && /this\.moonMat\.depthFunction = overDepth\(units\)/.test(setter(src("NightSky.ts"))));
+  const sky = src("SkyDome.ts"), night = src("NightSky.ts");
+  ck("neither disc changes the depth test (no depthFunction, no rendering group drawn after the villa)",
+     ![sky, night].some((t) => /(sunMat|moonMat|sunDisc|moon)\.(depthFunction|renderingGroupId)\b/.test(t) || /\b(sun|moon)\.renderingGroupId\b/.test(t)));
+  ck("  ...and both stay at sky distance, behind the villa (infiniteDistance billboards)",
+     /sun\.infiniteDistance = true/.test(sky) && /moon\.infiniteDistance = true/.test(night));
 }
 
 console.log("\n  warmth");
