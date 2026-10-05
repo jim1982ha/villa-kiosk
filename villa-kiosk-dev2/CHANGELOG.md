@@ -1,3 +1,8 @@
+## 2.496.300
+
+### Fixed
+- Zooming the 3D overview no longer moves the sun or the moon against the house. Before, zooming in pulled the sun along the pool and lowered it toward the roof. Now each one stays over the same spot on the ground beside the house, and its height above that spot grows with the house as you zoom in. At the zoom the overview opens with, nothing has changed. Zoomed far in, a sun or moon that would end up behind you is simply not shown.
+
 ## 2.496.299
 
 ### Fixed
