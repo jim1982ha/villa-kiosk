@@ -62,7 +62,8 @@ ck("back to the overview: the moon is lifted again at once", !near(unit(moon), d
   const sky2 = new SkyDome(s2);
   sky2.setHorizonDrop(200);
   const V = new Vector3(0, 1, 0);            // the villa's centre (the fit target)
-  sky2.setVillaCentre(V);
+  const FIT = 60;                            // the fitted view's orbit distance
+  sky2.setVillaCentre(V, FIT);
   // A low sun to the right of the view, so its disc stays in the plain (un-eased) part of the frame.
   const alt2 = (5 * Math.PI) / 180, az2 = (70 * Math.PI) / 180;
   const sunTo = new Vector3(Math.sin(az2) * Math.cos(alt2), Math.sin(alt2), Math.cos(az2) * Math.cos(alt2));
@@ -71,10 +72,20 @@ ck("back to the overview: the moon is lifted again at once", !near(unit(moon), d
     s2.render();
     const r = sky2.sunReport();
     const p = cam.globalPosition, D = Vector3.Distance(p, cam.target);
-    const spot = V.add(new Vector3(Math.sin(az2), 0, Math.cos(az2)).scale(f.DOME_SCALE * D)).subtract(p).normalize();
+    // a FIXED spot on the ground (sized for the fit), lifted in proportion to
+    // how much the ground there has grown since the fitted view (its depth
+    // from the fitted camera — orbiting V at FIT, this heading — over its depth now)
+    const S = V.add(new Vector3(Math.sin(az2), 0, Math.cos(az2)).scale(f.DOME_SCALE * FIT));
+    const F = cam.target.subtract(p).normalize();
+    const grow = Vector3.Dot(S.subtract(V.subtract(F.scale(FIT))), F) / Vector3.Dot(S.subtract(p), F);
+    const spot = S.subtract(p).normalize();
     const g = f.projectToFrame(spot.x, spot.y, spot.z, sky2.camera);
-    const up = f.LIFT_LOW + (f.LIFT_HIGH - f.LIFT_LOW) * (5 / 90);
-    return { r, err: Math.hypot(r.frameX - g.frameX, r.frameY - (g.frameY - up / 2)) };
+    const up = (f.LIFT_LOW + (f.LIFT_HIGH - f.LIFT_LOW) * (5 / 90)) * grow;
+    // ⚠️ only meaningful in the plain part of the frame: past FRAME_TRUE the
+    // disc is eased toward the villa ON PURPOSE, and an eased pose would fail
+    // here for the wrong reason (twice while writing this test).
+    const plain = Math.abs(2 * r.frameX - 1) <= f.FRAME_TRUE && Math.abs(1 - 2 * r.frameY) <= f.FRAME_TRUE;
+    return { r, plain, err: Math.hypot(r.frameX - g.frameX, r.frameY - (g.frameY - up / 2)) };
   };
   const before = where();
   cam.target.x += 8; cam.target.z -= 5;      // a pan: heading and tilt untouched
@@ -82,7 +93,11 @@ ck("back to the overview: the moon is lifted again at once", !near(unit(moon), d
   ck("panning the real camera re-places the disc (a pan moves neither heading nor tilt)",
      before.r.frameX !== null && after.r.frameX !== null
      && Math.hypot(after.r.frameX - before.r.frameX, after.r.frameY - before.r.frameY) > 0.01, { before: before.r, after: after.r });
-  ck("  ...onto its spot round the VILLA, before and after the pan", before.err < 1e-6 && after.err < 1e-6, { before: before.err, after: after.err, b: before.r, a: after.r, cam: sky2.camera });
+  cam.radius = 56;                           // zoom in: distance only
+  const zoomed = where();
+  ck("zooming the real camera re-places the disc too (a zoom moves neither heading nor tilt)",
+     zoomed.r.frameX !== null && Math.hypot(zoomed.r.frameX - after.r.frameX, zoomed.r.frameY - after.r.frameY) > 0.01, { after: after.r, zoomed: zoomed.r });
+  ck("  ...onto its spot round the VILLA — before and after the pan, and zoomed in", [before, after, zoomed].every((w) => w.plain && w.err < 1e-6), { before: before.err, after: after.err, zoomed: zoomed.err, zr: zoomed.r, zoom: sky2.camera.zoom });
 }
 
 // ── ONE sun in the overview (owner, 2026-10-05, 17:37 screenshot): the sky

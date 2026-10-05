@@ -19,7 +19,20 @@ const PITCHES = [deg(10), deg(25), deg(40), deg(61.4), deg(75), deg(87)];
 // Measured through the CAMERA'S OWN PROJECTION of the direction lift() hands
 // the disc — never the design numbers (2.496.290: a flat approximation stayed
 // green while the moon slid sideways).
-function drawn(alt, az, cam) {
+/** How much the ground AT A SPOT has grown on screen since the fitted view —
+ *  world geometry only, not the code's formula: the spot's depth seen from
+ *  the FITTED camera (orbiting the villa V at distance R, this heading and
+ *  tilt) over its depth from the camera at C. The disc's lift scales by it. */
+function growth(F, V, R, b, C, S) {
+  const Cf = [V[0] - R * F.x, V[1] - R * F.y, V[2] - R * F.z];
+  const Sf = [V[0] + f.DOME_SCALE * R * Math.sin(b), V[1], V[2] + f.DOME_SCALE * R * Math.cos(b)];
+  const depth = (P, Q) => (P[0] - Q[0]) * F.x + (P[1] - Q[1]) * F.y + (P[2] - Q[2]) * F.z;
+  return depth(Sf, Cf) / depth(S, C);
+}
+/** A pose at the FITTED zoom unless it says otherwise (SkyCamera.zoom). */
+const fitted = (cam) => ({ anchor: null, zoom: 1, ...cam });
+function drawn(alt, az, cam0) {
+  const cam = fitted(cam0);
   const d = dirAt(alt, az);
   const l = f.lift(d.x, d.y, d.z, drop, cam);
   return { ...(f.projectToFrame(l.x, l.y, l.z, cam) ?? { frameX: NaN, frameY: NaN }), dir: l, fade: f.bodyFade(d.x, d.y, d.z, drop, cam) };
@@ -51,7 +64,7 @@ console.log("  a spot on the ground round the villa, the disc straight up the sc
       const err = Math.hypot(r.frameX - want.frameX, r.frameY - want.frameY);
       if (err > worst) { worst = err; at = { cam, D, a, alt }; }
     }
-  ck(`the disc stands straight above a real spot on the ground beside the villa — orbit, tilt, zoom and pan alike (${checked} poses)`, worst < 1e-9 && checked > 1000, { worst, at, checked });
+  ck(`the disc stands straight above a real spot on the ground beside the villa — any orbit, tilt and distance, sized for the fit (${checked} poses)`, worst < 1e-9 && checked > 1000, { worst, at, checked });
   // ⚠️ "pan alike" above was true only of a camera ORBITING THE VILLA: the
   // spot was round the orbit point, which a pan carries along with the
   // camera, so panning slid the villa and left the sun on the screen (owner,
@@ -67,7 +80,9 @@ console.log("  a spot on the ground round the villa, the disc straight up the sc
       const v = [V[0] + k * Math.sin(b) - C[0], V[1] - C[1], V[2] + k * Math.cos(b) - C[2]], n = Math.hypot(...v);
       const g = f.projectToFrame(v[0] / n, v[1] / n, v[2] / n, cam);
       if (!g) continue;
-      const up = f.LIFT_LOW + (f.LIFT_HIGH - f.LIFT_LOW) * alt / 90;
+      // panned: the spot is nearer or farther than at the fit, and its lift grows or shrinks with it
+      const S = [V[0] + k * Math.sin(b), V[1], V[2] + k * Math.cos(b)];
+      const up = (f.LIFT_LOW + (f.LIFT_HIGH - f.LIFT_LOW) * alt / 90) * growth(F, V, D, b, C, S);
       const want = { frameX: g.frameX, frameY: g.frameY - up / 2 };
       if (Math.abs(2 * want.frameX - 1) > f.FRAME_TRUE || Math.abs(1 - 2 * want.frameY) > f.FRAME_TRUE) continue;
       panned++;
@@ -77,6 +92,53 @@ console.log("  a spot on the ground round the villa, the disc straight up the sc
     }
   ck(`  ...PANNING carries it with the villa: the spot is round the villa's centre, not round the point the camera orbits (${panned} panned poses)`,
      worstPan < 1e-9 && panned > 500, { worstPan, atPan, panned });
+  // ZOOM (owner, 2026-10-05, recording): the spot's distance and the lift
+  // were sized by the CURRENT orbit distance and the frame, so zooming in
+  // pulled the moon along the pool and lowered it against the roof. Sized
+  // for the FIT (distance R) and scaled by zoom = R / D, the spot is a fixed
+  // place on the ground (V + DOME_SCALE·R along the bearing) and the lift
+  // grows with the villa: measured in villa-sizes on screen, the disc keeps
+  // the same place at every zoom.
+  let worstZoom = 0, atZoom = null, zoomed = 0;
+  const R = 60, V = [2, 1, -3];
+  for (const cam0 of CAMS) for (let a = -170; a <= 180; a += 20) for (const alt of [5, 35, 70]) {
+    const F = { x: Math.sin(cam0.camAz) * Math.cos(cam0.pitch), y: -Math.sin(cam0.pitch), z: Math.cos(cam0.camAz) * Math.cos(cam0.pitch) };
+    const rel = [];
+    for (const D of [R * 1.6, R, R * 0.8, R * 0.6]) {
+      const C = [V[0] - D * F.x, V[1] - D * F.y, V[2] - D * F.z];   // orbiting the villa, at distance D
+      const cam = { ...cam0, anchor: { x: (V[0] - C[0]) / D, y: (V[1] - C[1]) / D, z: (V[2] - C[2]) / D }, zoom: R / D };
+      const b = deg(a), k = f.DOME_SCALE * R;
+      const v = [V[0] + k * Math.sin(b) - C[0], V[1] - C[1], V[2] + k * Math.cos(b) - C[2]], n = Math.hypot(...v);
+      const g = f.projectToFrame(v[0] / n, v[1] / n, v[2] / n, cam);
+      if (!g) { rel.length = 0; break; }
+      const S = [V[0] + k * Math.sin(b), V[1], V[2] + k * Math.cos(b)], grow = growth(F, V, R, b, C, S);
+      const up = (f.LIFT_LOW + (f.LIFT_HIGH - f.LIFT_LOW) * alt / 90) * grow;
+      const want = { frameX: g.frameX, frameY: g.frameY - up / 2 };
+      if (Math.abs(2 * want.frameX - 1) > f.FRAME_TRUE || Math.abs(1 - 2 * want.frameY) > f.FRAME_TRUE) { rel.length = 0; break; }
+      const r = drawn(deg(alt), b, cam);
+      // where it is drawn against its spot, in sizes of the ground THERE (÷ growth)
+      rel.push([(r.frameX - g.frameX) / grow, (r.frameY - g.frameY) / grow, Math.hypot(r.frameX - want.frameX, r.frameY - want.frameY)]);
+    }
+    if (rel.length < 2) continue;
+    zoomed++;
+    for (const q of rel) {
+      const e = Math.max(q[2], Math.hypot(q[0] - rel[0][0], q[1] - rel[0][1]));
+      if (e > worstZoom) { worstZoom = e; atZoom = { cam0, a, alt, rel }; }
+    }
+  }
+  ck(`  ...ZOOMING never moves it against the villa: a fixed spot on the ground, lifted in proportion to the ground's size there (${zoomed} poses x 4 zooms)`,
+     worstZoom < 1e-9 && zoomed > 200, { worstZoom, atZoom, zoomed });
+  {
+    // Zoomed all the way in (zoom ≈ 13: fitFrame's lo limit is 0.08 of the span
+    // against a fit of 1.05), a body off to the side has its spot BEHIND the
+    // camera: it is hidden, never drawn behind the viewer's head.
+    const cam = { pitch: deg(40), halfFov: 0.4, camAz: 0, hHalf: 0.7, anchor: { x: 0, y: -Math.sin(deg(40)), z: Math.cos(deg(40)) }, zoom: 13 };
+    const d = dirAt(deg(10), deg(104));   // still in the side fade (85°–105°), its spot ~0.08 behind the camera
+    const p = f.placeBody(d.x, d.y, d.z, drop, cam);
+    const front = dirAt(deg(10), deg(10)), q = f.placeBody(front.x, front.y, front.z, drop, cam);
+    ck("  ...zoomed all the way in, a body whose spot falls behind the camera is hidden; one ahead is still drawn",
+       p.dir === null && p.fade === 0 && q.dir !== null && f.projectToFrame(q.dir.x, q.dir.y, q.dir.z, cam) !== null, { p, q });
+  }
   // The 2.496.294 defect: a disc raised into the AIR lines up with different
   // ground as the view tilts, so tilting slid the sun from beside the pool to
   // above it. Over the same spot, the disc's offset from it must not change
@@ -191,7 +253,7 @@ console.log("\n  behind you is behind you (owner, 2026-10-05, 2.496.296)");
 
 console.log("\n  setting");
 {
-  const cam = { pitch: deg(61.4), halfFov: 0.4, camAz: 0, hHalf: 0.7 };
+  const cam = fitted({ pitch: deg(61.4), halfFov: 0.4, camAz: 0, hHalf: 0.7 });
   ck("set: below −1° of TRUE altitude it is gone; above 3° fully up; between, a fade",
      f.horizonFade(deg(-1.5)) === 0 && f.horizonFade(deg(4)) === 1 && f.horizonFade(deg(1)) > 0 && f.horizonFade(deg(1)) < 1);
   const lo = dirAt(deg(-0.5), 0);
@@ -201,7 +263,7 @@ console.log("\n  setting");
 
 console.log("\n  first person");
 {
-  const cam = { pitch: deg(5), halfFov: 0.4, camAz: 1, hHalf: 0.7 };
+  const cam = fitted({ pitch: deg(5), halfFov: 0.4, camAz: 1, hHalf: 0.7 });
   const d = dirAt(deg(37), deg(140));
   const out = f.lift(d.x, d.y, d.z, 0, cam);
   ck("no horizon drop: the true sky, untouched (the viewer is standing under it)",

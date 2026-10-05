@@ -27,11 +27,16 @@ export interface SkyCamera {
    *  distance to the point it orbits; null = that orbit point itself (the
    *  view as fitted, before a model is known). See lift(). */
   anchor: { x: number; y: number; z: number } | null;
+  /** The fitted view's orbit distance over the current one: 1 at the fit, 2
+   *  zoomed in to half the distance. The spot's distance from the villa and
+   *  the disc's lift are sized for the fit and scaled by this, so zooming
+   *  changes how BIG they look, never where they sit against the villa. */
+  zoom: number;
 }
 
 /** The pose before the first rendered frame reports the real one. */
 export function defaultSkyCamera(): SkyCamera {
-  return { pitch: 0, halfFov: 0.4, camAz: 0, hHalf: 0.7, anchor: null };
+  return { pitch: 0, halfFov: 0.4, camAz: 0, hHalf: 0.7, anchor: null, zoom: 1 };
 }
 
 /** The dome's radius, and the denominator the horizon drop's angle is measured
@@ -52,10 +57,10 @@ export function liftFor(units: number): number {
 /**
  * Where the overview anchors the sun and the moon: a spot ON THE GROUND beside
  * the villa — round the villa's CENTRE (SkyCamera.anchor), in the body's true
- * direction, DOME_SCALE times the camera's distance from the point it orbits.
- * Because the distance follows the camera, zooming leaves the bodies where
- * they are relative to the villa, and because the spot is round the villa
- * and not round the orbit point, panning slides them WITH the villa;
+ * direction, DOME_SCALE times the FITTED view's orbit distance — a fixed
+ * distance on the ground, so zooming leaves the bodies where they are
+ * relative to the villa (SkyCamera.zoom) — and because the spot is round the
+ * villa and not round the orbit point, panning slides them WITH the villa;
  * because the spot is fixed on the ground, turning and tilting move it exactly
  * as they move the villa. A sun-path diagram drawn round the house, not the
  * sky at infinity — owner, 2026-10-05: "bring them closer to the villa ... so
@@ -121,6 +126,12 @@ export const SET_HIGH = (3 * Math.PI) / 180;
  *   along with the camera: panning slid the villa across the screen and left
  *   the sun where it was (owner, 2026-10-05, arrow keys). It is round the
  *   villa's centre now (cam.anchor).
+ * - until 2.496.300 the spot's distance and the lift were sized by the
+ *   CURRENT orbit distance and the frame: zooming in pulled the moon along
+ *   the pool and lowered it against the roof (owner recording). Both are
+ *   sized for the fitted view now and scale with the zoom (cam.zoom), so at
+ *   the fit nothing moved and at any other zoom the body keeps its place
+ *   against the villa.
  * This one is a ground spot round the villa (DOME_SCALE) with the disc drawn
  * straight up the screen from it: the sun east of the house
  * is drawn east of the house from every angle, a sun behind you is not drawn
@@ -137,12 +148,23 @@ export function lift(x: number, y: number, z: number, drop: number, cam: SkyCame
   // camera → villa centre (the forward ray while nothing is panned), then
   // villa → ground spot: DOME_SCALE along the bearing, level. All in units of
   // the orbit distance.
-  const k = DOME_SCALE;
+  const k = DOME_SCALE * cam.zoom;
   const c = cam.anchor ?? { x: sa * cp, y: -sp, z: ca * cp };
   const v = { x: c.x + k * Math.sin(az), y: c.y, z: c.z + k * Math.cos(az) };
   const p = projectToFrame(v.x, v.y, v.z, cam);
-  if (!p) return unit(v);                           // unreachable while DOME_SCALE < 1
-  const up = lerp(LIFT_LOW, LIFT_HIGH, Math.min(1, alt / (Math.PI / 2)));
+  // Zoomed far in, the spot (fixed on the ground, cam.zoom) can lie behind
+  // the camera; placeBody hides the body then, as it does one behind the viewer.
+  if (!p) return unit(v);
+  // In the frame (tilt-proof), scaled by how much the ground AT THE SPOT has
+  // grown on screen since the fitted view (zoom-proof): its depth then over
+  // its depth now. ⚠️ Not `zoom` alone — perspective enlarges near ground more
+  // than far ground, so a body beside the far wall drifted against it
+  // (measured in the sky rig). 1 at the fit, unpanned: the accepted look.
+  // Both in units of the CURRENT orbit distance (v's units); the fit's orbit
+  // distance is `zoom` of them. depthNow > 0: p exists.
+  const depthNow = v.x * sa * cp - v.y * sp + v.z * ca * cp;
+  const depthFit = cam.zoom * (1 + DOME_SCALE * cp * Math.cos(az - cam.camAz));
+  const up = lerp(LIFT_LOW, LIFT_HIGH, Math.min(1, alt / (Math.PI / 2))) * (depthFit / depthNow);
   // Past FRAME_TRUE, ease each axis toward the villa so the body never leaves
   // the frame. ⚠️ PER AXIS, not along the line to the centre: a body above
   // the top edge must come DOWN, not also slide toward the middle — the
@@ -227,7 +249,11 @@ export function placeBody(x: number, y: number, z: number, drop: number, cam: Sk
   fade: number; dir: { x: number; y: number; z: number } | null;
 } {
   const fade = bodyFade(x, y, z, drop, cam);
-  return { fade, dir: fade > 0 ? lift(x, y, z, drop, cam) : null };
+  if (!(fade > 0)) return { fade, dir: null };
+  const dir = lift(x, y, z, drop, cam);
+  // Its ground spot behind the camera (zoomed far in): not drawn at all.
+  if (drop > 0 && !projectToFrame(dir.x, dir.y, dir.z, cam)) return { fade: 0, dir: null };
+  return { fade, dir };
 }
 
 /** How much the sun's disc warms toward the horizon, over the last 25° of

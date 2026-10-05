@@ -217,6 +217,7 @@ export class SkyDome {
     // camera holds fixed — see cameraFrame.ts.
     const { vHalf: halfFov, hHalf } = cameraFrame(this.scene, cam);
     const anchor = this.anchorFrom(cam);
+    const zoom = this.zoomOf(cam);
     // ~0.3°: below that nothing has moved a pixel, and re-placing would repaint
     // nothing while defeating the on-demand render. ⚠️ A PAN changes only the
     // anchor — heading and tilt stay put — so it must be compared too.
@@ -224,12 +225,13 @@ export class SkyDome {
     if (!this.reframe && Math.abs(pitch - c.pitch) < 0.005
       && Math.abs(wrapAngle(camAz - c.camAz)) < 0.005
       && halfFov === c.halfFov && hHalf === c.hHalf
-      && sameAnchor(anchor, c.anchor)) return;
+      && sameAnchor(anchor, c.anchor) && Math.abs(zoom - c.zoom) < 1e-4 * zoom) return;
     c.pitch = pitch;
     c.camAz = camAz;
     c.halfFov = halfFov;
     c.hHalf = hHalf;
     c.anchor = anchor;
+    c.zoom = zoom;
     this.reframe = false;
     this.placeSun();
     this.placeMoon();
@@ -244,11 +246,23 @@ export class SkyDome {
 
   /** Place the bodies round THIS point (SceneManager, from the model's own
    *  extents — no villa dimension ships). */
-  setVillaCentre(p: Vector3): void {
+  setVillaCentre(p: Vector3, fitRadius: number): void {
     this.villa = p.clone();
+    this.fitRadius = fitRadius;
     this.reframe = true;   // on the next rendered frame, even if the camera is still
   }
   private reframe = false;
+  /** The fitted view's orbit distance — what the dome is sized for (SkyCamera.zoom). */
+  private fitRadius = 0;
+
+  /** Fitted orbit distance over the current one (SkyCamera.zoom); 1 before a
+   *  fit or for a camera that orbits nothing. */
+  private zoomOf(cam: Camera): number {
+    const target = (cam as { target?: unknown }).target;
+    if (!(this.fitRadius > 0) || !(target instanceof Vector3)) return 1;
+    const d = Vector3.Distance(cam.globalPosition, target);
+    return d > 1e-6 ? this.fitRadius / d : 1;
+  }
 
   /** Camera → villa centre in units of the orbit distance (SkyCamera.anchor);
    *  null without a villa or for a camera that orbits nothing. */

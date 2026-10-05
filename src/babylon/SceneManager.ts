@@ -1085,9 +1085,10 @@ export class SceneManager {
     const ext = this.worldExtends(this.loadedMeshes);
     this.overview.fitTo({ min: ext.min, max: ext.max });
     // The sun and moon are placed round the villa, not round wherever the
-    // view has been panned to — the same centre the fit frames.
+    // view has been panned to — the same centre the fit frames — and sized
+    // for the fitted view, so zooming does not move them against the villa.
     const fit = fitFrame(ext, 1).target;
-    this.sky.setVillaCentre(new Vector3(fit.x, fit.y, fit.z));
+    this.sky.setVillaCentre(new Vector3(fit.x, fit.y, fit.z), this.overview.getFitRadius());
     // A saved per-device default (see saveOverviewDefault) overrides the
     // auto-fit angle/tilt/zoom/pan — fitTo() still ran first so the pan
     // bounds and icon-zoom reference are correct for THIS model.
