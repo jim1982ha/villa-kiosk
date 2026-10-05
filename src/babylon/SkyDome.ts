@@ -331,7 +331,7 @@ export class SkyDome {
     const alt = Math.atan2(y, Math.hypot(x, z));
     // Fade on the TRUE altitude — see skyFraming.horizonFade. Below the horizon
     // the sun is simply gone, and the night sky takes over.
-    const fade = bodyFade(x, y, z);
+    const fade = bodyFade(x, y, z, drop, this.camera);
     // First person shows the material's own disc in a sky the viewer is
     // genuinely standing under, so the billboard would only ever be a second
     // sun beside the real one.

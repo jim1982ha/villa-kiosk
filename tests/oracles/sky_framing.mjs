@@ -22,7 +22,7 @@ const PITCHES = [deg(10), deg(25), deg(40), deg(61.4), deg(75), deg(87)];
 function drawn(alt, az, cam) {
   const d = dirAt(alt, az);
   const l = f.lift(d.x, d.y, d.z, drop, cam);
-  return { ...(f.projectToFrame(l.x, l.y, l.z, cam) ?? { frameX: NaN, frameY: NaN }), dir: l };
+  return { ...(f.projectToFrame(l.x, l.y, l.z, cam) ?? { frameX: NaN, frameY: NaN }), dir: l, fade: f.bodyFade(d.x, d.y, d.z, drop, cam) };
 }
 const CAMS = [];
 for (const pitch of PITCHES) for (const [halfFov, hHalf] of [[0.4, 0.7], [0.4, 1.0], [0.55, 0.3], [0.4, 0.35]])
@@ -73,13 +73,13 @@ console.log("  a spot on the ground round the villa, the disc straight up the sc
   let out = [];
   for (const cam of CAMS) for (let a = -179; a <= 179; a += 7) for (const alt of [0, 15, 35, 60, 85, 90]) {
     const r = drawn(deg(alt), cam.camAz + deg(a), cam);
-    if (!(r.frameX > 0.04 && r.frameX < 0.96 && r.frameY > 0.04 && r.frameY < 0.96)) out.push([cam, a, alt, r.frameX, r.frameY]);
+    if (r.fade > 0 && !(r.frameX > 0.04 && r.frameX < 0.96 && r.frameY > 0.04 && r.frameY < 0.96)) out.push([cam, a, alt, r.frameX, r.frameY]);
   }
-  ck("  ...and it is ALWAYS on screen: every bearing, height, tilt, heading, tablet and phone (eased toward the villa near the edges)", out.length === 0, out.slice(0, 2));
+  ck("  ...and whenever it is drawn it is ON screen: every bearing, height, tilt, heading, tablet and phone (eased toward the villa near the edges)", out.length === 0, out.slice(0, 2));
   let wrongSide = [];
   for (const cam of CAMS) for (let a = 5; a <= 175; a += 10) for (const alt of [0, 40, 80]) for (const sgn of [1, -1]) {
-    const x = drawn(deg(alt), cam.camAz + sgn * deg(a), cam).frameX;
-    if (Math.sign(x - 0.5) !== sgn) wrongSide.push([cam, sgn * a, alt, x]);
+    const r = drawn(deg(alt), cam.camAz + sgn * deg(a), cam), x = r.frameX;
+    if (r.fade > 0 && Math.sign(x - 0.5) !== sgn) wrongSide.push([cam, sgn * a, alt, x]);
   }
   ck("  ...a body to the RIGHT of where the camera faces is drawn right of the villa, and left is left", wrongSide.length === 0, wrongSide.slice(0, 2));
   let low = [];
@@ -107,7 +107,9 @@ console.log("\n  the same wall from every side (owner, 2026-10-05, 2.496.293)");
       const G = [0.3 * D * Math.sin(az) - C[0], -C[1], 0.3 * D * Math.cos(az) - C[2]], n = Math.hypot(...G);
       const g = f.projectToFrame(G[0] / n, G[1] / n, G[2] / n, cam);
       const side = g.frameX - 0.5;
-      const sx = drawn(deg(alt), az, cam).frameX - 0.5;
+      const r = drawn(deg(alt), az, cam);
+      if (!(r.fade > 0)) continue;                 // behind you: not drawn at all
+      const sx = r.frameX - 0.5;
       if (Math.abs(side) > 0.08 && Math.sign(sx) !== Math.sign(side)) wrong.push([pitch, alt, az, t, side, sx]);
       if (Math.abs(side) > 0.25 && Math.abs(sx) < 0.15) weak.push([+pitch.toFixed(2), alt, +az.toFixed(2), t, +side.toFixed(2), +sx.toFixed(2)]);
     }
@@ -122,7 +124,8 @@ console.log("\n  nothing jumps (2.496.290: east to west in one step)");
     let prev = null;
     for (let t = 0; t <= 720; t += 0.5) {
       const r = drawn(deg(alt), deg(40), { pitch, halfFov, camAz: deg(t), hHalf });
-      if (prev && Math.hypot(r.frameX - prev.frameX, r.frameY - prev.frameY) > 0.03) seams.push(["turn", hHalf, pitch, alt, t]);
+      if (prev && prev.fade > 0 && r.fade > 0 && Math.hypot(r.frameX - prev.frameX, r.frameY - prev.frameY) > 0.03) seams.push(["turn", hHalf, pitch, alt, t]);
+      if (prev && Math.abs(r.fade - prev.fade) > 0.05) seams.push(["popped", hHalf, pitch, alt, t, prev.fade, r.fade]);
       prev = r;
     }
   }
@@ -131,10 +134,34 @@ console.log("\n  nothing jumps (2.496.290: east to west in one step)");
     for (let p = 3; p <= 87; p += 0.25) {
       const r = drawn(deg(35), deg(a), { pitch: deg(p), halfFov, camAz: 0, hHalf });
       if (prev && Math.hypot(r.frameX - prev.frameX, r.frameY - prev.frameY) > 0.03) seams.push(["tilt", hHalf, a, p]);
+      if (prev && r.fade !== prev.fade) seams.push(["tilt changed visibility", hHalf, a, p]);
       prev = r;
     }
   }
-  ck("turning all the way round, twice, and tilting end to end: it glides, never pops", seams.length === 0, seams.slice(0, 3));
+  ck("turning all the way round, twice, and tilting end to end: it glides and fades, never pops", seams.length === 0, seams.slice(0, 3));
+}
+
+console.log("\n  behind you is behind you (owner, 2026-10-05, 2.496.296)");
+{
+  // From the front and from the back of the villa, a sun can be in front of
+  // ONE of the two viewers only. 2.496.295 drew it in both, lifted up the
+  // screen, so both views showed it "out there".
+  let wrong = [];
+  for (const cam of CAMS) for (let a = -180; a <= 180; a += 5) for (const alt of [5, 40, 70]) {
+    const r = drawn(deg(alt), cam.camAz + deg(a), cam), rel = Math.abs(deg(a));
+    if (rel <= f.BEHIND_FROM - 1e-6 && r.fade !== 1) wrong.push(["in front, not fully drawn", cam, a, alt, r.fade]);
+    if (rel >= f.BEHIND_TO + 1e-6 && r.fade !== 0) wrong.push(["behind, still drawn", cam, a, alt, r.fade]);
+  }
+  ck("a body behind the viewer is not drawn; one in front is fully drawn; between, it fades at the side", wrong.length === 0, wrong.slice(0, 2));
+  let both = [];
+  for (const cam of CAMS) for (let a = -180; a < 180; a += 5) {
+    const back = { ...cam, camAz: cam.camAz + Math.PI };
+    const s1 = drawn(deg(40), cam.camAz + deg(a), cam).fade, s2 = drawn(deg(40), cam.camAz + deg(a), back).fade;
+    if (s1 > 0 && s2 > 0 && Math.abs(Math.abs(deg(a)) - Math.PI / 2) > (f.BEHIND_TO - Math.PI / 2)) both.push([a, s1, s2]);
+  }
+  ck("  ...so seen from the front and from the back of the villa, the same sun is visible from only one side (outside the side-on fade)", both.length === 0, both.slice(0, 3));
+  const walk = dirAt(deg(30), Math.PI);
+  ck("  ...walking, the true sky decides on its own (no extra hiding)", f.bodyFade(walk.x, walk.y, walk.z, 0, { pitch: 0, halfFov: 0.4, camAz: 0, hHalf: 0.7 }) === 1);
 }
 
 console.log("\n  setting");
@@ -144,7 +171,7 @@ console.log("\n  setting");
      f.horizonFade(deg(-1.5)) === 0 && f.horizonFade(deg(4)) === 1 && f.horizonFade(deg(1)) > 0 && f.horizonFade(deg(1)) < 1);
   const lo = dirAt(deg(-0.5), 0);
   ck("  ...asked of the TRUE altitude, never the drawn one (in overview the drawn direction is below the horizon)",
-     f.lift(lo.x, lo.y, lo.z, drop, cam).y < 0 && f.bodyFade(lo.x, lo.y, lo.z) > 0);
+     f.lift(lo.x, lo.y, lo.z, drop, cam).y < 0 && f.bodyFade(lo.x, lo.y, lo.z, drop, cam) > 0);
 }
 
 console.log("\n  first person");
@@ -153,7 +180,7 @@ console.log("\n  first person");
   const d = dirAt(deg(37), deg(140));
   const out = f.lift(d.x, d.y, d.z, 0, cam);
   ck("no horizon drop: the true sky, untouched (the viewer is standing under it)",
-     out.x === d.x && out.y === d.y && out.z === d.z && f.bodyFade(d.x, d.y, d.z) === 1);
+     out.x === d.x && out.y === d.y && out.z === d.z && f.bodyFade(d.x, d.y, d.z, 0, cam) === 1);
   ck("liftFor: 0 units is 0; 200 units is about 22° (the drop's own rotation)",
      f.liftFor(0) === 0 && Math.abs(f.liftFor(200) - deg(21.8)) < deg(0.1));
 }

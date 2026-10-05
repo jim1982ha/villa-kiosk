@@ -171,7 +171,7 @@ export class NightSky {
     const { x, y, z } = look.dir;
     const d = lift(x, y, z, this.lift, this.camera);
     const dir = new Vector3(d.x, d.y, d.z);
-    const fade = bodyFade(x, y, z);
+    const fade = bodyFade(x, y, z, this.lift, this.camera);
     const visible = night > 0 && fade > 0;
     this.moonMat.alpha = visible ? night * fade : 0;
     this.moon.setEnabled(visible);

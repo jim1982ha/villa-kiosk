@@ -12,7 +12,7 @@
 // every tilt the user can hold?" by value. SkyDome and NightSky are the
 // Babylon adapters; the explanations of each rule live beside it below.
 
-import { lerp } from "@/utils/geometry";
+import { lerp, wrapAngle } from "@/utils/geometry";
 
 /** The camera, as the framing measures against it. `pitch` is radians BELOW
  *  horizontal (positive); `halfFov` half the vertical field of view; `camAz`
@@ -75,6 +75,19 @@ export const LIFT_HIGH = 0.55;
 export const FRAME_TRUE = 0.6;
 export const FRAME_REACH = 0.9;
 
+/** Shown only when IN FRONT of the viewer: fully up to BEHIND_FROM of
+ *  bearing away from where the camera faces, gone by BEHIND_TO, and a fade
+ *  between — at the side of the frame, so it dims out where it stands rather
+ *  than jumping anywhere.
+ *
+ *  ⚠️ 2.496.292–295 showed a body behind the viewer too, drawn on the
+ *  viewer's side of the house and lifted up the screen, so from the front and
+ *  from the back of the villa the sun looked equally "out there" (owner,
+ *  2026-10-05: "the sun shall be on the viewpoint's back ... in one case it
+ *  shall not be visible at all"). Behind you is behind you. */
+export const BEHIND_FROM = (85 * Math.PI) / 180;
+export const BEHIND_TO = (105 * Math.PI) / 180;
+
 /** The twilight band a body fades over as it sets: −1°..3° of TRUE altitude. */
 export const SET_LOW = (-1 * Math.PI) / 180;
 export const SET_HIGH = (3 * Math.PI) / 180;
@@ -97,10 +110,11 @@ export const SET_HIGH = (3 * Math.PI) / 180;
  *   centre: it seemed to follow the camera (ease());
  * - 2.496.293's dome kept the body up in the air: TILTING moved it from
  *   beside the pool to above it, by parallax (LIFT_LOW).
+ * - 2.496.295 still drew a body that was BEHIND the viewer (frontFade).
  * This one is a ground spot round the villa (DOME_SCALE) with the disc drawn
  * straight up the screen from it: the sun east of the house
- * is drawn east of the house from every angle, a sun behind you is drawn on
- * your side of the house (lower in the frame), and nothing ever jumps. The
+ * is drawn east of the house from every angle, a sun behind you is not drawn
+ * (bodyFade), and nothing ever jumps. The
  * disc is still drawn at SKY distance, so wherever it overlaps the villa the
  * villa covers it (owner, 2026-10-05: "never displayed over the villa").
  */
@@ -176,10 +190,19 @@ export function horizonFade(alt: number): number {
   return Math.max(0, Math.min(1, t));
 }
 
+/** 1 while the body's bearing is in front of the camera, 0 behind it, a fade
+ *  between (BEHIND_FROM..BEHIND_TO). Walking (`drop` 0) it is always 1: the
+ *  true sky's own projection already hides what is behind the viewer. */
+export function frontFade(x: number, z: number, drop: number, cam: SkyCamera): number {
+  if (drop <= 0 || Math.hypot(x, z) < 1e-9) return 1;
+  const rel = Math.abs(wrapAngle(Math.atan2(x, z) - cam.camAz));
+  return Math.max(0, Math.min(1, (BEHIND_TO - rel) / (BEHIND_TO - BEHIND_FROM)));
+}
+
 /** The opacity of a body at TRUE direction (x,y,z): it has set, or it is
- *  fully there — on the overview's dome it is never out of view. */
-export function bodyFade(x: number, y: number, z: number): number {
-  return horizonFade(Math.atan2(y, Math.hypot(x, z)));
+ *  behind the viewer, or it is fully there. */
+export function bodyFade(x: number, y: number, z: number, drop: number, cam: SkyCamera): number {
+  return horizonFade(Math.atan2(y, Math.hypot(x, z))) * frontFade(x, z, drop, cam);
 }
 
 /** How much the sun's disc warms toward the horizon, over the last 25° of
