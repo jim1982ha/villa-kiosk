@@ -1,3 +1,8 @@
+## 2.496.303
+
+### Improved
+- Each new version is now started and checked healthy on both kinds of hardware (Intel/AMD and ARM, such as the Home Assistant Yellow) before Home Assistant is offered the update. A version that cannot start is never published.
+
 ## 2.496.302
 
 ### Changed
