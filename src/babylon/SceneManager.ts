@@ -13,6 +13,7 @@ import { SceneInstrumentation } from "@babylonjs/core/Instrumentation/sceneInstr
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { fitFrame } from "./overviewPose";
+import { sunPathOf } from "./skyFraming";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
 import { Ray } from "@babylonjs/core/Culling/ray";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
@@ -1084,11 +1085,10 @@ export class SceneManager {
     if (!this.loadedMeshes.length) return;
     const ext = this.worldExtends(this.loadedMeshes);
     this.overview.fitTo({ min: ext.min, max: ext.max });
-    // The sun and moon are placed round the villa, not round wherever the
-    // view has been panned to — the same centre the fit frames — and sized
-    // for the fitted view, so zooming does not move them against the villa.
-    const fit = fitFrame(ext, 1).target;
-    this.sky.setVillaCentre(new Vector3(fit.x, fit.y, fit.z), this.overview.getFitRadius());
+    // The sun and moon are fixed points on a sun-path diagram round the
+    // villa (skyFraming), sized from the model itself, on the ground the fit
+    // frames — so no camera motion can move them against the villa.
+    this.sky.setSunPath(sunPathOf(ext.min, ext.max, fitFrame(ext, 1).target.y - 1));
     // A saved per-device default (see saveOverviewDefault) overrides the
     // auto-fit angle/tilt/zoom/pan — fitTo() still ran first so the pan
     // bounds and icon-zoom reference are correct for THIS model.

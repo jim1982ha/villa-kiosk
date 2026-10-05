@@ -128,15 +128,15 @@ export class NightSky {
   }
 
   /** The last look handed to update(), so the moon can be re-placed when the
-   *  CAMERA moves rather than only when the sky clock ticks. The arc is framed
-   *  against the camera (skyFraming.lift), so a turn or tilt changes the answer. */
+   *  CAMERA moves rather than only when the sky clock ticks: in the overview
+   *  it is a fixed point round the villa (skyFraming.placeBody), so wherever
+   *  the camera goes, the direction to it changes. */
   private lastLook: MoonLook | null = null;
 
   /** Re-place from the stored look against the sky's current drop (`lift`,
-   *  radians). Called by SkyDome whenever it re-frames the sun — a camera move
-   *  or a drop change — so sun and moon move in the same frame by the same
-   *  rule. A moon left at its true elevation while everything around it
-   *  rises is the empty-sky bug 2.388.0 fixed for the sun, one body over. */
+   *  radians; > 0 is the overview). Called by SkyDome whenever it re-frames
+   *  the sun — a camera move or a drop change — so sun and moon move in the
+   *  same frame by the same rule. */
   reframe(lift: number): void {
     this.lift = lift;
     if (this.lastLook) this.update(this.lastLook);
@@ -158,14 +158,11 @@ export class NightSky {
     // Below the horizon the moon is simply not visible — no need to fade it,
     // and fading would leave a disc hanging in the ground half of the dome.
     //
-    // ⚠️ "Has it set?" is asked of the TRUE altitude, never of the lifted one
-    // this same line computes. In overview the drawn direction points down at
-    // the dome round the villa (skyFraming.lift), below the horizon: the old
-    // test on `dir.y` would now be false always and the moon would never be
-    // drawn at all. skyFraming.horizonFade owns the rule for both bodies.
-    // The same expressions the sun is placed and faded by (skyFraming), against
-    // the same camera object SkyDome tracks — the moon rides the identical dome,
-    // round the identical villa.
+    // ⚠️ "Has it set?" is asked of the TRUE altitude, never of the drawn
+    // direction: in the overview that points from the camera to a point round
+    // the villa, often below the horizon. skyFraming.horizonFade owns the rule
+    // for both bodies, and placeBody places both, against the same camera
+    // object SkyDome tracks — the moon on the same sun-path diagram as the sun.
     const { x, y, z } = look.dir;
     const { fade, dir: d } = placeBody(x, y, z, this.lift, this.camera);
     const visible = night > 0 && d !== null;

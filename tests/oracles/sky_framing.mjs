@@ -1,10 +1,13 @@
-// Where the overview draws the sun and the moon (babylon/skyFraming.ts, 2.496.251).
+// Where the overview draws the sun and the moon (babylon/skyFraming.ts).
 //
-// Nearly every sky release since 2.388 retuned the overview framing, checked by
-// eye in a browser, because the maths was private to SkyDome and read four
-// shared static fields. It is pure now, the camera an argument; this pins the
-// promises the comments make, across every tilt and turn the user can hold.
-// 2.496.292 replaced the placement with a dome round the villa; see lift().
+// 2.496.302: ONE RULE — a body is a fixed point on a sun-path diagram round
+// the villa (Revit draws one at 150 % of the model's radius), and the disc is
+// drawn in the direction from the camera to it. 2.496.290–301 drew it by screen
+// rules (a ground spot, a lift up the screen, an edge pull-in, a behind-you
+// fade, pan and zoom factors) and each rule moved it under another camera
+// motion. This pins that NO camera motion can: whatever the pose, the drawn
+// direction points at the same world point, and that point depends on the
+// villa and the true direction alone.
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
@@ -13,261 +16,79 @@ const f = await import("@/babylon/skyFraming");
 const deg = (d) => (d * Math.PI) / 180;
 const dirAt = (alt, az) => ({ x: Math.sin(az) * Math.cos(alt), y: Math.sin(alt), z: Math.cos(az) * Math.cos(alt) });
 const drop = f.liftFor(200);
-// The overview's tilt range: beta 0.05..1.4 rad, so the camera looks 10°..87° below horizontal.
-const PITCHES = [deg(10), deg(25), deg(40), deg(61.4), deg(75), deg(87)];
+// A model's world extents (any — the rule must not care) and its diagram.
+const MIN = { x: -18, y: 0, z: -9 }, MAX = { x: 22, y: 7, z: 11 };
+const path = f.sunPathOf(MIN, MAX, 0);
 
-// Measured through the CAMERA'S OWN PROJECTION of the direction lift() hands
-// the disc — never the design numbers (2.496.290: a flat approximation stayed
-// green while the moon slid sideways).
-/** How much the ground AT A SPOT has grown on screen since the fitted view —
- *  world geometry only, not the code's formula: the spot's depth seen from
- *  the FITTED camera (orbiting the villa V at distance R, this heading and
- *  tilt) over its depth from the camera at C. The disc's lift scales by it. */
-function growth(F, V, R, b, C, S) {
-  const Cf = [V[0] - R * F.x, V[1] - R * F.y, V[2] - R * F.z];
-  const Sf = [V[0] + f.DOME_SCALE * R * Math.sin(b), V[1], V[2] + f.DOME_SCALE * R * Math.cos(b)];
-  const depth = (P, Q) => (P[0] - Q[0]) * F.x + (P[1] - Q[1]) * F.y + (P[2] - Q[2]) * F.z;
-  return depth(Sf, Cf) / depth(S, C);
-}
-/** A pose at the FITTED zoom unless it says otherwise (SkyCamera.zoom). */
-const fitted = (cam) => ({ anchor: null, zoom: 1, ...cam });
-function drawn(alt, az, cam0) {
-  const cam = fitted(cam0);
-  const d = dirAt(alt, az);
-  const l = f.lift(d.x, d.y, d.z, drop, cam);
-  return { ...(f.projectToFrame(l.x, l.y, l.z, cam) ?? { frameX: NaN, frameY: NaN }), dir: l, fade: f.bodyFade(d.x, d.y, d.z, drop, cam) };
-}
-const CAMS = [];
-for (const pitch of PITCHES) for (const [halfFov, hHalf] of [[0.4, 0.7], [0.4, 1.0], [0.55, 0.3], [0.4, 0.35]])
-  for (const camAz of [0, deg(120), deg(-150)]) CAMS.push({ pitch, halfFov, camAz, hHalf });
+console.log("  the sun-path diagram, from the model alone");
+ck("centred on the model's footprint, on its ground",
+   path.centre.x === 2 && path.centre.z === 1 && path.centre.y === 0);
+ck("  ...its radius 150 % of the model's (half its footprint's diagonal) — Revit's default",
+   Math.abs(path.radius - 1.5 * Math.hypot(40, 20) / 2) < 1e-9 && f.SUN_PATH_SCALE === 1.5);
 
-console.log("  a spot on the ground round the villa, the disc straight up the screen from it");
+console.log("\n  one fixed point, whatever the camera does");
 {
-  // A REAL ground spot: the camera orbits target T at distance D; the spot is
-  // DOME_SCALE·D from T along the body's bearing, on the ground. Where the
-  // frame is not eased, the disc must be exactly above that spot's projection
-  // by the lift for its altitude — at every distance and target, so zoom and
-  // pan cannot move it either.
-  let worst = 0, at = null, checked = 0;
-  for (const cam of CAMS) for (const [D, T] of [[10, [0, 0, 0]], [80, [12, 1, -30]], [400, [-50, 3, 7]]])
-    for (let a = -170; a <= 180; a += 10) for (const alt of [0, 20, 45, 70, 89]) {
-      const F = { x: Math.sin(cam.camAz) * Math.cos(cam.pitch), y: -Math.sin(cam.pitch), z: Math.cos(cam.camAz) * Math.cos(cam.pitch) };
-      const C = [T[0] - D * F.x, T[1] - D * F.y, T[2] - D * F.z];
-      const k = f.DOME_SCALE * D, b = deg(a);
-      const v = [T[0] + k * Math.sin(b) - C[0], T[1] - C[1], T[2] + k * Math.cos(b) - C[2]], n = Math.hypot(...v);
-      const g = f.projectToFrame(v[0] / n, v[1] / n, v[2] / n, cam);
-      const up = f.LIFT_LOW + (f.LIFT_HIGH - f.LIFT_LOW) * alt / 90;
-      const want = { frameX: g.frameX, frameY: g.frameY - up / 2 };
-      if (Math.abs(2 * want.frameX - 1) > f.FRAME_TRUE || Math.abs(1 - 2 * want.frameY) > f.FRAME_TRUE) continue;
-      checked++;
-      const r = drawn(deg(alt), b, cam);
-      const err = Math.hypot(r.frameX - want.frameX, r.frameY - want.frameY);
-      if (err > worst) { worst = err; at = { cam, D, a, alt }; }
-    }
-  ck(`the disc stands straight above a real spot on the ground beside the villa — any orbit, tilt and distance, sized for the fit (${checked} poses)`, worst < 1e-9 && checked > 1000, { worst, at, checked });
-  // ⚠️ "pan alike" above was true only of a camera ORBITING THE VILLA: the
-  // spot was round the orbit point, which a pan carries along with the
-  // camera, so panning slid the villa and left the sun on the screen (owner,
-  // 2026-10-05, arrow keys). Here the villa V is NOT the orbit point: the spot
-  // must be round V (cam.anchor), whatever the pan.
-  let worstPan = 0, atPan = null, panned = 0;
-  for (const cam0 of CAMS) for (const [D, T, V] of [[30, [8, 1, -5], [0, 1, 0]], [80, [-20, 1, 15], [3, 1, -2]], [150, [40, 0, 40], [0, 0, 0]]])
-    for (let a = -170; a <= 180; a += 10) for (const alt of [0, 30, 70]) {
-      const F = { x: Math.sin(cam0.camAz) * Math.cos(cam0.pitch), y: -Math.sin(cam0.pitch), z: Math.cos(cam0.camAz) * Math.cos(cam0.pitch) };
-      const C = [T[0] - D * F.x, T[1] - D * F.y, T[2] - D * F.z];
-      const cam = { ...cam0, anchor: { x: (V[0] - C[0]) / D, y: (V[1] - C[1]) / D, z: (V[2] - C[2]) / D } };
-      const k = f.DOME_SCALE * D, b = deg(a);
-      const v = [V[0] + k * Math.sin(b) - C[0], V[1] - C[1], V[2] + k * Math.cos(b) - C[2]], n = Math.hypot(...v);
-      const g = f.projectToFrame(v[0] / n, v[1] / n, v[2] / n, cam);
-      if (!g) continue;
-      // panned: the spot is nearer or farther than at the fit, and its lift grows or shrinks with it
-      const S = [V[0] + k * Math.sin(b), V[1], V[2] + k * Math.cos(b)];
-      const up = (f.LIFT_LOW + (f.LIFT_HIGH - f.LIFT_LOW) * alt / 90) * growth(F, V, D, b, C, S);
-      const want = { frameX: g.frameX, frameY: g.frameY - up / 2 };
-      if (Math.abs(2 * want.frameX - 1) > f.FRAME_TRUE || Math.abs(1 - 2 * want.frameY) > f.FRAME_TRUE) continue;
-      panned++;
-      const r = drawn(deg(alt), b, cam);
-      const err = Math.hypot(r.frameX - want.frameX, r.frameY - want.frameY);
-      if (err > worstPan) { worstPan = err; atPan = { cam0, D, T, V, a, alt }; }
-    }
-  ck(`  ...PANNING carries it with the villa: the spot is round the villa's centre, not round the point the camera orbits (${panned} panned poses)`,
-     worstPan < 1e-9 && panned > 500, { worstPan, atPan, panned });
-  // ZOOM (owner, 2026-10-05, recording): the spot's distance and the lift
-  // were sized by the CURRENT orbit distance and the frame, so zooming in
-  // pulled the moon along the pool and lowered it against the roof. Sized
-  // for the FIT (distance R) and scaled by zoom = R / D, the spot is a fixed
-  // place on the ground (V + DOME_SCALE·R along the bearing) and the lift
-  // grows with the villa: measured in villa-sizes on screen, the disc keeps
-  // the same place at every zoom.
-  let worstZoom = 0, atZoom = null, zoomed = 0;
-  const R = 60, V = [2, 1, -3];
-  for (const cam0 of CAMS) for (let a = -170; a <= 180; a += 20) for (const alt of [5, 35, 70]) {
-    const F = { x: Math.sin(cam0.camAz) * Math.cos(cam0.pitch), y: -Math.sin(cam0.pitch), z: Math.cos(cam0.camAz) * Math.cos(cam0.pitch) };
-    const rel = [];
-    for (const D of [R * 1.6, R, R * 0.8, R * 0.6]) {
-      const C = [V[0] - D * F.x, V[1] - D * F.y, V[2] - D * F.z];   // orbiting the villa, at distance D
-      const cam = { ...cam0, anchor: { x: (V[0] - C[0]) / D, y: (V[1] - C[1]) / D, z: (V[2] - C[2]) / D }, zoom: R / D };
-      const b = deg(a), k = f.DOME_SCALE * R;
-      const v = [V[0] + k * Math.sin(b) - C[0], V[1] - C[1], V[2] + k * Math.cos(b) - C[2]], n = Math.hypot(...v);
-      const g = f.projectToFrame(v[0] / n, v[1] / n, v[2] / n, cam);
-      if (!g) { rel.length = 0; break; }
-      const S = [V[0] + k * Math.sin(b), V[1], V[2] + k * Math.cos(b)], grow = growth(F, V, R, b, C, S);
-      const up = (f.LIFT_LOW + (f.LIFT_HIGH - f.LIFT_LOW) * alt / 90) * grow;
-      const want = { frameX: g.frameX, frameY: g.frameY - up / 2 };
-      if (Math.abs(2 * want.frameX - 1) > f.FRAME_TRUE || Math.abs(1 - 2 * want.frameY) > f.FRAME_TRUE) { rel.length = 0; break; }
-      const r = drawn(deg(alt), b, cam);
-      // where it is drawn against its spot, in sizes of the ground THERE (÷ growth)
-      rel.push([(r.frameX - g.frameX) / grow, (r.frameY - g.frameY) / grow, Math.hypot(r.frameX - want.frameX, r.frameY - want.frameY)]);
-    }
-    if (rel.length < 2) continue;
-    zoomed++;
-    for (const q of rel) {
-      const e = Math.max(q[2], Math.hypot(q[0] - rel[0][0], q[1] - rel[0][1]));
-      if (e > worstZoom) { worstZoom = e; atZoom = { cam0, a, alt, rel }; }
-    }
-  }
-  ck(`  ...ZOOMING never moves it against the villa: a fixed spot on the ground, lifted in proportion to the ground's size there (${zoomed} poses x 4 zooms)`,
-     worstZoom < 1e-9 && zoomed > 200, { worstZoom, atZoom, zoomed });
-  {
-    // Zoomed all the way in (zoom ≈ 13: fitFrame's lo limit is 0.08 of the span
-    // against a fit of 1.05), a body off to the side has its spot BEHIND the
-    // camera: it is hidden, never drawn behind the viewer's head.
-    const cam = { pitch: deg(40), halfFov: 0.4, camAz: 0, hHalf: 0.7, anchor: { x: 0, y: -Math.sin(deg(40)), z: Math.cos(deg(40)) }, zoom: 13 };
-    const d = dirAt(deg(10), deg(104));   // still in the side fade (85°–105°), its spot ~0.08 behind the camera
-    const p = f.placeBody(d.x, d.y, d.z, drop, cam);
-    const front = dirAt(deg(10), deg(10)), q = f.placeBody(front.x, front.y, front.z, drop, cam);
-    ck("  ...zoomed all the way in, a body whose spot falls behind the camera is hidden; one ahead is still drawn",
-       p.dir === null && p.fade === 0 && q.dir !== null && f.projectToFrame(q.dir.x, q.dir.y, q.dir.z, cam) !== null, { p, q });
-  }
-  // The 2.496.294 defect: a disc raised into the AIR lines up with different
-  // ground as the view tilts, so tilting slid the sun from beside the pool to
-  // above it. Over the same spot, the disc's offset from it must not change
-  // with the tilt at all.
-  let drift = 0, at3 = null;
-  for (const [halfFov, hHalf] of [[0.4, 0.75], [0.55, 0.3]]) for (const camAz of [0, deg(70), deg(200)]) for (let a = -170; a <= 180; a += 20) for (const alt of [5, 40, 75]) {
-    const offs = [];
-    for (const pitch of PITCHES) {
-      const cam = { pitch, halfFov, camAz, hHalf };
-      const F = { x: Math.sin(camAz) * Math.cos(pitch), y: -Math.sin(pitch), z: Math.cos(camAz) * Math.cos(pitch) };
-      const b = deg(a), v = [F.x + f.DOME_SCALE * Math.sin(b), F.y, F.z + f.DOME_SCALE * Math.cos(b)];
-      const g = f.projectToFrame(...v, cam), r = drawn(deg(alt), b, cam);
-      const eased = [g.frameX, g.frameY, r.frameX, r.frameY].some((q) => Math.abs(2 * q - 1) > f.FRAME_TRUE);
-      if (!eased) offs.push([r.frameX - g.frameX, r.frameY - g.frameY]);
-    }
-    for (const o of offs) { const d = Math.hypot(o[0] - offs[0][0], o[1] - offs[0][1]); if (d > drift) { drift = d; at3 = { camAz, a, alt, offs }; } }
-  }
-  ck("  ...TILTING never moves the disc off its spot: the same offset from the same patch of ground at every tilt (it slid from beside the pool to above it)", drift < 1e-9, at3);
-  let out = [];
-  for (const cam of CAMS) for (let a = -179; a <= 179; a += 7) for (const alt of [0, 15, 35, 60, 85, 90]) {
-    const r = drawn(deg(alt), cam.camAz + deg(a), cam);
-    if (r.fade > 0 && !(r.frameX > 0.04 && r.frameX < 0.96 && r.frameY > 0.04 && r.frameY < 0.96)) out.push([cam, a, alt, r.frameX, r.frameY]);
-  }
-  ck("  ...and whenever it is drawn it is ON screen: every bearing, height, tilt, heading, tablet and phone (eased toward the villa near the edges)", out.length === 0, out.slice(0, 2));
-  let wrongSide = [];
-  for (const cam of CAMS) for (let a = 5; a <= 175; a += 10) for (const alt of [0, 40, 80]) for (const sgn of [1, -1]) {
-    const r = drawn(deg(alt), cam.camAz + sgn * deg(a), cam), x = r.frameX;
-    if (r.fade > 0 && Math.sign(x - 0.5) !== sgn) wrongSide.push([cam, sgn * a, alt, x]);
-  }
-  ck("  ...a body to the RIGHT of where the camera faces is drawn right of the villa, and left is left", wrongSide.length === 0, wrongSide.slice(0, 2));
-  let low = [];
-  for (const cam of CAMS) for (let a = -60; a <= 60; a += 10) for (const alt of [20, 50]) {
-    const y = drawn(deg(alt), cam.camAz + deg(a), cam).frameY;
-    if (!(y < 0.5)) low.push([cam.pitch, a, alt, y]);
-  }
-  ck("  ...a sun in front of you is drawn ABOVE the villa, in the sky", low.length === 0, low.slice(0, 2));
+  // Every pose a person can reach and more: orbit (heading), tilt, zoom
+  // (distance), pan (the orbit point anywhere), a phone's narrow frame.
+  let worst = 0, at = null, n = 0;
+  for (const camAz of [0, deg(70), deg(160), deg(-120)]) for (const pitch of [deg(5), deg(30), deg(60), deg(85)])
+    for (const D of [8, 40, 150]) for (const T of [[2, 1, 1], [30, 1, -25], [-40, 1, 30]]) for (const hHalf of [0.3, 0.7])
+      for (let a = -170; a <= 180; a += 25) for (const alt of [2, 20, 50, 85]) {
+        const F = { x: Math.sin(camAz) * Math.cos(pitch), y: -Math.sin(pitch), z: Math.cos(camAz) * Math.cos(pitch) };
+        const eye = { x: T[0] - D * F.x, y: T[1] - D * F.y, z: T[2] - D * F.z };
+        const cam = { pitch, halfFov: 0.4, camAz, hHalf, eye, path };
+        const d = dirAt(deg(alt), deg(a));
+        const r = f.placeBody(d.x, d.y, d.z, drop, cam);
+        // The point, worked out here from the villa and the true direction only.
+        const P = { x: path.centre.x + path.radius * d.x, y: path.centre.y + path.radius * d.y, z: path.centre.z + path.radius * d.z };
+        const v = [P.x - eye.x, P.y - eye.y, P.z - eye.z], m = Math.hypot(...v);
+        const err = Math.hypot(r.dir.x - v[0] / m, r.dir.y - v[1] / m, r.dir.z - v[2] / m);
+        n++;
+        if (err > worst) { worst = err; at = { camAz, pitch, D, T, a, alt }; }
+      }
+  ck(`the disc points from the camera at ONE world point — orbit, tilt, zoom, pan and frame alike (${n} poses)`,
+     worst < 1e-12 && n > 10000, { worst, at });
 }
-
-console.log("\n  the same wall from every side (owner, 2026-10-05, 2.496.293)");
 {
-  // A sun east of the house must be drawn on the side of the screen where the
-  // house's EAST side is, whichever way the camera faces — and clearly so, not
-  // a few pixels off the middle. 2.496.292 drew a 65° sun above the roof: over
-  // a whole turn it stayed within 0.41..0.58 of the frame, "following the camera".
-  const T = [0, 0, 0], D = 50;
-  let wrong = [], weak = [];
-  for (const [halfFov, hHalf] of [[0.4, 0.75], [0.55, 0.3]]) for (const pitch of [deg(20), deg(35), deg(61.4), deg(80)])
-    for (const alt of [10, 40, 65, 80]) for (const az of [deg(83), deg(200), deg(-60)]) for (let t = 0; t < 360; t += 15) {
-      const cam = { pitch, halfFov, camAz: deg(t), hHalf };
-      const F = { x: Math.sin(cam.camAz) * Math.cos(pitch), y: -Math.sin(pitch), z: Math.cos(cam.camAz) * Math.cos(pitch) };
-      const C = [T[0] - D * F.x, T[1] - D * F.y, T[2] - D * F.z];
-      // the house's wall on the sun's side: a ground point toward the sun's bearing
-      const G = [0.3 * D * Math.sin(az) - C[0], -C[1], 0.3 * D * Math.cos(az) - C[2]], n = Math.hypot(...G);
-      const g = f.projectToFrame(G[0] / n, G[1] / n, G[2] / n, cam);
-      const side = g.frameX - 0.5;
-      const r = drawn(deg(alt), az, cam);
-      if (!(r.fade > 0)) continue;                 // behind you: not drawn at all
-      const sx = r.frameX - 0.5;
-      if (Math.abs(side) > 0.08 && Math.sign(sx) !== Math.sign(side)) wrong.push([pitch, alt, az, t, side, sx]);
-      if (Math.abs(side) > 0.25 && Math.abs(sx) < 0.15) weak.push([+pitch.toFixed(2), alt, +az.toFixed(2), t, +side.toFixed(2), +sx.toFixed(2)]);
-    }
-  ck("whichever way the camera faces, the sun is drawn on the side of the house it really is on", wrong.length === 0, wrong.slice(0, 2));
-  ck("  ...and CLEARLY there when that wall is side-on to you, however high the sun is (not near the middle, as if following the camera)", weak.length === 0, weak.slice(0, 3));
+  // That point belongs to the villa and the sky, not to the camera: east of
+  // the house for an eastern sun, at the true height, on the ground at sunrise.
+  const east = dirAt(deg(30), deg(90)), P = f.bodyPoint(east.x, east.y, east.z, path);
+  ck("  ...the point is where the sun really is, seen from the villa: an eastern sun east of the house, at its true height",
+     P.x > path.centre.x && Math.abs(P.z - path.centre.z) < 1e-9 && Math.abs(Math.atan2(P.y - path.centre.y, P.x - path.centre.x) - deg(30)) < 1e-9);
+  const rise = dirAt(0, deg(-90)), Q = f.bodyPoint(rise.x, rise.y, rise.z, path);
+  ck("  ...a sun on the horizon sits on the ground circle, one radius out",
+     Math.abs(Q.y - path.centre.y) < 1e-12 && Math.abs(Math.hypot(Q.x - path.centre.x, Q.z - path.centre.z) - path.radius) < 1e-9);
 }
-
-console.log("\n  nothing jumps (2.496.290: east to west in one step)");
 {
-  let seams = [];
-  for (const [halfFov, hHalf] of [[0.4, 0.7], [0.55, 0.3]]) for (const pitch of [deg(10), deg(61.4), deg(87)]) for (const alt of [5, 40, 80]) {
-    let prev = null;
-    for (let t = 0; t <= 720; t += 0.5) {
-      const r = drawn(deg(alt), deg(40), { pitch, halfFov, camAz: deg(t), hHalf });
-      if (prev && prev.fade > 0 && r.fade > 0 && Math.hypot(r.frameX - prev.frameX, r.frameY - prev.frameY) > 0.03) seams.push(["turn", hHalf, pitch, alt, t]);
-      if (prev && Math.abs(r.fade - prev.fade) > 0.05) seams.push(["popped", hHalf, pitch, alt, t, prev.fade, r.fade]);
-      prev = r;
-    }
-  }
-  for (const [halfFov, hHalf] of [[0.4, 0.7], [0.55, 0.3]]) for (let a = -180; a < 180; a += 30) {
-    let prev = null;
-    for (let p = 3; p <= 87; p += 0.25) {
-      const r = drawn(deg(35), deg(a), { pitch: deg(p), halfFov, camAz: 0, hHalf });
-      if (prev && Math.hypot(r.frameX - prev.frameX, r.frameY - prev.frameY) > 0.03) seams.push(["tilt", hHalf, a, p]);
-      if (prev && r.fade !== prev.fade) seams.push(["tilt changed visibility", hHalf, a, p]);
-      prev = r;
-    }
-  }
-  ck("turning all the way round, twice, and tilting end to end: it glides and fades, never pops", seams.length === 0, seams.slice(0, 3));
-}
-
-console.log("\n  behind you is behind you (owner, 2026-10-05, 2.496.296)");
-{
-  // From the front and from the back of the villa, a sun can be in front of
-  // ONE of the two viewers only. 2.496.295 drew it in both, lifted up the
-  // screen, so both views showed it "out there".
-  let wrong = [];
-  for (const cam of CAMS) for (let a = -180; a <= 180; a += 5) for (const alt of [5, 40, 70]) {
-    const r = drawn(deg(alt), cam.camAz + deg(a), cam), rel = Math.abs(deg(a));
-    if (rel <= f.BEHIND_FROM - 1e-6 && r.fade !== 1) wrong.push(["in front, not fully drawn", cam, a, alt, r.fade]);
-    if (rel >= f.BEHIND_TO + 1e-6 && r.fade !== 0) wrong.push(["behind, still drawn", cam, a, alt, r.fade]);
-  }
-  ck("a body behind the viewer is not drawn; one in front is fully drawn; between, it fades at the side", wrong.length === 0, wrong.slice(0, 2));
-  let both = [];
-  for (const cam of CAMS) for (let a = -180; a < 180; a += 5) {
-    const back = { ...cam, camAz: cam.camAz + Math.PI };
-    const s1 = drawn(deg(40), cam.camAz + deg(a), cam).fade, s2 = drawn(deg(40), cam.camAz + deg(a), back).fade;
-    if (s1 > 0 && s2 > 0 && Math.abs(Math.abs(deg(a)) - Math.PI / 2) > (f.BEHIND_TO - Math.PI / 2)) both.push([a, s1, s2]);
-  }
-  ck("  ...so seen from the front and from the back of the villa, the same sun is visible from only one side (outside the side-on fade)", both.length === 0, both.slice(0, 3));
-  const walk = dirAt(deg(30), Math.PI);
-  ck("  ...walking, the true sky decides on its own (no extra hiding)", f.bodyFade(walk.x, walk.y, walk.z, 0, { pitch: 0, halfFov: 0.4, camAz: 0, hHalf: 0.7 }) === 1);
+  // The camera cannot reach the point through anything but `eye`: two
+  // different headings/tilts/frames at one position draw the same direction.
+  const d = dirAt(deg(40), deg(200)), eye = { x: 30, y: 25, z: -60 };
+  const a = f.placeBody(d.x, d.y, d.z, drop, { pitch: deg(10), halfFov: 0.4, camAz: 0, hHalf: 0.7, eye, path });
+  const b = f.placeBody(d.x, d.y, d.z, drop, { pitch: deg(70), halfFov: 0.6, camAz: 2, hHalf: 0.3, eye, path });
+  ck("  ...where the camera LOOKS changes nothing — only where it stands (a pan, a zoom, an orbit move it)",
+     a.dir.x === b.dir.x && a.dir.y === b.dir.y && a.dir.z === b.dir.z && a.fade === b.fade);
 }
 
 console.log("\n  setting");
 {
-  const cam = fitted({ pitch: deg(61.4), halfFov: 0.4, camAz: 0, hHalf: 0.7 });
+  const cam = { pitch: deg(40), halfFov: 0.4, camAz: 0, hHalf: 0.7, eye: { x: 0, y: 40, z: -50 }, path };
   ck("set: below −1° of TRUE altitude it is gone; above 3° fully up; between, a fade",
      f.horizonFade(deg(-1.5)) === 0 && f.horizonFade(deg(4)) === 1 && f.horizonFade(deg(1)) > 0 && f.horizonFade(deg(1)) < 1);
-  const lo = dirAt(deg(-0.5), 0);
-  ck("  ...asked of the TRUE altitude, never the drawn one (in overview the drawn direction is below the horizon)",
-     f.lift(lo.x, lo.y, lo.z, drop, cam).y < 0 && f.bodyFade(lo.x, lo.y, lo.z, drop, cam) > 0);
+  const lo = dirAt(deg(-0.5), 0), r = f.placeBody(lo.x, lo.y, lo.z, drop, cam);
+  ck("  ...asked of the TRUE altitude, never the drawn one (from above, the drawn direction points down)",
+     r.dir !== null && r.dir.y < 0 && r.fade > 0);
+  const gone = dirAt(deg(-5), 0);
+  ck("  ...a set body is not drawn at all", f.placeBody(gone.x, gone.y, gone.z, drop, cam).dir === null);
 }
 
-console.log("\n  first person");
+console.log("\n  first person, and before a model");
 {
-  const cam = fitted({ pitch: deg(5), halfFov: 0.4, camAz: 1, hHalf: 0.7 });
+  const cam = { pitch: deg(5), halfFov: 0.4, camAz: 1, hHalf: 0.7, eye: { x: 3, y: 1.6, z: 2 }, path };
   const d = dirAt(deg(37), deg(140));
-  const out = f.lift(d.x, d.y, d.z, 0, cam);
-  ck("no horizon drop: the true sky, untouched (the viewer is standing under it)",
-     out.x === d.x && out.y === d.y && out.z === d.z && f.bodyFade(d.x, d.y, d.z, 0, cam) === 1);
+  const out = f.placeBody(d.x, d.y, d.z, 0, cam).dir;
+  ck("no horizon drop: the true sky, untouched (the viewer is standing under it)", out.x === d.x && out.y === d.y && out.z === d.z);
+  const none = f.placeBody(d.x, d.y, d.z, drop, { ...cam, path: null }).dir;
+  ck("  ...and before a model is loaded, the true direction too (nothing to stand round)", none.x === d.x && none.y === d.y && none.z === d.z);
   ck("liftFor: 0 units is 0; 200 units is about 22° (the drop's own rotation)",
      f.liftFor(0) === 0 && Math.abs(f.liftFor(200) - deg(21.8)) < deg(0.1));
 }

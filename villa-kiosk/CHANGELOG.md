@@ -1,3 +1,8 @@
+## 2.496.302
+
+### Changed
+- In the 3D overview, the sun and the moon now stay in one fixed place relative to the house, however you move the view: turning, tilting, zooming or panning. Each sits on an invisible dome round the house, one and a half times the house's size, in the direction where it really is. A morning sun is east of the house, low near the horizon, high at midday, and the house always passes in front of it. This is how architecture software such as Revit shows the sun round a building. Because each one is now a real place in the 3D view, it behaves like a tall palm tree beside the pool: tilting shows it over a different part of the garden, and it leaves the screen when that place is out of view.
+
 ## 2.496.301
 
 ### Improved

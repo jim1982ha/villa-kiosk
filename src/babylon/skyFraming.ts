@@ -1,42 +1,54 @@
 // src/babylon/skyFraming.ts
 // Where the overview draws a body of the sky — the sun or the moon — given its
-// TRUE direction, the horizon drop and the camera: pure numbers, no Babylon.
+// TRUE direction: pure numbers, no Babylon. SkyDome and NightSky are the
+// Babylon adapters; tests/oracles/sky_framing.mjs and sky_bodies.mjs pin it.
 //
-// ⚠️ THE FRAMING WAS PRIVATE TO SkyDome, IN SHARED STATIC FIELDS (until
-// 2.496.251). Nearly every sky release since 2.388 retuned it — the horizon
-// drop, the altitude band, the azimuth dome, the fades — and each was checked
-// by eye in a browser, because the maths read four mutable statics on the
-// SkyDome class (pitch, halfFov, camAz, hHalf) and sat inside a method that
-// also wrote meshes. Here the camera is an argument (SkyCamera), so
-// tests/oracles/sky_framing.mjs asks "where does the sun land in the FRAME at
-// every tilt the user can hold?" by value. SkyDome and NightSky are the
-// Babylon adapters; the explanations of each rule live beside it below.
-
-import { lerp, wrapAngle } from "@/utils/geometry";
+// ── ONE RULE: A SUN-PATH DIAGRAM ROUND THE VILLA (2.496.302) ────────────────
+// A body is a FIXED POINT IN THE WORLD: the villa's centre plus SUN_PATH_SCALE
+// times the villa's radius, along the body's true direction — the 3D sun-path
+// diagram architecture tools draw round a model (Revit shows it at 150 % of
+// the model's radius by default; Ladybug's has a centre and a radius). The
+// disc is drawn in the direction from the camera to that point. Every camera
+// motion — orbit, tilt, pan, zoom, a phone's narrow frame — therefore moves it
+// exactly as it moves the villa, because it is the same projection, with no
+// rule per motion.
+//
+// ⚠️ WHAT THIS REPLACED, AND WHY IT COULD NOT BE FIXED. 2.496.290–301 drew the
+// body by SCREEN rules: a ground spot, a lift up the screen, a pull-in at the
+// frame edges, a fade behind the viewer, then scale factors for pan and zoom.
+// Each rule answered one camera motion and moved the body under another, so
+// every release fixed one motion (orbit, tilt, pan, zoom) and the owner's next
+// recording showed the next (2.496.301: "still moving up/down with the camera
+// position"). A fixed point cannot do that.
+//
+// The trade-off, accepted by the owner on 2026-10-05: a point ABOVE the ground
+// shows ordinary 3D parallax against the lawn when tilting (only a point ON the
+// ground has none), and it leaves the frame when its point is out of view —
+// exactly as a palm tree beside the pool does.
 
 /** The camera, as the framing measures against it. `pitch` is radians BELOW
  *  horizontal (positive); `halfFov` half the vertical field of view; `camAz`
- *  the camera's own bearing; `hHalf` half the HORIZONTAL field of view (it
- *  follows the aspect ratio, so a portrait phone gets a narrower dome). */
+ *  the camera's own bearing; `hHalf` half the HORIZONTAL field of view. Used
+ *  by projectToFrame (the debug report and the oracles). `eye` is the camera's
+ *  position in the world; `path` the sun-path diagram (sunPathOf) — both null
+ *  until a camera and a model are known. */
 export interface SkyCamera {
   pitch: number;
   halfFov: number;
   camAz: number;
   hHalf: number;
-  /** Camera → the VILLA's centre on the ground, divided by the camera's
-   *  distance to the point it orbits; null = that orbit point itself (the
-   *  view as fitted, before a model is known). See lift(). */
-  anchor: { x: number; y: number; z: number } | null;
-  /** The fitted view's orbit distance over the current one: 1 at the fit, 2
-   *  zoomed in to half the distance. The spot's distance from the villa and
-   *  the disc's lift are sized for the fit and scaled by this, so zooming
-   *  changes how BIG they look, never where they sit against the villa. */
-  zoom: number;
+  eye: Vec3 | null;
+  path: SunPath | null;
 }
+
+export interface Vec3 { x: number; y: number; z: number }
+
+/** The sun-path diagram: its centre (the villa's, on its ground) and radius. */
+export interface SunPath { centre: Vec3; radius: number }
 
 /** The pose before the first rendered frame reports the real one. */
 export function defaultSkyCamera(): SkyCamera {
-  return { pitch: 0, halfFov: 0.4, camAz: 0, hHalf: 0.7, anchor: null, zoom: 1 };
+  return { pitch: 0, halfFov: 0.4, camAz: 0, hHalf: 0.7, eye: null, path: null };
 }
 
 /** The dome's radius, and the denominator the horizon drop's angle is measured
@@ -44,159 +56,87 @@ export function defaultSkyCamera(): SkyCamera {
 export const SKY_RADIUS = 500;
 
 /**
- * The angle, in radians, that a given horizon drop rotated the sky by — and
- * therefore the angle bodies must be moved DOWN by to stay in it. 0 in first
- * person, where the true sky is what the viewer is standing under and must
- * not be redrawn at all. (SkyDome.setHorizonDrop's units are world units
- * against SKY_RADIUS: 200 is about 22°.)
+ * The angle, in radians, that a given horizon drop rotated the sky by. 0 in
+ * first person, where the true sky is what the viewer is standing under and
+ * must not be redrawn at all — so `drop > 0` is also "this is the overview".
+ * (SkyDome.setHorizonDrop's units are world units against SKY_RADIUS: 200 is
+ * about 22°.)
  */
 export function liftFor(units: number): number {
   return units > 0 ? Math.atan(units / SKY_RADIUS) : 0;
 }
 
-/**
- * Where the overview anchors the sun and the moon: a spot ON THE GROUND beside
- * the villa — round the villa's CENTRE (SkyCamera.anchor), in the body's true
- * direction, DOME_SCALE times the FITTED view's orbit distance — a fixed
- * distance on the ground, so zooming leaves the bodies where they are
- * relative to the villa (SkyCamera.zoom) — and because the spot is round the
- * villa and not round the orbit point, panning slides them WITH the villa;
- * because the spot is fixed on the ground, turning and tilting move it exactly
- * as they move the villa. A sun-path diagram drawn round the house, not the
- * sky at infinity — owner, 2026-10-05: "bring them closer to the villa ... so
- * they always appear, to indicate where to look in reality". Under 1 so the
- * spot can never fall behind the camera.
- */
-export const DOME_SCALE = 0.45;
-/** How far the disc is drawn straight UP THE SCREEN from its ground spot, in
- *  half-heights of the frame: LIFT_LOW for a body on the horizon, LIFT_HIGH
- *  for one overhead. The height is a hint; the bearing is the message.
- *
- *  ⚠️ IN THE FRAME, NOT IN THE WORLD. 2.496.292–294 raised the body into the
- *  air above its spot (a dome, 10°–35° up). A raised point lines up with
- *  different ground as the view tilts — parallax — so tilting slid the sun
- *  from beside the pool to above it (owner, 2026-10-05: "the sun is still
- *  changing position when tilting"). An offset on the screen does not depend
- *  on the tilt, so the disc stays over the same patch of ground. */
-export const LIFT_LOW = 0.25;
-export const LIFT_HIGH = 0.55;
-/** Inside this part of the frame (in half-widths, and separately half-heights,
- *  from the centre) a body sits exactly where its spot and lift put it; beyond, that
- *  axis is eased toward the villa, reaching at most FRAME_REACH. */
-export const FRAME_TRUE = 0.6;
-export const FRAME_REACH = 0.9;
+/** The sun-path radius, in the villa's radii — Revit's default display size
+ *  (150 % of the model's radius). */
+export const SUN_PATH_SCALE = 1.5;
 
-/** Shown only when IN FRONT of the viewer: fully up to BEHIND_FROM of
- *  bearing away from where the camera faces, gone by BEHIND_TO, and a fade
- *  between — at the side of the frame, so it dims out where it stands rather
- *  than jumping anywhere.
- *
- *  ⚠️ 2.496.292–295 showed a body behind the viewer too, drawn on the
- *  viewer's side of the house and lifted up the screen, so from the front and
- *  from the back of the villa the sun looked equally "out there" (owner,
- *  2026-10-05: "the sun shall be on the viewpoint's back ... in one case it
- *  shall not be visible at all"). Behind you is behind you. */
-export const BEHIND_FROM = (85 * Math.PI) / 180;
-export const BEHIND_TO = (105 * Math.PI) / 180;
+/**
+ * The sun-path diagram for a model's world extents: centred on the model, on
+ * the ground it stands on, with SUN_PATH_SCALE times its radius (half the
+ * diagonal of its footprint). From the model itself — no villa dimension
+ * ships.
+ */
+export function sunPathOf(min: Vec3, max: Vec3, groundY: number): SunPath {
+  const radius = Math.hypot(max.x - min.x, max.z - min.z) / 2;
+  return {
+    centre: { x: (min.x + max.x) / 2, y: groundY, z: (min.z + max.z) / 2 },
+    radius: Math.max(radius, 1) * SUN_PATH_SCALE,
+  };
+}
 
 /** The twilight band a body fades over as it sets: −1°..3° of TRUE altitude. */
 export const SET_LOW = (-1 * Math.PI) / 180;
 export const SET_HIGH = (3 * Math.PI) / 180;
 
 /**
- * The direction from the camera to where a body at TRUE direction (x,y,z) is
- * drawn in overview, as a unit vector — the ONE expression both bodies are
- * placed by. Depends only on the camera's heading, tilt and field of view:
- * never on its distance or its target, which is why zoom and pan cannot move
- * a body relative to the villa.
- *
- * ⚠️ Three placements were tried and each was reported:
- * - until 2.496.290 the bearing was squeezed toward the camera's heading and
- *   hung from its forward ray: TILTING slid the moon sideways;
- * - 2.496.290 parked an out-of-view body at the frame's edge: turning past
- *   "behind you" swapped it from the east edge to the west in one step;
- * - 2.496.291 drew the true sky at infinity: correct, but far from the villa
- *   and out of view half the time (owner: "too far from the villa").
- * - 2.496.292's dome drew a high sun above the roof and pulled it to the top
- *   centre: it seemed to follow the camera (ease());
- * - 2.496.293's dome kept the body up in the air: TILTING moved it from
- *   beside the pool to above it, by parallax (LIFT_LOW).
- * - 2.496.295 still drew a body that was BEHIND the viewer (frontFade).
- * - until 2.496.298 the spot was round the ORBIT POINT, which a pan carries
- *   along with the camera: panning slid the villa across the screen and left
- *   the sun where it was (owner, 2026-10-05, arrow keys). It is round the
- *   villa's centre now (cam.anchor).
- * - until 2.496.300 the spot's distance and the lift were sized by the
- *   CURRENT orbit distance and the frame: zooming in pulled the moon along
- *   the pool and lowered it against the roof (owner recording). Both are
- *   sized for the fitted view now and scale with the zoom (cam.zoom), so at
- *   the fit nothing moved and at any other zoom the body keeps its place
- *   against the villa.
- * This one is a ground spot round the villa (DOME_SCALE) with the disc drawn
- * straight up the screen from it: the sun east of the house
- * is drawn east of the house from every angle, a sun behind you is not drawn
- * (bodyFade), and nothing ever jumps. The
- * disc is still drawn at SKY distance, so wherever it overlaps the villa the
- * villa covers it (owner, 2026-10-05: "never displayed over the villa").
+ * How opaque a body at TRUE altitude `alt` should be, so it sets and rises
+ * rather than blinking out.
  */
-export function lift(x: number, y: number, z: number, drop: number, cam: SkyCamera): { x: number; y: number; z: number } {
-  if (drop <= 0) return { x, y, z };
-  const alt = Math.max(0, Math.atan2(y, Math.hypot(x, z)));
-  // Straight overhead has no bearing; any will do.
-  const az = Math.hypot(x, z) < 1e-9 ? 0 : Math.atan2(x, z);
-  const sa = Math.sin(cam.camAz), ca = Math.cos(cam.camAz), sp = Math.sin(cam.pitch), cp = Math.cos(cam.pitch);
-  // camera → villa centre (the forward ray while nothing is panned), then
-  // villa → ground spot: DOME_SCALE along the bearing, level. All in units of
-  // the orbit distance.
-  const k = DOME_SCALE * cam.zoom;
-  const c = cam.anchor ?? { x: sa * cp, y: -sp, z: ca * cp };
-  const v = { x: c.x + k * Math.sin(az), y: c.y, z: c.z + k * Math.cos(az) };
-  const p = projectToFrame(v.x, v.y, v.z, cam);
-  // Zoomed far in, the spot (fixed on the ground, cam.zoom) can lie behind
-  // the camera; placeBody hides the body then, as it does one behind the viewer.
-  if (!p) return unit(v);
-  // In the frame (tilt-proof), scaled by how much the ground AT THE SPOT has
-  // grown on screen since the fitted view (zoom-proof): its depth then over
-  // its depth now. ⚠️ Not `zoom` alone — perspective enlarges near ground more
-  // than far ground, so a body beside the far wall drifted against it
-  // (measured in the sky rig). 1 at the fit, unpanned: the accepted look.
-  // Both in units of the CURRENT orbit distance (v's units); the fit's orbit
-  // distance is `zoom` of them. depthNow > 0: p exists.
-  const depthNow = v.x * sa * cp - v.y * sp + v.z * ca * cp;
-  const depthFit = cam.zoom * (1 + DOME_SCALE * cp * Math.cos(az - cam.camAz));
-  const up = lerp(LIFT_LOW, LIFT_HIGH, Math.min(1, alt / (Math.PI / 2))) * (depthFit / depthNow);
-  // Past FRAME_TRUE, ease each axis toward the villa so the body never leaves
-  // the frame. ⚠️ PER AXIS, not along the line to the centre: a body above
-  // the top edge must come DOWN, not also slide toward the middle — the
-  // radial version (2.496.292) pulled the east sun to the top centre.
-  const nx = ease(2 * p.frameX - 1), ny = ease(1 - 2 * p.frameY + up);
-  const cx = nx * Math.tan(cam.hHalf), cy = ny * Math.tan(cam.halfFov);
-  // forward + cx·right + cy·up, for a camera with no roll.
-  return unit({
-    x: sa * cp + cx * ca + cy * sa * sp,
-    y: -sp + cy * cp,
-    z: ca * cp - cx * sa + cy * ca * sp,
-  });
+export function horizonFade(alt: number): number {
+  const t = (alt - SET_LOW) / (SET_HIGH - SET_LOW);
+  return Math.max(0, Math.min(1, t));
 }
 
-function ease(n: number): number {
-  const a = Math.abs(n);
-  if (a <= FRAME_TRUE) return n;
-  const span = FRAME_REACH - FRAME_TRUE;
-  return Math.sign(n) * (FRAME_TRUE + span * Math.tanh((a - FRAME_TRUE) / span));
+/** The body's fixed point in the world: on the sun-path diagram, along its
+ *  TRUE direction (x,y,z — a unit vector toward the body). */
+export function bodyPoint(x: number, y: number, z: number, path: SunPath): Vec3 {
+  return {
+    x: path.centre.x + path.radius * x,
+    y: path.centre.y + path.radius * y,
+    z: path.centre.z + path.radius * z,
+  };
 }
 
-function unit(v: { x: number; y: number; z: number }): { x: number; y: number; z: number } {
+/**
+ * Where and how strongly a body at TRUE direction (x,y,z) is drawn: the ONE
+ * placement both bodies go through (SkyDome's sun, NightSky's moon).
+ *
+ * Overview (`drop` > 0): the direction from the camera to the body's fixed
+ * point (bodyPoint). The disc is drawn at SKY distance along it (SkyDome), so
+ * it lands exactly where that point projects AND the villa still covers it —
+ * never painted over the house (owner, 2026-10-05). Walking (`drop` 0): the
+ * true direction — the viewer is standing under the real sky. `dir` is null
+ * when the body has set; one whose point is behind the camera is drawn behind
+ * the camera, which shows nothing, as for any object there.
+ */
+export function placeBody(x: number, y: number, z: number, drop: number, cam: SkyCamera): {
+  fade: number; dir: Vec3 | null;
+} {
+  const fade = horizonFade(Math.atan2(y, Math.hypot(x, z)));
+  if (!(fade > 0)) return { fade, dir: null };
+  if (drop <= 0 || !cam.eye || !cam.path) return { fade, dir: { x, y, z } };
+  const p = bodyPoint(x, y, z, cam.path);
+  const v = { x: p.x - cam.eye.x, y: p.y - cam.eye.y, z: p.z - cam.eye.z };
   const n = Math.hypot(v.x, v.y, v.z);
-  return { x: v.x / n, y: v.y / n, z: v.z / n };
+  // The camera standing ON the point (never in practice): nowhere to look.
+  if (!(n > 1e-9)) return { fade: 0, dir: null };
+  return { fade, dir: { x: v.x / n, y: v.y / n, z: v.z / n } };
 }
 
 /**
  * Where a DIRECTION actually lands on screen through this camera — the
- * camera's own projection, not the design. The debug report and the oracle
- * measure the drawn disc with it. ⚠️ BOTH axes, because reporting only one is
- * how a whole round was spent on a disc perfectly placed vertically and off
- * the side of the screen. Behind the camera is null.
+ * camera's own projection. The debug report and the oracle measure the drawn
+ * disc with it. Behind the camera is null.
  */
 export function projectToFrame(x: number, y: number, z: number, cam: SkyCamera): { frameX: number; frameY: number } | null {
   const sa = Math.sin(cam.camAz), ca = Math.cos(cam.camAz), sp = Math.sin(cam.pitch), cp = Math.cos(cam.pitch);
@@ -208,52 +148,6 @@ export function projectToFrame(x: number, y: number, z: number, cam: SkyCamera):
     frameX: 0.5 + 0.5 * (right / fwd) / Math.tan(cam.hHalf),
     frameY: 0.5 - 0.5 * (up / fwd) / Math.tan(cam.halfFov),
   };
-}
-
-/**
- * How opaque a body at TRUE altitude `alt` should be, so it sets and rises
- * rather than blinking out.
- *
- * ⚠️ TRUE altitude, never the drawn one: in overview the drawn direction
- * points DOWN at the dome round the villa, below the horizon, so a test on
- * the lifted direction would hide the moon always. "Has it set?" is about
- * the real sky; "where do I paint it?" is about this camera.
- */
-export function horizonFade(alt: number): number {
-  const t = (alt - SET_LOW) / (SET_HIGH - SET_LOW);
-  return Math.max(0, Math.min(1, t));
-}
-
-/** 1 while the body's bearing is in front of the camera, 0 behind it, a fade
- *  between (BEHIND_FROM..BEHIND_TO). Walking (`drop` 0) it is always 1: the
- *  true sky's own projection already hides what is behind the viewer. */
-export function frontFade(x: number, z: number, drop: number, cam: SkyCamera): number {
-  if (drop <= 0 || Math.hypot(x, z) < 1e-9) return 1;
-  const rel = Math.abs(wrapAngle(Math.atan2(x, z) - cam.camAz));
-  return Math.max(0, Math.min(1, (BEHIND_TO - rel) / (BEHIND_TO - BEHIND_FROM)));
-}
-
-/** The opacity of a body at TRUE direction (x,y,z): it has set, or it is
- *  behind the viewer, or it is fully there. */
-export function bodyFade(x: number, y: number, z: number, drop: number, cam: SkyCamera): number {
-  return horizonFade(Math.atan2(y, Math.hypot(x, z))) * frontFade(x, z, drop, cam);
-}
-
-/**
- * Where and how strongly a body at TRUE direction (x,y,z) is drawn: the ONE
- * placement both bodies go through (SkyDome's sun, NightSky's moon), so the
- * two cannot be placed by two copies of the same steps. `dir` is null when
- * the body is not drawn at all (set, or behind the viewer).
- */
-export function placeBody(x: number, y: number, z: number, drop: number, cam: SkyCamera): {
-  fade: number; dir: { x: number; y: number; z: number } | null;
-} {
-  const fade = bodyFade(x, y, z, drop, cam);
-  if (!(fade > 0)) return { fade, dir: null };
-  const dir = lift(x, y, z, drop, cam);
-  // Its ground spot behind the camera (zoomed far in): not drawn at all.
-  if (drop > 0 && !projectToFrame(dir.x, dir.y, dir.z, cam)) return { fade: 0, dir: null };
-  return { fade, dir };
 }
 
 /** How much the sun's disc warms toward the horizon, over the last 25° of

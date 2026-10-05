@@ -8,7 +8,7 @@
 import { wrapAngle } from "@/utils/geometry";
 import {
   defaultSkyCamera, liftFor, placeBody, projectToFrame, sunWarmth,
-  type SkyCamera,
+  type SkyCamera, type SunPath,
 } from "./skyFraming";
 import type { NightSky } from "./NightSky";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
@@ -18,7 +18,6 @@ import { Constants } from "@babylonjs/core/Engines/constants";
 import { cameraFrame } from "./cameraFrame";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
 import type { Scene } from "@babylonjs/core/scene";
-import type { Camera } from "@babylonjs/core/Cameras/camera";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { SkyMaterial } from "@babylonjs/materials/sky/skyMaterial";
@@ -201,11 +200,13 @@ export class SkyDome {
   readonly camera: SkyCamera = defaultSkyCamera();
 
   /**
-   * Follow the camera: the bodies sit on a dome round the villa, seen from here.
+   * Follow the camera: the bodies are fixed points round the villa
+   * (skyFraming's sun-path diagram), seen from wherever the camera is now.
    *
-   * Cheap enough to run per rendered frame — two trig calls and an early-out on
-   * a pitch that has not moved — and this scene renders on demand, so it costs
-   * nothing at all while the camera is still.
+   * Cheap enough to run per rendered frame, and this scene renders on demand,
+   * so it costs nothing at all while the camera is still. ⚠️ The camera's
+   * POSITION is compared, not only its heading and tilt: a pan or a zoom moves
+   * nothing else, and the body must move with the villa then too.
    */
   private trackCamera(): void {
     const cam = this.scene.activeCamera;
@@ -216,22 +217,19 @@ export class SkyDome {
     // Both half-angles, from the one place that knows which of them this
     // camera holds fixed — see cameraFrame.ts.
     const { vHalf: halfFov, hHalf } = cameraFrame(this.scene, cam);
-    const anchor = this.anchorFrom(cam);
-    const zoom = this.zoomOf(cam);
-    // ~0.3°: below that nothing has moved a pixel, and re-placing would repaint
-    // nothing while defeating the on-demand render. ⚠️ A PAN changes only the
-    // anchor — heading and tilt stay put — so it must be compared too.
+    const p = cam.globalPosition;
     const c = this.camera;
+    // ~0.3° and a millimetre: below that nothing has moved a pixel, and
+    // re-placing would repaint nothing while defeating the on-demand render.
     if (!this.reframe && Math.abs(pitch - c.pitch) < 0.005
       && Math.abs(wrapAngle(camAz - c.camAz)) < 0.005
       && halfFov === c.halfFov && hHalf === c.hHalf
-      && sameAnchor(anchor, c.anchor) && Math.abs(zoom - c.zoom) < 1e-4 * zoom) return;
+      && c.eye !== null && Math.hypot(p.x - c.eye.x, p.y - c.eye.y, p.z - c.eye.z) < 1e-3) return;
     c.pitch = pitch;
     c.camAz = camAz;
     c.halfFov = halfFov;
     c.hHalf = hHalf;
-    c.anchor = anchor;
-    c.zoom = zoom;
+    c.eye = { x: p.x, y: p.y, z: p.z };
     this.reframe = false;
     this.placeSun();
     this.placeMoon();
@@ -240,40 +238,14 @@ export class SkyDome {
   private readonly fwd = new Vector3(0, 0, 1);
   private static readonly FORWARD = new Vector3(0, 0, 1);
   private moon: NightSky | null = null;
-  /** The villa's centre on the ground, from the model's extents — what the
-   *  bodies are placed round. Null until a model is fitted. */
-  private villa: Vector3 | null = null;
 
-  /** Place the bodies round THIS point (SceneManager, from the model's own
-   *  extents — no villa dimension ships). */
-  setVillaCentre(p: Vector3, fitRadius: number): void {
-    this.villa = p.clone();
-    this.fitRadius = fitRadius;
+  /** The sun-path diagram the bodies sit on (skyFraming.sunPathOf, from the
+   *  model's own extents — no villa dimension ships). */
+  setSunPath(path: SunPath): void {
+    this.camera.path = path;
     this.reframe = true;   // on the next rendered frame, even if the camera is still
   }
   private reframe = false;
-  /** The fitted view's orbit distance — what the dome is sized for (SkyCamera.zoom). */
-  private fitRadius = 0;
-
-  /** Fitted orbit distance over the current one (SkyCamera.zoom); 1 before a
-   *  fit or for a camera that orbits nothing. */
-  private zoomOf(cam: Camera): number {
-    const target = (cam as { target?: unknown }).target;
-    if (!(this.fitRadius > 0) || !(target instanceof Vector3)) return 1;
-    const d = Vector3.Distance(cam.globalPosition, target);
-    return d > 1e-6 ? this.fitRadius / d : 1;
-  }
-
-  /** Camera → villa centre in units of the orbit distance (SkyCamera.anchor);
-   *  null without a villa or for a camera that orbits nothing. */
-  private anchorFrom(cam: Camera): SkyCamera["anchor"] {
-    const target = (cam as { target?: unknown }).target;
-    if (!this.villa || !(target instanceof Vector3)) return null;
-    const p = cam.globalPosition;
-    const d = Vector3.Distance(p, target);
-    if (!(d > 1e-6)) return null;
-    return { x: (this.villa.x - p.x) / d, y: (this.villa.y - p.y) / d, z: (this.villa.z - p.z) / d };
-  }
 
   /** The moon, placed from here whenever the sun is re-framed — the camera
    *  moved or the horizon drop changed — by the same rule, in the same frame,
@@ -449,8 +421,3 @@ export class SkyDome {
   }
 }
 
-/** Equal to well under a pixel (1e-4 of the orbit distance). */
-function sameAnchor(a: SkyCamera["anchor"], b: SkyCamera["anchor"]): boolean {
-  if (a === null || b === null) return a === b;
-  return Math.abs(a.x - b.x) < 1e-4 && Math.abs(a.y - b.y) < 1e-4 && Math.abs(a.z - b.z) < 1e-4;
-}
