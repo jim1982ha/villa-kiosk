@@ -7,7 +7,7 @@
 
 import { wrapAngle } from "@/utils/geometry";
 import {
-  bodyFade, defaultSkyCamera, lift, liftFor, projectToFrame, sunWarmth,
+  bodyFade, defaultSkyCamera, lift, liftFor, overDepth, projectToFrame, sunWarmth,
   type SkyCamera,
 } from "./skyFraming";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
@@ -198,7 +198,7 @@ export class SkyDome {
   readonly camera: SkyCamera = defaultSkyCamera();
 
   /**
-   * Follow the camera, because the arc is drawn in the FRAME and not in the sky.
+   * Follow the camera: the bodies sit on a dome round the villa, seen from here.
    *
    * Cheap enough to run per rendered frame — two trig calls and an early-out on
    * a pitch that has not moved — and this scene renders on demand, so it costs
@@ -292,6 +292,7 @@ export class SkyDome {
   setHorizonDrop(units: number): void {
     this.mat.cameraOffset.y = units;
     this.dropUnits = units;
+    this.sunMat.depthFunction = overDepth(units);
     this.placeSun();
   }
 
@@ -331,7 +332,7 @@ export class SkyDome {
     const alt = Math.atan2(y, Math.hypot(x, z));
     // Fade on the TRUE altitude — see skyFraming.horizonFade. Below the horizon
     // the sun is simply gone, and the night sky takes over.
-    const fade = bodyFade(x, y, z, drop, this.camera);
+    const fade = bodyFade(x, y, z);
     // First person shows the material's own disc in a sky the viewer is
     // genuinely standing under, so the billboard would only ever be a second
     // sun beside the real one.

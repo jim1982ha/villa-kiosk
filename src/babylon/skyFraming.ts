@@ -12,7 +12,7 @@
 // every tilt the user can hold?" by value. SkyDome and NightSky are the
 // Babylon adapters; the explanations of each rule live beside it below.
 
-import { lerp, wrapAngle } from "@/utils/geometry";
+import { lerp } from "@/utils/geometry";
 
 /** The camera, as the framing measures against it. `pitch` is radians BELOW
  *  horizontal (positive); `halfFov` half the vertical field of view; `camAz`
@@ -46,89 +46,80 @@ export function liftFor(units: number): number {
 }
 
 /**
- * Where the arc sits IN THE FRAME, as a fraction of the half field of view
- * above the camera's own forward ray: 0 is dead centre, 1 the top edge.
- *
- * ⚠️ THE UNIT IS THE FRAME, NOT THE SKY, and 2.396.0 is why. That release put
- * the arc at a fixed WORLD elevation, computed against the overview's DEFAULT
- * pitch of 61.4° — correct there, and wrong everywhere else, because the pitch
- * is a control the user holds. `beta` clamps to 0.05..1.4 rad, so the visible
- * cone travels with it; NO fixed elevation can be well framed at every tilt,
- * reported as "the sun appears but below the villa". Measuring from the
- * camera's forward ray removes the whole problem by construction.
+ * The dome the overview draws the sun and the moon on: a hemisphere centred on
+ * the point the camera orbits (the villa), its radius DOME_SCALE times the
+ * camera's distance from that point. Because the radius follows the distance,
+ * zooming and panning leave the bodies where they are relative to the villa on
+ * screen; because the dome is fixed in the WORLD, orbiting and tilting move
+ * them exactly as they move the villa. It is a sun-path diagram drawn round the
+ * house, not the sky at infinity — owner, 2026-10-05: "bring them closer to the
+ * villa ... so they always appear, to indicate where to look in reality".
+ * Under 1 so the point can never fall behind the camera.
  */
-export const BAND_LOW = 0.35;
-/** Where a sun directly overhead is drawn. BAND_LOW and this are the whole
- *  tuning surface if the arc wants to sit higher or flatter. */
-export const BAND_HIGH = 0.85;
-
-/** How far past the frame's side edge, in radians of bearing, a body is
- *  still drawn: its halo (~7° across) must slide off the edge rather than be
- *  switched off while part of it shows. Beyond this it is hidden — off screen
- *  either way, so the switch is invisible. */
-export const AZ_SPILL = 0.2;
+export const DOME_SCALE = 0.45;
+/** The lowest elevation a body is drawn at on the dome, so one on the horizon
+ *  floats above the garden rather than lying on the ground plane; the true
+ *  0–90° range is spread over DOME_LOW..90°. */
+export const DOME_LOW = (20 * Math.PI) / 180;
+/** Inside this part of the frame (in half-widths/half-heights from the centre)
+ *  a body sits exactly where the dome puts it; beyond, it is eased toward the
+ *  villa so it can never leave the frame, reaching at most FRAME_REACH. */
+export const FRAME_TRUE = 0.6;
+export const FRAME_REACH = 0.9;
 
 /** The twilight band a body fades over as it sets: −1°..3° of TRUE altitude. */
 export const SET_LOW = (-1 * Math.PI) / 180;
 export const SET_HIGH = (3 * Math.PI) / 180;
 
 /**
- * Where a body of the sky is DRAWN in the frame, given its TRUE direction:
- * 0 is the left/top edge, 1 the right/bottom, 0.5 dead centre — where the
- * camera's target, the villa, sits. The overview decides the frame position
- * first and lift() turns it back into a direction, so the two cannot disagree.
+ * The direction from the camera to where a body at TRUE direction (x,y,z) is
+ * drawn in overview, as a unit vector — the ONE expression both bodies are
+ * placed by. Depends only on the camera's heading, tilt and field of view:
+ * never on its distance or its target, which is why zoom and pan cannot move
+ * a body relative to the villa.
  *
- * ⚠️ This is a diagram, not a photograph, and only in overview. A camera
- * looking DOWN at a villa cannot contain an overhead sun: at local noon the
- * real altitude is ~85°, behind the viewer.
- *
- * HEIGHT: the whole 0–90° range is squeezed into a band in the upper part of
- * the frame (BAND_LOW..BAND_HIGH), so the sun is visible in the middle of the
- * day — precisely when a sun is most expected.
- *
- * SIDE: the TRUE bearing relative to where the camera faces, and nothing else
- * — the place a real sky would put it, so it moves exactly as the landscape
- * does. ⚠️ Two releases got this wrong:
- * - until 2.496.290 the bearing was squeezed toward the camera's heading
- *   (×0.45) and placed on a sphere hanging from the camera's forward ray, so
- *   TILTING slid a moon 80° to the right from frameX 0.94 to 0.64 (owner,
- *   2026-10-05: "the east/west position changes with the angle of the camera");
- * - 2.496.290 then PARKED a body that was out of view at the frame's edge on
- *   its own side, so turning past "directly behind" swapped it from one edge
- *   to the other in one step — "the sun suddenly disappears from the east
- *   side and reappears on the west side" (owner, 2026-10-05, 2.496.291).
- * Out of view is out of view: it leaves over the edge as you turn and comes
- * back over the other edge only after you have turned the rest of the way.
- */
-export function framePositionOf(x: number, y: number, z: number, cam: SkyCamera): { frameX: number; frameY: number } {
-  const alt = Math.atan2(y, Math.hypot(x, z));
-  const t = Math.max(0, Math.min(1, alt / (Math.PI / 2)));
-  const ndcY = Math.tan(cam.halfFov * lerp(BAND_LOW, BAND_HIGH, t)) / Math.tan(cam.halfFov);
-  // Hidden past hHalf + AZ_SPILL (azimuthFade); the cap only keeps tan()
-  // finite for a direction that is not drawn.
-  const lim = Math.min(cam.hHalf + AZ_SPILL, 1.45);
-  const rel = Math.max(-lim, Math.min(lim, wrapAngle(Math.atan2(x, z) - cam.camAz)));
-  return { frameX: 0.5 + 0.5 * Math.tan(rel) / Math.tan(cam.hHalf), frameY: 0.5 - 0.5 * ndcY };
-}
-
-/**
- * A direction redrawn for this camera, as a unit vector — the ONE expression
- * both bodies are placed by, so the sun and the moon can never sit in skies
- * tilted differently from each other. It is the frame position of
- * framePositionOf turned back into the direction the camera sees there.
+ * ⚠️ Three placements were tried and each was reported:
+ * - until 2.496.290 the bearing was squeezed toward the camera's heading and
+ *   hung from its forward ray: TILTING slid the moon sideways;
+ * - 2.496.290 parked an out-of-view body at the frame's edge: turning past
+ *   "behind you" swapped it from the east edge to the west in one step;
+ * - 2.496.291 drew the true sky at infinity: correct, but far from the villa
+ *   and out of view half the time (owner: "too far from the villa").
+ * This one is a dome round the villa (DOME_SCALE): the sun east of the house
+ * is drawn east of the house from every angle, a sun behind you is drawn on
+ * your side of the house (lower in the frame), and nothing ever jumps.
  */
 export function lift(x: number, y: number, z: number, drop: number, cam: SkyCamera): { x: number; y: number; z: number } {
-  if (Math.hypot(x, z) < 1e-6 || drop <= 0) return { x, y, z };
-  const { frameX, frameY } = framePositionOf(x, y, z, cam);
-  const cx = (2 * frameX - 1) * Math.tan(cam.hHalf);
-  const cy = (1 - 2 * frameY) * Math.tan(cam.halfFov);
+  if (drop <= 0) return { x, y, z };
+  const alt = Math.max(0, Math.atan2(y, Math.hypot(x, z)));
+  const e = lerp(DOME_LOW, Math.PI / 2, alt / (Math.PI / 2));
+  // Straight overhead has no bearing; any will do, since cos(e) is 0 there.
+  const az = Math.hypot(x, z) < 1e-9 ? 0 : Math.atan2(x, z);
   const sa = Math.sin(cam.camAz), ca = Math.cos(cam.camAz), sp = Math.sin(cam.pitch), cp = Math.cos(cam.pitch);
+  // camera → villa is the forward ray (unit), villa → body is DOME_SCALE·u.
+  const k = DOME_SCALE, ce = Math.cos(e);
+  const v = { x: sa * cp + k * Math.sin(az) * ce, y: -sp + k * Math.sin(e), z: ca * cp + k * Math.cos(az) * ce };
+  const p = projectToFrame(v.x, v.y, v.z, cam);
+  if (!p) return unit(v);                           // unreachable while DOME_SCALE < 1
+  // Ease toward the centre past FRAME_TRUE, along the line to the villa, so
+  // the direction "where to look" is kept and the body never leaves the frame.
+  const nx = 2 * p.frameX - 1, ny = 1 - 2 * p.frameY;
+  const r = Math.hypot(nx, ny);
+  if (r <= FRAME_TRUE) return unit(v);
+  const span = FRAME_REACH - FRAME_TRUE;
+  const f = (FRAME_TRUE + span * Math.tanh((r - FRAME_TRUE) / span)) / r;
+  const cx = nx * f * Math.tan(cam.hHalf), cy = ny * f * Math.tan(cam.halfFov);
   // forward + cx·right + cy·up, for a camera with no roll.
-  const vx = sa * cp + cx * ca + cy * sa * sp;
-  const vy = -sp + cy * cp;
-  const vz = ca * cp - cx * sa + cy * ca * sp;
-  const n = Math.hypot(vx, vy, vz);
-  return { x: vx / n, y: vy / n, z: vz / n };
+  return unit({
+    x: sa * cp + cx * ca + cy * sa * sp,
+    y: -sp + cy * cp,
+    z: ca * cp - cx * sa + cy * ca * sp,
+  });
+}
+
+function unit(v: { x: number; y: number; z: number }): { x: number; y: number; z: number } {
+  const n = Math.hypot(v.x, v.y, v.z);
+  return { x: v.x / n, y: v.y / n, z: v.z / n };
 }
 
 /**
@@ -154,9 +145,9 @@ export function projectToFrame(x: number, y: number, z: number, cam: SkyCamera):
  * How opaque a body at TRUE altitude `alt` should be, so it sets and rises
  * rather than blinking out.
  *
- * ⚠️ TRUE altitude, never the drawn one: every drawn altitude in overview is
- * below the horizon (the band hangs from the camera's forward ray), so a test
- * on the lifted direction would hide the moon always. "Has it set?" is about
+ * ⚠️ TRUE altitude, never the drawn one: in overview the drawn direction
+ * points DOWN at the dome round the villa, below the horizon, so a test on
+ * the lifted direction would hide the moon always. "Has it set?" is about
  * the real sky; "where do I paint it?" is about this camera.
  */
 export function horizonFade(alt: number): number {
@@ -164,20 +155,23 @@ export function horizonFade(alt: number): number {
   return Math.max(0, Math.min(1, t));
 }
 
-/** 1 while the body's bearing is within the frame (plus AZ_SPILL for its
- *  halo), 0 beyond — where it is already off screen, so the step never shows.
- *  It used to be a fade over a "cut" directly behind the camera, a seam the
- *  edge-parking created; a true bearing has no seam. */
-export function azimuthFade(x: number, z: number, drop: number, cam: SkyCamera): number {
-  if (drop <= 0) return 1;
-  const rel = Math.abs(wrapAngle(Math.atan2(x, z) - cam.camAz));
-  return rel <= Math.min(cam.hHalf + AZ_SPILL, 1.45) ? 1 : 0;
+/** The opacity of a body at TRUE direction (x,y,z): it has set, or it is
+ *  fully there — on the overview's dome it is never out of view. */
+export function bodyFade(x: number, y: number, z: number): number {
+  return horizonFade(Math.atan2(y, Math.hypot(x, z)));
 }
 
-/** The opacity of a body at TRUE direction (x,y,z): it has set, or sits at
- *  out of view to the side, or is fully there. */
-export function bodyFade(x: number, y: number, z: number, drop: number, cam: SkyCamera): number {
-  return horizonFade(Math.atan2(y, Math.hypot(x, z))) * azimuthFade(x, z, drop, cam);
+/**
+ * The depth test a body's disc uses: in overview (`drop` > 0) it is drawn OVER
+ * the villa, never hidden by it — the disc sits on a dome round the house
+ * (lift), and a body behind the viewer is drawn on the viewer's side, across
+ * the garden or the roof, which would otherwise cover it. Walking (0), the
+ * ordinary test, so the moon stays behind walls and ceilings. 0 is the
+ * engine's default test; 519 is GL ALWAYS (Constants.ALWAYS, kept as a number
+ * so this module stays free of Babylon).
+ */
+export function overDepth(drop: number): number {
+  return drop > 0 ? 519 : 0;
 }
 
 /** How much the sun's disc warms toward the horizon, over the last 25° of

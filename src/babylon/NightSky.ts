@@ -15,7 +15,7 @@
 
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
-import { bodyFade, lift, liftFor, type SkyCamera } from "./skyFraming";
+import { bodyFade, lift, liftFor, overDepth, type SkyCamera } from "./skyFraming";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
@@ -137,11 +137,12 @@ export class NightSky {
    */
   setHorizonDrop(units: number): void {
     this.lift = liftFor(units);
+    this.moonMat.depthFunction = overDepth(units);
   }
 
   /** The last look handed to update(), so the moon can be re-placed when the
    *  CAMERA moves rather than only when the sky clock ticks. The arc is framed
-   *  against the camera now (skyFraming.BAND_LOW), so a tilt changes the answer. */
+   *  against the camera (skyFraming.lift), so a turn or tilt changes the answer. */
   private lastLook: MoonLook | null = null;
 
   /** Re-place from the stored look. Called by SkyDome's framing hook, so sun
@@ -161,17 +162,17 @@ export class NightSky {
     // and fading would leave a disc hanging in the ground half of the dome.
     //
     // ⚠️ "Has it set?" is asked of the TRUE altitude, never of the lifted one
-    // this same line computes. The overview's band is negative (see
-    // skyFraming.BAND_LOW), so every DRAWN altitude is below the horizon: the old
+    // this same line computes. In overview the drawn direction points down at
+    // the dome round the villa (skyFraming.lift), below the horizon: the old
     // test on `dir.y` would now be false always and the moon would never be
     // drawn at all. skyFraming.horizonFade owns the rule for both bodies.
     // The same expressions the sun is placed and faded by (skyFraming), against
     // the same camera object SkyDome tracks — the moon rides the identical dome,
-    // so it leaves the frame at the identical edge.
+    // round the identical villa.
     const { x, y, z } = look.dir;
     const d = lift(x, y, z, this.lift, this.camera);
     const dir = new Vector3(d.x, d.y, d.z);
-    const fade = bodyFade(x, y, z, this.lift, this.camera);
+    const fade = bodyFade(x, y, z);
     const visible = night > 0 && fade > 0;
     this.moonMat.alpha = visible ? night * fade : 0;
     this.moon.setEnabled(visible);

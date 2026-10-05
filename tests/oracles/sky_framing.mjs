@@ -4,8 +4,7 @@
 // eye in a browser, because the maths was private to SkyDome and read four
 // shared static fields. It is pure now, the camera an argument; this pins the
 // promises the comments make, across every tilt and turn the user can hold.
-// (Moving it out was proved output-identical: 3,456 lift/fade values over a
-// grid of poses and directions matched the old SkyDome to 12 decimals.)
+// 2.496.292 replaced the placement with a dome round the villa; see lift().
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
@@ -16,102 +15,92 @@ const dirAt = (alt, az) => ({ x: Math.sin(az) * Math.cos(alt), y: Math.sin(alt),
 const drop = f.liftFor(200);
 // The overview's tilt range: beta 0.05..1.4 rad, so the camera looks 10°..87° below horizontal.
 const PITCHES = [deg(10), deg(25), deg(40), deg(61.4), deg(75), deg(87)];
-const VFOV = [0.4, 0.55];                       // landscape tablet, portrait phone
-const HHALF = [0.35, 0.7, 1.0];
 
 // Measured through the CAMERA'S OWN PROJECTION of the direction lift() hands
-// the disc — never the design numbers. Until 2.496.290 this read a flat
-// approximation (framePosition) that ignored how a steep tilt pulls every
-// bearing toward the centre, and stayed green while the moon slid sideways.
+// the disc — never the design numbers (2.496.290: a flat approximation stayed
+// green while the moon slid sideways).
 function drawn(alt, az, cam) {
   const d = dirAt(alt, az);
   const l = f.lift(d.x, d.y, d.z, drop, cam);
-  return { ...(f.projectToFrame(l.x, l.y, l.z, cam) ?? { frameX: NaN, frameY: NaN }), fade: f.bodyFade(d.x, d.y, d.z, drop, cam) };
+  return { ...(f.projectToFrame(l.x, l.y, l.z, cam) ?? { frameX: NaN, frameY: NaN }), dir: l };
 }
+const CAMS = [];
+for (const pitch of PITCHES) for (const [halfFov, hHalf] of [[0.4, 0.7], [0.4, 1.0], [0.55, 0.3], [0.4, 0.35]])
+  for (const camAz of [0, deg(120), deg(-150)]) CAMS.push({ pitch, halfFov, camAz, hHalf });
 
-console.log("  vertical: the arc hangs from the camera's own forward ray");
+console.log("  a dome round the villa (owner, 2026-10-05: 'too far from the villa')");
 {
-  let worst = [1, 0], independent = true;
-  for (const halfFov of VFOV) for (const alt of [0, deg(20), deg(45), deg(70), deg(89)]) {
-    const ys = PITCHES.map((pitch) => drawn(alt, 0, { pitch, halfFov, camAz: 0, hHalf: 0.7 }).frameY);
-    if (Math.max(...ys) - Math.min(...ys) > 1e-9) independent = false;
-    worst = [Math.min(worst[0], ...ys), Math.max(worst[1], ...ys)];
+  // A REAL object: the camera orbits target T at distance D; the body sits on a
+  // dome of radius DOME_SCALE·D round T. Where the frame is not eased, the
+  // drawn direction must be exactly the camera's line of sight to that point —
+  // at every distance and target, so zoom and pan cannot move it either.
+  let worst = 0, at = null, checked = 0;
+  for (const cam of CAMS) for (const [D, T] of [[10, [0, 0, 0]], [80, [12, 1, -30]], [400, [-50, 3, 7]]])
+    for (let a = -170; a <= 180; a += 10) for (const alt of [0, 20, 45, 70, 89]) {
+      const e = f.DOME_LOW + (Math.PI / 2 - f.DOME_LOW) * alt / 90;
+      const F = { x: Math.sin(cam.camAz) * Math.cos(cam.pitch), y: -Math.sin(cam.pitch), z: Math.cos(cam.camAz) * Math.cos(cam.pitch) };
+      const C = [T[0] - D * F.x, T[1] - D * F.y, T[2] - D * F.z];
+      const k = f.DOME_SCALE * D, b = deg(a);
+      const P = [T[0] + k * Math.sin(b) * Math.cos(e), T[1] + k * Math.sin(e), T[2] + k * Math.cos(b) * Math.cos(e)];
+      const v = [P[0] - C[0], P[1] - C[1], P[2] - C[2]], n = Math.hypot(...v);
+      const pr = f.projectToFrame(v[0] / n, v[1] / n, v[2] / n, cam);
+      if (Math.hypot(2 * pr.frameX - 1, 1 - 2 * pr.frameY) > f.FRAME_TRUE) continue;
+      checked++;
+      const l = drawn(deg(alt), b, cam).dir;
+      const err = Math.hypot(l.x - v[0] / n, l.y - v[1] / n, l.z - v[2] / n);
+      if (err > worst) { worst = err; at = { cam, D, a, alt }; }
+    }
+  ck(`the sun is drawn exactly where a real object on a dome round the villa would be — orbit, tilt, zoom and pan alike (${checked} poses)`, worst < 1e-9 && checked > 1000, { worst, at, checked });
+  let out = [];
+  for (const cam of CAMS) for (let a = -179; a <= 179; a += 7) for (const alt of [0, 15, 35, 60, 85, 90]) {
+    const r = drawn(deg(alt), cam.camAz + deg(a), cam);
+    if (!(r.frameX > 0.04 && r.frameX < 0.96 && r.frameY > 0.04 && r.frameY < 0.96)) out.push([cam, a, alt, r.frameX, r.frameY]);
   }
-  ck("the sun's height in the FRAME is the same at every tilt the user can hold (2.396's defect: a fixed world elevation)", independent);
-  ck("  ...always in the upper part of the frame, above the villa at the centre", worst[0] > 0.05 && worst[1] < 0.35, worst);
-  const cam = { pitch: deg(61.4), halfFov: 0.4, camAz: 0, hHalf: 0.7 };
-  const ys = [0, 15, 30, 60, 89].map((a) => drawn(deg(a), 0, cam).frameY);
-  ck("  ...and the sun CLIMBS across the frame as it rises (smaller frameY = higher)", ys.every((y, i) => i === 0 || y < ys[i - 1]), ys);
-}
-
-console.log("\n  horizontal: the TRUE bearing, whatever the view (owner, 2026-10-05)");
-{
-  let worst = 0, at = null;
-  for (const hHalf of HHALF) for (const halfFov of VFOV) for (const a of [-150, -80, -40, -10, 10, 40, 80, 150]) for (const alt of [5, 35, 70]) {
-    const xs = PITCHES.map((pitch) => drawn(deg(alt), deg(a), { pitch, halfFov, camAz: 0, hHalf }).frameX);
-    const spread = Math.max(...xs) - Math.min(...xs);
-    if (spread > worst) { worst = spread; at = { hHalf, a, alt, xs }; }
-  }
-  ck("TILTING the camera never moves the sun or moon sideways (it slid 0.94 → 0.64 between 20° and 85°)", worst < 1e-9, at);
-  let off = 0, at2 = null;
-  for (const hHalf of HHALF) for (const pitch of PITCHES) for (const camAz of [0, deg(120), deg(-150)]) for (let a = -60; a <= 60; a += 4) {
-    const rel = deg(a), cam = { pitch, halfFov: 0.4, camAz, hHalf };
-    if (Math.abs(rel) >= hHalf) continue;                       // only where it is on screen
-    const want = 0.5 + 0.5 * Math.tan(rel) / Math.tan(hHalf);
-    const e = Math.abs(drawn(deg(30), camAz + rel, cam).frameX - want);
-    if (e > off) { off = e; at2 = { hHalf, pitch, camAz, a }; }
-  }
-  ck("  ...and TURNING moves it by the true amount, edge to edge, exactly as the landscape moves", off < 1e-9, { off, at2 });
+  ck("  ...and it is ALWAYS on screen: every bearing, height, tilt, heading, tablet and phone (eased toward the villa near the edges)", out.length === 0, out.slice(0, 2));
   let wrongSide = [];
-  for (const pitch of PITCHES) for (const camAz of [0, deg(120), deg(-150)]) for (let a = -170; a <= 170; a += 10) {
-    if (a === 0) continue;
-    const r = drawn(deg(30), camAz + deg(a), { pitch, halfFov: 0.4, camAz, hHalf: 0.7 });
-    if (r.fade > 0 && Math.sign(r.frameX - 0.5) !== Math.sign(a)) wrongSide.push([pitch, camAz, a, r.frameX]);
+  for (const cam of CAMS) for (let a = 5; a <= 175; a += 10) for (const alt of [0, 40, 80]) for (const sgn of [1, -1]) {
+    const x = drawn(deg(alt), cam.camAz + sgn * deg(a), cam).frameX;
+    if (Math.sign(x - 0.5) !== sgn) wrongSide.push([cam, sgn * a, alt, x]);
   }
-  ck("  ...a body to the RIGHT of where the camera faces is always drawn right of the villa, and left is left", wrongSide.length === 0, wrongSide.slice(0, 3));
-  // The 2.496.291 defect: turning the camera all the way round, the sun must
-  // leave over one edge and come back over the OTHER edge only after the turn
-  // has carried it there — never vanish or appear while on screen, never jump.
+  ck("  ...a body to the RIGHT of where the camera faces is drawn right of the villa, and left is left", wrongSide.length === 0, wrongSide.slice(0, 2));
+  let low = [];
+  for (const cam of CAMS) for (let a = -60; a <= 60; a += 10) for (const alt of [20, 50]) {
+    const y = drawn(deg(alt), cam.camAz + deg(a), cam).frameY;
+    if (!(y < 0.5)) low.push([cam.pitch, a, alt, y]);
+  }
+  ck("  ...a sun in front of you is drawn ABOVE the villa, in the sky", low.length === 0, low.slice(0, 2));
+}
+
+console.log("\n  nothing jumps (2.496.290: east to west in one step)");
+{
   let seams = [];
-  for (const hHalf of HHALF) for (const pitch of [deg(25), deg(61.4), deg(87)]) {
+  for (const [halfFov, hHalf] of [[0.4, 0.7], [0.55, 0.3]]) for (const pitch of [deg(10), deg(61.4), deg(87)]) for (const alt of [5, 40, 80]) {
     let prev = null;
     for (let t = 0; t <= 720; t += 0.5) {
-      const cam = { pitch, halfFov: 0.4, camAz: deg(t), hHalf };
-      const r = drawn(deg(30), deg(40), cam);
-      const shown = r.fade > 0;
-      const onScreen = r.frameX > 0 && r.frameX < 1;
-      if (prev) {
-        if (shown !== prev.shown && (onScreen || prev.onScreen)) seams.push(["switched on screen", hHalf, t, r.frameX]);
-        if (shown && prev.shown && Math.abs(r.frameX - prev.frameX) > 0.05) seams.push(["jumped", hHalf, t, prev.frameX, r.frameX]);
-        if (shown && prev.shown && r.frameX > prev.frameX + 1e-12) seams.push(["moved WITH the turn", hHalf, t]);
-      }
-      prev = { shown, onScreen, frameX: r.frameX };
+      const r = drawn(deg(alt), deg(40), { pitch, halfFov, camAz: deg(t), hHalf });
+      if (prev && Math.hypot(r.frameX - prev.frameX, r.frameY - prev.frameY) > 0.03) seams.push(["turn", hHalf, pitch, alt, t]);
+      prev = r;
     }
   }
-  ck("  ...turning all the way round: it slides off one edge and back in over the other, never popping in, out or across", seams.length === 0, seams.slice(0, 3));
-  let missing = [];
-  for (const hHalf of HHALF) for (const pitch of PITCHES) for (let a = -55; a <= 55; a += 5) {
-    if (Math.abs(deg(a)) >= hHalf) continue;
-    const r = drawn(deg(30), deg(a), { pitch, halfFov: 0.4, camAz: 0, hHalf });
-    if (!(r.fade === 1 && r.frameX > 0 && r.frameX < 1 && r.frameY > 0 && r.frameY < 1)) missing.push([hHalf, pitch, a]);
+  for (const [halfFov, hHalf] of [[0.4, 0.7], [0.55, 0.3]]) for (let a = -180; a < 180; a += 30) {
+    let prev = null;
+    for (let p = 3; p <= 87; p += 0.25) {
+      const r = drawn(deg(35), deg(a), { pitch: deg(p), halfFov, camAz: 0, hHalf });
+      if (prev && Math.hypot(r.frameX - prev.frameX, r.frameY - prev.frameY) > 0.03) seams.push(["tilt", hHalf, a, p]);
+      prev = r;
+    }
   }
-  ck("  ...and whenever its bearing is inside the view, it is on screen and fully drawn", missing.length === 0, missing.slice(0, 3));
-  const cam = { pitch: deg(61.4), halfFov: 0.4, camAz: 0, hHalf: 0.7 };
-  const xs = [-40, -20, 0, 20, 40].map((a) => drawn(deg(30), deg(a), cam).frameX);
-  ck("  ...and bearings stay in order across the frame", xs.every((x, i) => i === 0 || x > xs[i - 1]), xs);
+  ck("turning all the way round, twice, and tilting end to end: it glides, never pops", seams.length === 0, seams.slice(0, 3));
 }
 
-console.log("\n  out of view, and setting");
+console.log("\n  setting");
 {
   const cam = { pitch: deg(61.4), halfFov: 0.4, camAz: 0, hHalf: 0.7 };
-  const behind = dirAt(deg(30), Math.PI - 1e-6), beside = dirAt(deg(30), Math.PI / 2);
-  ck("behind the camera, or beside it out of view, the body is not drawn (out of view is out of view)",
-     f.bodyFade(behind.x, behind.y, behind.z, drop, cam) === 0 && f.bodyFade(beside.x, beside.y, beside.z, drop, cam) === 0);
   ck("set: below −1° of TRUE altitude it is gone; above 3° fully up; between, a fade",
      f.horizonFade(deg(-1.5)) === 0 && f.horizonFade(deg(4)) === 1 && f.horizonFade(deg(1)) > 0 && f.horizonFade(deg(1)) < 1);
   const lo = dirAt(deg(-0.5), 0);
   ck("  ...asked of the TRUE altitude, never the drawn one (in overview the drawn direction is below the horizon)",
-     f.lift(lo.x, lo.y, lo.z, drop, cam).y < 0 && f.bodyFade(lo.x, lo.y, lo.z, drop, cam) > 0);
+     f.lift(lo.x, lo.y, lo.z, drop, cam).y < 0 && f.bodyFade(lo.x, lo.y, lo.z) > 0);
 }
 
 console.log("\n  first person");
@@ -120,9 +109,22 @@ console.log("\n  first person");
   const d = dirAt(deg(37), deg(140));
   const out = f.lift(d.x, d.y, d.z, 0, cam);
   ck("no horizon drop: the true sky, untouched (the viewer is standing under it)",
-     out.x === d.x && out.y === d.y && out.z === d.z && f.azimuthFade(d.x, d.z, 0, cam) === 1);
+     out.x === d.x && out.y === d.y && out.z === d.z && f.bodyFade(d.x, d.y, d.z) === 1);
   ck("liftFor: 0 units is 0; 200 units is about 22° (the drop's own rotation)",
      f.liftFor(0) === 0 && Math.abs(f.liftFor(200) - deg(21.8)) < deg(0.1));
+}
+
+console.log("\n  drawn over the villa in overview only");
+{
+  const { Constants } = await import("@babylonjs/core/Engines/constants.js");
+  ck("overview: the disc is drawn OVER the villa (GL ALWAYS), so the house never hides it; walking: the ordinary test, so walls and ceilings do",
+     f.overDepth(f.liftFor(200)) === Constants.ALWAYS && f.overDepth(0) === 0);
+  const fs = await import("node:fs");
+  const src = (n) => fs.readFileSync(new URL(`../../src/babylon/${n}`, import.meta.url), "utf8");
+  const setter = (t) => (t.match(/setHorizonDrop\(units: number\): void \{[\s\S]*?\n  \}/) || [""])[0];
+  ck("  ...and BOTH discs take it from the drop they are handed (sun and moon alike)",
+     /this\.sunMat\.depthFunction = overDepth\(units\)/.test(setter(src("SkyDome.ts")))
+     && /this\.moonMat\.depthFunction = overDepth\(units\)/.test(setter(src("NightSky.ts"))));
 }
 
 console.log("\n  warmth");
@@ -140,4 +142,4 @@ console.log("\n  the theme's night");
        (await import("node:fs")).readFileSync(new URL("../../src/utils/themeTime.ts", import.meta.url), "utf8")));
 }
 
-done("✅ the sun and the moon are framed by one tested rule, at every tilt");
+done("✅ the sun and the moon are drawn on one dome round the villa, from every view");
