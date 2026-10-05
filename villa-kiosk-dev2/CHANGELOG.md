@@ -1,3 +1,8 @@
+## 2.496.298
+
+### Fixed
+- Panning the 3D overview (dragging it, or the arrow keys) now carries the sun and the moon along with the house. Before, they stayed put on the screen while the house slid away, so after a pan the moon could hang over empty sky or end up on the wrong side of the pool. Turning, tilting and zooming were already right and are unchanged.
+
 ## 2.496.297
 
 ### Fixed
