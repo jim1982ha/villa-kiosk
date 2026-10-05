@@ -115,7 +115,8 @@ class Manifests(unittest.TestCase):
         m, problem = manifest.load(HERE.parent / "agent-src" / "vesta-agent.yaml")
         self.assertIsNone(problem)
         self.assertEqual((m.name, m.start), ("vesta-agent", "python -m vesta_agent"))
-        self.assertEqual(m.system_packages, [])                      # no PDF, no headless browser (0.9.2)
+        # no PDF, no headless browser (0.9.2); libopus0 alone, for voice messages (0.12.42) — never ffmpeg
+        self.assertEqual(m.system_packages, ["libopus0"])
         self.assertEqual(m.install_files, ["requirements.txt"])
         self.assertEqual(m.ui, "python -m vesta_agent.ui")
 

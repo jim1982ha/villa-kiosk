@@ -149,6 +149,8 @@ class KnowledgePack:
     unknown_area: list[str]
     unclassified: list[str]
     retention: dict
+    # Each area's other names in Home Assistant ("Cuisine" for Kitchen): a person may say either.
+    area_aliases: dict[str, list[str]] = field(default_factory=dict)
 
     def entities(self, family: str) -> list[dict]:
         return self.families.get(family, [])
@@ -308,6 +310,8 @@ def build_pack(registry: dict, helpers: list[dict], states: dict | None = None,
         unknown_area=unknown_area,
         unclassified=unclassified,
         retention=retention,
+        area_aliases={a.get("name"): [x for x in (a.get("aliases") or []) if x]
+                      for a in registry.get("areas", []) if a.get("name") and a.get("aliases")},
     )
 
 

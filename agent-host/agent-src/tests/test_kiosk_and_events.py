@@ -109,7 +109,7 @@ def test_kiosk_off_without_url_or_token():
 
 
 # ---------------------------------------------------------------------- a fake Home Assistant websocket
-def test_the_websocket_listens_to_four_event_types_and_sends_nothing_else():
+def test_the_websocket_listens_to_its_event_types_and_sends_nothing_else():
     async def go():
         sent_by_agent: list[dict] = []
         got: list[tuple[str, dict]] = []
@@ -163,7 +163,8 @@ def test_the_websocket_listens_to_four_event_types_and_sends_nothing_else():
         stop.set()
         await asyncio.wait_for(task, 10)
         await runner.cleanup()
-        assert [m["type"] for m in sent_by_agent] == ["auth"] + ["subscribe_events"] * 4
+        assert [m["type"] for m in sent_by_agent] == ["auth"] + ["subscribe_events"] * len(EVENT_TYPES)
+        assert len(EVENT_TYPES) == 5                     # + telegram_attachment (voice messages, 0.6.39)
         assert sorted(m["event_type"] for m in sent_by_agent[1:]) == sorted(EVENT_TYPES)
         assert [e for e, _ in got] == ["vesta_critical_event", "telegram_text"]      # state_changed ignored
         assert beats                                                               # the villa-silent watch

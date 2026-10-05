@@ -4,3 +4,7 @@ scripts:
     commands: [status, find]
     flags: {--what: text, --where: text}
     inject: [pack, store, zone]
+on_event:
+  # A Telegram voice message: its audio made ready for Home Assistant's speech-to-text
+  # (which speech-to-text, which language: villa.voice.yaml). The engine sends it.
+  voice_message: "voice.py prepare --audio {audio} --language {language}"

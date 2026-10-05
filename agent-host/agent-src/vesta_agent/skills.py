@@ -19,6 +19,7 @@ and skill.yaml (what the engine needs):
     every_5_min: "desk.py tick"      a code job every 5 minutes
     on_event:
       critical_event: "desk.py intake --event {event}"
+      voice_message: "voice.py prepare --audio {audio} --language {language}"   # prints {"stt": {...}}
     on_reply: "desk.py reply --incident {incident} --text {text} --from {role}"
 
 Nothing is compiled or cached across calls: a changed folder counts at the next
@@ -64,7 +65,7 @@ REFERENCE = ".starter"      # the current starter skills, for reading: not loade
 # the villa's playbook entries and cards) is the villa's, never shipped. It does not count as an edit of
 # the skill, and an update keeps it — so the villa adds its own without losing the starter's updates.
 VILLA_PREFIX = "villa."
-HOOK_EVENTS = {"critical_event"}
+HOOK_EVENTS = {"critical_event", "voice_message"}
 JOB_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,40}$")
 JOB_TARGETS = ("owner", "fm")
 

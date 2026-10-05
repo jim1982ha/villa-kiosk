@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.39 (5 October 2026)
+
+- Voice messages (owner, 2026-10-05): ha_events also listens to `telegram_attachment`; an audio attachment from a person the agent answers (private chat, or a reply to the agent in a group) is fetched with getFile (Telegram.download; only with takeover), handed to the skill hook `on_event.voice_message` (new HOOK_EVENT) with {audio, language}, and the WAV the skill returns goes to Home Assistant's /api/stt/<entity> (speech.py: the engine holds the token, a script never does). The text then reaches converse(voice=True). Audio and WAV are deleted after. tests/test_voice_messages.py (real hook, fake Telegram and STT), mutation-checked.
+- villa-concierge: scripts/voice.py decodes Ogg/Opus with libopus (ctypes) to 16 kHz mono WAV and picks the stt entity (the only one, or villa.voice.yaml `stt:`; several and none named: refused, never guessed) and the language (villa.voice.yaml `language:`, else the person's). vesta-agent.yaml system_packages: libopus0. tests/test_voice_prepare.py (a real Opus fixture: duration, energy, 440 Hz), mutation-checked.
+- villa-concierge find(): the Home Assistant area decides (place(): area name or alias, accents and case folded, exact before contains); a device with no area counts by its name; names only when no area answers; an entity id never. The pack carries area_aliases. SKILL.md: resolve every place with find, never from ha_search text. tests/test_concierge_place.py, 5 mutants red.
+- Reply language: converse() no longer says "Answer in <saved language>"; it gives the saved language as information. The rule (the message's own language) is the skill's (villa-concierge SKILL.md).
+- Starter skills recorded.
+
 ## 0.6.38 (5 October 2026)
 
 - Workflow and DRY passes 1–2:

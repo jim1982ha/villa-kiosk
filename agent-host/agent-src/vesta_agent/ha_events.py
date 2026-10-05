@@ -1,14 +1,15 @@
-"""The one Home Assistant websocket: LISTEN ONLY, to four event types.
+"""The one Home Assistant websocket: LISTEN ONLY, to five event types.
 
   vesta_critical_event   fired by the VESTA rules (the critical_* blueprints), AFTER
                          their own Telegram message: the alert desk's input
   telegram_text          what Home Assistant receives on the villa bot, as it fires it
   telegram_command       for its own automations: the agent reads Telegram from here
   telegram_callback      and never from Telegram itself (telegram.py sends only)
+  telegram_attachment    a photo, a file or a VOICE MESSAGE: only its file id travels here
 
 Decision D1 (owner, 2026-09-30): an exception to "Home Assistant only through HA
 MCP", because HA MCP has no event-listening tool. The socket subscribes to these
-four types and SENDS NOTHING ELSE: no service call, no event, no write of any kind
+five types and SENDS NOTHING ELSE: no service call, no event, no write of any kind
 travels on it. Everything Home Assistant does with Telegram (alerts, the gate
 button, any automation) keeps working whether this process runs or not.
 
@@ -28,7 +29,8 @@ import aiohttp
 
 log = logging.getLogger("vesta.ha_events")
 
-EVENT_TYPES = ("vesta_critical_event", "telegram_text", "telegram_command", "telegram_callback")
+EVENT_TYPES = ("vesta_critical_event", "telegram_text", "telegram_command", "telegram_callback",
+               "telegram_attachment")
 BACKOFF_START = 5
 BACKOFF_MAX = 300
 BEAT_EVERY = 60

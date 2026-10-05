@@ -1,4 +1,4 @@
-"""Telegram Bot API, SEND ONLY.
+"""Telegram Bot API: SEND, and fetch a file a person sent (a voice message).
 
 ⚠️ HOME ASSISTANT IS THE ONE RECEIVER OF THE VILLA BOT, FOR GOOD. Telegram gives
 a bot one receiver; Home Assistant's telegram_bot integration is it, and its
@@ -6,6 +6,8 @@ automations (the gate button, any other) depend on it. The agent reads messages
 and button presses from the events Home Assistant fires for them (ha_events.py)
 and only SENDS here. So this module never calls getUpdates, and never leaveChat:
 leaving a group would take the villa bot — and Home Assistant's alerts — out of it.
+The one read: a file Home Assistant's event named by its id (getFile, then the
+file itself) — the voice message a person sent, which no event carries.
 """
 
 from __future__ import annotations
@@ -100,6 +102,24 @@ class Telegram:
             res = await self.api("sendMessage", **data)
             last_id = res.get("message_id")
         return last_id
+
+    async def download(self, file_id: str, limit: int = 20 * 1024 * 1024) -> bytes:
+        """A file a person sent, by the id Home Assistant's telegram_attachment event gave.
+        Telegram serves a bot files up to 20 MB."""
+        assert self.http is not None
+        info = await self.api("getFile", file_id=file_id)
+        path = (info or {}).get("file_path")
+        if not path or (info.get("file_size") or 0) > limit:
+            raise TelegramError("getFile: no file, or larger than 20 MB")
+        try:
+            async with self.http.get(f"https://api.telegram.org/file/bot{self.token}/{path}") as r:
+                if r.status != 200:
+                    raise TelegramError(f"file: HTTP {r.status}")
+                return await r.read()
+        except TelegramError:
+            raise
+        except Exception as e:  # never log the URL: it holds the token
+            raise TelegramError(f"file: {type(e).__name__}") from None
 
     async def answer_callback(self, callback_id: str, text: str):
         try:

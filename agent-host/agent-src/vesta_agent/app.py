@@ -4,9 +4,14 @@ What comes in (ha_events.py, one listen-only Home Assistant websocket):
   vesta_critical_event                  the alert desk (the skills' `on_event`)
   telegram_text / _command / _callback  what Home Assistant receives on the villa
                                         bot: messages and button presses for the agent
+  telegram_attachment                   a voice message: the skill that handles
+                                        `voice_message` prepares its audio, Home
+                                        Assistant's speech-to-text turns it into text
 What goes out: Telegram messages (telegram.py, send only), Kiosk heartbeat and
 Facility tickets (kiosk.py), and — only after a person presses Approve — a service
-call through the HA MCP sidecar (actions.py).
+call through the HA MCP sidecar (actions.py). And one read that HA MCP cannot do:
+a voice message's audio to Home Assistant's speech-to-text (/api/stt), which
+changes nothing in the villa.
 
 Runs without the model (code only, zero tokens): alert intake, the 5-minute chase,
 the ladder buttons (Done / Not found / Need help / Mute), approvals, execution and
@@ -38,6 +43,7 @@ from .policy import Person, Policy, problems as policy_problems
 from .routing import CONVERSATION, JOB, Origin, Routing
 from .scheduler import Scheduler
 from .skills import Skills, run_command, script_env
+from .speech import speech_to_text
 from .state import State
 from .telegram import Telegram, TelegramError
 from .tools import Toolbox, scrub
@@ -372,6 +378,9 @@ class Vesta:
         except (TypeError, ValueError):
             return
         is_group = cid < 0              # Telegram: groups negative, private chats positive; no type field
+        voice = event_type == "telegram_attachment"
+        if voice and not str(m.get("file_mime_type") or "").startswith("audio/"):
+            return                      # a photo or a file: nothing the agent does with it
         pol = self.policy()
         from_id = m.get("user_id")
         if event_type == "telegram_command":
@@ -409,11 +418,66 @@ class Vesta:
             self.state.set_session(cid, None)
             await self.send(cid, "New conversation.")
             return
+        if voice:
+            # in a group, only a voice message that replies to the agent reaches here (no mention possible)
+            text = await self.transcribe(cid, person, str(m.get("file_id") or ""))
         if self.bot_username:
-            text = re.sub(rf"@{re.escape(self.bot_username)}", "", text, flags=re.I).strip()
+            text = re.sub(rf"@{re.escape(self.bot_username)}", "", text or "", flags=re.I).strip()
         if not text:
             return
-        await self.converse(cid, person, text, chat_role=pol.chat_role(cid) or "private")
+        await self.converse(cid, person, text, chat_role=pol.chat_role(cid) or "private", voice=voice)
+
+    async def transcribe(self, cid: int, person: Person, file_id: str) -> str | None:
+        """A voice message's words, or None (the person is told why).
+
+        ⚠️ THE SKILL DECIDES, THE ENGINE ONLY CARRIES (owner, 2026-10-05: everything tuned
+        per villa lives in the skills, so a villa's skills copied to another work the same).
+        The skill whose `on_event.voice_message` hook runs decodes the audio and chooses the
+        speech-to-text and the language; the engine fetches the file and sends the skill's
+        WAV to Home Assistant, because it holds the token and a skill script never does."""
+        hook = next(((sk, sk.on_event["voice_message"]) for sk in self.skills.all().values()
+                     if "voice_message" in sk.on_event), None)
+        if not self.tg:
+            log.info("Voice message in chat %s not read: Telegram takeover is off", cid)
+            return None
+        if not hook:
+            await self.send(cid, "Voice messages are not set up here: no skill handles them.")
+            return None
+        folder = os.path.join(self.s.out_dir, "voice")
+        os.makedirs(folder, exist_ok=True)
+        path = os.path.join(folder, f"{datetime.now(timezone.utc):%Y%m%dT%H%M%S%f}.ogg")
+        wav = None
+        try:
+            try:
+                audio = await self.tg.download(file_id)
+            except TelegramError as e:
+                log.warning("Voice message in chat %s: %s", cid, e)
+                await self.send(cid, "This voice message could not be fetched from Telegram.")
+                return None
+            with open(path, "wb") as f:
+                f.write(audio)
+            sk, cmd = hook
+            res = await asyncio.to_thread(self.code_command, sk, cmd, {"audio": path, "language": person.language}, 120)
+            st = res.get("stt") if isinstance(res.get("stt"), dict) else None
+            if not st:
+                await self.send(cid, str(res.get("error") or "This voice message could not be prepared."))
+                return None
+            wav = st.get("wav")
+            text, why = await speech_to_text(self.s.ha_url, self.s.ha_token, st, self.cf_headers)
+            log.info("Voice message in chat %s: %s s, %s (%s)%s", cid, st.get("seconds"), st.get("entity"),
+                     st.get("language"), f": {why}" if why else "")
+            self.state.log("voice", {"chat": cid, "seconds": st.get("seconds"), "stt": st.get("entity"),
+                                     "language": st.get("language"), "ok": bool(text), "why": why})
+            if not text:
+                await self.send(cid, "I could not make out this voice message. Try again, or write it.")
+            return text
+        finally:
+            for f in (path, wav):        # a voice is the person's: kept no longer than it takes to read it
+                if f and os.path.dirname(os.path.abspath(f)) == os.path.abspath(folder):
+                    try:
+                        os.remove(f)
+                    except OSError:
+                        pass
 
     def _resume_for(self, chat_id: int) -> str | None:
         sid, last = self.state.session(chat_id)
@@ -444,7 +508,7 @@ class Vesta:
                 f"Villa time zone: {self.s.timezone}. Today: {_now_local(self.s.timezone):%A %d %B %Y, %H:%M}.")
 
     async def converse(self, cid: int, person: Person | None, text: str, chat_role: str = "private",
-                       resume: str | None = "auto", is_continue: bool = False):
+                       resume: str | None = "auto", is_continue: bool = False, voice: bool = False):
         async with self.lock(cid):
             if resume == "auto":
                 resume = self._resume_for(cid)
@@ -452,8 +516,12 @@ class Vesta:
             if is_continue:
                 prompt = "Continue exactly where you stopped. Do not repeat what you already wrote."
             else:
-                prompt = (f"Message from {person.name} (role {person.role}, writes in {lang}) in the {chat_role} chat:\n"
-                          f"\"\"\"{text}\"\"\"\nAnswer in {lang}, short.")
+                # ⚠️ THE LANGUAGE OF THE ANSWER IS THE SKILL'S RULE (owner, 2026-10-05): the
+                # engine says which language is saved for the person, never "answer in it".
+                said = "a voice message, as transcribed" if voice else "a message"
+                prompt = (f"{said.capitalize()} from {person.name if person else 'someone'} (role "
+                          f"{person.role if person else '?'}; language saved for them: {lang}) in the {chat_role} chat:\n"
+                          f"\"\"\"{text}\"\"\"\nAnswer short.")
             if not self.server_tools:
                 await self.refresh_server_tools()
             tb = self.toolbox()

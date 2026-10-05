@@ -1,6 +1,6 @@
 # The VESTA Agent's manifest, read by the VESTA Agent host (SPEC section 8).
 name: vesta-agent
-version: "0.6.38"
+version: "0.6.39"
 runtime: python
 # Runs at IMAGE BUILD, in CI, never on the Yellow. `rm -rf tests` keeps every test
 # (and the villa's own fixtures, which a local copy may hold) out of the image.
@@ -15,6 +15,7 @@ start: "python -m vesta_agent"
 ui: "python -m vesta_agent.ui"
 stop_grace_seconds: 20
 # Debian packages the agent needs at run time, installed in the host image's
-# final stage. None: the reports are HTML pages (no PDF, no headless browser —
-# owner, 2026-09-30).
-system_packages: []
+# final stage. The reports are HTML pages (no PDF, no headless browser — owner,
+# 2026-09-30). libopus0 (~0.2 MB, not ffmpeg): villa-concierge's voice.py decodes
+# a Telegram voice message (Ogg/Opus) for Home Assistant's speech-to-text.
+system_packages: [libopus0]

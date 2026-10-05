@@ -13,14 +13,49 @@ villa now reports.
 
 - `catalogue.yaml`          the closed list of actions, roles, confirmations, read-back states
 - `scripts/concierge.py`    status, find, propose, execute, readback
+- `scripts/voice.py`        a voice message's audio, made ready for Home Assistant's speech-to-text
 - Shared: `vesta_shared`, part of the engine (pack, store, HA client, params)
 
 ## Who is talking
 
 The people table of the knowledge pack maps a chat id to a role (owner, fm,
 tenant) and a language. An unknown sender gets one line ("this chat is not
-registered") and is logged; nothing else. Answer in the sender's language;
-device names stay as in Home Assistant.
+registered") and is logged; nothing else.
+
+Answer in the language the message is written in — for a voice message, the
+language spoken. The language saved for the person (shown with the message)
+is only for a message that does not tell ("ok", a number) and for what you
+send on your own. Device names stay as in Home Assistant.
+
+## Which devices a person means
+
+Before reading or acting on a place, resolve it with
+`concierge.py find --what ... --where ...`, never by picking devices from a
+text search (ha_search): an entity id or a device name can carry a room's word
+without being in that room.
+
+- The Home Assistant area decides. Give `--where` the area as Home Assistant
+  names it (the areas are in the knowledge pack; "cuisine" is the Kitchen area
+  unless the area has that alias). `place.areas` in the answer: only those
+  areas' devices count, plus a device with no area whose name says the place.
+- `place.by_name` true: no area answers to the place, the devices were found by
+  their names. When that gives more than one, name them before acting.
+- A device named by the person ("the dining table light") is found with
+  `--what` and its name.
+- Act only on the devices `find` returned; say which ones in the answer.
+
+## Voice messages
+
+A voice message arrives as text, already transcribed, marked as a voice
+message. Treat it as the same message typed. When the transcription makes no
+sense, say what you heard and ask once.
+
+`on_event.voice_message` runs `voice.py prepare`: it turns the Telegram audio
+into the WAV Home Assistant's speech-to-text takes, and chooses the
+speech-to-text and the language (`villa.voice.yaml`, optional: `stt:` an
+`stt.*` entity when the villa has several, `language:` a code to always use
+instead of the person's saved one). The engine sends that WAV to Home
+Assistant and brings the text back here.
 
 ## Reading (no confirmation)
 

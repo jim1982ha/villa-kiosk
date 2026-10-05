@@ -425,7 +425,8 @@ class McpClient(HABase):
         areas = [a for f in fa.get("floors") or [] for a in f.get("areas") or []] + list(fa.get("unassigned_areas") or [])
         home = (states.get("zone.home") or {}).get("attributes") or {}
         return {"entities": entities, "devices": devices,
-                "areas": [{"area_id": a.get("area_id"), "name": a.get("name")} for a in areas],
+                "areas": [{"area_id": a.get("area_id"), "name": a.get("name"), "aliases": a.get("aliases") or []}
+                          for a in areas],
                 "config": {"time_zone": self.zone, "location_name": home.get("friendly_name")}}
 
     def logbook(self, start, end, entity_id=None):
