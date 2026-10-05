@@ -28,29 +28,48 @@ const CAMS = [];
 for (const pitch of PITCHES) for (const [halfFov, hHalf] of [[0.4, 0.7], [0.4, 1.0], [0.55, 0.3], [0.4, 0.35]])
   for (const camAz of [0, deg(120), deg(-150)]) CAMS.push({ pitch, halfFov, camAz, hHalf });
 
-console.log("  a dome round the villa (owner, 2026-10-05: 'too far from the villa')");
+console.log("  a spot on the ground round the villa, the disc straight up the screen from it");
 {
-  // A REAL object: the camera orbits target T at distance D; the body sits on a
-  // dome of radius DOME_SCALE·D round T. Where the frame is not eased, the
-  // drawn direction must be exactly the camera's line of sight to that point —
-  // at every distance and target, so zoom and pan cannot move it either.
+  // A REAL ground spot: the camera orbits target T at distance D; the spot is
+  // DOME_SCALE·D from T along the body's bearing, on the ground. Where the
+  // frame is not eased, the disc must be exactly above that spot's projection
+  // by the lift for its altitude — at every distance and target, so zoom and
+  // pan cannot move it either.
   let worst = 0, at = null, checked = 0;
   for (const cam of CAMS) for (const [D, T] of [[10, [0, 0, 0]], [80, [12, 1, -30]], [400, [-50, 3, 7]]])
     for (let a = -170; a <= 180; a += 10) for (const alt of [0, 20, 45, 70, 89]) {
-      const e = f.DOME_LOW + (f.DOME_HIGH - f.DOME_LOW) * alt / 90;
       const F = { x: Math.sin(cam.camAz) * Math.cos(cam.pitch), y: -Math.sin(cam.pitch), z: Math.cos(cam.camAz) * Math.cos(cam.pitch) };
       const C = [T[0] - D * F.x, T[1] - D * F.y, T[2] - D * F.z];
       const k = f.DOME_SCALE * D, b = deg(a);
-      const P = [T[0] + k * Math.sin(b) * Math.cos(e), T[1] + k * Math.sin(e), T[2] + k * Math.cos(b) * Math.cos(e)];
-      const v = [P[0] - C[0], P[1] - C[1], P[2] - C[2]], n = Math.hypot(...v);
-      const pr = f.projectToFrame(v[0] / n, v[1] / n, v[2] / n, cam);
-      if (Math.abs(2 * pr.frameX - 1) > f.FRAME_TRUE || Math.abs(1 - 2 * pr.frameY) > f.FRAME_TRUE) continue;
+      const v = [T[0] + k * Math.sin(b) - C[0], T[1] - C[1], T[2] + k * Math.cos(b) - C[2]], n = Math.hypot(...v);
+      const g = f.projectToFrame(v[0] / n, v[1] / n, v[2] / n, cam);
+      const up = f.LIFT_LOW + (f.LIFT_HIGH - f.LIFT_LOW) * alt / 90;
+      const want = { frameX: g.frameX, frameY: g.frameY - up / 2 };
+      if (Math.abs(2 * want.frameX - 1) > f.FRAME_TRUE || Math.abs(1 - 2 * want.frameY) > f.FRAME_TRUE) continue;
       checked++;
-      const l = drawn(deg(alt), b, cam).dir;
-      const err = Math.hypot(l.x - v[0] / n, l.y - v[1] / n, l.z - v[2] / n);
+      const r = drawn(deg(alt), b, cam);
+      const err = Math.hypot(r.frameX - want.frameX, r.frameY - want.frameY);
       if (err > worst) { worst = err; at = { cam, D, a, alt }; }
     }
-  ck(`the sun is drawn exactly where a real object on a dome round the villa would be — orbit, tilt, zoom and pan alike (${checked} poses)`, worst < 1e-9 && checked > 1000, { worst, at, checked });
+  ck(`the disc stands straight above a real spot on the ground beside the villa — orbit, tilt, zoom and pan alike (${checked} poses)`, worst < 1e-9 && checked > 1000, { worst, at, checked });
+  // The 2.496.294 defect: a disc raised into the AIR lines up with different
+  // ground as the view tilts, so tilting slid the sun from beside the pool to
+  // above it. Over the same spot, the disc's offset from it must not change
+  // with the tilt at all.
+  let drift = 0, at3 = null;
+  for (const [halfFov, hHalf] of [[0.4, 0.75], [0.55, 0.3]]) for (const camAz of [0, deg(70), deg(200)]) for (let a = -170; a <= 180; a += 20) for (const alt of [5, 40, 75]) {
+    const offs = [];
+    for (const pitch of PITCHES) {
+      const cam = { pitch, halfFov, camAz, hHalf };
+      const F = { x: Math.sin(camAz) * Math.cos(pitch), y: -Math.sin(pitch), z: Math.cos(camAz) * Math.cos(pitch) };
+      const b = deg(a), v = [F.x + f.DOME_SCALE * Math.sin(b), F.y, F.z + f.DOME_SCALE * Math.cos(b)];
+      const g = f.projectToFrame(...v, cam), r = drawn(deg(alt), b, cam);
+      const eased = [g.frameX, g.frameY, r.frameX, r.frameY].some((q) => Math.abs(2 * q - 1) > f.FRAME_TRUE);
+      if (!eased) offs.push([r.frameX - g.frameX, r.frameY - g.frameY]);
+    }
+    for (const o of offs) { const d = Math.hypot(o[0] - offs[0][0], o[1] - offs[0][1]); if (d > drift) { drift = d; at3 = { camAz, a, alt, offs }; } }
+  }
+  ck("  ...TILTING never moves the disc off its spot: the same offset from the same patch of ground at every tilt (it slid from beside the pool to above it)", drift < 1e-9, at3);
   let out = [];
   for (const cam of CAMS) for (let a = -179; a <= 179; a += 7) for (const alt of [0, 15, 35, 60, 85, 90]) {
     const r = drawn(deg(alt), cam.camAz + deg(a), cam);
@@ -169,4 +188,4 @@ console.log("\n  the theme's night");
        (await import("node:fs")).readFileSync(new URL("../../src/utils/themeTime.ts", import.meta.url), "utf8")));
 }
 
-done("✅ the sun and the moon are drawn on one dome round the villa, from every view");
+done("✅ the sun and the moon are drawn by one rule round the villa, from every view");

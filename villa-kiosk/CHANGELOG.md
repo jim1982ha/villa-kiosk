@@ -1,3 +1,8 @@
+## 2.496.295
+
+### Fixed
+- Tilting the view no longer moves the sun or the moon against the house. They are now tied to a spot on the ground beside the house, in their real direction, and drawn straight above that spot on the screen, higher when they are higher in the sky. Before, they hung in the air, so tilting made them line up with different things: beside the pool from one angle, above it from another. Now a sun beside the pool stays beside the pool however you tilt, turn or zoom.
+
 ## 2.496.294
 
 ### Fixed

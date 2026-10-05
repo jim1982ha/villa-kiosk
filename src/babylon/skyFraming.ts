@@ -46,31 +46,31 @@ export function liftFor(units: number): number {
 }
 
 /**
- * The dome the overview draws the sun and the moon on: a hemisphere centred on
- * the point the camera orbits (the villa), its radius DOME_SCALE times the
- * camera's distance from that point. Because the radius follows the distance,
- * zooming and panning leave the bodies where they are relative to the villa on
- * screen; because the dome is fixed in the WORLD, orbiting and tilting move
- * them exactly as they move the villa. It is a sun-path diagram drawn round the
- * house, not the sky at infinity — owner, 2026-10-05: "bring them closer to the
- * villa ... so they always appear, to indicate where to look in reality".
- * Under 1 so the point can never fall behind the camera.
+ * Where the overview anchors the sun and the moon: a spot ON THE GROUND beside
+ * the villa, in the body's true direction, DOME_SCALE times the camera's
+ * distance from the point it orbits. Because the distance follows the camera,
+ * zooming and panning leave the bodies where they are relative to the villa;
+ * because the spot is fixed on the ground, turning and tilting move it exactly
+ * as they move the villa. A sun-path diagram drawn round the house, not the
+ * sky at infinity — owner, 2026-10-05: "bring them closer to the villa ... so
+ * they always appear, to indicate where to look in reality". Under 1 so the
+ * spot can never fall behind the camera.
  */
 export const DOME_SCALE = 0.45;
-/** The elevations a body is drawn at on the dome: the true 0–90° is spread
- *  over DOME_LOW..DOME_HIGH, so one on the horizon floats above the garden and
- *  one overhead still stands OFF to its side of the house.
+/** How far the disc is drawn straight UP THE SCREEN from its ground spot, in
+ *  half-heights of the frame: LIFT_LOW for a body on the horizon, LIFT_HIGH
+ *  for one overhead. The height is a hint; the bearing is the message.
  *
- *  ⚠️ LOW ON PURPOSE. 2.496.292 spread it up to 90°, and a sun at 65° (10:00
- *  in the tropics) was drawn nearly above the roof: over a full turn of the
- *  camera it moved only 0.41..0.58 across the frame, so it read as following
- *  the camera — owner: "if the sun is behind the east wall, turning the
- *  camera shall keep it behind the same wall". The BEARING is the message;
- *  the height is a hint. */
-export const DOME_LOW = (10 * Math.PI) / 180;
-export const DOME_HIGH = (35 * Math.PI) / 180;
+ *  ⚠️ IN THE FRAME, NOT IN THE WORLD. 2.496.292–294 raised the body into the
+ *  air above its spot (a dome, 10°–35° up). A raised point lines up with
+ *  different ground as the view tilts — parallax — so tilting slid the sun
+ *  from beside the pool to above it (owner, 2026-10-05: "the sun is still
+ *  changing position when tilting"). An offset on the screen does not depend
+ *  on the tilt, so the disc stays over the same patch of ground. */
+export const LIFT_LOW = 0.25;
+export const LIFT_HIGH = 0.55;
 /** Inside this part of the frame (in half-widths, and separately half-heights,
- *  from the centre) a body sits exactly where the dome puts it; beyond, that
+ *  from the centre) a body sits exactly where its spot and lift put it; beyond, that
  *  axis is eased toward the villa, reaching at most FRAME_REACH. */
 export const FRAME_TRUE = 0.6;
 export const FRAME_REACH = 0.9;
@@ -94,8 +94,11 @@ export const SET_HIGH = (3 * Math.PI) / 180;
  * - 2.496.291 drew the true sky at infinity: correct, but far from the villa
  *   and out of view half the time (owner: "too far from the villa").
  * - 2.496.292's dome drew a high sun above the roof and pulled it to the top
- *   centre: it seemed to follow the camera (DOME_HIGH, ease()).
- * This one is a dome round the villa (DOME_SCALE): the sun east of the house
+ *   centre: it seemed to follow the camera (ease());
+ * - 2.496.293's dome kept the body up in the air: TILTING moved it from
+ *   beside the pool to above it, by parallax (LIFT_LOW).
+ * This one is a ground spot round the villa (DOME_SCALE) with the disc drawn
+ * straight up the screen from it: the sun east of the house
  * is drawn east of the house from every angle, a sun behind you is drawn on
  * your side of the house (lower in the frame), and nothing ever jumps. The
  * disc is still drawn at SKY distance, so wherever it overlaps the villa the
@@ -104,21 +107,21 @@ export const SET_HIGH = (3 * Math.PI) / 180;
 export function lift(x: number, y: number, z: number, drop: number, cam: SkyCamera): { x: number; y: number; z: number } {
   if (drop <= 0) return { x, y, z };
   const alt = Math.max(0, Math.atan2(y, Math.hypot(x, z)));
-  const e = lerp(DOME_LOW, DOME_HIGH, Math.min(1, alt / (Math.PI / 2)));
   // Straight overhead has no bearing; any will do.
   const az = Math.hypot(x, z) < 1e-9 ? 0 : Math.atan2(x, z);
   const sa = Math.sin(cam.camAz), ca = Math.cos(cam.camAz), sp = Math.sin(cam.pitch), cp = Math.cos(cam.pitch);
-  // camera → villa is the forward ray (unit), villa → body is DOME_SCALE·u.
-  const k = DOME_SCALE, ce = Math.cos(e);
-  const v = { x: sa * cp + k * Math.sin(az) * ce, y: -sp + k * Math.sin(e), z: ca * cp + k * Math.cos(az) * ce };
+  // camera → villa is the forward ray (unit); villa → ground spot is
+  // DOME_SCALE along the bearing, level.
+  const k = DOME_SCALE;
+  const v = { x: sa * cp + k * Math.sin(az), y: -sp, z: ca * cp + k * Math.cos(az) };
   const p = projectToFrame(v.x, v.y, v.z, cam);
   if (!p) return unit(v);                           // unreachable while DOME_SCALE < 1
+  const up = lerp(LIFT_LOW, LIFT_HIGH, Math.min(1, alt / (Math.PI / 2)));
   // Past FRAME_TRUE, ease each axis toward the villa so the body never leaves
   // the frame. ⚠️ PER AXIS, not along the line to the centre: a body above
   // the top edge must come DOWN, not also slide toward the middle — the
   // radial version (2.496.292) pulled the east sun to the top centre.
-  const nx = ease(2 * p.frameX - 1), ny = ease(1 - 2 * p.frameY);
-  if (nx === 2 * p.frameX - 1 && ny === 1 - 2 * p.frameY) return unit(v);
+  const nx = ease(2 * p.frameX - 1), ny = ease(1 - 2 * p.frameY + up);
   const cx = nx * Math.tan(cam.hHalf), cy = ny * Math.tan(cam.halfFov);
   // forward + cx·right + cy·up, for a camera with no roll.
   return unit({
