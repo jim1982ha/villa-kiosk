@@ -35,7 +35,7 @@ const own = sites.filter((f) => /const on = entity\?\.state ===/.test(src(f)) ||
 ck("the power panels read and throw through devicePower, none by `state === \"on\"`", own.length === 0, own);
 const d = src("pages/Dashboard.tsx");
 ck("the quick tap and the linked switch throw through it; the linked switch knows 'unknown'",
-   /HAServices\.power\(ws, entity, entityId\)/.test(d) && /HAServices\.power\(ws, entities\[linkedEntityId\], linkedEntityId\)/.test(d) && /known: linkedPower\?\.position !== "unknown"/.test(d));
+   /HAServices\.power\(ws, entity, entityId\)/.test(d) && /HAServices\.power\(ws, entities\[linkedEntityId\], linkedEntityId\)/.test(d) && /known: linkedPower\.position !== "unknown"/.test(d));
 // The linked ring is deviceActivity.readingOf's, which asks devicePower — driven
 // by value: a device LINKED to an unlocked lock / an open cover rings, linked to a
 // locked one / a closed one does not (a raw `state === "on"` said neither).
@@ -82,7 +82,7 @@ ck("the lock panel: lock and unlock both through switchAsk and the hook; nothing
    && (lp.match(/unlockDoor/g) ?? []).length === 1 && /onClick=\{unlock\.request\}/.test(lp));
 ck("the linked switch: deviceSwitch with the linked device's own flag, asked by a dialog the panels cannot skip",
    /deviceSwitch\(entities\[linkedEntityId\], linkedEntityId,/.test(d) && /useAskFirst\(linkedPower\?\.ask \?\? null, linkedToggle\.toggle\)/.test(d)
-   && /toggle: linkedAsk\.request,/.test(d));
+   && /toggle: linkedAsk\.request \}/.test(d));
 ck("no switch site reads requireConfirm for itself any more",
    [row, pt, lp, cf, sg].every((t) => !/requireConfirm \?/.test(t)) && !/mapping\.requireConfirm\) return false/.test(src("utils/quickAction.ts")));
 ck("HAServices keeps no per-domain toggle of its own", !/toggle(Light|Fan|Switch|Entity|Media)\b/.test(src("ha/HAServiceCalls.ts")));

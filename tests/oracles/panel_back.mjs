@@ -47,8 +47,11 @@ console.log("\n  ⚠️ a device this profile may not see opens NOTHING (2.496.2
 ck("no Back step is recorded and the open panel stays",
    ["open", "drill", "switch"].every((t) => R(rd1, { type: t, panel: null }) === rd1)
    && R(dev, { type: "openFrom", panel: null, from: room }) === dev);
+// The ORDER — nothing changes unless a panel opens — is pages/screen's
+// handOver, driven by value in screen.mjs (a refused device leaves the window
+// open); the page only sends it the panel it found.
 ck("the hand-over closes its window only after a panel was found",
-   /const panel = panelFor\(identity\.deviceOf\(entityId\)\);\s*if \(!panel\) return;\s*closeSurface\(from\);/.test(dash));
+   /go\(\{ type: "handOver", from, panel: panelFor\(identity\.deviceOf\(entityId\)\) \}\)/.test(dash) && !/closeSurface\(from\)/.test(dash));
 ck("every window a device can be handed from has words for its Back",
    ["cockpit", "agent"].every((w) => typeof SURFACE_LABEL[w] === "string" && SURFACE_LABEL[w].length > 0));
 done("✅ a panel opened from another window can go back to it");

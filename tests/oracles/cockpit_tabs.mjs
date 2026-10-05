@@ -18,12 +18,14 @@ ck("  ...a profile without the Facility door sees the Cockpit's own view, with n
 ck("the Facility window is gone, and nothing opens it",
    !existsSync(new URL("../../src/components/fm/FacilityModal.tsx", import.meta.url))
    && !/FacilityModal|"facility"\)/.test(dash) && !/onOpenFacility|ClipboardList/.test(hud));
+// The moves themselves (Faults tab, device filled in, guest's report instead)
+// are pages/screen's, driven by value in screen.mjs; the page only sends them.
 ck("a device's 'report a fault' opens the Cockpit on Faults with the device filled in",
-   /setFaultForEntity\(activePanel\.entityId\);\s*setCockpitTab\("faults"\);\s*openSurface\("cockpit"\);/.test(dash)
-   && /reportFaultFor=\{faultForEntity \?\? undefined\}/.test(dash));
+   /onReportFault: canReportFault \? \(\) => go\(\{ type: "reportFault" \}\)/.test(dash)
+   && /reportFaultFor=\{screen\.faultFor \?\? undefined\}/.test(dash));
 ck("the top bar opens it on Overview; Back from a device returns to the tab it left (the tab is held by the page)",
-   /onOpenCockpit=\{\(\) => \{ setCockpitTab\("overview"\); openSurface\("cockpit"\); \}\}/.test(dash)
-   && /tab=\{cockpitTab\}\s*onTab=\{setCockpitTab\}/.test(dash));
+   /onOpenCockpit=\{\(\) => go\(\{ type: "openWindow", window: "cockpit", tab: "overview" \}\)\}/.test(dash)
+   && /tab=\{screen\.cockpitTab\}\s*onTab=\{\(tab\) => go\(\{ type: "cockpitTab", tab \}\)\}/.test(dash));
 ck("Readiness's 'devices offline' switches to Overview (it opened a second Cockpit over Facility)",
    /onOpenOverview=\{\(\) => onTab\("overview"\)\}/.test(cockpit) && /onOpenUnavailableDevices=\{onOpenOverview\}/.test(fm)
    && !/CockpitModal/.test(fm));

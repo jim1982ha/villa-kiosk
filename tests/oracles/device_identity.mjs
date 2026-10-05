@@ -101,16 +101,17 @@ const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf
 const d = src("pages/Dashboard.tsx"), router = src("components/panels/PanelRouter.tsx"), base = src("components/panels/BasePanel.tsx");
 ck("the Cockpit, the summary bar, the Agent and Facility open the DEVICE",
    /onOpenEntity=\{openDevicePanel\}/.test(d)
-   && /const handOver = useCallback\(\(from: Surface, entityId: string\) => \{\s*const panel = panelFor\(identity\.deviceOf\(entityId\)\);/.test(d)
+   && /go\(\{ type: "handOver", from, panel: panelFor\(identity\.deviceOf\(entityId\)\) \}\)/.test(d)
    && ["cockpit", "agent"].every((w) => d.includes(`onOpenEntity={(id) => handOver("${w}", id)}`))
-   && /dispatchNav\(\{ type: "open", panel: panelFor\(identity\.deviceOf\(entityId\)\) \}\)/.test(d));
+   && /go\(\{ type: "openDevice", panel: panelFor\(identity\.deviceOf\(entityId\)\) \}\)/.test(d));
 ck("  ...a list row and the camera's next/prev open exactly the entity they name",
    // 2.496.270: through openFromList, which records the list for Back and opens exactly the entity
-   /setClusterGroup\(null\);\s*openFromList\(id, /.test(d) && /setCategoryGroup\(null\);\s*openFromList\(id, /.test(d)
-   && /const openFromList = useCallback\([\s\S]*?panel: panelFor\(entityId\), from: list/.test(d)
-   && /onOpenEntity=\{\(id\) => dispatchNav\(\{ type: "switch", panel: panelFor\(id\) \}\)\}/.test(d));
+   // (Back to the list is pages/screen's, driven by value in screen.mjs.)
+   (d.match(/onOpenEntity=\{openFromList\}/g) ?? []).length === 2
+   && /go\(\{ type: "openFromList", panel: panelFor\(entityId\) \}\)/.test(d)
+   && /onOpenEntity=\{\(id\) => go\(\{ type: "switchPanel", panel: panelFor\(id\) \}\)\}/.test(d));
 ck("the open panel lists its device's readings, each opening its own panel",
-   /identity\.readingsOf\(activePanel\.entityId\)/.test(d) && /readings: panelReadings,/.test(d) && /onOpenReading: openReading,/.test(d) && /const openReading = useCallback\(\s*\(entityId: string\) => dispatchNav\(\{ type: "drill", panel: panelFor\(entityId\) \}\)/.test(d)
+   /identity\.readingsOf\(activePanel\.entityId\)/.test(d) && /readings: panelReadings,/.test(d) && /onOpenReading: openReading,/.test(d) && /go\(\{ type: "openReading", panel: panelFor\(entityId\) \}\)/.test(d)
    && /rows\.map\(\(r\) =>/.test(src("components/panels/DeviceReadings.tsx")) && /onOpenReading\(r\.id\)/.test(src("components/panels/DeviceReadings.tsx")));
 ck("grouping never trades controls for a summary: only a READING-led group opens the combined view",
    /if \(group && \(mapping\.type === "sensor" \|\| mapping\.type === "binary_sensor"\)\)/.test(router)

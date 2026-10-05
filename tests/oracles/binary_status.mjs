@@ -40,12 +40,8 @@ ck("  ...only motion and occupancy are detectors; openings and locks have a secu
    && ["motion", "moisture", undefined].every((c) => secureStateFor(c) === undefined));
 ck("unavailable stays unavailable, never green", leak.status("unavailable") === "unavailable" && leak.word("unavailable") === "Unavailable");
 
-console.log("\n  every window asks it:");
-ck("the sensor window takes its look from binaryLook (no combination of its own)",
-   /const look = binaryLook\(/.test(panel) && /readingLevel\(entity, kind, threshold, look\.problem\)/.test(panel) && /colorFor=\{look\.color\}/.test(panel)
-   && !/colourAlertStateFor|secureStateFor|binaryStatus\(/.test(panel));
-ck("the grouped device window too: a binary member gets its pill and its history (it was grey text)",
-   /binaryLook\(id, /.test(group) && /status-pill \$\{r\.look\.tone\(r\.value\)\}/.test(group) && /<LastDayTimeline entityId=\{r\.id\} colorFor=\{r\.look!\.color\} \/>/.test(group));
+// Which windows ask binaryLook — and that none assembles a reading of its own —
+// is tests/oracles/reading.mjs (config/reading, 2.496.305).
 
 console.log("\n  \"Also on this device\" (config/readingRows, 2.496.297):");
 const { readingRows } = await import("@/config/readingRows");
@@ -64,7 +60,7 @@ ck("a grouped smoke detector's 'Smoke detected' is red in the list, as in its wi
 ck("  ...'Clear' and a quiet motion sensor green, an offline battery amber, an open door plain grey",
    rows["binary_sensor.det_smoke_clear"].tone === "on" && rows["binary_sensor.hall"].tone === "on"
    && rows["binary_sensor.det_battery"].tone === "unavailable" && rows["binary_sensor.gate"].tone === "off");
-ck("  ...a measurement takes no tone (plain secondary text)", rows["sensor.det_temperature"].tone === undefined);
+ck("  ...a measurement inside its limits takes no tone (plain secondary text)", rows["sensor.det_temperature"].tone === undefined);
 const owned = readingRows(["binary_sensor.hall"], { "binary_sensor.hall": ent("binary_sensor.hall", "off", "motion") }, {},
   { "binary_sensor.hall": { alertState: "off" } });
 ck("  ...the owner's alert state wins here too", owned[0].tone === "danger");

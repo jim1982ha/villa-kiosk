@@ -46,7 +46,7 @@ ck("Dashboard computes it once and mounts every window behind it",
    && ["agent", "settings", "configEditor"].every((s) => new RegExp(`\\{shown\\("${s}"\\) && \\(`).test(dash))
    // 2.496.273: Facility is the Cockpit's tabs, behind the same door
    && /const tabs: ModalTab<CockpitTab>\[\] = doors\.facility \? \[OVERVIEW_TAB, \.\.\.FACILITY_TABS\] : \[OVERVIEW_TAB\];/.test(cockpit)
-   && /const shown = \(surface: Surface\) => surfaceShown\(open, surface, doors\);/.test(dash));
+   && /const shown = \(surface: Surface\) => surfaceShown\(screen\.windows, surface, doors\);/.test(dash));
 ck("  ...and no longer re-asks those capabilities itself",
    !/roleCan\(role, "(openSettings|manageFacility|viewAgent)"\)/.test(dash) && !/agentVisible \?/.test(dash));
 ck("no window's visibility is implied by a callback being passed (no `? () => … : undefined`)",

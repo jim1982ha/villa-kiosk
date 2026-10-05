@@ -63,11 +63,11 @@ ck("numeric device charts (sensor, pumps, device groups) ask for the trend, thro
    /kind: "trend"/.test(src("components/panels/NumericHistory.tsx"))
    && /<NumericHistory series=/.test(src("components/panels/SensorPanel.tsx")) && /<NumericHistory named series=/.test(src("components/panels/DeviceGroupPanel.tsx")));
 // The rule itself (an offline reading with a unit is a measurement) is
-// config/sensorReading.readingKind, driven by value in active_devices.mjs;
-// this pins that the grouped panel asks it (2.496.229).
+// config/sensorReading.readingKind, behind config/reading (driven by value in
+// reading.mjs); this pins that the grouped panel charts by that kind.
 ck("a device-group member that is unavailable NOW still gets its chart",
-   /kind: readingKind\(entity, domainOf\(id\) === "binary_sensor" \? "binary_sensor" : "sensor"\)/.test(src("components/panels/DeviceGroupPanel.tsx"))
-   && /r\.kind === "measurement" && \(r\.numeric !== undefined \|\| r\.unit !== ""\)/.test(src("components/panels/DeviceGroupPanel.tsx")));
+   /readingOf\(id, entity, domainOf\(id\) === "binary_sensor" \? "binary_sensor" : "sensor"/.test(src("components/panels/DeviceGroupPanel.tsx"))
+   && /r\.reading\.kind === "measurement" && \(r\.numeric !== undefined \|\| r\.unit !== ""\)/.test(src("components/panels/DeviceGroupPanel.tsx")));
 const { cameraBarState } = await import("@/components/panels/cameraStatusBar");
 ck("the camera bar paints a lost motion sensor as unavailable, not 'online'",
    cameraBarState("idle", "unavailable", true) === "motion-unavailable" && cameraBarState("idle", undefined, true) === "motion-unavailable"

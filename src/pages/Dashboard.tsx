@@ -29,31 +29,31 @@ import { useProfile } from "@/auth/ProfileContext";
 import { isTypeAllowed, panelMapping, roleCan } from "@/auth/permissions";
 import { doorsFor } from "@/auth/doors";
 import { patchMapping } from "@/config/mappingEdits";
-import type { CockpitTab } from "@/components/cockpit/CockpitModal";
 import AgentModal from "@/components/agent/AgentModal";
 import { useAgent } from "@/agent/AgentContext";
 import GuestReportModal from "@/components/fm/GuestReportModal";
 import { useHA } from "@/ha/HAStateStore";
 import { displayLabelFor, resolveRooms, labelOf } from "@/config/EntityMap";
 import { deriveHaScenes, scenesForRoom } from "@/config/haScenes";
-import { effectiveCategory, subjectOf, categoryColor, CATEGORY_ICONS, CATEGORY_LABELS } from "@/config/EntityCategories";
+import { CATEGORY_ICONS, CATEGORY_LABELS } from "@/config/EntityCategories";
 import { deviceLook, storeLookSource } from "@/utils/deviceActivity";
-import { NO_SURFACES, SURFACE_LABEL, chipRooms, shown as surfaceShown, mergeTeleportPoints, roomChoicesFor, surfacesReducer, type Surface } from "./surfaces";
+import { chipRooms, shown as surfaceShown, mergeTeleportPoints, roomChoicesFor, type Surface } from "./surfaces";
+import { START, backLabel, screenReducer, type Screen, type ScreenAction } from "./screen";
+import type { Doors } from "@/auth/doors";
 import CockpitModal from "@/components/cockpit/CockpitModal";
 import { isMotionSensor } from "@/config/BinarySensorClasses";
-import { iconKeyFor } from "@/babylon/badgeIconKeys";
 import { isQuickToggle } from "@/utils/quickAction";
 import { useOptimisticToggle } from "@/hooks/useOptimisticToggle";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { installDailyAutoReload } from "@/utils/autoReload";
 import type { SceneManager } from "@/babylon/SceneManager";
 import type { ActivePanel } from "@/types/panel.types";
-import { NO_PANEL, panelNavReducer, reopenOf, type BackStep } from "./panelNav";
-import type { Category, TeleportPoint } from "@/types/scene.types";
+import type { TeleportPoint } from "@/types/scene.types";
 import { VillaModelProvider, useVillaSets, useDeviceIdentity } from "@/config/VillaModel";
 import { readingRows } from "@/config/readingRows";
 import { categoryMembers } from "@/config/villaVisibility";
 import { deviceSwitch } from "@/utils/devicePower";
+import { panelHeader } from "@/components/panels/panelHeader";
 import { useAskFirst } from "@/hooks/useAskFirst";
 import AskDialog from "@/components/common/AskDialog";
 import { readSceneMirror } from "./sceneMirror";
@@ -86,15 +86,11 @@ export default function Dashboard() {
   resolvedRoomsRef.current = resolvedRooms;
 
   const [manager, setManager] = useState<SceneManager | null>(null);
-  // The open device panel and where its "Back" goes (owner, 2026-10-04): a
-  // reading from its device, a device from a room or category list, the
-  // Cockpit, the VESTA Agent — one owner, pages/panelNav.
-  const [nav, dispatchNav] = useReducer(panelNavReducer, NO_PANEL);
-  const activePanel = nav.panel;
-  // The Cockpit's open tab, held here: "report a fault" opens it on Faults,
-  // and Back from a device returns to the tab it left (2.496.273).
-  const [cockpitTab, setCockpitTab] = useState<CockpitTab>("overview");
-  const closePanel = useCallback(() => dispatchNav({ type: "close" }), []);
+  // WHAT IS ON SCREEN — the windows, the open device panel and where its Back
+  // goes, the open room or category list, the Cockpit's tab, the fault and
+  // guest report to start, Advanced Settings' focus — and every move between
+  // them: one module, pages/screen. This page sends actions and mounts what
+  // it says is open.
   // True only for a profile with viewAgent AND a configured agent — see
   // AgentProvider. Nothing about the agent renders otherwise (PLAN A8).
   const { visible: agentVisible } = useAgent();
@@ -102,31 +98,21 @@ export default function Dashboard() {
   // ONCE (auth/doors) and handed to the top bar and the Cockpit, rather than
   // implied by which callbacks happen to be passed.
   const doors = useMemo(() => doorsFor(role, agentVisible), [role, agentVisible]);
-  // Which windows are open over the map, and what may open — one owner
-  // (pages/surfaces), every opener asking it.
-  const [open, dispatchSurface] = useReducer(surfacesReducer, NO_SURFACES);
-  const openSurface = useCallback((surface: Surface) => dispatchSurface({ type: "open", surface, doors }), [doors]);
-  const closeSurface = useCallback((surface: Surface) => dispatchSurface({ type: "close", surface }), []);
-  const shown = (surface: Surface) => surfaceShown(open, surface, doors);
-  /** Device the Facility modal should open a blank fault for — set by a
-   *  panel's "report a fault" shortcut, cleared as soon as the modal has
-   *  consumed it so reopening Facility later doesn't resurrect the form. */
-  const [faultForEntity, setFaultForEntity] = useState<string | null>(null);
-  /** Device a GUEST is reporting a problem with (see GuestReportModal). */
-  const [guestReportFor, setGuestReportFor] = useState<string | null>(null);
-  // When Advanced Settings is opened from a device panel's edit shortcut, this
-  // holds the entity_id to pre-filter the entity table on (null = opened from
-  // Settings, so "Back" returns to Settings rather than just closing).
-  const [configEditorFocus, setConfigEditorFocus] = useState<string | null>(null);
+  const [screen, dispatchScreen] = useReducer(
+    (s: Screen, x: { a: ScreenAction; doors: Doors }) => screenReducer(s, x.a, x.doors), START);
+  /** Every move goes through here, with this profile's doors. */
+  const go = useCallback((a: ScreenAction) => dispatchScreen({ a, doors }), [doors]);
+  const activePanel = screen.nav.panel;
+  const closePanel = useCallback(() => go({ type: "closePanel" }), [go]);
+  const openSurface = useCallback((surface: Surface) => go({ type: "openWindow", window: surface }), [go]);
+  const closeSurface = useCallback((surface: Surface) => go({ type: "closeWindow", window: surface }), [go]);
+  const shown = (surface: Surface) => surfaceShown(screen.windows, surface, doors);
   const [room, setRoom] = useState<string | null>(null);
-  // A tapped zoomed-out room-cluster chip (see EntityVisuals' LOD bands) — its
-  // members open in the SAME group modal a bottom-bar tile uses, so a cluster
-  // needs no UI concept of its own.
-  const [clusterGroup, setClusterGroup] = useState<{ room: string; entityIds: string[] } | null>(null);
-  // Long-press a HUD category filter icon — every device in that category,
-  // the same group modal a SummaryBar tile or a room cluster opens. Only
-  // computed once a category is actually held (cheap null-skip otherwise).
-  const [categoryGroup, setCategoryGroup] = useState<Category | null>(null);
+  // A room's devices — from a tapped zoomed-out room-cluster chip — or a
+  // category's (a long-pressed top-bar filter): the SAME group modal a
+  // bottom-bar tile uses. The open list is pages/screen's.
+  const clusterGroup = screen.list?.kind === "room" ? screen.list : null;
+  const categoryGroup = screen.list?.kind === "category" ? screen.list.category : null;
   // Live HA scenes (see config/haScenes.ts) — derived, not stored, so a scene
   // added/edited/removed in HA's own Scene Editor shows up here on the very
   // next entity update. Computed once here (not per-panel-open) since both
@@ -303,7 +289,7 @@ export default function Dashboard() {
       }
 
       // Rich entities (sliders, streams, info) open their control panel as before.
-      dispatchNav({ type: "open", panel: { entityId, mapping } });
+      go({ type: "openDevice", panel: { entityId, mapping } });
     },
     [config.entityMap, entities, ws, role, spawnRipple],
   );
@@ -333,7 +319,7 @@ export default function Dashboard() {
       // distinct quick action, so tap and long-press already land on the same
       // panel with no flag needed — see ActivePanel's docstring for the full
       // reasoning.
-      dispatchNav({ type: "open", panel: { entityId, mapping, detail: mapping.type === "camera" } });
+      go({ type: "openDevice", panel: { entityId, mapping, detail: mapping.type === "camera" } });
     },
     // `entities` is read (the category — and so the permission — can depend
     // on a device's device_class); it was missing, so this judged a stale one.
@@ -403,38 +389,22 @@ export default function Dashboard() {
   const identity = useDeviceIdentity();
   /** A device from the bottom bar: a fresh open. */
   const openDevicePanel = useCallback(
-    (entityId: string) => dispatchNav({ type: "open", panel: panelFor(identity.deviceOf(entityId)) }),
-    [panelFor, identity],
+    (entityId: string) => go({ type: "openDevice", panel: panelFor(identity.deviceOf(entityId)) }),
+    [panelFor, identity, go],
   );
   /** A window hands a device over: the device's panel opens and the window
-   *  closes — only when there IS a panel to open. */
-  const handOver = useCallback((from: Surface, entityId: string) => {
-    const panel = panelFor(identity.deviceOf(entityId));
-    if (!panel) return;
-    closeSurface(from);
-    dispatchNav({ type: "openFrom", panel, from: { kind: "surface", surface: from } });
-  }, [panelFor, identity, closeSurface]);
+   *  closes — only when there IS a panel to open (pages/screen). */
+  const handOver = useCallback(
+    (from: Surface, entityId: string) => go({ type: "handOver", from, panel: panelFor(identity.deviceOf(entityId)) }),
+    [panelFor, identity, go]);
   /** A device's reading, opened from the device's panel: Back returns to it. */
   const openReading = useCallback(
-    (entityId: string) => dispatchNav({ type: "drill", panel: panelFor(entityId) }), [panelFor]);
-  /** A device opened from a room or category list (the list closes first). */
+    (entityId: string) => go({ type: "openReading", panel: panelFor(entityId) }), [panelFor, go]);
+  /** A device opened from the open room or category list (the list closes). */
   const openFromList = useCallback(
-    (entityId: string, list: BackStep & { kind: "list" }) => dispatchNav({ type: "openFrom", panel: panelFor(entityId), from: list }),
-    [panelFor]);
-  /** Back: one step — a panel step reopens that panel inside panelNav; a
-   *  window or list is reopened here. */
-  const goBack = useCallback(() => {
-    const step = reopenOf(nav);
-    dispatchNav({ type: "back" });
-    if (step?.kind === "surface") openSurface(step.surface);
-    else if (step?.list.kind === "room") setClusterGroup({ room: step.list.room, entityIds: [...step.list.entityIds] });
-    else if (step?.list.kind === "category") setCategoryGroup(step.list.category);
-  }, [nav, openSurface]);
-  const backStep = nav.back[nav.back.length - 1];
-  const backLabel = !backStep ? null
-    : backStep.kind === "surface" ? SURFACE_LABEL[backStep.surface]
-    : backStep.kind === "panel" ? labelOf(backStep.panel.entityId, config.entityMap, entities)
-    : backStep.list.kind === "room" ? backStep.list.room : CATEGORY_LABELS[backStep.list.category];
+    (entityId: string) => go({ type: "openFromList", panel: panelFor(entityId) }), [panelFor, go]);
+  const goBack = useCallback(() => go({ type: "back" }), [go]);
+  const backText = backLabel(screen, (id) => labelOf(id, config.entityMap, entities), (c) => CATEGORY_LABELS[c]);
   const panelReadings = activePanel
     ? readingRows(identity.readingsOf(activePanel.entityId), entities, config.entityMap, config.alertThresholds)
     : [];
@@ -473,16 +443,13 @@ export default function Dashboard() {
   // narrow rail needs no room for an inline prompt.
   const linkedAsk = useAskFirst(linkedPower?.ask ?? null, linkedToggle.toggle);
 
-  // The open panel's MOTION sensor (EntityMapping.motionEntityId) — camera-
-  // only, and read-only: unlike linkedEntityId this drives the map's
-  // detection beam from HA's own report, not something a switch can flip, so
-  // there's no optimistic hook here, just the live state. Configured in
-  // Advanced Settings' "Motion sensor" field but, until now, never actually
-  // shown anywhere in the panel itself — a camera could have one wired up
-  // with no way to see that from the panel that camera opens.
-  const motionEntityId = activePanel?.mapping.type === "camera"
-    ? (config.entityMap[activePanel.entityId] ?? activePanel.mapping).motionEntityId
-    : undefined;
+  // The open panel's header — badge, linked switch, motion line — derived in
+  // one place (components/panels/panelHeader); the switch's state is the
+  // optimistic hook's above, passed in.
+  const header = activePanel
+    ? panelHeader({ panel: activePanel, entities, config, canControl,
+        linkedSwitch: linkedPower ? { isOn: linkedToggle.isOn, known: linkedPower.position !== "unknown" } : null })
+    : null;
 
   // Everything React shows of the scene's own state, read from EACH new scene
   // (a cold start, or a model reload remounting the canvas) — the view it
@@ -685,9 +652,9 @@ export default function Dashboard() {
           (id) => (entities[id] ? deviceLook(id, looks) : undefined)));
         return;
       }
-      setClusterGroup({ room, entityIds });
+      go({ type: "openList", list: { kind: "room", room, entityIds } });
     },
-    [resolvedRooms, entities, config],
+    [resolvedRooms, entities, config, go],
   );
 
   const handleClusterTapped = useCallback(
@@ -804,8 +771,8 @@ export default function Dashboard() {
         hasOverviewDefault={hasOverviewDefault}
         onApplyOverviewDefault={applyOverviewDefault}
         onSaveOverviewDefault={saveOverviewDefault}
-        onOpenCockpit={() => { setCockpitTab("overview"); openSurface("cockpit"); }}
-        onOpenCategory={setCategoryGroup}
+        onOpenCockpit={() => go({ type: "openWindow", window: "cockpit", tab: "overview" })}
+        onOpenCategory={(category) => go({ type: "openList", list: { kind: "category", category } })}
       />
 
       {/* Bottom dashboard strip — scene / quick-action / summary tiles,
@@ -831,15 +798,9 @@ export default function Dashboard() {
             entityId: activePanel.entityId,
             readings: panelReadings,
             onOpenReading: openReading,
-            back: backLabel ? { label: backLabel, go: goBack } : undefined,
+            back: backText ? { label: backText, go: goBack } : undefined,
             // Owner-only: jump straight to this device's row in Advanced Settings.
-            onEdit: canEditConfig
-              ? () => {
-                  closePanel();
-                  setConfigEditorFocus(activePanel.entityId);
-                  openSurface("configEditor");
-                }
-              : undefined,
+            onEdit: canEditConfig ? () => go({ type: "editDevice" }) : undefined,
             // Same capability that gates the Facility workspace itself —
             // offering a shortcut into a screen the profile can't open would
             // be a dead end.
@@ -847,94 +808,24 @@ export default function Dashboard() {
             // one-screen report form, an owner/facility manager lands in the
             // Faults tab with the device filled in — same button, same intent,
             // the destination differs only by what the profile can act on.
-            onReportFault: canReportFault
-              ? () => {
-                  closePanel();
-                  if (doors.facility) {
-                    // the Cockpit's Faults tab, the device filled in
-                    setFaultForEntity(activePanel.entityId);
-                    setCockpitTab("faults");
-                    openSurface("cockpit");
-                  } else {
-                    setGuestReportFor(activePanel.entityId);
-                  }
-                }
-              : undefined,
-            // The device's exact map badge (same glyph/colour as the 3D view),
-            // shown in the panel header and — for editors — clickable to recolour.
-            badge: (() => {
-              const { entityId, mapping } = activePanel;
-              const ent = entities[entityId];
-              // Read the colour from LIVE config, not activePanel.mapping (a
-              // snapshot taken when the panel opened) — otherwise the header
-              // badge wouldn't reflect a just-picked colour until reopened.
-              const liveMapping = config.entityMap[entityId] ?? mapping;
-              const category = effectiveCategory(subjectOf(
-                entityId, { ...mapping, ...liveMapping }, ent, mapping.type));
-              // motionEntityId is deliberately NOT an alert source here — it
-              // drives the map's detection beam, never a ring (deviceLook).
-              return {
-                category,
-                iconKey: iconKeyFor(mapping.type, ent),
-                color: liveMapping.badgeColor,
-                categoryColor: categoryColor(category),
-                // The ONE shared look (deviceActivity.deviceLook), same as the
-                // map badge and the device lists — it resolves the linked
-                // entity and the alert override itself.
-                //
-                // The linked switch is deliberately the OPTIMISTIC toggle
-                // state (`pendingPower`), not the confirmed one: this header
-                // sits directly above the switch the user just pressed, and
-                // the two are one thing, so a ring lagging seconds behind its
-                // own switch would look like the bug this was written to fix.
-                // The MAP badge stays on confirmed state only — it is
-                // Babylon-side, and predicting scene appearance is the thing
-                // that was rightly reverted before.
-                ...(() => {
-                  const linkedId = liveMapping.linkedEntityId;
-                  const b = deviceLook(entityId, storeLookSource(entities, config, {
-                    drawnAs: { entityId, type: mapping.type },
-                    pendingPower: (id) => (linkedId && id === linkedId ? linkedToggle.isOn : undefined),
-                  }));
-                  return { state: b.face, ringState: b.ring };
-                })(),
-              };
-            })(),
+            onReportFault: canReportFault ? () => go({ type: "reportFault" }) : undefined,
+            // The device's exact map badge, its linked switch and its motion
+            // line — components/panels/panelHeader, from the open panel and
+            // live data; the switch's state is the optimistic hook's.
+            badge: header!.badge,
             onSetBadgeColor: canEditConfig
               ? (hex) => update(patchMapping(
                   activePanel.entityId, { badgeColor: hex ?? undefined }, activePanel.mapping))
               : undefined,
-            // The linked-entity on/off switch, rendered by the shared panel
-            // chrome — so it appears on EVERY device type whose
-            // linkedEntityId is set, with no per-panel code. isOn/toggle come
-            // from the optimistic hook above (declared at top level, since
-            // hooks can't live inside this IIFE), so the switch moves the
-            // instant it's clicked instead of waiting on a slow device.
-            linked: linkedEntityId && canControl
-              ? {
-                  label: linkedLabel,
-                  isOn: linkedToggle.isOn,
-                  known: linkedPower?.position !== "unknown",
-                  toggle: linkedAsk.request,
-                }
-              : undefined,
-            // Read-only — see motionEntityId's own comment above for why this
-            // has no toggle. Shown regardless of canControl (a guest can't
-            // flip it either way, but knowing a camera has motion detection
-            // wired up is not a control action).
-            motion: motionEntityId
-              ? {
-                  label: labelOf(motionEntityId, config.entityMap, entities),
-                  isOn: entities[motionEntityId]?.state === "on",
-                }
-              : undefined,
+            linked: header!.linked ? { ...header!.linked, toggle: linkedAsk.request } : undefined,
+            motion: header!.motion ?? undefined,
           }}
         >
           <PanelRouter
             active={activePanel}
             onClose={closePanel}
             pinContinuous={pinContinuous}
-            onOpenEntity={(id) => dispatchNav({ type: "switch", panel: panelFor(id) })}
+            onOpenEntity={(id) => go({ type: "switchPanel", panel: panelFor(id) })}
           />
         </PanelActionsProvider>
       )}
@@ -966,14 +857,10 @@ export default function Dashboard() {
       )}
       {clusterGroup && (
         <SummaryGroupPanel
-          group={{ title: clusterGroup.room, icon: Layers, entityIds: clusterGroup.entityIds }}
+          group={{ title: clusterGroup.room, icon: Layers, entityIds: [...clusterGroup.entityIds] }}
           canControl={canControl}
-          onClose={() => setClusterGroup(null)}
-          onOpenEntity={(id) => {
-            const g = clusterGroup;
-            setClusterGroup(null);
-            openFromList(id, { kind: "list", list: { kind: "room", room: g.room, entityIds: g.entityIds } });
-          }}
+          onClose={() => go({ type: "closeList" })}
+          onOpenEntity={openFromList}
           roomScenes={scenesForRoom(haScenes, clusterGroup.room)}
           // Same rule as the category browse (Dashboard.tsx's categoryGroup,
           // below) and for the same reason: every id in clusterGroup.entityIds
@@ -991,12 +878,8 @@ export default function Dashboard() {
         <SummaryGroupPanel
           group={{ title: CATEGORY_LABELS[categoryGroup], icon: CATEGORY_ICONS[categoryGroup], entityIds: categoryGroupEntityIds }}
           canControl={canControl}
-          onClose={() => setCategoryGroup(null)}
-          onOpenEntity={(id) => {
-            const c = categoryGroup;
-            setCategoryGroup(null);
-            openFromList(id, { kind: "list", list: { kind: "category", category: c } });
-          }}
+          onClose={() => go({ type: "closeList" })}
+          onOpenEntity={openFromList}
           // categoryGroupEntityIds has ALREADY applied the precise
           // suppressed/diagnostic filtering (mapped-on-the-map entities kept,
           // orphan diagnostic sensors dropped) — this modal's own blanket
@@ -1018,14 +901,14 @@ export default function Dashboard() {
 
       {shown("cockpit") && (
         <CockpitModal
-          onClose={() => { closeSurface("cockpit"); setFaultForEntity(null); }}
+          onClose={() => closeSurface("cockpit")}
           onOpenEntity={(id) => handOver("cockpit", id)}
           doors={doors}
           onOpenAgent={() => openSurface("agent")}
-          tab={cockpitTab}
-          onTab={setCockpitTab}
-          reportFaultFor={faultForEntity ?? undefined}
-          onFaultFormOpened={() => setFaultForEntity(null)}
+          tab={screen.cockpitTab}
+          onTab={(tab) => go({ type: "cockpitTab", tab })}
+          reportFaultFor={screen.faultFor ?? undefined}
+          onFaultFormOpened={() => go({ type: "faultFormOpened" })}
         />
       )}
 
@@ -1036,10 +919,10 @@ export default function Dashboard() {
         />
       )}
 
-      {guestReportFor !== null && (
+      {screen.guestReportFor !== null && (
         <GuestReportModal
-          entityId={guestReportFor}
-          onClose={() => setGuestReportFor(null)}
+          entityId={screen.guestReportFor}
+          onClose={() => go({ type: "closeGuestReport" })}
         />
       )}
 
@@ -1057,7 +940,7 @@ export default function Dashboard() {
           // was answered by a handler belonging to a component that no longer
           // existed. Nesting is what the stack was built for, so the hazard is
           // deleted rather than worked around.
-          onOpenConfigEditor={() => { setConfigEditorFocus(null); openSurface("configEditor"); }}
+          onOpenConfigEditor={() => openSurface("configEditor")}
         />
       )}
 
@@ -1065,14 +948,11 @@ export default function Dashboard() {
           it returns to Settings with no GLB reload; edits already applied live. */}
       {shown("configEditor") && (
         <ConfigEditorModal
-          focusEntityId={configEditorFocus ?? undefined}
-          onBack={() => {
-            // Just close this one. Settings is still mounted underneath if it
-            // was the way in, and was never opened if a device panel was — so
-            // there is nothing to restore and nothing to decide.
-            closeSurface("configEditor");
-            setConfigEditorFocus(null);
-          }}
+          focusEntityId={screen.editorFocus ?? undefined}
+          // Just close this one. Settings is still mounted underneath if it
+          // was the way in, and was never opened if a device panel was — so
+          // there is nothing to restore and nothing to decide.
+          onBack={() => closeSurface("configEditor")}
           onModelChanged={() => setModelKey((k) => k + 1)}
         />
       )}

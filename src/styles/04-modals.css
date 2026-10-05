@@ -673,3 +673,4 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .panel-reading-value.danger { color: var(--status-danger); font-weight: 600; }
 .panel-reading-value.transitional { color: var(--status-pending); }
 .panel-reading-value.unavailable { color: var(--status-warning); }
+.panel-reading-value.warning { color: var(--status-warning); }

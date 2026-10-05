@@ -129,13 +129,16 @@ console.log("\n  the callers ask it (pin the caller):");
 {
   const src = (f) => readFileSync(new URL(`../../src/${f}`, import.meta.url), "utf8")
     .replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
-  const ev = src("babylon/EntityVisuals.ts"), sg = src("components/panels/SummaryGroupPanel.tsx"), db = src("pages/Dashboard.tsx");
+  const ev = src("babylon/EntityVisuals.ts"), sg = src("components/panels/SummaryGroupPanel.tsx"), db = src("pages/Dashboard.tsx"),
+    ph = src("components/panels/panelHeader.ts");
   ck("the map paints badges, cells and chip members from deviceLook through its one source",
      (ev.match(/deviceLook\([^)]*this\.lookSource\)/g) ?? []).length >= 4 && /mapLookSource\(this\.lastState, this\.mapping/.test(ev));
   ck("the device-list rows and the panel header ask deviceLook through the store",
-     /deviceLook\(id, looks\)/.test(sg) && /storeLookSource\(entities, config\)/.test(sg) && /deviceLook\(entityId, storeLookSource\(/.test(db));
+     // the header since 2.496.305 in components/panels/panelHeader (driven by value in panel_header.mjs)
+     /deviceLook\(id, looks\)/.test(sg) && /storeLookSource\(entities, config\)/.test(sg) && /deviceLook\(entityId, storeLookSource\(/.test(ph)
+     && /panelHeader\(\{/.test(db));
   ck("no caller builds a reading by hand any more (badgeFaceAndRing / linkedOn / alertStateFor)",
-     ![ev, sg, db].some((s) => /badgeFaceAndRing\(|linkedOn:|alertStateFor\(|linkActiveIds/.test(s)));
+     ![ev, sg, db, ph].some((s) => /badgeFaceAndRing\(|linkedOn:|alertStateFor\(|linkActiveIds/.test(s)));
 }
 
 done("✅ one device, one look, whichever side holds its state");

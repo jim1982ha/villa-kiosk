@@ -51,8 +51,8 @@ ck("  ...nothing moved: null, so nothing is written", S.mergeTeleportPoints(fit,
 console.log("\n  the callers:");
 const rd = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
 const dash = rd("pages/Dashboard.tsx"), hud = rd("components/hud/HUD.tsx");
-ck("the Dashboard holds the windows in ONE reducer — no window flag of its own",
-   /useReducer\(surfacesReducer, NO_SURFACES\)/.test(dash) && !/set(Teleport|Settings|ConfigEditor|Facility|Agent)Open/.test(dash));
+ck("the Dashboard holds the windows in ONE reducer — no window flag of its own (pages/screen, which wraps surfaces)",
+   /screenReducer\(s, x\.a, x\.doors\), START\)/.test(dash) && !/set(Teleport|Settings|ConfigEditor|Facility|Agent)Open|useReducer\(surfacesReducer/.test(dash));
 ck("  ...the Cockpit (Facility's tabs included) and the Agent hand a device over the same way",
    (dash.match(/onOpenEntity=\{\(id\) => handOver\("(cockpit|agent)", id\)\}/g) ?? []).length === 2);
 ck("the top bar mounts no window: it asks the Dashboard to open the Cockpit",

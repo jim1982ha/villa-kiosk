@@ -6,18 +6,15 @@
 // plus one dual-axis 24h graph when there are exactly two numeric series
 // (the common case) or a stacked line chart per series otherwise.
 
-import { formatSensorParts } from "@/utils/entityValue";
-import { Layers } from "lucide-react";
+import { AlertTriangle, Layers } from "lucide-react";
 import BasePanel from "./BasePanel";
 import NumericHistory from "./NumericHistory";
 import UnavailableNotice from "./UnavailableNotice";
 import { useHA } from "@/ha/HAStateStore";
 import type { DeviceGroup } from "@/config/AppConfig";
 import type { EntityMapping } from "@/types/scene.types";
-import { isUnavailable } from "@/utils/stateColors";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
-import { readingKind } from "@/config/sensorReading";
-import { binaryLook } from "@/config/binaryLook";
+import { readingOf } from "@/config/reading";
 import { domainOf } from "@/utils/entityDomain";
 import { useConfig } from "@/config/ConfigContext";
 import LastDayTimeline from "./LastDayTimeline";
@@ -52,35 +49,30 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
   const entityLabel = useEntityLabel();
   const ids = [group.primaryEntityId, ...group.memberEntityIds];
 
+  // Each member's reading is config/reading's — the SAME answer its own
+  // sensor window gives: its words, its pill, its alarm and the owner's
+  // thresholds. ⚠️ This window used to assemble it from the pieces itself and
+  // never asked for the thresholds: a temperature over its limit was red alone
+  // and plain here, a detector in alarm lost its capitals and warning icon.
   const rows = ids.map((id) => {
     const entity = entities[id];
     const numeric = Number(entity?.state);
+    const reading = readingOf(id, entity, domainOf(id) === "binary_sensor" ? "binary_sensor" : "sensor", config.alertThresholds);
     return {
       id,
       label: entityLabel(id),
+      // ⚠️ THE CHART'S UNIT IS THE RAW ONE: it plots the raw series and labels
+      // its axis from this; the reading's own unit is scaled with its headline
+      // number ("kW"), which must match the badge.
       unit: (entity?.attributes.unit_of_measurement as string | undefined) ?? "",
-      value: entity?.state ?? "—",
-      // ⚠️ THE FORMATTED READING IS A SEPARATE FIELD, NOT AN OVERWRITE OF
-      // `unit`. The line chart below plots the RAW series and labels its axis
-      // from `r.unit`; scaling the label to "kW" while the points stay in
-      // watts would put a wrong axis on a right chart. `display` is for the
-      // row's headline number only — the one that has to match the badge.
-      display: entity ? formatSensorParts(entity) : { value: "", unit: "" },
       numeric: Number.isFinite(numeric) ? numeric : undefined,
-      unavailable: isUnavailable(entity),
-      // A binary member is a binary reading, with the binary sensor window's own
-      // look (config/binaryLook) — it was read as "text": plain grey words, no
-      // colour, no history (a smoke detector grouped with its battery).
-      kind: readingKind(entity, domainOf(id) === "binary_sensor" ? "binary_sensor" : "sensor"),
-      look: domainOf(id) === "binary_sensor"
-        ? binaryLook(id, entity?.attributes.device_class as string | undefined, config.alertThresholds[id]?.alertState)
-        : null,
+      reading,
     };
   });
   // A reading with a unit is a measurement even while it is UNAVAILABLE —
   // that is exactly when its chart's shaded outage has something to say
   // (config/sensorReading, the rule the sensor panel shares).
-  const numericRows = rows.filter((r) => r.kind === "measurement" && (r.numeric !== undefined || r.unit !== ""));
+  const numericRows = rows.filter((r) => r.reading.kind === "measurement" && (r.numeric !== undefined || r.unit !== ""));
   return (
     <BasePanel
       title={group.label ?? primaryMapping.label}
@@ -93,7 +85,7 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
       {/* EVERY member offline → the same shared notice every other panel shows
           (UnavailableNotice), instead of this panel's own "Unavailable" text —
           one presentation of "HA lost contact" across the whole app. */}
-      {rows.length > 0 && rows.every((r) => r.unavailable) ? (
+      {rows.length > 0 && rows.every((r) => r.reading.unavailable) ? (
         <UnavailableNotice device="device" />
       ) : (
         <div className="row-buttons" style={{ marginBottom: 18 }}>
@@ -107,11 +99,15 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
                     a second line with % on its own) — the value and its unit
                     were previously two stacked block divs; now one line, unit
                     a bit smaller, matching how SensorPanel already does it. */}
-                {r.unavailable
-                  ? <span className="status-pill unavailable">UNAVAILABLE</span>
-                  : r.look
-                    ? <span className={`status-pill ${r.look.tone(r.value)}`}>{r.look.word(r.value)}</span>
-                    : <>{r.display.value || r.value}{r.display.unit && <span className="value-unit" style={{ fontSize: "var(--text-md)", marginLeft: 3 }}>{r.display.unit}</span>}</>}
+                {r.reading.pill
+                  // A pill at pill size — inside the large-number style an
+                  // alarm's capitals ("SMOKE DETECTED") broke awkwardly — kept
+                  // inside its column: on a phone it wraps within the pill
+                  // rather than running into its neighbour.
+                  ? <span className={`status-pill ${r.reading.pill}`} style={{ fontSize: "var(--text-lg)", maxWidth: "100%", justifyContent: "center" }}>
+                      {r.reading.alarm && <AlertTriangle size={18} />}{r.reading.value}
+                    </span>
+                  : <span style={{ color: r.reading.color }}>{r.reading.value}{r.reading.unit && <span className="value-unit" style={{ fontSize: "var(--text-md)", marginLeft: 3 }}>{r.reading.unit}</span>}</span>}
               </div>
               <div className="muted body-text">{r.label}</div>
             </div>
@@ -124,10 +120,10 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
       <NumericHistory named series={numericRows.map((r, i) => ({
         id: r.id, label: r.label, unit: r.unit, color: SERIES_COLORS[i % SERIES_COLORS.length] }))} />
       {/* each binary member's own state history, coloured as in its own window */}
-      {rows.filter((r) => r.look).map((r) => (
+      {rows.filter((r) => r.reading.stateColor).map((r) => (
         <div key={`h-${r.id}`}>
           <div className="muted body-text" style={{ margin: "12px 0 4px" }}>{r.label}</div>
-          <LastDayTimeline entityId={r.id} colorFor={r.look!.color} />
+          <LastDayTimeline entityId={r.id} colorFor={r.reading.stateColor!} />
         </div>
       ))}
     </BasePanel>
