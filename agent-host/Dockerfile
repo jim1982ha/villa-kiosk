@@ -73,7 +73,8 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends python3 python3-venv ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 COPY --from=agent-inputs /inputs/install /opt/vesta/agent
-RUN set -e; cd /opt/vesta/agent; python3 -m venv .venv; \
+WORKDIR /opt/vesta/agent
+RUN set -e; python3 -m venv .venv; \
     if [ -s install.sh ]; then PATH="/opt/vesta/agent/.venv/bin:$PATH" sh install.sh; fi; \
     find .venv -name __pycache__ -prune -exec rm -rf {} +
 
@@ -94,6 +95,8 @@ RUN python3 --version
 # image it RUNS in, checked as package names by vesta_host.manifest (SPEC H2);
 # none listed, nothing installed. Installed here, never at run time on the Yellow.
 COPY --from=agent-inputs /inputs/packages.txt /tmp/agent-packages.txt
+# $pkgs is a LIST of package names, split on purpose (one apt argument each).
+# hadolint ignore=SC2086
 RUN set -e; pkgs=$(cat /tmp/agent-packages.txt); rm /tmp/agent-packages.txt; \
     if [ -n "$pkgs" ]; then \
       apt-get update && apt-get install -y --no-install-recommends $pkgs && rm -rf /var/lib/apt/lists/*; \

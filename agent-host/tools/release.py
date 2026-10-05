@@ -49,6 +49,10 @@ PY = sys.executable
 GATES: list[tuple[str, list[str], str]] = [   # (name, command, working directory under ROOT)
     ("The VESTA Kiosk is untouched", ["bash", "agent-host/tests/check_isolation.sh", "origin/main"], "."),
     ("The app manifest agrees with what the Supervisor reads", [PY, "agent-host/tests/check_manifest.py"], "."),
+    # Home Assistant's own checks — the community example app's CI: the add-on
+    # linter, hadolint, shellcheck (agent-host/tools/addon_lint.py; needs Docker).
+    ("Home Assistant's add-on checks",
+     [PY, "agent-host/tools/addon_lint.py", "vesta-agent", "agent-host/Dockerfile", "agent-host/rootfs"], "."),
     ("The host's start-up, contract, folders and redaction", [PY, "agent-host/tests/test_host.py"], "."),
     ("The self-test reports each link correctly", [PY, "agent-host/tests/test_selftest.py"], "."),
     ("The sidecar, the restart policy and the stop grace", [PY, "agent-host/tests/test_supervise.py"], "."),

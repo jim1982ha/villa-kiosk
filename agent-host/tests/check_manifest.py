@@ -57,17 +57,20 @@ if cfg.get("init") is not False:
 if not 10 <= int(cfg.get("timeout", 10)) <= 300:
     problems.append("timeout must be within 10–300 s (Supervisor range)")
 
-# SPEC H3/H4: no local-only privileges, nothing listens.
+# SPEC H3/H4: no local-only privileges, nothing listens. The EFFECTIVE value is
+# what the Supervisor grants: absent is false (Home Assistant's add-on linter
+# refuses the key written out at its default — agent-host/tools/addon_lint.py),
+# and anything that grants it fails here.
 for key in ("homeassistant_api", "hassio_api"):
-    if cfg.get(key) is not False:
-        problems.append(f"{key} must be explicitly false (SPEC H3)")
+    if cfg.get(key, False) is not False:
+        problems.append(f"{key} must not be granted (SPEC H3): leave it out")
 for key in ("ports", "host_network", "privileged", "full_access", "docker_api"):
     if cfg.get(key):
         problems.append(f"`{key}` is set — SPEC H4 forbids anything listening or privileged")
 # H4 as amended (owner, 2026-09-30): Home Assistant's Ingress is the one way in, for
 # the agent's UI, administrators only, on the port the UI listens on.
 if cfg.get("ingress"):
-    if cfg.get("panel_admin") is not True:
+    if cfg.get("panel_admin", True) is not True:   # absent = the Supervisor's default, true
         problems.append("ingress without panel_admin: true — the UI edits what the agent may do, admins only (H4)")
     if cfg.get("ingress_port") != 8095:
         problems.append("ingress_port must be 8095, the UI's port (vesta_host.contract.UI_PORT)")

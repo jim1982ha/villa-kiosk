@@ -134,6 +134,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
             io.hass.version=${{ steps.meta.outputs.version }}
             io.hass.arch=${{ matrix.arch }}
             io.hass.type=addon
