@@ -37,14 +37,14 @@ console.log("  a dome round the villa (owner, 2026-10-05: 'too far from the vill
   let worst = 0, at = null, checked = 0;
   for (const cam of CAMS) for (const [D, T] of [[10, [0, 0, 0]], [80, [12, 1, -30]], [400, [-50, 3, 7]]])
     for (let a = -170; a <= 180; a += 10) for (const alt of [0, 20, 45, 70, 89]) {
-      const e = f.DOME_LOW + (Math.PI / 2 - f.DOME_LOW) * alt / 90;
+      const e = f.DOME_LOW + (f.DOME_HIGH - f.DOME_LOW) * alt / 90;
       const F = { x: Math.sin(cam.camAz) * Math.cos(cam.pitch), y: -Math.sin(cam.pitch), z: Math.cos(cam.camAz) * Math.cos(cam.pitch) };
       const C = [T[0] - D * F.x, T[1] - D * F.y, T[2] - D * F.z];
       const k = f.DOME_SCALE * D, b = deg(a);
       const P = [T[0] + k * Math.sin(b) * Math.cos(e), T[1] + k * Math.sin(e), T[2] + k * Math.cos(b) * Math.cos(e)];
       const v = [P[0] - C[0], P[1] - C[1], P[2] - C[2]], n = Math.hypot(...v);
       const pr = f.projectToFrame(v[0] / n, v[1] / n, v[2] / n, cam);
-      if (Math.hypot(2 * pr.frameX - 1, 1 - 2 * pr.frameY) > f.FRAME_TRUE) continue;
+      if (Math.abs(2 * pr.frameX - 1) > f.FRAME_TRUE || Math.abs(1 - 2 * pr.frameY) > f.FRAME_TRUE) continue;
       checked++;
       const l = drawn(deg(alt), b, cam).dir;
       const err = Math.hypot(l.x - v[0] / n, l.y - v[1] / n, l.z - v[2] / n);
@@ -69,6 +69,31 @@ console.log("  a dome round the villa (owner, 2026-10-05: 'too far from the vill
     if (!(y < 0.5)) low.push([cam.pitch, a, alt, y]);
   }
   ck("  ...a sun in front of you is drawn ABOVE the villa, in the sky", low.length === 0, low.slice(0, 2));
+}
+
+console.log("\n  the same wall from every side (owner, 2026-10-05, 2.496.293)");
+{
+  // A sun east of the house must be drawn on the side of the screen where the
+  // house's EAST side is, whichever way the camera faces — and clearly so, not
+  // a few pixels off the middle. 2.496.292 drew a 65° sun above the roof: over
+  // a whole turn it stayed within 0.41..0.58 of the frame, "following the camera".
+  const T = [0, 0, 0], D = 50;
+  let wrong = [], weak = [];
+  for (const [halfFov, hHalf] of [[0.4, 0.75], [0.55, 0.3]]) for (const pitch of [deg(20), deg(35), deg(61.4), deg(80)])
+    for (const alt of [10, 40, 65, 80]) for (const az of [deg(83), deg(200), deg(-60)]) for (let t = 0; t < 360; t += 15) {
+      const cam = { pitch, halfFov, camAz: deg(t), hHalf };
+      const F = { x: Math.sin(cam.camAz) * Math.cos(pitch), y: -Math.sin(pitch), z: Math.cos(cam.camAz) * Math.cos(pitch) };
+      const C = [T[0] - D * F.x, T[1] - D * F.y, T[2] - D * F.z];
+      // the house's wall on the sun's side: a ground point toward the sun's bearing
+      const G = [0.3 * D * Math.sin(az) - C[0], -C[1], 0.3 * D * Math.cos(az) - C[2]], n = Math.hypot(...G);
+      const g = f.projectToFrame(G[0] / n, G[1] / n, G[2] / n, cam);
+      const side = g.frameX - 0.5;
+      const sx = drawn(deg(alt), az, cam).frameX - 0.5;
+      if (Math.abs(side) > 0.08 && Math.sign(sx) !== Math.sign(side)) wrong.push([pitch, alt, az, t, side, sx]);
+      if (Math.abs(side) > 0.25 && Math.abs(sx) < 0.15) weak.push([+pitch.toFixed(2), alt, +az.toFixed(2), t, +side.toFixed(2), +sx.toFixed(2)]);
+    }
+  ck("whichever way the camera faces, the sun is drawn on the side of the house it really is on", wrong.length === 0, wrong.slice(0, 2));
+  ck("  ...and CLEARLY there when that wall is side-on to you, however high the sun is (not near the middle, as if following the camera)", weak.length === 0, weak.slice(0, 3));
 }
 
 console.log("\n  nothing jumps (2.496.290: east to west in one step)");

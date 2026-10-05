@@ -57,13 +57,21 @@ export function liftFor(units: number): number {
  * Under 1 so the point can never fall behind the camera.
  */
 export const DOME_SCALE = 0.45;
-/** The lowest elevation a body is drawn at on the dome, so one on the horizon
- *  floats above the garden rather than lying on the ground plane; the true
- *  0–90° range is spread over DOME_LOW..90°. */
-export const DOME_LOW = (20 * Math.PI) / 180;
-/** Inside this part of the frame (in half-widths/half-heights from the centre)
- *  a body sits exactly where the dome puts it; beyond, it is eased toward the
- *  villa so it can never leave the frame, reaching at most FRAME_REACH. */
+/** The elevations a body is drawn at on the dome: the true 0–90° is spread
+ *  over DOME_LOW..DOME_HIGH, so one on the horizon floats above the garden and
+ *  one overhead still stands OFF to its side of the house.
+ *
+ *  ⚠️ LOW ON PURPOSE. 2.496.292 spread it up to 90°, and a sun at 65° (10:00
+ *  in the tropics) was drawn nearly above the roof: over a full turn of the
+ *  camera it moved only 0.41..0.58 across the frame, so it read as following
+ *  the camera — owner: "if the sun is behind the east wall, turning the
+ *  camera shall keep it behind the same wall". The BEARING is the message;
+ *  the height is a hint. */
+export const DOME_LOW = (10 * Math.PI) / 180;
+export const DOME_HIGH = (35 * Math.PI) / 180;
+/** Inside this part of the frame (in half-widths, and separately half-heights,
+ *  from the centre) a body sits exactly where the dome puts it; beyond, that
+ *  axis is eased toward the villa, reaching at most FRAME_REACH. */
 export const FRAME_TRUE = 0.6;
 export const FRAME_REACH = 0.9;
 
@@ -85,6 +93,8 @@ export const SET_HIGH = (3 * Math.PI) / 180;
  *   "behind you" swapped it from the east edge to the west in one step;
  * - 2.496.291 drew the true sky at infinity: correct, but far from the villa
  *   and out of view half the time (owner: "too far from the villa").
+ * - 2.496.292's dome drew a high sun above the roof and pulled it to the top
+ *   centre: it seemed to follow the camera (DOME_HIGH, ease()).
  * This one is a dome round the villa (DOME_SCALE): the sun east of the house
  * is drawn east of the house from every angle, a sun behind you is drawn on
  * your side of the house (lower in the frame), and nothing ever jumps.
@@ -92,8 +102,8 @@ export const SET_HIGH = (3 * Math.PI) / 180;
 export function lift(x: number, y: number, z: number, drop: number, cam: SkyCamera): { x: number; y: number; z: number } {
   if (drop <= 0) return { x, y, z };
   const alt = Math.max(0, Math.atan2(y, Math.hypot(x, z)));
-  const e = lerp(DOME_LOW, Math.PI / 2, alt / (Math.PI / 2));
-  // Straight overhead has no bearing; any will do, since cos(e) is 0 there.
+  const e = lerp(DOME_LOW, DOME_HIGH, Math.min(1, alt / (Math.PI / 2)));
+  // Straight overhead has no bearing; any will do.
   const az = Math.hypot(x, z) < 1e-9 ? 0 : Math.atan2(x, z);
   const sa = Math.sin(cam.camAz), ca = Math.cos(cam.camAz), sp = Math.sin(cam.pitch), cp = Math.cos(cam.pitch);
   // camera → villa is the forward ray (unit), villa → body is DOME_SCALE·u.
@@ -101,20 +111,26 @@ export function lift(x: number, y: number, z: number, drop: number, cam: SkyCame
   const v = { x: sa * cp + k * Math.sin(az) * ce, y: -sp + k * Math.sin(e), z: ca * cp + k * Math.cos(az) * ce };
   const p = projectToFrame(v.x, v.y, v.z, cam);
   if (!p) return unit(v);                           // unreachable while DOME_SCALE < 1
-  // Ease toward the centre past FRAME_TRUE, along the line to the villa, so
-  // the direction "where to look" is kept and the body never leaves the frame.
-  const nx = 2 * p.frameX - 1, ny = 1 - 2 * p.frameY;
-  const r = Math.hypot(nx, ny);
-  if (r <= FRAME_TRUE) return unit(v);
-  const span = FRAME_REACH - FRAME_TRUE;
-  const f = (FRAME_TRUE + span * Math.tanh((r - FRAME_TRUE) / span)) / r;
-  const cx = nx * f * Math.tan(cam.hHalf), cy = ny * f * Math.tan(cam.halfFov);
+  // Past FRAME_TRUE, ease each axis toward the villa so the body never leaves
+  // the frame. ⚠️ PER AXIS, not along the line to the centre: a body above
+  // the top edge must come DOWN, not also slide toward the middle — the
+  // radial version (2.496.292) pulled the east sun to the top centre.
+  const nx = ease(2 * p.frameX - 1), ny = ease(1 - 2 * p.frameY);
+  if (nx === 2 * p.frameX - 1 && ny === 1 - 2 * p.frameY) return unit(v);
+  const cx = nx * Math.tan(cam.hHalf), cy = ny * Math.tan(cam.halfFov);
   // forward + cx·right + cy·up, for a camera with no roll.
   return unit({
     x: sa * cp + cx * ca + cy * sa * sp,
     y: -sp + cy * cp,
     z: ca * cp - cx * sa + cy * ca * sp,
   });
+}
+
+function ease(n: number): number {
+  const a = Math.abs(n);
+  if (a <= FRAME_TRUE) return n;
+  const span = FRAME_REACH - FRAME_TRUE;
+  return Math.sign(n) * (FRAME_TRUE + span * Math.tanh((a - FRAME_TRUE) / span));
 }
 
 function unit(v: { x: number; y: number; z: number }): { x: number; y: number; z: number } {
