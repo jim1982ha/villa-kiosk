@@ -1,3 +1,8 @@
+## 2.496.293
+
+### Fixed
+- The sun and the moon stay on their real side of the house however you turn the view. A sun behind the east wall stays behind the east wall from every side. Before, a sun high in the sky was drawn almost above the roof and seemed to follow the camera. Its height on screen is now only a hint, and the direction it lies in is what it shows.
+
 ## 2.496.292
 
 ### Changed
