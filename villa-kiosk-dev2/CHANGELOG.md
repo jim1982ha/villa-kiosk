@@ -1,3 +1,8 @@
+## 2.496.292
+
+### Changed
+- In the 3D overview the sun and the moon now sit close to the house, on an imaginary dome around it, instead of far away in the sky. A sun east of the house is drawn east of the house from every angle, so it shows you where to look outside. It stays at the same distance from the house when you zoom or move the view. It is always on screen, eased in gently near the edges, and the house never hides it. When it is behind you, it is drawn on your side of the house, lower on the screen. Walking through the house is unchanged: there the sky is the real one, and walls still hide the moon.
+
 ## 2.496.291
 
 ### Fixed
