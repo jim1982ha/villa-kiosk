@@ -62,13 +62,13 @@ export const BAND_LOW = 0.35;
  *  tuning surface if the arc wants to sit higher or flatter. */
 export const BAND_HIGH = 0.85;
 
-/** How much of a real change in bearing is drawn as one, in front of the
- *  camera. Below 1 the daily arc narrows into a dome; at 1 there would be no
- *  dome and no guarantee of being on screen. */
-export const AZ_WORLD = 0.45;
+/** Inside this part of the frame's half-width the body sits EXACTLY where a
+ *  real sky would put it: turning the camera moves it by the true amount, the
+ *  way the landscape moves. Only beyond it does the edge pull it in. */
+export const AZ_TRUE = 0.6;
 /** How far out the saturation reaches, as a fraction of the frame's half
- *  width. Under 1 so a body directly behind still lands inside the frame
- *  rather than exactly on its edge. */
+ *  width. Under 1 so a body to the side or behind still lands inside the frame
+ *  — at the edge on its TRUE side — rather than exactly on the edge. */
 export const AZ_REACH = 0.88;
 /** Width of the fade at the cut directly behind the camera. */
 export const AZ_FADE = (9 * Math.PI) / 180;
@@ -78,56 +78,81 @@ export const SET_LOW = (-1 * Math.PI) / 180;
 export const SET_HIGH = (3 * Math.PI) / 180;
 
 /**
- * Map a body's TRUE altitude onto one the overview camera can actually show.
+ * Where a body of the sky is DRAWN in the frame, given its TRUE direction:
+ * 0 is the left/top edge, 1 the right/bottom, 0.5 dead centre — where the
+ * camera's target, the villa, sits. The overview decides the frame position
+ * first and lift() turns it back into a direction, so the two cannot disagree.
  *
  * ⚠️ This is a diagram, not a photograph, and only in overview. A camera
  * looking DOWN at a villa cannot contain an overhead sun: at local noon the
- * real altitude is ~85°, behind the viewer. The whole 0–90° range is squeezed
- * into a band in the upper part of the frame (BAND_LOW..BAND_HIGH), so the sun
- * is visible in the middle of the day — precisely when a sun is most expected.
- * Only how HIGH the body is drawn is rescaled here; displayAzimuth owns the
- * bearing.
+ * real altitude is ~85°, behind the viewer.
+ *
+ * HEIGHT: the whole 0–90° range is squeezed into a band in the upper part of
+ * the frame (BAND_LOW..BAND_HIGH), so the sun is visible in the middle of the
+ * day — precisely when a sun is most expected.
+ *
+ * SIDE: the TRUE bearing relative to where the camera faces, and nothing else.
+ * ⚠️ Until 2.496.290 the bearing was squeezed toward the camera's heading
+ * (×0.45) and placed on a sphere hanging from the camera's forward ray, so
+ * the moon's east/west in the frame depended on the VIEW: tilting from 20° to
+ * 85° slid a moon 80° to the right from frameX 0.94 to 0.64 — reported as
+ * "the east/west position of the moon changes with the angle of the camera"
+ * (owner, 2026-10-05). Now tilting cannot move it sideways at all, and turning
+ * moves it by the true amount while it is in the middle of the frame
+ * (AZ_TRUE). Toward the sides it is eased into the edge on its TRUE side
+ * (AZ_REACH) instead of leaving the frame — the old complaint was a sun
+ * "simply behind you" — and directly behind it fades (azimuthFade).
  */
-export function displayAltitude(alt: number, drop: number, cam: SkyCamera): number {
-  if (drop <= 0) return alt;
+export function framePositionOf(x: number, y: number, z: number, cam: SkyCamera): { frameX: number; frameY: number } {
+  const alt = Math.atan2(y, Math.hypot(x, z));
   const t = Math.max(0, Math.min(1, alt / (Math.PI / 2)));
-  const frac = lerp(BAND_LOW, BAND_HIGH, t);
-  return -cam.pitch + cam.halfFov * frac;
+  const ndcY = Math.tan(cam.halfFov * lerp(BAND_LOW, BAND_HIGH, t)) / Math.tan(cam.halfFov);
+  const rel = wrapAngle(Math.atan2(x, z) - cam.camAz);
+  // The true horizontal place of that bearing, in half-widths; beyond 90° to
+  // the side there is none, so it is "past the edge" on its own side.
+  const u = Math.abs(rel) < Math.PI / 2 ? Math.abs(Math.tan(rel)) / Math.tan(cam.hHalf) : Infinity;
+  const span = AZ_REACH - AZ_TRUE;
+  const eased = u <= AZ_TRUE ? u : AZ_TRUE + span * Math.tanh((u - AZ_TRUE) / span);
+  return { frameX: 0.5 + 0.5 * Math.sign(rel) * eased, frameY: 0.5 - 0.5 * ndcY };
 }
 
 /**
- * Pull a body's BEARING toward the direction the camera is facing.
- *
- * `tanh` rather than a straight scale: near the FRONT the slope is AZ_WORLD, so
- * a real change of bearing is drawn as a proportional one; toward the BACK it
- * saturates to AZ_REACH of the frame's half-width, so a body anywhere in the
- * sky is still on screen — no clamp, so no corner where it parks against an
- * edge. (Recorded: orbit to the sun's side and it was simply behind you,
- * `frameY=0.21 discAlpha=1.00` with nothing on screen; and the true 208°
- * sunrise-to-sunset sweep put the arc's ends on opposite sides of the villa.)
- *
- * ⚠️ A circle cannot be mapped onto a segment without one cut, at "directly
- * behind you"; azimuthFade covers it.
- */
-export function displayAzimuth(az: number, cam: SkyCamera): number {
-  const reach = cam.hHalf * AZ_REACH;
-  if (!(reach > 0)) return az;
-  const rel = wrapAngle(az - cam.camAz);
-  return cam.camAz + reach * Math.tanh((AZ_WORLD * rel) / reach);
-}
-
-/**
- * A direction with its ELEVATION and BEARING redrawn for this camera, as a
- * unit vector — the ONE expression both bodies are placed by, so the sun and
- * the moon can never sit in skies tilted differently from each other.
+ * A direction redrawn for this camera, as a unit vector — the ONE expression
+ * both bodies are placed by, so the sun and the moon can never sit in skies
+ * tilted differently from each other. It is the frame position of
+ * framePositionOf turned back into the direction the camera sees there.
  */
 export function lift(x: number, y: number, z: number, drop: number, cam: SkyCamera): { x: number; y: number; z: number } {
-  const horiz = Math.hypot(x, z);
-  if (horiz < 1e-6 || drop <= 0) return { x, y, z };
-  const alt = displayAltitude(Math.atan2(y, horiz), drop, cam);
-  const az = displayAzimuth(Math.atan2(x, z), cam);
-  const c = Math.cos(alt);
-  return { x: Math.sin(az) * c, y: Math.sin(alt), z: Math.cos(az) * c };
+  if (Math.hypot(x, z) < 1e-6 || drop <= 0) return { x, y, z };
+  const { frameX, frameY } = framePositionOf(x, y, z, cam);
+  const cx = (2 * frameX - 1) * Math.tan(cam.hHalf);
+  const cy = (1 - 2 * frameY) * Math.tan(cam.halfFov);
+  const sa = Math.sin(cam.camAz), ca = Math.cos(cam.camAz), sp = Math.sin(cam.pitch), cp = Math.cos(cam.pitch);
+  // forward + cx·right + cy·up, for a camera with no roll.
+  const vx = sa * cp + cx * ca + cy * sa * sp;
+  const vy = -sp + cy * cp;
+  const vz = ca * cp - cx * sa + cy * ca * sp;
+  const n = Math.hypot(vx, vy, vz);
+  return { x: vx / n, y: vy / n, z: vz / n };
+}
+
+/**
+ * Where a DIRECTION actually lands on screen through this camera — the
+ * camera's own projection, not the design. The debug report and the oracle
+ * measure the drawn disc with it. ⚠️ BOTH axes, because reporting only one is
+ * how a whole round was spent on a disc perfectly placed vertically and off
+ * the side of the screen. Behind the camera is null.
+ */
+export function projectToFrame(x: number, y: number, z: number, cam: SkyCamera): { frameX: number; frameY: number } | null {
+  const sa = Math.sin(cam.camAz), ca = Math.cos(cam.camAz), sp = Math.sin(cam.pitch), cp = Math.cos(cam.pitch);
+  const fwd = x * sa * cp - y * sp + z * ca * cp;
+  if (!(fwd > 1e-9)) return null;
+  const right = x * ca - z * sa;
+  const up = x * sa * sp + y * cp + z * ca * sp;
+  return {
+    frameX: 0.5 + 0.5 * (right / fwd) / Math.tan(cam.hHalf),
+    frameY: 0.5 - 0.5 * (up / fwd) / Math.tan(cam.halfFov),
+  };
 }
 
 /**
@@ -157,22 +182,6 @@ export function azimuthFade(x: number, z: number, drop: number, cam: SkyCamera):
  *  the cut behind the camera, or is fully there. */
 export function bodyFade(x: number, y: number, z: number, drop: number, cam: SkyCamera): number {
   return horizonFade(Math.atan2(y, Math.hypot(x, z))) * azimuthFade(x, z, drop, cam);
-}
-
-/**
- * Where a DRAWN body lands on screen: 0 is the left/top edge, 1 the
- * right/bottom, 0.5 dead centre — where the camera's target, the villa, sits.
- * Outside 0..1 is off screen. BOTH axes, because reporting only one is how a
- * whole round was spent on a disc perfectly placed vertically and off the side
- * of the screen.
- */
-export function framePosition(drawnAlt: number, drawnAz: number, cam: SkyCamera): { frameX: number; frameY: number } {
-  const above = drawnAlt + cam.pitch;
-  const side = wrapAngle(drawnAz - cam.camAz);
-  return {
-    frameX: 0.5 + 0.5 * (Math.tan(side) / Math.tan(cam.hHalf)),
-    frameY: 0.5 - 0.5 * (Math.tan(above) / Math.tan(cam.halfFov)),
-  };
 }
 
 /** How much the sun's disc warms toward the horizon, over the last 25° of

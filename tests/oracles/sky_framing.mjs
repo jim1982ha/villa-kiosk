@@ -19,10 +19,14 @@ const PITCHES = [deg(10), deg(25), deg(40), deg(61.4), deg(75), deg(87)];
 const VFOV = [0.4, 0.55];                       // landscape tablet, portrait phone
 const HHALF = [0.35, 0.7, 1.0];
 
+// Measured through the CAMERA'S OWN PROJECTION of the direction lift() hands
+// the disc — never the design numbers. Until 2.496.290 this read a flat
+// approximation (framePosition) that ignored how a steep tilt pulls every
+// bearing toward the centre, and stayed green while the moon slid sideways.
 function drawn(alt, az, cam) {
   const d = dirAt(alt, az);
-  const a = f.displayAltitude(alt, drop, cam), b = f.displayAzimuth(az, cam);
-  return { ...f.framePosition(a, b, cam), fade: f.bodyFade(d.x, d.y, d.z, drop, cam) };
+  const l = f.lift(d.x, d.y, d.z, drop, cam);
+  return { ...(f.projectToFrame(l.x, l.y, l.z, cam) ?? { frameX: NaN, frameY: NaN }), fade: f.bodyFade(d.x, d.y, d.z, drop, cam) };
 }
 
 console.log("  vertical: the arc hangs from the camera's own forward ray");
@@ -40,17 +44,40 @@ console.log("  vertical: the arc hangs from the camera's own forward ray");
   ck("  ...and the sun CLIMBS across the frame as it rises (smaller frameY = higher)", ys.every((y, i) => i === 0 || y < ys[i - 1]), ys);
 }
 
-console.log("\n  horizontal: anywhere in the sky is on screen");
+console.log("\n  horizontal: the TRUE bearing, whatever the view (owner, 2026-10-05)");
 {
-  let inside = true, sample = [];
-  for (const hHalf of HHALF) for (const camAz of [0, deg(120), deg(-150)]) for (let a = -179; a <= 179; a += 7) {
-    const { frameX } = drawn(deg(30), deg(a), { pitch: deg(61.4), halfFov: 0.4, camAz, hHalf });
-    if (!(frameX > 0 && frameX < 1)) { inside = false; sample.push([hHalf, camAz, a, frameX]); }
+  let worst = 0, at = null;
+  for (const hHalf of HHALF) for (const halfFov of VFOV) for (const a of [-150, -80, -40, -10, 10, 40, 80, 150]) for (const alt of [5, 35, 70]) {
+    const xs = PITCHES.map((pitch) => drawn(deg(alt), deg(a), { pitch, halfFov, camAz: 0, hHalf }).frameX);
+    const spread = Math.max(...xs) - Math.min(...xs);
+    if (spread > worst) { worst = spread; at = { hHalf, a, alt, xs }; }
   }
-  ck("at every bearing, for every frame width and camera heading, the body lands inside 0..1 (it was 'behind you')", inside, sample.slice(0, 3));
+  ck("TILTING the camera never moves the sun or moon sideways (it slid 0.94 → 0.64 between 20° and 85°)", worst < 1e-9, at);
+  let off = 0, at2 = null;
+  for (const hHalf of HHALF) for (const pitch of PITCHES) for (const camAz of [0, deg(120), deg(-150)]) for (let a = -20; a <= 20; a += 4) {
+    const rel = deg(a), cam = { pitch, halfFov: 0.4, camAz, hHalf };
+    const want = 0.5 + 0.5 * Math.tan(rel) / Math.tan(hHalf);
+    if (Math.abs(want - 0.5) > 0.5 * f.AZ_TRUE) continue;
+    const e = Math.abs(drawn(deg(30), camAz + rel, cam).frameX - want);
+    if (e > off) { off = e; at2 = { hHalf, pitch, camAz, a }; }
+  }
+  ck("  ...and TURNING moves it by the true amount in the middle of the frame, as the landscape moves", off < 1e-9, { off, at2 });
+  let wrongSide = [];
+  for (const pitch of PITCHES) for (const camAz of [0, deg(120), deg(-150)]) for (let a = -170; a <= 170; a += 10) {
+    if (a === 0) continue;
+    const x = drawn(deg(30), camAz + deg(a), { pitch, halfFov: 0.4, camAz, hHalf: 0.7 }).frameX;
+    if (Math.sign(x - 0.5) !== Math.sign(a)) wrongSide.push([pitch, camAz, a, x]);
+  }
+  ck("  ...a body to the RIGHT of where the camera faces is always drawn right of the villa, and left is left", wrongSide.length === 0, wrongSide.slice(0, 3));
+  let inside = true, sample = [];
+  for (const hHalf of HHALF) for (const pitch of PITCHES) for (const camAz of [0, deg(120), deg(-150)]) for (let a = -179; a <= 179; a += 7) {
+    const { frameX, frameY } = drawn(deg(30), deg(a), { pitch, halfFov: 0.4, camAz, hHalf });
+    if (!(frameX > 0 && frameX < 1 && frameY > 0 && frameY < 1)) { inside = false; sample.push([hHalf, pitch, camAz, a, frameX]); }
+  }
+  ck("  ...at every bearing, frame width, tilt and heading it lands INSIDE the frame — at the edge on its true side when it is out of view (it was 'behind you')", inside, sample.slice(0, 3));
   const cam = { pitch: deg(61.4), halfFov: 0.4, camAz: 0, hHalf: 0.7 };
-  const xs = [-60, -30, 0, 30, 60].map((a) => drawn(deg(30), deg(a), cam).frameX);
-  ck("  ...and east stays left of west in front of the camera: real bearings still move it, in order", xs.every((x, i) => i === 0 || x > xs[i - 1]), xs);
+  const xs = [-120, -60, -30, 0, 30, 60, 120].map((a) => drawn(deg(30), deg(a), cam).frameX);
+  ck("  ...and bearings stay in order across the frame", xs.every((x, i) => i === 0 || x > xs[i - 1]), xs);
 }
 
 console.log("\n  the cut directly behind, and setting");
@@ -62,7 +89,7 @@ console.log("\n  the cut directly behind, and setting");
   ck("set: below −1° of TRUE altitude it is gone; above 3° fully up; between, a fade",
      f.horizonFade(deg(-1.5)) === 0 && f.horizonFade(deg(4)) === 1 && f.horizonFade(deg(1)) > 0 && f.horizonFade(deg(1)) < 1);
   const lo = dirAt(deg(-0.5), 0);
-  ck("  ...asked of the TRUE altitude, never the drawn one (every drawn altitude in overview is below the horizon)",
+  ck("  ...asked of the TRUE altitude, never the drawn one (in overview the drawn direction is below the horizon)",
      f.lift(lo.x, lo.y, lo.z, drop, cam).y < 0 && f.bodyFade(lo.x, lo.y, lo.z, drop, cam) > 0);
 }
 

@@ -7,7 +7,7 @@
 
 import { wrapAngle } from "@/utils/geometry";
 import {
-  bodyFade, defaultSkyCamera, displayAltitude, displayAzimuth, framePosition, lift, liftFor, sunWarmth,
+  bodyFade, defaultSkyCamera, lift, liftFor, projectToFrame, sunWarmth,
   type SkyCamera,
 } from "./skyFraming";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
@@ -43,14 +43,13 @@ export class SkyDome {
   /** Whether the sky as a whole is on — the disc is a part of it and must not
    *  come back on its own when the dome is off. */
   private enabled = true;
-  /** Where the disc was last DRAWN, in radians. Reported on the `sky` debug
-   *  channel: it is the one field that answers "why can't I see the sun". */
-  private drawnAlt = 0;
-  /** The drawn BEARING, or null when the disc is not drawn at all. Null rather
+  /** Where the disc was last DRAWN, as a unit direction, or null when it is
+   *  not drawn at all. Reported on the `sky` debug channel: it is the one
+   *  field that answers "why can't I see the sun". Null rather
    *  than a stale number because `drawn=` used to keep reporting the true
    *  altitude all night, which reads as a placement and is not one — an
    *  instrument must not answer a question it did not measure. */
-  private drawn: number | null = null;
+  private drawn: { x: number; y: number; z: number } | null = null;
 
   private scene: Scene;
 
@@ -342,9 +341,8 @@ export class SkyDome {
     this.drawn = null;
     if (!visible) return;
 
-    this.drawnAlt = displayAltitude(alt, drop, this.camera);
-    this.drawn = displayAzimuth(Math.atan2(x, z), this.camera);
     const d = lift(x, y, z, drop, this.camera);
+    this.drawn = d;
     this.sunDisc.position = new Vector3(d.x, d.y, d.z).scale(SUN_DIST);
 
     const warmth = sunWarmth(alt);
@@ -372,9 +370,9 @@ export class SkyDome {
     }
     return {
       trueDeg,
-      drawnDeg: deg(this.drawnAlt),
+      drawnDeg: deg(Math.atan2(this.drawn.y, Math.hypot(this.drawn.x, this.drawn.z))),
       alpha: this.sunMat.alpha,
-      ...framePosition(this.drawnAlt, this.drawn, this.camera),
+      ...(projectToFrame(this.drawn.x, this.drawn.y, this.drawn.z, this.camera) ?? { frameX: null, frameY: null }),
     };
   }
 

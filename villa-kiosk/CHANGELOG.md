@@ -1,3 +1,8 @@
+## 2.496.290
+
+### Fixed
+- The sun and the moon now keep their true east/west place in the overview. Tilting the view no longer slides them sideways: a moon on the right of the house stays on the right whether you look from the side or from straight above. Turning the view moves them by the real amount, the way the garden moves. When one is out of view to the side or behind you, it waits at the edge of the screen on its real side instead of disappearing.
+
 ## 2.496.289
 
 ### Changed
