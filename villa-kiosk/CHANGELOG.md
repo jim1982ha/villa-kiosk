@@ -1,3 +1,8 @@
+## 2.496.307
+
+### Changed
+- Behind the scenes: preparing the release of this version as the main VESTA. One release check mistook Home Assistant's own internal addresses for internet addresses. Nothing you see changes.
+
 ## 2.496.306
 
 ### Fixed

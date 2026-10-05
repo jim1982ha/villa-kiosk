@@ -116,6 +116,11 @@ def main() -> int:
                 host = m.group(0)
                 if LAN_OR_INERT.search(host):
                     continue
+                # A name with no dot resolves only on the local network: the
+                # Supervisor's own DNS (`homeassistant`, an add-on's hostname).
+                # The VESTA Agent's manifest on main names both (2.496.307).
+                if "." not in host.split("://", 1)[1]:
+                    continue
                 if "github.com" in host and REPO_LINK_OK.search(rel):
                     continue          # the descriptor's whole job is this link
                 third_party.append(f"{rel}:{num}  {host}")
