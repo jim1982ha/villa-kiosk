@@ -77,7 +77,7 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
         <>
           <div className="center" style={{ padding: "12px 0 6px" }}>
             {/* unavailable MUST win over the device_class off-label below —
-                showing e.g. "Dry"/"No motion" (classInfo.offLabel) for a
+                showing e.g. "No leak"/"Clear" (the class's off word) for a
                 sensor HA has actually lost contact with claims a confirmed
                 reading that was never taken. */}
             <div

@@ -667,3 +667,9 @@ label.toggle span { user-select: none; line-height: 1.4; }
 }
 .panel-reading-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .panel-reading-value { flex: 0 0 auto; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+/* A binary reading in its own window's colour (config/readingRows): the
+   .status-pill tones, as text. "off" (idle) keeps the secondary grey. */
+.panel-reading-value.on { color: var(--status-on); }
+.panel-reading-value.danger { color: var(--status-danger); font-weight: 600; }
+.panel-reading-value.transitional { color: var(--status-pending); }
+.panel-reading-value.unavailable { color: var(--status-warning); }

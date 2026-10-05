@@ -273,11 +273,6 @@ export function binaryStatus(state: string, alertState?: string, secureState?: "
   return plain;
 }
 
-/** binary_sensor: binaryStatus as a colour — the history bar's. */
-export function binarySensorColor(state: string, alertState?: string, secureState?: "on" | "off"): string {
-  return STATUS_COLOR[binaryStatus(state, alertState, secureState)];
-}
-
 const PALETTE = [ON_COLOR, "var(--accent)", WARN_COLOR, DANGER_COLOR, "var(--accent-strong)"];
 
 /**

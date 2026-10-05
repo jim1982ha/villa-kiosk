@@ -21,8 +21,8 @@ ck("unavailable stays Unavailable, never 'Normal'", row(E("binary_sensor.leak_ba
 ck("a switch's off and a numeric battery are untouched", row(E("switch.pump", "off")) === "Off"
    && /^100\s?%$/.test(formatSensorValue(E("sensor.leak_battery", "100", "battery", "%"))), formatSensorValue(E("sensor.leak_battery", "100", "battery", "%")));
 const cls = readFileSync(new URL("../../src/config/BinarySensorClasses.ts", import.meta.url), "utf8");
-ck("the panel's class table takes its words from the same table (no second copy)",
-   (cls.match(/onLabel: "/g) ?? []).length === 1 && /BINARY_WORDS\[c\]/.test(cls));   // the one left is the no-class default
+ck("the panel's class table holds no words at all (binarySensorWords is the one copy)",
+   !/onLabel|offLabel/.test(cls));
 ck("every class has two words", Object.values(BINARY_WORDS).every((w) => w.length === 2 && w[0] && w[1]) && binaryWord("sensor.x", "battery", "off") === null);
 const picker = readFileSync(new URL("../../src/components/settings/EntityPicker.tsx", import.meta.url), "utf8");
 ck("Settings' entity search words its states the same way", /deviceRowText\(e, domainOf\(e\.entity_id\)\)/.test(picker) && !/>\{e\.state\}</.test(picker));

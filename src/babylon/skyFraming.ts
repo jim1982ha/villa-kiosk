@@ -205,6 +205,19 @@ export function bodyFade(x: number, y: number, z: number, drop: number, cam: Sky
   return horizonFade(Math.atan2(y, Math.hypot(x, z))) * frontFade(x, z, drop, cam);
 }
 
+/**
+ * Where and how strongly a body at TRUE direction (x,y,z) is drawn: the ONE
+ * placement both bodies go through (SkyDome's sun, NightSky's moon), so the
+ * two cannot be placed by two copies of the same steps. `dir` is null when
+ * the body is not drawn at all (set, or behind the viewer).
+ */
+export function placeBody(x: number, y: number, z: number, drop: number, cam: SkyCamera): {
+  fade: number; dir: { x: number; y: number; z: number } | null;
+} {
+  const fade = bodyFade(x, y, z, drop, cam);
+  return { fade, dir: fade > 0 ? lift(x, y, z, drop, cam) : null };
+}
+
 /** How much the sun's disc warms toward the horizon, over the last 25° of
  *  TRUE altitude: 0 high (white core), 1 on the horizon (orange) — the same
  *  reddening the sky shader does behind it, so the two agree. */

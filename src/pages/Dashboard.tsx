@@ -51,13 +51,12 @@ import type { ActivePanel } from "@/types/panel.types";
 import { NO_PANEL, panelNavReducer, reopenOf, type BackStep } from "./panelNav";
 import type { Category, TeleportPoint } from "@/types/scene.types";
 import { VillaModelProvider, useVillaSets, useDeviceIdentity } from "@/config/VillaModel";
-import { deviceRowText } from "@/utils/entityValue";
+import { readingRows } from "@/config/readingRows";
 import { categoryMembers } from "@/config/villaVisibility";
 import { deviceSwitch } from "@/utils/devicePower";
 import { useAskFirst } from "@/hooks/useAskFirst";
 import AskDialog from "@/components/common/AskDialog";
 import { readSceneMirror } from "./sceneMirror";
-import { domainOf } from "@/utils/entityDomain";
 
 
 export default function Dashboard() {
@@ -437,11 +436,7 @@ export default function Dashboard() {
     : backStep.kind === "panel" ? labelOf(backStep.panel.entityId, config.entityMap, entities)
     : backStep.list.kind === "room" ? backStep.list.room : CATEGORY_LABELS[backStep.list.category];
   const panelReadings = activePanel
-    ? identity.readingsOf(activePanel.entityId).map((id) => ({
-        id,
-        label: labelOf(id, config.entityMap, entities),
-        text: entities[id] ? deviceRowText(entities[id], domainOf(id)) : "",
-      }))
+    ? readingRows(identity.readingsOf(activePanel.entityId), entities, config.entityMap, config.alertThresholds)
     : [];
 
   // The open panel's LINKED entity (EntityMapping.linkedEntityId) — resolved

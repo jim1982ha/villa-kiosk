@@ -29,7 +29,7 @@ export default function DeviceReadings() {
         <button key={r.id} type="button" className="panel-reading-row"
           onClick={onOpenReading ? () => onOpenReading(r.id) : undefined} disabled={!onOpenReading}>
           <span className="panel-reading-label" title={r.label}>{r.label}</span>
-          <span className="panel-reading-value">{r.text}</span>
+          <span className={`panel-reading-value${r.tone ? ` ${r.tone}` : ""}`}>{r.text}</span>
           {onOpenReading && <ChevronRight size={16} aria-hidden />}
         </button>
       ))}

@@ -5,7 +5,7 @@ import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
-const { binaryStatus, binarySensorColor, STATUS_COLOR } = await import("@/utils/stateColors");
+const { binaryStatus, STATUS_COLOR } = await import("@/utils/stateColors");
 
 ck("a leak/smoke/gas sensor (problem state on): off = active (green), on = alert", binaryStatus("off", "on") === "active" && binaryStatus("on", "on") === "alert");
 ck("a connectivity sensor (problem state off): on = active, off = alert", binaryStatus("on", "off") === "active" && binaryStatus("off", "off") === "alert");
@@ -16,7 +16,6 @@ ck("a door/window/lock with no alert state: closed (secure) = active, open = idl
 ck("  ...and an alert state set on it wins: open = alert, closed still active",
    binaryStatus("on", "on", "off") === "alert" && binaryStatus("off", "on", "off") === "active");
 ck("unavailable stays unavailable, never green", binaryStatus("unavailable", "on") === "unavailable" && binaryStatus("unknown", "on") !== "active");
-ck("the history bar paints the same meaning", binarySensorColor("off", "on") === STATUS_COLOR.active && binarySensorColor("on", "on") === STATUS_COLOR.alert);
 const panel = readFileSync(new URL("../../src/components/panels/SensorPanel.tsx", import.meta.url), "utf8");
 const group = readFileSync(new URL("../../src/components/panels/DeviceGroupPanel.tsx", import.meta.url), "utf8");
 const { binaryLook } = await import("@/config/binaryLook");
@@ -47,4 +46,33 @@ ck("the sensor window takes its look from binaryLook (no combination of its own)
    && !/colourAlertStateFor|secureStateFor|binaryStatus\(/.test(panel));
 ck("the grouped device window too: a binary member gets its pill and its history (it was grey text)",
    /binaryLook\(id, /.test(group) && /status-pill \$\{r\.look\.tone\(r\.value\)\}/.test(group) && /<LastDayTimeline entityId=\{r\.id\} colorFor=\{r\.look!\.color\} \/>/.test(group));
+
+console.log("\n  \"Also on this device\" (config/readingRows, 2.496.297):");
+const { readingRows } = await import("@/config/readingRows");
+const ent = (id, state, dc) => ({ entity_id: id, state, attributes: dc ? { device_class: dc } : {}, last_changed: "", last_updated: "" });
+const E = {
+  "binary_sensor.det_smoke": ent("binary_sensor.det_smoke", "on", "smoke"),
+  "binary_sensor.det_smoke_clear": ent("binary_sensor.det_smoke_clear", "off", "smoke"),
+  "binary_sensor.det_battery": ent("binary_sensor.det_battery", "unavailable", "battery"),
+  "binary_sensor.hall": ent("binary_sensor.hall", "off", "motion"),
+  "binary_sensor.gate": ent("binary_sensor.gate", "on", "door"),
+  "sensor.det_temperature": ent("sensor.det_temperature", "21", "temperature"),
+};
+const rows = Object.fromEntries(readingRows(Object.keys(E), E, {}, {}).map((r) => [r.id, r]));
+ck("a grouped smoke detector's 'Smoke detected' is red in the list, as in its window",
+   rows["binary_sensor.det_smoke"].text === "Smoke detected" && rows["binary_sensor.det_smoke"].tone === "danger");
+ck("  ...'Clear' and a quiet motion sensor green, an offline battery amber, an open door plain grey",
+   rows["binary_sensor.det_smoke_clear"].tone === "on" && rows["binary_sensor.hall"].tone === "on"
+   && rows["binary_sensor.det_battery"].tone === "unavailable" && rows["binary_sensor.gate"].tone === "off");
+ck("  ...a measurement takes no tone (plain secondary text)", rows["sensor.det_temperature"].tone === undefined);
+const owned = readingRows(["binary_sensor.hall"], { "binary_sensor.hall": ent("binary_sensor.hall", "off", "motion") }, {},
+  { "binary_sensor.hall": { alertState: "off" } });
+ck("  ...the owner's alert state wins here too", owned[0].tone === "danger");
+const list = readFileSync(new URL("../../src/components/panels/DeviceReadings.tsx", import.meta.url), "utf8");
+const dash = readFileSync(new URL("../../src/pages/Dashboard.tsx", import.meta.url), "utf8");
+const css = readFileSync(new URL("../../src/styles/04-modals.css", import.meta.url), "utf8");
+ck("the list paints the tone, the page builds its rows here, and the tones have colours",
+   /className=\{`panel-reading-value\$\{r\.tone \? ` \$\{r\.tone\}` : ""\}`\}/.test(list)
+   && /readingRows\(identity\.readingsOf\(/.test(dash)
+   && ["on", "danger", "unavailable"].every((t) => new RegExp(`\\.panel-reading-value\\.${t} \\{ color: var\\(--status-`).test(css)));
 done("✅ a detector finding nothing wrong reads green, on its pill and its history");

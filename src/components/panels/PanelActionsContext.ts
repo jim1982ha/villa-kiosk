@@ -7,6 +7,7 @@
 import { createContext, useContext } from "react";
 import type { Category } from "@/types/scene.types";
 import type { DeviceSurfaceState } from "@/config/EntityCategories";
+import type { ReadingRow } from "@/config/readingRows";
 
 export interface PanelActions {
   /** The HA entity_id the open panel controls (shown under the title). */
@@ -71,7 +72,7 @@ export interface PanelActions {
    *  group's members and the registry siblings nobody placed — a pump plug's
    *  energy and current), listed under its controls; tapping one opens that
    *  reading's own panel (2.496.260). Empty or undefined: nothing listed. */
-  readings?: { id: string; label: string; text: string }[];
+  readings?: ReadingRow[];
   onOpenReading?: (entityId: string) => void;
   /** Where this panel was opened FROM, when that was another window — a
    *  device's reading opened from the device, a device from a room list, the

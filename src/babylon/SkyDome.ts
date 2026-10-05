@@ -7,9 +7,10 @@
 
 import { wrapAngle } from "@/utils/geometry";
 import {
-  bodyFade, defaultSkyCamera, lift, liftFor, projectToFrame, sunWarmth,
+  defaultSkyCamera, liftFor, placeBody, projectToFrame, sunWarmth,
   type SkyCamera,
 } from "./skyFraming";
+import type { NightSky } from "./NightSky";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
@@ -224,18 +225,29 @@ export class SkyDome {
     c.halfFov = halfFov;
     c.hHalf = hHalf;
     this.placeSun();
-    this.onFraming?.();
+    this.placeMoon();
   }
 
   private readonly fwd = new Vector3(0, 0, 1);
   private static readonly FORWARD = new Vector3(0, 0, 1);
-  private onFraming: (() => void) | null = null;
+  private moon: NightSky | null = null;
 
-  /** Called after the framing moved, so the moon can be re-placed by the same
-   *  rule in the same frame. Wired by SceneManager rather than by a second
-   *  observer inside NightSky, which would race this one for ordering. */
-  setFramingHook(fn: () => void): void {
-    this.onFraming = fn;
+  /** The moon, placed from here whenever the sun is re-framed — the camera
+   *  moved or the horizon drop changed — by the same rule, in the same frame,
+   *  against the same drop. One owner rather than a second observer inside
+   *  NightSky, which would race this one for ordering.
+   *
+   *  ⚠️ THE DROP WAS HANDED TO EACH BODY SEPARATELY (until 2.496.297), and
+   *  only the sun was re-placed when it changed: the walk-through has no
+   *  drop, so trackCamera stops early, and the moon stayed where the
+   *  overview had put it until the next sky-clock tick. */
+  setMoon(moon: NightSky): void {
+    this.moon = moon;
+    this.placeMoon();
+  }
+
+  private placeMoon(): void {
+    this.moon?.reframe(liftFor(this.dropUnits));
   }
 
   /** Last direction handed to update(), so a horizon-drop change can re-place
@@ -293,6 +305,7 @@ export class SkyDome {
     this.mat.cameraOffset.y = units;
     this.dropUnits = units;
     this.placeSun();
+    this.placeMoon();
   }
 
   /**
@@ -331,17 +344,16 @@ export class SkyDome {
     const alt = Math.atan2(y, Math.hypot(x, z));
     // Fade on the TRUE altitude — see skyFraming.horizonFade. Below the horizon
     // the sun is simply gone, and the night sky takes over.
-    const fade = bodyFade(x, y, z, drop, this.camera);
+    const { fade, dir: d } = placeBody(x, y, z, drop, this.camera);
     // First person shows the material's own disc in a sky the viewer is
     // genuinely standing under, so the billboard would only ever be a second
     // sun beside the real one.
-    const visible = drop > 0 && fade > 0;
+    const visible = drop > 0 && d !== null;
     this.sunMat.alpha = fade;
     this.sunDisc.setEnabled(this.enabled && visible);
     this.drawn = null;
     if (!visible) return;
 
-    const d = lift(x, y, z, drop, this.camera);
     this.drawn = d;
     this.sunDisc.position = new Vector3(d.x, d.y, d.z).scale(SUN_DIST);
 

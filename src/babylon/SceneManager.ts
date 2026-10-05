@@ -406,10 +406,11 @@ export class SceneManager {
     // exactly the same night sky, which is the requirement.
     this.nightSky = new NightSky(this.scene, this.sky.camera);
     this.sun.setNightSky(this.nightSky);
-    // Sun and moon are framed against the camera, so a tilt re-places both —
-    // through ONE observer (SkyDome's), because two would race for ordering and
-    // leave the moon a frame behind the sun in a sky they are meant to share.
-    this.sky.setFramingHook(() => this.nightSky?.reframe());
+    // Sun and moon are framed against the camera and the horizon drop, so a
+    // tilt or a view change re-places both — through ONE owner (SkyDome),
+    // because two would race for ordering and leave the moon behind the sun
+    // in a sky they are meant to share.
+    this.sky.setMoon(this.nightSky);
 
     this.visuals = new EntityVisuals(this.scene, opts.config, this.frames);
 
@@ -624,8 +625,7 @@ export class SceneManager {
     // no moon, no stars, just the loading backdrop below. Same early-return
     // that bit 2.383.0's aim flag; stating startup state explicitly is the fix
     // that works for both.
-    this.sky.setHorizonDrop(OVERVIEW_HORIZON_DROP);
-    this.nightSky?.setHorizonDrop(OVERVIEW_HORIZON_DROP);
+    this.sky.setHorizonDrop(OVERVIEW_HORIZON_DROP);   // the sun AND the moon
     // The dome is on now and is infiniteDistance, so it covers the frame and
     // this only shows where the dome does not — which is nowhere. Kept rather
     // than nulled because it is still the right answer for the instants before
@@ -1136,10 +1136,9 @@ export class SceneManager {
       // actually use, instead of only at the near-horizontal one that had to be
       // dialled in deliberately. See SkyDome.setHorizonDrop for why this is the
       // only lever that exists (moving or scaling the dome provably cannot).
-      this.sky.setHorizonDrop(OVERVIEW_HORIZON_DROP);
       // The moon rides the same drop as the sun and the gradient — one number,
-      // three bodies, so they cannot end up in skies tilted differently.
-      this.nightSky?.setHorizonDrop(OVERVIEW_HORIZON_DROP);
+      // one call, so they cannot end up in skies tilted differently.
+      this.sky.setHorizonDrop(OVERVIEW_HORIZON_DROP);
     } else {
       this.overview.disable();
       this.scene.activeCamera = this.camera.camera;
@@ -1165,8 +1164,7 @@ export class SceneManager {
       // No horizon drop when walking: standing in the villa, the horizon
       // belongs at eye level, which is what 0 means. Applying the overview's
       // drop here would put the sea's edge below the terrace floor.
-      this.sky.setHorizonDrop(0);
-      this.nightSky?.setHorizonDrop(0);
+      this.sky.setHorizonDrop(0);   // the sun AND the moon
       this.visuals.setIconZoomFit(0); // 0 = no zoom shrink: fixed size when walking
     }
     this.requestRender(600);

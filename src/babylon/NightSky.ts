@@ -15,7 +15,7 @@
 
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
-import { bodyFade, lift, liftFor, type SkyCamera } from "./skyFraming";
+import { placeBody, type SkyCamera } from "./skyFraming";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
@@ -57,7 +57,8 @@ export class NightSky {
   private moon: Mesh;
   private moonMat: StandardMaterial;
   private moonTex: DynamicTexture;
-  /** The sky's horizon drop as an angle, mirrored onto the moon. */
+  /** The sky's horizon drop as an angle — handed over by SkyDome (reframe),
+   *  the one owner of the drop for both bodies. */
   private lift = 0;
   private starLayers: { mesh: Mesh; mat: StandardMaterial; peak: number }[] = [];
   /** Last phase the texture was drawn for, so a per-minute update does not
@@ -67,7 +68,10 @@ export class NightSky {
 
   /** SkyDome's camera object (SceneManager hands it over), so the moon is framed
    *  against the very pose the sun is. */
-  constructor(scene: Scene, private readonly camera: SkyCamera) {
+  private readonly camera: SkyCamera;
+
+  constructor(scene: Scene, camera: SkyCamera) {
+    this.camera = camera;
     // ── Stars ──────────────────────────────────────────────────────────────
     // GL POINTS, not a textured sphere — and that is the whole fix (2.228.0).
     //
@@ -123,33 +127,27 @@ export class NightSky {
     this.setEnabled(false);
   }
 
+  /** The last look handed to update(), so the moon can be re-placed when the
+   *  CAMERA moves rather than only when the sky clock ticks. The arc is framed
+   *  against the camera (skyFraming.lift), so a turn or tilt changes the answer. */
+  private lastLook: MoonLook | null = null;
+
+  /** Re-place from the stored look against the sky's current drop (`lift`,
+   *  radians). Called by SkyDome whenever it re-frames the sun — a camera move
+   *  or a drop change — so sun and moon move in the same frame by the same
+   *  rule. A moon left at its true elevation while everything around it
+   *  rises is the empty-sky bug 2.388.0 fixed for the sun, one body over. */
+  reframe(lift: number): void {
+    this.lift = lift;
+    if (this.lastLook) this.update(this.lastLook);
+  }
+
   /**
    * Place and light the moon, and fade both it and the stars for the hour.
    *
    * Called from SunController on the same beat as the sun, so an unattended
    * kiosk walks the moon across the sky and through its phases on its own.
    */
-  /**
-   * Match the overview's horizon drop, so the moon is lifted by exactly the
-   * angle the sun and the sky gradient are — see SkyDome.setHorizonDrop. A moon
-   * left at its true elevation while everything around it rises is the same
-   * empty-sky bug 2.388.0 fixed for the sun, one body over.
-   */
-  setHorizonDrop(units: number): void {
-    this.lift = liftFor(units);
-  }
-
-  /** The last look handed to update(), so the moon can be re-placed when the
-   *  CAMERA moves rather than only when the sky clock ticks. The arc is framed
-   *  against the camera (skyFraming.lift), so a turn or tilt changes the answer. */
-  private lastLook: MoonLook | null = null;
-
-  /** Re-place from the stored look. Called by SkyDome's framing hook, so sun
-   *  and moon are re-framed in the same frame by the same rule. */
-  reframe(): void {
-    if (this.lastLook) this.update(this.lastLook);
-  }
-
   update(look: MoonLook): void {
     this.lastLook = look;
     const night = Math.max(0, Math.min(1, look.nightT));
@@ -169,15 +167,13 @@ export class NightSky {
     // the same camera object SkyDome tracks — the moon rides the identical dome,
     // round the identical villa.
     const { x, y, z } = look.dir;
-    const d = lift(x, y, z, this.lift, this.camera);
-    const dir = new Vector3(d.x, d.y, d.z);
-    const fade = bodyFade(x, y, z, this.lift, this.camera);
-    const visible = night > 0 && fade > 0;
+    const { fade, dir: d } = placeBody(x, y, z, this.lift, this.camera);
+    const visible = night > 0 && d !== null;
     this.moonMat.alpha = visible ? night * fade : 0;
     this.moon.setEnabled(visible);
     if (!visible) return;
 
-    this.moon.position = dir.scale(MOON_DIST);
+    this.moon.position = new Vector3(d.x, d.y, d.z).scale(MOON_DIST);
 
     // Redraw only when the disc would actually look different.
     const key = `${look.fraction.toFixed(2)}:${look.angle < 0 ? "w" : "n"}`
