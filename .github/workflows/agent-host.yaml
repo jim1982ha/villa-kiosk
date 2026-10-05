@@ -34,6 +34,14 @@ jobs:
         run: |
           python3 -m pip install --quiet pyyaml pytest -r agent-host/agent-src/requirements.txt
 
+      - name: What the agent needs from Debian
+        # The image installs the agent manifest's system_packages; the tests need the
+        # same (libopus0: voice.py decodes a voice message, 0.12.42). Read from the
+        # manifest, never retyped here.
+        run: |
+          pkgs=$(python3 -c "import yaml; print(' '.join(yaml.safe_load(open('agent-host/agent-src/vesta-agent.yaml')).get('system_packages') or []))")
+          if [ -n "$pkgs" ]; then sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends $pkgs; fi
+
       - name: The gates
         # ⚠️ LISTED ONCE, IN agent-host/tools/release.py (0.12.18). This job
         # named nine steps and no local runner existed, so "run what CI runs"

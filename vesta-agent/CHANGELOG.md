@@ -1,3 +1,8 @@
+## 0.12.43
+
+### Changed
+- Behind the scenes: the release checks now install the same system library as the app (the one that reads voice messages). 0.12.42 was never published because of this; everything listed under 0.12.42 arrives with this version.
+
 ## 0.12.42
 
 ### Added
