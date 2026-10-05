@@ -17,6 +17,7 @@
 //     dismissedEntityIds  entities the owner removed as "no longer in HA" —
 //                    a decision about the VILLA's model, so dismissing on a
 //                    phone must dismiss on the wall tablet too
+//     fmContract     the maintenance contract's cap and category names
 //
 //   PER-DEVICE — describes THIS CLIENT's look/feel, where different answers on
 //   different hardware are correct, not a drift to be reconciled: render
@@ -31,23 +32,99 @@
 
 import { ingressPath } from "@/ha/ingress";
 import type { AppConfig, DeviceGroup } from "./AppConfig";
+import { EMPTY_FM_CONTRACT, type FmContract } from "@/fm/fmTypes";
 import type { EntityMapping, TeleportPoint } from "@/types/scene.types";
 import { backendFetch } from "@/auth/sessionLost";
 import {
   keyBy, diffKeyed, applyKeyed, keyedDiffIsEmpty,
   type Keyed, type KeyedDiff,
 } from "@/utils/keyedSync";
+import { readJson, writeJson } from "@/utils/storedJson";
 
-/** The AppConfig fields stored centrally. Single source of truth — both the
- *  push (what we send) and the merge (what a pull is allowed to overwrite)
- *  derive from this one list, so adding a field here is all it takes to make
- *  it site-wide. */
-export const SHARED_CONFIG_KEYS = [
-  "entityMap", "meshBindings", "deviceGroups", "teleportPoints", "dismissedEntityIds",
-] as const;
+// ── THE SHARED KEYS: ONE ROW EACH ──────────────────────────────────────────
+// Every shared key, described once: how its value is indexed item by item for
+// the per-item diff (see "Per-item diff/merge" below), how it is rebuilt from
+// that index, what a server value must look like to be accepted, and what it
+// is when the server has never stored it. Every function in this file —
+// parse, diff, apply, "is the diff empty", the empty baseline — derives from
+// these rows (2.496.224). The key list used to be spelled out by hand in
+// seven places; a key missing from the parser was silently dropped on every
+// pull.
+//
+// Adding a shared key is: its item type in SharedItems, and its row in
+// SHARED_KEYS (tsc refuses a row missing for a key, or a key without a row).
 
-export type SharedConfigKey = (typeof SHARED_CONFIG_KEYS)[number];
+/** The type of ONE item of each shared key, once indexed. */
+interface SharedItems {
+  entityMap: EntityMapping;
+  meshBindings: string;
+  deviceGroups: DeviceGroup;
+  teleportPoints: TeleportPoint;
+  dismissedEntityIds: true;
+  fmContract: FmContract;
+}
+
+export type SharedConfigKey = keyof SharedItems;
 export type SharedDeviceConfig = Pick<AppConfig, SharedConfigKey>;
+
+interface SharedKeyRow<V, I> {
+  /** The value as {itemId: item}. */
+  index(value: V): Keyed<I>;
+  /** The value rebuilt from that index. */
+  fromIndex(items: Keyed<I>): V;
+  /** A server value in this key's shape, or undefined to keep the local
+   *  value. Element shapes are validated downstream by the consumers. */
+  parse(raw: unknown): V | undefined;
+  /** The value when the server has never stored the key. */
+  empty: V;
+}
+
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  !!v && typeof v === "object" && !Array.isArray(v);
+const asRecord = <T>(raw: unknown): Record<string, T> | undefined =>
+  isRecord(raw) ? (raw as Record<string, T>) : undefined;
+const asArray = <T>(raw: unknown): T[] | undefined =>
+  Array.isArray(raw) ? (raw as T[]) : undefined;
+const sameRecord = <T>(v: Keyed<T>): Keyed<T> => v;
+
+const SHARED_KEYS: { [K in SharedConfigKey]: SharedKeyRow<AppConfig[K], SharedItems[K]> } = {
+  entityMap: { index: sameRecord, fromIndex: sameRecord, parse: asRecord, empty: {} },
+  meshBindings: { index: sameRecord, fromIndex: sameRecord, parse: asRecord, empty: {} },
+  // Arrays are indexed by their own natural id (`id` / `name`, both already
+  // required to be unique elsewhere in the app).
+  deviceGroups: {
+    index: (arr) => keyBy(arr, (g) => g.id), fromIndex: Object.values, parse: asArray, empty: [],
+  },
+  teleportPoints: {
+    index: (arr) => keyBy(arr, (p) => p.name), fromIndex: Object.values, parse: asArray, empty: [],
+  },
+  // A plain id list is its own index — dismissing an entity on one device and
+  // un-dismissing a DIFFERENT one on another must not cancel each other out,
+  // which is exactly what comparing the two lists wholesale would do.
+  dismissedEntityIds: {
+    index: (arr) => Object.fromEntries(arr.map((id) => [id, true as const])),
+    fromIndex: Object.keys,
+    parse: (raw) => (Array.isArray(raw) ? raw.filter((v): v is string => typeof v === "string") : undefined),
+    empty: [],
+  },
+  // One value, not a collection: indexed as a single item, so a change on
+  // one device replaces it whole and an untouched copy carries nothing.
+  fmContract: {
+    index: (v) => ({ terms: v }),
+    fromIndex: (items) => items.terms ?? EMPTY_FM_CONTRACT,
+    parse: (raw) => (isRecord(raw) ? { ...EMPTY_FM_CONTRACT, ...(raw as Partial<FmContract>) } : undefined),
+    empty: EMPTY_FM_CONTRACT,
+  },
+};
+
+/** The AppConfig fields stored centrally, in the one order every document is
+ *  built in (the push gate compares JSON strings, so key order matters). */
+export const SHARED_CONFIG_KEYS = Object.keys(SHARED_KEYS) as readonly SharedConfigKey[];
+
+/** One row, typed for its own key — the only cast the loops below need. */
+function row<K extends SharedConfigKey>(key: K): SharedKeyRow<AppConfig[K], SharedItems[K]> {
+  return SHARED_KEYS[key];
+}
 
 // ── Shared, but not ALL of it: derived items are excluded ──────────────────
 // `teleportPoints` holds two different kinds of thing under one key. A point
@@ -66,7 +143,7 @@ export type SharedDeviceConfig = Pick<AppConfig, SharedConfigKey>;
 // removes the derived items on the way out, mergeSharedConfig puts this
 // device's own back on the way in. Keeping them together is what stops a pull
 // blanking the fitted rooms until the next calibration.
-const isFittedPoint = (p: TeleportPoint): boolean => p.fitted === true;
+export const isFittedPoint = (p: TeleportPoint): boolean => p.fitted === true;
 
 /** Extract just the shared slice of a full config — authored data only. */
 export function pickSharedConfig(config: AppConfig): SharedDeviceConfig {
@@ -102,18 +179,12 @@ export function mergeSharedConfig(
  *  THIS app version knows, dropping anything unrecognised — so a store written
  *  by a newer version can't inject unknown keys into config. Absent/wrong-typed
  *  fields are simply omitted, letting the caller keep its current value. */
-function parseSharedConfig(raw: unknown): Partial<SharedDeviceConfig> {
-  if (!raw || typeof raw !== "object") return {};
-  const b = raw as Record<string, unknown>;
+export function parseSharedConfig(raw: unknown): Partial<SharedDeviceConfig> {
+  if (!isRecord(raw)) return {};
   const out: Record<string, unknown> = {};
-  // teleportPoints is the only array; the rest are plain objects/arrays whose
-  // element shapes are already validated downstream by the consumers.
-  if (b.entityMap && typeof b.entityMap === "object") out.entityMap = b.entityMap;
-  if (b.meshBindings && typeof b.meshBindings === "object") out.meshBindings = b.meshBindings;
-  if (Array.isArray(b.deviceGroups)) out.deviceGroups = b.deviceGroups;
-  if (Array.isArray(b.teleportPoints)) out.teleportPoints = b.teleportPoints;
-  if (Array.isArray(b.dismissedEntityIds)) {
-    out.dismissedEntityIds = b.dismissedEntityIds.filter((v) => typeof v === "string");
+  for (const key of SHARED_CONFIG_KEYS) {
+    const value = row(key).parse(raw[key]);
+    if (value !== undefined) out[key] = value;
   }
   return out as Partial<SharedDeviceConfig>;
 }
@@ -137,38 +208,21 @@ function parseSharedConfig(raw: unknown): Partial<SharedDeviceConfig> {
 // copy (see DeviceConfigSync's push flow), makes concurrent edits to
 // different items commute instead of racing.
 //
-// Each shared key is normalised to Record<id, item> for diffing — entityMap
-// and meshBindings already are; deviceGroups/teleportPoints (arrays) are
-// keyed by their own natural id (`id` / `name` respectively, both already
-// required to be unique elsewhere in the app).
-// The diff/apply primitives live in utils/keyedSync.ts — the SAME ones the
-// Facility Manager store uses. See that file for why these three rules are
-// shared code rather than a copy per store.
-const keyDeviceGroups = (arr: DeviceGroup[]) => keyBy(arr, (g) => g.id);
-const keyTeleportPoints = (arr: TeleportPoint[]) => keyBy(arr, (p) => p.name);
-/** A plain id list is its own key — dismissing an entity on one device and
- *  un-dismissing a DIFFERENT one on another must not cancel each other out,
- *  which is exactly what comparing the two lists wholesale would do. */
-const keyIdList = (arr: string[]): Keyed<true> =>
-  Object.fromEntries(arr.map((id) => [id, true as const]));
+// Each shared key is indexed as Record<id, item> for diffing by its row in
+// SHARED_KEYS. The diff/apply primitives live in utils/keyedSync.ts — the
+// SAME ones the Facility Manager store uses. See that file for why these
+// three rules are shared code rather than a copy per store.
 
-export interface SharedConfigDiff {
-  entityMap: KeyedDiff<EntityMapping>;
-  meshBindings: KeyedDiff<string>;
-  deviceGroups: KeyedDiff<DeviceGroup>;
-  teleportPoints: KeyedDiff<TeleportPoint>;
-  dismissedEntityIds: KeyedDiff<true>;
-}
+export type SharedConfigDiff = { [K in SharedConfigKey]: KeyedDiff<SharedItems[K]> };
 
 /** What did `next` actually change relative to `base`, per item? */
 export function diffSharedConfig(base: SharedDeviceConfig, next: SharedDeviceConfig): SharedConfigDiff {
-  return {
-    entityMap: diffKeyed(base.entityMap, next.entityMap),
-    meshBindings: diffKeyed(base.meshBindings, next.meshBindings),
-    deviceGroups: diffKeyed(keyDeviceGroups(base.deviceGroups), keyDeviceGroups(next.deviceGroups)),
-    teleportPoints: diffKeyed(keyTeleportPoints(base.teleportPoints), keyTeleportPoints(next.teleportPoints)),
-    dismissedEntityIds: diffKeyed(keyIdList(base.dismissedEntityIds), keyIdList(next.dismissedEntityIds)),
-  };
+  const out = {} as Record<SharedConfigKey, unknown>;
+  for (const key of SHARED_CONFIG_KEYS) {
+    const r = row(key) as SharedKeyRow<unknown, unknown>;
+    out[key] = diffKeyed(r.index(base[key]), r.index(next[key]));
+  }
+  return out as SharedConfigDiff;
 }
 
 /**
@@ -194,22 +248,19 @@ export function describeSharedConfigDiff(diff: SharedConfigDiff): Record<string,
 }
 
 export function isSharedConfigDiffEmpty(diff: SharedConfigDiff): boolean {
-  return keyedDiffIsEmpty(diff.entityMap) && keyedDiffIsEmpty(diff.meshBindings)
-    && keyedDiffIsEmpty(diff.deviceGroups) && keyedDiffIsEmpty(diff.teleportPoints)
-    && keyedDiffIsEmpty(diff.dismissedEntityIds);
+  return SHARED_CONFIG_KEYS.every((key) => keyedDiffIsEmpty(diff[key] as KeyedDiff<unknown>));
 }
 
 /** Replay a diff onto some other config snapshot (normally the server's
  *  freshest one) — additions/edits and deletions from the diff win,
  *  everything else in `target` is left exactly as-is. */
 export function applySharedConfigDiff(target: SharedDeviceConfig, diff: SharedConfigDiff): SharedDeviceConfig {
-  return {
-    entityMap: applyKeyed(target.entityMap, diff.entityMap),
-    meshBindings: applyKeyed(target.meshBindings, diff.meshBindings),
-    deviceGroups: Object.values(applyKeyed(keyDeviceGroups(target.deviceGroups), diff.deviceGroups)),
-    teleportPoints: Object.values(applyKeyed(keyTeleportPoints(target.teleportPoints), diff.teleportPoints)),
-    dismissedEntityIds: Object.keys(applyKeyed(keyIdList(target.dismissedEntityIds), diff.dismissedEntityIds)),
-  };
+  const out = {} as Record<SharedConfigKey, unknown>;
+  for (const key of SHARED_CONFIG_KEYS) {
+    const r = row(key) as SharedKeyRow<unknown, unknown>;
+    out[key] = r.fromIndex(applyKeyed(r.index(target[key]), diff[key] as KeyedDiff<unknown>));
+  }
+  return out as SharedDeviceConfig;
 }
 
 // The sync baseline (what the server was last known to hold) is PERSISTED,
@@ -236,9 +287,9 @@ const BASELINE_KEY = "villa-kiosk:shared-config-baseline";
 
 export function loadSyncBaseline(): SharedDeviceConfig | null {
   try {
-    const raw = localStorage.getItem(BASELINE_KEY);
-    if (!raw) return null;
-    const parsed = parseSharedConfig(JSON.parse(raw));
+    const raw = readJson<unknown>(BASELINE_KEY);
+    if (raw === null) return null;
+    const parsed = parseSharedConfig(raw);
     // Only usable as a baseline if it carries every shared key — a partial
     // one would read as "this device deleted the missing keys".
     return SHARED_CONFIG_KEYS.every((k) => k in parsed)
@@ -250,17 +301,9 @@ export function loadSyncBaseline(): SharedDeviceConfig | null {
 }
 
 export function saveSyncBaseline(config: SharedDeviceConfig): void {
-  try {
-    localStorage.setItem(BASELINE_KEY, JSON.stringify(config));
-  } catch { /* storage full/disabled — degrades to the old in-memory behaviour */ }
+  // Storage full/disabled degrades to the old in-memory behaviour.
+  writeJson(BASELINE_KEY, config);
 }
-
-/** What each shared key looks like when the server has never stored it.
- *  Used to build a HONEST baseline (see baselineFromServer). */
-const EMPTY_SHARED_CONFIG: SharedDeviceConfig = {
-  entityMap: {}, meshBindings: {}, deviceGroups: [], teleportPoints: [],
-  dismissedEntityIds: [],
-};
 
 /**
  * The baseline = what the server ACTUALLY holds, with an empty value for every
@@ -286,7 +329,7 @@ export function baselineFromServer(server: Partial<SharedDeviceConfig>): SharedD
   // Built in SHARED_CONFIG_KEYS order so its JSON compares byte-for-byte
   // against pickSharedConfig's (the push gate is a string compare).
   for (const key of SHARED_CONFIG_KEYS) {
-    out[key] = key in server ? server[key] : EMPTY_SHARED_CONFIG[key];
+    out[key] = key in server ? server[key] : row(key).empty;
   }
   return out as SharedDeviceConfig;
 }

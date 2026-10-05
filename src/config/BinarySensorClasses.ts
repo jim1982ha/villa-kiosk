@@ -6,7 +6,7 @@
 // details" panel used to hard-code leak wording ("LEAK DETECTED" / "No
 // leak") for every single binary_sensor regardless of device_class, which
 // read as nonsense for a motion or door sensor. This table maps each HA
-// device_class to its on/off wording, a representative icon, and whether
+// device_class to a representative icon and whether
 // its "on" (or "off", for the few classes where the concerning state is
 // off — e.g. connectivity) state is inherently a problem — so the panel's
 // danger styling matches what the sensor actually monitors instead of
@@ -17,15 +17,16 @@
 // the sensible starting point for a class the user hasn't customised.
 
 import { prettyState } from "@/utils/entityValue";
+import { binaryWord } from "./binarySensorWords";
 import {
   Activity, AlertTriangle, BatteryCharging, BatteryWarning, DoorOpen, Droplets,
   Eye, Flame, Home, Lightbulb, Plug, RefreshCw, ShieldAlert, Snowflake,
   Thermometer, Unlock, Vibrate, Volume2, Wifi, Wind, type LucideIcon,
 } from "lucide-react";
 
+/** A class's icon and default problem state. Its WORDS are not here: they
+ *  live once in config/binarySensorWords (binaryWord), which every surface reads. */
 export interface BinarySensorClassInfo {
-  onLabel: string;
-  offLabel: string;
   icon: LucideIcon;
   /** Which state (if any) counts as this class's default "problem" state.
    *  "none" = purely informational, never auto-flagged as an alert. */
@@ -35,41 +36,41 @@ export interface BinarySensorClassInfo {
 /** Fallback for a missing/unrecognised device_class — preserves the
  *  historical behaviour (generic "on" = alert) for anything not listed. */
 const DEFAULT_INFO: BinarySensorClassInfo = {
-  onLabel: "On", offLabel: "Off", icon: Activity, alarmState: "on",
+  icon: Activity, alarmState: "on",
 };
 
 const BINARY_SENSOR_CLASSES: Record<string, BinarySensorClassInfo> = {
   // Actual hazards — "on" is the problem.
-  moisture:        { onLabel: "Leak detected", offLabel: "No leak", icon: Droplets, alarmState: "on" },
-  smoke:           { onLabel: "Smoke detected", offLabel: "Clear", icon: Flame, alarmState: "on" },
-  gas:             { onLabel: "Gas detected", offLabel: "Clear", icon: Wind, alarmState: "on" },
-  carbon_monoxide: { onLabel: "CO detected", offLabel: "Clear", icon: Wind, alarmState: "on" },
-  safety:          { onLabel: "Unsafe", offLabel: "Safe", icon: ShieldAlert, alarmState: "on" },
-  problem:         { onLabel: "Problem", offLabel: "OK", icon: AlertTriangle, alarmState: "on" },
-  tamper:          { onLabel: "Tampered", offLabel: "Clear", icon: ShieldAlert, alarmState: "on" },
-  heat:            { onLabel: "Hot", offLabel: "Normal", icon: Thermometer, alarmState: "on" },
-  cold:            { onLabel: "Cold", offLabel: "Normal", icon: Snowflake, alarmState: "on" },
-  battery:         { onLabel: "Low", offLabel: "Normal", icon: BatteryWarning, alarmState: "on" },
+  moisture: { icon: Droplets, alarmState: "on" },
+  smoke: { icon: Flame, alarmState: "on" },
+  gas: { icon: Wind, alarmState: "on" },
+  carbon_monoxide: { icon: Wind, alarmState: "on" },
+  safety: { icon: ShieldAlert, alarmState: "on" },
+  problem: { icon: AlertTriangle, alarmState: "on" },
+  tamper: { icon: ShieldAlert, alarmState: "on" },
+  heat: { icon: Thermometer, alarmState: "on" },
+  cold: { icon: Snowflake, alarmState: "on" },
+  battery: { icon: BatteryWarning, alarmState: "on" },
   // Concerning when OFF, not on.
-  connectivity:    { onLabel: "Connected", offLabel: "Disconnected", icon: Wifi, alarmState: "off" },
+  connectivity: { icon: Wifi, alarmState: "off" },
 
   // Informational — presence/state, not a fault, so never auto-alerts.
-  motion:            { onLabel: "Motion detected", offLabel: "Clear", icon: Activity, alarmState: "none" },
-  moving:            { onLabel: "Moving", offLabel: "Not moving", icon: Activity, alarmState: "none" },
-  occupancy:         { onLabel: "Occupied", offLabel: "Clear", icon: Eye, alarmState: "none" },
-  presence:          { onLabel: "Home", offLabel: "Away", icon: Home, alarmState: "none" },
-  sound:             { onLabel: "Sound detected", offLabel: "Clear", icon: Volume2, alarmState: "none" },
-  vibration:         { onLabel: "Vibration detected", offLabel: "Clear", icon: Vibrate, alarmState: "none" },
-  light:             { onLabel: "Light detected", offLabel: "No light", icon: Lightbulb, alarmState: "none" },
-  door:              { onLabel: "Open", offLabel: "Closed", icon: DoorOpen, alarmState: "none" },
-  garage_door:       { onLabel: "Open", offLabel: "Closed", icon: DoorOpen, alarmState: "none" },
-  window:            { onLabel: "Open", offLabel: "Closed", icon: DoorOpen, alarmState: "none" },
-  opening:           { onLabel: "Open", offLabel: "Closed", icon: DoorOpen, alarmState: "none" },
-  lock:              { onLabel: "Unlocked", offLabel: "Locked", icon: Unlock, alarmState: "none" },
-  plug:              { onLabel: "Plugged in", offLabel: "Unplugged", icon: Plug, alarmState: "none" },
-  running:           { onLabel: "Running", offLabel: "Not running", icon: Activity, alarmState: "none" },
-  battery_charging:  { onLabel: "Charging", offLabel: "Not charging", icon: BatteryCharging, alarmState: "none" },
-  update:            { onLabel: "Update available", offLabel: "Up to date", icon: RefreshCw, alarmState: "none" },
+  motion: { icon: Activity, alarmState: "none" },
+  moving: { icon: Activity, alarmState: "none" },
+  occupancy: { icon: Eye, alarmState: "none" },
+  presence: { icon: Home, alarmState: "none" },
+  sound: { icon: Volume2, alarmState: "none" },
+  vibration: { icon: Vibrate, alarmState: "none" },
+  light: { icon: Lightbulb, alarmState: "none" },
+  door: { icon: DoorOpen, alarmState: "none" },
+  garage_door: { icon: DoorOpen, alarmState: "none" },
+  window: { icon: DoorOpen, alarmState: "none" },
+  opening: { icon: DoorOpen, alarmState: "none" },
+  lock: { icon: Unlock, alarmState: "none" },
+  plug: { icon: Plug, alarmState: "none" },
+  running: { icon: Activity, alarmState: "none" },
+  battery_charging: { icon: BatteryCharging, alarmState: "none" },
+  update: { icon: RefreshCw, alarmState: "none" },
 };
 
 export function binarySensorClassInfo(deviceClass?: string): BinarySensorClassInfo {
@@ -89,9 +90,8 @@ export function binarySensorClassInfo(deviceClass?: string): BinarySensorClassIn
  * wording: an unavailable sensor is "Unavailable", never "No leak".
  */
 export function stateLabelFor(entityId: string, deviceClass?: string): (state: string) => string {
-  if (!entityId.startsWith("binary_sensor.")) return prettyState;
-  const info = binarySensorClassInfo(deviceClass);
-  return (state) => state === "on" ? info.onLabel : state === "off" ? info.offLabel : prettyState(state);
+  // the one table of words (binarySensorWords) — this used to read them a second way
+  return (state) => binaryWord(entityId, deviceClass, state) ?? prettyState(state);
 }
 
 /**
@@ -141,6 +141,28 @@ export function alertStateFor(
 export const OPENING_DEVICE_CLASSES: ReadonlySet<string> = new Set([
   "door", "garage_door", "window", "opening",
 ]);
+
+/** The state a binary_sensor is SECURE in, when its kind has one: an opening
+ *  (OPENING_DEVICE_CLASSES) closed, a lock locked — both "off". Undefined for
+ *  every other kind (stateColors.binaryStatus). */
+export function secureStateFor(deviceClass: string | undefined): "off" | undefined {
+  return deviceClass !== undefined && (OPENING_DEVICE_CLASSES.has(deviceClass) || deviceClass === "lock") ? "off" : undefined;
+}
+
+/** The state in which a DETECTOR reports something, for its window's colours
+ *  (stateColors.binaryStatus): a motion or occupancy sensor's "on". Shown red
+ *  there, as the camera's motion bar shows a detection, and its quiet "off"
+ *  green — the sensor watching. Colours only: it is not a problem state, so the
+ *  map and the alerts still treat motion as information (alertStateFor). */
+export function detectionStateFor(deviceClass: string | undefined): "on" | undefined {
+  return deviceClass === "motion" || deviceClass === "occupancy" ? "on" : undefined;
+}
+
+/** The state a sensor's WINDOW colours red: its problem state (alertStateFor),
+ *  else, for a detector, its detection (detectionStateFor). */
+export function colourAlertStateFor(deviceClass: string | undefined, override: string | undefined): string | undefined {
+  return alertStateFor(deviceClass, override) ?? detectionStateFor(deviceClass);
+}
 
 /** binary_sensor device_classes whose "on" means someone or something MOVED.
  *  ⚠️ ONE LIST. Dashboard's motion toast and EntityCategories' access bucket

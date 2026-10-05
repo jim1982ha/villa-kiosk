@@ -9,6 +9,7 @@ import type { EntityMapping } from "@/types/scene.types";
 import type { HassEntity } from "@/types/ha.types";
 import { isUnavailable } from "@/utils/stateColors";
 import { dismissedEntitySet } from "./dismissedEntities";
+import { domainOf } from "@/utils/entityDomain";
 
 /** Every entity_id folded into some group as a (non-primary) member — these
  *  never get their own badge; see EntityVisuals.rebuildLabels. */
@@ -223,6 +224,25 @@ export function deviceFolding(
   for (const s of suggestDeviceGroups(entityMap, [...deviceGroups], entityDeviceIds)) {
     if (!repOf.has(s.memberEntityId)) repOf.set(s.memberEntityId, s.primaryEntityId);
   }
+  // ⚠️ AN ENTITY THAT IS NOT ON THE MAP STILL BELONGS TO ITS DEVICE (2.496.258).
+  // The fold used to cover only entityMap keys, so a reading the owner never
+  // placed — a pump's energy meter beside its placed power sensor — was a
+  // device of its own: the agent's "used 0.09 kWh/day" ticket on it stood
+  // alone in Cockpit with no room, and tapping it opened the meter instead of
+  // the pump the map shows. Home Assistant's registry says which device it is;
+  // it folds to that device's representative. Only unplaced ids are added, and
+  // every count (selectableDeviceIds) walks placed ids, so no number moves.
+  const repOfDevice = new Map<string, string>();
+  for (const id of Object.keys(entityMap).sort()) {
+    const deviceId = entityDeviceIds[id];
+    if (!deviceId || entityMap[id]?.disabled || repOfDevice.has(deviceId)) continue;
+    repOfDevice.set(deviceId, repOf.get(id) ?? id);
+  }
+  for (const [id, deviceId] of Object.entries(entityDeviceIds)) {
+    if (entityMap[id] || repOf.has(id)) continue;
+    const rep = repOfDevice.get(deviceId);
+    if (rep && rep !== id) repOf.set(id, rep);
+  }
   return repOf;
 }
 
@@ -289,4 +309,150 @@ export function villaDevices(input: VillaDeviceInput): VillaDevices {
     unavailable: ids.filter((id) => isUnavailable(input.entities[id])),
     has: (id) => set.has(id),
   };
+}
+
+// ── One identity for every opener (2.496.260) ──────────────────────────────
+// ⚠️ THREE ANSWERS TO "WHICH DEVICE IS THIS". The panel router and the map
+// knew explicit groups only; Cockpit and the counts the full fold above; and
+// every other opener — the Agent, Facility, the device lists — the raw entity
+// id. So the Onsen pump's energy-meter fault opened the meter in one place
+// and the pump in another, Settings listed that meter as "not shown
+// anywhere", and accepting a group swapped a lock's controls for a read-only
+// summary. These answer it once, from the fold.
+
+/** The entity that stands for `id`'s device — what a tap on anything of that
+ *  device opens. Itself when it is its own device. */
+export function deviceOf(folding: ReadonlyMap<string, string>, id: string): string {
+  return folding.get(id) ?? id;
+}
+
+const READING_DOMAINS = new Set(["sensor", "binary_sensor"]);
+
+/** Readings that say most about a device, first: what it draws and uses,
+ *  then what it measures. Everything else follows in id order. */
+const FIRST_CLASSES = ["power", "energy", "temperature"];
+
+/**
+ * What else is on the device of the entity whose panel is OPEN — "Also on this
+ * device" (2.496.260; the same for every panel since 2.496.271).
+ *
+ * ⚠️ IT ONLY EVER SHOWED ON SOME DEVICES (owner, 2026-10-04: "only applied to
+ * some specific devices"). Only the device's MAIN entity listed anything, so a
+ * reading opened by itself listed nothing; a device nobody placed on the map
+ * had no fold and listed nothing; and a battery is filed "diagnostic" by most
+ * integrations, so a light or a lock usually listed nothing either.
+ *
+ * Now, for any open entity `id`:
+ *  - NEVER the device's MAIN entity (owner, 2026-10-05: a battery opened from
+ *    "Smoke detector Smoke" listed "Smoke detector Smoke" again). Until
+ *    2.496.278 a reading's panel listed its main entity first, as the way back
+ *    to the device's controls; "‹ Back" (pages/panelNav) is that way now, and
+ *    the list is only what ELSE the device has;
+ *  - the device's other readings — fold members (groups, registry siblings) and the
+ *    registry siblings of an unplaced device alike — power, energy and
+ *    temperature first;
+ *  - a reading Home Assistant files as hidden or diagnostic only when the owner
+ *    grouped it, or when it is a BATTERY HA filed as diagnostic (a level to act
+ *    on, not noise) — never one a person hid.
+ * Never a restart button, a setting or a network tracker. The panel shows the
+ * first few and "Show all" (BasePanel), so a busy plug does not bury its controls.
+ */
+export function deviceReadings(
+  id: string,
+  folding: ReadonlyMap<string, string>,
+  entities: Record<string, HassEntity>,
+  suppressed: ReadonlySet<string>,
+  deviceGroups: readonly DeviceGroup[],
+  entityDeviceIds: Readonly<Record<string, string>> = {},
+  /** Hidden by a PERSON in Home Assistant (registry hidden_by) — kept hidden,
+   *  battery or not; the battery exception is for HA's own "diagnostic". */
+  userHidden: ReadonlySet<string> = new Set(),
+): string[] {
+  const rep = deviceOf(folding, id);
+  const chosen = new Set(deviceGroups.find((g) => g.primaryEntityId === rep)?.memberEntityIds ?? []);
+  const members = new Set<string>();
+  for (const [m, to] of folding) if (to === rep) members.add(m);
+  const dev = entityDeviceIds[rep] ?? entityDeviceIds[id];
+  if (dev) for (const [m, d] of Object.entries(entityDeviceIds)) if (d === dev) members.add(m);
+  const readings: string[] = [];
+  for (const m of members) {
+    if (m === id || m === rep || !entities[m]) continue;
+    if ((folding.get(m) ?? m) !== rep && folding.has(m)) continue;   // grouped under another device: listed there
+    if (!READING_DOMAINS.has(domainOf(m))) continue;
+    const battery = entities[m].attributes?.device_class === "battery";
+    if (suppressed.has(m) && !chosen.has(m) && (!battery || userHidden.has(m))) continue;
+    readings.push(m);
+  }
+  const rank = (m: string) => {
+    const k = FIRST_CLASSES.indexOf(String(entities[m]?.attributes?.device_class ?? ""));
+    return k < 0 ? FIRST_CLASSES.length : k;
+  };
+  readings.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+  return readings;
+}
+
+/**
+ * Home Assistant entities the villa cannot show ANYWHERE — Advanced
+ * Settings' audit. Not one that belongs to a placed device (it is shown, in
+ * that device's panel), not one HA hides. (A dismissal applies only to an id
+ * Home Assistant no longer knows — dismissedEntitySet — so it can never touch
+ * this list, which is built from the entities HA does know.)
+ */
+export function unshownEntities(input: {
+  entities: Record<string, HassEntity>;
+  entityMap: Record<string, EntityMapping>;
+  folding: ReadonlyMap<string, string>;
+  suppressed: ReadonlySet<string>;
+  /** A type this app can draw (EntityMap.inferTypeFromEntityId). */
+  knownType: (id: string) => boolean;
+}): string[] {
+  return Object.keys(input.entities)
+    .filter((id) => input.knownType(id) && !input.entityMap[id] && !input.suppressed.has(id) && !input.folding.has(id))
+    .sort();
+}
+
+/** A change to the owner's groups. */
+export type GroupEdit =
+  | { kind: "create"; primaryEntityId: string; id: string }
+  | { kind: "add"; groupId: string; memberEntityId: string }
+  | { kind: "accept"; primaryEntityId: string; memberEntityId: string; id: string }
+  | { kind: "remove-member"; groupId: string; memberEntityId: string };
+
+/**
+ * Apply `edit` to the groups in `c`, or say why not. ONE ENTITY, ONE GROUP is
+ * enforced here, against the config the edit is applied to — it lived in the
+ * Settings component, checked against the list that render saw, and accepting
+ * a suggestion did not check it at all.
+ */
+export function groupEdit(c: Pick<AppConfig, "deviceGroups">, edit: GroupEdit): Pick<AppConfig, "deviceGroups"> | string {
+  const taken = groupedEntityIds(c.deviceGroups);
+  const withGroups = (deviceGroups: DeviceGroup[]) => ({ deviceGroups });
+  const put = (g: DeviceGroup) => upsertGroup(c as AppConfig, g);
+  switch (edit.kind) {
+    case "create":
+      if (taken.has(edit.primaryEntityId)) return "This entity is already part of another group.";
+      return put({ id: edit.id, primaryEntityId: edit.primaryEntityId, memberEntityIds: [] });
+    case "add": {
+      const g = c.deviceGroups.find((x) => x.id === edit.groupId);
+      if (!g) return "That group no longer exists.";
+      if (!edit.memberEntityId || edit.memberEntityId === g.primaryEntityId) return withGroups([...c.deviceGroups]);
+      if (taken.has(edit.memberEntityId)) return "This entity is already part of a group.";
+      return put({ ...g, memberEntityIds: [...g.memberEntityIds, edit.memberEntityId] });
+    }
+    case "accept": {
+      const existing = c.deviceGroups.find((g) => g.primaryEntityId === edit.primaryEntityId);
+      if (taken.has(edit.memberEntityId)) return "This entity is already part of a group.";
+      if (!existing && taken.has(edit.primaryEntityId)) return "This entity is already part of another group.";
+      // A primary's second suggestion ADDS to its group rather than making a
+      // second, orphaned group under the same primary.
+      return put(existing
+        ? { ...existing, memberEntityIds: [...existing.memberEntityIds, edit.memberEntityId] }
+        : { id: edit.id, primaryEntityId: edit.primaryEntityId, memberEntityIds: [edit.memberEntityId] });
+    }
+    case "remove-member": {
+      const g = c.deviceGroups.find((x) => x.id === edit.groupId);
+      if (!g) return withGroups([...c.deviceGroups]);
+      return put({ ...g, memberEntityIds: g.memberEntityIds.filter((id) => id !== edit.memberEntityId) });
+    }
+  }
 }

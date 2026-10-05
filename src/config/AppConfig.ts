@@ -7,6 +7,8 @@ import { ENTITY_MAP } from "./EntityMap";
 import { TELEPORT_POINTS } from "./TeleportPoints";
 import { DEFAULT_THRESHOLDS, type Threshold } from "./ThresholdConfig";
 import { DEFAULT_EYE_HEIGHT } from "@/babylon/walkerSpawn";
+import { EMPTY_FM_CONTRACT, type FmContract } from "@/fm/fmTypes";
+import { readJson, writeJson, removeStored } from "@/utils/storedJson";
 
 const CONFIG_KEY = "villa-kiosk:config:v2";
 
@@ -181,6 +183,10 @@ export interface AppConfig {
   dismissedEntityIds: string[];
   teleportPoints: TeleportPoint[];
   alertThresholds: Record<string, Threshold>;
+  /** The maintenance contract's money rules — monthly cap, category names,
+   *  warning share (fm/fmTypes.ts). SHARED: they describe the villa's
+   *  agreement, so every device reads the same terms. Empty by default. */
+  fmContract: FmContract;
   /** Standing eye height in metres (default 1.7). Configurable in Settings. */
   eyeHeight: number;
   /** Walk-speed multiplier (1.0 = default). Configurable in Settings. */
@@ -307,6 +313,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   dismissedEntityIds: [],
   teleportPoints: TELEPORT_POINTS,
   alertThresholds: DEFAULT_THRESHOLDS,
+  fmContract: EMPTY_FM_CONTRACT,
   eyeHeight: DEFAULT_EYE_HEIGHT,
   walkSpeed: 1,
   renderOnDemand: true,
@@ -442,9 +449,9 @@ function completeConfig(config: AppConfig): AppConfig {
 
 export function loadConfig(): AppConfig {
   try {
-    const raw = localStorage.getItem(CONFIG_KEY);
-    if (!raw) return { ...DEFAULT_CONFIG };
-    const stored = JSON.parse(raw) as Partial<AppConfig>;
+    // Absent, unparsable or storage disabled all read as "nothing stored".
+    const stored = readJson<Partial<AppConfig>>(CONFIG_KEY, (v): v is Partial<AppConfig> => !!v && typeof v === "object");
+    if (!stored) return { ...DEFAULT_CONFIG };
     return normaliseConfig({
       ...DEFAULT_CONFIG,
       ...stored,
@@ -486,15 +493,12 @@ function adoptRenderLookDefaults(render: RenderConfig): RenderConfig {
 }
 
 export function saveConfig(config: AppConfig): void {
-  try {
-    localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
-  } catch (err) {
-    console.error("[AppConfig] failed to save", err);
-  }
+  // Said, not swallowed: a full quota here loses this device's own settings.
+  if (!writeJson(CONFIG_KEY, config)) console.error("[AppConfig] failed to save (storage full or disabled)");
 }
 
 export function resetConfig(): void {
-  localStorage.removeItem(CONFIG_KEY);
+  removeStored(CONFIG_KEY);
 }
 
 /** Fallback title when neither a configured title nor the HA instance name exist. */

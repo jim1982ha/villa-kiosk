@@ -33,7 +33,7 @@ import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { Scene } from "@babylonjs/core/scene";
 import type { CameraController } from "./CameraController";
 import { structureRole } from "./meshRoles";
-import { floorOf, type FloorPlan } from "./floorOf";
+import { floorOf, structureFloors, stairTarget, type FloorPlan } from "./floorOf";
 
 
 export class FloorManager {
@@ -48,10 +48,12 @@ export class FloorManager {
   private alwaysOnMeshes: AbstractMesh[] = [];
   /** Every floor-bound mesh with what its floor is decided from, so a plan
    *  arriving after the load (calibration) can re-decide it. */
-  private indexed: { mesh: AbstractMesh; role: { isStructure: boolean; level: number }; centreY: number }[] = [];
+  private indexed: { mesh: AbstractMesh; role: { isStructure: boolean; level: number }; centreY: number; minY: number }[] = [];
   private plan: FloorPlan | null = null;
-  private triggerUp: AbstractMesh | null = null;
-  private triggerDown: AbstractMesh | null = null;
+  /** Stair-trigger zones the GLB ships, any number of each: entering an
+   *  "up" one moves one floor up (floorOf.stairTarget), a "down" one down. */
+  private triggersUp: AbstractMesh[] = [];
+  private triggersDown: AbstractMesh[] = [];
   private currentFloor = 1;
   private floorsDetected: number[] = [1];
   private cooldownUntil = 0;
@@ -85,18 +87,20 @@ export class FloorManager {
   indexFloors(meshes: AbstractMesh[]): void {
     this.alwaysOnMeshes = [];
     this.indexed = [];
+    this.triggersUp = [];
+    this.triggersDown = [];
     // A new model: the last one's plan describes other rooms. Calibration
     // hands this one's over (setPlan); until then, the height split.
     this.plan = null;
     for (const m of meshes) {
       if (/^trigger_stair_up/i.test(m.name)) {
-        this.triggerUp = m;
+        this.triggersUp.push(m);
         m.isVisible = false;
         m.isPickable = false;
         continue;
       }
       if (/^trigger_stair_down/i.test(m.name)) {
-        this.triggerDown = m;
+        this.triggersDown.push(m);
         m.isVisible = false;
         m.isPickable = false;
         continue;
@@ -126,7 +130,8 @@ export class FloorManager {
         if (!m.isEnabled(false)) m.setEnabled(true);
         continue;
       }
-      this.indexed.push({ mesh: m, role, centreY: m.getBoundingInfo().boundingBox.centerWorld.y });
+      const box = m.getBoundingInfo().boundingBox;
+      this.indexed.push({ mesh: m, role, centreY: box.centerWorld.y, minY: box.minimumWorld.y });
     }
     this.classify();
   }
@@ -143,8 +148,10 @@ export class FloorManager {
   private classify(): void {
     this.floorMeshes.clear();
     this.floorBaseY.clear();
+    // The model's own storeys, for a villa whose plan cannot say (floorOf).
+    const structure = structureFloors(this.indexed);
     for (const { mesh: m, role, centreY } of this.indexed) {
-      const floor = floorOf(role, centreY, this.plan);
+      const floor = floorOf(role, centreY, this.plan, structure);
       m.metadata = { ...(m.metadata ?? {}), floorIndex: floor };
       const list = this.floorMeshes.get(floor) ?? [];
       list.push(m);
@@ -204,21 +211,19 @@ export class FloorManager {
     if (performance.now() < this.cooldownUntil) return;
     const pos = this.camera.getPosition();
 
-    // Explicit stair-trigger zones (if the GLB ships them) take priority.
-    if (this.triggerUp && this.currentFloor === 1 && this.triggerUp.intersectsPoint(pos)) {
-      this.switchToFloor(2);
-      return;
-    }
-    if (this.triggerDown && this.currentFloor === 2 && this.triggerDown.intersectsPoint(pos)) {
-      this.switchToFloor(1);
-      return;
-    }
+    // Explicit stair-trigger zones (if the GLB ships them) take priority —
+    // one floor up or down among the floors the model has (2.496.261: they
+    // jumped 1 → 2 and 2 → 1 only).
+    const up = this.triggersUp.some((t) => t.intersectsPoint(pos)) ? stairTarget(this.floorsDetected, this.currentFloor, true) : null;
+    if (up !== null) { this.switchToFloor(up); return; }
+    const down = this.triggersDown.some((t) => t.intersectsPoint(pos)) ? stairTarget(this.floorsDetected, this.currentFloor, false) : null;
+    if (down !== null) { this.switchToFloor(down); return; }
 
     // Otherwise (the pipeline emits no trigger meshes) derive the storey from
     // the walker's feet height: climbing the stairs raises the eye, and once the
     // feet clear onto the upper slab we reveal that storey (and hide it again on
     // the way down). Only while actually walking — see setFirstPerson.
-    if (this.firstPerson && !this.triggerUp && !this.triggerDown && this.floorsDetected.length > 1) {
+    if (this.firstPerson && this.triggersUp.length === 0 && this.triggersDown.length === 0 && this.floorsDetected.length > 1) {
       const desired = this.floorFromElevation(this.camera.getFeetY());
       if (desired !== this.currentFloor) this.switchToFloor(desired);
     }

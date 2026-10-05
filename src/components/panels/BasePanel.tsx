@@ -12,15 +12,17 @@
 // for room.
 
 import { useState, type ReactNode } from "react";
-import { Wrench } from "lucide-react";
+import { ChevronLeft, Wrench } from "lucide-react";
 import { linkedSwitchProps, usePanelActions } from "./PanelActionsContext";
 import { badgeImage } from "@/babylon/badgeIcons";
 import { useModalA11y } from "@/hooks/useModalA11y";
+import DeviceReadings from "./DeviceReadings";
 import { useConfig } from "@/config/ConfigContext";
 import { categorySurface } from "@/config/EntityCategories";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import BadgeColorModal from "./BadgeColorModal";
 import LastDayTimeline from "./LastDayTimeline";
+import ModalFooter from "@/components/common/ModalFooter";
 
 interface Props {
   title: string;
@@ -49,12 +51,15 @@ interface Props {
    *  (GenericPanel). Anything else should take the shared one: the default is
    *  what guarantees a new panel type can't quietly ship without history. */
   history?: false;
+  /** Opt OUT of "Also on this device" (PanelActions.readings) — only for a
+   *  panel that already shows every reading of the device (DeviceGroupPanel). */
+  deviceReadings?: false;
   onClose: () => void;
   children: ReactNode;
 }
 
-export default function BasePanel({ title, entityId, icon, className, headerActions, footerLeading, history, onClose, children }: Props) {
-  const { onEdit, onReportFault, badge, onSetBadgeColor, linked, motion } = usePanelActions();
+export default function BasePanel({ title, entityId, icon, className, headerActions, footerLeading, history, deviceReadings, onClose, children }: Props) {
+  const { onEdit, onReportFault, badge, onSetBadgeColor, linked, motion, back } = usePanelActions();
   const { resolvedRooms } = useConfig();
   const room = entityId ? resolvedRooms[entityId] : undefined;
   const [colorOpen, setColorOpen] = useState(false);
@@ -63,7 +68,9 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
   // panels sits the live villa canvas and HUD, so a Tab out of an open panel
   // used to walk straight into controls the user couldn't see behind the
   // scrim.
-  const dialogRef = useModalA11y(onClose);
+  // With somewhere to go back to, Escape and the phone's back gesture go back
+  // (one step), as the Back button does; Close and a tap outside close.
+  const dialogRef = useModalA11y(back ? back.go : onClose);
   // The header badge is a PNG baked from the theme's tokens and the tint below
   // is composited in JS, so neither re-themes through the cascade — a panel
   // left open across a dusk theme flip would keep its old-theme colours.
@@ -129,11 +136,26 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
           <div className="title">
             {headerIcon}
             <div style={{ minWidth: 0 }}>
-              <h2 title={title}>{title}</h2>
+              {/* The window's first focus (useModalA11y's data-autofocus), not the
+                  badge: the badge is the Owner's recolour BUTTON, and focusing it on
+                  open drew the phone's own focus ring round it — an amber border
+                  that read as a device state (owner, 2026-10-05). The heading is the
+                  conventional dialog-open target; tabIndex={-1} keeps it out of Tab. */}
+              <h2 title={title} tabIndex={-1} data-autofocus>{title}</h2>
               {room && <div className="room">{room}</div>}
             </div>
           </div>
-          {headerActions && <div className="modal-header-actions">{headerActions}</div>}
+          {(headerActions || back) && (
+            <div className="modal-header-actions">
+              {headerActions}
+              {back && (
+                <button type="button" className="btn panel-back" onClick={back.go}
+                  title={`Back to ${back.label}`} aria-label={`Back to ${back.label}`}>
+                  <ChevronLeft size={18} aria-hidden /> Back
+                </button>
+              )}
+            </div>
+          )}
         </div>
         <div className="modal-body">
           {/* The device's linked entity, if one is configured (Advanced
@@ -179,6 +201,10 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
             </div>
           )}
           {children}
+          {/* The device's other readings — the same physical device, one place
+              (2.496.260). A grouped lock kept only a read-only summary, and a
+              pump plug's energy meter had no panel of its own to be found in. */}
+          {deviceReadings !== false && <DeviceReadings />}
           {/* The "last N hours" history section — rendered HERE, in the shared
               chrome, for the same reason the linked-entity switch above is:
               so every panel about a device gets it identically and a NEW panel
@@ -193,9 +219,9 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
               structural rather than fixed twice. */}
           {history !== false && entityId && <LastDayTimeline entityId={entityId} />}
         </div>
-        {/* The modal shell's footer (04-modals.css) — the left group is always
-            there, empty or not, so Close sits right as in every dialog. */}
-        <div className="modal-footer">
+        {/* The shared footer (ModalFooter): the left group is always there,
+            empty or not, so Close sits right as in every dialog. */}
+        <ModalFooter onClose={onClose} leading={
           <div className="modal-footer-group">
             {footerLeading}
             {onEdit && <button className="btn ghost" onClick={onEdit}>Edit</button>}
@@ -212,8 +238,7 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
               ><Wrench size={16} /></button>
             )}
           </div>
-          <button className="btn primary" onClick={onClose}>Close</button>
-        </div>
+        } />
       </div>
 
       {colorOpen && badge && onSetBadgeColor && (

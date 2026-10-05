@@ -17,6 +17,7 @@ import type { FrameRequests } from "./frameScheduler";
 import type { SceneLook } from "./sceneLook";
 import type { LightingMode } from "./lightingMode";
 import { sunGeometry, sunLights } from "./sunState";
+import { clockTime } from "@/utils/dateText";
 
 export class SunController {
   /** The scene's sun — a directional light this controller alone drives.
@@ -231,7 +232,7 @@ export class SunController {
    * `real` vs `alt` is the day/night PREVIEW pin: they differ only when
    * Settings is forcing a side of the horizon, which is what made a simulated
    * 04:00 render as bright noon with no stars and no moon.
-   * `drawn` is where the sun DISC lands (SkyDome.displayAltitude); read it
+   * `drawn` is where the sun DISC lands (skyFraming.placeBody); read it
    * against `sinTilt` on the `place` line to say whether it is in frame.
    */
   private reportSky(
@@ -239,16 +240,11 @@ export class SunController {
     preview: string, nightT: number,
   ): void {
     const deg = (r: number) => Math.round((r * 180) / Math.PI);
-    const s = this.sky?.sunReport();
-    const clock = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const clock = clockTime(date);
     const line = `sky: ${clock}${skySimActive() ? " (sim)" : ""}`
       + ` alt=${deg(alt)}° real=${deg(real)}° az=${deg(azimuth)}°`
       + ` day=${alt > 0 ? "y" : "n"} nightT=${nightT.toFixed(2)} preview=${preview}`
-      + (!s ? " sky=off"
-        : s.drawnDeg === null ? " disc=hidden"
-        : ` drawn=${Math.round(s.drawnDeg)}°`
-          + ` frame=${s.frameX!.toFixed(2)},${s.frameY!.toFixed(2)}`
-          + ` discAlpha=${s.alpha.toFixed(2)}`);
+      + (this.sky ? this.sky.sunReport() : " sky=off");
     if (line === this.lastSkyLine) return;
     this.lastSkyLine = line;
     tapDebug(line, "sky");

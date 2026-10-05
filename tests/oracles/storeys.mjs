@@ -12,6 +12,7 @@ register("../consistency/alias-hook.mjs", import.meta.url);
 const { Storeys, isStairwell } = await import("@/babylon/storeys");
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import { tsFiles } from "../consistency/check.mjs";
 
 let fail = 0;
 const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
@@ -35,7 +36,7 @@ for (const numbered of [true, false]) {
   // only the plan's number can place it, which is why the numbers win.
   if (numbered) ck("  ...and, by the plan's number, so is the upper staircase (1.11 m)", s.storeyOf(byName("Staircase", 1)) === up);
   ck("a storey's floor is what its rooms agree on — 0 and 2.56, not a tread",
-     s.floorOf(g) === 0 && s.floorOf(up) === 2.56, [s.floorOf(g), s.floorOf(up)]);
+     s.floorY(g) === 0 && s.floorY(up) === 2.56, [s.floorY(g), s.floorY(up)]);
   ck("above the ground storey: 2.56 (not the staircase's 0.85)", s.floorAbove(g) === 2.56, s.floorAbove(g));
   ck("above the top storey: nothing", s.floorAbove(up) === Infinity);
   ck("a ceiling lamp at 2.3 m is on the GROUND storey", s.storeyAt(2.3) === g, s.storeyAt(2.3));
@@ -88,7 +89,7 @@ console.log("\n  the plan's other answers (one villa plan, 2.496.91):");
 console.log("\n  one plan, held once:");
 {
   const SRC = new URL("../../src/", import.meta.url).pathname;
-  const walk = (d, out = []) => { for (const e of readdirSync(d)) { const p = join(d, e); statSync(p).isDirectory() ? walk(p, out) : /\.tsx?$/.test(p) && out.push(p); } return out; };
+  const walk = tsFiles;
   const files = walk(SRC).map((f) => ({ f: f.slice(SRC.length), src: readFileSync(f, "utf8") }));
   const builders = files.filter(({ src }) => /new Storeys(?:<[^>]*>)?\((?!\[\]\))/.test(src)).map(({ f }) => f);
   ck("only SceneManager builds a plan with rooms in it; everyone else is handed it",
@@ -131,7 +132,18 @@ console.log("\n  a device in a wall (2.496.201):");
   ck("open ground two metres from any room is still no room", s.roomNear(5, 1.2, -2, WALL_TOLERANCE_M) === null);
   ck("the tolerance is a wall, not a garden", WALL_TOLERANCE_M >= 0.3 && WALL_TOLERANCE_M <= 1);
   const ev = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
-  ck("roomForEntity falls through containment to the nearest wall's room", /return this\.plan\.roomNear\(p\.x, p\.y, p\.z, WALL_TOLERANCE_M\)\?\.name \?\? null;/.test(ev));
+  ck("roomForEntity asks the plan's device ladder", /return this\.plan\.deviceRoomAt\(p\.x, p\.y, p\.z\)\?\.name \?\? null;/.test(ev));
+}
+
+console.log("\n  a device's room, the whole ladder by value (Storeys.deviceRoomAt, 2.496.287):");
+{
+  // a ground room at 0 m, an upper room at 3 m over a different part of the plan
+  const p = new Storeys([{ name: "Ground", floorY: 0, pts: sq(0, 5, 0, 5) }, { name: "Upper", floorY: 3, pts: sq(10, 15, 0, 5) }]);
+  ck("1. contained on its own storey", p.deviceRoomAt(2, 0.5, 2)?.name === "Ground" && p.deviceRoomAt(12, 3.5, 2)?.name === "Upper");
+  ck("2. its storey has no room there, yet a drawn room contains it: that room, never 'Other' (2.440.0)",
+     p.roomAt(2, 3.5, 2) === null && p.deviceRoomAt(2, 3.5, 2)?.name === "Ground");
+  ck("3. contained by nothing, in a wall: the room behind it", p.deviceRoomAt(5.3, 0.5, 2)?.name === "Ground");
+  ck("  ...and open ground is no room", p.deviceRoomAt(7.5, 0.5, 2) === null);
 }
 }
 

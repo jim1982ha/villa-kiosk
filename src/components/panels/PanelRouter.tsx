@@ -42,11 +42,15 @@ export default function PanelRouter({ active, onClose, pinContinuous, onOpenEnti
   };
   const props = { entity, mapping, onClose };
 
-  // An entity that's the PRIMARY of a device group opens the combined view
-  // (current values + history for every grouped entity) instead of its own
-  // type-based panel — see config/deviceGroups.ts.
+  // A group led by a READING (a temperature + humidity combo) opens the
+  // combined view — every member's value and one shared chart. A group led by
+  // something you CONTROL (a lock, a switch, a pump plug) opens that device's
+  // own panel, with the members listed under it as "Also on this device"
+  // (BasePanel): the combined view has no controls, and grouping a lock's
+  // battery with it used to leave the lock impossible to lock from its badge
+  // (2.496.260).
   const group = groupForPrimary(config.deviceGroups, active.entityId);
-  if (group) {
+  if (group && (mapping.type === "sensor" || mapping.type === "binary_sensor")) {
     return <DeviceGroupPanel group={group} primaryMapping={mapping} onClose={onClose} />;
   }
 

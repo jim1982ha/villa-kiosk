@@ -9,15 +9,10 @@
 // `unavailable` and not one line here would have gone red — which is precisely
 // the regression the file is named for.
 //
-// It drives the shipped function now. `fetchStateHistory` fetches, so the two
-// things it reaches for are stubbed: `window.location` (ingressApiBase builds a
-// same-origin URL from it) and `fetch` (which returns the recorded rows). Both
-// are three lines, and they are the only reason this was ever called untestable.
-// An EMPTY origin, not a plausible hostname. The first version used one, and
-// tests/hard-rules.py's third-party-host clause caught it immediately — the
-// guard doing its job on a file written minutes earlier. `fetch` is stubbed, so
-// the URL is never dialled and only its shape matters.
-globalThis.window = { location: { origin: "", pathname: "/" } };
+// It drives the shipped history source (src/ha/historySource.ts). Home
+// Assistant sits behind its port, so the recorded rows are handed to it by a
+// fake adapter — it used to take stubbing `window.location` and the global
+// `fetch` to reach the same code (2.496.214).
 
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
@@ -41,10 +36,11 @@ const ROWS = [
   { state: "unlocked",    last_changed: T(49) },  // attribute-only change
   { state: "unavailable", last_changed: T(90) },
 ];
-globalThis.fetch = async () => ({ ok: true, json: async () => [ROWS] });
-
-const { fetchStateHistory } = await import("@/ha/HAHistoryAPI");
-const points = await fetchStateHistory("lock.fixture", 24);
+const { loadOne } = await import("@/ha/historySource");
+const portOf = (rows) => ({ stateRows: async () => rows, getStatisticsDuringPeriod: async () => ({}) });
+const NOW = Date.UTC(2026, 8, 14, 12, 0);
+const statesOf = async (rows, id) => (await loadOne(portOf(rows), { kind: "states", ids: [id], hours: 24 }, NOW))[id];
+const points = await statesOf(ROWS, "lock.fixture");
 const states = points.map((p) => p.state);
 console.log(`  ${ROWS.length} recorded rows → ${points.length} points\n`);
 
@@ -73,10 +69,9 @@ eq("timestamps are finite", points.every((p) => Number.isFinite(p.t)), true);
 eq("...and ascending", points.every((p, i) => i === 0 || p.t >= points[i - 1].t), true);
 
 console.log("\n  a null state does not travel:");
-globalThis.fetch = async () => ({ ok: true, json: async () => [[
+const withNull = await statesOf([
   { state: null, last_changed: T(0) }, { state: "on", last_changed: T(5) },
-]] });
-const withNull = await fetchStateHistory("sensor.fresh", 24);
+], "sensor.fresh");
 eq("HA's null on a fresh entity is coerced at the door",
    withNull.every((p) => typeof p.state === "string"), true);
 

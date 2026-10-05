@@ -8,11 +8,15 @@
 // overdue work actually is.
 
 import { useState } from "react";
-import { Plus, Pencil, Trash2, Check, X } from "lucide-react";
+import Dropdown from "@/components/common/Dropdown";
+import { Plus, Pencil, Trash2 } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
-import { useFmData } from "@/fm/FmDataContext";
+import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
 import { scheduleStatus, shortDate } from "@/fm/fmEngine";
 import type { FmSchedule } from "@/fm/fmTypes";
+import AgentMark from "./AgentMark";
+import { EMPTY_SCHEDULE_DRAFT as EMPTY, scheduleToDraft as toDraft, draftDays, scheduleWrite, type ScheduleDraft as Draft } from "@/fm/scheduleDraft";
+import FormActions from "./FormActions";
 
 /** How the obligation is usually WRITTEN, mapped to days. Anything that isn't a
  *  whole number of days rounds DOWN (twice a week -> 3, not 4) so a genuinely
@@ -27,48 +31,35 @@ const PRESETS: { label: string; days: number }[] = [
   { label: "Every 12 months", days: 365 },
 ];
 
-type Draft = { title: string; clause: string; everyDays: string; room: string };
-
-const EMPTY: Draft = { title: "", clause: "", everyDays: "90", room: "" };
-
-function toDraft(s: FmSchedule): Draft {
-  return {
-    title: s.title,
-    clause: s.clause ?? "",
-    everyDays: String(s.everyDays),
-    room: s.room ?? "",
-  };
-}
-
 export default function ScheduleEditor() {
   const { data, addSchedule, updateSchedule, removeSchedule } = useFmData();
   const { config } = useConfig();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState<Draft>(EMPTY);
+  /** Why the last save was refused — the draft is kept (2.496.252). */
+  const [formError, setFormError] = useState<string | null>(null);
 
   const rooms = [...new Set(
     config.teleportPoints.map((p) => p.name).filter(Boolean),
   )].sort();
 
-  const days = Math.max(1, Number(draft.everyDays.replace(/[^\d]/g, "")) || 0);
-  const valid = draft.title.trim().length > 0 && days >= 1;
+  // The form's rules are scheduleDraft's (2.496.259): an edit never resumes
+  // a paused task, "1.5" is not 15, and a mistyped interval is not "every day".
+  const days = draftDays(draft.everyDays);
+  const write = scheduleWrite(draft, editingId);
+  const valid = write.ok;
 
   const startAdd = () => { setDraft(EMPTY); setEditingId(null); setAdding(true); };
   const startEdit = (s: FmSchedule) => { setDraft(toDraft(s)); setAdding(false); setEditingId(s.id); };
-  const cancel = () => { setAdding(false); setEditingId(null); setDraft(EMPTY); };
+  const cancel = () => { setFormError(null); setAdding(false); setEditingId(null); setDraft(EMPTY); };
 
   const save = async () => {
-    const payload = {
-      title: draft.title.trim(),
-      clause: draft.clause.trim() || undefined,
-      everyDays: days,
-      room: draft.room || undefined,
-      enabled: true,
-    };
-    if (editingId) await updateSchedule(editingId, payload);
-    else await addSchedule(payload);
-    cancel();
+    if (!write.ok) { setFormError(write.problem); return; }
+    const { done, note: why } = fmSaveOutcome(
+      write.kind === "edit" ? await updateSchedule(write.id, write.patch) : await addSchedule(write.fields));
+    // Close only when saved or queued; a refused save keeps the draft (2.496.252).
+    if (done) cancel(); else setFormError(why);
   };
 
   const form = (
@@ -102,10 +93,8 @@ export default function ScheduleEditor() {
 
       <label className="fm-field" style={{ maxWidth: 260 }}>
         <span>Room (optional)</span>
-        <select value={draft.room} onChange={(e) => setDraft({ ...draft, room: e.target.value })}>
-          <option value="">Whole villa</option>
-          {rooms.map((r) => <option key={r} value={r}>{r}</option>)}
-        </select>
+        <Dropdown value={draft.room} ariaLabel="Room" onChange={(room) => setDraft({ ...draft, room })}
+          options={[{ value: "", label: "Whole villa" }, ...rooms.map((r) => ({ value: r, label: r }))]} />
       </label>
 
       <label className="fm-field" style={{ maxWidth: 260 }}>
@@ -114,12 +103,11 @@ export default function ScheduleEditor() {
           placeholder="e.g. 3.7(i)" />
       </label>
 
-      <div className="modal-actions" style={{ marginTop: 8 }}>
-        <button className="btn ghost" onClick={cancel}><X size={16} /> Cancel</button>
-        <button className="btn primary" disabled={!valid} onClick={() => void save()}>
-          <Check size={16} /> {editingId ? "Save changes" : "Add task"}
-        </button>
-      </div>
+      {!write.ok && draft.everyDays.trim() !== "" && days === null && (
+        <div className="fm-inline-error" role="alert">{write.problem}</div>
+      )}
+      <FormActions error={formError} onCancel={cancel} onSave={save} disabled={!valid}
+        saveLabel={editingId ? "Save changes" : "Add task"} />
     </div>
   );
 
@@ -154,6 +142,7 @@ export default function ScheduleEditor() {
                   {s.clause && <span className="fm-clause">Cl. {s.clause}</span>}
                   {s.room && <span className="fm-clause">{s.room}</span>}
                   {!s.enabled && <span className="fm-clause">Paused</span>}
+                  <AgentMark record={s} />
                 </div>
                 <div className="fm-row-sub muted">
                   Every {s.everyDays} days · due by {due.dueAt ? shortDate(due.dueAt) : "—"}

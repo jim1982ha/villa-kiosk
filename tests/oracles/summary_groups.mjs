@@ -9,6 +9,7 @@ register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const G = await import("@/config/summaryGroups");
 const V = await import("@/config/villaSummary");
+const R = await import("@/utils/panelRules");
 const { DoorClosed, DoorOpen, Lock } = await import("lucide-react");
 
 const e = (id, state) => ({ entity_id: id, state, attributes: {} });
@@ -26,12 +27,14 @@ ck("the group is the facts' devices: the villa's own, nothing else (no optional 
    && G.lightsGroup(V.lightFacts(withNeighbour, villa)).entityIds.join() === "light.a");
 ck("no locks, no group", G.locksGroup(V.lockFacts(ents([]), villa), {}) === null && G.lightsGroup(null) === null);
 ck("the AC temperature in Home Assistant's unit: 24°C, 75°F, a bare degree when unknown",
-   V.fmtClimateTemp(24, "°C") === "24°C" && V.fmtClimateTemp(75, "°F") === "75°F" && V.fmtClimateTemp(24) === "24°");
+   R.fmtTemp(24, "°C") === "24°C" && R.fmtTemp(75, "°F") === "75°F" && R.fmtTemp(24) === "24°" && R.fmtTemp(24, "") === "24°");
 
 const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
-const sb = src("components/hud/SummaryBar.tsx"), fm = src("components/fm/FacilityModal.tsx"), sg = src("config/summaryGroups.ts");
+const sb = src("config/summaryTiles.ts"), bar = src("components/hud/SummaryBar.tsx"), fm = src("components/fm/FacilitySections.tsx"), sg = src("config/summaryGroups.ts");
 ck("the tile and the Facility shortcut build the groups from the facts", /locksGroup\(facts\.locks,/.test(sb) && /lightsGroup\(facts\.lights\)/.test(sb) && /locksGroup\(lockFacts\(entities, devices\)/.test(fm));
 ck("summaryGroups selects no domain itself and imports no screen", !/startsWith\("lock\.|startsWith\("light\./.test(sg) && !/@\/components\//.test(sg));
-ck("no assumed Celsius on the AC tile", !/°C`/.test(sb) && /fmtClimateTemp\(avg, tempUnit\)/.test(sb) && /haConfig\?\.unit_system\?\.temperature/.test(sb));
+// The tiles are config/summaryTiles.ts since 2.496.232 (summary_tiles.mjs
+// calls them); the bar still hands them HA's unit.
+ck("no assumed Celsius on the AC tile", !/°C`/.test(sb) && /fmtTemp\(avg, tempUnit\)/.test(sb) && /haConfig\?\.unit_system\?\.temperature/.test(bar));
 
 done("✅ a summary's icon and words come from the same facts");

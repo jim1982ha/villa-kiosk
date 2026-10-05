@@ -1,5 +1,5 @@
 // src/components/fm/SavedDocumentsList.tsx
-// The saved-reports / saved-statements list shown under both ReportTab and
+// The saved-recaps / saved-statements list shown under both RecapTab and
 // SpendTab — one renderer so "save, reopen, delete a generated document"
 // reads and behaves identically in both places instead of two bespoke lists
 // that could drift apart.
@@ -10,6 +10,7 @@ import { localStamp } from "@/fm/fmEngine";
 
 import { monthLabel } from "@/fm/fmEngine";
 import type { FmSavedDocument } from "@/fm/fmTypes";
+import AgentMark from "./AgentMark";
 
 export default function SavedDocumentsList({
   kind, onOpen,
@@ -25,7 +26,7 @@ export default function SavedDocumentsList({
 
   if (docs.length === 0) return null;
 
-  const noun = kind === "report" ? "reports" : "statements";
+  const noun = kind === "recap" ? "recaps" : "statements";
 
   return (
     <div className="fm-stack">
@@ -36,7 +37,10 @@ export default function SavedDocumentsList({
         {docs.map((doc) => (
           <div key={doc.id} className="fm-row">
             <div className="fm-row-main">
-              <div className="fm-row-title"><strong>{monthLabel(doc.month)}</strong></div>
+              <div className="fm-row-title">
+                <strong>{monthLabel(doc.month)}</strong>
+                <AgentMark record={doc} />
+              </div>
               <div className="fm-row-sub muted">Saved {localStamp(doc.generatedAt)}</div>
             </div>
             <button className="btn ghost" onClick={() => onOpen(doc)}>
@@ -45,7 +49,7 @@ export default function SavedDocumentsList({
             <button
               className="icon-btn"
               onClick={() => void removeDocument(doc.id)}
-              aria-label={`Delete saved ${kind === "report" ? "report" : "statement"} for ${monthLabel(doc.month)}`}
+              aria-label={`Delete saved ${kind === "recap" ? "recap" : "statement"} for ${monthLabel(doc.month)}`}
               title="Delete this saved document"
             >
               <Trash2 size={16} />

@@ -22,12 +22,13 @@
 
 import { useState } from "react";
 
-import { useFmData, fmWriteProblem } from "@/fm/FmDataContext";
-import { formatMoney, parseAmount } from "@/fm/fmEngine";
+import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
+import { parseAmount } from "@/fm/fmEngine";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
 import NotesField from "./NotesField";
 import { useModalA11y } from "@/hooks/useModalA11y";
+import CostFields from "./CostFields";
 
 const STAGE_COPY: Record<FmTicketStatus, { title: string; cta: string; note: string }> = {
   open: { title: "Reopen fault", cta: "Reopen", note: "Why it's being reopened (optional)" },
@@ -86,9 +87,9 @@ export default function FaultStageModal({
         : undefined,
     );
     setBusy(false);
-    // Closes only on a real save; otherwise stays, with what went wrong.
-    const problem = fmWriteProblem(result);
-    if (problem) setFailed(problem); else onClose();
+    // Closes when saved or queued; stays, with the reason, only when refused.
+    const { done, note: why } = fmSaveOutcome(result);
+    if (done) onClose(); else setFailed(why);
   };
 
   return (
@@ -127,27 +128,10 @@ export default function FaultStageModal({
                 pair lives on one record instead of scattered across steps. */}
             <EvidenceRow photoIds={photoIds} onChange={setPhotoIds} />
           </div>
+          {/* The same cost fields and cap line as the Today and Spend forms
+              (CostFields) — this was once the one place without the warning. */}
           {asksCost && (
-            <label className="fm-field">
-              <span>What it cost (optional — leave blank if nothing was spent)</span>
-              <input value={amount} inputMode="numeric"
-                onChange={(e) => setAmount(e.target.value)} placeholder="450000" />
-            </label>
-          )}
-          {amountIdr > 0 && (
-            <>
-              <label className="fm-field">
-                <span>Category</span>
-                <select value={category}
-                  onChange={(e) => setCategory(e.target.value as "minor" | "major")}>
-                  <option value="minor">Minor — counts against the monthly cap</option>
-                  <option value="major">Major — outside the cap</option>
-                </select>
-              </label>
-              <div className="fm-row-sub muted">
-                Records {formatMoney(amountIdr)} against this fault.
-              </div>
-            </>
+            <CostFields amount={amount} onAmount={setAmount} category={category} onCategory={setCategory} optional />
           )}
         </div>
         {failed && <div className="fm-inline-error" role="alert" style={{ margin: "0 28px 8px" }}>{failed}</div>}

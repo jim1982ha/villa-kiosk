@@ -17,6 +17,11 @@
     "isolatedModules": true,
     "moduleDetection": "force",
     "noEmit": true,
+    // Incremental, its record OUTSIDE what `npm run clean` deletes (2026-10-05):
+    // `tsc -b` re-checked every file on every build (12-13 s) because there was
+    // no record to compare against; with one, an unchanged tree checks in ~5 s.
+    "incremental": true,
+    "tsBuildInfoFile": "node_modules/.cache/vesta-tsc.tsbuildinfo",
     "jsx": "react-jsx",
 
     "strict": true,

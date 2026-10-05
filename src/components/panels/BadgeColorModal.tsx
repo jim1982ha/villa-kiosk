@@ -7,6 +7,7 @@
 
 import { RotateCcw } from "lucide-react";
 import { useModalA11y } from "@/hooks/useModalA11y";
+import ModalFooter from "@/components/common/ModalFooter";
 
 // A spread of distinct, pleasant badge colours. Identity swatches (not a data
 // scale), so no ramp/validator needed — just visibly different from each other.
@@ -89,10 +90,7 @@ export default function BadgeColorModal({ current, categoryColor, onChange, onCl
           </div>
         </div>
 
-        <div className="modal-footer">
-          <span />
-          <button className="btn primary" onClick={onClose}>Close</button>
-        </div>
+        <ModalFooter onClose={onClose} />
       </div>
     </div>
   );

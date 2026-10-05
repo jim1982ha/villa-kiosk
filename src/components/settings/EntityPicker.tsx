@@ -19,6 +19,8 @@ import { useOutsideClose } from "@/hooks/useOutsideClose";
 import { Search, X } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { ENTITY_ID_RE } from "@/utils/sh3dParser";
+import { domainOf } from "@/utils/entityDomain";
+import { deviceRowText } from "@/utils/entityValue";
 
 interface Props {
   value?: string;
@@ -59,7 +61,7 @@ export default function EntityPicker({
   const list = useMemo(() => {
     const q = query.toLowerCase();
     return Object.values(entities)
-      .filter((e) => !domains || domains.includes(e.entity_id.split(".")[0]))
+      .filter((e) => !domains || domains.includes(domainOf(e.entity_id)))
       .filter(
         (e) =>
           e.entity_id.toLowerCase().includes(q) ||
@@ -113,13 +115,7 @@ export default function EntityPicker({
       )}
 
       {open && (
-        <div
-          style={{
-            position: "absolute", zIndex: 20, left: 0, right: 0, marginTop: 6,
-            maxHeight: 260, overflowY: "auto", background: "var(--bg-overlay)",
-            border: "1px solid var(--hairline-strong)", borderRadius: 10,
-          }}
-        >
+        <div className="picker-dropdown">
           {allowCustom && ENTITY_ID_RE.test(query.trim()) && !entities[query.trim()] && (
             <button
               className="row"
@@ -149,7 +145,8 @@ export default function EntityPicker({
                 {e.attributes.friendly_name ?? e.entity_id}
                 <div className="muted" style={{ fontSize: "var(--text-2xs)" }}>{e.entity_id}</div>
               </span>
-              <span className="muted" style={{ fontSize: "var(--text-2xs)" }}>{e.state}</span>
+              {/* Worded as every other row (deviceRowText): "Normal", "21.4 °C" — not "off", "21.4" */}
+              <span className="muted" style={{ fontSize: "var(--text-2xs)" }}>{deviceRowText(e, domainOf(e.entity_id))}</span>
             </button>
           ))}
         </div>

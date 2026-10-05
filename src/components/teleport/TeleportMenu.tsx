@@ -4,7 +4,7 @@
 // The long-press/right-click "re-anchor this room to where I'm standing"
 // gesture that used to live here is GONE, along with the per-room saved
 // overview pose it wrote. Framing a room is now derived from the floor plan
-// itself (SceneManager.computeRoomOverviewPose fits the room's real polygon),
+// itself (roomShot.ts fits the room's real polygon),
 // so a hand-saved viewpoint was not just redundant but actively worse: it
 // froze one person's one-time eyeballed zoom in config, and a shot that
 // wasn't tight enough also left that room's badges grouped on arrival.

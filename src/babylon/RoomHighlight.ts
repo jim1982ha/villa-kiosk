@@ -174,17 +174,9 @@ export class RoomHighlight {
     // Both winding directions so the glow reads from any camera angle
     // (overview looks straight down, first-person can graze it at an angle).
     for (const [a, b, c] of tris) indices.push(c, b, a);
-
-    const normals: number[] = [];
-    VertexData.ComputeNormals(positions, indices, normals);
-
-    const mesh = new Mesh(`roomGlow_${key}`, this.scene);
-    const vd = new VertexData();
-    vd.positions = positions;
-    vd.indices = indices;
-    vd.normals = normals;
-    vd.applyToMesh(mesh);
-    return this.adopt(key, mesh, false);
+    // The mesh itself is built exactly as a conform patch is (2.496.263: the
+    // normals/VertexData/adopt steps were written out in both).
+    return this.buildConformMesh(key, positions, indices);
   }
 
   /**

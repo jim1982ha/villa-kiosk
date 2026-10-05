@@ -2,20 +2,19 @@
 // Owns the <canvas> + SceneManager lifecycle and wires HA state -> 3D visuals.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { sliceChanged } from "@/babylon/entityMapDiff";
 import { AlertTriangle, X } from "lucide-react";
 import { SceneManager } from "@/babylon/SceneManager";
 import { formatProbe, registerProbeRunner } from "@/babylon/perfProbe";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
-import { filterConfigForRole, hasCapability } from "@/auth/permissions";
+import { filterConfigForRole, roleCan } from "@/auth/permissions";
 import { useHA } from "@/ha/HAStateStore";
-import { loadModelFromIndexedDB, getModelMeta, clearStoredModel } from "@/utils/localModel";
-import { fetchAddonConfig, versionedModelUrl, roomsPathFor } from "@/utils/centralModel";
+import { forgetBrowserModel } from "@/utils/localModel";
+import { readAddonConfig, centralRoomsUrl, roomsPathFor } from "@/utils/centralModel";
 import { modelBytes } from "@/utils/modelPrefetch";
 import { acquireModel } from "@/utils/modelSource";
 import { setLoadedModelInfo, sha256Hex } from "@/utils/modelInfo";
-import { parseRoomData } from "@/utils/sh3dParser";
+import { fetchRoomData, roomDataPatch, type RoomDataFetch } from "@/config/roomData";
 import { report as reportTelemetry } from "@/utils/telemetry";
 import { markBoot, beginLoad, endLoad, bootTimeline, hiddenMsTotal, scheduleSpanCensus } from "@/utils/bootTimeline";
 import { saveMeshCatalog } from "@/utils/meshCatalog";
@@ -27,34 +26,7 @@ import {
   isCrashLooping, crashLoopInfo, noteLoadStart, noteLoadPhase, noteModel,
   noteLoadSuccess, clearCrashLoop, noteContextLoss, captureError, buildReport,
 } from "@/utils/diagnostics";
-import type { EntityMapping } from "@/types/scene.types";
-import type { ParsedRoomData } from "@/utils/sh3dParser";
-
-type RoomsSyncResult =
-  | { ok: true; rooms: ParsedRoomData["rooms"]; entities: ParsedRoomData["entities"] }
-  | { ok: false; status: number }
-  | { ok: false; error: Error };
-
-/** Fetch + parse the central ".rooms.json" sidecar. Pulled out of the load
- *  effect so it can be STARTED the moment addonCfg.model_path is known —
- *  before the (multi-second) GLB import even begins, since this fetch has no
- *  dependency on the model's bytes or decode. Awaiting its result only
- *  happens later, once loadModel has resolved, by which point this has
- *  usually already finished in the background — see the call site. */
-async function fetchRoomsSync(modelPath: string): Promise<RoomsSyncResult> {
-  const roomsPath = roomsPathFor(modelPath);
-  try {
-    const ctrl = new AbortController();
-    const tid = setTimeout(() => ctrl.abort(), 5000);
-    const resp = await fetch(await versionedModelUrl(roomsPath), { signal: ctrl.signal });
-    clearTimeout(tid);
-    if (!resp.ok) return { ok: false, status: resp.status };
-    const { rooms, entities } = parseRoomData(await resp.text());
-    return { ok: true, rooms, entities };
-  } catch (err) {
-    return { ok: false, error: err as Error };
-  }
-}
+import { adoptDetected } from "@/config/mappingEdits";
 
 interface Props {
   onManager: (m: SceneManager | null) => void;
@@ -87,7 +59,7 @@ export default function BabylonCanvas({
     () => (role ? filterConfigForRole(config, role) : config),
     [config, role],
   );
-  const canManageModel = role != null && hasCapability(role, "manageModel");
+  const canManageModel = roleCan(role, "manageModel");
   // Keep a live ref so the one-shot loadModel callback can read the latest config
   // without being recreated (BabylonCanvas mounts once with empty deps).
   const configRef = useRef(config);
@@ -258,7 +230,7 @@ export default function BabylonCanvas({
      *  anything new. Extracted only so the load sequence below reads as one
      *  line — the reasoning for WHERE it is called lives at the call site. */
     const applyRoomsSync = async (
-      promise: Promise<RoomsSyncResult>, modelPath: string,
+      promise: Promise<RoomDataFetch>, modelPath: string,
     ): Promise<void> => {
       const roomsPath = roomsPathFor(modelPath); // for the messages below only
       const result = await promise;
@@ -277,28 +249,13 @@ export default function BabylonCanvas({
         }
         return;
       }
-      const { rooms, entities: sh3dEntities } = result;
-      // Compare by CONTENT, not reference: parseRoomData returns fresh
-      // arrays every open, so a reference check would force the
-      // rebuild on every load even when nothing actually changed.
-      const cur = configRef.current;
-      // ⚠️ `sliceChanged` IS THE SHARED RULE, and this site is why it is worth
-      // naming: sh3dRooms/sh3dEntities are NOT shared config keys, but they
-      // have the identical hazard — `parseRoomData` returns fresh arrays every
-      // open. The rule is about fresh objects, not about the sync layer.
-      const sameRooms = !sliceChanged(cur.sh3dRooms ?? [], rooms);
-      const sameEnts = !sliceChanged(cur.sh3dEntities ?? [], sh3dEntities);
-      if (sameRooms && sameEnts) return; // the common re-open case — nothing to do
-      // If the central plan's room SET changed (admin swapped the
-      // file), drop stale rooms so only the new plan's remain — the
-      // scene re-calibrates from the fresh set. Same set: leave
-      // teleportPoints alone so user-added rooms + saved overview
-      // poses survive.
-      const prevNames = (cur.sh3dRooms ?? []).map((r) => r.name).sort().join("|");
-      const nextNames = rooms.map((r) => r.name).sort().join("|");
-      update(prevNames !== nextNames
-        ? { sh3dRooms: rooms, sh3dEntities, teleportPoints: [] }
-        : { sh3dRooms: rooms, sh3dEntities });
+      // What a changed plan wipes is roomData's rule, and on a LOAD it never
+      // touches the rooms people added by hand: this device's copy of the plan
+      // may be stale or empty, which says nothing about what everyone else
+      // has done since (see roomDataPatch).
+      const patch = roomDataPatch(configRef.current, result.data, "load");
+      if (!patch) return; // the common re-open case — nothing to do
+      update(patch);
       // Give React a beat to commit and run the [sceneConfig] effect, whose
       // updateConfig() writes the new config onto the SceneManager. That write
       // is the whole point of the wait: it happens synchronously at the top of
@@ -313,24 +270,25 @@ export default function BabylonCanvas({
       try {
         noteLoadPhase("fetch-config");
         const tConfigStart = performance.now();
-        const addonCfg = await fetchAddonConfig();
-        const tConfigDone = performance.now();
-        // Started here, not where it's awaited below: this fetch depends only
-        // on addonCfg.model_path, so kicking it off now lets its round-trip
-        // run in the shadow of the GLB's own multi-second import instead of
-        // adding to the critical path serially after it.
-        const roomsSyncPromise = addonCfg.model_path ? fetchRoomsSync(addonCfg.model_path) : null;
-        const tFetchStart = performance.now();
-        // WHICH model, and what a failure means — utils/modelSource. A network
-        // blip is ridden through with a "reconnecting" notice; an HTTP status
-        // comes back at once, unretried: a real "nothing there".
-        const got = await acquireModel(addonCfg.model_path, {
-          versionedModelUrl, modelBytes,
-          fromIndexedDB: loadModelFromIndexedDB,
-          hasStoredMeta: () => !!getModelMeta(),
-          clearStoredModel,
+        // Started from onCentral, not where it's awaited below: the room data
+        // depends only on the add-on's answer, so its round-trip runs in the
+        // shadow of the GLB's own multi-second download and import.
+        // A holder, not a `let`: tsc cannot see a callback assign a `let`.
+        const roomsSync: { promise: Promise<RoomDataFetch> | null } = { promise: null };
+        let tConfigDone = tConfigStart;
+        // WHICH model, and what a failure means — utils/modelSource. No answer
+        // from the add-on is retried with a "reconnecting" notice (never "no
+        // model"); an HTTP status for the model comes back at once, unretried.
+        const got = await acquireModel({
+          readAddonConfig, modelBytes, forgetBrowserModel,
+          wait: (ms) => new Promise((r) => setTimeout(r, ms)),
         }, {
-          onCentral: (path) => { noteModel({ path }); noteLoadPhase("fetch-model"); },
+          onCentral: (cfg) => {
+            tConfigDone = performance.now();
+            noteModel({ path: cfg.model_path });
+            noteLoadPhase("fetch-model");
+            roomsSync.promise = fetchRoomData(centralRoomsUrl(cfg));
+          },
           onProgress: (f) => {
             if (cancelled) return;
             setProgress(f);
@@ -339,22 +297,23 @@ export default function BabylonCanvas({
             if (f > 0) setReconnecting(false);
           },
           onRetrying: () => { if (!cancelled) setReconnecting(true); },
+          cancelled: () => cancelled,
         });
+        const tFetchStart = tConfigDone;
         if (!got.ok && got.reason === "http") {
           setAddonError(true);
           loadErrorCode = got.code;
           throw new Error(got.message);
         }
-        if (cancelled) return; // StrictMode unmounted us mid-load
+        if (cancelled || (!got.ok && got.reason === "cancelled")) return; // unmounted mid-load
         if (!got.ok) {
-          // No GLB available (empty IndexedDB in standalone, or model_path unset
-          // in the add-on). Show an explanatory overlay instead of silently
-          // popping Settings open over a blank blue scene.
+          // The add-on holds no model yet. Show an explanatory overlay (with
+          // the owner's upload) instead of a blank blue scene.
           setStatus("no-model");
           return;
         }
-        const { data, fromAddon, source: loadedSource, prefetched: usedPrefetch } = got;
-        if (fromAddon) noteModel({ bytes: data.byteLength });
+        const { data, cfg: addonCfg, source: loadedSource, prefetched: usedPrefetch, kept: modelKept } = got;
+        noteModel({ bytes: data.byteLength });
         // Bytes are in hand — clear any lingering reconnecting notice even if
         // the successful fetch happened to report no progress fractions (a
         // cache hit / no Content-Length skips readWithProgress's onProgress).
@@ -395,9 +354,9 @@ export default function BabylonCanvas({
         // await is normally instant. Awaiting it any earlier would put its
         // round-trip on the critical path serially instead of in the model's
         // shadow. A missing/hung sidecar still never blocks (5s abort inside
-        // fetchRoomsSync, and a failure just proceeds without the refresh).
-        if (fromAddon && addonCfg.model_path && roomsSyncPromise) {
-          await applyRoomsSync(roomsSyncPromise, addonCfg.model_path);
+        // roomData.fetchRoomData, and a failure just proceeds without the refresh).
+        if (roomsSync.promise) {
+          await applyRoomsSync(roomsSync.promise, addonCfg.model_path);
           if (cancelled) return;
         }
         const tRoomsDone = performance.now();
@@ -475,6 +434,10 @@ export default function BabylonCanvas({
           // public_model_access off, an unauthorised /model/, or a model
           // replaced between the two).
           prefetched: usedPrefetch,
+          // Read from the copy this device kept (utils/modelCache) rather than
+          // downloaded. The field showed a phone downloading all 17 MB on every
+          // open under Home Assistant; this says whether that is over.
+          modelKept: modelKept,
           bytes: data.byteLength,
           meshes: meshNames.length,
           fetchMs: Math.round(tFetchDone - tFetchStart),
@@ -492,7 +455,7 @@ export default function BabylonCanvas({
           roomsMs: Math.round(tRoomsDone - tFetchDone),
           importMs: Math.round(importMs),
           postMs: Math.round(postMs),
-          source: fromAddon ? "addon" : "indexeddb",
+          source: "addon",
           // Which STEP of our own post-processing dominates. Without this a
           // slow load is only ever "post was 3.4s" with no way to act on it.
           ...phases,
@@ -556,8 +519,6 @@ export default function BabylonCanvas({
         function autoDetectEntities() {
         const detected = manager.getAutoDetectedMappings();
         if (detected.length > 0) {
-          const current = configRef.current;
-          const additions: Record<string, EntityMapping> = {};
           // Live HA state, read once for this whole pass — a mesh literally
           // named after an entity_id (the pipeline's own naming convention)
           // that HA no longer reports (renamed/removed) used to get
@@ -566,7 +527,7 @@ export default function BabylonCanvas({
           // Advanced Settings' "N entities no longer in Home Assistant ->
           // Remove N" — the auto-detect pass never checked whether the
           // entity was still real, only whether a mesh happened to carry its
-          // name. Reported: climate.gym_room kept "coming back" no matter
+          // name. Reported: one climate entity kept "coming back" no matter
           // how many times it was removed; confirmed via HA that the entity
           // genuinely no longer exists. Auto-detect exists to save typing
           // for a genuinely new, live entity — not to repopulate one that's
@@ -574,15 +535,10 @@ export default function BabylonCanvas({
           // get_states has resolved, a real new entity could be skipped
           // here and only get picked up on the NEXT load — self-healing,
           // and far better than silently undoing an explicit removal.)
+          // The rule itself is mappingEdits.adoptDetected, applied to the
+          // config React holds when it lands (not a snapshot of it).
           const liveEntities = getEntitiesSnapshot();
-          for (const m of detected) {
-            if (current.entityMap[m.entityId]) continue;
-            if (!liveEntities[m.entityId]) continue;
-            additions[m.entityId] = m;
-          }
-          if (Object.keys(additions).length > 0) {
-            update({ entityMap: { ...current.entityMap, ...additions } });
-          }
+          update(adoptDetected(detected, (id) => !!liveEntities[id]));
         }
         }
         // Paint the current entity states immediately (meshes + markers). Read
@@ -947,7 +903,7 @@ export default function BabylonCanvas({
               <div className="muted body-text">
                 Upload a villa GLB to start exploring.
               </div>
-              <ModelUploader minimal onUploaded={() => cbRef.current.onModelUploaded()} />
+              <ModelUploader onUploaded={() => cbRef.current.onModelUploaded()} />
             </>
           )}
         </div>

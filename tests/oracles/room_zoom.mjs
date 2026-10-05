@@ -98,8 +98,10 @@ console.log("\n  the caller:");
      /return solveRoomZoom\(\s*members\.map\(/.test(ev) && /grouping: this\.currentViewBasis\(view\.dir\),/.test(ev));
   ck("  ...and keeps no ladder of its own", !/widestFitting|widestClean|Math\.pow\(2, k \/ q\)/.test(ev));
   const sm = readFileSync(new URL("../../src/babylon/SceneManager.ts", import.meta.url), "utf8");
-  ck("SceneManager's room shot asks roomWallFit, and fits nothing itself",
-     /const fit = roomWallFit\(bounds, allReal, /.test(sm) && !/Math\.tan\(hFov \/ 2\)|ROOM_FIT_VIEWPORT_FRACTION_ENTITIES/.test(sm));
+  const shot = readFileSync(new URL("../../src/babylon/roomShot.ts", import.meta.url), "utf8");
+  ck("the room shot (roomShot.ts) asks roomWallFit; SceneManager fits nothing itself (2.496.261)",
+     /const fit = roomWallFit\(bounds, real, /.test(shot) && /const framed = roomShot\(\{/.test(sm)
+     && !/roomWallFit|Math\.tan\(hFov \/ 2\)|ROOM_FIT_VIEWPORT_FRACTION_ENTITIES|MIN_ROOM_FIT_RADIUS/.test(sm));
 }
 
 done("✅ the room shot, replayed");

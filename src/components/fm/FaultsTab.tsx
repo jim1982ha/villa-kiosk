@@ -14,7 +14,7 @@ import { useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, Plus, Wrench } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
-import { useFmData } from "@/fm/FmDataContext";
+import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
 import { isTicketOpen, isTicketResolved, localStamp, ticketStats, ticketRank, TICKET_NEXT } from "@/fm/fmEngine";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
@@ -22,6 +22,10 @@ import ErasableRow from "./ErasableRow";
 import FaultStageModal from "./FaultStageModal";
 import NotesField from "./NotesField";
 import DeviceSearchPicker, { type DeviceOption } from "./DeviceSearchPicker";
+import AgentMark from "./AgentMark";
+import InlineConfirm from "@/components/common/InlineConfirm";
+import { useDeviceChoice } from "./useDeviceChoice";
+import FormActions from "./FormActions";
 
 /** Read-only evidence strips never call back — a stable identity keeps the
  *  memoised row from re-rendering on every parent update. */
@@ -49,7 +53,7 @@ export default function FaultsTab(
     onFaultFormOpened?: () => void;
   },
 ) {
-  const { data, addTicket, updateTicket, removeTicket } = useFmData();
+  const { data, addTicket, updateTicket, removeTicket, closeTicket } = useFmData();
   const { resolvedRooms } = useConfig();
   const [adding, setAdding] = useState(false);
   /** Id of the fault being edited, or null when the form is raising a new one.
@@ -59,25 +63,39 @@ export default function FaultsTab(
    *  the two drift apart. */
   const [editingId, setEditingId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
-  const [deviceText, setDeviceText] = useState("");
-  const [entityId, setEntityId] = useState("");
+  // The device the fault is about — its search text and match, as one (useDeviceChoice).
+  const device = useDeviceChoice();
+  const { deviceText, entityId, clearDevice } = device;
   const [note, setNote] = useState("");
   const [photoIds, setPhotoIds] = useState<string[]>([]);
   /** The fault whose stage change is being recorded, and where it's going. */
   const [staging, setStaging] = useState<{ ticket: FmTicket; to: FmTicketStatus } | null>(null);
   const [showBroken, setShowBroken] = useState(false);
+  /** The fault whose one-step close ("no action needed") is being confirmed,
+   *  and the reason the last close did not land. */
+  const [closingId, setClosingId] = useState<string | null>(null);
+  const [closeError, setCloseError] = useState<{ id: string; text: string } | null>(null);
+  /** Why the last raise/edit was refused — the form keeps what was typed. */
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const closeNoAction = async (id: string) => {
+    setCloseError(null);
+    const { done, note: why } = fmSaveOutcome(await closeTicket(id));
+    setClosingId(null);
+    if (!done && why) setCloseError({ id, text: why });
+  };
 
   const resetForm = () => {
+    setFormError(null);
     setAdding(false); setEditingId(null);
-    setTitle(""); setDeviceText(""); setEntityId(""); setNote(""); setPhotoIds([]);
+    setTitle(""); clearDevice(); setNote(""); setPhotoIds([]);
   };
 
   const openEditor = (t: FmTicket) => {
     setEditingId(t.id);
     setAdding(true);
     setTitle(t.title);
-    setEntityId(t.entityId ?? "");
-    setDeviceText(t.deviceLabel ?? (t.entityId ? label(t.entityId) : ""));
+    device.selectDevice(t.entityId ?? "", t.deviceLabel ?? (t.entityId ? label(t.entityId) : ""));
     setNote(t.note ?? "");
     setPhotoIds(t.photoIds);
   };
@@ -100,10 +118,9 @@ export default function FaultsTab(
   // box) — both write here, so picking one never leaves the other showing a
   // stale answer.
   const selectDevice = (id: string, name: string) => {
-    setEntityId(id); setDeviceText(name);
+    device.selectDevice(id, name);
     if (!title) setTitle(`${name} offline`);
   };
-  const clearDevice = () => { setEntityId(""); setDeviceText(""); };
 
   // Arrived from a device panel's fault shortcut: open the form with that
   // device already chosen. Runs once per request — the parent clears it — so
@@ -116,8 +133,7 @@ export default function FaultsTab(
     if (!reportFaultFor) return;
     setAdding(true);
     setEditingId(null);
-    setEntityId(reportFaultFor);
-    setDeviceText(label(reportFaultFor));
+    device.selectDevice(reportFaultFor, label(reportFaultFor));
     setTitle("");
     setNote("");
     setPhotoIds([]);
@@ -191,12 +207,10 @@ export default function FaultsTab(
           <div className="fm-field">
             <span>Device (search, or type one not listed)</span>
             <DeviceSearchPicker
-              value={deviceText}
-              options={deviceOptions}
-              matchedEntityId={entityId || undefined}
-              onChangeText={(text) => { setDeviceText(text); setEntityId(""); }}
+              {...device.pickerProps}
+              // A search pick also suggests the title, as a shortlist pick does.
               onSelect={(opt) => selectDevice(opt.entityId, opt.label)}
-              onClear={clearDevice}
+              options={deviceOptions}
             />
           </div>
           <label className="fm-field">
@@ -218,12 +232,10 @@ export default function FaultsTab(
             <span>Photo evidence</span>
             <EvidenceRow photoIds={photoIds} onChange={setPhotoIds} />
           </div>
-          <div className="modal-actions" style={{ marginTop: 8 }}>
-            <button className="btn ghost" onClick={resetForm}>Cancel</button>
-            <button
-              className="btn primary"
-              disabled={!title.trim()}
-              onClick={async () => {
+          <FormActions
+            error={formError} onCancel={resetForm} disabled={!title.trim()}
+            saveLabel={editingId ? "Save changes" : "Raise fault"}
+            onSave={async () => {
                 const fields = {
                   title: title.trim(),
                   entityId: entityId || undefined,
@@ -235,12 +247,13 @@ export default function FaultsTab(
                 // Same fields either way — updateTicket leaves status,
                 // openedAt and resolvedAt alone, so correcting a description
                 // never rewrites the fault's history.
-                if (editingId) await updateTicket(editingId, fields);
-                else await addTicket(fields);
-                resetForm();
+                const { done, note: why } = fmSaveOutcome(
+                  editingId ? await updateTicket(editingId, fields) : await addTicket(fields));
+                // Empty the form only when saved or queued: a refused save
+                // used to throw away what was typed (2.496.252).
+                if (done) resetForm(); else setFormError(why);
               }}
-            >{editingId ? "Save changes" : "Raise fault"}</button>
-          </div>
+          />
         </div>
       )}
 
@@ -258,19 +271,31 @@ export default function FaultsTab(
         {openFirst.map((t) => (
           <ErasableRow
             key={t.id}
-            className={`state-${isTicketResolved(t) ? "ok" : t.status === "open" ? "overdue" : "due-soon"}`}
+            className={`fm-fault state-${isTicketResolved(t) ? "ok" : t.status === "open" ? "overdue" : "due-soon"}`}
             intent={{ title: "Erase this fault", detail: t.title }}
             erase={(token) => removeTicket(t.id, token)}
             onOpen={() => openEditor(t)}
           >
-            <div className="fm-row-main">
+            {/* ⚠️ ONE CARD, THREE ROWS (owner, 2026-10-01: "the style of the cards
+                is very bad"). The status pill and both buttons used to share
+                the title's row, which squeezed a long title into a column six
+                lines tall. Now: the title across the card with its status at
+                the right; the record under it; the actions on a row of their
+                own, at the right — or the close question in their place. */}
+            <div className="fm-fault-head">
               <div className="fm-row-title">
                 <strong>{t.title}</strong>
                 {t.room && <span className="fm-clause">{t.room}</span>}
                 {/* Read this row differently: a guest reports a symptom from
                     inside the villa, not a diagnosis. */}
                 {t.reportedBy === "guest" && <span className="fm-clause guest">guest report</span>}
+                <AgentMark record={t} />
               </div>
+              <span className={`fm-badge ${isTicketResolved(t) ? "ok" : t.status === "open" ? "overdue" : "due-soon"}`}>
+                {LABEL[t.status]}
+              </span>
+            </div>
+            <div className="fm-row-main">
               <div className="fm-row-sub muted">
                 Opened {localStamp(t.openedAt)}
                 {t.resolvedAt && ` · resolved ${localStamp(t.resolvedAt)}`}
@@ -283,8 +308,10 @@ export default function FaultsTab(
               )}
               {/* The fault's own history. Rendered on the card rather than
                   behind another tap: "what has actually been done about this"
-                  is the question anyone opening the Faults tab is asking. */}
-              {(t.updates?.length ?? 0) > 0 && (
+                  is the question anyone opening the Faults tab is asking.
+                  A history of ONE plain "Open" entry only repeats "Opened …"
+                  above, so it shows once something has happened. */}
+              {(t.updates?.length ?? 0) > (t.updates?.[0]?.note || t.updates?.[0]?.photoIds?.length ? 0 : 1) && (
                 <ol className="fm-timeline">
                   {t.updates!.map((u, i) => (
                     <li key={i}>
@@ -317,17 +344,43 @@ export default function FaultsTab(
                 </div>
               )}
             </div>
-            <span className={`fm-badge ${isTicketResolved(t) ? "ok" : t.status === "open" ? "overdue" : "due-soon"}`}>
-              {LABEL[t.status]}
-            </span>
-            {TICKET_NEXT[t.status] && (
-              <button className="btn ghost"
-                // Never a bare status flip any more: every transition goes
-                // through the same dialog, so the record always carries who
-                // and what behind the change.
-                onClick={(e) => { e.stopPropagation(); setStaging({ ticket: t, to: TICKET_NEXT[t.status]! }); }}>
-                Mark {LABEL[TICKET_NEXT[t.status]!].toLowerCase()}
-              </button>
+            {closingId !== t.id && (TICKET_NEXT[t.status] || !isTicketResolved(t)) && (
+              <div className="fm-fault-actions">
+                {TICKET_NEXT[t.status] && (
+                  <button className="btn ghost"
+                    // Never a bare status flip any more: every transition goes
+                    // through the same dialog, so the record always carries who
+                    // and what behind the change.
+                    onClick={(e) => { e.stopPropagation(); setStaging({ ticket: t, to: TICKET_NEXT[t.status]! }); }}>
+                    Mark {LABEL[TICKET_NEXT[t.status]!].toLowerCase()}
+                  </button>
+                )}
+                {/* ⚠️ THE ONE-STEP CLOSE, BESIDE THE TWO-STEP FLOW, NOT INSTEAD
+                    OF IT. Many faults are obsolete — raised automatically and
+                    since gone away — and walking each through "in progress" and
+                    a cost dialog recorded work nobody did. This one leaves
+                    "Closed without action" on the history, and no completion or
+                    cost (fmEngine.withTicketClosed). */}
+                {!isTicketResolved(t) && (
+                  <button className="btn ghost"
+                    onClick={(e) => { e.stopPropagation(); setCloseError(null); setClosingId(t.id); }}>
+                    Close — no action needed
+                  </button>
+                )}
+              </div>
+            )}
+            {closingId === t.id && (
+              <div className="fm-row-confirm">
+                <InlineConfirm
+                  question="Close this fault? Nothing was done — no cost is recorded."
+                  confirmLabel="Close fault"
+                  onConfirm={() => closeNoAction(t.id)}
+                  onCancel={() => setClosingId(null)}
+                />
+              </div>
+            )}
+            {closeError?.id === t.id && (
+              <div className="fm-inline-error fm-row-confirm" role="alert">{closeError.text}</div>
             )}
           </ErasableRow>
         ))}

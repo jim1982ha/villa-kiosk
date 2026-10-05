@@ -1,7 +1,7 @@
 {
   "name": "villa-kiosk",
   "private": true,
-  "version": "2.496.210",
+  "version": "2.496.307",
   "description": "VESTA \u2014 a 3D interactive villa dashboard for Home Assistant",
   "license": "UNLICENSED",
   "type": "module",
@@ -16,11 +16,15 @@
     "typecheck": "tsc -b --noEmit",
     "test:oracles": "sh tests/oracles/run-all.sh",
     "test:hard-rules": "python3 tests/hard-rules.py",
-    "test:proxy": "python3 tests/proxy-rules.py",
+    "test:proxy": "python3 tests/proxy-rules.py && python3 tests/agent-interface.py && python3 tests/store-doors.py",
     "test:routes": "python3 tests/routes.py",
     "test:manifest": "python3 tests/addon-manifest.py",
+    "test:service-finish": "python3 tests/service-finish.py",
+    "test:addon-lint": "python3 tools/addon_lint.py villa-kiosk Dockerfile rootfs",
     "test:hard-rules:ci": "VK_HASH_ONLY=1 python3 tests/hard-rules.py",
-    "preflight": "bash tests/preflight.sh",
+    "gates": "python3 tools/release.py gates",
+    "ship": "python3 tools/release.py ship",
+    "test:release": "python3 tests/release.py",
     "test:proxy-parse": "python3 -c \"import ast, pathlib; ast.parse(pathlib.Path('rootfs/usr/bin/supervisor-proxy.py').read_text())\""
   },
   "dependencies": {

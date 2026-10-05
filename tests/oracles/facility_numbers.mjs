@@ -21,9 +21,10 @@ import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 
 const {
-  ticketStats, scheduleStatus, budgetStatus, monthLabel, shortDate, formatMoney,
+  ticketStats, scheduleStatus, budgetStatus, monthLabel, shortDate,
 } = await import("@/fm/fmEngine");
-const { spendSummary } = await import("@/fm/fmReport");
+const { formatMoney } = await import("@/utils/money");
+const { spendSummary } = await import("@/fm/fmDocuments");
 
 let fail = 0;
 const eq = (name, got, want) => {
@@ -73,8 +74,8 @@ console.log("\n  an unconfigured cap is not a cap of zero:");
 // cap <= 0 as "not configured" — state ok, fraction 0 — and the two report
 // documents printed the unset value anyway: "0 of the 0 monthly cap (0%)".
 // SpendTab and TodayTab were corrected in 2.496.31; the pin written with them
-// named only those two files, which is how fmReport survived it.
-const noCap = budgetStatus([], "2026-09", 0);
+// named only those two files, which is how fmDocuments survived it.
+const noCap = budgetStatus([], "2026-09", { monthlyCap: 0, warnAt: 0.8 });
 eq("no cap configured reads as ok, not exceeded", noCap.state, "ok");
 eq("...with fraction 0, never NaN or Infinity", noCap.fraction, 0);
 eq("...and the report says so in words, not as a zero",
@@ -83,7 +84,7 @@ eq("...and does not print a cap figure at all",
    /of the .* monthly cap/.test(spendSummary(noCap)[0]), false);
 const withCap = budgetStatus(
   [{ id: "c", at: "2026-09-02T00:00:00Z", label: "Pump seal", category: "minor", amountIdr: 900 }],
-  "2026-09", 1000);
+  "2026-09", { monthlyCap: 1000, warnAt: 0.8 });
 eq("a configured cap still reports the fraction", withCap.fraction, 0.9);
 eq("...and reads as approaching at 80%", withCap.state, "approaching");
 eq("...and the report prints the cap", spendSummary(withCap)[0].includes("monthly cap"), true);
@@ -94,8 +95,12 @@ eq("month 13 is refused", monthLabel("2026-13"), "2026-13");
 eq("a real month renders", /2026/.test(monthLabel("2026-07")), true);
 
 console.log("\n  nothing prints a currency nobody configured:");
-eq("no currency configured shows the amount alone", formatMoney(450000, ""), "450,000");
-eq("a configured one prefixes it", formatMoney(450000, "EUR"), "EUR 450,000");
+// ONE money look (utils/money, 2.496.263): Home Assistant's currency, the
+// reader's locale's currency style — Facility wrote "EUR 450,000", Energy "€".
+eq("no currency configured shows the amount alone", formatMoney(450000, "", "en-US"), "450,000");
+eq("a configured one in the locale's currency style", formatMoney(450000, "EUR", "en-US"), "€450,000");
+eq("  ...whole units from 100 up, cents below", formatMoney(12.5, "EUR", "en-US"), "€12.50");
+eq("  ...an unfamiliar code is written AS the code, never as a wrong symbol", formatMoney(1500, "XQZ", "en-US").replace(/\s/g, " "), "XQZ 1,500");
 eq("a short date renders without throwing", typeof shortDate("2026-07-24T00:00:00Z"), "string");
 
 console.log(`\n${fail ? `❌ ${fail} failed` : "✅ the owner's numbers hold"}`);

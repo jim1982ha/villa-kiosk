@@ -1,0 +1,124 @@
+// One answer to "which device is this, and what does tapping it open"
+// (src/config/deviceGroups.ts, 2.496.260). The panel router and the map knew
+// explicit groups only, Cockpit and the counts the full fold, and every other
+// opener the raw entity id: the Onsen pump's energy-meter fault opened the
+// meter in one place and the pump in another, Settings listed that meter as
+// "not shown anywhere", and grouping a lock's battery with it swapped the
+// lock's controls for a read-only summary. Driven by value through the real
+// fold, then the callers are pinned.
+import { register } from "node:module";
+import { readFileSync } from "node:fs";
+register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
+const { deviceFolding, deviceOf, deviceReadings, unshownEntities, groupEdit } = await import("@/config/deviceGroups");
+
+const ent = (id, state = "1") => ({ entity_id: id, state, attributes: { friendly_name: id } });
+const ids = ["switch.pump", "sensor.pump_power", "sensor.pump_energy", "sensor.pump_current", "button.pump_restart",
+  "device_tracker.pump", "binary_sensor.pump_overheat", "lock.door", "sensor.door_battery", "sensor.lonely", "light.hall"];
+const entities = Object.fromEntries(ids.map((id) => [id, ent(id)]));
+// Placed: the pump's power sensor (its badge), the lock, a hall light.
+const entityMap = Object.fromEntries(["sensor.pump_power", "lock.door", "light.hall"].map((id) => [id, { entityId: id, type: id.split(".")[0] }]));
+const registry = Object.fromEntries([
+  ...["switch.pump", "sensor.pump_power", "sensor.pump_energy", "sensor.pump_current", "button.pump_restart", "device_tracker.pump", "binary_sensor.pump_overheat"].map((id) => [id, "dev-pump"]),
+  ["lock.door", "dev-door"], ["sensor.door_battery", "dev-door"]]);
+const fold = deviceFolding(entityMap, [], registry);
+const suppressed = new Set(["binary_sensor.pump_overheat"]);   // HA marks it diagnostic
+
+console.log("  which device:");
+ck("anything of the pump opens the pump's placed badge entity", ["switch.pump", "sensor.pump_energy", "button.pump_restart"].every((id) => deviceOf(fold, id) === "sensor.pump_power"));
+ck("  ...a placed entity, and one with no device, is its own", deviceOf(fold, "sensor.pump_power") === "sensor.pump_power" && deviceOf(fold, "sensor.lonely") === "sensor.lonely");
+
+console.log("\n  also on this device:");
+const r = deviceReadings("sensor.pump_power", fold, entities, suppressed, []);
+ck("the pump's other READINGS — energy and current; not the restart button, not the network tracker, not itself",
+   [...r].sort().join() === "sensor.pump_current,sensor.pump_energy", r);
+ck("  ...a reading HA hides as diagnostic is left out unless the owner grouped it on purpose",
+   !r.includes("binary_sensor.pump_overheat")
+   && deviceReadings("sensor.pump_power", deviceFolding(entityMap, [{ id: "g", primaryEntityId: "sensor.pump_power", memberEntityIds: ["binary_sensor.pump_overheat"] }], registry),
+        entities, suppressed, [{ id: "g", primaryEntityId: "sensor.pump_power", memberEntityIds: ["binary_sensor.pump_overheat"] }]).includes("binary_sensor.pump_overheat"));
+ck("the lock lists its battery", deviceReadings("lock.door", fold, entities, suppressed, []).join() === "sensor.door_battery");
+
+console.log("\n  the same on every panel (2.496.271):");
+{
+  const E = (id, dc) => ({ entity_id: id, state: "1", attributes: { friendly_name: id, ...(dc ? { device_class: dc } : {}) } });
+  const ents2 = { ...entities,
+    "sensor.pump_energy": E("sensor.pump_energy", "energy"), "sensor.pump_current": E("sensor.pump_current", "current"),
+    "sensor.pump_temp": E("sensor.pump_temp", "temperature"), "sensor.pump_rssi": E("sensor.pump_rssi", "signal_strength"),
+    "sensor.pump_battery": E("sensor.pump_battery", "battery"),
+    "sensor.solo_a": E("sensor.solo_a", "power"), "sensor.solo_b": E("sensor.solo_b", "voltage") };
+  const reg2 = { ...registry, "sensor.pump_temp": "dev-pump", "sensor.pump_rssi": "dev-pump", "sensor.pump_battery": "dev-pump",
+    "sensor.solo_a": "dev-solo", "sensor.solo_b": "dev-solo" };
+  const fold2 = deviceFolding(entityMap, [], reg2);
+  const hidden = new Set(["binary_sensor.pump_overheat", "sensor.pump_rssi", "sensor.pump_battery"]);
+  const main = deviceReadings("sensor.pump_power", fold2, ents2, hidden, [], reg2);
+  ck("power, energy and temperature first, then the rest in order", main.slice(0, 2).join() === "sensor.pump_energy,sensor.pump_temp", main);
+  ck("a battery is listed though Home Assistant files it diagnostic; signal strength is not",
+     main.includes("sensor.pump_battery") && !main.includes("sensor.pump_rssi"), main);
+  ck("  ...but a battery a PERSON hid in Home Assistant stays hidden",
+     !deviceReadings("sensor.pump_power", fold2, ents2, hidden, [], reg2, new Set(["sensor.pump_battery"])).includes("sensor.pump_battery"));
+  const fromReading = deviceReadings("sensor.pump_energy", fold2, ents2, hidden, [], reg2);
+  // owner, 2026-10-05: "the main entity shall never be visible in 'Also on this device' when showing a
+  // sub-entity screen" — Back is the way to it; the list is what ELSE the device has
+  ck("a READING's panel lists the device's other readings — never the main entity, never itself",
+     !fromReading.includes("sensor.pump_power") && !fromReading.includes("sensor.pump_energy")
+     && fromReading.includes("sensor.pump_temp") && fromReading.includes("sensor.pump_battery"), fromReading);
+  ck("  ...for every entity of the device, the main entity is listed by none of them",
+     ["sensor.pump_energy", "sensor.pump_temp", "sensor.pump_battery", "sensor.pump_current"]
+       .every((r) => !deviceReadings(r, fold2, ents2, hidden, [], reg2).includes("sensor.pump_power")));
+  ck("a device nobody placed on the map still lists its readings (from Home Assistant's device registry)",
+     deviceReadings("sensor.solo_b", fold2, ents2, hidden, [], reg2).join() === "sensor.solo_a");
+  const grouped = [{ id: "g", primaryEntityId: "light.hall", memberEntityIds: ["sensor.pump_temp"] }];
+  ck("a reading grouped under ANOTHER device is listed there, not here",
+     !deviceReadings("sensor.pump_power", deviceFolding(entityMap, grouped, reg2), ents2, hidden, grouped, reg2).includes("sensor.pump_temp"));
+  const rd = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
+  ck("every panel frame draws the one list, the first 3 then 'Show all'",
+     /\{deviceReadings !== false && <DeviceReadings \/>\}/.test(rd("components/panels/BasePanel.tsx"))
+     && /export const READINGS_SHOWN = 3;/.test(rd("components/panels/DeviceReadings.tsx"))
+     && /readingsOf: \(id: string\) => deviceReadings\(id, folding, entities, suppressedEntityIds, deviceGroups, entityDeviceIds,\s*hiddenInHaEntityIds\)/.test(rd("config/VillaModel.tsx")));
+}
+
+console.log("\n  not shown anywhere (Advanced Settings):");
+const un = unshownEntities({ entities, entityMap, folding: fold, suppressed, knownType: () => true });
+ck("a reading of a placed device is NOT 'not shown anywhere' (it is, in that device's panel)", !un.includes("sensor.pump_energy") && !un.includes("sensor.door_battery"), un);
+ck("  ...a placed one is not listed, a hidden one is not listed",
+   !un.includes("light.hall") && !un.includes("binary_sensor.pump_overheat"), un);
+ck("  ...and a reading with no placed device IS listed", un.includes("sensor.lonely"), un);
+
+console.log("\n  one entity, one group (groupEdit):");
+const c0 = { deviceGroups: [{ id: "g1", primaryEntityId: "lock.door", memberEntityIds: ["sensor.door_battery"] }] };
+ck("creating a group on an entity already in one is refused, with the reason", typeof groupEdit(c0, { kind: "create", primaryEntityId: "sensor.door_battery", id: "n" }) === "string");
+ck("adding a member already in a group is refused", /already part of a group/.test(groupEdit({ deviceGroups: [...c0.deviceGroups, { id: "g2", primaryEntityId: "light.hall", memberEntityIds: [] }] }, { kind: "add", groupId: "g2", memberEntityId: "sensor.door_battery" })));
+ck("accepting a suggestion whose member is already grouped is refused (it was not checked at all)",
+   typeof groupEdit(c0, { kind: "accept", primaryEntityId: "light.hall", memberEntityId: "sensor.door_battery", id: "n" }) === "string");
+const acc = groupEdit(c0, { kind: "accept", primaryEntityId: "lock.door", memberEntityId: "sensor.extra", id: "n" });
+ck("a primary's second suggestion ADDS to its group (no second group under one primary)",
+   typeof acc !== "string" && acc.deviceGroups.length === 1 && acc.deviceGroups[0].memberEntityIds.join() === "sensor.door_battery,sensor.extra", acc);
+const rm = groupEdit(c0, { kind: "remove-member", groupId: "g1", memberEntityId: "sensor.door_battery" });
+ck("removing a member", typeof rm !== "string" && rm.deviceGroups[0].memberEntityIds.length === 0);
+
+console.log("\n  the callers:");
+const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
+const d = src("pages/Dashboard.tsx"), router = src("components/panels/PanelRouter.tsx"), base = src("components/panels/BasePanel.tsx");
+ck("the Cockpit, the summary bar, the Agent and Facility open the DEVICE",
+   /onOpenEntity=\{openDevicePanel\}/.test(d)
+   && /go\(\{ type: "handOver", from, panel: panelFor\(identity\.deviceOf\(entityId\)\) \}\)/.test(d)
+   && ["cockpit", "agent"].every((w) => d.includes(`onOpenEntity={(id) => handOver("${w}", id)}`))
+   && /go\(\{ type: "openDevice", panel: panelFor\(identity\.deviceOf\(entityId\)\) \}\)/.test(d));
+ck("  ...a list row and the camera's next/prev open exactly the entity they name",
+   // 2.496.270: through openFromList, which records the list for Back and opens exactly the entity
+   // (Back to the list is pages/screen's, driven by value in screen.mjs.)
+   (d.match(/onOpenEntity=\{openFromList\}/g) ?? []).length === 2
+   && /go\(\{ type: "openFromList", panel: panelFor\(entityId\) \}\)/.test(d)
+   && /onOpenEntity=\{\(id\) => go\(\{ type: "switchPanel", panel: panelFor\(id\) \}\)\}/.test(d));
+ck("the open panel lists its device's readings, each opening its own panel",
+   /identity\.readingsOf\(activePanel\.entityId\)/.test(d) && /readings: panelReadings,/.test(d) && /onOpenReading: openReading,/.test(d) && /go\(\{ type: "openReading", panel: panelFor\(entityId\) \}\)/.test(d)
+   && /rows\.map\(\(r\) =>/.test(src("components/panels/DeviceReadings.tsx")) && /onOpenReading\(r\.id\)/.test(src("components/panels/DeviceReadings.tsx")));
+ck("grouping never trades controls for a summary: only a READING-led group opens the combined view",
+   /if \(group && \(mapping\.type === "sensor" \|\| mapping\.type === "binary_sensor"\)\)/.test(router)
+   && /deviceReadings=\{false\}/.test(src("components/panels/DeviceGroupPanel.tsx")));
+ck("Settings' 'not shown anywhere' and the group editor ask deviceGroups, not their own rules",
+   /unshownEntities\(\{/.test(src("components/settings/BindingsTable.tsx")) && !/!config\.entityMap\[id\] && !suppressedEntityIds\.has\(id\)/.test(src("components/settings/BindingsTable.tsx"))
+   && /groupEdit\(config, e\)/.test(src("components/settings/GroupedDevices.tsx")) && /groupEdit\(c, e\)/.test(src("components/settings/GroupedDevices.tsx"))
+   && !/groupedEntityIds|upsertGroup/.test(src("components/settings/GroupedDevices.tsx")));
+
+done("✅ one device identity for every opener");

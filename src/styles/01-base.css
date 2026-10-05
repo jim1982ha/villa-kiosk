@@ -198,6 +198,15 @@
      brand guidelines' 40px without this would have overflowed the pill by 2px.
      The compact query's 42 is the same arithmetic at a 32px chip. */
   --hud-pill-h: 50px;
+  /* The LEFT RAIL's one width (2.496.242): the app-icon tile at the top left
+     and the 1F/2F floor block under it are both this wide, with the same
+     radius and shadow, so they read as one column. The floor block's own
+     width (40px button + 2×4px padding + 2×1px border) — the narrower of the
+     two, and the one whose buttons fit it exactly. NOT redeclared on phones:
+     the floor block keeps its 40px buttons there, so the tile keeps this too
+     (the bar is 52px tall, so a 50px tile fits it at every tier). Each floor
+     button's TOUCH target is 44px regardless (.hud-floor-btn::before). */
+  --hud-rail-w: 50px;
   /* One labelled form field, one rhythm. Three surfaces had grown their own
      numbers for the same idea — the Settings body (6px under a 13px label),
      the slider fields (8px) and the Facility forms (5px under a 12px one) —
@@ -578,7 +587,9 @@ button {
   color: var(--device-ink, var(--text-primary));
   border-color: var(--device-ring, var(--hairline-strong));
 }
-.panel-modal .row-buttons .btn.ghost:hover { background: var(--device-fill, var(--bg-input)); }
+@media (hover: hover) {
+  .panel-modal .row-buttons .btn.ghost:hover { background: var(--device-fill, var(--bg-input)); }
+}
 .panel-modal .row-buttons .btn.active,
 .panel-modal .btn.active {
   background: var(--device-fill, var(--accent-soft));
@@ -708,6 +719,14 @@ button {
 }
 .hud-group .icon-btn { width: 40px; height: 40px; }
 .hud-stack .icon-btn { width: 40px; height: 38px; }
-.hud-group .icon-btn:hover, .hud-stack .icon-btn:hover { background: var(--bg-input); }
+@media (hover: hover) {
+  .hud-group .icon-btn:hover, .hud-stack .icon-btn:hover { background: var(--bg-input); }
+}
 .hud-group .icon-btn.active, .hud-stack .icon-btn.active { background: var(--accent); color: var(--text-on-accent); }
-.hud-group .icon-btn.active:hover { background: var(--accent); }
+/* The category filter buttons take their colours from common/categoryChip (inline,
+   the Cockpit's own category colours); a category hidden from the map is the
+   neutral chip, dimmed, so "off" still reads as off at a glance. */
+.hud-cat-btn.is-hidden { opacity: 0.45; }
+@media (hover: hover) {
+  .hud-group .icon-btn.active:hover { background: var(--accent); }
+}

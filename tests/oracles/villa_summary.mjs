@@ -54,7 +54,9 @@ ck("an all-locked villa reads secured", lockFacts({ a: E("lock.a", "locked") }).
 
 console.log("\n  the caller:");
 const bar = readFileSync(new URL("../../src/components/hud/SummaryBar.tsx", import.meta.url), "utf8");
-ck("the summary bar reads its facts from villaSummary", /villaSummary\(\{/.test(bar));
+// The tiles moved to config/summaryTiles.ts (2.496.232).
+const tilesSrc = readFileSync(new URL("../../src/config/summaryTiles.ts", import.meta.url), "utf8");
+ck("the summary bar reads its facts from villaSummary", /villaSummary\(\{/.test(tilesSrc) && /deriveTiles\(/.test(bar));
 ck("  ...and keeps no copy of the rules", !/byDomain\("(climate|sensor|switch)"\)/.test(bar) && !/POOL_WORD\s*=/.test(bar));
 
 done("✅ one answer per door, on every screen");

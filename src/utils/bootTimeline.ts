@@ -167,6 +167,27 @@ let loadReportedAt = 0;
  *  which is what installFreezeWatchdog exists for. */
 let longtaskAvailable = false;
 
+/**
+ * Is this long block a FREEZE worth a record? Pure (tests/oracles/boot_record.mjs).
+ *   "loading"  — no load record yet, or the block STARTED before it was built:
+ *                load cost, already in the record's stall stats (the 5,469 ms
+ *                "freeze" that was the load's own paint);
+ *   "short"    — under FREEZE_MIN_MS: jank, not "not responding";
+ *   "cooldown" / "cap" — rate-limited: a wedged thread emits several in a row,
+ *                and the first is the informative one.
+ */
+export function freezeVerdict(f: {
+  durationMs: number; startedAt: number; now: number;
+  /** When the load record was built; 0 before. */
+  loadReportedAt: number; lastReportAt: number; reports: number;
+}): "report" | "loading" | "short" | "cooldown" | "cap" {
+  if (!f.loadReportedAt || f.startedAt < f.loadReportedAt) return "loading";
+  if (f.durationMs < FREEZE_MIN_MS) return "short";
+  if (f.now - f.lastReportAt < FREEZE_COOLDOWN_MS) return "cooldown";
+  if (f.reports >= FREEZE_MAX_PER_SESSION) return "cap";
+  return "report";
+}
+
 function reportPostLoadFreeze(
   durationMs: number,
   src: "longtask" | "watchdog",
@@ -174,13 +195,8 @@ function reportPostLoadFreeze(
    *  built is load cost, however long after it the observer reports it. */
   startedAt: number,
 ): void {
-  // While the villa is still loading there is a spinner explaining the wait,
-  // and those blocks are already covered by the load record's stall stats.
-  if (!loadReportedAt || startedAt < loadReportedAt) return;
-  if (durationMs < FREEZE_MIN_MS) return;
   const now = performance.now();
-  if (now - lastFreezeReportAt < FREEZE_COOLDOWN_MS) return;
-  if (freezeReports >= FREEZE_MAX_PER_SESSION) return;
+  if (freezeVerdict({ durationMs, startedAt, now, loadReportedAt, lastReportAt: lastFreezeReportAt, reports: freezeReports }) !== "report") return;
   lastFreezeReportAt = now;
   freezeReports++;
   // Read the span ring NOW, not inside the setTimeout below: the deferral is
@@ -338,11 +354,16 @@ export function installVisibilityTracker(): void {
   });
 }
 
+/** The load record is being built: from here on a long task is no longer load
+ *  cost but a freeze on a villa that is already up (reportPostLoadFreeze).
+ *  ONCE per load — this was a side effect of reading the stall summary, so
+ *  building the record a second time moved the line and re-filed blocks as
+ *  load cost (2.496.262). */
+function markLoadReported(): void {
+  if (!loadReportedAt) loadReportedAt = performance.now();
+}
+
 function stallSummary(): Record<string, number> {
-  // The load record is being built, so from here on a long task is no longer
-  // load cost — it is a freeze on a villa that is already up. See
-  // reportPostLoadFreeze, which only reports once this flips.
-  loadReportedAt = performance.now();
   if (!stalls.count) return {};
   return {
     stallCount: stalls.count,
@@ -387,10 +408,6 @@ export function markBoot(name: BootMark): void {
   if (!marks.has(name)) marks.set(name, performance.now());
 }
 
-function mark(name: BootMark): number | undefined {
-  return marks.get(name);
-}
-
 /** Has this milestone been reached in the current load cycle? Lets code that
  *  knows nothing about auth ask "are we still on the pre-login screens?" —
  *  `hasBootMark("scene")` is false until the villa actually starts loading. */
@@ -429,17 +446,6 @@ function scriptWeight(): { jsKb?: number; jsNetKb?: number } {
   }
 }
 
-/** The whole picture, flattened into telemetry fields.
- *
- *  `total` is the caller's own navigation-start → villa-visible measurement
- *  (BabylonCanvas already owns that clock); everything else is derived here.
- *
- *  On a RELOAD (`loadSeq > 1`) the navigation-relative figures are deliberately
- *  NOT emitted. `bootMs`, `totalMs` and `activeMs` all mean "since the page
- *  opened", which after a sign-out/sign-in cycle is a number that grows forever
- *  and describes nothing — it is exactly what made a healthy 2.5s load look
- *  like a 35s regression. `reloadMs` replaces them: this load's own span, the
- *  only figure that is true for both cases. */
 /** The shape of `PerformanceNavigationTiming.notRestoredReasons` — a tree, one
  *  node per frame. Declared here because this TS lib's DOM types predate it,
  *  and only the parts actually read are described. */
@@ -448,41 +454,62 @@ interface NotRestoredLike {
   children?: NotRestoredLike[];
 }
 
-export function bootTimeline(total: number): Record<string, number | string | boolean> {
+/** Everything a load record is built from — what the browser and the marks
+ *  said, as plain values. */
+export interface LoadInputs {
+  /** BabylonCanvas's own navigation-start → villa-visible span. */
+  total: number;
+  loadSeq: number;
+  /** This load's own span (now − beginLoad), for a reload. */
+  sinceLoadStart: number;
+  nav?: {
+    type: string; workerStart: number; requestStart: number; responseStart: number; responseEnd: number;
+    activationStart?: number; notRestoredReasons?: NotRestoredLike | null;
+  };
+  marks: Partial<Record<BootMark, number>>;
+  /** scriptWeight() and stallSummary(), already measured. */
+  extra?: Record<string, number>;
+}
+
+/**
+ * The load record, from plain values — pure, so tests/oracles/boot_record.mjs
+ * replays the figures speed decisions rest on ("mountMs: 21001", a bootMs that
+ * grew forever, a paintMs with hidden time in it: each came out of here).
+ *
+ * On a RELOAD (`loadSeq > 1`) the navigation-relative figures are deliberately
+ * NOT emitted. `bootMs`, `totalMs` and `activeMs` all mean "since the page
+ * opened", which after a sign-out/sign-in cycle is a number that grows forever
+ * and describes nothing — it is exactly what made a healthy 2.5s load look
+ * like a 35s regression. `reloadMs` replaces them.
+ */
+export function loadRecord(i: LoadInputs): Record<string, number | string | boolean> {
   const out: Record<string, number | string | boolean> = {};
   const put = (k: string, v: number | undefined) => {
     if (typeof v === "number" && Number.isFinite(v) && v >= 0) out[k] = Math.round(v);
   };
-  const isReload = loadSeq > 1;
+  const isReload = i.loadSeq > 1;
   if (isReload) {
-    out.loadSeq = loadSeq;
-    put("reloadMs", performance.now() - loadT0);
+    out.loadSeq = i.loadSeq;
+    put("reloadMs", i.sinceLoadStart);
   }
 
-  const nav = navEntry();
-  const tJs = mark("js");
-  const tReact = mark("react");
-  const tGate = mark("gate") ?? mark("pin");
-  const tAuth = mark("auth");
-  const tScene = mark("scene");
+  const nav = i.nav;
+  const tJs = i.marks.js;
+  const tReact = i.marks.react;
+  const tGate = i.marks.gate ?? i.marks.pin;
+  const tAuth = i.marks.auth;
+  const tScene = i.marks.scene;
 
   // ── Navigation: what the browser did before any of our code existed ──────
   if (nav) {
     out.navType = nav.type;
     // ── WHY THE BACK-FORWARD CACHE DIDN'T RESTORE US ────────────────────────
-    // Backgrounding the app and returning to it re-runs this whole load, ~10s
-    // on the phone and ~16s on the iPad, when a bfcache restore would have been
-    // instant. Guessing at the cause is exactly the trap this file exists to
-    // avoid, and the browser will simply say: `notRestoredReasons` (Chrome 123+)
-    // reports the blocking reasons for the CURRENT navigation, and reports null
-    // when the page WAS restored.
-    //
-    // Only the reason codes, flattened and deduped — the tree also carries frame
-    // URLs, which are not ours to ship. A capped, sorted, comma-joined string so
-    // two records with the same causes compare equal.
-    const nrr = (nav as PerformanceNavigationTiming & {
-      notRestoredReasons?: NotRestoredLike | null;
-    }).notRestoredReasons;
+    // `notRestoredReasons` (Chrome 123+) reports the blocking reasons for the
+    // CURRENT navigation, and null when the page WAS restored. Only the reason
+    // codes, flattened and deduped (the tree also carries frame URLs, which are
+    // not ours to ship), capped, sorted and comma-joined so two records with
+    // the same causes compare equal.
+    const nrr = nav.notRestoredReasons;
     if (nrr) {
       const seen = new Set<string>();
       const walk = (n: NotRestoredLike | null | undefined): void => {
@@ -493,18 +520,13 @@ export function bootTimeline(total: number): Record<string, number | string | bo
       walk(nrr);
       if (seen.size) out.bfBlocked = [...seen].sort().join(",");
     }
-    // A prerendered document starts its clock earlier than it became visible;
-    // without this the phases below look impossibly fast. Not in every browser
-    // (and not in this TS lib's DOM types), so it is read defensively.
-    put("actMs", (nav as PerformanceNavigationTiming & { activationStart?: number }).activationStart);
-    // workerStart > 0 means the service worker handled this navigation — on the
-    // PWA (which is the villa iPad's actual configuration) that is the normal
-    // path, and its cost has never been separated from "the server was slow".
+    // A prerendered document starts its clock earlier than it became visible.
+    put("actMs", nav.activationStart);
+    // workerStart > 0: a service worker handled this navigation (the PWA path).
     if (nav.workerStart > 0) put("swMs", nav.responseStart - nav.workerStart);
     put("ttfbMs", nav.responseStart - nav.requestStart);
     put("htmlMs", nav.responseEnd - nav.responseStart);
-    // Bundle: HTML delivered → our module body ran. This is download + parse +
-    // compile of the JS, the phase the Babylon barrel-import fix targets.
+    // Bundle: HTML delivered → our module body ran (download + parse + compile).
     if (tJs !== undefined) put("bundleMs", tJs - nav.responseEnd);
   }
 
@@ -512,43 +534,49 @@ export function bootTimeline(total: number): Record<string, number | string | bo
   if (tJs !== undefined && tReact !== undefined) put("reactMs", tReact - tJs);
 
   // ── The human ────────────────────────────────────────────────────────────
-  // A gate only appears when there is no restored session. When it does, the
-  // time from it appearing to a session existing is dominated by a person
-  // reading, tapping and typing — NOT by anything worth optimising. Reporting
-  // it separately is what makes `activeMs` meaningful.
+  // A gate only appears when there is no restored session; the time from it
+  // appearing to a session existing is a person reading, tapping and typing —
+  // reported apart so `activeMs` means something.
   const gated = tGate !== undefined;
   out.gated = gated;
-  if (gated) out.pinned = mark("pin") !== undefined;
+  if (gated) out.pinned = i.marks.pin !== undefined;
   let wait = 0;
   if (gated && tAuth !== undefined && tGate !== undefined && tAuth > tGate) {
     wait = tAuth - tGate;
     put("waitMs", wait);
   }
 
-  // Passcode accepted → the scene effect actually starting: React committing
-  // the whole authenticated tree (the config/FM/HA providers, Dashboard, then
-  // BabylonCanvas) before one line of villa-loading code runs. This is the
-  // stretch a user experiences as "I typed my PIN and nothing happened yet",
-  // and no measurement has ever covered it. On the restored-session path (no
-  // gate at all) it is measured from React instead, the only earlier anchor.
-  // ANCHOR MATTERS: `tAuth` is a per-load mark, `tReact` is page-level and
-  // never cleared. Falling back to `tReact` on a RELOAD measured from the
-  // page's React mount, producing figures like mountMs: 21001 on a load whose
-  // own span was 2.2s — the same class of lie `bootMs` told before it was
-  // fixed. Only emitted when the anchor genuinely belongs to this load.
+  // Passcode accepted → the scene effect starting. ANCHOR MATTERS: `tAuth` is a
+  // per-load mark, `tReact` is page-level and never cleared — falling back to
+  // it on a RELOAD produced mountMs: 21001 on a load whose own span was 2.2s.
+  // Only emitted when the anchor genuinely belongs to this load.
   const sceneFrom = tAuth ?? (isReload ? undefined : tReact);
   if (tScene !== undefined && sceneFrom !== undefined) put("mountMs", tScene - sceneFrom);
 
   // Navigation-relative from here down — only true for the page's FIRST load.
-  if (isReload) {
-    Object.assign(out, scriptWeight(), stallSummary());
-    return out;
+  if (!isReload) {
+    // THE number to judge a load by: wall clock minus the part spent waiting
+    // on a person. Equals totalMs whenever a session was already restored.
+    put("activeMs", i.total - wait);
   }
-
-  // THE number to judge a load by: wall clock minus the part spent waiting on a
-  // person. Equals totalMs whenever a session was already restored.
-  put("activeMs", total - wait);
-
-  Object.assign(out, scriptWeight(), stallSummary());
+  Object.assign(out, i.extra ?? {});
   return out;
+}
+
+/** The load record for THIS page — the browser adapter around loadRecord. */
+export function bootTimeline(total: number): Record<string, number | string | boolean> {
+  const nav = navEntry() as (PerformanceNavigationTiming & {
+    activationStart?: number; notRestoredReasons?: NotRestoredLike | null;
+  }) | undefined;
+  markLoadReported();
+  return loadRecord({
+    total, loadSeq, sinceLoadStart: performance.now() - loadT0,
+    nav: nav ? {
+      type: nav.type, workerStart: nav.workerStart, requestStart: nav.requestStart,
+      responseStart: nav.responseStart, responseEnd: nav.responseEnd,
+      activationStart: nav.activationStart, notRestoredReasons: nav.notRestoredReasons,
+    } : undefined,
+    marks: Object.fromEntries(marks) as Partial<Record<BootMark, number>>,
+    extra: { ...scriptWeight(), ...stallSummary() },
+  });
 }

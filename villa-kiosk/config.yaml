@@ -5,7 +5,7 @@
 # no-compile operation. The {arch} placeholder + version resolve to e.g.
 # ghcr.io/jim1982ha/villa-kiosk-amd64:2.0.0 — published by .github/workflows/build.yaml.
 name: VESTA
-version: "2.496.210"
+version: "2.496.307"
 slug: villa_kiosk
 description: 3D Home Assistant villa dashboard — HA sidebar (Ingress) + its own hostname
 url: https://github.com/jim1982ha/villa-kiosk
@@ -15,9 +15,10 @@ arch:
   - aarch64
 # The HA base image ships s6-overlay v3 as its own init — disable Docker's.
 init: false
-# Serve in the sidebar through Ingress (HA does the auth there).
+# Serve in the sidebar through Ingress (HA does the auth there), on nginx's
+# 8099 — the Supervisor's default ingress_port, so it is not written out (the
+# add-on linter refuses a key that repeats a default; tools/addon_lint.py).
 ingress: true
-ingress_port: 8099
 # ALSO publish the kiosk on its own host port, so it can be reached directly —
 # e.g. via a Cloudflare Tunnel pointed at http://<HA-host-ip>:8099 — and opened
 # as a full-screen PWA with none of the Home Assistant UI around it. This is
@@ -37,8 +38,13 @@ ports_description:
 homeassistant_api: true
 panel_icon: mdi:home-city
 panel_title: VESTA
-boot: auto
-startup: application
+# boot: auto and startup: application are the Supervisor's defaults — left
+# out for the same reason.
+# Health: the image's own Docker HEALTHCHECK (see the Dockerfile), not a
+# `watchdog:` key here — the add-on linter calls that key obsolete. With the
+# owner's Watchdog switch on, the Supervisor restarts the add-on when the
+# container turns unhealthy or stops (a crash loop stops it on purpose:
+# rootfs/usr/bin/vesta-service-finish).
 # Profile passcodes: a 4-digit PIN per kiosk profile (Guest / Owner / Facility
 # manager). Leave a PIN empty to let that profile in without a passcode. PINs
 # are verified server-side by the add-on (never sent to the browser), and a
@@ -124,6 +130,32 @@ startup: application
 # pin_lockout_minutes (default 5). How long a device that has entered five
 #   wrong passcodes must wait. The lockout is per source address, so raising
 #   it punishes a guesser rather than locking the household out.
+#
+# ── The VESTA Agent (PLAN workstream A) ────────────────────────────────────
+# agent_enabled — THE switch, a top-level field so it is visible with the group
+# below folded (the Supervisor's form cannot put a switch in a group header or
+# open a group on its own). vesta_agent — the group of settings that only
+# matter while it is on. History: four flat keys until 2.496.218, then all four
+# in the group (2.496.218), now the switch back outside it (2.496.219); the
+# proxy moves an install's values at its first start (migrate_options)
+# and reads the older places until then.
+#
+# agent_enabled (default false): THE switch. Off = there is no agent: every
+#   /agent/v1 route answers 404 and no agent UI is shown, whatever the token
+#   holds. On = the agent interface exists once `token` is valid; on with an
+#   empty or short token stays off and says so in the log (the Supervisor's
+#   form cannot make a field required only when a switch is on).
+# token (only read while enabled). The same value as `kiosk_agent_token` in the
+#   VESTA Agent host. A `password` field, so the form masks it; its SHAPE (at
+#   least 16 characters) is checked by the proxy — a short token counts as not
+#   configured. It lets the agent read and update Facility records (never
+#   delete them), post messages with buttons and report its presence; a wrong
+#   token counts toward the passcode lockout like a wrong PIN, and it never
+#   opens anything else in the kiosk.
+# offline_after_minutes (default 5): the agent is shown offline when no
+#   heartbeat arrived within this window.
+# message_retention_days (default 90): how long agent messages and the answers
+#   given to them are kept.
 options:
   guest_pin: ""
   owner_pin: ""
@@ -134,6 +166,11 @@ options:
   session_days: 30
   telemetry_max_events: 500
   pin_lockout_minutes: 5
+  agent_enabled: false
+  vesta_agent:
+    token: ""
+    offline_after_minutes: 5
+    message_retention_days: 90
 schema:
   guest_pin: match(^[0-9]{4}$|^$)?
   owner_pin: match(^[0-9]{4}$|^$)?
@@ -144,3 +181,8 @@ schema:
   session_days: int(1,365)?
   telemetry_max_events: int(50,5000)?
   pin_lockout_minutes: int(1,1440)?
+  agent_enabled: bool?
+  vesta_agent:
+    token: password?
+    offline_after_minutes: int(1,60)?
+    message_retention_days: int(1,365)?

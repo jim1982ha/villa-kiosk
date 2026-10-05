@@ -62,25 +62,6 @@ jobs:
         # both paths, so a green run here speaks for the image.
         run: npm ci --no-audit --no-fund
 
-      - name: Types and bundle
-        # The gate that already existed, hoisted out of the image so it fails
-        # in seconds rather than after a multi-arch build.
-        run: npm run build
-
-      - name: Oracles
-        # Each pins a defect that was found, reproduced and fixed. `open/` holds
-        # ones that fail BY DESIGN against known-open defects; run-all.sh
-        # reports those separately and does not fail on them.
-        run: npm run test:oracles
-
-      - name: The two hard rules
-        # ⚠️ THE HASH PATH IS THE ONLY ONE THAT EXISTS HERE. The plaintext token
-        # list is gitignored, so `checkout` never produces it — which is how
-        # this clause came to print SKIP and exit 0 on every runner for eleven
-        # releases. `npm run test:hard-rules:ci` is the same command a developer
-        # can run locally to exercise THIS branch rather than their own.
-        run: npm run test:hard-rules:ci
-
       - name: The proxy's runtime dependency
         # ⚠️ WITHOUT THIS, THE NEXT STEP CANNOT EVEN IMPORT ITS SUBJECT.
         # supervisor-proxy.py does `from aiohttp import ...` at module scope and
@@ -91,22 +72,12 @@ jobs:
         # dependency as an apk (py3-aiohttp); this is CI's half of that fact.
         run: python3 -m pip install --quiet aiohttp
 
-      - name: The proxy's security rules
-        # ⚠️ THE FIRST TEST ON THIS BRANCH THAT REACHES THE PROXY AT ALL.
-        run: npm run test:proxy
-
-      - name: The path lists agree
-        run: npm run test:routes
-
-      - name: The add-on manifest agrees with what an operator reads
-        # ⚠️ config.yaml PROMISED THIS GUARD AND IT DID NOT EXIST — its comment
-        # beside the options block named a security_test.py that is not tracked
-        # on this branch. A field missing from translations/en.yaml
-        # renders on Supervisor's Configuration page as its raw key with no
-        # help text, and that is the page where the PINs are set.
-        run: npm run test:manifest
-
-      - name: The proxy parses
-        # ⚠️ THE CHEAPEST CHECK HERE AND THE ONE WITH THE WORST FAILURE MODE.
-        # Nothing else in this pipeline loads the proxy at all.
-        run: npm run test:proxy-parse
+      - name: The gates
+        # ⚠️ LISTED ONCE, IN tools/release.py (2.496.249). This file named nine
+        # steps, CLAUDE.md the same list again, and a developer retyped it:
+        # three copies of one fact, kept equal by hand. The module runs every
+        # gate even after a red one, prints each in its own log group and an
+        # annotation per failure, and is the same command `ship` and a
+        # developer run (`npm run gates`). tests/release.py fails if a gate
+        # reappears here.
+        run: python3 tools/release.py gates

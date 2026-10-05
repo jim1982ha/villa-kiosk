@@ -16,68 +16,117 @@ import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "./ConfigContext";
 import { useFmData } from "@/fm/FmDataContext";
-import { villaDevices, deviceFolding, type VillaDevices } from "./deviceGroups";
-import {
-  buildAttentionItems, villaHealthFrom, type AttentionItem, type VillaHealth,
-} from "@/components/cockpit/cockpitData";
+import { villaDevices, deviceFolding, deviceOf, deviceReadings, type VillaDevices } from "./deviceGroups";
+import { dismissedEntitySet } from "./dismissedEntities";
+import { effectiveMapped, visibleEntitiesOf, visibleTo } from "./villaVisibility";
+import type { Role } from "@/auth/roles";
+import type { HassEntity } from "@/types/ha.types";
+import { buildAttentionItems, type VillaProblems } from "./attention";
 
-export interface VillaAttention {
-  unavailableIds: string[];
-  selectableIds: string[];
-  attentionItems: AttentionItem[];
-  health: VillaHealth;
+/** The villa's problems, role-blind; a profile's view (grouped, with its
+ *  health line) is attention.attentionFor — see useVillaAttention. */
+export type { VillaProblems };
+
+/** The sets the villa model is built on — from useVillaSets, which the
+ *  Dashboard calls (it also reads them itself, above the provider it renders). */
+export interface VillaSets {
+  /** Entities the 3D model carries, plus every mapping's linked and motion
+   *  entity — dismissed ones excluded (villaVisibility.effectiveMapped). */
+  mappedEntityIds: Set<string>;
+  /** Entities the owner removed and HA no longer knows (dismissedEntitySet). */
+  dismissedIds: Set<string>;
+  /** Every entity a profile can see at all (hidden and diagnostic ones out). */
+  visibleEntities: Record<string, HassEntity>;
 }
 
-export interface VillaModel {
-  /** Entities the 3D model carries, plus every mapping's linked and motion
-   *  entity — dismissed ones excluded (Dashboard's effectiveMappedEntityIds). */
-  mappedEntityIds: Set<string>;
+export function useVillaSets(sceneEntityIds: Set<string>): VillaSets {
+  const { entities, suppressedEntityIds } = useHA();
+  const { config } = useConfig();
+  const dismissedIds = useMemo(
+    () => dismissedEntitySet(config.dismissedEntityIds, entities), [config.dismissedEntityIds, entities]);
+  const mappedEntityIds = useMemo(
+    () => effectiveMapped(sceneEntityIds, config.entityMap, dismissedIds), [sceneEntityIds, config.entityMap, dismissedIds]);
+  const visibleEntities = useMemo(
+    () => visibleEntitiesOf(entities, suppressedEntityIds), [entities, suppressedEntityIds]);
+  return useMemo(() => ({ mappedEntityIds, dismissedIds, visibleEntities }), [mappedEntityIds, dismissedIds, visibleEntities]);
+}
+
+export interface VillaModel extends VillaSets {
   /** The villa's own devices, over every entity HA reports. */
   devices: VillaDevices;
   /** The same, over the entities a profile can SEE (hidden and diagnostic
    *  ones left out) — what the bottom bar counts. */
   visibleDevices: VillaDevices;
-  /** What needs attention: unavailable devices, open faults, overdue
-   *  schedules, active alarms — the HUD badge and Cockpit read this ONE. */
-  attention: VillaAttention;
+  /** What needs attention, role-blind: unavailable devices, open faults,
+   *  overdue schedules, active alarms. Shown only through a profile's view
+   *  (useVillaAttention → attention.attentionFor), never counted directly. */
+  attention: VillaProblems;
+  /** The devices this profile's lists may name (villaVisibility.visibleTo) —
+   *  the attention badge, the Cockpit list and anything else that asks. */
+  visibleTo: (role: Role | null) => { has(id: string): boolean };
 }
 
 const Ctx = createContext<VillaModel | null>(null);
 
-export function VillaModelProvider({ mappedEntityIds, children }: { mappedEntityIds: Set<string>; children: ReactNode }) {
-  const { entities, entityDeviceIds, suppressedEntityIds } = useHA();
+export function VillaModelProvider({ sets, children }: { sets: VillaSets; children: ReactNode }) {
+  const { mappedEntityIds, visibleEntities } = sets;
+  const { entities, entityDeviceIds } = useHA();
   const { config, resolvedRooms } = useConfig();
   const { data: fmData } = useFmData();
   const { entityMap, deviceGroups, dismissedEntityIds } = config;
 
   // Which entity stands for which device — a function of CONFIG and the
   // registry, so it is computed when those change, not on every state push.
-  const folding = useMemo(() => deviceFolding(entityMap, deviceGroups, entityDeviceIds), [entityMap, deviceGroups, entityDeviceIds]);
+  const { folding } = useDeviceIdentity();
   const devices = useMemo(
     () => villaDevices({ entityMap, deviceGroups, dismissedEntityIds, mappedEntityIds, entities, entityDeviceIds, folding }),
     [entityMap, deviceGroups, dismissedEntityIds, mappedEntityIds, entities, entityDeviceIds, folding],
   );
-  const visibleEntities = useMemo(() => {
-    const out: typeof entities = {};
-    for (const [id, e] of Object.entries(entities)) if (!suppressedEntityIds.has(id)) out[id] = e;
-    return out;
-  }, [entities, suppressedEntityIds]);
   const visibleDevices = useMemo(
     () => villaDevices({ entityMap, deviceGroups, dismissedEntityIds, mappedEntityIds, entities: visibleEntities, entityDeviceIds, folding }),
     [entityMap, deviceGroups, dismissedEntityIds, mappedEntityIds, visibleEntities, entityDeviceIds, folding],
   );
-  const attention = useMemo((): VillaAttention => {
+  const attention = useMemo((): VillaProblems => {
     const unavailableIds = devices.unavailable as string[];
     const selectableIds = devices.ids as string[];
-    const attentionItems = buildAttentionItems({ unavailableIds, entities, entityMap, resolvedRooms, fmData, selectableIds });
-    return { unavailableIds, selectableIds, attentionItems, health: villaHealthFrom(attentionItems) };
-  }, [devices, entities, entityMap, resolvedRooms, fmData]);
+    const attentionItems = buildAttentionItems({
+      unavailableIds, entities, entityMap, alertThresholds: config.alertThresholds, resolvedRooms, fmData, selectableIds, folding });
+    // NOT grouped here: grouping is per profile (attentionFor), and a
+    // role-blind grouping had no reader (until 2.496.268 it ran anyway).
+    return { unavailableIds, selectableIds, attentionItems };
+  }, [devices, entities, entityMap, config.alertThresholds, resolvedRooms, fmData, folding]);
 
   const value = useMemo(
-    () => ({ mappedEntityIds, devices, visibleDevices, attention }),
-    [mappedEntityIds, devices, visibleDevices, attention],
+    (): VillaModel => ({
+      ...sets, devices, visibleDevices, attention,
+      visibleTo: (role) => visibleTo(role, { mapped: mappedEntityIds, entityMap, entities }),
+    }),
+    [sets, mappedEntityIds, devices, visibleDevices, attention, entityMap, entities],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
+/**
+ * "Which device is this entity, and what else does it read?" — for every
+ * opener (the map, Cockpit, the Agent, Facility, the lists) and for Settings
+ * (2.496.260). A hook rather than a field of the villa model because the
+ * Dashboard, which opens panels, is what PROVIDES that model. The fold is a
+ * function of config and the registry only, so it is rebuilt when those
+ * change, never on a state push.
+ */
+export function useDeviceIdentity() {
+  const { entities, entityDeviceIds, suppressedEntityIds, hiddenInHaEntityIds } = useHA();
+  const { config } = useConfig();
+  const { entityMap, deviceGroups } = config;
+  const folding = useMemo(() => deviceFolding(entityMap, deviceGroups, entityDeviceIds), [entityMap, deviceGroups, entityDeviceIds]);
+  return useMemo(() => ({
+    folding,
+    /** What a tap on anything of `id`'s device opens. */
+    deviceOf: (id: string) => deviceOf(folding, id),
+    /** What else is on the open entity's device, listed under its panel. */
+    readingsOf: (id: string) => deviceReadings(id, folding, entities, suppressedEntityIds, deviceGroups, entityDeviceIds,
+      hiddenInHaEntityIds),
+  }), [folding, entities, suppressedEntityIds, deviceGroups, entityDeviceIds, hiddenInHaEntityIds]);
 }
 
 export function useVillaModel(): VillaModel {

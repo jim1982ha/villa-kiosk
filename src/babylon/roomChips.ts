@@ -13,6 +13,7 @@
 // Pure; tests/oracles/room_chips.mjs.
 
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
+import { groupLook, type DeviceLook } from "@/utils/deviceActivity";
 
 /**
  * One room chip as DERIVED — everything needed to decide where it lands and
@@ -46,7 +47,11 @@ export interface RoomChip {
    */
   label: string;
   ids: string[]; centre: Vector3; rooms: number; roomNames: string[];
-  ringRed: boolean; unavailable: boolean;
+  /** red: a member needs attention; on: a member is on (and none needs attention) — never red for "on".
+   *  deviceActivity.groupLook's count rule; combineChips ORs them on a merge. */
+  ringRed: boolean; ringOn: boolean; unavailable: boolean;
+  /** A member is on, even when one needs attention (groupLook.anyOn). */
+  anyOn: boolean;
   /** True-perspective screen position and half-extents — the merge test only.
    *  The collision test re-projects `centre` onto the view plane instead; see
    *  CHIP_COLLISION for why the two spaces are not the same one. */
@@ -59,84 +64,59 @@ export interface RoomChip {
  *  must never truncate it — see that function. */
 export const chipSuffixOf = (c: RoomChip) => (c.rooms > 1 ? `+${c.rooms - 1}` : "");
 
-/** One shown badge, as a chip needs it. `kind` is its badge state (on, alert,
- *  unavailable, …) — see EntityVisuals.badgeKind. */
+/** One shown badge, as a chip needs it. `look` is its deviceLook
+ *  (utils/deviceActivity); undefined while Home Assistant has not reported it
+ *  to the map — it then rings nothing. */
 export interface ChipMember {
   id: string;
   /** roomKey() of the room it is in. */
   room: string;
   pos: { x: number; y: number; z: number };
-  kind?: string;
+  look?: DeviceLook;
 }
 
 /**
  * One chip per CLUSTERED room, in first-seen order, unmeasured. A chip's centre
- * is its members' mean position; its ring is red if any member is on or
- * alerting; it is marked unavailable if any member is.
+ * is its members' mean position; its ring is deviceActivity.groupLook's COUNT
+ * rule (a chip draws no devices): red if any member is alerting (needs
+ * attention), the neutral "on" ring if any member is on, none otherwise; it is
+ * marked unavailable if any member is.
  */
 export function bucketRoomChips(
   members: readonly ChipMember[],
   clustered: (roomKey: string) => boolean,
   display: (roomKey: string) => string,
 ): RoomChip[] {
-  const groups = new Map<string, { ids: string[]; sum: Vector3; ringRed: boolean; unavailable: boolean }>();
+  const groups = new Map<string, { ids: string[]; sum: Vector3; looks: (DeviceLook | undefined)[] }>();
   for (const m of members) {
     if (!clustered(m.room)) continue;
     let g = groups.get(m.room);
-    if (!g) { g = { ids: [], sum: Vector3.Zero(), ringRed: false, unavailable: false }; groups.set(m.room, g); }
+    if (!g) { g = { ids: [], sum: Vector3.Zero(), looks: [] }; groups.set(m.room, g); }
     g.ids.push(m.id);
     g.sum.addInPlaceFromFloats(m.pos.x, m.pos.y, m.pos.z);
-    if (ringsSummary(m.kind)) g.ringRed = true;
-    if (m.kind === "unavailable") g.unavailable = true;
+    g.looks.push(m.look);
   }
   const chips: RoomChip[] = [];
   for (const [key, g] of groups) {
     // Back to the raw spelling for anything a person reads or taps: the key
     // is a Map key only, and `display` holds what to print.
     const room = display(key);
+    const look = groupLook(g.looks, { showingDevices: false });
     chips.push({
       key, keys: [key], room, label: room, ids: g.ids.slice(),
       centre: g.sum.scale(1 / g.ids.length), rooms: 1, roomNames: [room],
-      ringRed: g.ringRed, unavailable: g.unavailable,
+      ringRed: look.ringRed, ringOn: look.ringOn, unavailable: look.unavailable, anyOn: look.anyOn,
       x: 0, y: 0, halfW: 0, halfH: 0,
     });
   }
   return chips;
 }
 
-/**
- * Whether a member's state rings a summary that shows it only as a COUNT (a
- * room chip, a group card drawing a number): "on" and "alert" do, as they
- * ring a lone badge (BADGE_RING); "unavailable" does not — dimming is that
- * kind's own signal, not a ring.
- */
-export function ringsSummary(kind: string | undefined): boolean {
-  return kind === "on" || kind === "alert";
-}
-
-/** A member as a summary's ring reads it: its badge `kind` (a count) or its
- *  own chip's `ring` (badgeFaceAndRing's, when the card shows the devices).
- *  null: Home Assistant has not reported it. */
-export type RingMember = { kind?: string; ring?: string | null } | null;
-
-/**
- * Whether a summary rings red (round 9, 2.496.141 — this lived inline in
- * EntityVisuals.updateEntityGroups, where no check reached it). Two rules,
- * because the ring means two things:
- *
- *   SHOWING ITS DEVICES  each chip carries its own ring, so the card's may say
- *     only what is true of the WHOLE set: red iff every member's own ring is
- *     "alert". A card that went red because ONE of two devices was armed
- *     claimed the pair was; and it reads the chips' ring, not the kind, which
- *     folds in plain "on" — three merely-connected cameras drew a red card
- *     round three idle chips. An unreported member is not alerting.
- *   DRAWING A COUNT      nothing inside says anything, so the room chip's rule:
- *     red if ANY member rings (ringsSummary).
- */
-export function summaryRingRed(members: readonly RingMember[], showingDevices: boolean): boolean {
-  if (showingDevices) return members.length > 0 && members.every((m) => m?.ring === "alert");
-  return members.some((m) => ringsSummary(m?.kind));
-}
+/* ⚠️ `ringsSummary`, `summaryRingRed`, `summaryRingOn` AND `RingMember` ARE
+   GONE (2.496.245) — the summary ring rule is deviceActivity.groupLook's, with
+   both meanings (SHOWING ITS DEVICES / DRAWING A COUNT) and their reasons, and
+   it is the one every summary on the map and in the app asks. A group card's
+   is read through babylon/summaryLook.groupCardModel. */
 
 /**
  * What `keep` becomes when `drop` merges into it: the members of both, a
@@ -155,5 +135,7 @@ export function combineChips(keep: RoomChip, drop: RoomChip): void {
   keep.roomNames = [...keep.roomNames, ...drop.roomNames];
   keep.keys = [...keep.keys, ...drop.keys];
   keep.ringRed = keep.ringRed || drop.ringRed;
+  keep.ringOn = (keep.ringOn || drop.ringOn) && !keep.ringRed;
   keep.unavailable = keep.unavailable || drop.unavailable;
+  keep.anyOn = keep.anyOn || drop.anyOn;
 }

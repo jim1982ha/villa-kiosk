@@ -26,6 +26,10 @@ export interface AddonConfig {
   model_upload?: { original_name: string; uploaded_at: string } | null;
   /** Same provenance for the room-data sidecar (<model>.rooms.json). */
   rooms_upload?: { original_name: string; uploaded_at: string } | null;
+  /** The version of each file, in nginx's ETag form ("<mtime hex>-<size hex>"),
+   *  "" when the file does not exist — see modelUrl. */
+  model_version?: string;
+  rooms_version?: string;
 }
 
 /** The room-data sidecar URL that sits next to the central GLB (model_path
@@ -35,83 +39,36 @@ export function roomsPathFor(modelPath: string): string {
   return modelPath.replace(/\.glb$/i, ".rooms.json");
 }
 
-// versionedModelUrl's HEAD probe (below) is the only way to detect a replaced
-// file, but it's a real network round-trip on every open — over a remote
-// tunnel (DuckDNS, Nabu Casa) a transient slow/dropped HEAD would otherwise
-// fall back to the BARE url, which the service worker's model cache has
-// never seen (every previous successful load was cached under a `?v=`
-// key) — forcing a full re-download of a many-MB GLB for what's often just
-// one flaky request. Remembering the last tag that worked means a failed
-// probe still resolves to the SAME versioned URL as last time, so the model
-// cache still hits.
-const LAST_MODEL_TAG_PREFIX = "villa-kiosk:model-tag:";
-
-// versionedModelUrl is called from at least two independent places on every
-// load (main.tsx's startModelPrefetch AND BabylonCanvas's own load effect,
-// each racing to resolve the SAME relPath) — each call used to fire its own
-// live HEAD probe. Under a flaky/congested network, one call's probe can time
-// out while the other succeeds, and the timed-out one then falls back to
-// whatever tag was in localStorage — which can be a DIFFERENT tag than the
-// one the other call just resolved. Two callers disagreeing on the model's
-// `?v=` breaks prefetch reuse (claimPrefetch rejects on a URL mismatch,
-// silently discarding an already-downloaded GLB and re-fetching from scratch)
-// and fragments the floor-probe cache (keyed on this same URL) for what is
-// otherwise byte-identical geometry. Memoizing per relPath — one real HEAD
-// probe per page life, every other caller awaits its result — makes that
-// class of mismatch structurally impossible instead of just unlikely.
-const _versionedUrlCache = new Map<string, Promise<string>>();
-
-export function versionedModelUrl(relPath: string): Promise<string> {
-  let p = _versionedUrlCache.get(relPath);
-  if (!p) {
-    p = resolveVersionedModelUrl(relPath);
-    _versionedUrlCache.set(relPath, p);
-  }
-  return p;
-}
-
 /**
- * Resolve a central model file (GLB/SH3D) to a version-stamped URL so the
- * service worker can cache it aggressively (cache-first) yet still pick up a
- * replaced file automatically. We HEAD the file for its ETag / Last-Modified and
- * append it as `?v=`; when the admin swaps the model the tag changes, the URL
- * changes, and the SW downloads the new bytes exactly once. Without this the
- * 34 MB GLB was re-downloaded on every open (the SW skipped it because, behind
- * Ingress, its path contains "/api/"). If the live probe fails, falls back to
- * the last tag that worked (see LAST_MODEL_TAG_PREFIX) rather than an
- * unversioned URL, so a flaky probe doesn't force a fresh download.
+ * A central file's URL, stamped with the version the add-on reported for it
+ * in /addon-config (`model_version` / `rooms_version`). The stamp is what lets
+ * the service worker cache a many-MB GLB forever (nginx marks a `?v=` request
+ * immutable) yet fetch a replaced file exactly once: a new upload, a new stamp.
+ *
+ * ⚠️ THE ADD-ON SAYS WHICH VERSION; THE CLIENT NO LONGER GUESSES (2.496.254).
+ * It used to send a HEAD request per file per open and read the ETag, with a
+ * 3 s timeout, a per-page memo (two callers racing could disagree) and a
+ * localStorage fallback (a failed HEAD must not change the URL and force a
+ * re-download). All of that existed to learn something the add-on already
+ * knew when it answered /addon-config — it stats the file there. The add-on
+ * reports it in nginx's own ETag format, so a stamp already in a device's
+ * cache keeps matching and nothing is downloaded again.
  */
-async function resolveVersionedModelUrl(relPath: string): Promise<string> {
+export function modelUrl(relPath: string, version: string | null | undefined): string {
   // The add-on's nginx serves central files at /model/ (an alias onto the
-  // add-on's /data volume, session-gated). Resolved against the base path so it
-  // works both in the sidebar (Ingress prefix) and on the direct hostname.
+  // add-on's /data volume, session-gated), resolved against the base path so
+  // it works both in the sidebar (Ingress prefix) and on the direct hostname.
   const url = ingressPath(`model/${relPath}`);
-  const tagKey = LAST_MODEL_TAG_PREFIX + relPath;
-  try {
-    const ctrl = new AbortController();
-    const tid = setTimeout(() => ctrl.abort(), 3000);
-    const resp = await fetch(url, { method: "HEAD", signal: ctrl.signal });
-    clearTimeout(tid);
-    if (resp.ok) {
-      const tag =
-        resp.headers.get("ETag") ||
-        resp.headers.get("Last-Modified") ||
-        resp.headers.get("Content-Length");
-      if (tag) {
-        const clean = tag.replace(/"/g, "");
-        try { localStorage.setItem(tagKey, clean); } catch { /* storage full/disabled */ }
-        return `${url}?v=${encodeURIComponent(clean)}`;
-      }
-    }
-  } catch {
-    // Offline, HEAD unsupported, or the probe timed out/dropped.
-  }
-  try {
-    const lastTag = localStorage.getItem(tagKey);
-    if (lastTag) return `${url}?v=${encodeURIComponent(lastTag)}`;
-  } catch { /* storage disabled */ }
-  return url;
+  return version ? `${url}?v=${encodeURIComponent(version)}` : url;
 }
+
+/** The central GLB's URL from an add-on answer, or "" when it has none. */
+export const centralModelUrl = (cfg: AddonConfig): string =>
+  cfg.model_path ? modelUrl(cfg.model_path, cfg.model_version) : "";
+
+/** The central room data's URL from an add-on answer, or "" when it has none. */
+export const centralRoomsUrl = (cfg: AddonConfig): string =>
+  cfg.model_path ? modelUrl(roomsPathFor(cfg.model_path), cfg.rooms_version) : "";
 
 let _addonConfigCache: AddonConfig | null = null;
 
@@ -121,13 +78,6 @@ export function clearAddonConfigCache(): void {
   _addonConfigCache = null;
 }
 
-/** Drop every memoized versionedModelUrl() result — call alongside
- *  clearAddonConfigCache() right after a central upload, so the next resolve
- *  does a real HEAD probe instead of replaying the pre-upload tag/URL for the
- *  rest of this page's life. */
-export function clearVersionedModelUrlCache(): void {
-  _versionedUrlCache.clear();
-}
 
 // HA's Ingress gateway rejects any single request over ~16 MB with HTTP 413
 // (a Supervisor-level cap the add-on cannot raise), so anything bigger goes up
@@ -292,30 +242,33 @@ export async function uploadCentralModel(
   return result;
 }
 
-/** Fetch the effective model paths from the supervisor-proxy (/addon-config).
- *  Cached after first SUCCESSFUL call (see below for why a failure isn't
- *  cached). Runs after login, so the session cookie carries the authorization;
- *  a 401/failure just means "no central model yet" — OR, since v2.28.0's
- *  background model prefetch (see utils/modelPrefetch.ts) calls this from the
- *  profile-select screen, BEFORE login on the direct/Cloudflare-gated
- *  deployment, where /addon-config is genuinely unauthorized (401) until a
- *  session cookie exists. Caching that early 401 as "no model" would
- *  permanently poison the REAL post-login call in BabylonCanvas — a model
- *  that actually exists would show "no model" for the rest of the session.
- *  Only a genuine 200 (even one reporting an empty model_path) is cached. */
-export async function fetchAddonConfig(): Promise<AddonConfig> {
-  if (_addonConfigCache) return _addonConfigCache;
-  // A NETWORK-level failure here (fetch throwing, or our own abort timeout on a
-  // slow public hop) is transient — the SAME Cloudflare-hop blip that used to
-  // dead-end the model download (see fetchModelWithRetry) can hit this gateway
-  // call too, and when it did the whole load silently misrouted to the "no
-  // model — upload one" screen even though a model actually exists. Retry those
-  // a couple of times. An HTTP non-ok RESPONSE is deliberately NOT retried: a
-  // 401 here is the expected, correct "not authorized yet" signal the
-  // pre-login prefetch relies on (see this function's docstring +
-  // modelPrefetch), and any other status is a real answer, not a blip — both
-  // just mean "no central model right now" and return empty immediately, with
-  // zero added latency on that (common, pre-login) path.
+/** What asking the add-on for its model produced: its answer, or no answer
+ *  at all (`status` when it replied with an error, absent when the request
+ *  itself failed). */
+export type AddonConfigAnswer =
+  | { ok: true; cfg: AddonConfig }
+  | { ok: false; status?: number };
+
+/**
+ * Ask the add-on which model it holds (/addon-config).
+ *
+ * ⚠️ "NO ANSWER" IS NOT "NO MODEL" (2.496.254). This used to return
+ * `{model_path: ""}` for every failure — a 502 while the add-on restarted, an
+ * expired session, three dropped requests — and the load read that as "the
+ * villa has no model" and showed the upload screen on a villa that had one,
+ * until something reloaded the page. Only a 200 is an answer; anything else
+ * is returned as no answer, and the caller decides (modelSource retries it).
+ *
+ * A network-level failure (fetch throwing, or the 3 s abort on a slow public
+ * hop) is retried twice here with a short backoff; an HTTP status is returned
+ * at once — a 401 is the expected "not signed in yet" of the pre-login
+ * prefetch, and retrying it would only delay that screen.
+ *
+ * Cached after the first 200 (even one reporting an empty model_path); a
+ * failure never is, so an early 401 cannot poison the post-login call.
+ */
+export async function readAddonConfig(): Promise<AddonConfigAnswer> {
+  if (_addonConfigCache) return { ok: true, cfg: _addonConfigCache };
   const ATTEMPTS = 3;
   for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
     try {
@@ -327,16 +280,21 @@ export async function fetchAddonConfig(): Promise<AddonConfig> {
       } finally {
         clearTimeout(tid);
       }
-      if (!resp.ok) return { model_path: "" }; // real answer (often an expected 401) — not a blip
+      if (!resp.ok) return { ok: false, status: resp.status };
       const cfg = await resp.json() as AddonConfig;
       _addonConfigCache = cfg;
-      return cfg;
+      return { ok: true, cfg };
     } catch {
-      // Network throw / abort timeout — transient. Short backoff, then retry;
-      // never cached, so a still-failing gateway just falls back to empty and a
-      // later call (e.g. the daily auto-reload, or a manual retry) tries again.
       if (attempt < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
     }
   }
-  return { model_path: "" };
+  return { ok: false };
+}
+
+/** readAddonConfig for a caller to whom no answer and no model are the same
+ *  thing — the pre-login prefetch (nothing to fetch yet) and Settings' model
+ *  info (nothing to show). Never the load: see readAddonConfig. */
+export async function fetchAddonConfig(): Promise<AddonConfig> {
+  const got = await readAddonConfig();
+  return got.ok ? got.cfg : { model_path: "" };
 }

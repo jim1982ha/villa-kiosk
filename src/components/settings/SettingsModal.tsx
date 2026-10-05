@@ -18,10 +18,10 @@ import {
 } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
-import { hasCapability, type Capability } from "@/auth/permissions";
+import { roleCan, type Capability } from "@/auth/permissions";
 import { useHA } from "@/ha/HAStateStore";
-import { useDraftCommit } from "@/hooks/useDraftCommit";
-import { DEFAULT_SITE_TITLE, DEFAULT_RENDER, type AppConfig, type RenderConfig } from "@/config/AppConfig";
+import { useDraftedSlice } from "@/hooks/useDraftedSlice";
+import { DEFAULT_SITE_TITLE, type RenderConfig } from "@/config/AppConfig";
 import type { SceneManager } from "@/babylon/SceneManager";
 
 interface Props {
@@ -32,101 +32,54 @@ interface Props {
 }
 
 export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: Props) {
-  const { config, update } = useConfig();
+  const { config } = useConfig();
   const { role } = useProfile();
   const { haConfig } = useHA();
   // RBAC: which settings areas the active profile may use. Dashboard already
   // refuses to open this modal without "openSettings"; these narrow further.
-  const can = (c: Capability) => role != null && hasCapability(role, c);
+  const can = (c: Capability) => roleCan(role, c);
 
-  // Every setting here applies AND persists live now, matching Advanced
-  // Settings — there is nothing left to Cancel/Save, only a single Close.
-  // A slider/text field still needs a local echo for responsive typing/drag,
-  // but committing config on every single tick would mean writing the WHOLE
-  // config blob (entityMap included) to localStorage dozens of times a
-  // second. So: apply to the live scene on every tick (unchanged), but
-  // debounce the config commit — same pattern as Advanced Settings'
-  // commitLabel (ConfigEditor.tsx) — and always flush before the modal
-  // actually closes so a change made just before Close is never dropped.
-  // Single (non-keyed) pending patch — see useDraftCommit's docstring for the
-  // general pattern (same one Advanced Settings uses per-row). useDraftCommit
-  // already flushes on unmount on its own, so there's no separate safety-net
-  // effect needed here beyond the explicit flush in closeModal below.
-  const SETTINGS_DRAFT_KEY = "settings";
-  const pending = useDraftCommit<Partial<AppConfig>>((_key, patch) => update(patch), 500);
-  const scheduleCommit = (patch: Partial<AppConfig>) =>
-    pending.draft(SETTINGS_DRAFT_KEY, { ...pending.drafts[SETTINGS_DRAFT_KEY], ...patch });
-  const flushPending = () => pending.flush(SETTINGS_DRAFT_KEY);
-
-  // ⚠️ THIS DIALOG APPLIES LIVE AND STILL HAS A REAL DRAFT, and those are not
-  // in conflict. Live preview is the POINT of these controls: a walk-speed
-  // slider that only took effect on Save would be untunable, so every tick
-  // still reaches the scene. What was missing is the other half — a BASELINE to
-  // return to. So:
+  // Every setting here applies AND persists live: the scene previews on every
+  // tick (load-bearing — a walk-speed slider that only took effect on Save
+  // would be untunable), the config write is debounced (the WHOLE config
+  // blob goes to localStorage on each write), and there is a BASELINE to go
+  // back to:
   //
-  //   the scene previews on every tick   (unchanged, and load-bearing)
   //   dirty   = the live config differs from the baseline taken at open
   //   Save    = keep it, and make THIS the new baseline
   //   Discard = write the baseline back, which reverts the scene AND the store
   //
-  // ⚠️ DISCARD REVERTS BY WRITING, not by withholding a write. Persistence here
-  // is eager by design, so there is no un-written state to drop — undoing means
-  // putting the old values back through the same path any control uses, which
-  // is also why the scene follows for free.
-  //
-  // ⚠️ THE BASELINE IS EVERY KEY THIS DIALOG WRITES, listed once. A key added
-  // to a control and not to this list is silently un-revertable: Discard would
-  // restore its nine siblings and leave that one changed, which is worse than
-  // not offering Discard at all. Pinned by tests/oracles/settings_baseline.mjs,
-  // which derives the list from the update()/scheduleCommit() call sites here
-  // and fails if they disagree.
+  // All of that is useDraftedSlice. ⚠️ THE SLICE IS EVERY KEY THIS DIALOG
+  // WRITES, listed once — and it is the ONLY way this dialog writes: `set`
+  // accepts no other key, so a control writing a key Discard would not
+  // restore is a type error, not a silent gap (tests/oracles/settings_baseline.mjs).
   const SETTINGS_KEYS = [
     "badgeStyle", "eyeHeight", "highlightInteractive", "naturalScrolling",
     "northOffsetDeg", "render", "showSummaryBar", "siteTitle", "theme",
     "walkSpeed",
   ] as const;
-  const slice = (c: AppConfig): Partial<AppConfig> => {
-    const out: Record<string, unknown> = {};
-    for (const k of SETTINGS_KEYS) out[k] = c[k];
-    return out as Partial<AppConfig>;
-  };
-  // Captured once, on open. `useState`'s initialiser — not a live read — so a
-  // config change while the dialog is open moves `dirty`, which is the whole
-  // point, rather than moving the thing dirty is measured against.
-  const [baseline, setBaseline] = useState<Partial<AppConfig>>(() => slice(config));
-  // Content comparison, never reference: `render` is an object rebuilt by every
-  // one of its own controls, so `!==` would report dirty forever.
-  const dirty = JSON.stringify(slice(config)) !== JSON.stringify(baseline)
-    || Object.keys(pending.drafts).length > 0;
+  const slice = useDraftedSlice(SETTINGS_KEYS);
+  const v = slice.view;
 
   const [askingClose, setAskingClose] = useState(false);
 
   const commit = {
-    dirty,
-    save: () => {
-      flushPending();
-      setBaseline(slice({ ...config, ...pending.drafts[SETTINGS_DRAFT_KEY] } as AppConfig));
-    },
-    // ⚠️ THE LOCAL ECHOES ARE RE-SEEDED TOO. They are what the sliders and text
-    // fields render from, and a reverted config behind a stale echo is the same
-    // lie one layer up — the value would read as changed while the villa showed
-    // the old one.
+    dirty: slice.dirty,
+    save: slice.save,
+    // The sliders and fields read the slice's view, so they follow the
+    // reverted config with nothing to re-seed; only what this dialog drives
+    // on the scene directly is re-applied.
     discard: () => {
-      pending.cancel(SETTINGS_DRAFT_KEY);
-      update(baseline);
-      setSiteTitle(baseline.siteTitle ?? "");
-      setEyeHeight(eyeHeightOf(baseline.eyeHeight));
-      setWalkSpeed(baseline.walkSpeed ?? 1);
-      setRender(baseline.render ?? DEFAULT_RENDER);
-      if (baseline.render) manager?.setRenderConfig(baseline.render);
+      const baseline = slice.discard();
+      manager?.setRenderConfig(baseline.render);
     },
   };
 
   // ⚠️ CLOSE ASKS WHEN THERE IS SOMETHING TO LOSE, and closes straight away
   // when there is not — a question with only one sensible answer is noise.
   const closeModal = () => {
-    if (dirty) { setAskingClose(true); return; }
-    flushPending();
+    if (slice.dirty) { setAskingClose(true); return; }
+    slice.flush();
     onClose();
   };
   // Focus trap + Escape + focus restore (see useModalA11y). Declared AFTER
@@ -135,37 +88,27 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
   // flush-then-close that the Close button and backdrop click do.
   const dialogRef = useModalA11y(closeModal);
 
-  const [siteTitle, setSiteTitle] = useState(config.siteTitle);
-  const [eyeHeight, setEyeHeight] = useState(eyeHeightOf(config.eyeHeight));
-  const [walkSpeed, setWalkSpeed] = useState(config.walkSpeed);
-  const [render, setRender] = useState<RenderConfig>(config.render);
-
-  const applySiteTitle = (v: string) => {
-    setSiteTitle(v);
-    scheduleCommit({ siteTitle: v.trim() });
-  };
+  // Shown as typed, stored trimmed.
+  const applySiteTitle = (text: string) => slice.set({ siteTitle: text }, { stored: { siteTitle: text.trim() } });
 
   // Live-apply render tuning straight to the scene while dragging, so the user
-  // can iterate on look/perf without saving + reloading, and debounce-commit
-  // the same object to config so it's remembered without a Save step.
+  // can iterate on look/perf without saving + reloading.
   const applyRender = (patch: Partial<RenderConfig>) => {
-    const next = { ...render, ...patch };
-    setRender(next);
+    const next = { ...v.render, ...patch };
     manager?.setRenderConfig(next);
-    scheduleCommit({ render: next });
+    slice.set({ render: next });
   };
 
   // Live-apply so you can feel/see the change while dragging the sliders.
   const applyEyeHeight = (h: number) => {
-    setEyeHeight(h);
     manager?.camera.setEyeHeight(h);
-    scheduleCommit({ eyeHeight: h });
+    slice.set({ eyeHeight: h });
   };
-  const applyWalkSpeed = (v: number) => {
-    setWalkSpeed(v);
-    manager?.camera.setWalkSpeed(v);
-    scheduleCommit({ walkSpeed: v });
+  const applyWalkSpeed = (speed: number) => {
+    manager?.camera.setWalkSpeed(speed);
+    slice.set({ walkSpeed: speed });
   };
+  const eyeHeight = eyeHeightOf(v.eyeHeight);
 
   return (
     <div className="modal-backdrop" onClick={closeModal}>
@@ -213,7 +156,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
           {can("customizeAppearance") && (
             <div className="settings-header-control">
               <span className="settings-inline-label">Interface</span>
-            <SegmentedGroup ariaLabel="Interface theme" className="segmented-icons" active={config.theme} onChange={(theme) => update({ theme })} options={[
+            <SegmentedGroup ariaLabel="Interface theme" className="segmented-icons" active={v.theme} onChange={(theme) => slice.set({ theme }, { now: true })} options={[
               { key: "light", title: "Light interface theme", label: <Sun size={17} /> },
               { key: "dark", title: "Dark interface theme", label: <Moon size={17} /> },
               { key: "auto", title: "Auto — follows the system, and dims to the night theme after dark", label: <Monitor size={17} /> },
@@ -228,9 +171,9 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
           <>
             <div className="settings-section-title" style={{ marginTop: 0 }}>Dashboard title</div>
             <input
-              value={siteTitle}
+              value={v.siteTitle}
               onChange={(e) => applySiteTitle(e.target.value)}
-              onBlur={flushPending}
+              onBlur={slice.flush}
               placeholder={haConfig?.location_name || DEFAULT_SITE_TITLE}
             />
           </>
@@ -261,10 +204,10 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             not just on a roomy screen. */}
         <div className="row" style={{ gap: 10, marginTop: 12, flexWrap: "wrap" }}>
           <SegmentedGroup ariaLabel="Blue glow for clickable devices" className="settings-row-half"
-            active={config.highlightInteractive ? "on" : null} onChange={() => update({ highlightInteractive: !config.highlightInteractive })}
+            active={v.highlightInteractive ? "on" : null} onChange={() => slice.set({ highlightInteractive: !v.highlightInteractive }, { now: true })}
             options={[{ key: "on", title: "Blue glow around clickable devices", label: <><MousePointerClick size={16} /> Clickable Glow</> }]} />
           <SegmentedGroup ariaLabel="Natural scrolling" className="settings-row-half"
-            active={config.naturalScrolling ? "on" : null} onChange={() => update({ naturalScrolling: !config.naturalScrolling })}
+            active={v.naturalScrolling ? "on" : null} onChange={() => slice.set({ naturalScrolling: !v.naturalScrolling }, { now: true })}
             options={[{ key: "on", title: "Natural scrolling in the bird's-eye view", label: <><Move size={16} /> Natural Scroll</> }]} />
         </div>
 
@@ -282,16 +225,16 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             Glow/Natural Scroll row above. */}
         <div className="row" style={{ gap: 12, marginTop: 14, flexWrap: "wrap", alignItems: "flex-start" }}>
           <div style={{ flex: "1 1 200px", minWidth: 0 }}>
-            <label>Brightness · {render.exposure.toFixed(2)}×</label>
+            <label>Brightness · {v.render.exposure.toFixed(2)}×</label>
             <input
-              type="range" min={0.6} max={2} step={0.05} value={render.exposure}
+              type="range" min={0.6} max={2} step={0.05} value={v.render.exposure}
               onChange={(e) => applyRender({ exposure: Number(e.target.value) })}
             />
           </div>
           <div style={{ flex: "1 1 200px", minWidth: 0 }}>
-            <label>Night dimming · {render.nightDimming.toFixed(1)}×</label>
+            <label>Night dimming · {v.render.nightDimming.toFixed(1)}×</label>
             <input
-              type="range" min={0} max={1} step={0.1} value={render.nightDimming}
+              type="range" min={0} max={1} step={0.1} value={v.render.nightDimming}
               onChange={(e) => applyRender({ nightDimming: Number(e.target.value) })}
             />
           </div>
@@ -317,7 +260,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             <div style={{ flex: "0 0 auto", minWidth: 0 }}>
             <label>Villa lighting</label>
             <SegmentedGroup ariaLabel="Villa lighting" className="segmented-icons daynight-segmented"
-              active={render.dayNightPreview ?? "auto"} onChange={(dayNightPreview) => applyRender({ dayNightPreview })} options={[
+              active={v.render.dayNightPreview ?? "auto"} onChange={(dayNightPreview) => applyRender({ dayNightPreview })} options={[
               { key: "day", title: "Light the villa as daytime", label: <Sunrise size={17} /> },
               { key: "night", title: "Light the villa as night", label: <Moon size={17} /> },
               { key: "auto", title: "Automatic — the villa follows the real day/night cycle", label: <SunMoon size={17} /> },
@@ -336,9 +279,9 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             structure can't be brightened by a real light), and the real
             dynamic PointLight's intensity in non-baked villas (where it
             silently did nothing before). */}
-        <label style={{ marginTop: 14 }}>Light effect strength · {render.lightPoolIntensity.toFixed(1)}×</label>
+        <label style={{ marginTop: 14 }}>Light effect strength · {v.render.lightPoolIntensity.toFixed(1)}×</label>
         <input
-          type="range" min={0.3} max={2} step={0.1} value={render.lightPoolIntensity}
+          type="range" min={0.3} max={2} step={0.1} value={v.render.lightPoolIntensity}
           onChange={(e) => applyRender({ lightPoolIntensity: Number(e.target.value) })}
         />
 
@@ -355,7 +298,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             grows (it carries a live value) rather than crushing the button
             below --touch-min. */}
         <label style={{ marginTop: 14 }}>
-          Model north offset · {config.northOffsetDeg}°
+          Model north offset · {v.northOffsetDeg}°
         </label>
         {/* The button rides the SLIDER's line, not the title's: they are one
             control in two forms — the slider sets the offset by hand, the
@@ -365,9 +308,9 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             subtracted rather than guessed at. */}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <input
-            type="range" min={0} max={359} step={1} value={config.northOffsetDeg}
+            type="range" min={0} max={359} step={1} value={v.northOffsetDeg}
             style={{ flex: "1 1 auto", minWidth: 0 }}
-            onChange={(e) => update({ northOffsetDeg: Number(e.target.value) })}
+            onChange={(e) => slice.set({ northOffsetDeg: Number(e.target.value) }, { now: true })}
           />
           {/* The one-tap path, and the reason the slider is not the only one:
               the operator knows which way their villa faces, not what the
@@ -385,7 +328,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             disabled={!manager}
             onClick={() => {
               const deg = manager?.viewHeadingDeg();
-              if (deg != null) update({ northOffsetDeg: Math.round(deg) });
+              if (deg != null) slice.set({ northOffsetDeg: Math.round(deg) }, { now: true });
             }}
           >
             Set North
@@ -413,7 +356,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             halves would starve the pair while leaving Dock's half mostly
             empty; both groups instead grow to fill the row, weighted 2:1. */}
         <div className="row badge-style-row" style={{ gap: 10, marginTop: 6 }}>
-          <SegmentedGroup ariaLabel="Floating badge style" className="settings-row-half" active={config.badgeStyle} onChange={(badgeStyle) => update({ badgeStyle })} options={[
+          <SegmentedGroup ariaLabel="Floating badge style" className="settings-row-half" active={v.badgeStyle} onChange={(badgeStyle) => slice.set({ badgeStyle }, { now: true })} options={[
             { key: "classic", title: "Icon badge style — the reading sits on a small pill under the icon", label: <><Circle size={16} /> <span className="badge-btn-label">Icon</span></> },
             { key: "card", title: "Card badge style — the reading sits inline beside the icon (default)", label: <><CreditCard size={16} /> <span className="badge-btn-label">Card</span></> },
           ]} />
@@ -425,7 +368,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
               there (.settings-label-short/-full) since "Dock" leaves the
               Default/Card pair the most room. */}
           <SegmentedGroup ariaLabel="Summary bar" className="settings-row-half"
-            active={config.showSummaryBar ? "on" : null} onChange={() => update({ showSummaryBar: !config.showSummaryBar })}
+            active={v.showSummaryBar ? "on" : null} onChange={() => slice.set({ showSummaryBar: !v.showSummaryBar }, { now: true })}
             options={[{ key: "on", label: <><PanelBottom size={16} /><span className="settings-label-full">Summary bar</span><span className="settings-label-short">Dock</span></> }]} />
         </div>
         <p className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-2xs)" }}>
@@ -450,9 +393,9 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             />
           </div>
           <div>
-            <label>Walk speed · {walkSpeed.toFixed(1)}×</label>
+            <label>Walk speed · {v.walkSpeed.toFixed(1)}×</label>
             <input
-              type="range" min={0.3} max={3} step={0.1} value={walkSpeed}
+              type="range" min={0.3} max={3} step={0.1} value={v.walkSpeed}
               onChange={(e) => applyWalkSpeed(Number(e.target.value))}
             />
           </div>
@@ -475,7 +418,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             </button>
           ) : undefined}
           commit={commit}
-          onClose={() => { flushPending(); onClose(); }}
+          onClose={() => { slice.flush(); onClose(); }}
         />
       </div>
       {askingClose && (

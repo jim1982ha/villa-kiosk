@@ -1,191 +1,36 @@
 // src/ha/HAHistoryAPI.ts
-// Every history a panel draws, from either of Home Assistant's two recorder
-// paths, returned in ONE shape (HistorySeries: points, gaps, window):
-//   * STATES over REST — each change the entity reported (fetchHistory,
-//     fetchStateHistory): the device panels' line charts and timelines;
-//   * STATISTICS over the websocket — the recorder's 5-minute / hourly / daily
-//     buckets (fetchStatistics): the Weather window, whose station reports
-//     every 16 s — 30 days of raw wind would be ~160,000 rows.
-// Which one a chart reads is the adapter's business; the gaps travel with the
-// points on both (utils/statisticsSeries.ts for why that was not always so).
+// The history source's Home Assistant adapter (ha/historySource.ts): state
+// rows over REST through the add-on, statistics over the websocket. What a
+// chart asks for, and every rule about windows, gaps and outages, is the
+// source's; this only fetches.
 
-import { gapsFrom } from "@/utils/historyGaps";
-import { statisticsSeries, type StatisticField, type StatisticsPeriod } from "@/utils/statisticsSeries";
-import type { StateHistoryPoint, HistorySeries, StatisticPeriod } from "@/types/ha.types";
+import type { HistoryPort, StateRow } from "./historySource";
 import { ingressApiBase } from "./ingress";
-import { fiveMinuteSeries } from "@/utils/trendInterval";
+import { backendFetch } from "@/auth/sessionLost";
 
-interface RawHistoryState {
-  state: string;
-  last_changed: string;
-  last_updated?: string;
-}
+/** Anything that can read the recorder's statistics — the HA websocket. */
+export type StatisticsPort = Pick<HistoryPort, "getStatisticsDuringPeriod">;
 
-async function fetchRaw(
-  entityId: string, hours: number,
-): Promise<{ rows: RawHistoryState[]; window: { from: number; to: number } }> {
-  // The add-on's Supervisor proxy injects the token server-side, so we hit it
-  // token-less (session cookie carries the browser's authorization).
-  const apiBase = ingressApiBase();
-  const now = Date.now();
-  const start = new Date(now - hours * 3600 * 1000).toISOString();
-  // end_time is REQUIRED for any window longer than a day. Home Assistant's
-  // history endpoint defaults it to start + 24h when it is omitted, so a 7-day
-  // request silently came back with the FIRST day of that week and nothing
-  // since — a chart whose newest point was six days old while the 24h view of
-  // the same sensor was full of data.
-  const end = new Date(now).toISOString();
-  const url =
-    `${apiBase}/history/period/${encodeURIComponent(start)}` +
-    `?filter_entity_id=${encodeURIComponent(entityId)}` +
-    `&end_time=${encodeURIComponent(end)}&minimal_response&no_attributes`;
-
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`History request failed: ${res.status}`);
-  const data = (await res.json()) as RawHistoryState[][];
-  return { rows: data[0] ?? [], window: { from: now - hours * 3600 * 1000, to: now } };
-}
-
-/** A history row's numeric value, or NaN when there was no reading at all.
- *
- *  ⚠️ BLANK AND NULL ARE NOT ZERO. Kept as a named function rather than inlined
- *  because "absent" vs "zero" is the distinction the whole numeric path turns
- *  on, and `Number(x)` quietly answers 0 for both. */
-export function numericState(raw: unknown): number {
-  if (raw == null) return NaN;
-  const s = String(raw).trim();
-  return s === "" ? NaN : Number(s);
-}
-
-/**
- * Fetch the last `hours` of NUMERIC history for an entity (line charts),
- * AND the stretches in which it reported nothing usable.
- *
- * ⚠️ THE GAPS ARE PART OF THE RETURN VALUE, NOT AN OPTION. Dropping the
- * unusable rows and saying nothing is what drew a pump "ramping up" all night
- * while it was offline — the chart joined the last reading before the outage to
- * the first one after it and called that a measurement. Returning one object
- * makes the honest drawing the only drawing a caller can produce: there is no
- * overload that hands back points alone.
- */
-export async function fetchHistory(entityId: string, hours = 24): Promise<HistorySeries> {
-  const { rows: series, window } = await fetchRaw(entityId, hours);
-  const rows = series
-    // ⚠️ A MISSING READING MUST BECOME NaN, NEVER 0. `Number(null)` is 0 and so
-    // is `Number("")`, and both are `Number.isFinite`, so the filter below —
-    // which exists to drop unparseable rows — passed them through as a real
-    // measurement of zero. On a power sensor that draws a line to the floor and
-    // reads as "the device stopped drawing power"; on a temperature it reads as
-    // 0°C. Same wire and same lie about the declared type as the null-state
-    // crash fixed alongside this, silent instead of loud.
-    .map((s) => ({ t: new Date(s.last_changed).getTime(), v: numericState(s.state) }));
+export function haHistoryPort(ws: StatisticsPort): HistoryPort {
   return {
-    points: rows.filter((p) => Number.isFinite(p.v)),
-    // The window's end rather than the last row's stamp: an entity that is
-    // unavailable NOW has an outage that has not ended. That was "safe" only in
-    // a comment until 2.496.62 — the charts scaled to their last finite point,
-    // so the band fell off the plot. They draw `window` now (lineChart.ts).
-    gaps: gapsFrom(rows, window.to),
-    window,
+    async stateRows(entityId, from, to) {
+      // The add-on's Supervisor proxy injects the token server-side, so this
+      // goes token-less (the session cookie carries the authorization).
+      //
+      // ⚠️ end_time IS REQUIRED for any window longer than a day. Home
+      // Assistant defaults it to start + 24h when omitted, so a 7-day request
+      // silently came back with the FIRST day of that week and nothing since.
+      const url =
+        `${ingressApiBase()}/history/period/${encodeURIComponent(new Date(from).toISOString())}` +
+        `?filter_entity_id=${encodeURIComponent(entityId)}` +
+        `&end_time=${encodeURIComponent(new Date(to).toISOString())}&minimal_response&no_attributes`;
+      // backendFetch: a 401 here is the session gone, reported as such (it
+      // read as "History request failed" until 2.496.263).
+      const res = await backendFetch(url);
+      if (!res.ok) throw new Error(`History request failed: ${res.status}`);
+      const data = (await res.json()) as StateRow[][];
+      return data[0] ?? [];
+    },
+    getStatisticsDuringPeriod: (...args) => ws.getStatisticsDuringPeriod(...args),
   };
-}
-
-/**
- * A device's numeric TREND: its history in the one five-minute interval every
- * device chart reports in (utils/trendInterval) — each interval's mean, and
- * the outages widened to the intervals they touched. What a device panel
- * draws; `fetchHistory` stays the raw series for the few readers that want
- * every change (the pressure tendency).
- */
-export async function fetchTrend(entityId: string, hours = 24): Promise<HistorySeries> {
-  return fiveMinuteSeries(await fetchHistory(entityId, hours));
-}
-
-/**
- * Fetch the last `hours` of RAW state history for an entity (StateTimeline) —
- * no numeric parsing, so this also works for on/off, enum, and free-text
- * sensor states (e.g. an access point reporting "connected"/"disconnected").
- * fetchHistory's numeric filter silently drops every point for such an
- * entity, which is why a text-state sensor previously showed "Not enough
- * history yet" even though HA had real history for it.
- */
-export async function fetchStateHistory(
-  entityId: string,
-  hours = 24,
-): Promise<StateHistoryPoint[]> {
-  // ⚠️ `unavailable` AND `unknown` ARE KEPT, AND THE OPTION TO DROP THEM IS
-  // GONE. It used to default to dropping, which silently deleted every period
-  // a device was offline before the chart ever saw it. Two ways that showed,
-  // both reported 2026-09-14 on a lock that had been flapping all day:
-  //
-  //   • a 1h window whose first in-window change is late renders BLANK up to
-  //     that change, because the state the entity was ALREADY in — the anchor
-  //     HA returns at the window start — was an `unavailable` row and got
-  //     deleted. The bar begins mid-chart with nothing before it.
-  //   • a 12h window renders as ONE solid band of the surviving state, because
-  //     once the `unavailable` rows are gone the remaining rows are all equal
-  //     and the de-duplication below collapses them into a single segment. It
-  //     looks complete and is the worse lie of the two: it claims the device
-  //     held one state for twelve hours when it was offline for most of them.
-  //
-  // ⚠️ AND IT MADE `useStateHistory`'s OWN DEAD-WINDOW TEST VACUOUS. That hook
-  // asks `h.some(pt => !UNKNOWN_STATES.has(pt.state))` to decide whether to
-  // look further back for the last sighting — a question that can only be
-  // answered by data this filter had already removed, so the answer was always
-  // "alive" and the lookback never ran.
-  //
-  // Nothing wanted the old default: all three call sites either passed the
-  // opt-out or were broken by not passing it. Colour is not this module's
-  // business — `stateColors.historyStateColor` already maps these to the amber
-  // the Map colours legend documents.
-  const { rows: series } = await fetchRaw(entityId, hours);
-  const points = series
-    // ⚠️ COERCED AT THE DOOR, alongside the guard in `statusKeyFor`. Home
-    // Assistant sends a null `state` on a freshly added entity's early rows
-    // and every consumer downstream believed the declared type. The filter
-    // below treats null exactly as it did before (it is neither "unavailable"
-    // nor "unknown"), so this changes no behaviour — it only stops the null
-    // travelling any further.
-    .map((s) => ({ t: new Date(s.last_changed).getTime(),
-                   state: String(s.state ?? "") }))
-    .filter((p) => Number.isFinite(p.t));
-  // Collapse consecutive duplicate states (can happen when only attributes
-  // changed between two reported points) so segment rendering doesn't draw
-  // redundant boundaries.
-  const out: StateHistoryPoint[] = [];
-  for (const p of points) {
-    if (out.length === 0 || out[out.length - 1].state !== p.state) out.push(p);
-  }
-  return out;
-}
-
-/** What the statistics adapter needs from the socket — the one call. */
-export interface StatisticsPort {
-  getStatisticsDuringPeriod(
-    ids: string[], start: string, period: StatisticsPeriod, end?: string,
-    types?: ReadonlyArray<StatisticField>,
-  ): Promise<Record<string, StatisticPeriod[]>>;
-}
-
-/**
- * The last `hours` of the recorder's statistics for `ids`, one HistorySeries
- * per id per field asked for — gaps included, and an id the recorder has
- * nothing for is an outage the width of the window, never an empty "zero".
- * A failed request REJECTS; the caller's status says "failed", not "no data".
- */
-export async function fetchStatistics<F extends StatisticField>(
-  port: StatisticsPort, ids: readonly string[], hours: number, period: StatisticsPeriod, fields: readonly F[],
-  since?: number,
-): Promise<Record<string, Record<F, HistorySeries>>> {
-  const to = Date.now();
-  const window = { from: since ?? to - hours * 3600 * 1000, to };
-  if (ids.length === 0) return {};
-  const res = await port.getStatisticsDuringPeriod(
-    [...ids], new Date(window.from).toISOString(), period, undefined, fields);
-  const out: Record<string, Record<F, HistorySeries>> = {};
-  for (const id of ids) {
-    const rows = res[id];
-    out[id] = Object.fromEntries(fields.map((f) => [f, statisticsSeries(rows, f, period, window)])) as Record<F, HistorySeries>;
-  }
-  return out;
 }

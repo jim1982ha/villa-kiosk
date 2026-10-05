@@ -57,15 +57,16 @@ export default function VestaMark({ size = 24, className }: Props) {
 import appIconLight from "@/assets/brand/vesta-appicon.svg?url";
 import appIconDark from "@/assets/brand/vesta-appicon-dark.svg?url";
 
-export function VestaAppIcon({ size = 28, className }: Props) {
+/** `size: null` leaves the box to CSS — the HUD's left rail sizes the tile
+ *  with --hud-rail-w so it and the floor block under it are one number. */
+export function VestaAppIcon({ size = 28, className }: Omit<Props, "size"> & { size?: number | null }) {
   return (
     <span
       className={`vesta-appicon${className ? ` ${className}` : ""}`}
       style={{
         ["--icon-light" as string]: `url("${appIconLight}")`,
         ["--icon-dark" as string]: `url("${appIconDark}")`,
-        height: size,
-        width: size,
+        ...(size != null ? { height: size, width: size } : {}),
       }}
       aria-hidden="true"
     />

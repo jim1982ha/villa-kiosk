@@ -11,26 +11,19 @@
 // a guest's badge counted devices their list would not show (2.496.191).
 
 import { useMemo } from "react";
-import { useVillaModel, type VillaAttention } from "@/config/VillaModel";
+import { useVillaModel } from "@/config/VillaModel";
 import { useProfile } from "@/auth/ProfileContext";
-import { useConfig } from "@/config/ConfigContext";
-import { useHA } from "@/ha/HAStateStore";
-import { isMappingAllowed, listedDevices } from "@/auth/permissions";
-import { attentionFor } from "./cockpitData";
+import { attentionFor, type VillaAttention } from "@/config/attention";
 
 export type { VillaAttention };
 
+/** What needs attention, as THIS profile may see it — the villa model's
+ *  attention through its visibleTo(role). */
 export function useVillaAttention(): VillaAttention {
-  const { attention, mappedEntityIds } = useVillaModel();
+  const { attention, visibleTo } = useVillaModel();
   const { role } = useProfile();
-  const { config } = useConfig();
-  const { entities } = useHA();
   return useMemo(() => {
-    const listed = listedDevices(role, { has: () => true }, mappedEntityIds);
-    return attentionFor(attention, (id) => {
-      if (!listed.has(id)) return false;
-      const m = config.entityMap[id];
-      return !m || (role != null && isMappingAllowed(role, id, m, entities[id]));
-    });
-  }, [attention, mappedEntityIds, role, config.entityMap, entities]);
+    const sees = visibleTo(role);
+    return attentionFor(attention, (id) => sees.has(id));
+  }, [attention, visibleTo, role]);
 }

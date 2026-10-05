@@ -64,9 +64,12 @@ export function climateStep(target: number, dir: 1 | -1, step: number, range: { 
   return Math.min(range.max, Math.max(range.min, next));
 }
 
-/** A temperature in Home Assistant's own unit ("°C", "°F"); "--" for none. */
-export function fmtTemp(v: number | undefined | null, unit: string | undefined): string {
-  return v === undefined || v === null ? `--${unit ?? "°"}` : `${v}${unit ?? "°"}`;
+/** A temperature in Home Assistant's own unit ("24°C", "75°F"); a bare degree
+ *  when the unit is unknown or empty — never an assumed Celsius; "--" for no
+ *  value. ONE formatter: the AC tile had its own (villaSummary.fmtClimateTemp,
+ *  gone 2.496.263) that disagreed only on an empty unit. */
+export function fmtTemp(v: number | undefined | null, unit?: string): string {
+  return v === undefined || v === null ? `--${unit || "°"}` : `${v}${unit || "°"}`;
 }
 
 /** What a light can be asked for, from its supported_color_modes. */

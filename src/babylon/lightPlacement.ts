@@ -140,7 +140,7 @@ export function placeLight<R extends PlacementRoom>(
   const floorless = !!room && isStairwell(room.name);
   const storeyOfRoom = room ? storeys.storeyOf(room) : null;
   const roomFloor = floorless && storeyOfRoom !== null
-    ? storeys.floorOf(storeyOfRoom)
+    ? storeys.floorY(storeyOfRoom)
     : surfaceY !== null ? storeys.floorUnder(x, surfaceY, z) : null;
   const glowFloorY = roomFloor ?? surfaceY ?? currentFloorY;
   let radius = LIGHT_POOL_RADIUS;

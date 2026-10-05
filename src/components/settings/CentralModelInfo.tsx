@@ -7,6 +7,7 @@
 import { Info } from "lucide-react";
 import type { getLoadedModelInfo } from "@/utils/modelInfo";
 import type { AddonConfig } from "@/utils/centralModel";
+import { stampText } from "@/utils/dateText";
 
 export default function CentralModelInfo({
   addonCfg, loadedModel, editable,
@@ -28,7 +29,7 @@ export default function CentralModelInfo({
                 <>
                   <code>{addonCfg.rooms_upload.original_name}</code>
                   {addonCfg.rooms_upload.uploaded_at &&
-                    ` · ${new Date(addonCfg.rooms_upload.uploaded_at).toLocaleString()}`}
+                    ` · ${stampText(addonCfg.rooms_upload.uploaded_at)}`}
                 </>
               ) : "—"}
             </span>
@@ -44,7 +45,7 @@ export default function CentralModelInfo({
             <span style={{ wordBreak: "break-word", textAlign: "right" }}>
               <code>{addonCfg.model_upload?.original_name || addonCfg.model_path}</code>
               {addonCfg.model_upload?.uploaded_at &&
-                ` · ${new Date(addonCfg.model_upload.uploaded_at).toLocaleString()}`}
+                ` · ${stampText(addonCfg.model_upload.uploaded_at)}`}
             </span>
           </div>
           {loadedModel && (

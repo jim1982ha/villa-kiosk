@@ -37,6 +37,7 @@
 // it to the native dialogs AskDialog replaced, which cannot suffer it because
 // they are browser-modal. Here it was real.
 
+import { SUPERADMIN_PIN_LENGTH } from "./pinShape";
 import {
   createContext, useCallback, useContext, useRef, useState, type ReactNode,
 } from "react";
@@ -44,6 +45,7 @@ import { ShieldAlert } from "lucide-react";
 import PinPad from "@/components/auth/PinPad";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import { requestElevation } from "./elevation";
+import type { PinOutcome } from "./pinOutcome";
 
 export interface ElevationIntent {
   /** What is about to be destroyed, in the operator's words: "Delete fault". */
@@ -86,19 +88,12 @@ export function SuperadminGate({ children }: { children: ReactNode }) {
     return new Promise<string | null>((resolve) => { resolver.current = resolve; });
   }, [settle]);
 
-  const submit = useCallback(async (pin: string) => {
+  const submit = useCallback(async (pin: string): Promise<PinOutcome> => {
     const result = await requestElevation(pin);
-    if (result.ok) {
-      token.current = result.token;
-      return { ok: true };
-    }
-    if (result.reason === "disabled") {
-      setUnconfigured(true);
-      return { ok: false };
-    }
-    if (result.reason === "locked-out") return { ok: false, retryAfter: result.retryAfter };
-    if (result.reason === "error") throw new Error("elevation service unreachable");
-    return { ok: false };
+    if (result.kind === "accepted") token.current = result.token ?? null;
+    // No superadmin code configured: the prompt says so instead of the pad.
+    if (result.kind === "closed") setUnconfigured(true);
+    return result;
   }, []);
 
   return (
@@ -122,7 +117,7 @@ function SuperadminPrompt({
 }: {
   intent: ElevationIntent;
   unconfigured: boolean;
-  onSubmit: (pin: string) => Promise<{ ok: boolean; retryAfter?: number }>;
+  onSubmit: (pin: string) => Promise<PinOutcome>;
   onAccepted: () => void;
   onCancel: () => void;
 }) {
@@ -162,7 +157,7 @@ function SuperadminPrompt({
           <PinPad
             roleLabel="Authorisation required"
             subtitle="Enter the 6-digit superadmin code"
-            length={6}
+            length={SUPERADMIN_PIN_LENGTH}
             backLabel="Cancel"
             helpText="This code is held by whoever is accountable for the villa's records. It authorises this one deletion and nothing else."
             onSubmit={onSubmit}

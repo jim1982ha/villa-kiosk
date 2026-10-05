@@ -118,7 +118,7 @@ export interface TeleportPoint {
   floor: number;
   /** FIRST-PERSON teleport destination (a standing pose). The bird's-eye
    *  framing is NOT stored: it's derived per room from the floor plan's own
-   *  footprint on arrival — see SceneManager.computeRoomOverviewPose. There
+   *  footprint on arrival — see babylon/roomShot.ts. There
    *  used to be a hand-saved `overviewPose` here as well, which froze one
    *  eyeballed zoom into config and, being usually too wide, also left the
    *  room's badges grouped when you arrived. */

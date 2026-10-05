@@ -5,9 +5,10 @@
 //              the right-side overflow menu instead — see hud-overflow) so
 //              the category row keeps its width
 //   • Center — category filter, then a label-size stepper (+/-)
-//   • Right  — unavailable-devices + Facility alerts, then the profile chip
-//              and Settings — grouped together since they're all "who's
-//              signed in / what needs attention" info, not map controls
+//   • Right  — the Cockpit (the robot when a VESTA Agent is configured) +
+//              Facility alerts, then Settings and, last, the round signed-in
+//              badge — grouped together since they're all "who's signed in /
+//              what needs attention" info, not map controls
 // A left control column floats below the brand: the vertical floor toggle
 // (1F / 2F) — a plain tap switches floor as before; a LONG-PRESS on either
 // button opens the radial rooms dial pre-scoped to that floor, replacing the
@@ -27,30 +28,33 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   // MapIcon, not Map: the bare name shadows the global Map constructor,
   // which this file also uses.
-  Settings, LogOut, Map as MapIcon, PersonStanding,
-  Minus, Plus, CircleHelp, TriangleAlert, ClipboardList,
+  Settings, Map as MapIcon, PersonStanding,
+  Minus, Plus, CircleHelp, TriangleAlert, Bot,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { isCategoryAllowed } from "@/auth/permissions";
-import { ROLE_LABELS } from "@/auth/roles";
+import { ROLE_LABELS, ROLE_INITIALS } from "@/auth/roles";
 import { resolveSiteTitle } from "@/config/AppConfig";
 import { VestaAppIcon } from "@/components/VestaMark";
 import { CATEGORY_ORDER, CATEGORY_LABELS, CATEGORY_ICONS } from "@/config/EntityCategories";
+import { categoryChipStyle } from "@/components/common/categoryChip";
+import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { ENTITY_ICON_SCALE_MIN, ENTITY_ICON_SCALE_MAX, clampIconScale } from "@/config/AppConfig";
 import type { Category, TeleportPoint } from "@/types/scene.types";
 import VirtualJoystick from "./VirtualJoystick";
 import ViewControls from "./ViewControls";
 import { useLongPress, HOLD_MS_HUD } from "@/hooks/useLongPress";
 import { useHomeAnchor } from "./useHomeAnchor";
-import RadialRoomMenu, { type RadialItem } from "./RadialRoomMenu";
+import RadialRoomMenu from "./RadialRoomMenu";
+import { openRoomDial, roomDialItems, roomsOnFloor, type RadialItem, type RoomDial } from "./roomDial";
 import LegendModal from "./LegendModal";
-import CockpitModal from "@/components/cockpit/CockpitModal";
+import type { Doors } from "@/auth/doors";
 import { useVillaAttention } from "@/components/cockpit/useVillaAttention";
-import { useFmData } from "@/fm/FmDataContext";
-import { fmAttention } from "@/fm/fmEngine";
 import { formatCountBadge } from "@/utils/countBadge";
+import { useAgent } from "@/agent/AgentContext";
+import { awaitingAnswer } from "@/agent/agentView";
 
 // Label-size stepper (next to the category filter): each click moves
 // entityIconScale by this much, clamped to the shared
@@ -69,9 +73,11 @@ interface Props {
   /** Rooms-dial navigation: jump straight to a room (switches floor + zooms in),
    *  bypassing the full Rooms list. */
   onNavigateRoom: (point: TeleportPoint) => void;
+  /** Which windows this profile may open (auth/doors) — Settings, Facility,
+   *  the agent. Every button below that leads to one is drawn by it, never by
+   *  whether its callback was passed. */
+  doors: Doors;
   onOpenSettings: () => void;
-  /** RBAC: whether the active profile may open Settings at all. */
-  canOpenSettings: boolean;
   onMove: (x: number, y: number) => void;
   viewMode: "first-person" | "overview";
   onToggleViewMode: () => void;
@@ -87,12 +93,9 @@ interface Props {
    *  overview camera's current angle/tilt/zoom/pan. Returns false when not
    *  currently in overview (nothing to capture). */
   onSaveOverviewDefault: () => boolean;
-  /** Drill into an entity's full panel from the unavailable-devices list —
-   *  wired to Dashboard's setActivePanel, same callback SummaryBar uses. */
-  onOpenEntity: (entityId: string) => void;
-  /** Open the Facility Manager workspace. Undefined when the profile lacks
-   *  `manageFacility` — the button is then not rendered at all. */
-  onOpenFacility?: () => void;
+  /** Open the Cockpit — mounted by the Dashboard beside the other windows
+   *  (pages/surfaces); with `doors.agent` its button is the robot. */
+  onOpenCockpit: () => void;
   /** Long-press (or hold Enter/Space) a category filter icon — list every
    *  device in that category, the same group-modal every SummaryBar tile
    *  already opens. A plain tap keeps toggling that category's visibility. */
@@ -107,10 +110,10 @@ function useClock(): string {
 
 export default function HUD({
   currentFloor, floorsAvailable, onShowFloor, onOpenTeleport, onNavigateRoom,
-  onOpenSettings, canOpenSettings, onMove,
+  doors, onOpenSettings, onMove,
   viewMode, onToggleViewMode,
   hasOverviewDefault, onApplyOverviewDefault, onSaveOverviewDefault,
-  onOpenEntity, onOpenFacility, onOpenCategory,
+  onOpenCockpit, onOpenCategory,
 }: Props) {
   const { connection, haConfig } = useHA();
   const { config, update } = useConfig();
@@ -127,21 +130,20 @@ export default function HUD({
   // alone, computed separately here from before Needs Attention was
   // unified — reported as "the button says 4, the modal says 5 things need
   // attention" once the two definitions had quietly drifted apart.
-  const { attentionItems, health } = useVillaAttention();
-  // Opens Cockpit (the villa-wide status report), not the bare unavailable-
-  // devices list directly any more — that list is now a drill-down INSIDE
-  // Cockpit's Needs Attention section (see CockpitModal), reached the same
-  // way. Name kept close to its old meaning since this is still the "how
-  // many devices need attention" alert icon; only what it opens changed.
-  const [cockpitOpen, setCockpitOpen] = useState(false);
+  const { attentionGroups, health } = useVillaAttention();
 
-  // Facility attention count: overdue/never-recorded maintenance plus unresolved
-  // faults. Surfaced ON the button because the whole point of a schedule is
-  // that you find out you're late WITHOUT having to go looking — an operator
-  // who must open a modal to discover overdue work will discover it late.
-  const { data: fmData } = useFmData();
-  // The Facility's attention rule (fmEngine.fmAttention) — the Cockpit's too.
-  const facilityAttention = useMemo(() => fmAttention(fmData).total, [fmData]);
+  // (Facility's own button and count are gone, 2.496.273: its tabs live in the
+  // Cockpit, and the Cockpit's count already includes faults and overdue work.)
+  // The VESTA Agent: its presence dot, and how many of its messages wait for
+  // an answer THIS profile can give (agentView.awaitingAnswer).
+  const { status: agentStatus, messages: agentMessages } = useAgent();
+  const agentOnline = agentStatus?.state === "online";
+  const agentWaiting = useMemo(() => awaitingAnswer(agentMessages), [agentMessages]);
+  const agentTitle = `VESTA Agent — ${agentOnline ? "online" : "offline"}`
+    + (agentWaiting > 0 ? `, ${agentWaiting} message${agentWaiting === 1 ? "" : "s"} to answer` : "");
+  // The agent's presence as the dot on its robot — the top bar's and the
+  // phone menu's are this one element (.status-dot, 2.496.247).
+  const agentDot = <span className={`status-dot ${agentOnline ? "on" : "warn"}`} aria-hidden="true" />;
 
   // ── Floor buttons now do double duty, no separate Rooms button any more:
   // a normal tap/click keeps the original behaviour (switch to that floor,
@@ -154,11 +156,10 @@ export default function HUD({
   // floors as chips inside the dial was a redundant extra step. Tap a room
   // to zoom there, tap outside to dismiss. See RadialRoomMenu.
   // ───────────────────────────────────────────────────────────────────────
-  type RadialState = { cx: number; cy: number; activeFloor: number | null };
   // One ref per floor button — the dial anchors itself to whichever one was
   // actually held, so its screen position always matches the gesture.
   const floorBtnRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
-  const [radial, setRadial] = useState<RadialState | null>(null);
+  const [radial, setRadial] = useState<RoomDial | null>(null);
   useBackToClose(() => setRadial(null), radial !== null);
   const floorLongTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const floorLongFired = useRef(false);
@@ -171,87 +172,15 @@ export default function HUD({
   // Sorted because the detection order is the mesh index's, not the reader's.
   const availFloors = useMemo(
     () => [...floorsAvailable].sort((a, b) => a - b), [floorsAvailable]);
-  const ROOM_R = 228;         // baseline outer-arc radius — the original, always-fine "few rooms" size
-  const ROOM_MIN_ARC_PX = 48; // safe arc-length per room AT that baseline (228px radius, ~12° steps)
-  const ROOM_VIEWPORT_PAD = 40; // top/bottom breathing room — matches the cy-clamp margin below
-  const ROOM_R_FLOOR = 90;    // sanity floor so an extreme case never collapses the fan onto the button
-
-  /** Half-angle (deg) of the room fan for `n` rooms: unchanged from before —
-   *  a tight ~12° step per room until the spread saturates at ±86°. */
-  const roomFanHalfAngle = (n: number): number =>
-    n <= 1 ? 0 : Math.min(86, ((n - 1) * 12) / 2);
-
-  /**
-   * Outer arc radius for `n` rooms.
-   *
-   * The baseline (228px) reproduces the original "few rooms" look exactly,
-   * unchanged. Past ~15 rooms the fan's angular spread saturates at ±86°, so
-   * each ADDITIONAL room shrinks the angular slice between chips below the
-   * safe arc-length that kept them apart at the baseline — this is what let
-   * a long room list stack its labels on top of each other. Growing the
-   * radius instead restores that same safe per-room spacing by giving the
-   * (now-fixed) angular spread more physical arc to spend it on.
-   *
-   * That growth is capped by how much vertical room the CURRENT viewport
-   * actually has, so the dial can never be pushed off-screen. Only once even
-   * that cap can't fit the ideal spacing do labels start to overlap — a
-   * deliberate, visible fallback for an unusually long room list, not a bug.
-   */
-  const roomFanRadius = (n: number): number => {
-    const half = roomFanHalfAngle(n);
-    let needed = ROOM_R;
-    if (n > 1) {
-      const stepRad = ((2 * half) / (n - 1)) * (Math.PI / 180);
-      if (stepRad > 0) needed = Math.max(ROOM_R, ROOM_MIN_ARC_PX / stepRad);
-    }
-    const maxForViewport = window.innerHeight / 2 - ROOM_VIEWPORT_PAD;
-    // ⚠️ NOT clamp(needed, ROOM_R_FLOOR, maxForViewport), which it looks like.
-    // The FLOOR wins here: on a short viewport maxForViewport can fall below
-    // ROOM_R_FLOOR, and clamp() would let the ceiling win and collapse the fan
-    // to something unreadable. Written this way on purpose — do not converge.
-    return Math.max(ROOM_R_FLOOR, Math.min(needed, maxForViewport));
-  };
-
-  const roomsForFloor = (f: number) =>
-    config.teleportPoints
-      .filter((p) => (p.floor ?? 1) === f)
-      // Alphabetical, not model/creation order — reads as a deliberately
-      // organised list rather than whatever order rooms happened to be added.
-      .sort((a, b) => a.name.localeCompare(b.name));
-
-  const buildRadialItems = (r: RadialState): RadialItem[] => {
-    if (r.activeFloor == null) return [];
-    const cosd = (d: number) => Math.cos((d * Math.PI) / 180);
-    const sind = (d: number) => Math.sin((d * Math.PI) / 180);
-    const arc = (i: number, n: number, half: number) =>
-      n <= 1 ? 0 : -half + (2 * half) * (i / (n - 1));
-    const rooms = roomsForFloor(r.activeFloor);
-    const half = roomFanHalfAngle(rooms.length);
-    const radius = roomFanRadius(rooms.length);
-    return rooms.map((p, i) => {
-      const a = arc(i, rooms.length, half);
-      return {
-        key: `r${p.name}`, label: p.name, kind: "room",
-        x: r.cx + radius * cosd(a), y: r.cy + radius * sind(a), active: false,
-      };
-    });
-  };
-
   const closeRadial = () => setRadial(null);
   /** Open the dial anchored to floor `f`'s OWN button, pre-expanded to `f`'s
-   *  rooms regardless of which floor is actually showing right now. */
+   *  rooms regardless of which floor is actually showing right now — where it
+   *  sits and whether it is an arc or a column is roomDial's. */
+  const viewport = () => ({ width: window.innerWidth, height: window.innerHeight });
   const openRadialForFloor = (f: number) => {
     const b = floorBtnRefs.current.get(f)?.getBoundingClientRect();
     if (!b) return;
-    const radius = roomFanRadius(roomsForFloor(f).length);
-    const cx = b.right + 16;
-    // Clamp the centre so the tall outer arc always fits (never clipped top/bottom).
-    const margin = radius + ROOM_VIEWPORT_PAD;
-    const cy = Math.max(
-      Math.min(margin, window.innerHeight / 2),
-      Math.min(b.top + b.height / 2, window.innerHeight - margin),
-    );
-    setRadial({ cx, cy, activeFloor: f });
+    setRadial(openRoomDial(f, roomsOnFloor(config.teleportPoints, f).length, b, viewport()));
   };
 
   // ── DELIBERATELY NOT useLongPress — do not "DRY" this into the hook ───────
@@ -274,14 +203,19 @@ export default function HUD({
   // this" note protects the shape of a gesture, and is exactly the thing that
   // lets a NUMBER inside it drift unread — the two decisions are separate and
   // only the first one was ever made here.
-  const onFloorPointerDown = (f: number) => (e: React.PointerEvent<HTMLButtonElement>) => {
-    if (e.button !== undefined && e.button !== 0) return;
+  /** Start the hold that opens floor `f`'s room dial — one timer for the
+   *  finger and the key (written out in both until 2.496.263). */
+  const armFloorHold = (f: number) => {
     floorLongFired.current = false;
     if (floorLongTimer.current) clearTimeout(floorLongTimer.current);
     floorLongTimer.current = setTimeout(() => {
       floorLongFired.current = true;
       openRadialForFloor(f);
     }, HOLD_MS_HUD);
+  };
+  const onFloorPointerDown = (f: number) => (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (e.button !== undefined && e.button !== 0) return;
+    armFloorHold(f);
   };
   const onFloorPointerUp = (f: number) => () => {
     if (floorLongTimer.current) { clearTimeout(floorLongTimer.current); floorLongTimer.current = null; }
@@ -303,12 +237,7 @@ export default function HUD({
     if (e.key !== "Enter" && e.key !== " ") return;
     e.preventDefault();
     if (e.repeat) return; // ignore OS key-repeat while held, same as a still finger
-    floorLongFired.current = false;
-    if (floorLongTimer.current) clearTimeout(floorLongTimer.current);
-    floorLongTimer.current = setTimeout(() => {
-      floorLongFired.current = true;
-      openRadialForFloor(f);
-    }, HOLD_MS_HUD);
+    armFloorHold(f);
   };
   const onFloorKeyUp = (f: number) => (e: React.KeyboardEvent<HTMLButtonElement>) => {
     if (e.key !== "Enter" && e.key !== " ") return;
@@ -334,10 +263,13 @@ export default function HUD({
     closeRadial();
   };
 
-  const radialItems = radial ? buildRadialItems(radial) : [];
+  const radialItems = radial ? roomDialItems(roomsOnFloor(config.teleportPoints, radial.floor), radial, viewport()) : [];
   // Only the categories this profile may see get a filter button; the scene
   // enforces the same set (see filterConfigForRole), so the HUD never offers
   // a toggle that could reveal a denied category.
+  // The category buttons' colours are composited from the theme's tokens
+  // (common/categoryChip): re-render when the theme changes.
+  useResolvedTheme();
   const visibleCategories = role
     ? CATEGORY_ORDER.filter((c) => isCategoryAllowed(role, c))
     : CATEGORY_ORDER;
@@ -368,6 +300,8 @@ export default function HUD({
 
   const connClass =
     connection === "connected" ? "online" : connection === "connecting" ? "connecting" : "offline";
+  // The same status as a .status-dot's tone — the phone menu's role badge.
+  const connTone = connClass === "online" ? "on" : connClass === "connecting" ? "pending" : "danger";
 
   const toggleCategory = (cat: Category) =>
     update({
@@ -418,6 +352,7 @@ export default function HUD({
       <RadialRoomMenu
         items={radialItems}
         open={!!radial}
+        listAt={radial?.list ? radial.cx : null}
         onPick={onRadialPick}
         onBackdrop={onRadialBackdrop}
       />
@@ -451,20 +386,27 @@ export default function HUD({
                 looks exactly like the undersized icon this was reported as.
                 A couple of px shy of the box so the focus ring and the
                 has-hold-action dot still have somewhere to land. */}
-            <VestaAppIcon size={44} />
+            {/* size={null}: the rail width (--hud-rail-w) sizes it in CSS,
+                so the tile and the floor block under it are one number. */}
+            <VestaAppIcon size={null} />
           </button>
           <span id="home-btn-hint" className="sr-only">Hold Space (or right-click) to save the current view as the default</span>
-          <span className="hud-title">{title}</span>
-          <span
-            className={`conn-dot ${connClass}`}
-            title={`Connection: ${connection}`}
-            role="img"
-            aria-label={`Connection: ${connection}`}
-          >
-            <span className="dot" />
+          {/* The text clips here, not on .hud-brand: the app icon beside it
+              carries the left rail's shadow, which a clipping parent would
+              cut off (see .hud-brand-text). */}
+          <span className="hud-brand-text">
+            <span className="hud-title">{title}</span>
+            <span
+              className={`conn-dot ${connClass}`}
+              title={`Connection: ${connection}`}
+              role="img"
+              aria-label={`Connection: ${connection}`}
+            >
+              <span className="dot" />
+            </span>
+            {/* Time sits right next to the villa name + connection dot. */}
+            <span className="hud-clock">{clock}</span>
           </span>
-          {/* Time sits right next to the villa name + connection dot. */}
-          <span className="hud-clock">{clock}</span>
         </div>
         {homeFlash && (
           <div className="overview-hint hud-home-hint">
@@ -497,7 +439,12 @@ export default function HUD({
                   // full row of same-shaped neighbours, and the constant
                   // "you can hold this" hint read as visual clutter rather
                   // than a useful affordance, at the user's request.
-                  className={`icon-btn${hidden ? "" : " active"}`}
+                  // Coloured as the Cockpit colours its category tiles
+                  // (common/categoryChip): shown = the category's own tint,
+                  // hidden = the neutral surface, dimmed. Not `.active`, whose
+                  // accent fill would paint every category the same green.
+                  className={`icon-btn hud-cat-btn${hidden ? " is-hidden" : ""}`}
+                  style={categoryChipStyle(cat, !hidden)}
                   {...catHold}
                   onPointerDown={onCatPointerDown(cat)}
                   // Space-only, and that now comes from the hook's nativeButton
@@ -581,62 +528,47 @@ export default function HUD({
             category row) can't read as bigger/higher than its neighbours. */}
         <div className="hud-right">
           <div className="hud-right-inline hud-group">
+            {/* ONE button for the Cockpit and the agent (2.496.242): with an
+                agent configured the Cockpit's icon IS the robot — its count
+                (top right) stays the Cockpit's, the agent's presence dot sits
+                bottom right — and the agent's own window opens from the
+                Cockpit's footer. Without one, the ⚠ as before. */}
             <button
-              className={`icon-btn${attentionItems.length > 0 ? " has-alert" : ""}`}
-              onClick={() => setCockpitOpen(true)}
-              title={attentionItems.length > 0 ? health.summary : "Cockpit — villa status at a glance"}
-              aria-label="Open Cockpit — villa status at a glance"
+              className={`icon-btn${doors.agent ? " agent-btn" : ""}${attentionGroups.length > 0 ? " has-alert" : ""}`}
+              onClick={onOpenCockpit}
+              title={(attentionGroups.length > 0 ? health.summary : "Cockpit — villa status at a glance")
+                + (doors.agent ? ` · ${agentTitle}` : "")}
+              aria-label={`Open Cockpit — villa status at a glance${doors.agent ? ` (${agentTitle})` : ""}`}
             >
-              <TriangleAlert size={24} />
-              {attentionItems.length > 0 && (
+              {doors.agent ? <Bot size={24} /> : <TriangleAlert size={24} />}
+              {doors.agent && agentDot}
+              {attentionGroups.length > 0 && (
                 <span className="icon-btn-count" aria-hidden="true">
-                  {formatCountBadge(attentionItems.length)}
+                  {formatCountBadge(attentionGroups.length)}
                 </span>
               )}
             </button>
-            {onOpenFacility && (
-              <button
-                className={`icon-btn${facilityAttention > 0 ? " has-alert" : ""}`}
-                onClick={onOpenFacility}
-                title={facilityAttention > 0
-                  ? `${facilityAttention} maintenance item${facilityAttention === 1 ? "" : "s"} need attention`
-                  : "Facility — maintenance, readiness, faults"}
-                aria-label="Open the facility workspace"
-              >
-                <ClipboardList size={24} />
-                {facilityAttention > 0 && (
-                  <span className="icon-btn-count" aria-hidden="true">
-                    {formatCountBadge(facilityAttention)}
-                  </span>
-                )}
-              </button>
-            )}
             {/* (The colour-legend button moved into the category row — it
                 explains those very colours. See .hud-cat-help.) */}
-            {/* First-person / bird's-eye switch, right after Facility — both
-                are app-level "how am I looking at/managing this villa"
-                controls rather than map content, so they sit together ahead
-                of the profile chip and Settings. It used to sit right before
-                Settings instead; moved at the user's request. On a phone
-                this whole row collapses into the overflow menu, which
-                carries its own copy (see .hud-menu). */}
-            <ViewControls viewMode={viewMode} onToggleViewMode={onToggleViewMode} />
-            {role && (
-              <span className="hud-profile" title={`Signed in as ${ROLE_LABELS[role]}`}>
-                <span className="hud-profile-name">{ROLE_LABELS[role]}</span>
-                <button
-                  className="icon-btn"
-                  onClick={beginSwitch}
-                  title="Switch profile"
-                  aria-label={`Signed in as ${ROLE_LABELS[role]} — switch profile`}
-                >
-                  <LogOut size={18} />
-                </button>
-              </span>
-            )}
-            {canOpenSettings && (
+            {/* (The first-person / bird's-eye switch moved to the left
+                column, under 1F/2F — see .hud-left-col below.) */}
+            {doors.settings && (
               <button className="icon-btn" onClick={onOpenSettings} title="Settings" aria-label="Settings">
                 <Settings size={24} />
+              </button>
+            )}
+            {/* Who is signed in, as ONE round badge, last on the right
+                (2.496.242): the role's letter(s) in place of the name + exit
+                arrow. Same action as before — the profile switch, which keeps
+                the villa loaded under the PIN pad (ProfileContext.beginSwitch). */}
+            {role && (
+              <button
+                className="icon-btn hud-role-badge"
+                onClick={beginSwitch}
+                title={`Signed in as ${ROLE_LABELS[role]} — switch profile`}
+                aria-label={`Signed in as ${ROLE_LABELS[role]} — switch profile`}
+              >
+                <span aria-hidden="true" className={`role-glyph${ROLE_INITIALS[role].length > 1 ? " two" : ""}`}>{ROLE_INITIALS[role]}</span>
               </button>
             )}
           </div>
@@ -666,23 +598,6 @@ export default function HUD({
             </button>
             {menuOpen && (
               <div className="hud-menu" role="menu" aria-label="Settings and profile">
-                {/* Connection status, repeated here (the top-bar .hud-brand
-                    chip always shows its own dot too, phone included — see
-                    its media queries) since this dropdown is the one place
-                    Settings/profile live on a phone, and the profile line
-                    is a natural spot for it — as a bare icon (no
-                    "Connection: " text) sharing the line, not its own row. */}
-                <div className="hud-menu-header">
-                  {role && <span>Signed in as {ROLE_LABELS[role]}</span>}
-                  <span
-                    className={`conn-dot ${connClass}`}
-                    title={`Connection: ${connection}`}
-                    role="img"
-                    aria-label={`Connection: ${connection}`}
-                  >
-                    <span className="dot" />
-                  </span>
-                </div>
                 {/* Cockpit/Facility — the same two buttons that sit beside
                     the profile chip on a roomy screen (see
                     .hud-right-inline), collapsed into menu items here so a
@@ -692,21 +607,20 @@ export default function HUD({
                 <button
                   role="menuitem"
                   className="hud-menu-item"
-                  onClick={() => { setMenuOpen(false); setCockpitOpen(true); }}
+                  onClick={() => { setMenuOpen(false); onOpenCockpit(); }}
+                  title={doors.agent ? agentTitle : undefined}
                 >
-                  <TriangleAlert size={18} />
-                  <span>Cockpit{attentionItems.length > 0 ? ` (${formatCountBadge(attentionItems.length)})` : ""}</span>
+                  {/* The agent's presence is the dot on its robot, as in the
+                      top bar (owner, 2.496.247) — no "· agent online" text. */}
+                  <span className="hud-menu-glyph">
+                    {doors.agent ? <Bot size={18} /> : <TriangleAlert size={18} />}
+                    {doors.agent && agentDot}
+                  </span>
+                  <span>
+                    Cockpit{attentionGroups.length > 0 ? ` (${formatCountBadge(attentionGroups.length)})` : ""}
+                    {doors.agent && <span className="sr-only">{` — ${agentTitle}`}</span>}
+                  </span>
                 </button>
-                {onOpenFacility && (
-                  <button
-                    role="menuitem"
-                    className="hud-menu-item"
-                    onClick={() => { setMenuOpen(false); onOpenFacility(); }}
-                  >
-                    <ClipboardList size={18} />
-                    <span>Facility{facilityAttention > 0 ? ` (${formatCountBadge(facilityAttention)})` : ""}</span>
-                  </button>
-                )}
                 {/* Same control as the (hidden-on-mobile) inline Minus/Plus
                     — one row, not two menu items, since it's a single
                     stepper rather than two independent actions. Doesn't
@@ -715,7 +629,20 @@ export default function HUD({
                     re-opening the dropdown after every click would be far
                     more annoying than leaving it open. */}
                 <div className="hud-menu-item hud-menu-stepper" role="none">
-                  <span>Label size</span>
+                  {/* "Label size (?)": the title is the way to the map-colours
+                      legend on a phone (owner, 2.496.246) — it replaced the
+                      menu's own "Map colours" row. Only the title opens it;
+                      the −/+ beside it still only step the size. */}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="hud-menu-help"
+                    onClick={() => { setMenuOpen(false); setLegendOpen(true); }}
+                    aria-label="Label size — what the map colours mean"
+                  >
+                    <span>Label size</span>
+                    <CircleHelp size={18} aria-hidden="true" />
+                  </button>
                   <div className="row" style={{ gap: 6 }}>
                     <button
                       className="icon-btn"
@@ -747,7 +674,7 @@ export default function HUD({
                   {viewMode === "overview" ? <PersonStanding size={18} /> : <MapIcon size={18} />}
                   <span>{viewMode === "overview" ? "First-person view" : "Bird's-eye view"}</span>
                 </button>
-                {canOpenSettings && (
+                {doors.settings && (
                   <button
                     role="menuitem"
                     className="hud-menu-item"
@@ -757,22 +684,24 @@ export default function HUD({
                     <span>Settings</span>
                   </button>
                 )}
-                <button
-                  role="menuitem"
-                  className="hud-menu-item"
-                  onClick={() => { setMenuOpen(false); setLegendOpen(true); }}
-                >
-                  <CircleHelp size={18} />
-                  <span>Map colours</span>
-                </button>
+                {/* The same round badge as the desktop bar's (O, FM, G), and
+                    the same action: back to the PIN pad (beginSwitch). Who is
+                    signed in and the connection to Home Assistant are said by
+                    the badge and its dot (owner, 2.496.247) — the menu's
+                    "Signed in as …" header line repeated both and is gone. */}
                 {role && (
                   <button
                     role="menuitem"
                     className="hud-menu-item"
                     onClick={() => { setMenuOpen(false); beginSwitch(); }}
+                    title={`Signed in as ${ROLE_LABELS[role]} · Connection: ${connection}`}
+                    aria-label={`Signed in as ${ROLE_LABELS[role]}, connection ${connection} — log out`}
                   >
-                    <LogOut size={18} />
-                    <span>Switch profile</span>
+                    <span className="hud-menu-glyph" aria-hidden="true">
+                      <span className={`role-glyph${ROLE_INITIALS[role].length > 1 ? " two" : ""}`}>{ROLE_INITIALS[role]}</span>
+                      <span className={`status-dot ${connTone}`} />
+                    </span>
+                    <span>Log out</span>
                   </button>
                 )}
               </div>
@@ -783,12 +712,6 @@ export default function HUD({
 
       {legendOpen && <LegendModal onClose={() => setLegendOpen(false)} />}
 
-      {cockpitOpen && (
-        <CockpitModal
-          onClose={() => setCockpitOpen(false)}
-          onOpenEntity={(id) => { setCockpitOpen(false); onOpenEntity(id); }}
-        />
-      )}
 
       {/* Left column: the floor toggle (1F / 2F — the ONLY entry to the
           rooms dial, no separate Rooms button any more). A plain tap/click
@@ -813,7 +736,7 @@ export default function HUD({
             <button
               key={f}
               ref={(el) => { if (el) floorBtnRefs.current.set(f, el); else floorBtnRefs.current.delete(f); }}
-              className={`icon-btn hud-floor-btn has-hold-action${currentFloor === f || radial?.activeFloor === f ? " active" : ""}`}
+              className={`icon-btn hud-floor-btn has-hold-action${currentFloor === f || radial?.floor === f ? " active" : ""}`}
               title={`Show floor ${f} — hold for its rooms`}
               aria-label={`Show floor ${f} — hold for its rooms`}
               aria-describedby="floor-btn-hint"
@@ -830,6 +753,12 @@ export default function HUD({
             </button>
           ))}
           <span id="floor-btn-hint" className="sr-only">Hold (or hold Enter/Space) for this floor's rooms</span>
+          {/* The first-person / bird's-eye switch, last in the floor section
+              and drawn like 1F/2F (owner, 2.496.248). Roomy screens only: on
+              a phone it stays in the overflow menu (.hud-view-btn's media
+              query, the same breakpoints as .hud-right-inline). */}
+          <span className="hud-stack-sep hud-view-btn" aria-hidden="true" />
+          <ViewControls className="hud-view-btn" viewMode={viewMode} onToggleViewMode={onToggleViewMode} />
         </div>
       </div>
 

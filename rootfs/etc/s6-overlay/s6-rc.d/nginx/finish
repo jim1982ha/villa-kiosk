@@ -1,0 +1,4 @@
+#!/bin/sh
+# shellcheck shell=sh
+# s6 calls this after nginx exits: the crash-loop rule lives in one place.
+exec /usr/bin/vesta-service-finish nginx "$@"

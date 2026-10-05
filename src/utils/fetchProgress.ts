@@ -1,5 +1,6 @@
 // src/utils/fetchProgress.ts
 import { devLog } from "./devLog";
+import { backendFetch } from "@/auth/sessionLost";
 // Read a fetch Response to an ArrayBuffer while reporting download progress
 // (0..1) — shared by BabylonCanvas's normal model load and modelPrefetch's
 // background download so both report progress identically. Falls back to a
@@ -160,7 +161,9 @@ export async function fetchModelWithRetry(
     const ctrl = new AbortController();
     const headerTimer = setTimeout(() => ctrl.abort(), MODEL_FETCH_HEADERS_MS);
     try {
-      const resp = await fetch(attemptUrl, { signal: ctrl.signal });
+      // backendFetch: the model is behind the session too, so a 401 reports
+      // it lost (2.496.263) rather than only failing this load.
+      const resp = await backendFetch(attemptUrl, { signal: ctrl.signal });
       clearTimeout(headerTimer);
       if (!resp.ok) return { resp, data: new ArrayBuffer(0) }; // caller classifies + reports the status; no retry
       const data = await readWithProgress(resp, onProgress, MODEL_FETCH_STALL_MS);

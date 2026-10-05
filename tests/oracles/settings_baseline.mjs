@@ -1,41 +1,44 @@
-// Does Settings' revert list cover every key Settings can change?
+// Settings' live edits, baseline, Save and Discard (hooks/useDraftedSlice.ts).
 //
-// ⚠️ THE FAILURE IS SILENT AND ONE-SIDED. A key written by a control but absent
-// from SETTINGS_KEYS is un-revertable: Discard restores its siblings and leaves
-// that one changed — worse than not offering Discard, because the dialog says
-// it undid something it did not. No behavioural test sees this; it only shows
-// up months later as "I pressed Discard and the theme stayed".
+// ⚠️ THE FAILURE IS SILENT AND ONE-SIDED. A key written by a control but not
+// in the dialog's slice is un-revertable: Discard restores its siblings and
+// leaves that one changed. Since 2.496.224 the dialog writes ONLY through the
+// slice's `set`, whose type accepts only the slice's keys — so that gap is a
+// type error. What stays for this oracle: the slice's rules, by value, and the
+// one thing tsc cannot see — that the dialog did not take a second way to
+// write (useConfig().update) around the slice.
+import { register } from "node:module";
+register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
 import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+const { sliceOf, draftedView, sliceChanged } = await import("@/config/configSlice");
 
-const FILE = resolve(dirname(fileURLToPath(import.meta.url)),
-                     "../../src/components/settings/SettingsModal.tsx");
-const src = readFileSync(FILE, "utf8");
+const KEYS = ["siteTitle", "render", "walkSpeed"];
+const config = { siteTitle: "Home", render: { exposure: 1 }, walkSpeed: 1, theme: "dark", entityMap: { x: 1 } };
+const J = JSON.stringify;
 
-// Every key handed to update({...}) or scheduleCommit({...}) in this file.
-const written = new Set();
-for (const m of src.matchAll(/(?:update|scheduleCommit)\(\{\s*([A-Za-z0-9_]+)/g))
-  written.add(m[1]);
+console.log("  the slice:");
+ck("reads exactly its keys", J(Object.keys(sliceOf(config, KEYS))) === J(KEYS));
+ck("the view is the live config with what is being typed laid over it",
+   J(draftedView(config, KEYS, { siteTitle: "Home " })) === J({ siteTitle: "Home ", render: { exposure: 1 }, walkSpeed: 1 }));
+ck("nothing typed: the view IS the config (a reverted config shows at once)",
+   J(draftedView(config, KEYS, {})) === J(sliceOf(config, KEYS)));
 
-// The declared revert list.
-const decl = src.match(/const SETTINGS_KEYS = \[([\s\S]*?)\] as const;/);
-const declared = new Set(
-  decl ? [...decl[1].matchAll(/"([A-Za-z0-9_]+)"/g)].map((m) => m[1]) : []);
+console.log("\n  changed since it opened:");
+const baseline = sliceOf(config, KEYS);
+ck("the same config: unchanged", !sliceChanged(config, KEYS, baseline, false));
+ck("an object value rebuilt with the same content: unchanged (compared by content)",
+   !sliceChanged({ ...config, render: { exposure: 1 } }, KEYS, baseline, false));
+ck("a key of the slice changed: changed", sliceChanged({ ...config, walkSpeed: 2 }, KEYS, baseline, false));
+ck("a write still waiting: changed", sliceChanged(config, KEYS, baseline, true));
+ck("a key OUTSIDE the slice changed: not this dialog's change", !sliceChanged({ ...config, theme: "light" }, KEYS, baseline, false));
 
-const missing = [...written].filter((k) => !declared.has(k)).sort();
-const extra   = [...declared].filter((k) => !written.has(k)).sort();
+console.log("\n  the Settings window writes only through its slice:");
+const src = readFileSync(new URL("../../src/components/settings/SettingsModal.tsx", import.meta.url), "utf8");
+ck("it declares its slice", /useDraftedSlice\(SETTINGS_KEYS\)/.test(src));
+ck("it takes no `update` from useConfig (a second way to write, past Discard)",
+   !/\{[^}]*\bupdate\b[^}]*\}\s*=\s*useConfig\(\)/.test(src) && !/useConfig\(\)\.update/.test(src));
+ck("it keeps no copy of a value beside the slice (no useState seeded from config)",
+   !/useState[^(]*\(\s*(?:\(\)\s*=>\s*)?[^)]*config\./.test(src));
 
-console.log(`  keys written by a control : ${[...written].sort().join(", ")}`);
-console.log(`  keys in SETTINGS_KEYS     : ${[...declared].sort().join(", ")}`);
-if (missing.length) console.log(`\n  ⚠️ WRITTEN BUT NOT REVERTABLE: ${missing.join(", ")}`);
-if (extra.length)   console.log(`\n  declared but never written: ${extra.join(", ")}`);
-
-let fail = 0;
-const ck = (n, ok) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}`); if (!ok) fail++; };
-console.log("\n  assertions:");
-ck("the scan found the controls at all", written.size >= 8);
-ck("SETTINGS_KEYS was parsed", declared.size > 0);
-ck("every key a control writes can be reverted", missing.length === 0);
-ck("no dead key in the revert list", extra.length === 0);
-process.exit(fail ? 1 : 0);
+done("✅ Settings edits one slice: Discard restores every key it can change");

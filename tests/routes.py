@@ -96,6 +96,30 @@ unreachable = sorted(asked - routes - {"/model"})
 ck("every path the app requests is answered", not unreachable,
    f"the app fetches these and nothing answers: {', '.join(unreachable)}")
 
+# ⚠️ THE CHECKS ABOVE COMPARE FIRST SEGMENTS, AND nginx's `location = /x` IS
+# EXACT (2.496.239). `/agent-messages/clear` shares its first segment with
+# `location = /agent-messages`, so it read as published while nginx would have
+# handed it to the SPA fallback. Each WHOLE literal path the app requests must
+# be matched by a location that reaches the proxy: equal to an exact one, or
+# under a prefix one.
+asked_full = set()
+for f in (ROOT / "src").rglob("*.ts*"):
+    for m in re.finditer(r'ingressPath\("([^"?]+)', f.read_text(encoding="utf-8")):
+        asked_full.add("/" + m.group(1).lstrip("/"))
+backend_locs = [(bool(m.group(1)), m.group(2)) for m in
+                re.finditer(r"location\s+(=\s*)?(\S+)\s*\{([^}]*)\}", ng)
+                if "127.0.0.1:8100" in m.group(3)]
+unpublished = sorted(p for p in asked_full if not any(
+    (p == loc) if exact else p.startswith(loc) for exact, loc in backend_locs))
+ck(f"every whole path the app requests ({len(asked_full)}) has an nginx location reaching the proxy",
+   bool(asked_full) and not unpublished,
+   f"nginx would not forward these: {', '.join(unpublished)}")
+proxy_full = [re.sub(r"\{[^}]*\}", "[^/]+", m.group(1)) for m in
+              re.finditer(r'app\.router\.add_\w+\(\s*(?:"[A-Z*]+"\s*,\s*)?"([^"]+)"', px)]
+unrouted = sorted(p for p in asked_full if not any(re.fullmatch(r, p) for r in proxy_full))
+ck("  ...and the proxy routes each whole path", bool(asked_full) and not unrouted,
+   f"no route for: {', '.join(unrouted)}")
+
 missing_dev = sorted(asked - dev - {"/model"})
 ck("the dev server forwards everything the app requests", not missing_dev,
    f"`npm run dev` would 404: {', '.join(missing_dev)}")
@@ -123,21 +147,40 @@ ck("no location sets X-VK-Ingress by hand", not by_hand,
    f"a hand-written copy: {', '.join(by_hand)}")
 
 # ── what the service worker may serve from its cache ─────────────────────
-# Its rule, read from sw.js: a path containing one of the `includes(...)`
-# fragments, or ending with a NEVER_CACHE entry, goes to the network. Tried
-# on the BARE path — the standalone hostname, where the add-on's endpoints
-# are not under /api/ and only the explicit list protects them.
+# Its rule is sw.js's own swRoute (2.496.233), RUN here through Node — this
+# used to read its fragments by regex and re-implement them in Python
+# (`sw_skips`), a copy sw.js's own header warns against. Every GET route is
+# tried bare (the standalone hostname, where the add-on's endpoints are not
+# under /api/ and only NEVER_CACHE protects them) AND behind Home Assistant's
+# Ingress prefix.
+import json as _json
+import subprocess as _sp
 sw = SW.read_text()
-nc = re.search(r"const NEVER_CACHE = \[(.*?)\];", sw, re.S)
-never = re.findall(r'"([^"]+)"', nc.group(1)) if nc else []
-guard = sw[nc.end():sw.index("return; // default network handling", nc.end())] if nc else ""
-fragments = re.findall(r'url\.pathname\.includes\("([^"]+)"\)', guard)
-ck("the service worker's never-cache rule was read", bool(never) and bool(fragments),
-   f"list {never}, fragments {fragments}")
+INGRESS = "/api/hassio_ingress/tok"
 
 
-def sw_skips(path: str) -> bool:
-    return any(f in path for f in fragments) or any(path.endswith(p) for p in never)
+def sw_routes(paths):
+    """{path: route} from the real swRoute, for bare and Ingress paths."""
+    script = r"""
+const fs = require("fs");
+const src = fs.readFileSync(process.argv[1], "utf8");
+const grab = (re) => { const m = re.exec(src); if (!m) throw new Error("not found: " + re); return m[0]; };
+const body = [
+  grab(/const SW_BYPASS_PARAM = [^;]+;/),
+  grab(/const NEVER_CACHE = \[[\s\S]*?\];/),
+  grab(/const NEVER_CACHE_FRAGMENTS = \[[\s\S]*?\];/),
+  grab(/function swRoute\(url, mode, destination, origin\) \{[\s\S]*?\n\}/),
+].join("\n");
+const swRoute = new Function(body + "; return swRoute;")();
+const out = {};
+for (const p of JSON.parse(process.argv[2])) out[p] = swRoute(new URL("http://localhost" + p), "cors", "", "http://localhost");
+console.log(JSON.stringify(out));
+"""
+    res = _sp.run(["node", "-e", script, str(SW), _json.dumps(paths)], capture_output=True, text=True)
+    if res.returncode != 0:
+        print(res.stderr[-600:])
+        return {}
+    return _json.loads(res.stdout)
 
 
 # Cacheable ON PURPOSE — and why. Anything else a GET reaches must be skipped.
@@ -147,9 +190,13 @@ SW_CACHEABLE = {
 }
 gets = [re.sub(r"\{[^}]*\}", "x", m.group(1)) for m in
         re.finditer(r'app\.router\.add_(?:get|route)\(\s*(?:"[A-Z*]+"\s*,\s*)?"([^"]+)"', px)]
-cached = sorted(p for p in gets if not sw_skips(p) and p not in SW_CACHEABLE)
-ck(f"every one of the proxy's {len(gets)} GET routes is kept out of the offline cache", bool(gets) and not cached,
-   f"the service worker would serve these from its cache: {', '.join(cached)}")
+routed = sw_routes(gets + [INGRESS + p for p in gets])
+ck("the service worker's real routing function was run", len(routed) == 2 * len(gets) and bool(gets),
+   f"{len(routed)} answers for {2 * len(gets)} paths")
+cached = sorted(p for p in gets if p not in SW_CACHEABLE
+                and (routed.get(p) != "network" or routed.get(INGRESS + p) != "network"))
+ck(f"every one of the proxy's {len(gets)} GET routes is kept out of the offline cache, bare and behind Ingress",
+   bool(gets) and not cached, f"the service worker would serve these from its cache: {', '.join(cached)}")
 stale = sorted(p for p in SW_CACHEABLE if p not in gets)
 ck("  ...and every deliberately cacheable path is still a route", not stale,
    f"no longer routes: {', '.join(stale)}")
@@ -239,13 +286,22 @@ dockerfile = (ROOT / "Dockerfile").read_text()
 ck("the s6 run script drops to `vesta` after handing it /data",
    run.index("chown -R vesta:vesta /data") < run.index("exec s6-setuidgid vesta python3 /usr/bin/supervisor-proxy.py"))
 ck("  ...and the image creates that account (no home, no shell)", re.search(r"adduser -D -H -s /sbin/nologin\b.* vesta\b", dockerfile) is not None)
-# Filesystem paths only: a module-level `X_FILE/_DIR/_ROOT = "/…"` constant or
-# a literal handed to open()/os.* — HTTP routes ("/auth/verify") are not files.
+# Everything the proxy persists is a NAME resolved against DATA_DIR at call
+# time (`_data(...)`, a `*_NAME` constant, a `JsonStore("…")`); an absolute
+# literal handed to open()/os.* is the only other way to reach the disk, and
+# only the read-only table may be one. HTTP routes ("/auth/verify") are not files.
 src = PROXY.read_text()
-fs = set(re.findall(r'^[A-Z_]+(?:_FILE|_DIR|_ROOT) = "(/[^"]+)"', src, re.M))
-fs |= set(re.findall(r'(?:open|os\.\w+)\(\s*"(/[^"]+)"', src))
-outside = sorted(p for p in fs if not p.startswith(("/data/", "/usr/share/vesta/")))
-ck(f"every filesystem path the proxy names ({len(fs)}) is under /data or the read-only table", fs and not outside, "; ".join(outside))
+names = set(re.findall(r'^[A-Z_]+_NAME = "([^"]+)"', src, re.M))
+names |= set(re.findall(r'JsonStore\("([^"]+)"', src))
+names |= set(re.findall(r'_data\("([^"]+)"', src))
+bad_names = sorted(n for n in names if n.startswith("/") or ".." in n.split("/"))
+ck(f"the data directory is /data, and every name inside it ({len(names)}) is relative",
+   re.search(r'^DATA_DIR = "/data"$', src, re.M) is not None and len(names) >= 10 and not bad_names,
+   "; ".join(bad_names))
+fs = set(re.findall(r'(?:open|os\.\w+)\(\s*"(/[^"]+)"', src))
+fs |= set(re.findall(r'^[A-Z_]+(?:_FILE|_DIR|_ROOT) = "(/[^"]+)"', src, re.M))
+outside = sorted(p for p in fs - {"/data"} if not p.startswith("/usr/share/vesta/"))
+ck("no other absolute path reaches the disk (only the read-only table)", not outside, "; ".join(outside))
 ck("an unreadable options file reads as nothing configured (closed), not a crash",
    "except (OSError, ValueError):\n        return {}" in PROXY.read_text())
 

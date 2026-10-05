@@ -16,12 +16,16 @@
 import { useMemo } from "react";
 import { CalendarCheck, Wrench } from "lucide-react";
 import { useFmData } from "@/fm/FmDataContext";
-import { localStamp, formatMoney, completionSource } from "@/fm/fmEngine";
+import { localStamp, completionSource } from "@/fm/fmEngine";
+import { useFmTerms } from "@/fm/useFmTerms";
 import EvidenceRow from "./EvidenceRow";
 import ErasableRow from "./ErasableRow";
+import AgentMark from "./AgentMark";
+import { formatMoney } from "@/utils/money";
 
 export default function RecentWorkList({ limit = 12 }: { limit?: number }) {
   const { data, removeCompletion } = useFmData();
+  const terms = useFmTerms();
 
   const rows = useMemo(() => {
     const costById = new Map(data.costs.map((c) => [c.id, c]));
@@ -65,6 +69,7 @@ export default function RecentWorkList({ limit = 12 }: { limit?: number }) {
                   : <CalendarCheck size={16} className="muted" />}
                 <strong>{source.title}</strong>
                 {source.kind === "fault" && <span className="fm-clause">fault</span>}
+                <AgentMark record={c} />
               </div>
               <div className="fm-row-sub muted">
                 {localStamp(c.at)}{c.by && c.by !== "—" ? ` · ${c.by}` : ""}
@@ -74,7 +79,7 @@ export default function RecentWorkList({ limit = 12 }: { limit?: number }) {
                 <EvidenceRow photoIds={c.photoIds} disabled />
               )}
             </div>
-            {cost && <span className="fm-amount">{formatMoney(cost.amountIdr)}</span>}
+            {cost && <span className="fm-amount">{formatMoney(cost.amountIdr, terms.currency)}</span>}
           </ErasableRow>
         ))}
       </div>

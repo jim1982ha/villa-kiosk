@@ -106,6 +106,7 @@ import re
 import secrets
 import tempfile
 import time
+from collections import defaultdict
 from datetime import datetime, timezone
 
 from aiohttp import ClientSession, ClientTimeout, WSMsgType, web
@@ -144,7 +145,21 @@ REMOVED_OPTION_KEYS = {"sh3d_path", "model_path"}
 # access to /config and nothing sensitive is exposed on HA's unauthenticated
 # /local/ static route. nginx serves it at /model/<path> (session-gated); the
 # upload handler below writes into it.
-DATA_ROOT = "/data/www"
+#: ⚠️ EVERY PATH THIS PROCESS PERSISTS IS RESOLVED AGAINST THIS, AT CALL TIME.
+#: The Supervisor mounts the add-on's volume at /data; `build_app(data_dir=…)`
+#: points the whole process somewhere else in one move (the tests' temp
+#: directory). Paths used to be captured as "/data/…" constants when the module
+#: loaded, in two binding styles, so a test had to rewrite the SOURCE TEXT to
+#: keep off the real volume. Below, only NAMES inside it are declared.
+DATA_DIR = "/data"
+
+
+def _data(*names: str) -> str:
+    """A path inside the data directory, resolved now."""
+    return os.path.join(DATA_DIR, *names)
+
+
+WWW_NAME = "www"
 # The single managed location an uploaded model lands at. addon_config_handler
 # reports it as the effective path once the file exists, so an uploaded model
 # lights up for every client with no Supervisor API call or add-on restart.
@@ -152,8 +167,8 @@ MANAGED_PATH = {"glb": "villa.glb"}
 
 # ── Session auth ─────────────────────────────────────────────────────────────
 SESSION_COOKIE = "vk_session"
-SESSION_EPOCH_FILE = "/data/session-epoch"
-SESSION_SECRET_FILE = "/data/.session_secret"
+SESSION_EPOCH_NAME = "session-epoch"
+SESSION_SECRET_NAME = ".session_secret"
 # How long a kiosk stays "logged in" — the DEFAULT; see _session_ttl(), which
 # an operator can override through the add-on's session_days option.
 _session_secret_cache: bytes | None = None
@@ -167,7 +182,7 @@ def _session_secret() -> bytes:
     if _session_secret_cache is not None:
         return _session_secret_cache
     try:
-        with open(SESSION_SECRET_FILE, "rb") as f:
+        with open(_data(SESSION_SECRET_NAME), "rb") as f:
             existing = f.read().strip()
         if len(existing) >= 32:
             _session_secret_cache = existing
@@ -180,7 +195,7 @@ def _session_secret() -> bytes:
         # not a corrupt file you notice, it is a file shorter than 32 bytes,
         # which the reader above silently rejects and this function then
         # REPLACES — logging every session out with no error anywhere.
-        atomic_write(SESSION_SECRET_FILE, lambda out: out.write(fresh), mode=0o600)
+        atomic_write(_data(SESSION_SECRET_NAME), lambda out: out.write(fresh), mode=0o600)
     except OSError as err:  # /data unwritable is fatal-ish, but degrade to
         # a process-lifetime secret rather than crashing (sessions then reset
         # on restart, which just means re-entering the PIN).
@@ -197,7 +212,7 @@ def _rotate_session_secret() -> None:
     Raises OSError when /data cannot be written; the caller decides."""
     global _session_secret_cache
     fresh = secrets.token_hex(32).encode()
-    atomic_write(SESSION_SECRET_FILE, lambda out: out.write(fresh), mode=0o600)
+    atomic_write(_data(SESSION_SECRET_NAME), lambda out: out.write(fresh), mode=0o600)
     _session_secret_cache = fresh
 
 
@@ -227,14 +242,14 @@ def _session_epoch() -> int:
     """
     global _EPOCH_CACHE
     try:
-        stamp = os.stat(SESSION_EPOCH_FILE).st_mtime_ns
+        stamp = os.stat(_data(SESSION_EPOCH_NAME)).st_mtime_ns
     except OSError:
         return 0
     cached = _EPOCH_CACHE
     if cached is not None and cached[0] == stamp:
         return cached[1]
     try:
-        with open(SESSION_EPOCH_FILE, "r", encoding="utf-8") as f:
+        with open(_data(SESSION_EPOCH_NAME), "r", encoding="utf-8") as f:
             value = int(f.read().strip() or "0")
     except (OSError, ValueError):
         return 0
@@ -248,7 +263,7 @@ def _bump_session_epoch() -> int:
         # A torn epoch reads back as 0 (the int() falls over and _session_epoch
         # returns 0), which silently re-validates every token logout-all was
         # called to kill. Atomic or not at all.
-        atomic_write(SESSION_EPOCH_FILE, lambda out: out.write(str(nxt)),
+        atomic_write(_data(SESSION_EPOCH_NAME), lambda out: out.write(str(nxt)),
                      binary=False, mode=0o600)
     except OSError as err:
         print(f"[supervisor-proxy] could not persist session epoch: {err}", flush=True)
@@ -313,29 +328,63 @@ def _role_for(request: web.Request) -> str:
     return _session_role(request.cookies.get(SESSION_COOKIE)) or "guest"
 
 
-# ── WHAT EACH ROLE MAY DO — the proxy's ONE statement of it ──────────────
+def _load_vesta_table(name: str, refusal: str) -> dict:
+    """One of the add-on's own JSON tables (/usr/share/vesta/<name>, or the
+    repo's rootfs copy beside this file when run from a checkout).
+
+    FAIL CLOSED, for every table: unreadable or unparsable returns {} — which
+    grants nothing — and says what is refused because of it. Written out four
+    times (roles, ha-commands, fm-records, agent-contract) until 2.496.263."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    for path in ("/usr/share/vesta/" + name,
+                 os.path.join(here, "..", "share", "vesta", name)):
+        try:
+            with open(path, encoding="utf-8") as f:
+                return json.load(f)
+        except (OSError, ValueError):
+            continue
+    print(f"[proxy] {name} unreadable: {refusal}", flush=True)
+    return {}
+
+
+# ── WHAT EACH ROLE MAY DO — ONE TABLE, READ HERE AND BY THE APP ──────────
 # Every authorization decision below asks `_may(role, capability)`; none names
-# a role. It used to: "guest may not view cameras" was `role == "guest"` once
-# per door (REST and websocket), the owner's exemption from the allowlists was
-# `role == "owner"` in three functions, and five handlers carried their own
-# role tuples — so adding a profile meant finding about a dozen places.
+# a role. The rights themselves live in /usr/share/vesta/roles.json
+# (rootfs/usr/share/vesta/ in the repo), which src/auth/permissions.ts imports
+# too — the ha-commands.json precedent. They used to be written twice, here and
+# in the app, kept equal by a test that scraped the TypeScript as text.
 #
-# The names are src/auth/permissions.ts's wherever the kiosk has the same idea
-# (editConfig, manageModel, manageFacility, reportFault), and
-# tests/proxy-rules.py fails if the two tables disagree on any of them. Two
-# are the proxy's own:
-#   viewCameras — the client expresses it as `deniedTypes: ["camera"]`; the
-#                 test holds the two equivalent.
+# Two names are derived or proxy-only:
+#   viewCameras — held exactly when "camera" is not among a profile's
+#                 deniedTypes, so what the app hides and what the proxy refuses
+#                 cannot disagree.
 #   administer  — exempt from the websocket/REST allowlists and the service
 #                 confinement, may revoke every session and read telemetry.
-ROLE_CAPABILITIES = {
-    "owner": frozenset({"administer", "editConfig", "manageModel", "manageFacility",
-                        "reportFault", "viewCameras"}),
-    "ops": frozenset({"manageFacility", "reportFault", "viewCameras"}),
-    # A guest reports faults and attaches photos of them; the write guard then
-    # confines what that write may contain (see _fm_guest_write_ok).
-    "guest": frozenset({"reportFault"}),
-}
+#
+# ⚠️ THE VESTA AGENT IS NOT A PROFILE (docs/agent-integration/PLAN.md A3). Its
+# row is roles.json's "agent": it never appears on the profile picker, never
+# holds a cookie, and is not in AUTH_ROLES — it reaches only /agent/v1/*, by
+# bearer token (_agent_refuse), and _authorized() never looks at its token.
+#
+# FAIL CLOSED: an unreadable table grants nothing to anyone.
+def _load_roles() -> dict:
+    return _load_vesta_table("roles.json", "every profile refused")
+
+
+def _role_capabilities(table: dict) -> dict:
+    """roles.json → {role: frozenset of capabilities}, viewCameras derived."""
+    out = {}
+    for role, row in (table.get("profiles") or {}).items():
+        caps = set(row.get("capabilities") or ())
+        if "camera" not in (row.get("deniedTypes") or ()):
+            caps.add("viewCameras")
+        out[role] = frozenset(caps)
+    out["agent"] = frozenset((table.get("agent") or {}).get("capabilities") or ())
+    return out
+
+
+ROLES_TABLE = _load_roles()
+ROLE_CAPABILITIES = _role_capabilities(ROLES_TABLE)
 
 
 def _may(role: str, capability: str) -> bool:
@@ -356,16 +405,7 @@ def _may(role: str, capability: str) -> bool:
 # FAIL CLOSED: an unreadable table allows nothing beyond the owner's
 # exemption — never everything.
 def _load_ha_commands() -> dict:
-    here = os.path.dirname(os.path.abspath(__file__))
-    for path in ("/usr/share/vesta/ha-commands.json",
-                 os.path.join(here, "..", "share", "vesta", "ha-commands.json")):
-        try:
-            with open(path, encoding="utf-8") as f:
-                return json.load(f)
-        except (OSError, ValueError):
-            continue
-    print("[proxy] ha-commands.json unreadable: non-owner Home Assistant access refused", flush=True)
-    return {}
+    return _load_vesta_table("ha-commands.json", "non-owner Home Assistant access refused")
 
 
 HA_COMMANDS = _load_ha_commands()
@@ -472,7 +512,7 @@ def _public_model_access() -> bool:
     routes; /core/* (Home Assistant control) always goes through _authorized()
     regardless. Read fresh on every call (not cached) so flipping the option
     takes effect without restarting this process."""
-    return bool(_read_options().get("public_model_access", False))
+    return opt("public_model_access")
 
 
 def _model_authorized(request: web.Request) -> bool:
@@ -848,10 +888,147 @@ def _read_options() -> dict:
     every option save, so between a save and the restart Home Assistant asks
     for, a read may be refused rather than merely absent."""
     try:
-        with open("/data/options.json") as f:
+        with open(_data("options.json")) as f:
             return json.load(f)
     except (OSError, ValueError):
         return {}
+
+
+# ── THE ADD-ON'S OPTIONS: ONE TABLE ─────────────────────────────────────────
+# Every option the Configuration page offers, one row each: its kind, its
+# default, its range or pattern, and any OLDER place an install may still have
+# it stored. Every reader asks opt(name); the start-up self-heal asks
+# migrate_options(stored). tests/addon-manifest.py checks villa-kiosk/
+# config.yaml against this table BY VALUE — default, range and pattern.
+#
+# Before 2.496.223 an option's default and range were written in the manifest
+# AND in each reader, never compared, and the three moves of the agent
+# settings in one day each touched seven or eight places.
+#
+# A dotted name is a field inside a group on the page (`vesta_agent.token`).
+# Values are read fresh on every call (a change needs no restart) and never
+# trusted: the schema validates what the form writes, but /data/options.json
+# can be hand-edited, so a malformed value falls back to the default (for a
+# code or token: to "not configured", the closed failure) and a number is
+# clamped — a retention of -1 or 10**9 must not become "delete everything" or
+# "never delete".
+PIN_RE = re.compile(r"^[0-9]{4}$")
+SUPERADMIN_PIN_RE = re.compile(r"^[0-9]{6}$")
+#: ⚠️ A SHORT TOKEN IS A GUESSABLE ONE. The option is a masked `password`
+#: field (config.yaml), which cannot also carry a pattern, so THIS is the one
+#: check of its shape: a token that fails it is treated as NOT CONFIGURED — the
+#: closed failure — and the start-up log says so (_agent_config_warning).
+AGENT_TOKEN_RE = re.compile(r"^[A-Za-z0-9._~+/=-]{16,128}$")
+
+
+class Option:
+    """One row of OPTIONS. `kind` is "text" (fullmatch `pattern`, else ""),
+    "secret" (the same, shown masked), "bool" (only a real true/false counts)
+    or "int" (clamped to lo..hi). `older` lists the places an earlier release
+    stored it, as key paths; while one is still stored it WINS, and
+    migrate_options moves it here."""
+    __slots__ = ("kind", "default", "lo", "hi", "pattern", "older")
+
+    def __init__(self, kind, default, lo=None, hi=None, pattern=None, older=()):
+        self.kind, self.default, self.lo, self.hi = kind, default, lo, hi
+        self.pattern, self.older = pattern, tuple(older)
+
+
+OPTIONS = {
+    "guest_pin": Option("text", "", pattern=PIN_RE),
+    "owner_pin": Option("text", "", pattern=PIN_RE),
+    "ops_pin": Option("text", "", pattern=PIN_RE),
+    "superadmin_pin": Option("text", "", pattern=SUPERADMIN_PIN_RE),
+    "public_model_access": Option("bool", False),
+    "evidence_retention_days": Option("int", 550, 0, 3650),
+    "session_days": Option("int", 30, 1, 365),
+    "telemetry_max_events": Option("int", 500, 50, 5000),
+    "pin_lockout_minutes": Option("int", 5, 1, 1440),
+    # THE agent switch sits above its group, so the page shows it with the
+    # group folded; in 2.496.218 it was inside the group as `enabled`.
+    "agent_enabled": Option("bool", False, older=[("vesta_agent", "enabled")]),
+    # Before 2.496.218 the agent's settings were flat keys.
+    "vesta_agent.token": Option("secret", "", pattern=AGENT_TOKEN_RE, older=[("agent_token",)]),
+    "vesta_agent.offline_after_minutes": Option("int", 5, 1, 60, older=[("agent_offline_after_minutes",)]),
+    "vesta_agent.message_retention_days": Option("int", 90, 1, 365, older=[("agent_message_retention_days",)]),
+}
+
+
+def _stored_at(options, path):
+    """(True, value) when `path` is stored in `options`, else (False, None)."""
+    node = options
+    for key in path:
+        if not isinstance(node, dict) or key not in node:
+            return False, None
+        node = node[key]
+    return True, node
+
+
+def _stored_value(options, name):
+    """The raw stored value of option `name` — an older place first — or its
+    default when it is stored nowhere."""
+    row = OPTIONS[name]
+    for path in row.older + (tuple(name.split(".")),):
+        found, value = _stored_at(options, path)
+        if found:
+            return value
+    return row.default
+
+
+def opt(name: str, options: dict | None = None):
+    """Option `name`, read fresh from /data/options.json (or `options`), in
+    the shape its row promises. Never raises."""
+    row = OPTIONS[name]
+    raw = _stored_value(_read_options() if options is None else options, name)
+    if row.kind == "bool":
+        return raw if isinstance(raw, bool) else row.default
+    if row.kind == "int":
+        if isinstance(raw, bool):
+            return row.default
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            return row.default
+        return max(row.lo, min(row.hi, value))
+    if row.kind == "secret":
+        text = raw if isinstance(raw, str) else ""
+    else:
+        text = str(raw or "").strip()
+    return text if row.pattern.fullmatch(text) else ""
+
+
+def migrate_options(stored: dict) -> dict | None:
+    """The stored options to write back, or None when nothing is stale:
+    retired keys (REMOVED_OPTION_KEYS) dropped, and every option still in an
+    OLDER place moved to its current one, value kept — the owner's token and
+    switch must survive an update. Pure: tests/agent-interface.py drives it."""
+    out = json.loads(json.dumps(stored))
+    changed = False
+    for key in REMOVED_OPTION_KEYS & set(out):
+        del out[key]
+        changed = True
+    for name, row in OPTIONS.items():
+        path = tuple(name.split("."))
+        found_any, kept = False, None
+        for older in row.older:
+            found, value = _stored_at(out, older)
+            if not found:
+                continue
+            if not found_any:
+                found_any, kept = True, value   # the first older place wins
+            parent = out
+            for key in older[:-1]:
+                parent = parent[key]
+            del parent[older[-1]]
+        if found_any:
+            target = out
+            for key in path[:-1]:
+                if not isinstance(target.get(key), dict):
+                    target[key] = {}
+                target = target[key]
+            target[path[-1]] = kept
+            changed = True
+    return out if changed else None
 
 
 async def _cleanup_stale_options(session: ClientSession) -> None:
@@ -885,10 +1062,10 @@ async def _cleanup_stale_options(session: ClientSession) -> None:
                 return
             body = await resp.json()
         options = (body.get("data") or {}).get("options") or {}
-        stale = sorted(set(options) & REMOVED_OPTION_KEYS)
-        if not stale:
+        cleaned = migrate_options(options)
+        if cleaned is None:
             return
-        cleaned = {k: v for k, v in options.items() if k not in REMOVED_OPTION_KEYS}
+        stale = sorted(set(options) - set(cleaned))
         async with session.post(
             f"http://{SUPERVISOR}/addons/self/options", headers=AUTH,
             json={"options": cleaned},
@@ -918,7 +1095,7 @@ def _upload_meta(rel: str) -> dict | None:
     if not rel:
         return None
     try:
-        with open(os.path.join(DATA_ROOT, rel) + ".upload.json", encoding="utf-8") as f:
+        with open(os.path.join(_data(WWW_NAME), rel) + ".upload.json", encoding="utf-8") as f:
             meta = json.load(f)
         if isinstance(meta, dict):
             return {
@@ -946,12 +1123,29 @@ def _effective_paths() -> dict:
     is derived from the GLB path, not separately configurable.
     """
     model_rel = MANAGED_PATH["glb"] if os.path.exists(
-        os.path.join(DATA_ROOT, MANAGED_PATH["glb"])) else ""
+        os.path.join(_data(WWW_NAME), MANAGED_PATH["glb"])) else ""
     return {
         "model_path": model_rel,
         "model_upload": _upload_meta(model_rel) if model_rel else None,
         "rooms_upload": _upload_meta(_rooms_rel(model_rel)) if model_rel else None,
+        "model_version": _file_version(model_rel) if model_rel else "",
+        "rooms_version": _file_version(_rooms_rel(model_rel)) if model_rel else "",
     }
+
+
+def _file_version(rel: str) -> str:
+    """The version of a central file as the Kiosk stamps its URL (?v=), "" when
+    it does not exist. Exactly nginx's ETag for the same file — "<mtime in
+    seconds, hex>-<size, hex>" (ngx_http_set_etag) — which is what the Kiosk
+    read from a HEAD request before the add-on reported it here: a device's
+    cached model keeps its URL across that change and is not downloaded again.
+    A replaced file changes its mtime (an upload writes a new file), so the
+    version changes with it."""
+    try:
+        st = os.stat(os.path.join(_data(WWW_NAME), rel))
+    except OSError:
+        return ""
+    return f"{int(st.st_mtime):x}-{st.st_size:x}"
 
 
 def _resolve_upload_target(kind: str) -> str:
@@ -962,7 +1156,7 @@ def _resolve_upload_target(kind: str) -> str:
     Raises ValueError if the resolved path escapes the data root.
     """
     rel = MANAGED_PATH["glb"] if kind == "glb" else _rooms_rel(MANAGED_PATH["glb"])
-    root = os.path.realpath(DATA_ROOT)
+    root = os.path.realpath(_data(WWW_NAME))
     dest = os.path.realpath(os.path.join(root, rel))
     if dest != root and not dest.startswith(root + os.sep):
         raise ValueError("resolved path escapes the data root")
@@ -987,6 +1181,16 @@ async def addon_config_handler(request: web.Request) -> web.Response:
     return web.json_response(_effective_paths(), headers={"Cache-Control": "no-store"})
 
 
+async def healthz_handler(request: web.Request) -> web.Response:
+    """The image's Docker HEALTHCHECK (Dockerfile), which the Supervisor's
+    watchdog acts on: 200 means nginx reached this process and it answered.
+    PUBLIC on purpose and says nothing — no version, no option, no state —
+    because the check carries no session, and anything it said would be
+    readable by anyone who can reach the port. A hung proxy fails it (the
+    check times out); a dead one fails it too (nginx answers 502)."""
+    return web.Response(text="ok", headers={"Cache-Control": "no-store"})
+
+
 async def auth_check_handler(request: web.Request) -> web.Response:
     """nginx auth_request backend for the static /model/ route: 200 when the
     caller is authorized (valid session cookie, trusted Ingress, or
@@ -1002,7 +1206,7 @@ async def auth_check_handler(request: web.Request) -> web.Response:
 
 AUTH_ROLES = ("guest", "owner", "ops")
 PIN_OPTION = {"guest": "guest_pin", "owner": "owner_pin", "ops": "ops_pin"}
-PIN_RE = re.compile(r"^[0-9]{4}$")
+# PIN_RE: see OPTIONS.
 
 # ── Superadmin elevation ─────────────────────────────────────────────────
 # NOT a fourth profile: it never appears in the profile picker, mints no
@@ -1019,7 +1223,7 @@ PIN_RE = re.compile(r"^[0-9]{4}$")
 # everyday profile PINs (and the same two-tier rate limiter still applies).
 SUPERADMIN = "superadmin"
 SUPERADMIN_PIN_OPTION = "superadmin_pin"
-SUPERADMIN_PIN_RE = re.compile(r"^[0-9]{6}$")
+# SUPERADMIN_PIN_RE: see OPTIONS.
 # Short window purely to cover the round-trip between "PIN accepted" and "the
 # write arrives". A token is consumed by the FIRST write that uses it, so this
 # is a ceiling on an unused one, not a period of standing privilege.
@@ -1070,7 +1274,11 @@ _auth_failures: dict = {}                                    # (role, ip) -> sta
 #: Bounded by construction: `_note_global_failure` drops what has aged out and
 #: keeps only the newest `AUTH_GLOBAL_MAX_FAILURES`, which is all the question
 #: "are there N inside the window" can need.
-_auth_failures_global: dict = {r: [] for r in (*AUTH_ROLES, SUPERADMIN)}
+#:
+#: Keyed by BUCKET — a profile, SUPERADMIN or AGENT — and created on first use,
+#: so a new door needs no entry here (the agent's used to be a bare "agent"
+#: literal, 1,500 lines before the AGENT constant it had to equal).
+_auth_failures_global: dict = defaultdict(list)
 
 
 def _note_global_failure(role: str, now: float = None) -> None:
@@ -1099,32 +1307,9 @@ def _global_locked_for(role: str, now: float = None) -> int:
     return int(remaining) + 1 if remaining > 0 else 0
 
 
-def _option_int(key: str, default: int, lo: int, hi: int) -> int:
-    """A numeric add-on option, read fresh and clamped.
-
-    These exist so an operator can tune the add-on from the Supervisor UI
-    instead of editing constants in a Python file they would lose on the next
-    update. Every one of them is a POLICY choice — how long evidence is kept,
-    how long a session lasts — where no single number is right for every
-    property, which is the test for whether something belongs here at all.
-
-    Read on every call rather than cached, so a change takes effect without
-    restarting this process (same as _public_model_access). Clamped rather
-    than trusted: the schema validates what the UI writes, but /data/options.
-    json can be hand-edited, and a retention of -1 or 10**9 must not turn into
-    "delete everything" or "never delete".
-    """
-    raw = _read_options().get(key, default)
-    try:
-        value = int(raw)
-    except (TypeError, ValueError):
-        return default
-    return max(lo, min(hi, value))
-
-
 def _session_ttl() -> int:
     """How long a signed-in profile stays signed in, in seconds."""
-    return _option_int("session_days", 30, 1, 365) * 86400
+    return opt("session_days") * 86400
 
 
 def _evidence_retention_days() -> int:
@@ -1132,17 +1317,17 @@ def _evidence_retention_days() -> int:
     an operator whose own retention obligation outlives any default we could
     pick. Referenced-photo garbage collection is unaffected either way: this
     is about age, not about whether anything still points at the file."""
-    return _option_int("evidence_retention_days", 550, 0, 3650)
+    return opt("evidence_retention_days")
 
 
 def _telemetry_max_events() -> int:
     """How many diagnostic events the ring keeps."""
-    return _option_int("telemetry_max_events", 500, 50, 5000)
+    return opt("telemetry_max_events")
 
 
 def _auth_lockout_seconds() -> int:
     """How long a client is locked out after too many wrong passcodes."""
-    return _option_int("pin_lockout_minutes", 5, 1, 1440) * 60
+    return opt("pin_lockout_minutes") * 60
 
 
 def _client_ip(request: web.Request) -> str:
@@ -1205,8 +1390,7 @@ def _configured_pin(role: str) -> str:
     treated as unset rather than comparable — never let a weird value widen
     what a submitted string could match.
     """
-    raw = str(_read_options().get(PIN_OPTION[role], "") or "").strip()
-    return raw if PIN_RE.fullmatch(raw) else ""
+    return opt(PIN_OPTION[role])
 
 
 def _configured_superadmin_pin() -> str:
@@ -1214,8 +1398,7 @@ def _configured_superadmin_pin() -> str:
 
     Empty means the whole capability is OFF: no elevation can be minted, so no
     destructive delete can be authorised by anyone. That is the default."""
-    raw = str(_read_options().get(SUPERADMIN_PIN_OPTION, "") or "").strip()
-    return raw if SUPERADMIN_PIN_RE.fullmatch(raw) else ""
+    return opt(SUPERADMIN_PIN_OPTION)
 
 
 def _mint_elevation() -> str:
@@ -1256,6 +1439,26 @@ def _lockout_remaining(role: str, ip: str) -> int:
         else:
             worst = int(remaining) + 1
     return max(worst, _global_locked_for(role, now))
+
+
+def _auth_failed(bucket: str, ip: str, now: float = None) -> None:
+    """Charge one wrong secret to this caller's bucket AND the bucket's global
+    rate. The one write side of the limiter: `_lockout_remaining` asks, this
+    and `_auth_succeeded` answer. Every door that takes a secret (passcode,
+    superadmin code, agent token) calls exactly these three."""
+    moment = time.monotonic() if now is None else now
+    st = _auth_failures.setdefault((bucket, ip), {"count": 0, "last": 0.0})
+    st["count"] += 1
+    st["last"] = moment
+    _note_global_failure(bucket, moment)
+
+
+def _auth_succeeded(bucket: str, ip: str) -> None:
+    """Clear only THIS caller's counter. The global tier is left to decay on
+    its own window, so one correct entry cannot reset a distributed guess."""
+    st = _auth_failures.get((bucket, ip))
+    if st:
+        st["count"] = 0
 
 
 def _profile_enabled(role: str, ingress: bool) -> bool:
@@ -1346,23 +1549,14 @@ async def auth_elevate_handler(request: web.Request) -> web.Response:
     except (ValueError, UnicodeDecodeError):
         return web.json_response({"error": "invalid JSON body"}, status=400)
     submitted = str(body.get("pin", "") or "")
-    ok = hmac.compare_digest(submitted, configured)
-    # Same two-tier bookkeeping as auth_verify_handler: clear only THIS
-    # client's counter on success and let the global tier decay on its own, so
-    # one correct entry cannot reset a distributed guessing campaign.
-    now = time.monotonic()
-    st = _auth_failures.setdefault((SUPERADMIN, ip), {"count": 0, "last": 0.0})
-    if ok:
-        st["count"] = 0
-    else:
-        st["count"] += 1
-        st["last"] = now
+    if not hmac.compare_digest(submitted, configured):
         # ⚠️ SUPERADMIN, NOT THE SESSION'S ROLE. This handler is reached by an
         # owner or a facility manager, so `role` here is theirs — recording a
         # wrong SUPERADMIN code against it would both blame the wrong bucket
         # and leave the superadmin tier never accumulating at all.
-        _note_global_failure(SUPERADMIN, now)
+        _auth_failed(SUPERADMIN, ip)
         return web.json_response({"error": "incorrect code"}, status=401)
+    _auth_succeeded(SUPERADMIN, ip)
     return web.json_response({"token": _mint_elevation(),
                               "expiresIn": ELEVATION_TTL_SECONDS})
 
@@ -1370,7 +1564,9 @@ async def auth_elevate_handler(request: web.Request) -> web.Response:
 # Collections in the FM document whose records are individually addressable by
 # `id`. Kept here (not imported from the frontend) because the server must be
 # able to tell "a record was removed" on its own — a rule that only the client
-# knows is not a rule.
+# knows is not a rule. Equal to fm-records.json's "collections" (the app reads
+# that; tests/proxy-rules.py fails when the two differ) — a literal, not a
+# load, because an unreadable table must not empty it (see _load_fm_records).
 FM_RECORD_COLLECTIONS = ("schedules", "completions", "costs", "tickets", "savedDocuments")
 
 # The subset whose records are EVIDENCE of something that happened: a fault
@@ -1391,17 +1587,210 @@ FM_PROTECTED_COLLECTIONS = ("completions", "costs", "tickets")
 FM_GUEST_MAX_NEW_TICKETS = 3
 
 
+# ── THE FACILITY RECORD'S CHANGE MODULE ─────────────────────────────────────
+# Three doors write the Facility record — a guest's report, owner/ops at work,
+# the VESTA Agent — and each used to re-derive "what did this write change?"
+# on its own (removed ids, dropped photos, unknown keys; the id index and the
+# photo walk existed twice). And nothing on the server said what a VALID
+# record is, so the agent's door could store a fault marked resolved with no
+# resolution date, a cost whose amount is text, or a completion tied to
+# nothing (2.496.223).
+#
+# Now one classifier (_fm_classify) says what a write changes, one validator
+# (_fm_record_errors) says what is wrong with a record, and each door is a
+# short POLICY on top: the guest may only append a report, deleting evidence
+# needs the superadmin code, the agent may delete nothing.
+#
+# ⚠️ ONLY NEW PROBLEMS ARE REFUSED. A record already stored with a problem is
+# not this write's fault: refusing every later write over it would lock the
+# owner out of their own record. A write is refused for a problem the record
+# did not have before it (_FmChange.invalid holds only those).
+
+def _fm_by_id(doc, name: str) -> dict:
+    """{id: record} for one collection — the ONE index every rule uses."""
+    items = doc.get(name) if isinstance(doc, dict) else None
+    return {str(it.get("id")): it for it in items
+            if isinstance(it, dict) and it.get("id") not in (None, "")} if isinstance(items, list) else {}
+
+
 def _fm_ids(doc) -> dict:
     """{collection: {id, ...}} for whatever this document actually contains."""
-    out = {}
-    for name in FM_RECORD_COLLECTIONS:
-        items = doc.get(name) if isinstance(doc, dict) else None
-        out[name] = {
-            str(it.get("id")) for it in items
-            if isinstance(it, dict) and it.get("id") is not None
-        } if isinstance(items, list) else set()
-    return out
+    return {name: set(_fm_by_id(doc, name)) for name in FM_RECORD_COLLECTIONS}
 
+
+def _fm_record_photo_ids(record) -> set:
+    """Every photo one record points at, its per-stage updates included — the
+    ONE photo walk. A fault's per-stage updates carry their own photos (see
+    FmTicketUpdate); missing those would delete a live photo."""
+    ids = set()
+    if not isinstance(record, dict):
+        return ids
+    if isinstance(record.get("photoIds"), list):
+        ids.update(str(p) for p in record["photoIds"])
+    if isinstance(record.get("updates"), list):
+        for u in record["updates"]:
+            if isinstance(u, dict) and isinstance(u.get("photoIds"), list):
+                ids.update(str(p) for p in u["photoIds"])
+    return ids
+
+
+def _fm_referenced_photo_ids(doc) -> set:
+    """Every evidence photo id the document still points at, anywhere."""
+    ids = set()
+    if not isinstance(doc, dict):
+        return ids
+    for name in FM_RECORD_COLLECTIONS:
+        items = doc.get(name)
+        if isinstance(items, list):
+            for it in items:
+                ids |= _fm_record_photo_ids(it)
+    return ids
+
+
+# THE FACILITY RECORD'S VOCABULARY: /usr/share/vesta/fm-records.json (the
+# roles.json precedent) — a fault's statuses, a cost's categories and the
+# record collections, read here AND by the app (src/fm/fmTypes.ts), so the
+# words the kiosk writes and the words this server accepts cannot drift apart.
+# tests/proxy-rules.py and tests/oracles/fm_records.mjs hold both sides to it.
+#
+# FAIL CLOSED: unreadable, there are no valid statuses or categories, so every
+# new or edited fault and cost is refused as invalid — never everything
+# accepted. FM_RECORD_COLLECTIONS above stays a literal ON PURPOSE: an empty
+# collection list would make the protected-record and guest-shape guards see
+# nothing removed or changed, which fails OPEN. The test pins it to the table.
+def _load_fm_records() -> dict:
+    return _load_vesta_table("fm-records.json", "every new or edited fault and cost is refused")
+
+
+FM_RECORDS_TABLE = _load_fm_records()
+
+
+def _fm_words(key: str) -> tuple:
+    """One list of words from the table; anything but a list of strings is none."""
+    words = FM_RECORDS_TABLE.get(key) if isinstance(FM_RECORDS_TABLE, dict) else None
+    return tuple(words) if isinstance(words, list) and all(isinstance(w, str) for w in words) else ()
+
+
+FM_TICKET_STATUSES = _fm_words("ticketStatuses")
+FM_COST_CATEGORIES = _fm_words("costCategories")
+
+
+def _fm_record_errors(name: str, record) -> set:
+    """What is wrong with one record of collection `name` — empty when valid.
+
+    The rules the app's own code always meets (src/fm/fmEngine.ts), so a
+    kiosk write never trips them; they exist for a writer that is not the
+    kiosk. Each is a sentence a person can act on."""
+    if not isinstance(record, dict):
+        return {"is not an object"}
+    errors = set()
+    if record.get("id") in (None, ""):
+        errors.add("has no id")
+    if "photoIds" in record and not (isinstance(record["photoIds"], list)
+                                     and all(isinstance(p, str) for p in record["photoIds"])):
+        errors.add("photoIds is not a list of photo ids")
+    if name == "tickets":
+        if record.get("status") not in FM_TICKET_STATUSES:
+            errors.add(f"status is not one of {', '.join(FM_TICKET_STATUSES)}")
+        # withTicketPatch / withTicketAdvanced stamp it on the way in; the
+        # time-to-resolve figures rest on it.
+        if record.get("status") == "resolved" and not (
+                isinstance(record.get("resolvedAt"), str) and record["resolvedAt"]):
+            errors.add("is resolved with no resolvedAt")
+    elif name == "costs":
+        amount = record.get("amountIdr")
+        if isinstance(amount, bool) or not isinstance(amount, (int, float)) \
+                or amount != amount or amount in (float("inf"), float("-inf")) or amount < 0:
+            errors.add("amountIdr is not a number of zero or more")
+        if record.get("category") not in FM_COST_CATEGORIES:
+            errors.add(f"category is not one of {', '.join(FM_COST_CATEGORIES)}")
+    elif name == "completions":
+        # A completion answers a schedule OR a fault (withTicketAdvanced files
+        # scheduleId "" with a ticketId); tied to neither it evidences nothing.
+        if not record.get("scheduleId") and not record.get("ticketId"):
+            errors.add("is tied to no schedule and no fault")
+    return errors
+
+
+class _FmChange:
+    """What one write does to the Facility record. Built by _fm_classify."""
+    __slots__ = ("removed", "added", "changed", "dropped_photos", "unknown_keys", "invalid")
+
+    def __init__(self):
+        self.removed = {}         # {collection: set of ids no longer present}
+        self.added = {}           # {collection: [records with a new id]}
+        self.changed = {}         # {collection: [ids whose record differs]}
+        self.dropped_photos = {}  # {(collection, id): photos a KEPT record lost}
+        self.unknown_keys = set() # top-level keys this server does not know, changed
+        self.invalid = []         # [(collection, id or "#index", problem)] NEW problems only
+
+
+def _fm_classify(old, new) -> _FmChange:
+    """The one statement of what a write changes. `old` may be anything (an
+    unreadable or empty store); `new` is what would be stored."""
+    old = old if isinstance(old, dict) else {}
+    new = new if isinstance(new, dict) else {}
+    ch = _FmChange()
+    known = set(FM_RECORD_COLLECTIONS)
+    ch.unknown_keys = {k for k in set(old) | set(new) if k not in known and old.get(k) != new.get(k)}
+    for name in FM_RECORD_COLLECTIONS:
+        before, after = _fm_by_id(old, name), _fm_by_id(new, name)
+        ch.removed[name] = set(before) - set(after)
+        ch.added[name] = [after[i] for i in after if i not in before]
+        ch.changed[name] = [i for i in after if i in before and after[i] != before[i]]
+        for i in set(before) & set(after):
+            lost = _fm_record_photo_ids(before[i]) - _fm_record_photo_ids(after[i])
+            if lost:
+                ch.dropped_photos[(name, i)] = lost
+        items = new.get(name, [])
+        if not isinstance(items, list):
+            if items != old.get(name, []):
+                ch.invalid.append((name, "", "is not a list"))
+            continue
+        # A record without a usable id cannot be addressed, kept or deleted.
+        # Judged by count, so one already stored is not held against a write.
+        if _fm_idless_count(items) > _fm_idless_count(old.get(name)):
+            ch.invalid.append((name, "", "a record is not an object with an id"))
+        seen, old_dupes = set(), _fm_duplicate_ids(old.get(name))
+        for it in items:
+            rid = str(it.get("id")) if isinstance(it, dict) and it.get("id") not in (None, "") else None
+            if rid is None:
+                continue
+            if rid in seen and rid not in old_dupes:
+                ch.invalid.append((name, rid, "appears twice"))
+            seen.add(rid)
+        for rid in [r["id"] for r in ch.added[name]] + ch.changed[name]:
+            rid = str(rid)
+            new_problems = _fm_record_errors(name, after[rid]) - (
+                _fm_record_errors(name, before[rid]) if rid in before else set())
+            ch.invalid.extend((name, rid, p) for p in sorted(new_problems))
+    return ch
+
+
+def _fm_idless_count(items) -> int:
+    return sum(1 for it in items if not isinstance(it, dict) or it.get("id") in (None, "")) \
+        if isinstance(items, list) else 0
+
+
+def _fm_duplicate_ids(items) -> set:
+    seen, dupes = set(), set()
+    for it in items if isinstance(items, list) else ():
+        if isinstance(it, dict) and it.get("id") not in (None, ""):
+            rid = str(it["id"])
+            (dupes if rid in seen else seen).add(rid)
+    return dupes
+
+
+def _fm_invalid_response(ch: _FmChange):
+    """400 naming the first few new problems, or None."""
+    if not ch.invalid:
+        return None
+    said = "; ".join(f"{n} {i} {p}".replace("  ", " ") for n, i, p in ch.invalid[:5])
+    return web.json_response({"error": f"This write would store an invalid Facility record: {said}."},
+                             status=400)
+
+
+# ── the three policies ──────────────────────────────────────────────────────
 
 def _fm_guest_write_ok(old, new) -> bool:
     """True when this write is one a GUEST is allowed to make.
@@ -1412,51 +1801,34 @@ def _fm_guest_write_ok(old, new) -> bool:
     guest happened to tell someone. Letting them raise a fault closes that,
     but a guest must not be able to edit the maintenance record itself.
 
-    So the rule is not a role, it is the SHAPE of the change: every collection
-    except `tickets` must be byte-identical, and `tickets` may only gain
-    entries — no removal, no edit of one that already exists. A guest can add
-    a report and nothing else, including to their own report once it is filed.
-    Triage, status, cost and resolution stay with owner/ops.
+    So the rule is not a role, it is the SHAPE of the change: nothing removed,
+    nothing edited, no unknown key touched, and only `tickets` may gain
+    entries — open reports, marked as a guest's, with no cost, at most
+    FM_GUEST_MAX_NEW_TICKETS. Triage, status, cost and resolution stay with
+    owner/ops.
     """
     if not isinstance(old, dict) or not isinstance(new, dict):
         return False
-    for name in FM_RECORD_COLLECTIONS:
-        if name == "tickets":
-            continue
-        if old.get(name, []) != new.get(name, []):
-            return False
-    # Any key this server version doesn't know about must also be untouched —
-    # a newer client's field is not a licence to rewrite it from a guest
-    # session.
-    known = set(FM_RECORD_COLLECTIONS)
-    for key in set(old) | set(new):
-        if key not in known and old.get(key) != new.get(key):
-            return False
-
-    old_tickets = old.get("tickets") or []
-    new_tickets = new.get("tickets") or []
-    if not isinstance(new_tickets, list) or len(new_tickets) < len(old_tickets):
+    ch = _fm_classify(old, new)
+    if ch.unknown_keys or ch.invalid or any(ch.removed.values()) or any(ch.changed.values()):
         return False
-    # Existing tickets must survive UNCHANGED and in place; only appended
-    # entries are new. Comparing element-wise rather than by id also rejects
-    # a reordering that hides an edit.
-    if new_tickets[:len(old_tickets)] != old_tickets:
+    # Records without an id are invisible to the index; a guest's write must
+    # leave every collection but tickets exactly as it was, and the existing
+    # tickets unchanged and IN PLACE — comparing element-wise also rejects a
+    # reordering that hides an edit.
+    if any(old.get(n, []) != new.get(n, []) for n in FM_RECORD_COLLECTIONS if n != "tickets"):
+        return False
+    old_tickets, new_tickets = old.get("tickets") or [], new.get("tickets") or []
+    if not isinstance(new_tickets, list) or new_tickets[:len(old_tickets)] != old_tickets:
         return False
     added = new_tickets[len(old_tickets):]
-    if not added or len(added) > FM_GUEST_MAX_NEW_TICKETS:
+    if not added or len(added) > FM_GUEST_MAX_NEW_TICKETS \
+            or len(ch.added["tickets"]) != len(added):
         return False
-    for t in added:
-        if not isinstance(t, dict):
-            return False
-        # A guest files an OPEN report and cannot pre-resolve it, backdate it,
-        # or attach a cost to the villa's accounts.
-        if t.get("status") != "open":
-            return False
-        if t.get("resolvedAt") is not None or t.get("costId") is not None:
-            return False
-        if t.get("reportedBy") != "guest":
-            return False
-    return True
+    # A guest files an OPEN report and cannot pre-resolve it, backdate it, or
+    # attach a cost to the villa's accounts.
+    return all(t.get("status") == "open" and t.get("resolvedAt") is None
+               and t.get("costId") is None and t.get("reportedBy") == "guest" for t in added)
 
 
 def _fm_reader_view(request: web.Request, stored):
@@ -1520,12 +1892,10 @@ def _fm_write_guard(request: web.Request, body, old, new):
             return _forbidden("A guest may only add a fault report.")
         return None
 
-    new_ids = _fm_ids(new)
-    removed = {
-        name: _fm_ids(old)[name] - new_ids[name]
-        for name in FM_PROTECTED_COLLECTIONS
-    }
-    if not any(removed.values()):
+    ch = _fm_classify(old, new)
+    if (bad := _fm_invalid_response(ch)) is not None:
+        return bad
+    if not any(ch.removed[name] for name in FM_PROTECTED_COLLECTIONS):
         return None                      # nothing destroyed — ordinary write
     if not _configured_superadmin_pin():
         return _forbidden("Deleting records requires the superadmin code, "
@@ -1537,39 +1907,13 @@ def _fm_write_guard(request: web.Request, body, old, new):
     return None
 
 
-def _fm_referenced_photo_ids(doc) -> set:
-    """Every evidence photo id the document still points at, anywhere."""
-    ids = set()
-    if not isinstance(doc, dict):
-        return ids
-    for name in FM_RECORD_COLLECTIONS:
-        items = doc.get(name)
-        if not isinstance(items, list):
-            continue
-        for it in items:
-            if not isinstance(it, dict):
-                continue
-            for field in ("photoIds",):
-                photos = it.get(field)
-                if isinstance(photos, list):
-                    ids.update(str(p) for p in photos)
-            # A fault's per-stage updates carry their own photos (see
-            # FmTicketUpdate) — missing these would delete a live photo.
-            updates = it.get("updates")
-            if isinstance(updates, list):
-                for u in updates:
-                    if isinstance(u, dict) and isinstance(u.get("photoIds"), list):
-                        ids.update(str(p) for p in u["photoIds"])
-    return ids
-
-
 def _delete_evidence(photo_id: str) -> bool:
     """Remove one evidence JPEG, with the id and the resolved path both
     checked — this deletes a file from a path built out of stored data."""
     if not FM_EVIDENCE_ID_RE.fullmatch(photo_id):
         return False
-    path = os.path.join(FM_EVIDENCE_DIR, f"{photo_id}.jpg")
-    if os.path.realpath(os.path.dirname(path)) != os.path.realpath(FM_EVIDENCE_DIR):
+    path = os.path.join(_data(FM_EVIDENCE_NAME), f"{photo_id}.jpg")
+    if os.path.realpath(os.path.dirname(path)) != os.path.realpath(_data(FM_EVIDENCE_NAME)):
         return False
     try:
         os.unlink(path)
@@ -1623,7 +1967,7 @@ def _fm_after_write(old, new, baseline_readable: bool = True) -> None:
     #    the grace window — the cancelled-form case.
     cutoff = time.time() - FM_EVIDENCE_ORPHAN_GRACE_SECONDS
     try:
-        names = os.listdir(FM_EVIDENCE_DIR)
+        names = os.listdir(_data(FM_EVIDENCE_NAME))
     except OSError:
         names = []
     for name in names:
@@ -1632,7 +1976,7 @@ def _fm_after_write(old, new, baseline_readable: bool = True) -> None:
         photo_id = name[:-4]
         if photo_id in referenced:
             continue
-        path = os.path.join(FM_EVIDENCE_DIR, name)
+        path = os.path.join(_data(FM_EVIDENCE_NAME), name)
         try:
             if os.path.getmtime(path) >= cutoff:
                 continue      # still inside the grace window
@@ -1693,16 +2037,10 @@ async def auth_verify_handler(request: web.Request) -> web.Response:
         )
 
     ok = hmac.compare_digest(pin, configured)
-    now = time.monotonic()
-    st = _auth_failures.setdefault((role, ip), {"count": 0, "last": 0.0})
     if ok:
-        # Clear only THIS client's counter. The global tier is left to decay on
-        # its own window, so one correct PIN cannot reset a distributed guess.
-        st["count"] = 0
+        _auth_succeeded(role, ip)
     else:
-        st["count"] += 1
-        st["last"] = now
-        _note_global_failure(role, now)
+        _auth_failed(role, ip)
     resp = web.json_response({"ok": ok})
     if ok:
         _set_session_cookie(resp, role)
@@ -1908,7 +2246,7 @@ async def _chunked_upload(request: web.Request, kind: str, dest: str,
     # .part nobody finishes is swept after a day (_sweep_stale_parts).
 
     _write_upload_sidecar(request, dest)
-    rel = os.path.relpath(dest, os.path.realpath(DATA_ROOT))
+    rel = os.path.relpath(dest, os.path.realpath(_data(WWW_NAME)))
     return web.json_response({"path": rel, "size": offset + n})
 
 
@@ -1960,7 +2298,7 @@ async def model_upload_handler(request: web.Request) -> web.Response:
     total = await atomic_write_async(dest, _stream)
 
     _write_upload_sidecar(request, dest)
-    rel = os.path.relpath(dest, os.path.realpath(DATA_ROOT))
+    rel = os.path.relpath(dest, os.path.realpath(_data(WWW_NAME)))
     return web.json_response({"path": rel, "size": total})
 
 
@@ -1983,7 +2321,6 @@ async def model_upload_handler(request: web.Request) -> web.Response:
 # room polygons), hence the roomier cap — still bounded so a bad body can't
 # fill /data. See the frontend's config/deviceConfig.ts for exactly which
 # AppConfig fields are shared (site-wide) vs kept per-device (look/feel).
-DEVICE_CONFIG_FILE = "/data/device-config.json"
 DEVICE_CONFIG_MAX_BYTES = 8_000_000
 
 
@@ -2140,77 +2477,125 @@ def _store_revision(path: str) -> str:
         return "0"
 
 
-def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
-                         writer_capability: str = "editConfig",
-                         write_guard=None, after_write=None,
-                         reader_view=None, writer_merge=None):
-    """Build the (GET, PUT) handler pair for one shared store.
+class StoreUnreadable(Exception):
+    """The document on disk exists and will not parse (see
+    _read_json_store_status): a change cannot be checked against it."""
 
-    GET is open to any authorized session — a guest still has to read the
-    device config to see the right badges/rooms at all. PUT needs
-    `writer_capability`, which defaults to editConfig — owner-only, because
-    shared state is exactly what a non-owner profile must not rewrite for
-    everyone else. The FM store asks for reportFault instead, which every
-    profile holds, and its write guard then confines what a write may contain.
 
-    `write_guard(request, body, old, new)` may veto a write by returning a
-    response (used to require a superadmin elevation before any record is
-    DELETED); `after_write(old, new, baseline_readable)` runs once the write has
-    landed (used to purge evidence photos an authorised delete orphaned). Both
-    are optional hooks on this one factory rather than a reason to fork it again.
+class StoreTooLarge(Exception):
+    """The changed document would exceed the store's byte cap."""
 
-    `reader_view(request, stored)` is what THIS session may read — applied to
-    the GET and to the 409 body alike (a stale write must not be a way to read
-    what a GET withholds). `writer_merge(request, stored, value)` turns what a
-    restricted session sent into the document to write (run BEFORE the guard,
-    which then judges the merged result). Both default to the whole document.
 
-    ⚠️ `baseline_readable` IS FALSE WHEN THE STORED DOCUMENT COULD NOT BE
-    PARSED. The PUT path refuses such a write outright, so a hook should never
-    see it — the flag exists because a hook that DELETES on the strength of
-    `old` must not depend on a caller three hundred lines away remembering
-    that. See _read_json_store_status.
+class Veto(Exception):
+    """Raised by a change to refuse it; carries the answer for the caller."""
 
-    ⚠️ TWO STORES ARE DELIBERATELY *NOT* BUILT HERE, AND CONVERGING EITHER ONE
-    WOULD BE A PRIVILEGE BUG, NOT A TIDY-UP (found by /dry-audit, 2026-08-19,
-    when the project's own architecture notes claimed all four stores were on
-    this factory — they are not, and for telemetry the permission model stated
-    there is exactly INVERTED):
+    def __init__(self, response: web.Response):
+        super().__init__(response.status)
+        self.response = response
 
-      * TELEMETRY is the mirror image of this contract. Its WRITE is open to
-        any authorized session, because a guest's iPhone going white after an
-        app switch is precisely the event worth capturing; its READ is
-        owner-only, because the ring carries other people's user-agent strings
-        and error text. Putting it here would publish that to every guest
-        session AND close the write path that makes it useful. It is also
-        append-one-into-a-bounded-ring, not replace-the-whole-document, so the
-        revision/409 conflict machinery below has nothing to conflict over.
-      * EVIDENCE PHOTOS are binary blobs on their own POST/GET pair, streamed
-        and content-checked rather than parsed as JSON.
 
-    Everything that IS a whole-document JSON store belongs here.
+class JsonStore:
+    """ONE JSON document in the data directory, and everything that makes
+    writing it safe: its path (resolved at call time, see DATA_DIR), its lock,
+    its revision, its byte cap, the refusal to change a document that cannot be
+    read, and the write off the event loop.
 
-    That role difference used to be the excuse for a SECOND, hand-written PUT
-    handler for the FM store. Copying the handler copied its auth/validation
-    but silently NOT its revision check or its lock, so the FM store — the
-    maintenance and cost records — had no concurrency protection at all while
-    the device-config store did. One parameter is cheaper than one duplicate.
+    ⚠️ ONE INSTANCE PER FILE, SHARED BY EVERY DOOR THAT OPENS IT. /fm-data and
+    /agent/v1/fm-data change the same document; each door used to be handed a
+    lock, and two locks on one file is no lock — the read-check-write of one
+    door could interleave with the other's. The lock now lives with the file.
 
-    PUT optionally carries a `rev` (the revision the caller last read, from
-    GET's own response) for optimistic concurrency: villa-kiosk is routinely
-    open on several devices at once, and a blind overwrite here would let
-    the last PUT to arrive silently erase whatever a different device wrote
-    moments earlier. When `rev` is present and stale, the write is rejected
-    (409) with the current value + revision instead of applied — the caller
-    is expected to rebase its own change onto that fresher copy and retry
-    (see the frontend's DeviceConfigSync and fm/fmApi — both stores send it).
-    Omitting `rev` keeps the old unconditional-overwrite behaviour. The lock makes the read-check-write atomic against a
-    second PUT landing on this same store mid-request.
+    Doors (_store_get_handler, _store_put_handler, and the append doors for
+    messages, choices, telemetry) decide WHO may do WHAT; this decides nothing
+    about callers.
     """
-    lock = asyncio.Lock()
+
+    def __init__(self, name: str, empty, max_bytes: int):
+        self.name = name
+        self.empty = empty
+        self.max_bytes = max_bytes
+        self.lock = asyncio.Lock()
+
+    @property
+    def path(self) -> str:
+        return _data(self.name)
+
+    def read(self):
+        """The degrading read — see _read_json_store."""
+        return _read_json_store(self.path, self.empty)
+
+    def read_status(self) -> tuple[object, bool]:
+        """(value, readable) — see _read_json_store_status."""
+        return _read_json_store_status(self.path, self.empty)
+
+    def rev(self) -> str:
+        """The revision a conditional write names — see _store_revision."""
+        return _store_revision(self.path)
+
+    async def replace(self, value) -> None:
+        """Overwrite whole, for a document nobody reads-then-changes (the
+        agent's heartbeat). Anything that depends on what is stored uses
+        `update`."""
+        async with self.lock:
+            await _write_json_store_async(self.path, json.dumps(value))
+
+    async def update(self, change, after=None) -> tuple[object, object, str]:
+        """Read, change, write — atomically against every other change to
+        this file. Returns (stored, new, revision after the write).
+
+        `change(stored)` returns the new document, or raises Veto. Raises
+        StoreUnreadable when the stored document cannot be read (nothing is
+        written: a change computed against a baseline nobody has would replace
+        records unchecked), StoreTooLarge past the byte cap. `after(stored,
+        new)` runs once the write has landed, still inside the lock (the
+        evidence sweep: a photo it judges orphaned must not be re-referenced
+        by a write that has not happened yet). It runs on a worker thread."""
+        async with self.lock:
+            stored, readable = await asyncio.to_thread(self.read_status)
+            if not readable:
+                raise StoreUnreadable(self.name)
+            new = change(stored)
+            payload = json.dumps(new)
+            if len(payload.encode("utf-8")) > self.max_bytes:
+                raise StoreTooLarge(self.name)
+            await _write_json_store_async(self.path, payload)
+            if after is not None:
+                # On a worker thread too: the evidence sweep lists and deletes
+                # files, and this loop relays every kiosk's websocket.
+                await asyncio.to_thread(after, stored, new)
+            return stored, new, self.rev()
+
+
+def _store_unreadable_response(key: str) -> web.Response:
+    """⚠️ REFUSED, NOT DEGRADED. Every write is computed by the client against a
+    document it fetched; if the copy on disk is now unusable, this write's diff
+    describes a baseline nobody has. Accepting it silently replaces records the
+    guard could not check and orphans the photos they referenced. Failing
+    loudly keeps both, and the file is still on disk to recover from — the GET
+    degrades to empty on purpose, so a client can still read, re-enter and push
+    a whole document once someone has looked."""
+    return web.json_response(
+        {"error": f"the stored {key} document could not be read, so this "
+                  f"write cannot be checked against it. Nothing has been "
+                  f"changed or deleted. Check /data for a corrupt file."},
+        status=409, headers={"Cache-Control": "no-store"})
+
+
+def _store_get_handler(store: JsonStore, key: str, what: str, *,
+                       capability: str | None = None, view=None, gate=None):
+    """The GET door of one store: `{key: document, "rev": revision}`.
+
+    `capability` gates it (None = any authorized caller — a guest still has to
+    read the device config to see the right badges and rooms at all).
+    `view(request, stored)` is what THIS caller may read (default: the whole
+    document). `gate(request, capability, message)` replaces _refuse for a
+    caller that is not a browser session — the VESTA Agent's bearer token
+    (_agent_refuse)."""
+    gate = gate or _refuse
 
     async def get_handler(request: web.Request) -> web.Response:
-        if (refused := _refuse(request)) is not None:
+        if (refused := gate(request, capability,
+                            f"You do not have permission to read {what}.")) is not None:
             return refused
         # This store changes on every edit from any device and every client
         # is expected to see the current value within one heartbeat (see
@@ -2223,81 +2608,115 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
         # never stated. no-store is explicit rather than assumed — confirmed
         # in the field as the cause of one client's shared config silently
         # disagreeing with every other client's.
-        stored_now = _read_json_store(path, empty)
+        stored = await asyncio.to_thread(store.read)
         return web.json_response(
-            {key: reader_view(request, stored_now) if reader_view else stored_now,
-             "rev": _store_revision(path)},
+            {key: view(request, stored) if view else stored, "rev": store.rev()},
             headers={"Cache-Control": "no-store"},
         )
 
+    return get_handler
+
+
+def _store_put_handler(store: JsonStore, key: str, what: str, *,
+                       capability: str = "editConfig", merge=None, guard=None,
+                       after=None, view=None, require_rev: bool = False, gate=None):
+    """The whole-document PUT door of one store: `{key: document, "rev"?}`.
+
+    `capability` defaults to editConfig — owner-only, because shared state is
+    exactly what a non-owner profile must not rewrite for everyone else. The FM
+    store asks for reportFault instead, which every profile holds, and its
+    guard then confines what a write may contain.
+
+    `merge(request, stored, sent)` turns what a restricted caller sent into
+    the document to write; `guard(request, body, stored, new)` then judges the
+    merged result and may refuse it by returning a response (a superadmin
+    elevation before any record is DELETED); `after(stored, new)` runs once the
+    write has landed (the evidence sweep). `view` is applied to the 409 body
+    too — a stale write must not be a way to read what a GET withholds.
+
+    PUT optionally carries a `rev` (the revision the caller last read, from
+    GET's own response) for optimistic concurrency: villa-kiosk is routinely
+    open on several devices at once, and a blind overwrite would let the last
+    PUT to arrive silently erase whatever a different device wrote moments
+    earlier. A stale `rev` is refused (409) with the current value + revision
+    — the caller rebases onto that fresher copy and retries (DeviceConfigSync,
+    fm/fmApi). `require_rev` refuses a PUT without one (428): the agent must
+    always say which copy it changed.
+
+    ⚠️ TWO STORES ARE DELIBERATELY *NOT* WHOLE-DOCUMENT DOORS, AND CONVERGING
+    EITHER ONE WOULD BE A PRIVILEGE BUG, NOT A TIDY-UP (found by /dry-audit,
+    2026-08-19):
+
+      * TELEMETRY is the mirror image of this contract. Its WRITE is open to
+        any authorized session, because a guest's iPhone going white after an
+        app switch is precisely the event worth capturing; its READ is
+        owner-only, because the ring carries other people's user-agent strings
+        and error text. It appends one event into a bounded ring.
+      * EVIDENCE PHOTOS are binary blobs on their own POST/GET pair, streamed
+        and content-checked rather than parsed as JSON.
+
+    Neither are the agent's messages and choices: each is ONE item appended to
+    a list the server owns (agent_messages_post_handler,
+    agent_choices_put_handler), never a document a client sends whole.
+
+    That role difference was once the excuse for a SECOND, hand-written PUT
+    handler for the FM store. Copying the handler copied its auth/validation
+    but silently NOT its revision check or its lock, so the FM store had no
+    concurrency protection at all while the device-config store did. The
+    protections now live in JsonStore.update, which no door can skip.
+    """
+    gate = gate or _refuse
+    owner_only = [r for r in AUTH_ROLES if _may(r, capability)] == ["owner"]
+    refusal = (f"Only the owner profile may edit {what}." if owner_only
+               else f"You do not have permission to edit {what}.")
+
     async def put_handler(request: web.Request) -> web.Response:
-        owner_only = [r for r in AUTH_ROLES if _may(r, writer_capability)] == ["owner"]
-        if (refused := _refuse(request, writer_capability,
-                               f"Only the owner profile may edit {what}." if owner_only
-                               else f"You do not have permission to edit {what}.")) is not None:
+        if (refused := gate(request, capability, refusal)) is not None:
             return refused
         try:
             body = await request.json()
         except (json.JSONDecodeError, ValueError):
             return web.json_response({"error": "invalid JSON"}, status=400)
-        value = body.get(key) if isinstance(body, dict) else body
-        if not isinstance(value, type(empty)):
+        sent = body.get(key) if isinstance(body, dict) else body
+        if not isinstance(sent, type(store.empty)):
             return web.json_response(
-                {"error": f"{key} must be a {type(empty).__name__}"}, status=400)
+                {"error": f"{key} must be a {type(store.empty).__name__}"}, status=400)
         # Only a STRING rev participates in the concurrency check — see
         # _store_revision. A client sending the old numeric form has already
         # lost precision, so its value could never match; treating it as
-        # absent lets those (currently unable to write at all) through
-        # unconditionally rather than failing them forever.
+        # absent lets those through unconditionally rather than failing them
+        # forever.
         raw_rev = body.get("rev") if isinstance(body, dict) else None
         expected_rev = raw_rev if isinstance(raw_rev, str) else None
-        payload = json.dumps(value)
-        if len(payload.encode("utf-8")) > max_bytes:
-            return web.json_response({"error": f"{key} payload too large"}, status=413)
-        async with lock:
-            stored, readable = _read_json_store_status(path, empty)
-            if not readable:
-                # ⚠️ REFUSED, NOT DEGRADED. Every write here is computed by the
-                # client against a document it fetched; if the copy on disk is
-                # now unusable, this write's diff describes a baseline nobody
-                # has. Accepting it silently replaces records the guard could
-                # not check and orphans the photos they referenced. Failing
-                # loudly keeps both, and the file is still on disk to recover
-                # from — the GET beside this one degrades to empty on purpose,
-                # so a client can still read, re-enter and push a whole
-                # document once someone has looked.
-                return web.json_response(
-                    {"error": f"the stored {key} document could not be read, so this "
-                              f"write cannot be checked against it. Nothing has been "
-                              f"changed or deleted. Check /data for a corrupt file."},
-                    status=409, headers={"Cache-Control": "no-store"})
-            if expected_rev is not None:
-                current_rev = _store_revision(path)
-                if expected_rev != current_rev:
-                    # The fresher copy a caller rebases its retry onto — an
-                    # intermediary caching THIS would be actively harmful,
-                    # not just stale, so it gets the same explicit no-store
-                    # as the GET above rather than relying on 409 responses
-                    # not normally being cacheable.
-                    return web.json_response(
-                        {"error": "conflict",
-                         key: reader_view(request, stored) if reader_view else stored,
-                         "rev": current_rev},
-                        status=409, headers={"Cache-Control": "no-store"})
-            if writer_merge is not None:
-                value = writer_merge(request, stored, value)
-                payload = json.dumps(value)
-            if write_guard is not None:
-                veto = write_guard(request, body, stored, value)
-                if veto is not None:
-                    return veto
-            await _write_json_store_async(path, payload)
-            new_rev = _store_revision(path)
-            if after_write is not None:
-                after_write(stored, value, readable)
-        return web.json_response({"ok": True, "count": len(value), "rev": new_rev})
+        if require_rev and expected_rev is None:
+            return web.json_response(
+                {"error": "rev is required: send the revision you last read"}, status=428)
 
-    return get_handler, put_handler
+        def change(stored):
+            if expected_rev is not None and expected_rev != (current := store.rev()):
+                # The fresher copy a caller rebases its retry onto — an
+                # intermediary caching THIS would be actively harmful, not
+                # just stale, hence the explicit no-store.
+                raise Veto(web.json_response(
+                    {"error": "conflict", key: view(request, stored) if view else stored,
+                     "rev": current},
+                    status=409, headers={"Cache-Control": "no-store"}))
+            new = merge(request, stored, sent) if merge is not None else sent
+            if guard is not None and (veto := guard(request, body, stored, new)) is not None:
+                raise Veto(veto)
+            return new
+
+        try:
+            _, _, rev = await store.update(change, after)
+        except Veto as refused:
+            return refused.response
+        except StoreUnreadable:
+            return _store_unreadable_response(key)
+        except StoreTooLarge:
+            return web.json_response({"error": f"{key} payload too large"}, status=413)
+        return web.json_response({"ok": True, "rev": rev})
+
+    return put_handler
 
 
 # ── Telemetry ────────────────────────────────────────────────────────────────
@@ -2308,16 +2727,16 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
 # any amount of local testing finds. Kept deliberately small and dumb: newest
 # N events in one JSON file, no rotation logic, no index, no PII beyond the
 # user-agent the browser already sends on every request.
-TELEMETRY_FILE = "/data/telemetry.json"
 TELEMETRY_MAX_BODY = 64_000
 # The ring is bounded by COUNT (telemetry_max_events, up to 5000) AND by
 # serialised size: at the count ceiling alone, 5000 x 64 kB events made a
 # ~320 MB file that every POST re-read and rewrote whole (2.496.196).
 TELEMETRY_MAX_RING_BYTES = 2_000_000
-# One writer at a time: the read-append-write below leaves the event loop
-# (a worker thread), so two POSTs could otherwise interleave and one would
-# overwrite the other's event.
-_telemetry_lock = asyncio.Lock()
+# The ring trims itself to the byte cap, so the store's own cap (a refusal) is
+# only ever reached by one event over it — which TELEMETRY_MAX_BODY refuses
+# first. The store's lock is what keeps two POSTs from each appending to the
+# same old ring and one event being lost.
+TELEMETRY = JsonStore("telemetry.json", [], TELEMETRY_MAX_RING_BYTES + TELEMETRY_MAX_BODY)
 
 
 def _telemetry_ring_after(events: list, max_events: int, max_bytes: int) -> list:
@@ -2331,16 +2750,6 @@ def _telemetry_ring_after(events: list, max_events: int, max_bytes: int) -> list
         drop = max(1, len(kept) // 8)
         kept = kept[drop:]
     return kept
-
-
-def _telemetry_append(body: dict, max_events: int, max_bytes: int) -> int:
-    """Read the ring, append, trim, write — on a worker thread (see
-    _write_json_store_async for why nothing here may run on the loop)."""
-    events = _read_json_store(TELEMETRY_FILE, [])
-    events.append(body)
-    events = _telemetry_ring_after(events, max_events, max_bytes)
-    _write_json_store(TELEMETRY_FILE, json.dumps(events))
-    return len(events)
 
 
 def _csp_event(r: dict) -> dict:
@@ -2386,10 +2795,16 @@ async def telemetry_post_handler(request: web.Request) -> web.Response:
     body["ua"] = request.headers.get("User-Agent", "")[:300]
     body["role"] = _role_for(request)
 
-    async with _telemetry_lock:
-        stored = await asyncio.to_thread(
-            _telemetry_append, body, _telemetry_max_events(), TELEMETRY_MAX_RING_BYTES)
-    return web.json_response({"ok": True, "stored": stored})
+    max_events = _telemetry_max_events()
+    try:
+        _, ring, _ = await TELEMETRY.update(lambda events: _telemetry_ring_after(
+            events + [body], max_events, TELEMETRY_MAX_RING_BYTES))
+    except StoreUnreadable:
+        # A corrupt ring is diagnostics, not a record: start a fresh one
+        # rather than lose every event from here on.
+        ring = [body]
+        await TELEMETRY.replace(ring)
+    return web.json_response({"ok": True, "stored": len(ring)})
 
 
 async def telemetry_get_handler(request: web.Request) -> web.Response:
@@ -2398,10 +2813,14 @@ async def telemetry_get_handler(request: web.Request) -> web.Response:
     if (refused := _refuse(request, "administer",
                            "Only the owner profile may read telemetry.")) is not None:
         return refused
-    async with _telemetry_lock:
-        events = await asyncio.to_thread(_read_json_store, TELEMETRY_FILE, [])
-        if request.query.get("clear") == "1":
-            await _write_json_store_async(TELEMETRY_FILE, json.dumps([]))
+    if request.query.get("clear") == "1":
+        try:
+            events, _, _ = await TELEMETRY.update(lambda _events: [])
+        except StoreUnreadable:
+            events = []
+            await TELEMETRY.replace(events)
+    else:
+        events = await asyncio.to_thread(TELEMETRY.read)
     return web.json_response(
         {"events": events, "count": len(events)}, headers={"Cache-Control": "no-store"})
 
@@ -2412,7 +2831,6 @@ async def telemetry_get_handler(request: web.Request) -> web.Response:
 # because every write comes from one operator on one device at a time, and an
 # atomic whole-document replace is far easier to reason about than four stores
 # that can disagree with each other mid-edit.
-FM_DATA_FILE = "/data/fm-data.json"
 FM_DATA_MAX_BYTES = 4_000_000
 
 # Evidence photos back the compliance record — a maintenance completion or a
@@ -2424,7 +2842,7 @@ FM_DATA_MAX_BYTES = 4_000_000
 # ~1600px JPEG before sending, which lands around 200 KB — comfortably inside
 # the Supervisor ingress body cap, so the chunking machinery would be pure
 # complexity for no benefit.
-FM_EVIDENCE_DIR = "/data/fm-evidence"
+FM_EVIDENCE_NAME = "fm-evidence"
 FM_EVIDENCE_MAX_BYTES = 3_000_000     # generous headroom over a downscaled JPEG
 # Evidence age limit — the DEFAULT is ~18 months (a 12-month agreement plus the
 # yield-up/dispute window after it). See _evidence_retention_days().
@@ -2448,8 +2866,8 @@ def _prune_fm_evidence() -> int:
     cutoff = time.time() - days * 86400
     removed = 0
     try:
-        for name in os.listdir(FM_EVIDENCE_DIR):
-            path = os.path.join(FM_EVIDENCE_DIR, name)
+        for name in os.listdir(_data(FM_EVIDENCE_NAME)):
+            path = os.path.join(_data(FM_EVIDENCE_NAME), name)
             try:
                 if os.path.isfile(path) and os.path.getmtime(path) < cutoff:
                     os.unlink(path)
@@ -2470,13 +2888,20 @@ async def fm_evidence_post_handler(request: web.Request) -> web.Response:
     if (refused := _refuse(request, "reportFault",
                            "You do not have permission to add evidence.")) is not None:
         return refused
+    return await _store_evidence(request)
+
+
+async def _store_evidence(request: web.Request) -> web.Response:
+    """The upload itself, for whichever door let the caller in: the app's
+    (/fm-evidence) or the VESTA Agent's (/agent/v1/fm-evidence). Same id rule,
+    size cap, JPEG check and atomic write for both — one copy of the checks."""
     photo_id = request.query.get("id", "")
     if not FM_EVIDENCE_ID_RE.fullmatch(photo_id):
         return web.json_response({"error": "bad photo id"}, status=400)
 
-    os.makedirs(FM_EVIDENCE_DIR, exist_ok=True)
-    dest = os.path.join(FM_EVIDENCE_DIR, f"{photo_id}.jpg")
-    if os.path.realpath(os.path.dirname(dest)) != os.path.realpath(FM_EVIDENCE_DIR):
+    os.makedirs(_data(FM_EVIDENCE_NAME), exist_ok=True)
+    dest = os.path.join(_data(FM_EVIDENCE_NAME), f"{photo_id}.jpg")
+    if os.path.realpath(os.path.dirname(dest)) != os.path.realpath(_data(FM_EVIDENCE_NAME)):
         return web.json_response({"error": "bad path"}, status=400)
 
     body = bytearray()
@@ -2518,7 +2943,7 @@ async def fm_evidence_get_handler(request: web.Request) -> web.StreamResponse:
     photo_id = request.match_info.get("id", "")
     if not FM_EVIDENCE_ID_RE.fullmatch(photo_id):
         return web.json_response({"error": "bad photo id"}, status=400)
-    path = os.path.join(FM_EVIDENCE_DIR, f"{photo_id}.jpg")
+    path = os.path.join(_data(FM_EVIDENCE_NAME), f"{photo_id}.jpg")
     if not os.path.isfile(path):
         return web.json_response({"error": "not found"}, status=404)
     return web.FileResponse(path, headers={
@@ -2529,36 +2954,796 @@ async def fm_evidence_get_handler(request: web.Request) -> web.StreamResponse:
     })
 
 
-device_config_get_handler, device_config_put_handler = _json_store_handlers(
-    DEVICE_CONFIG_FILE, "config", {}, DEVICE_CONFIG_MAX_BYTES, "device configuration")
-# Facility Manager working set — same factory as the device config, so it gets
-# the same revision check, the same write lock and the same validation. The
-# only difference is who may write it.
-fm_data_get_handler, fm_data_put_handler = _json_store_handlers(
-    FM_DATA_FILE, "data", {}, FM_DATA_MAX_BYTES, "facility manager data",
+DEVICE_CONFIG = JsonStore("device-config.json", {}, DEVICE_CONFIG_MAX_BYTES)
+device_config_get_handler = _store_get_handler(
+    DEVICE_CONFIG, "config", "device configuration")
+device_config_put_handler = _store_put_handler(
+    DEVICE_CONFIG, "config", "device configuration")
+# Facility Manager working set — a whole-document store like the device
+# config, so it gets the same revision check, lock and validation. The only
+# difference is who may write it. /agent/v1/fm-data opens the SAME store.
+FM_DATA = JsonStore("fm-data.json", {}, FM_DATA_MAX_BYTES)
+fm_data_get_handler = _store_get_handler(
+    FM_DATA, "data", "facility manager data", view=_fm_reader_view)
+fm_data_put_handler = _store_put_handler(
+    FM_DATA, "data", "facility manager data",
     # "guest" is admitted at the ROLE gate but constrained by the write guard
     # to appending a fault report (see _fm_guest_write_ok) — the role check
     # alone would be far too broad. Everything else about the maintenance
     # record stays owner/ops.
-    writer_capability="reportFault",
-    write_guard=_fm_write_guard, after_write=_fm_after_write,
-    reader_view=_fm_reader_view, writer_merge=_fm_writer_merge)
+    capability="reportFault", view=_fm_reader_view, merge=_fm_writer_merge,
+    guard=_fm_write_guard, after=_fm_after_write)
 
 
-def main() -> None:
+# ══ The VESTA Agent interface v1 ═════════════════════════════════════════════
+# docs/agent-integration/PLAN.md, workstream A. The VESTA Agent is an OUTSIDE
+# client (F1) that always starts the exchange (F2): this add-on never calls it
+# and needs no address for it. Everything is under /agent/v1, JSON, and gated
+# by one bearer token — the `agent_token` option. Empty token: every route
+# answers 404 and the rest of the kiosk behaves exactly as before (F8).
+#
+# The VESTA Kiosk OWNS this contract. The agent host's self-test checks
+# `contract: 1` on /agent/v1/info; a change a v1 client cannot survive is a
+# new version, not an edit to this one.
+
+AGENT = "agent"
+#: THE AGREEMENT WITH THE AGENT: /usr/share/vesta/agent-contract.json (the
+#: roles.json precedent) — version, message kinds, severities, states, limits
+#: and samples, read here, by the app, and by the agent host's copy (its CI
+#: compares the two). FAIL CLOSED: unreadable, the agent door answers nothing
+#: (version 0, no kinds).
+def _load_agent_contract() -> dict:
+    return _load_vesta_table("agent-contract.json", "the agent interface refuses every message")
+
+
+AGENT_CONTRACT_TABLE = _load_agent_contract()
+_AGENT_MSG = AGENT_CONTRACT_TABLE.get("message") or {}
+_AGENT_LIMITS = _AGENT_MSG.get("limits") or {}
+AGENT_CONTRACT = int(AGENT_CONTRACT_TABLE.get("version") or 0)
+#: Its settings are rows of OPTIONS: `agent_enabled` (THE switch, above the
+#: group on the page) and the `vesta_agent.*` fields.
+AGENT_STORE_MAX_BYTES = 2_000_000
+#: Beyond the retention window, a hard cap: an agent posting in a loop must not
+#: grow /data (or the Kiosk's message list) without bound.
+AGENT_MAX_MESSAGES = 500
+AGENT_MESSAGE_KINDS = tuple(_AGENT_MSG.get("kinds") or ())
+AGENT_SEVERITIES = tuple(_AGENT_MSG.get("severities") or ())
+#: Who may press an agent's buttons: every profile holding the contract's
+#: answering capability in roles.json — never a guest (PLAN A8). Was a second
+#: list, ("owner", "ops"), which a profile newly given the agent would have
+#: been missing from: it would see messages it could never answer.
+AGENT_ANSWER_PROFILES = tuple(
+    r for r, row in (ROLES_TABLE.get("profiles") or {}).items()
+    if AGENT_CONTRACT_TABLE.get("answeringCapability") in (row.get("capabilities") or ()))
+AGENT_MAX_BUTTONS = int(_AGENT_LIMITS.get("buttons") or 0)
+AGENT_MAX_TITLE = int(_AGENT_LIMITS.get("title") or 0)
+AGENT_MAX_BODY = int(_AGENT_LIMITS.get("body") or 0)
+AGENT_MAX_ENTITIES = int(_AGENT_LIMITS.get("entities") or 0)
+AGENT_MAX_LABEL = int(_AGENT_LIMITS.get("buttonLabel") or 0)
+AGENT_BUTTON_ID_RE = re.compile(_AGENT_MSG.get("buttonIdPattern") or r"(?!)")
+AGENT_ENTITY_RE = re.compile(_AGENT_MSG.get("entityPattern") or r"(?!)")
+#: What every Facility record the agent creates or changes carries (PLAN F6).
+AGENT_SOURCE = "vesta_agent"
+AGENT_NAME = "VESTA Agent"
+AGENT_MESSAGES = JsonStore("agent-messages.json", {"messages": []}, AGENT_STORE_MAX_BYTES)
+AGENT_CHOICES = JsonStore("agent-choices.json", {"choices": [], "next_seq": 1},
+                          AGENT_STORE_MAX_BYTES)
+AGENT_PRESENCE = JsonStore("agent-presence.json", {}, 10_000)
+
+#: This add-on's own version, for /agent/v1/info. Read once from the Supervisor
+#: at start-up (_learn_own_version); the image deliberately does not carry it
+#: (see the Dockerfile's LABEL note).
+_own_version = "unknown"
+
+
+def _agent_token() -> str:
+    """The configured token, or "" when the agent interface is off.
+
+    ⚠️ THE SWITCH FIRST (`enabled`, default off). A token alone used to be the
+    switch; the owner asked for an explicit one, so "is there an agent" is a
+    yes/no a person sets — and a token left in the field while the switch is
+    off opens nothing. Only `True` counts: a hand-edited "yes" is not a yes."""
+    return opt("vesta_agent.token") if opt("agent_enabled") else ""
+
+
+def _agent_config_warning() -> str | None:
+    """What the log says at start when the switch is on and the token cannot
+    be used — the Supervisor's form cannot make the token required only while
+    the switch is on, so this is where "required" is enforced."""
+    if not opt("agent_enabled") or _agent_token():
+        return None
+    return ("the VESTA Agent is switched on but its token is empty or invalid "
+            "(at least 16 characters: letters, digits and . _ ~ + / = -): "
+            "the agent stays off until one is set")
+
+
+def _agent_offline_minutes() -> int:
+    return opt("vesta_agent.offline_after_minutes")
+
+
+def _agent_retention_days() -> int:
+    return opt("vesta_agent.message_retention_days")
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def _iso_epoch(value) -> float | None:
+    """An ISO-8601 timestamp as epoch seconds, or None if it is not one."""
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.timestamp()
+
+
+def _agent_refuse(request: web.Request, capability: str | None = None,
+                  message: str = "forbidden") -> web.Response | None:
+    """The gate at the top of every /agent/v1 handler — _refuse's twin for a
+    caller that is not a browser.
+
+    404 while no token is configured: the interface does not exist, and says
+    nothing about why. Otherwise `Authorization: Bearer <agent_token>`,
+    compared in constant time.
+
+    ⚠️ A WRONG OR MISSING TOKEN COUNTS TOWARD THE SAME LOCKOUT AS A WRONG
+    PASSCODE (PLAN A3): per source address, with the global rate as the
+    backstop, in the agent's own bucket so it can never lock a profile out.
+
+    ⚠️ NEVER A COOKIE, NEVER INGRESS. A signed-in browser, or Home Assistant's
+    own Ingress, gets no further here than anyone else without the token —
+    this door is the agent's alone, and _authorized() (the kiosk's door) in
+    turn never looks at the token.
+    """
+    configured = _agent_token()
+    if not configured:
+        return web.json_response({"error": "not found"}, status=404)
+    ip = _client_ip(request)
+    retry_after = _lockout_remaining(AGENT, ip)
+    if retry_after > 0:
+        return web.json_response({"error": "locked", "retryAfter": retry_after}, status=429)
+    header = request.headers.get("Authorization", "")
+    sent = header[7:].strip() if header[:7].lower() == "bearer " else ""
+    if not sent or not hmac.compare_digest(sent.encode(), configured.encode()):
+        _auth_failed(AGENT, ip)
+        return _unauthorized()
+    _auth_succeeded(AGENT, ip)
+    if capability is not None and not _may(AGENT, capability):
+        return _forbidden(message)
+    return None
+
+
+# ── Facility records written by the agent (PLAN A5) ─────────────────────────
+
+def _fm_agent_merge(request: web.Request, stored, value):
+    """Stamp every record the agent created or changed (PLAN A5, F6).
+
+    ⚠️ STAMPED HERE, NOT TRUSTED FROM THE AGENT. `source: "vesta_agent"` is
+    what the Kiosk shows as "By VESTA Agent", and a marker the writer sets
+    itself is a marker the writer can forget. A record the agent sends back
+    exactly as it read it is left untouched — reading and re-saving the
+    document must not claim every record in the villa.
+    """
+    if not isinstance(stored, dict) or not isinstance(value, dict):
+        return value
+    now = _now_iso()
+    out = dict(value)
+    for name in FM_RECORD_COLLECTIONS:
+        items = value.get(name)
+        if not isinstance(items, list):
+            continue
+        before = _fm_by_id(stored, name)
+        stamped = []
+        for it in items:
+            old = before.get(str(it.get("id"))) if isinstance(it, dict) else None
+            if not isinstance(it, dict) or it.get("id") is None or old == it:
+                stamped.append(it)
+                continue
+            it = dict(it, source=AGENT_SOURCE, updatedAt=now)
+            if name == "completions":
+                it["by"] = AGENT_NAME
+            if name == "tickets" and isinstance(it.get("updates"), list):
+                prior = len(old.get("updates") or []) if isinstance(old, dict) else 0
+                it["updates"] = [
+                    dict(u, by=u.get("by") or AGENT_NAME)
+                    if i >= prior and isinstance(u, dict) else u
+                    for i, u in enumerate(it["updates"])]
+            stamped.append(it)
+        out[name] = stamped
+    return out
+
+
+def _fm_agent_write_guard(request: web.Request, body, old, new):
+    """What the agent may NOT do to the Facility record (PLAN A5, F6).
+
+    It may read, create and update records. It may never remove one: a whole
+    document that omits a record IS a delete, so the rule is on the shape of
+    the change, like the guest's. There is no elevation path for the agent —
+    the superadmin code is a person's.
+
+    ⚠️ NOR MAY IT DROP A PHOTO FROM A RECORD IT KEEPS. _fm_after_write deletes
+    a photo file the moment nothing references it, so removing a photo id is a
+    delete of evidence by another name — the loophole the plan's "the agent
+    cannot delete, so cannot orphan photos" did not see.
+    """
+    ch = _fm_classify(old, new)
+    if ch.unknown_keys:
+        return _forbidden(f"The VESTA Agent may not change `{sorted(ch.unknown_keys)[0]}`.")
+    if (bad := _fm_invalid_response(ch)) is not None:
+        return bad
+    if any(ch.removed.values()):
+        what = ", ".join(f"{len(v)} from {n}" for n, v in ch.removed.items() if v)
+        return _forbidden(f"The VESTA Agent may not delete Facility records (this write "
+                          f"removes {what}). Deleting stays with people.")
+    if ch.dropped_photos:
+        name, rid = sorted(ch.dropped_photos)[0]
+        return _forbidden(f"The VESTA Agent may not remove photos from a record "
+                          f"({name} {rid}): that would delete the evidence.")
+    return None
+
+
+agent_fm_get_handler = _store_get_handler(
+    FM_DATA, "data", "the Facility records", capability="agentRead", gate=_agent_refuse)
+agent_fm_put_handler = _store_put_handler(
+    FM_DATA, "data", "the Facility records", capability="agentWrite",
+    merge=_fm_agent_merge, guard=_fm_agent_write_guard, after=_fm_after_write,
+    require_rev=True, gate=_agent_refuse)
+
+
+async def agent_fm_evidence_handler(request: web.Request) -> web.Response:
+    """Attach a photo: the same checks and limits as the app's upload."""
+    if (refused := _agent_refuse(request, "agentWrite")) is not None:
+        return refused
+    return await _store_evidence(request)
+
+
+# ── Messages and choices (PLAN A6) ───────────────────────────────────────────
+
+def _agent_prune_messages(messages: list, now: float | None = None) -> list:
+    """Messages inside the retention window, newest AGENT_MAX_MESSAGES."""
+    cutoff = (time.time() if now is None else now) - _agent_retention_days() * 86400
+    kept = [m for m in messages if isinstance(m, dict)
+            and (_iso_epoch(m.get("created_at")) or 0) >= cutoff]
+    return kept[-AGENT_MAX_MESSAGES:]
+
+
+def _agent_prune_choices(choices: list, now: float | None = None) -> list:
+    cutoff = (time.time() if now is None else now) - _agent_retention_days() * 86400
+    return [c for c in choices if isinstance(c, dict) and (_iso_epoch(c.get("at")) or 0) >= cutoff]
+
+
+def _agent_validate_message(body) -> tuple[dict | None, str | None]:
+    """A message as the agent may post it, normalised — or the reason not."""
+    if not isinstance(body, dict):
+        return None, "body must be a JSON object"
+    kind = body.get("kind", "message")
+    if kind not in AGENT_MESSAGE_KINDS:
+        return None, f"kind must be one of {', '.join(AGENT_MESSAGE_KINDS)}"
+    title = body.get("title")
+    if not isinstance(title, str) or not title.strip() or len(title) > AGENT_MAX_TITLE:
+        return None, f"title must be a non-empty string of at most {AGENT_MAX_TITLE} characters"
+    text = body.get("body", "")
+    if not isinstance(text, str) or len(text) > AGENT_MAX_BODY:
+        return None, f"body must be a string of at most {AGENT_MAX_BODY} characters"
+    severity = body.get("severity", "info")
+    if severity not in AGENT_SEVERITIES:
+        return None, f"severity must be one of {', '.join(AGENT_SEVERITIES)}"
+    entities = body.get("entities", [])
+    if not isinstance(entities, list) or len(entities) > AGENT_MAX_ENTITIES or not all(
+            isinstance(e, str) and AGENT_ENTITY_RE.fullmatch(e) for e in entities):
+        return None, f"entities must be a list of at most {AGENT_MAX_ENTITIES} entity ids"
+    buttons = body.get("buttons", [])
+    if not isinstance(buttons, list) or len(buttons) > AGENT_MAX_BUTTONS:
+        return None, f"buttons must be a list of at most {AGENT_MAX_BUTTONS}"
+    clean_buttons, seen = [], set()
+    for b in buttons:
+        if not isinstance(b, dict) or not isinstance(b.get("id"), str) \
+                or not AGENT_BUTTON_ID_RE.fullmatch(b["id"]) or b["id"] in seen \
+                or not isinstance(b.get("label"), str) or not b["label"].strip() \
+                or len(b["label"]) > AGENT_MAX_LABEL:
+            return None, f"each button needs a unique id ({AGENT_BUTTON_ID_RE.pattern}) and a label (1-{AGENT_MAX_LABEL})"
+        seen.add(b["id"])
+        clean_buttons.append({"id": b["id"], "label": b["label"].strip()})
+    profiles = body.get("allowed_profiles", list(AGENT_ANSWER_PROFILES))
+    if not isinstance(profiles, list) or not profiles or not all(
+            p in AGENT_ANSWER_PROFILES for p in profiles):
+        return None, f"allowed_profiles must be a non-empty subset of {', '.join(AGENT_ANSWER_PROFILES)}"
+    expires = body.get("expires_at")
+    if expires is not None and _iso_epoch(expires) is None:
+        return None, "expires_at must be an ISO-8601 timestamp or null"
+    return {
+        "id": f"msg_{secrets.token_hex(8)}",
+        "kind": kind,
+        "title": title.strip(),
+        "body": text,
+        "severity": severity,
+        "entities": entities,
+        "buttons": clean_buttons,
+        "allowed_profiles": sorted(set(profiles), key=AGENT_ANSWER_PROFILES.index),
+        "expires_at": expires,
+        "created_at": _now_iso(),
+    }, None
+
+
+async def agent_messages_post_handler(request: web.Request) -> web.Response:
+    """Publish a message, report or recommendation; returns its id."""
+    if (refused := _agent_refuse(request, "agentMessage")) is not None:
+        return refused
+    try:
+        body = await request.json()
+    except (ValueError, UnicodeDecodeError):
+        return web.json_response({"error": "invalid JSON body"}, status=400)
+    message, error = _agent_validate_message(body)
+    if error:
+        return web.json_response({"error": error}, status=400)
+    try:
+        await AGENT_MESSAGES.update(lambda doc: {
+            "messages": _agent_prune_messages(list(doc.get("messages") or [])) + [message]})
+    except StoreUnreadable:
+        return web.json_response({"error": "the message store could not be read"}, status=409)
+    except StoreTooLarge:
+        return web.json_response({"error": "message store full"}, status=413)
+    return web.json_response({"ok": True, "id": message["id"],
+                              "created_at": message["created_at"]}, status=201)
+
+
+def _agent_answers() -> dict:
+    """{message_id: choice} — the first (only) answer to each message."""
+    doc = AGENT_CHOICES.read()
+    out = {}
+    for c in doc.get("choices") or [] if isinstance(doc, dict) else []:
+        if isinstance(c, dict) and c.get("message_id") not in out:
+            out[c.get("message_id")] = c
+    return out
+
+
+def _agent_messages_view(request: web.Request, stored):
+    """What an owner or facility manager sees: newest first, each message with
+    its state (open / answered / expired), who answered, and whether THIS
+    profile may press its buttons.
+
+    ⚠️ THE STATE IS COMPUTED, NOT STORED. "answered" lives in the choices store
+    and "expired" in the clock; a stored copy of either would be a second
+    answer to one question, and the two stores are written by different
+    parties under different locks."""
+    role = _role_for(request)
+    answers = _agent_answers()
+    now = time.time()
+    # ⚠️ "ANSWERABLE NOW" IS DECIDED HERE, ONCE (2.496.251). The page used to
+    # AND this with its own `status.state === "online"`, and the press door
+    # below never asked: a press from a tab opened before the agent went
+    # offline was stored for an agent that was not there to act on it. The
+    # agent's presence is part of the answer, and _agent_press_refusal asks
+    # the same question.
+    agent_here = _agent_presence()["state"] == "online"
+    out = []
+    for m in reversed(_agent_prune_messages(list((stored or {}).get("messages") or []), now)):
+        answer = answers.get(m.get("id"))
+        exp = _iso_epoch(m.get("expires_at"))
+        state = "answered" if answer else ("expired" if exp is not None and exp <= now else "open")
+        out.append({**m, "state": state,
+                    "answer": {k: answer.get(k) for k in ("button_id", "profile", "at")} if answer else None,
+                    "can_answer": state == "open" and bool(m.get("buttons")) and agent_here
+                    and role in (m.get("allowed_profiles") or [])})
+    return {"messages": out}
+
+
+agent_messages_get_handler = _store_get_handler(
+    AGENT_MESSAGES, "data", "agent messages", capability="viewAgent", view=_agent_messages_view)
+
+
+def _agent_press_refusal(stored, message_id: str, button_id: str, profile: str):
+    """Why this press may not be recorded, as the answer to send — or None.
+
+    One press, on an open message, with one of its buttons, by a profile it
+    allows, while the agent is online. First press wins; a later one gets 409 and who answered. Judged
+    against `stored`, the choices read under the store's lock, so two presses
+    racing each other cannot both win."""
+    messages = AGENT_MESSAGES.read().get("messages") or []
+    message = next((m for m in messages if isinstance(m, dict)
+                    and m.get("id") == message_id), None)
+    if message is None:
+        return web.json_response({"error": "no such message"}, status=404)
+    earlier = next((c for c in (stored or {}).get("choices") or []
+                    if isinstance(c, dict) and c.get("message_id") == message_id), None)
+    if earlier is not None:
+        return web.json_response(
+            {"error": "already answered",
+             "answer": {k: earlier.get(k) for k in ("button_id", "profile", "at")}}, status=409)
+    exp = _iso_epoch(message.get("expires_at"))
+    if exp is not None and exp <= time.time():
+        return web.json_response({"error": "this message has expired"}, status=409)
+    if button_id not in {b.get("id") for b in message.get("buttons") or []}:
+        return web.json_response({"error": "no such button on this message"}, status=400)
+    if profile not in (message.get("allowed_profiles") or []):
+        return _forbidden("This profile may not answer this message.")
+    if _agent_presence()["state"] != "online":
+        # Nobody would act on it (PLAN A8): the same rule can_answer applies.
+        return web.json_response({"error": "The VESTA Agent is offline: nobody would act on this answer now."},
+                                 status=409)
+    return None
+
+
+def _agent_choices_with(stored, message_id: str, button_id: str, profile: str) -> dict:
+    """The choices document with one press appended. The stored choices come
+    from disk, never from the client, so a press can add one answer and cannot
+    rewrite anybody else's; the sequence number, profile and time are the
+    server's."""
+    stored = stored if isinstance(stored, dict) else {}
+    have = [c for c in stored.get("choices") or [] if isinstance(c, dict)]
+    seq = max([int(stored.get("next_seq") or 1)]
+              + [int(c.get("seq", 0)) + 1 for c in have if isinstance(c.get("seq"), int)])
+    press = {"seq": seq, "message_id": message_id, "button_id": button_id,
+             "profile": profile, "at": _now_iso()}
+    return {"choices": _agent_prune_choices(have) + [press], "next_seq": seq + 1}
+
+
+agent_choices_get_handler = _store_get_handler(
+    AGENT_CHOICES, "data", "agent choices", capability="viewAgent")
+
+
+async def agent_choices_put_handler(request: web.Request) -> web.Response:
+    """A button press in the Kiosk: `{"data": {"choices": [{message_id,
+    button_id}]}}` — exactly ONE new choice (no `seq`), appended.
+
+    ⚠️ AN APPEND, NOT A DOCUMENT. This door was the whole-document PUT with a
+    merge and a guard, and the merge had to hand the guard what the client sent
+    through a key stashed on the request — the guard could not otherwise tell
+    the press from the stored list. The press is parsed once here and both
+    questions are asked of it directly."""
+    if (refused := _refuse(request, "viewAgent",
+                           "You do not have permission to edit agent choices.")) is not None:
+        return refused
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        return web.json_response({"error": "invalid JSON"}, status=400)
+    value = body.get("data") if isinstance(body, dict) else None
+    sent = value.get("choices") if isinstance(value, dict) else None
+    attempt = [c for c in sent if isinstance(c, dict) and "seq" not in c] \
+        if isinstance(sent, list) else []
+    if len(attempt) != 1 or len(sent) != 1:
+        return web.json_response({"error": "send exactly one new choice"}, status=400)
+    message_id = str(attempt[0].get("message_id", ""))
+    button_id = str(attempt[0].get("button_id", ""))
+    profile = _role_for(request)
+
+    def change(stored):
+        if (veto := _agent_press_refusal(stored, message_id, button_id, profile)) is not None:
+            raise Veto(veto)
+        return _agent_choices_with(stored, message_id, button_id, profile)
+
+    try:
+        _, _, rev = await AGENT_CHOICES.update(change)
+    except Veto as refused:
+        return refused.response
+    except StoreUnreadable:
+        return _store_unreadable_response("choices")
+    except StoreTooLarge:
+        return web.json_response({"error": "choice store full"}, status=413)
+    return web.json_response({"ok": True, "rev": rev})
+
+
+#: Exactly the ids _agent_validate_message has minted since the interface began.
+AGENT_MESSAGE_ID_RE = re.compile(r"msg_[0-9a-f]{16}")
+
+
+def _agent_messages_without(stored, ids: set) -> tuple[dict, list]:
+    """(the messages document without `ids`, the ids actually removed). An id
+    that names nothing is ignored; everything else in the document is kept."""
+    doc = stored if isinstance(stored, dict) else {}
+    kept, cleared = [], []
+    for m in doc.get("messages") or []:
+        if isinstance(m, dict) and m.get("id") in ids:
+            cleared.append(m["id"])
+        else:
+            kept.append(m)
+    return {**doc, "messages": kept}, cleared
+
+
+async def agent_messages_clear_handler(request: web.Request) -> web.Response:
+    """A person clears messages from the Kiosk's agent area: `{"ids": [...]}`.
+
+    The same gate as a button press (viewAgent: owner and facility manager,
+    never a guest, never cross-site). Each id must be of the msg_ form the
+    server mints; an id that names nothing (already cleared, pruned) is simply
+    ignored, so two devices clearing the same message both succeed.
+
+    ⚠️ THE CHOICES ARE LEFT ALONE. A cleared message stops being shown; an
+    answer a person gave stays in the agent's cursor (/agent/v1/choices),
+    which the agent may not have read yet. Not under /agent/v1: the agent
+    itself never clears what people read."""
+    if (refused := _refuse(request, "viewAgent",
+                           "You do not have permission to clear agent messages.")) is not None:
+        return refused
+    try:
+        body = await request.json()
+    except (ValueError, UnicodeDecodeError):
+        return web.json_response({"error": "invalid JSON"}, status=400)
+    ids = body.get("ids") if isinstance(body, dict) else None
+    if not isinstance(ids, list) or not ids or len(ids) > AGENT_MAX_MESSAGES or not all(
+            isinstance(i, str) and AGENT_MESSAGE_ID_RE.fullmatch(i) for i in ids):
+        return web.json_response(
+            {"error": f"ids must be a list of 1-{AGENT_MAX_MESSAGES} message ids (msg_…)"},
+            status=400)
+    cleared: list = []
+
+    def change(stored):
+        doc, gone = _agent_messages_without(stored, set(ids))
+        cleared.extend(gone)
+        return doc
+
+    try:
+        await AGENT_MESSAGES.update(change)
+    except StoreUnreadable:
+        return _store_unreadable_response("messages")
+    except StoreTooLarge:
+        return web.json_response({"error": "message store full"}, status=413)
+    return web.json_response({"ok": True, "cleared": cleared})
+
+
+async def agent_choices_handler(request: web.Request) -> web.Response:
+    """Button presses made in the Kiosk after `since`, oldest first — the
+    agent's cursor over people's answers (PLAN A4)."""
+    if (refused := _agent_refuse(request, "agentRead")) is not None:
+        return refused
+    try:
+        since = int(request.query.get("since", "0"))
+    except ValueError:
+        return web.json_response({"error": "since must be an integer"}, status=400)
+    doc = AGENT_CHOICES.read()
+    items = sorted((c for c in doc.get("choices") or []
+                    if isinstance(c, dict) and isinstance(c.get("seq"), int) and c["seq"] > since),
+                   key=lambda c: c["seq"])[:500]
+    return web.json_response({"choices": items, "next_seq": doc.get("next_seq", 1)},
+                             headers={"Cache-Control": "no-store"})
+
+
+# ── Presence (PLAN A7) ───────────────────────────────────────────────────────
+
+async def agent_heartbeat_handler(request: web.Request) -> web.Response:
+    """The agent says it is alive, with an optional status text.
+
+    ⚠️ PERSISTED, SO A RESTART NEVER SHOWS A FALSE "ONLINE". Presence is
+    computed from the last heartbeat's time on every read; an in-memory flag
+    would come back from a restart either stale or wrong."""
+    if (refused := _agent_refuse(request, "agentMessage")) is not None:
+        return refused
+    status = None
+    if request.can_read_body:
+        try:
+            body = await request.json()
+        except (ValueError, UnicodeDecodeError):
+            return web.json_response({"error": "invalid JSON body"}, status=400)
+        status = body.get("status") if isinstance(body, dict) else None
+        if status is not None and (not isinstance(status, str) or len(status) > 200):
+            return web.json_response({"error": "status must be a string of at most 200 characters"},
+                                     status=400)
+    await AGENT_PRESENCE.replace({"last_seen": time.time(), "status": status})
+    return web.json_response({"ok": True, "offline_after_minutes": _agent_offline_minutes()})
+
+
+def _agent_presence() -> dict:
+    """not_configured / offline / online, from the token and the last heartbeat."""
+    if not _agent_token():
+        return {"state": "not_configured"}
+    minutes = _agent_offline_minutes()
+    doc = AGENT_PRESENCE.read()
+    last = doc.get("last_seen") if isinstance(doc, dict) else None
+    last = float(last) if isinstance(last, (int, float)) else None
+    online = last is not None and 0 <= time.time() - last < minutes * 60
+    return {
+        "state": "online" if online else "offline",
+        "last_seen": datetime.fromtimestamp(last, timezone.utc).isoformat(timespec="seconds")
+        .replace("+00:00", "Z") if last else None,
+        "status": doc.get("status") if isinstance(doc, dict) else None,
+        "offline_after_minutes": minutes,
+    }
+
+
+async def agent_status_handler(request: web.Request) -> web.Response:
+    """The Kiosk's view of the agent, for owner and facility manager."""
+    if (refused := _refuse(request, "viewAgent")) is not None:
+        return refused
+    return web.json_response(_agent_presence(), headers={"Cache-Control": "no-store"})
+
+
+# ── The rooms the Kiosk shows (the villa model's fallback) ───────────────────
+# "Which room is this device in" is the Kiosk's rule (EntityMap.ts
+# resolveEntityRoom): Home Assistant's area, else the drawn room the device's
+# 3D anchor sits in. The second half exists only in a browser with the scene
+# loaded, so an owner's or facility manager's device SHARES its resolved rooms
+# here (RoomShare.tsx) and the villa model uses them for a device Home Assistant
+# has no area for — the add-on is told the Kiosk's answer, never re-derives it.
+KIOSK_ROOMS = JsonStore("kiosk-rooms.json", {"rooms": {}}, 1_000_000)
+
+
+def _kiosk_rooms_merge(request: web.Request, stored, value):
+    """Keep only `rooms`, stamped with when and by whom it was shared."""
+    rooms = value.get("rooms") if isinstance(value, dict) else None
+    return {"rooms": rooms, "at": _now_iso(), "by": _role_for(request)}
+
+
+def _kiosk_rooms_guard(request: web.Request, body, old, new):
+    rooms = new.get("rooms")
+    if not isinstance(rooms, dict) or len(rooms) > 10_000 or not all(
+            isinstance(k, str) and AGENT_ENTITY_RE.fullmatch(k)
+            and isinstance(v, str) and 0 < len(v) <= 100 for k, v in rooms.items()):
+        return web.json_response(
+            {"error": "rooms must map entity ids to room names (at most 100 characters)"}, status=400)
+    return None
+
+
+kiosk_rooms_put_handler = _store_put_handler(
+    KIOSK_ROOMS, "data", "the shared rooms", capability="viewAgent",
+    merge=_kiosk_rooms_merge, guard=_kiosk_rooms_guard)
+
+
+# ── Info and the villa model (PLAN A4) ───────────────────────────────────────
+
+async def _learn_own_version(session: ClientSession) -> None:
+    global _own_version
+    try:
+        async with session.get(f"http://{SUPERVISOR}/addons/self/info", headers=AUTH,
+                               timeout=ClientTimeout(total=10)) as resp:
+            if resp.status == 200:
+                _own_version = str(((await resp.json()).get("data") or {}).get("version") or "unknown")
+    except Exception as err:  # noqa: BLE001 — best-effort, never blocks start-up
+        print(f"[supervisor-proxy] own version unknown: {err}", flush=True)
+
+
+async def agent_info_handler(request: web.Request) -> web.Response:
+    """The compatibility check: contract version, Kiosk version, capabilities."""
+    if (refused := _agent_refuse(request, "agentRead")) is not None:
+        return refused
+    return web.json_response({
+        "contract": AGENT_CONTRACT,
+        "version": _own_version,
+        "capabilities": sorted(ROLE_CAPABILITIES[AGENT]),
+        "offline_after_minutes": _agent_offline_minutes(),
+        "message_retention_days": _agent_retention_days(),
+    }, headers={"Cache-Control": "no-store"})
+
+
+_VILLA_AREAS_CACHE: dict = {"key": None, "at": 0.0, "value": None}
+VILLA_AREAS_TTL = 60
+
+
+async def _ha_areas(session: ClientSession, ids: list) -> dict | None:
+    """{entity_id: [area, floor, friendly_name]} from Home Assistant, or None.
+
+    ⚠️ HOME ASSISTANT'S AREA IS THE KIOSK'S OWN FIRST ANSWER to "which room is
+    this device in" (EntityMap.ts resolveEntityRoom); its fallback — which drawn
+    room the device's 3D anchor sits in — exists only inside the browser's
+    scene, so it is not repeated here. One template render for every id:
+    `area_name()` follows an entity to its device's area, as the Kiosk does.
+
+    The ids are embedded in the template, so every one has passed
+    AGENT_ENTITY_RE: a template is code Home Assistant runs."""
+    if not ids:
+        return {}
+    key = hashlib.sha256("\n".join(ids).encode()).hexdigest()
+    cache = _VILLA_AREAS_CACHE
+    if cache["key"] == key and time.monotonic() - cache["at"] < VILLA_AREAS_TTL:
+        return cache["value"]
+    template = ("{% set ns = namespace(o={}) %}{% for e in " + json.dumps(ids) + " %}"
+                "{% set a = area_name(e) %}"
+                "{% set ns.o = dict(ns.o, **{e: [a, floor_name(e) if a else none, "
+                "state_attr(e, 'friendly_name')]}) %}{% endfor %}{{ ns.o | tojson }}")
+    try:
+        async with session.post(f"http://{SUPERVISOR}/core/api/template", headers=AUTH,
+                                json={"template": template},
+                                timeout=ClientTimeout(total=20)) as resp:
+            if resp.status != 200:
+                return None
+            value = json.loads(await resp.text())
+    except Exception:  # noqa: BLE001 — the model is still useful without rooms
+        return None
+    if not isinstance(value, dict):
+        return None
+    cache.update(key=key, at=time.monotonic(), value=value)
+    return value
+
+
+async def agent_villa_model_handler(request: web.Request) -> web.Response:
+    """Rooms, devices, entity ids, names and the room of each device, as this
+    Kiosk models the villa — read-only, derived from the shared device
+    configuration, the floor plan's room file and Home Assistant's areas."""
+    if (refused := _agent_refuse(request, "agentRead")) is not None:
+        return refused
+    cfg = DEVICE_CONFIG.read()
+    cfg = cfg if isinstance(cfg, dict) else {}
+    entity_map = cfg.get("entityMap") if isinstance(cfg.get("entityMap"), dict) else {}
+    mesh = cfg.get("meshBindings") if isinstance(cfg.get("meshBindings"), dict) else {}
+    groups = [g for g in cfg.get("deviceGroups") or [] if isinstance(g, dict)]
+    dismissed = {str(e) for e in cfg.get("dismissedEntityIds") or []}
+    group_of = {}
+    for g in groups:
+        for eid in [g.get("primaryEntityId"), *(g.get("memberEntityIds") or [])]:
+            if isinstance(eid, str):
+                group_of.setdefault(eid, str(g.get("id", "")))
+    ids = sorted({e for e in (*entity_map, *mesh.values(), *group_of)
+                  if isinstance(e, str) and AGENT_ENTITY_RE.fullmatch(e) and e not in dismissed})
+    areas = await _ha_areas(request.app["session"], ids)
+    shared = KIOSK_ROOMS.read()
+    kiosk_rooms = shared.get("rooms") if isinstance(shared, dict) \
+        and isinstance(shared.get("rooms"), dict) else {}
+    devices = []
+    for eid in ids:
+        mapping = entity_map.get(eid) if isinstance(entity_map.get(eid), dict) else {}
+        area, floor, friendly = (areas or {}).get(eid) or [None, None, None]
+        fallback = kiosk_rooms.get(eid) if not area and isinstance(kiosk_rooms.get(eid), str) else None
+        devices.append({
+            "entity_id": eid,
+            "name": mapping.get("label") or friendly or eid,
+            "type": mapping.get("type") or eid.partition(".")[0],
+            "category": mapping.get("category"),
+            "disabled": bool(mapping.get("disabled")),
+            "group_id": group_of.get(eid),
+            "room": area or fallback or None,
+            "floor": floor or None,
+            # ha_area: Home Assistant's own area. kiosk: the drawn room the
+            # Kiosk places it in (shared by an owner/ops device). None: neither.
+            "room_source": "ha_area" if area else ("kiosk" if fallback else None),
+        })
+    rooms = []
+    model = _effective_paths().get("model_path")
+    if model:
+        sidecar = _read_json_store(os.path.join(_data(WWW_NAME), _rooms_rel(model)), {})
+        for r in (sidecar.get("rooms") or []) if isinstance(sidecar, dict) else []:
+            if isinstance(r, dict) and isinstance(r.get("name"), str) and r["name"]:
+                rooms.append({"name": r["name"], "floor": r.get("floor", 1), "source": "floor_plan"})
+    for p in cfg.get("teleportPoints") or []:
+        if isinstance(p, dict) and isinstance(p.get("name"), str) and not p.get("fitted"):
+            rooms.append({"name": p["name"], "floor": p.get("floor", 1), "source": "added"})
+    return web.json_response({
+        "rooms": rooms,
+        "devices": devices,
+        "groups": [{"id": g.get("id"), "primary_entity_id": g.get("primaryEntityId"),
+                    "member_entity_ids": g.get("memberEntityIds") or [],
+                    "label": g.get("label")} for g in groups],
+        "ha_areas": areas is not None,
+    }, headers={"Cache-Control": "no-store"})
+
+
+def build_app(data_dir: str | None = None) -> web.Application:
+    """The application with every route — what main() serves.
+
+    Split out so tests/agent-interface.py drives THIS route table over real
+    HTTP rather than a copy of it: a handler that exists but is not routed, or
+    is routed to the wrong path, is exactly what a copy would not show.
+
+    `data_dir` moves everything this process persists — options, sessions,
+    every store, evidence, the model — to another directory (see DATA_DIR).
+    main() passes nothing: the Supervisor's /data."""
+    global DATA_DIR, _session_secret_cache, _EPOCH_CACHE
+    if data_dir is not None:
+        DATA_DIR = data_dir
+        # Both caches describe files in the OLD directory.
+        _session_secret_cache = None
+        _EPOCH_CACHE = None
     app = web.Application()
 
     async def on_start(a: web.Application) -> None:
         a["session"] = ClientSession(timeout=ClientTimeout(total=None))
-        os.makedirs(DATA_ROOT, exist_ok=True)
+        os.makedirs(_data(WWW_NAME), exist_ok=True)
         _session_secret()  # create the signing key on first boot
         await _cleanup_stale_options(a["session"])
+        await _learn_own_version(a["session"])
+        if (warning := _agent_config_warning()) is not None:
+            print(f"[supervisor-proxy] {warning}", flush=True)
 
     async def on_cleanup(a: web.Application) -> None:
         await a["session"].close()
 
     app.on_startup.append(on_start)
     app.on_cleanup.append(on_cleanup)
+    app.router.add_get("/healthz", healthz_handler)
     app.router.add_get("/addon-config", addon_config_handler)
     app.router.add_post("/model-upload", model_upload_handler)
     app.router.add_get("/device-config", device_config_get_handler)
@@ -2578,6 +3763,27 @@ def main() -> None:
     app.router.add_get("/auth/check", auth_check_handler)
     app.router.add_get("/core/websocket", ws_handler)
     app.router.add_route("*", "/core/api/{path:.*}", rest_handler)
+    # The Kiosk's side of the VESTA Agent (owner and facility manager).
+    app.router.add_get("/agent-status", agent_status_handler)
+    app.router.add_get("/agent-messages", agent_messages_get_handler)
+    app.router.add_post("/agent-messages/clear", agent_messages_clear_handler)
+    app.router.add_get("/agent-choices", agent_choices_get_handler)
+    app.router.add_put("/agent-choices", agent_choices_put_handler)
+    app.router.add_put("/kiosk-rooms", kiosk_rooms_put_handler)
+    # The VESTA Agent interface v1 (bearer token; 404 while agent_token is empty).
+    app.router.add_get("/agent/v1/info", agent_info_handler)
+    app.router.add_get("/agent/v1/villa-model", agent_villa_model_handler)
+    app.router.add_get("/agent/v1/fm-data", agent_fm_get_handler)
+    app.router.add_put("/agent/v1/fm-data", agent_fm_put_handler)
+    app.router.add_post("/agent/v1/fm-evidence", agent_fm_evidence_handler)
+    app.router.add_post("/agent/v1/messages", agent_messages_post_handler)
+    app.router.add_get("/agent/v1/choices", agent_choices_handler)
+    app.router.add_post("/agent/v1/heartbeat", agent_heartbeat_handler)
+    return app
+
+
+def main() -> None:
+    app = build_app()
     # aiohttp's own shutdown_timeout defaults to 60s: on SIGTERM it waits that
     # long for in-flight connections to finish naturally before exiting. The
     # kiosk keeps a long-lived proxied websocket open continuously (see

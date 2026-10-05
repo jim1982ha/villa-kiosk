@@ -14,13 +14,17 @@
 // Pure: tests/oracles/scene_config_plan.mjs.
 
 import type { AppConfig } from "@/config/AppConfig";
-import { entityMapDelta, sliceChanged } from "./entityMapDiff";
+import { entityMapDelta, sliceChanged, type EntityMapDelta } from "./entityMapDiff";
 
 export interface SceneConfigPlan {
   /** Tone mapping, SSAO, IBL, and the sun's lights (render look or location). */
   render: boolean;
-  /** Only cosmetic per-entity fields changed: repaint the badge glyphs. */
-  repaintBadges: boolean;
+  /** How the device list (entityMap) changed — decided ONCE, here, and handed
+   *  to EntityVisuals.updateConfig, which rebuilds the badges on any change.
+   *  ⚠️ IT DECIDED THIS A SECOND TIME, with its own diff, and SceneManager
+   *  then called repaintBadges() on top: every cosmetic edit (a label, a
+   *  colour) disposed and recreated every badge twice (2.496.215). */
+  entityMap: EntityMapDelta;
   /** The point-rooms (Rooms menu) are rebuilt. */
   roomPoints: boolean;
   /** Which mesh is which entity changed: re-index the meshes, re-apply the
@@ -47,7 +51,7 @@ export function sceneConfigPlan(prev: AppConfig, next: AppConfig): SceneConfigPl
   // for a config that did not change.
   const render = prev.render !== next.render || prev.latitude !== next.latitude || prev.longitude !== next.longitude;
   // A re-uploaded central .sh3d lands asynchronously (BabylonCanvas's central
-  // SH3D refresh) and must re-run the room fit; parseRoomData returns fresh
+  // SH3D refresh) and must re-run the room fit; readRoomData returns fresh
   // arrays every open, so by content.
   const sh3d = sliceChanged(prev.sh3dRooms, next.sh3dRooms) || sliceChanged(prev.sh3dEntities, next.sh3dEntities);
   // Three outcomes, not two (entityMapDelta): a same-content replacement is
@@ -62,7 +66,7 @@ export function sceneConfigPlan(prev: AppConfig, next: AppConfig): SceneConfigPl
   const recalibrate = structural && (sh3d || entityDelta > 0);
   return {
     render,
-    repaintBadges: mapDelta === "cosmetic" && !bindings && !sh3d,
+    entityMap: mapDelta,
     // teleportPoints by content (the fourth shared key to need it); eyeHeight
     // because the point-rooms READ it (a point stores the eye, the floor is
     // y − eyeHeight) — the slider left every glow at its old height.

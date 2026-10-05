@@ -13,7 +13,7 @@ import { register } from "node:module";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 register("../consistency/alias-hook.mjs", import.meta.url);
-import { ck, done } from "../consistency/check.mjs";
+import { ck, done, tsFiles } from "../consistency/check.mjs";
 const { chartGeometry, readingAt } = await import("@/utils/chartGeometry");
 
 const P = 300_000, H = 3_600_000, t0 = 1_700_000_000_000;
@@ -83,7 +83,7 @@ console.log("\n  the scales and the axis:");
 console.log("\n  the callers:");
 {
   const SRC = new URL("../../src/", import.meta.url).pathname;
-  const walk = (d, out = []) => { for (const e of readdirSync(d)) { const p = join(d, e); statSync(p).isDirectory() ? walk(p, out) : /\.tsx?$/.test(p) && out.push(p); } return out; };
+  const walk = tsFiles;
   const files = walk(SRC);
   // ⚠️ "A CHART" USED TO BE WHATEVER HAD <polyline OR className="chart-bar",
   // and the scan shrank silently: the Energy bars (energy-bar) and the state
@@ -109,8 +109,10 @@ console.log("\n  the callers:");
   const missing = Object.keys(CHARTS).filter((f) => !charts.map(rel).includes(f));
   ck(`  ...and all ${Object.keys(CHARTS).length} still draw one — the scan cannot shrink unseen`, missing.length === 0, missing);
   const lineUsers = files.filter((f) => /<LineChart\b/.test(src(f))).map(rel).sort();
-  ck("every history line is drawn by LineChart: the Weather window and both device panels",
-     lineUsers.join() === "components/panels/DeviceGroupPanel.tsx,components/panels/SensorPanel.tsx,components/panels/WeatherPanel.tsx", lineUsers);
+  // The device panels (Sensor, device group) draw theirs through the one
+  // numeric history section, NumericHistory (2.496.214).
+  ck("every history line is drawn by LineChart: the Weather window and the device panels' numeric section",
+     lineUsers.join() === "components/panels/NumericHistory.tsx,components/panels/WeatherPanel.tsx", lineUsers);
   const byKind = (k) => charts.filter((f) => CHARTS[rel(f)] === k);
   const own = byKind("line").filter((f) => !/\bchartGeometry\(/.test(src(f))).map(rel);
   ck("every line chart draws from chartGeometry", own.length === 0, own);

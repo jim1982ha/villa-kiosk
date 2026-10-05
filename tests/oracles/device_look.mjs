@@ -69,8 +69,8 @@ console.log("\n  the caller:");
 {
   const { readFileSync } = await import("node:fs");
   const ev = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
-  ck("applyToMesh paints meshLookFor, read through the one DeviceReading",
-     /const look = meshLookFor\(this\.reading\(map\.type, state, false\)\);/.test(ev));
+  ck("applyToMesh paints meshLookFor, read through the one DeviceReading (deviceActivity.readingOf)",
+     /const look = meshLookFor\(readingOf\(state\.entity_id, this\.lookSource\)\);/.test(ev));
   ck("  ...and reads no raw state of its own", !/state\.state === "locked"|const alert = state\.state === "on"|state\.state === "playing"/.test(ev));
   ck("  ...nor a literal colour", !/new Color3\(0\.2, 0\.75, 0\.3\)|new Color3\(0\.9, 0\.2, 0\.2\)|new Color3\(0\.1, 0\.35, 0\.4\)/.test(ev));
 }

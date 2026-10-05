@@ -3,6 +3,7 @@
 // utils/chartGeometry's hover answer, not a helper here.
 
 import type { StateHistoryPoint } from "@/types/ha.types";
+import { clockTime, dayMonth, dayTime } from "@/utils/dateText";
 
 export function fmtChartValue(v: number): string {
   if (!Number.isFinite(v)) return "";
@@ -11,7 +12,7 @@ export function fmtChartValue(v: number): string {
 }
 
 export function fmtChartTime(t: number): string {
-  return new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return clockTime(t);
 }
 
 /** A duration, as a person says it: "2 s", "3 min", "1 h 20 min", "2 d 3 h". */
@@ -40,7 +41,7 @@ export function fmtOutage(gap: { from: number; to: number; actual?: { from: numb
  *  labeller for every chart; the Weather charts had a second. */
 export function fmtChartTick(t: number, spanHours: number): string {
   if (spanHours <= 48) return fmtChartTime(t);
-  return new Date(t).toLocaleDateString([], { day: "numeric", month: "short" });
+  return dayMonth(t);
 }
 
 /**
@@ -63,9 +64,7 @@ export function fmtChartStamp(t: number, spanHours: number): string {
     && d.getMonth() === today.getMonth()
     && d.getDate() === today.getDate();
   if (spanHours <= 24 && sameDay) return fmtChartTime(t);
-  return d.toLocaleString([], {
-    day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
-  });
+  return dayTime(d);
 }
 
 /**

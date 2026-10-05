@@ -29,6 +29,8 @@
 // to write as an argument rather than owning a mutable map, so that decision
 // stays visible at the call site instead of hiding in here.
 
+import { readJson, writeJson, removeStoredWhere } from "@/utils/storedJson";
+
 /** Bumping a prefix silently invalidates every stored answer under it — which
  *  is correct when the MEANING of a key changes (see FloorProbe's `vk.probe2.`,
  *  bumped because reading a grid-keyed entry as room-keyed would have
@@ -65,23 +67,18 @@ export class ModelKeyedStore<T> {
   load(): Map<string, T> {
     const out = new Map<string, T>();
     if (!this.storeKey) return out;
-    try {
-      const raw = localStorage.getItem(this.storeKey);
-      if (!raw) return out;
-      for (const [k, v] of Object.entries(JSON.parse(raw) as Record<string, T>)) out.set(k, v);
-    } catch { /* unreadable or evicted — just recompute */ }
+    // Unreadable or evicted reads as absent — just recompute (storedJson).
+    const stored = readJson<Record<string, T>>(this.storeKey);
+    if (stored && typeof stored === "object") for (const [k, v] of Object.entries(stored)) out.set(k, v);
     return out;
   }
 
   /** Replace this model's entries, and evict every other model's. */
   save(data: ReadonlyMap<string, T>): void {
     if (!this.storeKey) return;
-    try {
-      for (let i = localStorage.length - 1; i >= 0; i -= 1) {
-        const k = localStorage.key(i);
-        if (k && this.sweepPattern.test(k) && k !== this.storeKey) localStorage.removeItem(k);
-      }
-      localStorage.setItem(this.storeKey, JSON.stringify(Object.fromEntries(data)));
-    } catch { /* quota / private mode — this is an optimisation, not state */ }
+    const keep = this.storeKey;
+    removeStoredWhere((k) => this.sweepPattern.test(k) && k !== keep);
+    // Quota / private mode refusing it is fine — an optimisation, not state.
+    writeJson(keep, Object.fromEntries(data));
   }
 }

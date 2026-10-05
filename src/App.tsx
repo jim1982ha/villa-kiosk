@@ -1,6 +1,7 @@
 import { ConfigProvider } from "@/config/ConfigContext";
 import DeviceConfigSync from "@/config/DeviceConfigSync";
 import { FmDataProvider } from "@/fm/FmDataContext";
+import { AgentProvider } from "@/agent/AgentContext";
 import { HAStateProvider } from "@/ha/HAStateStore";
 import { ProfileProvider } from "@/auth/ProfileContext";
 import ProfileGate from "@/components/auth/ProfileGate";
@@ -44,7 +45,12 @@ export default function App() {
                     panel so a second erasable surface elsewhere doesn't need
                     its own copy of the prompt. */}
                 <SuperadminGate>
-                  <Dashboard />
+                  {/* The VESTA Agent's presence and messages — inside the
+                      gate like the stores above, and asking nothing for a
+                      profile without viewAgent (see AgentProvider). */}
+                  <AgentProvider>
+                    <Dashboard />
+                  </AgentProvider>
                 </SuperadminGate>
               </FmDataProvider>
             </ProfileGate>

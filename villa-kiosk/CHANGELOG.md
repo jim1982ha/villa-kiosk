@@ -1,3 +1,639 @@
+## 2.496.307
+
+### Changed
+- Behind the scenes: preparing the release of this version as the main VESTA. One release check mistook Home Assistant's own internal addresses for internet addresses. Nothing you see changes.
+
+## 2.496.306
+
+### Fixed
+- VESTA opens again. Since 2.496.304, opening it in the evening could fail on every device with "The 3D scene failed to load" or a crash screen. This happened when the sun was behind the first view of the house. The cause was a line of the sun's debug report, not the phone's memory.
+
+## 2.496.305
+
+### Fixed
+- A grouped device's window now shows each reading exactly as that reading's own window does. A temperature over the limit you set is red in its group too (before, it was red only when opened on its own), and a detector in alarm, such as "SMOKE DETECTED", shows in capitals with its warning icon there as well.
+- In "Also on this device", a number past the limit you set is now coloured too: amber when it is close, red when it is over.
+
+### Changed
+- Behind the scenes: which window, list and device are open, and where Back goes, now follow one set of rules instead of being spread across the main page. Nothing you see changes.
+
+## 2.496.304
+
+### Changed
+- The sun and the moon in the 3D overview are now a guide drawn round the house as you see it. They always sit in the sky just outside the house's outline, on the side where they really are compared with the way you are looking: ahead of you means above the house, to your right means on its right. A low sun at sunrise or sunset sits close to the house's edge. The higher the sun is in the sky, the higher above the house it is drawn, and at noon it is straight above it. When the sun is behind you, it fades out.
+- Turning, tilting, zooming and panning now move the sun and the moon with the house. They can no longer end up on the lawn in front of the house, or over it. If you zoom in until the house fills the screen, they fade out.
+
+## 2.496.303
+
+### Improved
+- Each new version is now started and checked healthy on both kinds of hardware (Intel/AMD and ARM, such as the Home Assistant Yellow) before Home Assistant is offered the update. A version that cannot start is never published.
+
+## 2.496.302
+
+### Changed
+- In the 3D overview, the sun and the moon now stay in one fixed place relative to the house, however you move the view: turning, tilting, zooming or panning. Each sits on an invisible dome round the house, one and a half times the house's size, in the direction where it really is. A morning sun is east of the house, low near the horizon, high at midday, and the house always passes in front of it. This is how architecture software such as Revit shows the sun round a building. Because each one is now a real place in the 3D view, it behaves like a tall palm tree beside the pool: tilting shows it over a different part of the garden, and it leaves the screen when that place is out of view.
+
+## 2.496.301
+
+### Improved
+- Home Assistant can now tell when VESTA is not working. VESTA checks its own health every 30 seconds. If one of its parts keeps crashing (five times in two minutes), it stops, so Home Assistant shows it as stopped instead of "running" while the screen stays blank. Turn on **Watchdog** on the add-on's page and Home Assistant restarts it automatically in both cases. A single crash still recovers on its own within a second, as before.
+- Every release is now checked with Home Assistant's own add-on checks before it is published.
+
+## 2.496.300
+
+### Fixed
+- Zooming the 3D overview no longer moves the sun or the moon against the house. Before, zooming in pulled the sun along the pool and lowered it toward the roof. Now each one stays over the same spot on the ground beside the house, and its height above that spot grows with the house as you zoom in. At the zoom the overview opens with, nothing has changed. Zoomed far in, a sun or moon that would end up behind you is simply not shown.
+
+## 2.496.299
+
+### Fixed
+- The 3D overview shows only one sun. When the view was tilted close to level, a second small white sun with a large pale glow could appear above the real one. That second one was the sky's own built-in sun, drawn at the sun's true position. In the overview it is now switched off, so the sun placed round the house is the only one. The sky's colours for the time of day are unchanged, and the walk-through keeps its real sun as before.
+
+## 2.496.298
+
+### Fixed
+- Panning the 3D overview (dragging it, or the arrow keys) now carries the sun and the moon along with the house. Before, they stayed put on the screen while the house slid away, so after a pan the moon could hang over empty sky or end up on the wrong side of the pool. Turning, tilting and zooming were already right and are unchanged.
+
+## 2.496.297
+
+### Fixed
+- Switching from the 3D overview to the walk-through now moves the moon to its real place in the sky straight away. Before, it stayed where the overview had drawn it until the sky's next minute update, so for up to a minute it could hang in the wrong spot.
+- In "Also on this device", a sensor that only reports yes or no now shows the same colour as in its own window. A grouped smoke detector's "Smoke detected" is red, "Clear" is green and an offline sensor is amber. Before, every row was the same grey whatever it said.
+
+## 2.496.296
+
+### Fixed
+- A sun or moon that is behind you is no longer shown in the 3D overview. Looking at the house from the front and then from the back, it now appears from only one side: the side where it really is in front of you. As you turn the view and it moves round to your side, it fades out gently where it stands, and it fades back in on the same side when you turn back.
+
+## 2.496.295
+
+### Fixed
+- Tilting the view no longer moves the sun or the moon against the house. They are now tied to a spot on the ground beside the house, in their real direction, and drawn straight above that spot on the screen, higher when they are higher in the sky. Before, they hung in the air, so tilting made them line up with different things: beside the pool from one angle, above it from another. Now a sun beside the pool stays beside the pool however you tilt, turn or zoom.
+
+## 2.496.294
+
+### Fixed
+- The sun and the moon are never drawn over the house any more. Where one lines up with the house, it now goes behind it, the way the real sky does, and shows again as soon as it clears the walls or the roof.
+
+## 2.496.293
+
+### Fixed
+- The sun and the moon stay on their real side of the house however you turn the view. A sun behind the east wall stays behind the east wall from every side. Before, a sun high in the sky was drawn almost above the roof and seemed to follow the camera. Its height on screen is now only a hint, and the direction it lies in is what it shows.
+
+## 2.496.292
+
+### Changed
+- In the 3D overview the sun and the moon now sit close to the house, on an imaginary dome around it, instead of far away in the sky. A sun east of the house is drawn east of the house from every angle, so it shows you where to look outside. It stays at the same distance from the house when you zoom or move the view. It is always on screen, eased in gently near the edges, and the house never hides it. When it is behind you, it is drawn on your side of the house, lower on the screen. Walking through the house is unchanged: there the sky is the real one, and walls still hide the moon.
+
+## 2.496.291
+
+### Fixed
+- Turning the view no longer makes the sun or the moon jump from one side of the house to the other. They now behave like the real sky: as you turn, the sun slides off one edge of the screen, and it comes back over the other edge only once you have turned far enough round to face it again. While its direction is in view it is always shown, in its true place. Zooming and moving the view leave it where it is, like a real sky.
+
+## 2.496.290
+
+### Fixed
+- The sun and the moon now keep their true east/west place in the overview. Tilting the view no longer slides them sideways: a moon on the right of the house stays on the right whether you look from the side or from straight above. Turning the view moves them by the real amount, the way the garden moves. When one is out of view to the side or behind you, it waits at the edge of the screen on its real side instead of disappearing.
+
+## 2.496.289
+
+### Changed
+- Behind the scenes: updates are published faster. The ARM version (the one your Home Assistant Yellow runs) is now built on ARM hardware instead of being emulated. Nothing in the app changes.
+
+## 2.496.288
+
+### Changed
+- Behind the scenes: the checks run before each release are faster (about 108 s down to about 60 s): the code tests run side by side instead of one after another, the slowest test no longer redoes its work, and the type check reuses its last run. Nothing in the app changes.
+
+## 2.496.287
+
+### Changed
+- Behind the scenes: two rules of the 3D map now each live in one tested place: which room a device belongs to, and how many badges a room card can show on your screen. Nothing you see changes.
+
+## 2.496.286
+
+### Changed
+- Behind the scenes: the code that lays out a saved Recap, spend statement or readiness check on screen is now checked by tests against the documents themselves. Nothing you see changes.
+
+## 2.496.285
+
+### Fixed
+- **A sensor shown inside a grouped device window now looks the way it does on its own.** When a sensor is grouped with others (for example a smoke detector with its battery), its state used to show as plain grey text, with no colour and no history. It now has the same coloured status as in its own window ("Clear" in green, "Smoke detected" in red) and its own history bar underneath.
+
+### Changed
+- Behind the scenes: how a sensor's state looks (its words, colours, status and alert) is decided in one place that both windows use, and it is checked by tests on real values.
+
+## 2.496.284
+
+### Fixed
+- **No more coloured border round a device window's icon when it opens.** As the Owner, the icon at the top of a device window is a button for changing its colour, and it took the window's first focus. On a phone, the browser then drew its own focus ring round it, in the phone's theme colour (amber on yours). It looked like a device state, and it wasn't one. The window's title now takes that first focus. Keyboard focus on the icon shows VESTA's own green outline.
+
+## 2.496.283
+
+### Changed
+- **Motion and occupancy sensors: green while quiet, red bars for a detection.** In the sensor's window, its status and history bar are now green while nothing is detected (the sensor is watching) and red where something was, as the camera's motion bar already shows it. The map and the alerts still treat motion as information, not a problem. The Map colours legend says so.
+
+## 2.496.282
+
+### Fixed
+- **Opening some sensors' windows no longer shows the error screen.** When a sensor's readings were identical except for a tiny rounding difference in the last decimal place, drawing its chart axis never finished, and the window fell over with "Invalid array length". This happened, for example, with the Guest bathroom temperature & humidity sensor, three times since 2.496.269. Such readings are now drawn as the flat line they are, and an axis can no longer run on forever.
+
+## 2.496.281
+
+### Changed
+- **A closed door, window or gate is green.** Closed (and locked, for a lock sensor) is the secure, expected state, so its status and history bar are now green. When it's open, it's grey, not red: an open window isn't a fault. To have an open door flagged (a server room, for example), give that sensor an alert state in Settings: open then turns red and closed stays green. The Map colours legend says so.
+
+## 2.496.280
+
+### Changed
+- **A detector finding nothing wrong now shows green.** "No leak", "Clear" (smoke, gas, tamper) and a battery reading "Normal" are the device doing its job, so its status and its history bar are now green ("On / active") instead of grey ("Off / idle"). The problem state stays red. The same applies to any sensor you've given an alert state in Settings (a server-room door you watch, for example): its safe state is green. Sensors that only report what's happening (motion, a door nobody watches) are unchanged. The Map colours legend says so.
+
+## 2.496.279
+
+### Fixed
+- **Sensors that are either on or off now read as Home Assistant words them, everywhere.** A leak sensor's battery read "Off" where Home Assistant says "Normal" (and "Low" when it needs changing). Tamper reads "Clear", a door "Open"/"Closed", moisture "No leak"/"Leak detected", and so on for every kind of sensor. This applies in "Also on this device", every device list, the map badges and the entity search in Settings. The device window's own status already used these words. "Unavailable" and "Unknown" keep their own words.
+
+## 2.496.278
+
+### Changed
+- **The energy window's "Every device" opens on the pie chart.** The list is one tap away, on the same switch.
+- **"Also on this device" never lists the device's main entity.** Opening the battery of "Smoke Detector Smoke" listed "Smoke Detector Smoke" again. A reading's window now lists only what else the device has; "‹ Back" returns to the device itself. This applies to every device window.
+
+## 2.496.277
+
+### Fixed
+- **A percentage chart no longer goes above 100 %.** A battery at 100 % used to be drawn under an axis reading 100.5 and 101. The axis now stops at 100 and doesn't go below 0 for any % reading (batteries, humidity, the weather's Humidity chart), as long as the values stay between 0 and 100. A % reading that really goes above 100 keeps its full range, so nothing is cut off.
+
+## 2.496.276
+
+### Changed
+- Behind the scenes: which devices a device list shows (a summary tile, a room, a Cockpit tile) and their order by room are now decided in one place, shared with the Cockpit's room tiles, and checked by tests. Nothing you see changes.
+
+## 2.496.275
+
+### Changed
+- **Every dropdown in VESTA now opens VESTA's own list, in its colours.** This covers the Recap period, the Spend month, a cost's category, a maintenance task's room, and a device's type and category in Advanced Settings. They used to open the phone's own picker (on Android, a grey sheet of radio buttons; on iPhone, a wheel). The list opens under the field, or above it near the bottom of the screen, and the current choice is ticked. Back or Escape closes the list without closing the window behind it.
+
+## 2.496.274
+
+### Changed
+- **The Cockpit's "Report" tab is now "Recap".** "Report" now means only what the VESTA Agent sends you. The tab's buttons read **Generate recap** and **Save recap**, and the document is titled "operations recap". Recaps you saved before still appear in the list.
+
+### Fixed
+- **Opening a device you're not allowed to see no longer closes the window you were in.** Before, tapping such a device in the Cockpit or the VESTA Agent closed that window and opened nothing. Now nothing happens, and you stay where you were.
+- **"‹ Back" always leads somewhere.** Opening a reading that couldn't be shown used to leave a Back button pointing at the device you were already looking at.
+
+## 2.496.273
+
+### Changed
+- **Facility now lives inside the Cockpit: one button, one window, seven tabs.** The Facility button has left the top bar (and the phone menu). The Cockpit opens on **Overview** (what it showed before), followed by Facility's six tabs: **Today, Readiness, Faults, Spend, Schedule, Report**. Everything works as before:
+  - "Report a fault" on a device opens the Cockpit on **Faults** with the device already filled in.
+  - A device opened from any tab has a "‹ Back" button that returns to that same tab.
+  - Readiness's "devices offline" link now switches to Overview, instead of opening a second Cockpit on top.
+  - The Cockpit button's number already counted open faults and overdue maintenance, so the Facility button's own number isn't lost.
+- Guests (who never had Facility) see the Cockpit as before, without the tabs.
+
+## 2.496.272
+
+### Changed
+- **The category buttons in the top bar are coloured like the Cockpit's category tiles.** Each category shown on the map now has its own colour (comfort orange, light amber, network green, energy blue, access purple, others grey), instead of the same green for all of them. A category you hide turns neutral and dimmed. Both places use the same colouring code, so they can no longer drift apart.
+
+## 2.496.271
+
+### Changed
+- **"Also on this device" now works the same on every device window.**
+  - **Opening a reading by itself** (for example a pump's apparent power) now lists the rest of its device, starting with the device itself, so its controls are one tap away.
+  - **A device that isn't placed on the map** still lists its other readings, taken from Home Assistant's own list of devices.
+  - **Batteries are listed** even though Home Assistant files most of them as "diagnostic": a battery level is something to act on. Signal strength, uptime and similar technical readings stay out, and so does anything you hid yourself in Home Assistant.
+  - **No clutter:** the most useful readings come first (power, energy, temperature). Only the first three show, with "Show all" for the rest, so a busy plug no longer pushes its controls off the screen.
+  - **Cameras:** the list appears in a camera's details window (press and hold its badge). The live video view stays clear.
+
+## 2.496.270
+
+### Added
+- **A "Back" button on any window opened from another one.** Opening a reading from "Also on this device" used to replace the device's window, and the only way out was Close, back to the map. Now a "‹ Back" button at the top right returns to where you came from: the device a reading belongs to, the room or category list a device was picked from, or the Cockpit, the VESTA Agent or Facility. The phone's back gesture and the Escape key do the same. Close still closes everything. A window opened straight from the map or the bottom bar has no Back button, since there is nothing to go back to.
+
+## 2.496.269
+
+### Changed
+- Behind the scenes, nothing changes on screen (checked: the villa and its badges draw pixel for pixel as in 2.496.268). The code that draws the map's badges was made testable:
+  - **How much room a badge needs, with or without its number**, is now worked out in one place. "Zoom to this room" no longer hides every badge's number, measures and puts the numbers back to find its distance.
+  - **The test that lays badges out with the 3D engine's own layout now uses the very code the map draws with**, instead of its own copy of it, so a drawing mistake can no longer pass the test unseen.
+
+## 2.496.268
+
+### Changed
+- Behind the scenes, nothing changes on screen. Three pieces were made easier to test and harder to break:
+  - **The room dial** (hold a floor button): where it sits and whether the rooms show as an arc or as one column is now worked out in one place and checked at real screen sizes (a narrow phone, your phone, the unfolded phone and the wall tablet).
+  - **The windows over the map** (Cockpit, Facility, VESTA Agent, Settings, Rooms): one place now decides which are open and which this profile may open. Before, the Cockpit was handled by the top bar and the others by the page, each in its own way.
+  - **"Needs attention"** is worked out once per profile instead of twice, beside the villa's other data.
+
+## 2.496.267
+
+### Fixed
+- **Nothing looks selected after a tap any more.** On a phone or tablet, the browser keeps an invisible pointer where your finger lifted. Whatever opened under that spot took on its "mouse over" look and kept it, so the "Which room?" list could open with its first room highlighted in green as if it were already chosen. The "mouse over" look now appears only on devices with a real mouse or trackpad. This applies to every button and list in the app, not only that one.
+
+## 2.496.266
+
+### Changed
+- **A room chip now shows whether the room is all right in one place: its number.** Before, "needs attention" was a red border around the chip while the number stayed green, which read as two answers to one question. Now the number's colour says it all:
+  - **red** — something in the room needs attention (an unlocked door, a leak…);
+  - **amber** — Home Assistant has lost contact with a device in the room;
+  - **green** — all right.
+
+  If a room has both, red is shown. The chip's border no longer turns red; it only shows a light border when something in the room is on, as before. The "Which room?" list and the map colours key follow the same rule.
+
+## 2.496.265
+
+### Changed
+- **A room's device count is amber, not red, when a device there has gone offline.** On a room chip, red already meant "something here needs attention" (the border). The count used the same red for "Home Assistant has lost contact with a device", so a red border with a green count, or a red count with no border, looked contradictory. The count is now amber, the colour VESTA already uses for a lost device everywhere else, so red on a room chip only ever means "needs attention". The same applies in the "Which room?" list.
+- **The map colours key now explains room chips**: what the red and light borders mean, and what the green and amber numbers mean.
+
+## 2.496.264
+
+### Fixed
+- **Room chips keep their number while you move the camera.** The small circle with a room's device count went blank for a moment while the view was turning or zooming, then came back. The circle was redrawn at a new size each time the zoom changed, and stayed empty until the new drawing was ready. It is now drawn once, at the largest size this screen can show, so moving the camera only resizes it.
+
+## 2.496.263
+
+### Changed
+- **Money is written in Home Assistant's currency, the same way everywhere.** Facility, Energy and the monthly report each wrote amounts their own way: Facility as "IDR 450,000", Energy in a style taken from the cost sensor's own unit. Every amount now uses the currency set in Home Assistant (Settings → System → General → Currency), written in your language's usual style. Change it there once and every screen follows. Amounts of 100 or more show whole units; smaller ones show cents.
+- **The Facility forms look and behave the same.** Logging a fault, recording a spend, closing a job and editing a schedule or contract now share one cost field (labelled with the currency, for example "Cost (EUR)"), one device picker and one Cancel / Save row with its error line.
+- **Close buttons are the same on every window.** The legend, Cockpit, Facility, the VESTA Agent, the first-run tips and the colour and settings windows now share one footer.
+- **Dates and times read the same everywhere.** A "last changed" moment no longer shows seconds on some screens and not others.
+
+### Fixed
+- **Walking no longer carries on after you switch apps.** If you left VESTA while holding a walking key, the camera kept walking when you came back. Held keys are now released when the app loses focus.
+- **An expired login is now noticed by history charts, the 3D model download and room data.** Before, only some requests noticed it and the others failed silently. They now show the same "signed out" prompt.
+
+### Changed (behind the scenes)
+- Duplicated code went from 5,028 tokens (1.60 %) to 712 (0.23 %). New checks stop it from growing again and keep each shared job (money, dates, saved settings, requests to the add-on) in one place.
+
+## 2.496.262
+
+### Changed
+- Behind the scenes, nothing changes on screen. The figures VESTA reports about how long it took to open, and its "the app froze" reports, are now built by one piece of code that is checked against known cases. These figures were behind two earlier misleading readings: a 21-second "mount" on a 2-second load, and a load's own drawing time counted as a freeze. Building the report twice could also re-file a freeze as loading time; it no longer can. The 3D floor switching is now tested on a three-storey model.
+
+## 2.496.261
+
+### Fixed
+- **VESTA now works with villas of three storeys or more.** The stairs in the 3D model could only take you between floor 1 and floor 2, and a model without a room plan put everything above 2.8 m on floor 2. The stairs now go one floor up or down among the floors the model has. Without a room plan, each device's floor is taken from the model's own floor slabs. A two-storey villa like this one behaves as before.
+- **The debug line for a room tap now shows the zoom the camera actually uses.** When the camera's own zoom limits changed the result, the line printed the value from before the limit. It now prints both. Tapping a room gives the same view as before; on this villa it frames the Living Room identically.
+
+### Changed
+- Behind the scenes: the room-tap camera calculation and the walking-mode start point at the foot of the stairs are each one testable piece, checked by value. Behaviour is unchanged.
+
+## 2.496.260
+
+### Changed
+- **A device's panel now lists its other readings.** Under a device's controls, a new "Also on this device" section lists the readings Home Assistant reports for the same device: a pump plug's energy and current, a lock's battery. Tap one to open its own chart. These readings had no place in VESTA unless they were placed on the map.
+- **Cockpit, the VESTA Agent, Facility and the summary bar open the device.** Anything they mention about a device, such as a fault on the Onsen pump's energy meter, now opens the same panel as the device's badge on the map, and the reading they mentioned is listed in it. A row in a room or category list still opens exactly that row.
+
+### Fixed
+- **Grouping a device no longer removes its controls.** A group whose main entity can be switched (a lock, a switch, a plug) opened a summary with readings only, so a grouped lock could no longer be locked from its badge. It now opens the device's own controls, with the group's members under "Also on this device". A group of readings (a temperature and humidity sensor) keeps its combined chart.
+- **Advanced Settings no longer lists a device's own readings as "not shown anywhere".** A reading of a device that is on the map (the pump's energy meter) is shown, in that device's panel. The list also shows the first few with a "Show all" button instead of every entry at once.
+- **One entity can only be in one group, everywhere in Settings.** Accepting a suggested grouping did not check whether the entity was already in another group. Every group change is now checked against your latest settings.
+
+## 2.496.259
+
+### Fixed
+- **A door can no longer be unlocked with one tap from a device list.** In a room or category list (Cockpit, the summary bar), a lock's switch unlocked the door at once. The lock's own screen asks "Unlock …?" first. Now every switch asks the same question before an unlock: the list's switch (the question opens under the row), the device screen and a device's linked switch.
+- **"Ask before switching" is now respected everywhere.** A device you set to ask first (in Advanced Settings) was only asked about on its own screen and on the map. Its switch in a room or category list, and as another device's linked switch, acted straight away. They now ask too, in words that say where it is going ("Turn off Gate?").
+- **Editing a paused maintenance task no longer restarts it.** Fixing a paused task's name or interval switched it back on. It now stays paused until you press Resume.
+- **The task interval is read as you typed it.** "1.5" was saved as 15 days, and a blank or mistyped interval was saved as every day. The form now asks for a whole number of days and keeps the Add button off until there is one. The Spend tab's warning percentage had a similar problem ("8.5" read as 85) and is fixed too.
+
+## 2.496.258
+
+### Fixed
+- **A fault about one reading of a device now opens that device, the same as on the map.** The Onsen pump's energy-drop fault in Cockpit opened the pump's energy chart, while the pump on the map opens its power. The fault was raised on the pump's energy meter, a reading that isn't placed on the map, so Cockpit treated it as a separate device: no room under it, and a tap opened the meter. Cockpit now uses Home Assistant's own list of which readings belong to which device. The fault sits under the Onsen pump with its room (Onsen Outdoor), and a tap opens the pump as the map does. Other faults raised on an unplaced reading of a placed device, such as a battery level, behave the same way.
+
+## 2.496.257
+
+### Fixed
+- **VESTA inside the Home Assistant app now really keeps the 3D model on the device.** Your load reports after 2.496.255 still showed the model downloaded on every open (marked "not kept"). Inside Home Assistant the page is looked after by Home Assistant's own background helper, and VESTA mistook it for its own and skipped saving the model. It now saves it. The first open after this update downloads it once more, and later opens reuse it.
+- **The Save and Close buttons at the bottom of Settings (and every other dialog) show their icon and their word again on tablet-sized screens.** On screens 641 to 720 pixels wide, such as a tablet held upright, the two round buttons showed only a speck: the icon was squeezed to a few pixels and the word was hidden. They now read "Save" and "Close" there. Phones keep the round icon-only buttons, now drawn at full size.
+
+## 2.496.256
+
+### Changed
+- **The installed app (the home-screen VESTA) opens faster.** It now opens from the copy it keeps on the device instead of first checking the network for the page, which your iPhone spent 0.15 to 0.5 seconds on at every open.
+- **It no longer re-downloads its own code on every open.** Each open quietly downloaded about 4 MB of app code again in the background (the 3D engine, the app and its decoder), although nothing had changed. Those files are now kept until an update replaces them.
+- **Updates arrive differently.** A new version now downloads in the background while you use the app. When it is ready, a notice says "A new version of VESTA is ready — tap to reload". If you don't tap, the next open uses it. The wall tablet picks it up at its nightly 04:00 refresh. The first open after an update no longer waits for the new code to download, which took your iPhone 1 to 1.5 seconds extra.
+- Opening VESTA inside the Home Assistant app is not affected by this change.
+
+## 2.496.255
+
+### Fixed
+- **Opening VESTA inside the Home Assistant app no longer downloads the whole 3D model every time.** Your phone's load reports showed every open re-downloading the 17 MB villa (2 to 22 seconds), even twice in a row on the same version, while turning it into the 3D view took under 2 seconds. VESTA now keeps the model on the device after the first download and reuses it until a new model is uploaded. The first open after this update still downloads it once.
+- The copy is removed when someone signs out of a shared tablet, as before.
+
+## 2.496.254
+
+### Fixed
+- **Uploading a model without room data now clears the old rooms everywhere.** The upload already meant to reset them, but every device refused the empty room list and kept the previous model's rooms, with "Failed to refresh room names…".
+- **A wrong room-data file is refused before anything is saved.** Picking the wrong .json in Settings used to show an error while the file was already saved for every device. Now nothing is uploaded, not even the model picked with it.
+- **A brief add-on restart no longer shows "No 3D model loaded yet".** If the tablet cannot reach the add-on for a moment (a restart, an expired sign-in, a dropped connection), it now shows "reconnecting" and keeps trying until the villa loads, instead of offering an upload on a villa that has a model.
+- **Rooms added with "Add room here" are no longer at risk when a new or reset tablet opens.** Opening the villa never deletes them now; only a new model upload replaces the rooms.
+- **If a model uploads but its room data does not, you are told**, and the villa reloads to the new model. It used to stay silent.
+- **The first upload on a fresh install reaches every device.** The upload button on the "No 3D model loaded yet" screen saved the model in that one browser only. It now uploads to the add-on, with its room data, like Settings.
+
+### Changed
+- Opening the villa makes one request fewer: the add-on now tells each tablet which version of the model it holds. Models already saved on a tablet are kept and not downloaded again.
+- A model left in a browser by older versions is deleted to free the space.
+
+## 2.496.253
+
+### Changed
+- **"Which room?" shows each room's status.** When you press and hold a room badge that stands for several rooms, each room in the list now has the same border as its badge on the map: red when something there needs attention, the "on" colour when something is running. Its device count is green, or red when a device in that room has stopped reporting.
+
+## 2.496.252
+
+### Fixed
+- **A guest's report is no longer filed twice when the connection drops.** If the tablet could not reach the add-on, the report was already kept on the tablet and sent automatically later, but the window said "nothing was sent… try again", and pressing Send again created a second report. It now thanks the guest and says the tablet will send it on its own. The same applies to moving a fault to its next stage and to closing a fault.
+- **The Facility forms keep what you typed when a save is refused.** Raising or editing a fault, recording a cost, logging a completed task and editing a maintenance task emptied the form after Save even when the add-on refused it, so the text was lost. The form now stays filled and says why it was not saved.
+- **Recording a cost when a fault is resolved now warns about the monthly cap**, as the Today and Spend forms already did.
+- **The Cockpit's activity feed words states correctly.** A leak sensor that went offline was listed as "No leak"; it now reads "Unavailable". Words such as "not_home" read "Not home".
+- **Chart tooltips show a reading as its badge does**, for example "6.6 kW" instead of "6571W".
+- **The on-screen joystick stops when the phone loses the finger.** On iPhone and iPad the walk could carry on with no finger on the screen.
+
+### Changed
+- Nothing else looks different: every press-and-hold timing is now stated in one place (unchanged), and new checks make sure a device's map icon is always its panel icon.
+
+## 2.496.251
+
+### Fixed
+- **An answer to the VESTA Agent can no longer be given while the agent is offline.** The Kiosk hid an alert's buttons while the agent was offline, but a screen opened earlier could still press one, and the answer was kept for an agent that was not there to act on it. The add-on now refuses that press itself and says why ("The VESTA Agent is offline"), and every screen shows the buttons only when the add-on says the alert can be answered.
+- **With the sky-time preview (`?skyTime=`), the light/dark/night theme now follows the previewed hour**, as the sky does. It kept following the real clock.
+
+### Changed
+- Nothing else looks different. The rest of this release makes three things testable without a browser, so future changes can be checked before they reach the wall: where the sun and the moon are drawn in the overview (proved to draw exactly as before), what the phone's Back gesture closes, and the passcode lengths (now stated once and compared with the add-on's own rule).
+
+## 2.496.250
+
+### Changed
+- Nothing changes in the app itself. The release command now shows its progress as it goes, and waits a moment instead of stopping when two releases are prepared at the same time.
+
+## 2.496.249
+
+### Changed
+- Nothing changes in the app itself. This release only changes how VESTA releases are made: one command now writes the version everywhere, runs every check, sends the release and waits until Home Assistant can actually offer it, so a release can no longer be reported as done before it reaches you.
+
+## 2.496.248
+
+### Changed
+- **On a tablet or computer, the first-person / bird's-eye view button is under 1F and 2F.** It has moved out of the top bar's right-hand icons and into the 1F/2F section on the left, below a thin line, with the same size and look as the floor buttons. On a phone nothing changes: the switch is still in the menu.
+
+## 2.496.247
+
+### Changed
+- **Phone menu: no more "Signed in as Owner" line.** The badge on the "Log out" row (O, FM or G) already shows who is signed in. The dot that showed the connection to Home Assistant on that line now sits at the bottom right of the badge: green when connected, flashing amber while connecting, red when the connection is lost.
+- **Phone menu: the VESTA Agent's status is a dot on the robot.** The Cockpit row no longer says "· agent online". As in the top bar on a tablet, the robot has a small dot at its bottom right: green when the agent is online, amber when it is offline. The phone menu and the top bar now use the same dot.
+
+## 2.496.246
+
+### Changed
+- **The Cockpit's "Needs attention" shows each device once.** When the same device had more than one problem, it appeared twice: an unlocked entrance door was listed as "Unlocked", and once the VESTA Agent turned the "door unlocked" alert into a fault, the same door appeared a second time and the number on the Cockpit button went up. An offline device and its "device offline" fault did the same. Now a device with several problems is one entry, under the device's name and room, with one line per problem below it ("Unlocked", "Open fault: Entrance door unlocked"). Each fault keeps its own Close button. The number on the Cockpit button and in the phone menu counts devices, so a fault arriving for a door already listed no longer raises it. A device with a single problem looks exactly as before. A problem raised on another part of the same device (for example its battery) joins the device's entry. Faults and maintenance tasks that name no device keep an entry of their own. The most serious problems come first and an entry no longer moves when a new problem joins it.
+- **Phone menu: "Label size (?)".** The (?) now sits beside "Label size". Tap "Label size" or the (?) to open the map colours explanation that the "Map colours" row used to open; that row is gone. The − and + buttons still change the label size.
+- **Phone menu: "Log out".** The last row shows the same round badge as the top bar on a tablet (O for the Owner, FM for the Facility Manager, G for a Guest) and reads "Log out". It does what "Switch profile" did: it opens the profile picker.
+
+## 2.496.245
+
+### Fixed
+- **A device list now rings a device exactly as the map does.** A device whose linked entity is a lock or a blind (for example a gate sensor linked to its lock) had a coloured ring on the map while the lock was unlocked or the blind open, but showed plain in the device lists (a room's list, a bottom-bar tile's list, the Cockpit's lists). The row now has the same ring as its map badge.
+- **Everything red on the map is in the Cockpit's "Needs attention".** It listed only sensors such as a leak or a lost connection. An unlocked door, a jammed lock, a sensor reporting a fault, and a sensor whose state your configuration marks as a problem were red on the map but missing from the list and from the number on the Cockpit button. They are listed now, with what they say ("Unlocked", "Jammed", …), and the number counts them.
+
+### Changed
+- Nothing else looks different: the rest of this release is internal tidying (how a device's look, a room chip, a group card, the windows each profile may open and the Facility record's words are worked out), so each is decided in one place.
+
+## 2.496.244
+
+### Changed
+- **The signed-in badge is filled with the same green as the category buttons**, its letter(s) in their icon colour — white on green in the light theme, dark on light green in the dark and night themes.
+
+## 2.496.243
+
+### Changed
+- **The signed-in badge looks like the other top-bar icons.** A thin circle drawn like the gear beside it, the same size and colour, with its letter(s) centred — O, FM or G. It was a large filled disc with the letter off-centre.
+- **The time is part of the title line.** The villa name's own font and soft halo, a little smaller and lighter, instead of a separate pill.
+- **The V of the app icon sits in the middle of its tile.** A little smaller and lower, so it looks centred (a V is heavy at the top), everywhere the app icon appears.
+
+## 2.496.242
+
+### Changed
+- **One icon for the Cockpit and the VESTA Agent.** When a VESTA Agent is set up, the top bar no longer has a separate robot icon: the Cockpit button itself shows the robot, with the red "needs attention" number at its top right and the agent's online/offline dot at its bottom right. Tap it to open the Cockpit as before. The VESTA Agent window now opens from a "VESTA Agent" button at the bottom left of the Cockpit, in the same place Settings has its "Advanced Settings" button. Without an agent nothing changes: the ⚠ icon, and no extra button.
+- **Who is signed in is one round badge.** The figure, the word "Owner" and the exit arrow at the top right are replaced by one round badge the size of the other icons, last on the right after Settings: "O" for the Owner, "FM" for the Facility Manager, "G" for a Guest. Tapping it does what the arrow did: it opens the profile picker to switch profile. The first-person / bird's-eye view button stays where it was.
+- **The time at the top left is easy to read.** It is now the same colour as the villa name, a little larger, on its own small rounded backing so it stays readable over any part of the map, in the light, dark and night themes. The digits no longer shift when the minute changes.
+- **The "V" logo and the 1F/2F floor buttons line up as one column.** Both are now the same width, with the same rounded corners and the same shadow, on the tablet and on a phone. The floor buttons are also easier to hit with a finger.
+
+### Removed
+- **"Energy today" is no longer in the Cockpit.** The Energy window, from the bottom bar, already shows today's energy.
+
+## 2.496.241
+
+### Fixed
+- **Facility → Faults: the cards are laid out cleanly.** A card is now the title across its width with its status at the right, then what happened, then its buttons on their own row at the right (or the "Close this fault?" question in their place). Before, the status and both buttons sat beside the title and squeezed a long title into a narrow column six lines tall. A fault whose history is just "Open" no longer repeats it under "Opened …".
+- **Facility: the tab bar no longer gets cut.** On a long tab (Faults) the bar was squeezed and the highlighted tab showed cut in half, with the cards scrolling right under it; it now keeps its full height on every tab, like Today.
+
+## 2.496.240
+
+### Fixed
+- **A room chip turned red when a pump was simply running.** A device whose linked switch is on (a pump's power badge with its relay on) counted as "needs attention" for the room chip and the group cards that hold it, so the Swimming Pool chip went red while nothing was wrong. It counts as "on" now: the chip gets the neutral ring, and red stays for a real problem.
+- **The room list from a long press on a floor button overlapped on a phone.** With many rooms (17 on 1F), the names were laid on an arc that did not fit an upright phone, and they piled on top of each other (Bedroom 1 on Guest Bathroom, WIC on Swimming Pool). When the arc does not fit, the rooms now show as one column beside the floor buttons, one name per line, scrolling if needed; tap a name to go there. The arc stays wherever it fits, such as on the wall tablet.
+
+## 2.496.239
+
+### Added
+- **You can clear VESTA Agent messages.** Each message in the VESTA Agent window has a small "Clear" button, and when any message is answered or expired a "Clear answered (N)" button appears at the bottom left. A message that is still waiting for an answer asks "Clear it?" first, because once it is cleared nobody can answer it. Clearing removes the message for every device; the answers people already gave are kept for the agent.
+- **Close a fault in one step when nothing needs doing.** In the Faults tab, an open or in-progress fault now has "Close — no action needed" beside "Mark in progress" / "Mark resolved". In the Cockpit, each fault under "Needs attention" has a small "Close" button. Both ask once, then mark the fault resolved with the note "Closed without action" — no cost, and it is not counted as work done. The usual two-step way (in progress, then resolved with a cost) is unchanged.
+
+### Changed
+- **The ring a linked switch puts on a badge is now the badge's own colour, not red.** When a device's linked switch is on (for example a pump's power badge whose relay is on), its badge on the map, its list rows and the icon at the top of its window get a ring in the same colour as the badge's icon — blue for a power badge. Red stays only for "Needs attention" (an unlocked door, a leak, low battery). The Map colours guide (?) has a new line, "Linked device on", showing it.
+- **A room chip (or a group card showing a count) no longer turns red just because a device in it is on.** It turns red only when a device in it needs attention; a device that is merely on gives it a neutral ring.
+
+## 2.496.238
+
+### Changed
+- **"On" in the Cockpit now counts only devices you can switch**: lights, switches, unlocked locks, open blinds, A/C that is running, speakers that are on. Sensors — motion, doors, temperature — still count as devices but never as "on". Before, a motion sensor detecting someone made the Access Control tile read "2 on" beside a single unlocked door, and the number changed every few seconds.
+
+## 2.496.237
+
+### Changed
+- **The Cockpit has no status line at the top any more.** The green "Everything looks fine." line is gone too, like the red one in 2.496.236: when something needs attention, the "Needs attention (N)" list says so; when nothing does, the Cockpit simply starts with the rooms.
+
+## 2.496.236
+
+### Changed
+- **The Cockpit no longer says "needs attention" twice.** The red line at the top is gone when something needs attention; the list's title now carries the count instead — "Needs attention (1)". When nothing needs attention, the green "Everything looks fine." line still shows.
+
+## 2.496.235
+
+### Changed
+- **The Cockpit shows rooms and floors as tiles, like the categories.** Each tile gives the name and "N devices · M on", plus "· K offline" in amber when Home Assistant has lost any of its devices (what the red-and-green bars used to show). Every tile — room, floor or category — opens the list of its devices, so you can see exactly what a count includes.
+- **"Energy today" in the Cockpit opens the Energy window**, the same one as the Energy tile of the bottom bar.
+
+## 2.496.234
+
+### Changed
+- **Nothing to see on screen.** What the Kiosk and the VESTA Agent agree on — the version, what a message may contain, and what the Kiosk shows back — is now written in one file that both sides are tested against, so a change on one side can no longer silently break the other. Who may answer an agent's message now follows the profile rights directly (today: Owner and Facility manager, as before).
+
+## 2.496.233
+
+### Fixed
+- **A tablet whose session ended while the app was closed no longer keeps the villa's floor plan in its offline storage.** Signing out already cleared it; a session that ran out, or was ended with "Sign every device out" from another device, left it until the next sign-out. The app now clears it at start whenever the server says there is no session. (With no network at all, it is kept — an offline wall tablet must not lose its villa.)
+- **A passcode lockout without a stated time now waits 60 seconds on both passcodes.** The profile passcode and the superadmin code handled this differently.
+
+### Changed
+- **Nothing else to see on screen.** Signing in and out, the passcode answers and the offline storage rules each now live in one place and are tested directly.
+
+## 2.496.232
+
+### Changed
+- **Nothing to see on screen.** The rules behind the bottom bar's tiles (which tiles each profile gets, what each one says — "Locked", "1 Unlocked", "3 kW" — and which window a tap opens) now live in one place that is tested directly, instead of inside the bar's screen code.
+
+## 2.496.231
+
+### Fixed
+- **Sliders now always send their value.** Brightness, colour temperature and blind position were only sent when a finger or mouse was lifted: moving them with the keyboard changed the slider but did nothing, and a touch the browser turned into a scroll left the slider stuck and no longer following the device. They now send on every kind of release (a keyboard change once the keys stop), and a touch that turns into a scroll simply goes back to the device's value.
+- **A refused slider or A/C temperature change goes back straight away** to the device's real value, instead of showing a value Home Assistant did not apply.
+
+### Changed
+- **An offline device looks the same in every window**: the "Unavailable" notice, and no controls. The A/C used to show greyed-out controls under the notice, and the blind greyed-out buttons.
+
+## 2.496.230
+
+_2.496.229 did not reach Home Assistant (one of its checks failed); this update carries its changes._
+
+### Fixed
+- **The Cockpit's category tiles no longer count locked locks, closed blinds or sensor readings as "on".** A tile used to read, for example, "2 devices · 2 on" for two locked doors while the bottom bar said "Locked". "On" now means what it means everywhere else in the app: a light or switch that is on, an unlocked lock, an open blind, an A/C that is running, a speaker that is playing. Sensors and cameras add to a tile's device count but are never "on".
+- **"Turn all off" / "Turn all on" in a room or category list now works for mixed lists.** It used to send the first device's kind of command to every device in the list (a light command to a switch); it now sends each kind its own command.
+- **A power or temperature sensor that goes offline keeps its chart** in its own window, with the offline period shaded, instead of switching to a text timeline. The grouped-device window already did this; both now follow the same rule.
+
+## 2.496.228
+
+### Changed
+- **The VESTA Agent section on the Configuration page is now titled "VESTA Agent settings (Only used while "Connect the VESTA Agent" is on)"**, and the separate line of text inside it is gone.
+
+## 2.496.227
+
+### Changed
+- **Shorter help text for the VESTA Agent on the Configuration page.** "Connect the VESTA Agent" now reads: "Off" by default (no agent); when "On", the agent connects; if the token is empty or too short, the agent stays off and the app's log says so. The "VESTA Agent settings" section now says "Only used when "Connect the VESTA Agent" is on."
+
+## 2.496.226
+
+### Fixed
+- **A button whose command Home Assistant refuses now flips back straight away.** Until now the app only learned a command had failed through the error message; a switch you tapped kept showing its new position for up to ten seconds (or pulsed for four) before going back. It now returns to the real state the moment Home Assistant says no. This applies to the power button of lights, switches, fans and media players, the lock buttons, and the switches in device lists.
+- The spend form's cap line now says "This month would come to…" (or names the month when you correct an older entry) instead of a raw "2026-09".
+
+### Changed
+- **Nothing else to see on screen: two core pieces are simpler and fully tested.**
+- The part of the app that keeps the live state of every Home Assistant device (and reconnects when the link drops) is now separate from the screens. Its rules — listen for changes before reading the states so nothing is missed, re-read everything once after each reconnect, send the 3D map only what changed — are now tested directly against a stand-in Home Assistant.
+- "Which devices are on the map" and "which devices this profile may see" are now decided in one place and read by the Dashboard, the bottom bar and the Cockpit alike, so their counts cannot drift apart.
+
+## 2.496.225
+
+### New
+- **Spend settings on the Facility Spend tab (Owner only).** You can now set, for your own maintenance agreement: the **monthly cap**, the **names of the two spend categories** (for example "Routine" and "Capital" instead of "Minor" and "Major"), and **when the "approaching the cap" warning starts** (80 % unless you choose another share). Every screen and both documents (the monthly report and the spend statement) use your words and your cap. They are shared by every device. With nothing set there is no cap, as before.
+- **Amounts are written in the currency set in Home Assistant** (Settings → System → General). The app no longer has a currency of its own that nobody could change.
+
+### Fixed
+- **Correcting a spend entry no longer counts it twice.** When you edited an existing entry, the "this month would come to…" line added the new amount on top of the old one, so it could warn about the cap when nothing was over. It now replaces the old amount, and it also judges the entry in the month it belongs to (a new entry is always dated today, whichever month is on screen).
+- The report and screens no longer say spend beyond the cap is on the "Owner's account": that depends on your agreement, so they now just say it is outside the cap.
+
+## 2.496.224
+
+### Fixed
+- **Two quick changes to the same device no longer undo each other.** In Settings, the bindings table, the badge colour picker and the Grouped devices screen, a change could be built from a slightly out-of-date copy of your settings — so making a second change straight after the first (for example, accepting two group suggestions in a row) could silently undo the first. Every one of these changes now starts from your latest settings.
+
+### Changed
+- **Nothing else to see on screen; three pieces of the settings code are simpler and fully tested.**
+- The list of settings shared between all your devices (device settings, 3D object links, grouped devices, rooms, removed devices) is now written once. Adding a shared setting in future can no longer leave it silently unshared.
+- The Settings window no longer keeps extra copies of the dashboard title, eye height, walk speed and look settings beside its own draft, so **Discard** always puts every one of them back, and the app refuses to build if a new control could change a setting that Discard does not restore.
+
+## 2.496.223
+
+### Changed
+- **Nothing to see on screen: this release makes three safety rules simpler and stricter behind the scenes.**
+- **Who may do what is now written in one place.** What each profile (Guest, Owner, Facility manager) can see and do used to be written twice — once for the screens and once for the part of the app that checks every request — and kept equal by hand. Both now read the same list, so they can no longer disagree.
+- **The VESTA Agent can no longer save a broken maintenance record.** When the agent (or anything that is not the Kiosk's own screens) saves a Facility record, the app now checks it: a fault marked resolved must have a resolution date, a cost must have a real amount and a Minor/Major category, and completed work must be tied to a schedule or a fault. A record that fails is refused with a message saying why. Records already saved are never blocked, and the Kiosk's own screens always meet these rules.
+- **The app's settings are read from one table.** Each setting on the Configuration page (passcodes, session length, photo retention, VESTA Agent…) now has its default and allowed range written once, and a check stops a release if the Configuration page and the app ever disagree. Your saved values are unchanged.
+
+## 2.496.222
+
+### Fixed
+- **Room chip numbers are now centred on every screen and at every zoom.** The last two releases centred them well on some screens but not on others (on a phone they still sat a little high and to the left). The cause: the map lays each chip out at a small base size and then magnifies it for the zoom and the screen, so the tiniest rounding on the number grew three or four times on screen. The number's circle is now drawn the same way as the badge icons — as a sharp picture made at the size it is shown, with the number centred inside it — so there is no rounding left to magnify. Nothing is tuned to one device or one villa: each screen measures its own number.
+
+## 2.496.221
+
+### Fixed
+- **Room chip numbers are now centred side to side too.** 2.496.220 fixed their height but also shifted some numbers sideways — "3" and "7" sat a little to the left, as did two-digit numbers, while "8" was fine. The sideways shift is removed: numbers are centred horizontally by the font's own spacing, as before, and keep the new vertical centring.
+
+## 2.496.220
+
+### Fixed
+- **The number in a room chip's green (or red) circle is now centred.** It sat slightly too high on some devices and slightly too low on others: it was centred by the font's line spacing plus a fixed correction, and each browser measures that line spacing differently, so one fixed value could only ever be right on one of them. The number is now centred the way the badge icons already are — by measuring where its ink actually lands on this device — so it looks centred everywhere.
+
+## 2.496.219
+
+### Changed
+- **"Connect the VESTA Agent" is now always visible** on the Configuration page, just above the folded **"VESTA Agent settings"** section (token, offline delay, message retention), which you open only when you need it. Home Assistant draws this page itself and cannot put a switch inside a section's title or open a section on its own, so the switch sits right above it instead.
+- Your current values move to their new place automatically the first time the app starts after this update — nothing to re-enter.
+
+## 2.496.218
+
+### Changed
+- **All VESTA Agent settings are now grouped under one "VESTA Agent" section** on the app's Configuration page: **Connect the VESTA Agent** (the switch), **VESTA Agent token**, **Agent shown offline after (minutes)** and **Keep agent messages for (days)**. They only matter while the switch is on.
+- **The VESTA Agent token is now hidden like a password** (shown as dots). It still needs at least 16 characters; a shorter one keeps the agent off and the app's log says so.
+- Your current values are **moved into the new section automatically** the first time the app starts after this update — nothing to re-enter. Home Assistant's settings page cannot grey out or hide fields, so the token stays visible (as dots) even while the switch is off; it is simply not used then.
+
+## 2.496.217
+
+### Changed
+- **A switch now says whether the VESTA Agent is connected: "Connect the VESTA Agent"** on the app's Configuration page, off by default. Off: there is no agent — nothing about it is shown and it cannot connect, even if a token is filled in. On: the agent connects with the **VESTA Agent token**, which is then required; if the token is empty or too short, the agent stays off and the app's log says so.
+- ⚠️ **If you already use the agent: after this update, turn "Connect the VESTA Agent" on** and restart the app. Your token is kept; until the switch is on, the robot button disappears from the kiosk.
+
+## 2.496.216
+
+### Changed
+- **Nothing changes on screen.** The code that decides where badges, device cards and room chips go on the 3D map has been reorganised into one self-contained piece, so future placement fixes are easier and safer to make and to test. Before release, every badge, card and chip position was recorded on the villa's own 3D model — walking and overview, every floor, a focused room, on a tablet-sized and a phone-sized screen (196 views) — and the new version places them all in exactly the same spots.
+
+## 2.496.215
+
+### Fixed
+- **Editing a device's label, colour or other display setting redraws the badges once, not twice.** Every such edit rebuilt every badge on the 3D map two times in a row; on a villa with many devices that doubled the pause after each change in Settings. Nothing looks different; the settings screens respond faster.
+
+## 2.496.214
+
+### Fixed
+- **"Energy today" in the Cockpit now matches the Energy window.** The Cockpit counted only the electricity bought from the grid; the Energy window's "Today so far" counts what the house actually used (grid + solar − what was sold back). On a villa with solar panels the two showed different numbers for the same day. Both now show the Energy window's figure.
+- **The agent's room list is sent only when a room changes.** An owner's or facility manager's device used to send it again on every page load, even when nothing had changed. It now remembers what it last sent. (Only when the VESTA Agent is connected; nothing changes otherwise.)
+
+### Changed
+- **Every chart now loads its history the same way.** The device windows (sensors, device groups, the timelines), the camera's status bar, and the Weather and Energy windows all ask one shared loader, which decides the time window once. This is the kind of mismatch between a chart's title and what it actually showed that had to be fixed four times before. Charts look the same.
+- The Energy window's "couldn't load" message is now the same one every other chart uses.
+
+## 2.496.213
+
+### Changed
+- **Nothing changes on screen.** This release reorganises how the add-on saves its shared data (device settings, maintenance records, the agent's messages and answers, diagnostics) and how it counts wrong passcodes, so that each rule lives in one place and is tested by actually using it.
+- **Saving the maintenance record no longer pauses the kiosk.** Clearing out photos that a saved record no longer uses now happens in the background, instead of briefly holding up everything else the add-on relays — lights, locks and cameras included.
+- The wrong-passcode lockout is unchanged (same limits, same waiting time), but the passcode, the superadmin code and the agent's token now share one implementation instead of three copies.
+
+## 2.496.212
+
+### Added
+- **The VESTA Agent now appears in the kiosk** — for the owner and the facility manager only, and only once the agent is connected (the **VESTA Agent token** setting). Guests never see it, and with the token empty nothing changes.
+- **A new robot button in the top bar** (and in the phone menu) shows whether the agent is **online** (green dot) or **offline** (amber dot), with a count of the agent's messages waiting for your answer.
+- **Tapping it opens the agent's area:** its messages, reports and recommendations, newest first — with the devices they are about (tap one to open it) and **buttons to answer** where the agent asks for a decision. The first answer counts; everyone then sees who answered and what. While the agent is offline its messages stay readable but the buttons are hidden.
+- **"by VESTA Agent"** now marks every maintenance record — fault, completed work, cost, schedule or saved document — that the agent created or last changed.
+- For the agent's map of the villa, the kiosk now shares the room it shows for each device, so a device Home Assistant has no area for is still placed in the right room.
+
+## 2.496.211
+
+### Added
+- **The kiosk can now be connected to the VESTA Agent** — the AI assistant that will help run the villa. Nothing changes until you choose to connect it: three new settings on the add-on's Configuration page, **VESTA Agent token**, **Agent shown offline after (minutes)** and **Keep agent messages for (days)**. With the token empty (the default) the kiosk behaves exactly as before.
+- Once connected, the agent can read and update maintenance records — faults, completed work, costs, schedules — and attach photos. **It can never delete a record, nor remove a photo from one**; every record it creates or changes is marked as coming from the VESTA Agent. It can also post messages with buttons and report that it is online. There is nothing new to see on screen yet: the agent's status and messages come to the kiosk in the next release.
+- The token opens only the agent's own door. A wrong token counts toward the same lockout as a wrong passcode, and it never gives access to anything else in the kiosk.
+
 ## 2.496.210
 
 ### Changed

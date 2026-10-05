@@ -17,7 +17,7 @@ import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { AppConfig } from "@/config/AppConfig";
 import { roomKey } from "@/config/roomKey";
 import type { TeleportPoint } from "@/types/scene.types";
-import { clamp, pointInPolygon, type Pt2 } from "@/utils/geometry";
+import { clamp, pointInPolygon, type Pt2, boundsXZ } from "@/utils/geometry";
 import { Storeys } from "./storeys";
 import { rayTargets } from "./meshRoles";
 import { TapRecognizer } from "./TapRecognizer";
@@ -26,6 +26,7 @@ import { PointerRoster } from "./pointerRoster";
 import "./babylonSideEffects";
 import { keyLook, PITCH_LIMIT } from "./keyLook";
 import { keyIsForCamera } from "./overviewKeys";
+import { canvasInput, type CanvasInput } from "./canvasInput";
 
 interface CameraCallbacks {
   onRoomChange: (room: string | null) => void;
@@ -149,40 +150,32 @@ export class CameraController {
   // ── Input ownership ────────────────────────────────────────────────────────
   // Only one controller (first-person OR overview) listens to canvas pointers at
   // a time, so there's never a setPointerCapture race between them.
-  private inputAttached = false;
+  /** The canvas/keyboard listeners as one set (canvasInput) — including the
+   *  window blur that lets go of a held walk key (2.496.263). Built lazily:
+   *  the handlers are class fields declared further down. */
+  private inputSet: CanvasInput | null = null;
+  private input(): CanvasInput {
+    return this.inputSet ??= canvasInput(this.canvas, {
+      onPointerDown: this.onPointerDown, onPointerMove: this.onPointerMove, onPointerUp: this.onPointerUp,
+      // Two-finger trackpad swipe (and mouse wheel) = walk: up = forward,
+      // down = back, sideways = strafe. Arrow keys + WASD = walk.
+      onWheel: this.onWheel, onKey: this.onKey,
+      onBlur: () => this.keys.clear(),
+    });
+  }
 
   attachInput(): void {
-    if (this.inputAttached) return;
-    this.canvas.addEventListener("pointerdown", this.onPointerDown);
-    this.canvas.addEventListener("pointermove", this.onPointerMove);
-    this.canvas.addEventListener("pointerup", this.onPointerUp);
-    this.canvas.addEventListener("pointercancel", this.onPointerUp);
-    this.canvas.addEventListener("pointerleave", this.onPointerUp);
-    // Two-finger trackpad swipe (and mouse wheel) = walk. A swipe emits a stream
-    // of wheel events: up = forward, down = back, sideways = strafe.
-    this.canvas.addEventListener("wheel", this.onWheel, { passive: false });
-    // Arrow keys + WASD = walk.
-    window.addEventListener("keydown", this.onKey);
-    window.addEventListener("keyup", this.onKey);
-    this.inputAttached = true;
+    this.input().attach();
   }
 
   detachInput(): void {
-    if (!this.inputAttached) return;
-    this.canvas.removeEventListener("pointerdown", this.onPointerDown);
-    this.canvas.removeEventListener("pointermove", this.onPointerMove);
-    this.canvas.removeEventListener("pointerup", this.onPointerUp);
-    this.canvas.removeEventListener("pointercancel", this.onPointerUp);
-    this.canvas.removeEventListener("pointerleave", this.onPointerUp);
-    this.canvas.removeEventListener("wheel", this.onWheel);
-    window.removeEventListener("keydown", this.onKey);
-    window.removeEventListener("keyup", this.onKey);
+    if (!this.inputSet?.attached) return;
+    this.inputSet.detach();
     // Drop any in-flight gesture/movement so we don't resume mid-walk on return.
     this.pointers.clear();
     this.keys.clear();
     this.moveX = 0;
     this.moveY = 0;
-    this.inputAttached = false;
   }
 
   // ── Collision capsule sizing ──────────────────────────────────────────────
@@ -954,14 +947,8 @@ export class CameraController {
     // Fix it the day a plan with duplicate room names is reported, not before.
     const poly = this.plan.rooms.find((r) => roomKey(r.name) === key);
     if (!poly || poly.pts.length === 0) return null;
-    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-    for (const p of poly.pts) {
-      if (p.x < minX) minX = p.x;
-      if (p.x > maxX) maxX = p.x;
-      if (p.z < minZ) minZ = p.z;
-      if (p.z > maxZ) maxZ = p.z;
-    }
-    return { minX, maxX, minZ, maxZ, floorY: poly.floorY ?? 0 };
+    const box = boundsXZ(poly.pts);
+    return box && { ...box, floorY: poly.floorY ?? 0 };
   }
 
   private updateRoom(): void {
@@ -1030,17 +1017,17 @@ export class CameraController {
         m.isPickable = false;
       }
     }
-    this.roomAnchors =
-      fromMesh.length > 0
-        ? fromMesh
-        : this.config.teleportPoints
-            .filter((p) => p.floor === this.config.currentFloor)
-            .map((p) => ({ name: p.name, position: new Vector3(p.position.x, p.position.y, p.position.z) }));
+    this.roomAnchors = fromMesh.length > 0 ? fromMesh : this.anchorsOn(this.config.teleportPoints);
   }
 
   /** Replace room anchors from a set of (already model-space) teleport points. */
   setTeleportPoints(points: TeleportPoint[]): void {
-    this.roomAnchors = points
+    this.roomAnchors = this.anchorsOn(points);
+  }
+
+  /** The current floor's points as room anchors (written out twice until 2.496.263). */
+  private anchorsOn(points: readonly TeleportPoint[]): { name: string; position: Vector3 }[] {
+    return points
       .filter((p) => p.floor === this.config.currentFloor)
       .map((p) => ({ name: p.name, position: new Vector3(p.position.x, p.position.y, p.position.z) }));
   }

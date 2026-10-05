@@ -33,7 +33,7 @@ interface MinimalGltfDocument {
  * failure (corrupt file, unexpected layout) is treated the same as "not
  * present" so a malformed GLB doesn't block the upload it's actually there
  * for. The returned string is the SAME shape a ".rooms.json" sidecar has —
- * validate it with sh3dParser.parseRoomData exactly like an uploaded file.
+ * validate it with config/roomData.readRoomData exactly like an uploaded file.
  */
 export function extractEmbeddedRoomDataJson(glb: ArrayBuffer): string | null {
   try {

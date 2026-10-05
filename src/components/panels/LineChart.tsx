@@ -19,6 +19,7 @@ import { chartGeometry, type ChartGeometry } from "@/utils/chartGeometry";
 import { emptyHistoryText, type HistoryStatus } from "@/utils/statisticsSeries";
 import { STATUS_COLOR } from "@/utils/stateColors";
 import { fmtChartValue, fmtChartTick, fmtChartStamp, fmtOutage } from "./chartUtils";
+import { formatUnitValue } from "@/utils/entityValue";
 import { useChartPointer } from "./useChartPointer";
 import ChartTip from "./ChartTip";
 import YAxis, { type AxisTick } from "./ChartAxis";
@@ -89,7 +90,7 @@ export default function LineChart({ lines, window, height = 150, status, label }
   // A line with no readings still has its outage, and its band says so
   // (every line is kept); whether there is anything to draw is lineChart's.
   const w = drawableWindow(window, ...lines.map((l) => l.pts));
-  const g = w ? chartGeometry(w, lines.map((l) => ({ pts: l.pts, gaps: l.gaps ?? [], scale: l.scale ?? "shared" })), plot, 0.08) : null;
+  const g = w ? chartGeometry(w, lines.map((l) => ({ pts: l.pts, gaps: l.gaps ?? [], scale: l.scale ?? "shared", unit: l.unit })), plot, 0.08) : null;
   const { frac, handlers } = useChartPointer<SVGSVGElement>();
   if (!g) return <><ChartEmpty status={status} height={height} /><TimeAxis g={null} /></>;
 
@@ -138,7 +139,11 @@ export default function LineChart({ lines, window, height = 150, status, label }
                 const who = lines.length > 1 ? `${l.label} ` : "";
                 // An outage under the pointer says so — its span and length.
                 if (out) return [{ key: `${i}`, marker: keyOf(l), text: `${who}${fmtOutage(out, g.window.to)}` }];
-                return r ? [{ key: `${i}`, marker: keyOf(l), text: `${who}${fmtChartValue(r.v)}${l.unit ?? ""}` }] : [];
+                // A reading reads as the badge says it ("6.6 kW", not "6571W", 2.496.252):
+                // formatUnitValue is the one rule; a unitless line keeps the chart's number.
+                if (!r) return [];
+                const value = l.unit?.trim() ? formatUnitValue(r.v, l.unit.trim()) : fmtChartValue(r.v);
+                return [{ key: `${i}`, marker: keyOf(l), text: `${who}${value}` }];
               })} />
           )}
         </div>

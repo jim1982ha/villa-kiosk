@@ -6,20 +6,18 @@
 // plus one dual-axis 24h graph when there are exactly two numeric series
 // (the common case) or a stacked line chart per series otherwise.
 
-import { formatSensorParts } from "@/utils/entityValue";
-import { Layers } from "lucide-react";
+import { AlertTriangle, Layers } from "lucide-react";
 import BasePanel from "./BasePanel";
-import LineChart from "./LineChart";
+import NumericHistory from "./NumericHistory";
 import UnavailableNotice from "./UnavailableNotice";
 import { useHA } from "@/ha/HAStateStore";
-import { fetchTrend } from "@/ha/HAHistoryAPI";
-import { useHistoryRange, HistoryHeader } from "./historyRange";
-import { useHistory } from "@/hooks/useHistory";
 import type { DeviceGroup } from "@/config/AppConfig";
 import type { EntityMapping } from "@/types/scene.types";
-import type { HistorySeries } from "@/types/ha.types";
-import { isUnavailable } from "@/utils/stateColors";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
+import { readingOf } from "@/config/reading";
+import { domainOf } from "@/utils/entityDomain";
+import { useConfig } from "@/config/ConfigContext";
+import LastDayTimeline from "./LastDayTimeline";
 
 interface Props {
   group: DeviceGroup;
@@ -47,55 +45,47 @@ const SERIES_COLORS = ["var(--accent-teal)", "var(--accent)", "var(--accent-warm
 
 export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Props) {
   const { entities } = useHA();
+  const { config } = useConfig();
   const entityLabel = useEntityLabel();
   const ids = [group.primaryEntityId, ...group.memberEntityIds];
 
+  // Each member's reading is config/reading's — the SAME answer its own
+  // sensor window gives: its words, its pill, its alarm and the owner's
+  // thresholds. ⚠️ This window used to assemble it from the pieces itself and
+  // never asked for the thresholds: a temperature over its limit was red alone
+  // and plain here, a detector in alarm lost its capitals and warning icon.
   const rows = ids.map((id) => {
     const entity = entities[id];
     const numeric = Number(entity?.state);
+    const reading = readingOf(id, entity, domainOf(id) === "binary_sensor" ? "binary_sensor" : "sensor", config.alertThresholds);
     return {
       id,
       label: entityLabel(id),
+      // ⚠️ THE CHART'S UNIT IS THE RAW ONE: it plots the raw series and labels
+      // its axis from this; the reading's own unit is scaled with its headline
+      // number ("kW"), which must match the badge.
       unit: (entity?.attributes.unit_of_measurement as string | undefined) ?? "",
-      value: entity?.state ?? "—",
-      // ⚠️ THE FORMATTED READING IS A SEPARATE FIELD, NOT AN OVERWRITE OF
-      // `unit`. The line chart below plots the RAW series and labels its axis
-      // from `r.unit`; scaling the label to "kW" while the points stay in
-      // watts would put a wrong axis on a right chart. `display` is for the
-      // row's headline number only — the one that has to match the badge.
-      display: entity ? formatSensorParts(entity) : { value: "", unit: "" },
       numeric: Number.isFinite(numeric) ? numeric : undefined,
-      unavailable: isUnavailable(entity),
+      reading,
     };
   });
   // A reading with a unit is a measurement even while it is UNAVAILABLE —
-  // that is exactly when its chart's shaded outage has something to say. It
-  // used to need a numeric state NOW, so an offline member had no chart.
-  const numericRows = rows.filter((r) => r.numeric !== undefined || (r.unavailable && r.unit !== ""));
-  const numericIds = numericRows.map((r) => r.id).join(",");
-  // One range for the whole group — a temp+humidity pair plotted over two
-  // different windows would invite exactly the wrong comparison.
-  const { range, picker } = useHistoryRange();
-
-  const { data: history, status: historyStatus } = useHistory<Record<string, HistorySeries>>(
-    numericIds ? `${numericIds}|${range.hours}` : null,
-    async () => Object.fromEntries(await Promise.all(
-      numericIds.split(",").map((id) => fetchTrend(id, range.hours).then((h) => [id, h] as const)))),
-    {},
-  );
-
+  // that is exactly when its chart's shaded outage has something to say
+  // (config/sensorReading, the rule the sensor panel shares).
+  const numericRows = rows.filter((r) => r.reading.kind === "measurement" && (r.numeric !== undefined || r.unit !== ""));
   return (
     <BasePanel
       title={group.label ?? primaryMapping.label}
       entityId={primaryMapping.entityId}
       icon={<Layers size={22} />}
       history={false}
+      deviceReadings={false}
       onClose={onClose}
     >
       {/* EVERY member offline → the same shared notice every other panel shows
           (UnavailableNotice), instead of this panel's own "Unavailable" text —
           one presentation of "HA lost contact" across the whole app. */}
-      {rows.length > 0 && rows.every((r) => r.unavailable) ? (
+      {rows.length > 0 && rows.every((r) => r.reading.unavailable) ? (
         <UnavailableNotice device="device" />
       ) : (
         <div className="row-buttons" style={{ marginBottom: 18 }}>
@@ -109,9 +99,15 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
                     a second line with % on its own) — the value and its unit
                     were previously two stacked block divs; now one line, unit
                     a bit smaller, matching how SensorPanel already does it. */}
-                {r.unavailable
-                  ? <span className="status-pill unavailable">UNAVAILABLE</span>
-                  : <>{r.display.value || r.value}{r.display.unit && <span className="value-unit" style={{ fontSize: "var(--text-md)", marginLeft: 3 }}>{r.display.unit}</span>}</>}
+                {r.reading.pill
+                  // A pill at pill size — inside the large-number style an
+                  // alarm's capitals ("SMOKE DETECTED") broke awkwardly — kept
+                  // inside its column: on a phone it wraps within the pill
+                  // rather than running into its neighbour.
+                  ? <span className={`status-pill ${r.reading.pill}`} style={{ fontSize: "var(--text-lg)", maxWidth: "100%", justifyContent: "center" }}>
+                      {r.reading.alarm && <AlertTriangle size={18} />}{r.reading.value}
+                    </span>
+                  : <span style={{ color: r.reading.color }}>{r.reading.value}{r.reading.unit && <span className="value-unit" style={{ fontSize: "var(--text-md)", marginLeft: 3 }}>{r.reading.unit}</span>}</span>}
               </div>
               <div className="muted body-text">{r.label}</div>
             </div>
@@ -119,40 +115,17 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
         </div>
       )}
 
-      {numericRows.length === 2 ? (
-        <div className="field">
-          <HistoryHeader title={range.title} picker={picker} />
-          {/* Two readings of one device, each on its OWN scale (left and
-              right axes in their line's colour), the second dashed. */}
-          <LineChart label={`${numericRows[0].label} and ${numericRows[1].label} history`} height={120}
-            window={history[numericRows[0].id]?.window} status={historyStatus}
-            lines={numericRows.slice(0, 2).map((r, i) => ({
-              pts: history[r.id]?.points ?? [], gaps: history[r.id]?.gaps ?? [], label: r.label,
-              unit: r.unit ? ` ${r.unit}` : "", color: SERIES_COLORS[i], dashed: i === 1, scale: "own" as const,
-            }))} />
-          <div className="row" style={{ gap: 16, marginTop: 8, fontSize: "var(--text-xs)" }}>
-            <span className="muted">
-              <span style={{ color: SERIES_COLORS[0] }}>●</span> {numericRows[0].label}
-            </span>
-            <span className="muted">
-              <span style={{ color: SERIES_COLORS[1] }}>┄</span> {numericRows[1].label}
-            </span>
-          </div>
+      {/* One range for the whole group — a temp+humidity pair plotted over two
+          different windows would invite exactly the wrong comparison. */}
+      <NumericHistory named series={numericRows.map((r, i) => ({
+        id: r.id, label: r.label, unit: r.unit, color: SERIES_COLORS[i % SERIES_COLORS.length] }))} />
+      {/* each binary member's own state history, coloured as in its own window */}
+      {rows.filter((r) => r.reading.stateColor).map((r) => (
+        <div key={`h-${r.id}`}>
+          <div className="muted body-text" style={{ margin: "12px 0 4px" }}>{r.label}</div>
+          <LastDayTimeline entityId={r.id} colorFor={r.reading.stateColor!} />
         </div>
-      ) : (
-        numericRows.map((r, i) => (
-          <div className="field" key={r.id}>
-            {/* The picker rides the FIRST series only — it drives one shared
-                fetch, so repeating it per series would imply each chart had
-                its own window. */}
-            {i === 0
-              ? <HistoryHeader title={`${r.label} — ${range.title.toLowerCase()}`} picker={picker} />
-              : <label className="entity-label">{r.label} — {range.title.toLowerCase()}</label>}
-            <LineChart label={`${r.label} history`} height={110} window={history[r.id]?.window} status={historyStatus}
-              lines={[{ pts: history[r.id]?.points ?? [], gaps: history[r.id]?.gaps ?? [], label: r.label, unit: r.unit ? ` ${r.unit}` : "", color: SERIES_COLORS[i % SERIES_COLORS.length] }]} />
-          </div>
-        ))
-      )}
+      ))}
     </BasePanel>
   );
 }

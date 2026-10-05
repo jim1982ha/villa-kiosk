@@ -6,7 +6,7 @@ import { register } from "node:module";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 register("../consistency/alias-hook.mjs", import.meta.url);
-import { ck, done } from "../consistency/check.mjs";
+import { ck, done, tsFiles } from "../consistency/check.mjs";
 const { fmtPower, powerKw } = await import("@/config/energyModel");
 const { localMidnight, localMonthStart } = await import("@/utils/localDay");
 
@@ -26,7 +26,7 @@ ck("  ...no unit: watts, as HA's power sensors default", powerKw("1200", undefin
 
 console.log("\n  one copy of each:");
 const SRC = new URL("../../src/", import.meta.url).pathname;
-const walk = (d, out = []) => { for (const e of readdirSync(d)) { const p = join(d, e); statSync(p).isDirectory() ? walk(p, out) : /\.tsx?$/.test(p) && out.push(p); } return out; };
+const walk = tsFiles;
 const files = walk(SRC).map((f) => [f.slice(SRC.length), readFileSync(f, "utf8")]);
 const having = (re) => files.filter(([, s]) => re.test(s)).map(([f]) => f);
 ck("local midnight: localDay.ts only", having(/setHours\(0, 0, 0, 0\)/).join() === "utils/localDay.ts", having(/setHours\(0, 0, 0, 0\)/));

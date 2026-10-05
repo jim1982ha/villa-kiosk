@@ -12,6 +12,15 @@
    title row's device-specific parts are here. */
 .modal-header .title { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1 1 auto; }
 .modal-header-actions { flex: 0 0 auto; }
+/* "Back" — the panel was opened from another window (a device's reading, a room
+   list, the Cockpit…). Top right of the header, beside any header actions; a
+   quiet pill so it reads as navigation, not as the panel's primary action. */
+.modal-header-actions { display: flex; align-items: center; gap: 8px; }
+.panel-back {
+  display: inline-flex; align-items: center; gap: 2px;
+  min-height: 36px; padding: 0 12px 0 6px;
+  font-size: var(--text-sm); font-weight: 600; white-space: nowrap;
+}
 /* A device name is unbounded: single line, truncated with an ellipsis. Same
    size and weight as every modal title (.modal h2). */
 .modal-header .title h2 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
@@ -20,7 +29,15 @@
 /* Real map badge shown in the panel header. As a button it's a colour editor. */
 .panel-icon .panel-badge-img, .panel-badge-btn .panel-badge-img { width: 44px; height: 44px; display: block; border-radius: 12px; }
 .panel-badge-btn { position: relative; padding: 0; border: none; background: none; cursor: pointer; flex-shrink: 0; border-radius: 12px; line-height: 0; }
-.panel-badge-btn:hover { filter: brightness(1.05); }
+/* Keyboard focus in VESTA's accent, never the platform's own ring (Android colours it with the phone's
+   theme: an amber border round a badge reads as a device state). */
+.panel-badge-btn:focus { outline: none; }
+.panel-badge-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* A heading that takes a window's first focus (data-autofocus) draws no ring: it is not a control. */
+h2[data-autofocus]:focus { outline: none; }
+@media (hover: hover) {
+  .panel-badge-btn:hover { filter: brightness(1.05); }
+}
 .panel-badge-btn::after {
   content: ""; position: absolute; right: -3px; bottom: -3px; width: 15px; height: 15px;
   border-radius: 50%; background: var(--bg-card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='9' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 20h9'/%3E%3Cpath d='M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z'/%3E%3C/svg%3E") center / 9px no-repeat;
@@ -258,7 +275,9 @@ input[type="range"]::-moz-range-thumb {
   border-color: rgba(255, 255, 255, 0.22);
   color: #fff;
 }
-.camera-controls .icon-btn:hover { background: rgba(255, 255, 255, 0.24); }
+@media (hover: hover) {
+  .camera-controls .icon-btn:hover { background: rgba(255, 255, 255, 0.24); }
+}
 .camera-controls .icon-btn:active { transform: scale(0.94); }
 /* Icon fills a consistent share of the button at every size this cluster
    ever renders at (56px desktop down to a 34px floor in the phone-landscape

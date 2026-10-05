@@ -19,139 +19,58 @@
 // radio health, HA's own Area registry for grouping, presence tracking) and
 // why.
 
-import { useEffect, useMemo, useState } from "react";
-import {
-  TriangleAlert, CheckCircle2, AlertOctagon, MapPin, Building2, LayoutGrid,
-  Activity, Zap, RefreshCw, ChevronRight,
-} from "lucide-react";
+import { useMemo } from "react";
+import { Bot, LayoutDashboard } from "lucide-react";
 import { useModalA11y } from "@/hooks/useModalA11y";
-import SegmentedGroup from "@/components/common/SegmentedGroup";
-import { fmtChartTime } from "@/components/panels/chartUtils";
-import { useHA } from "@/ha/HAStateStore";
-import { useConfig } from "@/config/ConfigContext";
-import { useProfile } from "@/auth/ProfileContext";
-import { hasCapability, isCategoryAllowed, roleCan } from "@/auth/permissions";
-import { CATEGORY_LABELS, CATEGORY_ICONS, categorySurface } from "@/config/EntityCategories";
-import { useResolvedTheme } from "@/hooks/useResolvedTheme";
-import { isUnavailable } from "@/utils/stateColors";
-import { fetchLogbookEvents } from "@/ha/HALogbookAPI";
-import { fetchEnergyToday, type EnergyToday } from "@/ha/HAEnergyAPI";
-import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
-import { useVillaAttention } from "./useVillaAttention";
-import {
-  buildCategoryTiles, buildRoomGroups, buildFloorGroups,
-  buildActivityFeed, type AttentionItem, type AttentionKind, type ActivityEntry,
-} from "./cockpitData";
+import type { Doors } from "@/auth/doors";
+import { useAgent } from "@/agent/AgentContext";
+import { awaitingAnswer } from "@/agent/agentView";
+import { formatCountBadge } from "@/utils/countBadge";
+import ModalFooter from "@/components/common/ModalFooter";
+import ModalTabs, { type ModalTab } from "@/components/common/ModalTabs";
+import FacilitySections, { FACILITY_TABS, type FacilityTab } from "@/components/fm/FacilitySections";
+import CockpitOverview from "./CockpitOverview";
 
 export interface CockpitModalProps {
   onClose: () => void;
   onOpenEntity: (entityId: string) => void;
+  /** Which windows this profile may open (auth/doors): the footer's "VESTA
+   *  Agent" is drawn only with `doors.agent`, the updates count only with
+   *  `doors.updates`. */
+  doors: Doors;
+  /** Open the VESTA Agent window. */
+  onOpenAgent: () => void;
+  /** The open tab: the Cockpit's own view, or one of the Facility tabs (with
+   *  `doors.facility`). Held by the caller, so "report a fault" lands on
+   *  Faults and Back from a device returns to the tab it left. */
+  tab: CockpitTab;
+  onTab: (tab: CockpitTab) => void;
+  /** Faults opens with a blank fault pointed at this device (a device panel's
+   *  "report a fault"), and the request is dropped once the form has it. */
+  reportFaultFor?: string;
+  onFaultFormOpened?: () => void;
 }
 
-const ATTENTION_ICON: Record<AttentionKind, typeof TriangleAlert> = {
-  unavailable: TriangleAlert,
-  fault: AlertOctagon,
-  schedule: AlertOctagon,
-  alarm: TriangleAlert,
-};
+/** The Cockpit's own view, then the Facility tabs (2.496.273: the Facility
+ *  window merged in — one top-bar button, one window, the same workflows). */
+export type CockpitTab = "overview" | FacilityTab;
+const OVERVIEW_TAB: ModalTab<CockpitTab> = { id: "overview", label: "Overview", icon: LayoutDashboard };
 
-export default function CockpitModal({ onClose, onOpenEntity }: CockpitModalProps) {
-  const { entities, ws, entityFloorNumbers } = useHA();
-  const { config, resolvedRooms } = useConfig();
-  const { role } = useProfile();
+export default function CockpitModal({
+  onClose, onOpenEntity, doors, onOpenAgent, tab, onTab, reportFaultFor, onFaultFormOpened,
+}: CockpitModalProps) {
+  // A profile without the Facility door sees the Cockpit's view alone, no strip.
+  const tabs: ModalTab<CockpitTab>[] = doors.facility ? [OVERVIEW_TAB, ...FACILITY_TABS] : [OVERVIEW_TAB];
+  const shownTab: CockpitTab = doors.facility ? tab : "overview";
+  // The agent's presence and what waits for this profile's answer, for the
+  // footer button's label — read here, as the top bar reads them for its dot
+  // (agentView.awaitingAnswer), instead of being handed across (2.496.268).
+  const { status: agentStatus, messages: agentMessages } = useAgent();
+  const agentOnline = agentStatus?.state === "online";
+  const agentWaiting = useMemo(() => awaitingAnswer(agentMessages), [agentMessages]);
   const dialogRef = useModalA11y(onClose);
-  // Category tiles below composite their colours in JS — see the hook.
-  const theme = useResolvedTheme();
-  const [pivot, setPivot] = useState<"room" | "floor" | "category">("room");
-  // Drill-down opened by tapping a room/floor row below — reuses
-  // SummaryGroupPanel, the same device-list modal every other "all the
-  // devices in X" view in the app already opens (room clusters on the map,
-  // the bottom Summary bar's tiles), rather than a bespoke list here.
-  const [pivotDrill, setPivotDrill] = useState<{ label: string; entityIds: string[] } | null>(null);
-  const canControl = role != null && hasCapability(role, "controlEntities");
-
-  // Shared with HUD's own top-bar alert icon/overflow-menu badge — see
-  // useVillaAttention's own docstring for why that sharing is load-bearing,
-  // not just tidiness (the two used to disagree).
-  const { selectableIds, attentionItems, health } = useVillaAttention();
-  const categoryTiles = useMemo(
-    () => buildCategoryTiles(selectableIds, entities, config.entityMap),
-    [selectableIds, entities, config.entityMap],
-  );
-  const roomGroups = useMemo(
-    () => buildRoomGroups(selectableIds, resolvedRooms, config.sh3dRooms, entityFloorNumbers),
-    [selectableIds, resolvedRooms, config.sh3dRooms, entityFloorNumbers],
-  );
-  const floorGroups = useMemo(() => buildFloorGroups(roomGroups), [roomGroups]);
-
-  // Recent activity — HA's own Logbook (via websocket, see HALogbookAPI.ts
-  // for why not the classic REST endpoint), fetched once on open (a report
-  // you glance at, not a live-updating feed; re-opening Cockpit re-fetches).
-  // Described + filtered to this villa's own selectable devices in
-  // cockpitData.ts's buildActivityFeed — HA's raw logbook is unfiltered and
-  // genuinely noisy (a bare date/time helper alone produced roughly one
-  // entry every six seconds in a real pull).
-  const [rawActivity, setRawActivity] = useState<Awaited<ReturnType<typeof fetchLogbookEvents>> | "loading" | "error">("loading");
-  useEffect(() => {
-    let cancelled = false;
-    fetchLogbookEvents(ws, 6)
-      .then((entries) => { if (!cancelled) setRawActivity(entries); })
-      .catch(() => { if (!cancelled) setRawActivity("error"); });
-    return () => { cancelled = true; };
-  }, [ws]);
-  const villaActivity = useMemo((): ActivityEntry[] | "loading" | "error" => {
-    if (!Array.isArray(rawActivity)) return rawActivity;
-    return buildActivityFeed(rawActivity, entities, config.entityMap, selectableIds);
-  }, [rawActivity, entities, config.entityMap, selectableIds]);
-
-  // Energy today — only when the install has an Energy Dashboard configured
-  // AND its grid source actually resolves to recorded statistics (see
-  // HAEnergyAPI's own docstring — a configured source pointing at a
-  // statistic ID with no recorded data is a real, confirmed case, not a
-  // theoretical one). null (not shown) either way it doesn't resolve;
-  // undefined only while the fetch is in flight.
-  // Not asked at all for a profile without the energy category (the guest's).
-  const seesEnergy = role != null && isCategoryAllowed(role, "energy");
-  const [energy, setEnergy] = useState<EnergyToday | null | undefined>(undefined);
-  useEffect(() => {
-    if (!seesEnergy) { setEnergy(null); return; }
-    let cancelled = false;
-    fetchEnergyToday(ws)
-      .then((r) => { if (!cancelled) setEnergy(r); })
-      .catch(() => { if (!cancelled) setEnergy(null); });
-    return () => { cancelled = true; };
-  }, [ws, seesEnergy]);
-
-  // Firmware/add-on updates available — HA's own `update` domain already
-  // tracks this per device AND per add-on (including this one). A small
-  // Owner-only count, not a version list — this is a maintenance signal, not
-  // something a guest needs to see or act on.
-  const updatesAvailable = useMemo(() => {
-    if (!roleCan(role, "seeUpdates")) return null;
-    return Object.values(entities).filter((e) => e.entity_id.startsWith("update.") && e.state === "on").length;
-  }, [entities, role]);
-
-  // "Other" (not "Unplaced" or any other invented word) for the no-floor
-  // bucket — the SAME label the room pivot's own no-room bucket already
-  // uses (cockpitData.ts's NO_ROOM), which is itself the one term every
-  // room/category grouping across the app already uses for "doesn't
-  // resolve to one of the real ones". Reusing it here, not a second word
-  // for the same idea.
-  const pivotRows = useMemo(
-    () => (pivot === "room"
-      ? roomGroups.map((g) => ({ key: g.room, label: g.room, count: g.count, entityIds: g.entityIds }))
-      : pivot === "floor"
-        ? floorGroups.map((g) => ({
-            key: String(g.floor), label: g.floor != null ? `Floor ${g.floor}` : "Other",
-            count: g.count, entityIds: g.entityIds,
-          }))
-        : []
-    ),
-    [pivot, roomGroups, floorGroups],
-  );
 
   return (
-    <>
     <div className="modal-backdrop" onClick={onClose}>
       <div
         ref={dialogRef}
@@ -164,179 +83,30 @@ export default function CockpitModal({ onClose, onOpenEntity }: CockpitModalProp
         <div className="modal-header">
           <h2>Cockpit</h2>
         </div>
+        {tabs.length > 1 && <ModalTabs tabs={tabs} active={shownTab} onSelect={onTab} label="Cockpit sections" />}
 
         <div className="modal-body">
-          {/* ── Villa health headline ──────────────────────────────── */}
-          <div className={`cockpit-health cockpit-health-${health.level}`}>
-            {health.level === "ok" ? <CheckCircle2 size={22} /> : <TriangleAlert size={22} />}
-            <span>{health.summary}</span>
-          </div>
-
-          {/* ── Needs attention ────────────────────────────────────── */}
-          {attentionItems.length > 0 && (
-            <>
-              <div className="settings-section-title">Needs attention</div>
-              <div className="cockpit-attention-list">
-                {attentionItems.map((item) => (
-                  <CockpitAttentionRow key={item.id} item={item} onOpenEntity={onOpenEntity} />
-                ))}
-              </div>
-            </>
-          )}
-
-          {/* ── Room / floor / category breakdown ──────────────────── */}
-          {/* One selector, one section — category used to be its own
-              always-visible block above this pivot, which meant the modal
-              showed two overlapping "how are devices grouped" views at
-              once. Now a third tab on the same Room/Floor toggle, so only
-              one grouping is ever on screen and the section title always
-              names whichever is showing. */}
-          <div className="settings-section-title cockpit-pivot-header">
-            <span>By {pivot}</span>
-            <SegmentedGroup ariaLabel="Group by" className="cockpit-pivot" active={pivot} onChange={setPivot} options={[
-              { key: "room", label: <><MapPin size={16} /> Room</> },
-              { key: "floor", label: <><Building2 size={16} /> Floor</> },
-              { key: "category", label: <><LayoutGrid size={16} /> Category</> },
-            ]} />
-          </div>
-          {pivot === "category" ? (
-            <div className="cockpit-category-grid">
-              {categoryTiles.map((tile) => {
-                const Icon = CATEGORY_ICONS[tile.category];
-                // Neutral unless at least one device in the category is on
-                // (VESTA-DESIGN.md §0) — a house at rest shouldn't report
-                // every category as if it were doing something.
-                const surface = categorySurface(tile.category, tile.onCount > 0 ? "active" : "off");
-                return (
-                  // Keyed by theme as well as category: the surface above is
-                  // composited in JS from the theme's tokens, so it is frozen
-                  // at render time rather than re-evaluated by the cascade.
-                  <div key={`${tile.category}:${theme}`} className="cockpit-category-tile">
-                    <div className="cockpit-category-icon" style={{ background: surface.fill, color: surface.glyph }}>
-                      <Icon size={18} />
-                    </div>
-                    <div>
-                      <div className="cockpit-category-label">{CATEGORY_LABELS[tile.category]}</div>
-                      <div className="muted body-text" style={{ fontSize: "var(--text-xs)" }}>
-                        {tile.total === 0 ? "None" : `${tile.total} device${tile.total === 1 ? "" : "s"}${tile.onCount > 0 ? ` · ${tile.onCount} on` : ""}`}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+          {shownTab !== "overview" ? (
+            <FacilitySections tab={shownTab} onOpenEntity={onOpenEntity} reportFaultFor={reportFaultFor}
+              onFaultFormOpened={onFaultFormOpened} onOpenOverview={() => onTab("overview")} />
           ) : (
-            <div className="cockpit-pivot-list">
-              {pivotRows.map((row) => {
-                // The bar reports HEALTH, not size. It used to be the row's
-                // share of the villa's device count, which says nothing
-                // actionable — a room having more devices than another is not
-                // a fact anyone opens Cockpit to learn. Each bar now fills its
-                // whole track and splits into "reporting" and "unavailable",
-                // so a room with a problem is visible at a glance down the
-                // column. The count beside it still gives the size.
-                const down = row.entityIds.reduce(
-                  (n, id) => n + (isUnavailable(entities[id]) ? 1 : 0), 0);
-                const okPct = row.count > 0 ? ((row.count - down) / row.count) * 100 : 0;
-                return (
-                  <button
-                    key={row.key}
-                    type="button"
-                    className="cockpit-pivot-row"
-                    onClick={() => setPivotDrill({ label: row.label, entityIds: row.entityIds })}
-                    title={down > 0
-                      ? `${row.label}: ${down} of ${row.count} unavailable`
-                      : `${row.label}: all ${row.count} reporting`}
-                    aria-label={`Show ${row.label}'s devices — ${row.count} device${row.count === 1 ? "" : "s"}, ${down} unavailable`}
-                  >
-                    <span className="cockpit-pivot-label">{row.label}</span>
-                    {/* --tick is one device's width, which draws the faint
-                        per-device notches: it gives the bar a scale, so a
-                        sliver reads as "one device" rather than "a little". */}
-                    <div
-                      className="cockpit-pivot-bar"
-                      style={{ ["--tick" as string]: `${100 / Math.max(1, row.count)}%` }}
-                    >
-                      <div className="cockpit-pivot-bar-ok" style={{ width: `${okPct}%` }} />
-                    </div>
-                    <span className="cockpit-pivot-count muted">{row.count}</span>
-                    <ChevronRight size={16} className="cockpit-pivot-chevron muted" />
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          {/* ── Energy today (only when it resolves) ───────────────── */}
-          {energy && (
-            <>
-              <div className="settings-section-title"><Zap size={16} style={{ verticalAlign: -2 }} /> Energy today</div>
-              <p className="cockpit-energy-value">{energy.kwh.toFixed(1)} <span className="muted body-text">kWh</span></p>
-            </>
-          )}
-
-          {/* ── Recent activity ─────────────────────────────────────── */}
-          <div className="settings-section-title"><Activity size={16} style={{ verticalAlign: -2 }} /> Recent activity</div>
-          {villaActivity === "loading" && <p className="muted body-text">Loading…</p>}
-          {villaActivity === "error" && <p className="muted body-text">Couldn't reach Home Assistant's activity log.</p>}
-          {Array.isArray(villaActivity) && villaActivity.length === 0 && (
-            <p className="muted body-text">Nothing in the last 6 hours.</p>
-          )}
-          {Array.isArray(villaActivity) && villaActivity.length > 0 && (
-            <div className="cockpit-activity-list">
-              {villaActivity.map((e, i) => (
-                <div key={`${e.t}-${i}`} className="cockpit-activity-row">
-                  <span className="cockpit-activity-time muted">{fmtChartTime(e.t)}</span>
-                  <span className="cockpit-activity-text"><strong>{e.name}</strong> {e.message}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* ── Updates available (Owner only, small) ──────────────── */}
-          {updatesAvailable !== null && updatesAvailable > 0 && (
-            <p className="cockpit-updates muted body-text">
-              <RefreshCw size={16} style={{ verticalAlign: -2 }} /> {updatesAvailable} update{updatesAvailable === 1 ? "" : "s"} available
-            </p>
+            <CockpitOverview onOpenEntity={onOpenEntity} doors={doors} />
           )}
         </div>
 
-        <div className="modal-footer">
-          {/* Two slots, space-between (see .modal-footer): an empty left one. */}
-          <span />
-          <button className="btn primary" onClick={onClose}>Close</button>
-        </div>
+        {/* The VESTA Agent's door on the left when there is an agent — placed
+            the way Settings places "Advanced Settings": a ghost button that
+            leaves the dialog, never beside Close. */}
+        <ModalFooter onClose={onClose}
+          note={shownTab !== "overview" ? "Maintenance intervals are set in the Schedule tab" : undefined}
+          leading={shownTab === "overview" && doors.agent ? (
+          <button className="btn ghost" onClick={() => { onClose(); onOpenAgent(); }}
+            title={`VESTA Agent — ${agentOnline ? "online" : "offline"}`
+              + (agentWaiting > 0 ? `, ${agentWaiting} message${agentWaiting === 1 ? "" : "s"} to answer` : "")}>
+            <Bot size={18} /> VESTA Agent{agentWaiting > 0 ? ` (${formatCountBadge(agentWaiting)})` : ""}
+          </button>
+        ) : undefined} />
       </div>
     </div>
-    {pivotDrill && (
-      <SummaryGroupPanel
-        group={{ title: pivotDrill.label, icon: pivot === "room" ? MapPin : Building2, entityIds: pivotDrill.entityIds }}
-        canControl={canControl}
-        onClose={() => setPivotDrill(null)}
-        onOpenEntity={(id) => { setPivotDrill(null); onOpenEntity(id); }}
-      />
-    )}
-    </>
-  );
-}
-
-function CockpitAttentionRow({ item, onOpenEntity }: { item: AttentionItem; onOpenEntity: (id: string) => void }) {
-  const Icon = ATTENTION_ICON[item.kind];
-  const tappable = !!item.entityId;
-  const Row = tappable ? "button" : "div";
-  return (
-    <Row
-      className={`cockpit-attention-row${tappable ? " tappable" : ""}`}
-      {...(tappable ? { onClick: () => onOpenEntity(item.entityId as string) } : {})}
-    >
-      <Icon size={16} className={`cockpit-attention-icon cockpit-attention-${item.kind}`} />
-      <span className="cockpit-attention-body">
-        <span className="cockpit-attention-title">{item.title}</span>
-        <span className="muted body-text" style={{ fontSize: "var(--text-2xs)" }}>
-          {item.detail}{item.room ? ` · ${item.room}` : ""}
-        </span>
-      </span>
-      {tappable && <ChevronRight size={16} className="muted" />}
-    </Row>
   );
 }

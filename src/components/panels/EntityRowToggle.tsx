@@ -26,26 +26,36 @@
 import { useCallback } from "react";
 import { useOptimisticToggle } from "@/hooks/useOptimisticToggle";
 import { tapFeedback } from "@/utils/haptics";
+import { useAskFirst } from "@/hooks/useAskFirst";
+import type { SwitchAsk } from "@/utils/devicePower";
+import InlineConfirm from "@/components/common/InlineConfirm";
 
 interface Props {
   entityId: string;
-  /** Live, HA-confirmed "is this on" for this row's domain (a lock reads
-   *  inverted — see SummaryGroupPanel, which owns that rule). */
+  /** Live, HA-confirmed "is this on" for this row's domain (a lock is "on"
+   *  when unlocked — devicePower owns that rule). */
   actualOn: boolean;
   /** Accessible name for the switch, already resolved by the caller. */
   label: string;
-  /** Fire the real service call. */
-  onToggle: () => void;
+  /** Fire the real service call, returning its outcome so a refused one
+   *  reverts at once (see useOptimisticToggle). */
+  onToggle: () => unknown;
+  /** devicePower.deviceSwitch's `ask`: unlocking, or a device the owner set
+   *  to "ask before switching". The question opens under the row, and the
+   *  switch moves only on Confirm (2.496.259 — one tap here unlocked a door). */
+  ask?: SwitchAsk | null;
 }
 
-export default function EntityRowToggle({ entityId, actualOn, label, onToggle }: Props) {
-  const send = useCallback(() => { onToggle(); }, [onToggle]);
+export default function EntityRowToggle({ entityId, actualOn, label, onToggle, ask = null }: Props) {
+  const send = useCallback(() => onToggle(), [onToggle]);
   const { isOn, toggle } = useOptimisticToggle(entityId, actualOn, send);
+  const { asking, request, confirm, cancel } = useAskFirst(ask, () => { tapFeedback(); toggle(); });
 
   return (
+    <>
     <button
       className={`summary-entity-toggle${isOn ? " on" : ""}`}
-      onClick={() => { tapFeedback(); toggle(); }}
+      onClick={request}
       role="switch"
       aria-checked={isOn}
       aria-label={`${label}: ${isOn ? "on" : "off"}`}
@@ -53,5 +63,11 @@ export default function EntityRowToggle({ entityId, actualOn, label, onToggle }:
     >
       <span className="knob" />
     </button>
+    {asking && (
+      <div className="summary-entity-confirm">
+        <InlineConfirm question={asking.question} confirmLabel={asking.confirmLabel} onConfirm={confirm} onCancel={cancel} />
+      </div>
+    )}
+    </>
   );
 }

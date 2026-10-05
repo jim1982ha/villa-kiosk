@@ -28,6 +28,28 @@ export const UNAVAILABLE_AMBER = new Color3(0.72, 0.5, 0.12);
 // A Babylon GUI control can't consume a CSS custom property, so this is a
 // static match to the light-theme value rather than a live read.
 export const AVAILABLE_GREEN_HEX = "#34845A";
+// The same amber as UNAVAILABLE_AMBER (--status-warning, light theme), as a
+// hex for the pill below.
+export const UNAVAILABLE_AMBER_HEX = "#B8801F";
+
+/** A room's count pill, by the room's HEALTH (summaryLook.roomHealth): red —
+ *  something needs attention; amber — Home Assistant lost a device; green —
+ *  all right. ONE answer for the map chip (EntityVisuals.renderChips), the
+ *  "Which room?" list (RoomChoiceSheet) and the legend.
+ *
+ *  The vocabulary's own colours: red is "Needs attention" and amber "lost
+ *  contact" everywhere else (badge rings, panel status, legend). 2.496.265
+ *  briefly had red for the BORDER and amber/green here — two signals on one
+ *  chip, which read as contradicting each other (owner, 2026-10-04).
+ *
+ *  Dark ink on the amber: white on it is 3.4:1 against the green's 4.6:1, too
+ *  faint for a digit this small; dark is 5.2:1, and dark-on-amber is the usual
+ *  look of a warning. */
+export function healthPill(health: "alert" | "unavailable" | "ok"): { fill: string; ink: string } {
+  return health === "alert" ? { fill: ALERT_RED_HEX, ink: "#ffffff" }
+    : health === "unavailable" ? { fill: UNAVAILABLE_AMBER_HEX, ink: "#17191A" }
+    : { fill: AVAILABLE_GREEN_HEX, ink: "#ffffff" };
+}
 
 // A 3D lock mesh that is SECURE (locked, or on its way to a rest state) — the
 // green it has always been drawn in, named here beside the other status

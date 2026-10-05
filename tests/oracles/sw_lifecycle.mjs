@@ -38,8 +38,16 @@ eq("...and the stamp is written into the emitted worker",
    /sw\.split\("__SW_BUILD__"\)\.join\(pkgVersion\)/.test(VITE), true);
 
 console.log("\n  and no running page is ever seized:");
-// Either one alone re-arms the brick, so both are asserted absent.
-eq("install does not skipWaiting", /skipWaiting\s*\(/.test(code), false);
+// Either one alone re-arms the brick, so both are asserted absent — from the
+// worker's OWN initiative. Since 2.496.256 the page may ASK it to skip waiting
+// (src/utils/swUpdate.switchToWaiting), and reloads at once when it does; that
+// page is not seized mid-run, it is restarting into the new build.
+const installSrc = /self\.addEventListener\("install"[\s\S]*?\n\}\);/.exec(code)?.[0] ?? "";
+eq("the install handler was found", installSrc.length > 0, true);
+eq("install does not skipWaiting", /skipWaiting\s*\(/.test(installSrc), false);
+eq("the worker skips waiting ONLY when the page asks (one call, in the message handler)",
+   (code.match(/skipWaiting\s*\(/g) ?? []).length === 1
+   && /addEventListener\("message"[\s\S]{0,200}?"SKIP_WAITING"\)\s*self\.skipWaiting\(\)/.test(code), true);
 eq("activate does not claim clients", /clients\.claim\s*\(/.test(code), false);
 
 console.log("\n  what activate actually evicts:");
@@ -107,6 +115,27 @@ console.log("\n  and the escape hatch still matches its client:");
 const FP = readFileSync(ROOT + "src/utils/fetchProgress.ts", "utf8");
 eq("sw.js knows the bypass header", code.includes("vk-sw-bypass"), true);
 eq("...and the client sends the same one", FP.includes("vk-sw-bypass"), true);
+
+console.log("\n  what happens to each request (swRoute, the real function):");
+// Lifted whole, like cachesToEvict (2.496.233). tests/routes.py runs it over
+// every proxy route; this pins the ORDER of its answers.
+const routeSrc = [
+  /const SW_BYPASS_PARAM = [^;]+;/, /const NEVER_CACHE = \[[\s\S]*?\];/,
+  /const NEVER_CACHE_FRAGMENTS = \[[\s\S]*?\];/, /function swRoute\(url, mode, destination, origin\) \{[\s\S]*?\n\}/,
+].map((re) => re.exec(code)?.[0] ?? "").join("\n");
+eq("swRoute and its lists were found in the source", /function swRoute/.test(routeSrc) && /NEVER_CACHE_FRAGMENTS/.test(routeSrc), true);
+const swRoute = new Function(`${routeSrc}; return swRoute;`)();
+const O = "http://localhost";
+const r = (path, mode = "cors", dest = "") => swRoute(new URL(O + path), mode, dest, O);
+eq("the escape hatch wins over everything", r("/model/villa.glb?vk-sw-bypass=1"), "bypass");
+eq("a model file is the model — even behind Ingress's /api/ prefix", r("/api/hassio_ingress/tok/model/villa.glb"), "model");
+eq("  ...and its room sidecar", r("/model/villa.rooms.json"), "model");
+eq("a camera snapshot ending in .glb is NOT a model", r("/api/camera_proxy/x.glb"), "network");
+eq("the add-on's live endpoints go to the network, bare (the standalone hostname)", r("/device-config"), "network");
+eq("  ...and behind Ingress", r("/api/hassio_ingress/tok/fm-data"), "network");
+eq("another origin is not ours", swRoute(new URL("http://127.0.0.1:9/x.js"), "cors", "", O), "foreign");
+eq("a navigation is a page (this worker's own saved shell first)", r("/index.html", "navigate", "document"), "page");
+eq("a hashed asset is cache-first", r("/assets/index-abc.js"), "asset");
 
 console.log(`\n${fail ? `❌ ${fail} failed` : "✅ the worker updates without stranding a page"}`);
 process.exit(fail ? 1 : 0);

@@ -30,7 +30,6 @@ import dracoFallbackUrl from "@babylonjs/core/assets/Draco/draco_decoder_gltf.js
 import ktx2DecoderUrl from "babylonjs-ktx2decoder/babylon.ktx2Decoder.js?url";
 import mscTranscoderJsUrl from "@/assets/ktx2/msc_basis_transcoder.js?url";
 import mscTranscoderWasmUrl from "@/assets/ktx2/msc_basis_transcoder.wasm?url";
-import { saveModelToIndexedDB } from "@/utils/localModel";
 import { devLog } from "@/utils/devLog";
 import { tapDebug } from "@/utils/tapDebug";
 import { isCeilingMesh, isStructureMesh, looksLikePane, structureRole } from "./meshRoles";
@@ -1104,11 +1103,4 @@ export async function loadModelInto(
   } finally {
     URL.revokeObjectURL(url);
   }
-}
-
-/** Read an uploaded File, persist it, and return its bytes. */
-export async function ingestUploadedModel(file: File): Promise<ArrayBuffer> {
-  const buf = await file.arrayBuffer();
-  await saveModelToIndexedDB(buf, file.name);
-  return buf;
 }

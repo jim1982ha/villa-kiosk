@@ -8,6 +8,8 @@ import { markBoot, installStallObserver, installVisibilityTracker, currentLoadSe
 import { installLeakConsole } from "./utils/leakWatch";
 import { startModelPrefetch } from "./utils/modelPrefetch";
 import "./styles.css";
+import { underIngress } from "@/ha/ingress";
+import { startServiceWorker } from "@/utils/swUpdate";
 
 // ⚠️ THE VERSION HAS TO BE REACHABLE FROM THE CONSOLE, and until now it was
 // not. `__APP_VERSION__` is a BUILD-TIME define — Vite substitutes it into the
@@ -73,14 +75,11 @@ startModelPrefetch();
 // already serves the shell there. On the add-on's OWN hostname (direct /
 // Cloudflare, served at "/") the SW registers so the kiosk installs as a
 // full-screen PWA with none of the HA UI around it.
-const underIngress = location.pathname.includes("/api/hassio_ingress/");
-if ("serviceWorker" in navigator && !underIngress) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch((err) => {
-      console.warn("[SW] registration failed", err);
-    });
-  });
-}
+//
+// Registration, and how a new build reaches the page (switch at once if one is
+// already waiting; offer it when one arrives later), is utils/swUpdate's.
+const insideHa = underIngress();
+if ("serviceWorker" in navigator && !insideHa) startServiceWorker("./sw.js");
 
 // Under Ingress, this page is ALWAYS embedded below HA's own chrome — the
 // sidebar's top bar on desktop, or the Companion App's own toolbar (quick
@@ -97,7 +96,7 @@ if ("serviceWorker" in navigator && !underIngress) {
 // on it from first paint with no flash of the wrong layout. Left/right/bottom
 // insets are untouched — HA's wrapper is a horizontal bar at the very top
 // only, it doesn't help with the home indicator or a landscape side notch.
-if (underIngress) document.documentElement.classList.add("vk-ingress");
+if (insideHa) document.documentElement.classList.add("vk-ingress");
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

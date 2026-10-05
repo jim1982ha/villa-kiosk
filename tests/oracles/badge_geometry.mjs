@@ -116,8 +116,11 @@ ck("beside a VALUE the left margin is short by the ink the icon insets",
 {
   const { readFileSync } = await import("node:fs");
   const ev = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
+  const bc = readFileSync(new URL("../../src/babylon/badgeControls.ts", import.meta.url), "utf8");
   ck("the renderer shows ONE left margin at a time: padl beside a value, barePad without",
-     /if \(lbl\.padL\) lbl\.padL\.isVisible = on;/.test(ev) && /if \(lbl\.barePad\) lbl\.barePad\.isVisible = !on;/.test(ev) && /padL\.isVisible = false;/.test(ev));
+     // since 2.496.269 the toggle and the card's controls are badgeControls' (the oracle draws with them too)
+     /if \(p\.padL\) p\.padL\.isVisible = on;/.test(bc) && /if \(p\.barePad\) p\.barePad\.isVisible = !on;/.test(bc) && /padL\.isVisible = false;/.test(bc)
+     && /setValueParts\(lbl, on\);/.test(ev));
   ck("ONE mechanism for every card border, dashed included: the card's own DashableRectangle (owner: 'why is there a difference in the icon shape?')",
      /badge: DashableRectangle;/.test(ev) && /new DashableRectangle\(`lbl_badge_/.test(ev)
        && /applyBadgeFrame\(lbl\.badge, badgeRing\(surface, this\.metrics\.cardHeightPx, this\.metrics\), this\.metrics\.cardHeightPx\);/.test(ev)

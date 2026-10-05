@@ -1,6 +1,6 @@
 // src/fm/fmEngine.ts
 // Pure logic behind the Facility Manager screens: when a task is due, how a
-// month's spend sits against the Minor Maintenance cap, and how long faults
+// month's spend sits against the owner's monthly cap, and how long faults
 // take to resolve.
 //
 // Deliberately free of React, Babylon and the network so the parts that carry
@@ -8,10 +8,11 @@
 // threshold here traces to a clause; see fmTypes.ts for the citations.
 
 import {
-  MINOR_MAINTENANCE_CAP,
-  MONEY_CURRENCY,
+  NO_FM_TERMS,
+  type FmTerms,
   type FmCompletion, type FmCost, type FmData, type FmSchedule, type FmTicket, type FmTicketStatus,
 } from "./fmTypes";
+import { fullDate, monthYear } from "@/utils/dateText";
 
 const DAY_MS = 86_400_000;
 
@@ -116,8 +117,8 @@ export interface BudgetStatus {
   month: string;
   /** Minor-category spend this month — what the configured cap applies to. */
   minorSpend: number;
-  /** Major spend, tracked separately: it is the Owner's account and
-   *  explicitly NOT part of the cap. */
+  /** The other category's spend, tracked separately and explicitly NOT part
+   *  of the cap. */
   majorSpend: number;
   cap: number;
   /** 0–1+ against the cap; can exceed 1. */
@@ -127,20 +128,20 @@ export interface BudgetStatus {
 }
 
 /**
- * Where this month's maintenance spend sits against the configured Minor
- * Maintenance cap (0 = not configured — see MINOR_MAINTENANCE_CAP).
+ * Where this month's maintenance spend sits against the owner's monthly cap
+ * on the capped category (FmTerms.monthlyCap; 0 = no cap).
  *
- * "approaching" at 80% exists because the decision a cap forces — do this as
- * shared Minor Maintenance, or raise it as Major — has to be made BEFORE the
- * money is spent. A warning that only arrives at 100% arrives after the
- * choice is gone. With no cap configured (cap <= 0) that decision doesn't
- * apply yet, so spend is tracked as "ok" regardless of amount rather than
- * reading as permanently "exceeded" against a zero cap.
+ * "approaching" (at terms.warnAt, 80 % unless the owner set another share)
+ * exists because the decision a cap forces — keep this in the capped
+ * category, or record it in the other one — has to be made BEFORE the money
+ * is spent. With no cap that decision doesn't apply, so spend reads "ok"
+ * regardless of amount rather than permanently "exceeded" against a zero cap.
  */
 export function budgetStatus(
   costs: readonly FmCost[], month = monthKey(Date.now()),
-  cap = MINOR_MAINTENANCE_CAP,
+  terms: Pick<FmTerms, "monthlyCap" | "warnAt"> = NO_FM_TERMS,
 ): BudgetStatus {
+  const cap = terms.monthlyCap;
   const entries = costs.filter((c) => monthKey(c.at) === month);
   const minorSpend = entries.filter((c) => c.category === "minor")
     .reduce((s, c) => s + c.amountIdr, 0);
@@ -149,19 +150,42 @@ export function budgetStatus(
   const fraction = cap > 0 ? minorSpend / cap : 0;
   return {
     month, minorSpend, majorSpend, cap, fraction,
-    state: cap <= 0 ? "ok" : minorSpend >= cap ? "exceeded" : fraction >= 0.8 ? "approaching" : "ok",
+    state: cap <= 0 ? "ok" : minorSpend >= cap ? "exceeded" : fraction >= terms.warnAt ? "approaching" : "ok",
     entries,
   };
 }
 
-/** What a new minor expense of `amountIdr` would do to the cap — used to warn
- *  before it is committed rather than after. Never true with no cap
- *  configured (cap <= 0). */
+/**
+ * What the capped category's month would come to with one more expense — or
+ * with one entry CHANGED: `replacing` names an existing entry whose own
+ * amount is taken out first. The ONE cap check every form asks (SpendTab used
+ * to compute its own, and counted an edited entry's old amount twice).
+ *
+ * The month is the one the expense lands in: a new entry's is today's (it is
+ * stamped now), an edited entry keeps its own date.
+ */
+export function projectedSpend(
+  costs: readonly FmCost[],
+  change: { amount: number; category: "minor" | "major"; replacing?: string },
+  terms: Pick<FmTerms, "monthlyCap" | "warnAt"> = NO_FM_TERMS,
+  now = Date.now(),
+): { month: string; minorSpend: number; cap: number; over: boolean } {
+  const edited = change.replacing ? costs.find((c) => c.id === change.replacing) : undefined;
+  const month = monthKey(edited ? edited.at : now);
+  const others = edited ? costs.filter((c) => c.id !== edited.id) : costs;
+  const minorSpend = budgetStatus(others, month, terms).minorSpend
+    + (change.category === "minor" ? change.amount : 0);
+  const cap = terms.monthlyCap;
+  return { month, minorSpend, cap, over: cap > 0 && minorSpend >= cap };
+}
+
+/** Whether a new capped expense of `amount` would reach the cap — warned
+ *  about before it is committed. Never true with no cap. */
 export function wouldExceedCap(
-  costs: readonly FmCost[], amountIdr: number,
-  month = monthKey(Date.now()), cap = MINOR_MAINTENANCE_CAP,
+  costs: readonly FmCost[], amount: number,
+  terms: Pick<FmTerms, "monthlyCap" | "warnAt"> = NO_FM_TERMS, now = Date.now(),
 ): boolean {
-  return cap > 0 && budgetStatus(costs, month, cap).minorSpend + amountIdr >= cap;
+  return projectedSpend(costs, { amount, category: "minor" }, terms, now).over;
 }
 
 export interface TicketStats {
@@ -259,23 +283,10 @@ export function localStamp(at: string | number | Date = Date.now()): string {
     + `${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-/** Write a money amount for display.
- *
- *  ⚠️ NEITHER THE CURRENCY NOR THE GROUPING IS BAKED IN ANY MORE. This was
- *  `IDR ${n.toLocaleString("en-US")}` — one site's currency and one country's
- *  digit grouping, in a redistributable add-on, applied to every install.
- *  `MONEY_CURRENCY` is empty by default, so an unconfigured install prints the
- *  number alone rather than mislabelling it; `[]` hands the grouping to the
- *  viewer's own locale, which is what a reader in front of the screen expects.
- *  The rounding is unchanged — these are whole-unit amounts by contract. */
-export function formatMoney(n: number, currency: string = MONEY_CURRENCY): string {
-  const amount = Math.round(n).toLocaleString([]);
-  return currency ? `${currency} ${amount}` : amount;
-}
 
 /** Short human date, local time (e.g. "24 Jul 2026") — for a target/due date
  *  or a report table row, where the full time-of-day in localStamp() is more
- *  precision than the reader needs. Was previously private to fmReport.ts;
+ *  precision than the reader needs. Was previously private to fmDocuments.ts;
  *  moved here (and imported back from there) so TodayTab and ScheduleEditor
  *  can show the exact same date format the report annex uses, rather than
  *  each screen inventing its own. */
@@ -286,19 +297,18 @@ export function shortDate(at: string | number | Date): string {
   // the app already asks the platform. The FIELDS stay fixed — day, short
   // month, year — so the shape is stable and unambiguous wherever it renders;
   // only the ordering and spelling follow the reader.
-  const d = new Date(at);
-  return d.toLocaleDateString([], { day: "2-digit", month: "short", year: "numeric" });
+  return fullDate(at);
 }
 
 /** The month a report covers, spelled for a heading (e.g. "July 2026").
  *  Same reasoning as shortDate: fixed fields, reader's locale. Lived in
- *  fmReport.ts with its own hardcoded "en-GB". */
+ *  fmDocuments.ts with its own hardcoded "en-GB". */
 export function monthLabel(month: string): string {
   const [y, m] = month.split("-").map(Number);
   // A malformed month key would otherwise render "Invalid Date" into the
   // report's own Period heading; say what was actually stored instead.
   if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) return month;
-  return new Date(y, m - 1, 1).toLocaleDateString([], { month: "long", year: "numeric" });
+  return monthYear(new Date(y, m - 1, 1));
 }
 
 // ── How a record changes (round 10, 2.496.159) ──────────────────────────────
@@ -392,6 +402,32 @@ export function withTicketAdvanced(
         }]
       : d.completions,
     costs: costId ? [...d.costs, { ...cost!, id: costId, at, photoIds: step.photoIds }] : d.costs,
+  };
+}
+
+/** The note a one-step close leaves on the fault's history. */
+export const CLOSED_WITHOUT_ACTION = "Closed without action";
+
+/**
+ * Close a fault in ONE step, nothing done: an obsolete or duplicate fault
+ * (often one the VESTA Agent raised automatically and that has since gone
+ * away). Resolved, stamped now, with a "Closed without action" update — and
+ * deliberately NO completion and NO cost: nothing was done, and counting it
+ * as work would inflate every "work done" figure (see withTicketAdvanced).
+ * A fault already resolved, or unknown, is left exactly as it is.
+ */
+export function withTicketClosed(d: FmData, id: string, k: Pick<FmStamp, "now">): FmData {
+  const t = d.tickets.find((x) => x.id === id);
+  if (!t || isTicketResolved(t)) return d;
+  const at = k.now;
+  return {
+    ...d,
+    tickets: d.tickets.map((x) => (x.id !== id ? x : {
+      ...x,
+      status: "resolved",
+      resolvedAt: at,
+      updates: [...(x.updates ?? []), { at, status: "resolved", note: CLOSED_WITHOUT_ACTION, photoIds: [] }],
+    })),
   };
 }
 

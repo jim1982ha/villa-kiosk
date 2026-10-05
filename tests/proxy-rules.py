@@ -184,9 +184,60 @@ def _enclosing(needle: str) -> str:
     return _code[start + 1:_code.index("(", start)].replace("async def ", "").replace("def ", "")
 
 ck("  the SUPERADMIN charge sits in the elevation handler",
-   _enclosing("_note_global_failure(SUPERADMIN,") == "auth_elevate_handler")
+   _enclosing("_auth_failed(SUPERADMIN,") == "auth_elevate_handler")
 ck("  ...and the caller's-role charge sits in the passcode handler",
-   _enclosing("_note_global_failure(role,") == "auth_verify_handler")
+   _enclosing("_auth_failed(role,") == "auth_verify_handler")
+ck("  ...and the agent's in the agent's gate",
+   _enclosing("_auth_failed(AGENT,") == "_agent_refuse")
+
+# ── the limiter's interface: ask, fail, succeed ───────────────────────────
+# Every door that takes a secret goes through `_lockout_remaining`,
+# `_auth_failed` and `_auth_succeeded`; the write side used to be copied into
+# three handlers. Driven here by value, per bucket and per caller.
+print("\n  the limiter (ask · fail · succeed):")
+proxy._auth_failures.clear()
+reset()
+A, B = "203.0.113.9", "198.51.100.7"
+for _ in range(proxy.AUTH_MAX_FAILURES - 1):
+    proxy._auth_failed(role, A)
+ck("one short of the per-caller limit is not locked",
+   proxy._lockout_remaining(role, A) == 0)
+proxy._auth_failed(role, A)
+ck("the limit locks that caller", proxy._lockout_remaining(role, A) > 0)
+ck("...not another caller", proxy._lockout_remaining(role, B) == 0)
+ck("...nor the same caller in another bucket",
+   proxy._lockout_remaining(proxy.SUPERADMIN, A) == 0)
+ck("each failure also counts toward the bucket's global rate",
+   len(proxy._auth_failures_global[role]) == proxy.AUTH_MAX_FAILURES)
+proxy._auth_failures.clear()
+reset()
+for _ in range(proxy.AUTH_MAX_FAILURES - 1):
+    proxy._auth_failed(role, A)
+proxy._auth_succeeded(role, A)
+proxy._auth_failed(role, A)
+ck("a success clears that caller's count",
+   proxy._lockout_remaining(role, A) == 0
+   and proxy._auth_failures[(role, A)]["count"] == 1)
+ck("...and leaves the global rate alone (one right PIN cannot reset a campaign)",
+   len(proxy._auth_failures_global[role]) == proxy.AUTH_MAX_FAILURES)
+proxy._auth_succeeded(role, "192.0.2.77")
+ck("a success from an unknown caller tracks nothing",
+   (role, "192.0.2.77") not in proxy._auth_failures)
+proxy._auth_failed("agent-" + role, A)
+ck("a new bucket needs no registration",
+   len(proxy._auth_failures_global["agent-" + role]) == 1)
+proxy._auth_failures.clear()
+reset()
+# ...and nothing else touches its state: a fourth door copying the write side
+# is exactly what this interface exists to stop.
+_LIMITER = {"_prune_auth_failures", "_lockout_remaining", "_auth_failed",
+            "_auth_succeeded", "_note_global_failure", "_global_locked_for"}
+_touching = sorted(
+    name for name, fn in inspect.getmembers(proxy, inspect.isfunction)
+    if fn.__module__ == proxy.__name__ and name not in _LIMITER
+    and re.search(r"\b_auth_failures(_global)?\b",
+                  re.sub(r"#.*", "", inspect.getsource(fn)).split('"""')[-1]))
+ck(f"only the limiter touches the limiter's state {_touching or ''}", not _touching)
 
 # ── the REST allow-list fails CLOSED ──────────────────────────────────────
 # Every string below reached Core from a guest session before the rule became a
@@ -229,8 +280,8 @@ ck("the re-check reads the COOKIE, not a captured role",
 # notice a bump or the fix above is inert.
 import os, tempfile, time as _t
 with tempfile.TemporaryDirectory() as tmp:
-    epoch_file = os.path.join(tmp, "session-epoch")
-    proxy.SESSION_EPOCH_FILE = epoch_file
+    proxy.DATA_DIR = tmp
+    epoch_file = proxy._data(proxy.SESSION_EPOCH_NAME)
     proxy._EPOCH_CACHE = None
     with open(epoch_file, "w") as fh:
         fh.write("7")
@@ -291,8 +342,9 @@ with tempfile.TemporaryDirectory() as tmp:
 # The sweep must not delete on a baseline nobody could read, whichever caller
 # reaches it — the PUT path refuses such a write, and this is the second lock.
 with tempfile.TemporaryDirectory() as tmp:
-    proxy.FM_EVIDENCE_DIR = tmp
-    photo = os.path.join(tmp, "a" * 32 + ".jpg")
+    proxy.DATA_DIR = tmp
+    os.makedirs(proxy._data(proxy.FM_EVIDENCE_NAME))
+    photo = os.path.join(proxy._data(proxy.FM_EVIDENCE_NAME), "a" * 32 + ".jpg")
     with open(photo, "wb") as fh:
         fh.write(b"\xff\xd8\xff")
     # ⚠️ A CURRENT MTIME, ON PURPOSE. The first attempt set this to epoch 0,
@@ -346,8 +398,16 @@ ck("  ...still never a system service or a write frame",
    refuse("guest", "call_service", domain="homeassistant", service="restart") is not None
    and refuse("guest", "call_service", domain="script", service="turn_on") is not None
    and refuse("guest", "fire_event") is not None)
+# Driven by value (2.496.263): the ONE table loader, asked for a table that is
+# not there, grants nothing — and every table the proxy reads goes through it.
 ck("an unreadable table fails CLOSED (no non-owner access), never open",
-   'return {}' in inspect.getsource(proxy._load_ha_commands) and 'HA_COMMANDS.get("websocket", ())' in inspect.getsource(proxy))
+   proxy._load_vesta_table("no-such-table.json", "test") == {}
+   and 'HA_COMMANDS.get("websocket", ())' in inspect.getsource(proxy))
+ck("  ...for every table: roles, ha-commands, fm-records and agent-contract all load through it",
+   all(f'_load_vesta_table("{n}",' in inspect.getsource(fn) for n, fn in (
+       ("roles.json", proxy._load_roles), ("ha-commands.json", proxy._load_ha_commands),
+       ("fm-records.json", proxy._load_fm_records), ("agent-contract.json", proxy._load_agent_contract)))
+   and inspect.getsource(proxy).count('for path in ("/usr/share/vesta/"') == 1)
 ck("an unlisted command is refused for ops",
    refuse("ops", "config/entity_registry/update") is not None)
 ck("  ...and for guest",
@@ -393,55 +453,60 @@ ck("guest cannot fetch a camera image over REST",
 ck("guest can still read history (the charts)",
    proxy._rest_call_allowed("guest", "history/period/2026-01-01T00:00:00+08:00"))
 
-# ── the proxy's table and the kiosk's agree ──────────────────────────────
-# permissions.ts decides what each profile is SHOWN; ROLE_CAPABILITIES what it
-# may DO. Two halves of one rule, so the names they share must mean the same
-# thing for every role, or the kiosk offers a button the proxy refuses (or
-# hides one the proxy would allow).
-print("\n  the proxy's roles and the kiosk's:")
-PERMS = ROOT / "src" / "auth" / "permissions.ts"
-pt = PERMS.read_text()
-matrix = pt[pt.index("const PERMISSION_MATRIX"):]
-client = {}
-for role in proxy.AUTH_ROLES:
-    m = re.search(rf"\b{role}:\s*\{{(.*?)\n  \}}", matrix, re.S)
-    body = m.group(1) if m else ""
-    caps = re.search(r"capabilities:\s*\[(.*?)\]", body, re.S)
-    denied = re.search(r"deniedTypes:\s*\[(.*?)\]", body, re.S)
-    client[role] = (set(re.findall(r'"(\w+)"', caps.group(1))) if caps else set(),
-                    set(re.findall(r'"(\w+)"', denied.group(1))) if denied else set())
-ck("the kiosk's matrix was read for every role",
-   all(client[r][0] for r in proxy.AUTH_ROLES))
-SHARED = ("editConfig", "manageModel", "manageFacility", "reportFault")
-mismatch = [f"{r}.{c}" for r in proxy.AUTH_ROLES for c in SHARED
-            if (c in client[r][0]) != proxy._may(r, c)]
-ck("every shared capability means the same thing on both sides", not mismatch)
-if mismatch:
-    print(f"          the proxy and permissions.ts disagree on: {', '.join(mismatch)}")
-cam_mismatch = [r for r in proxy.AUTH_ROLES
-                if ("camera" not in client[r][1]) != proxy._may(r, "viewCameras")]
-ck("viewCameras is exactly the roles the kiosk shows cameras to", not cam_mismatch)
+# ── one role table, read by the proxy and the kiosk ──────────────────────
+# rootfs/usr/share/vesta/roles.json decides what each profile is SHOWN
+# (src/auth/permissions.ts imports it) and what it may DO (ROLE_CAPABILITIES
+# is built from it). These drive VALUES through the proxy's own loader; the
+# app side is tests/oracles/role_table.mjs.
+print("\n  the one role table:")
+ROLES_JSON = _json.loads((ROOT / "rootfs" / "usr" / "share" / "vesta" / "roles.json").read_text())
+ck("the proxy loaded the shipped role table", proxy.ROLES_TABLE == ROLES_JSON)
+ck("the table's profiles are exactly the sign-in profiles",
+   set(ROLES_JSON["profiles"]) == set(proxy.AUTH_ROLES))
+for r, row in ROLES_JSON["profiles"].items():
+    ck(f"{r}: holds exactly its listed capabilities (plus derived viewCameras)",
+       proxy.ROLE_CAPABILITIES[r] - {"viewCameras"} == set(row["capabilities"]))
+cam_mismatch = [r for r, row in ROLES_JSON["profiles"].items()
+                if ("camera" not in row["deniedTypes"]) != proxy._may(r, "viewCameras")]
+ck("viewCameras is exactly the profiles the kiosk shows cameras to", not cam_mismatch)
 if cam_mismatch:
     print(f"          disagree for: {', '.join(cam_mismatch)}")
+ck("the agent holds only its own three capabilities",
+   proxy.ROLE_CAPABILITIES["agent"] == {"agentRead", "agentWrite", "agentMessage"})
+# seeUpdates counts Home Assistant's update.* entities. The proxy lets a
+# profile read them only by `administer` (the update domain is not in
+# readDomains), so giving seeUpdates to a profile without it would show a
+# count that is always zero. Hold the two together.
+blind = [r for r in proxy.AUTH_ROLES
+         if proxy._may(r, "seeUpdates") and not proxy._read_allowed(r, "update.any")]
+ck("a profile that sees the update count may read update entities", not blind)
+if blind:
+    print(f"          sees the count but cannot read them: {', '.join(blind)}")
 ck("an unknown role holds nothing",
    not any(proxy._may("intruder", c) for caps in proxy.ROLE_CAPABILITIES.values() for c in caps))
+ck("an unreadable table grants nothing to anyone",
+   all(not caps for r, caps in proxy._role_capabilities({}).items()))
 
 # ── every route is gated, or public on purpose (round 11, 2.496.169) ──────
 # The gate was written out by hand at twelve handlers and had drifted into two
 # 403 shapes; it is one call now (_refuse). A NEW handler that forgets it is an
 # open endpoint with every other check green — so each routed handler must
-# call _refuse (or the model gate, which adds the public_model_access option),
-# or be named here with the reason it answers without a session.
+# call _refuse (or the model gate, which adds the public_model_access option,
+# or the VESTA Agent's bearer gate _agent_refuse — /agent/v1/*, and store
+# handlers built with gate=_agent_refuse), or be named here with the reason it
+# answers without a session.
 PUBLIC_HANDLERS = {
     "auth_roles_handler": "the profile screen lists the roles before anyone signs in",
     "auth_session_handler": "answers 'is there a session' — to anyone, by design",
     "auth_verify_handler": "the sign-in itself (rate-limited)",
     "auth_logout_handler": "clears the caller's own cookie",
+    "healthz_handler": "the image's Docker HEALTHCHECK carries no session; it answers 'ok' and nothing else",
 }
 routed = re.findall(r'app\.router\.add_\w+\(\s*(?:"[A-Z*]+"\s*,\s*)?"[^"]+"\s*,\s*(\w+)',
                     PROXY.read_text())
 ungated = sorted({h for h in routed if h not in PUBLIC_HANDLERS
-                  and not re.search(r"\b_refuse\(request|\b_model_authorized\(request",
+                  and not re.search(r"\b_refuse\(request|\b_model_authorized\(request"
+                                    r"|\b_agent_refuse\(request|\bgate\(request",
                                     inspect.getsource(getattr(proxy, h)))})
 ck(f"all {len(set(routed))} routed handlers are gated (_refuse), or named public with a reason",
    len(routed) > 10 and not ungated)
@@ -482,10 +547,125 @@ try:
        proxy._fm_reader_view(None, STORED) is STORED and proxy._fm_writer_merge(None, STORED, {"x": 1}) == {"x": 1})
 finally:
     proxy._role_for = _real_role_for
-src = PROXY.read_text()
-ck("the store applies the view to the GET AND to the 409 body (a stale write is not a way to read)",
-   "key: reader_view(request, stored) if reader_view else stored," in src and "reader_view(request, stored_now)" in src
-   and "reader_view=_fm_reader_view, writer_merge=_fm_writer_merge" in src)
+# The view on the GET AND on the 409 body is driven over HTTP now:
+# tests/store-doors.py ("a guest's STALE write gets the empty view back").
+
+# ── The add-on's options table (2.496.223) ─────────────────────────────────
+# One row per option; every reader asks opt(name). The manifest is compared
+# with the table by value in tests/addon-manifest.py.
+print("\n  the options table:")
+o = proxy.opt
+ck("with nothing stored, every option reads as its row's default",
+   all(o(n, {}) == r.default for n, r in proxy.OPTIONS.items()))
+ck("a switch is on only for a real true (a hand-edited \"yes\" is not)",
+   o("public_model_access", {"public_model_access": "yes"}) is False
+   and o("public_model_access", {"public_model_access": True}) is True
+   and o("agent_enabled", {"agent_enabled": 1}) is False)
+ck("a number is clamped, and junk (text, true, a list) is the default",
+   o("session_days", {"session_days": 0}) == 1 and o("session_days", {"session_days": 10**9}) == 365
+   and all(o("session_days", {"session_days": j}) == 30 for j in ("abc", True, [], None)))
+ck("a code that does not fit its pattern is NOT configured (\"\"), never compared",
+   o("guest_pin", {"guest_pin": " 1234 "}) == "1234" and o("guest_pin", {"guest_pin": "12345"}) == ""
+   and o("superadmin_pin", {"superadmin_pin": "1234"}) == "")
+ck("a group field is read from its group",
+   o("vesta_agent.offline_after_minutes", {"vesta_agent": {"offline_after_minutes": 9}}) == 9)
+ck("an OLDER place still stored wins over the new one (an update must not drop it)",
+   o("vesta_agent.offline_after_minutes",
+     {"agent_offline_after_minutes": 7, "vesta_agent": {"offline_after_minutes": 5}}) == 7
+   and o("agent_enabled", {"agent_enabled": False, "vesta_agent": {"enabled": True}}) is True)
+ck("migrate: nothing stale, nothing to write", proxy.migrate_options({"session_days": 3}) is None)
+ck("migrate: a retired key is dropped", proxy.migrate_options({"sh3d_path": "x", "session_days": 3}) == {"session_days": 3})
+_m = proxy.migrate_options({"agent_token": "t" * 20})
+ck("migrate: an older place is moved, value kept, and a missing group is created",
+   _m == {"vesta_agent": {"token": "t" * 20}}, )
+ck("migrate: after it, reading gives the same answer as before it",
+   all(o(n, _m) == o(n, {"agent_token": "t" * 20}) for n in proxy.OPTIONS))
+
+# ── The Facility record's change module (2.496.223) ─────────────────────────
+# One classifier says what a write changes; one validator what is wrong with a
+# record; the guest, people and agent doors are policies on top. Driven by
+# value here; over HTTP by store-doors.py and agent-interface.py.
+print("\n  the Facility record's change module:")
+
+
+def ckv(label, ok, detail=None):
+    ck(label, ok)
+    if not ok and detail is not None:
+        print(f"          {detail}")
+
+
+OLD = {"schedules": [{"id": "s1"}],
+       "tickets": [{"id": "t1", "status": "open", "photoIds": ["p1", "p2"]},
+                   {"id": "legacy", "status": "resolved", "photoIds": []}],   # stored with a problem
+       "completions": [], "costs": [], "savedDocuments": [], "future": 1}
+NEW = {**OLD, "schedules": [],
+       "tickets": [{"id": "t1", "status": "in_progress", "photoIds": ["p1"]},
+                   {"id": "legacy", "status": "resolved", "photoIds": []},
+                   {"id": "t2", "status": "open", "photoIds": []}], "future": 2}
+ch = proxy._fm_classify(OLD, NEW)
+ckv("classify: a removed schedule", ch.removed["schedules"] == {"s1"}, ch.removed)
+ckv("classify: an added fault", [r["id"] for r in ch.added["tickets"]] == ["t2"], ch.added)
+ckv("classify: an edited fault, and only that one", ch.changed["tickets"] == ["t1"], ch.changed)
+ckv("classify: the photo a KEPT record lost", ch.dropped_photos == {("tickets", "t1"): {"p2"}}, ch.dropped_photos)
+ckv("classify: a key this server does not know, changed", ch.unknown_keys == {"future"}, ch.unknown_keys)
+ckv("classify: a problem already stored is not this write's", ch.invalid == [], ch.invalid)
+edited_legacy = {**OLD, "tickets": [OLD["tickets"][0], {"id": "legacy", "status": "resolved", "photoIds": [], "note": "x"}]}
+ckv("  ...and editing that stored record for something else is allowed",
+   proxy._fm_classify(OLD, edited_legacy).invalid == [])
+ckv("validate: resolved needs resolvedAt",
+   proxy._fm_record_errors("tickets", {"id": "a", "status": "resolved"}) == {"is resolved with no resolvedAt"})
+ckv("validate: an amount must be a number (text, true, NaN, negative all refused)",
+   all(proxy._fm_record_errors("costs", {"id": "k", "category": "minor", "amountIdr": a})
+       for a in ("5", True, float("nan"), -1, None))
+   and not proxy._fm_record_errors("costs", {"id": "k", "category": "major", "amountIdr": 0}))
+ckv("validate: a completion answers a schedule or a fault",
+   proxy._fm_record_errors("completions", {"id": "c", "scheduleId": ""})
+   and not proxy._fm_record_errors("completions", {"id": "c", "scheduleId": "", "ticketId": "t"})
+   and not proxy._fm_record_errors("completions", {"id": "c", "scheduleId": "s1"}))
+dup = {**OLD, "tickets": OLD["tickets"] + [{"id": "t1", "status": "open", "photoIds": []}]}
+ckv("classify: an id written twice is a new problem", any(p == "appears twice" for _, _, p in proxy._fm_classify(OLD, dup).invalid))
+_real_role_for = proxy._role_for
+try:
+    proxy._role_for = lambda _r: "ops"
+    bad = {**OLD, "tickets": OLD["tickets"] + [{"id": "t3", "status": "resolved", "photoIds": []}]}
+    r = proxy._fm_write_guard(None, {}, OLD, bad)
+    ckv("the people's door refuses a new invalid record too (400)", r is not None and r.status == 400)
+finally:
+    proxy._role_for = _real_role_for
+
+# ⚠️ THE KIOSK'S OWN WRITES MUST PASS. The validator's rules claim to be the
+# ones src/fm/fmEngine.ts always meets; a rule the app breaks would refuse an
+# owner's ordinary save. So run the REAL engine (Node) through every way it
+# builds a record, and hand what it built to the validator.
+import subprocess, tempfile as _tf
+_script = """
+import { register } from "node:module";
+register(%r, import.meta.url);
+const e = await import("@/fm/fmEngine");
+let n = 0; const k = { now: "2026-09-29T10:00:00.000Z", id: (p) => `${p}${++n}` };
+let d = { schedules: [{ id: "s1", title: "Filter", everyDays: 30, enabled: true }], completions: [], costs: [], tickets: [], savedDocuments: [] };
+const docs = [];
+d = e.withCompletion(d, { scheduleId: "s1", at: k.now, by: "FM", photoIds: ["a"] }, { amountIdr: e.parseAmount("150.000"), label: "Filter", category: "minor" }, k); docs.push(d);
+d = { ...d, tickets: [{ id: "t1", title: "Leak", status: "open", openedAt: k.now, photoIds: [] }] };
+d = e.withTicketAdvanced(d, "t1", "in_progress", { by: "FM", photoIds: [] }, undefined, k); docs.push(d);
+d = e.withTicketAdvanced(d, "t1", "resolved", { by: "FM", photoIds: ["b"] }, { amountIdr: 20, label: "Seal", category: "major" }, k); docs.push(d);
+d = e.withTicketAdvanced(d, "t1", "open", { by: "FM", photoIds: [] }, undefined, k); docs.push(d);
+d = e.withTicketPatch(d, "t1", { status: "resolved" }, k); docs.push(d);
+console.log(JSON.stringify(docs));
+""" % (ROOT / "tests" / "consistency" / "alias-hook.mjs").as_uri()
+with _tf.TemporaryDirectory() as _td:
+    _f = Path(_td) / "app-writes.mjs"
+    _f.write_text(_script)
+    _out = subprocess.run(["node", "--no-warnings", str(_f)], capture_output=True, text=True, cwd=ROOT)
+_docs = _json.loads(_out.stdout) if _out.returncode == 0 else []
+ckv("the Kiosk's engine was run (withCompletion, withTicketAdvanced, withTicketPatch)", len(_docs) == 5,
+   _out.stderr[-400:])
+_prev = {n: [] for n in proxy.FM_RECORD_COLLECTIONS}
+_problems = []
+for _d in _docs:
+    _problems += proxy._fm_classify(_prev, _d).invalid
+    _prev = _d
+ckv("  ...and every record it built passes the server's validator", not _problems, _problems)
 
 # ── A chunked upload survives a re-sent piece (round 11, 2.496.166) ──────────
 # Driven through the real handler with a fake request: the client re-sends a
@@ -564,11 +744,14 @@ ck("  ...never trimming to nothing (one event always fits)", len(proxy._telemetr
 ck("the ceiling the options allow is under the byte cap by construction",
    proxy.TELEMETRY_MAX_RING_BYTES < 5000 * proxy.TELEMETRY_MAX_BODY)
 src = PROXY.read_text()
-ck("a store PUT writes OFF the event loop, inside its lock",
-   "await _write_json_store_async(path, payload)" in src and "asyncio.to_thread(_write_json_store, path, payload)" in src
-   and "            _write_json_store(path, payload)" not in src)
-ck("  ...and so does the telemetry append, under ONE lock", "async with _telemetry_lock:" in src
-   and "await asyncio.to_thread(\n            _telemetry_append" in src)
+_update = inspect.getsource(proxy.JsonStore.update)
+ck("a store change reads and writes OFF the event loop, inside its lock",
+   "async with self.lock:" in _update and "await asyncio.to_thread(self.read_status)" in _update
+   and "await _write_json_store_async(self.path, payload)" in _update
+   and "asyncio.to_thread(_write_json_store, path, payload)" in src
+   and "await asyncio.to_thread(after, stored, new)" in _update)
+ck("  ...and the telemetry append is a change to its store (ONE lock)",
+   "await TELEMETRY.update(" in inspect.getsource(proxy.telemetry_post_handler))
 
 # ── the lockout bucket is keyed by what the caller CANNOT write ───────────
 # _client_ip used to take the FIRST X-Forwarded-For hop — the one address in
@@ -673,16 +856,16 @@ ck("the telemetry POST recognises a browser's report body",
 # ── signing every device out also replaces the signing key ────────────────
 print("\n  the signing key:")
 with tempfile.TemporaryDirectory() as d:
-    proxy.SESSION_SECRET_FILE = os.path.join(d, ".session_secret")
-    proxy.SESSION_EPOCH_FILE = os.path.join(d, "session-epoch")
+    proxy.DATA_DIR = d
+    secret_file = proxy._data(proxy.SESSION_SECRET_NAME)
     proxy._session_secret_cache = None
     token = proxy._make_session_token("owner")
     ck("a fresh token verifies", proxy._session_role(token) == "owner")
-    before = open(proxy.SESSION_SECRET_FILE, "rb").read()
+    before = open(secret_file, "rb").read()
     proxy._rotate_session_secret()
     ck("after a rotation it does not, and the key on disk is new (0600)",
-       proxy._session_role(token) is None and open(proxy.SESSION_SECRET_FILE, "rb").read() != before
-       and (os.stat(proxy.SESSION_SECRET_FILE).st_mode & 0o777) == 0o600)
+       proxy._session_role(token) is None and open(secret_file, "rb").read() != before
+       and (os.stat(secret_file).st_mode & 0o777) == 0o600)
     ck("  ...and a token issued afterwards does", proxy._session_role(proxy._make_session_token("ops")) == "ops")
 ck("sign-every-device-out rotates the key after bumping the epoch",
    "    epoch = _bump_session_epoch()\n    try:\n        _rotate_session_secret()" in PROXY.read_text())
@@ -731,6 +914,65 @@ table = _json.loads((ROOT / "rootfs" / "usr" / "share" / "vesta" / "ha-commands.
 ck("readDomains comes from the shared table, and holds the drawn domains plus sun/scene/weather",
    proxy.READ_DOMAINS == frozenset(table["readDomains"]) and {"light", "sensor", "sun", "scene", "weather"} <= proxy.READ_DOMAINS
    and not {"person", "device_tracker", "alarm_control_panel", "update", "calendar"} & proxy.READ_DOMAINS)
+
+# THE FACILITY VOCABULARY IS ONE TABLE (2.496.245): fm-records.json, read by
+# the proxy and by the app (tests/oracles/fm_records.mjs holds the app side).
+# Driven through _fm_record_errors, not read off the source.
+fm_table = _json.loads((ROOT / "rootfs" / "usr" / "share" / "vesta" / "fm-records.json").read_text())
+_tk = lambda st: {"id": "t1", "status": st, "resolvedAt": "2026-01-01" if st == "resolved" else None}
+_co = lambda cat: {"id": "c1", "amountIdr": 5, "category": cat}
+ck("fm-records.json: every fault status it names is one the proxy accepts, and only those",
+   proxy.FM_TICKET_STATUSES == tuple(fm_table["ticketStatuses"])
+   and all(not proxy._fm_record_errors("tickets", _tk(st)) for st in fm_table["ticketStatuses"])
+   and proxy._fm_record_errors("tickets", _tk("closed")))
+ck("  ...every cost category, and only those",
+   proxy.FM_COST_CATEGORIES == tuple(fm_table["costCategories"])
+   and all(not proxy._fm_record_errors("costs", _co(c)) for c in fm_table["costCategories"])
+   and proxy._fm_record_errors("costs", _co("other")))
+ck("  ...and the proxy's own collection list (a literal, so it cannot fail open) equals the table's",
+   proxy.FM_RECORD_COLLECTIONS == tuple(fm_table["collections"]))
+_saved = (proxy.FM_RECORDS_TABLE, proxy.FM_TICKET_STATUSES, proxy.FM_COST_CATEGORIES)
+try:
+    proxy.FM_RECORDS_TABLE = {}
+    proxy.FM_TICKET_STATUSES, proxy.FM_COST_CATEGORIES = proxy._fm_words("ticketStatuses"), proxy._fm_words("costCategories")
+    ck("  ...an unreadable table accepts NO status or category (fails closed)",
+       proxy.FM_TICKET_STATUSES == () and proxy.FM_COST_CATEGORIES == ()
+       and proxy._fm_record_errors("tickets", _tk("open")) and proxy._fm_record_errors("costs", _co("minor")))
+    proxy.FM_RECORDS_TABLE = {"ticketStatuses": "open", "costCategories": [1]}
+    ck("  ...and so does a malformed one", proxy._fm_words("ticketStatuses") == () and proxy._fm_words("costCategories") == ())
+finally:
+    proxy.FM_RECORDS_TABLE, proxy.FM_TICKET_STATUSES, proxy.FM_COST_CATEGORIES = _saved
+
+# ── The model's version is nginx's ETag (2.496.254) ──────────────────────────
+# The Kiosk stamped the model's URL (?v=) from a HEAD request's ETag; the
+# add-on now reports the version in /addon-config instead. It must be the SAME
+# string nginx sends (ngx_http_set_etag: "<mtime hex>-<size hex>"), or every
+# device's cached multi-MB model would be fetched again under a new URL.
+print("\n  the model's version:")
+with tempfile.TemporaryDirectory() as d:
+    _saved_data = proxy._data
+    proxy._data = lambda name="": os.path.join(d, name)
+    try:
+        os.makedirs(os.path.join(d, proxy.WWW_NAME))
+        eff0 = proxy._effective_paths()
+        ck("no model: no path, no versions",
+           (eff0["model_path"], eff0["model_version"], eff0["rooms_version"]) == ("", "", ""))
+        glb = os.path.join(d, proxy.WWW_NAME, proxy.MANAGED_PATH["glb"])
+        with open(glb, "wb") as f:
+            f.write(b"glTF" + b"\0" * 300)
+        os.utime(glb, (1_700_000_000, 1_700_000_000))
+        eff = proxy._effective_paths()
+        ck("a model's version is nginx's ETag for it: mtime and size in hex",
+           eff["model_version"] == f"{1_700_000_000:x}-{304:x}" == "6553f100-130")
+        ck("  ...its room data, absent, has none (and is not mistaken for the model)", eff["rooms_version"] == "")
+        with open(os.path.join(d, proxy.WWW_NAME, proxy._rooms_rel(proxy.MANAGED_PATH["glb"])), "w") as f:
+            f.write('{"rooms": []}')
+        os.utime(glb, (1_700_000_100, 1_700_000_100))
+        eff2 = proxy._effective_paths()
+        ck("a replaced model gets a new version; the room data its own",
+           eff2["model_version"] != eff["model_version"] and eff2["rooms_version"].endswith("-d"))
+    finally:
+        proxy._data = _saved_data
 
 print()
 print("✅ the proxy's pure rules hold" if FAIL == 0

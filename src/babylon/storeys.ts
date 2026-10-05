@@ -161,8 +161,10 @@ export class Storeys<R extends StoreyRoomIn = StoreyRoomIn> {
   /** The storey a room is on. */
   storeyOf(room: R): number | null { return this.of.get(room) ?? null; }
 
-  /** A storey's floor: the height its rooms agree on. */
-  floorOf(storey: number): number { return this.floor.get(storey) ?? 0; }
+  /** A storey's floor HEIGHT: the one its rooms agree on. (Was `floorOf`,
+   *  which collided with floorOf.ts's floorOf — a 1-based floor NUMBER —
+   *  2.496.261.) */
+  floorY(storey: number): number { return this.floor.get(storey) ?? 0; }
 
   /**
    * The storey of a point an UNKNOWN height above its floor — a light
@@ -214,6 +216,26 @@ export class Storeys<R extends StoreyRoomIn = StoreyRoomIn> {
     const s = this.storeyAt(y);
     for (const r of this.rooms) if (this.of.get(r) === s && pointInPolygon(x, z, r.pts)) return r;
     return null;
+  }
+
+  /**
+   * The room a DEVICE is in (EntityVisuals.roomForEntity) — three steps, in
+   * this order, each a rule this repo learned:
+   *  1. containing it on its own storey (roomAt);
+   *  2. else ANY polygon containing it — the storey filter may refine an
+   *     answer, never delete one (2.440.0: a storey none of whose rooms
+   *     contain the point turned a good room into "Other");
+   *  3. else the room whose wall it is in, within WALL_TOLERANCE_M (2.496.201).
+   * Not roomAt itself: the light pool wants the opposite fallback (its storey,
+   * then the nearest boundary), so this ladder belongs to devices alone.
+   * Pure — tests/oracles/storeys.mjs drives all three steps (2.496.287; the
+   * ladder lived in the 5,700-line EntityVisuals and only step 3 was pinned).
+   */
+  deviceRoomAt(x: number, y: number, z: number): R | null {
+    const own = this.roomAt(x, y, z);
+    if (own) return own;
+    for (const r of this.rooms) if (pointInPolygon(x, z, r.pts)) return r;
+    return this.roomNear(x, y, z, WALL_TOLERANCE_M);
   }
 
   /** The room whose BOUNDARY is nearest a point that no room contains, on the

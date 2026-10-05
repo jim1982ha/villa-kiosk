@@ -19,11 +19,29 @@
 // replace is far easier to reason about than four stores that can disagree
 // mid-edit.
 
+// ⚠️ THE VOCABULARY IS ONE TABLE, SHARED WITH THE ADD-ON (2.496.245): a fault's
+// statuses, a cost's categories and the record's collections live in
+// rootfs/usr/share/vesta/fm-records.json, which supervisor-proxy.py reads to
+// judge every write (_fm_record_errors). They were two literal copies, one per
+// side. The literal union TYPES stay below — the compiler needs words — and
+// tests/oracles/fm_records.mjs fails when they and the table part.
+import FM_RECORDS from "../../rootfs/usr/share/vesta/fm-records.json" with { type: "json" };
+
+/** Who last created or changed a record, when it was not a person
+ *  (docs/agent-integration/PLAN.md F6). Set by the ADD-ON, never by this app:
+ *  every record the VESTA Agent writes is stamped server-side, so the mark
+ *  cannot be forgotten by the writer. Absent on a person's record. */
+export interface FmProvenance {
+  source?: "vesta_agent";
+  /** ISO time of the agent's last change to this record. */
+  updatedAt?: string;
+}
+
 /** A recurring obligation. `everyDays` is the contractual interval. */
-export interface FmSchedule {
+export interface FmSchedule extends FmProvenance {
   id: string;
   title: string;
-  /** Free-text clause reference, shown in the UI and the report annex. */
+  /** Free-text clause reference, shown in the UI and the monthly recap. */
   clause?: string;
   everyDays: number;
   /** Optional binding so the task can highlight a room on the 3D map. */
@@ -51,7 +69,7 @@ export interface FmSchedule {
 }
 
 /** One performance of a scheduled task. */
-export interface FmCompletion {
+export interface FmCompletion extends FmProvenance {
   id: string;
   /** The scheduled task this completes. Empty for work that answers a FAULT
    *  rather than a schedule — see ticketId. */
@@ -73,17 +91,17 @@ export interface FmCompletion {
 /** A maintenance expense. "minor" counts against the monthly cap and is a
  *  shared direct expense; "major" is the Owner's and is excluded from the
  *  cap — whatever the underlying contract calls that split. */
-export interface FmCost {
+export interface FmCost extends FmProvenance {
   id: string;
   at: string;
-  /** The amount, in the install's own currency (MONEY_CURRENCY / fmtMoney).
+  /** The amount, in the install's own currency (FmTerms.currency, Home Assistant's own).
    *  ⚠️ THE NAME IS A STORED FIELD, NOT A CLAIM ABOUT THE CURRENCY: every
    *  install's Facility records carry `amountIdr`, so renaming it needs a
    *  migration of that data (the code-only names — the cap, the month's minor
    *  and major spend — lost their "Idr" in 2.496.163). */
   amountIdr: number;
   label: string;
-  category: "minor" | "major";
+  category: FmCostCategory;
   /** Free note — what the spend was actually for, beyond its one-line label.
    *  The same field faults have, for the same reason: the person reading this
    *  in six months is not the person who typed it. */
@@ -100,6 +118,13 @@ export interface FmCost {
 }
 
 export type FmTicketStatus = "open" | "in_progress" | "resolved";
+/** Every status, in the table's order (fm-records.json). */
+export const FM_TICKET_STATUSES = FM_RECORDS.ticketStatuses as readonly FmTicketStatus[];
+
+/** A cost's category — see FmCost. */
+export type FmCostCategory = "minor" | "major";
+/** Every category, in the table's order (fm-records.json). */
+export const FM_COST_CATEGORIES = FM_RECORDS.costCategories as readonly FmCostCategory[];
 
 /** One recorded step in a fault's life — raised, picked up, resolved.
  *
@@ -120,7 +145,7 @@ export interface FmTicketUpdate {
 }
 
 /** A fault raised against a device or room. */
-export interface FmTicket {
+export interface FmTicket extends FmProvenance {
   id: string;
   title: string;
   status: FmTicketStatus;
@@ -145,19 +170,27 @@ export interface FmTicket {
 }
 
 /** A generated markdown document the operator chose to keep — the monthly
- *  owner-report annex (ReportTab), a spend statement (SpendTab), or a
+ *  monthly recap (RecapTab), a spend statement (SpendTab), or a
  *  point-in-time readiness snapshot (ReadinessTab). Kept
  *  verbatim as generated (not recomputed live) so a saved document stays a
  *  point-in-time record even if the underlying schedules/costs/tickets
- *  change afterwards — the same reasoning ReportTab's own "Generate" button
+ *  change afterwards — the same reasoning RecapTab's own "Generate" button
  *  (an explicit action, not a live re-render) already follows. */
-export interface FmSavedDocument {
+export interface FmSavedDocument extends FmProvenance {
   id: string;
-  kind: "report" | "spend" | "readiness";
+  kind: "recap" | "spend" | "readiness";
   /** The period the document is ABOUT ("2026-06"), not when it was saved. */
   month: string;
   markdown: string;
   generatedAt: string;
+}
+
+/** ⚠️ A RECAP SAVED BEFORE 2.496.274 IS STORED AS kind "report" (the tab was
+ *  renamed: "report" is what the VESTA Agent sends). It is read as "recap"
+ *  in fmApi.parseFmData, the one door every stored record comes in by, so the saved list
+ *  keeps showing it and no screen ever meets the old word. */
+export function recapKind(d: FmSavedDocument): FmSavedDocument {
+  return (d.kind as string) === "report" ? { ...d, kind: "recap" } : d;
 }
 
 export interface FmData {
@@ -168,36 +201,81 @@ export interface FmData {
   savedDocuments: FmSavedDocument[];
 }
 
+/** One of the record's collections — each a list of records with an `id`. */
+export type FmCollection = keyof FmData;
+/** Every collection, in the table's order (fm-records.json) — the add-on's
+ *  FM_RECORD_COLLECTIONS is held to the same table by tests/proxy-rules.py. */
+export const FM_COLLECTIONS = FM_RECORDS.collections as readonly FmCollection[];
+
 export const EMPTY_FM_DATA: FmData = {
   schedules: [], completions: [], costs: [], tickets: [], savedDocuments: [],
 };
 
-/** The monthly Minor Maintenance spend cap, in the install's currency — 0 means "not configured".
- *  Was a hardcoded IDR 3,000,000 (one specific contract's clause), which
- *  applied that villa's real cap to every install with no way to turn it
- *  off. budgetStatus() below treats <= 0 as "not tracked" rather than an
- *  ever-exceeded cap, so a fresh install with nothing configured shows no
- *  false "over cap" warning instead of a wrong number. No in-app editor yet
- *  (same status as ThresholdConfig's alertThresholds), but every SCREEN now
- *  reads budgetStatus().cap rather than this constant — SpendTab printed
- *  "of IDR 0" on an unconfigured install because it reached past the engine
- *  for the raw value. Wiring this to real per-install config is the remaining
- *  follow-up. */
-export const MINOR_MAINTENANCE_CAP = 0;
+/** The maintenance contract's money rules, as the OWNER sets them — stored
+ *  in the shared config (`fmContract`, so every device reads the same terms)
+ *  and edited on the Spend tab. Before 2.496.225 these were code: a cap of 0
+ *  and a currency of "" that nothing could set, the words "Minor"/"Major" and
+ *  "Owner's account" typed in the report and three screens, and the 80 %
+ *  warning inline in the engine — one contract's shape in a redistributable
+ *  add-on (CLAUDE.md, the hard rule).
+ *
+ *  Stored EMPTY by default ("" and 0) and resolved by fmTerms(): an empty
+ *  name reads as the generic word, a cap of 0 as "no cap", so a fresh install
+ *  shows no invented number. The stored category ids stay "minor"/"major"
+ *  (FmCost.category) — only their NAMES are the owner's. */
+export interface FmContract {
+  /** The monthly cap on the capped category, in the install's currency. 0 = no cap. */
+  monthlyCap: number;
+  /** What the capped category is called ("" → "Minor"). */
+  cappedName: string;
+  /** What the uncapped category is called ("" → "Major"). */
+  uncappedName: string;
+  /** Warn when the month reaches this share of the cap, in percent (0 → 80). */
+  warnAtPercent: number;
+}
 
-/** The currency every money figure in the Facility Manager is written in —
- *  "" means "not configured", and an unconfigured install prints the number
- *  alone rather than guessing.
- *
- *  ⚠️ SAME HARD RULE AS THE CAP ABOVE, ONE LEVEL DOWN. The cap's AMOUNT was
- *  correctly emptied when one contract's clause turned out to be shipping to
- *  every install — but the CURRENCY stayed welded into formatMoney as the
- *  literal "IDR", alongside an "en-US" grouping locale, so a villa billed in
- *  euros read "IDR 450,000" and a reader in France got US digit grouping. A
- *  currency is a per-site value exactly as a cap amount is; the first hard rule
- *  names business and contract-specific values, and this was one.
- *
- *  Empty rather than a "helpful" default, for the reason AppConfig's merge-on-
- *  load taught this repo: a seed spread underneath stored config resurrects
- *  what the user deleted. */
-export const MONEY_CURRENCY = "";
+export const EMPTY_FM_CONTRACT: FmContract = { monthlyCap: 0, cappedName: "", uncappedName: "", warnAtPercent: 0 };
+
+/** The contract as every Facility screen, the engine and the report read it:
+ *  names and threshold resolved, plus the currency Home Assistant is set to
+ *  (Settings → System → General) — the app keeps no currency of its own. */
+export interface FmTerms {
+  monthlyCap: number;
+  currency: string;
+  cappedName: string;
+  uncappedName: string;
+  /** 0–1. */
+  warnAt: number;
+}
+
+const WARN_DEFAULT_PERCENT = 80;
+
+/** A usable "warn at" percentage (1–99), or null — so a blank or out-of-range
+ *  value falls back to the default. One rule for the stored terms (fmTerms)
+ *  and the Spend tab's editor, which restated it and read "8.5" as 85. */
+export function validWarnPercent(v: unknown): number | null {
+  const n = typeof v === "string" ? (v.trim() === "" ? NaN : Number(v.trim())) : Number(v);
+  return Number.isFinite(n) && n >= 1 && n <= 99 ? n : null;
+}
+
+/** Resolve stored terms (any shape an older or hand-edited store may hold). */
+export function fmTerms(contract: Partial<FmContract> | undefined, haCurrency: string | undefined): FmTerms {
+  const c = contract ?? {};
+  const cap = Number(c.monthlyCap);
+  const name = (v: unknown, fallback: string) => (typeof v === "string" && v.trim() ? v.trim() : fallback);
+  return {
+    monthlyCap: Number.isFinite(cap) && cap > 0 ? cap : 0,
+    currency: typeof haCurrency === "string" ? haCurrency.trim() : "",
+    cappedName: name(c.cappedName, "Minor"),
+    uncappedName: name(c.uncappedName, "Major"),
+    warnAt: (validWarnPercent(c.warnAtPercent) ?? WARN_DEFAULT_PERCENT) / 100,
+  };
+}
+
+/** Terms with nothing configured — what a caller that has none passes. */
+export const NO_FM_TERMS: FmTerms = fmTerms(undefined, undefined);
+
+/** The owner's name for a cost category. */
+export function categoryName(terms: FmTerms, category: "minor" | "major"): string {
+  return category === "minor" ? terms.cappedName : terms.uncappedName;
+}

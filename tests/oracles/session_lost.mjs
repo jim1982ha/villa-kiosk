@@ -9,7 +9,7 @@ import { register } from "node:module";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 register("../consistency/alias-hook.mjs", import.meta.url);
-import { ck, done } from "../consistency/check.mjs";
+import { ck, done, tsFiles } from "../consistency/check.mjs";
 const S = await import("@/auth/sessionLost");
 
 
@@ -38,15 +38,19 @@ console.log("\n  the wiring:");
 const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
 ck("the socket reports the proxy's 4401 close", /if \(ev\.code === 4401\) reportSessionLost\("socket 4401"\);/.test(src("ha/HAWebSocket.ts")));
 const pc = src("auth/ProfileContext.tsx");
-ck("ProfileContext answers it: confirms with the server, decides by sessionLostDecision, signs out locally",
-   /onSessionLost\(/.test(pc) && /serverSession\(\)/.test(pc) && /sessionLostDecision\(role, server\) !== "sign-out"/.test(pc) && /setRole\(null\)/.test(pc));
+// The answer (ask the server, decide by sessionLostDecision, sign out, report
+// with the NEXT sign-in) is auth/profileSession.sessionLost, driven by value
+// in profile_session.mjs since 2.496.233; this pins that the context wires it.
+ck("ProfileContext answers it: the session module confirms with the server and decides by sessionLostDecision",
+   /onSessionLost\(\(source\) => \{ void session\.sessionLost\(source\); \}\)/.test(pc) && /askServer: serverSession/.test(pc)
+   && /sessionLostDecision\(role, server\) !== "sign-out"/.test(src("auth/profileSession.ts")));
 ck("  ...and its telemetry waits for the NEXT sign-in (the proxy refuses telemetry from the dead session it reports)",
-   /localStorage\.setItem\(PENDING_LOST_KEY/.test(pc) && /const pending = localStorage\.getItem\(PENDING_LOST_KEY\);/.test(pc)
-     && !/onSessionLost\([\s\S]{0,600}reportTelemetry\(/.test(pc));
+   /writeJson\(PENDING_LOST_KEY, r\)/.test(pc) && /readJson<LostReport>\(PENDING_LOST_KEY\)/.test(pc) && /removeStored\(PENDING_LOST_KEY\)/.test(pc)
+     && /this\.io\.pendingLost\.put\(/.test(src("auth/profileSession.ts")));
 ck("serverSession answers in three: a role, none, unknown (a failed request is never 'none')",
    /if \(!resp\.ok\) return "unknown";/.test(src("auth/PinVerifier.ts")) && /\} catch \{\s*return "unknown";/.test(src("auth/PinVerifier.ts")));
 const SRC = new URL("../../src/", import.meta.url).pathname;
-const walk = (d, out = []) => { for (const e of readdirSync(d)) { const p = join(d, e); statSync(p).isDirectory() ? walk(p, out) : /\.tsx?$/.test(p) && out.push(p); } return out; };
+const walk = tsFiles;
 const raw = walk(SRC).flatMap((f) => [...readFileSync(f, "utf8").matchAll(/\bfetch\((?:`\$\{)?ingressPath\("([^"]+)"/g)].map((m) => `${f.slice(SRC.length)}:${m[1]}`))
   .filter((x) => !/:auth\//.test(x));
 ck("every call to the add-on's own routes goes through backendFetch (only the sign-in routes may not — their 401 means a wrong code)", raw.length === 0, raw);

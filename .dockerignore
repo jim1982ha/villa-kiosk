@@ -12,6 +12,7 @@ tsconfig.tsbuildinfo
 villa-kiosk
 MODEL_PIPELINE.md
 CLAUDE.md
+tools
 tests
 # ⚠️ EXCEPT THE GATES `npm run build` ITSELF RUNS. `prebuild` runs the service
 # worker's lifecycle oracle, because a throw from a vite plugin hook is

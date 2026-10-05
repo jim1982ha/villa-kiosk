@@ -4,6 +4,7 @@
 // used elsewhere in the same panels.
 
 import type { HassEntity } from "@/types/ha.types";
+import { domainOf } from "./entityDomain";
 
 /** HA reports "unavailable" when it has lost contact with the device
  *  (offline, integration reload, …) and "unknown" when it's never reported a
@@ -210,7 +211,7 @@ export function statusKeyFor(state: string, domain?: string): StatusKey {
     return "unavailable";
   }
   if (domain) {
-    const d = domain.split(".")[0];
+    const d = domainOf(domain);
     const hit = DOMAIN_STATES[d]?.[s];
     if (hit) return hit;
   }
@@ -244,11 +245,32 @@ export const STATUS_PILL_CLASS: Record<StatusKey, string> = {
   alert: "danger",
 };
 
-/** binary_sensor: like the plain map above, but the device_class's "problem" state (if
- *  configured — see ThresholdConfig/BinarySensorClasses) reads as danger. */
-export function binarySensorColor(state: string, alertState?: string): string {
-  if (alertState !== undefined && state === alertState) return DANGER_COLOR;
-  return STATUS_COLOR[statusKeyFor(state, "binary_sensor")];
+/**
+ * A binary_sensor's meaning. When it has a PROBLEM state — its device class's
+ * (leak, smoke, gas, tamper, a low battery…) or the owner's own per-device
+ * setting (BinarySensorClasses.alertStateFor) — that state is an alert and
+ * the OTHER one is the device doing its job: "active", green.
+ *
+ * ⚠️ "NO LEAK" WAS GREY (owner, 2026-10-05): a leak sensor reporting no leak
+ * read "Off / idle" on its pill and its history bar, as if it were switched
+ * off, when it is watching and finding nothing — the state an owner wants to
+ * see. Only a sensor with no problem state (motion, a door nobody watches)
+ * keeps on = active, off = idle. Unavailable/unknown keep their own meaning.
+ *
+ * ⚠️ AND A CLOSED DOOR IS GREEN (owner, 2026-10-05, a server door reading
+ * grey while closed). A sensor with a SECURE state (`secureState`:
+ * BinarySensorClasses.secureStateFor — an opening closed, a lock locked) and
+ * no problem state reads that state as active; the other is idle, NOT an
+ * alert: an open window is not a fault, and the map and the Cockpit do not
+ * flag it. An owner who wants it flagged sets an alert state on it — the
+ * problem state then wins.
+ */
+export function binaryStatus(state: string, alertState?: string, secureState?: "on" | "off"): StatusKey {
+  const plain = statusKeyFor(state, "binary_sensor");
+  if (state !== "on" && state !== "off") return plain;
+  if (alertState === "on" || alertState === "off") return state === alertState ? "alert" : "active";
+  if (secureState) return state === secureState ? "active" : "idle";
+  return plain;
 }
 
 const PALETTE = [ON_COLOR, "var(--accent)", WARN_COLOR, DANGER_COLOR, "var(--accent-strong)"];

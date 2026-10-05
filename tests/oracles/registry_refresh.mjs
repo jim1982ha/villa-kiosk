@@ -9,7 +9,6 @@
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
-import { readFileSync } from "node:fs";
 const { placesAfterRefresh } = await import("@/ha/registryResolve");
 
 
@@ -30,11 +29,9 @@ ck("only floors failed: room names re-derived, floor numbers kept", noFloors.are
 const empty = placesAfterRefresh(prev, rows, { devices: [], areas: [], floors: [] });
 ck("an EMPTY answer is an answer: nothing is in an area, so nothing is placed", Object.keys(empty.areaNames).length === 0 && empty !== prev);
 
-const st = readFileSync(new URL("../../src/ha/HAStateStore.tsx", import.meta.url), "utf8");
-ck("the provider maps a failed fetch to null and asks placesAfterRefresh over what it holds",
-   /const failed = \(\) => null;/.test(st) && /ws\.getAreaRegistry\(\)\.catch\(failed\)/.test(st)
-   && /placesAfterRefresh\(prev, rows, \{ devices, areas, floors \}\)/.test(st) && /if \(places === prev\) return;/.test(st)
-   && !/devices\.length === 0 && areas\.length === 0/.test(st));
+// Its CALLER — a failed fetch mapped to null, over what the store holds — is
+// driven by value in entity_store.mjs ("an area registry that fails to load
+// keeps the room names it had") since 2.496.226.
 
 done("✅ a failed registry keeps the rooms it had");
 

@@ -7,6 +7,7 @@
 import { createContext, useContext } from "react";
 import type { Category } from "@/types/scene.types";
 import type { DeviceSurfaceState } from "@/config/EntityCategories";
+import type { ReadingRow } from "@/config/readingRows";
 
 export interface PanelActions {
   /** The HA entity_id the open panel controls (shown under the title). */
@@ -54,7 +55,7 @@ export interface PanelActions {
    *  is configured and the profile may control it. Renders as an on/off switch
    *  in the shared panel chrome, so EVERY device type gets it for free the
    *  moment that field is set — no per-panel wiring, no type checks. Toggling
-   *  it is what drives the badge's red ring (see EntityVisuals' linkActiveIds),
+   *  it is what drives the badge's ring (see deviceActivity.deviceLook),
    *  which is why the two live and die together. Undefined = no linked entity
    *  configured, or read-only profile: the switch is then not rendered. */
   linked?: {
@@ -67,6 +68,19 @@ export interface PanelActions {
     known: boolean;
     toggle: () => void;
   };
+  /** The open device's OTHER readings (deviceGroups.deviceReadings: its
+   *  group's members and the registry siblings nobody placed — a pump plug's
+   *  energy and current), listed under its controls; tapping one opens that
+   *  reading's own panel (2.496.260). Empty or undefined: nothing listed. */
+  readings?: ReadingRow[];
+  onOpenReading?: (entityId: string) => void;
+  /** Where this panel was opened FROM, when that was another window — a
+   *  device's reading opened from the device, a device from a room list, the
+   *  Cockpit, the VESTA Agent or Facility. Drawn as "Back" at the header's
+   *  top right, and Escape / the phone's back gesture take it too; Close still
+   *  closes everything (owner, 2026-10-04: "no way to come back to the main
+   *  device"). Undefined: opened from the map, nothing to go back to. */
+  back?: { label: string; go: () => void };
   /** The open camera's MOTION sensor (EntityMapping.motionEntityId), when one
    *  is configured — camera-only, unlike linkedEntityId above. Read-only: it
    *  reports what HA already knows (and drives the map's detection beam), not

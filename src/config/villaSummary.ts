@@ -20,10 +20,13 @@
 // Energy total.
 
 import type { HassEntity } from "@/types/ha.types";
-import { OFF_STATES } from "@/utils/entityState";
+// POWER, by name: "N on" counts a device switched on (deviceActivity owns both
+// meanings of "on"; a lights/AC tile counts this one).
+import { isSwitchedOn } from "@/utils/deviceActivity";
 import { isUnavailable } from "@/utils/stateColors";
 import { effectiveSensorClass, toBaseUnit } from "./SensorClasses";
 import { levelForValue, type Threshold } from "./ThresholdConfig";
+import { domainOf } from "@/utils/entityDomain";
 
 /** Only `.has` is called — villaDevices(...) satisfies it, and so does a Set. */
 export type Allowed = { has(entityId: string): boolean };
@@ -68,7 +71,7 @@ export type DomainIndex = ReadonlyMap<string, readonly HassEntity[]>;
 export function domainIndex(entities: Record<string, HassEntity>): DomainIndex {
   const out = new Map<string, HassEntity[]>();
   for (const e of Object.values(entities)) {
-    const d = e.entity_id.slice(0, e.entity_id.indexOf("."));
+    const d = domainOf(e.entity_id);
     const list = out.get(d);
     if (list) list.push(e); else out.set(d, [e]);
   }
@@ -79,7 +82,6 @@ const ofDomain = (entities: Record<string, HassEntity>, d: string, allowed?: All
   return allowed ? all.filter((e) => allowed.has(e.entity_id)) : [...all];
 };
 const idsOf = (es: readonly HassEntity[]) => es.map((e) => e.entity_id);
-const isOn = (e: HassEntity) => !OFF_STATES.has(e.state);
 
 export function lockFacts(entities: Record<string, HassEntity>, allowed?: Allowed, index?: DomainIndex): LockFacts | null {
   const locks = ofDomain(entities, "lock", allowed, index);
@@ -94,13 +96,13 @@ export function lockFacts(entities: Record<string, HassEntity>, allowed?: Allowe
 
 export function lightFacts(entities: Record<string, HassEntity>, allowed?: Allowed, index?: DomainIndex): OnOffFacts | null {
   const lights = ofDomain(entities, "light", allowed, index);
-  return lights.length ? { ids: idsOf(lights), on: idsOf(lights.filter(isOn)) } : null;
+  return lights.length ? { ids: idsOf(lights), on: idsOf(lights.filter((e) => isSwitchedOn(e, e.entity_id))) } : null;
 }
 
 export function climateFacts(entities: Record<string, HassEntity>, allowed?: Allowed, index?: DomainIndex): ClimateFacts | null {
   const units = ofDomain(entities, "climate", allowed, index);
   if (!units.length) return null;
-  const active = units.filter((e) => e.state !== "off" && !OFF_STATES.has(e.state));
+  const active = units.filter((e) => isSwitchedOn(e, e.entity_id));
   const temps = active
     .map((e) => e.attributes.current_temperature)
     .filter((t): t is number => typeof t === "number");
@@ -110,12 +112,6 @@ export function climateFacts(entities: Record<string, HassEntity>, allowed?: All
     unreachable: idsOf(units.filter((e) => isUnavailable(e))),
     avgCurrentTemp: temps.length ? Math.round(temps.reduce((a, b) => a + b, 0) / temps.length) : null,
   };
-}
-
-/** The AC tile's temperature: in Home Assistant's own unit when it is known
- *  ("24°C", "75°F"), a bare degree otherwise — never an assumed Celsius. */
-export function fmtClimateTemp(avg: number, unit?: string): string {
-  return unit ? `${avg}${unit}` : `${avg}°`;
 }
 
 export function powerFacts(

@@ -44,7 +44,7 @@ const CANVAS_PX = 128;
  */
 const BAKE_LADDER = [32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 256] as const;
 
-function bakeSizeFor(pxHint: number): number {
+export function bakeSizeFor(pxHint: number): number {
   if (!(pxHint > 0)) return CANVAS_PX;
   const want = Math.ceil(pxHint);
   for (const rung of BAKE_LADDER) if (rung >= want) return rung;

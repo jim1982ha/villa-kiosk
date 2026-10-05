@@ -21,6 +21,7 @@
 
 import { getLoadedModelInfo } from "./modelInfo";
 import { report } from "./telemetry";
+import { readJson, writeJson } from "@/utils/storedJson";
 
 const DIAG_KEY = "villa-kiosk:diag";
 // Two rapid failed attempts already in the window → the next mount is the 3rd,
@@ -53,22 +54,14 @@ interface DiagState {
 }
 
 function read(): DiagState {
-  try {
-    const raw = localStorage.getItem(DIAG_KEY);
-    if (!raw) return { attempts: [] };
-    const s = JSON.parse(raw) as DiagState;
-    return { ...s, attempts: Array.isArray(s.attempts) ? s.attempts : [] };
-  } catch {
-    return { attempts: [] };
-  }
+  const s = readJson<DiagState>(DIAG_KEY, (v): v is DiagState => !!v && typeof v === "object");
+  if (!s) return { attempts: [] };
+  return { ...s, attempts: Array.isArray(s.attempts) ? s.attempts : [] };
 }
 
 function write(patch: Partial<DiagState>): void {
-  try {
-    localStorage.setItem(DIAG_KEY, JSON.stringify({ ...read(), ...patch }));
-  } catch {
-    /* storage full/blocked — diagnostics are best-effort */
-  }
+  // Storage full/blocked: diagnostics are best-effort.
+  writeJson(DIAG_KEY, { ...read(), ...patch });
 }
 
 /** Recent (in-window) load-start timestamps. */

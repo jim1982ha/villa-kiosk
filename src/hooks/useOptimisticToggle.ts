@@ -26,6 +26,7 @@
 // truth overrides it — which is exactly the intended behaviour, not a bug.
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { onFailure } from "@/ha/serviceOutcome";
 
 export interface OptimisticToggle {
   /** What the switch should render: pending intent if any, else real state. */
@@ -40,8 +41,10 @@ export function useOptimisticToggle(
   entityId: string | undefined,
   /** Live, HA-confirmed state. */
   actualOn: boolean,
-  /** Fire the actual service call. */
-  send: () => void,
+  /** Fire the actual service call — returning its outcome (callService's
+   *  promise) lets a refused command revert AT ONCE instead of at the
+   *  timeout (serviceOutcome.onFailure). */
+  send: () => unknown,
   /** How long to keep showing intent before giving up and trusting HA again.
    *  Generous: it only has to outlast a slow integration's confirmation, and
    *  reverting too early would produce a visible flip-back on exactly the
@@ -53,6 +56,7 @@ export function useOptimisticToggle(
   // Keep `toggle` stable even when the caller passes an inline closure.
   const sendRef = useRef(send);
   sendRef.current = send;
+  const attempts = useRef(0);
 
   const clearPending = useCallback(() => {
     if (timer.current) {
@@ -82,8 +86,11 @@ export function useOptimisticToggle(
       timer.current = null;
       setPending(null);
     }, timeoutMs);
-    sendRef.current();
-  }, [pending, actualOn, timeoutMs]);
+    const attempt = ++attempts.current;
+    // Refused: show the real state again now — unless a newer tap has
+    // already replaced this intent.
+    onFailure(sendRef.current(), () => { if (attempt === attempts.current) clearPending(); });
+  }, [pending, actualOn, timeoutMs, clearPending]);
 
   return { isOn: pending ?? actualOn, toggle };
 }

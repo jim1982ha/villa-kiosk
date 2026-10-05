@@ -107,7 +107,7 @@ export function solveRoomZoom(
   // precomputed once in world units here and multiplied through below.
   //
   // The basis is the DESTINATION's, and since 2.325.0 that is no longer the
-  // live one: computeRoomOverviewPose keeps the current alpha but forces beta
+  // live one: the room shot (roomShot.ts) keeps the current alpha but forces beta
   // to the camera's top-down limit, so the ladder MUST be walked through the
   // direction the camera will arrive at, not the one it is leaving. It is
   // handed in (view.grouping) for exactly that reason. markContacts below is then the SAME test the
@@ -174,7 +174,7 @@ export function solveRoomZoom(
   // then have to zoom in a little more myself", with the badges arriving as
   // a cluster of grouped cards and separating into readable ones a rung or
   // two closer. That is the opposite of this solver's stated purpose, and of
-  // the comment in computeRoomOverviewPose promising that a room whose badges
+  // the comment in the room shot (then SceneManager) promising that a room whose badges
   // only separate at maximum zoom is taken to maximum zoom.
   //
   // So `clean` is now evaluated at EVERY rung, and framing is the preference

@@ -78,10 +78,26 @@ ck("turning on the spot through 36 headings gives ONE placement", sigs.size === 
 // ── the callers ──
 const src = (p) => readFileSync(new URL(`../../src/babylon/${p}`, import.meta.url), "utf8");
 const ev = src("EntityVisuals.ts");
-ck("EntityVisuals gives the eye to the walk camera only, and measures badges AND cards through measuredAt",
-   /eye: this\.orbitCamera\(\) \? undefined : this\.walkEye\(\)/.test(ev)
-   && /const m = this\.measuredAt\(clearance, s\.wx, s\.wy, s\.wz\);\s*onGlass\(clearance, m\.x, m\.y, m\.z/.test(ev)
-   && /const m = this\.measuredAt\(clearance, x, y, z\);\s*const p = projectToView\(clearance\.basis, m\.x, m\.y, m\.z/.test(ev));
+ck("EntityVisuals gives the eye to the walk camera only", /eye: this\.orbitCamera\(\) \? undefined : this\.walkEye\(\)/.test(ev));
+{
+  // Badges AND cards measured through measuredAt — driven by value through the
+  // pass's own functions (placementPass: placementItems, planeOf): with an eye,
+  // a device 20 m ahead is measured at the reference depth, so it lands where
+  // one at that depth would; without one, where it stands.
+  const P = await import("@/babylon/placementPass");
+  const { RoomFocus } = await import("@/babylon/roomFocus");
+  const basis = { rx: 1, rz: 0, ax: 0, az: 1, sinPhi: 0, cosPhi: 1, mode: "world3d" };
+  const eye = { x: 0, y: 0, z: 0 };
+  const walk = { pxPerWorld: 10, allow: 1, basis, refDepth: 5, eye };
+  const far = P.planeOf(walk, 4, 0, 20, P.glassScratch()), near = P.planeOf(walk, 1, 0, 5, P.glassScratch());
+  ck("a card: a far point is measured at the reference depth (same bearing, same glass point)",
+     Math.abs(far.sx - near.sx) < 1e-9 && Math.abs(far.sz - near.sz) < 1e-9, [far, near]);
+  const orbit = P.planeOf({ ...walk, eye: undefined }, 4, 0, 20, P.glassScratch());
+  ck("  ...and without an eye it stands where it is", orbit.sx === 40 && orbit.sz === 200, orbit);
+  const shown = [{ id: "a", lbl: { type: "light", category: "light" }, wx: 4, wy: 0, wz: 20 }];
+  const items = P.placementItems(shown, [{ halfW: 5, halfH: 5, cy: 0 }], walk, {}, new RoomFocus().rooms, [], P.glassScratch());
+  ck("a badge is measured the same way as a card", Math.abs(items[0].sx - near.sx) < 1e-9 && Math.abs(shown[0].sx - near.sx) < 1e-9, [items[0].sx, near.sx]);
+}
 // The absorb test's ground metric is driven by VALUE in walk_frame.mjs (the
 // same distance in every direction) — it replaced a regex pin here.
 

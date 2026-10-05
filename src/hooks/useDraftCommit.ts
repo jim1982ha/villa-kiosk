@@ -54,16 +54,20 @@ export function useDraftCommit<T>(
   const commitRef = useRef(commit);
   commitRef.current = commit;
 
-  const flush = useCallback((key: string) => {
+  /** Take a pending draft out — its timer AND its value, together — and
+   *  commit it or not. Flush and cancel were this, written out twice. */
+  const take = useCallback((key: string, commitIt: boolean) => {
     clearTimeout(timers.current[key]);
     delete timers.current[key];
     setDrafts((prev) => {
       if (!(key in prev)) return prev;
       const { [key]: value, ...rest } = prev;
-      commitRef.current(key, value);
+      if (commitIt) commitRef.current(key, value);
       return rest;
     });
   }, []);
+
+  const flush = useCallback((key: string) => take(key, true), [take]);
 
   const flushAll = useCallback(() => {
     for (const key of Object.keys(timers.current)) flush(key);
@@ -73,15 +77,7 @@ export function useDraftCommit<T>(
    *  DRAFT. Clearing only the draft would leave the timer to fire and commit
    *  `undefined`; clearing only the timer would leave the value to be picked up
    *  by the next flush. Both, or neither. */
-  const cancel = useCallback((key: string) => {
-    clearTimeout(timers.current[key]);
-    delete timers.current[key];
-    setDrafts((prev) => {
-      if (!(key in prev)) return prev;
-      const { [key]: _dropped, ...rest } = prev;
-      return rest;
-    });
-  }, []);
+  const cancel = useCallback((key: string) => take(key, false), [take]);
 
   const draft = useCallback((key: string, value: T, delayMs = defaultDelayMs) => {
     setDrafts((prev) => ({ ...prev, [key]: value }));

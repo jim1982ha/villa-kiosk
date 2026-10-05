@@ -15,6 +15,15 @@ export const ROLE_LABELS: Record<Role, string> = {
   ops: "Facility manager",
 };
 
+/** The letter(s) in the top bar's round signed-in badge (HUD.tsx's
+ *  .hud-role-badge): short enough for a 40px circle, and "FM" rather than
+ *  "O" for ops so it can never read as the Owner's. */
+export const ROLE_INITIALS: Record<Role, string> = {
+  guest: "G",
+  owner: "O",
+  ops: "FM",
+};
+
 /** One-line pitch under each profile button (mirrors the product spec). */
 export const ROLE_DESCRIPTIONS: Record<Role, string> = {
   guest: "Enjoy the villa — comfort, lights, music and doors.",

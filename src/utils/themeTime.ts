@@ -8,16 +8,21 @@
 // lat/lng (sourced from HA's config, never hardcoded — see AppConfig).
 
 import { getSunPosition } from "./sunCalc";
+import { skyNow } from "./skyClock";
 
 export type EffectiveTheme = "light" | "dark" | "night";
 export type ThemeSetting = EffectiveTheme | "auto";
 
-// SunController's own day/night lighting transition finishes at -6deg
-// (its TWILIGHT constant). "Night" starts a bit past that, approximating
-// "sunset + 1h" without needing HA's sun.sun next_setting timestamp.
+// The scene's day/night lighting transition finishes at -6deg (TWILIGHT in
+// babylon/sunState.ts). "Night" starts deliberately past that, approximating
+// "sunset + 1h" without needing HA's sun.sun next_setting timestamp — the two
+// thresholds differ on purpose.
+//
+// ⚠️ THE CLOCK IS THE SKY'S (skyNow), not `new Date()` (2.496.251): with
+// `?skyTime=` previewing an hour, the sky went to night under a day theme.
 const NIGHT_ALTITUDE_RAD = (-10 * Math.PI) / 180;
 
-export function isDeepNight(latitude: number, longitude: number, date: Date = new Date()): boolean {
+export function isDeepNight(latitude: number, longitude: number, date: Date = skyNow()): boolean {
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return false;
   const { altitude } = getSunPosition(date, latitude, longitude);
   return altitude < NIGHT_ALTITUDE_RAD;
@@ -27,7 +32,7 @@ export function resolveEffectiveTheme(
   theme: ThemeSetting,
   latitude: number,
   longitude: number,
-  date: Date = new Date(),
+  date: Date = skyNow(),
 ): EffectiveTheme {
   if (theme !== "auto") return theme;
   const prefersDark = typeof window !== "undefined" && window.matchMedia

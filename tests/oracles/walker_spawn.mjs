@@ -92,6 +92,29 @@ console.log("\n  the foot of the stairs:");
        && JSON.stringify(S.flightBottom(0, 6, 2.4, 0.3)) === JSON.stringify({ bottom: 6, up: -1 }));
 }
 
+console.log("\n  the stair candidate (moved behind SpawnWorld, 2.496.261):");
+{
+  const w = world({ wells: [R(0, 2, 0, 2, { name: "Staircase" })], ground: [{ pts: sq(-10, 10, -10, 10) }] });
+  const named = S.stairSpawn(w, { namedRoom: { x: 1, z: 1 } });
+  ck("a named stairwell: its FOOT on the ground floor, eye over the floor, facing open space",
+     named.floor === 1 && !(named.position.x >= 0 && named.position.x <= 2 && named.position.z >= 0 && named.position.z <= 2)
+     && named.position.y === 1.7 && named.target.x === named.position.x + 3, named);
+  ck("  ...a named stairwell outranks a stair-named mesh",
+     JSON.stringify(S.stairSpawn(w, { namedRoom: { x: 1, z: 1 }, namedMesh: { x: 9, z: 9 } }).position) === JSON.stringify(named.position));
+  // A straight flight along x, 0 → 6, rising toward x = 6.
+  const flight = { ...world(), castDownStair: (x) => (x < 3 ? 0.3 : 2.4) };
+  const geo = S.stairSpawn(flight, { geometry: { min: { x: 0, y: 0, z: 4 }, max: { x: 6, y: 3, z: 5 } } });
+  ck("real stair geometry: 1.2 m before the LOW end, looking up the flight",
+     Math.abs(geo.position.x - -1.2) < 1e-9 && geo.position.z === 4.5 && geo.target.x > geo.position.x, geo);
+  const down = S.stairSpawn({ ...world(), castDownStair: (x) => (x < 3 ? 2.4 : 0.3) }, { geometry: { min: { x: 0, y: 0, z: 4 }, max: { x: 6, y: 3, z: 5 } } });
+  ck("  ...the other way round when the flight rises toward x = 0", Math.abs(down.position.x - 7.2) < 1e-9 && down.target.x < down.position.x, down);
+  ck("no signs, or geometry with no way to probe it: no candidate",
+     S.stairSpawn(world(), {}) === null && S.stairSpawn(world(), { geometry: { min: { x: 0, y: 0, z: 0 }, max: { x: 1, y: 1, z: 1 } } }) === null);
+  const sm = readFileSync(new URL("../../src/babylon/SceneManager.ts", import.meta.url), "utf8");
+  ck("SceneManager only measures: it hands the signs to stairSpawn and casts no stair ray of its own outside SpawnWorld",
+     /return stairSpawn\(w, \{/.test(sm) && !/flightBottom\(|stairFoot\(/.test(sm) && /castDownStair: \(x, fromY, z, len\) =>/.test(sm));
+}
+
 console.log("\n  one eye height:");
 ck("the default is 1.7, and a setting wins", S.eyeHeightOf(undefined) === 1.7 && S.eyeHeightOf(1.55) === 1.55);
 {

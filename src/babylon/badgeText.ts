@@ -58,6 +58,7 @@
 import { TextBlock } from "@babylonjs/gui/2D/controls/textBlock";
 import { Control } from "@babylonjs/gui/2D/controls/control";
 import type { BadgeMetrics } from "./badgeMetrics";
+import { bakeSizeFor, inkNudge } from "./badgeIcons";
 
 /**
  * The app's own UI typeface, as a canvas font stack.
@@ -133,4 +134,98 @@ export function badgeText(name: string, opts: BadgeTextOptions): TextBlock {
   if (opts.align === "left") t.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
   t.textVerticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
   return t;
+}
+
+// ── THE COUNT PILL IS A BAKED PICTURE, like a glyph chip (2.496.222) ─────
+// The room chip's count — a number in a circle — was a Babylon Rectangle with
+// a TextBlock in it, centred by Babylon's layout. Three releases tried to
+// centre that digit and each was right on some screens and wrong on others:
+//   * a fixed 0.105 em nudge (tuned by eye on one device);
+//   * 2.496.220: a nudge measured from the digit's own ink (2.496.221 kept it
+//     vertical only — the horizontal half moved "3" and "7" left).
+// The cause none of them could reach, measured with a real Babylon GUI in
+// Chromium and WebKit (tests/_probe/count): Babylon SNAPS every control's
+// position and size to whole pixels AT THE CHIP'S BASE SIZE (a ~16 px circle,
+// a ~10 px digit), and only then does the chip's scale (zoom × user size ×
+// CSS-to-GUI) magnify it. A sub-pixel correction cannot be expressed at that
+// size, and every snapped pixel becomes 3–4 on the screen: a base pill
+// magnified 3.5× put the digit 2 px high and up to 3.5 px left in both
+// engines — the owner's phone showed 3.5–4.5 px high, "8" included.
+//
+// The glyphs never had this problem because they are PICTURES baked at the
+// size they are drawn (bakeSizeFor's ladder), their ink centred inside the
+// bitmap (badgeIcons.opticalNudge → inkNudge). So the count is too: the circle
+// and its number baked at its drawn size, the number centred VERTICALLY by its
+// ink with the glyphs' own rule (inkNudge, OPTICAL_CORRECTION) and
+// HORIZONTALLY by its advance width (the font's own spacing — the axis that
+// never varied). Babylon then only places one image, which it cannot
+// mis-centre. Nothing here is tuned: the proportions are the badge metrics'
+// (countPillFraction, countFontFraction) and the offset is measured on the
+// device that draws it.
+
+/** A room chip's count pill, as the picture to draw. */
+export interface CountBadgeSpec {
+  /** The count as displayed (utils/countBadge.formatCountBadge). */
+  text: string;
+  /** Circle fill — the room's health colour (colors.healthPill). */
+  fill: string;
+  /** Number colour. */
+  ink: string;
+  /** How large to bake it, render px: its size at this device's BEST scale
+   *  (badgeLook.badgeBakePx), never the live zoom — see the chip's caller. */
+  drawnPx: number;
+  /** The number's font size as a fraction of the pill's diameter. */
+  fontOfSize: number;
+}
+
+const countCache = new Map<string, string>();
+
+/** Where the number's baseline goes in a pill of `size` px: the centre, moved
+ *  so its INK is vertically centred by the glyphs' rule. `alpha` is the number
+ *  rasterised with its baseline AT the centre. Pure — the oracle drives it. */
+export function countBaseline(alpha: ArrayLike<number>, size: number): number {
+  return size / 2 + inkNudge(alpha, size).dy;
+}
+
+/** The count pill as a data URL: a filled circle and its number, baked at the
+ *  drawn size and ink-centred (see above). Cached per picture. */
+export function countBadgeImage(s: CountBadgeSpec): string {
+  const px = bakeSizeFor(s.drawnPx);
+  const key = `${s.text}|${s.fill}|${s.ink}|${px}|${s.fontOfSize}`;
+  const hit = countCache.get(key);
+  if (hit) return hit;
+  let url = "";
+  const canvas = typeof document !== "undefined" ? document.createElement("canvas") : null;
+  const ctx = canvas?.getContext("2d");
+  if (canvas && ctx) {
+    canvas.width = canvas.height = px;
+    const font = `700 ${px * s.fontOfSize}px ${GUI_FONT_FAMILY}`;
+    // The number alone, baseline at the centre, to measure its ink.
+    ctx.font = font;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = "#000";
+    ctx.fillText(s.text, px / 2, px / 2);
+    const data = ctx.getImageData(0, 0, px, px).data;
+    const alpha = new Uint8ClampedArray(px * px);
+    for (let i = 0; i < alpha.length; i++) alpha[i] = data[i * 4 + 3];
+    const baseline = countBaseline(alpha, px);
+    // The picture: circle, then the number where its ink is centred.
+    ctx.clearRect(0, 0, px, px);
+    ctx.beginPath();
+    ctx.arc(px / 2, px / 2, px / 2, 0, Math.PI * 2);
+    ctx.fillStyle = s.fill;
+    ctx.fill();
+    ctx.fillStyle = s.ink;
+    ctx.fillText(s.text, px / 2, baseline);
+    url = canvas.toDataURL("image/png");
+  }
+  // ⚠️ NOT CACHED BEFORE THE WEB FONT HAS LOADED: baked in the fallback font,
+  // the picture would be kept after Public Sans replaced it everywhere else.
+  // The chip re-asks at every update, so the next one after the load re-bakes.
+  if (url && (typeof document === "undefined" || !document.fonts || document.fonts.status === "loaded")) {
+    if (countCache.size > 256) countCache.clear();
+    countCache.set(key, url);
+  }
+  return url;
 }

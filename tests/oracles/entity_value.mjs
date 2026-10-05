@@ -1,5 +1,6 @@
-import { formatSensorParts, formatSensorValue, formatUnitValue, prettyState, compactValue,
-  VALUE_CAPABLE_TYPES } from "../../src/utils/entityValue.ts";
+import { register } from "node:module";
+register("../consistency/alias-hook.mjs", import.meta.url);
+const { formatSensorParts, formatSensorValue, formatUnitValue, prettyState, compactValue, VALUE_CAPABLE_TYPES } = await import("../../src/utils/entityValue.ts");
 import { readFileSync } from "node:fs";
 
 const E = (state, unit, attrs = {}) => ({

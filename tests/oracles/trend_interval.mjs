@@ -49,11 +49,28 @@ const st = src("components/panels/StateTimeline.tsx");
 ck("the timeline has ONE interval (no bucketMinutes anywhere) and paints through paintState",
    /const bucketMs = TREND_INTERVAL_MS;/.test(st) && /const colorFor = useMemo\(\(\) => paintState\(ownColour\)/.test(st)
    && !["components/panels/historyRange.tsx", "components/panels/SensorPanel.tsx", "components/panels/GenericPanel.tsx", "components/panels/LastDayTimeline.tsx", "components/panels/CameraPanel.tsx"].some((f) => /bucketMinutes/.test(src(f))));
-ck("numeric device charts (sensor, pumps, device groups) draw the five-minute trend, not raw points",
-   /\(\) => fetchTrend\(mapping\.entityId, range\.hours\)/.test(src("components/panels/SensorPanel.tsx")) && /fetchTrend\(id, range\.hours\)/.test(src("components/panels/DeviceGroupPanel.tsx"))
-   && /return fiveMinuteSeries\(await fetchHistory\(entityId, hours\)\);/.test(src("ha/HAHistoryAPI.ts")));
-ck("a device-group member that is unavailable NOW still gets its chart", /r\.numeric !== undefined \|\| \(r\.unavailable && r\.unit !== ""\)/.test(src("components/panels/DeviceGroupPanel.tsx")));
+{
+  // Driven through the history source with a fake Home Assistant: a pump
+  // reporting every minute comes back as five-minute values.
+  const { loadOne } = await import("@/ha/historySource");
+  const rows = Array.from({ length: 20 }, (_, i) => ({ state: String(i), last_changed: new Date(t0 + i * M).toISOString() }));
+  const port = { stateRows: async () => rows, getStatisticsDuringPeriod: async () => ({}) };
+  const trend = await loadOne(port, { kind: "trend", ids: ["sensor.pump"], hours: 1 / 3 }, t0 + 20 * M);
+  ck("a device's TREND is the five-minute series, not raw points",
+     trend["sensor.pump"].points.map((p) => p.v).join() === "2,7,12,17", trend["sensor.pump"].points);
+}
+ck("numeric device charts (sensor, pumps, device groups) ask for the trend, through the one section",
+   /kind: "trend"/.test(src("components/panels/NumericHistory.tsx"))
+   && /<NumericHistory series=/.test(src("components/panels/SensorPanel.tsx")) && /<NumericHistory named series=/.test(src("components/panels/DeviceGroupPanel.tsx")));
+// The rule itself (an offline reading with a unit is a measurement) is
+// config/sensorReading.readingKind, behind config/reading (driven by value in
+// reading.mjs); this pins that the grouped panel charts by that kind.
+ck("a device-group member that is unavailable NOW still gets its chart",
+   /readingOf\(id, entity, domainOf\(id\) === "binary_sensor" \? "binary_sensor" : "sensor"/.test(src("components/panels/DeviceGroupPanel.tsx"))
+   && /r\.reading\.kind === "measurement" && \(r\.numeric !== undefined \|\| r\.unit !== ""\)/.test(src("components/panels/DeviceGroupPanel.tsx")));
+const { cameraBarState } = await import("@/components/panels/cameraStatusBar");
 ck("the camera bar paints a lost motion sensor as unavailable, not 'online'",
-   /return "motion-unavailable";/.test(src("components/panels/CameraPanel.tsx")) && /s === "offline" \|\| s === "motion-unavailable" \? STATUS_COLOR\.unavailable/.test(src("components/panels/CameraPanel.tsx")));
+   cameraBarState("idle", "unavailable", true) === "motion-unavailable" && cameraBarState("idle", undefined, true) === "motion-unavailable"
+   && /s === "offline" \|\| s === "motion-unavailable" \? STATUS_COLOR\.unavailable/.test(src("components/panels/CameraPanel.tsx")));
 
 done("✅ one five-minute interval, one unavailable colour");

@@ -31,6 +31,23 @@ export interface ChartSeriesInput {
   /** "shared": one y-scale with every other shared series (the default);
    *  "own": its own min–max (a second axis); "fromZero": its own 0–max. */
   scale?: "shared" | "own" | "fromZero";
+  /** Its unit: a "%" reading keeps its axis within 0–100 while its values do
+   *  (naturalBounds). */
+  unit?: string;
+}
+
+/**
+ * The range a unit's readings normally live in: a percentage between 0 and
+ * 100. The axis stops at those ends ONLY while every value lies inside them
+ * — never a cap: a "%" series that goes above 100 (an energy change, an
+ * efficiency) keeps its own range.
+ *
+ * ⚠️ OWNER, 2026-10-05 (a battery at 100 %): the axis read 100 / 100.5 / 101 —
+ * a flat series got "a span of 1 above its value" and the line chart's 8 %
+ * padding on top, so a full battery was drawn under a 101 % line.
+ */
+export function naturalBounds(unit: string | undefined): { min: number; max: number } | null {
+  return unit?.trim() === "%" ? { min: 0, max: 100 } : null;
 }
 
 export interface HoverReading { t: number; v: number; x: number; y: number }
@@ -148,18 +165,27 @@ export function chartGeometry(
   const span = window.to - window.from || 1;
   const tAt = (x: number) =>
     window.from + Math.max(0, Math.min(1, (x - plot.left) / ((plot.right - plot.left) || 1))) * span;
-  const range = (vs: number[], fromZero: boolean): [number, number] => {
+  const range = (vs: number[], fromZero: boolean, units: readonly (string | undefined)[]): [number, number] => {
     if (vs.length === 0) return [0, 1];
     let lo = fromZero ? 0 : Math.min(...vs), hi = Math.max(...vs);
-    if (hi - lo <= 0) hi = lo + 1;
+    // Every series on this scale in the same bounded unit, and every value
+    // inside its bounds: the axis may not pass them (naturalBounds).
+    const b = units.length > 0 && units.every((u) => naturalBounds(u) !== null && u?.trim() === units[0]?.trim())
+      ? naturalBounds(units[0]) : null;
+    const held = b !== null && lo >= b.min && hi <= b.max;
+    // A flat series gets a span of 1 — below it when it sits on the ceiling.
+    // (A span of float noise is flat too: isFlat — 21.4 against 21.400000000000002.)
+    if (isFlat(lo, hi)) { if (held && hi >= b!.max) lo = hi - 1; else hi = lo + 1; }
     if (!fromZero && pad > 0) { const p = (hi - lo) * pad; lo -= p; hi += p; }
+    if (held) { lo = Math.max(lo, b!.min); hi = Math.min(hi, b!.max); }
     return [lo, hi];
   };
-  const shared = range(input.filter((s) => (s.scale ?? "shared") === "shared").flatMap((s) => s.pts.map((p) => p.v)), false);
+  const sharedInput = input.filter((s) => (s.scale ?? "shared") === "shared");
+  const shared = range(sharedInput.flatMap((s) => s.pts.map((p) => p.v)), false, sharedInput.map((s) => s.unit));
   const slice = (plot.bottom - plot.top) / Math.max(1, input.length);
   const series = input.map((s, i): SeriesGeometry => {
     const kind = s.scale ?? "shared";
-    const [lo, hi] = kind === "shared" ? shared : range(s.pts.map((p) => p.v), kind === "fromZero");
+    const [lo, hi] = kind === "shared" ? shared : range(s.pts.map((p) => p.v), kind === "fromZero", [s.unit]);
     const sy = (v: number) => plot.bottom - ((v - lo) / (hi - lo)) * (plot.bottom - plot.top);
     const minW = (plot.right - plot.left) * MIN_BAND_OF_PLOT;
     const bands = s.gaps.flatMap((gap) => {
@@ -218,15 +244,32 @@ export function chartGeometry(
  * the chart shows can be read").
  */
 export function niceTicks(lo: number, hi: number, n = 3): { ticks: number[]; bottom: number; top: number; step: number } {
-  if (!(hi > lo)) hi = lo + 1;
+  if (!Number.isFinite(lo) || !Number.isFinite(hi)) return { ticks: [], bottom: 0, top: 1, step: 1 };
+  if (isFlat(lo, hi)) hi = lo + 1;
   const raw = (hi - lo) / Math.max(1, n);
   const mag = Math.pow(10, Math.floor(Math.log10(raw)));
   const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw * 0.999) ?? 10 * mag;
   const bottom = Math.floor(lo / step + 1e-9) * step;
   const top = Math.ceil(hi / step - 1e-9) * step;
+  // ⚠️ EACH TICK FROM ITS INDEX, AND A BOUNDED COUNT (owner, 2026-10-05: the
+  // error screen opening a temperature & humidity sensor, "Invalid array
+  // length", three times since 2.496.269). The loop added `step` to `v` until
+  // it passed `top`: with readings differing by float noise (21.4 and
+  // 21.400000000000002) the step was smaller than v's own precision, v + step
+  // === v, and it pushed until the browser refused the array.
+  const count = Math.min(Math.round((top - bottom) / step), MAX_TICKS);
   const ticks: number[] = [];
-  for (let v = bottom; v <= top + step * 1e-6; v += step) ticks.push(Math.round(v / step) * step);
+  for (let i = 0; i <= count; i++) ticks.push(Math.round((bottom + i * step) / step) * step);
   return { ticks, bottom, top, step };
+}
+
+/** More ticks than any axis draws: a guard, never a layout choice. */
+const MAX_TICKS = 100;
+
+/** A span too small to be anything but floating-point noise around the value
+ *  (or none at all): drawn as a flat line, not stretched across the chart. */
+export function isFlat(lo: number, hi: number): boolean {
+  return !(hi - lo > Math.max(Math.abs(lo), Math.abs(hi), 1) * 1e-9);
 }
 
 /** An axis label: no trailing zeros, thousands as k and millions as M. */

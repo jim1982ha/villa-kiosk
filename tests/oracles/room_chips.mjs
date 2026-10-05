@@ -8,10 +8,20 @@
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
-const { bucketRoomChips, combineChips, chipSuffixOf, summaryRingRed } = await import("@/babylon/roomChips");
+const { bucketRoomChips, combineChips, chipSuffixOf } = await import("@/babylon/roomChips");
 const { mergeOverlapping } = await import("@/babylon/boxMerge");
+const { deviceLook, storeLookSource } = await import("@/utils/deviceActivity");
 
-const M = (id, room, x, kind) => ({ id, room, pos: { x, y: 1, z: 0 }, kind });
+// A member's look is the REAL deviceLook of a device in that state (2.496.245 —
+// it was a bare `kind` string the test made up): on = a light on, off = a light
+// off, alert = an unlocked lock, unavailable = a light HA has lost.
+const STATE_OF = { on: ["light.x", "on"], off: ["light.x", "off"], alert: ["lock.x", "unlocked"], unavailable: ["light.x", "unavailable"] };
+const lookOf = (kind) => {
+  if (!kind) return undefined;
+  const [id, state] = STATE_OF[kind];
+  return deviceLook(id, storeLookSource({ [id]: { entity_id: id, state, attributes: {} } }, { entityMap: {}, alertThresholds: {} }));
+};
+const M = (id, room, x, kind) => ({ id, room, pos: { x, y: 1, z: 0 }, look: lookOf(kind) });
 const members = [
   M("light.k1", "kitchen", 0, "on"), M("light.k2", "kitchen", 2, "off"),
   M("fan.bed", "bedroom", 10, "unavailable"),
@@ -25,7 +35,12 @@ const chips = bucketRoomChips(members, clustered, display);
 ck("one chip per CLUSTERED room, in first-seen order", chips.map((c) => c.key).join() === "kitchen,bedroom", chips.map((c) => c.key));
 ck("a chip prints the room's own spelling, not its key", chips[1].room === "Bedroom 1" && chips[1].label === "Bedroom 1");
 ck("its centre is its members' mean position", chips[0].centre.x === 1, chips[0].centre);
-ck("a member that is on rings the chip red", chips[0].ringRed === true);
+// owner, 2026-10-01: red is the legend's "Needs attention" — a device merely ON never rings red
+ck("a member that is on gives the chip the neutral 'on' ring, NOT red", chips[0].ringOn === true && chips[0].ringRed === false);
+{
+  const alerting = bucketRoomChips([M("lock.d", "door", 0, "alert"), M("light.d", "door", 1, "on")], () => true, (k) => k);
+  ck("a member that needs attention rings it red, and red wins over 'on'", alerting[0].ringRed === true && alerting[0].ringOn === false);
+}
 ck("an unavailable member dims it, and does NOT ring it", chips[1].unavailable === true && chips[1].ringRed === false);
 
 console.log("\n  merging:");
@@ -36,7 +51,7 @@ console.log("\n  merging:");
   ck("  ...its centre is weighted by members (2 at x=1, 1 at x=10 → 4)", Math.abs(k.centre.x - 4) < 1e-9, k.centre.x);
   ck("  ...it keeps the rooms' NAMES, so a tap can offer them", k.roomNames.join() === "Kitchen,Bedroom 1", k.roomNames);
   ck("  ...and every key it now stands for", k.keys.join() === "kitchen,bedroom", k.keys);
-  ck("  ...and either one's ring and dimming", k.ringRed && k.unavailable);
+  ck("  ...and either one's ring and dimming", k.ringOn && !k.ringRed && k.unavailable);
   ck("  ...and prints \"+1\" for the room it swallowed", k.rooms === 2 && chipSuffixOf(k) === "+1");
 }
 {
@@ -49,20 +64,12 @@ console.log("\n  merging:");
   ck("  ...named for every room it covers", [...out[0].roomNames].sort().join() === "A,B,C" && out[0].rooms === 3);
 }
 
-console.log("\n  a summary's ring (2.496.141 — was inline in EntityVisuals, unchecked):");
+console.log("\n  a chip's ring is the count rule (deviceActivity.groupLook — group_look.mjs drives it in full):");
 {
-  const alert = { ring: "alert" }, linked = { ring: "linked" }, on = { kind: "on" }, off = { kind: "off" }, na = { kind: "unavailable" };
-  ck("showing its devices: red only when EVERY member alerts", summaryRingRed([alert, alert], true) && !summaryRingRed([alert, linked], true));
-  ck("  ...three merely-connected cameras (kind 'on', ring not alert) do not ring the card",
-     !summaryRingRed([{ kind: "on", ring: "linked" }, { kind: "on", ring: "linked" }, { kind: "on", ring: "linked" }], true));
-  ck("  ...a member HA has not reported is not alerting", !summaryRingRed([alert, null], true));
-  ck("drawing a count: red when ANY member is on or alerting", summaryRingRed([off, on], false) && summaryRingRed([{ kind: "alert" }], false));
-  ck("  ...not for unavailable (dimming is its signal), off, or unreported", !summaryRingRed([na, off, null], false));
-  ck("the room chip keeps the count rule", bucketRoomChips([M("a", "r", 0, "on"), M("b", "r", 1, "off")], () => true, (k) => k)[0].ringRed
+  ck("the room chip keeps the count rule", bucketRoomChips([M("a", "r", 0, "on"), M("b", "r", 1, "off")], () => true, (k) => k)[0].ringOn
+     && bucketRoomChips([M("a", "r", 0, "alert"), M("b", "r", 1, "off")], () => true, (k) => k)[0].ringRed
      && !bucketRoomChips([M("a", "r", 0, "unavailable")], () => true, (k) => k)[0].ringRed);
-  const ev = (await import("node:fs")).readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
-  ck("the group card asks summaryRingRed and keeps no rule of its own",
-     /summaryRingRed\(g\.members\.map/.test(ev) && !/ringRed = true;|if \(ring !== "alert"\) ringRed = false/.test(ev));
+  ck("  ...a member the map has no state for rings nothing", !bucketRoomChips([M("a", "r", 0), M("b", "r", 1, "off")], () => true, (k) => k)[0].ringOn);
 }
 
 done("✅ a room chip says who is in it, merged or not");

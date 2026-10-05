@@ -7,157 +7,37 @@
 // summary would be actively misleading, not just noisy. See the Cockpit plan
 // memory for how this was verified.
 
-import { binarySensorClassInfo } from "@/config/BinarySensorClasses";
-import { CATEGORY_ORDER, effectiveCategory, subjectOf } from "@/config/EntityCategories";
+import { stateLabelFor } from "@/config/BinarySensorClasses";
+import { categoryMembers, type CategoryMembers } from "@/config/activeDevices";
+import { deviceLook, groupLook, type LookSource } from "@/utils/deviceActivity";
 import { displayLabelFor } from "@/config/EntityMap";
 import { roomKey, NO_ROOM_LABEL } from "@/config/roomKey";
-import { fmAttention } from "@/fm/fmEngine";
-import type { FmData } from "@/fm/fmTypes";
-import { isOn } from "@/utils/entityState";
+import { byRoomOrder } from "@/config/summaryRows";
 import type { HassEntity, RawLogbookEntry } from "@/types/ha.types";
 import type { Category, EntityMapping } from "@/types/scene.types";
 
-export type AttentionKind = "unavailable" | "fault" | "schedule" | "alarm";
+/** A category's devices — what its tile counts (tileStats) and opens. */
+export type CategoryTile = CategoryMembers;
 
-export interface AttentionItem {
-  id: string;
-  kind: AttentionKind;
-  title: string;
-  /** Short status word — "Open", "Overdue", "Leak detected", etc. */
-  detail: string;
-  room?: string;
-  /** Present when this item can be drilled into (opens the entity's own
-   *  panel) — a fault/schedule with no device behind it (a whole-villa task,
-   *  a free-text device description) has none, so it renders as read-only. */
-  entityId?: string;
+/** What a Cockpit tile (room, floor or category) counts: its devices, how
+ *  many are on — POWER, a group's `onCount` (a locked lock is not "on", a
+ *  motion sensor never is) — and how many Home Assistant has lost. */
+export interface TileStats { total: number; onCount: number; offline: number }
+
+export function tileStats(entityIds: readonly string[], source: LookSource): TileStats {
+  const g = groupLook(entityIds.map((id) => deviceLook(id, source)), { showingDevices: false });
+  return { total: entityIds.length, onCount: g.onCount, offline: g.offline };
 }
 
-/**
- * Everything currently wrong, in one list — replaces the split between the
- * HUD's unavailable-devices badge and Facility's separate attention badge.
- * Four sources, each already tracked somewhere in the app, just never
- * combined: unavailable devices, open faults, overdue/never-recorded
- * maintenance, and any binary_sensor currently in its device_class's alarm
- * state (leak/smoke/tamper/etc — BinarySensorClasses' `alarmState`, computed
- * per class already, just never aggregated across the villa before).
- */
-export function buildAttentionItems(opts: {
-  unavailableIds: readonly string[];
-  entities: Record<string, HassEntity>;
-  entityMap: Record<string, EntityMapping>;
-  resolvedRooms: Record<string, string>;
-  fmData: FmData;
-  selectableIds: readonly string[];
-}): AttentionItem[] {
-  const { unavailableIds, entities, entityMap, resolvedRooms, fmData, selectableIds } = opts;
-  const items: AttentionItem[] = [];
-
-  for (const id of unavailableIds) {
-    const mapping = entityMap[id];
-    items.push({
-      id: `unavailable:${id}`,
-      kind: "unavailable",
-      title: displayLabelFor(id, mapping?.label, entities[id]?.attributes.friendly_name as string | undefined),
-      detail: "Unavailable",
-      room: resolvedRooms[id],
-      entityId: id,
-    });
-  }
-
-  const fm = fmAttention(fmData);
-  for (const t of fm.openFaults) {
-    items.push({
-      id: `fault:${t.id}`,
-      kind: "fault",
-      title: t.title,
-      detail: t.status === "in_progress" ? "In progress" : "Open fault",
-      room: t.room,
-      entityId: t.entityId,
-    });
-  }
-
-  for (const s of fm.lateTasks) {
-    items.push({
-      id: `schedule:${s.schedule.id}`,
-      kind: "schedule",
-      title: s.schedule.title,
-      detail: s.state === "never" ? "Never recorded" : "Overdue",
-      room: s.schedule.room,
-      entityId: s.schedule.entityId,
-    });
-  }
-
-  // Every binary_sensor currently reporting its own device_class's "problem"
-  // state — a leak, a tamper trip, low battery, a disconnected sensor.
-  // Restricted to selectableIds (never a raw HA domain scan): a bare
-  // Zigbee2MQTT relay-lock/config sub-entity is technically a binary_sensor
-  // too, and was never meant to be villa-facing.
-  for (const id of selectableIds) {
-    if (!id.startsWith("binary_sensor.")) continue;
-    const entity = entities[id];
-    if (!entity) continue;
-    const info = binarySensorClassInfo(entity.attributes.device_class as string | undefined);
-    if (info.alarmState === "none" || entity.state !== info.alarmState) continue;
-    const mapping = entityMap[id];
-    items.push({
-      id: `alarm:${id}`,
-      kind: "alarm",
-      title: displayLabelFor(id, mapping?.label, entity.attributes.friendly_name as string | undefined),
-      detail: info.alarmState === "on" ? info.onLabel : info.offLabel,
-      room: resolvedRooms[id],
-      entityId: id,
-    });
-  }
-
-  return items;
-}
-
-export type VillaHealthLevel = "ok" | "warn" | "danger";
-
-export interface VillaHealth {
-  level: VillaHealthLevel;
-  summary: string;
-}
-
-/** Unavailable devices and active alarms are the "something is actually
- *  broken or unsafe right now" tier (danger); open faults and overdue
- *  maintenance are "needs doing, not urgent" (warn) — a schedule running a
- *  few days late shouldn't paint the whole villa red the same as a leak
- *  sensor going off. */
-/**
- * The attention a PROFILE is shown: items about a device it may not open are
- * left out, and the health line is re-read from what remains. The HUD badge
- * and the Cockpit list both take this, so a guest's badge can no longer count
- * a camera or a leak sensor their Cockpit list would refuse to open (2.496.191).
- * Items with no device (a schedule) stand for themselves.
- */
-export function attentionFor<T extends { unavailableIds: readonly string[]; selectableIds: readonly string[]; attentionItems: AttentionItem[] }>(
-  att: T, may: (entityId: string) => boolean,
-): T & { health: VillaHealth } {
-  const attentionItems = att.attentionItems.filter((i) => !i.entityId || may(i.entityId));
-  return {
-    ...att,
-    unavailableIds: att.unavailableIds.filter(may),
-    selectableIds: att.selectableIds.filter(may),
-    attentionItems,
-    health: villaHealthFrom(attentionItems),
-  };
-}
-
-export function villaHealthFrom(items: AttentionItem[]): VillaHealth {
-  if (items.length === 0) return { level: "ok", summary: "Everything looks fine." };
-  const hasDanger = items.some((i) => i.kind === "unavailable" || i.kind === "alarm");
-  const n = items.length;
-  return {
-    level: hasDanger ? "danger" : "warn",
-    summary: `${n} thing${n === 1 ? "" : "s"} need${n === 1 ? "s" : ""} attention.`,
-  };
-}
-
-export interface CategoryTile {
-  category: Category;
-  total: number;
-  onCount: number;
+/** The line under a tile's name — ONE wording for rooms, floors and
+ *  categories (2.496.235; rooms and floors were bars): "4 devices · 1 on",
+ *  plus "· 1 offline" when Home Assistant has lost any of them. */
+export function tileLine(s: TileStats): string {
+  if (s.total === 0) return "None";
+  const parts = [`${s.total} device${s.total === 1 ? "" : "s"}`];
+  if (s.onCount > 0) parts.push(`${s.onCount} on`);
+  if (s.offline > 0) parts.push(`${s.offline} offline`);
+  return parts.join(" · ");
 }
 
 /** One tile per category, count + a generic cross-domain "on" count —
@@ -169,19 +49,7 @@ export function buildCategoryTiles(
   entities: Record<string, HassEntity>,
   entityMap: Record<string, EntityMapping>,
 ): CategoryTile[] {
-  const totals = new Map<Category, number>(CATEGORY_ORDER.map((c) => [c, 0]));
-  const ons = new Map<Category, number>(CATEGORY_ORDER.map((c) => [c, 0]));
-  for (const id of selectableIds) {
-    const mapping = entityMap[id];
-    if (!mapping) continue;
-    const entity = entities[id];
-    const cat = effectiveCategory(subjectOf(id, mapping, entity));
-    totals.set(cat, (totals.get(cat) ?? 0) + 1);
-    if (isOn(entity)) ons.set(cat, (ons.get(cat) ?? 0) + 1);
-  }
-  return CATEGORY_ORDER.map((category) => ({
-    category, total: totals.get(category) ?? 0, onCount: ons.get(category) ?? 0,
-  }));
+  return categoryMembers(selectableIds, entities, entityMap);
 }
 
 
@@ -231,11 +99,7 @@ export function buildRoomGroups(
       const floor = room === NO_ROOM_LABEL ? null : (haFloor ?? floorByRoom.get(roomKey(room)) ?? null);
       return { room, count: entityIds.length, entityIds, floor };
     })
-    .sort((a, b) => {
-      if (a.room === NO_ROOM_LABEL) return b.room === NO_ROOM_LABEL ? 0 : 1;
-      if (b.room === NO_ROOM_LABEL) return -1;
-      return a.room.localeCompare(b.room);
-    });
+    .sort((a, b) => byRoomOrder(a.room, b.room));
 }
 
 export interface FloorGroup {
@@ -300,11 +164,12 @@ export function describeLogbookEntry(
   const mapping = entityMap[raw.entity_id];
   const name = displayLabelFor(raw.entity_id, mapping?.label, raw.name ?? (entity?.attributes.friendly_name as string | undefined));
 
-  if (raw.entity_id.startsWith("binary_sensor.")) {
-    const info = binarySensorClassInfo(entity?.attributes.device_class as string | undefined);
-    return { t, name, message: raw.state === "on" ? info.onLabel : info.offLabel };
-  }
-  return { t, name, message: raw.state.charAt(0).toUpperCase() + raw.state.slice(1) };
+  // ⚠️ THE SHARED WORDS, NOT ITS OWN (2.496.252). This line worded binary
+  // states by hand — anything but "on" took the OFF word, so a leak sensor
+  // that went OFFLINE read "No leak" — and capitalised the rest by hand, so
+  // "not_home" read "Not_home". stateLabelFor and prettyState are the rules
+  // every other surface (the pill, the history bars) already reads.
+  return { t, name, message: stateLabelFor(raw.entity_id, entity?.attributes.device_class as string | undefined)(raw.state) };
 }
 
 /** Describe + filter to the villa's own selectable devices (HA's raw
@@ -327,4 +192,40 @@ export function buildActivityFeed(
     .filter((e): e is ActivityEntry => e !== null)
     .sort((a, b) => b.t - a.t);
   return described.slice(0, limit);
+}
+
+/** How the Cockpit's grid is grouped. */
+export type Pivot = "room" | "floor" | "category";
+
+/** One tile of the Room / Floor / Category grid. Its icon is the screen's
+ *  (by `pivot`, or the category's own). */
+export interface PivotTile {
+  key: string;
+  label: string;
+  pivot: Pivot;
+  /** Set for a category tile: it takes that category's colour. */
+  category: Category | null;
+  entityIds: string[];
+  stats: TileStats;
+}
+
+/**
+ * The grid's tiles for one grouping. ONE tile for every grouping (2.496.235):
+ * rooms and floors were bars, the categories tiles — the same question ("what
+ * is in here, how much is on, is any of it lost?") drawn two ways. "Other"
+ * names the no-floor bucket, the room grouping's own word (NO_ROOM_LABEL).
+ * Pure (2.496.274: it was a useMemo inside the Cockpit window, untestable).
+ */
+export function pivotTiles(
+  pivot: Pivot,
+  groups: { categories: readonly CategoryTile[]; rooms: readonly RoomGroup[]; floors: readonly FloorGroup[] },
+  categoryLabels: Readonly<Record<Category, string>>,
+  looks: LookSource,
+): PivotTile[] {
+  const rows = pivot === "category"
+    ? groups.categories.map((t) => ({ key: t.category, label: categoryLabels[t.category], category: t.category, entityIds: t.entityIds }))
+    : pivot === "room"
+      ? groups.rooms.map((g) => ({ key: g.room, label: g.room, category: null, entityIds: g.entityIds }))
+      : groups.floors.map((g) => ({ key: String(g.floor), label: g.floor != null ? `Floor ${g.floor}` : NO_ROOM_LABEL, category: null, entityIds: g.entityIds }));
+  return rows.map((r) => ({ ...r, pivot, stats: tileStats(r.entityIds, looks) }));
 }

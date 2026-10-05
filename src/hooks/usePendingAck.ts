@@ -22,6 +22,7 @@
 // stay defined once.
 
 import { useEffect, useRef, useState } from "react";
+import { onFailure } from "@/ha/serviceOutcome";
 
 /** Safety-net cap on the pending visual — cleared as soon as the watched
  *  state actually changes, so this only matters when HA never confirms (a
@@ -42,7 +43,9 @@ const PENDING_TIMEOUT_MS = 4000;
  */
 export function usePendingAck<T>(actual: T, timeoutMs = PENDING_TIMEOUT_MS): {
   pending: boolean;
-  markPending: () => void;
+  /** Pass the command's outcome (callService's promise) and a refused one
+   *  stops the in-flight look at once instead of after the timeout. */
+  markPending: (sent?: unknown) => void;
 } {
   const [pending, setPending] = useState(false);
   const prev = useRef(actual);
@@ -60,5 +63,13 @@ export function usePendingAck<T>(actual: T, timeoutMs = PENDING_TIMEOUT_MS): {
     return () => clearTimeout(t);
   }, [pending, timeoutMs]);
 
-  return { pending, markPending: () => setPending(true) };
+  const attempts = useRef(0);
+  return {
+    pending,
+    markPending: (sent?: unknown) => {
+      const attempt = ++attempts.current;
+      setPending(true);
+      onFailure(sent, () => { if (attempt === attempts.current) setPending(false); });
+    },
+  };
 }

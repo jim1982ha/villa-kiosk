@@ -26,13 +26,16 @@ delete globalThis.caches;
 ck("no Cache API at all (insecure context) is false too", await purgeModelCache() === false);
 
 console.log("\n  every end of a session:");
-const end = /const endSession = useCallback\(\(\) => \{([\s\S]*?)\}, \[\]\);/.exec(ctx)?.[1] ?? "";
-ck("endSession purges the model cache and drops the role", /void purgeModelCache\(\);/.test(end) && /setRole\(null\);/.test(end));
-ck("it is the ONLY place the role is dropped", (ctx.match(/setRole\(null\)/g) ?? []).length === 1);
-for (const name of ["logout", "logoutAll"]) {
-  const body = new RegExp(`const ${name} = useCallback\\(([\\s\\S]*?)\\}, \\[endSession\\]\\);`).exec(ctx)?.[1] ?? "";
-  ck(`${name} ends the session through it`, /endSession\(\);/.test(body));
-}
-ck("so does the server-ended session (sessionLost)", /sessionLostDecision\(role, server\)[\s\S]*?endSession\(\);/.test(ctx));
+// The session's life is auth/profileSession.ts since 2.496.233 and is driven
+// by value in profile_session.mjs (logout, sign every device out, the server
+// ending it, and a session found gone at start). What stays here: that ONE
+// place ends it, and that the browser's "forget" is this purge.
+const ps = readFileSync(new URL("../../src/auth/profileSession.ts", import.meta.url), "utf8")
+  .replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+ck("the session module drops the role in one place, which forgets the cache",
+   (ps.match(/role: null/g) ?? []).length === 1 && /private end\(\): void \{[\s\S]*?this\.io\.forget\(\);[\s\S]*?role: null/.test(ps));
+ck("logout, sign-everywhere and the server-ended session all go through it",
+   (ps.match(/this\.end\(\);/g) ?? []).length === 3);
+ck("the browser's forget IS the model-cache purge", /forget: \(\) => \{ void purgeModelCache\(\); \}/.test(ctx));
 
 done("✅ a signed-out device holds no floor plan");

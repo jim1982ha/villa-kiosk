@@ -13,6 +13,7 @@
 // each table supplies only its layout — a cell per field (`cell`).
 
 import type { ReactNode } from "react";
+import Dropdown from "@/components/common/Dropdown";
 import EntityPicker from "./EntityPicker";
 import { useDraftCommit } from "@/hooks/useDraftCommit";
 import { CATEGORY_ORDER, CATEGORY_LABELS, effectiveCategory, subjectOf } from "@/config/EntityCategories";
@@ -22,6 +23,19 @@ import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 
 /** One field's place in the row's layout. */
 export type FieldCell = (key: string, label: string, field: ReactNode, opts?: { wide?: boolean; pair?: boolean }) => ReactNode;
+
+/**
+ * A mapping row's pending edits: `draftField` stages a change (committed after
+ * the draft delay) and `m` is the mapping WITH those edits, so a control
+ * reflects a click at once while the commit is pending. Shared by this table
+ * and the entity map's own row (written out in both until 2.496.263).
+ */
+export function useMappingDraft(mapping: EntityMapping, onPatch: (change: Partial<EntityMapping>) => void) {
+  const field = useDraftCommit<Partial<EntityMapping>>((_k, change) => onPatch(change));
+  const draftField = (change: Partial<EntityMapping>) => field.draft("v", { ...field.drafts.v, ...change });
+  const m = field.drafts.v ? { ...mapping, ...field.drafts.v } : mapping;
+  return { field, draftField, m };
+}
 
 export default function MappingFields({ entityId, mapping, entity, onPatch, cell, selectStyle }: {
   entityId: string;
@@ -35,30 +49,25 @@ export default function MappingFields({ entityId, mapping, entity, onPatch, cell
 }) {
   const label = useDraftCommit<string>((_k, value) => onPatch({ label: value }), 500);
   const intensity = useDraftCommit<number>((_k, ratio) => onPatch({ lightIntensityRatio: ratio }), 500);
-  const field = useDraftCommit<Partial<EntityMapping>>((_k, change) => onPatch(change));
-  const draftField = (change: Partial<EntityMapping>) => field.draft("v", { ...field.drafts.v, ...change });
-  // Not-yet-committed edits show at once, even while the commit is pending.
-  const m = field.drafts.v ? { ...mapping, ...field.drafts.v } : mapping;
+  const { draftField, m } = useMappingDraft(mapping, onPatch);
 
   const ratio = intensity.drafts.v ?? m.lightIntensityRatio ?? 0;
   const pct = Math.round(ratio * 100);
   return (
     <>
       {cell("type", "Type", (
-        <select style={selectStyle} value={m.type} title="Panel type"
-          onChange={(e) => draftField({ type: e.target.value as EntityType })}>
-          {ENTITY_DOMAINS.map((t) => <option key={t} value={t}>{t}</option>)}
-        </select>
+        <Dropdown<EntityType> style={selectStyle} value={m.type} title="Panel type" ariaLabel="Panel type"
+          onChange={(type) => draftField({ type })}
+          options={ENTITY_DOMAINS.map((t) => ({ value: t, label: t }))} />
       ))}
       {cell("category", "Category", (
-        <select style={selectStyle} value={effectiveCategory(subjectOf(entityId, m, entity))}
+        <Dropdown<Category> style={selectStyle} value={effectiveCategory(subjectOf(entityId, m, entity))}
           // `categoryPicked` records that this was CHOSEN. Without it the pick
           // round-trips through the legacy-default discard and the dropdown
           // snaps straight back — six of the options were unselectable.
-          onChange={(e) => draftField({ category: e.target.value as Category, categoryPicked: true })}
-          title="Which map filter group this device belongs to">
-          {CATEGORY_ORDER.map((c) => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
-        </select>
+          onChange={(category) => draftField({ category, categoryPicked: true })}
+          title="Which map filter group this device belongs to" ariaLabel="Category"
+          options={CATEGORY_ORDER.map((c) => ({ value: c, label: CATEGORY_LABELS[c] }))} />
       ))}
       {cell("label", "Label", (
         // Saved half a second after typing stops, or at once on leaving the field.

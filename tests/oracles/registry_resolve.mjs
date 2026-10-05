@@ -2,7 +2,6 @@
 // (src/ha/registryResolve.ts), and when the kiosk re-reads them
 // (HAStateStore's one on-connected pass) — round 10, 2.496.160.
 import { register } from "node:module";
-import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const R = await import("@/ha/registryResolve");
@@ -26,14 +25,8 @@ ck("  ...and with none of its own it inherits the device's", p.areaNames["light.
 ck("the floor follows the same area (1F = 1, 2F = 2 — resolveEntityFloor reads the name)", p.floorNumbers["light.from_device"] === 1 && p.floorNumbers["light.own_area"] === 2);
 ck("no area: left out, not guessed", !("switch.nowhere" in p.areaNames) && !("switch.nowhere" in p.floorNumbers));
 
-const st = readFileSync(new URL("../../src/ha/HAStateStore.tsx", import.meta.url), "utf8");
-const connectBody = st.slice(st.indexOf("const connect = useCallback"), st.indexOf("EVERY (RE)CONNECT, ONE PASS"));
-const pass = st.slice(st.indexOf("EVERY (RE)CONNECT, ONE PASS"), st.indexOf("const subscribe = useCallback"));
-ck("connect() opens and subscribes, and loads nothing itself (the first connect loaded the states twice)",
-   !/hydrate\(|get_config/.test(connectBody.replace(/\/\/.*$/gm, "")));
-ck("every (re)connect runs ONE pass — after the subscriptions — loading the states, the config AND the registry (a reconnect re-read only the states)",
-   /if \(connection !== "connected"\) return;/.test(pass) && /await subscribedRef\.current;/.test(pass)
-   && pass.indexOf("await subscribedRef.current") < pass.indexOf("hydrate()") && /"get_config"/.test(pass) && /refreshRegistryData\(\)/.test(pass));
-ck("the provider resolves nothing itself", /entityRegistryFacts\(rows\)/.test(st) && /placesAfterRefresh\(prev, rows, \{ devices, areas, floors \}\)/.test(st) && !/deviceAreaById/.test(st));
+// The one pass per (re)connect — after the subscriptions, re-reading the
+// states, the config AND the registry — is driven by value in
+// entity_store.mjs since 2.496.226 (it was a regex on the provider's source).
 
 done("✅ the registries, resolved once and re-read on every reconnect");

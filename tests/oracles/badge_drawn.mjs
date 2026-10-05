@@ -8,9 +8,9 @@
 // (2.496.137) — and a 20.5 px unit floored a group card and its chips in
 // opposite directions: 3 px above each chip, 1 px below (2.496.138). CI could
 // not see any of it. GUI layout is pure arithmetic on the controls' measures,
-// so it runs here with no browser; the badges are built with EntityVisuals'
-// recipe (its card branch and updateEntityGroups), the geometry and frames
-// from the app's own modules.
+// so it runs here with no browser. The badges are built by the map's OWN
+// builders (badgeControls, 2.496.269 — this file used to copy the recipe by
+// hand), the geometry and frames from the app's own modules.
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
@@ -34,8 +34,8 @@ const { Rectangle } = await import("@babylonjs/gui/2D/controls/rectangle.js");
 const { StackPanel } = await import("@babylonjs/gui/2D/controls/stackPanel.js");
 const { Image } = await import("@babylonjs/gui/2D/controls/image.js");
 const { TextBlock } = await import("@babylonjs/gui/2D/controls/textBlock.js");
-const { DashableRectangle } = await import("@/babylon/dashableRectangle");
-const { cardStruts, arrange, MAX_GRID_CHIPS } = await import("@/babylon/badgeCard");
+const { arrange, MAX_GRID_CHIPS } = await import("@/babylon/badgeCard");
+const { buildCardBadge, growGroupCard, placeGroupCard, setValueParts } = await import("@/babylon/badgeControls");
 const { badgeMetricsFor } = await import("@/babylon/badgeMetrics");
 const { glyphDrawPx } = await import("@/babylon/badgeLayout");
 const { badgeRing, applyBadgeFrame } = await import("@/babylon/badgeLook");
@@ -54,49 +54,34 @@ const ALERT = { ring: "#c33" };
 let slot = 0;
 const place = (c) => { c.horizontalAlignment = 0; c.verticalAlignment = 0; c.left = `${(slot % 6) * 250 + 10}px`; c.top = `${Math.floor(slot / 6) * 150 + 10}px`; slot++; ui.addControl(c); };
 
-/** A lone card badge, as EntityVisuals builds its card: a DashableRectangle
- *  sized to a horizontal row of cardStruts' struts, the chip, and the value. */
+/** A lone card badge, built by the map's OWN builder (badgeControls.buildCardBadge,
+ *  2.496.269 — this file used to rebuild it by hand, a twin that could drift):
+ *  framed, placed, and its value shown the way the map shows one. */
 function card(m, surface, value) {
   const g = glyphDrawPx(m, true);
-  const st = cardStruts(m.cardHeightPx, g, value ? value.length * 7 : 0);
-  const badge = new DashableRectangle("b");
-  badge.height = `${m.cardHeightPx}px`;
-  badge.adaptWidthToChildren = true; badge.descendantsOnlyPadding = true; badge.paddingLeft = "0px"; badge.paddingRight = "0px";
-  applyBadgeFrame(badge, badgeRing(surface, m.cardHeightPx, m), m.cardHeightPx);
-  place(badge);
-  const row = new StackPanel("r"); row.isVertical = false; row.height = `${g}px`; row.adaptWidthToChildren = true; badge.addControl(row);
-  const strut = (w, shown = true) => { const r = new Rectangle(); r.thickness = 0; r.width = `${Math.max(0, w)}px`; r.height = `${g}px`; r.isVisible = shown; row.addControl(r); return r; };
-  strut(st.barepad, !value); strut(st.padl, !!value);
-  const glyph = new Image("g"); glyph.width = `${g}px`; glyph.height = `${g}px`; row.addControl(glyph);
-  strut(st.valgap, !!value);
-  const wrap = new Rectangle("w"); wrap.thickness = 0; wrap.adaptWidthToChildren = true; wrap.height = `${g}px`; wrap.isVisible = !!value;
-  const t = new TextBlock("t", value ?? ""); t.fontSize = m.cardHeightPx * 0.4; t.resizeToFit = true; wrap.addControl(t); row.addControl(wrap);
-  strut(st.valtail, !!value); strut(st.padr);
-  return { badge, glyph };
+  const glyph = new Image("g");
+  const cc = buildCardBadge("t", m, g, glyph);
+  applyBadgeFrame(cc.badge, badgeRing(surface, m.cardHeightPx, m), m.cardHeightPx);
+  place(cc.badge);
+  if (value) {
+    const t = new TextBlock("t", value); t.fontSize = m.cardHeightPx * 0.4; t.resizeToFit = true;
+    cc.valueWrap.addControl(t);
+    setValueParts(cc, true);
+  }
+  return { badge: cc.badge, glyph };
 }
 
-/** A group's summary card, as updateEntityGroups builds it: a transparent host
- *  sized to the arrangement, its sub-cards and a chip per cell, all placed in
- *  px from the host's centre. */
+/** A group's summary card, laid out by the map's own pools and layout
+ *  (badgeControls.growGroupCard / placeGroupCard) from badgeCard.arrange. */
 function group(m, n, perCard) {
   const lay = arrange(n, m.cardHeightPx, m.cardIconFraction, m.minGapPx, undefined, 0, perCard);
   const host = new Rectangle("h"); host.thickness = 0; host.background = ""; host.clipChildren = false;
-  host.width = `${lay.width}px`; host.height = `${lay.height}px`;
   place(host);
-  const subs = lay.cards.map((c) => {
-    const r = new Rectangle("s"); r.zIndex = 0;
-    r.width = `${c.width}px`; r.height = `${c.height}px`; r.left = `${c.left}px`; r.top = `${c.top}px`;
-    applyBadgeFrame(r, badgeRing(RESTING, m.cardHeightPx, m), lay.pitch);
-    host.addControl(r);
-    return r;
-  });
-  const chips = Array.from({ length: lay.cells }, (_, k) => {
-    const im = new Image("c"); im.zIndex = 1;
-    im.width = `${lay.chip}px`; im.height = `${lay.chip}px`; im.left = `${lay.cellLeft(k)}px`; im.top = `${lay.cellTop(k)}px`;
-    host.addControl(im);
-    return im;
-  });
-  return { lay, subs, chips };
+  const c = { container: host, cards: [], chips: [], zones: [] };
+  growGroupCard(c, lay.cells, lay.cards.length);
+  placeGroupCard(c, lay, lay.cells);
+  for (const r of c.cards) applyBadgeFrame(r, badgeRing(RESTING, m.cardHeightPx, m), lay.pitch);
+  return { lay, subs: c.cards, chips: c.chips };
 }
 
 const built = [];
@@ -134,4 +119,13 @@ for (const b of built) {
   }
 }
 
+{
+  const { readFileSync } = await import("node:fs");
+  const ev = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
+  console.log("\n  the map draws with the same builders:");
+  ck("its card is buildCardBadge's, its group card growGroupCard's and placeGroupCard's, its value toggle setValueParts'",
+     /= buildCardBadge\(entityId, m, glyphPx, glyph\)\);/.test(ev) && /growGroupCard\(c, drawn, lay\.cards\.length\);/.test(ev)
+     && /placeGroupCard\(c, lay, drawn\);/.test(ev) && /setValueParts\(lbl, on\);/.test(ev)
+     && !/private growGrid|new StackPanel\(`lbl_row_/.test(ev));
+}
 done("✅ every badge draws centred, as Babylon lays it out");

@@ -46,6 +46,7 @@ import "./babylonSideEffects";
 import { FrameClock } from "./frameClock";
 import { keyIsForCamera, overviewKeyAction, overviewKeyStep, type OverviewKeyAction } from "./overviewKeys";
 import type { Observer } from "@babylonjs/core/Misc/observable";
+import { canvasInput, type CanvasInput } from "./canvasInput";
 
 interface OverviewCallbacks {
   onActivity: () => void;
@@ -96,7 +97,6 @@ export class OverviewController {
   private scene: Scene;
   private canvas: HTMLCanvasElement;
   private cb: OverviewCallbacks;
-  private attached = false;
   private naturalScrolling = true;
   private bounds: PanBounds = { minX: -20, maxX: 20, minZ: -20, maxZ: 20 };
   /** The whole-villa fit radius (see fitTo): the threshold at/below which
@@ -130,6 +130,8 @@ export class OverviewController {
    *  camera's own limits mirror it for its internal per-frame clamp). */
   private radiusLimits: RadiusLimits = { lo: 3, hi: 200 };
   getRadiusLimits(): RadiusLimits { return this.radiusLimits; }
+  /** Where the orbit centre may go — what applyPose clamps the target to. */
+  getPanBounds(): PanBounds { return this.bounds; }
   private setRadiusLimits(l: RadiusLimits): void {
     this.radiusLimits = l;
     this.camera.lowerRadiusLimit = l.lo;
@@ -230,36 +232,26 @@ export class OverviewController {
     this.cb.onActivity();
   }
 
+  /** The canvas/keyboard listeners as one set (canvasInput). The keyboard is
+   *  the touch screen's four movements (overviewKeys.ts). */
+  private inputSet: CanvasInput | null = null;
+  private input(): CanvasInput {
+    return this.inputSet ??= canvasInput(this.canvas, {
+      onPointerDown: this.onPointerDown, onPointerMove: this.onPointerMove, onPointerUp: this.onPointerUp,
+      onWheel: this.onWheel, onKey: this.onKey, onBlur: this.releaseKeys,
+    });
+  }
+
   enable(): void {
-    if (this.attached) return;
-    this.canvas.addEventListener("pointerdown",  this.onPointerDown);
-    this.canvas.addEventListener("pointermove",  this.onPointerMove);
-    this.canvas.addEventListener("pointerup",    this.onPointerUp);
-    this.canvas.addEventListener("pointercancel",this.onPointerUp);
-    this.canvas.addEventListener("pointerleave", this.onPointerUp);
-    this.canvas.addEventListener("wheel",        this.onWheel, { passive: false });
-    // The keyboard — the touch screen's four movements (overviewKeys.ts).
-    window.addEventListener("keydown", this.onKey);
-    window.addEventListener("keyup", this.onKey);
-    window.addEventListener("blur", this.releaseKeys);
-    this.attached = true;
+    this.input().attach();
   }
 
   disable(): void {
-    if (!this.attached) return;
-    this.canvas.removeEventListener("pointerdown",  this.onPointerDown);
-    this.canvas.removeEventListener("pointermove",  this.onPointerMove);
-    this.canvas.removeEventListener("pointerup",    this.onPointerUp);
-    this.canvas.removeEventListener("pointercancel",this.onPointerUp);
-    this.canvas.removeEventListener("pointerleave", this.onPointerUp);
-    this.canvas.removeEventListener("wheel",        this.onWheel);
-    window.removeEventListener("keydown", this.onKey);
-    window.removeEventListener("keyup", this.onKey);
-    window.removeEventListener("blur", this.releaseKeys);
+    if (!this.inputSet?.attached) return;
+    this.inputSet.detach();
     this.releaseKeys();
     this.pointers.clear();
     this.touchBase = null;
-    this.attached = false;
   }
 
   dispose(): void { this.disable(); }

@@ -1,29 +1,38 @@
 // src/components/fm/SpendTab.tsx
-// Maintenance spend against a monthly Minor Maintenance cap — MINOR_MAINTENANCE_CAP
-// (see fmTypes.ts), 0 until an operator's own contract/agreement gives it a
-// real one. The cap matters because whatever agreement is in play, it's
+// Maintenance spend against the owner's monthly cap (the shared `fmContract`
+// terms, see fmTypes.ts fmTerms) — none until the owner sets one here. The cap matters because whatever agreement is in play, it's
 // typically the line that decides who pays for a repair: under it, ordinary
 // shared maintenance; over it, a bigger expense the owner is on the hook
 // for. The warning therefore has to arrive BEFORE the money is committed,
 // which is why the entry form projects the new total as you type.
 
 import { useState } from "react";
+import Dropdown from "@/components/common/Dropdown";
 import SaveButton from "@/components/common/SaveButton";
 import { Plus, Sparkles, Save, Download } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { resolveSiteTitle } from "@/config/AppConfig";
-import { useFmData } from "@/fm/FmDataContext";
-import { budgetStatus, formatMoney, monthKey, localStamp, parseAmount } from "@/fm/fmEngine";
-import { MONEY_CURRENCY } from "@/fm/fmTypes";
-import { buildSpendStatement } from "@/fm/fmReport";
+import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
+import { budgetStatus, monthKey, localStamp, parseAmount } from "@/fm/fmEngine";
+import { categoryName } from "@/fm/fmTypes";
+import { useFmTerms } from "@/fm/useFmTerms";
+import { useProfile } from "@/auth/ProfileContext";
+import { roleCan } from "@/auth/permissions";
+import ContractTermsEditor from "./ContractTermsEditor";
+import { buildSpendStatement } from "@/fm/fmDocuments";
 import type { FmCost, FmSavedDocument } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
 import DeviceSearchPicker, { type DeviceOption } from "./DeviceSearchPicker";
 import ErasableRow from "./ErasableRow";
 import NotesField from "./NotesField";
-import ReportPreview from "./ReportPreview";
+import MarkdownPreview from "./MarkdownPreview";
 import SavedDocumentsList from "./SavedDocumentsList";
+import AgentMark from "./AgentMark";
+import { formatMoney } from "@/utils/money";
+import CostFields from "./CostFields";
+import { useDeviceChoice } from "./useDeviceChoice";
+import FormActions from "./FormActions";
 
 export default function SpendTab(
   { onOpenEntity, deviceOptions }: {
@@ -36,31 +45,36 @@ export default function SpendTab(
   const { data, addCost, updateCost, removeCost, saveDocument } = useFmData();
   const { config, resolvedRooms } = useConfig();
   const { haConfig } = useHA();
+  const { role } = useProfile();
+  const terms = useFmTerms();
+  const money = (n: number) => formatMoney(n, terms.currency);
   const [month, setMonth] = useState(monthKey(Date.now()));
   const [adding, setAdding] = useState(false);
   /** Id of the entry being corrected, or null when recording a new one — one
    *  form for both, same reasoning as the Faults tab. */
   const [editingId, setEditingId] = useState<string | null>(null);
+  /** Why the last save was refused — the form keeps what was typed (2.496.252). */
+  const [formError, setFormError] = useState<string | null>(null);
   const [label, setLabel] = useState("");
-  const [deviceText, setDeviceText] = useState("");
-  const [entityId, setEntityId] = useState("");
+  // The device the entry is about — its search text and match, as one (useDeviceChoice).
+  const device = useDeviceChoice();
+  const { deviceText, entityId, selectDevice, clearDevice } = device;
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [category, setCategory] = useState<"minor" | "major">("minor");
   const [photoIds, setPhotoIds] = useState<string[]>([]);
   // The saved-statement workflow — same "explicit Generate, then optionally
-  // Save" shape as ReportTab, so a statement is a point-in-time record of
+  // Save" shape as RecapTab, so a statement is a point-in-time record of
   // this month's spend rather than something that silently changes if an
   // entry is edited or deleted afterwards.
   const [statement, setStatement] = useState<string | null>(null);
   const [statementSaved, setStatementSaved] = useState(false);
   const villaName = resolveSiteTitle(config, haConfig?.location_name);
 
-  const selectDevice = (id: string, name: string) => { setEntityId(id); setDeviceText(name); };
-  const clearDevice = () => { setEntityId(""); setDeviceText(""); };
   const resetForm = () => {
+    setFormError(null);
     setAdding(false); setEditingId(null);
-    setLabel(""); setDeviceText(""); setEntityId("");
+    setLabel(""); clearDevice();
     setAmount(""); setNote(""); setPhotoIds([]); setCategory("minor");
   };
 
@@ -72,15 +86,14 @@ export default function SpendTab(
     setNote(c.note ?? "");
     setCategory(c.category);
     setPhotoIds(c.photoIds);
-    setEntityId(c.entityId ?? "");
-    setDeviceText(c.deviceLabel ?? "");
+    selectDevice(c.entityId ?? "", c.deviceLabel ?? "");
   };
 
-  const b = budgetStatus(data.costs, month);
+  const b = budgetStatus(data.costs, month, terms);
   const amountIdr = parseAmount(amount);
 
   const generateStatement = () => {
-    setStatement(buildSpendStatement(data, month, villaName));
+    setStatement(buildSpendStatement(data, month, villaName, terms));
     setStatementSaved(false);
   };
   const downloadStatement = () => {
@@ -101,9 +114,6 @@ export default function SpendTab(
     setStatement(doc.markdown);
     setStatementSaved(true);
   };
-  const projected = b.minorSpend + (category === "minor" ? amountIdr : 0);
-  const projectedOver = b.cap > 0 && projected >= b.cap;
-
   // Months that actually have entries, newest first — plus the current month so
   // it's always selectable even before anything is recorded in it.
   const months = [...new Set([monthKey(Date.now()), ...data.costs.map((c) => monthKey(c.at))])]
@@ -111,18 +121,22 @@ export default function SpendTab(
 
   return (
     <div className="fm-stack">
+      {/* The terms are the villa's agreement, set by whoever administers the
+          kiosk — the shared config only the owner may write. */}
+      {roleCan(role, "editConfig") && <ContractTermsEditor />}
       <label className="fm-field" style={{ maxWidth: 220 }}>
         <span>Month</span>
-        <select value={month} onChange={(e) => { setMonth(e.target.value); setStatement(null); setStatementSaved(false); }}>
-          {months.map((m) => <option key={m} value={m}>{m}</option>)}
-        </select>
+        <Dropdown value={month} ariaLabel="Month" onChange={(m) => { setMonth(m); setStatement(null); setStatementSaved(false); }}
+          options={months.map((m) => ({ value: m, label: m }))} />
       </label>
 
       <div className={`fm-cap ${b.state}`}>
         <div className="fm-cap-head">
-          <strong>{formatMoney(b.minorSpend)}</strong>
+          <strong>{money(b.minorSpend)}</strong>
           <span className="muted">
-            {b.cap > 0 ? `of ${formatMoney(b.cap)} Minor Maintenance cap` : "Minor Maintenance spend (no cap configured)"}
+            {b.cap > 0
+              ? `${terms.cappedName} spend, of a ${money(b.cap)} monthly cap`
+              : `${terms.cappedName} spend (no monthly cap set)`}
           </span>
         </div>
         {b.cap > 0 && (
@@ -132,20 +146,19 @@ export default function SpendTab(
         )}
         {b.state === "exceeded" && (
           <p className="fm-cap-note">
-            Cap reached. Further spend this month is Major maintenance, on whatever
-            terms your own agreement sets for spend beyond it.
+            Cap reached. Further spend this month belongs to {terms.uncappedName}, on
+            whatever terms your own agreement sets for spend beyond it.
           </p>
         )}
         {b.state === "approaching" && (
           <p className="fm-cap-note">
-            Approaching the cap — decide now whether upcoming work is Minor or should
-            be raised as Major maintenance.
+            Approaching the cap — decide now whether upcoming work is {terms.cappedName} or
+            should be recorded as {terms.uncappedName}.
           </p>
         )}
         {b.majorSpend > 0 && (
           <p className="fm-cap-note">
-            Plus {formatMoney(b.majorSpend)} recorded as Major maintenance (Owner&rsquo;s
-            account, outside the cap).
+            Plus {money(b.majorSpend)} recorded as {terms.uncappedName} (outside the cap).
           </p>
         )}
       </div>
@@ -162,12 +175,8 @@ export default function SpendTab(
           <div className="fm-field">
             <span>Device (search, or type one not listed — leave blank for a whole-villa expense)</span>
             <DeviceSearchPicker
-              value={deviceText}
+              {...device.pickerProps}
               options={deviceOptions}
-              matchedEntityId={entityId || undefined}
-              onChangeText={(text) => { setDeviceText(text); setEntityId(""); }}
-              onSelect={(opt) => selectDevice(opt.entityId, opt.label)}
-              onClear={clearDevice}
             />
           </div>
           <label className="fm-field">
@@ -184,45 +193,18 @@ export default function SpendTab(
             onChange={setNote}
             placeholder="e.g. Second refill this quarter — check for a leak"
           />
-          <label className="fm-field">
-            <span>Amount{MONEY_CURRENCY ? ` (${MONEY_CURRENCY})` : ""}</span>
-            <input value={amount} inputMode="numeric"
-              onChange={(e) => setAmount(e.target.value)} placeholder="450000" />
-          </label>
-          <label className="fm-field">
-            <span>Category</span>
-            <select value={category} onChange={(e) => setCategory(e.target.value as "minor" | "major")}>
-              {/* Neutral words: which contract clause or account a category
-                  maps to is one villa's arrangement (hard-rules.py, 3b). */}
-              <option value="minor">Minor — routine maintenance</option>
-              <option value="major">Major — larger works</option>
-            </select>
-          </label>
-
-          {category === "minor" && amountIdr > 0 && (
-            <div className={`fm-banner ${projectedOver ? "warn" : ""}`}>
-              {/* b.cap, NOT the raw constant — see fmEngine's budgetStatus, where
-                  cap <= 0 means "no cap configured yet" and every other line in
-                  this file already gates on it. This one did not, and the shipped
-                  default is 0, so an unconfigured install read "…would become
-                  IDR 450,000 of IDR 0" while projectedOver was correctly false —
-                  a number with no warning attached to it. */}
-              This month would become {formatMoney(projected)} of {formatMoney(b.cap)}
-              {projectedOver && " — over the cap. Consider recording it as Major maintenance instead."}
-            </div>
-          )}
+          <CostFields amount={amount} onAmount={setAmount} category={category} onCategory={setCategory}
+            replacing={editingId ?? undefined} />
 
           <div className="fm-field">
             <span>Receipt / photo</span>
             <EvidenceRow photoIds={photoIds} onChange={setPhotoIds} />
           </div>
 
-          <div className="modal-actions" style={{ marginTop: 8 }}>
-            <button className="btn ghost" onClick={resetForm}>Cancel</button>
-            <button
-              className="btn primary"
-              disabled={!label.trim() || amountIdr <= 0}
-              onClick={async () => {
+          <FormActions
+            error={formError} onCancel={resetForm} disabled={!label.trim() || amountIdr <= 0}
+            saveLabel={editingId ? "Save changes" : "Save"}
+            onSave={async () => {
                 const fields = {
                   amountIdr, label: label.trim(), category, photoIds,
                   note: note.trim() || undefined,
@@ -233,12 +215,13 @@ export default function SpendTab(
                 // `at` is set once, when the spend happened, and is never
                 // rewritten by a later correction — it is what the monthly
                 // total and the cap are computed from.
-                if (editingId) await updateCost(editingId, fields);
-                else await addCost({ ...fields, at: new Date().toISOString() });
-                resetForm();
+                const { done, note: why } = fmSaveOutcome(editingId
+                  ? await updateCost(editingId, fields)
+                  : await addCost({ ...fields, at: new Date().toISOString() }));
+                // Empty the form only when saved or queued (2.496.252).
+                if (done) resetForm(); else setFormError(why);
               }}
-            >{editingId ? "Save changes" : "Save"}</button>
-          </div>
+          />
         </div>
       )}
 
@@ -249,14 +232,15 @@ export default function SpendTab(
         {b.entries.sort((a, c) => Date.parse(c.at) - Date.parse(a.at)).map((c) => (
           <ErasableRow
             key={c.id}
-            intent={{ title: "Erase this spend entry", detail: `${c.label} — ${formatMoney(c.amountIdr)}` }}
+            intent={{ title: "Erase this spend entry", detail: `${c.label} — ${money(c.amountIdr)}` }}
             erase={(token) => removeCost(c.id, token)}
             onOpen={() => openEditor(c)}
           >
             <div className="fm-row-main">
               <div className="fm-row-title">
                 <strong>{c.label}</strong>
-                <span className="fm-clause">{c.category === "minor" ? "Minor" : "Major"}</span>
+                <span className="fm-clause">{categoryName(terms, c.category)}</span>
+                <AgentMark record={c} />
               </div>
               <div className="fm-row-sub muted">{localStamp(c.at)}</div>
               {c.note && <div className="fm-timeline-note">{c.note}</div>}
@@ -280,13 +264,13 @@ export default function SpendTab(
                 </div>
               )}
             </div>
-            <span className="fm-amount">{formatMoney(c.amountIdr)}</span>
+            <span className="fm-amount">{money(c.amountIdr)}</span>
           </ErasableRow>
         ))}
       </div>
 
       {/* A standalone statement for this month — same explicit Generate ->
-          Save shape as the Report tab (see fmReport.buildSpendStatement),
+          Save shape as the Recap tab (see fmDocuments.buildSpendStatement),
           for handing THIS month's spend over on its own without the rest of
           the operational annex, and for keeping a point-in-time copy even
           after entries above are later edited or removed. */}
@@ -300,7 +284,7 @@ export default function SpendTab(
           <Download size={16} /> Download .md
         </button>
       </div>
-      {statement && <ReportPreview markdown={statement} />}
+      {statement && <MarkdownPreview markdown={statement} />}
 
       <SavedDocumentsList kind="spend" onOpen={reopenStatement} />
     </div>

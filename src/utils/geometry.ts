@@ -14,6 +14,19 @@ export interface Pt2 {
   z: number;
 }
 
+/** The XZ box around `pts`, or null for none. Three files wrote the
+ *  min/max loop out (2.496.263). */
+export function boundsXZ(pts: Iterable<Pt2>): { minX: number; maxX: number; minZ: number; maxZ: number } | null {
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  for (const p of pts) {
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.z < minZ) minZ = p.z;
+    if (p.z > maxZ) maxZ = p.z;
+  }
+  return minX <= maxX ? { minX, maxX, minZ, maxZ } : null;
+}
+
 /** Ray-casting point-in-polygon test on the XZ plane. */
 export function pointInPolygon(x: number, z: number, poly: Pt2[]): boolean {
   let inside = false;

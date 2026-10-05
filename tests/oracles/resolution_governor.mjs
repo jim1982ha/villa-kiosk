@@ -8,6 +8,7 @@
 // latched at native and switched the valve off on every DPR<=2 machine
 // (2.329.0), and a gate that must read RENDER time, never the frame gap.
 import { register } from "node:module";
+import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { ResolutionGovernor, startingScale, VALVE_SAMPLE_MIN } = await import("@/babylon/resolutionGovernor");
@@ -71,6 +72,9 @@ console.log("\n  the burst:");
   const d = device(2);
   const b19 = burst(d, VALVE_SAMPLE_MIN - 1, 60, 55);
   ck(`${VALVE_SAMPLE_MIN - 1} gaps: too few for the valve to act`, d.level === 0.5 && b19.gaps.length === VALVE_SAMPLE_MIN - 1, [d.level, b19.gaps.length]);
+  ck("  ...and the governor says so itself (SceneManager asks hasEnoughSamples, not the constant)",
+     /this\.governor\.hasEnoughSamples/.test(readFileSync(new URL("../../src/babylon/SceneManager.ts", import.meta.url), "utf8"))
+     && !/VALVE_SAMPLE_MIN/.test(readFileSync(new URL("../../src/babylon/SceneManager.ts", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "")));
   burst(d, VALVE_SAMPLE_MIN, 60, 55);
   ck(`${VALVE_SAMPLE_MIN}: the valve acts — whatever the telemetry cap says (it used to gate it)`, d.level > 0.5, d.level);
   const g = device(2);

@@ -30,11 +30,14 @@ ROOT = Path(__file__).resolve().parent.parent
 
 #: Prose states what the code must not DO; a hostname quoted in a sentence is
 #: not a dependency. Lock files and binaries carry no fetch. `.github/` is CI —
-#: it is never in the image.
+#: it is never in the image. `tools/` is the release tool (it asks GitHub's API
+#: whether a pushed commit's CI failed, 2026-10-05): never in the image either,
+#: and only while .dockerignore keeps it out of the build context — checked
+#: below, so this exemption cannot outlive its reason.
 SKIP_FILES = re.compile(
     r"(^|/)(CHANGELOG\.md|DOCS\.md|README\.md|package-lock\.json)$|"
     r"\.(png|jpg|jpeg|ico|woff2|glb|wasm|svg|map)$|"
-    r"^\.github/")
+    r"^\.github/|^tools/")
 
 #: The LAN this add-on exists to talk to, plus one XML namespace identifier that
 #: is never fetched. `github.com` is permitted ONLY in the two descriptors whose
@@ -112,6 +115,11 @@ def main() -> int:
             for m in HOSTS.finditer(line):
                 host = m.group(0)
                 if LAN_OR_INERT.search(host):
+                    continue
+                # A name with no dot resolves only on the local network: the
+                # Supervisor's own DNS (`homeassistant`, an add-on's hostname).
+                # The VESTA Agent's manifest on main names both (2.496.307).
+                if "." not in host.split("://", 1)[1]:
                     continue
                 if "github.com" in host and REPO_LINK_OK.search(rel):
                     continue          # the descriptor's whole job is this link
@@ -225,6 +233,10 @@ def main() -> int:
 
     report("an LLM provider is reachable from shipped source", providers,
            "no provider host anywhere shipped")
+    # tools/ is exempt above only because the image never sees it
+    ignored = [l.strip() for l in (ROOT / ".dockerignore").read_text().splitlines()]
+    if "tools" not in ignored:
+        third_party.append(".dockerignore  no longer keeps tools/ out of the image — its hosts now count")
     report("a third-party host is named in shipped source", third_party,
            "no third-party host anywhere shipped")
     report("an entity_id is hardcoded in executable code", ids,

@@ -8,14 +8,16 @@
 
 import { useState } from "react";
 import { Check, CalendarClock, Trash2 } from "lucide-react";
-import { useFmData } from "@/fm/FmDataContext";
-import { formatMoney, isTicketOpen, localStamp, scheduleBoard, shortDate, type ScheduleStatus, parseAmount, fmAttention } from "@/fm/fmEngine";
-import { budgetStatus, wouldExceedCap } from "@/fm/fmEngine";
-import { MONEY_CURRENCY } from "@/fm/fmTypes";
+import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
+import { budgetStatus, isTicketOpen, localStamp, scheduleBoard, shortDate, type ScheduleStatus, parseAmount, fmAttention } from "@/fm/fmEngine";
 import EvidenceRow from "./EvidenceRow";
 import RecentWorkList from "./RecentWorkList";
 import NotesField from "./NotesField";
 import InlineConfirm from "@/components/common/InlineConfirm";
+import AgentMark from "./AgentMark";
+import { formatMoney } from "@/utils/money";
+import CostFields from "./CostFields";
+import FormActions from "./FormActions";
 
 const STATE_LABEL: Record<ScheduleStatus["state"], string> = {
   overdue: "Overdue",
@@ -118,6 +120,7 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
                 <strong>{s.schedule.title}</strong>
                 {s.schedule.clause && <span className="fm-clause">Cl. {s.schedule.clause}</span>}
                 {s.schedule.room && <span className="fm-clause">{s.schedule.room}</span>}
+                <AgentMark record={s.schedule} />
               </div>
               <div className="fm-row-sub muted">
                 {dueText(s)} · every {s.schedule.everyDays} days
@@ -152,8 +155,10 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
           scheduleId={openId}
           onCancel={() => setOpenId(null)}
           onSave={async (payload, cost) => {
-            await logCompletion(payload, cost);
-            setOpenId(null);
+            // Close only when saved or queued; a refused save keeps the form (2.496.252).
+            const { done, note: why } = fmSaveOutcome(await logCompletion(payload, cost));
+            if (done) setOpenId(null);
+            return done ? null : why;
           }}
           onOpenEntity={onOpenEntity}
         />
@@ -163,7 +168,7 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
 }
 
 /** The completion form. Cost is optional and defaults to Minor — but the moment
- *  it would take the month past the configured Minor Maintenance cap (see
+ *  it would take the month past the owner's monthly cap (see
  *  fmEngine's budgetStatus().cap), the operator is told BEFORE
  *  saving, because that is when the minor-vs-major decision is still theirs
  *  to make. No-op with no cap configured — wouldExceedCap is never true then. */
@@ -175,7 +180,7 @@ function LogCompletion({
   onSave: (
     c: { scheduleId: string; at: string; by: string; note?: string; photoIds: string[] },
     cost?: { amountIdr: number; label: string; category: "minor" | "major" },
-  ) => Promise<void>;
+  ) => Promise<string | null>;   // null = saved/queued; else why it was refused
   onOpenEntity: (id: string) => void;
 }) {
   const { data } = useFmData();
@@ -185,9 +190,10 @@ function LogCompletion({
   const [photoIds, setPhotoIds] = useState<string[]>([]);
   const [amount, setAmount] = useState("");
   const [saving, setSaving] = useState(false);
+  /** Why the save was refused — the form keeps what was typed (2.496.252). */
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const amountIdr = parseAmount(amount);
-  const willExceed = amountIdr > 0 && wouldExceedCap(data.costs, amountIdr);
 
   return (
     <div className="fm-form">
@@ -206,44 +212,30 @@ function LogCompletion({
         placeholder="What was done, anything found or worth flagging for next time"
       />
 
-      <label className="fm-field">
-        <span>Cost (optional{MONEY_CURRENCY ? `, ${MONEY_CURRENCY}` : ""})</span>
-        <input value={amount} inputMode="numeric"
-          onChange={(e) => setAmount(e.target.value)} placeholder="e.g. 450000" />
-      </label>
-
-      {willExceed && (
-        <div className="fm-banner warn">
-          This takes the month past the {formatMoney(budgetStatus(data.costs).cap)} Minor
-          Maintenance cap. Spend beyond it is Major maintenance — record it as that
-          category instead if that's what your own agreement calls for.
-        </div>
-      )}
+      {/* A completion's cost is always the capped kind (CostFields). */}
+      <CostFields amount={amount} onAmount={setAmount} optional />
 
       <div className="fm-field">
         <span>Photo evidence</span>
         <EvidenceRow photoIds={photoIds} onChange={setPhotoIds} />
       </div>
 
-      <div className="modal-actions" style={{ marginTop: 8 }}>
-        <button className="btn ghost" onClick={onCancel}>Cancel</button>
-        <button
-          className="btn primary"
-          disabled={saving}
-          onClick={async () => {
+      <FormActions
+        error={saveError} onCancel={onCancel} disabled={saving}
+        saveLabel={saving ? "Saving…" : "Save completion"}
+        onSave={async () => {
             setSaving(true);
-            await onSave(
+            setSaveError(null);
+            const refused = await onSave(
               { scheduleId, at: new Date().toISOString(), by: by.trim(), note: note.trim() || undefined, photoIds },
               amountIdr > 0
                 ? { amountIdr, label: schedule?.title ?? "Maintenance", category: "minor" }
                 : undefined,
             );
             setSaving(false);
+            if (refused) setSaveError(refused);
           }}
-        >
-          {saving ? "Saving…" : "Save completion"}
-        </button>
-      </div>
+      />
     </div>
   );
 }

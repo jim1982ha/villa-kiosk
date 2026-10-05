@@ -58,3 +58,20 @@ export function isDoublePress(elapsedMs: number, dx: number, dy: number): boolea
   if (elapsedMs < 0 || elapsedMs >= DOUBLE_PRESS_MS) return false;
   return Math.hypot(dx, dy) < DOUBLE_PRESS_TOL_PX;
 }
+
+// ── Holds on DOM controls: one table, one entry per kind of surface ────────
+// ⚠️ THESE DIFFER FROM LONG_PRESS_MS ON PURPOSE, and lived in hooks/useLongPress
+// as private constants until 2.496.252 — so "how long is a hold" had answers in
+// two files and read as drift. They are product decisions, kept as they were:
+
+/** A hold that DESTROYS something (the superadmin delete gate on Facility
+ *  rows): deliberately slower, so it is hard to trip by accident. */
+export const HOLD_MS_DESTRUCTIVE = 600;
+/** The top bar's icons and floor buttons — what they have always used. A hold
+ *  on a top-bar icon competes with nothing; 600 there would be a 25% slower
+ *  hold on the app's most-used buttons. */
+export const HOLD_MS_HUD = 480;
+/** Drift a DOM hold tolerates, per axis, before it is a scroll: tighter than
+ *  TAP_MOVE_TOL_PX because on a phone the whole Facility screen scrolls, and a
+ *  hold that fires mid-flick would be worse than no gesture at all. */
+export const HOLD_SCROLL_TOL_PX = 10;

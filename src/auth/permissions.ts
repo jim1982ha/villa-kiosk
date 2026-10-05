@@ -1,8 +1,9 @@
 // src/auth/permissions.ts
-// THE role-based access control matrix. Edit the PERMISSION_MATRIX table to
-// change what a profile can see or do — nothing else in the app needs to
-// change. Components never read the table directly; they ask the resolver
-// functions at the bottom, so the table's shape can evolve freely.
+// THE role-based access control resolvers. The table itself is
+// rootfs/usr/share/vesta/roles.json, shared with the add-on's proxy (which
+// reads it for what each profile may DO) — edit a profile's rights THERE.
+// Components never read the table directly; they ask the resolver functions
+// at the bottom, so the table's shape can evolve freely.
 //
 // Categories are the existing map-filter categories (config/EntityCategories.ts
 // — comfort / light / network / energy / access_control / others) and the
@@ -16,40 +17,53 @@ import type { AppConfig } from "@/config/AppConfig";
 import { CATEGORY_ORDER, effectiveCategory, subjectOf } from "@/config/EntityCategories";
 import { mappingForEntityId } from "@/config/EntityMap";
 import type { Role } from "./roles";
+import ROLE_TABLE from "../../rootfs/usr/share/vesta/roles.json" with { type: "json" };
 
-/** Things a profile can DO (beyond seeing devices). */
-export type Capability =
+/** Things a profile can DO (beyond seeing devices). roles.json may name
+ *  only these (tests/oracles/role_table.mjs); the proxy's own `administer`
+ *  sits here too so the one table stays one list. */
+export const CAPABILITIES = [
+  /** Server-side only: exempt from the proxy's Home Assistant allow-lists.
+   *  The app never asks for it. */
+  "administer",
   /** Toggle / drive devices from the map and panels. */
-  | "controlEntities"
+  "controlEntities",
   /** Open the Settings modal at all. */
-  | "openSettings"
+  "openSettings",
   /** Appearance / behaviour tweaks inside Settings (theme, quality, icons…). */
-  | "customizeAppearance"
+  "customizeAppearance",
   /** The full Config Editor modal: villa coordinates, bindings, entity metadata. */
-  | "editConfig"
+  "editConfig",
   /** Upload / replace / reset the central 3D model and SH3D plan. */
-  | "manageModel"
+  "manageModel",
   /** The Facility Manager workspace: maintenance schedule, completions with
    *  photo evidence, maintenance spend against the configured Minor
    *  Maintenance cap, and fault tickets. Held by BOTH the facility manager
    *  (whose job it is) and
    *  the owner (who is accountable for the property and signs off the monthly
    *  report), so this is not simply "ops-only". */
-  | "manageFacility"
+  "manageFacility",
   /** May file a fault report. Held by EVERY profile, guests included: the
    *  person living in the villa is the one most likely to notice something
    *  broken, and a report they cannot file is a fault nobody records. It is
    *  NOT manageFacility — a guest files a report and can do nothing else with
    *  it; triage, status, cost and resolution stay with owner/ops, and the
    *  add-on enforces that shape server-side (_fm_guest_write_ok). */
-  | "reportFault"
+  "reportFault",
   /** Lists and counts cover the villa's devices that are NOT on the 3D map
    *  too. A guest's do not: an off-map device has no presence a guest could
    *  see, so it is neither listed nor counted (listedDevices). */
-  | "listUnmappedDevices"
+  "listUnmappedDevices",
   /** The count of firmware/add-on updates Home Assistant has waiting — a
    *  maintenance signal for whoever administers the kiosk. */
-  | "seeUpdates";
+  "seeUpdates",
+  /** The VESTA Agent's status, messages and reports, and its buttons where a
+   *  message allows this profile (docs/agent-integration/PLAN.md A8). Never a
+   *  guest's: a guest does not see the agent at all. The add-on holds the same
+   *  name (ROLE_CAPABILITIES) and refuses /agent-* to a session without it. */
+  "viewAgent",
+] as const;
+export type Capability = (typeof CAPABILITIES)[number];
 
 export interface RolePermissions {
   /** Device categories this profile sees on the map. "all" = every category. */
@@ -94,36 +108,7 @@ export interface RolePermissions {
  *             (maintenance schedule, evidence, spend, faults). Still no
  *             config/model administration — that stays with the owner.
  */
-const PERMISSION_MATRIX: Record<Role, RolePermissions> = {
-  guest: {
-    allowedCategories: ["comfort", "light", "network", "access_control"],
-    deniedTypes: ["camera", "binary_sensor"],
-    capabilities: ["controlEntities", "openSettings", "customizeAppearance", "reportFault"],
-    // comfortRange deliberately unset — see its declaration. The A/C stepper
-    // falls back to the device's own reported limits.
-  },
-  owner: {
-    allowedCategories: "all",
-    deniedTypes: [],
-    capabilities: [
-      "controlEntities", "openSettings", "customizeAppearance", "editConfig", "manageModel",
-      "manageFacility", "reportFault", "listUnmappedDevices", "seeUpdates",
-    ],
-  },
-  ops: {
-    allowedCategories: "all",
-    deniedTypes: [],
-    // Facility managers get Settings access (open + personal appearance/comfort
-    // tweaks), same as a guest — the admin-only sections (editConfig,
-    // manageModel) stay gated to the owner. manageFacility is the one thing
-    // they hold that the guest does not: the maintenance/fault workspace that
-    // evidences the property's own maintenance/inspection obligations.
-    capabilities: [
-      "controlEntities", "openSettings", "customizeAppearance", "manageFacility", "reportFault",
-      "listUnmappedDevices",
-    ],
-  },
-};
+const PERMISSION_MATRIX = ROLE_TABLE.profiles as Record<Role, RolePermissions>;
 
 export function hasCapability(role: Role, cap: Capability): boolean {
   return PERMISSION_MATRIX[role].capabilities.includes(cap);

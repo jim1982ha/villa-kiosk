@@ -1,0 +1,44 @@
+{
+  "_what": "The agreement between the VESTA Kiosk and the VESTA Agent (the /agent/v1 interface), declared ONCE. The Kiosk's proxy (rootfs/usr/bin/supervisor-proxy.py) checks against it, the app (src/agent/agentApi.ts) reads its lists, and the VESTA Agent host keeps a copy (agent-host/contract/agent-contract.json) that its CI compares with this file. tests/agent-interface.py replays the samples through the real proxy; tests/oracles/agent_view.mjs parses the sample view. A change a version-1 agent cannot survive is a new version, not an edit to this one.",
+  "version": 1,
+  "status": { "states": ["not_configured", "offline", "online"] },
+  "message": {
+    "kinds": ["message", "report", "recommendation"],
+    "severities": ["info", "warning", "critical"],
+    "states": ["open", "answered", "expired"],
+    "limits": { "title": 200, "body": 20000, "entities": 100, "buttons": 6, "buttonLabel": 60 },
+    "buttonIdPattern": "^[A-Za-z0-9_-]{1,40}$",
+    "entityPattern": "^[a-z_]+\\.[a-z0-9_]+$"
+  },
+  "_answering": "Who may press a message's buttons: every profile holding this capability in roles.json (never a guest).",
+  "answeringCapability": "viewAgent",
+  "samples": {
+    "_postMessage": "What an agent POSTs to /agent/v1/messages.",
+    "postMessage": {
+      "kind": "recommendation",
+      "title": "Pool filter due for cleaning",
+      "body": "Pressure has risen for three days. Clean the filter this week?",
+      "severity": "warning",
+      "entities": [],
+      "buttons": [{ "id": "yes", "label": "Yes, schedule it" }, { "id": "later", "label": "Later" }]
+    },
+    "_messagesView": "What the Kiosk app reads from /agent-messages (one message per field the app uses).",
+    "messagesView": {
+      "messages": [{
+        "id": "msg_0123456789abcdef",
+        "kind": "recommendation",
+        "title": "Pool filter due for cleaning",
+        "body": "Pressure has risen for three days. Clean the filter this week?",
+        "severity": "warning",
+        "entities": [],
+        "buttons": [{ "id": "yes", "label": "Yes, schedule it" }, { "id": "later", "label": "Later" }],
+        "allowed_profiles": ["owner", "ops"],
+        "expires_at": null,
+        "created_at": "2026-09-30T08:00:00Z",
+        "state": "open",
+        "answer": null,
+        "can_answer": true
+      }]
+    }
+  }
+}

@@ -1,0 +1,59 @@
+#!/bin/sh
+# shellcheck shell=sh
+# What a service's crash means for the whole add-on — every s6 `finish` script
+# calls this: `vesta-service-finish <service> <exit code> <signal>`.
+#
+# ⚠️ NOT THE COMMUNITY EXAMPLE'S RULE, ON PURPOSE. hassio-addons/app-example
+# halts the container on EVERY crash, so Home Assistant sees the add-on stop
+# and its watchdog restarts it. Home Assistant's watchdog is OFF unless the
+# owner turns it on (Supervisor: `watchdog` defaults to false), so that rule
+# would leave the wall dark after one transient crash that s6 heals in a
+# second today.
+#
+# So: a crash is restarted in place by s6, as before — until the service
+# crashes CRASH_LIMIT times within CRASH_WINDOW seconds. That is a loop, not a
+# blip; the container is then stopped with the service's exit code, so Home
+# Assistant shows the add-on as failed (it used to show "running" while s6
+# restarted a dead nginx once a second, forever), and the watchdog — if the
+# owner turned it on — starts a fresh container. The VESTA Agent applies the
+# same idea in vesta_host/supervise.py.
+
+CRASH_LIMIT=5
+CRASH_WINDOW=120
+
+service="$1"
+code="$2"
+signal="$3"
+# Overridable only so tests/service-finish.py can run this off the container.
+results=${VESTA_FINISH_RESULTS:-/run/s6-linux-init-container-results/exitcode}
+crashes=${VESTA_FINISH_DIR:-/run/vesta-crashes}
+halt=${VESTA_FINISH_HALT:-/run/s6/basedir/bin/halt}
+
+# 0: it exited cleanly — s6 starts it again. 256 + SIGTERM: the container is
+# stopping, which s6 is already doing.
+[ "$code" = "0" ] && exit 0
+if [ "$code" = "256" ]; then
+  [ "$signal" = "15" ] && exit 0
+  code=$((128 + signal))
+fi
+
+log="$crashes/$service"
+mkdir -p "$crashes"
+now=$(date +%s)
+echo "$now" >> "$log"
+# Keep only this window's crashes, and count them.
+recent=$(awk -v cut=$((now - CRASH_WINDOW)) '$1 >= cut' "$log")
+printf '%s\n' "$recent" > "$log"
+n=$(printf '%s\n' "$recent" | grep -c .)
+
+if [ "$n" -lt "$CRASH_LIMIT" ]; then
+  echo "[$service] exited with code $code (crash $n of $CRASH_LIMIT within ${CRASH_WINDOW}s) — restarting"
+  exit 0
+fi
+
+echo "[$service] crashed $n times within ${CRASH_WINDOW}s — stopping the add-on so Home Assistant shows it failed"
+# Another service may have stopped the container first: keep its code.
+if [ "$(cat "$results" 2>/dev/null || echo 0)" = "0" ]; then
+  echo "$code" > "$results"
+fi
+exec "$halt"

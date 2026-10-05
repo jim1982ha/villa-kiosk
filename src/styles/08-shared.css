@@ -41,7 +41,7 @@
      Reduced-motion asks for no VESTIBULAR motion, not for no feedback, so
      these keep animating with the movement taken out: a slow opacity breath
      conveys "still working" while nothing travels, rotates or scales. */
-  .spinner, .conn-dot.connecting .dot, .state-timeline-skeleton {
+  .spinner, .conn-dot.connecting .dot, .status-dot.pending, .state-timeline-skeleton {
     animation: reduced-motion-breathe 1.6s ease-in-out infinite !important;
   }
   /* The skeleton's own look is a moving GRADIENT, so the breath above has to
@@ -90,6 +90,27 @@
   pointer-events: none;
 }
 .connection-banner svg { flex: 0 0 auto; color: var(--status-warning); }
+
+/* The installed app's update notice (UpdateBanner): the connection banner's
+   pill, one row below it so the two never overlap (the bottom edge is the
+   category bar's), in the accent colour (news, not a fault), and a button —
+   the whole pill is the tap target. */
+.update-banner {
+  position: absolute;
+  top: calc(var(--safe-top) + 52px + 8px + 48px);
+  left: 50%; transform: translateX(-50%); z-index: 75;
+  max-width: min(560px, calc(100% - 32px));
+  min-height: var(--touch-min);
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 8px 16px;
+  background: color-mix(in srgb, var(--accent) 16%, var(--bg-modal));
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 999px;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+.update-banner svg { flex: 0 0 auto; color: var(--accent); }
 .conn-banner-short { display: none; }
 
 /* Phone: the full sentence wrapped to five lines inside a shrink-to-fit pill,
@@ -112,24 +133,26 @@
 }
 
 /* --- Cockpit page (CockpitModal) — villa-wide status report ------------- */
-.cockpit-health {
-  display: flex; align-items: center; gap: 10px;
-  padding: 12px 14px; border-radius: 12px;
-  font-size: var(--text-md); font-weight: 500;
-}
-.cockpit-health svg { flex: 0 0 auto; }
-.cockpit-health-ok { background: color-mix(in srgb, var(--status-on) 14%, transparent); color: var(--status-on); }
-.cockpit-health-warn { background: color-mix(in srgb, var(--status-warning) 16%, transparent); color: var(--status-warning); }
-.cockpit-health-danger { background: color-mix(in srgb, var(--status-danger) 16%, transparent); color: var(--status-danger); }
-
 .cockpit-attention-list { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+/* One item: the row, with a fault's "Close" BESIDE it (the row itself may be
+   a button), and its "sure?" on a line of its own beneath, wrapping on a phone. */
+.cockpit-attention-item { display: flex; flex-direction: column; gap: 4px; }
+.cockpit-attention-line { display: flex; align-items: stretch; gap: 6px; }
+.cockpit-attention-line > .cockpit-attention-row { flex: 1 1 auto; min-width: 0; }
+.cockpit-attention-close {
+  flex: none; display: inline-flex; align-items: center; gap: 2px;
+  min-height: 36px; padding: 0 var(--space-2); font-size: var(--text-xs);
+}
+.cockpit-attention-confirm .modal-actions { flex-wrap: wrap; align-items: center; }
 .cockpit-attention-row {
   display: flex; align-items: center; gap: 10px; width: 100%;
   padding: 10px 12px; border-radius: 10px; text-align: left;
   background: var(--bg-input); border: none; color: inherit; font: inherit;
 }
 button.cockpit-attention-row.tappable { cursor: pointer; }
-button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var(--accent) 12%, var(--bg-input)); }
+@media (hover: hover) {
+  button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var(--accent) 12%, var(--bg-input)); }
+}
 .cockpit-attention-icon { flex: 0 0 auto; }
 /* These two were SWAPPED, which inverted the one distinction the status
    vocabulary exists to protect (utils/stateColors, babylon/colors): amber is
@@ -147,6 +170,19 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   font-size: var(--text-sm); color: var(--text-primary);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+/* A device with several problems (cockpitData.groupAttention): one line per
+   problem under its row, indented to the row's title (12px padding + 16px
+   icon + 10px gap), each fault with its own Close beside it. */
+.cockpit-attention-subs {
+  list-style: none; margin: 0; padding: 0 0 0 38px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.cockpit-attention-sub { display: flex; flex-direction: column; gap: 4px; }
+.cockpit-attention-sub-line { display: flex; align-items: center; gap: 8px; min-height: 36px; }
+.cockpit-attention-sub-text {
+  flex: 1 1 auto; min-width: 0; font-size: var(--text-xs); color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
 
 /* Room/Floor/Category selector header: wraps onto its own line below the
    "By ___" label on a narrow phone rather than clipping or overflowing —
@@ -157,58 +193,38 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
 .cockpit-pivot { flex: 0 0 auto; }
 
 .cockpit-category-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-top: 4px; }
-.cockpit-category-tile { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 12px; background: var(--bg-input); }
+/* ONE tile for rooms, floors and categories (2.496.235 — rooms and floors
+   were health bars). A real <button>: each opens that group's device list. */
+.cockpit-category-tile {
+  display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 12px;
+  background: var(--bg-input); border: none; width: 100%; min-width: 0;
+  color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.cockpit-category-tile:focus-visible {
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-input));
+}
+@media (hover: hover) {
+  .cockpit-category-tile:hover {
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-input));
+}
+}
 .cockpit-category-icon {
   flex: 0 0 auto; width: 34px; height: 34px; border-radius: 10px;
   display: flex; align-items: center; justify-content: center; color: #fff;
 }
-.cockpit-category-label { font-size: var(--text-sm); font-weight: 500; color: var(--text-primary); }
-
-.cockpit-pivot-list { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
-/* A real button (tap opens that room/floor's own device list, SummaryGroupPanel
-   reused from every other device-group view in the app) — reset to plain row
-   chrome first since a <button> otherwise brings its own border/background,
-   then the SAME layout the row always had (flex/gap unchanged) plus a hover
-   cue and the trailing chevron below. .cockpit-pivot-label itself is
-   untouched — only the row's own container gained interactivity. */
-.cockpit-pivot-row {
-  display: flex; align-items: center; gap: 10px; width: 100%;
-  background: none; border: none; padding: 3px 4px; margin: -3px -4px;
-  border-radius: 8px; color: inherit; font: inherit; text-align: left; cursor: pointer;
+/* A room or floor has no category colour: neutral, amber while one of its
+   devices is offline (the signal the bars used to carry). */
+.cockpit-category-icon.is-neutral { background: var(--bg-card); color: var(--text-secondary); }
+.cockpit-category-icon.is-warn {
+  background: color-mix(in srgb, var(--status-warning) 22%, var(--bg-card)); color: var(--status-warning);
 }
-.cockpit-pivot-row:hover, .cockpit-pivot-row:focus-visible {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-}
-.cockpit-pivot-label {
-  flex: 0 0 130px; font-size: var(--text-sm); color: var(--text-primary);
+.cockpit-tile-text { min-width: 0; }
+.cockpit-category-label {
+  font-size: var(--text-sm); font-weight: 500; color: var(--text-primary);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-/* The track IS the unavailable state — amber — and the green fill covers the
-   part that is reporting. One element instead of two, so the two segments can
-   never disagree about where the boundary is. */
-.cockpit-pivot-bar {
-  position: relative;
-  flex: 1 1 auto; height: 8px; border-radius: 999px;
-  background: color-mix(in srgb, var(--status-warning) 55%, var(--bg-input));
-  overflow: hidden;
-}
-.cockpit-pivot-bar-ok { height: 100%; background: var(--status-on); border-radius: inherit; }
-/* Per-device notches, one every --tick of the width. Faint on purpose: it is a
-   scale for reading the bar, not data of its own, so it should be legible when
-   looked for and invisible when not. Hidden once devices are thinner than a
-   notch, where it would read as texture rather than as divisions. */
-.cockpit-pivot-bar::after {
-  content: ""; position: absolute; inset: 0; pointer-events: none;
-  background: repeating-linear-gradient(
-    to right,
-    transparent 0, transparent calc(var(--tick) - 1px),
-    color-mix(in srgb, var(--bg-base) 55%, transparent) calc(var(--tick) - 1px), color-mix(in srgb, var(--bg-base) 55%, transparent) var(--tick));
-}
-@supports not (width: calc(var(--tick) - 1px)) { .cockpit-pivot-bar::after { display: none; } }
-.cockpit-pivot-count { flex: 0 0 26px; text-align: right; font-size: var(--text-xs); }
-.cockpit-pivot-chevron { flex: 0 0 auto; }
-
-.cockpit-energy-value { font-size: var(--text-display-sm); font-weight: 600; color: var(--text-primary); margin: 4px 0 0; }
+.cockpit-tile-line { font-size: var(--text-xs); }
+.cockpit-tile-line.is-warn { color: var(--status-warning); }
 
 .cockpit-activity-list { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
 /* Two columns where there is width for them, so the same 20 entries are read
@@ -307,19 +323,28 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   display: flex; align-items: center; gap: 10px;
   min-height: var(--touch-min); padding: 0 12px;
   border-radius: 12px; background: var(--bg-input);
+  /* Always 2px so a framed row and a plain one are the same size; the colour
+     (set inline from the room's chip frame) is transparent when it rests. */
+  border: 2px solid transparent;
   font-size: var(--text-md); color: var(--text-primary); text-align: left;
 }
-.room-choice-row:hover { background: var(--accent-soft); color: var(--accent); }
+@media (hover: hover) {
+  .room-choice-row:hover { background: var(--accent-soft); color: var(--accent); }
+}
 .room-choice-icon { flex: 0 0 auto; color: var(--text-dim); }
-.room-choice-row:hover .room-choice-icon { color: var(--accent); }
+@media (hover: hover) {
+  .room-choice-row:hover .room-choice-icon { color: var(--accent); }
+}
 .room-choice-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The count is why one row is distinguishable from the next, so it reuses the
    count-pill treatment the chip itself carries on the map. */
 .room-choice-count {
   flex: 0 0 auto; min-width: 24px; padding: 2px 8px;
-  border-radius: 999px; background: var(--bg-modal);
-  font-size: var(--text-xs); font-variant-numeric: tabular-nums;
-  color: var(--text-secondary); text-align: center;
+  border-radius: 999px;
+  font-size: var(--text-xs); font-weight: 600; font-variant-numeric: tabular-nums;
+  /* Background and ink set inline (colors.healthPill): red = needs attention,
+     amber = a device lost, green = all right — the map chip's count pill. */
+  text-align: center;
 }
 
 /* --- Badge hover tooltip (Dashboard) -------------------------------------
@@ -381,10 +406,55 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    "this is a warning" in text rather than in a badge. */
 .sev-warning { color: var(--status-warning); }
 
-@media (max-width: 720px) {
+@media (max-width: 640px) {
   /* ⚠️ ICON-ONLY AT THE PHONE TIER, where two labelled buttons plus a hint do
      not fit a 360px footer — the row wraps, and a wrapped footer is what makes
-     a dialog look broken. Square, --touch-min on both axes. */
-  .modal-footer-actions > button { width: var(--touch-min); padding: 0; }
+     a dialog look broken. Square, --touch-min on both axes. 640px is the
+     layout's phone tier (05-layout.css); a 641-720px screen — a tablet in
+     portrait — has room for the words, and showed bare glyphs (2.496.257).
+     ⚠️ `.modal-footer` IN THE SELECTOR IS LOAD-BEARING: `.modal-footer .btn`
+     (04-modals.css, padding 10px 20px) outranks a bare
+     `.modal-footer-actions > button`, so its side padding would stay in a
+     44px button and squeeze the icon to a 4px speck wherever nothing else
+     trims it — which is what the 641-720px screens showed. */
+  .modal-footer .modal-footer-actions > button { width: var(--touch-min); padding: 0; }
   .btn-label { display: none; }
 }
+
+/* The results list under a search picker (DeviceSearchPicker, EntityPicker) —
+   one look, written inline in both until 2.496.263. */
+.picker-dropdown {
+  position: absolute; z-index: 20; left: 0; right: 0; margin-top: 6px;
+  max-height: 260px; overflow-y: auto; background: var(--bg-overlay);
+  border: 1px solid var(--hairline-strong); border-radius: 10px;
+}
+
+/* ── THE DROPDOWN (common/Dropdown.tsx) ──────────────────────────────────
+   The app's own list in place of the platform's picker (2.496.275). The
+   button wears the form-field look every input in a dialog has; the list is
+   a --bg-modal sheet with 44 px rows (dropdownPlacement.DROPDOWN_ROW_PX) —
+   above every window (z 400: the topmost layer is 300). */
+.dropdown {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: 100%; min-height: 44px; padding: 10px 14px; border-radius: 10px;
+  background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--hairline);
+  font: inherit; font-size: var(--text-md); text-align: left; cursor: pointer;
+}
+.dropdown:focus-visible, .dropdown.is-open { border-color: var(--accent); outline: none; }
+.dropdown:disabled { opacity: 0.5; cursor: default; }
+.dropdown-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.dropdown-caret { flex: none; color: var(--text-secondary); transition: transform 0.15s ease; }
+.dropdown.is-open .dropdown-caret { transform: rotate(180deg); }
+.dropdown-list {
+  z-index: 400; overflow-y: auto; overscroll-behavior: contain; padding: 4px;
+  background: var(--bg-modal); color: var(--text-primary);
+  border: 1px solid var(--hairline-strong); border-radius: 12px; box-shadow: var(--elev-3);
+  outline: none; animation: modal-backdrop-in 0.12s ease-out;
+}
+.dropdown-option {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  min-height: 44px; box-sizing: border-box; padding: 10px 12px; border-radius: 8px;
+  font-size: var(--text-md); cursor: pointer;
+}
+.dropdown-option.is-active { background: var(--bg-input); }
+.dropdown-option.is-chosen { color: var(--accent); font-weight: 600; }

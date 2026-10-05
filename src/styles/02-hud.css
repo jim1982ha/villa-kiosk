@@ -42,7 +42,9 @@
      smaller than the category/alert pills beside it. Fixed height + flex
      centering (align-items: center above) matches .hud-group exactly
      instead, and tracks it automatically if --hud-pill-h ever changes. */
-  height: var(--hud-pill-h);
+  /* max(): on a phone the pills shrink to 42px but the app-icon tile keeps
+     the left rail's width (--hud-rail-w) — the chip is as tall as its tile. */
+  height: max(var(--hud-pill-h), var(--hud-rail-w));
   /* Left padding matches .hud-stack's own 4px (not the right side's 16px,
      kept for the villa-name text) so the home icon's left edge lines up
      exactly under the 1F/2F floor buttons directly below it — both are now
@@ -62,7 +64,17 @@
      switch below the bar. It truncates instead (see .hud-title), and the
      progressive rules further down drop the clock, then the name entirely,
      before it can get that tight. */
-  white-space: nowrap; min-width: 0; overflow: hidden;
+  white-space: nowrap; min-width: 0;
+}
+/* ⚠️ THE TEXT CLIPS, NOT THE CHIP (2.496.242). `overflow: hidden` used to sit
+   on .hud-brand itself, which also cut off the app-icon tile's shadow — the
+   shadow it now shares with the floor block below (see .hud-home-btn). The
+   villa name, connection dot and clock clip here instead; stretched to the
+   chip's full height so the name's halo and the clock's pill are not clipped
+   top and bottom. */
+.hud-brand-text {
+  display: flex; align-items: center; gap: inherit; align-self: stretch;
+  min-width: 0; overflow: hidden;
 }
 /* The name used to be legible because it sat on the brand capsule's glass.
    With the capsule gone it is type directly over the villa render, which can
@@ -131,10 +143,35 @@
 }
 /* Hover/active still need a readable plate under them, and an active filter
    would smear the fill rather than outline it. */
-.hud-right-inline .icon-btn:hover,
 .hud-right-inline .icon-btn.active { filter: none; }
+@media (hover: hover) {
+  .hud-right-inline .icon-btn:hover { filter: none; }
+}
 
 .hud-right-inline { display: flex; align-items: center; gap: 8px; }
+
+/* Signed-in badge: the role's letter(s) in a thin circle, drawn like the icons
+   beside it (owner, 2026-10-01: the filled 40px disc "feels completely not
+   integrated" and its letter sat off-centre). The BUTTON is a plain icon-btn —
+   same size, hover and halo as the gear; only the glyph inside is the circle,
+   about the size of a 24px icon, filled like the category buttons. The
+   letter is centred on its cap height, not its line box, so "O" and "FM"
+   sit in the middle of the ring. */
+.role-glyph {
+  display: inline-grid; place-items: center;
+  width: 26px; height: 26px; box-sizing: border-box; border-radius: 50%;
+  /* Filled with the category buttons' own green and their icon colour, in
+     every theme (owner, 2026-10-01): var(--accent) / var(--text-on-accent),
+     the pair .hud-group .icon-btn.active paints. */
+  background: var(--accent); color: var(--text-on-accent);
+  font-family: var(--font-ui); font-size: 11px; font-weight: 700; letter-spacing: 0.01em;
+  line-height: 1; text-box: trim-both cap alphabetic;
+}
+.role-glyph.two { font-size: 9px; letter-spacing: 0; }
+/* The phone menu's "Log out" row wears the same badge, at its 18px icons'
+   optical size (owner, 2.496.246). */
+.hud-menu-item .role-glyph { flex: 0 0 auto; width: 22px; height: 22px; font-size: 10px; }
+.hud-menu-item .role-glyph.two { font-size: 8px; }
 
 /* Overflow menu: on phones the right-side controls (view mode, Settings,
    switch profile) collapse into this single button + dropdown. Hidden on
@@ -164,14 +201,31 @@
   cursor: pointer;
 }
 .hud-menu-item svg { flex: 0 0 auto; color: var(--text-secondary); }
-.hud-menu-item:hover, .hud-menu-item:active { background: var(--bg-input); }
+.hud-menu-item:active { background: var(--bg-input); }
+@media (hover: hover) {
+  .hud-menu-item:hover { background: var(--bg-input); }
+}
 /* Label-size row: same padding/row shape as a normal .hud-menu-item, but it
    isn't itself a button (its two child icon-btns are) — space-between
    instead of the icon+text left-aligned layout, and no hover fill (nothing
    to click on the row itself). */
 .hud-menu-stepper { justify-content: space-between; cursor: default; }
-.hud-menu-stepper:hover, .hud-menu-stepper:active { background: transparent; }
+.hud-menu-stepper:active { background: transparent; }
+@media (hover: hover) {
+  .hud-menu-stepper:hover { background: transparent; }
+}
 .hud-menu-stepper .icon-btn { width: 32px; height: 32px; }
+/* "Label size (?)": the row's title is itself a button, opening the colour
+   legend — text and (?) inline, no row chrome of its own. */
+.hud-menu-help {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin: -6px -6px; padding: 6px; border: none; border-radius: 8px;
+  background: transparent; color: inherit; font: inherit; cursor: pointer;
+}
+.hud-menu-help:active { background: var(--bg-input); }
+@media (hover: hover) {
+  .hud-menu-help:hover { background: var(--bg-input); }
+}
 /* The currently-open camera's own row in .camera-picker-menu below — reused
    nowhere else, so scoped there rather than added to the base .hud-menu-item
    (every other menu in the app is a one-shot action list, nothing in it is
@@ -220,15 +274,40 @@
 }
 .hud-group.hud-group-scroll::-webkit-scrollbar { display: none; }
 .hud-group.hud-group-scroll .icon-btn { flex: 0 0 auto; }
-/* Time sits inside the brand chip, right of the villa name — a hairline
-   divider separates it instead of a nested pill-in-pill. */
+/* Time, right of the villa name. ⚠️ ITS OWN PILL (2.496.242): as bare
+   secondary-grey text over the 3D map it was reported barely readable — the
+   name has a halo, the time had nothing. The title's colour, a step larger,
+   tabular digits so 21:59 → 22:00 does not shift the bar, on the same section
+   material as every other top-bar pill (--chip-bg, blur, hairline) so it reads
+   over a bright sky and a night scene alike, in every theme. */
 .hud-clock {
-  font-variant-numeric: tabular-nums; font-size: var(--text-md); font-weight: 400;
-  color: var(--text-secondary);
-  padding-left: 10px; margin-left: 2px; border-left: 1px solid var(--hairline);
+  /* Part of the title line, not a separate pill (owner, 2026-10-01: the pill
+     "looks very bad"): the villa name's own font and halo, a step smaller and
+     lighter, tabular digits so 21:59 → 22:00 does not shift the bar. */
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums; font-size: var(--text-lg); font-weight: 400; line-height: 1;
+  color: var(--text-primary); opacity: 0.85; letter-spacing: var(--tracking-tight);
+  text-shadow: 0 1px 2px var(--hud-icon-halo), 0 0 8px var(--hud-icon-halo);
 }
 
 /* Connection status sits right next to the villa name — just a coloured dot. */
+/* A status dot on a glyph's lower right — ONE look for every glyph that
+   carries a status (2.496.247): the agent's presence on the robot (top bar
+   and phone menu), the connection on the phone menu's role badge. Placed by
+   its parent (position: relative); the tone is the status vocabulary's. */
+.status-dot {
+  position: absolute; right: var(--status-dot-inset, 6px); bottom: var(--status-dot-inset, 6px);
+  width: 9px; height: 9px; border-radius: 50%;
+  box-shadow: 0 0 0 1.5px var(--bg-overlay);
+  background: var(--status-off);
+}
+.status-dot.on { background: var(--status-on); }
+.status-dot.warn { background: var(--status-warning); }
+.status-dot.danger { background: var(--status-danger); }
+.status-dot.pending { background: var(--status-pending); animation: pulse 1s infinite; }
+/* A phone-menu row's glyph that carries a .status-dot: the dot sits on the
+   glyph's own corner, not the row's. */
+.hud-menu-glyph { position: relative; display: inline-grid; place-items: center; flex: 0 0 auto; --status-dot-inset: -3px; }
 .conn-dot { display: inline-flex; align-items: center; }
 .conn-dot .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--status-off); }
 .conn-dot.online .dot { background: var(--status-on); box-shadow: 0 0 8px var(--status-on); }
@@ -243,6 +322,19 @@
 /* The Rooms dial button + the 1F/2F floor toggle now flow together in the
    left-column .hud-stack (see HUD). "1F"/"2F" are text, not icons. */
 .hud-floor-btn { font-size: var(--text-sm); font-weight: 700; letter-spacing: 0.02em; }
+/* The floor block is the left rail's width (--hud-rail-w, shared with the
+   app-icon tile above it); its buttons fill it. ::before, not ::after, for
+   the invisible 44px touch target — ::after is .has-hold-action's dot. */
+.hud-left-col .hud-stack { width: var(--hud-rail-w); }
+.hud-left-col .hud-stack .icon-btn { width: 100%; }
+/* Between 1F/2F and the view switch under them: the floor section's own
+   hairline, horizontal (.hud-cat-sep is the category row's, vertical). */
+.hud-stack-sep { flex: 0 0 auto; height: 1px; margin: 0 4px; background: var(--hairline-strong); }
+.hud-floor-btn::before {
+  content: ""; position: absolute; top: 50%; left: 50%;
+  width: var(--touch-min); height: var(--touch-min);
+  transform: translate(-50%, -50%);
+}
 
 /* Rooms dial popup: tappable floating chips on arcs beside the button (see
    RadialRoomMenu). The full-screen backdrop catches an outside tap to dismiss;
@@ -262,10 +354,26 @@
 .radial-item > span { overflow: hidden; text-overflow: ellipsis; }
 /* Hover = the solid accent (same as the active/selected state), not a faint
    translucent wash — matches every other button's highlight. */
-.radial-item:hover { background: var(--accent); color: var(--text-on-accent); border-color: var(--accent); }
+@media (hover: hover) {
+  .radial-item:hover { background: var(--accent); color: var(--text-on-accent); border-color: var(--accent); }
+}
 .radial-item:active { transform: translate(-50%, -50%) scale(0.94); }
 .radial-item.active { background: var(--accent); color: var(--text-on-accent); border-color: var(--accent); }
 @keyframes radial-pop { from { opacity: 0; transform: translate(-50%, -50%) scale(0.8); } }
+/* The rooms as ONE scrollable column, when they do not fit the arc on this
+   screen (a phone held upright, a long room list): never overlapping, always
+   above the "Manage rooms" button. */
+.radial-list {
+  position: fixed; z-index: 1;
+  top: calc(var(--safe-top) + 64px);
+  bottom: calc(max(28px, var(--safe-bottom-float)) + 64px);
+  display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+  overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+  padding: 4px 8px 4px 4px; max-width: calc(100vw - 24px);
+}
+.radial-list .radial-item { position: static; transform: none; flex: 0 0 auto; animation: radial-pop-list 0.12s ease-out; }
+.radial-list .radial-item:active { transform: scale(0.94); }
+@keyframes radial-pop-list { from { opacity: 0; transform: scale(0.9); } }
 
 /* "Manage rooms" — the full Rooms list (create/edit/re-anchor), the one
    thing the old Rooms button's long-press reached that this dial's floor/
@@ -284,7 +392,9 @@
   box-shadow: 0 6px 20px var(--shadow); backdrop-filter: blur(8px);
   animation: radial-pop 0.12s ease-out;
 }
-.radial-manage-btn:hover { background: var(--accent); color: var(--text-on-accent); border-color: var(--accent); }
+@media (hover: hover) {
+  .radial-manage-btn:hover { background: var(--accent); color: var(--text-on-accent); border-color: var(--accent); }
+}
 .radial-manage-btn:active { transform: translateX(-50%) scale(0.96); }
 
 /* Left-side control column: floor switch, then the Room + Switch View stack,
@@ -323,11 +433,26 @@
      pill it read as a small icon floating in a tall row rather than a peer of
      the section beside it. One value, tracking the pill, so the two cannot
      drift apart again. */
-  height: var(--hud-pill-h); width: auto;
-  background: none; border: none;
-  border-radius: 10px; cursor: pointer; color: inherit;
+  /* ⚠️ THE LEFT RAIL (2.496.242): the tile is --hud-rail-w square with the
+     floor block's radius and shadow, so the two read as one column — they
+     were a 44px app-icon plate (its own ~10px corners, no shadow) above a
+     50px glass block (18px corners, --elev-2). */
+  height: var(--hud-rail-w); width: var(--hud-rail-w);
+  background: none; border: none; padding: 0;
+  border-radius: var(--panel-radius); cursor: pointer; color: inherit;
 }
-.hud-home-btn:hover, .hud-home-btn:focus-visible { background: var(--bg-input); }
+/* The artwork's own plate is clipped to the panel radius (larger than its
+   22% corners, so the cut is clean); the inset ring is the floor block's
+   1px hairline. */
+.hud-home-btn .vesta-appicon {
+  width: 100%; height: 100%;
+  border-radius: var(--panel-radius);
+  box-shadow: var(--elev-2), inset 0 0 0 1px var(--hairline);
+}
+.hud-home-btn:focus-visible { background: var(--bg-input); }
+@media (hover: hover) {
+  .hud-home-btn:hover { background: var(--bg-input); }
+}
 .hud-home-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* Invisible 44px hit area (see the phone touch-target overlay further down
    for the same technique) — on ::before, not ::after, because ::after is
@@ -416,13 +541,9 @@
 }
 .bottom-bar > * { pointer-events: auto; }
 
-/* The first-person/bird's-eye toggle's own layout (used both in its
-   .hud-left-col home and, "stacked" false, inside the SummaryBar in the past
-   — see ViewControls' docstring). (Only in overview) the "jump to default
-   view" button sits in a DIFFERENT section (hud-left-col's floor/rooms
-   stack) — not part of this class. */
+/* The overview hint's layout. (The first-person/bird's-eye switch itself is
+   the last button of .hud-left-col's floor section — see ViewControls.) */
 .overview-help { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
-.overview-help-buttons { display: flex; flex-direction: column; gap: 8px; }
 .overview-hint {
   max-width: min(60vw, 460px);
   background: var(--bg-overlay); color: var(--text-secondary);
@@ -507,7 +628,9 @@
   transition: background 0.15s ease;
 }
 .summary-tile:not(:last-child) { border-right: 1px solid var(--hairline); }
-.summary-tile:hover:not(:disabled) { background: var(--bg-input); }
+@media (hover: hover) {
+  .summary-tile:hover:not(:disabled) { background: var(--bg-input); }
+}
 .summary-tile.is-info, .summary-tile:disabled { cursor: default; }
 .summary-tile:disabled { opacity: 0.9; }
 
@@ -595,7 +718,9 @@
   color: var(--text-primary); font-size: var(--text-md); font-weight: 600;
   text-align: left; white-space: nowrap;
 }
-.summary-scene-item:hover { background: var(--bg-input); }
+@media (hover: hover) {
+  .summary-scene-item:hover { background: var(--bg-input); }
+}
 .summary-scene-item svg { color: var(--text-secondary); flex: 0 0 auto; }
 
 /* --- SummaryGroupPanel: the modal a bottom-bar tile opens (entity list) --- */
@@ -660,7 +785,7 @@
 .summary-entity-row.is-notinha .summary-entity-name,
 .summary-entity-row.is-notinha .summary-entity-state { color: var(--status-warning); }
 .summary-entity-row {
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   border-radius: 14px; background: var(--bg-input);
 }
 .summary-entity-main {
@@ -670,7 +795,9 @@
   background: transparent; border: none; cursor: pointer;
   color: var(--text-primary); text-align: left;
 }
-.summary-entity-main:hover { background: var(--bg-card); }
+@media (hover: hover) {
+  .summary-entity-main:hover { background: var(--bg-card); }
+}
 .summary-entity-badge { width: 38px; height: 38px; flex: 0 0 auto; border-radius: 11px; }
 .summary-entity-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
 /* Row wrapper so the "hidden in HA" icon (if any) stays fixed-width and
@@ -697,6 +824,9 @@
   background: var(--status-off); transition: background 0.15s ease;
 }
 .summary-entity-toggle.on { background: var(--status-on); }
+/* The row switch's "Unlock …?" — on its own line under the row, full width
+   (EntityRowToggle; the row wraps only while it is open). */
+.summary-entity-confirm { flex: 1 1 100%; padding: 0 12px 12px; }
 .summary-entity-toggle .knob {
   position: absolute; top: 3px; left: 3px; width: 22px; height: 22px;
   border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.35);

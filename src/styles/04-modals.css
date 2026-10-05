@@ -22,7 +22,9 @@
 .tp-card span { position: relative; font-family: var(--font-display); font-size: var(--text-xl); font-weight: 400; color: #fff; }
 .tp-card .floor-tag { position: absolute; top: 10px; right: 12px; font-size: var(--text-2xs); color: #fff; background: rgba(0,0,0,0.4); padding: 3px 8px; border-radius: 6px; }
 .tp-card .tp-delete { position: absolute; top: 8px; left: 10px; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; background: rgba(0,0,0,0.45); color: #fff; }
-.tp-card .tp-delete:hover { color: var(--status-danger); }
+@media (hover: hover) {
+  .tp-card .tp-delete:hover { color: var(--status-danger); }
+}
 .tp-card.tp-add { align-items: center; justify-content: center; flex-direction: column; gap: 8px; color: var(--accent); border-style: dashed; background: transparent; }
 .tp-card.tp-add span { font-family: var(--font-ui); font-size: var(--text-base); color: var(--accent); }
 /* --- Modals / wizard --- */
@@ -170,12 +172,16 @@
   padding: 10px 20px; font-weight: 500; color: var(--text-secondary);
   transition: background 0.15s ease, color 0.15s ease;
 }
-.modal-footer .btn:hover:not(:disabled) {
+@media (hover: hover) {
+  .modal-footer .btn:hover:not(:disabled) {
   background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent);
+}
 }
 .modal-footer .btn.primary { background: var(--accent); color: var(--text-on-accent); }
 .modal-footer .btn.danger { background: var(--status-danger); color: #fff; }
-.modal-footer .btn.primary:hover:not(:disabled) { background: var(--accent); color: var(--text-on-accent); filter: brightness(1.06); }
+@media (hover: hover) {
+  .modal-footer .btn.primary:hover:not(:disabled) { background: var(--accent); color: var(--text-on-accent); filter: brightness(1.06); }
+}
 
 /* Section headings inside Settings — quiet, uppercase group labels. */
 .settings-section-title { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: var(--tracking-eyebrow); color: var(--text-secondary); margin: 24px 0 12px; font-weight: 600; }
@@ -214,6 +220,8 @@
 .legend-row { display: flex; align-items: center; gap: 10px; font-size: var(--text-sm); }
 .legend-swatch { width: 20px; height: 20px; border-radius: 7px; flex-shrink: 0; border: 1px solid var(--hairline); }
 .legend-swatch-round { border-radius: 50%; }
+/* The room chip's count, drawn as the chip draws it (colors.reportingPill). */
+.legend-count { display: inline-flex; align-items: center; justify-content: center; font-size: var(--text-2xs); font-weight: 700; }
 @media (max-width: 480px) {
   .legend-grid { grid-template-columns: 1fr; }
 }
@@ -370,7 +378,9 @@
   background: var(--bg-input); color: var(--text-secondary);
   border: 1px solid var(--hairline);
 }
-.info-tip > .info-btn:hover { color: var(--accent); }
+@media (hover: hover) {
+  .info-tip > .info-btn:hover { color: var(--accent); }
+}
 .info-tip .info-pop {
   /* Open DOWNWARD. The (i) button sits near the TOP of the "3D model source"
      section (right after the heading) with the rest of the scrollable modal
@@ -399,8 +409,10 @@
   transition: opacity 0.14s, transform 0.14s, visibility 0.14s;
   text-align: left; white-space: normal;
 }
-.info-tip:hover .info-pop,
 .info-tip:focus-within .info-pop { opacity: 1; visibility: visible; transform: translateY(0); }
+@media (hover: hover) {
+  .info-tip:hover .info-pop { opacity: 1; visibility: visible; transform: translateY(0); }
+}
 /* Phones: anchored-absolute can't be guaranteed to fit — the button's offset
    plus 78vw of popover overflowed the modal's right edge (horizontal-scroll
    report). Pin it to the VIEWPORT instead, spanning the full width minus
@@ -414,8 +426,10 @@
     max-height: min(76vh, 560px);
     overscroll-behavior: contain;
   }
-  .info-tip:hover .info-pop,
   .info-tip:focus-within .info-pop { transform: translateY(-50%); }
+  @media (hover: hover) {
+  .info-tip:hover .info-pop { transform: translateY(-50%); }
+}
 }
 .info-pop .row { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; }
 .info-pop .row span:first-child { color: var(--text-dim); flex: 0 0 auto; }
@@ -569,7 +583,9 @@ label.toggle span { user-select: none; line-height: 1.4; }
   border: none; background: transparent; border-radius: 8px;
   color: var(--text-dim);
 }
-.entity-picker-clear:hover { background: var(--bg-panel); color: var(--text-primary); }
+@media (hover: hover) {
+  .entity-picker-clear:hover { background: var(--bg-panel); color: var(--text-primary); }
+}
 
 /* Entity ID cell: id text on the left, action icons (edit + delete) pinned right
    so every card lines up identically. */
@@ -577,13 +593,17 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .entity-id-text { flex: 1 1 auto; min-width: 0; word-break: break-all; }
 .entity-id-actions { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; margin-left: auto; }
 .entity-id-actions .icon-btn { width: 30px; height: 30px; }
-.icon-btn-danger:hover { color: var(--status-danger); }
+@media (hover: hover) {
+  .icon-btn-danger:hover { color: var(--status-danger); }
+}
 
 /* Collapsed-by-default device card header: Shown checkbox + entity id/remap
    row + expand chevron, all on one line. */
 .config-table td.device-card-header { justify-content: flex-start; gap: 10px; padding-top: 4px; }
 .entity-id-toggle { cursor: pointer; border-radius: 8px; }
-.entity-id-toggle:hover { color: var(--text-primary); }
+@media (hover: hover) {
+  .entity-id-toggle:hover { color: var(--text-primary); }
+}
 .entity-id-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* Redirect-entity picker: one line (field + Apply + Cancel) on desktop,
@@ -633,3 +653,24 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .legend-keys { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 10px; }
 .legend-keys .legend-row { display: grid; grid-template-columns: minmax(0, 15em) 1fr; gap: 12px; align-items: baseline; }
 .legend-keys kbd { font: 600 var(--text-xs) var(--font-ui); padding: 3px 8px; border-radius: 6px; background: var(--bg-input); border: 1px solid var(--hairline); white-space: nowrap; justify-self: start; }
+
+/* A device panel's "Also on this device" (BasePanel, PanelActions.readings):
+   the device's other readings, each a row that opens its own panel. */
+.panel-readings { margin-top: 18px; border-top: 1px solid var(--hairline); padding-top: 12px; }
+.panel-readings-title { font-size: var(--text-2xs); font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 6px; }
+.panel-reading-row { display: flex; align-items: center; gap: 10px; width: 100%; min-height: var(--touch-min); padding: 6px 4px; border: none; background: none; color: var(--text-primary); text-align: left; cursor: pointer; border-radius: 10px; }
+.panel-reading-row + .panel-reading-row { border-top: 1px solid var(--hairline); border-radius: 0; }
+/* "Show all (n)" — the rest of a busy device's readings, on request (DeviceReadings). */
+.panel-readings-more { display: block; width: 100%; min-height: var(--touch-min); margin-top: 2px; padding: 6px 4px; border: none; border-top: 1px solid var(--hairline); background: none; color: var(--accent); font-size: var(--text-sm); font-weight: 600; text-align: left; cursor: pointer; }
+@media (hover: hover) {
+  .panel-reading-row:hover:not(:disabled) { background: var(--bg-input); }
+}
+.panel-reading-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.panel-reading-value { flex: 0 0 auto; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+/* A binary reading in its own window's colour (config/readingRows): the
+   .status-pill tones, as text. "off" (idle) keeps the secondary grey. */
+.panel-reading-value.on { color: var(--status-on); }
+.panel-reading-value.danger { color: var(--status-danger); font-weight: 600; }
+.panel-reading-value.transitional { color: var(--status-pending); }
+.panel-reading-value.unavailable { color: var(--status-warning); }
+.panel-reading-value.warning { color: var(--status-warning); }

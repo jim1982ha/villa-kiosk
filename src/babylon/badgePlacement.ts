@@ -296,6 +296,18 @@ function byteLess(a: string, b: string): boolean {
   return a < b;
 }
 
+/** THE canonical order every placement decision uses: rank first, entity_id
+ *  to break ties. Both static, so it is the same on every device and every
+ *  frame. (Written out twice until 2.496.263.) */
+function canonicalOrder(items: readonly PlacementItem[]): (x: number, y: number) => number {
+  return (x, y) => {
+    const rx = items[x].rank, ry = items[y].rank;
+    if (rx !== ry) return rx - ry;
+    return byteLess(items[x].sortKey, items[y].sortKey) ? -1
+      : items[x].sortKey === items[y].sortKey ? 0 : 1;
+  };
+}
+
 /**
  * Which badges are in direct contact with at least one other — the tier 1 → 2
  * test, where a crowded badge drops its READOUT before anything is summarised.
@@ -326,6 +338,35 @@ export function markContacts(
   out.fill(0, 0, n);
   if (n < 2) return out;
 
+  forEachConflict(items, gap, minSeparation, scratch.cells, (i, j) => { out[i] = 1; out[j] = 1; });
+  return out;
+}
+
+/** Standard 3-prime spatial hash. */
+function hashCell(ix: number, iy: number, iz: number): number {
+  return (Math.imul(ix, 73856093) ^ Math.imul(iy, 19349663) ^ Math.imul(iz, 83492791)) | 0;
+}
+
+/**
+ * Visit every pair (i < j) of non-exempt items that `conflicts`, in a fixed
+ * order — the spatial index both tiers use (markContacts, groupBadges).
+ *
+ * A uniform grid, the same structure Mapbox's own collision index uses
+ * (grid_index.ts) — an R-tree buys nothing for near-uniformly-sized boxes and
+ * costs a rebuild every frame. The cell edge is the largest distance at which
+ * any pair can possibly conflict, so a conflicting pair always shares a cell or
+ * an immediate neighbour and the 27-cell query is exhaustive. Returns false
+ * (visiting nothing) when the frame has no usable geometry.
+ *
+ * ⚠️ WRITTEN OUT TWICE UNTIL 2.496.263, ~40 lines each. The visiting order is
+ * the old one in both (ascending i, then j in bucket order), which is what
+ * keeps union-find's piles — and pile_merge_order — byte-identical.
+ */
+function forEachConflict(
+  items: readonly PlacementItem[], gap: number, minSeparation: number,
+  cells: Map<number, number[]>, visit: (i: number, j: number) => void,
+): boolean {
+  const n = items.length;
   let maxReach = 0;
   for (let i = 0; i < n; i++) {
     // Both extents: the cell edge must cover the largest possible conflict
@@ -334,16 +375,15 @@ export function markContacts(
     if (items[i].reachY > maxReach) maxReach = items[i].reachY;
   }
   const cell = Math.max(2 * maxReach + gap, minSeparation);
-  if (!(cell > 0) || !Number.isFinite(cell)) return out;
-
-  const cells = scratch.cells;
+  if (!(cell > 0) || !Number.isFinite(cell)) return false;
+  // Truncate rather than clear: the bucket arrays are reused across frames, so
+  // the steady state allocates nothing.
   for (const arr of cells.values()) arr.length = 0;
   for (let i = 0; i < n; i++) {
+    // An exempt badge is drawn whatever happens and blocks nobody.
     if (items[i].exempt) continue;
     const it = items[i];
-    const k = hashCell(
-      Math.floor(it.sx / cell), Math.floor(it.sy / cell), Math.floor(it.sz / cell),
-    );
+    const k = hashCell(Math.floor(it.sx / cell), Math.floor(it.sy / cell), Math.floor(it.sz / cell));
     let bucket = cells.get(k);
     if (!bucket) { bucket = []; cells.set(k, bucket); }
     bucket.push(i);
@@ -358,20 +398,15 @@ export function markContacts(
           const bucket = cells.get(hashCell(cx + ox, cy + oy, cz + oz));
           if (!bucket) continue;
           for (const j of bucket) {
+            // Each unordered pair considered once; self skipped.
             if (j <= i) continue;
-            if (!conflicts(a, items[j], gap, minSeparation)) continue;
-            out[i] = 1; out[j] = 1;
+            if (conflicts(a, items[j], gap, minSeparation)) visit(i, j);
           }
         }
       }
     }
   }
-  return out;
-}
-
-/** Standard 3-prime spatial hash. */
-function hashCell(ix: number, iy: number, iz: number): number {
-  return (Math.imul(ix, 73856093) ^ Math.imul(iy, 19349663) ^ Math.imul(iz, 83492791)) | 0;
+  return true;
 }
 
 /**
@@ -454,72 +489,23 @@ export function solvePlacement(
     return { accepted, buckets: st.buckets, bucketCount: 0, chipRooms: st.chipRooms, stats };
   }
 
-  // ── 1. Spatial index ─────────────────────────────────────────────────────
-  // A uniform grid, the same structure Mapbox's own collision index uses
-  // (grid_index.ts) — an R-tree buys nothing for near-uniformly-sized boxes
-  // and costs a rebuild every frame. Cell edge is the largest distance at
-  // which any pair can possibly conflict, so a conflicting pair always shares
-  // a cell or an immediate neighbour and the 27-cell query is exhaustive.
-  let maxReach = 0;
-  for (let i = 0; i < n; i++) {
-    // Both extents: the cell edge must cover the largest possible conflict
-    // distance on EITHER axis, or the 27-cell query stops being exhaustive.
-    if (items[i].reach > maxReach) maxReach = items[i].reach;
-    if (items[i].reachY > maxReach) maxReach = items[i].reachY;
-  }
-  const cell = Math.max(2 * maxReach + gap, minSeparation);
-  if (!(cell > 0) || !Number.isFinite(cell)) {
-    // No usable geometry this frame (zoom unresolved, degenerate projection).
-    // Draw everything rather than summarise on numbers we do not trust.
-    accepted.fill(1, 0, n);
-    stats.accepted = n;
-    return { accepted, buckets: st.buckets, bucketCount: 0, chipRooms: st.chipRooms, stats };
-  }
-
-  const cells = st.cells;
-  // Truncate rather than clear: the bucket arrays are reused across frames, so
-  // the steady state allocates nothing.
-  for (const arr of cells.values()) arr.length = 0;
-  for (let i = 0; i < n; i++) {
-    const it = items[i];
-    const k = hashCell(
-      Math.floor(it.sx / cell), Math.floor(it.sy / cell), Math.floor(it.sz / cell),
-    );
-    let bucket = cells.get(k);
-    if (!bucket) { bucket = []; cells.set(k, bucket); }
-    bucket.push(i);
-  }
-
-  // ── 2. Union-find over conflicting pairs ─────────────────────────────────
+  // ── 1–2. Union-find over conflicting pairs (forEachConflict's grid) ────
   for (let i = 0; i < n; i++) parent[i] = i;
   const find = (x: number): number => {
     let r = x;
     while (parent[r] !== r) { parent[r] = parent[parent[r]]; r = parent[r]; }
     return r;
   };
-  for (let i = 0; i < n; i++) {
-    const a = items[i];
-    // An exempt badge is drawn whatever happens and blocks nobody, so it takes
-    // no part in the graph at all.
-    if (a.exempt) continue;
-    const cx = Math.floor(a.sx / cell), cy = Math.floor(a.sy / cell), cz = Math.floor(a.sz / cell);
-    for (let ox = -1; ox <= 1; ox++) {
-      for (let oy = -1; oy <= 1; oy++) {
-        for (let oz = -1; oz <= 1; oz++) {
-          const bucket = cells.get(hashCell(cx + ox, cy + oy, cz + oz));
-          if (!bucket) continue;
-          for (const j of bucket) {
-            // Each unordered pair considered once; self skipped.
-            if (j <= i) continue;
-            const b = items[j];
-            if (b.exempt) continue;
-            if (!conflicts(a, b, gap, minSeparation)) continue;
-            const ra = find(i), rb = find(j);
-            if (ra !== rb) parent[ra] = rb;
-          }
-        }
-      }
-    }
+  const usable = forEachConflict(items, gap, minSeparation, st.cells, (i, j) => {
+    const ra = find(i), rb = find(j);
+    if (ra !== rb) parent[ra] = rb;
+  });
+  if (!usable) {
+    // No usable geometry this frame (zoom unresolved, degenerate projection).
+    // Draw everything rather than summarise on numbers we do not trust.
+    accepted.fill(1, 0, n);
+    stats.accepted = n;
+    return { accepted, buckets: st.buckets, bucketCount: 0, chipRooms: st.chipRooms, stats };
   }
 
   // ── 3. Components ────────────────────────────────────────────────────────
@@ -563,12 +549,7 @@ export function solvePlacement(
     // Total order: rank first, entity_id to break ties. Both static, so this
     // is the same order on every device and every frame — which is the last
     // place camera or frame state could have leaked in.
-    members.sort((x, y) => {
-      const rx = items[x].rank, ry = items[y].rank;
-      if (rx !== ry) return rx - ry;
-      return byteLess(items[x].sortKey, items[y].sortKey) ? -1
-        : items[x].sortKey === items[y].sortKey ? 0 : 1;
-    });
+    members.sort(canonicalOrder(items));
     const acceptedHere: number[] = [];
     for (const i of members) {
       let clear = true;
@@ -670,12 +651,7 @@ export function solvePlacement(
       const bucket = st.buckets[b];
       if (bucket.members.length <= drawableMax) continue;
       // The canonical order every other decision uses: rank, then entity_id.
-      const order = bucket.members.slice().sort((x, y) => {
-        const rx = items[x].rank, ry = items[y].rank;
-        if (rx !== ry) return rx - ry;
-        return byteLess(items[x].sortKey, items[y].sortKey) ? -1
-          : items[x].sortKey === items[y].sortKey ? 0 : 1;
-      });
+      const order = bucket.members.slice().sort(canonicalOrder(items));
       const cliques = buildCliques(items, order, gap, minSeparation, drawableMax);
       // Fold singletons nearest-first, in canonical order so the outcome is a
       // function of geometry and rank like everything else here.

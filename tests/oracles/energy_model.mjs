@@ -66,7 +66,11 @@ const up = E.risers(leafs, (id) => fri[id], (id) => typ[id] ?? 0.0);
 ck("what rose on Friday: devices at least 0.5 kWh over their own typical day, biggest first",
    ["sensor.spa_pump_energy", "sensor.jet_pump_energy"].every((id) => up.some((r) => r.node.id === id)) && !up.some((r) => r.node.id === "sensor.pool_pump_energy")
      && up.every((r, i) => i === 0 || up[i - 1].extra >= r.extra), up.map((r) => r.node.id));
-ck("money in the cost statistic's currency", /19,887|19\.887/.test(E.fmtMoney(19887.47, "IDR", "en-US")) && E.fmtMoney(12.5, "kr?", "en-US") === "13 kr?");
+{
+  const { formatMoney } = await import("@/utils/money");
+  ck("money: the ONE formatter (utils/money) — whole from 100, cents below, an unknown code after the number",
+     /19,887/.test(formatMoney(19887.47, "IDR", "en-US")) && formatMoney(12.5, "kr?", "en-US") === "12.5 KR?" && !("fmtMoney" in E));
+}
 
 console.log("\n  a period, bucket by bucket (2.496.113) — a missing hour is MISSING, never 0 kWh:");
 {
@@ -128,7 +132,7 @@ ck("the observation cards share the row however many there are (two cards, no em
 const cfg = readFileSync(new URL("../../src/config/AppConfig.ts", import.meta.url), "utf8");
 ck("nothing about energy is stored in VESTA's config", !/energy(Sources|Devices|Tariff)/i.test(cfg));
 const bar = readFileSync(new URL("../../src/components/hud/SummaryBar.tsx", import.meta.url), "utf8");
-ck("the Energy tile opens the Energy window", /openGroup\?\.id === "__energy" && \(\s*<EnergyPanel/.test(bar));
+ck("the Energy tile opens the Energy window", /openGroup\?\.kind === "energy" && \(\s*<EnergyPanel/.test(bar));
 
 done("✅ HA's Energy, laid out — never re-configured");
 

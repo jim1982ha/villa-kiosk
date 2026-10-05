@@ -5,7 +5,7 @@
 // like the shared device configuration and scenes.
 
 import { ingressPath } from "@/ha/ingress";
-import { EMPTY_FM_DATA, type FmData } from "./fmTypes";
+import { EMPTY_FM_DATA, FM_COLLECTIONS, type FmCollection, type FmData, type FmSavedDocument, recapKind } from "./fmTypes";
 import { backendFetch } from "@/auth/sessionLost";
 import {
   keyBy, diffKeyed, applyKeyed, keyedDiffIsEmpty,
@@ -26,7 +26,7 @@ function parseFmData(raw: unknown): FmData {
     tickets: arr(b.tickets),
     // Absent on a store written before saved documents existed — defaults to
     // empty rather than dropping the field, same as every array above.
-    savedDocuments: arr(b.savedDocuments),
+    savedDocuments: arr<FmSavedDocument>(b.savedDocuments).map(recapKind),
   };
 }
 
@@ -107,10 +107,8 @@ export async function saveFmData(
 // ── Per-item diff/merge for the FM document ──────────────────────────────
 // Every FM collection is a list of records with their own `id`, so the shared
 // keyed machinery applies directly — no bespoke merge logic here.
-const FM_COLLECTIONS = [
-  "schedules", "completions", "costs", "tickets", "savedDocuments",
-] as const;
-type FmCollection = (typeof FM_COLLECTIONS)[number];
+// The collections are the shared table's (fmTypes.FM_COLLECTIONS, read from
+// fm-records.json — the same list the add-on judges writes by).
 
 export type FmDataDiff = Record<FmCollection, KeyedDiff<{ id: string }>>;
 

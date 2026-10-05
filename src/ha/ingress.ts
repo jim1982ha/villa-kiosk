@@ -18,9 +18,22 @@
 /** The base path to resolve backend routes against: the Ingress prefix
  *  ("/api/hassio_ingress/<token>/") in the sidebar, or "/" on the direct
  *  hostname. */
+const INGRESS_BASE = /^(.*\/api\/hassio_ingress\/[^/]+\/)/;
+
+/** The Ingress base of a path, or null when the path is not under Ingress.
+ *  Pure — the one rule both questions below ask (main.tsx used a looser
+ *  `includes("/api/hassio_ingress/")` of its own until 2.496.233). */
+export function ingressBaseOf(pathname: string): string | null {
+  return INGRESS_BASE.exec(pathname)?.[1] ?? null;
+}
+
+/** Whether the page was opened inside Home Assistant (its sidebar). */
+export function underIngress(): boolean {
+  return ingressBaseOf(window.location.pathname) !== null;
+}
+
 function ingressBasePath(): string {
-  const m = window.location.pathname.match(/^(.*\/api\/hassio_ingress\/[^/]+\/)/);
-  return m ? m[1] : "/";
+  return ingressBaseOf(window.location.pathname) ?? "/";
 }
 
 /** WebSocket endpoint of the add-on's Supervisor proxy (token injected server-side). */

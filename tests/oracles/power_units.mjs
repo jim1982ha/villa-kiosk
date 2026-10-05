@@ -1,8 +1,8 @@
 // The Energy tile's total, against the real SensorClasses module.
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
-import { toBaseUnit, effectiveSensorClass } from "../../src/config/SensorClasses.ts";
-import { formatUnitValue } from "../../src/utils/entityValue.ts";
+const { toBaseUnit, effectiveSensorClass } = await import("../../src/config/SensorClasses.ts");
+const { formatUnitValue } = await import("../../src/utils/entityValue.ts");
 
 const E = (id, state, unit, dc) => ({ entity_id: id, state: String(state),
   attributes: { unit_of_measurement: unit, ...(dc ? { device_class: dc } : {}) } });
