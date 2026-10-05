@@ -1,3 +1,9 @@
+## 2.496.304
+
+### Changed
+- The sun and the moon in the 3D overview are now a guide drawn round the house as you see it. They always sit in the sky just outside the house's outline, on the side where they really are compared with the way you are looking: ahead of you means above the house, to your right means on its right. A low sun at sunrise or sunset sits close to the house's edge. The higher the sun is in the sky, the higher above the house it is drawn, and at noon it is straight above it. When the sun is behind you, it fades out.
+- Turning, tilting, zooming and panning now move the sun and the moon with the house. They can no longer end up on the lawn in front of the house, or over it. If you zoom in until the house fills the screen, they fade out.
+
 ## 2.496.303
 
 ### Improved
