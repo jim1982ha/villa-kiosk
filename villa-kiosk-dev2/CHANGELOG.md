@@ -1,3 +1,8 @@
+## 2.496.306
+
+### Fixed
+- VESTA opens again. Since 2.496.304, opening it in the evening could fail on every device with "The 3D scene failed to load" or a crash screen. This happened when the sun was behind the first view of the house. The cause was a line of the sun's debug report, not the phone's memory.
+
 ## 2.496.305
 
 ### Fixed
