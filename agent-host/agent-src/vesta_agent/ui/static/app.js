@@ -187,8 +187,41 @@ function svg(tag, attrs = {}, ...kids) {
   return el;
 }
 
+// ---------------------------------------------------------------- the page's own dialog
+// ⚠️ NEVER confirm(), alert() or prompt() (owner, 2026-10-06): the browser draws those in its own style,
+// titled with the site's address. Every question goes through ask(): a <dialog> in the page's style.
+// Resolves true/false, or the text typed (null when cancelled) when `input` is given.
+// (Closing or reloading the TAB with unsaved changes still shows the browser's own "Leave site?":
+// a page may ask for that warning, never draw it.)
+function ask({ title, text = "", ok = "OK", cancel = "Cancel", danger = false, input = null }) {
+  return new Promise((resolve) => {
+    const field = input ? h("input", { type: "text", placeholder: input, spellcheck: "false" }) : null;
+    const lines = Array.isArray(text) ? text : [text];
+    const dlg = h("dialog", { class: "ask" },
+      h("form", { method: "dialog" },
+        h("h3", {}, title),
+        lines.length > 1 ? h("ul", {}, lines.map((l) => h("li", {}, l))) : (lines[0] ? h("p", {}, lines[0]) : null),
+        field,
+        h("div", { class: "actions" },
+          cancel ? h("button", { class: "btn ghost", value: "cancel", type: "submit" }, cancel) : null,
+          h("button", { class: "btn " + (danger ? "danger" : "primary"), value: "ok", type: "submit" }, ok))));
+    dlg.addEventListener("close", () => {
+      const yes = dlg.returnValue === "ok";
+      dlg.remove();
+      resolve(input ? (yes ? field.value.trim() || null : null) : yes);
+    });
+    document.body.append(dlg);
+    dlg.showModal();
+    (field || dlg.querySelector(".btn:last-child")).focus();
+  });
+}
+const tell = (title, text) => ask({ title, text, cancel: null });
+
 function markDirty() { dirty = true; showBar(); }
-function guard() { return !dirty || confirm("You have unsaved changes. Leave without saving?"); }
+async function guard() {
+  return !dirty || ask({ title: "Unsaved changes", text: "Leave without saving? Your changes will be lost.",
+                         ok: "Leave without saving", cancel: "Stay", danger: true });
+}
 window.addEventListener("beforeunload", (e) => { if (dirty) { e.preventDefault(); e.returnValue = ""; } });
 
 let barState = null;
@@ -218,7 +251,7 @@ function jobsBanner(names, after) {
   const btn = h("button", { class: "btn primary", onclick: async () => {
     btn.disabled = true;
     try { await addMissingJobs(); toast("AI jobs added. Change their brain or limit under Rules."); after(); }
-    catch (e) { btn.disabled = false; alert(e.problems.join("\n")); }
+    catch (e) { btn.disabled = false; tell("Not added", e.problems); }
   } }, "Add them");
   return h("div", { class: "banner" },
     h("div", {}, h("b", {}, `${names.length} AI job${names.length > 1 ? "s are" : " is"} not set: ${names.length > 1 ? "they don't" : "it doesn't"} run.`),
@@ -310,9 +343,9 @@ setTheme(document.documentElement.getAttribute("data-theme") || "auto");
 
 // ---------------------------------------------------------------- tabs
 // one "Rules (file)" tab (owner, 2026-10-01): "Rules" opens the forms, "(file)" the file itself
-document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", (e) => {
+document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", async (e) => {
   const tab = e.target.closest(".tab-file") ? "rules-file" : b.dataset.tab;
-  if (tab === current || !guard()) return;
+  if (tab === current || !(await guard())) return;
   go(tab);
 }));
 
@@ -582,7 +615,7 @@ async function skills(select = null) {
   const side = h("div", { class: "card" },
     h("h2", {}, "Skills"),
     h("p", { class: "lead" }, "Each skill is a folder. A change counts at the agent's next use, no restart."),
-    list.length ? list.map((s) => h("button", { class: "skill-item" + (s.name === select ? " on" : ""), onclick: () => { if (guard()) skills(s.name); } },
+    list.length ? list.map((s) => h("button", { class: "skill-item" + (s.name === select ? " on" : ""), onclick: async () => { if (await guard()) skills(s.name); } },
       h("div", {}, h("b", {}, s.name), s.ok ? null : [" ", h("span", { class: "chip off" }, "not working")]),
       h("div", { class: "d" }, s.ok ? s.description : s.problem))) : h("p", { class: "muted" }, "No skill yet. The starter skills are copied at the agent's first start."),
     h("div", { class: "actions" }, h("button", { class: "btn ghost", onclick: newSkill }, "New skill")));
@@ -593,10 +626,10 @@ async function skills(select = null) {
 }
 
 async function newSkill() {
-  const name = (prompt("Name of the new skill (lower-case, digits, - and _), e.g. pool-care") || "").trim();
-  if (!name || !guard()) return;
+  const name = await ask({ title: "New skill", text: "Its name: lower-case letters, digits, - and _.", ok: "Create", input: "e.g. pool-care" });
+  if (!name || !(await guard())) return;
   try { await api("POST", "api/skills", { name }); toast(`Skill ${name} created.`); skills(name); }
-  catch (e) { alert(e.problems.join("\n")); }
+  catch (e) { tell("Not created", e.problems); }
 }
 
 let filesOpen = false;
@@ -618,7 +651,7 @@ async function openSkill(name, pane, info, path = "SKILL.md") {
   };
   // one line of files while collapsed (the open one first, so it always shows); a button shows them all,
   // and appears only when they do not fit on that line. Open or closed is kept from skill to skill.
-  const fileList = h("div", { class: "files" + (filesOpen ? "" : " collapsed") }, files.map((x) => h("button", { class: x.path === path ? "on" : "", onclick: () => { if (x.path !== path && guard()) openSkill(name, pane, info, x.path); } }, x.path)));
+  const fileList = h("div", { class: "files" + (filesOpen ? "" : " collapsed") }, files.map((x) => h("button", { class: x.path === path ? "on" : "", onclick: async () => { if (x.path !== path && await guard()) openSkill(name, pane, info, x.path); } }, x.path)));
   const more = h("button", { class: "btn ghost files-more", hidden: true, onclick: () => {
     filesOpen = !filesOpen; fileList.classList.toggle("collapsed", !filesOpen); fits(); } });
   const fits = () => {
@@ -638,22 +671,24 @@ async function openSkill(name, pane, info, path = "SKILL.md") {
     } catch (e) { fill(probs, problemsBox(e.problems)); }
   };
   const newFile = async () => {
-    const p = (prompt("New file, e.g. scripts/check.py or templates/page.html") || "").trim();
-    if (!p || !guard()) return;
+    const p = await ask({ title: "New file", text: `In ${name}. A folder may be part of the name.`, ok: "Create",
+                          input: "e.g. scripts/check.py or templates/page.html" });
+    if (!p || !(await guard())) return;
     try {
       await api("PUT", `api/skills/${encodeURIComponent(name)}/file?path=${encodeURIComponent(p)}`, { content: p.endsWith(".py") ? "#!/usr/bin/env python3\n" : "", rev: null });
       toast(`${p} created.`); openSkill(name, pane, info, p);
-    } catch (e) { alert(e.problems.join("\n")); }
+    } catch (e) { tell("Not created", e.problems); }
   };
   const delFile = async () => {
-    if (!confirm(`Delete ${path} from ${name}?`)) return;
+    if (!(await ask({ title: `Delete ${path}?`, text: `It is removed from ${name}.`, ok: "Delete", danger: true }))) return;
     try { await api("DELETE", `api/skills/${encodeURIComponent(name)}/file?path=${encodeURIComponent(path)}`); dirty = false; toast(`${path} deleted.`); openSkill(name, pane, info); }
     catch (e) { fill(probs, problemsBox(e.problems, "Not deleted:")); }
   };
   const delSkill = async () => {
-    if (!confirm(`Delete the skill ${name}? The agent stops using it at once. It is kept in skills/.trash, and does not come back on its own.`)) return;
+    if (!(await ask({ title: `Delete the skill ${name}?`, ok: "Delete the skill", danger: true,
+                      text: "The agent stops using it at once. It is kept in skills/.trash, and does not come back on its own." }))) return;
     try { await api("DELETE", `api/skills/${encodeURIComponent(name)}`); dirty = false; toast(`Skill ${name} deleted.`); skills(); }
-    catch (e) { alert(e.problems.join("\n")); }
+    catch (e) { tell("Not deleted", e.problems); }
   };
   fill(pane, h("div", { class: "card" },
     h("h2", {}, name, info && !info.ok ? [" ", h("span", { class: "chip off" }, "not working")] : null),

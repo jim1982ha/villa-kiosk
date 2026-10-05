@@ -426,3 +426,18 @@ def test_the_file_editors_wrap_long_lines_instead_of_scrolling_sideways():
     rule = re.search(r"textarea\.editor \{([^}]*)\}", css).group(1)
     assert "white-space: pre-wrap" in rule and "overflow-wrap: anywhere" in rule
     assert 'wrap: "off"' not in js and "wrap=\"off\"" not in js and js.count('h("textarea", { class: "editor"') == 2
+
+
+def test_the_page_never_uses_the_browsers_own_dialogs():
+    # owner, 2026-10-06: confirm/alert/prompt are drawn by the browser, titled with the site's address.
+    # Every question goes through ask(), a <dialog> in the page's style.
+    import re
+    from vesta_agent.ui.server import STATIC
+    css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
+    for name in ("app.js", "errors.js", "theme.js"):
+        src = open(os.path.join(STATIC, name), encoding="utf-8").read()
+        code = "\n".join(l for l in src.splitlines() if not l.lstrip().startswith("//"))
+        assert not re.search(r"(?<![\w.])(confirm|alert|prompt)\(", code), name
+    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
+    assert "async function guard()" in js and "showModal()" in js and "dialog.ask {" in css
+    assert not re.search(r"[^\w](?<!await )guard\(\)", js.replace("async function guard()", "")), "a guard() not awaited"

@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from claude_agent_sdk import (AssistantMessage, ClaudeAgentOptions, ClaudeSDKClient, HookMatcher,
                               PermissionResultAllow, PermissionResultDeny, ResultMessage, TextBlock)
 
+from .api_errors import NO_RETRY, classify
 from .policy import PROFILES  # noqa: E402
 
 log = logging.getLogger("vesta.runner")
@@ -57,6 +58,53 @@ class RunResult:
     cost_usd: float | None
     denied: list[str]
     error: str | None = None
+    # why it failed, in one word (api_errors.classify): what the person is told, never the raw error
+    problem: str | None = None
+
+
+class Collector:
+    """What one run's message stream says: the answer, and — when Anthropic failed — why.
+
+    ⚠️ A FAILED API CALL ALSO ARRIVES AS TEXT: the CLI turns it into an AssistantMessage whose
+    `error` is set and whose text is the raw "API Error: 400 {...credit balance is too low...}".
+    That text is the error's, never the answer: it is read for the reason and never sent."""
+
+    def __init__(self, session_id: str | None = None):
+        self.texts: list[str] = []
+        self.session_id, self.stopped, self.cost, self.err = session_id, False, None, None
+        self.usage, self.turns, self.ms = {}, None, None
+        self.kind, self.status, self.exc_name, self.raw = None, None, None, ""
+
+    def feed(self, msg) -> None:
+        if isinstance(msg, AssistantMessage):
+            words = [b.text.strip() for b in msg.content if isinstance(b, TextBlock) and b.text.strip()]
+            if getattr(msg, "error", None):
+                self.kind = msg.error
+                self.raw += " ".join(words)
+                return
+            self.texts += words
+        elif isinstance(msg, ResultMessage):
+            self.session_id = msg.session_id or self.session_id
+            self.cost = msg.total_cost_usd
+            self.usage, self.turns, self.ms = msg.usage or {}, msg.num_turns, msg.duration_ms
+            self.stopped = msg.subtype == "error_max_budget_usd"
+            if msg.is_error and not self.stopped:
+                self.err = msg.subtype if msg.subtype != "success" else f"api error {msg.api_error_status}"
+                self.status = getattr(msg, "api_error_status", None) or self.status
+                self.raw += " " + (msg.result or "") + " " + " ".join(getattr(msg, "errors", None) or [])
+
+    def fail(self, e: BaseException) -> None:
+        """An exception from the SDK or the network. ResultError carries the API's status and prose."""
+        self.err = type(e).__name__
+        self.exc_name = type(e).__name__
+        self.status = getattr(e, "api_error_status", None) or self.status
+        self.raw += " " + str(getattr(e, "result", "") or "") + " " + str(e)
+
+    @property
+    def problem(self) -> str | None:
+        if not (self.err or self.kind):
+            return None
+        return classify(self.kind, self.status, self.raw, self.exc_name)
 
 
 def make_guard(allowed: set[str], state, who: str):
@@ -117,35 +165,31 @@ async def run(settings, system_prompt: str, prompt: str, server, allowed: set[st
     clean_environ()
     opts, denied = build_options(settings, system_prompt, server, allowed, state, who, resume,
                                  limit_usd if limit_usd is not None else settings.reply_limit_usd, profile)
-    texts: list[str] = []
-    session_id, stopped, cost, err = resume, False, None, None
-    usage, turns, ms = {}, None, None
+    c = Collector(resume)
     try:
         async with ClaudeSDKClient(options=opts) as client:
             await client.query(prompt)
             async for msg in client.receive_response():
-                if isinstance(msg, AssistantMessage):
-                    for b in msg.content:
-                        if isinstance(b, TextBlock) and b.text.strip():
-                            texts.append(b.text.strip())
-                elif isinstance(msg, ResultMessage):
-                    session_id = msg.session_id or session_id
-                    cost = msg.total_cost_usd
-                    usage, turns, ms = msg.usage or {}, msg.num_turns, msg.duration_ms
-                    stopped = msg.subtype == "error_max_budget_usd"
-                    if msg.is_error and not stopped:
-                        err = msg.subtype if msg.subtype != "success" else f"api error {msg.api_error_status}"
+                c.feed(msg)
     except Exception as e:  # noqa: BLE001
-        log.exception("agent run failed")
-        err = type(e).__name__
+        c.fail(e)
+        # a known kind is one line (the warning below); anything else keeps its traceback for the log
+        if c.problem == "unknown":
+            log.exception("agent run failed")
+    texts, session_id, stopped, cost, usage, turns, ms = c.texts, c.session_id, c.stopped, c.cost, c.usage, c.turns, c.ms
+    err, problem = c.err or (f"api {c.kind}" if c.kind else None), c.problem
+    if problem:
+        # the kind and the status only: the raw prose may quote the request
+        log.warning("Anthropic: %s (%s%s)", problem, c.kind or c.exc_name or "error",
+                    f", HTTP {c.status}" if c.status else "")
     # ⚠️ WHAT THE COSTS TAB SHOWS (owner, 2026-10-01): the brain, the model and the tokens of each run, with
     # what was asked — never the answer, never a secret. Before 0.6.9 only who and the cost were kept.
     tokens = {k: usage.get(k) for k in ("input_tokens", "output_tokens", "cache_read_input_tokens",
                                          "cache_creation_input_tokens") if isinstance(usage.get(k), int)}
     state.log("run", {"who": who, "cost_usd": cost, "stopped_at_limit": stopped, "denied": denied, "error": err,
                       "profile": profile if profile in PROFILES else getattr(settings, "profile", None), "model": opts.model, "tokens": tokens,
-                      "turns": turns, "ms": ms, "asked": (asked or "")[:160] or None})
-    if err and resume and not texts:
+                      "turns": turns, "ms": ms, "asked": (asked or "")[:160] or None, "problem": problem})
+    if err and resume and not texts and problem not in NO_RETRY:
         # the session could not be resumed (lost, or from an older version): answer in a new one
         return await run(settings, system_prompt, prompt, server, allowed, state, who, None, limit_usd, profile)
-    return RunResult("\n\n".join(texts).strip(), session_id, stopped, cost, denied, err)
+    return RunResult("\n\n".join(texts).strip(), session_id, stopped, cost, denied, err, problem)

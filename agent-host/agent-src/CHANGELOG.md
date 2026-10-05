@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.41 (6 October 2026)
+
+- API failures (api_errors.py): runner.Collector reads the SDK's three ways to fail (AssistantMessage.error with the raw "API Error" as its text — never the answer now; ResultMessage is_error/api_error_status; exceptions incl. ResultError). classify() → credit / key / rate_limit / busy / offline / too_long / unknown; FOR_PERSON words in the chat; NEEDS_THE_OWNER (credit, key) told in the owner chat at most every 12 h (State.owner_told); NO_RETRY: a failed resume is not retried for those. run_model_job: a failed job tells its chat (for_job) instead of logging "done". tests/test_api_errors.py, 4 mutants red.
+- Housekeeping (housekeeping.py, policy.KEEP / settings.keep): runs 400 d, other records 90 d (calls, decided approvals, continuations, own_messages), CLI transcripts (claude/projects) 30 d, out folder 90 d, store features 24 months. At start and nightly after the pack. params' photo_retention_days / feature_retention_months removed (declared, never enforced); State.prune_own_messages folded in. policy_doc carries settings.keep through the Rules form (a save dropped it). tests/test_housekeeping.py, 4 mutants red.
+- UI: ask() — a styled <dialog> for every confirm/alert/prompt; guard() async. tests/test_ui.py forbids the native ones, 2 mutants red.
+
 ## 0.6.40 (6 October 2026)
 
 - UI: textarea.editor (Skills and Rules (file)) is white-space: pre-wrap + overflow-wrap: anywhere instead of pre (owner: no sideways scrolling). Soft wrap only, nothing added to the saved text. tests/test_ui.py pins it, mutation-checked.

@@ -45,6 +45,10 @@ def to_form(text: str) -> dict:
         settings.update({k: v for k, v in raw["settings"].items() if k in DEFAULT_BEHAVIOUR})
         if isinstance(raw["settings"].get("jobs"), dict):
             settings["jobs"] = raw["settings"]["jobs"]
+        # settings.keep has no form fields (Rules (file) edits it): carried through as written, or a
+        # save of the Rules form would drop the villa's limits (0.6.41)
+        if isinstance(raw["settings"].get("keep"), dict):
+            settings["keep"] = raw["settings"]["keep"]
     chats = raw.get("chats") if isinstance(raw.get("chats"), dict) else {}
     return {
         "settings": settings,

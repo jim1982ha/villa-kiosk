@@ -73,6 +73,16 @@ def profile_labels() -> dict[str, str]:
     keeps its own copy of which model a brain is."""
     return {p: f"{p.capitalize()} ({model.capitalize()})" for p, (model, _effort) in PROFILES.items()}
 DEFAULT_BEHAVIOUR = {"profile": "auto", "reply_limit_usd": 1.0, "web_search": True, "conversation_reset": "daily_04_00"}
+#: How long the agent keeps what it records (settings.keep; owner, 2026-10-06): before this, nothing
+#: was ever deleted. name: (default, lowest, highest). The villa's history (incidents, findings, tasks,
+#: proposals) is kept: a few rows a day, and the record of what happened in the villa.
+KEEP = {
+    "runs_days": (400, 31, 3650),           # each AI run: the Costs tab and its "Every run" (a year and a month)
+    "records_days": (90, 7, 3650),          # the agent's other records: refusals, voice, approvals decided, Continue
+    "conversations_days": (30, 1, 365),     # the AI's conversation transcripts (a conversation resumes for a day at most)
+    "files_days": (90, 7, 3650),            # its out folder: alert copies, report pages, saved files
+    "daily_figures_months": (24, 2, 120),   # the skills' daily figures per device (the baselines read 30 days)
+}
 #: A value the file leaves out. The starter policy.example.yaml writes the same ones.
 DEFAULTS = {"act_enabled": False, "approval_ttl_minutes": 15, "siren_auto_off_min": 3}
 
@@ -194,6 +204,10 @@ class Policy:
         self.siren_auto_off_min: int = _int_in(r.get("siren_auto_off_min"), 1, 60, DEFAULTS["siren_auto_off_min"])
         self.behaviour: dict = _behaviour(r.get("settings"))
         self.jobs: dict[str, dict] = _jobs(r.get("settings"))
+        raw_keep = (r.get("settings") or {}).get("keep") if isinstance(r.get("settings"), dict) else None
+        raw_keep = raw_keep if isinstance(raw_keep, dict) else {}
+        # an unreadable value keeps its default (and problems() names it): never "keep nothing"
+        self.keep: dict[str, int] = {k: _int_in(raw_keep.get(k), lo, hi, d) for k, (d, lo, hi) in KEEP.items()}
         self.people: dict[int, Person] = {}
         for p in r.get("people") or [] if isinstance(r.get("people"), list) else []:
             if not isinstance(p, dict):
@@ -454,6 +468,17 @@ def problems(raw: Any) -> list[str]:
                         lim = j.get("limit_usd")
                         if isinstance(lim, bool) or not isinstance(lim, (int, float)) or lim < 0.05:
                             out.append(f"settings.jobs.{name}.limit_usd must be a number of at least 0.05.")
+                elif k == "keep":
+                    if not isinstance(v, dict):
+                        out.append("settings.keep must be a set of name: number.")
+                        continue
+                    for name, val in v.items():
+                        if name not in KEEP:
+                            out.append(f"Unknown settings.keep.{name} (known: {', '.join(KEEP)}).")
+                            continue
+                        _, lo, hi = KEEP[name]
+                        if isinstance(val, bool) or not isinstance(val, int) or not lo <= val <= hi:
+                            out.append(f"settings.keep.{name} must be a whole number from {lo} to {hi}.")
                 elif k not in ("profile", "reply_limit_usd", "web_search", "conversation_reset"):
                     out.append(f"Unknown setting {k!r}.")
     if "act_enabled" in raw and not read_bool(raw["act_enabled"], False)[1]:

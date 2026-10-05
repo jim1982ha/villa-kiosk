@@ -155,6 +155,13 @@ class State:
         self.drop(f"incmsg:{incident}:{chat}:{message_id}")
 
     # A file in the out folder that the MODEL saved (a script's output may not be overwritten by it).
+    def owner_told(self, problem: str) -> str | None:
+        """When the owner was last told that `problem` (no credit, a refused key) stops the agent."""
+        return self.get(f"owner_told:{problem}")
+
+    def mark_owner_told(self, problem: str, at: str) -> None:
+        self.put(f"owner_told:{problem}", at)
+
     def mark_saved_by_model(self, name: str) -> None:
         self.put(f"saved_by_model:{name}", name)
 
@@ -181,11 +188,18 @@ class State:
                             (int(chat_id), int(message_id))).fetchone()
         return r is not None
 
-    def prune_own_messages(self, days: int = 60, now: datetime | None = None) -> None:
-        cut = ((now or utcnow()) - timedelta(days=days)).isoformat()
+    def prune(self, runs_before: str, records_before: str) -> dict[str, int]:
+        """Housekeeping (settings.keep): the AI runs (the Costs tab) and the other records have their own
+        limit; a pending approval and an unused Continue still waiting are never touched."""
         with self._lock:
-            self.db.execute("delete from own_messages where sent_at < ?", (cut,))
+            runs = self.db.execute("delete from calls where kind = 'run' and at < ?", (runs_before,)).rowcount
+            other = self.db.execute("delete from calls where kind != 'run' and at < ?", (records_before,)).rowcount
+            appr = self.db.execute("delete from approvals where status != 'pending' and created_at < ?",
+                                   (records_before,)).rowcount
+            cont = self.db.execute("delete from continuations where created_at < ?", (records_before,)).rowcount
+            msgs = self.db.execute("delete from own_messages where sent_at < ?", (records_before,)).rowcount
             self.db.commit()
+        return {"runs": runs, "records": other + appr + cont + msgs}
 
     # ------------------------------------------------------------------ approvals
     def new_approval(self, action: dict, action_hash: str, required_role: str, chat_id: int,

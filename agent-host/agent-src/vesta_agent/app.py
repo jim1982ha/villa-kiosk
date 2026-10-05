@@ -34,8 +34,10 @@ from zoneinfo import ZoneInfo
 
 from . import runner
 from .actions import Actions
+from .api_errors import FOR_PERSON, NEEDS_THE_OWNER, for_job
 from .config import STARTER_DIR
 from .ha_events import HaEvents
+from .housekeeping import tidy
 from .job_notices import JobNotices
 from .kiosk import Kiosk, KioskError
 from .outcome import Outcome
@@ -330,11 +332,17 @@ class Vesta:
             return {}
 
     async def rebuild_pack(self) -> None:
-        """The engine's nightly job (scheduler.PACK_AT): the knowledge pack, the tool list, and any
-        open task still without its Kiosk ticket."""
+        """The engine's nightly job (scheduler.PACK_AT): the knowledge pack, the tool list, any
+        open task still without its Kiosk ticket, and what the agent keeps (housekeeping.tidy)."""
         await asyncio.to_thread(self.build_pack)
         await self.refresh_server_tools()
         await self._safe(self.outcome.repair_tickets())
+        await self._safe(self.tidy())
+
+    async def tidy(self) -> None:
+        keep = self.policy().keep
+        gone = await asyncio.to_thread(tidy, self.s, self.state, keep)
+        log.info("Housekeeping (settings.keep): removed %s", ", ".join(f"{v} {k.replace('_', ' ')}" for k, v in gone.items()))
 
     # ------------------------------------------------------------------ Home Assistant's events
     async def on_ha_event(self, event_type: str, data: dict) -> None:
@@ -537,8 +545,12 @@ class Vesta:
                      f"{res.cost_usd:.3f} USD" if isinstance(res.cost_usd, (int, float)) else "cost unknown",
                      f", error {res.error}" if res.error else "")
             answer = res.text
-            if res.error and not answer:
-                answer = "The VESTA Agent could not answer this time. Try again in a moment."
+            if res.problem or res.error:
+                # ⚠️ NEVER THE RAW ERROR (owner, 2026-10-06): the reason in plain words (api_errors), and the
+                # owner told when no retry can help (no credit, a refused key)
+                said = FOR_PERSON.get(res.problem or "unknown", FOR_PERSON["unknown"])
+                answer = f"{answer}\n\n{said}" if answer else said
+                await self._safe(self._tell_owner(res.problem, cid))
             keyboard = None
             if res.stopped_at_limit and res.session_id:
                 cont = self.state.new_continuation(cid, res.session_id, person.telegram_id if person else None)
@@ -659,12 +671,36 @@ class Vesta:
                  " on request" if origin else "")
         res = await runner.run(self.s, self.system_prompt(), prompt, server, allowed, self.state, who=f"job:{name}",
                                limit_usd=cfg["limit_usd"], profile=cfg["profile"])
+        if res.problem or (res.error and not res.text):
+            # before 0.6.41 a failed job logged "done" and nobody was told: the report simply never came
+            problem = res.problem or "unknown"
+            log.warning("AI job %s did not run: %s", name, problem)
+            to = Routing(self.policy()).target("here" if origin else (job.get("to") or "owner"), origin)
+            if to:
+                await self.send(to, for_job(name, problem))
+            await self._safe(self._tell_owner(problem, to))
+            return
         log.info("AI job %s done (%s USD%s)", name, res.cost_usd,
                  ", stopped at its limit" if res.stopped_at_limit else "")
         if res.stopped_at_limit and job.get("on_limit"):
             to = "here" if origin else (job.get("to") or "owner")
             await self.run_code_job(skill, job["on_limit"], 300,
                                     {"to": to, "started": started, "limit": f"{cfg['limit_usd']:g}"}, origin)
+
+    async def _tell_owner(self, problem: str | None, already_told: int | None) -> None:
+        """No credit, a refused key: every reply and report stops until the owner acts. Told in the owner
+        chat at most every 12 hours per kind, and not again in a chat that was just told."""
+        text = NEEDS_THE_OWNER.get(problem or "")
+        owner = Routing(self.policy()).target("owner") if text else None
+        if not owner:
+            return
+        now = datetime.now(timezone.utc)
+        last = self.state.owner_told(problem)
+        if last and now - datetime.fromisoformat(last) < timedelta(hours=12):
+            return
+        self.state.mark_owner_told(problem, now.isoformat())
+        if int(owner) != int(already_told or 0):
+            await self.send(owner, text)
 
     async def start_job(self, name: str, chat: int) -> str:
         """A job a skill marks on_request, started from a chat: it runs as itself (its model, its limit)."""
@@ -700,7 +736,7 @@ class Vesta:
     # ------------------------------------------------------------------ main
     async def main(self, stop: asyncio.Event):
         await self.start()
-        self.state.prune_own_messages()
+        await self._safe(self.tidy())
         tasks = [asyncio.create_task(Scheduler(self.s, self.skills, self.state, self.run_code_job, self.run_model_job,
                                                self.rebuild_pack, self.housekeeping).run(stop))]
         if self.s.ha_url and self.s.ha_token:

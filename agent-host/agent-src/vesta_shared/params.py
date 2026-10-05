@@ -48,8 +48,6 @@ BEHAVIOUR_DEFAULTS: dict[str, float] = {
     "villa_silent_minutes": 30,
     "agent_deadman_hours": 36,
     "unavailable_minutes": 10,
-    "photo_retention_days": 30,
-    "feature_retention_months": 24,
     "on_threshold_fraction": 0.2,  # fraction of running power that counts as "on"
 }
 

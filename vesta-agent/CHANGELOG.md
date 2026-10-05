@@ -1,3 +1,24 @@
+## 0.12.45
+
+### Fixed
+- **When the AI cannot answer, you are told why, in plain words.** Out of Anthropic credit, an API key refused, too many requests, Anthropic's servers overloaded or down, no internet, a conversation grown too long: each now has its own short message. Before, you got a vague "could not answer", or, in some cases, the raw technical error text. When the credit runs out or the key is refused, the owner is also told in the owner chat (at most twice a day), since nothing works until they act.
+- **A scheduled report that cannot run now says so** in the chat it goes to. Before, it failed silently and the report never came.
+- **Saving the Rules page no longer drops settings it has no fields for.**
+
+### Changed
+- **The agent's records no longer grow forever.** Until now nothing was ever deleted: every run, every conversation transcript, every alert copy and report page, every day of device figures. Each night the oldest are removed:
+
+  | What | Kept for |
+  |---|---|
+  | AI runs (the Costs tab) | 400 days |
+  | Its other records | 90 days |
+  | Conversation transcripts | 30 days |
+  | Its files | 90 days |
+  | Daily device figures | 24 months |
+
+  The villa's history (incidents, findings, tasks) is kept. Each limit can be changed under `settings.keep` in Rules (file).
+- **Questions on the agent's page use its own style.** "Unsaved changes", "Delete the skill?", naming a new skill or file and error messages now appear in a VESTA window instead of the browser's grey box. (Closing or reloading the browser tab with unsaved changes still shows the browser's own warning: a page can ask for it, never draw it.)
+
 ## 0.12.44
 
 ### Changed

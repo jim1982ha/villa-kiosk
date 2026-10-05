@@ -304,3 +304,14 @@ svg.bars .base { stroke: var(--text-dim); }
   table.data td.ph-half { grid-column: auto; flex-direction: column; align-items: flex-start; justify-content: flex-start; text-align: left; gap: 0; padding: 4px 0; }
   table.data td.ph-half:nth-child(even of .ph-half) { align-items: flex-end; text-align: right; }
 }
+
+/* ---- the page's own dialog (app.js ask): never the browser's confirm/alert/prompt (owner, 2026-10-06).
+   Opaque (the card colour is translucent), the theme's fonts and buttons, phone-wide at most. */
+dialog.ask { border: 1px solid var(--hairline-strong); border-radius: var(--panel-radius); background: var(--bg-base);
+  color: var(--text-primary); padding: 22px; width: min(440px, calc(100vw - 32px)); box-shadow: 0 12px 40px var(--shadow); }
+dialog.ask::backdrop { background: rgba(0, 0, 0, 0.45); }
+dialog.ask h3 { font-family: var(--font-display); font-size: var(--text-lg); font-weight: 500; margin: 0 0 8px; overflow-wrap: anywhere; }
+dialog.ask p, dialog.ask ul { color: var(--text-secondary); margin: 0 0 16px; overflow-wrap: anywhere; }
+dialog.ask ul { padding-left: 18px; }
+dialog.ask input { width: 100%; box-sizing: border-box; margin: 0 0 16px; }
+dialog.ask .actions { justify-content: flex-end; margin-top: 0; }

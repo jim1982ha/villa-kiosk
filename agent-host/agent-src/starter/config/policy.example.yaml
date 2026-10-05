@@ -24,6 +24,13 @@ settings:
     fm-daily: {profile: auto, limit_usd: 1}             # the 07:00 digest
     fm-weekly: {profile: auto, limit_usd: 2}            # the facility manager's weekly report
     owner-monthly: {profile: performance, limit_usd: 6} # the owner's monthly report
+  # How long the agent keeps what it records; the oldest is deleted every night. Left out: these defaults.
+  # keep:
+  #   runs_days: 400              # each AI run (the Costs tab)
+  #   records_days: 90            # its other records: refusals, voice messages, decided approvals
+  #   conversations_days: 30      # the AI's conversation transcripts
+  #   files_days: 90              # its out folder: alert copies, report pages, saved files
+  #   daily_figures_months: 24    # the skills' daily figures per device
 
 act_enabled: false            # informs only. true switches the act path on (every action still needs a button press).
 approval_ttl_minutes: 15      # an Approve button older than this does nothing
