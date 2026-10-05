@@ -177,7 +177,7 @@ self.addEventListener("activate", (event) => {
 //   asset    — everything else of ours: cache first, refreshed behind.
 const NEVER_CACHE = [
   "/device-config", "/fm-data", "/telemetry", "/addon-config", "/model-upload",
-  "/agent-status", "/agent-messages", "/agent-choices", "/kiosk-rooms",
+  "/agent-status", "/agent-messages", "/agent-choices", "/kiosk-rooms", "/healthz",
 ];
 const NEVER_CACHE_FRAGMENTS = ["/api/", "/auth/", "/agent/v1/", "camera_proxy"];
 

@@ -54,11 +54,19 @@ COPY rootfs /
 # signal anywhere. .gitignore already records this exact lesson for a different
 # file: "THE PATTERN, NOT ONE FILE. A negation naming one file is a negation
 # somebody has to remember."
-RUN find /etc/s6-overlay/s6-rc.d -name run -exec chmod a+x {} + \
- && chmod a+x /usr/bin/supervisor-proxy.py
+RUN find /etc/s6-overlay/s6-rc.d \( -name run -o -name finish \) -exec chmod a+x {} + \
+ && chmod a+x /usr/bin/supervisor-proxy.py /usr/bin/vesta-service-finish
 
 # The compiled SPA from the build stage.
 COPY --from=build /app/dist /var/www
+
+# Healthy = nginx reached the proxy and it answered (/healthz). Docker marks
+# the container unhealthy after 3 misses, and the Supervisor's watchdog — when
+# the owner turns it on — restarts an unhealthy add-on. A dead proxy is a 502
+# and a hung one times out, so both count. Inside the container, so it works
+# with the 8099 host port unmapped.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD wget -q -T 8 -O /dev/null http://127.0.0.1:8099/healthz || exit 1
 
 LABEL \
   io.hass.name="VESTA" \

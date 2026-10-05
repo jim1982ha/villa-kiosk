@@ -500,6 +500,7 @@ PUBLIC_HANDLERS = {
     "auth_session_handler": "answers 'is there a session' — to anyone, by design",
     "auth_verify_handler": "the sign-in itself (rate-limited)",
     "auth_logout_handler": "clears the caller's own cookie",
+    "healthz_handler": "the image's Docker HEALTHCHECK carries no session; it answers 'ok' and nothing else",
 }
 routed = re.findall(r'app\.router\.add_\w+\(\s*(?:"[A-Z*]+"\s*,\s*)?"[^"]+"\s*,\s*(\w+)',
                     PROXY.read_text())

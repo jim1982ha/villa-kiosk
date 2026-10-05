@@ -1,4 +1,5 @@
 #!/command/with-contenv sh
+# shellcheck shell=sh
 # Run nginx in the foreground so s6 supervises (and restarts) it.
 #
 # ⚠️ WAIT FOR THE BACKEND TO ACCEPT FIRST. s6's dependency on `supervisor-proxy`

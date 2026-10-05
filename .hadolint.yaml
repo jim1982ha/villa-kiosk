@@ -1,0 +1,10 @@
+# hadolint (tools/addon_lint.py). Waived on purpose, each with its reason:
+ignored:
+  # BUILD_FROM is the per-arch Home Assistant base CI passes in; the community
+  # example app waives this rule the same way.
+  - DL3006
+  # Packages are deliberately NOT pinned to versions, like the base image's
+  # floating tag (see the Dockerfile's header): every build takes the base
+  # image's security fixes. Pinning is an owner decision, not a lint fix.
+  - DL3018
+  - DL3008

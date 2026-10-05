@@ -11,7 +11,11 @@ Home Assistant UI around it — same single app either way.
    `https://github.com/jim1982ha/villa-kiosk`.
 2. The **Vesta Kiosk** add-on appears in the store. Open it → **Install**
    (it pulls a prebuilt image — no on-device build).
-3. Enable **Start on boot** + **Watchdog**, then **Start**.
+3. Enable **Start on boot** + **Watchdog**, then **Start**. With the
+   watchdog on, Home Assistant restarts the add-on if it stops answering
+   its health check (every 30 seconds), or if one of its parts keeps crashing
+   (five times in two minutes). Without it, a part that keeps crashing stops
+   the add-on, and Home Assistant shows it as stopped until you start it again.
 4. Click **Vesta Kiosk** in the sidebar (or *Open Web UI*).
 
 ## First run

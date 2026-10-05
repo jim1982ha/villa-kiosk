@@ -61,6 +61,10 @@ GATES: list[tuple[str, list[str]]] = [
     ("The proxy's security rules", ["npm", "run", "test:proxy"]),
     ("The path lists agree", ["npm", "run", "test:routes"]),
     ("The add-on manifest agrees", ["npm", "run", "test:manifest"]),
+    # Home Assistant's own checks — the community example app's CI: the add-on
+    # linter, hadolint, shellcheck (tools/addon_lint.py; needs Docker).
+    ("Home Assistant's add-on checks", ["npm", "run", "test:addon-lint"]),
+    ("The crash-loop rule", ["npm", "run", "test:service-finish"]),
     ("The proxy parses", ["npm", "run", "test:proxy-parse"]),
     ("The release module", ["npm", "run", "test:release"]),
 ]

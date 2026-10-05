@@ -1181,6 +1181,16 @@ async def addon_config_handler(request: web.Request) -> web.Response:
     return web.json_response(_effective_paths(), headers={"Cache-Control": "no-store"})
 
 
+async def healthz_handler(request: web.Request) -> web.Response:
+    """The image's Docker HEALTHCHECK (Dockerfile), which the Supervisor's
+    watchdog acts on: 200 means nginx reached this process and it answered.
+    PUBLIC on purpose and says nothing — no version, no option, no state —
+    because the check carries no session, and anything it said would be
+    readable by anyone who can reach the port. A hung proxy fails it (the
+    check times out); a dead one fails it too (nginx answers 502)."""
+    return web.Response(text="ok", headers={"Cache-Control": "no-store"})
+
+
 async def auth_check_handler(request: web.Request) -> web.Response:
     """nginx auth_request backend for the static /model/ route: 200 when the
     caller is authorized (valid session cookie, trusted Ingress, or
@@ -3733,6 +3743,7 @@ def build_app(data_dir: str | None = None) -> web.Application:
 
     app.on_startup.append(on_start)
     app.on_cleanup.append(on_cleanup)
+    app.router.add_get("/healthz", healthz_handler)
     app.router.add_get("/addon-config", addon_config_handler)
     app.router.add_post("/model-upload", model_upload_handler)
     app.router.add_get("/device-config", device_config_get_handler)
