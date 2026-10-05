@@ -10,7 +10,7 @@
 # ⚠️ BUMP `version` ON EVERY PUSH. The Supervisor resolves image:<version>, never
 # :latest, so an unchanged version is an update Home Assistant cannot see.
 name: "VESTA Agent (dev)"
-version: "0.12.40"
+version: "0.12.41"
 slug: vesta_agent_dev
 description: "Runs the VESTA Agent, the villa's AI assistant"
 url: "https://github.com/jim1982ha/villa-kiosk"
@@ -20,13 +20,16 @@ arch:
 image: "ghcr.io/jim1982ha/vesta-agent-agent-dev-{arch}"
 # The HA base image ships s6-overlay v3 as its own init — disable Docker's.
 init: false
-startup: application
-boot: auto
+# startup: application and boot: auto are the Supervisor's defaults, so they are
+# not written out: Home Assistant's add-on linter refuses a key that repeats a
+# default (agent-host/tools/addon_lint.py, a gate).
+#
 # ⚠️ NO LOCAL-ONLY PRIVILEGES (SPEC H3, PLAN F10). Home Assistant is reached with
 # the "VESTA Agent" user's token, exactly as from outside the villa, so the same
-# image behaves identically as a standalone container.
-homeassistant_api: false
-hassio_api: false
+# image behaves identically as a standalone container. homeassistant_api and
+# hassio_api are therefore NOT granted — absent, which the Supervisor reads as
+# false, for the same linter reason. check_manifest.py fails if either is ever
+# set to true.
 # ⚠️ H4 AMENDED (owner, 2026-09-30): one way in, Home Assistant's Ingress — the
 # agent's UI (policy.yaml, the skills) in the sidebar, behind Home Assistant's
 # login, for administrators only (panel_admin). Still no published port: the UI
@@ -35,7 +38,8 @@ ingress: true
 ingress_port: 8095
 panel_icon: mdi:robot-outline
 panel_title: VESTA Agent
-panel_admin: true
+# Administrators only: panel_admin's default is true, so it is not written out
+# (the linter, again); check_manifest.py fails if it is ever set to false.
 # addon_config → /config in the container, /addon_configs/<repo>_<slug> on the
 # host: where VESTA Skills live so people can edit them from Home Assistant
 # without a restart or a rebuild (H6). The dict form is the Supervisor's current

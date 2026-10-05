@@ -1,3 +1,8 @@
+## 0.12.41
+
+### Changed
+- Behind the scenes: every release is now checked with Home Assistant's own app checks before it is published. Nothing in the app changes. Two settings that only repeated Home Assistant's defaults were removed from the app's description. What the app is allowed to do is unchanged: it still has no special access to Home Assistant, and its page is still for administrators only.
+
 ## 0.12.40
 
 ### Changed
