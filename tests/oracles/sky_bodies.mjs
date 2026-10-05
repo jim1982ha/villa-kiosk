@@ -118,6 +118,28 @@ ck("back to the overview: the moon is back round the villa at once", !near(unit(
      { camAz: sky2.camera.camAz, rel: f.relativeSky(to.x, to.y, to.z, sky2.camera.camAz).rel });
 }
 
+// ── OPENING THE APP (2.496.306): before the villa has loaded there is no
+// outline, so the sun is drawn along its true direction — and at dusk that can
+// be BEHIND the opening view, with no place on screen. 2.496.305's sky debug
+// line called .toFixed on that missing place, from a React effect on load:
+// the whole app down, on every device, every evening.
+{
+  const { ArcRotateCamera } = await import("@babylonjs/core/Cameras/arcRotateCamera.js");
+  const s3 = new Scene(new NullEngine());
+  const cam = new ArcRotateCamera("open", -Math.PI / 2, 1.1, 60, new Vector3(0, 1, 0), s3);
+  s3.activeCamera = cam;
+  const sky3 = new SkyDome(s3);
+  sky3.setHorizonDrop(200);                       // the overview — no villa outline yet
+  s3.render();
+  // A low sun straight behind the camera (it looks along +z from -z).
+  const behind = new Vector3(0, Math.sin(0.1), -Math.cos(0.1));
+  sky3.update(behind.scale(-1), true);
+  let report;
+  try { report = sky3.sunReport(); } catch (e) { report = e; }
+  ck("opening, sun behind the view, no villa yet: the sky report says 'behind' instead of throwing",
+     typeof report === "string" && report.includes("frame=behind"), String(report));
+}
+
 // ── ONE sun in the overview (owner, 2026-10-05, 17:37 screenshot): the sky
 // material paints its own disc and glow at the TRUE direction; at a shallow
 // tilt that showed beside the billboard. Loading SkyDome must gate both on the

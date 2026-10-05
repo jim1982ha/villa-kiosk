@@ -379,30 +379,25 @@ export class SkyDome {
     if (key !== this.sunKey) { this.sunKey = key; this.drawSun(warmth); }
   }
 
-  /** Where the disc is DRAWN, in degrees, and the true altitude it came from —
-   *  for the `sky` debug channel. A sun that cannot be seen is answered by
+  /** Where the disc is DRAWN, in degrees, and where on screen — the `sky`
+   *  debug channel's words for it. A sun that cannot be seen is answered by
    *  comparing the drawn figure against the camera's own `sinTilt`. */
-  sunReport(): {
-    trueDeg: number; drawnDeg: number | null;
-    alpha: number; frameX: number | null; frameY: number | null;
-  } {
+  sunReport(): string {
     const deg = (r: number) => (r * 180) / Math.PI;
-    const trueDeg = deg(
-      Math.atan2(-this.sunDir.y, Math.hypot(this.sunDir.x, this.sunDir.z)));
     // ⚠️ BOTH axes, because reporting only one is how a whole round was spent
     // on a disc that was perfectly placed vertically and off the side of the
     // screen: `frameY=0.21 discAlpha=1.00` with an empty sky in the recording.
     // 0 is the left/top edge, 1 the right/bottom, 0.5 dead centre — which is
     // where the camera's target, the villa, sits. Outside 0..1 is off screen.
-    if (this.drawn === null) {
-      return { trueDeg, drawnDeg: null, alpha: this.sunMat.alpha, frameX: null, frameY: null };
-    }
-    return {
-      trueDeg,
-      drawnDeg: deg(Math.atan2(this.drawn.y, Math.hypot(this.drawn.x, this.drawn.z))),
-      alpha: this.sunMat.alpha,
-      ...(projectToFrame(this.drawn.x, this.drawn.y, this.drawn.z, this.camera) ?? { frameX: null, frameY: null }),
-    };
+    if (this.drawn === null) return " disc=hidden";
+    // ⚠️ A sun BEHIND the viewer has a drawn point and no frame position
+    // (2.496.304 fades it out there). This text once assumed a frame and threw
+    // on load, in a React effect, whenever the evening sun was behind the
+    // opening view — the whole app down on every device (2.496.306).
+    const at = projectToFrame(this.drawn.x, this.drawn.y, this.drawn.z, this.camera);
+    return ` drawn=${Math.round(deg(Math.atan2(this.drawn.y, Math.hypot(this.drawn.x, this.drawn.z))))}°`
+      + (at ? ` frame=${at.frameX.toFixed(2)},${at.frameY.toFixed(2)}` : " frame=behind")
+      + ` discAlpha=${this.sunMat.alpha.toFixed(2)}`;
   }
 
   setEnabled(on: boolean): void {
