@@ -12,8 +12,6 @@ import { Scene } from "@babylonjs/core/scene";
 import { SceneInstrumentation } from "@babylonjs/core/Instrumentation/sceneInstrumentation";
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
-import { fitFrame } from "./overviewPose";
-import { sunPathOf } from "./skyFraming";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
 import { Ray } from "@babylonjs/core/Culling/ray";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
@@ -1085,10 +1083,14 @@ export class SceneManager {
     if (!this.loadedMeshes.length) return;
     const ext = this.worldExtends(this.loadedMeshes);
     this.overview.fitTo({ min: ext.min, max: ext.max });
-    // The sun and moon are fixed points on a sun-path diagram round the
-    // villa (skyFraming), sized from the model itself, on the ground the fit
-    // frames — so no camera motion can move them against the villa.
-    this.sky.setSunPath(sunPathOf(ext.min, ext.max, fitFrame(ext, 1).target.y - 1));
+    // The overview draws the sun and the moon on an arc round the villa's
+    // outline as the screen shows it (skyFraming): the outline is every
+    // mesh's box, reduced once to a handful of points.
+    const corners: { x: number; y: number; z: number }[] = [];
+    for (const m of this.loadedMeshes) {
+      for (const v of m.getBoundingInfo().boundingBox.vectorsWorld) corners.push({ x: v.x, y: v.y, z: v.z });
+    }
+    this.sky.setVillaOutline(corners);
     // A saved per-device default (see saveOverviewDefault) overrides the
     // auto-fit angle/tilt/zoom/pan — fitTo() still ran first so the pan
     // bounds and icon-zoom reference are correct for THIS model.

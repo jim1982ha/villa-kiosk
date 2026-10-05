@@ -8,7 +8,7 @@
 import { wrapAngle } from "@/utils/geometry";
 import {
   defaultSkyCamera, liftFor, placeBody, projectToFrame, sunWarmth,
-  type SkyCamera, type SunPath,
+  type SkyCamera, type Vec3, outlinePoints,
 } from "./skyFraming";
 import type { NightSky } from "./NightSky";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
@@ -200,8 +200,8 @@ export class SkyDome {
   readonly camera: SkyCamera = defaultSkyCamera();
 
   /**
-   * Follow the camera: the bodies are fixed points round the villa
-   * (skyFraming's sun-path diagram), seen from wherever the camera is now.
+   * Follow the camera: the bodies are drawn round the villa's outline as this
+   * camera shows it (skyFraming.placeAround), so every move re-places them.
    *
    * Cheap enough to run per rendered frame, and this scene renders on demand,
    * so it costs nothing at all while the camera is still. ⚠️ The camera's
@@ -239,10 +239,12 @@ export class SkyDome {
   private static readonly FORWARD = new Vector3(0, 0, 1);
   private moon: NightSky | null = null;
 
-  /** The sun-path diagram the bodies sit on (skyFraming.sunPathOf, from the
-   *  model's own extents — no villa dimension ships). */
-  setSunPath(path: SunPath): void {
-    this.camera.path = path;
+  /** The villa the bodies are drawn round: every mesh's box corners, reduced
+   *  once to the few points that outline it from any side
+   *  (skyFraming.outlinePoints) — from the model itself, no villa dimension
+   *  ships. */
+  setVillaOutline(points: Vec3[]): void {
+    this.camera.villa = outlinePoints(points);
     this.reframe = true;   // on the next rendered frame, even if the camera is still
   }
   private reframe = false;

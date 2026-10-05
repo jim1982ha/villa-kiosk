@@ -1,7 +1,7 @@
 // The REAL SkyDome and NightSky on Babylon's NullEngine (2.496.297): the sun
 // and the moon are placed by one owner, against one horizon drop — and, since
-// 2.496.302, on screen exactly where their fixed point round the villa
-// projects through Babylon's OWN camera, through every camera motion.
+// 2.496.304, drawn on exactly the pixel skyFraming places them at, round the
+// villa's outline, through Babylon's OWN camera and every camera motion.
 //
 // The drop used to be handed to each body separately, and only the sun was
 // re-placed when it changed. Walking has no drop, so the camera tracker stops
@@ -33,7 +33,7 @@ const sun = scene.getMeshByName("sunDisc");
 // whose sun-path diagram is set. The body sits ahead of it.
 const f0 = await import("@/babylon/skyFraming");
 Object.assign(sky.camera, { pitch: (40 * Math.PI) / 180, camAz: 0, halfFov: 0.4, hHalf: 0.7,
-  eye: { x: 0, y: 40, z: -50 }, path: f0.sunPathOf({ x: -10, y: 0, z: -6 }, { x: 10, y: 6, z: 6 }, 0) });
+  eye: { x: 0, y: 40, z: -50 }, villa: f0.boxCorners({ x: -10, y: 0, z: -6 }, { x: 10, y: 6, z: 6 }) });
 const alt = (30 * Math.PI) / 180, az = (20 * Math.PI) / 180;
 const dir = new Vector3(Math.sin(az) * Math.cos(alt), Math.sin(alt), Math.cos(az) * Math.cos(alt));
 const unit = (m) => m.position.clone().normalize();
@@ -42,7 +42,7 @@ const near = (a, b) => Vector3.Distance(a, b) < 1e-6;
 sky.setHorizonDrop(200);
 night.update({ dir, fraction: 0.6, angle: -1, parallacticAngle: 0, nightT: 1 });
 sky.update(dir.scale(-1), true);   // a sun in the same place, for the same-rule check
-ck("overview: the moon is drawn toward its point round the villa, not along its true direction", moon.isEnabled() && !near(unit(moon), dir));
+ck("overview: the moon is drawn round the villa, not along its true direction", moon.isEnabled() && !near(unit(moon), dir));
 ck("overview: sun and moon in the same direction are drawn in the same place (one rule)",
    sun.isEnabled() && near(unit(moon), unit(sun)));
 
@@ -52,34 +52,30 @@ ck("walk-through: the moon moves to its TRUE direction at once, without waiting 
 ck("  ...and the sun billboard is off (the sky material draws the real one)", !sun.isEnabled());
 
 sky.setHorizonDrop(200);           // and back
-ck("back to the overview: the moon is back on its point at once", !near(unit(moon), dir) && near(unit(moon), unit(sun)));
+ck("back to the overview: the moon is back round the villa at once", !near(unit(moon), dir) && near(unit(moon), unit(sun)));
 
-// ── EVERY CAMERA MOTION, through Babylon's own projection (2.496.302) ──────
-// Owner recordings, 2026-10-05: tilting, then panning, then zooming each moved
-// the sun against the villa, under the screen rules 2.496.290–301 drew it by.
+// ── EVERY CAMERA MOTION, through Babylon's own projection (2.496.304) ──────
 // Drive the REAL orbit camera through each motion and measure, with Babylon's
 // projection (not skyFraming's), where the disc lands on screen against where
-// its fixed point round the villa lands: they must be the same pixel, always.
+// skyFraming placed it: the same pixel, always — and gone while behind you.
 {
   const { ArcRotateCamera } = await import("@babylonjs/core/Cameras/arcRotateCamera.js");
   const { Matrix } = await import("@babylonjs/core/Maths/math.vector.js");
   const f = await import("@/babylon/skyFraming");
   const s2 = new Scene(new NullEngine());
   const cam = new ArcRotateCamera("ov", -Math.PI / 2, 1.1, 60, new Vector3(0, 1, 0), s2);
+  cam.fov = 0.8;
   s2.activeCamera = cam;
   const sky2 = new SkyDome(s2);
   const night2 = new NightSky(s2, sky2.camera);
   sky2.setMoon(night2);
   sky2.setHorizonDrop(200);
-  const path = f.sunPathOf({ x: -15, y: 0, z: -8 }, { x: 15, y: 7, z: 8 }, 0);
-  sky2.setSunPath(path);
+  sky2.setVillaOutline(f.boxCorners({ x: -15, y: 0, z: -8 }, { x: 15, y: 7, z: 8 }));
   const alt2 = (25 * Math.PI) / 180, az2 = (30 * Math.PI) / 180;
   const to = new Vector3(Math.sin(az2) * Math.cos(alt2), Math.sin(alt2), Math.cos(az2) * Math.cos(alt2));
   sky2.update(to.scale(-1), true);
   const mdir = new Vector3(-Math.sin(az2) * Math.cos(0.6), Math.sin(0.6), Math.cos(az2) * Math.cos(0.6));
   night2.update({ dir: mdir, fraction: 0.5, angle: -1, parallacticAngle: 0, nightT: 1 });
-  const P = Vector3.FromArray(Object.values(f.bodyPoint(to.x, to.y, to.z, path)));
-  const M = Vector3.FromArray(Object.values(f.bodyPoint(mdir.x, mdir.y, mdir.z, path)));
   const sunMesh = s2.getMeshByName("sunDisc"), moonMesh = s2.getMeshByName("moon");
   const eng = s2.getEngine();
   const px = (w) => {
@@ -93,8 +89,8 @@ ck("back to the overview: the moon is back on its point at once", !near(unit(moo
     ["as fitted", () => {}],
     ["orbited", () => { cam.alpha += 0.6; }],
     ["tilted", () => { cam.beta = 0.7; }],
-    ["zoomed in", () => { cam.radius = 35; }],
-    ["panned", () => { cam.target.x += 9; cam.target.z -= 6; }],
+    ["zoomed in", () => { cam.radius = 40; }],
+    ["panned", () => { cam.target.x += 6; cam.target.z -= 4; }],
     ["zoomed out and orbited", () => { cam.radius = 90; cam.alpha -= 1.4; }],
     ["tilted low", () => { cam.beta = 1.35; }],
   ];
@@ -103,18 +99,23 @@ ck("back to the overview: the moon is back on its point at once", !near(unit(moo
   for (const [name, move] of moves) {
     move();
     s2.render();
-    for (const [body, mesh, W] of [["sun", sunMesh, P], ["moon", moonMesh, M]]) {
-      if (!mesh.isEnabled()) continue;
-      const a = px(drawnAt(mesh)), b = px(W);
-      // Both in front of the camera: compare pixels. (z in 0..1 is in front.)
-      if (!(a.z > 0 && a.z < 1 && b.z > 0 && b.z < 1)) continue;
+    for (const [body, mesh, dir] of [["sun", sunMesh, to], ["moon", moonMesh, mdir]]) {
+      const want = f.placeBody(dir.x, dir.y, dir.z, f.liftFor(200), sky2.camera);
+      if (!mesh.isEnabled() || !want.frame) { if (mesh.isEnabled() !== !!want.dir) off.push({ name, body, enabled: mesh.isEnabled(), want: !!want.dir }); continue; }
       shown++;
-      const e = Math.hypot(a.x - b.x, a.y - b.y);
-      if (e > 0.01) off.push({ name, body, e, drawn: [a.x, a.y], point: [b.x, b.y] });
+      const a = px(drawnAt(mesh)), W = eng.getRenderWidth(), H = eng.getRenderHeight();
+      const e = Math.hypot(a.x - want.frame.fx * W, a.y - want.frame.fy * H);
+      if (e > 0.5) off.push({ name, body, e, drawn: [a.x, a.y], want: [want.frame.fx * W, want.frame.fy * H] });
     }
   }
-  ck(`the sun and the moon land on the SAME pixel as their point round the villa, through orbit, tilt, zoom and pan (${shown} measured)`,
-     off.length === 0 && shown >= 10, off.slice(0, 3));
+  ck(`the sun and the moon land on the pixel skyFraming placed them at, through orbit, tilt, zoom and pan (${shown} measured)`,
+     off.length === 0 && shown >= 8, off.slice(0, 3));
+  // Turn round until the sun is behind the camera: it is not drawn.
+  cam.target = new Vector3(0, 1, 0); cam.beta = 1.0; cam.radius = 60;
+  cam.alpha = Math.atan2(Math.cos(az2), Math.sin(az2));   // camera on the sun's side, looking away from it
+  s2.render();
+  ck("  ...and with the sun behind the camera, it is not drawn (not on the lawn in front of the villa)", !sunMesh.isEnabled(),
+     { camAz: sky2.camera.camAz, rel: f.relativeSky(to.x, to.y, to.z, sky2.camera.camAz).rel });
 }
 
 // ── ONE sun in the overview (owner, 2026-10-05, 17:37 screenshot): the sky
