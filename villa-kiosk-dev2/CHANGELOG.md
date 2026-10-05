@@ -1,3 +1,9 @@
+## 2.496.301
+
+### Improved
+- Home Assistant can now tell when VESTA is not working. VESTA checks its own health every 30 seconds. If one of its parts keeps crashing (five times in two minutes), it stops, so Home Assistant shows it as stopped instead of "running" while the screen stays blank. Turn on **Watchdog** on the add-on's page and Home Assistant restarts it automatically in both cases. A single crash still recovers on its own within a second, as before.
+- Every release is now checked with Home Assistant's own add-on checks before it is published.
+
 ## 2.496.300
 
 ### Fixed
