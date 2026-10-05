@@ -1,3 +1,8 @@
+## 2.496.296
+
+### Fixed
+- A sun or moon that is behind you is no longer shown in the 3D overview. Looking at the house from the front and then from the back, it now appears from only one side: the side where it really is in front of you. As you turn the view and it moves round to your side, it fades out gently where it stands, and it fades back in on the same side when you turn back.
+
 ## 2.496.295
 
 ### Fixed
