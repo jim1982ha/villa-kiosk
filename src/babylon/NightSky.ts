@@ -167,7 +167,7 @@ export class NightSky {
     // drawn at all. skyFraming.horizonFade owns the rule for both bodies.
     // The same expressions the sun is placed and faded by (skyFraming), against
     // the same camera object SkyDome tracks — the moon rides the identical dome,
-    // so it meets the identical cut directly behind you.
+    // so it leaves the frame at the identical edge.
     const { x, y, z } = look.dir;
     const d = lift(x, y, z, this.lift, this.camera);
     const dir = new Vector3(d.x, d.y, d.z);

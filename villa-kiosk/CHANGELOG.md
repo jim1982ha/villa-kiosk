@@ -1,3 +1,8 @@
+## 2.496.291
+
+### Fixed
+- Turning the view no longer makes the sun or the moon jump from one side of the house to the other. They now behave like the real sky: as you turn, the sun slides off one edge of the screen, and it comes back over the other edge only once you have turned far enough round to face it again. While its direction is in view it is always shown, in its true place. Zooming and moving the view leave it where it is, like a real sky.
+
 ## 2.496.290
 
 ### Fixed

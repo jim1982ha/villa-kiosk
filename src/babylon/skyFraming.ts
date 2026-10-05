@@ -62,16 +62,11 @@ export const BAND_LOW = 0.35;
  *  tuning surface if the arc wants to sit higher or flatter. */
 export const BAND_HIGH = 0.85;
 
-/** Inside this part of the frame's half-width the body sits EXACTLY where a
- *  real sky would put it: turning the camera moves it by the true amount, the
- *  way the landscape moves. Only beyond it does the edge pull it in. */
-export const AZ_TRUE = 0.6;
-/** How far out the saturation reaches, as a fraction of the frame's half
- *  width. Under 1 so a body to the side or behind still lands inside the frame
- *  — at the edge on its TRUE side — rather than exactly on the edge. */
-export const AZ_REACH = 0.88;
-/** Width of the fade at the cut directly behind the camera. */
-export const AZ_FADE = (9 * Math.PI) / 180;
+/** How far past the frame's side edge, in radians of bearing, a body is
+ *  still drawn: its halo (~7° across) must slide off the edge rather than be
+ *  switched off while part of it shows. Beyond this it is hidden — off screen
+ *  either way, so the switch is invisible. */
+export const AZ_SPILL = 0.2;
 
 /** The twilight band a body fades over as it sets: −1°..3° of TRUE altitude. */
 export const SET_LOW = (-1 * Math.PI) / 180;
@@ -91,29 +86,29 @@ export const SET_HIGH = (3 * Math.PI) / 180;
  * the frame (BAND_LOW..BAND_HIGH), so the sun is visible in the middle of the
  * day — precisely when a sun is most expected.
  *
- * SIDE: the TRUE bearing relative to where the camera faces, and nothing else.
- * ⚠️ Until 2.496.290 the bearing was squeezed toward the camera's heading
- * (×0.45) and placed on a sphere hanging from the camera's forward ray, so
- * the moon's east/west in the frame depended on the VIEW: tilting from 20° to
- * 85° slid a moon 80° to the right from frameX 0.94 to 0.64 — reported as
- * "the east/west position of the moon changes with the angle of the camera"
- * (owner, 2026-10-05). Now tilting cannot move it sideways at all, and turning
- * moves it by the true amount while it is in the middle of the frame
- * (AZ_TRUE). Toward the sides it is eased into the edge on its TRUE side
- * (AZ_REACH) instead of leaving the frame — the old complaint was a sun
- * "simply behind you" — and directly behind it fades (azimuthFade).
+ * SIDE: the TRUE bearing relative to where the camera faces, and nothing else
+ * — the place a real sky would put it, so it moves exactly as the landscape
+ * does. ⚠️ Two releases got this wrong:
+ * - until 2.496.290 the bearing was squeezed toward the camera's heading
+ *   (×0.45) and placed on a sphere hanging from the camera's forward ray, so
+ *   TILTING slid a moon 80° to the right from frameX 0.94 to 0.64 (owner,
+ *   2026-10-05: "the east/west position changes with the angle of the camera");
+ * - 2.496.290 then PARKED a body that was out of view at the frame's edge on
+ *   its own side, so turning past "directly behind" swapped it from one edge
+ *   to the other in one step — "the sun suddenly disappears from the east
+ *   side and reappears on the west side" (owner, 2026-10-05, 2.496.291).
+ * Out of view is out of view: it leaves over the edge as you turn and comes
+ * back over the other edge only after you have turned the rest of the way.
  */
 export function framePositionOf(x: number, y: number, z: number, cam: SkyCamera): { frameX: number; frameY: number } {
   const alt = Math.atan2(y, Math.hypot(x, z));
   const t = Math.max(0, Math.min(1, alt / (Math.PI / 2)));
   const ndcY = Math.tan(cam.halfFov * lerp(BAND_LOW, BAND_HIGH, t)) / Math.tan(cam.halfFov);
-  const rel = wrapAngle(Math.atan2(x, z) - cam.camAz);
-  // The true horizontal place of that bearing, in half-widths; beyond 90° to
-  // the side there is none, so it is "past the edge" on its own side.
-  const u = Math.abs(rel) < Math.PI / 2 ? Math.abs(Math.tan(rel)) / Math.tan(cam.hHalf) : Infinity;
-  const span = AZ_REACH - AZ_TRUE;
-  const eased = u <= AZ_TRUE ? u : AZ_TRUE + span * Math.tanh((u - AZ_TRUE) / span);
-  return { frameX: 0.5 + 0.5 * Math.sign(rel) * eased, frameY: 0.5 - 0.5 * ndcY };
+  // Hidden past hHalf + AZ_SPILL (azimuthFade); the cap only keeps tan()
+  // finite for a direction that is not drawn.
+  const lim = Math.min(cam.hHalf + AZ_SPILL, 1.45);
+  const rel = Math.max(-lim, Math.min(lim, wrapAngle(Math.atan2(x, z) - cam.camAz)));
+  return { frameX: 0.5 + 0.5 * Math.tan(rel) / Math.tan(cam.hHalf), frameY: 0.5 - 0.5 * ndcY };
 }
 
 /**
@@ -169,17 +164,18 @@ export function horizonFade(alt: number): number {
   return Math.max(0, Math.min(1, t));
 }
 
-/** Cover the cut: 1 everywhere except within AZ_FADE of directly behind the
- *  camera, where it falls to 0 — the body dims out at one edge and back in at
- *  the other instead of teleporting across the frame. */
+/** 1 while the body's bearing is within the frame (plus AZ_SPILL for its
+ *  halo), 0 beyond — where it is already off screen, so the step never shows.
+ *  It used to be a fade over a "cut" directly behind the camera, a seam the
+ *  edge-parking created; a true bearing has no seam. */
 export function azimuthFade(x: number, z: number, drop: number, cam: SkyCamera): number {
   if (drop <= 0) return 1;
   const rel = Math.abs(wrapAngle(Math.atan2(x, z) - cam.camAz));
-  return Math.max(0, Math.min(1, (Math.PI - rel) / AZ_FADE));
+  return rel <= Math.min(cam.hHalf + AZ_SPILL, 1.45) ? 1 : 0;
 }
 
 /** The opacity of a body at TRUE direction (x,y,z): it has set, or sits at
- *  the cut behind the camera, or is fully there. */
+ *  out of view to the side, or is fully there. */
 export function bodyFade(x: number, y: number, z: number, drop: number, cam: SkyCamera): number {
   return horizonFade(Math.atan2(y, Math.hypot(x, z))) * azimuthFade(x, z, drop, cam);
 }

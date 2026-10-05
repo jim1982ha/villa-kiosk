@@ -54,38 +54,59 @@ console.log("\n  horizontal: the TRUE bearing, whatever the view (owner, 2026-10
   }
   ck("TILTING the camera never moves the sun or moon sideways (it slid 0.94 → 0.64 between 20° and 85°)", worst < 1e-9, at);
   let off = 0, at2 = null;
-  for (const hHalf of HHALF) for (const pitch of PITCHES) for (const camAz of [0, deg(120), deg(-150)]) for (let a = -20; a <= 20; a += 4) {
+  for (const hHalf of HHALF) for (const pitch of PITCHES) for (const camAz of [0, deg(120), deg(-150)]) for (let a = -60; a <= 60; a += 4) {
     const rel = deg(a), cam = { pitch, halfFov: 0.4, camAz, hHalf };
+    if (Math.abs(rel) >= hHalf) continue;                       // only where it is on screen
     const want = 0.5 + 0.5 * Math.tan(rel) / Math.tan(hHalf);
-    if (Math.abs(want - 0.5) > 0.5 * f.AZ_TRUE) continue;
     const e = Math.abs(drawn(deg(30), camAz + rel, cam).frameX - want);
     if (e > off) { off = e; at2 = { hHalf, pitch, camAz, a }; }
   }
-  ck("  ...and TURNING moves it by the true amount in the middle of the frame, as the landscape moves", off < 1e-9, { off, at2 });
+  ck("  ...and TURNING moves it by the true amount, edge to edge, exactly as the landscape moves", off < 1e-9, { off, at2 });
   let wrongSide = [];
   for (const pitch of PITCHES) for (const camAz of [0, deg(120), deg(-150)]) for (let a = -170; a <= 170; a += 10) {
     if (a === 0) continue;
-    const x = drawn(deg(30), camAz + deg(a), { pitch, halfFov: 0.4, camAz, hHalf: 0.7 }).frameX;
-    if (Math.sign(x - 0.5) !== Math.sign(a)) wrongSide.push([pitch, camAz, a, x]);
+    const r = drawn(deg(30), camAz + deg(a), { pitch, halfFov: 0.4, camAz, hHalf: 0.7 });
+    if (r.fade > 0 && Math.sign(r.frameX - 0.5) !== Math.sign(a)) wrongSide.push([pitch, camAz, a, r.frameX]);
   }
   ck("  ...a body to the RIGHT of where the camera faces is always drawn right of the villa, and left is left", wrongSide.length === 0, wrongSide.slice(0, 3));
-  let inside = true, sample = [];
-  for (const hHalf of HHALF) for (const pitch of PITCHES) for (const camAz of [0, deg(120), deg(-150)]) for (let a = -179; a <= 179; a += 7) {
-    const { frameX, frameY } = drawn(deg(30), deg(a), { pitch, halfFov: 0.4, camAz, hHalf });
-    if (!(frameX > 0 && frameX < 1 && frameY > 0 && frameY < 1)) { inside = false; sample.push([hHalf, pitch, camAz, a, frameX]); }
+  // The 2.496.291 defect: turning the camera all the way round, the sun must
+  // leave over one edge and come back over the OTHER edge only after the turn
+  // has carried it there — never vanish or appear while on screen, never jump.
+  let seams = [];
+  for (const hHalf of HHALF) for (const pitch of [deg(25), deg(61.4), deg(87)]) {
+    let prev = null;
+    for (let t = 0; t <= 720; t += 0.5) {
+      const cam = { pitch, halfFov: 0.4, camAz: deg(t), hHalf };
+      const r = drawn(deg(30), deg(40), cam);
+      const shown = r.fade > 0;
+      const onScreen = r.frameX > 0 && r.frameX < 1;
+      if (prev) {
+        if (shown !== prev.shown && (onScreen || prev.onScreen)) seams.push(["switched on screen", hHalf, t, r.frameX]);
+        if (shown && prev.shown && Math.abs(r.frameX - prev.frameX) > 0.05) seams.push(["jumped", hHalf, t, prev.frameX, r.frameX]);
+        if (shown && prev.shown && r.frameX > prev.frameX + 1e-12) seams.push(["moved WITH the turn", hHalf, t]);
+      }
+      prev = { shown, onScreen, frameX: r.frameX };
+    }
   }
-  ck("  ...at every bearing, frame width, tilt and heading it lands INSIDE the frame — at the edge on its true side when it is out of view (it was 'behind you')", inside, sample.slice(0, 3));
+  ck("  ...turning all the way round: it slides off one edge and back in over the other, never popping in, out or across", seams.length === 0, seams.slice(0, 3));
+  let missing = [];
+  for (const hHalf of HHALF) for (const pitch of PITCHES) for (let a = -55; a <= 55; a += 5) {
+    if (Math.abs(deg(a)) >= hHalf) continue;
+    const r = drawn(deg(30), deg(a), { pitch, halfFov: 0.4, camAz: 0, hHalf });
+    if (!(r.fade === 1 && r.frameX > 0 && r.frameX < 1 && r.frameY > 0 && r.frameY < 1)) missing.push([hHalf, pitch, a]);
+  }
+  ck("  ...and whenever its bearing is inside the view, it is on screen and fully drawn", missing.length === 0, missing.slice(0, 3));
   const cam = { pitch: deg(61.4), halfFov: 0.4, camAz: 0, hHalf: 0.7 };
-  const xs = [-120, -60, -30, 0, 30, 60, 120].map((a) => drawn(deg(30), deg(a), cam).frameX);
+  const xs = [-40, -20, 0, 20, 40].map((a) => drawn(deg(30), deg(a), cam).frameX);
   ck("  ...and bearings stay in order across the frame", xs.every((x, i) => i === 0 || x > xs[i - 1]), xs);
 }
 
-console.log("\n  the cut directly behind, and setting");
+console.log("\n  out of view, and setting");
 {
   const cam = { pitch: deg(61.4), halfFov: 0.4, camAz: 0, hHalf: 0.7 };
-  const behind = dirAt(deg(30), Math.PI - 1e-6), beside = dirAt(deg(30), Math.PI - deg(20));
-  ck("directly behind the camera the body is faded out (no jump across the frame)", f.bodyFade(behind.x, behind.y, behind.z, drop, cam) < 0.01);
-  ck("  ...20° off the cut it is fully there", f.bodyFade(beside.x, beside.y, beside.z, drop, cam) === 1);
+  const behind = dirAt(deg(30), Math.PI - 1e-6), beside = dirAt(deg(30), Math.PI / 2);
+  ck("behind the camera, or beside it out of view, the body is not drawn (out of view is out of view)",
+     f.bodyFade(behind.x, behind.y, behind.z, drop, cam) === 0 && f.bodyFade(beside.x, beside.y, beside.z, drop, cam) === 0);
   ck("set: below −1° of TRUE altitude it is gone; above 3° fully up; between, a fade",
      f.horizonFade(deg(-1.5)) === 0 && f.horizonFade(deg(4)) === 1 && f.horizonFade(deg(1)) > 0 && f.horizonFade(deg(1)) < 1);
   const lo = dirAt(deg(-0.5), 0);
