@@ -1,3 +1,19 @@
+## 0.12.43
+
+### Changed
+- Behind the scenes: the release checks now install the same system library as the app (the one that reads voice messages). 0.12.42 was never published because of this; everything listed under 0.12.42 arrives with this version.
+
+## 0.12.42
+
+### Added
+- **Voice messages.** Send the agent a voice message in your private chat, or as a reply to one of its messages in a group, and it answers as if you had typed it. Home Assistant's own speech-to-text (your Whisper) turns it into text; the recording is deleted as soon as it is read. It is transcribed in the language saved for you on the VESTA Agent page, so set that to the language you speak. Needs "Telegram takeover" on.
+
+### Fixed
+- **"The kitchen lights" now means the lights in the Kitchen area.** The agent picked devices whose internal name contained "kitchen", and switched on the dining table light, which Home Assistant places in the Living Room. It now goes by the area set in Home Assistant, including the area's other names (aliases). It uses device names only for a device without an area, or when no area has that name.
+- **The agent answers in the language you write in.** It used to answer in the language saved for you, whatever language you wrote in. The saved language is now used only when a message doesn't tell (a number, an "ok") and for what the agent sends on its own.
+
+All three rules live in the villa-concierge skill (its instructions and scripts), not in the app, so a villa can adjust them and copy them to another villa. The skill updates itself unless you have edited it.
+
 ## 0.12.41
 
 ### Changed
