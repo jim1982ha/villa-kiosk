@@ -1,3 +1,12 @@
+## 2.496.305
+
+### Fixed
+- A grouped device's window now shows each reading exactly as that reading's own window does. A temperature over the limit you set is red in its group too (before, it was red only when opened on its own), and a detector in alarm, such as "SMOKE DETECTED", shows in capitals with its warning icon there as well.
+- In "Also on this device", a number past the limit you set is now coloured too: amber when it is close, red when it is over.
+
+### Changed
+- Behind the scenes: which window, list and device are open, and where Back goes, now follow one set of rules instead of being spread across the main page. Nothing you see changes.
+
 ## 2.496.304
 
 ### Changed
