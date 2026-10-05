@@ -1,3 +1,9 @@
+## 2.496.297
+
+### Fixed
+- Switching from the 3D overview to the walk-through now moves the moon to its real place in the sky straight away. Before, it stayed where the overview had drawn it until the sky's next minute update, so for up to a minute it could hang in the wrong spot.
+- In "Also on this device", a sensor that only reports yes or no now shows the same colour as in its own window. A grouped smoke detector's "Smoke detected" is red, "Clear" is green and an offline sensor is amber. Before, every row was the same grey whatever it said.
+
 ## 2.496.296
 
 ### Fixed
