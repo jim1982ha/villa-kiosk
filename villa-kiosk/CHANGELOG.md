@@ -1,3 +1,8 @@
+## 2.496.299
+
+### Fixed
+- The 3D overview shows only one sun. When the view was tilted close to level, a second small white sun with a large pale glow could appear above the real one. That second one was the sky's own built-in sun, drawn at the sun's true position. In the overview it is now switched off, so the sun placed round the house is the only one. The sky's colours for the time of day are unchanged, and the walk-through keeps its real sun as before.
+
 ## 2.496.298
 
 ### Fixed

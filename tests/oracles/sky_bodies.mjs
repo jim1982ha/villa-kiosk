@@ -85,4 +85,19 @@ ck("back to the overview: the moon is lifted again at once", !near(unit(moon), d
   ck("  ...onto its spot round the VILLA, before and after the pan", before.err < 1e-6 && after.err < 1e-6, { before: before.err, after: after.err, b: before.r, a: after.r, cam: sky2.camera });
 }
 
+// ── ONE sun in the overview (owner, 2026-10-05, 17:37 screenshot): the sky
+// material paints its own disc and glow at the TRUE direction; at a shallow
+// tilt that showed beside the billboard. Loading SkyDome must gate both on the
+// overview's drop — and a Babylon upgrade that rewrites those lines must fail
+// here, not ship a second sun.
+{
+  const { ShaderStore } = await import("@babylonjs/core/Engines/shaderStore.js");
+  const { SKY_SUN_GATED } = await import("@/babylon/skyShader");
+  const frag = ShaderStore.ShadersStore.skyPixelShader ?? "";
+  ck("the sky's own sun disc and glow are off while the overview drops the horizon (the billboard is the sun)",
+     SKY_SUN_GATED && frag.includes("sundisk*(cameraOffset.y>0.0?0.0:1.0)") && frag.includes("hgPhase(cosTheta,cameraOffset.y>0.0?0.0:mieDirectionalG)")
+     && !frag.includes("L0+=(sunE*19000.0*Fex)*sundisk;"));
+  ck("  ...walking (no drop) keeps them: the gate is the drop and nothing else", (frag.match(/cameraOffset\.y>0\.0\?0\.0:/g) ?? []).length === 2);
+}
+
 done();

@@ -22,6 +22,7 @@ import type { Camera } from "@babylonjs/core/Cameras/camera";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { SkyMaterial } from "@babylonjs/materials/sky/skyMaterial";
+import "./skyShader";   // the material's own sun is off in the overview (two suns)
 
 /** Distance from the camera, in world units. THE SAME AS NightSky's MOON_DIST
  *  on purpose — two bodies at two radii read as two different skies. */
