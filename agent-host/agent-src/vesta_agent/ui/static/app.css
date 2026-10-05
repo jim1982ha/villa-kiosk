@@ -122,7 +122,10 @@ input[type=text], input[type=number], select, textarea {
 }
 input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 textarea { font-family: var(--font-mono); font-size: 13px; line-height: 1.5; resize: vertical; tab-size: 2; }
-textarea.editor { min-height: 60vh; white-space: pre; }
+/* Long lines WRAP on screen (owner, 2026-10-06): no sideways scrolling to read a skill or the rules.
+   Display only — a soft wrap adds no newline to what is saved, so YAML indentation is untouched.
+   overflow-wrap breaks a long token (a URL, an entity id) that has no space to wrap at. */
+textarea.editor { min-height: 60vh; white-space: pre-wrap; overflow-wrap: anywhere; overflow-x: hidden; }
 .switch { display: flex; align-items: center; gap: 12px; cursor: pointer; min-height: var(--touch-min); }
 .switch input { width: 44px; height: 24px; appearance: none; background: var(--hairline-strong); border-radius: 999px; position: relative; cursor: pointer; transition: background .15s; }
 .switch input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .15s; }

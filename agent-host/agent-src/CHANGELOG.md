@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.40 (6 October 2026)
+
+- UI: textarea.editor (Skills and Rules (file)) is white-space: pre-wrap + overflow-wrap: anywhere instead of pre (owner: no sideways scrolling). Soft wrap only, nothing added to the saved text. tests/test_ui.py pins it, mutation-checked.
+
 ## 0.6.39 (5 October 2026)
 
 - Voice messages (owner, 2026-10-05): ha_events also listens to `telegram_attachment`; an audio attachment from a person the agent answers (private chat, or a reply to the agent in a group) is fetched with getFile (Telegram.download; only with takeover), handed to the skill hook `on_event.voice_message` (new HOOK_EVENT) with {audio, language}, and the WAV the skill returns goes to Home Assistant's /api/stt/<entity> (speech.py: the engine holds the token, a script never does). The text then reaches converse(voice=True). Audio and WAV are deleted after. tests/test_voice_messages.py (real hook, fake Telegram and STT), mutation-checked.

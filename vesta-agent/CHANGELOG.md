@@ -1,3 +1,8 @@
+## 0.12.44
+
+### Changed
+- **The skill and rules editors wrap long lines.** On the Skills page (and in Rules (file)), a long line now continues on the next line of the editor instead of running off to the right, so everything is readable without scrolling sideways. Only the display changes: the file is saved exactly as written, YAML indentation included.
+
 ## 0.12.43
 
 ### Changed

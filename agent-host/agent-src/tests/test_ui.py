@@ -414,3 +414,15 @@ def test_every_run_pairs_its_columns_on_a_phone():
     assert '{ v: "When", half: true }, { v: "What", half: true }, "Brain · model"' in js
     assert '{ v: "Tokens in / out", cls: "num", half: true }, { v: "Cost", cls: "num", half: true }' in js
     assert "table.data tr { display: grid; grid-template-columns: 1fr 1fr;" in css and "table.data td.ph-half { grid-column: auto;" in css
+
+
+def test_the_file_editors_wrap_long_lines_instead_of_scrolling_sideways():
+    # owner, 2026-10-06: a skill's or the rules' long lines must be readable without scrolling right.
+    # Display only: the textarea keeps its default soft wrap, so nothing is added to the saved file.
+    import re
+    from vesta_agent.ui.server import STATIC
+    css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
+    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
+    rule = re.search(r"textarea\.editor \{([^}]*)\}", css).group(1)
+    assert "white-space: pre-wrap" in rule and "overflow-wrap: anywhere" in rule
+    assert 'wrap: "off"' not in js and "wrap=\"off\"" not in js and js.count('h("textarea", { class: "editor"') == 2
