@@ -49,4 +49,40 @@ ck("  ...and the sun billboard is off (the sky material draws the real one)", !s
 sky.setHorizonDrop(200);           // and back
 ck("back to the overview: the moon is lifted again at once", !near(unit(moon), dir) && near(unit(moon), unit(sun)));
 
+// ── A PAN (owner, 2026-10-05, arrow keys): the villa slid across the screen
+// and the sun stayed put, because the spot was round the ORBIT POINT and a pan
+// carries that with the camera. Pan the real orbit camera — no turn, no tilt —
+// and the disc must stay over its spot round the VILLA.
+{
+  const { ArcRotateCamera } = await import("@babylonjs/core/Cameras/arcRotateCamera.js");
+  const f = await import("@/babylon/skyFraming");
+  const s2 = new Scene(new NullEngine());
+  const cam = new ArcRotateCamera("ov", -Math.PI / 2, 0.9, 60, new Vector3(0, 1, 0), s2);
+  s2.activeCamera = cam;
+  const sky2 = new SkyDome(s2);
+  sky2.setHorizonDrop(200);
+  const V = new Vector3(0, 1, 0);            // the villa's centre (the fit target)
+  sky2.setVillaCentre(V);
+  // A low sun to the right of the view, so its disc stays in the plain (un-eased) part of the frame.
+  const alt2 = (5 * Math.PI) / 180, az2 = (70 * Math.PI) / 180;
+  const sunTo = new Vector3(Math.sin(az2) * Math.cos(alt2), Math.sin(alt2), Math.cos(az2) * Math.cos(alt2));
+  sky2.update(sunTo.scale(-1), true);
+  const where = () => {
+    s2.render();
+    const r = sky2.sunReport();
+    const p = cam.globalPosition, D = Vector3.Distance(p, cam.target);
+    const spot = V.add(new Vector3(Math.sin(az2), 0, Math.cos(az2)).scale(f.DOME_SCALE * D)).subtract(p).normalize();
+    const g = f.projectToFrame(spot.x, spot.y, spot.z, sky2.camera);
+    const up = f.LIFT_LOW + (f.LIFT_HIGH - f.LIFT_LOW) * (5 / 90);
+    return { r, err: Math.hypot(r.frameX - g.frameX, r.frameY - (g.frameY - up / 2)) };
+  };
+  const before = where();
+  cam.target.x += 8; cam.target.z -= 5;      // a pan: heading and tilt untouched
+  const after = where();
+  ck("panning the real camera re-places the disc (a pan moves neither heading nor tilt)",
+     before.r.frameX !== null && after.r.frameX !== null
+     && Math.hypot(after.r.frameX - before.r.frameX, after.r.frameY - before.r.frameY) > 0.01, { before: before.r, after: after.r });
+  ck("  ...onto its spot round the VILLA, before and after the pan", before.err < 1e-6 && after.err < 1e-6, { before: before.err, after: after.err, b: before.r, a: after.r, cam: sky2.camera });
+}
+
 done();

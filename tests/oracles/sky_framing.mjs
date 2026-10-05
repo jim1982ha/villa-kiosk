@@ -52,6 +52,31 @@ console.log("  a spot on the ground round the villa, the disc straight up the sc
       if (err > worst) { worst = err; at = { cam, D, a, alt }; }
     }
   ck(`the disc stands straight above a real spot on the ground beside the villa — orbit, tilt, zoom and pan alike (${checked} poses)`, worst < 1e-9 && checked > 1000, { worst, at, checked });
+  // ⚠️ "pan alike" above was true only of a camera ORBITING THE VILLA: the
+  // spot was round the orbit point, which a pan carries along with the
+  // camera, so panning slid the villa and left the sun on the screen (owner,
+  // 2026-10-05, arrow keys). Here the villa V is NOT the orbit point: the spot
+  // must be round V (cam.anchor), whatever the pan.
+  let worstPan = 0, atPan = null, panned = 0;
+  for (const cam0 of CAMS) for (const [D, T, V] of [[30, [8, 1, -5], [0, 1, 0]], [80, [-20, 1, 15], [3, 1, -2]], [150, [40, 0, 40], [0, 0, 0]]])
+    for (let a = -170; a <= 180; a += 10) for (const alt of [0, 30, 70]) {
+      const F = { x: Math.sin(cam0.camAz) * Math.cos(cam0.pitch), y: -Math.sin(cam0.pitch), z: Math.cos(cam0.camAz) * Math.cos(cam0.pitch) };
+      const C = [T[0] - D * F.x, T[1] - D * F.y, T[2] - D * F.z];
+      const cam = { ...cam0, anchor: { x: (V[0] - C[0]) / D, y: (V[1] - C[1]) / D, z: (V[2] - C[2]) / D } };
+      const k = f.DOME_SCALE * D, b = deg(a);
+      const v = [V[0] + k * Math.sin(b) - C[0], V[1] - C[1], V[2] + k * Math.cos(b) - C[2]], n = Math.hypot(...v);
+      const g = f.projectToFrame(v[0] / n, v[1] / n, v[2] / n, cam);
+      if (!g) continue;
+      const up = f.LIFT_LOW + (f.LIFT_HIGH - f.LIFT_LOW) * alt / 90;
+      const want = { frameX: g.frameX, frameY: g.frameY - up / 2 };
+      if (Math.abs(2 * want.frameX - 1) > f.FRAME_TRUE || Math.abs(1 - 2 * want.frameY) > f.FRAME_TRUE) continue;
+      panned++;
+      const r = drawn(deg(alt), b, cam);
+      const err = Math.hypot(r.frameX - want.frameX, r.frameY - want.frameY);
+      if (err > worstPan) { worstPan = err; atPan = { cam0, D, T, V, a, alt }; }
+    }
+  ck(`  ...PANNING carries it with the villa: the spot is round the villa's centre, not round the point the camera orbits (${panned} panned poses)`,
+     worstPan < 1e-9 && panned > 500, { worstPan, atPan, panned });
   // The 2.496.294 defect: a disc raised into the AIR lines up with different
   // ground as the view tilts, so tilting slid the sun from beside the pool to
   // above it. Over the same spot, the disc's offset from it must not change

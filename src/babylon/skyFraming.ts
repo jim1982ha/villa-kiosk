@@ -23,11 +23,15 @@ export interface SkyCamera {
   halfFov: number;
   camAz: number;
   hHalf: number;
+  /** Camera → the VILLA's centre on the ground, divided by the camera's
+   *  distance to the point it orbits; null = that orbit point itself (the
+   *  view as fitted, before a model is known). See lift(). */
+  anchor: { x: number; y: number; z: number } | null;
 }
 
 /** The pose before the first rendered frame reports the real one. */
 export function defaultSkyCamera(): SkyCamera {
-  return { pitch: 0, halfFov: 0.4, camAz: 0, hHalf: 0.7 };
+  return { pitch: 0, halfFov: 0.4, camAz: 0, hHalf: 0.7, anchor: null };
 }
 
 /** The dome's radius, and the denominator the horizon drop's angle is measured
@@ -47,9 +51,11 @@ export function liftFor(units: number): number {
 
 /**
  * Where the overview anchors the sun and the moon: a spot ON THE GROUND beside
- * the villa, in the body's true direction, DOME_SCALE times the camera's
- * distance from the point it orbits. Because the distance follows the camera,
- * zooming and panning leave the bodies where they are relative to the villa;
+ * the villa — round the villa's CENTRE (SkyCamera.anchor), in the body's true
+ * direction, DOME_SCALE times the camera's distance from the point it orbits.
+ * Because the distance follows the camera, zooming leaves the bodies where
+ * they are relative to the villa, and because the spot is round the villa
+ * and not round the orbit point, panning slides them WITH the villa;
  * because the spot is fixed on the ground, turning and tilting move it exactly
  * as they move the villa. A sun-path diagram drawn round the house, not the
  * sky at infinity — owner, 2026-10-05: "bring them closer to the villa ... so
@@ -111,6 +117,10 @@ export const SET_HIGH = (3 * Math.PI) / 180;
  * - 2.496.293's dome kept the body up in the air: TILTING moved it from
  *   beside the pool to above it, by parallax (LIFT_LOW).
  * - 2.496.295 still drew a body that was BEHIND the viewer (frontFade).
+ * - until 2.496.298 the spot was round the ORBIT POINT, which a pan carries
+ *   along with the camera: panning slid the villa across the screen and left
+ *   the sun where it was (owner, 2026-10-05, arrow keys). It is round the
+ *   villa's centre now (cam.anchor).
  * This one is a ground spot round the villa (DOME_SCALE) with the disc drawn
  * straight up the screen from it: the sun east of the house
  * is drawn east of the house from every angle, a sun behind you is not drawn
@@ -124,10 +134,12 @@ export function lift(x: number, y: number, z: number, drop: number, cam: SkyCame
   // Straight overhead has no bearing; any will do.
   const az = Math.hypot(x, z) < 1e-9 ? 0 : Math.atan2(x, z);
   const sa = Math.sin(cam.camAz), ca = Math.cos(cam.camAz), sp = Math.sin(cam.pitch), cp = Math.cos(cam.pitch);
-  // camera → villa is the forward ray (unit); villa → ground spot is
-  // DOME_SCALE along the bearing, level.
+  // camera → villa centre (the forward ray while nothing is panned), then
+  // villa → ground spot: DOME_SCALE along the bearing, level. All in units of
+  // the orbit distance.
   const k = DOME_SCALE;
-  const v = { x: sa * cp + k * Math.sin(az), y: -sp, z: ca * cp + k * Math.cos(az) };
+  const c = cam.anchor ?? { x: sa * cp, y: -sp, z: ca * cp };
+  const v = { x: c.x + k * Math.sin(az), y: c.y, z: c.z + k * Math.cos(az) };
   const p = projectToFrame(v.x, v.y, v.z, cam);
   if (!p) return unit(v);                           // unreachable while DOME_SCALE < 1
   const up = lerp(LIFT_LOW, LIFT_HIGH, Math.min(1, alt / (Math.PI / 2)));
