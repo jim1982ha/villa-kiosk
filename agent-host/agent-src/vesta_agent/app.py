@@ -55,6 +55,7 @@ log = logging.getLogger("vesta")
 from .policy import LANGUAGES as LANG  # noqa: E402 — one list, also the VESTA Agent page's menu
 #: Commands the agent answers. Any other command belongs to Home Assistant's automations.
 OWN_COMMANDS = {"/ask", "/new", "/whoami"}
+TYPING_EVERY_S = 4.0             # Telegram's "typing…" lasts about 5 s
 PHOTOS_PER_REPLY = 4              # the camera pictures a reply carries, the last ones looked at
 
 
@@ -521,8 +522,28 @@ class Vesta:
                 f"Your skills: {skills or 'none'}. Read a skill with read_skill before doing its job.\n" + pol.summary() + "\n"
                 f"Villa time zone: {self.s.timezone}. Today: {_now_local(self.s.timezone):%A %d %B %Y, %H:%M}.")
 
+    async def _typing(self, cid: int, stop: asyncio.Event) -> None:
+        """"typing…" in the chat while the AI works (owner, 2026-10-06: "like if it was starting to write"). Telegram
+        shows it about 5 s, so it is said again every 4 s; it ends when the answer is sent (the bot's message clears it)."""
+        while not stop.is_set():
+            await self.tg.typing(int(cid))
+            try:
+                await asyncio.wait_for(stop.wait(), timeout=TYPING_EVERY_S)
+            except asyncio.TimeoutError:
+                pass
+
     async def converse(self, cid: int, person: Person | None, text: str, chat_role: str = "private",
                        resume: str | None = "auto", is_continue: bool = False, voice: bool = False):
+        stop = asyncio.Event()
+        typing = asyncio.create_task(self._typing(cid, stop)) if self.tg is not None else None
+        try:
+            await self._converse(cid, person, text, chat_role, resume, is_continue, voice, stop)
+        finally:
+            stop.set()
+            if typing:
+                await asyncio.gather(typing, return_exceptions=True)
+
+    async def _converse(self, cid, person, text, chat_role, resume, is_continue, voice, typing_stop: asyncio.Event):
         async with self.lock(cid):
             if resume == "auto":
                 resume = self._resume_for(cid)
@@ -564,6 +585,7 @@ class Vesta:
                 answer = (answer + "\n\n" if answer else "") + \
                     f"Stopped: this answer reached the {self.s.reply_limit_usd:g} USD limit per reply."
                 keyboard = {"inline_keyboard": [[{"text": "Continue", "callback_data": f"c:{cont}"}]]}
+            typing_stop.set()                                # the answer is going out
             photos = tb.photos[-PHOTOS_PER_REPLY:]
             if photos and answer and not keyboard:
                 # the pictures it looked at, the answer as the last one's caption

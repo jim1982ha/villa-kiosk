@@ -244,3 +244,26 @@ def test_a_camera_picture_the_ai_looked_at_reaches_the_chat_with_its_answer(agen
     assert [t for _, t, _ in agent.tg.sent] == ["Here is the lounge now."]       # one message: photo + caption
     converse_after("ha_get_state", {})                                           # no picture: the answer alone
     assert agent.tg.photos == [] and [t for _, t, _ in agent.tg.sent] == ["Here is the lounge now."]
+
+
+def test_the_chat_shows_typing_while_the_ai_works_and_not_after(agent, monkeypatch):
+    # owner, 2026-10-06: dots "like if it was starting to write", gone once the answer is there
+    from vesta_agent import app as app_module
+    monkeypatch.setattr(app_module, "TYPING_EVERY_S", 0.01)
+    seen = {}
+
+    async def slow_ai(settings_, system, prompt, server, allowed, state, who, **kw):
+        await asyncio.sleep(0.1)
+        seen["during"] = list(agent.tg.typing_in)
+        return runner.RunResult("Done.", None, False, 0.01, [], None)
+    monkeypatch.setattr(runner, "run", slow_ai)
+
+    async def main():
+        await agent.converse(OWNER_CHAT, Person(OWNER, "Owner", "owner"), "hello")
+        after = len(agent.tg.typing_in)
+        await asyncio.sleep(0.1)
+        return after
+    after = run(main())
+    assert len(seen["during"]) >= 3 and set(seen["during"]) == {OWNER_CHAT}     # said again while it works
+    assert len(agent.tg.typing_in) == after                                      # nothing once answered
+    assert [t for _, t, _ in agent.tg.sent] == ["Done."]

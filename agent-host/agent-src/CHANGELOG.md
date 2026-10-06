@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.59 (6 October 2026)
+
+- converse(): sendChatAction "typing" every 4 s (TYPING_EVERY_S) from the start of the run until the reply is sent (`telegram.typing`, failures logged at debug only).
+
 ## 0.6.58 (6 October 2026)
 
 - UI Try a command: `outfile` flags as a text box (validated as for the AI: a plain name in the out folder); after a run the skill's `out_files` are fetched again so the next step offers the file.

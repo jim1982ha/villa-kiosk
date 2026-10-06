@@ -23,7 +23,7 @@ TONE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "voi
 
 class FakeTelegram:
     def __init__(self):
-        self.sent, self.fetched = [], []
+        self.sent, self.fetched, self.typing_in = [], [], []
 
     async def open(self):
         return {"id": 8000, "username": "Villa_Test_bot"}
@@ -34,6 +34,9 @@ class FakeTelegram:
     async def send(self, chat_id, text, keyboard=None, document=None, photo_b64=None):
         self.sent.append((chat_id, text))
         return 1
+
+    async def typing(self, chat_id):
+        self.typing_in.append(chat_id)
 
     async def edit(self, chat_id, message_id, text):
         pass

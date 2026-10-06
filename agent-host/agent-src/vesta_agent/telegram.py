@@ -138,6 +138,13 @@ class Telegram:
             log.warning("deleteMessage failed: %s", e)
             return False
 
+    async def typing(self, chat_id: int) -> None:
+        """Telegram's "typing…" under the chat's name, for about 5 s or until the bot's next message."""
+        try:
+            await self.api("sendChatAction", chat_id=chat_id, action="typing")
+        except TelegramError as e:
+            log.debug("sendChatAction failed: %s", e)
+
     async def edit(self, chat_id: int, message_id: int, text: str):
         try:
             await self.api("editMessageText", chat_id=chat_id, message_id=message_id, text=text[:4096])

@@ -24,7 +24,7 @@ BOT = {"id": 8000, "username": "Villa_Test_bot"}
 class FakeTelegram:
     def __init__(self):
         self.sent, self.toasts, self.edits, self.deleted, self.next_id = [], [], [], [], 1000
-        self.photos = []
+        self.photos, self.typing_in = [], []
 
     async def open(self):
         return BOT
@@ -41,6 +41,9 @@ class FakeTelegram:
 
     async def answer_callback(self, qid, text):
         self.toasts.append((qid, text))
+
+    async def typing(self, chat_id):
+        self.typing_in.append(chat_id)
 
     async def edit(self, chat_id, message_id, text):
         self.edits.append((chat_id, message_id, text))

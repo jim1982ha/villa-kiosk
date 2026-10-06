@@ -110,6 +110,9 @@ class Tg:
         self.sent.append((chat_id, text))
         return len(self.sent)
 
+    async def typing(self, chat_id):
+        pass
+
     async def edit(self, *a):
         pass
 
