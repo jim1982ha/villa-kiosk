@@ -1,3 +1,8 @@
+## 0.12.51
+
+- **Rules → What the AI can use → "Ask for an action on the villa"** now links to "Acting on the villa" and "What the agent may do": a tap scrolls there and highlights it.
+- **Skills → About: a script without commands says what it does** (from the skill's own skill.yaml: `description:`), with its options listed one by one, instead of "the AI may run it".
+
 ## 0.12.50
 
 - **Rules → What the agent may do: the devices are on the service's own line.** For "Only the devices chosen beside it", a device picker opens on the same line; for every other rule there is nothing to choose. The separate "Allowed lists" card is gone. Services of one kind share one list ("same list as switch.turn_on"). The rule names are plain words.
