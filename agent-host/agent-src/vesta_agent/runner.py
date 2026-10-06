@@ -133,7 +133,8 @@ def step(name: str, args) -> dict:
     elif key == "web_search":
         said = str(args.get("query") or "")
     elif key == "send_message":
-        said = f"to {args.get('to', '?')}" + (f", {args['attachment']}" if args.get("attachment") else "")
+        said = f"to {args.get('to', '?')}" + (f", {args['attachment']}" if args.get("attachment") else "") \
+            + (f", photo of {args['camera']}" if args.get("camera") else "")
     elif key == "save_file":
         said = str(args.get("name") or "")
     else:

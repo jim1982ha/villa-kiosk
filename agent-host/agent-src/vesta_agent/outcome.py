@@ -62,6 +62,16 @@ def has_work(res) -> bool:
     return isinstance(res, dict) and any(res.get(k) for k in CARRIED_KEYS)
 
 
+
+async def camera_photo(reader, entity_id) -> tuple[str, str] | None:
+    """What a camera shows now, as (base64, mime) for Telegram's sendPhoto; None when it gave no image.
+    The one way a camera's picture reaches a chat: the alert desk's snapshot and the AI's send_message(camera=)."""
+    if not str(entity_id or "").startswith("camera."):
+        return None
+    blocks = await asyncio.to_thread(reader.tool_content, "ha_get_camera_image", {"entity_id": entity_id})
+    img = next((b for b in blocks if b.get("type") == "image" and b.get("data")), None)
+    return (img["data"], img.get("mimeType") or "image/jpeg") if img else None
+
 class Outcome:
     def __init__(self, *, policy: Callable, state, store_path: str, timezone: str, send: Callable[..., Awaitable],
                  out_dir: str = "",
@@ -154,13 +164,10 @@ class Outcome:
                     if await self._resolve(a):
                         done["resolved"] += 1
                 elif kind == "snapshot.get":
-                    blocks = await asyncio.to_thread(self.reader.tool_content, "ha_get_camera_image",
-                                                     {"entity_id": a.get("entity_id")})
-                    img = next((b for b in blocks if b.get("type") == "image"), None)
-                    if img:
+                    photo = await camera_photo(self.reader, a.get("entity_id"))
+                    if photo:
                         for chat in chats:
-                            await self.send(chat, f"Snapshot, incident #{a.get('incident_id')}",
-                                            photo_b64=(img.get("data"), img.get("mimeType")))
+                            await self.send(chat, f"Snapshot, incident #{a.get('incident_id')}", photo_b64=photo)
                 else:
                     self.state.log("action_ignored", {"action": kind, "skill": skill_name})
                     log.warning("Skill %s asked for an action this agent does not know: %s", skill_name, kind)

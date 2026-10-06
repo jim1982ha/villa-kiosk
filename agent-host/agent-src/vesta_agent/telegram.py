@@ -88,8 +88,10 @@ class Telegram:
             form.add_field("photo", base64.b64decode(data_b64), filename="snapshot.jpg", content_type=mime or "image/jpeg")
             async with self.http.post(f"{self.base}/sendPhoto", data=form) as r:
                 body = await r.json(content_type=None)
-            if body.get("ok"):
-                return body["result"]["message_id"]
+            if not body.get("ok"):
+                # was a silent fall back to the caption alone: "here is the photo" with no photo
+                raise TelegramError(f"sendPhoto: {body.get('description')}")
+            return body["result"]["message_id"]
         parts = split_message(text or "…")
         for i, part in enumerate(parts):
             data: dict[str, Any] = {"chat_id": chat_id, "text": part}

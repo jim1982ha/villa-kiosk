@@ -41,6 +41,10 @@ class Reader:
     def states(self, ids):
         return {}
 
+    def tool_content(self, name, args):
+        assert name == "ha_get_camera_image"
+        return [{"type": "image", "data": "SlBFRw==", "mimeType": "image/jpeg"}] if args["entity_id"] == "camera.lounge" else []
+
 
 @pytest.fixture
 def agent(tmp_path, monkeypatch):
@@ -207,3 +211,27 @@ def test_the_new_sections_are_checked_before_a_save():
     bad = problems({"agent_tools": {"read_skill": False}, "tool_access": {"owner": {}, "fm": {"zz": True}},
                     "skills_off": "roi-energy"})
     assert len(bad) == 4
+
+
+def send_tool(v, person, origin):
+    allowed = tool_access.allowed_for_person(v.policy(), v.server_tools, person.role, origin.chat)
+    return next(t for t in v.toolbox(allowed).tool_objects(person, origin) if t.name == "send_message")
+
+
+def test_a_photo_the_ai_was_asked_for_reaches_the_chat_and_only_with_cameras_on(agent):
+    # 2026-10-06: the AI looked with ha_get_camera_image, said "the image I just sent", and the chat got no photo
+    owner, fm = Person(OWNER, "Owner", "owner"), Person(FM, "FM", "fm")
+    send = send_tool(agent, owner, Origin(OWNER_CHAT, CONVERSATION))
+    assert "camera" in send.input_schema["properties"]
+    out = run(send.handler({"to": "here", "text": "The lounge now", "camera": "camera.lounge"}))
+    assert not out.get("is_error")
+    assert agent.tg.photos == [(OWNER_CHAT, ("SlBFRw==", "image/jpeg"))]
+    # no picture: said, and nothing sent
+    out = run(send.handler({"to": "here", "text": "x", "camera": "camera.dark"}))
+    assert out.get("is_error") and "nothing was sent" in out["content"][0]["text"] and len(agent.tg.photos) == 1
+    # cameras switched off for the facility manager: no camera to send, even if the AI writes one
+    policy_edit(agent, tool_access={"fm": {"cameras": False}})
+    send = send_tool(agent, fm, Origin(FM, CONVERSATION))
+    assert "camera" not in send.input_schema["properties"]
+    out = run(send.handler({"to": "here", "text": "x", "camera": "camera.lounge"}))
+    assert out.get("is_error") and len(agent.tg.photos) == 1

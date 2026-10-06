@@ -35,7 +35,7 @@ from claude_agent_sdk import create_sdk_mcp_server, tool
 from . import __version__, status, tool_access
 from .policy import Person, Policy
 from .routing import JOB, Origin, Routing
-from .outcome import has_work
+from .outcome import camera_photo, has_work
 from .runner import WEB_SEARCH
 from .skills import FILE_NAME, Skills, ToolError, run_script, runnable, validate_script_args
 
@@ -446,6 +446,13 @@ class Toolbox:
             "to": {"type": "string", "enum": targets}, "text": {"type": "string"},
             "attachment": {"type": "string", "description": "A file name in the out folder (an HTML report page), optional."}},
             "required": ["to", "text"]}
+        # ⚠️ ha_get_camera_image SHOWS THE PICTURE TO THE AI ONLY. Asked for a photo, it looked, answered "the image I
+        # just sent" and nothing reached the chat (2026-10-06): the photo travels here, fetched by the agent itself.
+        cameras = "ha_get_camera_image" in self.read_tool_names()
+        if cameras:
+            schema["properties"]["camera"] = {"type": "string", "description": (
+                "A camera's entity id (camera.*): what it shows now is sent as a photo, the text as its caption. "
+                "The only way a person sees a camera's picture.")}
         if origin and origin.holds:
             desc = ("Send a message, with a file attached if needed (an HTML report page), to=here: the chat of the "
                     "person you are answering, or the chat this job was asked for in. Nothing goes to another chat. "
@@ -453,6 +460,9 @@ class Toolbox:
         else:
             desc = ("Send a message, with a file attached if needed. to=owner / to=fm: the configured owner or "
                     "facility manager chat, for scheduled reports and digests.")
+        if cameras:
+            desc += (" With camera=, a photo of what that camera shows now. A picture you looked at with "
+                     "ha_get_camera_image was seen by you only: never say a photo was sent unless this tool answered Sent.")
 
         @tool("send_message", desc, schema)
         async def handler(args: dict) -> dict:
@@ -467,8 +477,24 @@ class Toolbox:
                 if not FILE_NAME.match(att) or not os.path.exists(os.path.join(self.s.out_dir, att)):
                     return _err(f"{att} is not a file in the out folder.")
                 path = os.path.join(self.s.out_dir, att)
-            await self.send(int(chat), args.get("text", ""), document=path,
-                            from_job=bool(origin and origin.kind == JOB))
-            self.state.log("sent", {"to": to, "chars": len(args.get("text", "")), "attachment": att})
+            photo = None
+            cam = args.get("camera")
+            if cam:
+                if not cameras:
+                    return _err("Camera pictures are not allowed here.")
+                if path:
+                    return _err("A photo and a file go in two messages.")
+                try:
+                    photo = await camera_photo(self.reader, cam)
+                except Exception as e:  # noqa: BLE001
+                    return _err(f"Home Assistant did not answer ({type(e).__name__}): nothing was sent.")
+                if not photo:
+                    return _err(f"{cam} gave no picture: nothing was sent.")
+            mid = await self.send(int(chat), args.get("text", ""), document=path, photo_b64=photo,
+                                  from_job=bool(origin and origin.kind == JOB))
+            if photo and not mid:
+                return _err("Telegram refused the photo: nothing was sent.")
+            self.state.log("sent", {"to": to, "chars": len(args.get("text", "")), "attachment": att,
+                                    "camera": cam or None})
             return _ok("Sent.")
         return handler

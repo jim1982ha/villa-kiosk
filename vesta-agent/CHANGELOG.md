@@ -1,3 +1,8 @@
+## 0.12.57
+
+- **Asked for a camera photo, the AI now sends it to the chat.** Before, it looked at the camera itself, described what it saw, and said "the image I just sent" when nothing had been sent: it had no way to send a picture. Now the photo arrives in the chat, with its answer as the caption. Only where cameras are allowed (Rules → What the AI can use). If the camera gives no picture, the AI says so instead of claiming it sent one.
+- A camera photo Telegram refuses is now noted in the log, instead of a message with no photo.
+
 ## 0.12.56
 
 - **Rules → The AI: "new conversation" is now "Delete conversation context at"**, under its menu (Every day at 04:00, After 8 hours of silence, Never). The same name appears in the history of changes and in the setup download.

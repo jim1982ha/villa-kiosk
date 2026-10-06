@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.53 (6 October 2026)
+
+- send_message takes `camera` (camera.*) when ha_get_camera_image is allowed for the run: the agent fetches the picture and sends it with sendPhoto, the text as caption; no picture or a refused photo is an error, never "Sent.". One fetch for both paths: `outcome.camera_photo` (also the alert desk's snapshot.get).
+- telegram.send raises on a refused sendPhoto (was a silent caption-only message).
+
 ## 0.6.52 (6 October 2026)
 
 - UI: settings.conversation_reset is named "Delete conversation context at" (caption, aria-label, history wording, export line).

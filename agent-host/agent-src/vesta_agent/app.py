@@ -199,8 +199,9 @@ class Vesta:
             self.state.log("send_failed", {"chat": chat_id, "error": str(e)})
             return None
         self.state.remember_message(chat_id, mid)
-        log.info("Sent to chat %s (%s)%s%s", chat_id, Routing(self.policy()).label(chat_id),
-                 " with buttons" if keyboard else "", " and a file" if document else "")
+        log.info("Sent to chat %s (%s)%s%s%s", chat_id, Routing(self.policy()).label(chat_id),
+                 " with buttons" if keyboard else "", " and a file" if document else "",
+                 " and a photo" if photo_b64 else "")
         if approval_id and mid:
             self.state.set_approval_message(approval_id, mid)
         return mid

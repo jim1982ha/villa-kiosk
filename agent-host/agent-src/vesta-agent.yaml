@@ -1,6 +1,6 @@
 # The VESTA Agent's manifest, read by the VESTA Agent host (SPEC section 8).
 name: vesta-agent
-version: "0.6.52"
+version: "0.6.53"
 runtime: python
 # Runs at IMAGE BUILD, in CI, never on the Yellow. `rm -rf tests` keeps every test
 # (and the villa's own fixtures, which a local copy may hold) out of the image.
