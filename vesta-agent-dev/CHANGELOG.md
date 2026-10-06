@@ -1,3 +1,8 @@
+## 0.12.49
+
+- **Long lists on the Rules page show 15 lines at a time,** with Previous / Next: People, What the agent may do, and What the AI can use → Reading Home Assistant (each group's heading repeats on the page where its tools continue). "Add" opens the last page, where the new line is.
+- **Who may use what: the columns line up** under their headings. The guest column shows "—": the agent answers only the people listed under Rules → People (owner or facility manager), so a guest gets no answer at all for now. The text under the tabs says so.
+
 ## 0.12.48
 
 - **Skills: each skill's On/Off switch is in the list on the left,** beside its name.
