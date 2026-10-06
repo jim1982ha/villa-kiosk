@@ -1,3 +1,7 @@
+## 0.12.61
+
+- **Skills → Try a command: a step that needs a file from an earlier step can be tried.** compose.py fm-weekly stopped with "needs --facts": it builds the weekly page from the figures facts.py saved, and the page offered no way to give them. Options that take a file (Facts, Notes, Energy) now show a menu of the files the last runs left, the one with the option's name chosen first (facts.json, notes.json).
+
 ## 0.12.60
 
 - **The nightly maintenance check can be run again for a day it already checked.** Running nightly.py from Try a command (or twice for the same day) stopped with "UNIQUE constraint failed": an event noted the first time (a meter going backwards, a pump's running hours…) was written a second time for the same day. Now the second run updates what the first one noted and does not report it as new again.

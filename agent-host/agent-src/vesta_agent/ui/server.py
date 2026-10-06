@@ -532,7 +532,19 @@ class UI:
         return web.json_response({
             "name": name, "ok": not blocked, "off": name in pol.skills_off, "description": sk.description,
             "release": rel, "engine": __version__, "needs": tool_access.needs(pol, listed, sk) if sk.tools is not None else None,
-            "acts": [{"when": w, "how": h} for w, h in acts], "scripts": scripts, "blocked": blocked})
+            "acts": [{"when": w, "how": h} for w, h in acts], "scripts": scripts, "blocked": blocked,
+            "out_files": self._out_files()})
+
+    def _out_files(self, limit: int = 60) -> list[str]:
+        """The files the last runs left in the out folder, newest first: what Try a command offers for an option
+        that takes one (compose.py fm-weekly --facts: the file facts.py wrote, 2026-10-06 "needs --facts")."""
+        from ..skills import FILE_NAME
+        d = os.path.join(self.s.data_dir, "out")
+        try:
+            names = [n for n in os.listdir(d) if FILE_NAME.match(n) and os.path.isfile(os.path.join(d, n))]
+        except OSError:
+            return []
+        return sorted(names, key=lambda n: os.path.getmtime(os.path.join(d, n)), reverse=True)[:limit]
 
     async def skill_on(self, request):
         name = request.match_info["name"]

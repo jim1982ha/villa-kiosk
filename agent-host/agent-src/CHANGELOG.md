@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.57 (6 October 2026)
+
+- UI: skill detail carries `out_files` (the out folder's files, newest first); Try a command offers `infile` flags as a menu of them (preselected: the file named after the flag), `outfile` still hidden. validate_script_args checks them as for the AI.
+
 ## 0.6.56 (6 October 2026)
 
 - vesta_shared.store.raise_finding: no open row → the row of the same (rule, entity, opened_day) is reopened and updated (is_new False) instead of a UNIQUE crash; nightly.py reports an event rule as new only when is_new. preventive-maintenance recorded as shipped.

@@ -293,3 +293,21 @@ def test_the_skill_page_is_read_from_the_skills_own_files_at_every_look(ui):
     js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
     for starter in ("alert-desk", "villa-concierge", "roi-energy", "preventive-maintenance", "desk.py", "concierge.py"):
         assert starter not in js, f"the page names {starter}: it must come from the skill's files"
+
+
+def test_try_a_command_offers_the_files_earlier_steps_left(ui):
+    # 2026-10-06: compose.py fm-weekly tried from the page: "needs --facts" — the page offered no file option
+    out = os.path.join(ui.data_dir, "out")
+    os.makedirs(out, exist_ok=True)
+    for i, n in enumerate(["notes.json", "facts.json"]):
+        with open(os.path.join(out, n), "w") as f:
+            f.write("{}")
+        os.utime(os.path.join(out, n), (1000 + i, 1000 + i))
+    os.makedirs(os.path.join(out, "a-folder"))
+
+    async def fn(c):
+        return await _json(c, "get", "/api/skills/reports")
+    st, body = call(ui, fn)
+    assert st == 200 and body["out_files"] == ["facts.json", "notes.json"]          # newest first, files only
+    compose = next(sc for sc in body["scripts"] if sc["script"] == "compose.py")
+    assert compose["flags"]["--facts"] == "infile"

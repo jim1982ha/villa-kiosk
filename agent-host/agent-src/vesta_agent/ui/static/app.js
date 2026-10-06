@@ -1036,18 +1036,27 @@ function tryPanel(name, d) {
     fill(what,
       field("Script", dropdown(runnable.map((sc) => [sc.script, sc.script]), script.script, (v) => { script = runnable.find((x) => x.script === v); values = {}; draw(); }, "Script")),
       cmds.length ? field("Command", dropdown(cmds.map((c) => [c.name, c.words ? `${c.name} — ${c.words}` : c.name]), command, (v) => { command = v; }, "Command")) : null);
-    // files a script writes or reads are the AI's business: not offered here
-    const flags = Object.entries(script.flags).filter(([, k]) => k !== "outfile" && k !== "infile");
+    // a file it would write is the AI's business: not offered. A file it reads is one an earlier step left in the
+    // out folder (compose.py fm-weekly --facts: facts.json, written by facts.py): chosen among them, the one named
+    // after the option first
+    const flags = Object.entries(script.flags).filter(([, k]) => k !== "outfile");
     fill(opts, flags.length ? flags.map(([flag, kind]) => {
       const label = flag.replace(/^--/, "").replace(/-/g, " ");
-      const input = Array.isArray(kind)
+      if (kind === "infile" && values[flag] === undefined) {
+        const own = (d.out_files || []).find((f) => f.replace(/\.[^.]+$/, "") === flag.replace(/^--/, ""));
+        values[flag] = own || "";
+      }
+      const input = kind === "infile"
+        ? dropdown([["", "not given"], ...(d.out_files || []).map((f) => [f, f])], values[flag], (v) => { values[flag] = v; }, label)
+        : Array.isArray(kind)
         ? dropdown([["", "not set"], ...kind.map((k) => [k, k])], values[flag] || "", (v) => { values[flag] = v; }, label)
         : kind === "switch"
           ? h("label", { class: "switch" }, h("input", { type: "checkbox", checked: !!values[flag], "aria-label": label,
               onchange: (e) => { values[flag] = e.target.checked; } }), "yes")
           : h("input", { type: "text", value: values[flag] || "", placeholder: FLAG_HELP[kind] || "", "aria-label": label,
               oninput: (e) => { values[flag] = e.target.value.trim(); } });
-      return field(label[0].toUpperCase() + label.slice(1), input, Array.isArray(kind) ? `one of: ${kind.join(", ")}` : flag);
+      return field(label[0].toUpperCase() + label.slice(1), input,
+        kind === "infile" ? `${flag} · a file an earlier step left` : Array.isArray(kind) ? `one of: ${kind.join(", ")}` : flag);
     }) : h("p", { class: "muted small" }, "This command takes no options."));
   };
   // the answer is asked for every second: a command may run for minutes (nightly.py), longer than a page request lives
