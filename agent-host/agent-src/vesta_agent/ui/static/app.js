@@ -1036,17 +1036,20 @@ function tryPanel(name, d) {
     fill(what,
       field("Script", dropdown(runnable.map((sc) => [sc.script, sc.script]), script.script, (v) => { script = runnable.find((x) => x.script === v); values = {}; draw(); }, "Script")),
       cmds.length ? field("Command", dropdown(cmds.map((c) => [c.name, c.words ? `${c.name} — ${c.words}` : c.name]), command, (v) => { command = v; }, "Command")) : null);
-    // a file it would write is the AI's business: not offered. A file it reads is one an earlier step left in the
-    // out folder (compose.py fm-weekly --facts: facts.json, written by facts.py): chosen among them, the one named
-    // after the option first
-    const flags = Object.entries(script.flags).filter(([, k]) => k !== "outfile");
+    // A file it reads is one an earlier step left in the out folder (a page's --facts: the file the step before it
+    // wrote): chosen among them, the one named after the option first. A file it writes is named here, for the next
+    // step (--energy: the week's energy, saved by another skill's script, 2026-10-06)
+    const flags = Object.entries(script.flags);
     fill(opts, flags.length ? flags.map(([flag, kind]) => {
       const label = flag.replace(/^--/, "").replace(/-/g, " ");
       if (kind === "infile" && values[flag] === undefined) {
         const own = (d.out_files || []).find((f) => f.replace(/\.[^.]+$/, "") === flag.replace(/^--/, ""));
         values[flag] = own || "";
       }
-      const input = kind === "infile"
+      const input = kind === "outfile"
+        ? h("input", { type: "text", value: values[flag] || "", placeholder: "not saved, e.g. week.json", "aria-label": label,
+            oninput: (e) => { values[flag] = e.target.value.trim(); } })
+        : kind === "infile"
         ? dropdown([["", "not given"], ...(d.out_files || []).map((f) => [f, f])], values[flag], (v) => { values[flag] = v; }, label)
         : Array.isArray(kind)
         ? dropdown([["", "not set"], ...kind.map((k) => [k, k])], values[flag] || "", (v) => { values[flag] = v; }, label)
@@ -1056,7 +1059,8 @@ function tryPanel(name, d) {
           : h("input", { type: "text", value: values[flag] || "", placeholder: FLAG_HELP[kind] || "", "aria-label": label,
               oninput: (e) => { values[flag] = e.target.value.trim(); } });
       return field(label[0].toUpperCase() + label.slice(1), input,
-        kind === "infile" ? `${flag} · a file an earlier step left` : Array.isArray(kind) ? `one of: ${kind.join(", ")}` : flag);
+        kind === "infile" ? `${flag} · a file an earlier step left` : kind === "outfile" ? `${flag} · saved for a next step`
+          : Array.isArray(kind) ? `one of: ${kind.join(", ")}` : flag);
     }) : h("p", { class: "muted small" }, "This command takes no options."));
   };
   // the answer is asked for every second: a command may run for minutes (nightly.py), longer than a page request lives
@@ -1077,6 +1081,8 @@ function tryPanel(name, d) {
     try {
       const { pending } = await api("POST", `api/skills/${encodeURIComponent(name)}/try`, { script: script.script, args: args() });
       const r = await waitFor(pending);
+      // a file it saved is offered to the next step at once
+      try { d.out_files = (await api("GET", `api/skills/${encodeURIComponent(name)}`)).out_files; draw(); } catch { /* kept */ }
       fill(out, r.ok === false && r.exit === undefined ? problemsBox([r.error], "Not run:") : [
         h("div", { class: "try-result" }, h("span", { class: "chip" + (r.exit === 0 ? "" : r.exit === 2 ? " warn" : " off") },
           r.exit === 0 ? "Done" : r.exit === 2 ? "Nothing to do, or a setting is missing" : `Stopped (exit ${r.exit})`),
@@ -1188,7 +1194,7 @@ async function openSkill(name, pane, info, path = ABOUT) {
 
   // ---- the views
   const FILES = "\u0000files";             // the Files tab stands for whichever file is open
-  const tabs = subTabs([[ABOUT, "About"], [FILES, "Files"], d.scripts && d.scripts.length ? [TRY, "Try a command", "Runs one of this skill's commands on the villa, exactly as the AI would: it only reads, uses no AI and costs nothing. Messages or tickets it would create are shown here, never sent."] : null,
+  const tabs = subTabs([[ABOUT, "About"], [FILES, "Files"], d.scripts && d.scripts.length ? [TRY, "Try a command", "Runs one of this skill's commands on the villa, exactly as the AI would: it changes nothing in Home Assistant, uses no AI and costs nothing. Messages or tickets it would create are shown here, never sent. A file it saves stays in the agent's out folder, for a next step."] : null,
                         rel.state === "edited" ? [COMPARE, "Compare"] : null], isFile ? FILES : path,
                        (k) => goTo(k === FILES ? (isFile ? path : "SKILL.md") : k));
   // ⚠️ NO TITLE, NO DESCRIPTION, NO SWITCH HERE ON A WIDE SCREEN (owner, 2026-10-06): the list beside it holds the

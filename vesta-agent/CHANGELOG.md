@@ -1,3 +1,8 @@
+## 0.12.62
+
+- **Skills → Try a command: a try can save its result for the next step.** compose.py owner-weekly stopped with "needs --energy": it needs the week's energy, which roi-energy's energy_period.py makes, and the page could not save that. Commands that write a file now show an "Out" box: run energy_period.py with Period week and Out week.json, then in reports pick week.json under Energy. A saved file appears in the menus at once.
+- The (i) of Try a command says so, and says the try changes nothing in Home Assistant (it may update the agent's own records, as nightly.py does).
+
 ## 0.12.61
 
 - **Skills → Try a command: a step that needs a file from an earlier step can be tried.** compose.py fm-weekly stopped with "needs --facts": it builds the weekly page from the figures facts.py saved, and the page offered no way to give them. Options that take a file (Facts, Notes, Energy) now show a menu of the files the last runs left, the one with the option's name chosen first (facts.json, notes.json).

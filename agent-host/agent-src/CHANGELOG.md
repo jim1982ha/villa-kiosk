@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.58 (6 October 2026)
+
+- UI Try a command: `outfile` flags as a text box (validated as for the AI: a plain name in the out folder); after a run the skill's `out_files` are fetched again so the next step offers the file.
+
 ## 0.6.57 (6 October 2026)
 
 - UI: skill detail carries `out_files` (the out folder's files, newest first); Try a command offers `infile` flags as a menu of them (preselected: the file named after the flag), `outfile` still hidden. validate_script_args checks them as for the AI.
