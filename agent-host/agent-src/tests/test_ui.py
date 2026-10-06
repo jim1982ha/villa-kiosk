@@ -448,3 +448,15 @@ def test_the_page_never_uses_the_browsers_own_dialogs():
     js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
     assert "async function guard()" in js and "showModal()" in js and "dialog.ask {" in css
     assert not re.search(r"[^\w](?<!await )guard\(\)", js.replace("async function guard()", "")), "a guard() not awaited"
+
+
+def test_on_a_phone_an_open_skill_hides_the_list_and_offers_the_way_back():
+    # owner, 2026-10-06: "make sure mobile display is properly handled" — the list above the skill pushed it a
+    # screen down; the page opens the skill alone, with "‹ All skills"
+    import re
+    from vesta_agent.ui.server import STATIC
+    css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
+    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
+    phone = re.search(r"@media \(max-width: 760px\) \{\s*\.skills\.has-open \.skills-side \{ display: none; \}\s*\.back-to-list \{ display: inline-flex; \}", css)
+    assert phone and re.search(r"\.back-to-list \{ display: none;", css)
+    assert 'pane.closest(".skills")?.classList.add("has-open")' in js and 'side.classList.add("skills-side")' in js

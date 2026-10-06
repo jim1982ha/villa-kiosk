@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.43 (6 October 2026)
+
+- UI, Skills (owner: "very messy", mobile):
+  - openSkill is a head (name, state chips, switch), banners, then sub-tabs About / Files / Try a command / Compare.
+  - aboutSkill(): .kv rows for the acts, .cmd-row switches for the commands, the tools' verdict with a folded list.
+  - Files: dots in place of " · differs" labels.
+  - Compare: shown() keeps changed rows ±2.
+  - Phone (≤760 px): .skills.has-open hides the list, with "‹ All skills". ≤600 px: .kv stacks, the comparison is one labelled column.
+  - test_ui pins the phone rule. Checked by screenshots at 1280 / 390 px.
+
 ## 0.6.42 (6 October 2026)
 
 - tool_access.py: one answer to "what may the AI use".
