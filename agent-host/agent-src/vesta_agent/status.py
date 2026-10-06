@@ -59,8 +59,7 @@ def report(state, store_path: str, hours: int = 24, now: datetime | None = None)
             "incidents": incidents[-40:]}
 
 
-def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_label=None,
-          job_names: dict[str, str] | None = None) -> dict:
+def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_label=None) -> dict:
     """What the AI cost, run by run, from the agent's own records (the cost the Anthropic API reported for each
     run): the VESTA Agent page's Costs tab. Each run: when, the work (a chat reply, or an AI job), who asked
     and what, the brain and model, the tokens, the cost. Read-only; never a chat id (`chat_label` names the chat)."""
@@ -77,10 +76,7 @@ def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_la
             d = {}
         who = str(d.get("who") or "")
         if who.startswith("job:"):
-            # ⚠️ A RUN BEFORE 0.12.0 IS "skill:when" (jobs had no names then: "reports:07:00" is today's
-            # fm-daily). `job_names` maps it to the job's name, so one job is one line (owner, 2026-10-05).
             kind, work, person, chat = "job", who[4:], None, None
-            work = (job_names or {}).get(work, work)
         else:
             name, _, cid = who.partition("@")
             kind, work, person = "chat", "Chat replies", name or None
@@ -92,7 +88,8 @@ def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_la
                      "tokens_in": tok.get("input_tokens"), "tokens_out": tok.get("output_tokens"),
                      "cache_read": tok.get("cache_read_input_tokens"), "cache_write": tok.get("cache_creation_input_tokens"),
                      "cost": round(cost, 4), "stopped": bool(d.get("stopped_at_limit")), "error": d.get("error"),
-                     "turns": d.get("turns"), "seconds": round(d["ms"] / 1000) if isinstance(d.get("ms"), (int, float)) else None})
+                     "turns": d.get("turns"), "seconds": round(d["ms"] / 1000) if isinstance(d.get("ms"), (int, float)) else None,
+                     "steps": [x for x in d.get("steps") or [] if isinstance(x, dict)]})
     runs.sort(key=lambda r: r["at"], reverse=True)
 
     def total(rs):
@@ -122,7 +119,36 @@ def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_la
             "by_day": [{"day": d, "cost": round(by_day.get(d, 0.0), 2)} for d in days_list],
             # the daily chart's Y axis, from the one axis rule (vesta_shared.axis): the page only draws it
             "axis": _cost_axis(max([by_day.get(d, 0.0) for d in days_list] + [0.01])),
-            "by_work": group("work"), "by_model": group("model"), "runs": runs[:300]}
+            "by_work": group("work"), "by_model": group("model"), "runs": runs[:300],
+            # the Costs tab's "Tools in this period": each tool, how many runs used it and how many times
+            "tools": _tool_counts(runs)}
+
+
+def _tool_counts(runs: list[dict]) -> list[dict]:
+    out: dict[str, dict] = {}
+    for r in runs:
+        for t in {x.get("tool") for x in r["steps"]}:
+            out.setdefault(t, {"tool": t, "runs": 0, "calls": 0})["runs"] += 1
+        for x in r["steps"]:
+            out[x.get("tool")]["calls"] += 1
+    return sorted(out.values(), key=lambda g: (-g["calls"], g["tool"] or ""))
+
+
+def tool_usage(state, days: int = 7, now: datetime | None = None) -> dict[str, int]:
+    """How many times each tool was called in the last `days` (Rules → What the AI can use: "used 12× this week")."""
+    since = (now or datetime.now(timezone.utc)) - timedelta(days=days)
+    out: dict[str, int] = {}
+    for c in state.calls_since(since.isoformat()):
+        if c["kind"] != "run":
+            continue
+        try:
+            steps = json.loads(c["detail"] or "{}").get("steps") or []
+        except ValueError:
+            continue
+        for x in steps:
+            if isinstance(x, dict) and x.get("tool"):
+                out[x["tool"]] = out.get(x["tool"], 0) + 1
+    return out
 
 
 def _cost_axis(top: float) -> dict:

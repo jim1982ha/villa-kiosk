@@ -5,7 +5,7 @@ import os
 import subprocess
 import sys
 
-from helpers import ROOT, STARTER_SKILLS
+from helpers import PYTHONPATH, ROOT, STARTER_SKILLS
 
 COMPOSE = os.path.join(STARTER_SKILLS, "reports", "scripts", "compose.py")
 
@@ -17,7 +17,7 @@ def test_a_step_without_its_input_stops_and_says_what_to_run(tmp_path):
                               (COMPOSE, "fm-weekly", "--facts"), (COMPOSE, "owner-monthly", "--facts"),
                               (COMPOSE, "owner-weekly", "--energy")):
         r = subprocess.run([sys.executable, script, cmd, "--pack", str(tmp_path / "none.json"), "--out", "x.html"],
-                           capture_output=True, text=True, env={**os.environ, "PYTHONPATH": ROOT})
+                           capture_output=True, text=True, env={**os.environ, "PYTHONPATH": PYTHONPATH})
         assert r.returncode == 1, (cmd, r.stderr)
         assert f"{cmd} needs {need}" in r.stderr and "Traceback" not in r.stderr
 
@@ -74,7 +74,7 @@ def _villa(tmp):
 
 def _run(script, *args, cwd=None):
     return subprocess.run([sys.executable, script, *args], capture_output=True, text=True,
-                          env={**os.environ, "PYTHONPATH": ROOT}, cwd=cwd)
+                          env={**os.environ, "PYTHONPATH": PYTHONPATH}, cwd=cwd)
 
 
 def _facts(tmp, fx):
@@ -135,7 +135,7 @@ def test_readings_carry_the_ais_own_numbers_marked_and_a_checked_slot_is_still_c
     assert "does not ask" in refused["card-pump.why"]
     page = (tmp_path / "page.html").read_text()
     assert "VESTA's reading</span> The garden pump moves less water" in page
-    assert "<svg" in page and "http://" not in page and "https://" not in page and "<script" not in page
+    assert "<svg" in page and "http://" not in page.replace("http://www.w3.org/2000/svg", "") and "https://" not in page and "<script" not in page
 
 
 def test_a_report_stopped_at_its_limit_is_still_sent_and_says_what_is_missing(tmp_path):
@@ -200,7 +200,7 @@ def _ctx(tmp_path, ha=None, now=datetime(2026, 10, 5, 7, tzinfo=timezone.utc)):
     spec = importlib.util.spec_from_file_location("facts", FACTS)
     facts = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(facts)
-    from vesta_shared.ha_client import FixtureClient
+    from fixture_client import FixtureClient
     from vesta_shared.knowledge_pack import KnowledgePack
     from vesta_shared.store import Store
     fx = _villa(tmp_path) if not (tmp_path / "fx").exists() else tmp_path / "fx"

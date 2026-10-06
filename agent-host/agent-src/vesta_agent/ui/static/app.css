@@ -315,3 +315,73 @@ dialog.ask p, dialog.ask ul { color: var(--text-secondary); margin: 0 0 16px; ov
 dialog.ask ul { padding-left: 18px; }
 dialog.ask input { width: 100%; box-sizing: border-box; margin: 0 0 16px; }
 dialog.ask .actions { justify-content: flex-end; margin-top: 0; }
+
+/* ---- 0.6.42: what the AI can use, a fuller Skills tab, copying a setup, the changes (owner's design, 2026-10-06) */
+.small { font-size: var(--text-xs); }
+.block { display: block; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip.warn { background: rgba(184, 128, 31, 0.14); color: var(--status-warning); }
+.chip.gray { background: var(--bg-input); color: var(--text-secondary); }
+.badge { display: inline-flex; font-size: var(--text-xs); padding: 1px 8px; border-radius: 999px; border: 1px solid var(--hairline-strong); color: var(--text-secondary); }
+.subtabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 14px; border-bottom: 1px solid var(--hairline); }
+.subtabs button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 8px 12px; min-height: var(--touch-min); color: var(--text-secondary); cursor: pointer; font-weight: 500; }
+.subtabs button.on { color: var(--text-primary); border-bottom-color: var(--accent); }
+.tools-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 0 0 12px; }
+.tools-head > div { flex: 1 1 260px; }
+.tool-group { border-top: 1px solid var(--hairline); padding: 12px 0 4px; }
+.tool-group-head { margin: 0 0 6px; }
+.tool-group.never summary { cursor: pointer; padding: 4px 0 10px; }
+.tool-row { display: flex; align-items: flex-start; gap: 12px; padding: 8px 0; }
+.tool-row .switch { min-height: 0; padding-top: 2px; }
+.tool-row.locked { opacity: .7; }
+.tool-text { min-width: 0; flex: 1; display: grid; gap: 3px; }
+.tool-text .chip { margin-left: 8px; }
+.tool-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.tool-meta code { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-dim); }
+table.rows.roles td { padding: 8px 8px 8px 0; border-bottom: 1px solid var(--hairline); }
+table.rows.roles .switch { min-height: 0; }
+table.rows td .switch input { width: 44px; flex: none; }   /* not the cell-wide inputs of the editable tables */
+td.tools-got .chip { font-size: 11px; padding: 2px 8px; }
+/* skills */
+.skill-name { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.skill-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 0 0 6px; }
+.skill-head h2 { margin: 0; }
+.skill-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin: 6px 0 4px; }
+.skill-sec h3 { font-family: var(--font-display); font-weight: 500; font-size: var(--text-md); margin: 12px 0 8px; }
+.skill-sec code { font-family: var(--font-mono); font-size: var(--text-xs); }
+.cmd-script { margin: 0 0 10px; }
+.cmd-script > code { display: block; margin: 0 0 4px; }
+.cmd { display: flex; align-items: baseline; gap: 8px; padding: 4px 0; cursor: pointer; }
+.cmd input { accent-color: var(--accent); width: 18px; height: 18px; flex: none; align-self: center; }
+.files button.special { font-family: var(--font-ui); border-style: dashed; }
+.try-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; align-items: end; margin: 0 0 12px; }
+pre.out { font-family: var(--font-mono); font-size: 12.5px; line-height: 1.6; background: var(--bg-input); border-radius: var(--radius); padding: 14px 16px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 60vh; overflow-y: auto; margin: 8px 0 0; }
+.compare { border: 1px solid var(--hairline); border-radius: var(--radius); overflow: hidden; margin: 10px 0; max-height: 60vh; overflow-y: auto; }
+.compare-head, .compare-row { display: grid; grid-template-columns: 1fr 1fr; }
+.compare-head b { padding: 8px 12px; border-bottom: 1px solid var(--hairline); font-size: var(--text-sm); }
+.compare-row pre { margin: 0; padding: 1px 12px; font-family: var(--font-mono); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; }
+.compare-row pre + pre { border-left: 1px solid var(--hairline); }
+.compare-row.diff pre { background: rgba(184, 128, 31, 0.12); }
+.compare-row pre.gap { background: var(--bg-input); }
+/* costs: a run's steps */
+ol.steps { margin: 6px 0 0; padding-left: 20px; text-align: left; }
+ol.steps code { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-primary); }
+/* overview: copying a setup */
+.grid.two { grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); }
+.box { border: 1px solid var(--hairline); border-radius: var(--radius); padding: 14px 16px; }
+.box .eyebrow { display: block; margin: 0 0 6px; }
+.tick { display: flex; gap: 10px; align-items: flex-start; padding: 6px 0; }
+.tick input { accent-color: var(--accent); width: 18px; height: 18px; flex: none; margin-top: 2px; }
+.tick .lock { width: 18px; flex: none; text-align: center; color: var(--text-dim); }
+.banner.warnbox { display: block; }
+.banner.warnbox ul { margin: 6px 0 0; padding-left: 18px; }
+@media (max-width: 600px) {
+  table.rows.ai td.tools-got { grid-column: 1 / -1; }
+  .compare-head, .compare-row { grid-template-columns: 1fr; }
+  .compare-row pre + pre { border-left: 0; border-top: 1px dashed var(--hairline); }
+}
+.files.views { margin: 14px 0 8px; }
+input[type=file] { font: inherit; color: var(--text-secondary); max-width: 100%; }
+input[type=file]::file-selector-button { font: inherit; font-weight: 500; min-height: var(--touch-min); padding: 0 18px; margin-right: 12px;
+  border-radius: var(--radius); border: 1px solid var(--hairline-strong); background: transparent; color: var(--text-primary); cursor: pointer; }
+@media (max-width: 600px) { .subtabs { flex-wrap: nowrap; overflow-x: auto; } .subtabs button { white-space: nowrap; } }

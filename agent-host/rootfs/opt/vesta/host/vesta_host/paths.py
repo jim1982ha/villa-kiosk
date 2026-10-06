@@ -17,7 +17,6 @@ DATA_HOST = ROOT / "data/host"                 # selftest.json, start info
 CONFIG_SKILLS = ROOT / "config/skills"         # VESTA Skills (VESTA_SKILLS_DIR)
 CONFIG_AGENT = ROOT / "config/agent"           # agent-owned editable settings
 AGENT_DIR = ROOT / "opt/vesta/agent"           # the VESTA Agent (built with AGENT_REF)
-STUB_DIR = ROOT / "opt/vesta/stub"             # the self-test stub, always present
 MANIFEST = "vesta-agent.yaml"
 AGENT_MANIFEST = AGENT_DIR / MANIFEST
 TEMPLATES = ROOT / "opt/vesta/host/templates"

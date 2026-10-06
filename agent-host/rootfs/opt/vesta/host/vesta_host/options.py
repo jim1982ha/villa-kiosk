@@ -17,17 +17,14 @@ from urllib.parse import urlsplit
 from . import paths
 
 DEFAULTS: dict[str, object] = {
-    "agent_mode": "stub",
     "ha_url": "http://homeassistant:8123",
     "kiosk_url": "http://e66a2348-villa-kiosk:8099",
     "telegram_takeover": False,
-    "stub_heartbeat": False,
     "log_level": "info",
 }
 
 #: name → (type, required). `list:` carries its allowed values.
 SCHEMA: dict[str, tuple[str, bool]] = {
-    "agent_mode": ("list:stub|agent", True),
     "anthropic_api_key": ("password", False),
     "ha_url": ("url", True),
     "ha_token": ("password", False),
@@ -35,7 +32,6 @@ SCHEMA: dict[str, tuple[str, bool]] = {
     "kiosk_agent_token": ("password", False),
     "telegram_takeover": ("bool", True),
     "telegram_bot_token": ("password", False),
-    "stub_heartbeat": ("bool", True),
     "log_level": ("list:debug|info|warning|error", True),
 }
 
@@ -43,7 +39,9 @@ SCHEMA: dict[str, tuple[str, bool]] = {
 #: ⚠️ NO EXTERNAL HA MCP ANY MORE (decision D2, 2026-09-30): the sidecar in this
 #: image runs the same way on the Yellow, standalone or remote, so `ha_mcp_mode`,
 #: `ha_mcp_url` and `ha_mcp_secret` are gone. A stored options.json that still
-#: holds them is fine — an unknown key is ignored (load()).
+#: holds them is fine — an unknown key is ignored (load()). So are `agent_mode` and
+#: `stub_heartbeat`: the self-test stub ("test mode") went in 0.12.46 — the slot
+#: always runs the VESTA Agent, which waits for what it needs.
 SECRET_OPTIONS = ("anthropic_api_key", "ha_token", "kiosk_agent_token", "telegram_bot_token")
 
 
@@ -125,20 +123,14 @@ def load() -> Options:
 
 
 def validate(o: Options) -> Options:
-    """SPEC 6: agent mode refuses to start without what the agent cannot work
-    without; stub mode starts regardless and only skips the related checks."""
-    agent = o.get("agent_mode") == "agent"
-    need = [("anthropic_api_key", "Anthropic"), ("ha_token", "Home Assistant and HA MCP")]
-    for name, check in need:
-        if o.has(name):
-            continue
-        if agent:
-            o.errors.append(f"agent mode needs {name} — set it on the Configuration page")
-        else:
-            o.notes.append(f"{name} is empty: the {check} check will be skipped")
+    """SPEC 6, since 0.12.46 (no test mode): a missing key never stops the start — the UI still runs, so
+    the rules and the skills can be prepared — and the agent slot waits until Home Assistant and Anthropic
+    both pass, saying what is missing (vesta-agent-slot's gate)."""
+    for name, what in (("anthropic_api_key", "Anthropic"), ("ha_token", "Home Assistant and HA MCP")):
+        if not o.has(name):
+            o.notes.append(f"{name} is empty: the agent waits until it is set ({what}) — Configuration page")
     if not o.has("kiosk_agent_token"):
         o.notes.append("kiosk_agent_token is empty: the VESTA Kiosk check will be skipped")
     if o.get("telegram_takeover") and not o.has("telegram_bot_token"):
-        msg = "telegram_takeover is on but telegram_bot_token is empty"
-        (o.errors if agent else o.notes).append(msg)
+        o.notes.append("telegram_takeover is on but telegram_bot_token is empty: nothing can be sent on Telegram")
     return o

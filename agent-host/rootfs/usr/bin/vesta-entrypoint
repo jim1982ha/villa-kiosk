@@ -6,9 +6,9 @@ longrun. It reads and validates the options, prints the start banner, creates
 the persistent folders and writes the agent's environment to /run/vesta.
 
 ⚠️ A NON-ZERO EXIT STOPS THE CONTAINER. The HA base image sets
-S6_BEHAVIOUR_IF_STAGE2_FAILS=2, so a failed oneshot ends the start-up — which is
-what SPEC 6 asks for in agent mode ("a missing key stops the start with a clear
-message"): the message is the last line in the app's log.
+S6_BEHAVIOUR_IF_STAGE2_FAILS=2, so a failed oneshot ends the start-up: only an
+option that cannot be read does that. A missing key does not (0.12.46, test mode
+gone): the UI runs and the agent slot waits, saying what is missing.
 """
 from __future__ import annotations
 
@@ -38,18 +38,17 @@ def origin(url: object) -> str:
     return f"{u.scheme}://{u.hostname}{port}"
 
 
-def agent_identity(mode: object = "agent") -> str:
-    return agent_manifest.identity((paths.STUB_DIR if mode == "stub" else paths.AGENT_DIR) / paths.MANIFEST)
+def agent_identity() -> str:
+    return agent_manifest.identity(paths.AGENT_MANIFEST)
 
 
 def banner(o: options.Options) -> None:
     def state(name: str) -> str:
         return "set" if o.has(name) else "missing"
 
-    mode = o.get("agent_mode")
     log("info", f"VESTA Agent host {os.environ.get('VESTA_HOST_VERSION', 'dev')}"
                 f" · deployment {o.deployment} · instance {contract.instance()}")
-    log("info", f"agent slot: mode {mode} · runs {agent_identity(mode)}")
+    log("info", f"agent slot: runs {agent_identity()}")
     log("info", f"link Home Assistant: {origin(o.get('ha_url'))} · token {state('ha_token')}")
     log("info", f"link HA MCP: sidecar {contract.SIDECAR_HOST}:{contract.SIDECAR_PORT}")
     log("info", f"link VESTA Kiosk: {origin(o.get('kiosk_url'))}"
@@ -123,13 +122,11 @@ def main() -> int:
     sidecar = sidecar_settings(o)
     write_private(paths.SIDECAR_ENV, sidecar)
     # What the slot and the self-test need that is NOT part of the contract:
-    # which program fills the slot, whether the stub sends heartbeats, and
     # whether the sidecar runs (and if not, why).
     HostState(
-        agent_mode=str(o.get("agent_mode") or "stub"),
-        stub_heartbeat=bool(o.get("stub_heartbeat")),
         sidecar_reason=None if sidecar["enabled"] else sidecar["reason"],
         host_version=os.environ.get("VESTA_HOST_VERSION", "dev"),
+        anthropic_url=os.environ.get("VESTA_TEST_ANTHROPIC_URL") or None,
     ).write(paths.HOST_STATE)
 
     # What started, when — never a secret. For a person diagnosing the app,
@@ -139,8 +136,7 @@ def main() -> int:
         "host_version": os.environ.get("VESTA_HOST_VERSION", "dev"),
         "deployment": o.deployment,
         "instance": contract.instance(),
-        "agent_mode": o.get("agent_mode"),
-        "agent": agent_identity(o.get("agent_mode")),
+        "agent": agent_identity(),
     }, indent=2))
     log("info", "start-up checks passed")
     return 0

@@ -41,7 +41,8 @@ from vesta_shared.ha_client import client_from_args  # noqa: E402
 from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
 from vesta_shared.messaging import no_code as _no_code  # noqa: E402
 from vesta_shared.store import Store  # noqa: E402
-from vesta_shared.timeutil import day_label, day_time_label  # noqa: E402  (the one day format)
+from vesta_shared.stats import slope_per_hour  # noqa: E402
+from vesta_shared.timeutil import day_label, day_time_label, local_day  # noqa: E402  (the one day format)
 from vesta_shared import agent_records  # noqa: E402  (the agent's records: one reader)
 from vesta_shared.problems import Problems  # noqa: E402  (what is still open: one owner)
 
@@ -87,10 +88,6 @@ def _num(v):
         return float(v)
     except (TypeError, ValueError):
         return None
-
-
-def _ms_day(ms: int, Z) -> date:
-    return datetime.fromtimestamp(ms / 1000, timezone.utc).astimezone(Z).date()
 
 
 def followed_by_agent(rule_eid: str, when: datetime, known: list[tuple[str, datetime]], window_s: float) -> bool:
@@ -235,7 +232,7 @@ class Ctx:
         for r in rows:
             v = _num(r.get("change"))
             if v is not None and v >= 0:                     # a counter stepping back is not consumption
-                out[_ms_day(r["start"], self.Z)] = round(v, 2)
+                out[local_day(r["start"], self.Z)] = round(v, 2)
         return out
 
     def running_power(self, entity_id: str, days: int) -> list[tuple[str, float]]:
@@ -247,7 +244,7 @@ class Ctx:
         for r in rows:
             v = _num(r.get("mean"))
             if v is not None and v > thr:
-                per.setdefault(_ms_day(r["start"], self.Z), []).append(v)
+                per.setdefault(local_day(r["start"], self.Z), []).append(v)
         return [(d.isoformat(), round(statistics.mean(v))) for d, v in sorted(per.items())]
 
     def ai_cost(self) -> float | None:
@@ -318,7 +315,7 @@ def _days_power(c: "Ctx", entity_id: str, days: int) -> list[tuple[date, float, 
     for r in rows:
         v = _num(r.get("mean"))
         if v is not None:
-            per.setdefault(_ms_day(r["start"], c.Z), []).append(v)
+            per.setdefault(local_day(r["start"], c.Z), []).append(v)
     out = []
     for d, vals in sorted(per.items()):
         run = [v for v in vals if v > thr]
@@ -391,11 +388,7 @@ def clue_battery_trend(c, when):
         pts = [(i, _num(x.get("mean"))) for i, x in enumerate(rows) if _num(x.get("mean")) is not None]
         fall = None
         if len(pts) >= 5:
-            xs, ys = [p[0] for p in pts], [p[1] for p in pts]
-            mx, my = statistics.mean(xs), statistics.mean(ys)
-            den = sum((x - mx) ** 2 for x in xs)
-            slope = sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / den if den else 0
-            fall = round(-slope * 7, 1)
+            fall = round(-(slope_per_hour(pts) or 0) * 7, 1)      # the points are (day index, level): per day
         if not fall or fall <= 0 or now_v <= repl:
             continue                    # no trend to project, or already due: the batteries section shows it
         out.append({"subject": r.get("name") or r["entity_id"], "entity_id": r["entity_id"], "level_pct": round(now_v),
@@ -749,7 +742,7 @@ def _extra_card(c: Ctx, spec: dict, days: int) -> dict:
         stat = "max" if kind.endswith("max") else "mean"
         s = datetime.combine(start, time(0), c.Z)
         rows = c.cli.statistics([eid], s, c.e_dt, "day", (stat,)).get(eid, [])
-        series = [(_ms_day(r["start"], c.Z).isoformat(), round(_num(r.get(stat)), 1)) for r in rows if _num(r.get(stat)) is not None]
+        series = [(local_day(r["start"], c.Z).isoformat(), round(_num(r.get(stat)), 1)) for r in rows if _num(r.get(stat)) is not None]
     alert = spec.get("alert_at")
     status = "Watch" if alert is not None and any(v >= alert for _, v in series) else "OK"
     return {"id": f"card-{eid}", "title": spec.get("title") or c.name(eid), "subtitle": spec.get("subtitle") or "",

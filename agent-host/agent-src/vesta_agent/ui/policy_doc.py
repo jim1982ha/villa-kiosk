@@ -16,11 +16,13 @@ from ruamel.yaml.comments import CommentedMap, CommentedSeq
 
 from ..policy import DEFAULT_BEHAVIOUR, DEFAULTS, ENTITY_LISTS
 
-#: What the forms edit. Everything else (ha_read_tools, system_actions,
-#: notify_recipients...) is edited in the file itself and never touched here.
+#: What the forms edit. Everything else (system_actions, notify_recipients...) is edited in the file itself and
+#: never touched here. "What the AI can use" (0.6.42): ha_read_tools, agent_tools, tool_access, and the skills'
+#: on/off switch (skills_off).
 FORM_KEYS = ("settings", "act_enabled", "approval_ttl_minutes", "people", "chats", "allowed_services",
              "owner_only_entities", "excluded_entities", "siren_entity", "siren_auto_off_min",
-             "switch_entities", "scene_allowlist", "script_allowlist", "button_allowlist")
+             "switch_entities", "scene_allowlist", "script_allowlist", "button_allowlist",
+             "ha_read_tools", "agent_tools", "tool_access", "skills_off")
 LISTS = tuple(ENTITY_LISTS)     # policy.py's own table, not a copy
 
 
@@ -60,6 +62,11 @@ def to_form(text: str) -> dict:
         "siren_entity": raw.get("siren_entity"),
         "siren_auto_off_min": raw.get("siren_auto_off_min", DEFAULTS["siren_auto_off_min"]),
         **{k: list(raw.get(k) or []) for k in LISTS},
+        "ha_read_tools": [x for x in raw.get("ha_read_tools") or [] if isinstance(x, str)]
+        if isinstance(raw.get("ha_read_tools"), list) else [],
+        "agent_tools": dict(raw.get("agent_tools") or {}) if isinstance(raw.get("agent_tools"), dict) else {},
+        "tool_access": dict(raw.get("tool_access") or {}) if isinstance(raw.get("tool_access"), dict) else {},
+        "skills_off": list(raw.get("skills_off") or []) if isinstance(raw.get("skills_off"), list) else [],
     }
 
 

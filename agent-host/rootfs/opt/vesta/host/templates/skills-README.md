@@ -7,7 +7,12 @@ A skill folder holds:
 
 - `SKILL.md`    what the agent reads before doing the skill's job
 - `skill.yaml`  what the agent runs, and when:
+  - `tools:` the tools the AI needs for this skill (`[ha_get_state, send_message]`):
+    its reports get only these, among those switched on (VESTA Agent page →
+    Rules → What the AI can use), and the skill shows "Not working" while one
+    of them is switched off. Left out: everything switched on.
   - `scripts:` the only scripts the agent may run, and the options each accepts
+    (`commands:` a list, or `{status: "what it does", ...}` — the page shows it)
   - `schedule:` jobs at a time — `"07:00"` daily, `"Mon 08:00"` weekly,
     `"1 08:00"` monthly; `prompt:` for a job the AI writes, `run:` for a
     script-only job (no AI, no cost). An AI job also has a `name`: its brain
@@ -30,7 +35,13 @@ The five starter skills were copied here once, at the first start
 you never edited; one you edited is kept (the new version is left in
 `.starter/` to compare); a deleted skill never comes back. A file named
 `villa.*` in a skill (for example `reports/villa.reports.yaml`) is the villa's
-own: it does not count as an edit, and updates keep it.
+own: it does not count as an edit, and updates keep it. `villa.skill.yaml` holds
+this villa's choices made on the page: the commands the AI may not run
+(`off_commands: {concierge.py: [find]}`).
+
+The VESTA Agent page's Skills tab switches a skill on or off (policy.yaml
+`skills_off`: an off skill has no schedule and is not read), compares an
+edited starter skill with the release, and tries a command on the live villa.
 
 This folder belongs to you and the agent: the VESTA Agent host created it once
 and never overwrites anything in it. It is included in Home Assistant backups.

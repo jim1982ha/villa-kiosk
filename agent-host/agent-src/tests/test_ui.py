@@ -225,11 +225,14 @@ def test_the_overview_gives_the_apps_version_with_the_agents(ui, monkeypatch):
 def test_the_rules_choose_devices_from_the_villas_own_by_name(ui):
     # owner, 2026-10-01: "free form text inputs are not suitable" — the pickers list the pack's entities
     import json
+    # the pack's real shape (KnowledgePack): `unclassified` holds ids only, so a device the pickers offer is in a family
     with open(ui.pack_path, "w") as f:
-        json.dump({"families": {"security": [{"entity_id": "lock.example_door", "name": "Front door", "area": "Entrance"}],
-                                "power": [{"entity_id": "lock.example_door", "name": "Front door", "area": "Entrance"}]},
-                   "unclassified": [{"entity_id": "scene.example_evening", "name": "Evening", "area": ""}],
-                   "generated_at": "2026-10-01T02:00:00+00:00"}, f)
+        json.dump({"villa": "x", "time_zone": "UTC", "generated_at": "2026-10-01T02:00:00+00:00", "ha_version": None,
+                   "families": {"security": [{"entity_id": "lock.example_door", "name": "Front door", "area": "Entrance"}],
+                                "power": [{"entity_id": "lock.example_door", "name": "Front door", "area": "Entrance"}],
+                                "scene": [{"entity_id": "scene.example_evening", "name": "Evening", "area": ""}]},
+                   "assets": {}, "areas": [], "people": [], "channels": {}, "unknown_area": [],
+                   "unclassified": ["sensor.example_unknown"], "retention": {}}, f)
 
     async def fn(c):
         return await (await c.get("/api/entities")).json(), await (await c.get("/api/policy")).json()
@@ -398,12 +401,16 @@ def test_a_run_recorded_before_jobs_had_names_counts_under_its_name(tmp_path):
         st.db.execute("insert into calls(at, kind, detail) values (?, 'run', ?)",
                       ((now - timedelta(hours=1)).isoformat(), json.dumps({"who": who, "cost_usd": cost})))
     st.db.commit()
-    c = status.costs(st, 30, job_names={"reports:07:00": "fm-daily", "reports:1 08:00": "owner-monthly"})
+    # 0.6.42: rewritten once, at the agent's start, instead of being read two ways by the Costs tab
+    assert st.rename_job_runs({"reports:07:00": "fm-daily", "reports:1 08:00": "owner-monthly"}) == 2
+    assert st.rename_job_runs({"reports:07:00": "fm-daily", "reports:1 08:00": "owner-monthly"}) == 0     # once
+    c = status.costs(st, 30)
     by = {g["name"]: g["runs"] for g in c["by_work"]}
     assert by == {"fm-daily": 2, "owner-monthly": 1, "other:09:00": 1}                # an unknown one keeps its label
-    from vesta_agent.ui.server import STATIC
-    src = open(os.path.join(os.path.dirname(STATIC), "server.py"), encoding="utf-8").read()
-    assert 'job_names = {f"{sk.name}:{j[\'when\']}": j["name"] for sk, j in ai_jobs(self.skills.all()) if j.get("name")}' in src
+    import inspect
+    from vesta_agent.app import Vesta
+    assert "self.state.rename_job_runs({f\"{sk.name}:{j['when']}\": j[\"name\"] for sk, j in ai_jobs(self.skills.all())})" \
+        in inspect.getsource(Vesta.start)                                             # pin the caller
 
 
 def test_every_run_pairs_its_columns_on_a_phone():

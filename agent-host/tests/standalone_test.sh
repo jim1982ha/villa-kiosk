@@ -53,12 +53,10 @@ services:
 EOF
 write_env() {  # write_env <cf id> <cf secret>
   cat > "$WORK/vesta-agent.env" <<EOF
-VESTA_OPT_AGENT_MODE=stub
 VESTA_OPT_HA_URL=http://villa:8080
 VESTA_OPT_HA_TOKEN=$HA_TOKEN
 VESTA_OPT_KIOSK_URL=http://villa:8080
 VESTA_OPT_KIOSK_AGENT_TOKEN=$KIOSK_TOKEN
-VESTA_OPT_STUB_HEARTBEAT=true
 VESTA_OPT_TELEGRAM_TAKEOVER=false
 VESTA_CF_ACCESS_CLIENT_ID=$1
 VESTA_CF_ACCESS_CLIENT_SECRET=$2
@@ -70,30 +68,32 @@ EOF
 echo "== 1. Remote deployment with the Cloudflare Access service token"
 write_env "$CF_ID" "$CF_SECRET"
 compose up -d >/dev/null 2>&1
-wait_log "stub: heartbeat" 180 || true
+# no Anthropic key: the self-test runs, then the slot waits for Anthropic (the stub, which ran here, went in 0.12.46)
+wait_log "agent start delayed" 180 || true
 has "deployment standalone · instance prod" && ok "banner: standalone, prod" || bad "banner"
 for line in "Home Assistant: pass" "HA MCP: pass — ha-mcp" "VESTA Kiosk: pass — contract 1" \
-            "Presence: pass" "Anthropic: skipped" "Telegram: skipped"; do
+            "Anthropic: skipped" "Telegram: skipped"; do
   has "self-test $line" && ok "self-test $line" || bad "self-test $line"
 done
-has "stub: heartbeat: HTTP 200" && ok "stub heartbeats through Cloudflare Access" || bad "stub heartbeat"
+has "agent start delayed: Anthropic not passing" && ok "the agent waits for Anthropic" || bad "the slot did not wait"
 l=$(logs); leaked=0
 for s in "$HA_TOKEN" "$KIOSK_TOKEN" "$CF_SECRET"; do grep -qF "$s" <<<"$l" && leaked=1; done
 [ "$leaked" = 0 ] && ok "no secret in the log" || bad "a secret in the log"
 [ -s "$WORK/data/host/selftest.json" ] && [ -f "$WORK/config/skills/README.md" ] \
   && ok "state in ./data, skills in ./config" || bad "folders"
 start=$(date +%s); compose stop -t 30 vesta-agent >/dev/null 2>&1; took=$(( $(date +%s) - start ))
-has "agent stopped cleanly" && [ "$took" -lt 30 ] && ok "compose stop: clean, ${took} s" || bad "stop (${took} s)"
+# the agent never started (no Anthropic key): the waiting slot stops at once
+has "service agent successfully stopped" && [ "$took" -lt 30 ] && ok "compose stop: clean, ${took} s" || bad "stop (${took} s)"
 compose down -v >/dev/null 2>&1
 docker run --rm --entrypoint /bin/rm -v "$WORK:/w" "$IMAGE" -rf /w/data /w/config >/dev/null 2>&1 || true
 
 echo "== 2. Same, without the service token: refused, reported as fail"
 write_env "" ""
 compose up -d >/dev/null 2>&1
-wait_log "starting vesta-agent-stub" 180 || true
+wait_log "agent start delayed" 180 || true
 has "self-test Home Assistant: fail — HTTP 403" && ok "Home Assistant refused (403) → fail" || bad "HA not refused"
 has "self-test VESTA Kiosk: fail — HTTP 403" && ok "VESTA Kiosk refused (403) → fail" || bad "Kiosk not refused"
-has "starting vesta-agent-stub" && ok "stub mode still starts" || bad "stub did not start"
+has "agent start delayed: Home Assistant, Anthropic not passing" && ok "the agent waits for both" || bad "the slot did not wait"
 
 echo
 [ "$FAILED" = 0 ] && echo "✅ standalone checks passed" || { echo "❌ standalone checks FAILED"; logs | tail -40; }

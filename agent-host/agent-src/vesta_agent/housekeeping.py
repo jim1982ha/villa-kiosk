@@ -63,6 +63,8 @@ def tidy(settings, state, keep: dict[str, int], now: datetime | None = None) -> 
                                         stamp, (".jsonl", ".json"))
     out["files"] = _files_older(settings.out_dir, keep["files_days"], stamp)
     out["daily_figures"] = _prune_figures(settings.store_path, now, keep["daily_figures_months"])
+    from .history import History
+    out["page changes"] = History(settings.history_path).prune(keep["records_days"], now)
     return out
 
 

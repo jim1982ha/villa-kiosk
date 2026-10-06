@@ -15,11 +15,12 @@ Every tool call is therefore decided by the code, never pre-approved.
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass
 
+import json
+
 from claude_agent_sdk import (AssistantMessage, ClaudeAgentOptions, ClaudeSDKClient, HookMatcher,
-                              PermissionResultAllow, PermissionResultDeny, ResultMessage, TextBlock)
+                              PermissionResultAllow, PermissionResultDeny, ResultMessage, TextBlock, ToolUseBlock)
 
 from .api_errors import NO_RETRY, classify
 from .policy import PROFILES  # noqa: E402
@@ -27,6 +28,7 @@ from .policy import PROFILES  # noqa: E402
 log = logging.getLogger("vesta.runner")
 
 WEB_SEARCH = "WebSearch"
+MAX_STEPS = 40          # the tools one run used, as the Costs tab shows them (a report uses about 20)
 
 # Named anyway, in case a future CLI adds a tool while tools=[] is set.
 BUILTIN_DENY = ["Bash", "BashOutput", "KillShell", "Read", "Write", "Edit", "MultiEdit", "NotebookEdit", "Glob", "Grep",
@@ -71,12 +73,16 @@ class Collector:
 
     def __init__(self, session_id: str | None = None):
         self.texts: list[str] = []
+        self.steps: list[dict] = []          # each tool the AI called: its name, and what it asked, in short
         self.session_id, self.stopped, self.cost, self.err = session_id, False, None, None
         self.usage, self.turns, self.ms = {}, None, None
         self.kind, self.status, self.exc_name, self.raw = None, None, None, ""
 
     def feed(self, msg) -> None:
         if isinstance(msg, AssistantMessage):
+            for b in msg.content:
+                if isinstance(b, ToolUseBlock) and len(self.steps) < MAX_STEPS:
+                    self.steps.append(step(b.name, b.input))
             words = [b.text.strip() for b in msg.content if isinstance(b, TextBlock) and b.text.strip()]
             if getattr(msg, "error", None):
                 self.kind = msg.error
@@ -105,6 +111,34 @@ class Collector:
         if not (self.err or self.kind):
             return None
         return classify(self.kind, self.status, self.raw, self.exc_name)
+
+
+def tool_key(name: str) -> str:
+    """A tool as the page names it: "mcp__vesta__ha_get_state" → "ha_get_state", "WebSearch" → "web_search"."""
+    if name == WEB_SEARCH:
+        return "web_search"
+    return name.rsplit("__", 1)[-1]
+
+
+def step(name: str, args) -> dict:
+    """One tool call, for the record: what was called and, in a line, with what. Never more: an answer can hold
+    anything, and the record is read on the Costs tab."""
+    args = dict(args or {}) if isinstance(args, dict) else {}
+    args.pop("vesta_part", None)
+    key = tool_key(name)
+    if key == "run_skill_script":
+        said = " ".join([str(args.get("script") or ""), *map(str, args.get("args") or [])]).strip()
+    elif key == "ha_call_service":
+        said = f"{args.get('domain', '')}.{args.get('service', '')} {args.get('entity_id') or ''}".strip()
+    elif key == "web_search":
+        said = str(args.get("query") or "")
+    elif key == "send_message":
+        said = f"to {args.get('to', '?')}" + (f", {args['attachment']}" if args.get("attachment") else "")
+    elif key == "save_file":
+        said = str(args.get("name") or "")
+    else:
+        said = json.dumps(args, ensure_ascii=False, sort_keys=True, default=str)[1:-1] if args else ""
+    return {"tool": key, "input": said[:160]}
 
 
 def make_guard(allowed: set[str], state, who: str):
@@ -177,6 +211,8 @@ async def run(settings, system_prompt: str, prompt: str, server, allowed: set[st
         if c.problem == "unknown":
             log.exception("agent run failed")
     texts, session_id, stopped, cost, usage, turns, ms = c.texts, c.session_id, c.stopped, c.cost, c.usage, c.turns, c.ms
+    secrets = [x for x in settings.secrets() if x and len(x) >= 8] if hasattr(settings, "secrets") else []
+    steps = [{**st, "input": _scrub(st["input"], secrets)} for st in c.steps]
     err, problem = c.err or (f"api {c.kind}" if c.kind else None), c.problem
     if problem:
         # the kind and the status only: the raw prose may quote the request
@@ -188,8 +224,16 @@ async def run(settings, system_prompt: str, prompt: str, server, allowed: set[st
                                          "cache_creation_input_tokens") if isinstance(usage.get(k), int)}
     state.log("run", {"who": who, "cost_usd": cost, "stopped_at_limit": stopped, "denied": denied, "error": err,
                       "profile": profile if profile in PROFILES else getattr(settings, "profile", None), "model": opts.model, "tokens": tokens,
-                      "turns": turns, "ms": ms, "asked": (asked or "")[:160] or None, "problem": problem})
+                      "turns": turns, "ms": ms, "asked": (asked or "")[:160] or None, "problem": problem,
+                      # ⚠️ THE TOOLS IT USED (0.6.42): the Costs tab's "Tools used", and how often each tool is used
+                      "steps": steps})
     if err and resume and not texts and problem not in NO_RETRY:
         # the session could not be resumed (lost, or from an older version): answer in a new one
         return await run(settings, system_prompt, prompt, server, allowed, state, who, None, limit_usd, profile)
     return RunResult("\n\n".join(texts).strip(), session_id, stopped, cost, denied, err, problem)
+
+
+def _scrub(text: str, secrets: list[str]) -> str:
+    for x in secrets:
+        text = text.replace(x, "[redacted]")
+    return text

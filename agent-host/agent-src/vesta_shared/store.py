@@ -80,6 +80,21 @@ class Store:
         for col in ("source", "check_text"):
             if col not in cols:
                 self.db.execute(f"ALTER TABLE tasks ADD COLUMN {col} TEXT")
+        # ...and its rows are rewritten ONCE in today's shape (0.6.42), so no reader keeps a second way of
+        # reading them: a task's source is the latest finding, else incident, of its rule and device
+        # ("none:0" when neither exists: it then waits for a person, as before), and its "<what> Check: <how>"
+        # text is split in two.
+        for t in self.db.execute("SELECT id, rule_id, entity_id, summary FROM tasks WHERE source IS NULL").fetchall():
+            src = "none:0"
+            for kind in ("finding", "incident"):
+                r = self.db.execute(f"SELECT id FROM {kind}s WHERE rule_id=? AND entity_id=? ORDER BY id DESC LIMIT 1",
+                                    (t["rule_id"], t["entity_id"])).fetchone()
+                if r:
+                    src = f"{kind}:{r['id']}"
+                    break
+            what, _, check = (t["summary"] or "").partition(" Check: ")
+            self.db.execute("UPDATE tasks SET source=?, summary=?, check_text=? WHERE id=?",
+                            (src, what if check else t["summary"], check.strip() or None, t["id"]))
         self.db.commit()
 
     @staticmethod
@@ -91,17 +106,6 @@ class Store:
         self.db.execute("INSERT OR REPLACE INTO features VALUES (?,?,?,?,?,?)",
                         (day, entity_id, family, name, value, json.dumps(meta or {})))
         self.db.commit()
-
-    def feature_series(self, entity_id: str, name: str, days: int, before_day: str | None = None) -> list[tuple[str, float]]:
-        q = "SELECT day, value FROM features WHERE entity_id=? AND name=? AND value IS NOT NULL"
-        args: list[Any] = [entity_id, name]
-        if before_day:
-            q += " AND day<=?"
-            args.append(before_day)
-        q += " ORDER BY day DESC LIMIT ?"
-        args.append(days)
-        rows = self.db.execute(q, args).fetchall()
-        return [(r["day"], r["value"]) for r in reversed(rows)]
 
     # findings ------------------------------------------------------------
     def open_finding(self, rule_id: str, entity_id: str) -> sqlite3.Row | None:
@@ -270,6 +274,3 @@ class Store:
     def audit(self, who: str, action: str, detail: dict):
         self.db.execute("INSERT INTO audit (at, who, action, detail) VALUES (?,?,?,?)", (_now(), who, action, json.dumps(detail)))
         self.db.commit()
-
-    def audit_rows(self, limit: int = 200) -> list[dict]:
-        return [dict(r) for r in self.db.execute("SELECT * FROM audit ORDER BY id DESC LIMIT ?", (limit,))]

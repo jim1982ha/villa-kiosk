@@ -1,3 +1,26 @@
+## 0.12.46
+
+- **Choose what the AI can use: Rules → What the AI can use.** Three tabs:
+  - **Reading Home Assistant:** every Home Assistant tool, grouped, with a switch, what it does, and how often it was used this week. Only a tool that changes nothing in Home Assistant can be switched on; the ones that change it are listed as "Never available". A tool added by a Home Assistant update arrives "New" and off. "Read the list again" fetches the list on demand.
+  - **The agent's own tools:** switch off web search, facility tickets, starting a report from a chat, or reading its own activity.
+  - **Who may use what:** what the facility manager may make the AI use, group by group. The owner gets everything that is switched on.
+- **Reports get only the tools their skill lists.** Rules → The AI shows the tools of each report.
+- **A fuller Skills tab.**
+  - **On/off switch:** a skill switched off is kept, but not used: no schedule, no alert hook, not read in a chat.
+  - **Its state:** follows the releases, edited here, or this villa's own.
+  - **The tools it needs, when it acts, and its commands as checkboxes.** The checkboxes are this villa's choice, saved in the skill's own villa file, so updates keep them and copying the skill carries them.
+  - **"Not working" when a tool it needs is switched off,** with a button that switches it on. Its reports do not run until then, and their chat is told why.
+  - **An edited starter skill:** "Compare with the release" shows its files side by side. "Keep mine" or "Take the release version": your edits go to the trash folder, and Undo brings them back.
+  - **"Try a command"** runs one of the skill's commands on the villa, exactly as the AI would, with no AI and no cost. Messages and tickets it would make are shown, never sent.
+- **Costs: the tools each run used.** Tap a run to see each step. A new table counts how often each tool was used.
+- **Overview: changes made on these pages.** Every save on Rules and Skills, newest first, each with Undo. Undo is refused if something changed since.
+- **Copy the setup to another villa.** Overview → "Download the setup" saves the skills and the shareable part of the rules in one file. It never includes people, chat ids, devices, keys or records. On the other villa, "Import a setup" shows every change and what does not fit before anything is written.
+- **Leaner.**
+  - **No test mode any more:** the "Agent mode" and "Stub heartbeat" options are gone. With nothing configured, the app runs, its page opens, and the agent waits, saying in its log what is missing.
+  - **Unused and duplicated code removed:** eleven unused pieces, calculations written twice, and test-only material that was installed on the villa.
+  - **The VESTA icon now sits in the report page itself.**
+  - **Old records converted once:** reports' run names, and tasks from before 1 October, instead of being read two ways.
+
 ## 0.12.45
 
 ### Fixed

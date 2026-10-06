@@ -120,9 +120,6 @@ class VillaParams:
             raise KeyError(name)
         return BEHAVIOUR_DEFAULTS[name]
 
-    def asset_number(self, asset: str, parameter: str, hint: str = "") -> float:
-        return self.number(f"{asset}_{parameter}", hint)
-
     def asset_optional_number(self, asset: str, parameter: str) -> float | None:
         return self.optional_number(f"{asset}_{parameter}")
 

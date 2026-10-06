@@ -26,7 +26,7 @@ APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STARTER_DIR = os.path.join(APP_DIR, "starter")
 
 # The settings block is policy.yaml's, read by vesta_agent.policy (one reader of the file).
-from .policy import CONVERSATION_RESETS, DEFAULT_BEHAVIOUR, PROFILES, Policy  # noqa: E402,F401
+from .policy import PROFILES, Policy  # noqa: E402
 
 
 def _env(name: str, default: str = "") -> str:
@@ -52,7 +52,7 @@ class Settings:
     config_dir: str = "/config/agent"
     skills_dir: str = "/config/skills"
     app_dir: str = APP_DIR
-    _behaviour_cache: dict = field(default_factory=dict, repr=False)
+    _policy_cache: dict = field(default_factory=dict, repr=False)
 
     # ------------------------------------------------------------------ paths
     @property
@@ -70,6 +70,11 @@ class Settings:
     @property
     def state_path(self) -> str:
         return os.path.join(self.data_dir, "vesta_agent.sqlite")
+
+    @property
+    def history_path(self) -> str:
+        """The VESTA Agent page's changes, each undoable (history.py)."""
+        return os.path.join(self.data_dir, "page_history.sqlite")
 
     @property
     def pack_path(self) -> str:
@@ -95,21 +100,25 @@ class Settings:
         return self.app_dir
 
     # ------------------------------------------------------------------ behaviour (policy.yaml `settings:`)
-    def behaviour(self) -> dict:
-        """The `settings:` block of policy.yaml, read again whenever the file changes — by Policy, the
-        one reader of the file. A value it does not understand falls back to its default (not an error:
-        a typo in a hand-edited file must not stop the agent; the UI refuses it before it is saved)."""
+    def policy(self) -> Policy:
+        """policy.yaml, read again whenever the file changes — the ONE cache of it (the engine and these
+        settings each kept their own until 0.6.42). A value it does not understand falls back to its default
+        (not an error: a typo in a hand-edited file must not stop the agent; the UI refuses it before it is saved)."""
         try:
             m = os.path.getmtime(self.policy_path)
         except OSError:
             m = None
-        if self._behaviour_cache.get("mtime") != m or "value" not in self._behaviour_cache:
+        if self._policy_cache.get("mtime") != m or "value" not in self._policy_cache:
             try:
-                v = Policy.load(self.policy_path).behaviour
-            except (OSError, yaml.YAMLError, AttributeError):
-                v = dict(DEFAULT_BEHAVIOUR)
-            self._behaviour_cache.update(mtime=m, value=v)
-        return self._behaviour_cache["value"]
+                v = Policy.load(self.policy_path)
+            except (OSError, yaml.YAMLError):
+                v = Policy({})
+            self._policy_cache.update(mtime=m, value=v)
+        return self._policy_cache["value"]
+
+    def behaviour(self) -> dict:
+        """The `settings:` block of policy.yaml (brain, limit per reply, web search, conversation reset)."""
+        return self.policy().behaviour
 
     @property
     def profile(self) -> str:

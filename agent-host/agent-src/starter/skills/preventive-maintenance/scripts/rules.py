@@ -260,28 +260,6 @@ def level_rules(asset: dict, entity_id: str, device_class: str | None, series: d
     return out
 
 
-# ---------------------------------------------------------------- water family
-def water_rules(asset: dict, entity_id: str, daily: dict[date, dict], night_flow_lpm: float | None, today: date,
-                params: VillaParams) -> list[Finding]:
-    """Ready for the day a water meter or flow sensor is added. Same shape as energy."""
-    out = []
-    slug = asset["slug"]
-    baseline_days = int(params.behaviour("baseline_days")); confirm = int(params.behaviour("confirm_days"))
-    days = sorted(d for d in daily if today - timedelta(days=baseline_days) < d <= today and daily[d].get("kwh") is not None)
-    if len(days) > confirm + int(params.behaviour("min_days_for_baseline")):
-        rec, base = [daily[d]["kwh"] for d in days[-confirm:]], [daily[d]["kwh"] for d in days[:-confirm]]
-        change = pct_change(med(rec), med(base))
-        if change is not None and change >= params.behaviour("energy_rise_pct"):
-            out.append(Finding("PM-WATER-JUMP", entity_id, slug, "water", P3,
-                               f"{asset['name']} water use is {change:+.0f}% versus normal ({med(rec):.2f} vs {med(base):.2f} m3/day).",
-                               {"recent": med(rec), "baseline": med(base)}, "Check for a running toilet, a hose left open, or a leak."))
-    if night_flow_lpm is not None and night_flow_lpm > 0.2:
-        out.append(Finding("PM-WATER-NIGHTFLOW", entity_id, slug, "water", P2,
-                           f"{asset['name']} shows {night_flow_lpm:.1f} L/min of continuous flow at night: probable leak.",
-                           {"night_flow_lpm": night_flow_lpm}, "Close the main valve and see whether the meter stops."))
-    return out
-
-
 # ------------------------------------------------------------- forensics family
 def flap_rules(asset: dict, entity_id: str, flips_by_day: dict[date, int], today: date, params: VillaParams) -> list[Finding]:
     n = sum(v for d, v in flips_by_day.items() if today - timedelta(days=3) < d <= today)

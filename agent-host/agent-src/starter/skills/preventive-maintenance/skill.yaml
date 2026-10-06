@@ -1,4 +1,5 @@
 description: Nightly maintenance checks on Home Assistant's history — pumps, batteries, devices offline — each finding a ticket for the facility manager
+tools: []                     # the night's checks are code: the AI needs no tool of its own here
 scripts:
   nightly.py:
     flags: {--as-of: date, --out: outfile, --skip-raw: switch}

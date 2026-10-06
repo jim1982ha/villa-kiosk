@@ -4,9 +4,12 @@ A skill is one folder in VESTA_SKILLS_DIR holding SKILL.md (what the model reads
 and skill.yaml (what the engine needs):
 
     description: one line
+    tools: [ha_get_state, ha_get_history, send_message]   optional: the tools the AI needs for this skill's
+                                     job — its AI jobs get only these (among those switched on), and the skill is
+                                     "not working" while one is switched off (tool_access.py). Absent: everything.
     scripts:                         the ONLY scripts the model may run, with the flags it may pass
       energy_period.py:
-        commands: [week, month]      optional: allowed first argument
+        commands: [week, month]      optional: allowed first argument (or {week: "what it does", ...})
         flags: {--period: [week, month], --out: outfile, --as-of: date, --what: text}
         inject: [pack, store, zone]  what the engine adds itself
         job_only: {week: weekly}     a command that, asked for in a chat, runs only as that AI job
@@ -24,7 +27,13 @@ and skill.yaml (what the engine needs):
 
 Nothing is compiled or cached across calls: a changed folder counts at the next
 use, a deleted one is gone with its schedule. A skill whose skill.yaml is broken
-is switched off alone, and the log names it.
+is switched off alone, and the log names it. A skill the villa switched off
+(policy.yaml skills_off, the VESTA Agent page's switch) is not loaded either.
+
+THE VILLA'S CHOICES FOR A SKILL (0.6.42) are in its villa.skill.yaml, written by the
+page's command checkboxes: `off_commands: {concierge.py: [find], proposals.py: true}`.
+A villa.* file is the villa's (VILLA_PREFIX): the skill still follows the releases,
+and copying the folder to another villa carries the choice.
 
 ⚠️ THE SCRIPTS A SKILL DECLARES ARE THE ONLY ONES THAT RUN. The model has no
 shell and no file tool; the flags it passes are checked here, against the
@@ -78,11 +87,17 @@ class SkillError(ValueError):
     pass
 
 
+VILLA_CHOICES = "villa.skill.yaml"
+TOOL = re.compile(r"^[a-z][a-z0-9_]{1,60}$")
+KEPT = ".kept.json"           # starter skills the owner chose to keep as edited, with the release they kept them at
+
+
 @dataclass
 class Skill:
     name: str
     path: str
     description: str = ""
+    tools: list[str] | None = None
     scripts: dict[str, dict] = field(default_factory=dict)
     schedule: list[dict] = field(default_factory=list)
     every_5_min: str | None = None
@@ -125,9 +140,16 @@ def _parse(name: str, path: str) -> Skill:
         if not set(inject) <= INJECTS:
             raise SkillError(f"scripts.{script}: inject may only name {', '.join(sorted(INJECTS))}")
         cmds = spec.get("commands")
+        words = {str(k): str(v or "") for k, v in cmds.items()} if isinstance(cmds, dict) else {}
         job_only = {str(k): str(v) for k, v in (spec.get("job_only") or {}).items()}
         sk.scripts[script] = {"cmds": set(map(str, cmds)) if cmds else None, "flags": flags, "inject": inject,
-                              "job_only": job_only}
+                              "job_only": job_only, "words": words, "off": set()}
+    tools = raw.get("tools")
+    if tools is not None:
+        if not isinstance(tools, list) or not all(isinstance(t, str) and TOOL.match(t) for t in tools):
+            raise SkillError("tools must be a list of tool names (ha_get_state, send_message, web_search...)")
+        sk.tools = list(dict.fromkeys(tools))
+    _villa_choices(sk)
     for i, job in enumerate(raw.get("schedule") or []):
         job = job or {}
         when = str(job.get("when") or "")
@@ -156,6 +178,43 @@ def _parse(name: str, path: str) -> Skill:
             if job not in asked:
                 raise SkillError(f"scripts.{script}.job_only: {job} is not an AI job of this skill a person may ask for")
     return sk
+
+
+def _villa_choices(sk: Skill) -> None:
+    """villa.skill.yaml's switched-off commands, onto the scripts. LENIENT: a script or command this version of the
+    skill no longer has is ignored (an update must never switch a skill off because of an old choice)."""
+    try:
+        with open(os.path.join(sk.path, VILLA_CHOICES), encoding="utf-8") as f:
+            raw = yaml.safe_load(f) or {}
+    except FileNotFoundError:
+        return
+    except (OSError, yaml.YAMLError) as e:
+        raise SkillError(f"{VILLA_CHOICES} cannot be read ({e})") from None
+    off = raw.get("off_commands") if isinstance(raw, dict) else None
+    for script, which in (off or {}).items() if isinstance(off, dict) else ():
+        spec = sk.scripts.get(str(script))
+        if not spec:
+            continue
+        if which is True:
+            spec["off"] = True
+        elif isinstance(which, list) and spec["cmds"]:
+            spec["off"] = {str(c) for c in which if str(c) in spec["cmds"]}
+
+
+def villa_choices(skill_path: str) -> dict:
+    """villa.skill.yaml as written ({} when absent): the page edits it."""
+    try:
+        with open(os.path.join(skill_path, VILLA_CHOICES), encoding="utf-8") as f:
+            raw = yaml.safe_load(f) or {}
+        return raw if isinstance(raw, dict) else {}
+    except (OSError, yaml.YAMLError):
+        return {}
+
+
+def runnable(spec: dict, command: str | None) -> bool:
+    """Whether the AI may run this script (and this command of it) here: not switched off for the villa."""
+    off = spec.get("off") or set()
+    return off is not True and not (command is not None and command in off)
 
 
 def _ai_job(path: str, job: dict, where: str) -> dict:
@@ -198,10 +257,12 @@ def ai_jobs(skills: dict) -> list[tuple["Skill", dict]]:
 class Skills:
     """The skills folder, read afresh at every call."""
 
-    def __init__(self, skills_dir: str, starter_dir: str | None = None):
+    def __init__(self, skills_dir: str, starter_dir: str | None = None, off=None):
         self.dir = skills_dir
         self.starter_dir = starter_dir
         self._reported: dict[str, str] = {}
+        # the skills the villa switched off (policy.yaml skills_off), read at every call
+        self._off = off or (lambda: set())
 
     # ------------------------------------------------------------------ seeding
     def seed(self) -> list[str]:
@@ -281,7 +342,9 @@ class Skills:
         return updated, kept
 
     # ------------------------------------------------------------------ reading
-    def all(self) -> dict[str, Skill]:
+    def all(self, include_off: bool = False) -> dict[str, Skill]:
+        """The skills the agent uses — without those the villa switched off, unless `include_off` (the page)."""
+        off = set() if include_off else set(self._off() or ())
         out: dict[str, Skill] = {}
         try:
             names = sorted(os.listdir(self.dir))
@@ -297,8 +360,10 @@ class Skills:
                 seen.add(name)
                 continue
             try:
-                out[name] = _parse(name, path)
+                sk = _parse(name, path)
                 self._report(name, "")
+                if name not in off:
+                    out[name] = sk
             except (SkillError, yaml.YAMLError, OSError) as e:
                 self._report(name, f"skill.yaml refused ({e}): switched off")
             seen.add(name)
@@ -308,6 +373,65 @@ class Skills:
 
     def get(self, name: str) -> Skill | None:
         return self.all().get(name)
+
+    # ------------------------------------------------------------------ against the release (the page)
+    def release_state(self, name: str) -> dict:
+        """A skill against this release's starter: `follows` (equal to a version a release shipped), `edited`
+        (a starter skill changed here: updates paused), `own` (not a starter skill). For an edited one, the files
+        that differ, and whether the owner already chose to keep it as it is for this release."""
+        dst = os.path.join(self.dir, name)
+        src = os.path.join(self.starter_dir, name) if self.starter_dir else ""
+        if not src or not os.path.isdir(src):
+            return {"state": "own"}
+        have, new = _files(dst), _files(src)
+        villa = sorted(k for k in have if os.path.basename(k).startswith(VILLA_PREFIX))
+        mine = {k: v for k, v in have.items() if k not in villa}
+        differs = sorted(k for k in set(mine) | set(new) if mine.get(k) != new.get(k))
+        if not differs:
+            return {"state": "follows", "villa": villa}
+        try:
+            with open(os.path.join(os.path.dirname(self.starter_dir), SHIPPED), encoding="utf-8") as f:
+                shipped = json.load(f).get(name, [])
+        except (OSError, ValueError):
+            shipped = []
+        if fingerprint(dst) in shipped:
+            return {"state": "follows", "villa": villa, "update_at_start": True}
+        return {"state": "edited", "villa": villa, "differs": differs,
+                "only_here": sorted(set(mine) - set(new)), "only_release": sorted(set(new) - set(mine)),
+                "kept": self._kept().get(name) == fingerprint(src)}
+
+    def _kept(self) -> dict:
+        try:
+            with open(os.path.join(self.dir, KEPT), encoding="utf-8") as f:
+                return json.load(f)
+        except (OSError, ValueError):
+            return {}
+
+    def keep_mine(self, name: str) -> None:
+        """The owner keeps the edited skill as it is for THIS release: the page stops offering the release's
+        version until a later release brings another one."""
+        kept = self._kept()
+        kept[name] = fingerprint(os.path.join(self.starter_dir, name))
+        with open(os.path.join(self.dir, KEPT), "w", encoding="utf-8") as f:
+            json.dump(kept, f, indent=1, sort_keys=True)
+
+    def take_release(self, name: str, trash: str) -> str:
+        """The skill replaced by this release's version; its villa.* files kept. The edited folder is moved to
+        `trash` (returned), never erased. From then on the skill follows the releases again."""
+        src, dst = os.path.join(self.starter_dir, name), os.path.join(self.dir, name)
+        tmp = dst + ".new"
+        shutil.rmtree(tmp, ignore_errors=True)
+        shutil.copytree(src, tmp, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", VILLA_PREFIX + "*"))
+        for root, _, files in os.walk(dst):
+            for f in files:
+                if f.startswith(VILLA_PREFIX):
+                    rel = os.path.relpath(os.path.join(root, f), dst)
+                    os.makedirs(os.path.dirname(os.path.join(tmp, rel)), exist_ok=True)
+                    shutil.copy2(os.path.join(root, f), os.path.join(tmp, rel))
+        os.makedirs(os.path.dirname(trash), exist_ok=True)
+        shutil.move(dst, trash)
+        os.rename(tmp, dst)
+        return trash
 
     def _report(self, name: str, problem: str) -> None:
         """Log a skill's problem once, and once more when it is fixed — never every tick."""
@@ -332,6 +456,9 @@ def validate_script_args(skill: Skill | None, skill_name: str, script: str, args
     if not spec:
         raise ToolError(f"{skill_name}/{script} is not a script this skill lets you run.")
     args = [str(a) for a in (args or [])]
+    if not runnable(spec, args[0] if spec["cmds"] is not None and args else None):
+        raise ToolError(f"{script}{' ' + args[0] if spec['cmds'] is not None and args else ''} is switched off for this "
+                        f"villa (VESTA Agent page → Skills → {skill_name}). Say so plainly; do not try another way.")
     final: list[str] = []
     i = 0
     if spec["cmds"] is not None:
@@ -391,6 +518,20 @@ def script_env(settings) -> dict:
         "VILLA_TZ": settings.timezone,
         "TZ": settings.timezone,
     }
+
+
+def _files(folder: str) -> dict[str, str]:
+    """Each file of a skill folder (its path inside it) → a hash of its content; Python's caches left out."""
+    out = {}
+    for root, dirs, files in os.walk(folder):
+        dirs[:] = [d for d in dirs if d != "__pycache__"]
+        for name in files:
+            if name.endswith(".pyc"):
+                continue
+            path = os.path.join(root, name)
+            with open(path, "rb") as f:
+                out[os.path.relpath(path, folder).replace(os.sep, "/")] = hashlib.sha256(f.read()).hexdigest()
+    return out
 
 
 def fingerprint(folder: str) -> str:

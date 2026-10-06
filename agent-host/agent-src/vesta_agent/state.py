@@ -148,9 +148,6 @@ class State:
             out.append((int(chat), int(mid), text))
         return out
 
-    def is_alert_message(self, incident: int | str, chat: int | str, message_id: int | str) -> bool:
-        return self.get(f"incmsg:{incident}:{chat}:{message_id}") is not None
-
     def forget_alert_message(self, incident: int | str, chat: int | str, message_id: int | str) -> None:
         self.drop(f"incmsg:{incident}:{chat}:{message_id}")
 
@@ -187,6 +184,21 @@ class State:
         r = self.db.execute("select 1 from own_messages where chat_id=? and message_id=?",
                             (int(chat_id), int(message_id))).fetchone()
         return r is not None
+
+    def rename_job_runs(self, names: dict[str, str]) -> int:
+        """A run recorded before jobs had names ("job:reports:07:00") is rewritten ONCE under its job's name today
+        ("job:fm-daily"), so the Costs tab needs no second reading of old records (0.6.42). `names`: old → new."""
+        n = 0
+        with self._lock:
+            for r in self.db.execute("select id, detail from calls where kind = 'run' and detail like '%\"job:%'").fetchall():
+                d = json.loads(r["detail"] or "{}")
+                new = names.get(str(d.get("who") or "")[4:])
+                if new:
+                    d["who"] = f"job:{new}"
+                    self.db.execute("update calls set detail=? where id=?", (json.dumps(d, default=str), r["id"]))
+                    n += 1
+            self.db.commit()
+        return n
 
     def prune(self, runs_before: str, records_before: str) -> dict[str, int]:
         """Housekeeping (settings.keep): the AI runs (the Costs tab) and the other records have their own

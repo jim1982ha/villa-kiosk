@@ -19,7 +19,6 @@ must not be able to edit the rules that bind it. Standalone: loopback only.
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
 import os
 import shutil
@@ -29,11 +28,13 @@ from datetime import datetime, timezone
 import yaml
 from aiohttp import web
 
-from .. import __version__, status
-from ..config import Settings
-from ..policy import problems as policy_problems
-from ..skills import FILE_NAME, SKILL_NAME, SkillError, Skills, _parse
+from .. import __version__, requests_box, status, tool_access
+from ..config import STARTER_DIR, Settings
+from ..history import History, file_change, policy_change
+from ..policy import Policy, problems as policy_problems
+from ..skills import FILE_NAME, SKILL_NAME, VILLA_CHOICES, SkillError, Skills, _parse, villa_choices
 from ..state import State
+from . import setup_copy
 from .policy_doc import apply_form, to_form
 
 log = logging.getLogger("vesta.ui")
@@ -43,6 +44,7 @@ STATIC = os.path.join(HERE, "static")
 INGRESS_GATEWAY = "172.30.32.2"
 TRASH = ".trash"
 MAX_FILE = 512 * 1024
+MAX_SETUP = 6 * 1024 * 1024            # an imported setup (a zip of skills and rules), base64 in its JSON body
 
 NEW_SKILL_MD = """---
 name: {name}
@@ -102,11 +104,13 @@ class UI:
     def __init__(self, settings: Settings, deployment: str = "ha_app"):
         self.s = settings
         self.allowed = {INGRESS_GATEWAY} if deployment == "ha_app" else {"127.0.0.1", "::1"}
-        self.skills = Skills(settings.skills_dir)
+        self.skills = Skills(settings.skills_dir, os.path.join(STARTER_DIR, "skills"),
+                             off=lambda: Policy.load(settings.policy_path).skills_off)
+        self.history = History(settings.history_path)
 
     # ------------------------------------------------------------------ plumbing
     def app(self) -> web.Application:
-        a = web.Application(middlewares=[self.guard], client_max_size=MAX_FILE + 64 * 1024)
+        a = web.Application(middlewares=[self.guard], client_max_size=MAX_SETUP * 4 // 3 + 64 * 1024)
         r = a.router
         r.add_get("/", self.index)
         r.add_static("/static/", STATIC, follow_symlinks=False)
@@ -128,6 +132,20 @@ class UI:
         r.add_get("/api/skills/{name}/file", self.file_get)
         r.add_put("/api/skills/{name}/file", self.file_put)
         r.add_delete("/api/skills/{name}/file", self.file_delete)
+        # 0.6.42: what the AI can use, a fuller Skills tab, copying a setup, the changes and their Undo
+        r.add_get("/api/tools", self.tools)
+        r.add_post("/api/tools/refresh", self.tools_refresh)
+        r.add_get("/api/skills/{name}", self.skill_detail)
+        r.add_put("/api/skills/{name}/on", self.skill_on)
+        r.add_put("/api/skills/{name}/commands", self.skill_commands)
+        r.add_get("/api/skills/{name}/compare", self.skill_compare)
+        r.add_post("/api/skills/{name}/keep", self.skill_keep)
+        r.add_post("/api/skills/{name}/take-release", self.skill_take_release)
+        r.add_post("/api/skills/{name}/try", self.skill_try)
+        r.add_get("/api/history", self.history_list)
+        r.add_post("/api/history/{id}/undo", self.history_undo)
+        r.add_post("/api/setup/export", self.setup_export)
+        r.add_post("/api/setup/import", self.setup_import)
         return a
 
     @web.middleware
@@ -190,10 +208,13 @@ class UI:
         from ..skills import ai_jobs
         set_ = Policy.load(self.s.policy_path).jobs
         from ..scheduler import describe
+        listed = {t["name"]: t for t in (tool_access.read_list(self.s.data_dir) or {}).get("tools") or []}
         return [{"name": j["name"], "skill": sk.name, "when": j["when"], "to": j.get("to"),
                  "when_words": describe(j["when"])[0], "runs_per_month": describe(j["when"])[1],
                  "on_request": j.get("on_request", False), "description": j.get("description") or "",
-                 "default": j.get("default") or {}, "set": j["name"] in set_, "current": set_.get(j["name"])}
+                 "default": j.get("default") or {}, "set": j["name"] in set_, "current": set_.get(j["name"]),
+                 # Rules → The AI → "Tools it gets": its skill's list (None: everything switched on)
+                 "tools": None if sk.tools is None else [tool_access.label(t, listed) for t in sk.tools]}
                 for sk, j in ai_jobs(self.skills.all())]
 
     async def jobs(self, _request):
@@ -215,28 +236,22 @@ class UI:
             zone = None
         route = Routing(Policy.load(self.s.policy_path))
         from ..policy import profile_labels
-        from ..skills import ai_jobs
-        # a run recorded before jobs had names ("skill:when") under the job's name today
-        job_names = {f"{sk.name}:{j['when']}": j["name"] for sk, j in ai_jobs(self.skills.all()) if j.get("name")}
         return web.json_response({**status.costs(State(self.s.state_path), days, zone=zone,
-                                                 chat_label=lambda cid: route.label(int(cid)), job_names=job_names),
+                                                 chat_label=lambda cid: route.label(int(cid))),
                                   "profiles": profile_labels()})
 
     # ------------------------------------------------------------------ the villa's devices
     async def entities(self, _request):
         """Every entity of the knowledge pack (id, name, area), for the pickers of the rules: chosen by name, not
         typed as ids. The UI has no Home Assistant token: the pack is what the agent last read (nightly)."""
-        try:
-            pack = json.loads(_read(self.s.pack_path) or b"{}")
-        except (OSError, ValueError):
-            pack = {}
+        from vesta_shared.knowledge_pack import KnowledgePack
+        pack = KnowledgePack.read(self.s.pack_path)
         seen: dict[str, dict] = {}
-        rows = [r for rs in (pack.get("families") or {}).values() for r in rs] + list(pack.get("unclassified") or [])
-        for r in rows:
-            if isinstance(r, dict) and r.get("entity_id") and r["entity_id"] not in seen:
+        for r in pack.rows() if pack else []:
+            if r["entity_id"] not in seen:
                 seen[r["entity_id"]] = {"id": r["entity_id"], "name": r.get("name") or r["entity_id"], "area": r.get("area") or ""}
         return web.json_response({"entities": sorted(seen.values(), key=lambda e: (e["name"].lower(), e["id"])),
-                                  "built": pack.get("generated_at")})
+                                  "built": pack.generated_at if pack else None})
 
     # ------------------------------------------------------------------ policy.yaml
     def _policy(self) -> tuple[str, str]:
@@ -253,7 +268,7 @@ class UI:
         return web.json_response({"text": text, "rev": r, "form": form, "problems": probs, "languages": LANGUAGES,
                                   "profiles": profile_labels(), "schema": form_schema()})
 
-    def _save_policy(self, new_text: str, base_rev: str) -> dict:
+    def _save_policy(self, new_text: str, base_rev: str, place: str = "Rules", what: str | None = None) -> dict:
         text, r = self._policy()
         if base_rev != r:
             raise Refused(["policy.yaml changed since you opened it (another window, Studio Code Server). "
@@ -268,6 +283,8 @@ class UI:
         data = new_text.encode("utf-8")
         _write(self.s.policy_path, data)
         log.info("UI: policy.yaml saved")
+        if new_text != text:
+            self.history.record(place, what or policy_change(text, new_text), {"kind": "policy"}, text, new_text)
         return {"rev": rev(data), "text": new_text, "form": to_form(new_text)}
 
     async def policy_form(self, request):
@@ -286,7 +303,8 @@ class UI:
 
     # ------------------------------------------------------------------ skills
     def _skill_rows(self) -> list[dict]:
-        loaded = self.skills.all()
+        loaded = self.skills.all(include_off=True)
+        pol = Policy.load(self.s.policy_path)
         rows = []
         try:
             names = sorted(os.listdir(self.s.skills_dir))
@@ -297,9 +315,20 @@ class UI:
             if not SKILL_NAME.match(n) or not os.path.isdir(path):
                 continue
             sk = loaded.get(n)
-            rows.append({"name": n, "description": sk.description if sk else "", "ok": sk is not None,
-                         "problem": None if sk else (self.skills.problems().get(n) or "switched off")})
+            blocked = tool_access.blockers(pol, self._server_tools(), sk) if sk else []
+            rows.append({"name": n, "description": sk.description if sk else "", "ok": sk is not None and not blocked,
+                         "off": n in pol.skills_off, "state": self.skills.release_state(n)["state"],
+                         "problem": None if sk and not blocked else
+                         (" ".join(b["why"] for b in blocked) if sk else self.skills.problems().get(n) or "switched off")})
         return rows
+
+    def _server_tools(self) -> list[dict] | None:
+        """HA MCP's tools as the agent last read them, in the server's own shape (annotations), or None."""
+        listed = tool_access.read_list(self.s.data_dir)
+        if not listed:
+            return None
+        return [{"name": t["name"], "annotations": {"readOnlyHint": bool(t.get("readable")), "title": t.get("title")}}
+                for t in listed.get("tools") or []]
 
     async def skills_list(self, _request):
         return web.json_response({"skills": self._skill_rows()})
@@ -358,6 +387,7 @@ class UI:
         _write(os.path.join(path, "SKILL.md"), NEW_SKILL_MD.format(name=name).encode())
         _write(os.path.join(path, "skill.yaml"), NEW_SKILL_YAML.encode())
         log.info("UI: skill %s created", name)
+        self.history.record("Skills", f"{name} created", {"kind": "folder", "skill": name}, None, "present")
         return web.json_response({"name": name})
 
     async def skill_delete(self, request):
@@ -368,6 +398,8 @@ class UI:
         os.makedirs(os.path.dirname(dest), exist_ok=True)
         shutil.move(path, dest)
         log.info("UI: skill %s deleted (kept in skills/%s)", name, TRASH)
+        self.history.record("Skills", f"{name} deleted (kept in skills/{TRASH})", {"kind": "folder", "skill": name},
+                            dest, None)
         return web.json_response({"deleted": name, "kept_in": f"{TRASH}/{os.path.basename(dest)}"})
 
     async def skill_files(self, request):
@@ -420,8 +452,12 @@ class UI:
                 yaml.safe_load(content)
             except yaml.YAMLError as e:
                 raise Refused([f"{rel} is not valid YAML: {e}"]) from None
+        before = _read(current).decode("utf-8", "replace") if os.path.exists(current) else None
         self._change(name, rel, data)
         log.info("UI: skill %s, %s saved", name, rel)
+        if before != content:
+            self.history.record("Skills", f"{name} › {file_change(rel, before, content)}",
+                                {"kind": "file", "skill": name, "path": rel.replace(os.sep, "/")}, before, content)
         return web.json_response({"rev": rev(data)})
 
     async def file_delete(self, request):
@@ -429,9 +465,266 @@ class UI:
         rel = self._rel(request.query.get("path", ""))
         if not os.path.isfile(os.path.join(self._skill_dir(name), rel)):
             raise Refused([f"No file {rel}."], 404)
+        before = _read(os.path.join(self._skill_dir(name), rel)).decode("utf-8", "replace")
         self._change(name, rel, None)
         log.info("UI: skill %s, %s deleted", name, rel)
+        self.history.record("Skills", f"{name} › {rel} deleted", {"kind": "file", "skill": name, "path": rel}, before, None)
         return web.json_response({"deleted": rel})
+
+    # ------------------------------------------------------------------ what the AI can use (Rules)
+    def _usage(self) -> dict[str, int]:
+        if not os.path.exists(self.s.state_path):
+            return {}
+        try:
+            return status.tool_usage(State(self.s.state_path), 7)
+        except Exception:  # noqa: BLE001 — the switches show without their counts
+            return {}
+
+    async def tools(self, _request):
+        """Rules → What the AI can use: Home Assistant's tools as the agent last read them, with this file's
+        switches; the agent's own tools; the facility manager's groups."""
+        pol = Policy.load(self.s.policy_path)
+        return web.json_response(tool_access.catalog(pol, tool_access.read_list(self.s.data_dir), self._usage()))
+
+    async def tools_refresh(self, _request):
+        """"Read the list again": the agent asks HA MCP (the page itself never talks to Home Assistant)."""
+        res = await requests_box.ask(self.s.data_dir, "refresh_tools", {}, timeout=45)
+        if res is None:
+            raise Refused(["The agent did not answer: it is stopped, or waiting for a setting (see its log)."], 503)
+        if not res.get("ok"):
+            raise Refused([res.get("error") or "Home Assistant's MCP server did not answer."], 502)
+        return await self.tools(_request)
+
+    def _edit_policy(self, change: dict, what: str, place: str = "Rules") -> dict:
+        """One section of policy.yaml changed by a switch on the page: through the same checks as a save."""
+        text, r = self._policy()
+        return self._save_policy(apply_form(text, change), r, place, what)
+
+    # ------------------------------------------------------------------ a fuller Skills tab
+    WHEN = {"critical_event": "a critical alert from a VESTA rule", "voice_message": "a voice message"}
+
+    async def skill_detail(self, request):
+        """Skills → one skill: its state against the release, the tools it needs, when it acts, its commands."""
+        from ..scheduler import describe
+        name = request.match_info["name"]
+        self._skill_dir(name)
+        pol = Policy.load(self.s.policy_path)
+        sk = self.skills.all(include_off=True).get(name)
+        rel = self.skills.release_state(name)
+        if sk is None:
+            return web.json_response({"name": name, "ok": False, "off": name in pol.skills_off, "release": rel,
+                                      "problem": self.skills.problems().get(name) or "switched off"})
+        listed = tool_access.read_list(self.s.data_dir)
+        acts = [("every chat message, when the AI reads it", None)]
+        acts += [(f"{describe(j['when'])[0]}" + (f" — {j['name']}" if j.get("name") else ""),
+                  j.get("run") or ("AI job" if j.get("prompt") else None)) for j in sk.schedule]
+        if sk.every_5_min:
+            acts.append(("every 5 minutes", sk.every_5_min))
+        acts += [(self.WHEN.get(ev, ev), cmd) for ev, cmd in sk.on_event.items()]
+        if sk.on_reply:
+            acts.append(("an answer to one of its alerts", sk.on_reply))
+        scripts = []
+        for script, spec in sorted(sk.scripts.items()):
+            off = spec.get("off") or set()
+            scripts.append({"script": script, "flags": {k: (list(v) if isinstance(v, tuple) else v) for k, v in spec["flags"].items()},
+                            "whole_off": off is True,
+                            "commands": [{"name": c, "words": spec["words"].get(c, ""), "on": off is not True and c not in off,
+                                          "job_only": spec["job_only"].get(c)} for c in sorted(spec["cmds"] or [])]})
+        blocked = tool_access.blockers(pol, self._server_tools(), sk)
+        return web.json_response({
+            "name": name, "ok": not blocked, "off": name in pol.skills_off, "description": sk.description,
+            "release": rel, "engine": __version__, "needs": tool_access.needs(pol, listed, sk) if sk.tools is not None else None,
+            "acts": [{"when": w, "how": h} for w, h in acts], "scripts": scripts, "blocked": blocked})
+
+    async def skill_on(self, request):
+        name = request.match_info["name"]
+        self._skill_dir(name)
+        on = bool((await request.json()).get("on"))
+        doc = to_form(self._policy()[0])
+        off = [x for x in doc["skills_off"] if x != name] + ([] if on else [name])
+        res = self._edit_policy({"skills_off": sorted(set(off))}, f"{name} switched {'on' if on else 'off'}", "Skills")
+        log.info("UI: skill %s switched %s", name, "on" if on else "off")
+        return web.json_response(res)
+
+    async def skill_commands(self, request):
+        """A command's checkbox: this villa's choice, in the skill's villa.skill.yaml (kept by updates, copied with it)."""
+        name = request.match_info["name"]
+        folder = self._skill_dir(name)
+        body = await request.json()
+        script, command, on = str(body.get("script") or ""), body.get("command"), bool(body.get("on"))
+        sk = self.skills.all(include_off=True).get(name)
+        spec = (sk.scripts.get(script) if sk else None)
+        if not spec:
+            raise Refused([f"{script} is not a script of {name}."])
+        if command is not None and command not in (spec["cmds"] or set()):
+            raise Refused([f"{command} is not a command of {script}."])
+        choices = villa_choices(folder)
+        off = dict(choices.get("off_commands") or {})
+        cur = off.get(script)
+        if command is None:
+            cur = None if on else True
+        else:
+            now = set(cur) if isinstance(cur, list) else (set(spec["cmds"]) if cur is True else set())
+            now = (now - {command}) if on else (now | {command})
+            cur = sorted(now) or None
+        if cur is None:
+            off.pop(script, None)
+        else:
+            off[script] = cur
+        keep = {k: v for k, v in choices.items() if k != "off_commands" and v}
+        if off:
+            keep["off_commands"] = off
+        text = ("# This villa's choices for this skill, made on the VESTA Agent page (Skills): kept by updates.\n"
+                + yaml.safe_dump(keep, sort_keys=False)) if keep else None
+        rel = VILLA_CHOICES
+        path = os.path.join(folder, rel)
+        before = _read(path).decode("utf-8") if os.path.exists(path) else None
+        if text is None and before is None:
+            return web.json_response({"ok": True})
+        self._change(name, rel, text.encode() if text is not None else None)
+        label = f"{script}{' ' + command if command else ''}"
+        self.history.record("Skills", f"{name} › {label} switched {'on' if on else 'off'} for the AI",
+                            {"kind": "file", "skill": name, "path": rel}, before, text)
+        log.info("UI: skill %s, %s switched %s", name, label, "on" if on else "off")
+        return web.json_response({"ok": True})
+
+    async def skill_compare(self, request):
+        """An edited starter skill's file beside the release's, line against line."""
+        import difflib
+        name = request.match_info["name"]
+        folder = self._skill_dir(name)
+        rel = self._rel(request.query.get("path", ""))
+        src = os.path.join(STARTER_DIR, "skills", name, rel)
+        here = _read(os.path.join(folder, rel)).decode("utf-8", "replace").splitlines()
+        there = _read(src).decode("utf-8", "replace").splitlines()
+        rows = []
+        for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(a=here, b=there, autojunk=False).get_opcodes():
+            for k in range(max(i2 - i1, j2 - j1)):
+                rows.append({"here": here[i1 + k] if i1 + k < i2 else None,
+                             "release": there[j1 + k] if j1 + k < j2 else None, "same": tag == "equal"})
+        return web.json_response({"rows": rows[:4000], "engine": __version__})
+
+    async def skill_keep(self, request):
+        name = request.match_info["name"]
+        self._skill_dir(name)
+        self.skills.keep_mine(name)
+        log.info("UI: skill %s kept as edited here", name)
+        return web.json_response({"ok": True})
+
+    async def skill_take_release(self, request):
+        name = request.match_info["name"]
+        self._skill_dir(name)
+        if self.skills.release_state(name)["state"] != "edited":
+            raise Refused([f"{name} is not an edited starter skill."])
+        dest = os.path.join(self.s.skills_dir, TRASH, f"{name}-{datetime.now(timezone.utc):%Y%m%dT%H%M%S}")
+        self.skills.take_release(name, dest)
+        self.history.record("Skills", f"{name}: the release's version taken (the edited one kept in skills/{TRASH})",
+                            {"kind": "folder", "skill": name}, dest, "present")
+        log.info("UI: skill %s replaced by the release's version", name)
+        return web.json_response({"ok": True})
+
+    async def skill_try(self, request):
+        """Skills → Try a command: run by the agent (it holds the access), checked as when the AI asks; nothing sent."""
+        name = request.match_info["name"]
+        self._skill_dir(name)
+        body = await request.json()
+        args = body.get("args") or []
+        if not isinstance(args, list) or not all(isinstance(a, str) and len(a) <= 300 for a in args) or len(args) > 20:
+            raise Refused(["The command's arguments are not understood."])
+        res = await requests_box.ask(self.s.data_dir, "try", {"skill": name, "script": str(body.get("script") or ""),
+                                                              "args": args}, timeout=180)
+        if res is None:
+            raise Refused(["The agent did not answer: it is stopped, or waiting for a setting (see its log)."], 503)
+        return web.json_response(res)
+
+    # ------------------------------------------------------------------ changes made on these pages
+    async def history_list(self, _request):
+        return web.json_response({"changes": self.history.rows(200)})
+
+    async def history_undo(self, request):
+        try:
+            cid = int(request.match_info["id"])
+        except ValueError:
+            raise Refused(["No such change."], 404) from None
+        ch = self.history.get(cid)
+        if not ch or ch["place"] == "Release":
+            raise Refused(["This change cannot be undone here."], 404)
+        if ch["undone_by"]:
+            raise Refused(["Already undone."], 409)
+        t = ch["target"]
+        later = ["Something changed since (another save, or Studio Code Server): undo the later change first."]
+        if t["kind"] == "policy":
+            text, r = self._policy()
+            if text != (ch["after"] or ""):
+                raise Refused(later, 409)
+            self._save_policy(ch["before"] or "", r, "Undo", f"Undo: {ch['what']}")
+        elif t["kind"] == "file":
+            name, rel = t["skill"], self._rel(t["path"])
+            path = os.path.join(self._skill_dir(name), rel)
+            now = _read(path).decode("utf-8", "replace") if os.path.exists(path) else None
+            if now != ch["after"]:
+                raise Refused(later, 409)
+            self._change(name, rel, ch["before"].encode("utf-8") if ch["before"] is not None else None)
+            self.history.record("Undo", f"Undo: {ch['what']}", t, ch["after"], ch["before"])
+        elif t["kind"] == "folder":
+            self._undo_folder(t["skill"], ch)
+        else:
+            raise Refused(["This change cannot be undone here."], 404)
+        self.history.mark_undone(cid, max(r["id"] for r in self.history.rows(1)))
+        log.info("UI: change #%s undone", cid)
+        return web.json_response({"ok": True})
+
+    def _undo_folder(self, name: str, ch: dict) -> None:
+        """A skill created, deleted, replaced by the release's version or imported: its folder put back."""
+        path = os.path.join(self.s.skills_dir, name)
+        old = ch["before"]
+        if ch["after"] is None:                         # deleted: it comes back from the trash
+            if os.path.exists(path) or not old or not os.path.isdir(old):
+                raise Refused([f"{name} cannot come back: a skill of that name exists, or its copy is gone."], 409)
+            shutil.move(old, path)
+            self.history.record("Undo", f"Undo: {ch['what']}", ch["target"], None, "present")
+            return
+        if not os.path.isdir(path) or (old and not os.path.isdir(old)):
+            raise Refused(["The skill or its previous copy is gone: nothing to put back."], 409)
+        dest = os.path.join(self.s.skills_dir, TRASH, f"{name}-{datetime.now(timezone.utc):%Y%m%dT%H%M%S%f}")
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        shutil.move(path, dest)
+        if old:
+            shutil.move(old, path)
+        self.history.record("Undo", f"Undo: {ch['what']}", ch["target"], dest, "present" if old else None)
+
+    # ------------------------------------------------------------------ copy the setup to another villa
+    async def setup_export(self, request):
+        body = await request.json()
+        parts = {k for k in setup_copy.PARTS if body.get(k)}
+        data = setup_copy.export(self.s, self.skills, parts)
+        name = f"vesta-agent-setup-{datetime.now(timezone.utc):%Y-%m-%d}.zip"
+        log.info("UI: setup exported (%s)", ", ".join(sorted(parts)))
+        return web.Response(body=data, content_type="application/zip",
+                            headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+    async def setup_import(self, request):
+        import base64
+        import binascii
+        body = await request.json()
+        try:
+            data = base64.b64decode(str(body.get("zip") or ""), validate=True)
+        except (binascii.Error, ValueError):
+            raise Refused(["Not a setup file."]) from None
+        if len(data) > MAX_SETUP:
+            raise Refused(["This file is too large for a setup."])
+        try:
+            setup = setup_copy.read(data)
+        except setup_copy.NotASetup as e:
+            raise Refused([str(e)]) from None
+        preview = setup_copy.preview(self.s, self.skills, setup, self._server_tools())
+        if not body.get("apply"):
+            return web.json_response(preview)
+        if body.get("fingerprint") != preview["fingerprint"]:
+            raise Refused(["Something changed since the preview: look at it again before applying."], 409)
+        setup_copy.apply(self, setup, preview)
+        log.info("UI: setup imported (%s changes)", sum(1 for r in preview["rows"] if r["change"] != "same"))
+        return web.json_response({"ok": True})
 
 
 def main() -> None:

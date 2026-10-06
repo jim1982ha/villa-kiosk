@@ -16,8 +16,7 @@ engine's reconcile all go through here; the engine itself only moves tickets to 
 the Kiosk (vesta_agent/outcome.py).
 
 A task knows its SOURCE ("finding:12" / "incident:5") and its CHECK (what to check on site)
-as fields. Tasks written before 0.6.16 have neither: their source is found by rule + entity,
-and their check by the " Check: " their text was written with — in this module only.
+as fields. (Tasks written before 0.6.16 had neither: the store rewrites them once, when it opens.)
 """
 from __future__ import annotations
 
@@ -31,7 +30,6 @@ CLEARED = "cleared"                    # its source is gone: the night check no 
 CLOSED_IN_KIOSK = "closed_in_kiosk"    # a person closed the fault in the VESTA Kiosk
 STATUSES = (DONE, CLEARED, CLOSED_IN_KIOSK)
 
-_LEGACY_CHECK = " Check: "
 _ORDER = {"P1": 0, "P2": 1, "P3": 2, "P4": 3}
 
 
@@ -62,8 +60,7 @@ class Problems:
         tickets are to be resolved)."""
         closed = []
         for t in self.store.tasks("open"):
-            if t.get("source") == f"{source}:{int(source_id)}" or (
-                    not t.get("source") and rule_id and t["rule_id"] == rule_id and t["entity_id"] == entity_id):
+            if t.get("source") == f"{source}:{int(source_id)}":
                 self.close(t["id"], status)
                 closed.append(t["id"])
         return closed
@@ -93,10 +90,7 @@ class Problems:
             # nobody wants to be told again) nor when its rule stopped watching it
             inc = self.store.incident(sid)
             return bool(inc) and bool(inc.get("closed_at")) and inc.get("state") in ("done", "resolved")
-        # a task from before sources were kept: by rule and entity, findings only (an alert's task
-        # has no finding, and stays until its incident is answered)
-        rows = [f for f in self.store.findings() if f["rule_id"] == task["rule_id"] and f["entity_id"] == task["entity_id"]]
-        return bool(rows) and not any(f["status"] == "open" for f in rows)
+        return False                                     # no source of its own: it waits for a person
 
     # ---------------------------------------------------------------- reading
     def open_tasks(self) -> list[dict]:
@@ -104,15 +98,11 @@ class Problems:
 
     def title_of(self, task: dict) -> str:
         """What is wrong, without what to check."""
-        s = task.get("summary") or ""
-        return s.split(_LEGACY_CHECK, 1)[0] if not task.get("check_text") else s
+        return task.get("summary") or ""
 
     def check_of(self, task: dict) -> str:
         """What to check on site ("" when the task does not say)."""
-        if task.get("check_text"):
-            return task["check_text"]
-        s = task.get("summary") or ""
-        return s.split(_LEGACY_CHECK, 1)[1].strip() if _LEGACY_CHECK in s else ""
+        return task.get("check_text") or ""
 
     def open_problems(self) -> list[dict]:
         """THE answer to "what is still open", for every reader (the weekly list, the daily digest, the

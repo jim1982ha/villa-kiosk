@@ -3,7 +3,7 @@
 
 s6 runs this as the `agent-ui` longrun beside the agent, not inside it: a
 policy.yaml or a skill that stops the agent can still be fixed from the UI.
-It runs in both modes (in stub mode, to prepare the files before switching).
+It runs even while the agent waits for a missing key, so the files can be prepared.
 
 ⚠️ NO SECRET REACHES IT (vesta_host.contract.ui_env): not the Anthropic key,
 not a Home Assistant or Kiosk token, not the bot token.

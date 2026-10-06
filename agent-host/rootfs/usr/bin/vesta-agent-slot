@@ -2,11 +2,11 @@
 """The agent slot: self-test, then run what the manifest names (SPEC 8, 10, 11).
 
 s6 runs this as the `agent` longrun after `init-vesta` and `ha-mcp`. It knows
-the agent only through `vesta-agent.yaml` (SPEC H2):
-  stub mode  → /opt/vesta/stub, after one self-test that never blocks;
-  agent mode → /opt/vesta/agent, only once Home Assistant AND Anthropic pass
-               (retried with backoff, SPEC 11) — an agent started without
-               either would only fail on its own and restart in a loop.
+the agent only through `vesta-agent.yaml` (SPEC H2): /opt/vesta/agent, after
+one self-test, and only once Home Assistant AND Anthropic pass (retried with
+backoff, SPEC 11) — an agent started without either would only fail on its own
+and restart in a loop. (A test mode, the "stub", filled the slot until 0.12.46:
+the start-up self-test already proves every link, so it went.)
 Then it keeps the program running under the restart policy (supervise.py):
 backoff 5 s → 5 min, and no more restarts after 5 crashes in 10 min.
 
@@ -33,7 +33,7 @@ from vesta_host.redact import Redactor  # noqa: E402
 
 #: The stop grace (default and cap) is vesta_host.manifest's: the whole stop
 #: must fit in the Supervisor's `timeout: 30`.
-#: Agent-mode gate backoff, same curve as the restart policy.
+#: The start gate's backoff, same curve as the restart policy.
 GATE = ("home_assistant", "anthropic")
 #: How long the sidecar may take to listen before the self-test runs anyway
 #: (and reports it failing). A Python server on the Yellow's CPU is not instant.
@@ -57,7 +57,7 @@ def wait_for_sidecar(host: HostState) -> None:
 
 
 def gate(env: dict[str, str], host: HostState) -> bool:
-    """Agent mode: wait until Home Assistant and Anthropic pass. False = stopped."""
+    """Wait until Home Assistant and Anthropic pass. False = stopped."""
     delay = supervise.BACKOFF_START
     while not stop.is_set():
         results = selftest.execute(env, host, only=GATE, write=False)
@@ -84,32 +84,18 @@ def main() -> int:
     signal.signal(signal.SIGTERM, lambda *_: stop.set())
     signal.signal(signal.SIGINT, lambda *_: stop.set())
 
-    mode = host.agent_mode
     wait_for_sidecar(host)
     if stop.is_set():
         return 0
-    # SPEC 11: at every start, in both modes. Stub mode never stops on it.
+    # SPEC 11: at every start.
     selftest.execute(env, host)
 
-    if mode == "stub":
-        folder = paths.STUB_DIR
-        # The only variable outside the contract, and only for the stub: it is
-        # host test machinery, not something any real agent is given.
-        if host.stub_heartbeat:
-            env = {**env, "VESTA_STUB_HEARTBEAT": "true"}
-    else:
-        folder = paths.AGENT_DIR
-        if not (folder / paths.MANIFEST).exists():
-            log("error", "agent mode, but this image contains no VESTA Agent "
-                         "(agent-host/agent-src was empty at build time) — switch agent_mode to stub")
-            stop.wait()
-            return 0
-        if not gate(env, host):
-            return 0
-
+    folder = paths.AGENT_DIR
     if not (folder / paths.MANIFEST).exists():
-        log("info", f"agent slot empty: no {paths.MANIFEST} in {folder} — idle")
+        log("error", "this image contains no VESTA Agent (agent-host/agent-src was empty at build time) — idle")
         stop.wait()
+        return 0
+    if not gate(env, host):
         return 0
 
     # The virtualenv the image build created for the agent's `install`

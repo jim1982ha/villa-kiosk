@@ -18,7 +18,6 @@ purpose: a file on the machine must not be able to allow a restart.
 
 from __future__ import annotations
 
-import fnmatch
 import hashlib
 import re
 import json
@@ -229,6 +228,17 @@ class Policy:
         }
         self.notify_recipients = set(_as_list(r.get("notify_recipients")))
         self.ha_read_tools: list[str] = _as_list(r.get("ha_read_tools"))
+        # What the AI can use (0.6.42; tool_access.py reads these): the agent's own tools a villa may switch
+        # off (absent: on), what the facility manager may make the AI use (absent: everything switched on), and
+        # the skills the villa switched off. An unreadable value is ignored, never "everything off".
+        agent_tools = r.get("agent_tools") if isinstance(r.get("agent_tools"), dict) else {}
+        self.agent_tools: dict[str, bool] = {str(k): v for k, v in agent_tools.items() if isinstance(v, bool)}
+        access = r.get("tool_access") if isinstance(r.get("tool_access"), dict) else {}
+        self.tool_access: dict[str, dict[str, bool]] = {
+            role: {str(k): v for k, v in groups.items() if isinstance(v, bool)}
+            for role, groups in access.items() if role in ROLES and isinstance(groups, dict)}
+        self.skills_off: set[str] = {str(x) for x in r.get("skills_off") or [] if isinstance(x, str)} \
+            if isinstance(r.get("skills_off"), list) else set()
         self.siren_entity: str | None = r.get("siren_entity")
         self.system_actions = [(a.get("service"), a.get("entity_id")) for a in (r.get("system_actions") or [])]
 
@@ -252,13 +262,6 @@ class Policy:
             if cid == int(chat_id):
                 return role
         return None
-
-    def is_known_chat(self, chat_id: int) -> bool:
-        return self.chat_role(chat_id) is not None or int(chat_id) in self.people
-
-    # ------------------------------------------------------------------ layer 1
-    def read_tool_allowed(self, name: str) -> bool:
-        return name in self.ha_read_tools
 
     # ------------------------------------------------------------------ layer 2
     def check_service(self, domain: str, service: str, entity_id: Any = None, data: dict | None = None,
@@ -410,7 +413,7 @@ def form_schema() -> dict:
                       for k, d in ENTITY_LISTS.items() if d]}
 SECTIONS = {"settings", "act_enabled", "approval_ttl_minutes", "people", "chats", "siren_entity",
             "siren_auto_off_min", "allowed_services", "notify_recipients", "system_actions", "ha_read_tools",
-            *ENTITY_LISTS}
+            "agent_tools", "tool_access", "skills_off", *ENTITY_LISTS}
 
 
 def _id(v: Any) -> int | None:
@@ -564,6 +567,7 @@ def problems(raw: Any) -> list[str]:
         v = raw.get(key)
         if v is not None and (not isinstance(v, list) or not all(isinstance(x, str) for x in v)):
             out.append(f"{key} must be a list of names.")
+    out += _tool_problems(raw)
     acts = raw.get("system_actions")
     if acts is not None:
         if not isinstance(acts, list) or not all(isinstance(a, dict) and set(a) <= {"service", "entity_id"} for a in acts):
@@ -571,5 +575,51 @@ def problems(raw: Any) -> list[str]:
     return out
 
 
-def match_any(name: str, patterns: list[str]) -> bool:
-    return any(fnmatch.fnmatchcase(name, p) for p in patterns)
+
+def _tool_problems(raw: dict) -> list[str]:
+    """What the AI can use (agent_tools, tool_access, skills_off): their names are tool_access.py's tables."""
+    from .tool_access import OWN, ROLE_GROUPS, CHOOSE
+    out: list[str] = []
+    choose = [k for k, v in OWN.items() if v[2] == CHOOSE and k != "web_search"]
+    at = raw.get("agent_tools")
+    if at is not None:
+        if not isinstance(at, dict):
+            out.append("agent_tools must be tool: true or false.")
+        else:
+            for k, v in at.items():
+                if k == "web_search":
+                    out.append("agent_tools.web_search: web search is settings.web_search.")
+                elif k not in choose:
+                    out.append(f"agent_tools: {k!r} is not one of the agent's tools a villa may switch off "
+                               f"({', '.join(choose)}).")
+                elif not isinstance(v, bool):
+                    out.append(f"agent_tools.{k} must be true or false.")
+    ta = raw.get("tool_access")
+    if ta is not None:
+        groups = {k for k, _ in ROLE_GROUPS}
+        if not isinstance(ta, dict):
+            out.append("tool_access must be fm: {group: true or false}.")
+        else:
+            for role, v in ta.items():
+                if role == "owner":
+                    out.append("tool_access.owner: the owner always has every tool that is switched on.")
+                elif role != "fm":
+                    out.append(f"tool_access: {role!r} is not a role (fm).")
+                elif not isinstance(v, dict):
+                    out.append("tool_access.fm must be group: true or false.")
+                else:
+                    for g, on in v.items():
+                        if g not in groups:
+                            out.append(f"tool_access.fm: {g!r} is not a group ({', '.join(sorted(groups))}).")
+                        elif not isinstance(on, bool):
+                            out.append(f"tool_access.fm.{g} must be true or false.")
+    so = raw.get("skills_off")
+    if so is not None and (not isinstance(so, list) or not all(isinstance(x, str) and re.match(r"^[a-z0-9][a-z0-9_-]{0,60}$", x)
+                                                                 for x in so)):
+        out.append("skills_off must be a list of skill names.")
+    rt = raw.get("ha_read_tools")
+    if isinstance(rt, list):
+        for n in rt:
+            if isinstance(n, str) and not re.match(r"^[a-z][a-z0-9_]{1,60}$", n):
+                out.append(f"ha_read_tools: {n!r} is not a tool name.")
+    return out

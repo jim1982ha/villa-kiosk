@@ -12,6 +12,9 @@
 - `send_message`: to the owner or FM chat of policy.yaml only.
 - Web search is Claude's own WebSearch tool (runner.py), when policy.yaml allows it.
 
+WHICH of these exist for one run is tool_access.py's answer (`allowed`): what is switched on, for the
+person's role in a chat, or the skill's own list for a report. A tool not in it is not built at all.
+
 Answers longer than a tool answer may carry are split into parts, and the model
 is told it holds part N of M.
 """
@@ -29,12 +32,12 @@ from typing import Any, Awaitable, Callable
 
 from claude_agent_sdk import create_sdk_mcp_server, tool
 
-from . import __version__, status
+from . import __version__, status, tool_access
 from .policy import Person, Policy
 from .routing import JOB, Origin, Routing
 from .outcome import has_work
 from .runner import WEB_SEARCH
-from .skills import FILE_NAME, Skills, ToolError, run_script, validate_script_args
+from .skills import FILE_NAME, Skills, ToolError, run_script, runnable, validate_script_args
 
 SERVER = "vesta"
 SAVE_MAX = 64 * 1024
@@ -118,7 +121,8 @@ class Toolbox:
                  send: Callable[..., Awaitable[Any]], server_tools: list[dict], state,
                  ticket: Callable[..., Awaitable[str]] | None = None,
                  carry_out: Callable[..., Awaitable[dict]] | None = None,
-                 start_job: Callable[..., Awaitable[str]] | None = None):
+                 start_job: Callable[..., Awaitable[str]] | None = None,
+                 allowed: set[str] | None = None):
         self.s = settings
         self.policy = policy
         self.reader = reader
@@ -131,20 +135,29 @@ class Toolbox:
         self.server_tools = {t["name"]: t for t in server_tools}
         self.state = state
         self.parts = Parts()
+        # tool_access.allowed_for_person / allowed_for_job; None: everything switched on (tests, the start log)
+        self.allowed = allowed if allowed is not None else tool_access.switched_on(policy, server_tools)
+
+    def _on(self, key: str) -> bool:
+        return key in self.allowed
 
     def _secrets(self) -> list[str]:
         return self.s.secrets()
 
     # ------------------------------------------------------------------ names
-    def model_tool_names(self, include_web: bool) -> list[str]:
+    def model_tool_names(self) -> list[str]:
         names = [f"mcp__{SERVER}__{n}" for n in self.read_tool_names()]
         names += [f"mcp__{SERVER}__{n}" for n in ("ha_call_service", "read_skill", "run_skill_script", "send_message",
-                                                  "agent_status", "save_file", "start_job")]
-        if self.ticket:
+                                                  "agent_status", "save_file", "start_job") if self._on(n)]
+        if self.ticket and self._on("create_ticket"):
             names.append(f"mcp__{SERVER}__create_ticket")
-        if include_web:
+        if self.include_web:
             names.append(WEB_SEARCH)
         return names
+
+    @property
+    def include_web(self) -> bool:
+        return self._on("web_search")
 
     def read_tool_names(self) -> list[str]:
         out = []
@@ -152,30 +165,38 @@ class Toolbox:
             t = self.server_tools.get(n)
             if not t:
                 continue          # named in the policy, absent from the server: reported at start, never guessed
-            if (t.get("annotations") or {}).get("destructiveHint"):
-                self.state.log("tool_denied", {"tool": n, "reason": "server marks it destructive"})
+            if not tool_access.readable(t):
+                # ⚠️ ONLY WHAT THE SERVER MARKS READ-ONLY (0.6.42): before, only "destructive" was refused, so a
+                # writing tool not marked destructive could be named in the file and reach the AI
+                self.state.log("tool_denied", {"tool": n, "reason": "the server does not mark it read-only"})
                 continue
-            out.append(n)
+            if n in self.allowed:
+                out.append(n)
         return out
 
+    def blocked(self, skill) -> list[dict]:
+        return tool_access.blockers(self.policy, list(self.server_tools.values()) or None, skill)
+
     # ------------------------------------------------------------------ build
-    def tool_objects(self, person: Person | None, origin: Origin | None, include_web: bool) -> list:
+    def tool_objects(self, person: Person | None, origin: Origin | None) -> list:
         """The AI's tools for one occasion: `origin` says who is asking (routing.Origin; None: a scheduled
         job or an alert hook), `person` who they are. What each tool allows follows from it, in routing."""
         chat_id = origin.chat if origin else None
         tools = [self._proxy(n) for n in self.read_tool_names()]
-        tools += [self._call_service(person, chat_id), self._read_skill(), self._run_script(origin), self._send(origin),
-                  self._status(), self._save_file()]
-        if origin and origin.is_conversation and person is not None and self.start_job:
+        tools += [self._read_skill(), self._run_script(origin), self._send(origin), self._save_file()]
+        if self._on("ha_call_service"):
+            tools.append(self._call_service(person, chat_id))
+        if self._on("agent_status"):
+            tools.append(self._status())
+        if origin and origin.is_conversation and person is not None and self.start_job and self._on("start_job"):
             # a person asking, in a chat: never a job (even one started from a chat), so no job starts another
             tools.append(self._start_job(chat_id))
-        if self.ticket:
+        if self.ticket and self._on("create_ticket"):
             tools.append(self._ticket())
         return tools
 
-    def server(self, person: Person | None, origin: Origin | None, include_web: bool):
-        return create_sdk_mcp_server(name=SERVER, version=__version__,
-                                     tools=self.tool_objects(person, origin, include_web))
+    def server(self, person: Person | None, origin: Origin | None):
+        return create_sdk_mcp_server(name=SERVER, version=__version__, tools=self.tool_objects(person, origin))
 
     def _proxy(self, name: str):
         t = self.server_tools[name]
@@ -287,13 +308,29 @@ class Toolbox:
             skill = self.skills.get(sk)
             if skill is None:
                 return _err(f"No skill {sk}. Your skills: {', '.join(self.skills.all()) or 'none'}.")
-            scripts = sorted(skill.scripts)
+            stop = self.blocked(skill)
+            if stop:
+                # ⚠️ SAID, NOT WORKED AROUND (0.6.42): a skill that needs a tool switched off is "not working"
+                return _err(f"The skill {sk} cannot be used now. " + " ".join(b["why"] for b in stop) +
+                            " Tell the person plainly which setting stops it (the VESTA Agent page); do not try another way.")
+            scripts = []
+            for name, spec in sorted(skill.scripts.items()):
+                if spec["cmds"] is None:
+                    if runnable(spec, None):
+                        scripts.append(name)
+                    continue
+                cmds = [c for c in sorted(spec["cmds"]) if runnable(spec, c)]
+                if cmds:
+                    scripts.append(f"{name} ({', '.join(cmds)})")
+            off = [n for n, spec in sorted(skill.scripts.items()) if spec.get("off")]
             try:
                 with open(skill.skill_md, encoding="utf-8") as f:
                     body = f.read()
             except OSError:
                 return _err(f"The skill {sk} could not be read.")
-            return _ok(SKILL_PREFACE + f"Scripts you may run for this skill: {', '.join(scripts) or 'none'}.\n\n" + body)
+            return _ok(SKILL_PREFACE + f"Scripts you may run for this skill: {', '.join(scripts) or 'none'}."
+                       + (f" Switched off for this villa: some commands of {', '.join(off)}." if off else "")
+                       + "\n\n" + body)
         return handler
 
     def _run_script(self, origin: Origin | None):
@@ -307,6 +344,8 @@ class Toolbox:
         async def handler(args: dict) -> dict:
             sk, sc = args.get("skill", ""), args.get("script", "")
             skill = self.skills.get(sk)
+            if skill and self.blocked(skill):
+                return _err(f"The skill {sk} cannot be used now: " + " ".join(b["why"] for b in self.blocked(skill)))
             job = ((skill.scripts.get(sc) or {}).get("job_only") or {}).get(str((args.get("args") or [""])[0])) \
                 if skill and origin and origin.is_conversation else None
             if job:

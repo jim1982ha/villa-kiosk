@@ -52,6 +52,10 @@ def test_each_kind_is_trimmed_at_its_own_limit(tmp_path):
     db.executemany("insert into features values(?, 'sensor.x', 'power', 'kwh', 1, null)",
                    [((NOW - timedelta(days=d)).date().isoformat(),) for d in (800, 700)])
     db.commit(); db.close()
+    from vesta_agent.history import History
+    h = History(s.history_path)
+    h.record("Rules", "old", {"kind": "policy"}, "a", "b", at=at(91))
+    h.record("Rules", "recent", {"kind": "policy"}, "a", "b", at=at(89))
 
     gone = housekeeping.tidy(s, st, KEEP_DEFAULT, now=NOW)
 
@@ -64,7 +68,8 @@ def test_each_kind_is_trimmed_at_its_own_limit(tmp_path):
     assert os.path.exists(os.path.join(s.out_dir, "report-new.html"))
     left = [r[0] for r in sqlite3.connect(s.store_path).execute("select day from features")]
     assert left == [(NOW - timedelta(days=700)).date().isoformat()]
-    assert gone == {"runs": 1, "records": 2, "conversations": 1, "files": 1, "daily_figures": 1}
+    assert [r["what"] for r in h.rows()] == ["recent"]                     # the page's changes: the records' limit
+    assert gone == {"runs": 1, "records": 2, "conversations": 1, "files": 1, "daily_figures": 1, "page changes": 1}
 
 
 def test_the_limits_are_the_villas_and_a_bad_one_keeps_its_default():

@@ -8,6 +8,6 @@ baked-in default for a physical quantity.
 """
 
 from .params import MissingParameter, VillaParams  # noqa: F401
-from .ha_client import McpClient, FixtureClient  # noqa: F401
+from .ha_client import McpClient  # noqa: F401
 from .store import Store  # noqa: F401
 from .knowledge_pack import KnowledgePack, build_pack  # noqa: F401

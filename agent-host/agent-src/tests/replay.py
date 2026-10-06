@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-"""Replay the nightly batch over a range of dates and print the timeline.
+"""Replay the preventive-maintenance nightly batch over a range of dates and print the timeline.
 
-  python replay.py --pack pack.json --fixture-dir DIR --from 2026-09-03 --to 2026-09-29 [--store tmp.sqlite]
+  python tests/replay.py --pack pack.json --fixture-dir DIR --from 2026-09-03 --to 2026-09-29 [--store tmp.sqlite]
+
+A test tool: it was a script of the skill (installed on the villa, never run there) until 0.6.42.
 """
 
 from __future__ import annotations
@@ -13,7 +15,8 @@ import tempfile
 from datetime import date, timedelta
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
+sys.path.insert(0, HERE)                                     # fixture_client
+sys.path.insert(0, os.path.join(os.path.dirname(HERE), "starter", "skills", "preventive-maintenance", "scripts"))
 import nightly  # noqa: E402
 
 

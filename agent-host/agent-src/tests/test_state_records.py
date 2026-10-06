@@ -35,7 +35,6 @@ def test_an_alerts_messages_are_remembered_listed_and_forgotten(tmp_path):
     s.remember_alert_message(13, 3001, 10, "Other")
     assert s.alert_skill(12, -100200) == "alert-desk" and s.alert_skill(12, 3001) is None
     assert sorted(s.alert_messages(12)) == [(-100200, 55, "Leak in the laundry"), (3001, 9, "Leak in the laundry")]
-    assert s.is_alert_message(12, 3001, 9) and not s.is_alert_message(12, 3001, 10)
     s.forget_alert_message(12, 3001, 9)
     assert s.alert_messages(12) == [(-100200, 55, "Leak in the laundry")] and s.alert_messages(13)
 

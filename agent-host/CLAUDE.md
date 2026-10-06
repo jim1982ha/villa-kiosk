@@ -16,7 +16,7 @@ You are building the **VESTA Agent host**: a Home Assistant app that hosts the V
   agent's UI only, `panel_admin: true`, port `contract.UI_PORT`. The UI runs as
   its own s6 service (`agent-ui`, the manifest's `ui`), gets `contract.ui_env`
   (folders, no secret), and accepts only the Ingress gateway 172.30.32.2.
-- Never export the Telegram token or call Telegram unless `telegram_takeover` is true. Never call `getUpdates` from the host or the stub.
+- Never export the Telegram token or call Telegram unless `telegram_takeover` is true. Never call `getUpdates` from the host.
 - Never write a secret to a log, a file under `/config`, the repository, or a CI log.
 - No agent logic in the host. The host only knows the agent manifest and the environment contract.
 - Nothing villa-specific in `agent-src/` either (the repository's hard rule): its villa tests and their real data live in `agent-src/tests/villa/`, gitignored, run locally only.
@@ -69,8 +69,10 @@ Checked on 2026-09-28 against the running system and upstream sources.
 
 `agent-host/rootfs/opt/vesta/host/agent-contract.json` is a COPY of the Kiosk's
 `rootfs/usr/share/vesta/agent-contract.json` (dev2). `vesta_host.kiosk_contract`
-reads it (version, message rules); the self-test, the stub's demo message and
-`tests/fake_remote.py` all use it. `tests/test_kiosk_contract.py` fails when the
+reads it (its version); the self-test and `tests/fake_remote.py` use it. (The
+test mode — the "stub" and its demo message — went in 0.12.46: the slot always
+runs the VESTA Agent, after the self-test, once Home Assistant and Anthropic
+pass; the UI runs from the start so the files can be prepared.) `tests/test_kiosk_contract.py` fails when the
 copy and the Kiosk's file differ — when the Kiosk changes the agreement, copy
 its file here and release the host; never edit one side alone.
 `vesta_host.manifest` reads `vesta-agent.yaml` (slot, start banner, image
@@ -119,3 +121,15 @@ Decisions of 2026-09-30 (owner):
 - ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent
   code LAST, libraries built from `install_files` only (`manifest
   build-inputs`). 0.9.1 re-sent ~840 MB for a few KB of code.
+
+## What the AI can use, and the page's controls (0.12.46)
+
+- `vesta_agent/tool_access.py` is the one answer to "may the AI use this tool": Toolbox builds only its
+  `allowed_for_person` / `allowed_for_job` set; the page draws its switches from `catalog()`. Only a tool HA MCP
+  marks `readOnlyHint` (and not destructive) can be on. A skill's `tools:` bound its AI jobs; a needed tool the
+  villa switched off makes the skill "not working" (`blockers`).
+- The page holds no token: the agent saves HA MCP's list to `<data>/ha_tools.json`; "Try a command" and "Read the
+  list again" go through `vesta_agent/requests_box.py` (files the agent answers). A try is checked like the AI's
+  call and never carried out.
+- Every page save is a row of `vesta_agent/history.py` (`page_history.sqlite`), undoable only while the file still
+  holds what the change wrote. Copying a setup: `ui/setup_copy.py` (never people, chats, devices, keys, records).

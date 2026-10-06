@@ -80,6 +80,8 @@ class GateResult:
 # in GATES order, whole, with its group — only the waiting is shared.
 LANES = {"The host's start-up, contract, folders and redaction": "sidecar",
          "The self-test reports each link correctly": "sidecar",
+         # since 0.12.46 (no test mode) its slot tests stand a fake on the sidecar's port too
+         "The sidecar, the restart policy and the stop grace": "sidecar",
          "The VESTA Agent's own tests": "agent"}
 
 
@@ -167,13 +169,6 @@ def yaml_version(text: str, where: str) -> str:
 
 def with_yaml_version(text: str, version: str) -> str:
     return re.sub(r'^(version:\s*)"?[^"\s]+"?(\s*)$', lambda m: f'{m.group(1)}"{version}"{m.group(2)}', text, count=1, flags=re.M)
-
-
-def init_version(text: str) -> str:
-    m = re.search(r'^__version__ = "([^"]+)"', text, re.M)
-    if not m:
-        raise ReleaseError(f"{ENGINE_INIT} has no __version__")
-    return m.group(1)
 
 
 def with_init_version(text: str, version: str) -> str:

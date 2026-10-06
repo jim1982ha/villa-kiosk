@@ -158,6 +158,11 @@ class KnowledgePack:
     def asset(self, slug: str) -> dict | None:
         return self.assets.get(slug)
 
+    def rows(self) -> list[dict]:
+        """Every entity row of every family (id, name, area, device…): the one walk over the pack that the
+        engine and the VESTA Agent page each wrote by hand (0.6.42)."""
+        return [r for rows in self.families.values() for r in rows if isinstance(r, dict) and r.get("entity_id")]
+
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=1, ensure_ascii=False)
 
@@ -165,6 +170,14 @@ class KnowledgePack:
     def load(cls, path: str) -> "KnowledgePack":
         d = json.load(open(path, encoding="utf-8"))
         return cls(**d)
+
+    @classmethod
+    def read(cls, path: str) -> "KnowledgePack | None":
+        """The pack, or None when it is not built yet or cannot be read (the callers show what they can)."""
+        try:
+            return cls.load(path)
+        except (OSError, ValueError, TypeError):
+            return None
 
 
 def _norm_entities(registry: dict, states: dict | None) -> list[dict]:

@@ -32,7 +32,7 @@ import sys
 from datetime import datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from . import runner
+from . import requests_box, runner, tool_access
 from .actions import Actions
 from .api_errors import FOR_PERSON, NEEDS_THE_OWNER, for_job
 from .config import STARTER_DIR
@@ -97,9 +97,10 @@ class Vesta:
 
         self.s = settings
         self.state = State(settings.state_path)
-        self.skills = skills or Skills(settings.skills_dir, os.path.join(STARTER_DIR, "skills"))
+        # the skills the villa switched off (policy.yaml skills_off) are not loaded: no schedule, no hook, not read
+        self.skills = skills or Skills(settings.skills_dir, os.path.join(STARTER_DIR, "skills"),
+                                       off=lambda: self.policy().skills_off)
         self._policy: Policy | None = None
-        self._policy_mtime = None
         self.reader = reader or McpClient(settings.ha_mcp_url, settings.timezone, write=False)
         self.writer_factory = writer_factory or (lambda: McpClient(settings.ha_mcp_url, settings.timezone, write=True))
         if telegram is not None:
@@ -123,60 +124,42 @@ class Vesta:
         self._locks: dict[int, asyncio.Lock] = {}
         # The "being prepared" message of a job asked for in a chat (job_notices.py decides, this file sends).
         self._job_notices = JobNotices()
-        self._names: dict[str, str] = {}
-        self._names_mtime = None
+        self._pack = None
+        self._pack_mtime = None
 
     # ------------------------------------------------------------------ policy and names
     def policy(self) -> Policy:
-        try:
-            m = os.path.getmtime(self.s.policy_path)
-        except OSError:
-            m = None
-        if self._policy is None or m != self._policy_mtime:
-            self._policy = Policy.load(self.s.policy_path)
-            self._policy_mtime = m
-            for p in policy_problems(self._policy.raw):
+        """policy.yaml (Settings.policy, the one cache of it); what is wrong in it logged once per change."""
+        pol = self.s.policy()
+        if pol is not self._policy:
+            self._policy = pol
+            for p in policy_problems(pol.raw):
                 log.warning("policy.yaml: %s", p)
-        return self._policy
+        return pol
 
-    def name_of(self, entity_id: str) -> str:
+    def pack(self):
+        """The knowledge pack, read again when the nightly rebuild changes it (None until it is built)."""
+        from vesta_shared.knowledge_pack import KnowledgePack
         try:
             m = os.path.getmtime(self.s.pack_path)
         except OSError:
             m = None
-        if m != self._names_mtime:
-            self._names = {}
-            try:
-                with open(self.s.pack_path, encoding="utf-8") as f:
-                    pack = json.load(f)
-                for rows in (pack.get("families") or {}).values():
-                    for r in rows:
-                        if r.get("entity_id") and r.get("name"):
-                            self._names[r["entity_id"]] = r["name"]
-            except (OSError, ValueError):
-                pass
-            self._names_mtime = m
-        return self._names.get(entity_id) or _pretty(entity_id)
+        if m != self._pack_mtime:
+            self._pack, self._pack_mtime = KnowledgePack.read(self.s.pack_path), m
+        return self._pack
+
+    def name_of(self, entity_id: str) -> str:
+        pack = self.pack()
+        row = next((r for r in pack.rows() if r["entity_id"] == entity_id), None) if pack else None
+        return (row or {}).get("name") or _pretty(entity_id)
 
     def related_entities(self, entity_ids: list[str]) -> set[str]:
         """What these ids stand for: the members of a group (its entity_id attribute) and the other entities
         of the same device (knowledge pack). An owner-only device behind a wrapper is found this way."""
         out: set[str] = set()
-        try:
-            with open(self.s.pack_path, encoding="utf-8") as f:
-                pack = json.load(f)
-            by_device: dict[str, set[str]] = {}
-            dev_of: dict[str, str] = {}
-            for rows in (pack.get("families") or {}).values():
-                for r in rows:
-                    if r.get("device_id"):
-                        by_device.setdefault(r["device_id"], set()).add(r["entity_id"])
-                        dev_of[r["entity_id"]] = r["device_id"]
-            for e in entity_ids:
-                if e in dev_of:
-                    out |= by_device.get(dev_of[e], set())
-        except (OSError, ValueError):
-            pass
+        rows = self.pack().rows() if self.pack() else []
+        devices = {r["device_id"] for r in rows if r.get("device_id") and r["entity_id"] in entity_ids}
+        out |= {r["entity_id"] for r in rows if r.get("device_id") in devices}
         try:
             for _eid, st in (self.reader.states(entity_ids) or {}).items():
                 members = ((st or {}).get("attributes") or {}).get("entity_id")
@@ -186,11 +169,12 @@ class Vesta:
             pass
         return out
 
-    def toolbox(self) -> Toolbox:
+    def toolbox(self, allowed: set[str] | None = None) -> Toolbox:
+        """`allowed`: what the AI may use this time (tool_access); None: everything switched on."""
         return Toolbox(settings=self.s, policy=self.policy(), reader=self.reader, actions=self.actions,
                        skills=self.skills, send=self.send, server_tools=self.server_tools, state=self.state,
                        ticket=self.outcome.create_ticket if self.kiosk.enabled else None,
-                       carry_out=self.outcome.carry_out, start_job=self.start_job)
+                       carry_out=self.outcome.carry_out, start_job=self.start_job, allowed=allowed)
 
     def lock(self, chat_id: int) -> asyncio.Lock:
         return self._locks.setdefault(int(chat_id), asyncio.Lock())
@@ -246,11 +230,20 @@ class Vesta:
                       type(e).__name__)
         if updated:
             log.info("Starter skills updated to this version (never edited here): %s", ", ".join(updated))
+            from . import __version__
+            from .history import History
+            for name in updated:
+                History(self.s.history_path).record("Release", f"{name} updated to engine {__version__} (never edited here)",
+                                                    {"kind": "release", "skill": name}, None, None)
         for name in kept:
             log.warning("Starter skill %s: this version brings changes, but yours was edited, so it is kept. "
                         "The new version is in skills/.starter/%s to compare.", name, name)
         names = sorted(self.skills.all())
         log.info("Skills: %s", ", ".join(names) or "none")
+        from .skills import ai_jobs
+        renamed = self.state.rename_job_runs({f"{sk.name}:{j['when']}": j["name"] for sk, j in ai_jobs(self.skills.all())})
+        if renamed:
+            log.info("Records: %s AI runs from before jobs had names now carry their job's name", renamed)
         if self.tg:
             try:
                 me = await self.tg.open()
@@ -268,6 +261,10 @@ class Vesta:
             except KioskError as e:
                 log.warning("VESTA Kiosk: %s", e)
         await self.refresh_server_tools()
+        for sk in self.skills.all().values():
+            stop = tool_access.blockers(self.policy(), self.server_tools or None, sk)
+            if stop:
+                log.warning("Skill %s is not working: %s", sk.name, " ".join(b["why"] for b in stop))
         if not os.path.exists(self.s.pack_path):
             await asyncio.to_thread(self.build_pack)
         pol = self.policy()
@@ -283,6 +280,13 @@ class Vesta:
             log.error("HA MCP tools/list failed (%s): Home Assistant tools unavailable until it answers", type(e).__name__)
             return
         names = {t["name"] for t in self.server_tools}
+        info = getattr(self.reader.mcp, "server_info", None) or {}
+        try:
+            # for the page (which holds no token): Rules → What the AI can use draws its switches from it
+            tool_access.save_list(self.s.data_dir, self.server_tools,
+                                  " ".join(str(x) for x in (info.get("name"), info.get("version")) if x))
+        except OSError as e:
+            log.warning("The HA MCP tool list could not be saved for the VESTA Agent page (%s)", type(e).__name__)
         pol = self.policy()
         missing = [n for n in pol.ha_read_tools if n not in names]
         if missing:
@@ -532,10 +536,11 @@ class Vesta:
                           f"\"\"\"{text}\"\"\"\nAnswer short.")
             if not self.server_tools:
                 await self.refresh_server_tools()
-            tb = self.toolbox()
-            include_web = self.s.web_search
-            server = tb.server(person, Origin(cid, CONVERSATION), include_web)
-            allowed = set(tb.model_tool_names(include_web))
+            pol = self.policy()
+            # what this person may make the AI use here (Rules → What the AI can use)
+            tb = self.toolbox(tool_access.allowed_for_person(pol, self.server_tools, person.role if person else None, cid))
+            server = tb.server(person, Origin(cid, CONVERSATION))
+            allowed = set(tb.model_tool_names())
             res = await runner.run(self.s, self.system_prompt(), prompt, server, allowed, self.state,
                                    who=f"{person.name if person else 'system'}@{cid}", resume=resume,
                                    asked=None if is_continue else text)
@@ -663,10 +668,22 @@ class Vesta:
             prompt += "\n\nThis was asked for in a chat, not on schedule."
         if not self.server_tools:
             await self.refresh_server_tools()
+        pol = self.policy()
+        stop = tool_access.blockers(pol, self.server_tools or None, skill)
+        if stop:
+            # ⚠️ NOT WORKING, AND SAID (0.6.42): a report whose skill needs a tool switched off does not run
+            why = " ".join(b["why"] for b in stop)
+            log.warning("AI job %s (skill %s) did not run: %s", name, skill.name, why)
+            self.state.log("job_blocked", {"job": name, "skill": skill.name, "tools": [b["tool"] for b in stop]})
+            to = Routing(pol).target("here" if origin else (job.get("to") or "owner"), origin)
+            if to:
+                await self.send(to, f"The {name} report did not run. {why} (VESTA Agent page)")
+            return
         started = datetime.now(timezone.utc).isoformat()
-        tb = self.toolbox()
-        server = tb.server(None, origin, False)
-        allowed = set(tb.model_tool_names(False))
+        # a report gets only the tools its skill lists (skill.yaml `tools`), among those switched on
+        tb = self.toolbox(tool_access.allowed_for_job(pol, self.server_tools, skill))
+        server = tb.server(None, origin)
+        allowed = set(tb.model_tool_names())
         log.info("AI job %s started (%s, limit %g USD)%s", name, cfg["profile"], cfg["limit_usd"],
                  " on request" if origin else "")
         res = await runner.run(self.s, self.system_prompt(), prompt, server, allowed, self.state, who=f"job:{name}",
@@ -727,6 +744,36 @@ class Vesta:
         if not self.server_tools and _now_local(self.s.timezone).minute % 10 == 0:
             await self.refresh_server_tools()
 
+    # ------------------------------------------------------------------ the VESTA Agent page's requests
+    async def on_request(self, req: dict) -> dict:
+        """What the page asks of the running agent (requests_box.py): it has no Home Assistant access itself."""
+        if req.get("kind") == "refresh_tools":
+            await self.refresh_server_tools()
+            return {"ok": bool(self.server_tools), "tools": len(self.server_tools)}
+        if req.get("kind") == "try":
+            return await asyncio.to_thread(self.try_command, str(req.get("skill") or ""), str(req.get("script") or ""),
+                                           [str(a) for a in req.get("args") or []])
+        return {"ok": False, "error": "Unknown request."}
+
+    def try_command(self, skill_name: str, script: str, args: list[str]) -> dict:
+        """Skills → Try a command: one command, checked exactly as when the AI asks for it, run on the live villa —
+        and NOT carried out: its messages and tickets are shown in the answer, never sent or recorded."""
+        from .skills import ToolError, run_script, validate_script_args
+        skill = self.skills.all(include_off=True).get(skill_name)
+        try:
+            final = validate_script_args(skill, skill_name, script, args, self.s.out_dir)
+        except ToolError as e:
+            return {"ok": False, "error": str(e)}
+        started = datetime.now(timezone.utc)
+        code, out, err = run_script(self.s, skill, script, final)
+        took = (datetime.now(timezone.utc) - started).total_seconds()
+        self.state.log("script_tried", {"skill": skill_name, "script": script, "args": final, "exit": code})
+        log.info("UI: tried %s %s %s (exit %s, %.1f s)", skill_name, script, " ".join(args), code, took)
+        last = err.strip().splitlines()[-1] if err.strip() else ""
+        return {"ok": code in (0, 2), "exit": code, "seconds": round(took, 1),
+                "output": scrub(out, self.s.secrets())[:60_000],
+                "error": scrub(last, self.s.secrets()) if code not in (0, 2) else None}
+
     async def _safe(self, coro):
         try:
             await coro
@@ -744,6 +791,7 @@ class Vesta:
             tasks.append(asyncio.create_task(events.run(stop)))
         if self.kiosk.enabled:
             tasks.append(asyncio.create_task(self.kiosk.heartbeats(stop)))
+        tasks.append(asyncio.create_task(requests_box.serve(self.s.data_dir, self.on_request, stop)))
         await stop.wait()
         log.info("Stopping")
         for t in tasks:

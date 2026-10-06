@@ -1,26 +1,25 @@
-"""Every HTML page the agent sends carries the VESTA mark (favicon.py), inside it.
+"""The reports' page carries the VESTA mark, inside it: the Kiosk's own icons.
 
-A report opened on a phone showed the browser's blank tab icon (owner, 2026-10-02).
+A report opened on a phone showed the browser's blank tab icon (owner, 2026-10-02). Since 0.6.42 the mark
+is written in the reports skill's page (templates/report.html), the one page the agent sends — the engine
+no longer rewrites every HTML file on its way out.
 """
 from __future__ import annotations
 
 import asyncio
 import base64
-import json
 import os
 import re
 import subprocess
 from urllib.parse import unquote
 
-import pytest
-
-from vesta_agent import favicon
-from vesta_agent.favicon import document_bytes, favicon_links, with_favicon
 from vesta_agent.telegram import Telegram
 
+from helpers import STARTER_SKILLS
 from test_reports import COMPOSE, _facts, _run, _villa
 
 ICONS = re.compile(r'<link rel="icon"[^>]*>')
+TEMPLATE = os.path.join(STARTER_SKILLS, "reports", "templates", "report.html")
 
 
 def kiosk_file(path: str) -> bytes:
@@ -37,65 +36,36 @@ def kiosk_file(path: str) -> bytes:
     raise AssertionError(f"the Kiosk's {path} could not be read from git (fetch dev2)")
 
 
+def _links() -> list[str]:
+    with open(TEMPLATE, encoding="utf-8") as f:
+        return ICONS.findall(f.read())
+
+
 def test_the_mark_is_the_vesta_kiosks_own():
     # The agent's image has no Kiosk in it, so the icons are copies: this is what keeps them the same.
-    assert favicon.FAVICON_SVG.encode() == kiosk_file("public/favicon.svg")
-    assert favicon.FAVICON_DARK_SVG.encode() == kiosk_file("public/favicon-dark.svg")
-    assert base64.b64decode(favicon.FAVICON_PNG_32_B64) == kiosk_file("public/icons/favicon-32x32.png")
+    light, dark, png = (re.search(r'href="([^"]*)"', link).group(1) for link in _links())
+    assert unquote(light.split(",", 1)[1]) == " ".join(kiosk_file("public/favicon.svg").decode().split())
+    assert unquote(dark.split(",", 1)[1]) == " ".join(kiosk_file("public/favicon-dark.svg").decode().split())
+    assert base64.b64decode(png.split(",", 1)[1]) == kiosk_file("public/icons/favicon-32x32.png")
 
 
-def test_the_links_are_well_formed_and_carry_the_icon_itself():
-    links = ICONS.findall(favicon_links())
+def test_the_links_are_well_formed_and_fetch_nothing():
+    links = _links()
     assert len(links) == 3
     for link in links:
         # every attribute closes where it should: a raw quote in the data would end href early
         assert re.fullmatch(r'<link( [a-z-]+="[^"]*")+>', link), link
-    light, dark, png = (re.search(r'href="([^"]*)"', link).group(1) for link in links)
-    assert unquote(light.split(",", 1)[1]) == " ".join(favicon.FAVICON_SVG.split())
-    assert unquote(dark.split(",", 1)[1]) == " ".join(favicon.FAVICON_DARK_SVG.split())
-    assert png == "data:image/png;base64," + favicon.FAVICON_PNG_32_B64
-    assert "http" not in favicon_links().replace("http://www.w3.org/2000/svg", "")   # nothing to fetch: works offline
+    assert "http" not in "".join(links).replace("http://www.w3.org/2000/svg", "")   # works offline
 
 
-def test_the_reports_page_gets_the_mark_at_the_top_of_its_head(tmp_path):
+def test_the_reports_page_has_the_mark_in_its_head(tmp_path):
     fx = _villa(tmp_path)
     _facts(tmp_path, fx)
     r = _run(COMPOSE, "fm-weekly", "--facts", str(tmp_path / "facts.json"), "--out", str(tmp_path / "page.html"))
     assert r.returncode == 0, r.stderr
     page = (tmp_path / "page.html").read_text()
-    assert not ICONS.search(page)                                   # the skill's page has none of its own
-    sent = document_bytes(str(tmp_path / "page.html")).decode()
-    head = sent[sent.index("<head>"):sent.index("</head>")]
-    assert len(ICONS.findall(head)) == 3 and head.startswith("<head>" + favicon_links())
-    assert sent.replace(favicon_links(), "", 1) == page               # nothing else in the page changed
-
-
-@pytest.mark.parametrize("page, where", [
-    ("<!doctype html><html lang=en><head><title>t</title></head><body>x</body></html>", "<head>"),
-    ("<!DOCTYPE html><HTML><HEAD prefix='x'><TITLE>t</TITLE></HEAD></HTML>", "<HEAD prefix='x'>"),
-    ("<!doctype html><html lang=en><body>no head</body></html>", "<html lang=en>"),
-    ("<!doctype html><p>a fragment</p>", "<!doctype html>"),
-    ("<p>no tags at all</p>", ""),
-])
-def test_any_page_shape_gets_the_mark_once_where_a_browser_reads_it(page, where):
-    out = with_favicon(page)
-    after = out.index(where) + len(where) if where else 0
-    assert out.count(favicon_links()) == 1 and out[after:].startswith(favicon_links()), out[:200]
-    assert with_favicon(out) == out                                 # sent twice, still one mark
-
-
-def test_a_page_with_its_own_icon_keeps_it():
-    page = '<html><head><link rel="shortcut icon" href="data:image/png;base64,AAAA"></head></html>'
-    assert with_favicon(page) == page
-
-
-def test_only_html_is_touched(tmp_path):
-    (tmp_path / "data.json").write_text(json.dumps({"<head>": 1}))
-    (tmp_path / "latin1.html").write_bytes("<html><head></head>é</html>".encode("latin-1"))
-    assert document_bytes(str(tmp_path / "data.json")) == (tmp_path / "data.json").read_bytes()
-    assert document_bytes(str(tmp_path / "latin1.html")) == (tmp_path / "latin1.html").read_bytes()
-    (tmp_path / "PAGE.HTM").write_text("<html><head></head></html>")
-    assert favicon_links().encode() in document_bytes(str(tmp_path / "PAGE.HTM"))
+    head = page[page.index("<head>"):page.index("</head>")]
+    assert ICONS.findall(head) == _links()
 
 
 class _Http:
@@ -120,10 +90,10 @@ class _Http:
         return _Resp()
 
 
-def test_a_report_sent_on_telegram_carries_the_mark(tmp_path):
-    (tmp_path / "page.html").write_text("<!doctype html><html><head><title>Week</title></head></html>")
+def test_a_file_is_sent_on_telegram_exactly_as_written(tmp_path):
+    page = "<!doctype html><html><head><title>Week</title></head></html>"
+    (tmp_path / "page.html").write_text(page)
     tg = Telegram("t0k3n")
     tg.http = _Http()
     assert asyncio.run(tg.send(1, "This week's report", document=str(tmp_path / "page.html"))) == 7
-    method, body = tg.http.sent
-    assert method == "sendDocument" and favicon_links().encode() in body
+    assert tg.http.sent == ("sendDocument", page.encode())

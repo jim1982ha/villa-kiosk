@@ -1,6 +1,5 @@
 """What the slot and the self-test need that is NOT part of the environment
-contract — which program fills the slot, whether the stub sends heartbeats,
-whether the HA MCP sidecar runs (and if not, why), the host's version.
+contract — whether the HA MCP sidecar runs (and if not, why), the host's version.
 
 Written once by the start script to /run/vesta/host.json and read by the
 slot, the self-test and `vesta-selftest`. It was a dict with string keys at
@@ -15,10 +14,12 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class HostState:
-    agent_mode: str = "stub"
-    stub_heartbeat: bool = False
     sidecar_reason: str | None = None
     host_version: str = "dev"
+    # ⚠️ FOR THE CONTAINER TEST ONLY (VESTA_TEST_ANTHROPIC_URL, as VESTA_ROOT is for the unit tests): with no test
+    # mode (0.12.46) a stand-in agent starts only once Anthropic passes, and a test never reaches the internet with
+    # a fake key. The Supervisor never sets it. Carried here because an s6 service does not see the container's env.
+    anthropic_url: str | None = None
 
     @classmethod
     def of(cls, raw: "HostState | dict | None") -> "HostState":
@@ -26,10 +27,9 @@ class HostState:
         if isinstance(raw, HostState):
             return raw
         d = raw if isinstance(raw, dict) else {}
-        return cls(agent_mode=str(d.get("agent_mode") or "stub"),
-                   stub_heartbeat=bool(d.get("stub_heartbeat")),
-                   sidecar_reason=d.get("sidecar_reason") if isinstance(d.get("sidecar_reason"), str) else None,
-                   host_version=str(d.get("host_version") or "dev"))
+        return cls(sidecar_reason=d.get("sidecar_reason") if isinstance(d.get("sidecar_reason"), str) else None,
+                   host_version=str(d.get("host_version") or "dev"),
+                   anthropic_url=d.get("anthropic_url") if isinstance(d.get("anthropic_url"), str) else None)
 
     @classmethod
     def read(cls, path: Path) -> "HostState":

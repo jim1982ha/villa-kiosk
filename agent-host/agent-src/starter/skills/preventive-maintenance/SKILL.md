@@ -63,7 +63,6 @@ closure, and never raise the same thing twice.
 | PM-UNAVAILABLE | availability | A device offline for more than 10 minutes at batch time, one finding per physical device; three or more devices of one integration offline together become one "integration down" finding. P2 when the device is critical. | `vesta_unavailable_minutes` |
 | PM-SILENT | level | A sensor online but not reporting for 24 h. | `vesta_silence_hours` |
 | PM-LEVEL-HIGH | level | A temperature or humidity above `<asset>_max_c` / `<asset>_max_humidity_pct` when such a helper exists. | asset helper |
-| PM-WATER-JUMP / -NIGHTFLOW | water | Ready for the day a water meter or flow sensor is added: daily volume jump, continuous night flow. | same shape as energy |
 | PM-RECONNECT-LOOP | network | Ten or more drop/reconnect events in three days for one device (logbook). | none |
 | PM-PARAM-MISSING | any | A rule could not run for lack of a helper. Says which one. | none |
 
@@ -97,7 +96,7 @@ alert-desk skill; this skill only opens and closes. Replies:
 
 ## Acceptance test (run before any change to rules.py)
 
-`python scripts/replay.py --pack pack.json --fixture-dir <fixtures> --from <day> --to <day>` replays a
+`python tests/replay.py --pack pack.json --fixture-dir <fixtures> --from <day> --to <day>` (the agent's tests) replays a
 saved month of the villa's statistics through the rules. The villa's own fixtures and the expected
 findings live with the agent's local tests (never in the app, never in the repository): run them
 before changing a threshold.

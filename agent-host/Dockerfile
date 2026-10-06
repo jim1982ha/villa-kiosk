@@ -80,7 +80,7 @@ RUN set -e; python3 -m venv .venv; \
 
 FROM ${BUILD_FROM}
 
-# python3: runs the host, the stub, and the virtualenvs the two stages above
+# python3: runs the host and the virtualenvs the two stages above
 # built (the VESTA Agent's in its own folder, the HA MCP sidecar's). python3-yaml: the host reads the
 # agent manifest (the host itself uses nothing else outside the standard
 # library). No compilers here — anything that needs one is built in a separate
@@ -106,9 +106,6 @@ COPY --from=ha-mcp /opt/vesta/ha-mcp /opt/vesta/ha-mcp
 COPY --from=agent /opt/vesta/agent/.venv /opt/vesta/agent/.venv
 
 COPY rootfs /
-# The self-test stub fills the slot in stub mode; the VESTA Agent is in
-# /opt/vesta/agent, so switching agent_mode never needs a different image.
-COPY stub /opt/vesta/stub
 # ⚠️ THE SHAPE, NOT A LIST OF PATHS — as in the VESTA Kiosk Dockerfile: git
 # stores rootfs files as 0644, and an s6 `run` script that is not executable
 # builds green and fails only on the device.

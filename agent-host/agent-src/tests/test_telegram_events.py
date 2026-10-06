@@ -54,7 +54,7 @@ class FakeReader:
     class mcp:
         @staticmethod
         def list_tools():
-            return [{"name": "ha_get_state"}]
+            return [{"name": "ha_get_state", "annotations": {"readOnlyHint": True}}]   # as HA MCP lists it
 
     def states(self, ids):
         return {}
@@ -161,7 +161,8 @@ def test_a_press_in_a_private_chat_is_answered_there_and_its_buttons_go(agent):
     # the facility manager's chat is the group, but the alert was pressed in a private chat:
     # the answer goes where the press was, and the pressed message loses its buttons
     mid = run(agent.send(FM, "🚨 Incident #1: pump stopped", keyboard={"inline_keyboard": [[{"text": "Done"}]]}))
-    agent.state.put(f"inc:1:{FM}", "alert-desk")
+    agent.state.set_alert_skill(1, FM, "alert-desk")
+    agent.state.remember_alert_message(1, FM, mid, "🚨 Incident #1: pump stopped")     # as outcome.carry_out does
     from vesta_shared.store import Store
     Store(agent.s.store_path).new_incident("k", "automation.x", "lock.front_door", "P2", {"message": "m"})
     press = {"id": "cb3", "data": "i:1:done", "chat_id": FM, "user_id": FM,
@@ -227,7 +228,7 @@ def test_a_failed_skill_script_is_in_the_apps_log_with_its_reason(agent, caplog)
     open(os.path.join(d, "skill.yaml"), "w").write(yaml.safe_dump({"description": "t", "scripts": {"check.py": {}}}))
     open(os.path.join(d, "scripts", "check.py"), "w").write(
         "import sys\nprint('Traceback...', file=sys.stderr)\nprint('check needs --energy', file=sys.stderr)\nsys.exit(1)\n")
-    tool = next(t for t in agent.toolbox().tool_objects(None, Origin(PRIVATE, CONVERSATION), False) if t.name == "run_skill_script")
+    tool = next(t for t in agent.toolbox().tool_objects(None, Origin(PRIVATE, CONVERSATION)) if t.name == "run_skill_script")
     res = run(tool.handler({"skill": "pool-care", "script": "check.py", "args": []}))
     assert res.get("is_error")
     assert any("pool-care: check.py failed (exit 1): check needs --energy" in r.getMessage() for r in caplog.records)
@@ -236,11 +237,11 @@ def test_a_failed_skill_script_is_in_the_apps_log_with_its_reason(agent, caplog)
 def test_a_report_asked_for_in_a_chat_can_be_sent_there(agent):
     # 2026-09-30: asked in the group, the weekly page went to the fm chat (a private chat)
     # asked in a private chat; owner and fm are both the group in this policy
-    here = next(t for t in agent.toolbox().tool_objects(None, Origin(PRIVATE, CONVERSATION), False) if t.name == "send_message")
+    here = next(t for t in agent.toolbox().tool_objects(None, Origin(PRIVATE, CONVERSATION)) if t.name == "send_message")
     assert "here" in here.input_schema["properties"]["to"]["enum"]
     run(here.handler({"to": "here", "text": "Weekly page"}))
     assert agent.tg.sent[-1][0] == PRIVATE != GROUP
-    job = next(t for t in agent.toolbox().tool_objects(None, None, False) if t.name == "send_message")
+    job = next(t for t in agent.toolbox().tool_objects(None, None) if t.name == "send_message")
     assert job.input_schema["properties"]["to"]["enum"] == ["owner", "fm"]      # a scheduled job names a chat
 
 

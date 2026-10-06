@@ -71,7 +71,7 @@ def agent(tmp_path):
 
 def script_tool(v, chat):
     """The model's run_skill_script, as one conversation holds it (one toolbox per conversation)."""
-    return next(t for t in v.toolbox().tool_objects(None, Origin(chat, CONVERSATION), False) if t.name == "run_skill_script")
+    return next(t for t in v.toolbox().tool_objects(None, Origin(chat, CONVERSATION)) if t.name == "run_skill_script")
 
 
 def model_runs(v, chat, part=1, tool=None):
@@ -121,7 +121,7 @@ def test_the_tasks_and_the_kiosks_tickets_agree(agent):
     # Kiosk's Cockpit only grew (22 faults for problems gone)
     from vesta_shared.problems import Problems
     v, kiosk = agent
-    kiosk.known, kiosk.closed_by_hand = ["t-hand", "t-gone", "t-alert", "t-old"], ["t-hand", "t-alert"]
+    kiosk.known, kiosk.closed_by_hand = ["t-hand", "t-gone", "t-alert"], ["t-hand", "t-alert"]
     st, pb = Store(v.s.store_path), Problems(Store(v.s.store_path))
     fid, _ = st.raise_finding("PM-A", "sensor.example_a", "level", "2026-09-30", "P3", "A", {})
     by_hand, _ = pb.open_task("finding", fid, "PM-A", "sensor.example_a", "Closed in the Kiosk"); st.set_task_uid(by_hand, "t-hand")
@@ -134,7 +134,6 @@ def test_the_tasks_and_the_kiosks_tickets_agree(agent):
     st.set_task_uid(alert, "t-alert")
     run(v.outcome.carry_out({"send": [{"to": "fm", "text": f"Door left open. Incident #{iid}.", "keyboard": True}],
                              "incident_id": iid}, "alert-desk"))
-    old = st.add_task("PM-B", "sensor.example_b", "Before sources were kept"); st.set_task_uid(old, "t-old")   # 0.6.15
     run(v.outcome.repair_tickets())
     assert st.task(by_hand)["status"] == "closed_in_kiosk"                          # a person closed it there
     assert st.task(gone)["status"] == "cleared" and kiosk.resolved == ["t-gone"]    # gone: closed with its ticket
@@ -142,18 +141,6 @@ def test_the_tasks_and_the_kiosks_tickets_agree(agent):
     # alert's message loses its buttons (villa, 2026-10-01: it kept reminding, then escalated to the owner)
     assert st.task(alert)["status"] == "closed_in_kiosk" and st.incident(iid)["closed_at"]
     assert any("Closed in the VESTA Kiosk" in text for _, _, text in v.tg.edits)
-    assert st.task(old)["status"] == "open"                                         # no finding of its own: stays
-
-
-def test_a_task_from_before_sources_keeps_its_title_and_check_apart(agent):
-    # owner, 2026-10-01: "<finding> Check: <what>" as one title filled a fault card with a paragraph. A task
-    # written before 0.6.16 still has the sentence: its missing ticket is made with the two apart.
-    v, kiosk = agent
-    st = Store(v.s.store_path)
-    st.add_task("PM-X", "sensor.example_rain", "Rain gauge has not reported for 2.0 days. Check: Check the sensor: battery.")
-    run(v.outcome.repair_tickets())
-    assert kiosk.tickets[-1] == ("Rain gauge has not reported for 2.0 days.", "sensor.example_rain")
-    assert kiosk.notes[-1] == "Check: Check the sensor: battery."
 
 
 def test_one_occasion_answers_every_routing_question():
@@ -200,7 +187,7 @@ def test_the_alert_skill_cannot_be_run_by_the_model_to_raise_an_alert():
 
 def test_the_model_saves_its_sentences_but_never_over_a_scripts_file(agent):
     v, _ = agent
-    tool = next(t for t in v.toolbox().tool_objects(None, Origin(GROUP, CONVERSATION), False) if t.name == "save_file")
+    tool = next(t for t in v.toolbox().tool_objects(None, Origin(GROUP, CONVERSATION)) if t.name == "save_file")
     ok = run(tool.handler({"name": "notes.json", "content": json.dumps({"headline": "All quiet."})}))
     assert not ok.get("is_error") and json.load(open(os.path.join(v.s.out_dir, "notes.json"))) == {"headline": "All quiet."}
     assert not run(tool.handler({"name": "notes.json", "content": "{}"})).get("is_error")      # its own file: again

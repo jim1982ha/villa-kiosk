@@ -4,12 +4,16 @@ UTC never reaches a chat message."""
 
 from __future__ import annotations
 
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from zoneinfo import ZoneInfo
 
 
-def tz(name: str) -> ZoneInfo:
-    return ZoneInfo(name)
+def local_day(ms: int, zone: "str | ZoneInfo") -> date:
+    """The villa's day of a Home Assistant statistics row's `start` (milliseconds, UTC).
+
+    One reading for the night's checks and the reports (they each had their own copy)."""
+    z = ZoneInfo(zone) if isinstance(zone, str) else zone
+    return datetime.fromtimestamp(ms / 1000, tz=timezone.utc).astimezone(z).date()
 
 
 def day_label(d: date) -> str:

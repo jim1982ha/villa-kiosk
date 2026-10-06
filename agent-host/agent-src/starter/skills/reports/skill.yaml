@@ -1,12 +1,22 @@
 description: The facility manager's daily digest and weekly page, the owner's weekly lines and monthly proof (HTML pages)
+# The tools a report's AI gets (among those switched on in Rules → What the AI can use): what VESTA's readings
+# look at in Home Assistant, the notes it saves for compose.py, and the message that carries the page.
+tools: [ha_get_state, ha_get_history, ha_search, ha_get_entity, ha_get_device, ha_eval_template, ha_get_logs,
+        ha_get_automation_traces, ha_list_floors_areas, ha_get_overview, save_file, send_message]
 scripts:
   facts.py:                    # every figure, and the clues, of a weekly or monthly page (reports.yaml)
-    commands: [fm-weekly, owner-monthly]
+    commands:
+      fm-weekly: the weekly page's figures and clues
+      owner-monthly: the monthly report's figures and clues
     job_only: {fm-weekly: fm-weekly, owner-monthly: owner-monthly}   # asked for in a chat: start_job, not here
     flags: {--energy: infile, --out: outfile}
     inject: [pack, store, zone]
   compose.py:                  # the chat texts, and a page from its facts and your notes
-    commands: [fm-daily, fm-weekly, owner-weekly, owner-monthly]
+    commands:
+      fm-daily: the facility manager's morning message
+      fm-weekly: the weekly page, from its figures and the readings
+      owner-weekly: the owner's three Monday lines
+      owner-monthly: the monthly report, from its figures and the readings
     job_only: {fm-daily: fm-daily, fm-weekly: fm-weekly, owner-monthly: owner-monthly}
     flags: {--energy: infile, --facts: infile, --notes: infile, --as-of: date, --out: outfile}
     inject: [pack, store, zone]

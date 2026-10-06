@@ -21,7 +21,7 @@ TGTOKEN="123456:TELEGRAM-CONTAINERTEST"
 cleanup() {
   docker rm -f vesta-ct >/dev/null 2>&1 || true
   # Files in the mounts were written by root inside the container.
-  docker run --rm "${PLATFORM[@]}" --entrypoint /bin/rm -v "$WORK:/w" "$IMAGE" -rf /w/data /w/config /w/stub >/dev/null 2>&1 || true
+  docker run --rm "${PLATFORM[@]}" --entrypoint /bin/rm -v "$WORK:/w" "$IMAGE" -rf /w/data /w/config /w/agent >/dev/null 2>&1 || true
   rm -rf "$WORK"
 }
 trap cleanup EXIT
@@ -58,32 +58,31 @@ fresh() {
   mkdir -p "$WORK/data" "$WORK/config"
 }
 
-echo "== 1. HA app, stub mode, secrets set, Telegram takeover off"
+echo "== 1. HA app, no Anthropic key yet, Telegram takeover off: the self-test, then the agent waits"
 fresh
 cat > "$WORK/data/options.json" <<EOF
-{"agent_mode":"stub","ha_url":"http://homeassistant:8123",
+{"ha_url":"http://homeassistant:8123",
  "kiosk_url":"http://e66a2348-villa-kiosk:8099","telegram_takeover":false,
- "stub_heartbeat":false,"log_level":"info",
+ "log_level":"info",
  "ha_token":"$HATOKEN","telegram_bot_token":"$TGTOKEN"}
 EOF
 docker run -d --name vesta-ct "${PLATFORM[@]}" -e TZ=Asia/Bangkok \
   -v "$WORK/data:/data" -v "$WORK/config:/config" "$IMAGE" >/dev/null
-if wait_log "stub: no heartbeat" 90; then ok "started: banner, self-test, stub"; else bad "the stub never started"; fi
+if wait_log "agent start delayed" 90; then ok "started: banner, self-test, the agent waits"; else bad "the slot never reached its gate"; fi
 has "deployment ha_app" && ok "banner: deployment ha_app" || bad "banner lacks deployment"
 has "link Home Assistant: http://homeassistant:8123 · token set" && ok "banner: token set (value hidden)" || bad "banner lacks the HA token state"
-for link in "Home Assistant" "HA MCP" "VESTA Kiosk" "Anthropic" "Telegram" "Presence"; do
+for link in "Home Assistant" "HA MCP" "VESTA Kiosk" "Anthropic" "Telegram"; do
   has "self-test ${link}: (pass|fail|skipped)" && ok "self-test line: ${link}" || bad "no self-test line for ${link}"
 done
 has "self-test Telegram: skipped — telegram_takeover is off" && ok "Telegram skipped, no call" || bad "Telegram not skipped"
-has "stub: environment contract received: 16/16" && ok "stub received the full contract" || bad "stub contract incomplete"
 [ -s "$WORK/data/host/selftest.json" ] && grep -q '"summary"' "$WORK/data/host/selftest.json" && ok "selftest.json written" || bad "selftest.json missing"
 grep -qF "$HATOKEN" "$WORK/data/host/selftest.json" && bad "a secret in selftest.json" || ok "no secret in selftest.json"
 has "time zone: Asia/Bangkok" && ok "banner: time zone from TZ" || bad "banner lacks TZ"
-no_secret "stub"
+no_secret "slot"
 [ -f "$WORK/config/skills/README.md" ] && [ -d "$WORK/data/agent" ] && ok "folders created" || bad "folders missing"
-# The agent's UI (Home Assistant sidebar): beside the stub too, reachable only
+# The agent's UI (Home Assistant sidebar): running while the agent waits, reachable only
 # through Home Assistant's Ingress gateway, and holding no secret.
-wait_log "UI: listening on port 8095" 60 && ok "the UI runs beside the stub" || bad "the UI did not start"
+wait_log "UI: listening on port 8095" 60 && ok "the UI runs while the agent waits" || bad "the UI did not start"
 ui=$(docker exec vesta-ct python3 -c '
 import urllib.request, urllib.error
 try:
@@ -125,34 +124,35 @@ echo "== 2. README kept on restart"
 docker run --rm "${PLATFORM[@]}" --entrypoint /bin/sh -v "$WORK/config:/config" "$IMAGE" \
   -c 'echo "edited by a person" > /config/skills/README.md'
 docker start vesta-ct >/dev/null
-wait_log "stub: no heartbeat" 90 >/dev/null || true
+wait_log "agent start delayed" 90 >/dev/null || true
 docker stop -t 30 vesta-ct >/dev/null
 [ "$(cat "$WORK/config/skills/README.md")" = "edited by a person" ] && ok "README not overwritten" || bad "README overwritten"
 
 echo "== 2b. Live skills: a file added from Home Assistant is visible without a restart"
 docker start vesta-ct >/dev/null
-wait_log "stub: no heartbeat" 90 >/dev/null || true
+wait_log "agent start delayed" 90 >/dev/null || true
 docker run --rm "${PLATFORM[@]}" --entrypoint /bin/sh -v "$WORK/config:/config" "$IMAGE" \
   -c 'mkdir -p /config/skills/pool-care && echo "# pool care" > /config/skills/pool-care/SKILL.md'
 docker exec vesta-ct test -f /config/skills/pool-care/SKILL.md && ok "new skill visible in the running app" || bad "new skill not visible"
 docker stop -t 30 vesta-ct >/dev/null
 
-echo "== 3. HA app, agent mode, no API key: must not start"
+echo "== 3. HA app, nothing set: the app runs, the agent waits and says what it needs"
 fresh
-echo '{"agent_mode":"agent","ha_url":"http://homeassistant:8123","kiosk_url":"http://e66a2348-villa-kiosk:8099","telegram_takeover":false,"stub_heartbeat":false,"log_level":"info"}' \
+echo '{"ha_url":"http://homeassistant:8123","kiosk_url":"http://e66a2348-villa-kiosk:8099","telegram_takeover":false,"log_level":"info"}' \
   > "$WORK/data/options.json"
 docker run -d --name vesta-ct "${PLATFORM[@]}" -v "$WORK/data:/data" -v "$WORK/config:/config" "$IMAGE" >/dev/null
-for _ in $(seq 1 60); do [ "$(docker inspect vesta-ct --format '{{.State.Running}}')" = "false" ] && break; sleep 0.5; done
-if [ "$(docker inspect vesta-ct --format '{{.State.Running}}')" = "false" ]; then ok "container stopped by itself"; else bad "container kept running"; fi
-has "agent mode needs anthropic_api_key" && ok "clear message in the log" || bad "no message"
-has "self-test" && bad "the agent slot started anyway" || ok "agent slot never started"
+wait_log "agent start delayed" 90 || true
+[ "$(docker inspect vesta-ct --format '{{.State.Running}}')" = "true" ] && ok "the app keeps running" || bad "the app stopped"
+has "anthropic_api_key is empty: the agent waits until it is set" && ok "clear message in the log" || bad "no message"
+has "agent start delayed: Home Assistant, Anthropic not passing" && ok "the agent never started" || bad "the agent slot did not wait"
+docker stop -t 30 vesta-ct >/dev/null
 
 echo "== 4. Standalone: VESTA_OPT_* variables, no options.json"
 fresh
 docker run -d --name vesta-ct "${PLATFORM[@]}" \
   -e VESTA_OPT_HA_TOKEN="$HATOKEN" -e VESTA_OPT_KIOSK_URL=https://kiosk.example.test \
   -v "$WORK/data:/data" -v "$WORK/config:/config" "$IMAGE" >/dev/null
-wait_log "stub: no heartbeat" 90 && ok "standalone started" || bad "standalone did not start"
+wait_log "agent start delayed" 90 && ok "standalone started" || bad "standalone did not start"
 has "deployment standalone" && ok "banner: deployment standalone" || bad "banner lacks standalone"
 has "link VESTA Kiosk: https://kiosk.example.test" && ok "option read from environment" || bad "VESTA_OPT_KIOSK_URL ignored"
 no_secret "standalone"
@@ -160,15 +160,15 @@ docker stop -t 30 vesta-ct >/dev/null
 
 echo "== 5. HA MCP sidecar: starts with a token, loopback only, answers the self-test"
 # The options an 0.8.x install still holds for the removed external mode
-# (decision D2) are part of this run: they must change nothing.
+# (decision D2), and 0.12.45's test-mode ones, are part of this run: they must change nothing.
 fresh
 cat > "$WORK/data/options.json" <<EOF
-{"agent_mode":"stub","ha_url":"http://homeassistant:8123","ha_mcp_mode":"external","ha_mcp_url":"http://127.0.0.1:9/mcp",
- "kiosk_url":"http://e66a2348-villa-kiosk:8099","telegram_takeover":false,
- "stub_heartbeat":false,"log_level":"info","ha_token":"$HATOKEN"}
+{"agent_mode":"stub","stub_heartbeat":false,"ha_url":"http://homeassistant:8123","ha_mcp_mode":"external",
+ "ha_mcp_url":"http://127.0.0.1:9/mcp","kiosk_url":"http://e66a2348-villa-kiosk:8099","telegram_takeover":false,
+ "log_level":"info","ha_token":"$HATOKEN"}
 EOF
 docker run -d --name vesta-ct "${PLATFORM[@]}" -v "$WORK/data:/data" -v "$WORK/config:/config" "$IMAGE" >/dev/null
-wait_log "stub: no heartbeat" 180 || true
+wait_log "agent start delayed" 180 || true
 has "self-test HA MCP: pass — ha-mcp [0-9.]+, [0-9]+ tools" && ok "HA MCP self-test passes against the sidecar" || bad "HA MCP self-test did not pass"
 # /proc/net/tcp: port 9583 = 256F, listening = state 0A. 0100007F = 127.0.0.1.
 tcp=$(docker exec vesta-ct cat /proc/net/tcp /proc/net/tcp6 2>/dev/null)
@@ -248,19 +248,27 @@ for w in IMPORTS STARTER CLEAN NOBROWSER; do
   grep -qx "$w" <<<"$got" && ok "agent image: $w" || bad "agent image: $w missing — $(tr '\n' ' ' <<<"$got" | cut -c1-600)"
 done
 
-# A stand-in agent mounted over the stub, to exercise the slot's policy.
-mkstub() {  # mkstub <start command> <grace>
-  mkdir -p "$WORK/stub"
-  printf 'name: test-stub\nversion: "0"\nruntime: python\nstart: "%s"\nstop_grace_seconds: %s\n' "$1" "$2" \
-    > "$WORK/stub/vesta-agent.yaml"
+# A stand-in agent mounted over the VESTA Agent, to exercise the slot's policy. The slot starts it only once
+# Home Assistant and Anthropic pass: both are the fake villa (tests/fake_remote.py) on the host network.
+FAKE_PORT=18080
+python3 "$(dirname "$0")/fake_remote.py" "$FAKE_PORT" >/dev/null 2>&1 &
+FAKE_PID=$!
+sleep 1
+mkagent() {  # mkagent <start command> <grace>
+  mkdir -p "$WORK/agent"
+  printf 'name: test-agent\nversion: "0"\nruntime: python\nstart: "%s"\nstop_grace_seconds: %s\n' "$1" "$2" \
+    > "$WORK/agent/vesta-agent.yaml"
 }
-DEFAULT_OPTS='{"agent_mode":"stub","ha_url":"http://homeassistant:8123","kiosk_url":"http://e66a2348-villa-kiosk:8099","telegram_takeover":false,"stub_heartbeat":false,"log_level":"info"}'
+DEFAULT_OPTS='{"ha_url":"http://127.0.0.1:18080","ha_token":"ha-TOKEN-123456","anthropic_api_key":"sk-ant-KEY-123456","kiosk_url":"http://e66a2348-villa-kiosk:8099","telegram_takeover":false,"log_level":"info"}'
+run_agent() {
+  docker run -d --name vesta-ct "${PLATFORM[@]}" --network host -e VESTA_TEST_ANTHROPIC_URL="http://127.0.0.1:${FAKE_PORT}/v1/models?limit=1" \
+    -v "$WORK/data:/data" -v "$WORK/config:/config" -v "$WORK/agent:/opt/vesta/agent:ro" "$IMAGE" >/dev/null
+}
 
 echo "== 7. Stop grace: an agent that needs 15 s to stop gets them, all within 30 s"
 fresh; echo "$DEFAULT_OPTS" > "$WORK/data/options.json"
-mkstub "trap 'echo saving; sleep 15; echo saved; exit 0' TERM; echo up; while :; do sleep 1; done" 20
-docker run -d --name vesta-ct "${PLATFORM[@]}" -v "$WORK/data:/data" -v "$WORK/config:/config" \
-  -v "$WORK/stub:/opt/vesta/stub:ro" "$IMAGE" >/dev/null
+mkagent "trap 'echo saving; sleep 15; echo saved; exit 0' TERM; echo up; while :; do sleep 1; done" 20
+run_agent
 wait_log "[agent] up" 90 || true
 start=$(date +%s); docker stop -t 30 vesta-ct >/dev/null; took=$(( $(date +%s) - start ))
 has "\[agent\] saved" && [ "$took" -ge 15 ] && [ "$took" -lt 30 ] \
@@ -268,14 +276,14 @@ has "\[agent\] saved" && [ "$took" -ge 15 ] && [ "$took" -lt 30 ] \
 
 echo "== 8. Crash: restarted after 5 s, the app keeps running"
 fresh; echo "$DEFAULT_OPTS" > "$WORK/data/options.json"
-mkstub "echo boom; exit 3" 5
-docker run -d --name vesta-ct "${PLATFORM[@]}" -v "$WORK/data:/data" -v "$WORK/config:/config" \
-  -v "$WORK/stub:/opt/vesta/stub:ro" "$IMAGE" >/dev/null
+mkagent "echo boom; exit 3" 5
+run_agent
 wait_log "crash 2 of 5" 90 || true
 has "exited with code 3 \(crash 1 of 5 allowed in 10 min\) — restarting in 5 s" && ok "first crash: restart in 5 s" || bad "no 5 s restart"
 has "crash 2 of 5 allowed in 10 min\) — restarting in 10 s" && ok "second crash: restart in 10 s (doubling)" || bad "backoff not doubling"
 [ "$(docker inspect vesta-ct --format '{{.State.Running}}')" = "true" ] && ok "container still running" || bad "container died"
 docker stop -t 30 vesta-ct >/dev/null
+kill "$FAKE_PID" 2>/dev/null || true
 
 echo
 if [ "$FAILED" = 0 ]; then echo "✅ container checks passed"; else

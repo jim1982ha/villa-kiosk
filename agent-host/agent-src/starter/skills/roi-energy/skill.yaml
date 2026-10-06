@@ -1,4 +1,5 @@
 description: Energy use and cost for a period, the pool filtration optimiser, and savings proposals
+tools: []                     # its scripts read Home Assistant themselves
 scripts:
   energy_period.py:
     flags: {--period: [week, month, custom], --start: date, --end: date, --no-cache: switch, --out: outfile}

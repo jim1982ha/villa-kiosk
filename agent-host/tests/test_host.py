@@ -42,6 +42,27 @@ SECRETS = {
 
 
 class Host(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        # Home Assistant and Anthropic, faked: the slot starts the agent only once both pass (no test mode
+        # since 0.12.46), and a test never reaches the internet with a fake key.
+        from http.server import ThreadingHTTPServer
+        sys.path.insert(0, str(HERE))
+        from fake_remote import Fake
+        from vesta_host import contract
+        cls.server = ThreadingHTTPServer(("127.0.0.1", 0), Fake)
+        cls.url = f"http://127.0.0.1:{cls.server.server_address[1]}"
+        # and on the sidecar's own address, so the slot does not wait its 120 s for an HA MCP server
+        cls.sidecar = ThreadingHTTPServer((contract.SIDECAR_HOST, contract.SIDECAR_PORT), Fake)
+        for srv in (cls.server, cls.sidecar):
+            threading.Thread(target=srv.serve_forever, daemon=True).start()
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        for srv in (cls.server, cls.sidecar):
+            srv.shutdown()
+            srv.server_close()
+
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
@@ -54,27 +75,6 @@ class Host(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.tmp.cleanup()
-
-    def fake_sidecar(self) -> None:
-        """Something listening on the sidecar's port, so the slot does not wait
-        its 120 s for an HA MCP server this test has no need of."""
-        from vesta_host import contract
-        s = socket.socket()
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        s.bind((contract.SIDECAR_HOST, contract.SIDECAR_PORT))
-        s.listen(8)
-
-        def refuse() -> None:
-            # accept and close at once: the self-test's handshake fails fast
-            # instead of waiting for an answer that never comes
-            while True:
-                try:
-                    conn, _ = s.accept()
-                except OSError:
-                    return
-                conn.close()
-        threading.Thread(target=refuse, daemon=True).start()
-        self.addCleanup(s.close)
 
     def env(self, **extra: str) -> dict[str, str]:
         base = {k: v for k, v in os.environ.items() if not k.startswith("VESTA_")}
@@ -91,26 +91,32 @@ class Host(unittest.TestCase):
         return json.loads((self.root / "run/vesta/agent-env.json").read_text())
 
     # ── validation ────────────────────────────────────────────────────────
-    def test_stub_starts_with_nothing_configured(self) -> None:
+    def test_starts_with_nothing_configured_and_says_what_the_agent_waits_for(self) -> None:
+        # 0.12.46, test mode gone: a missing key never stops the start (the UI must run to prepare the files)
         self.ha_options()
         r = self.start()
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        self.assertIn("anthropic_api_key is empty: the Anthropic check will be skipped", r.stdout)
+        self.assertIn("anthropic_api_key is empty: the agent waits until it is set", r.stdout)
+        self.assertIn("ha_token is empty: the agent waits until it is set", r.stdout)
         self.assertIn("start-up checks passed", r.stdout)
+        self.assertTrue((self.root / "run/vesta/agent-env.json").exists())
 
-    def test_agent_mode_without_key_or_token_stops(self) -> None:
-        self.ha_options(agent_mode="agent")
-        r = self.start()
-        self.assertEqual(r.returncode, 1)
-        self.assertIn("agent mode needs anthropic_api_key", r.stdout)
-        self.assertIn("agent mode needs ha_token", r.stdout)
-        self.assertIn("not starting", r.stdout)
-        self.assertFalse((self.root / "run/vesta/agent-env.json").exists())
-
-    def test_agent_mode_with_both_starts(self) -> None:
-        self.ha_options(agent_mode="agent", anthropic_api_key=SECRETS["anthropic_api_key"],
-                        ha_token=SECRETS["ha_token"])
+    def test_the_container_tests_anthropic_reaches_the_slot_only_when_set(self) -> None:
+        # an s6 service does not see the container's environment: the start script carries it in host.json
+        self.ha_options()
         self.assertEqual(self.start().returncode, 0)
+        self.assertIsNone(json.loads((self.root / "run/vesta/host.json").read_text())["anthropic_url"])
+        self.assertEqual(self.start(VESTA_TEST_ANTHROPIC_URL="http://127.0.0.1:1/v1/models").returncode, 0)
+        self.assertEqual(json.loads((self.root / "run/vesta/host.json").read_text())["anthropic_url"],
+                         "http://127.0.0.1:1/v1/models")
+
+    def test_old_test_mode_options_are_ignored(self) -> None:
+        # an install updated from 0.12.45 still holds agent_mode / stub_heartbeat in /data/options.json
+        self.ha_options(agent_mode="stub", stub_heartbeat=True, anthropic_api_key=SECRETS["anthropic_api_key"],
+                        ha_token=SECRETS["ha_token"])
+        r = self.start()
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertNotIn("stub", r.stdout)
 
     def test_old_external_mcp_options_are_ignored(self) -> None:
         # An install updated from 0.8.x still holds these in /data/options.json
@@ -196,11 +202,11 @@ class Host(unittest.TestCase):
         self.assertEqual(readme.read_text(), "edited by a person")
         self.assertTrue((self.root / "config/skills/pool").is_dir())
         info = json.loads((self.root / "data/host/last_start.json").read_text())
-        self.assertEqual(info["agent_mode"], "stub")
+        self.assertNotIn("agent_mode", info)
 
     # ── secrets ───────────────────────────────────────────────────────────
     def test_no_secret_in_the_start_log(self) -> None:
-        self.ha_options(agent_mode="agent", telegram_takeover=True, **SECRETS)
+        self.ha_options(telegram_takeover=True, **SECRETS)
         r = self.start()
         self.assertEqual(r.returncode, 0, r.stdout)
         for s in SECRETS.values():
@@ -210,49 +216,46 @@ class Host(unittest.TestCase):
         for f in ("agent-env.json", "redact.json"):
             self.assertEqual((self.root / "run/vesta" / f).stat().st_mode & 0o777, 0o600, f)
 
-    def test_agent_output_is_redacted_and_stop_is_forwarded(self) -> None:
-        # Stub mode, so no gate waits on a Home Assistant this test does not
-        # have; Anthropic left out, so the self-test makes no internet call.
-        self.ha_options(**{k: v for k, v in SECRETS.items() if k != "anthropic_api_key"},
-                        ha_url="http://127.0.0.1:9", kiosk_url="http://127.0.0.1:9")
+    def slot(self, start: str, seconds: float = 2.5, venv: bool = False) -> str:
+        """The real slot program against the fake Home Assistant and Anthropic, with `start` as the agent."""
+        from fake_remote import HA_TOKEN, KEY
+        self.ha_options(ha_url=self.url, kiosk_url="http://127.0.0.1:9", ha_token=HA_TOKEN, anthropic_api_key=KEY,
+                        kiosk_agent_token=SECRETS["kiosk_agent_token"])
         self.assertEqual(self.start().returncode, 0)
-        self.fake_sidecar()
-        agent = self.root / "opt/vesta/stub"
+        agent = self.root / "opt/vesta/agent"
         agent.mkdir(parents=True)
-        # A careless agent: prints its key, then waits to be stopped.
+        if venv:
+            (agent / ".venv/bin").mkdir(parents=True)
+            probe = agent / ".venv/bin/vesta-probe"
+            probe.write_text("#!/bin/sh\necho from-the-agent-venv\n")
+            probe.chmod(0o755)
         (agent / "vesta-agent.yaml").write_text(yaml.safe_dump({
-            "name": "leaky", "version": "0", "runtime": "python", "stop_grace_seconds": 5,
-            "start": "echo \"key=$VESTA_KIOSK_TOKEN token=$VESTA_HA_TOKEN\"; "
-                     "trap 'echo got-term; exit 0' TERM; while :; do sleep 0.1; done"}))
-        p = subprocess.Popen([sys.executable, str(SLOT)], env=self.env(),
+            "name": "test-agent", "version": "0", "runtime": "python", "stop_grace_seconds": 5, "start": start}))
+        boot = ("import runpy, sys; sys.path.insert(0, %r); from vesta_host import selftest; "
+                "selftest.ANTHROPIC_MODELS = %r; sys.argv = [%r]; runpy.run_path(%r, run_name='__main__')") % (
+            str(ROOTFS / "opt/vesta/host"), self.url + "/v1/models?limit=1", str(SLOT), str(SLOT))
+        p = subprocess.Popen([sys.executable, "-c", boot], env=self.env(),
                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-        time.sleep(2.5)
+        time.sleep(seconds)
         p.send_signal(signal.SIGTERM)
         out, _ = p.communicate(timeout=15)
         self.assertEqual(p.returncode, 0, out)
+        return out
+
+    def test_agent_output_is_redacted_and_stop_is_forwarded(self) -> None:
+        from fake_remote import HA_TOKEN
+        # A careless agent: prints its tokens, then waits to be stopped.
+        out = self.slot("echo \"key=$VESTA_KIOSK_TOKEN token=$VESTA_HA_TOKEN\"; "
+                        "trap 'echo got-term; exit 0' TERM; while :; do sleep 0.1; done")
         self.assertIn("[agent] key=*** token=***", out)
         self.assertIn("got-term", out)
-        for s in SECRETS.values():
+        for s in (SECRETS["kiosk_agent_token"], HA_TOKEN):
             self.assertNotIn(s, out)
 
     def test_agent_virtualenv_comes_first_on_path(self) -> None:
         # The image build installs the agent's libraries into <folder>/.venv
         # (Dockerfile, agent stage); `python` in its `start` must be that one.
-        self.ha_options(ha_url="http://127.0.0.1:9", kiosk_url="http://127.0.0.1:9")
-        self.assertEqual(self.start().returncode, 0)
-        agent = self.root / "opt/vesta/stub"
-        (agent / ".venv/bin").mkdir(parents=True)
-        probe = agent / ".venv/bin/vesta-probe"
-        probe.write_text("#!/bin/sh\necho from-the-agent-venv\n")
-        probe.chmod(0o755)
-        (agent / "vesta-agent.yaml").write_text(yaml.safe_dump({
-            "name": "venv", "version": "0", "runtime": "python", "stop_grace_seconds": 5,
-            "start": "vesta-probe; trap 'exit 0' TERM; while :; do sleep 0.1; done"}))
-        p = subprocess.Popen([sys.executable, str(SLOT)], env=self.env(),
-                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-        time.sleep(2.5)
-        p.send_signal(signal.SIGTERM)
-        out, _ = p.communicate(timeout=15)
+        out = self.slot("vesta-probe; trap 'exit 0' TERM; while :; do sleep 0.1; done", venv=True)
         self.assertIn("[agent] from-the-agent-venv", out)
 
     def test_redactor(self) -> None:

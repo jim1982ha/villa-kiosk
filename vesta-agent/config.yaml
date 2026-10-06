@@ -10,7 +10,7 @@
 # ⚠️ BUMP `version` ON EVERY PUSH. The Supervisor resolves image:<version>, never
 # :latest, so an unchanged version is an update Home Assistant cannot see.
 name: "VESTA Agent"
-version: "0.12.45"
+version: "0.12.46"
 slug: vesta_agent
 description: "Runs the VESTA Agent, the villa's AI assistant"
 url: "https://github.com/jim1982ha/villa-kiosk"
@@ -63,14 +63,11 @@ backup_exclude:
 # values from every log line (H8). `telegram_bot_token` is never exported to the
 # agent slot until `telegram_takeover` is true (H5).
 options:
-  agent_mode: stub
   ha_url: "http://homeassistant:8123"
   kiosk_url: "http://e66a2348-villa-kiosk:8099"
   telegram_takeover: false
-  stub_heartbeat: false
   log_level: info
 schema:
-  agent_mode: list(stub|agent)
   anthropic_api_key: password?
   ha_url: url
   ha_token: password?
@@ -78,5 +75,4 @@ schema:
   kiosk_agent_token: password?
   telegram_takeover: bool
   telegram_bot_token: password?
-  stub_heartbeat: bool
   log_level: list(debug|info|warning|error)

@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.6.42 (6 October 2026)
+
+- tool_access.py: one answer to "what may the AI use".
+  - **Rules:**
+    - ha_read_tools, only HA MCP readOnlyHint (and not destructive). Before, only destructiveHint was refused.
+    - agent_tools: create_ticket, start_job, agent_status; web search stays in settings.web_search.
+    - tool_access.fm, by group; the facility manager's chat is capped at the facility manager's tools.
+  - **Toolbox(allowed=...)** builds nothing else: allowed_for_person in converse, allowed_for_job in run_model_job (the skill's `tools` ∩ switched on + always-on; no `tools` → everything but web search, as before).
+  - **blockers():** a needed tool the villa switched off. read_skill and run_skill_script refuse in words; an AI job does not run and tells its chat (state `job_blocked`).
+  - **The page's list:** the agent saves HA MCP's list (ha_tools.json, first_seen → "New"), plus catalog() and needs().
+- **Skills:**
+  - skill.yaml `tools:`; `commands` may be {name: words}.
+  - villa.skill.yaml off_commands, lenient, enforced by validate_script_args and listed by read_skill.
+  - policy.yaml skills_off: Skills(off=...), all(include_off).
+  - release_state / keep_mine (.kept.json) / take_release.
+  - Starter skill.yaml files declare their tools and command words.
+- **runner:**
+  - Collector records each ToolUseBlock as {tool, input} (step(): short, secrets scrubbed, ≤ 40) in the run's record.
+  - status.costs gives each run's steps and the period's tool counts; tool_usage(7 d) feeds the switches.
+- requests_box.py: the page's requests ("try", "refresh_tools") as files the agent answers (the UI holds no token). Vesta.try_command validates as the AI's call and never carries out.
+- history.py (page_history.sqlite):
+  - Every UI save: policy (form or file), skill file, create/delete, on/off, commands, take-release, import. Starter updates are "Release".
+  - policy_change() says it in the page's words.
+  - Undo only while the target still holds the change's result.
+  - Pruned with records_days.
+- ui/server.py: /api/tools, /api/tools/refresh, /api/skills/{name} (detail), /on, /commands, /compare, /keep, /take-release, /try, /api/history (+ /undo), /api/setup/export, /api/setup/import.
+- ui/setup_copy.py: export (skills, optionally villa.*, settings for the AI and keep, allowed_services, the tool sections, instructions.md). Never people, chats, entity lists, the siren, system_actions, notify_recipients, keys or records. Import is read() (paths checked), then preview() (added/replaced/changed/same, plus misfits: policy problems, listed services with empty lists, absent tools, blocked skills, unset jobs, fingerprint), then apply().
+- Page (app.js/app.css): the What the AI can use card (three tabs), Tools it gets, the fuller Skills tab (switch, state, needs, acts, commands, Try a command, Compare with the release, 2C fix), Costs Tools used and tool table, Overview history/export/import. Checked by screenshots at 1280 and 390 px, light and dark.
+- **Leaner:**
+  - Removed with no caller: is_known_chat, read_tool_allowed, match_any, reply_keyboard, asset_number, feature_series, audit_rows, water_rules, days_back, timeutil.tz, release.init_version.
+  - One reading each:
+    - timeutil.local_day (features._day, facts._ms_day);
+    - stats.slope_per_hour (facts' battery slope);
+    - KnowledgePack.rows/read for the engine's names, related devices and the page's pickers;
+    - Settings.policy() as the one policy cache (app.py's own gone).
+  - FixtureClient → tests/fixture_client.py and replay.py → tests/ (no longer installed).
+  - favicon.py → the reports template's <head>; telegram sends files as written.
+  - Store rewrites pre-0.6.16 tasks once (source, check_text) and problems.py's second reading went. State.rename_job_runs rewrites "job:skill:when" runs once at start and status' job_names went. Pre-0.12.10 alert-message settle went.
+- Tests:
+  - New: test_tool_access.py and test_page_controls.py.
+  - Old shapes updated: test fakes list tools with readOnlyHint; packs in their real shape.
+  - 19 mutants red.
+- Starter skills recorded.
+
 ## 0.6.41 (6 October 2026)
 
 - API failures (api_errors.py): runner.Collector reads the SDK's three ways to fail (AssistantMessage.error with the raw "API Error" as its text — never the answer now; ResultMessage is_error/api_error_status; exceptions incl. ResultError). classify() → credit / key / rate_limit / busy / offline / too_long / unknown; FOR_PERSON words in the chat; NEEDS_THE_OWNER (credit, key) told in the owner chat at most every 12 h (State.owner_told); NO_RETRY: a failed resume is not retried for those. run_model_job: a failed job tells its chat (for_job) instead of logging "done". tests/test_api_errors.py, 4 mutants red.

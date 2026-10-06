@@ -115,10 +115,30 @@ class Policy(unittest.TestCase):
 class Programs(unittest.TestCase):
     """The real entrypoint, slot and sidecar programs on a temporary root."""
 
+    @classmethod
+    def setUpClass(cls):
+        # Home Assistant, Anthropic and the sidecar's address, faked: the slot starts the agent only once
+        # Home Assistant and Anthropic pass (no test mode since 0.12.46).
+        from http.server import ThreadingHTTPServer
+        from vesta_host import contract
+        sys.path.insert(0, str(HERE))
+        from fake_remote import Fake
+        cls.server = ThreadingHTTPServer(("127.0.0.1", 0), Fake)
+        cls.url = f"http://127.0.0.1:{cls.server.server_address[1]}"
+        cls.sidecar = ThreadingHTTPServer((contract.SIDECAR_HOST, contract.SIDECAR_PORT), Fake)
+        for srv in (cls.server, cls.sidecar):
+            threading.Thread(target=srv.serve_forever, daemon=True).start()
+
+    @classmethod
+    def tearDownClass(cls):
+        for srv in (cls.server, cls.sidecar):
+            srv.shutdown()
+            srv.server_close()
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
-        for d in ("data", "config", "opt/vesta/stub", "opt/vesta/ha-mcp/bin"):
+        for d in ("data", "config", "opt/vesta/agent", "opt/vesta/ha-mcp/bin"):
             (self.root / d).mkdir(parents=True)
         self.env = {k: v for k, v in os.environ.items() if not k.startswith("VESTA_")}
         self.env["VESTA_ROOT"] = str(self.root)
@@ -128,9 +148,8 @@ class Programs(unittest.TestCase):
 
     def prepare(self, **opts):
         (self.root / "data/options.json").write_text(json.dumps({
-            "agent_mode": "stub", "ha_url": "http://127.0.0.1:9",
-            "kiosk_url": "http://127.0.0.1:9", "telegram_takeover": False,
-            "stub_heartbeat": False, "log_level": "info", **opts}))
+            "ha_url": "http://127.0.0.1:9", "kiosk_url": "http://127.0.0.1:9", "telegram_takeover": False,
+            "log_level": "info", **opts}))
         r = subprocess.run([sys.executable, str(ROOTFS / "usr/bin/vesta-entrypoint")],
                            env=self.env, capture_output=True, text=True, timeout=30)
         self.assertEqual(r.returncode, 0, r.stdout)
@@ -140,9 +159,10 @@ class Programs(unittest.TestCase):
         """Run a real program with supervise's numbers scaled down."""
         sets = "".join(f"supervise.{k} = {v!r}; " for k, v in patch.items())
         slot = str(ROOTFS / "usr/bin" / program)
+        anthropic = self.url + "/v1/models?limit=1"           # never the internet with a fake key
         return [sys.executable, "-c",
                 f"import runpy, sys; sys.path.insert(0, {str(HOSTLIB)!r}); "
-                f"from vesta_host import supervise; {sets}"
+                f"from vesta_host import selftest, supervise; selftest.ANTHROPIC_MODELS = {anthropic!r}; {sets}"
                 f"sys.argv = [{slot!r}]; runpy.run_path({slot!r}, run_name='__main__')"]
 
     def run_for(self, cmd, seconds):
@@ -200,32 +220,32 @@ class Programs(unittest.TestCase):
         self.assertIn("HA MCP sidecar not started: ha_token not set", out)
 
     # ── agent slot supervision ────────────────────────────────────────────
-    def stub(self, start, grace=5):
-        (self.root / "opt/vesta/stub/vesta-agent.yaml").write_text(yaml.safe_dump(
-            {"name": "test-stub", "version": "0", "runtime": "python",
+    def agent(self, start, grace=5):
+        """A stand-in agent, and the options that let the slot start it (Home Assistant and Anthropic pass)."""
+        from fake_remote import HA_TOKEN, KEY
+        self.prepare(ha_url=self.url, ha_token=HA_TOKEN, anthropic_api_key=KEY)
+        (self.root / "opt/vesta/agent/vesta-agent.yaml").write_text(yaml.safe_dump(
+            {"name": "test-agent", "version": "0", "runtime": "python",
              "start": start, "stop_grace_seconds": grace}))
 
     def test_slot_crash_loop(self):
-        self.prepare()
-        self.stub("echo boom; exit 3")
+        self.agent("echo boom; exit 3")
         alive, code, out = self.run_for(self.boot("vesta-agent-slot", BACKOFF_START=0.1,
                                                   BACKOFF_MAX=0.2), 4.0)
         self.assertTrue(alive, "the slot exited — s6 would restart it outside the policy")
-        self.assertEqual(out.count("starting test-stub 0"), 5, out)
+        self.assertEqual(out.count("starting test-agent 0"), 5, out)
         self.assertIn("crash 1 of 5 allowed in 10 min", out)
         self.assertIn("crashed 5 times within 10 min — not restarting it", out)
         self.assertEqual(json.loads((self.root / "data/host/crashes.json").read_text())["crashes_in_window"], 5)
 
     def test_slot_honours_the_manifest_grace(self):
-        self.prepare()
-        self.stub("trap 'sleep 1.5; echo saved; exit 0' TERM; while :; do sleep 0.1; done", grace=5)
+        self.agent("trap 'sleep 1.5; echo saved; exit 0' TERM; while :; do sleep 0.1; done", grace=5)
         alive, code, out = self.run_for(self.boot("vesta-agent-slot"), 2.0)
         self.assertIn("[agent] saved", out)
         self.assertIn("agent stopped cleanly", out)
 
     def test_slot_caps_an_oversized_grace(self):
-        self.prepare()
-        self.stub("while :; do sleep 0.1; done", grace=120)
+        self.agent("while :; do sleep 0.1; done", grace=120)
         _, _, out = self.run_for(self.boot("vesta-agent-slot"), 1.5)
         self.assertIn("stop_grace_seconds 120 capped to 22", out)
 

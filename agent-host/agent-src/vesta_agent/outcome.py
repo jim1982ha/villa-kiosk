@@ -284,14 +284,7 @@ class Outcome:
         log.info("Button %s on incident #%s pressed by %s", label, iid, person.name)
         # the buttons go, and the message says who did what, when: nobody presses twice,
         # and the chat itself shows the incident was handled
-        msg = q.get("message") or {}
-        note = f"{label} — {person.name}, {{time}}"
-        known = bool(msg.get("message_id")) and self.state.is_alert_message(iid, chat, msg["message_id"])
-        await self.settle(int(iid), note)
-        if self.edit and msg.get("message_id") and not known:
-            # a message sent before its copies were remembered (an older version): it settles alone
-            base = (msg.get("text") or msg.get("caption") or "").rstrip()
-            await self.edit(chat, msg["message_id"], f"{base}\n\n{note.replace('{time}', datetime.now(ZoneInfo(self.tz)).strftime('%H:%M'))}"[:4096])
+        await self.settle(int(iid), f"{label} — {person.name}, {{time}}")
         if self.run_job:
             await self.run_job(skill, skill.on_reply, 120, {"incident": iid, "text": label, "role": person.role},
                                Origin(chat))

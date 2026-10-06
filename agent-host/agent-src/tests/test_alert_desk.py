@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from helpers import STARTER_SKILLS
+from helpers import PYTHONPATH, STARTER_SKILLS
 from vesta_shared.store import Store
 
 spec = importlib.util.spec_from_file_location("desk", os.path.join(STARTER_SKILLS, "alert-desk", "scripts", "desk.py"))
@@ -117,7 +117,7 @@ def test_the_cli_reads_an_event_file(tmp_path):
     import sys
     p = tmp_path / "ev.json"
     p.write_text(json.dumps(event()))
-    env = {**os.environ, "PYTHONPATH": os.path.dirname(os.path.dirname(os.path.abspath(__file__)))}
+    env = {**os.environ, "PYTHONPATH": PYTHONPATH}
     r = subprocess.run([sys.executable, os.path.join(STARTER_SKILLS, "alert-desk", "scripts", "desk.py"), "intake",
                         "--event", str(p), "--store", str(tmp_path / "s.sqlite"), "--villa-mode", "occupied"],
                        capture_output=True, text=True, env=env, timeout=60)

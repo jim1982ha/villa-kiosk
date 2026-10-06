@@ -134,7 +134,7 @@ def agent(tmp_path):
         yaml.safe_dump({"people": [{"telegram_id": FM, "name": "FM", "role": "fm"}],
                         "chats": {"owner": OWNER_CHAT, "fm": FM}}, f)
     v = Vesta(s, telegram=Tg(), reader=Reader(), kiosk=Kiosk("", ""))
-    v.server_tools = [{"name": "ha_get_state"}]
+    v.server_tools = [{"name": "ha_get_state", "annotations": {"readOnlyHint": True}}]   # as HA MCP lists it
     return v
 
 
@@ -159,6 +159,7 @@ def test_a_report_that_cannot_run_says_so_instead_of_logging_done(agent, monkeyp
     with open(agent.s.policy_path) as f:
         pol = yaml.safe_load(f)
     pol["settings"] = {"jobs": {"fm-daily": {"profile": "economy", "limit_usd": 1}}}
+    pol["ha_read_tools"] = ["ha_get_state"]
     with open(agent.s.policy_path, "w") as f:
         yaml.safe_dump(pol, f)
 

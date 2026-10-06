@@ -124,12 +124,12 @@ class Manifests(unittest.TestCase):
 class HostStates(unittest.TestCase):
     def test_round_trip(self):
         p = Path(tempfile.mkdtemp()) / "host.json"
-        h = HostState(agent_mode="agent", stub_heartbeat=True, sidecar_reason="off", host_version="0.8.0")
+        h = HostState(sidecar_reason="off", host_version="0.8.0")
         h.write(p)
         self.assertEqual(HostState.read(p), h)
 
     def test_missing_keys_are_defaulted_and_junk_ignored(self):
-        h = HostState.of({"agent_mode": None, "sidecar_reason": 3, "extra": 1})
+        h = HostState.of({"agent_mode": "stub", "sidecar_reason": 3, "extra": 1})      # 0.12.45's file: ignored
         self.assertEqual(h, HostState())
 
     def test_a_missing_file_raises(self):

@@ -1,6 +1,6 @@
 """The self-test: one check per link, each `pass`, `fail` or `skipped` (SPEC 11).
 
-It reads only the environment contract (plus two host-side flags), so it tests
+It reads only the environment contract (plus the host-side state), so it tests
 exactly what the agent will be given — not the options it was derived from.
 
 ⚠️ SKIPPED IS NOT FAIL, AND NEITHER IS PASS. A missing credential or a remote
@@ -76,13 +76,11 @@ def unreachable(exc: BaseException) -> str:
 
 
 class Checks:
-    def __init__(self, env: dict[str, str], stub_heartbeat: bool = False,
-                 agent_mode: str = "stub",
-                 client_version: str = "dev", sidecar_reason: str | None = None) -> None:
+    def __init__(self, env: dict[str, str], client_version: str = "dev",
+                 sidecar_reason: str | None = None, anthropic_url: str | None = None) -> None:
         self.env = env
         self.sidecar_reason = sidecar_reason   # None = the sidecar is meant to run
-        self.stub_heartbeat = stub_heartbeat
-        self.agent_mode = agent_mode
+        self.anthropic_url = anthropic_url     # the container test's fake Anthropic only (HostState)
         self.client_version = client_version
 
     def cf(self) -> dict[str, str]:
@@ -154,7 +152,7 @@ class Checks:
         if not key:
             return Result(link, SKIPPED, "anthropic_api_key not set")
         try:
-            r = http("GET", ANTHROPIC_MODELS,
+            r = http("GET", self.anthropic_url or ANTHROPIC_MODELS,
                      {"x-api-key": key, "anthropic-version": "2023-06-01"})
         except OSError as e:
             return Result(link, FAIL, unreachable(e))
@@ -182,32 +180,8 @@ class Checks:
             return Result(link, PASS, f"getMe ok (@{user})")
         return Result(link, FAIL, f"getMe HTTP {r.status}")
 
-    # ── Presence ──────────────────────────────────────────────────────────
-    def presence(self) -> Result:
-        link = "Presence"
-        if self.agent_mode != "stub":
-            return Result(link, SKIPPED, "agent mode: the VESTA Agent sends its own heartbeats")
-        if not self.stub_heartbeat:
-            return Result(link, SKIPPED, "stub_heartbeat is off")
-        token = self.env.get("VESTA_KIOSK_TOKEN")
-        if not token:
-            return Result(link, SKIPPED, "kiosk_agent_token not set")
-        url = self.env["VESTA_KIOSK_URL"].rstrip("/") + "/agent/v1/heartbeat"
-        try:
-            r = http("POST", url, {"Authorization": f"Bearer {token}", **self.cf()},
-                     {"status": "self-test"})
-        except OSError as e:
-            return Result(link, FAIL, unreachable(e))
-        missing = interface_missing(r)
-        if missing:
-            return Result(link, SKIPPED, missing)
-        if r.status == 200:
-            return Result(link, PASS, "heartbeat accepted")
-        return Result(link, FAIL, f"HTTP {r.status}")
-
     def all(self) -> list[Callable[[], Result]]:
-        return [self.home_assistant, self.ha_mcp, self.kiosk, self.anthropic,
-                self.telegram, self.presence]
+        return [self.home_assistant, self.ha_mcp, self.kiosk, self.anthropic, self.telegram]
 
 
 def interface_missing(r: HttpResult) -> str | None:
@@ -288,11 +262,10 @@ def run(checks: Checks, only: tuple[str, ...] | None = None) -> list[Result]:
     return results
 
 
-def report(results: list[Result], host_version: str, mode: str) -> dict:
+def report(results: list[Result], host_version: str) -> dict:
     return {
         "at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "host_version": host_version,
-        "agent_mode": mode,
         "results": [asdict(r) for r in results],
         "summary": {k: sum(r.result == k for r in results) for k in (PASS, FAIL, SKIPPED)},
     }
@@ -305,9 +278,7 @@ def execute(env: dict[str, str], host: "HostState | dict", only: tuple[str, ...]
     from .log import log
 
     h = HostState.of(host)
-    checks = Checks(env, stub_heartbeat=h.stub_heartbeat, agent_mode=h.agent_mode,
-                    client_version=h.host_version,
-                    sidecar_reason=h.sidecar_reason)
+    checks = Checks(env, client_version=h.host_version, sidecar_reason=h.sidecar_reason, anthropic_url=h.anthropic_url)
     results = run(checks, only)
     for r in results:
         log("warning" if r.result == FAIL else "info",
@@ -315,5 +286,5 @@ def execute(env: dict[str, str], host: "HostState | dict", only: tuple[str, ...]
     if write:
         paths.SELFTEST.parent.mkdir(parents=True, exist_ok=True)
         paths.SELFTEST.write_text(json.dumps(
-            report(results, h.host_version, h.agent_mode), indent=2))
+            report(results, h.host_version), indent=2))
     return results

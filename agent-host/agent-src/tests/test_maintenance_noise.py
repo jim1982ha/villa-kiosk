@@ -13,7 +13,7 @@ import subprocess
 import sys
 from datetime import date, datetime, timedelta, timezone
 
-from helpers import ROOT, STARTER_SKILLS
+from helpers import PYTHONPATH, ROOT, STARTER_SKILLS
 
 NIGHTLY = os.path.join(STARTER_SKILLS, "preventive-maintenance", "scripts", "nightly.py")
 COMPOSE = os.path.join(STARTER_SKILLS, "reports", "scripts", "compose.py")
@@ -22,7 +22,7 @@ NOW = datetime(2026, 10, 4, tzinfo=timezone.utc)
 
 
 def _run(*args):
-    return subprocess.run([sys.executable, *args], capture_output=True, text=True, env={**os.environ, "PYTHONPATH": ROOT})
+    return subprocess.run([sys.executable, *args], capture_output=True, text=True, env={**os.environ, "PYTHONPATH": PYTHONPATH})
 
 
 def _pack(tmp, families, assets=None):

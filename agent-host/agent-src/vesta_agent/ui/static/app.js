@@ -269,9 +269,12 @@ const brain = (p, m) => [p ? (PROFILES[p] || p).replace(/ \(.*/, "") : null, m ?
 function runWhat(r) {
   const label = r.kind === "job" ? r.work : `Reply to ${r.person || "someone"}`;
   const details = [r.kind === "chat" && r.chat ? r.chat : null, r.asked ? `“${r.asked}”` : null].filter(Boolean);
-  if (!details.length) return h("b", {}, label);
+  const steps = r.steps || [];
+  if (!details.length && !steps.length) return h("b", {}, label);
+  // what was asked, then each tool the AI called, in order (4A): a tap shows them under the run
   const box = h("div", { class: "what-tip", title: details.join("\n"), tabindex: "0", role: "button", "aria-expanded": "false" },
-    h("b", {}, label), h("div", { class: "muted what-detail" }, details.map((d) => h("div", {}, d))));
+    h("b", {}, label), h("div", { class: "muted what-detail" }, details.map((d) => h("div", {}, d)),
+      steps.length ? h("ol", { class: "steps" }, steps.map((x) => h("li", {}, h("code", {}, x.tool), x.input ? ` ${x.input}` : ""))) : null));
   const toggle = () => box.setAttribute("aria-expanded", String(box.getAttribute("aria-expanded") !== "true"));
   box.addEventListener("click", toggle);
   box.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
@@ -313,6 +316,7 @@ async function costs(days = 30) {
     new Date(r.at).toLocaleString([], { dateStyle: "short", timeStyle: "short" }),
     runWhat(r),
     brain(r.profile, r.model),
+    usedTools(r.steps),
     { v: r.tokens_in === null || r.tokens_in === undefined ? "—" : `${ktok((r.tokens_in || 0) + (r.cache_read || 0) + (r.cache_write || 0))} / ${ktok(r.tokens_out)}`, cls: "num" },
     { v: usd(r.cost), cls: "num" },
     r.stopped ? h("span", { class: "chip off" }, "stopped at its limit") : r.error ? h("span", { class: "chip off" }, r.error) : ""]);
@@ -323,9 +327,20 @@ async function costs(days = 30) {
       h("div", { class: "divided" }, kpis), h("div", { class: "divided" }, h("h2", {}, "Per day"), chart)),
     card("By work", "Chat replies, and each AI job.", groupTable(c.by_work, "Work")),
     card("By model", "Which model did the work.", groupTable(c.by_model, "Model")),
-    card("Every run", `${c.runs_count} runs, newest first. The model and tokens are recorded from agent 0.6.9 on; older runs show —.`,
-      paged([{ v: "When", half: true }, { v: "What", half: true }, "Brain · model",
-             { v: "Tokens in / out", cls: "num", half: true }, { v: "Cost", cls: "num", half: true }, ""], runRows)));
+    card("Every run", `${c.runs_count} runs, newest first. Press a run to see what was asked and which tools it used (recorded from agent 0.6.42 on).`,
+      paged([{ v: "When", half: true }, { v: "What", half: true }, "Brain · model", "Tools used",
+             { v: "Tokens in / out", cls: "num", half: true }, { v: "Cost", cls: "num", half: true }, ""], runRows)),
+    card(`Tools in the last ${days} days`, "Each tool the AI called, in how many runs and how many times. A tool never used is a candidate to switch off (Rules › What the AI can use).",
+      c.tools && c.tools.length ? paged(["Tool", { v: "Runs", cls: "num" }, { v: "Calls", cls: "num" }],
+        c.tools.map((t) => [h("code", {}, t.tool), { v: t.runs, cls: "num" }, { v: t.calls, cls: "num" }]))
+        : h("p", { class: "muted" }, "No tool recorded in this period yet.")));
+}
+
+function usedTools(steps) {
+  const n = {};
+  for (const x of steps || []) n[x.tool] = (n[x.tool] || 0) + 1;
+  const keys = Object.keys(n);
+  return keys.length ? h("div", { class: "chips" }, keys.map((k) => h("span", { class: "chip" }, n[k] > 1 ? `${k} ×${n[k]}` : k))) : "—";
 }
 
 // ---------------------------------------------------------------- theme (Light / Auto / Dark)
@@ -367,14 +382,14 @@ async function overview() {
   const ver = document.getElementById("ver");
   ver.textContent = `v${o.app_version || o.version}${o.instance && o.instance !== "prod" ? ` · ${o.instance}` : ""}`;
   ver.title = `${o.app_version ? `app ${o.app_version} · ` : ""}agent ${o.version} · ${o.instance}`;
-  const off = o.skills.filter((s) => !s.ok);
+  const off = o.skills.filter((s) => !s.ok && !s.off);
   const r = o.last_24h;
   const count = (k) => (r && r.counts[k]) || 0;
   const kids = [
     jobsBanner(o.jobs_not_set, () => go("overview")),
     // the Rules and Skills tabs are one click away: only what is wrong with them is shown here
     o.policy_problems.length ? problemsBox(o.policy_problems, "Rules — to fix:") : null,
-    off.length ? problemsBox(off.map((s) => `${s.name}: ${s.problem}`), "Skills not working:") : null,
+    off.length ? problemsBox(off.map((s) => `${s.name}: ${s.problem}`), `${plural(off.length, "skill", "skills")} not working:`) : null,
   ];
   if (r) {
     kids.push(card("The last 24 hours", "From the agent's own records.",
@@ -384,9 +399,92 @@ async function overview() {
       r.scheduled_jobs.length ? h("div", { class: "divided" }, h("h2", {}, "Scheduled jobs run"),
         paged(["Job", "Ran at"], [...r.scheduled_jobs].reverse().map((j) => [j.job, new Date(j.ran_at).toLocaleString()]))) : null));
   } else {
-    kids.push(card("The last 24 hours", "The agent has not recorded anything yet (it has not run in agent mode)."));
+    kids.push(card("The last 24 hours", "The agent has not recorded anything yet."));
   }
+  kids.push(await historyCard(), exportCard(), importCard());
   fill($view, ...kids);
+}
+
+// ---------------------------------------------------------------- overview › changes made on these pages (4C)
+async function historyCard() {
+  const { changes } = await api("GET", "api/history");
+  const undo = (c) => async () => {
+    if (!(await ask({ title: "Undo this change?", text: c.what, ok: "Undo" }))) return;
+    try { await api("POST", `api/history/${c.id}/undo`); toast("Undone."); go("overview"); }
+    catch (e) { tell("Not undone", e.problems); }
+  };
+  const PLACE = { Rules: "", Skills: "warn", Release: "gray", Import: "", Undo: "gray" };
+  return card("Changes made on these pages", "Every save on the Rules and Skills tabs, newest first, kept as long as the agent's other records. Undo writes the previous version back through the same checks as a save, and is itself recorded here.",
+    changes.length ? paged(["When", "Where", "What changed", ""], changes.map((c) => [
+      new Date(c.at).toLocaleString([], { dateStyle: "short", timeStyle: "short" }),
+      h("span", { class: "chip " + (PLACE[c.place] || "") }, c.place),
+      c.what,
+      c.undone_by ? h("span", { class: "muted" }, "undone") : c.place === "Release" || c.target.kind === "release" || c.target.kind === "instructions" ? ""
+        : h("button", { class: "btn ghost", onclick: undo(c) }, "Undo")])) : h("p", { class: "muted" }, "No change made here yet."));
+}
+
+// ---------------------------------------------------------------- overview › copy this setup to another villa (3A, 3B)
+function exportCard() {
+  const parts = { skills: true, villa_files: true, ai: true, actions: true, tools: true, keep: true, instructions: false };
+  const tick = (k, label, sub) => h("label", { class: "tick" }, h("input", { type: "checkbox", checked: parts[k], onchange: (e) => { parts[k] = e.target.checked; } }),
+    h("span", {}, label, sub ? h("span", { class: "muted small block" }, sub) : null));
+  const stay = (label, sub) => h("div", { class: "tick" }, h("span", { class: "lock" }, "✕"), h("span", {}, label, sub ? h("span", { class: "muted small block" }, sub) : null));
+  const btn = h("button", { class: "btn primary", onclick: async () => {
+    btn.disabled = true;
+    try {
+      const r = await fetch("api/setup/export", { method: "POST", headers: { "Content-Type": "application/json", "X-Vesta-UI": "1" }, body: JSON.stringify(parts) });
+      if (!r.ok) throw Object.assign(new Error("refused"), { problems: ((await r.json().catch(() => ({}))).problems) || [`Error ${r.status}`] });
+      const name = (r.headers.get("Content-Disposition") || "").match(/filename="([^"]+)"/)?.[1] || "vesta-agent-setup.zip";
+      const a = h("a", { href: URL.createObjectURL(await r.blob()), download: name });
+      document.body.append(a); a.click(); a.remove();
+    } catch (e) { tell("Not downloaded", e.problems || [String(e)]); }
+    btn.disabled = false;
+  } }, "Download the setup");
+  return card("Copy this setup to another villa", "One file with the skills and the shareable part of the rules. On the other villa: Overview › Import a setup.",
+    h("div", { class: "grid two" },
+      h("div", { class: "box" }, h("div", { class: "eyebrow" }, "Goes in the file"),
+        tick("skills", "The skills, every file"), tick("villa_files", "…with this villa's own files (villa.*)", "untick to leave them out"),
+        tick("ai", "The AI: brains, spending limits, new conversation, web search"),
+        tick("actions", "What the agent may do: each service and who decides"),
+        tick("tools", "What the AI can use: tool switches, per role, skills switched off"),
+        tick("keep", "How long records are kept"), tick("instructions", "instructions.md", "your standing rules for the agent")),
+      h("div", { class: "box" }, h("div", { class: "eyebrow" }, "Always stays here"),
+        stay("People and their Telegram ids"), stay("Chat ids (owner, facility manager)"),
+        stay("Devices: protected, excluded, allowed lists, the siren", "entity ids are this villa's"),
+        stay("Keys and tokens", "never in any file the page makes"), stay("Records, transcripts, costs"))),
+    h("div", { class: "actions" }, btn));
+}
+
+function importCard() {
+  const out = h("div");
+  const input = h("input", { type: "file", accept: ".zip,application/zip", onchange: () => input.files[0] && look(input.files[0]) });
+  let zip = null;
+  async function look(file) {
+    fill(out, h("p", { class: "muted" }, "Reading…"));
+    const buf = new Uint8Array(await file.arrayBuffer());
+    let bin = ""; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+    zip = btoa(bin);
+    try { show(file.name, await api("POST", "api/setup/import", { zip })); }
+    catch (e) { fill(out, problemsBox(e.problems, "Not a setup this agent can read:")); }
+  }
+  function show(name, p) {
+    const CH = { added: "", replaced: "", changed: "", same: "gray" };
+    fill(out,
+      h("p", { class: "muted" }, `${name}${p.made_with ? ` — made with agent ${p.made_with}` : ""}. Nothing is written until you press Apply.`),
+      h("table", { class: "rows data" }, h("thead", {}, h("tr", {}, ["What", "Change", "Detail"].map((x) => h("th", {}, x)))),
+        h("tbody", {}, p.rows.map((r) => h("tr", {}, h("td", {}, r.what), h("td", {}, h("span", { class: "chip " + (CH[r.change] || "") }, r.change[0].toUpperCase() + r.change.slice(1))),
+          h("td", { class: "muted" }, r.detail))))),
+      p.misfits.length ? h("div", { class: "banner warnbox" }, h("div", {}, h("b", {}, `${plural(p.misfits.length, "thing does", "things do")} not fit this villa`),
+        h("ul", {}, p.misfits.map((m) => h("li", { class: "muted" }, m))))) : null,
+      h("div", { class: "actions" },
+        h("button", { class: "btn ghost", onclick: () => { fill(out); input.value = ""; } }, "Cancel"),
+        h("button", { class: "btn primary", disabled: !p.changes, onclick: async () => {
+          try { await api("POST", "api/setup/import", { zip, apply: true, fingerprint: p.fingerprint }); toast("Imported. Every change is in Changes made on these pages."); go("overview"); }
+          catch (e) { tell("Not imported", e.problems); }
+        } }, p.changes ? `Apply ${plural(p.changes, "change", "changes")}` : "Nothing to change")));
+  }
+  return card("Import a setup", "A file made by \"Download the setup\" on another villa. You see every change, and what does not fit this villa, before anything is written.",
+    h("label", { class: "field" }, h("span", {}, "Setup file"), input), out);
 }
 
 // ---------------------------------------------------------------- rules (policy.yaml)
@@ -410,7 +508,8 @@ async function rules(sub = "forms") {
   dirty = false;
   // the forms are "Rules", the raw file is "Rules (file)": two tabs at the top, no sub-menu (owner, 2026-10-01)
   if (sub === "file" || !doc.form) return rulesFile(doc);
-  return rulesForms(doc, jobs);
+  const tools = await api("GET", "api/tools");
+  return rulesForms(doc, jobs, tools);
 }
 
 function rulesFile(doc) {
@@ -428,7 +527,7 @@ function rulesFile(doc) {
     card("policy.yaml", "Comments start with #. Every save is checked with the agent's own rules first.", ta));
 }
 
-function rulesForms(doc, jobs = []) {
+function rulesForms(doc, jobs = [], tools = null) {
   const f = structuredClone(doc.form);
   const probs = h("div");
   const on = (fn) => (e) => { fn(e.target); markDirty(); };
@@ -464,27 +563,36 @@ function rulesForms(doc, jobs = []) {
       h("td", {}, h("b", {}, "Chat answers"), h("div", { class: "muted" }, "replies in the chats; a reply at its limit offers Continue")),
       h("td", {}, sel(PROFILES, f.settings.profile, (v) => (f.settings.profile = v), "Brain")),
       h("td", {}, limitInput(f.settings.reply_limit_usd, (v) => (f.settings.reply_limit_usd = v), "Limit per reply (USD)", "for each reply")),
+      h("td", { class: "tools-got" }, h("span", { class: "muted" }, "Everything switched on, by role")),
       h("td", { class: "x" })),
     ...jobs.map((j) => {
       const cur = f.settings.jobs[j.name];
       const what = h("td", {}, h("b", {}, j.name),
         h("div", { class: "muted" }, `${j.skill} · ${j.when_words}${j.on_request ? ", or when asked in a chat" : ""}`));
+      // 1D: a report gets only the tools its skill lists (skill.yaml `tools`), among those switched on
+      const got = h("td", { class: "tools-got" }, j.tools === null || j.tools === undefined
+        ? h("span", { class: "muted" }, "Everything switched on (its skill lists none)")
+        : [h("div", { class: "chips", title: j.tools.join("\n") }, j.tools.length
+            ? [...j.tools.slice(0, 4).map((t) => h("span", { class: "chip" }, t)), j.tools.length > 4 ? h("span", { class: "chip gray" }, `+${j.tools.length - 4} more`) : null]
+            : h("span", { class: "muted" }, "none")),
+           h("div", { class: "muted small" }, `from ${j.skill}/skill.yaml · tools`)]);
       if (!cur) {
-        return h("tr", {}, what, h("td", { colspan: 2, class: "muted" }, "Not set: this job does not run."),
+        return h("tr", {}, what, h("td", { colspan: 2, class: "muted" }, "Not set: this job does not run."), got,
           h("td", { class: "x" }, h("button", { class: "btn icon ghost", title: "Set this job", onclick: () => { f.settings.jobs[j.name] = { ...j.default }; drawAi(); drawTotal(); markDirty(); } }, "+")));
       }
       return h("tr", {}, what,
         h("td", {}, sel(PROFILES, cur.profile, (v) => (cur.profile = v), "Brain")),
-        h("td", {}, limitInput(cur.limit_usd, (v) => (cur.limit_usd = v), `Limit per run of ${j.name} (USD)`, "for each run")),
+        h("td", {}, limitInput(cur.limit_usd, (v) => (cur.limit_usd = v), `Limit per run of ${j.name} (USD)`, "for each run")), got,
         h("td", { class: "x" }, h("button", { class: "btn icon ghost", title: "Stop this job", onclick: () => { delete f.settings.jobs[j.name]; drawAi(); drawTotal(); markDirty(); } }, "×")));
     }));
   drawAi(); drawTotal();
-  const ai = card("The AI", "Which brain does each piece of work, and the most ONE piece of work may cost: one chat reply, or one run of a job. It is not a monthly budget. A reply that reaches its limit stops and offers Continue; a report that reaches it is still sent with what is done. A job that is not set does not run.",
-    h("table", { class: "rows ai" }, h("thead", {}, h("tr", {}, ["Work", "Brain", "Most it may cost (US$)", ""].map((x) => h("th", {}, x)))), aiBody),
+  const ai = card("The AI", "Which brain does each piece of work, the most ONE piece of work may cost (one chat reply, or one run of a job — not a monthly budget), and which tools a report gets: only those its skill lists. A reply that reaches its limit stops and offers Continue; a report that reaches it is still sent with what is done. A job that is not set does not run.",
+    h("table", { class: "rows ai" }, h("thead", {}, h("tr", {}, ["Work", "Brain", "Most it may cost (US$)", "Tools it gets", ""].map((x) => h("th", {}, x)))), aiBody),
     total,
+    h("p", { class: "muted" }, "To change what a report may use, edit its skill's tools list on the Skills tab: the choice then travels with the skill."),
+    // web search is switched in "What the AI can use" (one place for every tool, 0.6.42)
     h("div", { class: "inline spaced" },
-      field("New conversation", sel(RESETS, f.settings.conversation_reset, (v) => (f.settings.conversation_reset = v), "New conversation")),
-      h("label", { class: "switch" }, h("input", { type: "checkbox", checked: f.settings.web_search, onchange: on((t) => (f.settings.web_search = t.checked)) }), "Web search (weather warnings, manuals)")));
+      field("New conversation", sel(RESETS, f.settings.conversation_reset, (v) => (f.settings.conversation_reset = v), "New conversation"))));
   const missing = jobs.filter((j) => !(f.settings.jobs || {})[j.name]).map((j) => j.name);
 
   // people
@@ -604,11 +712,102 @@ function rulesForms(doc, jobs = []) {
     }
   };
   setBar({ save, discard: () => rules("forms"), idle: "Changes apply within seconds, no restart." });
+  const canUse = tools ? toolsCard(f, tools, () => rules("forms")) : null;
   fill($view, doc.problems.length ? problemsBox(doc.problems, "To fix in this file:") : null, probs,
-    jobsBanner(missing, () => rules("forms")), acting, people, chats, services, devices, lists, ai);
+    jobsBanner(missing, () => rules("forms")), acting, people, chats, services, devices, lists, canUse, ai);
+  if (jumpTo === "tools" && canUse) { jumpTo = null; requestAnimationFrame(() => canUse.scrollIntoView({ block: "start" })); }
+}
+
+// ---------------------------------------------------------------- rules › what the AI can use
+// Three switches in policy.yaml (tool_access.py on the agent's side): the Home Assistant tools it may read with
+// (ha_read_tools), the agent's own tools a villa may switch off (agent_tools; web search is settings.web_search),
+// and what the facility manager may make it use (tool_access.fm). Saved with the rest of the form.
+let toolsTab = "ha";
+let jumpTo = null;           // "tools": open Rules on "What the AI can use" (a skill's "Open Rules › What the AI can use")
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+
+function toolsCard(f, t, reload) {
+  f.ha_read_tools = f.ha_read_tools || []; f.agent_tools = f.agent_tools || {}; f.tool_access = f.tool_access || {};
+  const body = h("div");
+  const switchRow = (on, set, title, kids, disabled = false) => h("div", { class: "tool-row" + (disabled ? " locked" : "") },
+    h("label", { class: "switch" }, h("input", { type: "checkbox", checked: on, disabled, "aria-label": title,
+                                                 onchange: (e) => { set(e.target.checked); markDirty(); draw(); } })),
+    h("div", { class: "tool-text" }, kids));
+  const used = (n) => (n ? h("span", { class: "badge" }, `used ${n}× this week`) : null);
+  const ha = () => {
+    const on = new Set(f.ha_read_tools);
+    const refresh = h("button", { class: "btn ghost", onclick: async () => {
+      refresh.disabled = true; refresh.textContent = "Reading…";
+      try { Object.assign(t, await api("POST", "api/tools/refresh")); toast("The list was read again."); }
+      catch (e) { tell("Not read", e.problems); }
+      draw();
+    } }, "Read the list again");
+    const head = h("div", { class: "tools-head" },
+      h("div", {}, h("b", {}, t.count ? `${[...on].filter((n) => t.groups.some((g) => g.tools.some((x) => x.name === n))).length} of ${t.count} tools on.` : "The list is not read yet."),
+        h("span", { class: "muted" }, t.read_at ? ` From Home Assistant's MCP server${t.server ? " " + t.server : ""}, read ${new Date(t.read_at).toLocaleString()}.` : " The agent reads it when it starts.")),
+      t.new_off ? h("span", { class: "chip warn" }, `${plural(t.new_off, "new tool", "new tools")} since an update — off`) : null, refresh);
+    const groups = t.groups.map((g) => h("div", { class: "tool-group" },
+      h("div", { class: "tool-group-head" }, h("b", {}, g.label), h("span", { class: "muted" }, ` ${g.tools.filter((x) => on.has(x.name)).length} of ${g.tools.length} on`)),
+      g.tools.map((x) => switchRow(on.has(x.name), (v) => { f.ha_read_tools = v ? [...f.ha_read_tools, x.name] : f.ha_read_tools.filter((n) => n !== x.name); },
+        x.title, [h("div", {}, h("b", {}, x.title), x.new ? h("span", { class: "chip warn" }, "New") : null),
+                  h("div", { class: "muted" }, x.description),
+                  h("div", { class: "tool-meta" }, h("code", {}, x.name), x.note ? h("span", { class: "badge" }, x.note) : null, used(x.used))]))));
+    const unknown = t.unknown.length ? problemsBox(t.unknown.map((n) => `${n}: named in the file, but this Home Assistant's MCP server has no such tool.`), "Not on this Home Assistant:") : null;
+    const never = t.never.length ? h("details", { class: "tool-group never" },
+      h("summary", {}, h("b", {}, "Never available"), h("span", { class: "muted" }, ` ${plural(t.never.length, "tool", "tools")} that change Home Assistant — locked by the agent, whatever is chosen here`)),
+      h("div", { class: "chips" }, t.never.map((x) => h("span", { class: "chip off", title: x.description }, x.title)))) : null;
+    return [head, unknown, ...groups, never];
+  };
+  const own = () => {
+    const kinds = [["choose", "You choose", null], ["elsewhere", "Set elsewhere", null], ["always", "Always on", "the agent cannot work without them"]];
+    return kinds.map(([kind, title, sub]) => h("div", { class: "tool-group" },
+      h("div", { class: "tool-group-head" }, h("b", {}, title), sub ? h("span", { class: "muted" }, ` — ${sub}`) : null),
+      t.own.filter((x) => x.kind === kind).map((x) => {
+        const isWeb = x.key === "web_search";
+        const on = kind !== "choose" ? true : isWeb ? !!f.settings.web_search : f.agent_tools[x.key] !== false;
+        const set = (v) => { if (isWeb) f.settings.web_search = v; else if (v) delete f.agent_tools[x.key]; else f.agent_tools[x.key] = false; };
+        return switchRow(on, set, x.label, [h("b", {}, x.label), h("div", { class: "muted" }, x.description),
+          h("div", { class: "tool-meta" }, h("code", {}, x.key === "web_search" ? "WebSearch" : x.key), used(x.used))], kind !== "choose");
+      })));
+  };
+  const roles = () => {
+    const fm = f.tool_access.fm || {};
+    return [h("p", { class: "muted" }, "When a person writes, the AI only gets the tools their role allows; in the facility manager's chat, never more than the facility manager's. A tool switched off in the first two tabs is off for everyone."),
+      h("table", { class: "rows roles" },
+        h("thead", {}, h("tr", {}, ["Tools", "Owner", "Facility manager", "Guest"].map((x) => h("th", {}, x)))),
+        h("tbody", {}, t.roles.map((g) => h("tr", {},
+          h("td", {}, h("b", {}, g.label)),
+          h("td", {}, h("label", { class: "switch" }, h("input", { type: "checkbox", checked: true, disabled: true, "aria-label": `${g.label}: owner` }))),
+          h("td", {}, h("label", { class: "switch" }, h("input", { type: "checkbox", checked: fm[g.key] !== false, "aria-label": `${g.label}: facility manager`,
+            onchange: (e) => { const m = { ...(f.tool_access.fm || {}) }; if (e.target.checked) delete m[g.key]; else m[g.key] = false;
+                               if (Object.keys(m).length) f.tool_access.fm = m; else delete f.tool_access.fm; markDirty(); } }))),
+          h("td", { class: "muted" }, "later"))))),
+      h("p", { class: "muted" }, "Asking for an action is decided by \"What the agent may do\": who approves stays there.")];
+  };
+  const tabs = h("div", { class: "subtabs", role: "tablist" });
+  function draw() {
+    tabs.replaceChildren(...[["ha", "Reading Home Assistant"], ["own", "The agent's own tools"], ["roles", "Who may use what"]].map(([k, l]) =>
+      h("button", { type: "button", class: toolsTab === k ? "on" : "", role: "tab", "aria-selected": String(toolsTab === k),
+                    onclick: () => { toolsTab = k; draw(); } }, l)));
+    fill(body, ...({ ha, own, roles })[toolsTab]());
+  }
+  draw();
+  const c = card("What the AI can use", "Each tool the AI may call. A tool switched off does not exist for it, in chats and in reports. Changes count at the next message.", tabs, body);
+  c.id = "rules-tools";
+  return c;
 }
 
 // ---------------------------------------------------------------- skills
+// A skill's state against this release: it follows the releases (never edited here), it was edited here (updates
+// paused), or it is the villa's own. Its on/off switch is the villa's (policy.yaml skills_off).
+const STATE_WORDS = { follows: "Follows the releases", edited: "Edited here · updates paused", own: "This villa's own skill" };
+
+function skillChips(s) {
+  return [s.off ? h("span", { class: "chip gray" }, "Off") : null,
+          !s.off && !s.ok ? h("span", { class: "chip off" }, "Not working") : null,
+          s.state === "edited" ? h("span", { class: "chip warn" }, "edited here") : null];
+}
+
 async function skills(select = null) {
   fill($view, h("p", { class: "muted" }, "Loading…"));
   const { skills: list } = await api("GET", "api/skills");
@@ -616,13 +815,96 @@ async function skills(select = null) {
     h("h2", {}, "Skills"),
     h("p", { class: "lead" }, "Each skill is a folder. A change counts at the agent's next use, no restart."),
     list.length ? list.map((s) => h("button", { class: "skill-item" + (s.name === select ? " on" : ""), onclick: async () => { if (await guard()) skills(s.name); } },
-      h("div", {}, h("b", {}, s.name), s.ok ? null : [" ", h("span", { class: "chip off" }, "not working")]),
-      h("div", { class: "d" }, s.ok ? s.description : s.problem))) : h("p", { class: "muted" }, "No skill yet. The starter skills are copied at the agent's first start."),
+      h("div", { class: "skill-name" }, h("b", {}, s.name), ...skillChips(s)),
+      h("div", { class: "d" }, s.off ? "Off · kept, not used" : s.ok ? s.description : s.problem))) : h("p", { class: "muted" }, "No skill yet. The starter skills are copied at the agent's first start."),
     h("div", { class: "actions" }, h("button", { class: "btn ghost", onclick: newSkill }, "New skill")));
   const pane = h("div");
   fill($view, h("div", { class: "skills" }, side, pane));
   dirty = false; setBar(null);
   if (select) openSkill(select, pane, list.find((s) => s.name === select));
+}
+
+async function setCommand(skill, script, command, on, box) {
+  try { await api("PUT", `api/skills/${encodeURIComponent(skill)}/commands`, { script, command, on }); toast(`${command || script} switched ${on ? "on" : "off"} for the AI.`); }
+  catch (e) { box.checked = !on; tell("Not changed", e.problems); }
+}
+
+// 2C's one-press fix: the tool switched on through the same save as the Rules form
+async function switchTool(b) {
+  const doc = await api("GET", "api/policy");
+  const form = doc.form;
+  if (b.fix === "ha") form.ha_read_tools = [...new Set([...(form.ha_read_tools || []), b.tool])];
+  else if (b.tool === "web_search") form.settings.web_search = true;
+  else { form.agent_tools = { ...(form.agent_tools || {}) }; delete form.agent_tools[b.tool]; }
+  await api("PUT", "api/policy/form", { form, rev: doc.rev });
+}
+
+// Skills › Try a command: run by the agent on the live villa, exactly as the AI would — nothing is sent
+function tryPanel(name, d) {
+  const out = h("div");
+  const runnable = d.scripts.filter((sc) => !sc.whole_off);
+  if (!runnable.length) return h("p", { class: "muted" }, "Every script of this skill is switched off for the AI.");
+  let script = runnable[0];
+  const form = h("div", { class: "try-form" });
+  const values = {};
+  let command = null;
+  const draw = () => {
+    const cmds = script.commands.filter((c) => c.on);
+    if (cmds.length && !cmds.some((c) => c.name === command)) command = cmds[0].name;
+    if (!cmds.length) command = null;
+    const flags = Object.entries(script.flags).filter(([, k]) => k !== "outfile" && k !== "infile");
+    form.replaceChildren(
+      field("Script", dropdown(runnable.map((sc) => [sc.script, sc.script]), script.script, (v) => { script = runnable.find((x) => x.script === v); draw(); }, "Script")),
+      cmds.length ? field("Command", dropdown(cmds.map((c) => [c.name, c.name]), command, (v) => { command = v; }, "Command")) : null,
+      ...flags.map(([flag, kind]) => field(flag, Array.isArray(kind)
+        ? dropdown([["", "—"], ...kind.map((k) => [k, k])], values[flag] || "", (v) => { values[flag] = v; }, flag)
+        : kind === "switch" ? h("label", { class: "switch" }, h("input", { type: "checkbox", checked: !!values[flag], onchange: (e) => { values[flag] = e.target.checked; } }), "on")
+        : h("input", { type: "text", value: values[flag] || "", placeholder: kind === "date" ? "2026-10-05" : "", oninput: (e) => { values[flag] = e.target.value; } }))),
+      h("button", { class: "btn primary", onclick: run }, "Run"));
+  };
+  async function run() {
+    const args = [...(command ? [command] : [])];
+    for (const [flag, kind] of Object.entries(script.flags)) {
+      const v = values[flag];
+      if (kind === "switch") { if (v) args.push(flag); } else if (v) args.push(flag, String(v));
+    }
+    fill(out, h("p", { class: "muted" }, "Running on the villa…"));
+    try {
+      const r = await api("POST", `api/skills/${encodeURIComponent(name)}/try`, { script: script.script, args });
+      fill(out, r.ok === false && r.exit === undefined ? problemsBox([r.error], "Not run:") : [
+        h("p", { class: "muted" }, `Ran in ${r.seconds} s · exit ${r.exit}${r.exit === 2 ? " (nothing to do, or a missing setting)" : ""} · the same answer the AI gets. Messages and tickets in it are shown, never sent.`),
+        r.error ? problemsBox([r.error], "The script stopped:") : null,
+        h("pre", { class: "out" }, pretty(r.output))]);
+    } catch (e) { fill(out, problemsBox(e.problems, "Not run:")); }
+  }
+  draw();
+  return h("div", { class: "skill-sec" }, h("h3", {}, "Try a command"),
+    h("p", { class: "muted" }, "Runs one of the skill's commands on the live villa, exactly as the AI would — read-only, no AI, no cost. Use it after changing a script."),
+    form, out);
+}
+
+function pretty(text) {
+  try { return JSON.stringify(JSON.parse(text), null, 2); } catch { return text || "(no output)"; }
+}
+
+// Skills › Compare with the release: an edited starter skill's file beside the release's
+async function comparePanel(name, rel) {
+  const box = h("div");
+  const list = rel.differs || [];
+  let file = list.find((f) => !(rel.only_here || []).includes(f)) || list[0];
+  const draw = async () => {
+    const { rows } = await api("GET", `api/skills/${encodeURIComponent(name)}/compare?path=${encodeURIComponent(file)}`);
+    fill(box,
+      h("div", { class: "files" }, list.map((f) => h("button", { class: f === file ? "on" : "", onclick: () => { file = f; draw(); } },
+        f + ((rel.only_here || []).includes(f) ? " · only here" : (rel.only_release || []).includes(f) ? " · only in the release" : "")))),
+      h("div", { class: "compare" },
+        h("div", { class: "compare-head" }, h("b", {}, "Here"), h("b", {}, "The release")),
+        rows.map((r) => h("div", { class: "compare-row" + (r.same ? "" : " diff") },
+          h("pre", { class: r.here === null ? "gap" : "" }, r.here ?? ""), h("pre", { class: r.release === null ? "gap" : "" }, r.release ?? "")))),
+      h("p", { class: "muted small" }, "\"Take the release version\" replaces the skill's files with the release's and keeps this villa's own files (villa.*). Your edits are moved to skills/.trash."));
+  };
+  if (file) await draw(); else fill(box, h("p", { class: "muted" }, "No file differs."));
+  return h("div", { class: "skill-sec" }, h("h3", {}, "Compare with the release"), box);
 }
 
 async function newSkill() {
@@ -634,9 +916,13 @@ async function newSkill() {
 
 let filesOpen = false;
 
+const TRY = "\u0000try", COMPARE = "\u0000compare";
+
 async function openSkill(name, pane, info, path = "SKILL.md") {
-  const { files } = await api("GET", `api/skills/${encodeURIComponent(name)}/files`);
-  if (!files.some((x) => x.path === path)) path = files.length ? files[0].path : null;
+  const enc = encodeURIComponent(name);
+  const [{ files }, d] = await Promise.all([api("GET", `api/skills/${enc}/files`), api("GET", `api/skills/${enc}`)]);
+  const special = path === TRY || path === COMPARE;
+  if (!special && !files.some((x) => x.path === path)) path = files.length ? files[0].path : null;
   const probs = h("div");
   const ta = h("textarea", { class: "editor", spellcheck: "false", oninput: markDirty });
   ta.addEventListener("keydown", (e) => {            // Tab indents instead of leaving the editor
@@ -651,7 +937,16 @@ async function openSkill(name, pane, info, path = "SKILL.md") {
   };
   // one line of files while collapsed (the open one first, so it always shows); a button shows them all,
   // and appears only when they do not fit on that line. Open or closed is kept from skill to skill.
-  const fileList = h("div", { class: "files" + (filesOpen ? "" : " collapsed") }, files.map((x) => h("button", { class: x.path === path ? "on" : "", onclick: async () => { if (x.path !== path && await guard()) openSkill(name, pane, info, x.path); } }, x.path)));
+  const rel = d.release || {};
+  const differs = new Set(rel.differs || []), villa = new Set(rel.villa || []);
+  const fileBtn = (p, label, cls = "") => h("button", { class: [p === path ? "on" : "", cls].filter(Boolean).join(" "),
+    onclick: async () => { if (p !== path && await guard()) openSkill(name, pane, info, p); } }, label);
+  const fileList = h("div", { class: "files" + (filesOpen ? "" : " collapsed") },
+    files.map((x) => fileBtn(x.path, [x.path, differs.has(x.path) ? " · differs" : "", villa.has(x.path) ? " · this villa's" : ""].join(""))));
+  // never folded away with the files: their own line, above them
+  const views = h("div", { class: "files views" }, h("button", { class: special ? "special" : "on special", onclick: async () => { if (special && await guard()) openSkill(name, pane, info); } }, "Files"),
+    d.scripts && d.scripts.length ? fileBtn(TRY, "Try a command", "special") : null,
+    rel.state === "edited" ? fileBtn(COMPARE, "Compare with the release", "special") : null);
   const more = h("button", { class: "btn ghost files-more", hidden: true, onclick: () => {
     filesOpen = !filesOpen; fileList.classList.toggle("collapsed", !filesOpen); fits(); } });
   const fits = () => {
@@ -690,10 +985,67 @@ async function openSkill(name, pane, info, path = "SKILL.md") {
     try { await api("DELETE", `api/skills/${encodeURIComponent(name)}`); dirty = false; toast(`Skill ${name} deleted.`); skills(); }
     catch (e) { tell("Not deleted", e.problems); }
   };
+  // ---- what this skill is, against the release, and what it needs (owner's design, 2026-10-06)
+  const onSwitch = h("label", { class: "switch push-right" }, h("input", { type: "checkbox", checked: !d.off, "aria-label": `${name} on`,
+    onchange: async (e) => {
+      const on = e.target.checked;
+      if (!on && !(await ask({ title: `Switch ${name} off?`, ok: "Switch off", danger: true,
+        text: "The agent stops using it at once: no schedule, no alert hook, not read in a chat. Its files are kept; switch it on again here." }))) { e.target.checked = true; return; }
+      try { await api("PUT", `api/skills/${enc}/on`, { on }); toast(`${name} switched ${on ? "on" : "off"}.`); skills(name); }
+      catch (err) { e.target.checked = !on; tell("Not changed", err.problems); }
+    } }), d.off ? "Off" : "On");
+  const head = h("div", { class: "skill-head" }, h("h2", {}, name),
+    rel.state ? h("span", { class: "chip" + (rel.state === "edited" ? " warn" : rel.state === "own" ? " gray" : "") }, STATE_WORDS[rel.state]) : null,
+    d.off ? h("span", { class: "chip gray" }, "Off") : !d.ok ? h("span", { class: "chip off" }, "Not working") : null, onSwitch);
+  const fixes = (d.blocked || []).filter((b) => b.fix);
+  const blocked = d.blocked && d.blocked.length ? h("div", { class: "problems" },
+    h("b", {}, "The agent cannot use this skill right now."),
+    h("ul", {}, d.blocked.map((b) => h("li", {}, b.why))),
+    h("p", { class: "muted" }, "Its AI jobs (reports) do not run, and a reply that needed it says which setting stops it."),
+    h("div", { class: "actions" },
+      ...fixes.map((b) => h("button", { class: "btn primary", onclick: async () => {
+        try { await switchTool(b); toast(`${b.label} switched on.`); skills(name); } catch (err) { tell("Not changed", err.problems); }
+      } }, `Switch ${b.label} on`)),
+      h("button", { class: "btn ghost", onclick: async () => { if (await guard()) { jumpTo = "tools"; toolsTab = "ha"; go("rules"); } } }, "Open Rules › What the AI can use"))) : null;
+  const releaseBanner = rel.state === "edited" && !rel.kept ? h("div", { class: "banner" },
+    h("div", {}, h("b", {}, `This version of the agent (engine ${d.engine}) has another version of this skill.`),
+      h("div", { class: "muted" }, `Because it was edited here, it was kept as it is. ${plural(rel.differs.length, "file differs", "files differ")}.`)),
+    h("div", { class: "actions" },
+      h("button", { class: "btn ghost", onclick: async () => { await api("POST", `api/skills/${enc}/keep`); toast("Kept as it is."); skills(name); } }, "Keep mine"),
+      h("button", { class: "btn primary", onclick: async () => {
+        if (!(await ask({ title: "Take the release version?", ok: "Take the release version", danger: true,
+          text: "The skill's files are replaced by the release's; this villa's own files (villa.*) are kept. Your edits are moved to skills/.trash, and Undo (Overview › Changes) brings them back." }))) return;
+        try { await api("POST", `api/skills/${enc}/take-release`); toast("The release's version is in place."); skills(name); }
+        catch (err) { tell("Not changed", err.problems); }
+      } }, "Take the release version"))) : null;
+  const needs = h("div", { class: "skill-sec" }, h("h3", {}, "Tools it needs"),
+    d.needs === null || d.needs === undefined ? h("p", { class: "muted" }, "Its skill.yaml lists none: its reports get every tool switched on.")
+      : d.needs.length ? [h("div", { class: "chips" }, d.needs.map((n) => h("span", { class: "chip" + (n.on ? "" : " off"), title: n.tool },
+          n.label + ({ off: " — off", missing: " — not on this Home Assistant", never: " — never available" }[n.state] || "")))),
+        h("p", { class: "muted small" }, d.needs.every((n) => n.on) ? "All switched on in Rules › What the AI can use." : "Switched on or off in Rules › What the AI can use.")]
+      : h("p", { class: "muted" }, "None: the AI needs no tool of its own for this skill."));
+  const acts = h("div", { class: "skill-sec" }, h("h3", {}, "When it acts"),
+    h("ul", { class: "plain" }, (d.acts || []).map((a) => h("li", {}, a.when, a.how ? h("code", { class: "muted" }, ` ${a.how}`) : null))));
+  const cmds = d.scripts && d.scripts.length ? h("div", { class: "skill-sec" }, h("h3", {}, "What the AI may run"),
+    d.scripts.map((sc) => h("div", { class: "cmd-script" }, h("code", {}, sc.script),
+      sc.commands.length ? sc.commands.map((c) => h("label", { class: "cmd" },
+        h("input", { type: "checkbox", checked: c.on, onchange: (e) => setCommand(name, sc.script, c.name, e.target.checked, e.target) }),
+        h("b", {}, c.name), c.words ? h("span", { class: "muted" }, ` — ${c.words}`) : null,
+        c.job_only ? h("span", { class: "muted small" }, ` (asked in a chat, it runs as the ${c.job_only} job)`) : null))
+        : h("label", { class: "cmd" }, h("input", { type: "checkbox", checked: !sc.whole_off, onchange: (e) => setCommand(name, sc.script, null, e.target.checked, e.target) }),
+          h("span", {}, "the AI may run it"))))
+    , h("p", { class: "muted small" }, "This villa's choice, in the skill's villa.skill.yaml: kept by updates, and copied with the skill.")) : null;
+  const top = [head, d.description ? h("p", { class: "lead" }, d.description) : null, blocked, releaseBanner,
+               d.acts ? h("div", { class: "skill-grid" }, needs, acts) : null, cmds];
+  if (path === TRY || path === COMPARE) {
+    fill(pane, h("div", { class: "card" }, ...top, views, path === TRY ? tryPanel(name, d) : await comparePanel(name, rel)));
+    setBar(null);
+    return;
+  }
   fill(pane, h("div", { class: "card" },
-    h("h2", {}, name, info && !info.ok ? [" ", h("span", { class: "chip off" }, "not working")] : null),
-    info && !info.ok ? problemsBox([info.problem], "The agent does not use this skill:") : null,
-    fileBtns, probs, path ? ta : h("p", { class: "muted" }, "No file."),
+    ...top,
+    info && !info.ok && !d.blocked ? problemsBox([info.problem], "The agent does not use this skill:") : null,
+    views, fileBtns, probs, path ? ta : h("p", { class: "muted" }, "No file."),
     h("div", { class: "actions" },
       h("button", { class: "btn ghost", onclick: newFile }, "New file"),
       path && !["SKILL.md", "skill.yaml"].includes(path) ? h("button", { class: "btn ghost", onclick: delFile }, "Delete this file") : null,

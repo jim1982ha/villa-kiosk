@@ -52,7 +52,7 @@ class Base(unittest.TestCase):
         selftest.ANTHROPIC_MODELS, selftest.TELEGRAM_API = cls._anth, cls._tg
 
     def setUp(self):
-        Fake.kiosk, Fake.mcp, Fake.requests, Fake.choices = "json", "json", [], []
+        Fake.kiosk, Fake.mcp, Fake.requests = "json", "json", []
 
     def env(self, **kw):
         base = {"VESTA_HA_URL": self.url, "VESTA_HA_TOKEN": HA_TOKEN,
@@ -67,9 +67,9 @@ class Base(unittest.TestCase):
 
 class Links(Base):
     def test_everything_configured_passes(self):
-        r = self.results(self.env(VESTA_TELEGRAM_ENABLED="true", VESTA_TELEGRAM_BOT_TOKEN=TG),
-                         stub_heartbeat=True)
-        for link in ("Home Assistant", "HA MCP", "VESTA Kiosk", "Anthropic", "Telegram", "Presence"):
+        r = self.results(self.env(VESTA_TELEGRAM_ENABLED="true", VESTA_TELEGRAM_BOT_TOKEN=TG))
+        self.assertEqual(sorted(r), ["Anthropic", "HA MCP", "Home Assistant", "Telegram", "VESTA Kiosk"])
+        for link in ("Home Assistant", "HA MCP", "VESTA Kiosk", "Anthropic", "Telegram"):
             self.assertEqual(r[link].result, PASS, f"{link}: {r[link].detail}")
         self.assertIn("fake-ha-mcp 8.5.0, 2 tools", r["HA MCP"].detail)
         self.assertIn("VESTA Kiosk 2.500.0", r["VESTA Kiosk"].detail)
@@ -82,8 +82,7 @@ class Links(Base):
 
     def test_missing_credentials_are_skipped_never_failed(self):
         r = self.results({"VESTA_HA_URL": self.url, "VESTA_HA_MCP_URL": "",
-                          "VESTA_KIOSK_URL": self.url, "VESTA_TELEGRAM_ENABLED": "false"},
-                         stub_heartbeat=True)
+                          "VESTA_KIOSK_URL": self.url, "VESTA_TELEGRAM_ENABLED": "false"})
         for link, res in r.items():
             self.assertEqual(res.result, SKIPPED, f"{link}: {res.detail}")
         self.assertEqual(Fake.requests, [], "a check without credentials made a request")
@@ -91,9 +90,8 @@ class Links(Base):
     def test_kiosk_without_agent_interface_is_skipped_not_passed(self):
         for mode in ("spa", "404"):
             Fake.kiosk = mode
-            r = self.results(self.env(), stub_heartbeat=True)
+            r = self.results(self.env())
             self.assertEqual(r["VESTA Kiosk"].result, SKIPPED, f"{mode}: {r['VESTA Kiosk'].detail}")
-            self.assertEqual(r["Presence"].result, SKIPPED, f"{mode}: {r['Presence'].detail}")
 
     def test_wrong_credentials_fail(self):
         r = self.results(self.env(VESTA_HA_TOKEN="wrong-token", VESTA_KIOSK_TOKEN="wrong-token",
@@ -125,9 +123,9 @@ class Links(Base):
         r = self.results(env)
         self.assertEqual(r["HA MCP"].result, FAIL)
 
-    def test_presence_only_in_stub_mode(self):
-        r = self.results(self.env(), stub_heartbeat=True, agent_mode="agent")
-        self.assertEqual(r["Presence"].result, SKIPPED)
+    def test_the_self_test_never_sends_a_heartbeat(self):
+        # the agent sends its own; the test mode's heartbeat went with it (0.12.46)
+        self.results(self.env())
         self.assertNotIn(("POST", "/agent/v1/heartbeat"), Fake.requests)
 
 
@@ -143,9 +141,8 @@ class CloudflareAccess(Base):
 
     def test_with_service_token_passes(self):
         from fake_remote import CF_ID, CF_SECRET
-        r = self.results(self.env(VESTA_CF_ACCESS_CLIENT_ID=CF_ID, VESTA_CF_ACCESS_CLIENT_SECRET=CF_SECRET),
-                         stub_heartbeat=True)
-        for link in ("Home Assistant", "HA MCP", "VESTA Kiosk", "Presence"):
+        r = self.results(self.env(VESTA_CF_ACCESS_CLIENT_ID=CF_ID, VESTA_CF_ACCESS_CLIENT_SECRET=CF_SECRET))
+        for link in ("Home Assistant", "HA MCP", "VESTA Kiosk"):
             self.assertEqual(r[link].result, PASS, f"{link}: {r[link].detail}")
 
     def test_without_service_token_is_refused(self):
@@ -167,7 +164,7 @@ class Telegram(Base):
 
 
 class Slot(Base):
-    """The slot program end to end: self-test, selftest.json, stub start."""
+    """The slot program end to end: self-test, selftest.json, the agent's start once it may."""
 
     @classmethod
     def setUpClass(cls):
@@ -191,19 +188,13 @@ class Slot(Base):
         self.root = Path(self.tmp.name)
         (self.root / "data").mkdir()
         (self.root / "config").mkdir()
-        stub = self.root / "opt/vesta/stub"
-        stub.mkdir(parents=True)
-        for f in (HERE.parent / "stub").iterdir():
-            if f.is_file():   # a __pycache__ left by another test is not the stub
-                (stub / f.name).write_text(f.read_text())
 
     def tearDown(self):
         self.tmp.cleanup()
 
     def prepare(self, **opts):
         (self.root / "data/options.json").write_text(json.dumps({
-            "agent_mode": "stub", "ha_url": self.url,
-            "kiosk_url": self.url, "telegram_takeover": False, "stub_heartbeat": False,
+            "ha_url": self.url, "kiosk_url": self.url, "telegram_takeover": False,
             "log_level": "info", **opts}))
         env = {k: v for k, v in os.environ.items() if not k.startswith("VESTA_")}
         env["VESTA_ROOT"] = str(self.root)
@@ -224,8 +215,8 @@ class Slot(Base):
         p = subprocess.Popen([sys.executable, "-c", boot], env=env,
                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         # ⚠️ WAIT FOR WHAT THE TEST READS, NOT A FIXED TIME. A flat 3 s sleep
-        # failed twice on GitHub's runner (0.7.0 and 0.8.0): the stub had not
-        # sent its heartbeat yet when it was stopped. With `until`, the output
+        # failed twice on GitHub's runner (0.7.0 and 0.8.0): the program had not
+        # printed its line yet when it was stopped. With `until`, the output
         # is read as it comes and the program is stopped once that line is
         # there (or after 20 s, and the assertions then say what is missing).
         lines: list[str] = []
@@ -240,58 +231,47 @@ class Slot(Base):
         reader.join(timeout=5)
         return p.returncode, "".join(lines)
 
-    def test_stub_mode_selftest_then_stub(self):
-        env = self.prepare(ha_token=HA_TOKEN, kiosk_agent_token=KIOSK_TOKEN,
-                           telegram_bot_token=TG, stub_heartbeat=True)
-        # Someone already pressed a button on the demo message, and an earlier
-        # answer to another message must not be mistaken for it.
-        Fake.choices = [
-            {"seq": 1, "message_id": "msg_other", "button_id": "x", "profile": "owner", "at": "t0"},
-            {"seq": 2, "message_id": "msg_demo", "button_id": "looks_good", "profile": "ops",
-             "at": "2026-09-29T00:01:00Z"}]
-        # ⚠️ BOTH LINES: the heartbeat and the demo run side by side in the stub,
-        # and on GitHub's runner the answer can land before the first heartbeat
-        # is logged (0.9.0's first CI run) — stopping at one line lost the other.
-        code, out = self.run_slot(env, until=("stub: answer received", "stub: heartbeat: HTTP 200"))
+    def agent(self, start: str) -> None:
+        agent = self.root / "opt/vesta/agent"
+        agent.mkdir(parents=True, exist_ok=True)
+        (agent / "vesta-agent.yaml").write_text(yaml.safe_dump(
+            {"name": "fake-agent", "version": "0", "runtime": "python", "start": start, "stop_grace_seconds": 2}))
+
+    def test_selftest_then_the_agent_once_home_assistant_and_anthropic_pass(self):
+        self.agent("echo \"agent-running $VESTA_INSTANCE\"; trap 'echo agent-stopped; exit 0' TERM; while :; do sleep 0.1; done")
+        env = self.prepare(ha_token=HA_TOKEN, kiosk_agent_token=KIOSK_TOKEN, anthropic_api_key=KEY,
+                           telegram_bot_token=TG)
+        code, out = self.run_slot(env, until="agent-running")
         self.assertEqual(code, 0, out)
-        for line in ("self-test Home Assistant: pass", "self-test HA MCP: pass",
-                     "self-test VESTA Kiosk: pass", "self-test Anthropic: skipped",
-                     "self-test Telegram: skipped", "self-test Presence: pass",
-                     "starting vesta-agent-stub 1",
-                     "stub: environment contract received: 16/16 variables present",
-                     "stub: Telegram disabled — no token received",
-                     "stub: heartbeat: HTTP 200",
-                     "stub: demo message posted (msg_demo)",
-                     'stub: answer received: "looks_good" pressed by ops at 2026-09-29T00:01:00Z',
-                     "stub: stopped"):
+        for line in ("self-test Home Assistant: pass", "self-test HA MCP: pass", "self-test VESTA Kiosk: pass",
+                     "self-test Anthropic: pass", "self-test Telegram: skipped", "starting fake-agent 0",
+                     "agent-running", "agent-stopped"):
             self.assertIn(line, out)
-        for secret in (HA_TOKEN, KIOSK_TOKEN, TG):
+        self.assertNotIn("Presence", out)
+        for secret in (HA_TOKEN, KIOSK_TOKEN, TG, KEY):
             self.assertNotIn(secret, out)
         report = json.loads((self.root / "data/host/selftest.json").read_text())
-        self.assertEqual(report["summary"], {"pass": 4, "fail": 0, "skipped": 2})
+        self.assertEqual(report["summary"], {"pass": 4, "fail": 0, "skipped": 1})
         self.assertIn("at", report)
         self.assertNotIn(HA_TOKEN, json.dumps(report))
         self.assertFalse([p for _, p in Fake.requests if p.startswith("/bot")])
 
-    def test_stub_mode_never_blocks_on_failure(self):
-        env = self.prepare(ha_token="wrong-token")
-        code, out = self.run_slot(env)
-        self.assertIn("self-test Home Assistant: fail", out)
-        self.assertIn("starting vesta-agent-stub", out)
-
-    def test_agent_mode_without_agent_does_not_crash_loop(self):
-        env = self.prepare(agent_mode="agent", ha_token=HA_TOKEN, anthropic_api_key=KEY)
+    def test_without_an_agent_it_idles_and_does_not_crash_loop(self):
+        env = self.prepare(ha_token=HA_TOKEN, anthropic_api_key=KEY)
         code, out = self.run_slot(env, 2.0)
         self.assertEqual(code, 0, out)
         self.assertIn("contains no VESTA Agent", out)
 
-    def test_agent_mode_waits_for_home_assistant(self):
-        agent = self.root / "opt/vesta/agent"
-        agent.mkdir(parents=True)
-        (agent / "vesta-agent.yaml").write_text(yaml.safe_dump(
-            {"name": "fake-agent", "version": "0", "runtime": "python",
-             "start": "echo agent-running; while :; do sleep 0.1; done", "stop_grace_seconds": 2}))
-        env = self.prepare(agent_mode="agent", ha_token="wrong-token", anthropic_api_key=KEY)
+    def test_nothing_configured_it_waits_and_says_so(self):
+        self.agent("echo agent-running; while :; do sleep 0.1; done")
+        env = self.prepare()
+        code, out = self.run_slot(env, 3.0)
+        self.assertIn("agent start delayed: Home Assistant, Anthropic not passing", out)
+        self.assertNotIn("agent-running", out)
+
+    def test_it_waits_for_home_assistant(self):
+        self.agent("echo agent-running; while :; do sleep 0.1; done")
+        env = self.prepare(ha_token="wrong-token", anthropic_api_key=KEY)
         code, out = self.run_slot(env, 3.0)
         self.assertIn("agent start delayed: Home Assistant", out)
         self.assertNotIn("agent-running", out)

@@ -95,7 +95,15 @@ system_actions: []
 #  - service: switch.turn_off
 #    entity_id: switch.your_siren
 
-# The Home Assistant tools the model may read with, name by name.
+# What the AI can use (VESTA Agent page → Rules → What the AI can use). Left out: everything on.
+# agent_tools:                  the agent's own tools a villa may switch off
+#   start_job: false            "send me the weekly report" from a chat
+# tool_access:                  what the facility manager may make the AI use, by group (the owner: everything)
+#   fm: {cameras: false, logs: false}
+# skills_off: []                skills kept but not used (the Skills tab's switch)
+
+# The Home Assistant tools the model may read with, name by name. Only a tool Home Assistant's MCP server
+# marks read-only can be on: one that changes Home Assistant is refused whatever this list says.
 # A tool not listed here does not exist for the model, including tools added by a later HA MCP version.
 # Several need the "VESTA Agent" user to be an administrator (decision D5): templates, automation
 # settings and traces, system logs.

@@ -8,6 +8,8 @@ from vesta_agent import config
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STARTER_SKILLS = os.path.join(ROOT, "starter", "skills")
+#: A script run by a test sees the engine's shared code AND the tests' own FixtureClient (--fixture-dir).
+PYTHONPATH = ROOT + os.pathsep + os.path.join(ROOT, "tests")
 
 
 def settings(tmp, **env) -> config.Settings:

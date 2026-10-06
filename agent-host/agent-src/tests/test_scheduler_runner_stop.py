@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 import yaml
 
-from helpers import ROOT, copy_skill, settings
+from helpers import PYTHONPATH, ROOT, copy_skill, settings
 from vesta_agent import runner
 from vesta_agent.scheduler import Scheduler, slot_for
 from vesta_agent.skills import Skills
@@ -96,7 +96,7 @@ def test_web_search_is_claudes_own_tool_and_only_when_allowed():
 
 def _env(tmp, **extra):
     env = {k: v for k, v in os.environ.items() if not k.startswith("VESTA_") and k != "ANTHROPIC_API_KEY"}
-    env.update({"PYTHONPATH": ROOT, "VESTA_SKILLS_DIR": os.path.join(tmp, "skills"),
+    env.update({"PYTHONPATH": PYTHONPATH, "VESTA_SKILLS_DIR": os.path.join(tmp, "skills"),
                 "VESTA_AGENT_CONFIG_DIR": os.path.join(tmp, "agent"), "VESTA_DATA_DIR": os.path.join(tmp, "data"),
                 "VESTA_TELEGRAM_ENABLED": "false", "TZ": "UTC"})
     env.update(extra)

@@ -40,7 +40,3 @@ def fmt_money(amount: float, currency: str) -> str:
         return f"{amount:,.0f} IDR"
     return f"{amount:,.2f} {currency}"
 
-
-def reply_keyboard(options: list[str]) -> dict:
-    """Telegram inline keyboard payload for the chase loop."""
-    return {"inline_keyboard": [[{"text": o, "callback_data": o.lower().replace(" ", "_")} for o in options]]}

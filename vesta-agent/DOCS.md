@@ -18,14 +18,22 @@ In the sidebar, **VESTA Agent**. It opens on:
 
 - **Overview** — whether the rules and the skills have a problem, and the last
   24 hours: alerts followed, buttons pressed, actions, replies, AI cost,
-  failures, scheduled jobs run.
+  failures, scheduled jobs run. Then **Changes made on these pages** (every
+  save, newest first, each with **Undo**), **Copy this setup to another
+  villa** and **Import a setup** (below).
 - **Rules** — `policy.yaml` as forms: acting on or off, the people, the chats,
   what the agent may do and who decides (`any`, `owner`, `listed`, `direct`),
-  the protected devices, the allowed lists, the AI settings. **The file** shows
-  the whole file for everything else. The file's comments are kept.
-- **Skills** — every skill, on or switched off (and why). Open one to edit its
-  files; add a file, delete one, create a skill, delete a skill (kept in
-  `skills/.trash`, it does not come back by itself).
+  the protected devices, the allowed lists, **What the AI can use** (below), the
+  AI settings. **The file** shows the whole file for everything else. The
+  file's comments are kept.
+- **Skills** — every skill, with its switch (On / Off), its state against the
+  release (follows the releases, edited here, or the villa's own), **Not
+  working** when a tool it needs is switched off (with the one-press fix), the
+  tools it needs, when it acts, and its commands as checkboxes. Open one to edit
+  its files, **Try a command**, or **Compare with the release**; add a file,
+  delete one, create a skill, delete a skill (kept in `skills/.trash`).
+- **Costs** — what the AI cost, each run with the **tools it used** (press a
+  run for each step), and how often each tool was used.
 
 Every save is checked first with the agent's own rules: a change the agent
 would refuse or misread is not written, and the page says why. If the file was
@@ -34,16 +42,50 @@ rather than overwriting that change. A saved change counts within seconds, no
 restart. The page keeps working while the agent is stopped, so a file that
 stops the agent can be fixed from it.
 
-## Modes
+## What the AI can use
 
-- **stub** (default) — a self-test of every connection, and nothing else.
-  Starts with nothing configured.
-- **agent** — runs the VESTA Agent. Needs the Anthropic API key and the Home
-  Assistant token; without them the app stops at once and its log says which
-  setting is missing. The agent starts once Home Assistant and Anthropic both
-  answer.
+Rules → **What the AI can use**, three tabs, saved in `policy.yaml`:
 
-## Before the first start in agent mode
+- **Reading Home Assistant** (`ha_read_tools`) — each tool of Home Assistant's
+  MCP server, grouped (states and history, devices and areas, automations,
+  cameras, logs, lists), with a switch, what it does, and how often it was used
+  this week. Only a tool the server marks read-only can be on: anything that
+  changes Home Assistant is **Never available**, whatever the file says. A tool
+  a later HA MCP version adds is **New** and off. **Read the list again** asks
+  the agent to read the server's list now (it also does at start and nightly).
+- **The agent's own tools** — the ones you choose (web search, facility tickets,
+  starting a report from a chat, reading its own activity: `agent_tools`), the
+  one set elsewhere (asking for an action: "What the agent may do"), and the
+  ones always on.
+- **Who may use what** (`tool_access.fm`) — what the facility manager may make
+  the AI use, by group. The owner gets everything switched on. In the facility
+  manager's chat, never more than the facility manager's.
+
+A report gets only the tools its skill lists (`skill.yaml` `tools:`), among
+those switched on: Rules → The AI shows them per job. A skill that needs a tool
+switched off is **Not working**: its reports do not run (its chat is told), and
+the AI says plainly which setting stops it.
+
+## Copy the setup to another villa
+
+Overview → **Copy this setup to another villa** downloads one file with the
+skills and the shareable part of the rules (the AI, what the agent may do, what
+the AI can use, how long records are kept; `instructions.md` if ticked).
+**Never** in it: people, chat ids, devices and lists, keys and tokens, records.
+On the other villa, **Import a setup** shows every change (added, replaced,
+changed, same) and what does not fit that villa, and writes only on **Apply**;
+a replaced skill is kept in `skills/.trash`, and the villa's own `villa.*`
+files stay. Each change is in **Changes made on these pages**, with Undo.
+
+## Starting
+
+The app starts with nothing configured: the VESTA Agent page opens, so the
+rules and the skills can be prepared, and the agent waits — its log says what
+is missing — until the Anthropic API key and the Home Assistant token are set
+and both answer. (A test mode, "stub", did this until 0.12.46: the start's
+self-test already checks every connection, so it went.)
+
+## Before the first start
 
 1. **The "VESTA Agent" Home Assistant user.** Settings → People → Users → Add
    user, named "VESTA Agent":
@@ -70,7 +112,6 @@ Keep backups encrypted if they leave the machine: they hold these tokens.
 
 | Field | What to put |
 |---|---|
-| Agent mode | `agent` |
 | Anthropic API key | the key |
 | Home Assistant address | keep the default on the same machine |
 | Home Assistant token | the VESTA Agent user's long-lived token |
@@ -328,7 +369,7 @@ update that changes only the code downloads only the code.
 |---|---|
 | Image, unpacked | about 530 MB (0.9.2; 1.1 GB in 0.9.0–0.9.1 with the PDF browser) |
 | An update that changes only the agent's code | its code: under 1 MB |
-| Idle memory | to measure on the HA Yellow (0.8.0, stub + HA MCP: about 142 MB) |
+| Idle memory | to measure on the HA Yellow (0.8.0, the old test mode + HA MCP: about 142 MB) |
 
 The largest parts are the Claude program the agent runs on (about 230 MB) and
 the HA MCP server (about 100 MB); both change rarely.

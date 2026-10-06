@@ -13,10 +13,7 @@ from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from vesta_shared.stats import med, slope_per_hour
-
-
-def _day(ms: int, zone: str) -> date:
-    return datetime.fromtimestamp(ms / 1000, tz=timezone.utc).astimezone(ZoneInfo(zone)).date()
+from vesta_shared.timeutil import local_day
 
 
 def power_daily_features(hour_rows: list[dict], zone: str, on_threshold_w: float) -> dict[date, dict]:
@@ -30,7 +27,7 @@ def power_daily_features(hour_rows: list[dict], zone: str, on_threshold_w: float
     """
     by_day: dict[date, list[dict]] = defaultdict(list)
     for r in hour_rows:
-        by_day[_day(r["start"], zone)].append(r)
+        by_day[local_day(r["start"], zone)].append(r)
     out = {}
     for day, rows in by_day.items():
         on = [r for r in rows if r.get("mean") is not None and r["mean"] > on_threshold_w]
@@ -50,7 +47,7 @@ def power_daily_features(hour_rows: list[dict], zone: str, on_threshold_w: float
 def energy_daily_features(day_rows: list[dict], zone: str) -> dict[date, dict]:
     out = {}
     for r in day_rows:
-        d = _day(r["start"], zone)
+        d = local_day(r["start"], zone)
         ch = r.get("change")
         out[d] = {"kwh": round(ch, 3) if ch is not None else None,
                   "counter_reset": bool(ch is not None and ch < 0)}
@@ -60,7 +57,7 @@ def energy_daily_features(day_rows: list[dict], zone: str) -> dict[date, dict]:
 def level_daily_features(hour_rows: list[dict], zone: str) -> dict[date, dict]:
     by_day: dict[date, list[dict]] = defaultdict(list)
     for r in hour_rows:
-        by_day[_day(r["start"], zone)].append(r)
+        by_day[local_day(r["start"], zone)].append(r)
     out = {}
     for day, rows in by_day.items():
         means = [r["mean"] for r in rows if r.get("mean") is not None]
@@ -157,10 +154,6 @@ def reporting_share(hour_rows: list[dict], until_ms: int | None = None, hours: i
             moved += 1
         prev = mean if mean is not None else prev
     return moved / len(rows), len(rows)
-
-
-def days_back(end: date, n: int) -> list[date]:
-    return [end - timedelta(days=i) for i in range(n)][::-1]
 
 
 def device_key(row: dict, fallback: str) -> str:

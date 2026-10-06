@@ -84,4 +84,21 @@ def test_a_store_from_before_sources_gains_the_columns(tmp_path):
     db.commit(); db.close()
     pb = Problems(Store(path))
     (t,) = pb.open_tasks()
-    assert t["source"] is None and pb.title_of(t) == "A is off." and pb.check_of(t) == "its battery"
+    assert t["source"] == "none:0" and pb.title_of(t) == "A is off." and pb.check_of(t) == "its battery"
+
+
+def test_an_old_task_is_given_the_source_of_its_rule_and_device_once(tmp_path):
+    # 0.6.42: the readers lost their second way of reading a 0.6.15 task; the store rewrites it instead
+    path = str(tmp_path / "old.sqlite")
+    st = Store(path)
+    fid, _ = st.raise_finding("PM-A", "sensor.example_a", "level", "2026-09-30", "P3", "A", {})
+    iid = st.new_incident("k", "automation.example_door", "lock.example_door", "P2", {"message": "Door"})
+    for rule, ent in (("PM-A", "sensor.example_a"), ("automation.example_door", "lock.example_door"), ("PM-B", "x.y")):
+        st.db.execute("INSERT INTO tasks (rule_id, entity_id, summary, created_at) VALUES (?, ?, 'Old', '2026-09-30')",
+                      (rule, ent))
+    st.db.commit()
+    pb = Problems(Store(path))
+    assert [t["source"] for t in pb.open_tasks()] == [f"finding:{fid}", f"incident:{iid}", "none:0"]
+    st.close_finding("PM-A", "sensor.example_a", "2026-10-01")
+    old_finding, _, nothing = pb.open_tasks()
+    assert pb.source_gone(old_finding) and not pb.source_gone(nothing)

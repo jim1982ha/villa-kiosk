@@ -10,20 +10,16 @@ McpClient     talks to Home Assistant through ha-mcp only (MCP streamable
               unless the agent's executor builds it with write=True; the
               skills' scripts never get a writing client.
 
-FixtureClient serves saved JSON files (tests/fixtures) with the same
-              interface, so every script runs offline in the replay test
-              and inside the agent when it already holds the data from an
-              ha-mcp tool result.
-
-Every script accepts --fixture-dir for the offline tests. Inside the agent the
-option is refused: the scripts read the live villa through McpClient.
+Every script accepts --fixture-dir for the agent's offline tests: their
+FixtureClient (saved JSON files, the same interface) lives with the tests,
+tests/fixture_client.py, and never in the app. Inside the agent the option is
+refused anyway: the scripts read the live villa through McpClient.
 """
 
 from __future__ import annotations
 
 import json
 import os
-import ssl
 from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable
 
@@ -58,99 +54,6 @@ class HABase:
 
     def call_service(self, domain: str, service: str, data: dict) -> Any:
         raise NotImplementedError
-
-
-class FixtureClient(HABase):
-    """Reads the JSON files a session saved from ha-mcp tool results.
-
-    Expected files (any may be absent):
-      stats_hour_*.json / stats_day_*.json  ha_get_history(source=statistics) result 'data'
-      history_raw_*.json                    ha_get_history(source=history) result 'data'
-      helpers.json                          {'helpers': [...], 'states': {...}}
-      registry.json                         {'entities': [...], 'areas': [...], 'devices': [...]}
-      states.json                           {'states': {entity_id: {state, attributes, last_changed}}}
-      logbook.json                          {'entries': [...]}
-    """
-
-    def __init__(self, fixture_dir: str, zone: str = "UTC", extra_helpers: str | None = None):
-        self.dir = fixture_dir
-        self.zone = zone
-        self.extra_helpers = extra_helpers or os.environ.get("VESTA_EXTRA_HELPERS")
-        self._stats: dict[str, dict[str, list[dict]]] = {"hour": {}, "day": {}, "week": {}, "month": {}}
-        self._hist: dict[str, list[dict]] = {}
-        self._calls: list[dict] = []
-        for name in sorted(os.listdir(fixture_dir)):
-            p = os.path.join(fixture_dir, name)
-            if name.startswith("stats_") and name.endswith(".json"):
-                d = json.load(open(p, encoding="utf-8"))
-                d = d.get("data", d)
-                period = d.get("period_type", "hour")
-                for e in d.get("entities", []):
-                    self._stats.setdefault(period, {}).setdefault(e["entity_id"], []).extend(e.get("statistics", []))
-            elif name.startswith("history_raw") and name.endswith(".json"):
-                d = json.load(open(p, encoding="utf-8"))
-                d = d.get("data", d)
-                for e in d.get("entities", []):
-                    self._hist.setdefault(e["entity_id"], []).extend(e.get("states", []))
-        for per in self._stats.values():
-            for rows in per.values():
-                rows.sort(key=lambda r: r["start"])
-
-    def _load(self, name: str, default: Any) -> Any:
-        p = os.path.join(self.dir, name)
-        if not os.path.exists(p):
-            return default
-        return json.load(open(p, encoding="utf-8"))
-
-    def statistics(self, entity_ids, start, end, period="hour", types=("mean", "min", "max")):
-        s_ms, e_ms = int(start.timestamp() * 1000), int(end.timestamp() * 1000)
-        out = {}
-        for eid in entity_ids:
-            rows = self._stats.get(period, {}).get(eid, [])
-            out[eid] = [r for r in rows if s_ms <= r["start"] < e_ms]
-        return out
-
-    def history(self, entity_ids, start, end):
-        out = {}
-        for eid in entity_ids:
-            rows = []
-            for r in self._hist.get(eid, []):
-                t = datetime.fromisoformat(r["last_changed"])
-                if start <= t < end:
-                    rows.append(r)
-            out[eid] = rows
-        return out
-
-    def states(self, entity_ids=None):
-        d = self._load("states.json", {"states": {}})["states"]
-        if entity_ids is None:
-            return d
-        return {e: d[e] for e in entity_ids if e in d}
-
-    def helpers(self):
-        d = self._load("helpers.json", {"helpers": [], "states": {}})
-        helpers, states = list(d.get("helpers", [])), dict(d.get("states", {}))
-        # helpers_local.json: helpers that do not exist on the villa yet (a proposal, a test)
-        extra = self._load(self.extra_helpers, {"helpers": [], "states": {}}) if self.extra_helpers else {"helpers": [], "states": {}}
-        helpers += extra.get("helpers", []); states.update(extra.get("states", {}))
-        return helpers, states
-
-    def registry(self):
-        return self._load("registry.json", {"entities": [], "areas": [], "devices": []})
-
-    def logbook(self, start, end, entity_id=None):
-        rows = self._load("logbook.json", {"entries": []})["entries"]
-        out = []
-        for r in rows:
-            t = datetime.fromisoformat(r["when"])
-            if start <= t < end and (entity_id is None or r.get("entity_id") == entity_id):
-                out.append(r)
-        return out
-
-    def call_service(self, domain, service, data):
-        # Recorded, never executed. The replay test asserts on this list.
-        self._calls.append({"domain": domain, "service": service, "data": data})
-        return {"recorded": True}
 
 
 class HAError(RuntimeError):
@@ -251,6 +154,7 @@ class McpSession:
         res = self._post("initialize", {"protocolVersion": "2025-03-26", "capabilities": {},
                                         "clientInfo": {"name": "vesta-agent", "version": "0.3"}})
         self._post("notifications/initialized", notify=True)
+        self.server_info = (res or {}).get("serverInfo") or {}      # name and version, for the VESTA Agent page
         return res or {}
 
     def ensure(self) -> None:
@@ -490,6 +394,10 @@ class McpClient(HABase):
 def client_from_args(args) -> HABase:
     """Every script accepts --fixture-dir (offline tests); otherwise the villa through ha-mcp, read-only."""
     if getattr(args, "fixture_dir", None):
+        try:
+            from fixture_client import FixtureClient   # the tests' own (tests/ on PYTHONPATH): not in the app
+        except ImportError:
+            raise SystemExit("--fixture-dir is for the agent's tests only") from None
         return FixtureClient(args.fixture_dir, zone=getattr(args, "zone", None) or "UTC")
     return McpClient(zone=getattr(args, "zone", None))
 
