@@ -299,7 +299,8 @@ def run(args) -> dict:
         d = f.as_dict(); d["id"] = fid
         if f.rule_id in EVENT_RULES:
             store.close_finding(f.rule_id, f.entity_id, key_day)  # events close the same night
-            new.append(d)
+            if is_new:                                             # a rerun of the same night: told already
+                new.append(d)
         elif is_new:
             new.append(d)
         else:

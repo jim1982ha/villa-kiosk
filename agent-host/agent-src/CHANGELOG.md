@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.56 (6 October 2026)
+
+- vesta_shared.store.raise_finding: no open row → the row of the same (rule, entity, opened_day) is reopened and updated (is_new False) instead of a UNIQUE crash; nightly.py reports an event rule as new only when is_new. preventive-maintenance recorded as shipped.
+
 ## 0.6.55 (6 October 2026)
 
 - requests_box: `submit` / `result` (page polls GET /api/tries/<id> every second; POST /try answers {"pending": id} at once); the agent renames a request to <id>.taken.json and runs each as its own task. Cause: a 180 s page request outlived Cloudflare's 100 s (Error 524) on nightly.py. `ask` kept for refresh_tools.

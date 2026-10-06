@@ -113,10 +113,18 @@ class Store:
                                (rule_id, entity_id)).fetchone()
 
     def raise_finding(self, rule_id: str, entity_id: str, family: str, day: str, severity: str, summary: str, detail: dict) -> tuple[int, bool]:
-        """Returns (id, is_new). An open finding for the same rule+entity is updated, not duplicated."""
+        """Returns (id, is_new). An open finding for the same rule+entity is updated, not duplicated.
+
+        ⚠️ THE SAME NIGHT RUN AGAIN (villa, 2026-10-06: nightly.py tried from the page for a day already judged) finds
+        that day's row for the rule+entity, closed if it was an event (closed the night it fires): it is opened again
+        and is not new — not a UNIQUE (rule_id, entity_id, opened_day) crash, not the same news twice."""
         cur = self.open_finding(rule_id, entity_id)
+        if not cur:
+            cur = self.db.execute("SELECT * FROM findings WHERE rule_id=? AND entity_id=? AND opened_day=?",
+                                  (rule_id, entity_id, day)).fetchone()
         if cur:
-            self.db.execute("UPDATE findings SET detail=?, summary=?, severity=? WHERE id=?", (json.dumps(detail), summary, severity, cur["id"]))
+            self.db.execute("UPDATE findings SET detail=?, summary=?, severity=?, status='open', closed_day=NULL WHERE id=?",
+                            (json.dumps(detail), summary, severity, cur["id"]))
             self.db.commit()
             return cur["id"], False
         c = self.db.execute("INSERT INTO findings (rule_id, entity_id, family, opened_day, severity, summary, detail) VALUES (?,?,?,?,?,?,?)",

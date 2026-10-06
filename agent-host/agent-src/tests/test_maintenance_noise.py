@@ -242,3 +242,15 @@ def test_the_morning_message_says_each_thing_once(tmp_path):
     assert "4 sensors have not reported: Sensor 0, Sensor 1, Sensor 2, Sensor 3." in text      # one line for the kind
     assert text.count("Motion battery") == 1                                                # new: not again under Still open
     assert "Still open: 1." in text and "Old lock" in text
+
+
+# ------------------------------------------------------------------------------------------ run twice
+def test_the_same_night_run_again_is_not_a_crash_nor_news_again(tmp_path):
+    # villa, 2026-10-06: nightly.py tried from the page for a day the scheduled night had already judged:
+    # "sqlite3.IntegrityError: UNIQUE constraint failed: findings.rule_id, findings.entity_id, findings.opened_day".
+    # An event (here the meter going backwards) is recorded and closed the night it fires; the rerun wrote it again.
+    _pump(tmp_path, [-3.0, 0.5])
+    first = _night(tmp_path, "--as-of", AS_OF)
+    assert [d["rule_id"] for d in first["new_findings"]].count("PM-COUNTER-RESET") == 1
+    again = _night(tmp_path, "--as-of", AS_OF)
+    assert "PM-COUNTER-RESET" not in [d["rule_id"] for d in again["new_findings"]]   # told once, the first night
