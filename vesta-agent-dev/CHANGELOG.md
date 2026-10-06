@@ -1,3 +1,7 @@
+## 0.12.58
+
+- **A camera picture the AI looks at now always comes with its answer.** 0.12.57 gave the AI a way to send the photo, but it did not use it: asked again for the living room camera, it looked, wrote "here's the current view", and you got text only. Now the agent itself attaches every camera picture the AI looked at while answering you: the photo arrives with the answer as its caption (up to 4 pictures per answer). Only where cameras are allowed (Rules → What the AI can use). If Telegram refuses the photo, the answer still arrives, saying the picture could not be sent.
+
 ## 0.12.57
 
 - **Asked for a camera photo, the AI now sends it to the chat.** Before, it looked at the camera itself, described what it saw, and said "the image I just sent" when nothing had been sent: it had no way to send a picture. Now the photo arrives in the chat, with its answer as the caption. Only where cameras are allowed (Rules → What the AI can use). If the camera gives no picture, the AI says so instead of claiming it sent one.
