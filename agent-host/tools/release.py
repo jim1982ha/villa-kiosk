@@ -46,23 +46,30 @@ ENGINE_MANIFEST = "agent-host/agent-src/vesta-agent.yaml"
 ENGINE_INIT = "agent-host/agent-src/vesta_agent/__init__.py"
 
 PY = sys.executable
-GATES: list[tuple[str, list[str], str]] = [   # (name, command, working directory under ROOT)
-    ("The VESTA Kiosk is untouched", ["bash", "agent-host/tests/check_isolation.sh", "origin/main"], "."),
-    ("The app manifest agrees with what the Supervisor reads", [PY, "agent-host/tests/check_manifest.py"], "."),
+# (name, command, working directory under ROOT, lane). ⚠️ A LANE RUNS ITS GATES IN ORDER, LANES RUN AT ONCE
+# (2026-10-05: one gate at a time was 77 s, 38 of them the agent's own tests). Every gate that binds the fixed sidecar
+# port (contract.SIDECAR_PORT) is in the "sidecar" lane, so two never bind it together — said on the gate's own line
+# (architecture review, 2026-10-07: a table keyed by these names meant a renamed gate silently left the lane;
+# tests/test_release.py finds every gate whose test file uses the port and holds it to this lane).
+GATES: list[tuple[str, list[str], str, str]] = [
+    ("The VESTA Kiosk is untouched", ["bash", "agent-host/tests/check_isolation.sh", "origin/main"], ".", "rest"),
+    ("The app manifest agrees with what the Supervisor reads", [PY, "agent-host/tests/check_manifest.py"], ".", "rest"),
     # Home Assistant's own checks — the community example app's CI: the add-on
     # linter, hadolint, shellcheck (agent-host/tools/addon_lint.py; needs Docker).
     ("Home Assistant's add-on checks",
-     [PY, "agent-host/tools/addon_lint.py", "vesta-agent", "agent-host/Dockerfile", "agent-host/rootfs"], "."),
-    ("The host's start-up, contract, folders and redaction", [PY, "agent-host/tests/test_host.py"], "."),
-    ("The self-test reports each link correctly", [PY, "agent-host/tests/test_selftest.py"], "."),
-    ("The sidecar, the restart policy and the stop grace", [PY, "agent-host/tests/test_supervise.py"], "."),
-    ("The update check moves only forward", [PY, "agent-host/tests/test_updates.py"], "."),
-    ("The agreement with the VESTA Kiosk is the Kiosk's own", [PY, "agent-host/tests/test_kiosk_contract.py"], "."),
-    ("What the host sends is what the agent reads", [PY, "agent-host/tests/test_env_contract.py"], "."),
-    ("The agent's manifest and the host state", [PY, "agent-host/tests/test_manifest.py"], "."),
-    ("The release module", [PY, "agent-host/tests/test_release.py"], "."),
+     [PY, "agent-host/tools/addon_lint.py", "vesta-agent", "agent-host/Dockerfile", "agent-host/rootfs"], ".", "rest"),
+    ("The host's start-up, contract, folders and redaction", [PY, "agent-host/tests/test_host.py"], ".", "sidecar"),
+    ("The self-test reports each link correctly", [PY, "agent-host/tests/test_selftest.py"], ".", "sidecar"),
+    # since 0.12.46 (no test mode) its slot tests stand a fake on the sidecar's port too
+    ("The sidecar, the restart policy and the stop grace", [PY, "agent-host/tests/test_supervise.py"], ".", "sidecar"),
+    ("The update check moves only forward", [PY, "agent-host/tests/test_updates.py"], ".", "rest"),
+    ("The agreement with the VESTA Kiosk is the Kiosk's own", [PY, "agent-host/tests/test_kiosk_contract.py"], ".", "rest"),
+    ("What the host sends is what the agent reads", [PY, "agent-host/tests/test_env_contract.py"], ".", "rest"),
+    ("The agent's manifest and the host state", [PY, "agent-host/tests/test_manifest.py"], ".", "rest"),
+    ("The release module", [PY, "agent-host/tests/test_release.py"], ".", "rest"),
     # The synthetic tests. tests/villa/ (real data, gitignored) is collected too wherever it exists.
-    ("The VESTA Agent's own tests", [PY, "-m", "pytest", "tests", "-q", "-p", "no:cacheprovider"], "agent-host/agent-src"),
+    ("The VESTA Agent's own tests", [PY, "-m", "pytest", "tests", "-q", "-p", "no:cacheprovider"], "agent-host/agent-src",
+     "agent"),
 ]
 
 
@@ -72,17 +79,6 @@ class GateResult:
     status: str            # "pass" | "FAIL"
     seconds: float = 0.0
     note: str = ""
-
-
-# ⚠️ THREE LANES SIDE BY SIDE (2026-10-05): one gate at a time was 77 s, 38 of them the agent's own tests.
-# A lane runs its gates in order; lanes run at once. Gates that bind the fixed sidecar port
-# (contract.SIDECAR_PORT) share the "sidecar" lane, so two never bind it together. Output is still printed
-# in GATES order, whole, with its group — only the waiting is shared.
-LANES = {"The host's start-up, contract, folders and redaction": "sidecar",
-         "The self-test reports each link correctly": "sidecar",
-         # since 0.12.46 (no test mode) its slot tests stand a fake on the sidecar's port too
-         "The sidecar, the restart policy and the stop grace": "sidecar",
-         "The VESTA Agent's own tests": "agent"}
 
 
 def _run_one(cmd: list[str], cwd: str) -> tuple[int, str, float]:
@@ -95,8 +91,8 @@ def run_gates() -> list[GateResult]:
     """Run every gate, even after a failure; return what each did."""
     from concurrent.futures import ThreadPoolExecutor
     lanes: dict[str, list[int]] = {}
-    for i, (name, _cmd, _cwd) in enumerate(GATES):
-        lanes.setdefault(LANES.get(name, "rest"), []).append(i)
+    for i, (_name, _cmd, _cwd, lane_name) in enumerate(GATES):
+        lanes.setdefault(lane_name, []).append(i)
     done: dict[int, tuple[int, str, float]] = {}
 
     def lane(indices: list[int]) -> None:
@@ -105,7 +101,7 @@ def run_gates() -> list[GateResult]:
     with ThreadPoolExecutor(max_workers=len(lanes)) as pool:
         list(pool.map(lane, lanes.values()))
     results: list[GateResult] = []
-    for i, (name, _cmd, _cwd) in enumerate(GATES):
+    for i, (name, _cmd, _cwd, _lane) in enumerate(GATES):
         print(f"::group::{name}" if IN_CI else f"\n═══ {name} ═══", flush=True)
         returncode, out, took = done[i]
         sys.stdout.write(out)

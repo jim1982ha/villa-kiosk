@@ -66,3 +66,44 @@ def test_the_tool_carries_out_what_carry_out_reads():
     assert has_work({"settle": [1]}) and not has_work({"notes": "x"}) and not has_work(None)
     tools = open(outcome.__file__.replace("outcome.py", "tools.py"), encoding="utf-8").read()
     assert "if has_work(res):" in tools and 'res.get("siren_gate") or res.get("settle")' not in tools
+
+
+# ---- the one reading (architecture review, 2026-10-07): read_policy gives the values AND the problems
+@pytest.mark.parametrize("raw", [{"allowed_services": ["light.turn_on"]}, {"system_actions": ["x"]},
+                                 {"system_actions": {"a": 1}}, {"people": "Owner"}, {"chats": ["x"]},
+                                 {"settings": ["x"]}, {"tool_access": ["fm"]}, {"siren_entity": 5}])
+def test_a_section_of_the_wrong_shape_is_named_never_a_crash(raw):
+    p = Policy(raw)                                    # crashed for the first two: every reply and job stopped
+    assert problems(raw) and p.problems == problems(raw)
+
+
+@pytest.mark.parametrize("raw,attr,default", [
+    ({"settings": {"reply_limit_usd": "3"}}, "behaviour", 1.0),
+    ({"settings": {"reply_limit_usd": True}}, "behaviour", 1.0),
+])
+def test_a_value_the_page_refuses_is_the_default_for_the_agent_too(raw, attr, default):
+    assert problems(raw) and Policy(raw).behaviour["reply_limit_usd"] == default
+
+
+def test_the_agent_reads_no_more_than_the_page_accepts():
+    p = Policy({"chats": {"owner": -1, "guests": -5}, "tool_access": {"owner": {"cameras": False}},
+                "settings": {"jobs": {"a": {"profile": "economy", "limit_usd": "0.5"},
+                                      "b": {"profile": "economy", "limit_usd": 1, "x": 1}}},
+                "people": [{"telegram_id": 7, "name": "A", "role": "fm"}, {"telegram_id": 7, "name": "B", "role": "owner"}],
+                "allowed_services": {"light.turn_on": "any", "homeassistant.restart": "owner", "lock.lock": "maybe"}})
+    assert p.chats == {"owner": -1} and p.tool_access == {} and p.jobs == {}
+    assert p.people[7].name == "A"                                          # the first of a repeated id
+    assert p.allowed_services == {"light.turn_on": "any"}                   # a refused line is not offered
+
+
+def test_the_siren_switches_itself_off_without_a_line_in_system_actions():
+    p = Policy({"siren_entity": "Switch.Siren"})
+    assert p.siren_entity == "switch.siren"
+    assert p.check_service("switch", "turn_off", "switch.siren", system=True).allowed
+    assert not p.check_service("switch", "turn_on", "switch.siren", system=True).allowed     # only its stop
+    assert not p.check_service("switch", "turn_off", "switch.other", system=True).allowed
+
+
+def test_a_protective_list_written_as_text_still_protects():
+    raw = {"owner_only_entities": "lock.front, lock.gate"}
+    assert problems(raw) and Policy(raw).owner_only == {"lock.front", "lock.gate"}

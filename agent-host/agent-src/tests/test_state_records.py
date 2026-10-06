@@ -67,3 +67,29 @@ def test_no_module_but_state_writes_these_key_layouts():
                 if re.search(r'f?"(inc|incmsg|saved_by_model):|kv_prefix\(|state\.(get|put|drop)\(', text):
                     owners.append(f)
     assert owners == [], f"raw keys outside state.py: {owners}"
+
+
+def test_an_alerts_button_records_are_kept_as_long_as_the_other_records(tmp_path):
+    # architecture review, 2026-10-07: inc: / incmsg: keys were written for every alert and never deleted
+    from datetime import datetime, timedelta, timezone
+    from vesta_agent.state import State
+    st = State(str(tmp_path / "s.sqlite"))
+    st.set_alert_skill(1, -100, "alert-desk")
+    st.remember_alert_message(1, -100, 55, "Door open")
+    st.put("job:x", "2026-10-01")
+    soon = (datetime.now(timezone.utc) + timedelta(minutes=1)).isoformat()
+    st.prune(runs_before="1970", records_before=soon)
+    assert st.alert_skill(1, -100) is None and st.alert_messages(1) == []
+    assert st.get("job:x") == "2026-10-01"                          # the scheduler's slots are not records
+
+
+def test_a_state_file_from_before_gains_the_keys_date(tmp_path):
+    import sqlite3
+    path = str(tmp_path / "old.sqlite")
+    db = sqlite3.connect(path)
+    db.execute("create table kv(k text primary key, v text)")
+    db.execute("insert into kv values('inc:1:-100', 'alert-desk')")
+    db.commit(); db.close()
+    from vesta_agent.state import State
+    st = State(path)
+    assert st.alert_skill(1, -100) == "alert-desk"                  # kept, its clock started now

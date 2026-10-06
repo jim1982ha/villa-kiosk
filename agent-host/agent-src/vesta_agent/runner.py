@@ -229,7 +229,8 @@ async def run(settings, system_prompt: str, prompt: str, server, allowed: set[st
                       "steps": steps})
     if err and resume and not texts and problem not in NO_RETRY:
         # the session could not be resumed (lost, or from an older version): answer in a new one
-        return await run(settings, system_prompt, prompt, server, allowed, state, who, None, limit_usd, profile)
+        # the same run for the Costs tab: what was asked goes with it (it was dropped, so the answered run had none)
+        return await run(settings, system_prompt, prompt, server, allowed, state, who, None, limit_usd, profile, asked)
     return RunResult("\n\n".join(texts).strip(), session_id, stopped, cost, denied, err, problem)
 
 

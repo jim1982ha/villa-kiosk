@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.63 (7 October 2026)
+
+Third architecture review, all six candidates, and two owner reports:
+1. `policy.read_policy(raw) -> (values, problems)`: one pass; Policy and problems() both read it. Fixes: list-shaped allowed_services / system_actions crashed Policy() (every reply and job); reply/job limits as text, unknown chat roles, tool_access.owner, repeated person ids (first wins), refused service lines are now the default/absent; siren_entity lower-cased and checked; a protective device list written as text still protects (named). check_service(system=True) allows the configured siren's turn_off. test_policy_agreement +5.
+2. `vesta_shared.params.live_params(client, store, max_age_minutes=10)`; alert-desk reads it (no --helpers in production before: params None, maintenance_mode never read); the desk's literals come from BEHAVIOUR_DEFAULTS.
+3. villa-concierge: propose/execute/readback and catalogue.yaml removed (unreachable); SKILL.md "Acting" is ha_call_service; SKILL_PREFACE's concierge clause dropped; test: a SKILL.md never names a `script.py command` the skill lacks.
+4. `store.Incident` (states, CHASED, ANSWERED_OR_CLEARED) used by desk/problems/compose; Store.finding / set_finding_detail / prune_features / pack_seen_empty replace raw SQL in nightly, problems, housekeeping, build_pack; guard test.
+5. Scheduler: start key = claim key (two jobs at one time both run); housekeeping hook started beside the tick. runner: the lost-session retry passes `asked`. State: kv gains `at` (migration dates existing rows), prune removes inc:/incmsg: with the other records.
+6. release.py: GATES carry their lane; test_release holds every gate whose test file uses the sidecar port to "sidecar".
+Owner: start_job keeps (chat, job) running and answers "still running" (the AI had answered from memory, nothing started); Delivery keeps "typing…" in the chat while a requested job runs (stops at its result or end).
+
 ## 0.6.62 (7 October 2026)
 
 Second architecture review, all five candidates:

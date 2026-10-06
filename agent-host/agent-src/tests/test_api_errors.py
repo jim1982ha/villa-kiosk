@@ -140,3 +140,39 @@ def test_a_report_that_cannot_run_says_so_instead_of_logging_done(agent, monkeyp
     job = next(j for s_, j in ai_jobs(agent.skills.all()) if j["name"] == "fm-daily")
     asyncio.run(agent.run_model_job(sk, job))
     assert any("fm-daily report could not be prepared" in t and "could not be reached" in t for _, t, _ in agent.tg.sent)
+
+
+def test_a_run_retried_after_a_lost_session_keeps_what_was_asked(monkeypatch, tmp_path):
+    # architecture review, 2026-10-07: the retry in a new conversation dropped `asked`: on the Costs tab, the run
+    # that answered showed nothing asked
+    lost = [AssistantMessage(content=[TextBlock(text="No conversation found")], model="m", error="unknown"),
+            failed_result(None, "No conversation found with session ID: old")]
+    answered = [AssistantMessage(content=[TextBlock(text="The pool is fine.")], model="m"),
+                ResultMessage(subtype="success", duration_ms=10, duration_api_ms=5, is_error=False, num_turns=1,
+                              session_id="s2", total_cost_usd=0.01, result="The pool is fine.")]
+    rounds = iter([lost, answered])
+
+    class Fake:
+        def __init__(self, options):
+            self.msgs = next(rounds)
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def query(self, prompt):
+            pass
+
+        async def receive_response(self):
+            for m in self.msgs:
+                yield m
+    monkeypatch.setattr(runner, "ClaudeSDKClient", Fake)
+    s = settings(str(tmp_path))
+    st = State(s.state_path)
+    res = asyncio.run(runner.run(s, "sys", "p", None, set(), st, who="x", resume="old", asked="is the pool ok?"))
+    assert res.text == "The pool is fine."
+    import json as _j
+    runs = [_j.loads(c["detail"]) for c in st.calls_since("1970") if c["kind"] == "run"]
+    assert runs[-1]["asked"] == "is the pool ok?"

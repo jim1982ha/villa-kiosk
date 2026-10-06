@@ -89,11 +89,9 @@ script_allowlist: []          # same for scripts
 button_allowlist: []          # never a restart button
 notify_recipients: []         # the agent writes on Telegram itself; notify.* stays closed
 
-# Calls the code makes for itself, without a person. The siren's automatic stop
-# after siren_auto_off_min needs its line here once siren_entity is set:
+# Calls the code makes for itself, without a person. (The siren's automatic stop
+# after siren_auto_off_min needs no line here: switching the siren off is always allowed.)
 system_actions: []
-#  - service: switch.turn_off
-#    entity_id: switch.your_siren
 
 # What the AI can use (VESTA Agent page → Rules → What the AI can use). Left out: everything on.
 # agent_tools:                  the agent's own tools a villa may switch off

@@ -66,7 +66,7 @@ def main(argv=None):
         st = Store(args.store)
         watched = [r for fam in ("power", "energy", "runtime", "battery", "level", "water", "security", "generation")
                    for r in pack.families.get(fam, [])]
-        first_run = st.db.execute("SELECT COUNT(*) FROM pack_seen").fetchone()[0] == 0
+        first_run = st.pack_seen_empty()
         new, gone = st.pack_diff(watched)
         summary["onboarding"] = (f"Initial inventory: {len(new)} monitored entities recorded, nothing to ask."
                                  if first_run else pack_diff_summary(new, gone))

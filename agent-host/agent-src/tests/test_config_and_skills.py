@@ -227,3 +227,20 @@ def test_the_villas_own_file_in_a_starter_skill_is_kept_and_does_not_stop_its_up
     assert Skills(str(skills), new).update_starters() == (["pool-care"], [])       # not an edit: updated
     assert (skills / "pool-care" / "scripts" / "check.py").read_text() == "print('v2')\n"
     assert (skills / "pool-care" / "villa.extra.yaml").read_text() == "mine: true\n"  # and kept
+
+
+def test_a_skills_instructions_never_name_a_command_the_skill_does_not_have():
+    # architecture review, 2026-10-07: villa-concierge's SKILL.md told the AI to run propose / execute / readback,
+    # which the skill did not offer and could not run (read-only), while the real path is ha_call_service
+    import re
+    from helpers import STARTER_SKILLS
+    from vesta_agent.skills import Skills
+    for name, sk in Skills(STARTER_SKILLS).all().items():
+        md = open(sk.skill_md, encoding="utf-8").read()
+        run = " ".join([j.get("run") or "" for j in sk.schedule] + [sk.every_5_min or "", sk.on_reply or ""]
+                       + list(sk.on_event.values()) + [j.get("on_limit") or "" for j in sk.schedule])
+        for script, cmd in re.findall(r"`([a-z_]+\.py) ([a-z][a-z_-]+)\b", md):        # a command, written as code
+            spec = sk.scripts.get(script)
+            if spec is None or spec.commands is None:
+                continue
+            assert cmd in spec.commands or f"{script} {cmd}" in run, f"{name}/SKILL.md names {script} {cmd}"

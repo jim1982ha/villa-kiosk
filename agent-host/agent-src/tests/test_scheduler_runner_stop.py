@@ -173,3 +173,33 @@ def test_a_long_job_never_holds_the_alert_chase(tmp_path):
         nightly_done.set()
         await sch.idle()
     asyncio.run(go())
+
+
+def test_two_jobs_of_a_skill_at_the_same_time_both_run_and_housekeeping_never_holds_the_tick(tmp_path):
+    # architecture review, 2026-10-07: the slot was claimed as skill:i:when and started as skill:when — the second
+    # job at the same time was refused as "still running" and lost; the engine's housekeeping ran inside the tick
+    from helpers import make_skill
+    s = settings(str(tmp_path))
+    make_skill(s.skills_dir, "twins", {"description": "t", "scripts": {"a.py": {}}, "schedule": [
+        {"when": "07:00", "run": "a.py"}, {"when": "07:00", "run": "a.py"}]}, {"a.py": "print('{}')\n"})
+    ran, slow = [], asyncio.Event()
+
+    async def run_code(skill, command, timeout):
+        ran.append(command)
+        await asyncio.sleep(0.05)
+
+    async def nothing(*a):
+        pass
+
+    async def housekeeping():
+        await slow.wait()                                   # HA MCP not answering
+
+    sch = Scheduler(s, Skills(s.skills_dir), State(s.state_path), run_code, nothing, nothing, housekeeping)
+
+    async def go():
+        await asyncio.wait_for(sch.tick(at(7, 1)), 1)     # returns at once though housekeeping waits
+        await asyncio.sleep(0.2)
+        slow.set()
+        await sch.idle()
+    asyncio.run(go())
+    assert ran == ["a.py", "a.py"]

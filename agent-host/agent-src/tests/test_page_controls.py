@@ -179,7 +179,7 @@ def test_try_a_command_is_checked_as_the_ai_and_nothing_is_carried_out(tmp_path)
     s = settings(str(tmp_path))
     copy_skill("villa-concierge", s.skills_dir)
     v = Vesta(s, telegram=FakeTelegram(), reader=FakeHA(), kiosk=Kiosk("", ""))
-    refused = v.try_command("villa-concierge", "concierge.py", ["propose", "--action", "lock.unlock"])
+    refused = v.try_command("villa-concierge", "concierge.py", ["unlock", "--what", "lock"])
     assert refused["ok"] is False and "concierge.py needs one of" in refused["error"]
     assert v.try_command("villa-concierge", "voice.py", ["prepare"])["ok"] is False   # a hook's script: not the AI's
     assert v.tg.sent == []

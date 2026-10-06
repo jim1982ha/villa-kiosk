@@ -159,3 +159,29 @@ class VillaParams:
         with open(path, encoding="utf-8") as f:
             d = json.load(f)
         return cls(helpers=d.get("helpers", []), states=d.get("states", {}))
+
+
+def live_params(client, store, max_age_minutes: float = 10, now=None) -> "VillaParams":
+    """The villa's parameters as Home Assistant has them now, kept for `max_age_minutes` in the skill store (a script
+    run every five minutes would otherwise read every helper each time). Home Assistant not answering: the last
+    copy kept, else the defaults — never a crash, never a guessed value. `client`: Home Assistant's client, or a
+    function that makes it (made only when the copy is too old).
+
+    ⚠️ ONE WAY IN FOR EVERY SCRIPT (architecture review, 2026-10-07): the alert desk read them only from a test
+    fixture, so in the villa its maintenance mode and the villa's own timings were never read."""
+    from datetime import datetime, timedelta, timezone
+    now = now or datetime.now(timezone.utc)
+    kept = store.cache_get("villa_params") or {}
+    try:
+        fresh = kept and now - datetime.fromisoformat(kept["at"]) < timedelta(minutes=max_age_minutes)
+    except (KeyError, ValueError):
+        fresh = False
+    if not fresh:
+        try:
+            helpers, states = (client() if callable(client) else client).helpers()
+            kept = {"at": now.isoformat(), "helpers": helpers, "states": states}
+            store.cache_put("villa_params", kept)
+        except Exception:  # noqa: BLE001 — Home Assistant unreachable: the last copy, or the defaults
+            pass
+    return VillaParams(helpers=kept.get("helpers") or [], states=kept.get("states") or {})
+

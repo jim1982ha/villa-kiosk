@@ -34,7 +34,7 @@ from datetime import datetime, timedelta, timezone
 import yaml
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-from vesta_shared.store import Store  # noqa: E402  (PYTHONPATH is set by the engine)
+from vesta_shared.store import Incident, Store  # noqa: E402  (PYTHONPATH is set by the engine)
 from vesta_shared.params import VillaParams  # noqa: E402
 from vesta_shared.problems import DONE, Problems  # noqa: E402  (a problem's lifecycle: one owner)
 
@@ -140,14 +140,14 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
             msg["keyboard"] = True
         out["send"].append(msg)
     if sev in ("P1", "P2") and route.get("ladder", True):
-        store.update_incident(iid, state="asked", asked_at=now.isoformat(), assignee="fm")
+        store.update_incident(iid, state=Incident.ASKED, asked_at=now.isoformat(), assignee="fm")
         tid, _ = Problems(store).open_task("incident", iid, rule_id, eid, ev["message"][:250], route.get("check") or "")
         out["actions"].append({"action": "ticket", "summary": ev["message"][:200], "task_id": tid,
                                "entity_id": eid if eid and "," not in eid else None, "note": route.get("check")})
     elif sev == "P3":
-        store.update_incident(iid, state="digest")
+        store.update_incident(iid, state=Incident.DIGEST)
     else:
-        store.update_incident(iid, state="logged")
+        store.update_incident(iid, state=Incident.LOGGED)
     # intrusion: open the siren gate, never fire it
     if route.get("intrusion"):
         gate = siren_gate(store, ev, now)
@@ -167,8 +167,8 @@ def resolved(store: Store, ev: dict, now: datetime) -> dict:
     inc = _find_by_ha_incident(store, ev.get("ha_incident")) or store.find_open_incident(f"{ev['rule_id']}|{ev.get('entity_id', '')}")
     if not inc:
         return out
-    was_chasing = inc["state"] in ("asked", "reasked", "escalated")
-    store.update_incident(inc["id"], state="resolved", closed_at=now.isoformat())
+    was_chasing = inc["state"] in Incident.CHASED
+    store.update_incident(inc["id"], state=Incident.RESOLVED, closed_at=now.isoformat())
     out["incident_id"], out["decision"] = inc["id"], "resolved"
     for tid in Problems(store).clear_source("incident", inc["id"], inc["rule_id"], inc["entity_id"]):
         out["actions"].append({"action": "ticket.resolve", "task_id": tid, "note": "Cleared: Home Assistant reports it is back to normal."})
@@ -186,7 +186,7 @@ def abandoned(store: Store, ev: dict, now: datetime) -> dict:
     inc = _find_by_ha_incident(store, ev.get("ha_incident")) or store.find_open_incident(f"{ev['rule_id']}|{ev.get('entity_id', '')}")
     if not inc:
         return out
-    store.update_incident(inc["id"], state="escalated", escalated_at=now.isoformat(), assignee="owner")
+    store.update_incident(inc["id"], state=Incident.ESCALATED, escalated_at=now.isoformat(), assignee="owner")
     out["incident_id"], out["decision"] = inc["id"], "abandoned"
     out["send"].append({"to": "owner", "text": f"Still not clear, and the rule has stopped watching it: {ev['message']} Incident #{inc['id']}."})
     return out
@@ -226,22 +226,22 @@ def reply(store: Store, iid: int, text: str, sender_role: str, now: datetime, pa
     if inc.get("closed_at") and not t.startswith("mute"):
         out["send"].append({"to": "here", "text": f"Incident #{iid} is already closed."}); return out
     if t.startswith("done"):
-        store.update_incident(iid, state="done", reply=text, closed_at=now.isoformat())
+        store.update_incident(iid, state=Incident.DONE, reply=text, closed_at=now.isoformat())
         for tid in Problems(store).clear_source("incident", iid, inc["rule_id"], inc["entity_id"], status=DONE):
             out["actions"].append({"action": "ticket.resolve", "task_id": tid, "note": f"Done, answered by the {sender_role}."})
         out["send"].append({"to": "here", "text": f"Thanks, incident #{iid} closed. The VESTA Agent will check it stays quiet."})
     elif t.startswith("not found"):
-        store.update_incident(iid, state="not_found", reply=text)
+        store.update_incident(iid, state=Incident.NOT_FOUND, reply=text)
         out["send"].append({"to": "here", "text": f"Noted for #{iid}. It stays open and goes in the weekly report; tell me if it comes back."})
     elif t.startswith("need help"):
-        store.update_incident(iid, state="escalated", reply=text, escalated_at=now.isoformat(), assignee="owner")
+        store.update_incident(iid, state=Incident.ESCALATED, reply=text, escalated_at=now.isoformat(), assignee="owner")
         out["send"].append({"to": "owner", "text": f"The FM needs help on incident #{iid}: {json.loads(inc['payload'] or '{}').get('message', inc['rule_id'])}."})
         out["send"].append({"to": "here", "text": "Owner notified."})
     elif t.startswith("mute"):
-        days = int((params.behaviour("mute_days") if params else 30))
+        days = int(params.behaviour("mute_days") if params else VillaParams().behaviour("mute_days"))
         until = (now + timedelta(days=days)).isoformat()
         store.mute(inc["rule_id"], inc["entity_id"], until, sender_role)
-        store.update_incident(iid, state="muted", reply=text, closed_at=now.isoformat())
+        store.update_incident(iid, state=Incident.MUTED, reply=text, closed_at=now.isoformat())
         out["send"].append({"to": "here", "text": f"Muted this alert for {days} days. The report will list it."})
     else:
         store.update_incident(iid, reply=text)
@@ -257,23 +257,24 @@ def reply(store: Store, iid: int, text: str, sender_role: str, now: datetime, pa
 
 def tick(store: Store, now: datetime, params: VillaParams | None = None) -> dict:
     """Every 5 minutes: chase ladder, villa-silent watch, alert fatigue."""
-    reask = params.behaviour("reask_minutes") if params else 15
-    escal = params.behaviour("escalate_minutes") if params else 45
-    silent_min = params.behaviour("villa_silent_minutes") if params else 30
+    params = params or VillaParams()               # no parameters given: the defaults table, never a copy of it here
+    reask = params.behaviour("reask_minutes")
+    escal = params.behaviour("escalate_minutes")
+    silent_min = params.behaviour("villa_silent_minutes")
     out = {"send": [], "actions": [], "escalated": [], "reasked": []}
     for inc in store.incidents(open_only=True):
-        if inc["state"] not in ("asked", "reasked"):
+        if inc["state"] not in (Incident.ASKED, Incident.REASKED):
             continue
         asked = datetime.fromisoformat(inc["asked_at"])
         age = now - asked
         msg = json.loads(inc["payload"] or "{}").get("message", inc["rule_id"])
-        if inc["state"] == "asked" and age >= timedelta(minutes=reask):
-            store.update_incident(inc["id"], state="reasked", reasked_at=now.isoformat())
+        if inc["state"] == Incident.ASKED and age >= timedelta(minutes=reask):
+            store.update_incident(inc["id"], state=Incident.REASKED, reasked_at=now.isoformat())
             out["send"].append({"to": "fm", "text": f"Reminder, incident #{inc['id']}: {msg}. Reply Done, Not found or Need help.",
                                 "keyboard": True})
             out["reasked"].append(inc["id"])
-        elif inc["state"] == "reasked" and age >= timedelta(minutes=escal):
-            store.update_incident(inc["id"], state="escalated", escalated_at=now.isoformat(), assignee="owner")
+        elif inc["state"] == Incident.REASKED and age >= timedelta(minutes=escal):
+            store.update_incident(inc["id"], state=Incident.ESCALATED, escalated_at=now.isoformat(), assignee="owner")
             out["send"].append({"to": "owner", "text": f"No answer from the FM after {int(escal)} min on incident #{inc['id']}: {msg}."})
             out["escalated"].append(inc["id"])
     # villa silent: the engine's Home Assistant connection has been down too long
@@ -284,16 +285,16 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None) -> dict
             iid = store.new_incident(key, "critical_internet---villa_silent", "agent", "P1",
                                      {"message": f"No contact with the villa's Home Assistant for {int((now - datetime.fromisoformat(last)).total_seconds() // 60)} min: internet, power or Home Assistant is down."},
                                      now.isoformat())
-            store.update_incident(iid, state="asked", asked_at=now.isoformat(), assignee="fm")
+            store.update_incident(iid, state=Incident.ASKED, asked_at=now.isoformat(), assignee="fm")
             for role in recipients("P1"):
                 out["send"].append({"to": role, "text": f"[P1] Villa silent since {last[:16]} UTC: no contact with Home Assistant. Check power, the router and the internet link. Incident #{iid}."})
     elif last:
         cur = store.find_open_incident("critical_internet---villa_silent|agent")
         if cur:
-            store.update_incident(cur["id"], closed_at=now.isoformat(), state="recovered")
+            store.update_incident(cur["id"], closed_at=now.isoformat(), state=Incident.RECOVERED)
             out["send"].append({"to": "fm", "text": "Villa back online: Home Assistant answers again."})
     # alert fatigue: a rule firing more than N times in 30 days without acknowledgement
-    limit = params.behaviour("alert_fatigue_per_month") if params else 20
+    limit = (params or VillaParams()).behaviour("alert_fatigue_per_month")
     since = (now - timedelta(days=30)).isoformat()
     rules = {i["rule_id"] for i in store.incidents(open_only=False) if i["opened_at"] >= since}
     for r in rules:
@@ -317,7 +318,14 @@ def main(argv=None):
     a = ap.parse_args(argv)
     store = Store(a.store)
     now = now_utc(a.now)
-    params = VillaParams.from_fixture(a.helpers) if a.helpers else None
+    # the villa's own parameters (its maintenance mode, its timings): a test's fixture, else Home Assistant's live
+    # helpers kept ten minutes (params.live_params) — never None, so the defaults table is the only fall-back
+    if a.helpers:
+        params = VillaParams.from_fixture(a.helpers)
+    else:
+        from vesta_shared.ha_client import McpClient
+        from vesta_shared.params import live_params
+        params = live_params(McpClient, store)
     if a.cmd == "intake":
         ev = json.load(open(a.event)) if a.event else json.load(sys.stdin)
         reader = (lambda: a.villa_mode) if a.villa_mode else villa_mode

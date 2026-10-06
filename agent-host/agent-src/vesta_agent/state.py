@@ -72,6 +72,11 @@ class State:
         self.db = sqlite3.connect(path, check_same_thread=False)
         self.db.row_factory = sqlite3.Row
         self.db.executescript(SCHEMA)
+        # ⚠️ A KEY KNOWS WHEN IT WAS WRITTEN (architecture review, 2026-10-07): an alert's button records (inc:,
+        # incmsg:) were never pruned — kv had no date. Existing rows start their clock now.
+        if "at" not in {r[1] for r in self.db.execute("pragma table_info(kv)")}:
+            self.db.execute("alter table kv add column at text")
+            self.db.execute("update kv set at = ?", (utcnow().isoformat(),))
         self.db.commit()
 
     # ------------------------------------------------------------------ log
@@ -98,7 +103,8 @@ class State:
 
     def put(self, k: str, v: str) -> None:
         with self._lock:
-            self.db.execute("insert into kv(k, v) values(?,?) on conflict(k) do update set v=excluded.v", (k, v))
+            self.db.execute("insert into kv(k, v, at) values(?,?,?) on conflict(k) do update set v=excluded.v, at=excluded.at",
+                            (k, v, utcnow().isoformat()))
             self.db.commit()
 
     def drop(self, k: str) -> None:
@@ -210,6 +216,9 @@ class State:
                                    (records_before,)).rowcount
             cont = self.db.execute("delete from continuations where created_at < ?", (records_before,)).rowcount
             msgs = self.db.execute("delete from own_messages where sent_at < ?", (records_before,)).rowcount
+            # an alert's button records go with the agent's other records (its messages are pruned just above)
+            msgs += self.db.execute("delete from kv where (k like 'inc:%' or k like 'incmsg:%') and at < ?",
+                                    (records_before,)).rowcount
             self.db.commit()
         return {"runs": runs, "records": other + appr + cont + msgs}
 

@@ -7,6 +7,7 @@ the channel manifest on main, and gates that pass or fail on demand.
 from __future__ import annotations
 
 import importlib.util
+import os
 import subprocess
 import sys
 import tempfile
@@ -183,6 +184,27 @@ class CiFailures(unittest.TestCase):
         def down():
             raise OSError("offline")
         self.assertIsNone(release.ci_failures("x", fetch=down))
+
+
+PORT_WORDS = ("SIDECAR" + "_PORT", "95" + "83")     # built, so this file does not name them itself
+
+
+class Lanes(unittest.TestCase):
+    """Every gate whose test file binds the sidecar's fixed port is in the "sidecar" lane (architecture review,
+    2026-10-07: the lanes were a table keyed by the gates' display names — a renamed gate left it unseen)."""
+
+    def test_a_gate_that_uses_the_sidecars_port_shares_its_lane(self):
+        root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        found = 0
+        for name, cmd, cwd, lane in release.GATES:
+            for part in cmd:
+                path = os.path.join(root, cwd, part)
+                if part.endswith(".py") and os.path.isfile(path):
+                    src = open(path, encoding="utf-8").read()
+                    if any(word in src for word in PORT_WORDS):
+                        found += 1
+                        self.assertEqual(lane, "sidecar", name)
+        self.assertGreaterEqual(found, 3)
 
 
 if __name__ == "__main__":

@@ -23,7 +23,7 @@ from __future__ import annotations
 import json
 
 from .messaging import no_code as _no_code
-from .store import Store
+from .store import Store, Incident
 
 DONE = "done"                          # a person answered Done (a button, or "#N done")
 CLEARED = "cleared"                    # its source is gone: the night check no longer sees it, HA cleared it
@@ -74,7 +74,7 @@ class Problems:
         if kind == "incident" and sid:
             inc = self.store.incident(sid)
             if inc and not inc.get("closed_at"):
-                self.store.update_incident(sid, state="done", reply="Closed in the VESTA Kiosk",
+                self.store.update_incident(sid, state=Incident.DONE, reply="Closed in the VESTA Kiosk",
                                            closed_at=self.store.now())
                 return sid
         return None
@@ -83,13 +83,13 @@ class Problems:
         """True when the finding or incident a task is about is closed — the task outlived it."""
         kind, sid = self._source(task)
         if kind == "finding":
-            row = self.store.db.execute("SELECT status FROM findings WHERE id=?", (sid,)).fetchone()
+            row = self.store.finding(sid)
             return bool(row) and row["status"] != "open"
         if kind == "incident":
             # over when it was answered or cleared — not when it was muted (the fault is still there,
             # nobody wants to be told again) nor when its rule stopped watching it
             inc = self.store.incident(sid)
-            return bool(inc) and bool(inc.get("closed_at")) and inc.get("state") in ("done", "resolved")
+            return bool(inc) and bool(inc.get("closed_at")) and inc.get("state") in Incident.ANSWERED_OR_CLEARED
         return False                                     # no source of its own: it waits for a person
 
     # ---------------------------------------------------------------- reading

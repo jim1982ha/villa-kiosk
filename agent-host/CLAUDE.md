@@ -147,6 +147,19 @@ Decisions of 2026-09-30 (owner):
   `kiosk_fake.FakeKiosk` held to the real ones by test_fakes. Page: one switch
   card, `core.toggleCard` (Rules › What the AI can use, Skills › What the AI may
   run; `.tool-grid.three`).
+  Third review, 0.12.68: `policy.read_policy` reads the file ONCE — the values
+  the agent uses and problems() come from the same pass (a value named is the
+  default; a wrongly shaped section never crashes; device lists stay lenient on
+  purpose); the configured siren's turn_off is an implied system action.
+  `vesta_shared.params.live_params` (the alert desk now reads the villa's
+  parameters, kept 10 min). villa-concierge has no action path of its own
+  (catalogue.yaml, propose/execute/readback removed; SKILL.md names only what
+  the skill offers — test). `store.Incident` names an incident's states; the
+  store owns its SQL (test). Scheduler: one key per job, housekeeping beside the
+  tick; runner's retry keeps `asked`; kv rows are dated and button records
+  pruned. release.py: each gate names its lane (test: port users → "sidecar").
+  start_job answers whether the job still runs (never the AI's memory);
+  Delivery keeps "typing…" while a job asked for in a chat runs.
 - No PDF (owner, 2026-09-30): the reports are self-contained HTML pages sent
   as attachments. Chromium was ~480 MB of a 1.1 GB image for this alone.
 - ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent

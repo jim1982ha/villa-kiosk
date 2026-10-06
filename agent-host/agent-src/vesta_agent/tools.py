@@ -81,9 +81,8 @@ The code adds --pack, --store and --zone itself: never pass them, nor --fixture-
 Output files: give --out a plain file name (e.g. week.json); the file lands in the agent's out folder and can be
 passed by name to another script or attached with send_message.
 Any action on the villa (light, lock, siren, automation...) is ha_call_service: it only ASKS a person, who approves
-with a button. A task for the facility manager is create_ticket. The concierge's propose/execute/readback commands
-and the desk's siren/reply/intake/tick commands are done by the code, not by you. Ignore the parts of the text
-below that tell you to run them.
+with a button. A task for the facility manager is create_ticket. The desk's siren/reply/intake/tick commands are
+done by the code, not by you. Ignore the parts of the text below that tell you to run them.
 [End of the VESTA note]
 
 """
@@ -400,7 +399,10 @@ class Toolbox:
 
         @tool("start_job", "Start one of the skills' jobs because the person asked for it (for example a weekly or "
                            "monthly report). It runs as on schedule, with its own model and spending limit, and "
-                           "sends its result to this chat when ready. Do not do the job yourself. Jobs: " + listing,
+                           "sends its result to this chat when ready. Do not do the job yourself. Call it EVERY time "
+                           "a person asks, even if you started it earlier in this conversation: it answers itself "
+                           "whether that job is still running. Never say a job is running without calling it. Jobs: "
+                           + listing,
               schema)
         async def handler(args: dict) -> dict:
             answer = await self.start_job(str(args.get("name") or ""), chat_id)

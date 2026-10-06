@@ -102,3 +102,19 @@ def test_an_old_task_is_given_the_source_of_its_rule_and_device_once(tmp_path):
     st.close_finding("PM-A", "sensor.example_a", "2026-10-01")
     old_finding, _, nothing = pb.open_tasks()
     assert pb.source_gone(old_finding) and not pb.source_gone(nothing)
+
+
+def test_the_store_owns_its_sql_and_an_incidents_states_have_one_spelling():
+    # architecture review, 2026-10-07: nightly.py, problems.py and the night's tidy wrote SQL on the store's tables;
+    # the desk spelt each incident state by hand and problems.py had its own "answered or cleared"
+    import glob
+    import os
+    import re
+    from helpers import ROOT, STARTER_SKILLS
+    files = glob.glob(os.path.join(STARTER_SKILLS, "*", "scripts", "*.py")) + \
+        [f for f in glob.glob(os.path.join(ROOT, "vesta_shared", "*.py")) if not f.endswith("store.py")] + \
+        [os.path.join(ROOT, "vesta_agent", "housekeeping.py")]
+    for f in files:
+        src = open(f, encoding="utf-8").read()
+        assert not re.search(r"\.db\.execute\(\s*[\"'](SELECT|UPDATE|DELETE|INSERT)", src), f
+        assert not re.search(r"update_incident\([^)]*state=[\"']", src), f

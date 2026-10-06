@@ -91,13 +91,13 @@ def _prune_figures(store_path: str, now: datetime, months: int) -> int:
     cut = (now - timedelta(days=round(months * 30.44))).date().isoformat()
     for attempt in range(3):            # a skill script may be writing: wait for it, never fail the night
         try:
-            db = sqlite3.connect(store_path, timeout=30)
+            from vesta_shared.store import Store          # the store owns its tables' SQL
+            st = Store(store_path)
+            st.db.execute("PRAGMA busy_timeout = 30000")
             try:
-                n = db.execute("DELETE FROM features WHERE day < ?", (cut,)).rowcount
-                db.commit()
-                return max(n, 0)
+                return st.prune_features(cut)
             finally:
-                db.close()
+                st.db.close()
         except sqlite3.OperationalError as e:
             if "no such table" in str(e):
                 return 0

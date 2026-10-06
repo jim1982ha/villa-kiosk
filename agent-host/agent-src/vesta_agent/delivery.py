@@ -56,6 +56,8 @@ class Delivery:
         self.state = state
         self.policy = policy
         self.notices = JobNotices()
+        # chat → (stop, the loop, the jobs running): "typing…" while a job asked for in a chat works
+        self._job_typing: dict[int, tuple[asyncio.Event, asyncio.Task, set[str]]] = {}
 
     # ------------------------------------------------------------------ one message
     async def send(self, chat_id: int, text: str, *, keyboard: dict | None = None, approval_id: str | None = None,
@@ -82,6 +84,9 @@ class Delivery:
             self.state.set_approval_message(approval_id, mid)
         if origin is not None and origin.kind == JOB:
             await self._notice(int(chat_id), self.notices.result(int(chat_id)))
+            entry = self._job_typing.get(int(chat_id))
+            if entry and len(entry[2]) <= 1:
+                self._stop_job_typing(int(chat_id))             # its result is there: nothing is pending any more
         return mid
 
     # ------------------------------------------------------------------ a conversation's reply
@@ -111,15 +116,7 @@ class Delivery:
         """"typing…" in the chat until the block ends or the yielded stop() is called (owner, 2026-10-06: "like if
         it was starting to write"). Telegram shows it about 5 s, so it is said again every TYPING_EVERY_S."""
         stop = asyncio.Event()
-
-        async def loop():
-            while not stop.is_set():
-                await self.tg.typing(int(chat_id))
-                try:
-                    await asyncio.wait_for(stop.wait(), timeout=TYPING_EVERY_S)
-                except asyncio.TimeoutError:
-                    pass
-        task = asyncio.create_task(loop()) if self.tg is not None else None
+        task = asyncio.create_task(self._typing_loop(chat_id, stop)) if self.tg is not None else None
         try:
             yield stop.set
         finally:
@@ -127,12 +124,41 @@ class Delivery:
             if task:
                 await task
 
+    async def _typing_loop(self, chat_id: int, stop: asyncio.Event) -> None:
+        while not stop.is_set():
+            await self.tg.typing(int(chat_id))
+            try:
+                await asyncio.wait_for(stop.wait(), timeout=TYPING_EVERY_S)
+            except asyncio.TimeoutError:
+                pass
+
     # ------------------------------------------------------------------ jobs asked for in a chat
+    # ⚠️ "typing…" UNTIL THE REPORT IS THERE (owner, 2026-10-07): the conversation's reply ("on its way") ended the
+    # sign while the job still worked for minutes. A job asked for in a chat keeps it in that chat — private or a
+    # group — until its result reaches the chat, or it ends without one.
     def job_started(self, chat_id: int, job: str) -> None:
         self.notices.started(int(chat_id), job)
+        if self.tg is None:
+            return
+        entry = self._job_typing.get(int(chat_id))
+        if entry and not entry[0].is_set():
+            entry[2].add(job)
+            return
+        stop = asyncio.Event()
+        self._job_typing[int(chat_id)] = (stop, asyncio.create_task(self._typing_loop(int(chat_id), stop)), {job})
 
     async def job_ended(self, chat_id: int, job: str) -> None:
+        entry = self._job_typing.get(int(chat_id))
+        if entry:
+            entry[2].discard(job)
+            if not entry[2]:
+                self._stop_job_typing(int(chat_id))
         await self._notice(int(chat_id), self.notices.ended(int(chat_id), job))
+
+    def _stop_job_typing(self, chat_id: int) -> None:
+        entry = self._job_typing.pop(chat_id, None)
+        if entry:
+            entry[0].set()
 
     async def _notice(self, chat_id: int, step) -> None:
         """Carry out what job_notices.py decided about a "being prepared" message."""

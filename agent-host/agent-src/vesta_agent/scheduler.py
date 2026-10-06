@@ -126,7 +126,11 @@ class Scheduler:
         for sk in skills.values():
             for i, job in enumerate(sk.schedule):
                 slot = slot_for(job["when"], now)
-                if not slot or not self._claim(f"{sk.name}:{i}:{job['when']}", slot):
+                # ⚠️ ONE KEY FOR CLAIMING THE SLOT AND FOR "STILL RUNNING" (architecture review, 2026-10-07): the slot
+                # was claimed per entry (skill:i:when) and started per time (skill:when) — two jobs of a skill at the
+                # same time, and the second, claimed, was refused as "still running": lost for the day
+                key = f"{sk.name}:{i}:{job['when']}"
+                if not slot or not self._claim(key, slot):
                     continue
                 name = f"{sk.name}:{job['when']}"
 
@@ -136,10 +140,11 @@ class Scheduler:
                         await self.run_code(sk, job["run"], job["timeout"])
                     else:
                         await self.run_model(sk, job)
-                if self._start(name, run):
+                if self._start(key, run):
                     started.append(name)
         if self.housekeeping:
-            await self.housekeeping()
+            # beside the tick like every job, never inside it: it may wait on HA MCP (90 s) when it is down
+            self._start("engine:housekeeping", self.housekeeping)
         return started
 
     async def run(self, stop: asyncio.Event) -> None:

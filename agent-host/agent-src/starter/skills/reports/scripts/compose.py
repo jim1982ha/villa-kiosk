@@ -45,7 +45,7 @@ sys.path.insert(0, HERE)
 from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
 from vesta_shared.messaging import fmt_money, split_message  # noqa: E402
 from vesta_shared.axis import is_flat, label as axis_label, nice_axis  # noqa: E402  (the one axis rule)
-from vesta_shared.store import Store  # noqa: E402
+from vesta_shared.store import Incident, Store  # noqa: E402
 from vesta_shared.timeutil import day_label, day_time_label, villa_day  # noqa: E402  (the one day format)
 from vesta_shared.problems import Problems  # noqa: E402  (what is still open: one owner)
 
@@ -84,7 +84,7 @@ def fm_daily(pack: KnowledgePack, store: Store, as_of: date) -> str:
 
     yesterday = (as_of - timedelta(days=1)).isoformat()
     new = [f for f in store.findings(since_day=yesterday) if f["severity"] in ("P2", "P3")]
-    digest_inc = [i for i in store.incidents(open_only=True) if i["state"] == "digest" and i["opened_at"][:10] >= yesterday]
+    digest_inc = [i for i in store.incidents(open_only=True) if i["state"] == Incident.DIGEST and i["opened_at"][:10] >= yesterday]
     shown_new = {f"finding:{f['id']}" for f in new}
     open_now = [p for p in Problems(store).open_problems() if p["source"] not in shown_new]
     lines = [f"{pack.villa}, {day_label(as_of, weekday=True)} morning."]

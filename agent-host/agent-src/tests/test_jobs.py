@@ -254,3 +254,57 @@ def test_the_ai_is_never_told_sent_for_a_message_telegram_refused(agent):
     assert out.get("is_error") and "nothing was sent" in out["content"][0]["text"]
     agent.tg.refuse.clear()
     assert not run(send.handler({"to": "here", "text": "The weekly report."})).get("is_error")
+
+
+def test_typing_goes_on_while_the_report_asked_for_is_made_and_stops_when_it_is_there(agent, tmp_path, monkeypatch):
+    # owner, 2026-10-07: "typing…" stopped at "on its way", while the report was still being made for minutes
+    from vesta_agent import delivery
+    monkeypatch.setattr(delivery, "TYPING_EVERY_S", 0.002)
+    seen = {}
+
+    async def act(run_):
+        if run_["who"].startswith("job:"):
+            n = len(agent.tg.typing_in)
+            await asyncio.sleep(0.03)                                   # the job works, after the reply was sent
+            seen["while_job"] = len(agent.tg.typing_in) - n
+            send = next(t for t in agent.toolbox().tool_objects(None, Origin(ASKER, JOB)) if t.name == "send_message")
+            await send.handler({"to": "here", "text": "The page."})
+            seen["at_result"] = len(agent.tg.typing_in)
+            await asyncio.sleep(0.03)                                   # the job's run goes on a moment after
+            seen["after_result"] = len(agent.tg.typing_in) - seen["at_result"]
+        else:
+            await agent.start_job("fm-weekly", ASKER)
+    FakeAI(lambda r: "" if r["who"].startswith("job:") else "On its way.", act=act).install(monkeypatch)
+
+    async def go():
+        await agent.converse(ASKER, Person(ASKER, "Asker", "fm"), "the weekly report")
+        await asyncio.sleep(0.15)
+    run(go())
+    assert seen["while_job"] >= 3 and set(agent.tg.typing_in) == {ASKER}
+    assert seen["after_result"] == 0
+
+
+def test_asked_again_the_agent_not_the_ais_memory_says_whether_the_report_runs(agent, monkeypatch):
+    # villa, 2026-10-07 01:22: asked again 30 s after the page was sent, the AI said "already being generated"
+    # from the conversation and started nothing; a second start while one ran would have made it twice
+    gate = asyncio.Event()
+
+    async def act(run_):
+        if run_["who"].startswith("job:"):
+            await gate.wait()
+    ai = FakeAI("", act=act).install(monkeypatch)
+
+    async def go():
+        first = await agent.start_job("fm-weekly", ASKER)
+        again = await agent.start_job("fm-weekly", ASKER)
+        gate.set()
+        await asyncio.sleep(0.05)
+        after = await agent.start_job("fm-weekly", ASKER)
+        gate.set()
+        await asyncio.sleep(0.05)
+        return first, again, after
+    first, again, after = run(go())
+    assert first.startswith("Started fm-weekly now (brain performance")
+    assert "still running" in again
+    assert after.startswith("Started fm-weekly now")                     # it ended: a new ask starts it again
+    assert sum(r["who"] == "job:fm-weekly" for r in ai.runs) == 2

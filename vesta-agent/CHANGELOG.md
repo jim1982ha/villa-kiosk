@@ -1,3 +1,14 @@
+## 0.12.68
+
+What you will see:
+- **"typing…" stays on until the report you asked for arrives** — in a private chat and in a group — not only until "on its way".
+- **Asking for a report again starts it again** once the last one is done. At 01:22 the AI answered "already being generated" from memory, 30 s after the report had been sent, and started nothing — so your new brain choice (Opus) was never used. The agent now says itself whether a report is still running.
+- **The alert desk follows the villa's own settings**: its maintenance-mode quiet time and the villa's timings (it read them nowhere before, so the defaults always applied).
+- **The siren switches itself off** after its minutes without needing a line written in the file by hand.
+- The concierge skill no longer tells the AI to run commands it does not have.
+
+Inside (third architecture review): policy.yaml is read once — a hand edit of the wrong shape could stop every reply and report; now it is named and ignored. Two jobs of a skill at the same time both run; the night's tidy never holds the clock; a retried AI run keeps what was asked on the Costs tab; old alert-button records are tidied.
+
 ## 0.12.67
 
 What you will see:

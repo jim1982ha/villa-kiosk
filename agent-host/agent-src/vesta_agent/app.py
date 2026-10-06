@@ -114,6 +114,7 @@ class Vesta:
         self.outcome = Outcome(policy=self.policy, state=self.state, send=self.delivery.send, actions=self.actions,
                                reader=self.reader, tickets=self.tickets, buttons=self.buttons, out_dir=settings.out_dir)
         self.server_tools: list[dict] = []
+        self._running_jobs: set[tuple[int, str]] = set()     # (chat, job) asked for in a chat and still running
         self.bot_username: str | None = None
         self._locks: dict[int, asyncio.Lock] = {}
         self._pack = None
@@ -619,9 +620,17 @@ class Vesta:
         if name not in self.policy().jobs:
             return f"The {name} job is not set up yet (VESTA Agent page → Rules → AI jobs): it cannot run."
         sk, job = found[0]
+        # ⚠️ THE AGENT SAYS WHETHER IT IS RUNNING, NOT THE AI'S MEMORY (villa, 2026-10-07 01:22): asked again 30 s after
+        # the report was sent, the AI answered "already being generated" from the conversation and started nothing.
+        # A second start while one runs would make the report twice.
+        if (int(chat), name) in self._running_jobs:
+            return f"The {name} job asked for here is still running: its result will be sent here when it is ready."
+        self._running_jobs.add((int(chat), name))
         self.delivery.job_started(chat, name)
         asyncio.create_task(self._safe(self._requested_job(sk, job, int(chat))))
-        return f"Started {name}: the result will be sent here when it is ready (a few minutes)."
+        cfg = self.policy().jobs[name]
+        return (f"Started {name} now (brain {cfg['profile']}, limit {cfg['limit_usd']:g} USD): the result will be sent "
+                "here when it is ready (a few minutes).")
 
     async def _requested_job(self, skill, job: dict, chat: int) -> None:
         """A job asked for in a chat. If it ends without sending its page, its "being prepared" message
@@ -629,6 +638,7 @@ class Vesta:
         try:
             await self.run_model_job(skill, job, Origin(chat, JOB))
         finally:
+            self._running_jobs.discard((int(chat), job["name"]))
             await self.delivery.job_ended(chat, job["name"])
 
     async def housekeeping(self) -> None:

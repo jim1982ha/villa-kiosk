@@ -159,91 +159,32 @@ def _int_in(v: Any, lo: int, hi: int, default: int) -> int:
     return read_int_in(v, lo, hi, default)[0]
 
 
-def _behaviour(raw: Any) -> dict:
-    """The settings block, leniently: a value not understood keeps its default."""
-    v = dict(DEFAULT_BEHAVIOUR)
-    raw = raw if isinstance(raw, dict) else {}
-    if raw.get("profile") in PROFILES:
-        v["profile"] = raw["profile"]
-    try:
-        limit = float(raw.get("reply_limit_usd", v["reply_limit_usd"]))
-        if limit >= 0.05:
-            v["reply_limit_usd"] = limit
-    except (TypeError, ValueError):
-        pass
-    if isinstance(raw.get("web_search"), bool):
-        v["web_search"] = raw["web_search"]
-    if raw.get("conversation_reset") in CONVERSATION_RESETS:
-        v["conversation_reset"] = raw["conversation_reset"]
-    return v
-
-
-def _jobs(settings: Any) -> dict[str, dict]:
-    """settings.jobs: each AI job's model profile and spending limit, by the name its skill gives it.
-    A job left out, or set to something not understood, is absent: it does not run (owner, 2026-10-01)."""
-    raw = (settings or {}).get("jobs") if isinstance(settings, dict) else None
-    out = {}
-    for name, v in (raw or {}).items() if isinstance(raw, dict) else ():
-        if not isinstance(v, dict) or v.get("profile") not in PROFILES:
-            continue
-        try:
-            limit = float(v.get("limit_usd"))
-        except (TypeError, ValueError):
-            continue
-        if limit >= 0.05:
-            out[str(name)] = {"profile": v["profile"], "limit_usd": limit}
-    return out
-
-
 class Policy:
     def __init__(self, raw: dict):
-        self.raw = raw or {}
-        r = self.raw
-        # an unreadable value is OFF (the default), never on: read_bool
-        self.act_enabled: bool = read_bool(r.get("act_enabled", DEFAULTS["act_enabled"]), DEFAULTS["act_enabled"])[0]
-        self.approval_ttl_minutes: int = _int_in(r.get("approval_ttl_minutes"), 1, 1440, DEFAULTS["approval_ttl_minutes"])
-        # ⚠️ A SAFETY STOP, SO NEVER ABSENT: an unreadable value still stops the siren (and problems() says so).
-        self.siren_auto_off_min: int = _int_in(r.get("siren_auto_off_min"), 1, 60, DEFAULTS["siren_auto_off_min"])
-        self.behaviour: dict = _behaviour(r.get("settings"))
-        self.jobs: dict[str, dict] = _jobs(r.get("settings"))
-        raw_keep = (r.get("settings") or {}).get("keep") if isinstance(r.get("settings"), dict) else None
-        raw_keep = raw_keep if isinstance(raw_keep, dict) else {}
-        # an unreadable value keeps its default (and problems() names it): never "keep nothing"
-        self.keep: dict[str, int] = {k: _int_in(raw_keep.get(k), lo, hi, d) for k, (d, lo, hi) in KEEP.items()}
-        self.people: dict[int, Person] = {}
-        for p in r.get("people") or [] if isinstance(r.get("people"), list) else []:
-            if not isinstance(p, dict):
-                continue
-            tid = _id(p.get("telegram_id"))           # a person's id is positive, as problems() says
-            if tid and tid > 0 and p.get("role") in ROLES:
-                self.people[tid] = Person(tid, str(p.get("name") or tid), p["role"], str(p.get("language") or "en"))
-        chats = r.get("chats") if isinstance(r.get("chats"), dict) else {}
-        # a chat id that is not a number is skipped (problems() names it), never a crash of every message
-        self.chats: dict[str, int] = {k: cid for k, v in chats.items() if (cid := _id(v))}
-        self.owner_only = set(_as_list(r.get("owner_only_entities")))
-        self.excluded = set(_as_list(r.get("excluded_entities")))
-        self.allowed_services: dict[str, str] = {k: str(v) for k, v in (r.get("allowed_services") or {}).items()}
-        self.lists = {
-            "switch": set(_as_list(r.get("switch_entities"))),
-            "scene": set(_as_list(r.get("scene_allowlist"))),
-            "script": set(_as_list(r.get("script_allowlist"))),
-            "button": set(_as_list(r.get("button_allowlist"))),
-        }
-        self.notify_recipients = set(_as_list(r.get("notify_recipients")))
-        self.ha_read_tools: list[str] = _as_list(r.get("ha_read_tools"))
-        # What the AI can use (0.6.42; tool_access.py reads these): the agent's own tools a villa may switch
-        # off (absent: on), what the facility manager may make the AI use (absent: everything switched on), and
-        # the skills the villa switched off. An unreadable value is ignored, never "everything off".
-        agent_tools = r.get("agent_tools") if isinstance(r.get("agent_tools"), dict) else {}
-        self.agent_tools: dict[str, bool] = {str(k): v for k, v in agent_tools.items() if isinstance(v, bool)}
-        access = r.get("tool_access") if isinstance(r.get("tool_access"), dict) else {}
-        self.tool_access: dict[str, dict[str, bool]] = {
-            role: {str(k): v for k, v in groups.items() if isinstance(v, bool)}
-            for role, groups in access.items() if role in ROLES and isinstance(groups, dict)}
-        self.skills_off: set[str] = {str(x) for x in r.get("skills_off") or [] if isinstance(x, str)} \
-            if isinstance(r.get("skills_off"), list) else set()
-        self.siren_entity: str | None = r.get("siren_entity")
-        self.system_actions = [(a.get("service"), a.get("entity_id")) for a in (r.get("system_actions") or [])]
+        """The file's values as the agent uses them: read_policy's, the default where it names a problem."""
+        self.raw = raw if isinstance(raw, dict) else {}
+        v, self.problems = read_policy(self.raw)
+        self.act_enabled: bool = v["act_enabled"]
+        self.approval_ttl_minutes: int = v["approval_ttl_minutes"]
+        # ⚠️ A SAFETY STOP, SO NEVER ABSENT: an unreadable value still stops the siren (and the problem is named).
+        self.siren_auto_off_min: int = v["siren_auto_off_min"]
+        self.behaviour: dict = v["behaviour"]
+        self.jobs: dict[str, dict] = v["jobs"]
+        self.keep: dict[str, int] = v["keep"]
+        self.people: dict[int, Person] = v["people"]
+        self.chats: dict[str, int] = v["chats"]
+        self.owner_only: set[str] = v["owner_only"]
+        self.excluded: set[str] = v["excluded"]
+        self.allowed_services: dict[str, str] = v["allowed_services"]
+        self.lists: dict[str, set[str]] = v["lists"]
+        self.notify_recipients: set[str] = v["notify_recipients"]
+        self.ha_read_tools: list[str] = v["ha_read_tools"]
+        # What the AI can use (0.6.42; tool_access.py reads these): absent means on / everything switched on
+        self.agent_tools: dict[str, bool] = v["agent_tools"]
+        self.tool_access: dict[str, dict[str, bool]] = v["tool_access"]
+        self.skills_off: set[str] = v["skills_off"]
+        self.siren_entity: str | None = v["siren_entity"]
+        self.system_actions: list[tuple[str, str | None]] = v["system_actions"]
 
     # ------------------------------------------------------------------ load
     @classmethod
@@ -313,7 +254,12 @@ class Policy:
             return deny(f"Not a valid entity id: {', '.join(bad)}.")
 
         if system:
-            if (full, ents[0] if len(ents) == 1 else None) in self.system_actions:
+            # ⚠️ THE SIREN'S OWN STOP IS ALWAYS THE AGENT'S TO MAKE (architecture review, 2026-10-07): it needed a line in
+            # system_actions, which only the file holds — a siren chosen on the page kept sounding past
+            # siren_auto_off_min. Switching the configured siren OFF is implied; nothing else is.
+            siren_off = bool(self.siren_entity) and ents == [self.siren_entity] and \
+                full == f"{self.siren_entity.split('.')[0]}.turn_off"
+            if siren_off or (full, ents[0] if len(ents) == 1 else None) in self.system_actions:
                 d.allowed, d.reason, d.required_role = True, "system action", "system"
                 return d
             return deny(f"{full} is not a listed system action.")
@@ -480,196 +426,266 @@ def _id(v: Any) -> int | None:
 def problems(raw: Any) -> list[str]:
     """What is wrong in a policy.yaml, in plain words — [] when nothing is.
 
-    ⚠️ ONE OWNER FOR "IS THIS FILE RIGHT": the agent logs these when the file
-    changes, and the UI refuses to save a file that has any. The agent itself
-    stays lenient (a bad value is ignored, never a crash), so a hand edit can
-    only switch something off, never stop the agent; the UI is stricter because
-    it can say why before the file is written."""
+    ⚠️ ONE OWNER FOR "IS THIS FILE RIGHT": the agent logs these when the file changes, and the page refuses to save
+    a file that has any. Since 0.12.68 they are read_policy's own: the same pass that gives the agent its values."""
     if raw is None:
         return []
     if not isinstance(raw, dict):
         return ["The file must be a set of sections (name: value), not a list or a single value."]
+    return read_policy(raw)[1]
+
+
+def read_policy(raw: dict) -> tuple[dict, list[str]]:
+    """policy.yaml read ONCE: (the values the agent uses, what is wrong in plain words).
+
+    ⚠️ ONE READING (architecture review, 2026-10-07). The file was parsed twice — leniently by Policy, strictly by
+    problems() — about twenty fields each coerced two ways, and they disagreed: `allowed_services` written as a
+    list crashed Policy() (and with it every reply and job: Settings.policy() did not catch it), a reply limit
+    written as text was used, an unknown chat role let its group in. Now each field is read by one rule that says
+    both: a value named here is the default for the agent, never a crash.
+    One deliberate leniency: a device list written as text ("lock.a, lock.b") is still read, because emptying a
+    PROTECTIVE list (only the owner may approve, left alone) over a slip would make the agent less safe."""
+    from .tool_access import OWN, ROLE_GROUPS, CHOOSE
     out: list[str] = []
+    v: dict[str, Any] = {}
     for k in raw:
         if k not in SECTIONS:
             out.append(f"Unknown section {k!r}: a misspelt name is ignored by the agent.")
 
+    # ---- settings
+    beh, jobs, keep = dict(DEFAULT_BEHAVIOUR), {}, {k: d for k, (d, _lo, _hi) in KEEP.items()}
     s = raw.get("settings")
-    if s is not None:
-        if not isinstance(s, dict):
-            out.append("settings must be a set of name: value.")
+    if s is not None and not isinstance(s, dict):
+        out.append("settings must be a set of name: value.")
+    for k, val in (s or {}).items() if isinstance(s, dict) else ():
+        if k == "profile":
+            if val in PROFILES:
+                beh["profile"] = val
+            else:
+                out.append(f"settings.profile must be one of {', '.join(PROFILES)}.")
+        elif k == "reply_limit_usd":
+            if isinstance(val, bool) or not isinstance(val, (int, float)) or val < 0.05:
+                out.append("settings.reply_limit_usd must be a number of at least 0.05.")
+            else:
+                beh["reply_limit_usd"] = float(val)
+        elif k == "web_search":
+            if isinstance(val, bool):
+                beh["web_search"] = val
+            else:
+                out.append("settings.web_search must be true or false.")
+        elif k == "conversation_reset":
+            if val in CONVERSATION_RESETS:
+                beh["conversation_reset"] = val
+            else:
+                out.append(f"settings.conversation_reset must be one of {', '.join(CONVERSATION_RESETS)}.")
+        elif k == "jobs":
+            # a job left out, or not understood, is absent: it does not run (owner, 2026-10-01)
+            if not isinstance(val, dict):
+                out.append("settings.jobs must be job name: {profile, limit_usd}.")
+                continue
+            for name, j in val.items():
+                if not isinstance(j, dict) or set(j) - {"profile", "limit_usd"}:
+                    out.append(f"settings.jobs.{name} must give profile and limit_usd only.")
+                    continue
+                ok = True
+                if j.get("profile") not in PROFILES:
+                    out.append(f"settings.jobs.{name}.profile must be one of {', '.join(PROFILES)}.")
+                    ok = False
+                lim = j.get("limit_usd")
+                if isinstance(lim, bool) or not isinstance(lim, (int, float)) or lim < 0.05:
+                    out.append(f"settings.jobs.{name}.limit_usd must be a number of at least 0.05.")
+                    ok = False
+                if ok:
+                    jobs[str(name)] = {"profile": j["profile"], "limit_usd": float(lim)}
+        elif k == "keep":
+            # an unreadable value keeps its default: never "keep nothing"
+            if not isinstance(val, dict):
+                out.append("settings.keep must be a set of name: number.")
+                continue
+            for name, n in val.items():
+                if name not in KEEP:
+                    out.append(f"Unknown settings.keep.{name} (known: {', '.join(KEEP)}).")
+                    continue
+                d, lo, hi = KEEP[name]
+                n2, valid = read_int_in(n, lo, hi, d)
+                keep[name] = n2
+                if not valid:
+                    out.append(f"settings.keep.{name} must be a whole number from {lo} to {hi}.")
         else:
-            for k, v in s.items():
-                if k == "profile" and v not in PROFILES:
-                    out.append(f"settings.profile must be one of {', '.join(PROFILES)}.")
-                elif k == "reply_limit_usd" and (isinstance(v, bool) or not isinstance(v, (int, float)) or v < 0.05):
-                    out.append("settings.reply_limit_usd must be a number of at least 0.05.")
-                elif k == "web_search" and not isinstance(v, bool):
-                    out.append("settings.web_search must be true or false.")
-                elif k == "conversation_reset" and v not in CONVERSATION_RESETS:
-                    out.append(f"settings.conversation_reset must be one of {', '.join(CONVERSATION_RESETS)}.")
-                elif k == "jobs":
-                    if not isinstance(v, dict):
-                        out.append("settings.jobs must be job name: {profile, limit_usd}.")
-                        continue
-                    for name, j in v.items():
-                        if not isinstance(j, dict) or set(j) - {"profile", "limit_usd"}:
-                            out.append(f"settings.jobs.{name} must give profile and limit_usd only.")
-                            continue
-                        if j.get("profile") not in PROFILES:
-                            out.append(f"settings.jobs.{name}.profile must be one of {', '.join(PROFILES)}.")
-                        lim = j.get("limit_usd")
-                        if isinstance(lim, bool) or not isinstance(lim, (int, float)) or lim < 0.05:
-                            out.append(f"settings.jobs.{name}.limit_usd must be a number of at least 0.05.")
-                elif k == "keep":
-                    if not isinstance(v, dict):
-                        out.append("settings.keep must be a set of name: number.")
-                        continue
-                    for name, val in v.items():
-                        if name not in KEEP:
-                            out.append(f"Unknown settings.keep.{name} (known: {', '.join(KEEP)}).")
-                            continue
-                        _, lo, hi = KEEP[name]
-                        if isinstance(val, bool) or not isinstance(val, int) or not lo <= val <= hi:
-                            out.append(f"settings.keep.{name} must be a whole number from {lo} to {hi}.")
-                elif k not in ("profile", "reply_limit_usd", "web_search", "conversation_reset"):
-                    out.append(f"Unknown setting {k!r}.")
-    if "act_enabled" in raw and not read_bool(raw["act_enabled"], False)[1]:
+            out.append(f"Unknown setting {k!r}.")
+    v["behaviour"], v["jobs"], v["keep"] = beh, jobs, keep
+
+    # ---- acting, and the two numbers
+    # an unreadable value is OFF (the default), never on
+    v["act_enabled"], valid = read_bool(raw.get("act_enabled", DEFAULTS["act_enabled"]), DEFAULTS["act_enabled"])
+    if "act_enabled" in raw and not valid:
         out.append("act_enabled must be true or false.")
     for k, lo, hi in (("approval_ttl_minutes", 1, 1440), ("siren_auto_off_min", 1, 60)):
-        v = raw.get(k)
-        if v is not None and not read_int_in(v, lo, hi, 0)[1]:
+        val = raw.get(k)
+        v[k], valid = read_int_in(val, lo, hi, DEFAULTS[k])
+        if val is not None and not valid:
             out.append(f"{k} must be a whole number from {lo} to {hi}.")
 
-    people = raw.get("people")
-    if people is not None:
-        if not isinstance(people, list):
-            out.append("people must be a list.")
-        else:
-            seen = set()
-            for i, p in enumerate(people, 1):
-                if not isinstance(p, dict):
-                    out.append(f"people, entry {i}: must have telegram_id, name, role, language.")
-                    continue
-                tid = _id(p.get("telegram_id"))
-                who = p.get("name") or f"entry {i}"
-                if tid is None or tid <= 0:
-                    out.append(f"people, {who}: telegram_id must be the person's Telegram id (a positive number; "
-                               "/whoami shows it). Until then the agent ignores this person.")
-                elif tid in seen:
-                    out.append(f"people, {who}: telegram_id {tid} is listed twice.")
-                else:
-                    seen.add(tid)
-                if p.get("role") not in ROLES:
-                    out.append(f"people, {who}: role must be owner or fm.")
-                if not str(p.get("name") or "").strip():
-                    out.append(f"people, entry {i}: a name is needed.")
-                if p.get("language") is not None and not re.match(r"^[a-z]{2,3}$", str(p.get("language"))):
-                    out.append(f"people, {who}: language must be a code such as en, fr, id.")
-                for extra in set(p) - {"telegram_id", "name", "role", "language"}:
-                    out.append(f"people, {who}: unknown field {extra!r}.")
-
-    chats = raw.get("chats")
-    if chats is not None:
-        if not isinstance(chats, dict):
-            out.append("chats must be owner: <id> and fm: <id>.")
-        else:
-            for k, v in chats.items():
-                if k not in ROLES:
-                    out.append(f"chats: {k!r} is not a role (owner or fm).")
-                elif v not in (None, "", 0, "0") and not _id(v):         # 0 = not set yet, as the agent reads it
-                    out.append(f"chats.{k} must be a chat id (a group's is negative; /whoami in the chat shows it).")
-
-    for key, domain in ENTITY_LISTS.items():
-        v = raw.get(key)
-        if v is None:
+    # ---- people: a person is registered exactly when their id is valid; the first of a repeated id counts
+    people: dict[int, Person] = {}
+    plist = raw.get("people")
+    if plist is not None and not isinstance(plist, list):
+        out.append("people must be a list.")
+    for i, p in enumerate(plist or [] if isinstance(plist, list) else [], 1):
+        if not isinstance(p, dict):
+            out.append(f"people, entry {i}: must have telegram_id, name, role, language.")
             continue
-        if not isinstance(v, list):
+        tid = _id(p.get("telegram_id"))
+        who = p.get("name") or f"entry {i}"
+        ok = True
+        if tid is None or tid <= 0:
+            out.append(f"people, {who}: telegram_id must be the person's Telegram id (a positive number; "
+                       "/whoami shows it). Until then the agent ignores this person.")
+            ok = False
+        elif tid in people:
+            out.append(f"people, {who}: telegram_id {tid} is listed twice.")
+            ok = False
+        if p.get("role") not in ROLES:
+            out.append(f"people, {who}: role must be owner or fm.")
+            ok = False
+        name = str(p.get("name") or "").strip()
+        if not name:
+            out.append(f"people, entry {i}: a name is needed.")
+        lang = p.get("language")
+        if lang is not None and not re.match(r"^[a-z]{2,3}$", str(lang)):
+            out.append(f"people, {who}: language must be a code such as en, fr, id.")
+            lang = None
+        for extra in set(p) - {"telegram_id", "name", "role", "language"}:
+            out.append(f"people, {who}: unknown field {extra!r}.")
+        if ok:
+            people[tid] = Person(tid, name or str(tid), p["role"], str(lang or "en"))
+    v["people"] = people
+
+    # ---- chats: only the roles; a chat id that is not a number is skipped and named, never a crash
+    chats: dict[str, int] = {}
+    craw = raw.get("chats")
+    if craw is not None and not isinstance(craw, dict):
+        out.append("chats must be owner: <id> and fm: <id>.")
+    for k, val in (craw or {}).items() if isinstance(craw, dict) else ():
+        if k not in ROLES:
+            out.append(f"chats: {k!r} is not a role (owner or fm).")
+            continue
+        cid = _id(val)
+        if cid:
+            chats[k] = cid
+        elif val not in (None, "", 0, "0"):         # 0 = not set yet
+            out.append(f"chats.{k} must be a chat id (a group's is negative; /whoami in the chat shows it).")
+    v["chats"] = chats
+
+    # ---- the device lists (read even when written as text: see above)
+    for key, domain in ENTITY_LISTS.items():
+        val = raw.get(key)
+        if val is None:
+            continue
+        if not isinstance(val, list):
             out.append(f"{key} must be a list of entity ids.")
             continue
-        for e in v:
+        for e in val:
             if not isinstance(e, str) or not ENTITY_ID.match(e):
                 out.append(f"{key}: {e!r} is not an entity id (domain.name).")
             elif domain and e.split(".")[0] != domain:
                 out.append(f"{key}: {e} is not a {domain} entity.")
+    v["owner_only"] = set(_as_list(raw.get("owner_only_entities")))
+    v["excluded"] = set(_as_list(raw.get("excluded_entities")))
+    v["lists"] = {d: set(_as_list(raw.get(k))) for k, d in ENTITY_LISTS.items() if d}
+
+    # ---- the siren: an entity id of its domains, in lower case as every id the checks compare
     siren = raw.get("siren_entity")
-    if siren is not None and (not isinstance(siren, str) or not ENTITY_ID.match(siren)):
+    v["siren_entity"] = None
+    if siren is not None and (not isinstance(siren, str) or not ENTITY_ID.match(siren.strip().lower())):
         out.append("siren_entity must be an entity id, or null.")
-    elif siren is not None and siren.split(".")[0] not in SIREN_DOMAINS:
+    elif siren is not None and siren.strip().lower().split(".")[0] not in SIREN_DOMAINS:
         out.append(f"siren_entity: {siren} is not a {' or '.join(SIREN_DOMAINS)} entity.")
+    elif siren is not None:
+        v["siren_entity"] = siren.strip().lower()
 
-    services = raw.get("allowed_services")
-    if services is not None:
-        if not isinstance(services, dict):
-            out.append("allowed_services must be service: rule.")
-        else:
-            for svc, rule in services.items():
-                if not isinstance(svc, str) or not re.match(r"^[a-z0-9_]+\.[a-z0-9_]+$", svc):
-                    out.append(f"allowed_services: {svc!r} is not a service (domain.service).")
-                    continue
-                if svc.split(".")[0] in NEVER_DOMAINS or svc in NEVER_SERVICES or "toggle" in svc.split(".")[1]:
-                    out.append(f"allowed_services: {svc} is never allowed, whatever the file says.")
-                if rule not in RULES:
-                    out.append(f"allowed_services: {svc} has the rule {rule!r}; use any, owner, listed or direct.")
-                elif rule == "listed" and svc.split(".")[0] not in {d for d in ENTITY_LISTS.values() if d}:
-                    out.append(f"allowed_services: {svc} is listed, but there is no list for {svc.split('.')[0]}.")
+    # ---- what the agent may do: a service named here is not offered at all
+    services: dict[str, str] = {}
+    sraw = raw.get("allowed_services")
+    if sraw is not None and not isinstance(sraw, dict):
+        out.append("allowed_services must be service: rule.")
+    for svc, rule in (sraw or {}).items() if isinstance(sraw, dict) else ():
+        if not isinstance(svc, str) or not re.match(r"^[a-z0-9_]+\.[a-z0-9_]+$", svc):
+            out.append(f"allowed_services: {svc!r} is not a service (domain.service).")
+            continue
+        ok = True
+        if svc.split(".")[0] in NEVER_DOMAINS or svc in NEVER_SERVICES or "toggle" in svc.split(".")[1]:
+            out.append(f"allowed_services: {svc} is never allowed, whatever the file says.")
+            ok = False
+        if rule not in RULES:
+            out.append(f"allowed_services: {svc} has the rule {rule!r}; use any, owner, listed or direct.")
+            ok = False
+        elif rule == "listed" and svc.split(".")[0] not in {d for d in ENTITY_LISTS.values() if d}:
+            out.append(f"allowed_services: {svc} is listed, but there is no list for {svc.split('.')[0]}.")
+            ok = False
+        if ok:
+            services[svc] = str(rule)
+    v["allowed_services"] = services
+
+    # ---- names lists
     for key in ("notify_recipients", "ha_read_tools"):
-        v = raw.get(key)
-        if v is not None and (not isinstance(v, list) or not all(isinstance(x, str) for x in v)):
+        val = raw.get(key)
+        if val is not None and (not isinstance(val, list) or not all(isinstance(x, str) for x in val)):
             out.append(f"{key} must be a list of names.")
-    out += _tool_problems(raw)
-    acts = raw.get("system_actions")
-    if acts is not None:
-        if not isinstance(acts, list) or not all(isinstance(a, dict) and set(a) <= {"service", "entity_id"} for a in acts):
-            out.append("system_actions must be a list of service: / entity_id: pairs.")
-    return out
+    v["notify_recipients"] = set(_as_list(raw.get("notify_recipients")))
+    v["ha_read_tools"] = _as_list(raw.get("ha_read_tools"))
+    for n in raw.get("ha_read_tools") if isinstance(raw.get("ha_read_tools"), list) else ():
+        if isinstance(n, str) and not re.match(r"^[a-z][a-z0-9_]{1,60}$", n):
+            out.append(f"ha_read_tools: {n!r} is not a tool name.")
 
-
-
-def _tool_problems(raw: dict) -> list[str]:
-    """What the AI can use (agent_tools, tool_access, skills_off): their names are tool_access.py's tables."""
-    from .tool_access import OWN, ROLE_GROUPS, CHOOSE
-    out: list[str] = []
-    choose = [k for k, v in OWN.items() if v[2] == CHOOSE and k != "web_search"]
+    # ---- what the AI can use: a value not understood is ignored (on), never "everything off"
+    choose = [k for k, x in OWN.items() if x[2] == CHOOSE and k != "web_search"]
+    agent_tools: dict[str, bool] = {}
     at = raw.get("agent_tools")
-    if at is not None:
-        if not isinstance(at, dict):
-            out.append("agent_tools must be tool: true or false.")
+    if at is not None and not isinstance(at, dict):
+        out.append("agent_tools must be tool: true or false.")
+    for k, val in (at or {}).items() if isinstance(at, dict) else ():
+        if k == "web_search":
+            out.append("agent_tools.web_search: web search is settings.web_search.")
+        elif k not in choose:
+            out.append(f"agent_tools: {k!r} is not one of the agent's tools a villa may switch off ({', '.join(choose)}).")
+        elif not isinstance(val, bool):
+            out.append(f"agent_tools.{k} must be true or false.")
         else:
-            for k, v in at.items():
-                if k == "web_search":
-                    out.append("agent_tools.web_search: web search is settings.web_search.")
-                elif k not in choose:
-                    out.append(f"agent_tools: {k!r} is not one of the agent's tools a villa may switch off "
-                               f"({', '.join(choose)}).")
-                elif not isinstance(v, bool):
-                    out.append(f"agent_tools.{k} must be true or false.")
+            agent_tools[str(k)] = val
+    v["agent_tools"] = agent_tools
+    groups = {k for k, _ in ROLE_GROUPS}
+    access: dict[str, dict[str, bool]] = {}
     ta = raw.get("tool_access")
-    if ta is not None:
-        groups = {k for k, _ in ROLE_GROUPS}
-        if not isinstance(ta, dict):
-            out.append("tool_access must be fm: {group: true or false}.")
+    if ta is not None and not isinstance(ta, dict):
+        out.append("tool_access must be fm: {group: true or false}.")
+    for role, val in (ta or {}).items() if isinstance(ta, dict) else ():
+        if role == "owner":
+            out.append("tool_access.owner: the owner always has every tool that is switched on.")
+        elif role != "fm":
+            out.append(f"tool_access: {role!r} is not a role (fm).")
+        elif not isinstance(val, dict):
+            out.append("tool_access.fm must be group: true or false.")
         else:
-            for role, v in ta.items():
-                if role == "owner":
-                    out.append("tool_access.owner: the owner always has every tool that is switched on.")
-                elif role != "fm":
-                    out.append(f"tool_access: {role!r} is not a role (fm).")
-                elif not isinstance(v, dict):
-                    out.append("tool_access.fm must be group: true or false.")
+            for g, on in val.items():
+                if g not in groups:
+                    out.append(f"tool_access.fm: {g!r} is not a group ({', '.join(sorted(groups))}).")
+                elif not isinstance(on, bool):
+                    out.append(f"tool_access.fm.{g} must be true or false.")
                 else:
-                    for g, on in v.items():
-                        if g not in groups:
-                            out.append(f"tool_access.fm: {g!r} is not a group ({', '.join(sorted(groups))}).")
-                        elif not isinstance(on, bool):
-                            out.append(f"tool_access.fm.{g} must be true or false.")
+                    access.setdefault("fm", {})[str(g)] = on
+    v["tool_access"] = access
     so = raw.get("skills_off")
+    good = so if isinstance(so, list) else []
     if so is not None and (not isinstance(so, list) or not all(isinstance(x, str) and re.match(r"^[a-z0-9][a-z0-9_-]{0,60}$", x)
                                                                  for x in so)):
         out.append("skills_off must be a list of skill names.")
-    rt = raw.get("ha_read_tools")
-    if isinstance(rt, list):
-        for n in rt:
-            if isinstance(n, str) and not re.match(r"^[a-z][a-z0-9_]{1,60}$", n):
-                out.append(f"ha_read_tools: {n!r} is not a tool name.")
-    return out
+    v["skills_off"] = {x for x in good if isinstance(x, str)}
+
+    # ---- the agent's own calls
+    acts = raw.get("system_actions")
+    if acts is not None and (not isinstance(acts, list) or not all(isinstance(a, dict) and set(a) <= {"service", "entity_id"} for a in acts)):
+        out.append("system_actions must be a list of service: / entity_id: pairs.")
+    v["system_actions"] = [(str(a.get("service")), a.get("entity_id")) for a in acts or []
+                           if isinstance(a, dict) and set(a) <= {"service", "entity_id"}] if isinstance(acts, list) else []
+    return v, out

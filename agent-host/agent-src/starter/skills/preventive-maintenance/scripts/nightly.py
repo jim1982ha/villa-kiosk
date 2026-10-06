@@ -309,7 +309,7 @@ def run(args) -> dict:
             if F.worsened(f.detail.get("change_pct"), f.detail.get("last_reported_pct")):
                 d["worsened"] = True
                 f.detail["last_reported_pct"] = f.detail.get("change_pct")
-                store.db.execute("UPDATE findings SET detail=? WHERE id=?", (json.dumps(f.detail), fid)); store.db.commit()
+                store.set_finding_detail(fid, f.detail)
     problems = Problems(store)
     resolved_tasks = []
     for o in F.to_close(store.findings(status="open"), fired, STATE_RULES):

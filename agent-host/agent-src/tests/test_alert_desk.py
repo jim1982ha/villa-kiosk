@@ -132,3 +132,32 @@ def test_a_text_answer_settles_the_alerts_buttons_too(store):
     assert res["settle"] == [{"incident_id": iid, "note": "Done — the facility manager, {time}"}]
     assert "settle" not in desk.reply(store, iid, "what happened?", "fm", T0 + timedelta(minutes=6))
 
+
+
+def test_the_desk_reads_the_villas_parameters_kept_ten_minutes_and_never_crashes(tmp_path):
+    # architecture review, 2026-10-07: in the villa the desk read its parameters from nowhere (only a test fixture),
+    # so its maintenance mode and the villa's timings were never read
+    from datetime import datetime, timedelta, timezone
+    from vesta_shared.params import live_params
+    from vesta_shared.store import Store
+    store = Store(str(tmp_path / "s.sqlite"))
+    calls = []
+
+    class HA:
+        def __init__(self, mode="on"):
+            self.mode = mode
+
+        def helpers(self):
+            calls.append(1)
+            return ([{"entity_id": "input_boolean.maintenance_mode", "helper_type": "input_boolean", "id": "maintenance_mode"}],
+                    {"input_boolean.maintenance_mode": self.mode})
+    t0 = datetime(2026, 10, 7, 1, 0, tzinfo=timezone.utc)
+    assert live_params(HA, store, now=t0).boolean("maintenance_mode", default=False) is True
+    live_params(HA, store, now=t0 + timedelta(minutes=5))
+    assert len(calls) == 1                                                        # kept: not read again
+    assert live_params(lambda: HA("off"), store, now=t0 + timedelta(minutes=11)).boolean("maintenance_mode", False) is False
+
+    def down():
+        raise RuntimeError("Home Assistant does not answer")
+    assert live_params(down, store, now=t0 + timedelta(hours=2)).boolean("maintenance_mode", True) is False   # the last copy
+    assert live_params(down, Store(str(tmp_path / "empty.sqlite"))).behaviour("reask_minutes") == 15           # the defaults

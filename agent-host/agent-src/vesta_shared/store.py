@@ -64,6 +64,19 @@ CREATE TABLE IF NOT EXISTS audit (
 """
 
 
+class Incident:
+    """The states an incident goes through — the alert desk's ladder — as every reader names them.
+
+    ⚠️ ONE VOCABULARY (architecture review, 2026-10-07): the desk wrote these words, problems.py and the reports read
+    them, each spelled by hand; "answered or cleared" existed twice."""
+    ASKED, REASKED, ESCALATED = "asked", "reasked", "escalated"          # the facility manager is being chased
+    DONE, NOT_FOUND, MUTED = "done", "not_found", "muted"                # a person's answer
+    RESOLVED, RECOVERED = "resolved", "recovered"                        # its rule cleared / its source came back
+    DIGEST, LOGGED = "digest", "logged"                                  # never chased: the morning list, the record
+    CHASED = (ASKED, REASKED, ESCALATED)
+    ANSWERED_OR_CLEARED = (DONE, RESOLVED)    # over: its task and ticket close with it (not muted, not recovered)
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
@@ -136,6 +149,20 @@ class Store:
         self.db.execute("UPDATE findings SET status='closed', closed_day=? WHERE rule_id=? AND entity_id=? AND status='open'",
                         (day, rule_id, entity_id))
         self.db.commit()
+
+    def finding(self, fid: int) -> dict | None:
+        r = self.db.execute("SELECT * FROM findings WHERE id=?", (fid,)).fetchone()
+        return dict(r) if r else None
+
+    def set_finding_detail(self, fid: int, detail: dict) -> None:
+        self.db.execute("UPDATE findings SET detail=? WHERE id=?", (json.dumps(detail), fid))
+        self.db.commit()
+
+    def prune_features(self, before_day: str) -> int:
+        """The daily figures per device older than `before_day` (housekeeping, settings.keep)."""
+        n = self.db.execute("DELETE FROM features WHERE day < ?", (before_day,)).rowcount
+        self.db.commit()
+        return max(n, 0)
 
     def findings(self, status: str | None = None, since_day: str | None = None) -> list[dict]:
         q, args = "SELECT * FROM findings WHERE 1=1", []
@@ -250,6 +277,10 @@ class Store:
         self.db.commit()
 
     # pack diff -------------------------------------------------------------
+    def pack_seen_empty(self) -> bool:
+        """No device seen yet: the first night (every device is "new", none is announced)."""
+        return self.db.execute("SELECT COUNT(*) FROM pack_seen").fetchone()[0] == 0
+
     def pack_diff(self, entities: list[dict]) -> tuple[list[dict], list[dict]]:
         """Returns (new, gone) versus the previous night."""
         seen = {r["entity_id"]: dict(r) for r in self.db.execute("SELECT * FROM pack_seen")}
