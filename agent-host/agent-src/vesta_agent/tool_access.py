@@ -117,6 +117,16 @@ def read_list(data_dir: str) -> dict | None:
         return None
 
 
+def saved_server_tools(data_dir: str) -> list[dict] | None:
+    """The saved list back in the server's own shape, for blockers()/readable() on the page; None before the
+    agent first read it. The one place that knows both shapes (save_list writes the other)."""
+    listed = read_list(data_dir)
+    if not listed:
+        return None
+    return [{"name": t["name"], "annotations": {"readOnlyHint": bool(t.get("readable")), "title": t.get("title")}}
+            for t in listed.get("tools") or []]
+
+
 # ---------------------------------------------------------------------- what is on
 def ha_on(policy: Policy, server_tools: list[dict]) -> set[str]:
     """The Home Assistant tools the AI may read with: named in policy.yaml, on the server, read-only."""

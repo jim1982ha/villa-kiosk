@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.61 (7 October 2026)
+
+Architecture review, the rest (candidate 5 and the leftovers):
+- Page JS split into ES modules by tab (core, costs, overview, rules, skills; app.js the entry). Done by a TypeScript-checker transform: 77 statements moved verbatim, the 5 cross-module mutable lets (dirty, current, PROFILES, jumpTo, toolsTab) into `core.page`, `go` reads `page.views`; verified statement-by-statement and by name resolution (0 unresolved, mutation-proven), all tabs rendered with no browser error.
+- `UI._text_change` / `_folder_change`: the only writers of page_history; Undo of policy, instructions and a skill's file is one rule (`TEXT_KINDS`). Fixes: imported instructions recorded as a kind Undo refused.
+- `requests_box.try_request` / `try_of`: a try's payload checked by the page and again by the agent.
+- `tool_access.saved_server_tools`: the saved list back in the server's shape (was rebuilt in ui/server.py).
+- Import preview through `paged()`.
+- Tests: `tests/ai_fake.py` FakeAI replaces 8 hand-written runner.run stubs (contract test vs runner.run); `helpers.page_js()` / `body_of()` read the page's modules.
+
 ## 0.6.60 (6 October 2026)
 
 Architecture review candidates 1–4 (candidate 5, splitting the page's files, not done):

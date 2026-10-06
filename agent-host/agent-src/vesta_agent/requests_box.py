@@ -45,6 +45,26 @@ def _write(path: str, data: dict) -> None:
     os.replace(tmp, path)            # whole or not at all: the other side never reads half a request
 
 
+# ---------------------------------------------------------------------- what a request holds
+# ⚠️ ONE OWNER OF A TRY'S SHAPE (architecture review, 2026-10-06): the page built it and the agent read it, each
+# with its own idea of it (only the page checked its arguments). Both go through these two.
+MAX_ARGS, MAX_ARG_CHARS = 20, 300
+
+
+def try_request(skill: str, script: str, args) -> dict:
+    """The payload of a try, checked: ValueError when its arguments are not a short list of short texts."""
+    if not isinstance(args, list) or len(args) > MAX_ARGS or \
+            not all(isinstance(a, str) and len(a) <= MAX_ARG_CHARS for a in args):
+        raise ValueError("The command's arguments are not understood.")
+    return {"skill": str(skill or ""), "script": str(script or ""), "args": list(args)}
+
+
+def try_of(req: dict) -> tuple[str, str, list[str]]:
+    """(skill, script, args) of a try, as the agent reads it — checked again: the folder is not only the page's."""
+    r = try_request(req.get("skill"), req.get("script"), req.get("args") or [])
+    return r["skill"], r["script"], r["args"]
+
+
 # ---------------------------------------------------------------------- the page's side
 def submit(data_dir: str, kind: str, payload: dict) -> str:
     """Leave a request for the agent; its id, for `result`."""

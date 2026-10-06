@@ -8,7 +8,7 @@ import pytest
 import yaml
 from aiohttp.test_utils import TestClient, TestServer
 
-from helpers import copy_skill, settings
+from helpers import copy_skill, settings, page_js, body_of
 from vesta_agent.ui.server import UI
 
 HDR = {"X-Vesta-UI": "1"}
@@ -171,11 +171,13 @@ def test_the_page_names_its_files_with_the_version_and_reports_its_errors_to_the
     async def fn(c):
         html = await (await c.get("/")).text()
         js = await c.get(f"/static/{__version__}/app.js")
+        # the tab modules app.js imports, by relative paths: served from the same versioned folder
+        mods = [(await c.get(f"/static/{__version__}/{m}.js")).status for m in ("core", "costs", "overview", "rules", "skills")]
         err = await c.post("/api/client-error", json={"message": "TypeError: x is undefined at app.js:12"}, headers=HDR)
-        return html, js.status, err.status
-    html, js, err = call(ui, fn)
+        return html, js.status, err.status, mods
+    html, js, err, mods = call(ui, fn)
     assert f'src="static/{__version__}/app.js"' in html and f'href="static/{__version__}/app.css"' in html
-    assert "{static}" not in html and js == 200 and err == 200
+    assert "{static}" not in html and js == 200 and err == 200 and mods == [200] * 5
     assert any("UI: page error: TypeError: x is undefined at app.js:12" in r.getMessage() for r in caplog.records)
 
 
@@ -183,7 +185,7 @@ def test_the_page_sets_no_inline_style_its_csp_would_block():
     # seen on the villa: "Applying inline style violates ... style-src 'self'" — the style is silently dropped
     import re
     from vesta_agent.ui.server import STATIC
-    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
+    js = page_js()
     assert not re.search(r"\bstyle\s*:", js)
 
 
@@ -192,7 +194,7 @@ def test_every_choice_is_the_pages_own_dropdown_never_the_platforms_picker():
     # radio sheet or iOS's wheel, which no theme reaches; app.js dropdown() draws its own list instead
     import re
     from vesta_agent.ui.server import STATIC
-    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
+    js = page_js()
     html = open(os.path.join(STATIC, "index.html"), encoding="utf-8").read()
     assert not re.search(r"""h\(\s*["']select["']|createElement\(\s*["']select""", js) and "<select" not in html
     assert js.count("dropdown(") >= 4 and "floating(box, list" in js           # on the page body, through floating()
@@ -205,7 +207,7 @@ def test_editable_tables_keep_their_columns_on_a_phone():
     import re
     from vesta_agent.ui.server import STATIC
     css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
-    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
+    js = page_js()
     assert "table.rows.edit, table.rows.ai { table-layout: fixed; }" in css and "table.rows { table-layout" not in css   # never the data tables
     assert js.count("...editTable(") == 2 and not re.search(r"rows\.(svc|people)", css)
     places = set(re.findall(r'phone: "(\w+)"', js))
@@ -326,7 +328,7 @@ def test_the_page_is_told_the_schedules_and_the_brains_and_keeps_no_copy(ui):
     from vesta_agent.policy import PROFILES
     assert set(doc["profiles"]) == set(PROFILES) and doc["profiles"]["economy"] == "Economy (Haiku)"
     from vesta_agent.ui.server import STATIC
-    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
+    js = page_js()
     assert "Sonnet" not in js and "Monday" not in js                       # no copy of either in the page
 
 
@@ -335,7 +337,7 @@ def test_every_set_of_figures_is_drawn_once_and_sits_two_to_a_row_on_a_phone():
     # phone. Both now go through figures(); its grid fits two 120px columns in a 320px card.
     import re
     from vesta_agent.ui.server import STATIC
-    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
+    js = page_js()
     css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
     assert js.count('class: "kpi"') == 1 and js.count("figures([") == 2   # one builder, both tabs call it
     rule = re.search(r"\.figures \{[^}]*grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(min\((\d+)px", css)
@@ -349,7 +351,7 @@ def test_the_title_line_holds_the_short_version_and_the_theme_toggle_on_the_righ
     from vesta_agent.ui.server import STATIC
     html = open(os.path.join(STATIC, "index.html"), encoding="utf-8").read()
     css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
-    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
+    js = page_js()
     brand = re.search(r'<div class="brand">(.*?)</div>', html).group(1)
     assert 'id="ver"' in brand                                   # inline with the title
     assert html.index('class="brand"') < html.index('class="themes"')
@@ -361,7 +363,7 @@ def test_the_costs_period_sits_on_the_titles_line_and_a_separator_comes_before_t
     # Owner, 2026-10-03: not a full-width selector with the figures straight under it; 2026-10-06: on the title's
     # line, on the right
     from vesta_agent.ui.server import STATIC
-    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
+    js = page_js()
     css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
     assert 'titleWithInfo("What the AI cost"' in js and '"h2", period)' in js
     assert 'h("div", { class: "divided" }, kpis)' in js
@@ -372,7 +374,7 @@ def test_a_runs_details_are_its_tooltip_not_table_text():
     # owner, 2026-10-04: "don't show the details description directly in the table (like chat content), but
     # add it as tooltip" — and a tap shows them, since a phone has no hover
     from vesta_agent.ui.server import STATIC
-    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
+    js = page_js()
     css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
     what = js[js.index("function runWhat(r)"):js.index("async function costs(")]
     assert 'title: details.join("\\n")' in what and '"aria-expanded"' in what
@@ -384,7 +386,7 @@ def test_a_data_table_becomes_labelled_cards_on_a_phone():
     # owner, 2026-10-05 (a phone screenshot): Every run's columns overlapped — fixed widths had reached the
     # paged data tables, whose numbers never wrap
     from vesta_agent.ui.server import STATIC
-    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
+    js = page_js()
     css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
     assert '"data-label": td ? label[i] : null' in js
     assert "table.data td::before { content: attr(data-label);" in css and "table.data thead { display: none; }" in css
@@ -418,7 +420,7 @@ def test_a_run_recorded_before_jobs_had_names_counts_under_its_name(tmp_path):
 def test_every_run_pairs_its_columns_on_a_phone():
     # owner, 2026-10-05: "When" and "What" on one line, "Tokens in / out" and "Cost" on one line
     from vesta_agent.ui.server import STATIC
-    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
+    js = page_js()
     css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
     assert '{ v: "When", half: true }, { v: "What", half: true }, "Brain · model"' in js
     assert '{ v: "Tokens in / out", cls: "num", half: true }, { v: "Cost", cls: "num", half: true }' in js
@@ -431,7 +433,7 @@ def test_the_file_editors_wrap_long_lines_instead_of_scrolling_sideways():
     import re
     from vesta_agent.ui.server import STATIC
     css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
-    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
+    js = page_js()
     rule = re.search(r"textarea\.editor \{([^}]*)\}", css).group(1)
     assert "white-space: pre-wrap" in rule and "overflow-wrap: anywhere" in rule
     assert 'wrap: "off"' not in js and "wrap=\"off\"" not in js and js.count('h("textarea", { class: "editor"') == 2
@@ -443,11 +445,12 @@ def test_the_page_never_uses_the_browsers_own_dialogs():
     import re
     from vesta_agent.ui.server import STATIC
     css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
-    for name in ("app.js", "errors.js", "theme.js"):
+    import glob
+    for name in sorted(os.path.basename(f) for f in glob.glob(os.path.join(STATIC, "*.js"))):
         src = open(os.path.join(STATIC, name), encoding="utf-8").read()
         code = "\n".join(l for l in src.splitlines() if not l.lstrip().startswith("//"))
         assert not re.search(r"(?<![\w.])(confirm|alert|prompt)\(", code), name
-    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
+    js = page_js()
     assert "async function guard()" in js and "showModal()" in js and "dialog.ask {" in css
     assert not re.search(r"[^\w](?<!await )guard\(\)", js.replace("async function guard()", "")), "a guard() not awaited"
 
@@ -458,7 +461,7 @@ def test_on_a_phone_an_open_skill_hides_the_list_and_offers_the_way_back():
     import re
     from vesta_agent.ui.server import STATIC
     css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
-    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
+    js = page_js()
     phone = re.search(r"@media \(max-width: 760px\) \{([^}]*\}){0,6}?[^}]*?\.skills\.has-open \.skills-side \{ display: none; \}", css)
     block = css[phone.start():css.index("\n}", phone.start())] if phone else ""
     assert phone and ".back-to-list { display: inline-flex; }" in block and re.search(r"\.back-to-list \{ display: none;", css)
@@ -469,7 +472,7 @@ def test_a_skill_is_named_and_switched_in_the_list_not_again_beside_it():
     # owner, 2026-10-06: no repeated title or description over the tabs; the switch in the list, the pill by the tabs
     from vesta_agent.ui.server import STATIC
     css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
-    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
+    js = page_js()
     assert ".skill-pane > .skill-head { display: none; }" in css
     assert "skillSwitch(s.name, !s.off, select)" in js                            # one switch per skill, in the list
     assert 'h("div", { class: "skill-bar" }, tabs, pill)' in js                    # the pill on the tabs' line
@@ -479,22 +482,22 @@ def test_a_skill_is_named_and_switched_in_the_list_not_again_beside_it():
 def test_the_rules_lists_show_at_most_15_lines_a_page():
     # owner, 2026-10-06: "paginate all the table to display a max number of 15 lines"
     from vesta_agent.ui.server import STATIC
-    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
+    js = page_js()
     assert "const PER_PAGE = 15;" in js
-    edit = js.split("function editTable")[1].split("\nfunction ")[0]
+    edit = body_of(js, "editTable")
     assert "pagedBlock(() => rows.length" in edit and "rows.slice(from, to)" in edit      # People, What the agent may do
     assert 'cls: "svc", add: "Add a service", blank: () => ["", "any"], per: 10,' in js     # the services: 10 a page
-    tools = js.split("function toolsCard")[1].split("\nfunction ")[0]
+    tools = body_of(js, "toolsCard")
     assert "pagedBlock(() => lines.length" in tools                                    # Reading Home Assistant
 
 
 def test_an_info_icon_shows_a_tooltip_never_text_in_the_page():
     # owner, 2026-10-06: the (i) shows its text as a tooltip on hover and on a tap, not inserted under the title
     from vesta_agent.ui.server import STATIC
-    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
-    info = js.split("function titleWithInfo")[1].split("\nfunction ")[0]
+    js = page_js()
+    info = body_of(js, "titleWithInfo")
     assert "infoTip(btn, text)" in info and "hidden: true" not in info and "info-text" not in js
-    tip = js.split("function infoTip")[1].split("\nfunction ")[0]
+    tip = body_of(js, "infoTip")
     for ev in ('"mouseenter"', '"focus"', '"click"'):
         assert ev in tip
     assert 'h("div", { class: "tooltip", role: "tooltip" }' in tip and "floating(btn," in tip
@@ -506,7 +509,7 @@ def test_the_lists_that_float_over_the_page_share_one_way_of_doing_it():
     # wide as the cell); "use the same code for similar features": the dropdown, the picker and the tooltip all
     # float through floating(), tabs through subTabs(), pages through pagedBlock()
     from vesta_agent.ui.server import STATIC
-    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
+    js = page_js()
     css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
     for owner in ("function dropdown", "const picker = ", "function infoTip"):
         part = js.split(owner)[1][:3000]
@@ -521,9 +524,9 @@ def test_the_tools_are_cards_four_a_row_and_the_ai_notes_are_behind_an_info():
     # owner, 2026-10-06: tools as cards (max 4 a row, fewer on a phone), both tabs; The AI's two notes in (i)s
     import re
     from vesta_agent.ui.server import STATIC
-    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
+    js = page_js()
     css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
-    tools = js.split("function toolsCard")[1].split("\nfunction ")[0]
+    tools = body_of(js, "toolsCard")
     assert tools.count('h("div", { class: "tool-grid" }') == 2 and "switchRow" not in tools
     assert ".tool-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));" in css
     assert re.search(r"@media \(max-width: 480px\) \{ \.tool-grid \{ grid-template-columns: 1fr; \} \}", css)

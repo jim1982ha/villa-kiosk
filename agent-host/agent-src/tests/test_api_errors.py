@@ -12,6 +12,7 @@ import yaml
 from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock
 
 from helpers import settings
+from ai_fake import FakeAI
 from telegram_fake import FakeTelegram
 from vesta_agent import api_errors, runner
 from vesta_agent.app import Vesta
@@ -125,9 +126,7 @@ def agent(tmp_path):
 
 
 def test_a_person_reads_the_reason_and_the_owner_is_told_once(agent, monkeypatch):
-    async def no_credit(*a, **k):
-        return runner.RunResult("", None, False, 0.0, [], "api billing_error", "credit")
-    monkeypatch.setattr(runner, "run", no_credit)
+    FakeAI("", problem="credit", cost_usd=0.0).install(monkeypatch)
     person = agent.policy().person(FM)
     for _ in range(2):
         asyncio.run(agent.converse(FM, person, "is the pool OK?"))
@@ -149,9 +148,7 @@ def test_a_report_that_cannot_run_says_so_instead_of_logging_done(agent, monkeyp
     with open(agent.s.policy_path, "w") as f:
         yaml.safe_dump(pol, f)
 
-    async def offline(*a, **k):
-        return runner.RunResult("", None, False, None, [], "CLIConnectionError", "offline")
-    monkeypatch.setattr(runner, "run", offline)
+    FakeAI("", problem="offline", cost_usd=None).install(monkeypatch)
     sk = agent.skills.get("reports")
     job = next(j for s_, j in ai_jobs(agent.skills.all()) if j["name"] == "fm-daily")
     asyncio.run(agent.run_model_job(sk, job))

@@ -42,3 +42,23 @@ def copy_skill(name: str, skills_dir: str) -> str:
     dst = os.path.join(skills_dir, name)
     shutil.copytree(os.path.join(STARTER_SKILLS, name), dst)
     return dst
+
+
+STATIC = os.path.join(ROOT, "vesta_agent", "ui", "static")
+
+
+def page_js() -> str:
+    """Every script of the VESTA Agent page (app.js and the tab modules it imports), as one text for the pins.
+    A module added to the page is read here without anyone listing it."""
+    import glob
+    return "\n".join(open(f, encoding="utf-8").read() for f in sorted(glob.glob(os.path.join(STATIC, "*.js"))))
+
+
+def body_of(js: str, name: str) -> str:
+    """One top-level function of the page's scripts, from its name to the next top-level function."""
+    import re
+    start = re.search(rf"\n(?:export )?(?:async )?function {re.escape(name)}\b", js)
+    assert start, f"no function {name} in the page's scripts"
+    rest = js[start.end():]
+    end = re.search(r"\n(?:export )?(?:async )?function ", rest)
+    return rest[:end.start()] if end else rest

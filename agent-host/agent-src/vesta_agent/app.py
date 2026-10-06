@@ -686,8 +686,11 @@ class Vesta:
             await self.refresh_server_tools()
             return {"ok": bool(self.server_tools), "tools": len(self.server_tools)}
         if req.get("kind") == "try":
-            return await asyncio.to_thread(self.try_command, str(req.get("skill") or ""), str(req.get("script") or ""),
-                                           [str(a) for a in req.get("args") or []])
+            try:
+                skill, script, args = requests_box.try_of(req)
+            except ValueError as e:
+                return {"ok": False, "error": str(e)}
+            return await asyncio.to_thread(self.try_command, skill, script, args)
         return {"ok": False, "error": "Unknown request."}
 
     def try_command(self, skill_name: str, script: str, args: list[str]) -> dict:

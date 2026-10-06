@@ -122,7 +122,16 @@ Decisions of 2026-09-30 (owner):
   judges every skill command (AI, job, page: one verdict, one record);
   `tool_access` decides the AI's tools and `Toolbox.for_run` builds exactly
   them, names read off the built tools. Tests use ONE Telegram stand-in,
-  `tests/telegram_fake.py`, held to the real interface by test_telegram_fake.
+  `tests/telegram_fake.py`, held to the real interface by test_telegram_fake,
+  and ONE AI stand-in, `tests/ai_fake.py` (FakeAI), held to runner.run's
+  parameters by test_ai_fake. 0.12.66: the page is ES modules —
+  `static/app.js` (entry: theme, tab clicks, `page.views`) imports
+  `core.js` (shared state `page`, helpers, dialog, `go`), `costs.js`,
+  `overview.js`, `rules.js`, `skills.js`; tests read them all with
+  `helpers.page_js()` / `body_of()`. Every page change is written AND recorded
+  by `UI._text_change` (rules, instructions, a skill's file) or
+  `UI._folder_change`; Undo of any text uses one rule. A try's payload is
+  `requests_box.try_request` / `try_of` on both sides.
 - No PDF (owner, 2026-09-30): the reports are self-contained HTML pages sent
   as attachments. Chromium was ~480 MB of a 1.1 GB image for this alone.
 - ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent

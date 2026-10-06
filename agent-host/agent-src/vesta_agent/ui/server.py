@@ -93,6 +93,8 @@ def _write(path: str, data: bytes) -> None:
         raise
 
 
+TEXT_KINDS = ("policy", "instructions", "file")    # what Undo writes back as text (UI._text_change)
+
 class Refused(Exception):
     def __init__(self, problems: list[str], status: int = 400):
         super().__init__("; ".join(problems))
@@ -281,10 +283,8 @@ class UI:
         if probs:
             raise Refused(probs)
         data = new_text.encode("utf-8")
-        _write(self.s.policy_path, data)
+        self._text_change(place, what or policy_change(text, new_text), {"kind": "policy"}, new_text)
         log.info("UI: policy.yaml saved")
-        if new_text != text:
-            self.history.record(place, what or policy_change(text, new_text), {"kind": "policy"}, text, new_text)
         return {"rev": rev(data), "text": new_text, "form": to_form(new_text)}
 
     async def policy_form(self, request):
@@ -323,12 +323,8 @@ class UI:
         return rows
 
     def _server_tools(self) -> list[dict] | None:
-        """HA MCP's tools as the agent last read them, in the server's own shape (annotations), or None."""
-        listed = tool_access.read_list(self.s.data_dir)
-        if not listed:
-            return None
-        return [{"name": t["name"], "annotations": {"readOnlyHint": bool(t.get("readable")), "title": t.get("title")}}
-                for t in listed.get("tools") or []]
+        """HA MCP's tools as the agent last read them (the page holds no token), or None."""
+        return tool_access.saved_server_tools(self.s.data_dir)
 
     async def skills_list(self, _request):
         return web.json_response({"skills": self._skill_rows()})
@@ -387,7 +383,7 @@ class UI:
         _write(os.path.join(path, "SKILL.md"), NEW_SKILL_MD.format(name=name).encode())
         _write(os.path.join(path, "skill.yaml"), NEW_SKILL_YAML.encode())
         log.info("UI: skill %s created", name)
-        self.history.record("Skills", f"{name} created", {"kind": "folder", "skill": name}, None, "present")
+        self._folder_change("Skills", f"{name} created", name, None, "present")
         return web.json_response({"name": name})
 
     async def skill_delete(self, request):
@@ -396,8 +392,7 @@ class UI:
         # Moved aside, not erased: a dot folder is never loaded, and a mistake can be undone (Overview › Changes).
         dest = to_trash(self.s.skills_dir, path, name)
         log.info("UI: skill %s deleted (kept in skills/%s)", name, TRASH)
-        self.history.record("Skills", f"{name} deleted (kept in skills/{TRASH})", {"kind": "folder", "skill": name},
-                            dest, None)
+        self._folder_change("Skills", f"{name} deleted (kept in skills/{TRASH})", name, dest, None)
         return web.json_response({"deleted": name, "kept_in": f"{TRASH}/{os.path.basename(dest)}"})
 
     async def skill_files(self, request):
@@ -450,12 +445,9 @@ class UI:
                 yaml.safe_load(content)
             except yaml.YAMLError as e:
                 raise Refused([f"{rel} is not valid YAML: {e}"]) from None
-        before = _read(current).decode("utf-8", "replace") if os.path.exists(current) else None
-        self._change(name, rel, data)
+        self._text_change("Skills", lambda before: f"{name} › {file_change(rel, before, content)}",
+                          {"kind": "file", "skill": name, "path": rel.replace(os.sep, "/")}, content)
         log.info("UI: skill %s, %s saved", name, rel)
-        if before != content:
-            self.history.record("Skills", f"{name} › {file_change(rel, before, content)}",
-                                {"kind": "file", "skill": name, "path": rel.replace(os.sep, "/")}, before, content)
         return web.json_response({"rev": rev(data)})
 
     async def file_delete(self, request):
@@ -463,10 +455,8 @@ class UI:
         rel = self._rel(request.query.get("path", ""))
         if not os.path.isfile(os.path.join(self._skill_dir(name), rel)):
             raise Refused([f"No file {rel}."], 404)
-        before = _read(os.path.join(self._skill_dir(name), rel)).decode("utf-8", "replace")
-        self._change(name, rel, None)
+        self._text_change("Skills", f"{name} › {rel} deleted", {"kind": "file", "skill": name, "path": rel}, None)
         log.info("UI: skill %s, %s deleted", name, rel)
-        self.history.record("Skills", f"{name} › {rel} deleted", {"kind": "file", "skill": name, "path": rel}, before, None)
         return web.json_response({"deleted": rel})
 
     # ------------------------------------------------------------------ what the AI can use (Rules)
@@ -591,10 +581,9 @@ class UI:
         before = _read(path).decode("utf-8") if os.path.exists(path) else None
         if text is None and before is None:
             return web.json_response({"ok": True})
-        self._change(name, rel, text.encode() if text is not None else None)
         label = f"{script}{' ' + command if command else ''}"
-        self.history.record("Skills", f"{name} › {label} switched {'on' if on else 'off'} for the AI",
-                            {"kind": "file", "skill": name, "path": rel}, before, text)
+        self._text_change("Skills", f"{name} › {label} switched {'on' if on else 'off'} for the AI",
+                          {"kind": "file", "skill": name, "path": rel}, text)
         log.info("UI: skill %s, %s switched %s", name, label, "on" if on else "off")
         return web.json_response({"ok": True})
 
@@ -627,8 +616,8 @@ class UI:
         if self.skills.release_state(name)["state"] != "edited":
             raise Refused([f"{name} is not an edited starter skill."])
         dest = self.skills.take_release(name)
-        self.history.record("Skills", f"{name}: the release's version taken (the edited one kept in skills/{TRASH})",
-                            {"kind": "folder", "skill": name}, dest, "present")
+        self._folder_change("Skills", f"{name}: the release's version taken (the edited one kept in skills/{TRASH})",
+                            name, dest, "present")
         log.info("UI: skill %s replaced by the release's version", name)
         return web.json_response({"ok": True})
 
@@ -637,13 +626,13 @@ class UI:
         name = request.match_info["name"]
         self._skill_dir(name)
         body = await request.json()
-        args = body.get("args") or []
-        if not isinstance(args, list) or not all(isinstance(a, str) and len(a) <= 300 for a in args) or len(args) > 20:
-            raise Refused(["The command's arguments are not understood."])
+        try:
+            payload = requests_box.try_request(name, body.get("script"), body.get("args") or [])
+        except ValueError as e:
+            raise Refused([str(e)]) from None
         # answered at once, the result asked for every second (/api/tries/<id>): a script running for minutes
         # (nightly.py) would outlive a page request — Cloudflare closes one after 100 s ("Error 524", 2026-10-06)
-        rid = requests_box.submit(self.s.data_dir, "try", {"skill": name, "script": str(body.get("script") or ""),
-                                                           "args": args})
+        rid = requests_box.submit(self.s.data_dir, "try", payload)
         return web.json_response({"pending": rid})
 
     async def try_result(self, request):
@@ -669,20 +658,12 @@ class UI:
         if ch["undone_by"]:
             raise Refused(["Already undone."], 409)
         t = ch["target"]
-        later = ["Something changed since (another save, or Studio Code Server): undo the later change first."]
-        if t["kind"] == "policy":
-            text, r = self._policy()
-            if text != (ch["after"] or ""):
-                raise Refused(later, 409)
-            self._save_policy(ch["before"] or "", r, "Undo", f"Undo: {ch['what']}")
-        elif t["kind"] == "file":
-            name, rel = t["skill"], self._rel(t["path"])
-            path = os.path.join(self._skill_dir(name), rel)
-            now = _read(path).decode("utf-8", "replace") if os.path.exists(path) else None
-            if now != ch["after"]:
-                raise Refused(later, 409)
-            self._change(name, rel, ch["before"].encode("utf-8") if ch["before"] is not None else None)
-            self.history.record("Undo", f"Undo: {ch['what']}", t, ch["after"], ch["before"])
+        if t["kind"] in TEXT_KINDS:
+            # ⚠️ ONLY FROM WHERE THE CHANGE LEFT IT, the same rule for every text (history.py)
+            if self._text_now(t) != ch["after"]:
+                raise Refused(["Something changed since (another save, or Studio Code Server): undo the later "
+                               "change first."], 409)
+            self._text_change("Undo", f"Undo: {ch['what']}", t, ch["before"])
         elif t["kind"] == "folder":
             self._undo_folder(t["skill"], ch)
         else:
@@ -699,14 +680,51 @@ class UI:
             if os.path.exists(path) or not old or not os.path.isdir(old):
                 raise Refused([f"{name} cannot come back: a skill of that name exists, or its copy is gone."], 409)
             shutil.move(old, path)
-            self.history.record("Undo", f"Undo: {ch['what']}", ch["target"], None, "present")
+            self._folder_change("Undo", f"Undo: {ch['what']}", name, None, "present")
             return
         if not os.path.isdir(path) or (old and not os.path.isdir(old)):
             raise Refused(["The skill or its previous copy is gone: nothing to put back."], 409)
         dest = to_trash(self.s.skills_dir, path, name)
         if old:
             shutil.move(old, path)
-        self.history.record("Undo", f"Undo: {ch['what']}", ch["target"], dest, "present" if old else None)
+        self._folder_change("Undo", f"Undo: {ch['what']}", name, dest, "present" if old else None)
+
+    # ------------------------------------------------------------------ every recorded change goes through here
+    # ⚠️ WRITTEN AND RECORDED IN ONE PLACE (architecture review, 2026-10-06): the history was recorded by hand at
+    # eleven places, and one of them (a setup's instructions) recorded a kind Undo did not know. A text — the
+    # rules, the instructions, a skill's file — goes through _text_change, a skill folder through _folder_change.
+    def _text_path(self, t: dict) -> str:
+        if t["kind"] == "policy":
+            return self.s.policy_path
+        if t["kind"] == "instructions":
+            return self.s.instructions_path
+        return os.path.join(self._skill_dir(t["skill"]), self._rel(t["path"]))
+
+    def _text_now(self, t: dict) -> str | None:
+        path = self._text_path(t)
+        return _read(path).decode("utf-8", "replace") if os.path.exists(path) else None
+
+    def _text_change(self, place: str, what, target: dict, text: str | None) -> str | None:
+        """Write one text (None: delete it) and record the change, when there is one. `what` is the line the
+        history shows, or a function of the text before. A skill's file is written only if the skill still loads
+        (_change). Returns the text before."""
+        before = self._text_now(target)
+        data = text.encode("utf-8") if text is not None else None
+        if target["kind"] == "file":
+            self._change(target["skill"], self._rel(target["path"]), data)
+        elif data is None:
+            if os.path.exists(self._text_path(target)):
+                os.unlink(self._text_path(target))
+        else:
+            _write(self._text_path(target), data)
+        if before != text:
+            self.history.record(place, what(before) if callable(what) else what, target, before, text)
+        return before
+
+    def _folder_change(self, place: str, what: str, skill: str, before: str | None, after: str | None) -> None:
+        """A skill folder created, deleted, replaced or imported (the move is the caller's): recorded. `before` is
+        where the previous folder was kept (skills/.trash), `after` "present" or None."""
+        self.history.record(place, what, {"kind": "folder", "skill": skill}, before, after)
 
     # ------------------------------------------------------------------ copy the setup to another villa
     async def setup_export(self, request):

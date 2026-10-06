@@ -9,6 +9,7 @@ import pytest
 import yaml
 
 from helpers import copy_skill, settings
+from ai_fake import FakeAI
 from telegram_fake import BOT, FakeTelegram
 from test_telegram_events import FakeReader
 from vesta_agent import runner
@@ -35,13 +36,9 @@ def agent(tmp_path, monkeypatch):
     copy_skill("reports", s.skills_dir)
     v = Vesta(s, telegram=FakeTelegram(), reader=FakeReader(), kiosk=Kiosk("", ""))
     v.bot_username = BOT["username"]
-    v.runs, v.code = [], []
-
-    async def fake_run(settings_, system, prompt, server, allowed, state, who, resume=None, limit_usd=None, profile=None, asked=None):
-        v.runs.append({"who": who, "limit": limit_usd, "profile": profile, "prompt": prompt})
-        return runner.RunResult("", None, v.stop_at_limit, 2.5, [], None)
+    v.code = []
     v.stop_at_limit = False
-    monkeypatch.setattr(runner, "run", fake_run)
+    v.runs = FakeAI(lambda run: runner.RunResult("", None, v.stop_at_limit, 2.5, [], None)).install(monkeypatch).runs
 
     async def fake_code(skill, command, timeout=900, values=None, origin=None):
         v.code.append((command.split()[0], values, origin))
@@ -65,7 +62,7 @@ def test_a_job_policy_yaml_does_not_name_does_not_run(agent, caplog):
 def test_a_set_job_runs_with_its_own_brain_and_limit(agent):
     run(agent.run_model_job(agent.skills.get("reports"), job(agent, "fm-weekly")))
     (r,) = agent.runs
-    assert (r["profile"], r["limit"], r["who"]) == ("performance", 2.5, "job:fm-weekly")
+    assert (r["profile"], r["limit_usd"], r["who"]) == ("performance", 2.5, "job:fm-weekly")
     assert agent.code == []                                               # finished within its limit
 
 
@@ -177,18 +174,22 @@ def _asked_in_chat(agent, tmp_path, monkeypatch, page: bool, job_name: str = "fm
     page_path = os.path.join(agent.s.out_dir, "fm_weekly.html")
     open(page_path, "w").write("<html></html>")
 
-    async def fake_run(settings_, system, prompt, server, allowed, state, who, resume=None, limit_usd=None, profile=None, asked=None):
-        if who.startswith("job:"):
+    async def act(run_):
+        if run_["who"].startswith("job:"):
             await asyncio.sleep(0.02)                    # the job takes a while
             if page:
                 # through the job's own send_message tool, as the model sends its result
                 send = next(t for t in agent.toolbox().tool_objects(None, Origin(ASKER, JOB)) if t.name == "send_message")
                 await send.handler({"to": "here", "text": "Three things need attention.",
                                     **({} if text_only else {"attachment": "fm_weekly.html"})})
+        else:
+            await agent.start_job(job_name, ASKER)       # what the start_job tool does
+
+    def answer(run_):
+        if run_["who"].startswith("job:"):
             return runner.RunResult("", None, False, 0.1, [], None, problem=fails)
-        await agent.start_job(job_name, ASKER)           # what the start_job tool does
-        return runner.RunResult("Your weekly report is on its way.", None, False, 0.01, [], None)
-    monkeypatch.setattr(runner, "run", fake_run)
+        return "Your weekly report is on its way."
+    FakeAI(answer, act=act).install(monkeypatch)
 
     async def go():
         await agent.converse(ASKER, Person(ASKER, "Asker", "fm"), "/ask the weekly report")

@@ -11,7 +11,7 @@ import zipfile
 
 import yaml
 
-from helpers import copy_skill, settings
+from helpers import copy_skill, settings, page_js
 from test_ui import HDR, call
 from vesta_agent import requests_box
 from vesta_agent.config import STARTER_DIR
@@ -290,7 +290,7 @@ def test_the_skill_page_is_read_from_the_skills_own_files_at_every_look(ui):
     assert dose["description"] == "how much to add" and dose["flags"] == {"--litres": "text", "--product": ["chlorine", "acid"]}
     assert any(a["when"].startswith("every Monday at 09:00") for a in after["acts"])
     from vesta_agent.ui.server import STATIC
-    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
+    js = page_js()
     for starter in ("alert-desk", "villa-concierge", "roi-energy", "preventive-maintenance", "desk.py", "concierge.py"):
         assert starter not in js, f"the page names {starter}: it must come from the skill's files"
 
@@ -311,3 +311,54 @@ def test_try_a_command_offers_the_files_earlier_steps_left(ui):
     assert st == 200 and body["out_files"] == ["facts.json", "notes.json"]          # newest first, files only
     compose = next(sc for sc in body["scripts"] if sc["script"] == "compose.py")
     assert compose["flags"]["--facts"] == "infile"
+
+
+def test_imported_instructions_can_be_undone_like_any_text(ui, tmp_path):
+    # architecture review, 2026-10-06: a setup's instructions were recorded as a kind Undo refused
+    with open(ui.instructions_path, "w") as f:
+        f.write("The instructions of the villa the setup comes from.\n")
+    data = _setup_zip(ui, {"instructions": True})
+    other = settings(str(tmp_path / "other"))
+    with open(other.instructions_path, "w") as f:
+        f.write("This villa's own instructions.\n")
+    zb = base64.b64encode(data).decode()
+
+    async def fn(c):
+        _, prev = await _json(c, "post", "/api/setup/import", json={"zip": zb})
+        await _json(c, "post", "/api/setup/import", json={"zip": zb, "apply": True, "fingerprint": prev["fingerprint"]})
+        imported = open(other.instructions_path).read()
+        hist = (await (await c.get("/api/history")).json())["changes"]
+        cid = next(h["id"] for h in hist if h["target"]["kind"] == "instructions")
+        st, _ = await _json(c, "post", f"/api/history/{cid}/undo", json={})
+        return imported, st
+    imported, st = call(other, fn)
+    assert imported.startswith("The instructions of the villa the setup comes from")
+    assert st == 200 and open(other.instructions_path).read() == "This villa's own instructions.\n"
+
+
+def test_an_undo_waits_for_a_later_change_to_be_undone_first(ui):
+    path = os.path.join(ui.skills_dir, "alert-desk", "SKILL.md")
+    original = open(path).read()
+
+    async def fn(c):
+        for text in ("first edit\n", "second edit\n"):
+            _, f = await _json(c, "get", "/api/skills/alert-desk/file?path=SKILL.md")
+            await _json(c, "put", "/api/skills/alert-desk/file?path=SKILL.md", json={"content": original + text, "rev": f["rev"]})
+        hist = (await (await c.get("/api/history")).json())["changes"]
+        older, newer = hist[1]["id"], hist[0]["id"]
+        refused, _ = await _json(c, "post", f"/api/history/{older}/undo", json={})
+        ok1, _ = await _json(c, "post", f"/api/history/{newer}/undo", json={})
+        ok2, _ = await _json(c, "post", f"/api/history/{older}/undo", json={})
+        return refused, ok1, ok2
+    refused, ok1, ok2 = call(ui, fn)
+    assert (refused, ok1, ok2) == (409, 200, 200) and open(path).read() == original
+
+
+def test_the_agent_checks_a_try_it_finds_in_the_folder_as_the_page_does(tmp_path):
+    # the requests folder is a file drop: what the agent reads there is checked again, by the same rule
+    from telegram_fake import FakeTelegram
+    from vesta_agent.app import Vesta
+    from vesta_agent.kiosk import Kiosk
+    v = Vesta(settings(str(tmp_path)), telegram=FakeTelegram(), kiosk=Kiosk("", ""), reader=object())
+    out = asyncio.run(v.on_request({"kind": "try", "skill": "x", "script": "y.py", "args": ["a" * 301]}))
+    assert out == {"ok": False, "error": "The command's arguments are not understood."}

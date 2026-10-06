@@ -8,7 +8,7 @@ import os
 import pytest
 import yaml
 
-from helpers import settings
+from helpers import settings, page_js
 from telegram_fake import FakeTelegram
 from test_telegram_events import FakeReader
 from vesta_agent import script_run
@@ -70,7 +70,7 @@ def test_a_failure_is_recorded_alike_by_the_ai_a_job_and_the_page(agent):
 
 
 def test_the_overview_counts_every_failed_script():
-    js = open(os.path.join(os.path.dirname(__file__), "..", "vesta_agent", "ui", "static", "app.js")).read()
+    js = page_js()
     assert 'count("script_failed")' in js
     from vesta_agent.status import STATUS_KINDS
     assert "script_failed" in STATUS_KINDS

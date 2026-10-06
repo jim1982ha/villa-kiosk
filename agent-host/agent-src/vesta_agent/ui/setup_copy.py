@@ -216,7 +216,7 @@ def preview(settings, skills, setup: dict, server_tools: list[dict] | None) -> d
 def apply(ui, setup: dict, prev: dict) -> None:
     """Write what the preview showed: skills first (each checked as a save would), then the rules, then instructions."""
     from ..skills import TRASH, carry_villa_files, to_trash
-    from .server import Refused, _read, _write
+    from .server import Refused
     s = ui.s
     changed = {r["what"] for r in prev["rows"] if r["change"] != "same"}
     for name, files in sorted(setup["skills"].items()):
@@ -240,9 +240,8 @@ def apply(ui, setup: dict, prev: dict) -> None:
         if os.path.isdir(path):
             old = to_trash(s.skills_dir, path, name)
         os.rename(new, path)
-        ui.history.record("Import", f"{name} {'replaced' if old else 'added'} from a setup"
-                                    + (f" (the previous one kept in skills/{TRASH})" if old else ""),
-                          {"kind": "folder", "skill": name}, old, "present")
+        ui._folder_change("Import", f"{name} {'replaced' if old else 'added'} from a setup"
+                                    + (f" (the previous one kept in skills/{TRASH})" if old else ""), name, old, "present")
     if setup["rules"] and any(r["kind"] == "rules" and r["change"] != "same" for r in prev["rows"]):
         from .policy_doc import apply_form, to_form
         text, r = ui._policy()
@@ -252,6 +251,5 @@ def apply(ui, setup: dict, prev: dict) -> None:
             form["settings"] = {**to_form(text)["settings"], **form["settings"]}
         ui._save_policy(apply_form(text, form), r, "Import", "Rules from a setup: " + policy_change(text, apply_form(text, form)))
     if setup["instructions"] is not None and "instructions.md" in changed:
-        before = _read(s.instructions_path).decode("utf-8", "replace") if os.path.exists(s.instructions_path) else None
-        _write(s.instructions_path, setup["instructions"].encode("utf-8"))
-        ui.history.record("Import", "instructions.md from a setup", {"kind": "instructions"}, before, setup["instructions"])
+        # undoable like any text (Overview › Changes): it was recorded as a kind Undo did not know
+        ui._text_change("Import", "instructions.md from a setup", {"kind": "instructions"}, setup["instructions"])

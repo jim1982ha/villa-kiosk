@@ -10,6 +10,7 @@ import pytest
 import yaml
 
 from helpers import copy_skill, settings
+from ai_fake import FakeAI
 from telegram_fake import FakeTelegram
 from vesta_agent import runner, tool_access
 from vesta_agent.app import Vesta
@@ -60,12 +61,7 @@ def agent(tmp_path, monkeypatch):
     copy_skill("reports", s.skills_dir)
     copy_skill("villa-concierge", s.skills_dir)
     v = Vesta(s, telegram=FakeTelegram(), reader=Reader(), kiosk=Kiosk("", ""))
-    v.runs = []
-
-    async def fake_run(settings_, system, prompt, server, allowed, state, who, **kw):
-        v.runs.append({"who": who, "allowed": allowed})
-        return runner.RunResult("ok", None, False, 0.01, [], None)
-    monkeypatch.setattr(runner, "run", fake_run)
+    v.runs = FakeAI("ok").install(monkeypatch).runs
     run(v.refresh_server_tools())
     return v
 
@@ -231,11 +227,10 @@ def test_a_camera_picture_the_ai_looked_at_reaches_the_chat_with_its_answer(agen
     monkeypatch.setattr(agent, "toolbox", lambda allowed=None: built.append(real_toolbox(allowed)) or built[-1])
 
     def converse_after(name, args):
-        async def the_ai(settings_, system, prompt, server, allowed, state, who, **kw):
+        async def looks(run_):
             tool = next(t for t in built[-1].tool_objects(owner, Origin(OWNER_CHAT, CONVERSATION)) if t.name == name)
             await tool.handler(args)                                            # what the AI does in the run
-            return runner.RunResult("Here is the lounge now.", None, False, 0.01, [], None)
-        monkeypatch.setattr(runner, "run", the_ai)
+        FakeAI("Here is the lounge now.", act=looks).install(monkeypatch)
         agent.tg.sent.clear(), agent.tg.photos.clear()
         run(agent.converse(OWNER_CHAT, owner, "show me the lounge camera"))
 
@@ -257,11 +252,10 @@ def test_the_chat_shows_typing_while_the_ai_works_and_not_after(agent, monkeypat
     monkeypatch.setattr(delivery, "TYPING_EVERY_S", 0.01)
     seen = {}
 
-    async def slow_ai(settings_, system, prompt, server, allowed, state, who, **kw):
+    async def works(run_):
         await asyncio.sleep(0.1)
         seen["during"] = list(agent.tg.typing_in)
-        return runner.RunResult("Done.", None, False, 0.01, [], None)
-    monkeypatch.setattr(runner, "run", slow_ai)
+    FakeAI("Done.", act=works).install(monkeypatch)
 
     async def main():
         await agent.converse(OWNER_CHAT, Person(OWNER, "Owner", "owner"), "hello")
@@ -299,3 +293,11 @@ def test_reading_home_assistant_does_not_write_a_record_per_call(agent):
     for _ in range(3):
         run(tool.handler({}))
     assert len(agent.state.calls_since("1970")) == before
+
+
+def test_the_saved_list_reads_back_as_the_server_gave_it(tmp_path):
+    # the page judges blockers from the saved list: read back, a tool keeps whether it can ever be on
+    tool_access.save_list(str(tmp_path), SERVER)
+    back = {t["name"]: tool_access.readable(t) for t in tool_access.saved_server_tools(str(tmp_path))}
+    assert back == {t["name"]: tool_access.readable(t) for t in SERVER}
+    assert tool_access.saved_server_tools(str(tmp_path / "none")) is None
