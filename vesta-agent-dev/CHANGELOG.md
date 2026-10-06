@@ -1,3 +1,14 @@
+## 0.12.53
+
+- **What the AI can use: each tool is a card** with its name, its switch, what it does and its notes. Cards sit at most four to a row: three, two or one as the screen narrows. Both "Reading Home Assistant" and "The agent's own tools" use them; the Reading tab shows 16 cards a page.
+- **Rules → The AI: the two notes under the table moved into (i)s:**
+  - "Limit (US$)": what a limit means, and the month's most at those limits, computed as you change them.
+  - "Tools it gets": what chats and reports get.
+
+  An (i) now takes the size of the text it sits beside. "New conversation" sits on the Chat answers line.
+- **Acting on the villa: just the switch, before the title,** with "On" or "Off" in words beside it. "Approve buttons work for (minutes)" moved to What the agent may do, on its title's line, where the buttons come from.
+- **Copy the setup → Download:** the villa files option now reads "This villa's own choices inside the skills", with what that means underneath.
+
 ## 0.12.52
 
 - **The (i) beside a title shows its text as a tooltip,** on hover, and on a tap on a phone. It no longer opens text in the page. A second tap, a tap elsewhere, Escape or scrolling closes it.
