@@ -195,7 +195,7 @@ def test_every_choice_is_the_pages_own_dropdown_never_the_platforms_picker():
     js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
     html = open(os.path.join(STATIC, "index.html"), encoding="utf-8").read()
     assert not re.search(r"""h\(\s*["']select["']|createElement\(\s*["']select""", js) and "<select" not in html
-    assert js.count("dropdown(") >= 4 and "document.body.append(list)" in js
+    assert js.count("dropdown(") >= 4 and "floating(box, list" in js           # on the page body, through floating()
 
 
 def test_editable_tables_keep_their_columns_on_a_phone():
@@ -357,14 +357,15 @@ def test_the_title_line_holds_the_short_version_and_the_theme_toggle_on_the_righ
     assert "ver.textContent = `v${" in js and "ver.title = " in js   # short on screen, the full line on hover
 
 
-def test_the_costs_period_sits_beside_its_label_and_a_separator_comes_before_the_figures():
-    # Owner, 2026-10-03: "Period" above a full-width selector, the figures straight under it.
+def test_the_costs_period_sits_on_the_titles_line_and_a_separator_comes_before_the_figures():
+    # Owner, 2026-10-03: not a full-width selector with the figures straight under it; 2026-10-06: on the title's
+    # line, on the right
     from vesta_agent.ui.server import STATIC
     js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
     css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
-    assert 'h("label", { class: "field row" }, h("span", {}, "Period"), period)' in js
+    assert 'titleWithInfo("What the AI cost"' in js and '"h2", period)' in js
     assert 'h("div", { class: "divided" }, kpis)' in js
-    assert ".field.row { flex-direction: row;" in css
+    assert ".card-title-right { margin-left: auto; }" in css
 
 
 def test_a_runs_details_are_its_tooltip_not_table_text():
@@ -484,3 +485,32 @@ def test_the_rules_lists_show_at_most_15_lines_a_page():
     assert "pagedBlock(() => rows.length" in edit and "rows.slice(from, to)" in edit      # People, What the agent may do
     tools = js.split("function toolsCard")[1].split("\nfunction ")[0]
     assert "pagedBlock(() => lines.length" in tools                                    # Reading Home Assistant
+
+
+def test_an_info_icon_shows_a_tooltip_never_text_in_the_page():
+    # owner, 2026-10-06: the (i) shows its text as a tooltip on hover and on a tap, not inserted under the title
+    from vesta_agent.ui.server import STATIC
+    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
+    info = js.split("function titleWithInfo")[1].split("\nfunction ")[0]
+    assert "infoTip(btn, text)" in info and "hidden: true" not in info and "info-text" not in js
+    tip = js.split("function infoTip")[1].split("\nfunction ")[0]
+    for ev in ('"mouseenter"', '"focus"', '"click"'):
+        assert ev in tip
+    assert 'h("div", { class: "tooltip", role: "tooltip" }' in tip and "floating(btn," in tip
+    assert 'titleWithInfo("What the AI cost"' in js and '"h2", period)' in js            # the period on the title's line
+
+
+def test_the_lists_that_float_over_the_page_share_one_way_of_doing_it():
+    # owner, 2026-10-06: the device picker's list, inside a table cell, took the cell's input rules (checkboxes as
+    # wide as the cell); "use the same code for similar features": the dropdown, the picker and the tooltip all
+    # float through floating(), tabs through subTabs(), pages through pagedBlock()
+    from vesta_agent.ui.server import STATIC
+    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
+    css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
+    for owner in ("function dropdown", "const picker = ", "function infoTip"):
+        part = js.split(owner)[1][:3000]
+        assert "floating(" in part, owner
+    for owner in ("function dropdown", "const picker = ", "function infoTip"):     # none floats a panel its own way
+        assert "document.body.append(" not in js.split(owner)[1][:3000].split("\nfunction ")[0], owner
+    assert js.count('class: "subtabs"') == 1 and js.count('class: "pager"') == 1
+    assert "table.rows td input:not([type=checkbox]):not([type=radio])" in css

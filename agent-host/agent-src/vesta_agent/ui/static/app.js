@@ -23,6 +23,42 @@ function h(tag, attrs = {}, ...kids) {
   return el;
 }
 
+// ⚠️ THE ONE FLOATING PANEL (owner, 2026-10-06: "use the same code for similar features"). The dropdown's list, the
+// device picker's list and the (i)'s tooltip all float over the page the same way: on the page body, fixed, so a
+// table cell or a card cannot clip or squeeze them (the picker's list inside a table cell took the cell's input
+// rules); under the anchor, or above it when there is no room below; closed by a click outside, Escape, a scroll
+// of the page or a resize. `width`: a fixed width (else the anchor's, at least 180 px); `center`: centred on it.
+function floating(anchor, panel, { width = null, center = false, onClose = () => {} } = {}) {
+  panel.classList.add("floating");
+  document.body.append(panel);
+  const place = () => {
+    const b = anchor.getBoundingClientRect(), vw = window.innerWidth, vh = window.innerHeight;
+    const w = Math.min(width || Math.max(b.width, 180), vw - 16);
+    const left = Math.min(Math.max(8, center ? b.left + b.width / 2 - w / 2 : b.left), vw - 8 - w);
+    Object.assign(panel.style, { width: `${w}px`, left: `${left}px`, top: "", bottom: "", maxHeight: "" });
+    const want = panel.scrollHeight, below = vh - b.bottom - 12, above = b.top - 12;
+    const up = want > below && above > below;
+    panel.style.maxHeight = `${Math.max(120, Math.min(want, up ? above : below))}px`;
+    if (up) panel.style.bottom = `${vh - b.top + 6}px`; else panel.style.top = `${b.bottom + 6}px`;
+  };
+  const outside = (e) => { if (!panel.contains(e.target) && !anchor.contains(e.target)) close(); };
+  const moved = (e) => { if (!(e && e.target instanceof Node && panel.contains(e.target))) close(); };
+  const esc = (e) => { if (e.key === "Escape") { e.stopPropagation(); close(); if (anchor.focus) anchor.focus(); } };
+  let closed = false;
+  function close() {
+    if (closed) return;
+    closed = true;
+    panel.remove();
+    document.removeEventListener("pointerdown", outside, true); window.removeEventListener("scroll", moved, true);
+    window.removeEventListener("resize", close); document.removeEventListener("keydown", esc, true);
+    onClose();
+  }
+  place();
+  document.addEventListener("pointerdown", outside, true); window.addEventListener("scroll", moved, true);
+  window.addEventListener("resize", close); document.addEventListener("keydown", esc, true);
+  return { close, place };
+}
+
 // ⚠️ THE ONE DROPDOWN (owner, 2026-10-04: "a lot of dropdown menus are badly rendered"). A native <select>
 // opens the platform's own list (Android: a grey sheet of radio buttons; iOS: a wheel) that no theme reaches.
 // This draws a button like the device picker's box and its own list, fixed on the page body so a table cell
@@ -34,49 +70,33 @@ function dropdown(options, value, pick, label) {
   const box = h("button", { type: "button", class: "picker-box dropdown", "aria-haspopup": "listbox", "aria-expanded": "false",
                             "aria-label": label ? `${label}: ${textOf(value)}` : null });
   const draw = () => box.replaceChildren(h("span", { class: "dropdown-value" }, textOf(value)), h("span", { class: "caret" }, "▾"));
-  let list = null, active = 0;
+  let list = null, float = null, active = 0;
   const rows = () => [...list.children];
   const mark = () => rows().forEach((r, i) => r.classList.toggle("active", i === active));
-  function close(refocus = true) {
-    if (!list) return;
-    list.remove(); list = null; box.setAttribute("aria-expanded", "false");
-    document.removeEventListener("pointerdown", outside, true); window.removeEventListener("scroll", moved, true);
-    window.removeEventListener("resize", moved);
-    if (refocus) box.focus();
-  }
-  const outside = (e) => { if (list && !list.contains(e.target) && !box.contains(e.target)) close(false); };
-  const moved = (e) => { if (list && !(e && e.target instanceof Node && list.contains(e.target))) close(false); };
+  const close = (refocus = true) => { if (float) float.close(); if (refocus) box.focus(); };
   const choose = (i) => {
     const v = options[i][0];
     if (String(v) !== String(value)) { value = v; draw(); pick(v); }
     close();
   };
   function open() {
-    const b = box.getBoundingClientRect(), vw = window.innerWidth, vh = window.innerHeight;
-    const want = options.length * ROW + 8, below = vh - b.bottom - 12, above = b.top - 12;
-    const up = want > below && above > below;
-    const width = Math.min(Math.max(b.width, 180), vw - 16), left = Math.min(Math.max(b.left, 8), vw - 8 - width);
     active = Math.max(0, options.findIndex(([k]) => String(k) === String(value)));
     list = h("div", { class: "dropdown-list", role: "listbox", tabindex: "-1", "aria-label": label || null },
       options.map(([k, l], i) => h("div", { class: "dropdown-option" + (i === active ? " on" : ""), role: "option",
                                             "aria-selected": String(i === active), onclick: () => choose(i),
                                             onpointerenter: () => { active = i; mark(); } }, l)));
-    Object.assign(list.style, { left: `${left}px`, width: `${width}px`, maxHeight: `${Math.max(2 * ROW, Math.min(want, up ? above : below))}px`,
-                                ...(up ? { bottom: `${vh - b.top + 4}px` } : { top: `${b.bottom + 4}px` }) });
     list.addEventListener("keydown", (e) => {
       const last = options.length - 1;
       const step = { ArrowDown: active + 1, ArrowUp: active - 1, Home: 0, End: last }[e.key];
       if (step !== undefined) { e.preventDefault(); active = Math.min(last, Math.max(0, step)); mark(); rows()[active].scrollIntoView({ block: "nearest" }); }
       else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); choose(active); }
-      else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); }
-      else if (e.key === "Tab") close();
+      else if (e.key === "Tab") close(false);
     });
-    document.body.append(list); mark(); box.setAttribute("aria-expanded", "true");
-    rows()[active].scrollIntoView({ block: "nearest" }); list.focus();
-    document.addEventListener("pointerdown", outside, true); window.addEventListener("scroll", moved, true);
-    window.addEventListener("resize", moved);
+    float = floating(box, list, { onClose: () => { list = null; float = null; box.setAttribute("aria-expanded", "false"); } });
+    mark(); box.setAttribute("aria-expanded", "true");
+    rows()[active].scrollIntoView({ block: "nearest" }); list.focus({ preventScroll: true });
   }
-  box.addEventListener("click", () => (list ? close() : open()));
+  box.addEventListener("click", () => (list ? close(false) : open()));
   box.addEventListener("keydown", (e) => { if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); if (!list) open(); } });
   draw();
   return box;
@@ -141,11 +161,32 @@ function card(title, lead, ...kids) {
   return h("section", { class: "card" }, titleWithInfo(title, lead), ...kids);
 }
 
-function titleWithInfo(title, text, tag = "h2") {
-  const tip = h("p", { class: "lead info-text", hidden: true }, text);
-  const btn = h("button", { type: "button", class: "info", title: text, "aria-label": `About ${title}`, "aria-expanded": "false",
-    onclick: () => { tip.hidden = !tip.hidden; btn.setAttribute("aria-expanded", String(!tip.hidden)); } }, "i");
-  return h("div", { class: "card-title" }, h(tag, {}, title, btn), tip);
+// A title, its (i), and an optional control on the same line, right-aligned (the Costs' period).
+// ⚠️ THE TEXT IS A TOOLTIP, NEVER INSERTED IN THE PAGE (owner, 2026-10-06): it floats over the page on hover or
+// keyboard focus, and on a tap (a phone has no hover); a second tap, a tap elsewhere, Escape or scrolling closes it.
+function titleWithInfo(title, text, tag = "h2", right = null) {
+  const btn = h("button", { type: "button", class: "info", "aria-label": `About ${title}: ${text}`, "aria-expanded": "false" }, "i");
+  infoTip(btn, text);
+  return h("div", { class: "card-title" }, h(tag, {}, title, btn), right ? h("div", { class: "card-title-right" }, right) : null);
+}
+
+let openTip = null;
+function infoTip(btn, text) {
+  let float = null, pinned = false;
+  const close = () => { if (float) float.close(); };
+  const open = () => {
+    if (float) return;
+    if (openTip) openTip();
+    float = floating(btn, h("div", { class: "tooltip", role: "tooltip" }, text), { width: 360, center: true,
+      onClose: () => { float = null; pinned = false; btn.setAttribute("aria-expanded", "false"); if (openTip === close) openTip = null; } });
+    btn.setAttribute("aria-expanded", "true");
+    openTip = close;
+  };
+  btn.addEventListener("mouseenter", open);
+  btn.addEventListener("mouseleave", () => { if (!pinned) close(); });
+  btn.addEventListener("focus", open);
+  btn.addEventListener("blur", () => { if (!pinned) close(); });
+  btn.addEventListener("click", (e) => { e.preventDefault(); if (pinned) close(); else { open(); pinned = true; } });
 }
 
 // A set of figures, each a number over its label: THE one way the page shows them (Overview's last
@@ -167,9 +208,6 @@ function field(label, input, hint) {
 // a cell is a node, a text, or {v, cls}. Newest first is the caller's order.
 function paged(head, rows, per = 10) {
   const body = h("tbody");
-  const nav = h("div", { class: "pager" });
-  const pages = Math.max(1, Math.ceil(rows.length / per));
-  let page = 0;
   // each cell carries its column's name: on a phone the row becomes a card, every value labelled (app.css);
   // a column whose head says `half` shares its line there with the next half one (owner, 2026-10-05)
   const label = head.map((c) => String(c && typeof c === "object" && "v" in c ? c.v : c || ""));
@@ -179,23 +217,26 @@ function paged(head, rows, per = 10) {
     const cls = [c && typeof c === "object" && "v" in c ? c.cls : null, td && half[i] ? "ph-half" : null].filter(Boolean).join(" ") || null;
     return h(tag, { class: cls, "data-label": td ? label[i] : null }, c && typeof c === "object" && "v" in c ? c.v : c);
   };
-  const draw = () => {
-    body.replaceChildren(...rows.slice(page * per, page * per + per).map((cells) => h("tr", {}, cells.map((c, i) => cell(c, "td", i)))));
-    nav.replaceChildren(...(pages > 1 ? [
-      h("button", { class: "btn ghost", disabled: page === 0, onclick: () => { page--; draw(); } }, "‹ Newer"),
-      h("span", { class: "muted" }, `Page ${page + 1} of ${pages} · ${rows.length} rows`),
-      h("button", { class: "btn ghost", disabled: page >= pages - 1, onclick: () => { page++; draw(); } }, "Older ›")] : []));
-  };
-  draw();
+  // newest first: the pages go to "older" (the one pager, pagedBlock)
+  const pager = pagedBlock(() => rows.length, (from, to) => body.replaceChildren(...rows.slice(from, to).map((cells) =>
+    h("tr", {}, cells.map((c, i) => cell(c, "td", i))))), per, ["‹ Newer", "Older ›", "rows"]);
+  pager.redraw();
   return h("div", {}, h("div", { class: "tbl" }, h("table", { class: "rows data" },
-    h("thead", {}, h("tr", {}, head.map((c, i) => cell(c, "th", i)))), body)), nav);
+    h("thead", {}, h("tr", {}, head.map((c, i) => cell(c, "th", i)))), body)), pager.nav);
+}
+
+// ⚠️ THE ONE TAB BAR (DRY, owner 2026-10-06): What the AI can use, a skill's views, Copy the setup. `items`: [[key,
+// label], …]; `current`: the key shown; `pick(key)` on a press.
+function subTabs(items, current, pick) {
+  return h("div", { class: "subtabs", role: "tablist" }, items.filter(Boolean).map(([k, l]) =>
+    h("button", { type: "button", role: "tab", class: k === current ? "on" : "", "aria-selected": String(k === current), onclick: () => pick(k) }, l)));
 }
 
 // Pages of at most `per` lines for an editable list (owner, 2026-10-06: "max 15 lines, so the UI stays consistent").
 // `draw(slice, offset)` fills the page; returns [box, nav, api]: api.redraw() after a change, api.last() to show the
 // last page (after Add).
 const PER_PAGE = 15;
-function pagedBlock(count, draw, per = PER_PAGE) {
+function pagedBlock(count, draw, per = PER_PAGE, [prev, next, unit] = ["‹ Previous", "Next ›", "lines"]) {
   const nav = h("div", { class: "pager" });
   let page = 0;
   const pages = () => Math.max(1, Math.ceil(count() / per));
@@ -203,9 +244,9 @@ function pagedBlock(count, draw, per = PER_PAGE) {
     page = Math.min(page, pages() - 1);
     draw(page * per, Math.min(count(), page * per + per));
     nav.replaceChildren(...(pages() > 1 ? [
-      h("button", { type: "button", class: "btn ghost", disabled: page === 0, onclick: () => { page--; redraw(); } }, "‹ Previous"),
-      h("span", { class: "muted" }, `Page ${page + 1} of ${pages()} · ${count()} lines`),
-      h("button", { type: "button", class: "btn ghost", disabled: page >= pages() - 1, onclick: () => { page++; redraw(); } }, "Next ›")] : []));
+      h("button", { type: "button", class: "btn ghost", disabled: page === 0, onclick: () => { page--; redraw(); } }, prev),
+      h("span", { class: "muted" }, `Page ${page + 1} of ${pages()} · ${count()} ${unit}`),
+      h("button", { type: "button", class: "btn ghost", disabled: page >= pages() - 1, onclick: () => { page++; redraw(); } }, next)] : []));
   };
   return { nav, redraw, last: () => { page = pages() - 1; redraw(); } };
 }
@@ -356,9 +397,9 @@ async function costs(days = 7) {
     { v: usd(r.cost), cls: "num" },
     r.stopped ? h("span", { class: "chip off" }, "stopped at its limit") : r.error ? h("span", { class: "chip off" }, r.error) : ""]);
   fill($view,
-    card("What the AI cost", "As the Anthropic API reported it for each run: a chat reply, or a run of an AI job. Tokens in count what the agent re-read from its cache too.",
-      // The period's label and its selector on one line, the figures below a separator (owner, 2026-10-03).
-      h("label", { class: "field row" }, h("span", {}, "Period"), period),
+    // the period's selector on the title's line, on the right (owner, 2026-10-06); the figures below a separator
+    h("section", { class: "card" },
+      titleWithInfo("What the AI cost", "As the Anthropic API reported it for each run: a chat reply, or a run of an AI job. Tokens in count what the agent re-read from its cache too. Everything on this tab follows the period chosen here.", "h2", period),
       h("div", { class: "divided" }, kpis), h("div", { class: "divided" }, h("h2", {}, "Per day"), chart)),
     card(`By work · last ${days} days`, "Chat replies, and each AI job.", groupTable(c.by_work, "Work")),
     card(`By model · last ${days} days`, "Which model did the work.", groupTable(c.by_model, "Model")),
@@ -494,11 +535,9 @@ function exportCard() {
 let setupTab = "out";
 function setupCard() {
   const body = h("div");
-  const tabs = h("div", { class: "subtabs", role: "tablist" });
+  const tabs = h("div");
   const draw = () => {
-    tabs.replaceChildren(...[["out", "Download this villa's setup"], ["in", "Import a setup"]].map(([k, l]) =>
-      h("button", { type: "button", role: "tab", class: setupTab === k ? "on" : "", "aria-selected": String(setupTab === k),
-                    onclick: () => { setupTab = k; draw(); } }, l)));
+    fill(tabs, subTabs([["out", "Download this villa's setup"], ["in", "Import a setup"]], setupTab, (k) => { setupTab = k; draw(); }));
     fill(body, setupTab === "out" ? exportCard() : importCard());
   };
   draw();
@@ -674,7 +713,7 @@ function rulesForms(doc, jobs = [], tools = null) {
   const picker = (get, set, domains, one = false) => {
     const box = h("div", { class: "picker" });
     const shown = h("button", { type: "button", class: "picker-box", "aria-haspopup": "listbox" });
-    const panel = h("div", { class: "picker-panel", hidden: true });
+    const panel = h("div", { class: "picker-panel" });
     const search = h("input", { type: "search", placeholder: "Search by name, room or id…", "aria-label": "Search devices" });
     const list = h("div", { class: "picker-list", role: "listbox", "aria-multiselectable": String(!one) });
     const pool = ENT.list.filter((e) => !domains || domains.includes(e.id.split(".")[0]));
@@ -708,24 +747,21 @@ function rulesForms(doc, jobs = [], tools = null) {
       if (!rows.length) list.append(h("p", { class: "muted pad" }, "No device matches."));
       if (rows.length > 300) list.append(h("p", { class: "muted pad" }, `${rows.length - 300} more: type to narrow the list.`));
     };
-    const outside = (ev) => { if (!box.contains(ev.target)) close(); };
-    const keys = (ev) => { if (ev.key === "Escape") close(); };
-    function close() {
-      panel.hidden = true; shown.setAttribute("aria-expanded", "false");
-      document.removeEventListener("mousedown", outside); document.removeEventListener("keydown", keys);
-    }
+    let float = null;
+    function close() { if (float) float.close(); }
     shown.addEventListener("click", () => {
-      if (!panel.hidden) return close();
-      panel.hidden = false; shown.setAttribute("aria-expanded", "true");
-      search.value = ""; drawList(); search.focus();
-      document.addEventListener("mousedown", outside); document.addEventListener("keydown", keys);
+      if (float) return close();
+      search.value = ""; drawList();
+      float = floating(shown, panel, { width: Math.max(shown.getBoundingClientRect().width, 340),
+                                       onClose: () => { float = null; shown.setAttribute("aria-expanded", "false"); } });
+      shown.setAttribute("aria-expanded", "true"); search.focus({ preventScroll: true });   // a scroll would close it
     });
-    search.addEventListener("input", drawList);
+    search.addEventListener("input", () => { drawList(); if (float) float.place(); });
     panel.append(search, list,
       one ? null : h("div", { class: "picker-foot" }, h("span", { class: "muted" }, "Tick as many as needed."),
                                                     h("button", { type: "button", class: "btn ghost", onclick: close }, "Done")));
     drawShown();
-    box.append(shown, panel);
+    box.append(shown);
     return box;
   };
   const many = (key, domains) => picker(() => f[key] || [], (v) => (f[key] = v), domains);
@@ -876,11 +912,10 @@ function toolsCard(f, t, reload) {
           h("td", { class: "muted", title: "There is no guest role yet: the agent answers only the owner and the facility manager" }, "—"))))),
       h("p", { class: "muted" }, "Asking for an action is decided by \"What the agent may do\": who approves stays there.")];
   };
-  const tabs = h("div", { class: "subtabs", role: "tablist" });
+  const tabs = h("div");
   function draw() {
-    tabs.replaceChildren(...[["ha", "Reading Home Assistant"], ["own", "The agent's own tools"], ["roles", "Who may use what"]].map(([k, l]) =>
-      h("button", { type: "button", class: toolsTab === k ? "on" : "", role: "tab", "aria-selected": String(toolsTab === k),
-                    onclick: () => { toolsTab = k; draw(); } }, l)));
+    fill(tabs, subTabs([["ha", "Reading Home Assistant"], ["own", "The agent's own tools"], ["roles", "Who may use what"]], toolsTab,
+                       (k) => { toolsTab = k; draw(); }));
     fill(body, ...({ ha, own, roles })[toolsTab]());
   }
   draw();
@@ -947,15 +982,14 @@ async function switchTool(b) {
 }
 
 // Skills › Try a command: run by the agent on the live villa, exactly as the AI would — nothing is sent.
-// Three steps (owner, 2026-10-06: "badly rendered, not understandable"): what to run, its options in words, then
-// the exact command it will run and the Run button.
+// Two steps (owner, 2026-10-06: "badly rendered, not understandable"): what to run, its options in words; then Run.
 const FLAG_HELP = { date: "a day, e.g. 2026-10-05", text: "a word or a few", switch: "" };
 function tryPanel(name, d) {
   const out = h("div");
   const runnable = d.scripts.filter((sc) => !sc.whole_off);
   if (!runnable.length) return h("p", { class: "muted" }, "Every script of this skill is switched off for the AI.");
   let script = runnable[0], command = null, values = {};
-  const what = h("div", { class: "try-row" }), opts = h("div", { class: "try-opts" }), preview = h("code", { class: "try-preview" });
+  const what = h("div", { class: "try-row" }), opts = h("div", { class: "try-opts" });
   const args = () => {
     const a = command ? [command] : [];
     for (const [flag, kind] of Object.entries(script.flags)) {
@@ -964,27 +998,25 @@ function tryPanel(name, d) {
     }
     return a;
   };
-  const showPreview = () => { preview.textContent = [script.script, ...args()].join(" "); };
   const draw = () => {
     const cmds = script.commands.filter((c) => c.on);
     if (!cmds.some((c) => c.name === command)) command = cmds.length ? cmds[0].name : null;
     fill(what,
       field("Script", dropdown(runnable.map((sc) => [sc.script, sc.script]), script.script, (v) => { script = runnable.find((x) => x.script === v); values = {}; draw(); }, "Script")),
-      cmds.length ? field("Command", dropdown(cmds.map((c) => [c.name, c.words ? `${c.name} — ${c.words}` : c.name]), command, (v) => { command = v; showPreview(); }, "Command")) : null);
+      cmds.length ? field("Command", dropdown(cmds.map((c) => [c.name, c.words ? `${c.name} — ${c.words}` : c.name]), command, (v) => { command = v; }, "Command")) : null);
     // files a script writes or reads are the AI's business: not offered here
     const flags = Object.entries(script.flags).filter(([, k]) => k !== "outfile" && k !== "infile");
     fill(opts, flags.length ? flags.map(([flag, kind]) => {
       const label = flag.replace(/^--/, "").replace(/-/g, " ");
       const input = Array.isArray(kind)
-        ? dropdown([["", "not set"], ...kind.map((k) => [k, k])], values[flag] || "", (v) => { values[flag] = v; showPreview(); }, label)
+        ? dropdown([["", "not set"], ...kind.map((k) => [k, k])], values[flag] || "", (v) => { values[flag] = v; }, label)
         : kind === "switch"
           ? h("label", { class: "switch" }, h("input", { type: "checkbox", checked: !!values[flag], "aria-label": label,
-              onchange: (e) => { values[flag] = e.target.checked; showPreview(); } }), "yes")
+              onchange: (e) => { values[flag] = e.target.checked; } }), "yes")
           : h("input", { type: "text", value: values[flag] || "", placeholder: FLAG_HELP[kind] || "", "aria-label": label,
-              oninput: (e) => { values[flag] = e.target.value.trim(); showPreview(); } });
+              oninput: (e) => { values[flag] = e.target.value.trim(); } });
       return field(label[0].toUpperCase() + label.slice(1), input, Array.isArray(kind) ? `one of: ${kind.join(", ")}` : flag);
     }) : h("p", { class: "muted small" }, "This command takes no options."));
-    showPreview();
   };
   async function run() {
     fill(out, h("p", { class: "muted" }, "Running on the villa…"));
@@ -1003,7 +1035,7 @@ function tryPanel(name, d) {
     h("p", { class: "muted" }, "Runs one of this skill's commands on the villa, exactly as the AI would: it only reads, uses no AI and costs nothing. Messages or tickets it would create are shown here, never sent."),
     h("h3", {}, "1 · What to run"), what,
     h("h3", {}, "2 · Options"), opts,
-    h("h3", {}, "3 · Run"), h("div", { class: "try-go" }, preview, h("button", { class: "btn primary", onclick: run }, "Run")),
+    h("div", { class: "actions" }, h("button", { class: "btn primary", onclick: run }, "Run")),
     out);
 }
 
@@ -1101,12 +1133,10 @@ async function openSkill(name, pane, info, path = ABOUT) {
       } }, "Take the release version"))) : null;
 
   // ---- the views
-  const tabs = h("div", { class: "subtabs", role: "tablist" },
-    [[ABOUT, "About"], [isFile ? path : "SKILL.md", "Files"], d.scripts && d.scripts.length ? [TRY, "Try a command"] : null,
-     rel.state === "edited" ? [COMPARE, "Compare"] : null].filter(Boolean).map(([p, label]) => {
-      const on = p === ABOUT ? path === ABOUT : p === TRY || p === COMPARE ? path === p : isFile;
-      return h("button", { type: "button", role: "tab", class: on ? "on" : "", "aria-selected": String(on), onclick: () => goTo(p) }, label);
-    }));
+  const FILES = "\u0000files";             // the Files tab stands for whichever file is open
+  const tabs = subTabs([[ABOUT, "About"], [FILES, "Files"], d.scripts && d.scripts.length ? [TRY, "Try a command"] : null,
+                        rel.state === "edited" ? [COMPARE, "Compare"] : null], isFile ? FILES : path,
+                       (k) => goTo(k === FILES ? (isFile ? path : "SKILL.md") : k));
   // ⚠️ NO TITLE, NO DESCRIPTION, NO SWITCH HERE ON A WIDE SCREEN (owner, 2026-10-06): the list beside it holds the
   // name, the line and the switch. The name and the switch come back on a phone, where the list is hidden.
   const card = (...kids) => fill(pane, h("div", { class: "card skill-pane" }, back, head, blocked, notLoaded, releaseBanner,

@@ -1,3 +1,11 @@
+## 0.12.52
+
+- **The (i) beside a title shows its text as a tooltip,** on hover, and on a tap on a phone. It no longer opens text in the page. A second tap, a tap elsewhere, Escape or scrolling closes it.
+- **Costs: the period selector sits on the title's line, on the right.**
+- **Skills → Try a command:** the line repeating the chosen script is gone; Run sits under the options.
+- **The device picker in "What the agent may do" displays properly:** its list floats over the page with normal checkboxes, instead of being squeezed into the table cell with checkboxes as wide as the cell.
+- **One way for every floating list:** the menus, the device pickers and the (i) tooltips open and close the same way (below the box, or above when there is no room; closed by a tap elsewhere, Escape or scrolling). The tab bars and the Previous / Next pagers are also one design each.
+
 ## 0.12.51
 
 - **Rules → What the AI can use → "Ask for an action on the villa"** now links to "Acting on the villa" and "What the agent may do": a tap scrolls there and highlights it.

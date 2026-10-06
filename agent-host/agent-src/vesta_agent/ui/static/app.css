@@ -114,9 +114,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px 20px; }
 .field { display: flex; flex-direction: column; gap: 6px; font-size: var(--text-sm); color: var(--text-secondary); }
 .field .hint { color: var(--text-dim); font-size: var(--text-xs); }
 /* A field whose label sits BESIDE its control (the Costs' Period): one line, the control its natural width. */
-.field.row { flex-direction: row; align-items: center; gap: 12px; }
-.field.row > .dropdown { width: auto; flex: 0 1 auto; }
-input[type=text], input[type=number], select, textarea {
+input[type=text], input[type=number], input[type=search], select, textarea {
   background: var(--bg-input); border: 1px solid var(--hairline); border-radius: var(--radius);
   padding: 10px 12px; min-height: var(--touch-min); color: var(--text-primary); width: 100%;
 }
@@ -205,7 +203,7 @@ ul.plain li:last-child { border-bottom: 0; }
    the devices in the lists below, then approval") widened the whole table and squeezed the service ids to
    "cove". Fixed widths: a long choice ends in "…" inside its own column; on a phone each row stacks below. */
 table.rows.edit, table.rows.ai { table-layout: fixed; }   /* NOT the paged data tables: their numbers never wrap */
-table.rows td .dropdown, table.rows td input { width: 100%; min-width: 0; }
+table.rows td .dropdown, table.rows td input:not([type=checkbox]):not([type=radio]) { width: 100%; min-width: 0; }
 table.rows.ai th:nth-child(1) { width: 30%; }
 table.rows.ai th:nth-child(2) { width: 22%; }
 table.rows.ai th:nth-child(3) { width: 15%; }
@@ -268,10 +266,12 @@ svg.bars .base { stroke: var(--text-dim); }
 .picker-box .caret { margin-left: auto; color: var(--text-dim); }
 .picker-chosen { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
 .picker-chosen .tag { padding: 2px 8px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; }
-.picker-panel { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; width: max(100%, 340px); max-width: calc(100vw - 32px);
+/* the floating panels (app.js floating): the dropdown's list, the picker's list, the tooltip */
+.floating { position: fixed; z-index: 70; }
+.picker-panel { display: flex; flex-direction: column; overflow: hidden;
   background: var(--bg-base); border: 1px solid var(--hairline); border-radius: var(--radius); box-shadow: 0 12px 32px rgba(0, 0, 0, .28); padding: 8px; }
 .picker-panel input[type=search] { width: 100%; box-sizing: border-box; margin-bottom: 6px; }
-.picker-list { max-height: 300px; overflow-y: auto; }
+.picker-list { flex: 1 1 auto; min-height: 0; max-height: 300px; overflow-y: auto; }
 .picker-row { display: flex; align-items: flex-start; gap: 10px; padding: 7px 8px; border-radius: 8px; cursor: pointer; }
 .picker-row:hover { background: var(--hairline); }
 .picker-row.on { background: var(--accent-soft); }
@@ -287,7 +287,7 @@ svg.bars .base { stroke: var(--text-dim); }
 .dropdown { padding: 6px 12px; min-width: 0; }
 .dropdown:focus-visible, .dropdown[aria-expanded="true"] { outline: 2px solid var(--accent); outline-offset: 1px; }
 .dropdown-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.dropdown-list { position: fixed; z-index: 60; overflow-y: auto; overscroll-behavior: contain; padding: 4px; outline: none;
+.dropdown-list { overflow-y: auto; overscroll-behavior: contain; padding: 4px; outline: none;
   background: var(--bg-base); border: 1px solid var(--hairline); border-radius: var(--radius); box-shadow: 0 12px 32px rgba(0, 0, 0, .28); }
 .dropdown-option { display: flex; align-items: center; min-height: 44px; box-sizing: border-box; padding: 10px 12px; border-radius: 8px;
   cursor: pointer; color: var(--text-primary); }
@@ -459,8 +459,12 @@ input[type=file]::file-selector-button { font: inherit; font-weight: 500; min-he
 button.info { width: 22px; height: 22px; min-height: 0; padding: 0; border-radius: 50%; border: 1px solid var(--hairline-strong); background: none;
   color: var(--text-secondary); font: italic 600 12px/1 Georgia, serif; cursor: help; display: inline-flex; align-items: center; justify-content: center; flex: none; }
 button.info:hover, button.info[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
-.card-title { margin: 0 0 12px; }
-.card-title .info-text { margin: 6px 0 0; }
+.card-title { margin: 0 0 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.card-title h2 { margin: 0; }
+.card-title-right { margin-left: auto; }
+.card-title-right .dropdown { width: auto; }
+.tooltip { overflow: auto; padding: 10px 12px; border-radius: var(--radius); background: var(--text-primary); color: var(--bg-base);
+  font-size: var(--text-sm); line-height: 1.45; box-shadow: 0 8px 24px var(--shadow); pointer-events: auto; }
 /* a device picker inside an editable table (the services' devices): top-aligned with the line's other fields */
 table.rows.edit td { vertical-align: top; }
 table.rows.edit td > .muted.small { display: block; padding-top: 12px; }

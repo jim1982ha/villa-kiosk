@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.48 (6 October 2026)
+
+- UI (owner):
+  - infoTip(), a floating tooltip on hover, focus or tap, replacing the inline text. titleWithInfo takes a right-aligned control (the Costs' period). tryPanel: no command preview.
+  - DRY:
+    - floating(): the one floating panel (body, fixed, flips above; closes on outside, Escape, scroll, resize), used by dropdown(), the device picker (whose absolute panel took a table cell's input rules) and the tooltip; focus with preventScroll.
+    - subTabs(): the one tab bar.
+    - paged() runs on pagedBlock().
+    - The table input rule spares checkboxes and radios; search inputs share the input style.
+  - test_ui pins it all.
+
 ## 0.6.47 (6 October 2026)
 
 - skill.yaml scripts.<s>.description (optional), shown by the page; the roi-energy and preventive-maintenance starters describe their scripts (recorded).
