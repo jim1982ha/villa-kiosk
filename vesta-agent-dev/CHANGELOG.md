@@ -1,3 +1,11 @@
+## 0.12.64
+
+- Publishes 0.12.63 ("typing…" in Telegram while the AI works): 0.12.63 was not offered because a check on GitHub could not run. Nothing else changed.
+
+## 0.12.63
+
+- **Telegram shows "typing…" while the AI works on an answer.** The moving dots appear at the top of the chat (in a group: "… is typing" above the message box) from the moment the agent starts on a message until its answer arrives, then stop. Telegram does not let a bot draw a bubble with dots in the chat itself: this is its own "typing" sign.
+
 ## 0.12.62
 
 - **Skills → Try a command: a try can save its result for the next step.** compose.py owner-weekly stopped with "needs --energy": it needs the week's energy, which roi-energy's energy_period.py makes, and the page could not save that. Commands that write a file now show an "Out" box: run energy_period.py with Period week and Out week.json, then in reports pick week.json under Energy. A saved file appears in the menus at once.
