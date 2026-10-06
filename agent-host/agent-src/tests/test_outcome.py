@@ -9,9 +9,10 @@ import os
 import pytest
 import yaml
 
-from helpers import settings
+from helpers import make_agent, make_skill, settings
 from telegram_fake import BOT, FakeTelegram
-from test_telegram_events import FakeReader
+from ha_fake import FakeHA, tool
+from kiosk_fake import FakeKiosk
 from vesta_agent.app import Vesta
 from vesta_agent.policy import Policy
 from vesta_agent.routing import CONVERSATION, Origin, Routing
@@ -20,52 +21,26 @@ from vesta_shared.store import Store
 GROUP, FM_PRIVATE, ASKER = -100777, 222, 333
 
 
-class FakeKiosk:
-    enabled = True
-
-    def __init__(self):
-        self.tickets, self.resolved = [], []
-
-    async def add_ticket(self, title, entity_id=None, note=None):
-        self.tickets.append((title, entity_id))
-        self.notes = getattr(self, "notes", []) + [note]
-        return f"t{len(self.tickets)}"
-
-    async def resolve_ticket(self, uid, note=None):
-        self.resolved.append(uid)
-        return True
-
-    async def ticket_states(self):
-        return {uid: "resolved" if uid in self.resolved or uid in getattr(self, "closed_by_hand", ()) else "open"
-                for uid in [f"t{i + 1}" for i in range(len(self.tickets))] + list(getattr(self, "known", ()))}
-
-
 def run(coro):
     return asyncio.run(coro)
 
 
 @pytest.fixture
 def agent(tmp_path):
-    s = settings(str(tmp_path), VESTA_TELEGRAM_ENABLED="true", VESTA_TELEGRAM_BOT_TOKEN="42:TG-TEST")
-    with open(s.policy_path, "w") as f:
-        yaml.safe_dump({"people": [{"telegram_id": ASKER, "name": "Asker", "role": "fm", "language": "en"}],
-                        "chats": {"owner": GROUP, "fm": FM_PRIVATE}}, f)
     # a skill whose script stores a task and asks for its ticket and a message, like the nightly check
-    d = os.path.join(s.skills_dir, "checker")
-    os.makedirs(os.path.join(d, "scripts"))
-    open(os.path.join(d, "SKILL.md"), "w").write("# checker\n")
-    open(os.path.join(d, "skill.yaml"), "w").write(yaml.safe_dump({"description": "t", "scripts": {"check.py": {"inject": ["store"]}}}))
-    open(os.path.join(d, "scripts", "check.py"), "w").write(
-        "import argparse, json\n"
-        "from vesta_shared.store import Store\n"
-        "ap = argparse.ArgumentParser(); ap.add_argument('--store'); a = ap.parse_args()\n"
-        "tid = Store(a.store).add_task('PM-X', 'sensor.example_pump_power', 'Pump draws less power')\n"
-        "print(json.dumps({'actions': [{'action': 'ticket', 'summary': 'Pump draws less power', 'task_id': tid,\n"
-        "                  'entity_id': 'sensor.example_pump_power'}],\n"
-        "                  'send': [{'to': 'fm', 'text': 'Pump draws less power'}], 'pad': 'x' * PAD}))\n"
-        .replace("PAD", os.environ.get("PAD", "10")))
+    make_skill(os.path.join(str(tmp_path), "skills"), "checker", {"description": "t", "scripts": {"check.py": {"inject": ["store"]}}},
+               {"check.py": "import argparse, json\n"
+                "from vesta_shared.store import Store\n"
+                "ap = argparse.ArgumentParser(); ap.add_argument('--store'); a = ap.parse_args()\n"
+                "tid = Store(a.store).add_task('PM-X', 'sensor.example_pump_power', 'Pump draws less power')\n"
+                "print(json.dumps({'actions': [{'action': 'ticket', 'summary': 'Pump draws less power', 'task_id': tid,\n"
+                "                  'entity_id': 'sensor.example_pump_power'}],\n"
+                "                  'send': [{'to': 'fm', 'text': 'Pump draws less power'}], 'pad': 'x' * PAD}))\n"
+                .replace("PAD", os.environ.get("PAD", "10"))})
     k = FakeKiosk()
-    v = Vesta(s, telegram=FakeTelegram(), reader=FakeReader(), kiosk=k)
+    v = make_agent(tmp_path, {"people": [{"telegram_id": ASKER, "name": "Asker", "role": "fm", "language": "en"}],
+                              "chats": {"owner": GROUP, "fm": FM_PRIVATE}},
+                   reader=FakeHA(tools=[tool("ha_get_state")]), kiosk=k)
     v.bot_username = BOT["username"]
     return v, k
 
@@ -111,10 +86,10 @@ def test_an_open_task_without_its_ticket_gets_one_once(agent):
     lost = st.add_task("PM-Y", "sensor.example_battery", "Battery low")
     has = st.add_task("PM-Z", "sensor.example_other", "Already filed")
     st.set_task_uid(has, "t-old")
-    assert run(v.outcome.repair_tickets()) == 1
+    assert run(v.tickets.repair()) == 1
     assert kiosk.tickets == [("Battery low", "sensor.example_battery")]
     assert st.task(lost)["todo_uid"] == "t1"
-    assert run(v.outcome.repair_tickets()) == 0                            # nothing left to repair
+    assert run(v.tickets.repair()) == 0                            # nothing left to repair
 
 
 def test_the_tasks_and_the_kiosks_tickets_agree(agent):
@@ -135,7 +110,7 @@ def test_the_tasks_and_the_kiosks_tickets_agree(agent):
     st.set_task_uid(alert, "t-alert")
     run(v.outcome.carry_out({"send": [{"to": "fm", "text": f"Door left open. Incident #{iid}.", "keyboard": True}],
                              "incident_id": iid}, "alert-desk"))
-    run(v.outcome.repair_tickets())
+    run(v.tickets.repair())
     assert st.task(by_hand)["status"] == "closed_in_kiosk"                          # a person closed it there
     assert st.task(gone)["status"] == "cleared" and kiosk.resolved == ["t-gone"]    # gone: closed with its ticket
     # an alert's fault closed in the Kiosk: its incident closes too — the desk stops chasing it — and the
@@ -182,7 +157,7 @@ def test_the_alert_skill_cannot_be_run_by_the_model_to_raise_an_alert():
     import vesta_agent
     from vesta_agent.skills import Skills
     sk = Skills(os.path.join(os.path.dirname(vesta_agent.__file__), "..", "starter", "skills")).get("alert-desk")
-    assert sk.scripts["desk.py"]["cmds"] == {"status"}                     # read only: intake, tick, reply are the engine's
+    assert set(sk.scripts["desk.py"].commands) == {"status"}                     # read only: intake, tick, reply are the engine's
     assert json.dumps(sorted(sk.on_event))                                  # the alert itself comes from Home Assistant
 
 

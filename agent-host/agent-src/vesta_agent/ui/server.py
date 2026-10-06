@@ -5,7 +5,7 @@ that stops the agent can still be fixed here. It never holds a secret: the host
 gives it the folders, the port and nothing else.
 
 ⚠️ EVERY SAVE IS CHECKED BY THE AGENT'S OWN RULES before it is written:
-policy.problems() for policy.yaml, the skill parser (skills._parse) for a skill,
+policy.problems() for policy.yaml, the skill parser (skills.parse_skill) for a skill,
 Python's own compiler for a script. The UI cannot write a file the agent would
 refuse or misread. A save names the version it started from (`rev`); if the
 file changed since (someone else, Studio Code Server), it is refused, never
@@ -32,7 +32,7 @@ from .. import __version__, requests_box, status, tool_access
 from ..config import STARTER_DIR, Settings
 from ..history import History, file_change, policy_change
 from ..policy import Policy, problems as policy_problems
-from ..skills import FILE_NAME, SKILL_NAME, TRASH, VILLA_CHOICES, SkillError, Skills, _parse, to_trash, villa_choices
+from ..skills import FILE_NAME, SKILL_NAME, TRASH, VILLA_CHOICES, SkillError, Skills, parse_skill, switch_command, to_trash
 from ..state import State
 from . import setup_copy
 from .policy_doc import apply_form, to_form
@@ -349,7 +349,7 @@ class UI:
         if not os.path.isfile(os.path.join(folder, "SKILL.md")) or not os.path.isfile(os.path.join(folder, "skill.yaml")):
             raise Refused(["A skill needs both SKILL.md and skill.yaml."])
         try:
-            _parse(name, folder)
+            parse_skill(name, folder)
         except (SkillError, yaml.YAMLError, OSError) as e:
             raise Refused([f"The agent would switch this skill off: {e}"]) from None
 
@@ -511,13 +511,7 @@ class UI:
         acts += [(self.WHEN.get(ev, ev), cmd) for ev, cmd in sk.on_event.items()]
         if sk.on_reply:
             acts.append(("an answer to one of its alerts", sk.on_reply))
-        scripts = []
-        for script, spec in sorted(sk.scripts.items()):
-            off = spec.get("off") or set()
-            scripts.append({"script": script, "description": spec.get("description", ""), "flags": {k: (list(v) if isinstance(v, tuple) else v) for k, v in spec["flags"].items()},
-                            "whole_off": off is True,
-                            "commands": [{"name": c, "words": spec["words"].get(c, ""), "on": off is not True and c not in off,
-                                          "job_only": spec["job_only"].get(c)} for c in sorted(spec["cmds"] or [])]})
+        scripts = [spec.view() for _, spec in sorted(sk.scripts.items())]      # skills.Script: one reading
         blocked = tool_access.blockers(pol, self._server_tools(), sk)
         return web.json_response({
             "name": name, "ok": not blocked, "off": name in pol.skills_off, "description": sk.description,
@@ -556,26 +550,9 @@ class UI:
         spec = (sk.scripts.get(script) if sk else None)
         if not spec:
             raise Refused([f"{script} is not a script of {name}."])
-        if command is not None and command not in (spec["cmds"] or set()):
+        if command is not None and command not in (spec.commands or {}):
             raise Refused([f"{command} is not a command of {script}."])
-        choices = villa_choices(folder)
-        off = dict(choices.get("off_commands") or {})
-        cur = off.get(script)
-        if command is None:
-            cur = None if on else True
-        else:
-            now = set(cur) if isinstance(cur, list) else (set(spec["cmds"]) if cur is True else set())
-            now = (now - {command}) if on else (now | {command})
-            cur = sorted(now) or None
-        if cur is None:
-            off.pop(script, None)
-        else:
-            off[script] = cur
-        keep = {k: v for k, v in choices.items() if k != "off_commands" and v}
-        if off:
-            keep["off_commands"] = off
-        text = ("# This villa's choices for this skill, made on the VESTA Agent page (Skills): kept by updates.\n"
-                + yaml.safe_dump(keep, sort_keys=False)) if keep else None
+        text = switch_command(folder, spec, command, on)          # skills.py writes the villa's choice, not this page
         rel = VILLA_CHOICES
         path = os.path.join(folder, rel)
         before = _read(path).decode("utf-8") if os.path.exists(path) else None

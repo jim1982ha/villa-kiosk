@@ -1,5 +1,5 @@
 // VESTA Agent page — the Skills tab.
-import { $view, api, ask, dropdown, field, fill, go, guard, h, markDirty, page, plural, problemsBox, setBar, showBar, subTabs, tell, titleWithInfo, toast } from "./core.js";
+import { $view, api, ask, dropdown, field, fill, go, guard, h, markDirty, page, plural, problemsBox, setBar, showBar, subTabs, tell, titleWithInfo, toast, toggleCard, withInfo } from "./core.js";
 
 // ---------------------------------------------------------------- skills
 // A skill's state against this release: it follows the releases (never edited here), it was edited here (updates
@@ -43,9 +43,12 @@ export async function skills(select = null) {
   if (select) openSkill(select, pane, list.find((s) => s.name === select));
 }
 
+// where the tools a skill needs are switched (Tools it needs: its (i))
+const WHERE_TOOLS = "Switched on or off in Rules › What the AI can use. A tool switched off there makes this skill \"not working\": its AI jobs do not run.";
+
 export async function setCommand(skill, script, command, on, box) {
   try { await api("PUT", `api/skills/${encodeURIComponent(skill)}/commands`, { script, command, on }); toast(`${command || script} switched ${on ? "on" : "off"} for the AI.`); }
-  catch (e) { box.checked = !on; tell("Not changed", e.problems); }
+  catch (e) { box.checked = !on; box.closest(".tool-card")?.classList.toggle("is-on", !on); tell("Not changed", e.problems); }
 }
 
 // 2C's one-press fix: the tool switched on through the same save as the Rules form
@@ -333,21 +336,19 @@ export function aboutSkill(name, d) {
       [job ? h("b", {}, job) : a.how && a.how !== "AI job" ? h("code", {}, a.how.split(" ")[0]) : h("span", { class: "muted" }, "when a person asks about it"),
        kind ? h("span", { class: "chip gray tiny" }, kind) : null]);
   });
-  // What the AI may run: a switch per command, its words under it
+  // What the AI may run: a card per command, as the tools' cards (core.toggleCard; owner, 2026-10-07), three a line
   const runs = (d.scripts || []).map((sc) => h("div", { class: "cmd-group" },
     h("div", { class: "cmd-script" }, h("code", {}, sc.script)),
-    sc.commands.length ? sc.commands.map((c) => h("div", { class: "cmd-row" },
-      h("label", { class: "switch" }, h("input", { type: "checkbox", checked: c.on, "aria-label": `${sc.script} ${c.name}`,
-        onchange: (e) => setCommand(name, sc.script, c.name, e.target.checked, e.target) })),
-      h("div", { class: "cmd-text" }, h("b", {}, c.name), c.words ? h("div", { class: "muted" }, c.words) : null,
-        c.job_only ? h("div", { class: "muted small" }, `Asked for in a chat, it runs as the ${c.job_only} job.`) : null)))
-      : h("div", { class: "cmd-row" },
-        h("label", { class: "switch" }, h("input", { type: "checkbox", checked: !sc.whole_off, "aria-label": sc.script,
-          onchange: (e) => setCommand(name, sc.script, null, e.target.checked, e.target) })),
-        // a script without commands: what it does (skill.yaml `description`), then its options, each as written
-        h("div", { class: "cmd-text" }, h("span", { class: "plain" }, sc.description || "The AI may run it."),
-          Object.keys(sc.flags).length ? h("div", { class: "chips" }, Object.keys(sc.flags).map((fl) => h("code", { class: "flag" }, fl))) : null))));
-  // Tools it needs: a one-line verdict; the list folded unless something is off
+    h("div", { class: "tool-grid three" }, sc.commands.length
+      ? sc.commands.map((c) => toggleCard(c.on, (on, box) => setCommand(name, sc.script, c.name, on, box), c.name, {
+          label: `${sc.script} ${c.name}`,
+          words: c.words ? h("div", { class: "muted" }, c.words) : null,
+          meta: c.job_only ? h("span", { class: "muted small" }, `Asked for in a chat, it runs as the ${c.job_only} job.`) : null }))
+      // a script without commands: what it does (skill.yaml `description`), its options as written
+      : [toggleCard(!sc.whole_off, (on, box) => setCommand(name, sc.script, null, on, box), sc.script, {
+          words: h("div", { class: "muted" }, sc.description || "The AI may run it."),
+          meta: Object.keys(sc.flags).map((fl) => h("code", { class: "flag" }, fl)) })])));
+  // Tools it needs: a one-line verdict and its (i); the list folded unless something is off
   let tools;
   if (d.needs === null || d.needs === undefined) tools = h("p", { class: "muted" }, "Its skill.yaml lists none: its reports get every tool switched on.");
   else if (!d.needs.length) tools = h("p", { class: "muted" }, "None: the AI needs no tool of its own for this skill.");
@@ -355,7 +356,8 @@ export function aboutSkill(name, d) {
     const off = d.needs.filter((n) => !n.on);
     const chip = (n) => h("span", { class: "chip" + (n.on ? "" : " off"), title: n.tool },
       n.label + ({ off: " — off", missing: " — not on this Home Assistant", never: " — never available" }[n.state] || ""));
-    tools = [h("p", {}, off.length ? h("b", { class: "warn-text" }, `${off.length} of ${d.needs.length} not available`) : h("span", {}, `${plural(d.needs.length, "tool", "tools")}, all switched on`)),
+    const verdict = off.length ? h("b", { class: "warn-text" }, `${off.length} of ${d.needs.length} not available`) : `${plural(d.needs.length, "tool", "tools")}, all switched on`;
+    tools = [h("p", {}, withInfo(verdict, WHERE_TOOLS)),
       off.length ? h("div", { class: "chips" }, off.map(chip)) : null,
       h("details", { class: "fold" }, h("summary", {}, off.length ? "All of them" : "Show them"), h("div", { class: "chips" }, d.needs.map(chip)))];
   }
@@ -363,6 +365,5 @@ export function aboutSkill(name, d) {
     h("section", { class: "about-sec" }, h("h3", {}, "When it acts"), acts),
     d.scripts && d.scripts.length ? h("section", { class: "about-sec" }, h("h3", {}, "What the AI may run"),
       h("p", { class: "muted small" }, "Switch a command off and the AI cannot run it here. Saved in the skill's villa.skill.yaml: kept by updates, copied with the skill."), runs) : null,
-    h("section", { class: "about-sec" }, h("h3", {}, "Tools it needs"), tools,
-      h("p", { class: "muted small" }, "Switched on or off in Rules › What the AI can use.")));
+    h("section", { class: "about-sec" }, h("h3", {}, "Tools it needs"), tools));
 }

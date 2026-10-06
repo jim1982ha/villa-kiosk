@@ -64,7 +64,10 @@ PROFILES = {
     "economy": ("haiku", "low"),
     "performance": ("opus", "high"),
 }
-CONVERSATION_RESETS = ("daily_04_00", "after_8h_silence", "never")
+#: When a chat's conversation context is deleted (settings.conversation_reset): value → what the page shows.
+RESET_WORDS = {"daily_04_00": "Every day at 04:00", "after_8h_silence": "After 8 hours of silence",
+               "never": "Never (/new only)"}
+CONVERSATION_RESETS = tuple(RESET_WORDS)
 
 
 def profile_labels() -> dict[str, str]:
@@ -406,15 +409,62 @@ _LIST_WORDS = {
 }
 
 
+#: ⚠️ ONE TABLE OF policy.yaml'S SETTINGS (architecture review, 2026-10-07). Five lists named the same sections
+#: (here, the forms, the setup copy, the history's words, the page) and three wrote their labels: the history said
+#: "Limit per reply (US$)" and "An Approve button works for" where the page said "(USD)" and "Approve buttons work
+#: for". path → (what the page and the history call it, edited by the Rules forms, the part of a copied setup that
+#: carries it — None: it stays with the villa). Everything else reads it: SECTIONS, policy_doc.FORM_KEYS,
+#: setup_copy, history.WORDS, and the page through form_schema()["words"].
+FIELDS: dict[str, tuple[str, bool, str | None]] = {
+    "settings": ("The AI", True, None),                      # its keys carry their own part
+    "settings.profile": ("Brain for chat answers", True, "ai"),
+    "settings.reply_limit_usd": ("Limit per reply (US$)", True, "ai"),
+    "settings.web_search": ("Web search", True, "ai"),
+    "settings.conversation_reset": ("Delete conversation context at", True, "ai"),
+    "settings.jobs": ("AI jobs", True, "ai"),
+    "settings.keep": ("How long records are kept", True, "keep"),
+    "act_enabled": ("The agent may act on the villa", True, None),
+    "approval_ttl_minutes": ("Approve buttons work for (minutes)", True, None),
+    "people": ("People", True, None),
+    "chats": ("Chats", True, None),
+    "chats.owner": ("Owner chat", True, None),
+    "chats.fm": ("Facility manager chat", True, None),
+    "allowed_services": ("What the agent may do", True, "actions"),
+    "owner_only_entities": ("Only the owner may approve", True, None),
+    "excluded_entities": ("Left alone", True, None),
+    "siren_entity": ("Siren", True, None),
+    "siren_auto_off_min": ("Siren stops after (minutes)", True, None),
+    **{k: (_LIST_WORDS[k][0], True, None) for k in _LIST_WORDS},
+    "ha_read_tools": ("Home Assistant tools the AI may read with", True, "tools"),
+    "agent_tools": ("The agent's own tools", True, "tools"),
+    "tool_access": ("Who may use what", True, "tools"),
+    "skills_off": ("Skills switched off", True, "tools"),
+    "notify_recipients": ("Who is notified", False, None),      # edited in the file itself
+    "system_actions": ("What the agent's own code may do", False, None),
+}
+SECTIONS = {k for k in FIELDS if "." not in k}
+WORDS = {k: v[0] for k, v in FIELDS.items()}
+
+
+def form_sections() -> tuple[str, ...]:
+    """The sections the Rules forms edit, in the table's order."""
+    return tuple(k for k in SECTIONS_ORDER if FIELDS[k][1])
+
+
+def setup_fields(part: str) -> list[str]:
+    """The paths a copied setup's `part` carries ("ai", "keep", "actions", "tools")."""
+    return [k for k, v in FIELDS.items() if v[2] == part]
+
+
+SECTIONS_ORDER = tuple(k for k in FIELDS if "." not in k)
+
+
 def form_schema() -> dict:
     """What the page's forms offer, from the same tables the checks below read."""
     return {"rules": RULE_WORDS, "actionable": list(ACTIONABLE), "siren_domains": list(SIREN_DOMAINS),
             "lists": [{"key": k, "label": _LIST_WORDS[k][0], "hint": _LIST_WORDS[k][1], "domains": [d]}
-                      for k, d in ENTITY_LISTS.items() if d]}
-SECTIONS = {"settings", "act_enabled", "approval_ttl_minutes", "people", "chats", "siren_entity",
-            "siren_auto_off_min", "allowed_services", "notify_recipients", "system_actions", "ha_read_tools",
-            "agent_tools", "tool_access", "skills_off", *ENTITY_LISTS}
-
+                      for k, d in ENTITY_LISTS.items() if d],
+            "words": WORDS, "resets": RESET_WORDS}
 
 def _id(v: Any) -> int | None:
     """An id as the agent reads it (int(...)): a number, or a number written as text."""

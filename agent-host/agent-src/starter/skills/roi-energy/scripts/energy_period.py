@@ -26,8 +26,6 @@ from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(HERE, "..", "..", "_shared"))
-sys.path.insert(0, os.path.join(HERE, "..", "..", "preventive-maintenance", "scripts"))
 
 from vesta_shared.ha_client import client_from_args  # noqa: E402
 from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
@@ -35,7 +33,8 @@ from vesta_shared.params import VillaParams, MissingParameter  # noqa: E402
 from vesta_shared.stats import med, pct_change  # noqa: E402
 from vesta_shared.store import Store  # noqa: E402
 from vesta_shared.messaging import fmt_money  # noqa: E402
-import features as F  # noqa: E402
+from vesta_shared.timeutil import villa_day  # noqa: E402
+import vesta_shared.daily as F  # noqa: E402  (a day of a meter: shared, not another skill's file)
 
 
 def period_bounds(period: str, end: date, start: date | None) -> tuple[date, date]:
@@ -63,7 +62,7 @@ def run(args) -> dict:
     Z = ZoneInfo(pack.time_zone)
     helpers, hstates = cli.helpers()
     params = VillaParams(helpers, hstates)
-    end = date.fromisoformat(args.end) if args.end else datetime.now(Z).date() - timedelta(days=1)
+    end = villa_day(Z, args.end, last_finished=True)
     start_arg = date.fromisoformat(args.start) if args.start else None
     a, b = period_bounds(args.period, end, start_arg)
     n_days = (b - a).days + 1

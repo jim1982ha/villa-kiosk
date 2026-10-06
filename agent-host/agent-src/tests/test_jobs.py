@@ -8,10 +8,10 @@ import os
 import pytest
 import yaml
 
-from helpers import copy_skill, settings
+from helpers import copy_skill, make_agent, settings
 from ai_fake import FakeAI
 from telegram_fake import BOT, FakeTelegram
-from test_telegram_events import FakeReader
+from ha_fake import FakeHA, tool
 from vesta_agent import runner
 from vesta_agent.app import Vesta
 from vesta_agent.kiosk import Kiosk
@@ -28,13 +28,10 @@ def run(coro):
 
 @pytest.fixture
 def agent(tmp_path, monkeypatch):
-    s = settings(str(tmp_path), VESTA_TELEGRAM_ENABLED="true", VESTA_TELEGRAM_BOT_TOKEN="42:TG-TEST")
-    with open(s.policy_path, "w") as f:
-        yaml.safe_dump({"people": [{"telegram_id": ASKER, "name": "Asker", "role": "fm"}],
-                        "chats": {"owner": GROUP, "fm": GROUP}, "ha_read_tools": ["ha_get_state"],
-                        "settings": {"jobs": {"fm-weekly": {"profile": "performance", "limit_usd": 2.5}}}}, f)
-    copy_skill("reports", s.skills_dir)
-    v = Vesta(s, telegram=FakeTelegram(), reader=FakeReader(), kiosk=Kiosk("", ""))
+    v = make_agent(tmp_path, {"people": [{"telegram_id": ASKER, "name": "Asker", "role": "fm"}],
+                              "chats": {"owner": GROUP, "fm": GROUP}, "ha_read_tools": ["ha_get_state"],
+                              "settings": {"jobs": {"fm-weekly": {"profile": "performance", "limit_usd": 2.5}}}},
+                   skills=["reports"], reader=FakeHA(tools=[tool("ha_get_state")]))
     v.bot_username = BOT["username"]
     v.code = []
     v.stop_at_limit = False
@@ -160,7 +157,7 @@ def test_every_report_a_person_may_ask_for_runs_as_its_job():
     # commands that make it (job_only), so in a chat it can only be started as its job, never made inline
     from helpers import STARTER_SKILLS
     for sk in Skills(STARTER_SKILLS).all().values():
-        tied = {job for spec in sk.scripts.values() for job in spec["job_only"].values()}
+        tied = {job for spec in sk.scripts.values() for job in spec.job_only.values()}
         for j in sk.schedule:
             if j.get("on_request"):
                 assert j["name"] in tied, f"{sk.name}: {j['name']} may be asked for but no command is job_only for it"

@@ -17,7 +17,6 @@ import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(HERE, "..", "..", "_shared"))
 from vesta_shared.store import Store  # noqa: E402
 from vesta_shared.messaging import fmt_money  # noqa: E402
 

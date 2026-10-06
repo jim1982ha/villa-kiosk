@@ -533,4 +533,4 @@ def test_the_tools_are_cards_four_a_row_and_the_ai_notes_are_behind_an_info():
     assert 'withInfo("Limit (US$)", limitNote)' in js and "At their limits" not in js.split("const ai =")[1][:400]
     assert "Everything switched on, by role" not in js
     # the New conversation menu lines up with the brain and the limit: its name under it, not a label above it
-    assert 'h("td", { class: "with-caption" }, sel(RESETS' in js
+    assert 'h("td", { class: "with-caption" }, sel(SCHEMA.resets' in js

@@ -14,7 +14,7 @@ TOKEN = "kiosk-TEST-token"
 
 
 # ---------------------------------------------------------------------- a fake Kiosk
-class FakeKiosk:
+class KioskServer:
     def __init__(self):
         self.doc = {"tickets": [{"id": "person-1", "title": "Raised by a person", "status": "open",
                                  "openedAt": "2026-10-01T00:00:00Z", "photoIds": []}],
@@ -74,7 +74,7 @@ async def _serve(app):
 
 def test_kiosk_agreement_heartbeat_and_tickets():
     async def go():
-        fake = FakeKiosk()
+        fake = KioskServer()
         runner, url = await _serve(fake.app())
         try:
             k = Kiosk(url, TOKEN)

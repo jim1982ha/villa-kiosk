@@ -33,7 +33,7 @@ import json
 import os
 import re
 import sys
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from html import escape as _esc
 from zoneinfo import ZoneInfo
 
@@ -41,13 +41,12 @@ from jinja2 import Environment, FileSystemLoader
 from markupsafe import Markup, escape
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(HERE, "..", "..", "_shared"))
 sys.path.insert(0, HERE)
 from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
 from vesta_shared.messaging import fmt_money, split_message  # noqa: E402
 from vesta_shared.axis import is_flat, label as axis_label, nice_axis  # noqa: E402  (the one axis rule)
 from vesta_shared.store import Store  # noqa: E402
-from vesta_shared.timeutil import day_label  # noqa: E402  (the one day format)
+from vesta_shared.timeutil import day_label, day_time_label, villa_day  # noqa: E402  (the one day format)
 from vesta_shared.problems import Problems  # noqa: E402  (what is still open: one owner)
 
 TPL = Environment(loader=FileSystemLoader(os.path.join(HERE, "..", "templates")), autoescape=True)
@@ -88,7 +87,7 @@ def fm_daily(pack: KnowledgePack, store: Store, as_of: date) -> str:
     digest_inc = [i for i in store.incidents(open_only=True) if i["state"] == "digest" and i["opened_at"][:10] >= yesterday]
     shown_new = {f"finding:{f['id']}" for f in new}
     open_now = [p for p in Problems(store).open_problems() if p["source"] not in shown_new]
-    lines = [f"{pack.villa}, {as_of.strftime('%a %d %b')} morning."]
+    lines = [f"{pack.villa}, {day_label(as_of, weekday=True)} morning."]
     if new:
         lines.append("New:")
         lines += _grouped([{"kind": f["rule_id"], "severity": f["severity"], "subject": name_of(f["entity_id"], f["summary"]),
@@ -320,22 +319,27 @@ def page(facts: dict, notes: dict, limit: str | None = None) -> str:
     def pct(v):
         return "—" if v is None else f"{'+' if v > 0 else '−' if v < 0 else ''}{abs(v):.0f}%"
 
+    # ⚠️ THE ONE DAY FORMAT, IN THE VILLA'S TIME (architecture review, 2026-10-07): these wrote "Mon 05 Oct", and a
+    # Home Assistant time (UTC, its zone cut off) was shown as if it were the villa's
+    zone = ZoneInfo(facts.get("zone") or "UTC")
+
     def day(s):
         try:
-            return date.fromisoformat(str(s)[:10]).strftime("%a %d %b")
+            return day_label(date.fromisoformat(str(s)[:10]), weekday=True)
         except ValueError:
             return s or ""
+
+    def when(s):
+        try:
+            t = datetime.fromisoformat(str(s))
+        except ValueError:
+            return s or ""
+        return day_time_label((t if t.tzinfo else t.replace(tzinfo=timezone.utc)).astimezone(zone), weekday=True)
 
     def sentence(s, end="."):
         """A playbook phrase as a sentence: a capital first, a full stop (or `end`) last."""
         s = str(s or "").strip()
         return "" if not s else s[:1].upper() + s[1:] + ("" if s[-1] in ".?!" else end)
-
-    def when(s):
-        try:
-            return datetime.fromisoformat(str(s)).strftime("%a %d %b, %H:%M")
-        except ValueError:
-            return s or ""
 
     sections = facts.get("sections") or {}
     header = sections.get("header") or {}
@@ -399,7 +403,7 @@ def main(argv=None):
     pack = KnowledgePack.load(a.pack)
     store = Store(a.store)
     Z = ZoneInfo(a.zone or pack.time_zone)
-    as_of = date.fromisoformat(a.as_of) if a.as_of else datetime.now(Z).date()
+    as_of = villa_day(Z, a.as_of)
     if a.cmd == "fm-daily":
         print(json.dumps({"messages": split_message(fm_daily(pack, store, as_of))}, indent=1)); return 0
     print(json.dumps({"messages": [owner_weekly(pack, store, json.load(open(a.energy)))]}, indent=1)); return 0

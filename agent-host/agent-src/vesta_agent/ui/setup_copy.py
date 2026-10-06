@@ -30,12 +30,14 @@ import yaml
 
 from .. import __version__, tool_access
 from ..history import policy_change
-from ..policy import Policy, problems as policy_problems
-from ..skills import FILE_NAME, SKILL_NAME, VILLA_PREFIX, SkillError, _files, _parse, ai_jobs
+from ..policy import WORDS, Policy, problems as policy_problems, setup_fields
+from ..skills import FILE_NAME, SKILL_NAME, VILLA_PREFIX, SkillError, skill_files, parse_skill, ai_jobs
 
 PARTS = ("skills", "villa_files", "ai", "actions", "tools", "keep", "instructions")
-AI_SETTINGS = ("profile", "reply_limit_usd", "web_search", "conversation_reset", "jobs")
-TOOL_SECTIONS = ("ha_read_tools", "agent_tools", "tool_access", "skills_off")
+# what each part carries: policy.FIELDS, the one table of the file's settings
+AI_SETTINGS = tuple(k.split(".", 1)[1] for k in setup_fields("ai"))
+TOOL_SECTIONS = tuple(setup_fields("tools"))
+ACTION_SECTIONS = tuple(setup_fields("actions"))
 MAX_FILES = 400
 MAX_UNPACKED = 20 * 1024 * 1024
 
@@ -53,8 +55,8 @@ def export(settings, skills, parts: set[str]) -> bytes:
         rules["settings"] = {k: s[k] for k in AI_SETTINGS if k in s}
     if "keep" in parts and "keep" in s:
         rules.setdefault("settings", {})["keep"] = s["keep"]
-    if "actions" in parts and "allowed_services" in raw:
-        rules["allowed_services"] = raw["allowed_services"]
+    if "actions" in parts:
+        rules.update({k: raw[k] for k in ACTION_SECTIONS if k in raw})
     if "tools" in parts:
         rules.update({k: raw[k] for k in TOOL_SECTIONS if k in raw})
     buf = io.BytesIO()
@@ -63,7 +65,7 @@ def export(settings, skills, parts: set[str]) -> bytes:
         if "skills" in parts:
             for name, sk in sorted(skills.all(include_off=True).items()):
                 names.append(name)
-                for rel in sorted(_files(sk.path)):
+                for rel in sorted(skill_files(sk.path)):
                     if os.path.basename(rel).startswith(VILLA_PREFIX) and "villa_files" not in parts:
                         continue
                     z.write(os.path.join(sk.path, rel), f"skills/{name}/{rel}")
@@ -126,7 +128,7 @@ def _merged_rules(current: dict, imported: dict | None) -> dict:
             s = dict(out.get("settings") or {})
             s.update(v)
             out["settings"] = s
-        elif k in ("allowed_services", *TOOL_SECTIONS):
+        elif k in (*ACTION_SECTIONS, *TOOL_SECTIONS):
             out[k] = v
     return out
 
@@ -143,7 +145,7 @@ def preview(settings, skills, setup: dict, server_tools: list[dict] | None) -> d
                 os.makedirs(os.path.dirname(os.path.join(folder, rel)), exist_ok=True)
                 with open(os.path.join(folder, rel), "wb") as f:
                     f.write(data)
-            mine = {k: v for k, v in (_files(have[name].path) if name in have else {}).items()
+            mine = {k: v for k, v in (skill_files(have[name].path) if name in have else {}).items()
                     if not os.path.basename(k).startswith(VILLA_PREFIX)}
             theirs = {k: hashlib.sha256(v).hexdigest() for k, v in files.items() if not os.path.basename(k).startswith(VILLA_PREFIX)}
             differ = sorted(k for k in set(mine) | set(theirs) if mine.get(k) != theirs.get(k))
@@ -154,17 +156,18 @@ def preview(settings, skills, setup: dict, server_tools: list[dict] | None) -> d
             else:
                 change, detail = "replaced", f"{len(differ)} file{'s' if len(differ) > 1 else ''} differ" + (
                     "; this villa's own villa.* files are kept" if name in have and any(
-                        os.path.basename(k).startswith(VILLA_PREFIX) for k in _files(have[name].path)) else "")
+                        os.path.basename(k).startswith(VILLA_PREFIX) for k in skill_files(have[name].path)) else "")
             rows.append({"what": name, "kind": "skill", "change": change, "detail": detail})
             try:
-                parsed[name] = _parse(name, folder)
+                parsed[name] = parse_skill(name, folder)
             except (SkillError, yaml.YAMLError, OSError) as e:
                 misfits.append(f"{name}: the agent would switch this skill off here ({e}).")
     current = _policy_raw(settings.policy_path)
     merged = _merged_rules(current, setup["rules"])
     if setup["rules"]:
-        for label, keys in (("The AI", [("settings", k) for k in AI_SETTINGS]), ("How long records are kept", [("settings", "keep")]),
-                            ("What the agent may do", [("allowed_services", None)]),
+        for label, keys in ((WORDS["settings"], [("settings", k) for k in AI_SETTINGS]),
+                            (WORDS["settings.keep"], [("settings", "keep")]),
+                            (WORDS["allowed_services"], [(k, None) for k in ACTION_SECTIONS]),
                             ("What the AI can use", [(k, None) for k in TOOL_SECTIONS])):
             def pick(d, keys=keys):
                 return {f"{a}.{b}" if b else a: ((d.get(a) or {}).get(b) if b else d.get(a)) for a, b in keys}
@@ -246,7 +249,7 @@ def apply(ui, setup: dict, prev: dict) -> None:
         from .policy_doc import apply_form, to_form
         text, r = ui._policy()
         merged = _merged_rules(_policy_raw(s.policy_path), setup["rules"])
-        form = {k: merged[k] for k in ("settings", "allowed_services", *TOOL_SECTIONS) if k in merged}
+        form = {k: merged[k] for k in ("settings", *ACTION_SECTIONS, *TOOL_SECTIONS) if k in merged}
         if "settings" in form:
             form["settings"] = {**to_form(text)["settings"], **form["settings"]}
         ui._save_policy(apply_form(text, form), r, "Import", "Rules from a setup: " + policy_change(text, apply_form(text, form)))

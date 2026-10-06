@@ -53,6 +53,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+from typing import Any
 from dataclasses import dataclass, field
 
 import yaml
@@ -95,12 +96,57 @@ KEPT = ".kept.json"           # starter skills the owner chose to keep as edited
 
 
 @dataclass
+class Script:
+    """One script of a skill as its skill.yaml declares it, with this villa's choice of what the AI may run.
+
+    ⚠️ ONE READING OF A SCRIPT (architecture review, 2026-10-07): it was a dict of five keys — `cmds` None for "no
+    commands", `off` an empty set, True or a set of commands — that the AI's tools, the page and the checks each
+    decoded, and the page wrote the villa's choice back by hand. Ask it instead."""
+    name: str
+    commands: dict[str, str] | None          # command → what it does (skill.yaml); None: the script takes none
+    flags: dict[str, Any] = field(default_factory=dict)
+    inject: list[str] = field(default_factory=list)
+    job_only: dict[str, str] = field(default_factory=dict)   # command → the AI job it is, asked for in a chat
+    description: str = ""
+    off_all: bool = False                    # villa.skill.yaml: the whole script switched off for the AI
+    off: set[str] = field(default_factory=set)               # villa.skill.yaml: these commands switched off
+
+    def runnable(self, command: str | None = None) -> bool:
+        """Whether the AI may run it (and this command of it) here."""
+        return not self.off_all and not (command is not None and command in self.off)
+
+    def runnable_commands(self) -> list[str]:
+        return [c for c in sorted(self.commands or ()) if self.runnable(c)]
+
+    @property
+    def any_off(self) -> bool:
+        return self.off_all or bool(self.off)
+
+    def view(self) -> dict:
+        """What the page shows of it (Skills → About, Try a command)."""
+        return {"script": self.name, "description": self.description,
+                "flags": {k: (list(v) if isinstance(v, tuple) else v) for k, v in self.flags.items()},
+                "whole_off": self.off_all,
+                "commands": [{"name": c, "words": (self.commands or {}).get(c, ""), "on": self.runnable(c),
+                              "job_only": self.job_only.get(c)} for c in sorted(self.commands or ())]}
+
+    def switched(self, command: str | None, on: bool):
+        """villa.skill.yaml's off_commands entry for this script once `command` (None: the whole script) is
+        switched on or off: True, a list of commands, or None (nothing off)."""
+        if command is None:
+            return None if on else True
+        now = set(self.commands or ()) if self.off_all else set(self.off)
+        now = (now - {command}) if on else (now | {command})
+        return sorted(now) or None
+
+
+@dataclass
 class Skill:
     name: str
     path: str
     description: str = ""
     tools: list[str] | None = None
-    scripts: dict[str, dict] = field(default_factory=dict)
+    scripts: dict[str, Script] = field(default_factory=dict)
     schedule: list[dict] = field(default_factory=list)
     every_5_min: str | None = None
     on_event: dict[str, str] = field(default_factory=dict)
@@ -119,7 +165,7 @@ def _script_file_ok(skill_path: str, script: str) -> bool:
         os.path.isfile(os.path.join(skill_path, "scripts", script))
 
 
-def _parse(name: str, path: str) -> Skill:
+def parse_skill(name: str, path: str) -> Skill:
     with open(os.path.join(path, "skill.yaml"), encoding="utf-8") as f:
         raw = yaml.safe_load(f) or {}
     if not isinstance(raw, dict):
@@ -144,9 +190,8 @@ def _parse(name: str, path: str) -> Skill:
         cmds = spec.get("commands")
         words = {str(k): str(v or "") for k, v in cmds.items()} if isinstance(cmds, dict) else {}
         job_only = {str(k): str(v) for k, v in (spec.get("job_only") or {}).items()}
-        sk.scripts[script] = {"cmds": set(map(str, cmds)) if cmds else None, "flags": flags, "inject": inject,
-                              "job_only": job_only, "words": words, "off": set(),
-                              "description": str(spec.get("description") or "").strip()}
+        sk.scripts[script] = Script(script, ({str(c): words.get(str(c), "") for c in cmds} if cmds else None), flags,
+                                    inject, job_only, str(spec.get("description") or "").strip())
     tools = raw.get("tools")
     if tools is not None:
         if not isinstance(tools, list) or not all(isinstance(t, str) and TOOL.match(t) for t in tools):
@@ -177,7 +222,7 @@ def _parse(name: str, path: str) -> Skill:
         sk.on_reply = _check_command(path, str(raw["on_reply"]), "on_reply")
     asked = {j["name"] for j in sk.schedule if j.get("on_request")}
     for script, spec in sk.scripts.items():
-        for cmd, job in spec["job_only"].items():
+        for cmd, job in spec.job_only.items():
             if job not in asked:
                 raise SkillError(f"scripts.{script}.job_only: {job} is not an AI job of this skill a person may ask for")
     return sk
@@ -199,9 +244,9 @@ def _villa_choices(sk: Skill) -> None:
         if not spec:
             continue
         if which is True:
-            spec["off"] = True
-        elif isinstance(which, list) and spec["cmds"]:
-            spec["off"] = {str(c) for c in which if str(c) in spec["cmds"]}
+            spec.off_all = True
+        elif isinstance(which, list) and spec.commands:
+            spec.off = {str(c) for c in which if str(c) in spec.commands}
 
 
 def villa_choices(skill_path: str) -> dict:
@@ -214,10 +259,21 @@ def villa_choices(skill_path: str) -> dict:
         return {}
 
 
-def runnable(spec: dict, command: str | None) -> bool:
-    """Whether the AI may run this script (and this command of it) here: not switched off for the villa."""
-    off = spec.get("off") or set()
-    return off is not True and not (command is not None and command in off)
+def switch_command(skill_path: str, script: Script, command: str | None, on: bool) -> str | None:
+    """villa.skill.yaml's text once a command (None: the whole script) is switched on or off for the AI; None when
+    the file is left with nothing in it. Its other choices are kept as written."""
+    choices = villa_choices(skill_path)
+    off = dict(choices.get("off_commands") or {})
+    entry = script.switched(command, on)
+    if entry is None:
+        off.pop(script.name, None)
+    else:
+        off[script.name] = entry
+    keep = {k: v for k, v in choices.items() if k != "off_commands" and v}
+    if off:
+        keep["off_commands"] = off
+    return ("# This villa's choices for this skill, made on the VESTA Agent page (Skills): kept by updates.\n"
+            + yaml.safe_dump(keep, sort_keys=False)) if keep else None
 
 
 def _ai_job(path: str, job: dict, where: str) -> dict:
@@ -358,7 +414,7 @@ class Skills:
                 seen.add(name)
                 continue
             try:
-                sk = _parse(name, path)
+                sk = parse_skill(name, path)
                 self._report(name, "")
                 if name not in off:
                     out[name] = sk
@@ -381,7 +437,7 @@ class Skills:
         src = os.path.join(self.starter_dir, name) if self.starter_dir else ""
         if not src or not os.path.isdir(src):
             return {"state": "own"}
-        have, new = _files(dst), _files(src)
+        have, new = skill_files(dst), skill_files(src)
         villa = sorted(k for k in have if os.path.basename(k).startswith(VILLA_PREFIX))
         mine = {k: v for k, v in have.items() if k not in villa}
         differs = sorted(k for k in set(mine) | set(new) if mine.get(k) != new.get(k))
@@ -448,14 +504,14 @@ def validate_script_args(skill: Skill | None, skill_name: str, script: str, args
     if not spec:
         raise ToolError(f"{skill_name}/{script} is not a script this skill lets you run.")
     args = [str(a) for a in (args or [])]
-    if not runnable(spec, args[0] if spec["cmds"] is not None and args else None):
-        raise ToolError(f"{script}{' ' + args[0] if spec['cmds'] is not None and args else ''} is switched off for this "
+    if not spec.runnable(args[0] if spec.commands is not None and args else None):
+        raise ToolError(f"{script}{' ' + args[0] if spec.commands is not None and args else ''} is switched off for this "
                         f"villa (VESTA Agent page → Skills → {skill_name}). Say so plainly; do not try another way.")
     final: list[str] = []
     i = 0
-    if spec["cmds"] is not None:
-        if not args or args[0] not in spec["cmds"]:
-            raise ToolError(f"{script} needs one of: {', '.join(sorted(spec['cmds']))}.")
+    if spec.commands is not None:
+        if not args or args[0] not in spec.commands:
+            raise ToolError(f"{script} needs one of: {', '.join(sorted(spec.commands))}.")
         final.append(args[0])
         i = 1
     while i < len(args):
@@ -463,7 +519,7 @@ def validate_script_args(skill: Skill | None, skill_name: str, script: str, args
         if "=" in a and a.startswith("--"):
             a, v = a.split("=", 1)
             args[i:i + 1] = [a, v]
-        kind = spec["flags"].get(a)
+        kind = spec.flags.get(a)
         if kind is None:
             raise ToolError(f"{a} is not allowed for {script}.")
         if kind == "switch":
@@ -536,7 +592,7 @@ def carry_villa_files(old: str, new: str) -> None:
                     shutil.copy2(os.path.join(root, f), os.path.join(new, rel))
 
 
-def _files(folder: str) -> dict[str, str]:
+def skill_files(folder: str) -> dict[str, str]:
     """Each file of a skill folder (its path inside it) → a hash of its content; Python's caches left out."""
     out = {}
     for root, dirs, files in os.walk(folder):
@@ -588,13 +644,13 @@ def record_shipped(starter_dir: str) -> list[str]:
 
 
 def injected(settings, skill: Skill, script: str) -> list[str]:
-    spec = skill.scripts.get(script) or {"inject": ["store"]}
+    inject = skill.scripts[script].inject if script in skill.scripts else ["store"]
     inject = []
-    if "pack" in spec["inject"]:
+    if "pack" in inject:
         inject += ["--pack", settings.pack_path]
-    if "store" in spec["inject"]:
+    if "store" in inject:
         inject += ["--store", settings.store_path]
-    if "zone" in spec["inject"]:
+    if "zone" in inject:
         inject += ["--zone", settings.timezone]
     return inject
 

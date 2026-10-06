@@ -40,12 +40,14 @@ from .config import STARTER_DIR
 from .ha_events import HaEvents
 from .housekeeping import tidy
 from .kiosk import Kiosk, KioskError
+from .alert_buttons import AlertButtons
 from .outcome import Outcome
+from .voice import Voice
+from .tickets import Tickets
 from .policy import Person, Policy, problems as policy_problems
 from .routing import CONVERSATION, JOB, Origin, Routing
 from .scheduler import Scheduler
 from .skills import Skills, script_env
-from .speech import speech_to_text
 from .state import State
 from .telegram import Telegram, TelegramError
 from .tools import Toolbox, scrub
@@ -101,10 +103,16 @@ class Vesta:
         # everything that reaches a chat, and whether it did (delivery.py)
         self.delivery = Delivery(self.tg, self.state, self.policy)
         self.actions = Actions(self.policy, self.state, self.writer_factory, names=self.name_of, related=self.related_entities)
-        self.outcome = Outcome(policy=self.policy, state=self.state, store_path=settings.store_path, out_dir=settings.out_dir,
-                               timezone=settings.timezone, send=self.delivery.send, kiosk=self.kiosk, actions=self.actions,
-                               reader=self.reader, skills=self.skills, run_job=self.run_code_job,
-                               edit=(self.tg.edit if self.tg else None))
+        # a script's result carried out (outcome.py), with the alert buttons and the Kiosk's tickets as their own modules
+        self.buttons = AlertButtons(state=self.state, skills=self.skills, store_path=settings.store_path,
+                                    timezone=settings.timezone, edit=(self.tg.edit if self.tg else None),
+                                    run_job=self.run_code_job)
+        self.tickets = Tickets(kiosk=self.kiosk, state=self.state, store_path=settings.store_path,
+                               settle_alert=self.buttons.settle)
+        # a voice message's words (voice.py): the skill prepares the audio, Home Assistant reads it
+        self.voice = Voice(self.s, self.tg, self.skills, self.code_command, self.delivery.send, self.state, self.cf_headers)
+        self.outcome = Outcome(policy=self.policy, state=self.state, send=self.delivery.send, actions=self.actions,
+                               reader=self.reader, tickets=self.tickets, buttons=self.buttons, out_dir=settings.out_dir)
         self.server_tools: list[dict] = []
         self.bot_username: str | None = None
         self._locks: dict[int, asyncio.Lock] = {}
@@ -157,7 +165,7 @@ class Vesta:
         """`allowed`: what the AI may use this time (tool_access); None: everything switched on."""
         return Toolbox(settings=self.s, policy=self.policy(), reader=self.reader, actions=self.actions,
                        skills=self.skills, send=self.delivery.send, server_tools=self.server_tools, state=self.state,
-                       ticket=self.outcome.create_ticket if self.kiosk.enabled else None,
+                       ticket=self.tickets.create if self.kiosk.enabled else None,
                        carry_out=self.outcome.carry_out, start_job=self.start_job, allowed=allowed)
 
     def lock(self, chat_id: int) -> asyncio.Lock:
@@ -205,7 +213,7 @@ class Vesta:
             try:
                 await self.kiosk.check()
                 log.info("VESTA Kiosk: agreement %s", self.kiosk.info.get("contract"))
-                await self._safe(self.outcome.repair_tickets())
+                await self._safe(self.tickets.repair())
             except KioskError as e:
                 log.warning("VESTA Kiosk: %s", e)
         await self.refresh_server_tools()
@@ -273,7 +281,7 @@ class Vesta:
         open task still without its Kiosk ticket, and what the agent keeps (housekeeping.tidy)."""
         await asyncio.to_thread(self.build_pack)
         await self.refresh_server_tools()
-        await self._safe(self.outcome.repair_tickets())
+        await self._safe(self.tickets.repair())
         await self._safe(self.tidy())
 
     async def tidy(self) -> None:
@@ -365,64 +373,12 @@ class Vesta:
             return
         if voice:
             # in a group, only a voice message that replies to the agent reaches here (no mention possible)
-            text = await self.transcribe(cid, person, str(m.get("file_id") or ""))
+            text = await self.voice.transcribe(cid, person, str(m.get("file_id") or ""))
         if self.bot_username:
             text = re.sub(rf"@{re.escape(self.bot_username)}", "", text or "", flags=re.I).strip()
         if not text:
             return
         await self.converse(cid, person, text, chat_role=pol.chat_role(cid) or "private", voice=voice)
-
-    async def transcribe(self, cid: int, person: Person, file_id: str) -> str | None:
-        """A voice message's words, or None (the person is told why).
-
-        ⚠️ THE SKILL DECIDES, THE ENGINE ONLY CARRIES (owner, 2026-10-05: everything tuned
-        per villa lives in the skills, so a villa's skills copied to another work the same).
-        The skill whose `on_event.voice_message` hook runs decodes the audio and chooses the
-        speech-to-text and the language; the engine fetches the file and sends the skill's
-        WAV to Home Assistant, because it holds the token and a skill script never does."""
-        hook = next(((sk, sk.on_event["voice_message"]) for sk in self.skills.all().values()
-                     if "voice_message" in sk.on_event), None)
-        if not self.tg:
-            log.info("Voice message in chat %s not read: Telegram takeover is off", cid)
-            return None
-        if not hook:
-            await self.delivery.send(cid, "Voice messages are not set up here: no skill handles them.")
-            return None
-        folder = os.path.join(self.s.out_dir, "voice")
-        os.makedirs(folder, exist_ok=True)
-        path = os.path.join(folder, f"{datetime.now(timezone.utc):%Y%m%dT%H%M%S%f}.ogg")
-        wav = None
-        try:
-            try:
-                audio = await self.tg.download(file_id)
-            except TelegramError as e:
-                log.warning("Voice message in chat %s: %s", cid, e)
-                await self.delivery.send(cid, "This voice message could not be fetched from Telegram.")
-                return None
-            with open(path, "wb") as f:
-                f.write(audio)
-            sk, cmd = hook
-            res = await asyncio.to_thread(self.code_command, sk, cmd, {"audio": path, "language": person.language}, 120)
-            st = res.get("stt") if isinstance(res.get("stt"), dict) else None
-            if not st:
-                await self.delivery.send(cid, str(res.get("error") or "This voice message could not be prepared."))
-                return None
-            wav = st.get("wav")
-            text, why = await speech_to_text(self.s.ha_url, self.s.ha_token, st, self.cf_headers)
-            log.info("Voice message in chat %s: %s s, %s (%s)%s", cid, st.get("seconds"), st.get("entity"),
-                     st.get("language"), f": {why}" if why else "")
-            self.state.log("voice", {"chat": cid, "seconds": st.get("seconds"), "stt": st.get("entity"),
-                                     "language": st.get("language"), "ok": bool(text), "why": why})
-            if not text:
-                await self.delivery.send(cid, "I could not make out this voice message. Try again, or write it.")
-            return text
-        finally:
-            for f in (path, wav):        # a voice is the person's: kept no longer than it takes to read it
-                if f and os.path.dirname(os.path.abspath(f)) == os.path.abspath(folder):
-                    try:
-                        os.remove(f)
-                    except OSError:
-                        pass
 
     def _resume_for(self, chat_id: int) -> str | None:
         sid, last = self.state.session(chat_id)
@@ -551,7 +507,7 @@ class Vesta:
             return await self.converse(cid, person, "", chat_role=pol.chat_role(cid) or "private",
                                        resume=cont["session_id"], is_continue=True)
         if data.startswith("i:"):
-            return await self.outcome.press(q, cid, data, pol.person(presser), toast)
+            return await self.buttons.press(q, cid, data, pol.person(presser), toast)
         await toast("Unknown button.")
 
     async def after_execution(self, ap: dict):

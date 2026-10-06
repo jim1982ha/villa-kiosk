@@ -14,15 +14,12 @@ import yaml
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 
-from ..policy import DEFAULT_BEHAVIOUR, DEFAULTS, ENTITY_LISTS
+from ..policy import DEFAULT_BEHAVIOUR, DEFAULTS, ENTITY_LISTS, form_sections
 
 #: What the forms edit. Everything else (system_actions, notify_recipients...) is edited in the file itself and
 #: never touched here. "What the AI can use" (0.6.42): ha_read_tools, agent_tools, tool_access, and the skills'
 #: on/off switch (skills_off).
-FORM_KEYS = ("settings", "act_enabled", "approval_ttl_minutes", "people", "chats", "allowed_services",
-             "owner_only_entities", "excluded_entities", "siren_entity", "siren_auto_off_min",
-             "switch_entities", "scene_allowlist", "script_allowlist", "button_allowlist",
-             "ha_read_tools", "agent_tools", "tool_access", "skills_off")
+FORM_KEYS = form_sections()     # policy.FIELDS: the one table of the file's settings
 LISTS = tuple(ENTITY_LISTS)     # policy.py's own table, not a copy
 
 

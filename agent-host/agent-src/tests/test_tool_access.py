@@ -9,8 +9,9 @@ import os
 import pytest
 import yaml
 
-from helpers import copy_skill, settings
+from helpers import copy_skill, make_agent, settings
 from ai_fake import FakeAI
+from ha_fake import FakeHA
 from telegram_fake import FakeTelegram
 from vesta_agent import runner, tool_access
 from vesta_agent.app import Vesta
@@ -32,35 +33,15 @@ def run(c):
     return asyncio.run(c)
 
 
-class Reader:
-    class mcp:
-        server_info = {"name": "ha-mcp", "version": "8.6.0"}
-
-        @staticmethod
-        def list_tools():
-            return SERVER
-
-    def states(self, ids):
-        return {}
-
-    def tool_content(self, name, args):
-        assert name == "ha_get_camera_image"
-        return [{"type": "image", "data": "SlBFRw==", "mimeType": "image/jpeg"}] if args["entity_id"] == "camera.lounge" else []
-
-
 @pytest.fixture
 def agent(tmp_path, monkeypatch):
-    s = settings(str(tmp_path), VESTA_TELEGRAM_ENABLED="true", VESTA_TELEGRAM_BOT_TOKEN="42:TG-TEST")
-    with open(s.policy_path, "w") as f:
-        yaml.safe_dump({"people": [{"telegram_id": OWNER, "name": "Owner", "role": "owner"},
-                                   {"telegram_id": FM, "name": "FM", "role": "fm"}],
-                        "chats": {"owner": OWNER_CHAT, "fm": FM_CHAT},
-                        "ha_read_tools": ["ha_get_state", "ha_get_history", "ha_get_camera_image",
-                                          "ha_config_set_automation", "ha_manage_theme"],
-                        "settings": {"jobs": {"fm-weekly": {"profile": "economy", "limit_usd": 1}}}}, f)
-    copy_skill("reports", s.skills_dir)
-    copy_skill("villa-concierge", s.skills_dir)
-    v = Vesta(s, telegram=FakeTelegram(), reader=Reader(), kiosk=Kiosk("", ""))
+    v = make_agent(tmp_path, {"people": [{"telegram_id": OWNER, "name": "Owner", "role": "owner"},
+                                         {"telegram_id": FM, "name": "FM", "role": "fm"}],
+                              "chats": {"owner": OWNER_CHAT, "fm": FM_CHAT},
+                              "ha_read_tools": ["ha_get_state", "ha_get_history", "ha_get_camera_image",
+                                                "ha_config_set_automation", "ha_manage_theme"],
+                              "settings": {"jobs": {"fm-weekly": {"profile": "economy", "limit_usd": 1}}}},
+                   skills=["reports", "villa-concierge"], reader=FakeHA(tools=SERVER, images={"camera.lounge": "SlBFRw=="}))
     v.runs = FakeAI("ok").install(monkeypatch).runs
     run(v.refresh_server_tools())
     return v

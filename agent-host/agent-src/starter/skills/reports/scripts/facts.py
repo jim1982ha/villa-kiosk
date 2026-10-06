@@ -36,7 +36,6 @@ import yaml
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL = os.path.dirname(HERE)
-sys.path.insert(0, os.path.join(HERE, "..", "..", "_shared"))
 from vesta_shared.ha_client import client_from_args  # noqa: E402
 from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
 from vesta_shared.messaging import no_code as _no_code  # noqa: E402
@@ -606,8 +605,8 @@ def s_header(c: Ctx) -> dict:
     title = (f"{c.pack.villa}, week {c.start.isocalendar()[1]}" if c.kind == "fm-weekly"
              else f"{c.pack.villa}, {c.start.strftime('%B %Y')}")
     return {"villa": c.pack.villa, "title": title,
-            "dates": f"{c.start.strftime('%A %d %B')} to {c.end.strftime('%A %d %B %Y')}",
-            "generated": c.now.astimezone(c.Z).strftime("%a %d %b %Y, %H:%M") + f" {c.Z.key}"}
+            "dates": f"{day_label(c.start, long=True)} to {day_label(c.end, long=True, year=True)}",
+            "generated": day_time_label(c.now.astimezone(c.Z), weekday=True, year=True) + f" {c.Z.key}"}
 
 
 def s_headline(c: Ctx) -> dict:
@@ -677,7 +676,7 @@ def _alert_rows(c: Ctx) -> list[dict]:
                      "severity": i.get("severity"), "source": "agent"})
     rows += c.ha_alerts()
     for r in rows:
-        r["when_h"] = datetime.fromisoformat(r["when"]).astimezone(c.Z).strftime("%a %d, %H:%M")
+        r["when_h"] = day_time_label(datetime.fromisoformat(r["when"]).astimezone(c.Z), weekday=True)
     return sorted(rows, key=lambda r: r["when"])
 
 
@@ -895,7 +894,7 @@ def facts(kind: str, c: Ctx) -> dict:
     rep = (c.cfg.get("reports") or {}).get(kind)
     if not rep:
         raise SystemExit(f"reports.yaml has no report {kind!r}")
-    out = {"kind": kind, "eyebrow": rep.get("eyebrow", ""), "villa": c.pack.villa,
+    out = {"kind": kind, "eyebrow": rep.get("eyebrow", ""), "villa": c.pack.villa, "zone": c.Z.key,
            "order": [], "sections": {}, "to_write": [], "problems": []}
     c.problems = out["problems"]       # a section that cannot say something names it here
     for sec in rep.get("sections") or []:

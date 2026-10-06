@@ -1,12 +1,13 @@
 // VESTA Agent page — the Rules tab (policy.yaml): the forms, the file, and What the AI can use.
-import { $view, api, card, dropdown, editTable, field, fill, floating, h, infoTip, jobsBanner, jump, markDirty, page, pagedBlock, plural, problemsBox, setBar, showBar, subTabs, tell, titleWithInfo, toast, withInfo } from "./core.js";
+import { $view, api, card, dropdown, editTable, field, fill, floating, h, infoButton, infoTip, jobsBanner, jump, markDirty, page, pagedBlock, plural, problemsBox, setBar, showBar, subTabs, tell, titleWithInfo, toast, toggleCard, withInfo } from "./core.js";
 
 // ---------------------------------------------------------------- rules (policy.yaml)
 // the rules, the lists and their domains, the siren's domains: policy.form_schema(), served with the file —
 // the page keeps no copy (two copies had drifted: input_button offered, then refused on save)
-export let SCHEMA = { rules: {}, lists: [], actionable: [], siren_domains: [] };
+export let SCHEMA = { rules: {}, lists: [], actionable: [], siren_domains: [], words: {}, resets: {} };
 
-export const RESETS = { daily_04_00: "Every day at 04:00", after_8h_silence: "After 8 hours of silence", never: "Never (/new only)" };
+// the settings' names and choices are the agent's (policy.FIELDS, RESET_WORDS), served in SCHEMA: never a copy here
+const W = (path) => SCHEMA.words[path] || path;
 // the villa's devices, from the agent's knowledge pack: chosen by name, never typed as ids
 export const ENT = { list: [], byId: {} };
 
@@ -46,16 +47,13 @@ export function rulesForms(doc, jobs = [], tools = null) {
   const on = (fn) => (e) => { fn(e.target); markDirty(); };
   const num = (v) => (v === "" || v === null ? null : Number(v));
 
-  // acting: the switch before the title, nothing else (owner, 2026-10-06); how long an Approve button works sits with
-  // the services that ask for one ("What the agent may do")
+  // acting: the title, its (i), then the switch — as every other title with a switch (owner, 2026-10-07: the
+  // switch came first, and a line repeated what the (i) says); how long an Approve button works sits with the
+  // services that ask for one ("What the agent may do")
   const acting = h("section", { class: "card" }, h("div", { class: "card-title" },
-    h("label", { class: "switch title-switch" }, h("input", { type: "checkbox", checked: f.act_enabled, "aria-label": "The agent may act on the villa",
-      onchange: on((t) => { f.act_enabled = t.checked; actState.textContent = t.checked ? "On: it may act, within the rules below." : "Off: the agent informs only."; }) })),
-    h("h2", {}, "Acting on the villa", (() => { const b = h("button", { type: "button", class: "info", "aria-label": "About Acting on the villa" }, "i");
-      infoTip(b, "Off: the agent informs only, and never offers to do anything. On: it may act, within the rules below; every action still goes through \"What the agent may do\"."); return b; })()),
-    h("span", { class: "muted", id: "act-state" })));
-  const actState = acting.querySelector("#act-state");
-  actState.textContent = f.act_enabled ? "On: it may act, within the rules below." : "Off: the agent informs only.";
+    h("h2", {}, "Acting on the villa", infoButton("Acting on the villa", "Off: the agent informs only, and never offers to do anything. On: it may act, within the rules below; every action still goes through \"What the agent may do\"."),
+      h("label", { class: "switch title-switch" }, h("input", { type: "checkbox", checked: f.act_enabled, "aria-label": W("act_enabled"),
+        onchange: on((t) => { f.act_enabled = t.checked; }) })))));
 
   // the AI
   const sel = (opts, value, set, label) => dropdown(Object.entries(opts), value, (v) => { set(v); markDirty(); }, label);
@@ -79,12 +77,12 @@ export function rulesForms(doc, jobs = [], tools = null) {
     h("tr", {},
       h("td", {}, h("b", {}, "Chat answers"), h("div", { class: "muted" }, "replies in the chats; a reply at its limit offers Continue")),
       h("td", {}, sel(page.PROFILES, f.settings.profile, (v) => (f.settings.profile = v), "Brain")),
-      h("td", {}, limitInput(f.settings.reply_limit_usd, (v) => (f.settings.reply_limit_usd = v), "Limit per reply (USD)", "for each reply")),
+      h("td", {}, limitInput(f.settings.reply_limit_usd, (v) => (f.settings.reply_limit_usd = v), W("settings.reply_limit_usd"), "for each reply")),
       // the chats' own setting, on the chats' line (owner, 2026-10-06): their tools are "everything switched on, by
       // role" — said in the (i) of "Tools it gets"
       // the menu on the line of the brain and the limit, its name under it like theirs ("for each reply")
-      h("td", { class: "with-caption" }, sel(RESETS, f.settings.conversation_reset, (v) => (f.settings.conversation_reset = v), "Delete conversation context at"),
-        h("div", { class: "muted" }, "Delete conversation context at")),
+      h("td", { class: "with-caption" }, sel(SCHEMA.resets, f.settings.conversation_reset, (v) => (f.settings.conversation_reset = v), W("settings.conversation_reset")),
+        h("div", { class: "muted" }, W("settings.conversation_reset"))),
       h("td", { class: "x" })),
     ...jobs.map((j) => {
       const cur = f.settings.jobs[j.name];
@@ -116,7 +114,7 @@ export function rulesForms(doc, jobs = [], tools = null) {
 
   // people
   const languages = (p) => ({ ...doc.languages, ...(p.language && !(p.language in doc.languages) ? { [p.language]: p.language } : {}) });
-  const people = card("People", "Who the agent answers. Each person sends /whoami to the bot to read their Telegram id.",
+  const people = card(W("people"), "Who the agent answers. Each person sends /whoami to the bot to read their Telegram id.",
     ...editTable(f.people, {
       cls: "people", add: "Add a person", blank: () => ({ telegram_id: "", name: "", role: "fm", language: "en" }),
       columns: [{ title: "Name", width: "26%", phone: "a" }, { title: "Telegram id", width: "22%", phone: "b" },
@@ -132,10 +130,10 @@ export function rulesForms(doc, jobs = [], tools = null) {
 
   // chats
   const chatId = (role) => h("input", { type: "text", inputmode: "numeric", value: f.chats[role] ?? "", oninput: on((t) => (f.chats[role] = t.value.trim() === "" ? null : (/^-?\d+$/.test(t.value.trim()) ? Number(t.value.trim()) : t.value))) });
-  const chats = card("Chats", "Where the agent posts on its own. A group id is negative; /whoami in the chat shows it.",
+  const chats = card(W("chats"), "Where the agent posts on its own. A group id is negative; /whoami in the chat shows it.",
     h("div", { class: "grid" },
-      field("Owner chat", chatId("owner"), "Escalations, monthly report, owner-only approvals."),
-      field("Facility manager chat", chatId("fm"), "Alerts, reminders, daily digest, weekly page.")));
+      field(W("chats.owner"), chatId("owner"), "Escalations, monthly report, owner-only approvals."),
+      field(W("chats.fm"), chatId("fm"), "Alerts, reminders, daily digest, weekly page.")));
 
   // devices: chosen from the villa's own, by name (owner, 2026-10-01: "free form text inputs are not
   // suitable"). A box like a menu shows what is chosen; it opens a list with a search and a checkbox per
@@ -213,9 +211,11 @@ export function rulesForms(doc, jobs = [], tools = null) {
     return box;
   };
   // how long an Approve button works: with the services that ask for one, on the title's line (owner, 2026-10-06)
-  const ttl = h("label", { class: "field row-inline" }, h("span", {}, withInfo("Approve buttons work for", "An Approve or Refuse button older than this does nothing: the person asks again.")),
-    h("input", { type: "number", min: 1, max: 1440, value: f.approval_ttl_minutes, "aria-label": "Approve buttons work for (minutes)",
-                 oninput: on((t) => (f.approval_ttl_minutes = num(t.value))) }), h("span", {}, "min"));
+  // its (i) after the unit (owner, 2026-10-07): "Approve buttons work for [15] min (i)"
+  const ttl = h("label", { class: "field row-inline" }, h("span", {}, W("approval_ttl_minutes").replace(/ \(minutes\)$/, "")),
+    h("input", { type: "number", min: 1, max: 1440, value: f.approval_ttl_minutes, "aria-label": W("approval_ttl_minutes"),
+                 oninput: on((t) => (f.approval_ttl_minutes = num(t.value))) }), h("span", {}, "min"),
+    infoButton(W("approval_ttl_minutes"), "An Approve or Refuse button older than this does nothing: the person asks again."))
   const services = h("section", { class: "card" },
     titleWithInfo("What the agent may do", "One line per Home Assistant service, and who decides. Anything not listed is refused. Restarts, shell commands, toggles and the like are refused whatever this says. For \"Only the devices chosen beside it\", choose the devices on the same line: the agent may act only on those, and still asks for approval.", "h2", ttl),
     ...editTable(svcRows, {
@@ -232,11 +232,11 @@ export function rulesForms(doc, jobs = [], tools = null) {
 
   const devices = card("Protected devices", "Devices that need more care than the rules above give them.",
     h("div", { class: "grid" },
-      field("Only the owner may approve", many("owner_only_entities", SCHEMA.actionable), "An action on these waits for the owner's Approve, whoever asks (locks, the gate, the siren)."),
-      field("Left alone", many("excluded_entities", null), "Never acted on, never reported (a test device)."),
-      field("Siren", picker(() => (f.siren_entity ? [f.siren_entity] : []), (v) => (f.siren_entity = v[0] || null), SCHEMA.siren_domains, true),
+      field(W("owner_only_entities"), many("owner_only_entities", SCHEMA.actionable), "An action on these waits for the owner's Approve, whoever asks (locks, the gate, the siren)."),
+      field(W("excluded_entities"), many("excluded_entities", null), "Never acted on, never reported (a test device)."),
+      field(W("siren_entity"), picker(() => (f.siren_entity ? [f.siren_entity] : []), (v) => (f.siren_entity = v[0] || null), SCHEMA.siren_domains, true),
             "The siren the alert desk may ask the owner to sound."),
-      field("Siren stops after (minutes)", h("input", { type: "number", min: 1, max: 60, value: f.siren_auto_off_min, oninput: on((t) => (f.siren_auto_off_min = num(t.value))) }))));
+      field(W("siren_auto_off_min"), h("input", { type: "number", min: 1, max: 60, value: f.siren_auto_off_min, oninput: on((t) => (f.siren_auto_off_min = num(t.value))) }))));
 
   const save = async () => {
     try {
@@ -266,11 +266,9 @@ export function toolsCard(f, t, reload) {
   const body = h("div");
   // ⚠️ ONE CARD PER TOOL, BOTH TABS (owner, 2026-10-06): its name and switch on top, what it does, then its id and
   // notes; at most 4 a row, fewer on a narrower screen (app.css .tool-grid)
-  const toolCard = (on, set, title, { chip = null, words, meta }, disabled = false) => h("div", { class: "tool-card" + (on ? " is-on" : "") + (disabled ? " locked" : "") },
-    h("div", { class: "tool-card-head" }, h("b", {}, title, chip),
-      h("label", { class: "switch" }, h("input", { type: "checkbox", checked: on, disabled, "aria-label": title,
-                                                   onchange: (e) => { set(e.target.checked); markDirty(); draw(); } }))),
-    words, h("div", { class: "tool-meta" }, meta));
+  // core.toggleCard, the one card for a switch: saved with the form, then the tab drawn again
+  const toolCard = (on, set, title, parts, disabled = false) =>
+    toggleCard(on, (v) => { set(v); markDirty(); draw(); }, title, parts, disabled);
   const used = (n) => (n ? h("span", { class: "badge" }, `used ${n}× this week`) : null);
   const ha = () => {
     const on = new Set(f.ha_read_tools);

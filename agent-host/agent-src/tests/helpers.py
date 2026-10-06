@@ -62,3 +62,40 @@ def body_of(js: str, name: str) -> str:
     rest = js[start.end():]
     end = re.search(r"\n(?:export )?(?:async )?function ", rest)
     return rest[:end.start()] if end else rest
+
+
+def make_agent(tmp_path, policy: dict, *, skills=(), telegram=None, reader=None, kiosk=None, telegram_on: bool = True):
+    """An agent on a test villa: these rules (policy.yaml), these starter skills, the shared stand-ins.
+
+    ⚠️ ONE WAY TO BUILD THE TEST VILLA (architecture review, 2026-10-07): seven test files each wrote the rules,
+    copied the skills and built the agent by hand, so a change to the agent's constructor edited all of them.
+    `telegram`, `reader` (Home Assistant), `kiosk`: tests/telegram_fake.py, ha_fake.py and the Kiosk switched off,
+    unless given. `telegram_on=False`: the takeover is off and nothing is sent (no Telegram at all)."""
+    import yaml
+    from ha_fake import FakeHA
+    from telegram_fake import FakeTelegram
+    from vesta_agent.app import Vesta
+    from vesta_agent.kiosk import Kiosk
+    env = {"VESTA_TELEGRAM_ENABLED": "true" if telegram_on else "false", "VESTA_TELEGRAM_BOT_TOKEN": "42:TG-TEST"}
+    s = settings(str(tmp_path), **env)
+    with open(s.policy_path, "w") as f:
+        yaml.safe_dump(policy, f)
+    for name in skills:
+        copy_skill(name, s.skills_dir)
+    tg = telegram if telegram is not None else (FakeTelegram() if telegram_on else None)
+    return Vesta(s, telegram=tg, reader=reader or FakeHA(), kiosk=kiosk or Kiosk("", ""))
+
+
+def make_skill(skills_dir: str, name: str, spec: dict, scripts: dict[str, str] | None = None, md: str = "") -> str:
+    """A skill folder written for a test: its skill.yaml (`spec`), SKILL.md and scripts {file name: code}."""
+    import yaml
+    d = os.path.join(skills_dir, name)
+    os.makedirs(os.path.join(d, "scripts"), exist_ok=True)
+    with open(os.path.join(d, "SKILL.md"), "w", encoding="utf-8") as f:
+        f.write(md or f"# {name}\n")
+    with open(os.path.join(d, "skill.yaml"), "w", encoding="utf-8") as f:
+        yaml.safe_dump(spec, f)
+    for fname, code in (scripts or {}).items():
+        with open(os.path.join(d, "scripts", fname), "w", encoding="utf-8") as f:
+            f.write(code)
+    return d

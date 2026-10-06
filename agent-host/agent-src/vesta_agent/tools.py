@@ -37,7 +37,7 @@ from .policy import Person, Policy
 from .routing import Origin, Routing
 from .outcome import has_work
 from .runner import WEB_SEARCH
-from .skills import FILE_NAME, Skills, ToolError, runnable, validate_script_args
+from .skills import FILE_NAME, Skills, ToolError, validate_script_args
 
 SERVER = "vesta"
 SAVE_MAX = 64 * 1024
@@ -325,14 +325,14 @@ class Toolbox:
                             " Tell the person plainly which setting stops it (the VESTA Agent page); do not try another way.")
             scripts = []
             for name, spec in sorted(skill.scripts.items()):
-                if spec["cmds"] is None:
-                    if runnable(spec, None):
+                if spec.commands is None:
+                    if spec.runnable():
                         scripts.append(name)
                     continue
-                cmds = [c for c in sorted(spec["cmds"]) if runnable(spec, c)]
+                cmds = spec.runnable_commands()
                 if cmds:
                     scripts.append(f"{name} ({', '.join(cmds)})")
-            off = [n for n, spec in sorted(skill.scripts.items()) if spec.get("off")]
+            off = [n for n, spec in sorted(skill.scripts.items()) if spec.any_off]
             try:
                 with open(skill.skill_md, encoding="utf-8") as f:
                     body = f.read()
@@ -356,7 +356,7 @@ class Toolbox:
             skill = self.skills.get(sk)
             if skill and self.blocked(skill):
                 return _err(f"The skill {sk} cannot be used now: " + " ".join(b["why"] for b in self.blocked(skill)))
-            job = ((skill.scripts.get(sc) or {}).get("job_only") or {}).get(str((args.get("args") or [""])[0])) \
+            job = (skill.scripts[sc].job_only.get(str((args.get("args") or [""])[0])) if sc in skill.scripts else None) \
                 if skill and origin and origin.is_conversation else None
             if job:
                 # ⚠️ A REPORT ASKED FOR IN A CHAT RUNS AS ITS JOB (owner, 2026-10-01): made here, inside the

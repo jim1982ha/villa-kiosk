@@ -29,7 +29,6 @@ from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(HERE, "..", "..", "_shared"))
 sys.path.insert(0, HERE)
 
 from vesta_shared.ha_client import client_from_args  # noqa: E402
@@ -37,6 +36,7 @@ from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
 from vesta_shared.messaging import no_code as _no_code  # noqa: E402
 from vesta_shared.params import VillaParams, MissingParameter  # noqa: E402
 from vesta_shared.store import Store  # noqa: E402
+from vesta_shared.timeutil import villa_day  # noqa: E402
 from vesta_shared.problems import Problems  # noqa: E402  (a problem's lifecycle: one owner)
 from vesta_shared.stats import med  # noqa: E402
 from vesta_shared.timeutil import schedule_hours_per_day  # noqa: E402
@@ -77,7 +77,7 @@ def run(args) -> dict:
     # ⚠️ THE DAY JUDGED IS THE LAST FINISHED ONE (villa, 2026-10-04): the batch runs at 02:00 and judged
     # the date it ran on — two hours of data — so a pump's "last 2 days" were yesterday and a 2-hour
     # stub: "Onsen pump used 0.09 kWh/day against a normal 0.48". --as-of names the day to judge.
-    today = date.fromisoformat(args.as_of) if args.as_of else datetime.now(Z).date() - timedelta(days=1)
+    today = villa_day(Z, args.as_of, last_finished=True)
     day_end = datetime.combine(today + timedelta(days=1), time(0, 0), tzinfo=Z)
     baseline_days = int(params.behaviour("baseline_days")) + int(params.behaviour("confirm_days")) + 2
     win_start = day_end - timedelta(days=baseline_days)

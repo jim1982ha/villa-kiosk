@@ -11,7 +11,8 @@ import re
 import pytest
 import yaml
 
-from helpers import copy_skill, settings
+from helpers import copy_skill, make_agent, settings
+from ha_fake import FakeHA, tool
 from vesta_agent.app import Vesta
 from vesta_agent.routing import CONVERSATION, Origin
 from vesta_agent.kiosk import Kiosk
@@ -21,25 +22,12 @@ OWNER, FM, STRANGER = 111, 222, 999
 GROUP, PRIVATE = -100123, OWNER
 
 
-class FakeReader:
-    class mcp:
-        @staticmethod
-        def list_tools():
-            return [{"name": "ha_get_state", "annotations": {"readOnlyHint": True}}]   # as HA MCP lists it
-
-    def states(self, ids):
-        return {}
-
-
 @pytest.fixture
 def agent(tmp_path):
-    s = settings(str(tmp_path), VESTA_TELEGRAM_ENABLED="true", VESTA_TELEGRAM_BOT_TOKEN="42:TG-TEST")
-    with open(s.policy_path, "w") as f:
-        yaml.safe_dump({"people": [{"telegram_id": OWNER, "name": "Owner", "role": "owner", "language": "en"},
-                                   {"telegram_id": FM, "name": "FM", "role": "fm", "language": "en"}],
-                        "chats": {"owner": GROUP, "fm": GROUP}}, f)
-    copy_skill("alert-desk", s.skills_dir)
-    v = Vesta(s, telegram=FakeTelegram(), reader=FakeReader(), kiosk=Kiosk("", ""))
+    v = make_agent(tmp_path, {"people": [{"telegram_id": OWNER, "name": "Owner", "role": "owner", "language": "en"},
+                                         {"telegram_id": FM, "name": "FM", "role": "fm", "language": "en"}],
+                              "chats": {"owner": GROUP, "fm": GROUP}}, skills=["alert-desk"],
+                   reader=FakeHA(tools=[tool("ha_get_state")]))
     v.bot_username = BOT["username"]
     v.conversed = []
 
@@ -185,7 +173,7 @@ def test_the_status_tool_reports_the_agents_own_night(agent):
 
 def test_nothing_is_sent_while_telegram_is_off(tmp_path):
     s = settings(str(tmp_path), VESTA_TELEGRAM_ENABLED="false", VESTA_TELEGRAM_BOT_TOKEN="42:TG-TEST")
-    v = Vesta(s, reader=FakeReader(), kiosk=Kiosk("", ""))
+    v = Vesta(s, reader=FakeHA(), kiosk=Kiosk("", ""))
     assert v.tg is None
     assert run(v.delivery.send(PRIVATE, "hello")) is None
     assert v.state.calls("send_skipped")

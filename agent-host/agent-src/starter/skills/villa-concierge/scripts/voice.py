@@ -30,7 +30,6 @@ import struct
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(HERE, "..", "..", "_shared"))
 
 RATE = 16000                    # what Home Assistant's Wyoming speech-to-text takes
 MAX_FRAME = 5760                # 120 ms at 48 kHz: Opus's longest frame, a safe buffer at any rate

@@ -132,6 +132,21 @@ Decisions of 2026-09-30 (owner):
   by `UI._text_change` (rules, instructions, a skill's file) or
   `UI._folder_change`; Undo of any text uses one rule. A try's payload is
   `requests_box.try_request` / `try_of` on both sides.
+  Second review, 0.12.67: `policy.FIELDS` is the one table of policy.yaml's
+  settings (sections, the words the page and history use, what the forms edit,
+  what a setup carries) — SECTIONS, policy_doc.FORM_KEYS, setup_copy's lists,
+  history.WORDS and the page (form_schema "words"/"resets") read it.
+  `skills.Script` is a skill's script (commands, words, job_only, this villa's
+  off choice; `switch_command` writes villa.skill.yaml). Skill scripts: one day
+  format and one "which day" rule (`vesta_shared.timeutil` day_label /
+  day_time_label / villa_day), the meter's day features in
+  `vesta_shared.daily` (no skill imports another skill's folder). Outcome
+  carries a result out; `tickets.py` (Kiosk tickets) and `alert_buttons.py`
+  (the ladder) are their own modules, `voice.py` the voice message. Tests: one
+  builder `helpers.make_agent` / `make_skill`, stand-ins `ha_fake.FakeHA` and
+  `kiosk_fake.FakeKiosk` held to the real ones by test_fakes. Page: one switch
+  card, `core.toggleCard` (Rules › What the AI can use, Skills › What the AI may
+  run; `.tool-grid.three`).
 - No PDF (owner, 2026-09-30): the reports are self-contained HTML pages sent
   as attachments. Chromium was ~480 MB of a 1.1 GB image for this alone.
 - ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent

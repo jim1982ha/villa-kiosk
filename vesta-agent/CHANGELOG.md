@@ -1,3 +1,15 @@
+## 0.12.67
+
+What you will see:
+- **Skills › About › What the AI may run: each command is a card**, like the tools in Rules › What the AI can use — three a line, two then one on a phone.
+- **Tools it needs:** the line "Switched on or off in Rules › What the AI can use." is now the (i) after "6 tools, all switched on".
+- **Rules › Acting on the villa:** the title, its (i), then the switch; the "On: it may act…" line is gone (the (i) says it).
+- **Rules › What the agent may do:** "Approve buttons work for [15] min (i)" — the (i) after the minutes.
+- **Reports:** a day is written "Mon 5 Oct", never "Mon 05 Oct"; "Its readings are missing since…" is now in the villa's time (it showed Home Assistant's UTC time).
+- The history of changes names each setting exactly as the page does (it said "US$" and "An Approve button works for" where the page said otherwise).
+
+Inside (the second architecture review of 7 October): one table of the rules file's settings; a skill's scripts read one way; the roi-energy skill no longer depends on the preventive-maintenance skill's folder; the Kiosk tickets, the alert buttons and voice messages are modules of their own; one way to set up the tests.
+
 ## 0.12.66
 
 The rest of the architecture review of 6 October, finished:

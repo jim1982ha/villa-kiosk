@@ -11,7 +11,7 @@ import pytest
 import yaml
 from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock
 
-from helpers import settings
+from helpers import make_agent, settings
 from ai_fake import FakeAI
 from telegram_fake import FakeTelegram
 from vesta_agent import api_errors, runner
@@ -101,26 +101,13 @@ def test_a_failed_resume_is_not_retried_when_a_new_conversation_fails_the_same(m
     assert len(calls) == 1
 
 
-class Reader:
-    class mcp:
-        @staticmethod
-        def list_tools():
-            return []
-
-    def states(self, ids):
-        return {}
-
-
 OWNER_CHAT, FM = -100777, 222
 
 
 @pytest.fixture
 def agent(tmp_path):
-    s = settings(str(tmp_path), VESTA_TELEGRAM_ENABLED="true", VESTA_TELEGRAM_BOT_TOKEN="42:TG-TEST")
-    with open(s.policy_path, "w") as f:
-        yaml.safe_dump({"people": [{"telegram_id": FM, "name": "FM", "role": "fm"}],
-                        "chats": {"owner": OWNER_CHAT, "fm": FM}}, f)
-    v = Vesta(s, telegram=FakeTelegram(), reader=Reader(), kiosk=Kiosk("", ""))
+    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "FM", "role": "fm"}],
+                              "chats": {"owner": OWNER_CHAT, "fm": FM}})
     v.server_tools = [{"name": "ha_get_state", "annotations": {"readOnlyHint": True}}]   # as HA MCP lists it
     return v
 

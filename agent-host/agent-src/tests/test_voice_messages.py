@@ -12,25 +12,17 @@ import os
 import pytest
 import yaml
 
-from helpers import copy_skill, settings
+from helpers import copy_skill, make_agent, settings
 from telegram_fake import FakeTelegram
+from ha_fake import FakeHA
 from vesta_agent import app as app_module
+from vesta_agent import voice as voice_module
 from vesta_agent.app import Vesta
 from vesta_agent.kiosk import Kiosk
 
 
 OWNER, GROUP = 111, -100123
 TONE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "voice_440hz.ogg")
-
-
-class FakeReader:
-    class mcp:
-        @staticmethod
-        def list_tools():
-            return []
-
-    def states(self, ids):
-        return {}
 
 
 def voice_event(chat, user, mime="audio/ogg", reply_to=None):
@@ -43,14 +35,11 @@ def voice_event(chat, user, mime="audio/ogg", reply_to=None):
 
 @pytest.fixture
 def agent(tmp_path, monkeypatch):
-    s = settings(str(tmp_path), VESTA_TELEGRAM_ENABLED="true", VESTA_TELEGRAM_BOT_TOKEN="42:TG-TEST")
-    with open(s.policy_path, "w") as f:
-        yaml.safe_dump({"people": [{"telegram_id": OWNER, "name": "Owner", "role": "owner", "language": "fr"}],
-                        "chats": {"owner": GROUP, "fm": GROUP}}, f)
-    skill = copy_skill("villa-concierge", s.skills_dir)
-    with open(os.path.join(skill, "villa.voice.yaml"), "w") as f:
+    v = make_agent(tmp_path, {"people": [{"telegram_id": OWNER, "name": "Owner", "role": "owner", "language": "fr"}],
+                              "chats": {"owner": GROUP, "fm": GROUP}}, skills=["villa-concierge"],
+                   telegram=FakeTelegram(audio=open(TONE, "rb").read()))
+    with open(os.path.join(v.s.skills_dir, "villa-concierge", "villa.voice.yaml"), "w") as f:
         yaml.safe_dump({"stt": "stt.test_whisper"}, f)       # the villa names its speech-to-text: no lookup
-    v = Vesta(s, telegram=FakeTelegram(audio=open(TONE, "rb").read()), reader=FakeReader(), kiosk=Kiosk("", ""))
     v.bot_username = "Villa_Test_bot"
     v.conversed, v.stt_calls = [], []
 
@@ -62,7 +51,7 @@ def agent(tmp_path, monkeypatch):
         wav = stt["wav"]
         v.stt_calls.append({**stt, "wav_existed": os.path.exists(wav), "wav_head": open(wav, "rb").read(4)})
         return "allume la cuisine", None
-    monkeypatch.setattr(app_module, "speech_to_text", fake_stt)
+    monkeypatch.setattr(voice_module, "speech_to_text", fake_stt)
     return v
 
 

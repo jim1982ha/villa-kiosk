@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.62 (7 October 2026)
+
+Second architecture review, all five candidates:
+1. `policy.FIELDS` (+ RESET_WORDS): sections, labels, form/setup membership; SECTIONS, FORM_KEYS (form_sections), setup_copy AI_SETTINGS/TOOL_SECTIONS/ACTION_SECTIONS (setup_fields), history.WORDS and the page (schema words/resets) derive from it. Label drift fixed (history vs page). test_policy_fields.
+2. `skills.Script` replaces the spec dict (commands, flags, inject, job_only, off_all/off; runnable, runnable_commands, view, switched) + `switch_command`; `_parse`/`_files` → public `parse_skill`/`skill_files`. test_skill_scripts.
+3. timeutil: `day_label(weekday, long, year)`, `day_time_label(weekday, year)`, `villa_day(zone, as_of, last_finished)`; 7 hand-written "%a %d %b" removed (rules.py, compose.py, facts.py); compose's when() converts HA's naive UTC to the villa zone (facts carries "zone"); `vesta_shared/daily.py` (power/energy day features) — roi-energy no longer imports preventive-maintenance's scripts by path; 8 dead `_shared` sys.path lines removed. Starter skills recorded as shipped. test_one_day_format.
+4. Tests: `helpers.make_agent` / `make_skill`; `ha_fake.FakeHA`, `kiosk_fake.FakeKiosk` (contract tests in test_fakes; test_telegram_fake's scan now sees handed-on methods too); 7 fixtures, 5 readers, 2 kiosks consolidated.
+5. `tickets.py` (create/resolve/repair), `alert_buttons.py` (keyboard/remember/settle/press, LADDER), `outcome_words.py`; Outcome takes tickets + buttons (8 deps, carry_out only); `voice.py` (transcribe) out of app.py.
+Page: `core.toggleCard` shared by Rules tools and Skills commands (`.tool-grid.three`); Tools-it-needs (i); Acting title order; ttl (i) after "min".
+
 ## 0.6.61 (7 October 2026)
 
 Architecture review, the rest (candidate 5 and the leftovers):

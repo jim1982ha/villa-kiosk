@@ -37,8 +37,6 @@ from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(HERE, "..", "..", "_shared"))
-sys.path.insert(0, os.path.join(HERE, "..", "..", "preventive-maintenance", "scripts"))
 
 from vesta_shared.ha_client import client_from_args  # noqa: E402
 from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
@@ -46,7 +44,7 @@ from vesta_shared.params import VillaParams, MissingParameter  # noqa: E402
 from vesta_shared.stats import med  # noqa: E402
 from vesta_shared.timeutil import schedule_hours_per_day, hhmm_to_minutes  # noqa: E402
 from vesta_shared.messaging import fmt_money  # noqa: E402
-import features as F  # noqa: E402
+import vesta_shared.daily as F  # noqa: E402  (a day of a meter: shared, not another skill's file)
 
 
 def interpolate(curve: list[list[float]], x: float) -> float | None:

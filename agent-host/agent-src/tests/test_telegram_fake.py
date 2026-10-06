@@ -23,5 +23,6 @@ def test_the_agent_calls_nothing_the_interface_does_not_have():
     import re
     from pathlib import Path
     src = "".join(p.read_text() for p in Path(__file__).parents[1].joinpath("vesta_agent").rglob("*.py"))
-    called = set(re.findall(r"\btg\.([a-z_]+)\(", src))
+    # any use, called or handed on (Outcome gets `edit=self.tg.edit`: no parenthesis after the name)
+    called = set(re.findall(r"\btg\.([a-z_]+)\b", src))
     assert called and called <= set(_interface(Telegram)), called - set(_interface(Telegram))

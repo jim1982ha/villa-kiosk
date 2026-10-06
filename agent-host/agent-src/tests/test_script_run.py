@@ -8,9 +8,9 @@ import os
 import pytest
 import yaml
 
-from helpers import settings, page_js
+from helpers import make_agent, make_skill, page_js, settings
 from telegram_fake import FakeTelegram
-from test_telegram_events import FakeReader
+from ha_fake import FakeHA, tool
 from vesta_agent import script_run
 from vesta_agent.app import Vesta
 from vesta_agent.kiosk import Kiosk
@@ -22,22 +22,15 @@ SECRET = "sk-ant-TEST-0123456789abcdef"
 
 @pytest.fixture
 def agent(tmp_path):
-    s = settings(str(tmp_path), VESTA_TELEGRAM_ENABLED="true", VESTA_TELEGRAM_BOT_TOKEN="42:TG-TEST")
-    with open(s.policy_path, "w") as f:
-        yaml.safe_dump({"people": [{"telegram_id": CHAT, "name": "Asker", "role": "owner"}],
-                        "chats": {"owner": -1001, "fm": -1002}}, f)
-    d = os.path.join(s.skills_dir, "probe")
-    os.makedirs(os.path.join(d, "scripts"))
-    open(os.path.join(d, "SKILL.md"), "w").write("# probe\n")
-    open(os.path.join(d, "skill.yaml"), "w").write(yaml.safe_dump({"description": "t", "scripts": {"p.py": {
-        "commands": {"ok": "prints a decision", "idle": "nothing to do", "boom": "fails"}}}}))
-    open(os.path.join(d, "scripts", "p.py"), "w").write(
-        "import json, sys\n"
-        "cmd = sys.argv[1]\n"
-        "if cmd == 'ok': print(json.dumps({'found': 1}))\n"
-        f"elif cmd == 'idle': sys.exit(2)\n"
-        f"else: print('the token is {SECRET}', file=sys.stderr); sys.exit(3)\n")
-    return Vesta(s, telegram=FakeTelegram(), reader=FakeReader(), kiosk=Kiosk("", ""))
+    make_skill(os.path.join(str(tmp_path), "skills"), "probe", {"description": "t", "scripts": {"p.py": {
+        "commands": {"ok": "prints a decision", "idle": "nothing to do", "boom": "fails"}}}},
+        {"p.py": "import json, sys\n"
+                 "cmd = sys.argv[1]\n"
+                 "if cmd == 'ok': print(json.dumps({'found': 1}))\n"
+                 "elif cmd == 'idle': sys.exit(2)\n"
+                 f"else: print('the token is {SECRET}', file=sys.stderr); sys.exit(3)\n"})
+    return make_agent(tmp_path, {"people": [{"telegram_id": CHAT, "name": "Asker", "role": "owner"}],
+                                 "chats": {"owner": -1001, "fm": -1002}}, reader=FakeHA(tools=[tool("ha_get_state")]))
 
 
 def _records(v, kind):

@@ -184,6 +184,20 @@ export function withInfo(label, text) {
   return h("span", { class: "with-info" }, label, infoButton(label, text));
 }
 
+// A switch as a card (owner, 2026-10-06/07): its title and switch on one line, what it does under it, a small line
+// of facts at the bottom. The one card for every switch the page draws as cards — Rules › What the AI can use and
+// Skills › What the AI may run — laid out by `.tool-grid` (four a line; `.tool-grid.three`: three).
+// onChange(checked, input): the card's own look follows at once.
+export function toggleCard(on, onChange, title, { chip = null, words = null, meta = null, label = null } = {}, disabled = false) {
+  const card = h("div", { class: "tool-card" + (on ? " is-on" : "") + (disabled ? " locked" : "") });
+  card.append(
+    h("div", { class: "tool-card-head" }, h("b", {}, title, chip),
+      h("label", { class: "switch" }, h("input", { type: "checkbox", checked: on, disabled, "aria-label": label || title,
+        onchange: (e) => { card.classList.toggle("is-on", e.target.checked); onChange(e.target.checked, e.target); } }))),
+    words, h("div", { class: "tool-meta" }, meta));
+  return card;
+}
+
 // the (i) itself, its text shown on hover and on a tap (infoTip)
 export function infoButton(about, text) {
   const btn = h("button", { type: "button", class: "info", "aria-label": `About ${about}`, "aria-expanded": "false" }, "i");

@@ -19,6 +19,10 @@ from datetime import datetime, timedelta, timezone
 
 import yaml
 
+# the rules' settings as the page names them: policy.FIELDS, the one table (a path it does not know is shown as
+# written). This file kept its own copy, and two labels had drifted from the page's.
+from .policy import WORDS
+
 SCHEMA = """
 create table if not exists changes(
   id integer primary key autoincrement,
@@ -106,18 +110,6 @@ def _word(v) -> str:
     if isinstance(v, (dict, list)):
         return f"{len(v)} item{'s' if len(v) != 1 else ''}"
     return str(v)
-
-
-#: The rules' sections as the page names them (a path the table does not know is shown as written).
-WORDS = {"act_enabled": "The agent may act on the villa", "approval_ttl_minutes": "An Approve button works for (minutes)",
-         "people": "People", "chats.owner": "Owner chat", "chats.fm": "Facility manager chat",
-         "allowed_services": "What the agent may do", "owner_only_entities": "Only the owner may approve",
-         "excluded_entities": "Left alone", "siren_entity": "Siren", "siren_auto_off_min": "Siren stops after (minutes)",
-         "switch_entities": "Switches it may turn on or off", "scene_allowlist": "Scenes it may start",
-         "script_allowlist": "Scripts it may run", "button_allowlist": "Buttons it may press",
-         "ha_read_tools": "Home Assistant tools the AI may read with", "skills_off": "Skills switched off",
-         "settings.profile": "Brain for chat answers", "settings.reply_limit_usd": "Limit per reply (US$)",
-         "settings.web_search": "Web search", "settings.conversation_reset": "Delete conversation context at"}
 
 
 def _say(path: str) -> str:

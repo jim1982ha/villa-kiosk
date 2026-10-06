@@ -119,7 +119,7 @@ def power_rules(asset: dict, entity_id: str, series: dict[date, dict], today: da
                 change = pct_change(f["run_hours"], exp)
                 if change is not None and abs(change) >= dev_pct:
                     what = "ran shorter" if change < 0 else "ran longer"
-                    summary = (f"{asset['name']} {what} than expected on {d.strftime('%a %d %b')}: "
+                    summary = (f"{asset['name']} {what} than expected on {day_label(d, weekday=True)}: "
                                f"{f['run_hours']:.1f} h against {exp:.1f} h scheduled"
                                + (f", and {f['gap_hours']} h without any data" if f.get("gap_hours") else "") + ".")
                     check = ("Check the timer or switch, the power supply of the pump, and whether someone stopped it by hand."
@@ -153,7 +153,7 @@ def power_rules(asset: dict, entity_id: str, series: dict[date, dict], today: da
             resets = [d for d in e_days[-confirm:] if energy_series[d].get("counter_reset")]
             if resets:
                 out.append(Finding("PM-COUNTER-RESET", asset["entities"].get("energy", entity_id), slug, "energy", INFO,
-                                   f"{asset['name']} energy counter went backwards on {', '.join(d.strftime('%d %b') for d in resets)}: "
+                                   f"{asset['name']} energy counter went backwards on {', '.join(day_label(d) for d in resets)}: "
                                    "the meter restarted, the day's kWh is unreliable.", {"days": [d.isoformat() for d in resets]},
                                    "Nothing to do on site; noted for the reports."))
 
@@ -174,7 +174,7 @@ def power_rules(asset: dict, entity_id: str, series: dict[date, dict], today: da
         exp = expected_hours_by_weekday.get(weekday_name(d), 0)
         if exp and series.get(d, {}).get("run_hours", 0) < 0.1:
             out.append(Finding("PM-EXPECTED-SILENT", entity_id, slug, "power", INFO,
-                               f"{asset['name']} was scheduled {exp:.1f} h on {d.strftime('%a %d %b')} and did not run.",
+                               f"{asset['name']} was scheduled {exp:.1f} h on {day_label(d, weekday=True)} and did not run.",
                                {"day": d.isoformat(), "expected_hours": exp}, "Report only: usage driven assets are not chased."))
     return out
 

@@ -25,7 +25,6 @@ from datetime import datetime, timedelta, timezone
 import yaml
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(HERE, "..", "..", "_shared"))
 from vesta_shared.ha_client import client_from_args  # noqa: E402
 from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
 from vesta_shared.params import VillaParams  # noqa: E402
