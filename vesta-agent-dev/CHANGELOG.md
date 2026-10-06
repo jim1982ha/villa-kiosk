@@ -1,3 +1,7 @@
+## 0.12.56
+
+- **Rules → The AI: "new conversation" is now "Delete conversation context at"**, under its menu (Every day at 04:00, After 8 hours of silence, Never). The same name appears in the history of changes and in the setup download.
+
 ## 0.12.55
 
 - **Rules → The AI: the "New conversation" menu lines up with the brain and the limit** on the Chat answers line, its name under it like "for each reply".
