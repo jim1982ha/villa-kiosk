@@ -1,3 +1,7 @@
+## 0.12.60
+
+- **The nightly maintenance check can be run again for a day it already checked.** Running nightly.py from Try a command (or twice for the same day) stopped with "UNIQUE constraint failed": an event noted the first time (a meter going backwards, a pump's running hours…) was written a second time for the same day. Now the second run updates what the first one noted and does not report it as new again.
+
 ## 0.12.59
 
 - **Skills → Try a command: a long command no longer ends in "Error 524".** Through the Cloudflare tunnel, a page that waits more than 100 seconds is cut off, and nightly.py checks every device for minutes. Run now answers at once; the page shows "Running on the villa… N s" and fetches the result when the command ends, however long it takes (up to 15 minutes). A long try no longer holds up another try or "Read the list again".
