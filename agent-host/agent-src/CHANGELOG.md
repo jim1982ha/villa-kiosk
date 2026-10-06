@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.51 (6 October 2026)
+
+- UI: The AI's chat line puts the New conversation menu in a captioned cell (td.with-caption) aligned with the brain and limit. test_ui pins it.
+
 ## 0.6.50 (6 October 2026)
 
 - UI: editTable takes `per`; the services table pages at 10 (owner). test_ui pins it.

@@ -495,3 +495,5 @@ th button.info, .field button.info { font-size: 1em; }
 .row-inline { flex-direction: row; align-items: center; gap: 8px; }
 .row-inline input[type=number] { width: 80px; }
 .tool-card .muted { overflow-wrap: anywhere; }
+table.rows.ai td.with-caption .dropdown { max-width: 260px; }
+@media (max-width: 600px) { table.rows.ai td.with-caption { grid-column: 1 / -1; grid-row: 3; } }

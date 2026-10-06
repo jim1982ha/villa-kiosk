@@ -666,8 +666,9 @@ function rulesForms(doc, jobs = [], tools = null) {
       h("td", {}, limitInput(f.settings.reply_limit_usd, (v) => (f.settings.reply_limit_usd = v), "Limit per reply (USD)", "for each reply")),
       // the chats' own setting, on the chats' line (owner, 2026-10-06): their tools are "everything switched on, by
       // role" — said in the (i) of "Tools it gets"
-      h("td", { class: "tools-got" }, h("label", { class: "field" }, h("span", {}, "New conversation"),
-        sel(RESETS, f.settings.conversation_reset, (v) => (f.settings.conversation_reset = v), "New conversation"))),
+      // the menu on the line of the brain and the limit, its name under it like theirs ("for each reply")
+      h("td", { class: "with-caption" }, sel(RESETS, f.settings.conversation_reset, (v) => (f.settings.conversation_reset = v), "New conversation"),
+        h("div", { class: "muted" }, "new conversation")),
       h("td", { class: "x" })),
     ...jobs.map((j) => {
       const cur = f.settings.jobs[j.name];
