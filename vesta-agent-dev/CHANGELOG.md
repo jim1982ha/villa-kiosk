@@ -1,3 +1,18 @@
+## 0.12.50
+
+- **Rules → What the agent may do: the devices are on the service's own line.** For "Only the devices chosen beside it", a device picker opens on the same line; for every other rule there is nothing to choose. The separate "Allowed lists" card is gone. Services of one kind share one list ("same list as switch.turn_on"). The rule names are plain words.
+- **Every card's description is behind an (i) beside its title:** hover, or tap on a phone. A card that has nothing else to show keeps its text.
+- **Overview: "Copy the setup to another villa" is one card with two tabs,** Download and Import.
+- **Overview: "Changes made on these pages" shows 10 lines a page** and is trimmed every night with the agent's other records (90 days by default).
+- **Skills deleted or replaced on the page** (kept in skills/.trash to undo a mistake) are now removed after the same time as the agent's other files (90 days). Until now they were kept for ever.
+- **Costs opens on the last 7 days, and everything on it follows the period you choose:**
+  - the figures (total, runs, per run, busiest day);
+  - the chart;
+  - by work and by model;
+  - every run;
+  - the tools.
+- **Skills → Try a command, in three steps:** what to run, its options in words, then the exact command it will run, and Run. The result says "Done", "Nothing to do", or why it stopped.
+
 ## 0.12.49
 
 - **Long lists on the Rules page show 15 lines at a time,** with Previous / Next: People, What the agent may do, and What the AI can use → Reading Home Assistant (each group's heading repeats on the page where its tools continue). "Add" opens the last page, where the new line is.
