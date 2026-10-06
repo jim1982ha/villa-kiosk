@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.47 (6 October 2026)
+
+- skill.yaml scripts.<s>.description (optional), shown by the page; the roi-energy and preventive-maintenance starters describe their scripts (recorded).
+- UI: jump() links from "set elsewhere" to the #rules-acting and #rules-services cards; flags as code chips.
+- test_page_controls: the skill page follows a hand edit of skill.yaml (scripts, commands, flags, tools, schedule), and the page's code names no starter skill or script.
+
 ## 0.6.46 (6 October 2026)
 
 - **UI:**

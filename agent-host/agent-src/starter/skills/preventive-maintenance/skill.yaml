@@ -2,6 +2,7 @@ description: Nightly maintenance checks on Home Assistant's history — pumps, b
 tools: []                     # the night's checks are code: the AI needs no tool of its own here
 scripts:
   nightly.py:
+    description: the night's maintenance check of every device, for the day you name
     flags: {--as-of: date, --out: outfile, --skip-raw: switch}
     inject: [pack, store, zone]
 schedule:

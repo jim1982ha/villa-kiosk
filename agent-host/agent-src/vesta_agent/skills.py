@@ -10,6 +10,7 @@ and skill.yaml (what the engine needs):
     scripts:                         the ONLY scripts the model may run, with the flags it may pass
       energy_period.py:
         commands: [week, month]      optional: allowed first argument (or {week: "what it does", ...})
+        description: one line        optional: what the script does (the VESTA Agent page shows it)
         flags: {--period: [week, month], --out: outfile, --as-of: date, --what: text}
         inject: [pack, store, zone]  what the engine adds itself
         job_only: {week: weekly}     a command that, asked for in a chat, runs only as that AI job
@@ -144,7 +145,8 @@ def _parse(name: str, path: str) -> Skill:
         words = {str(k): str(v or "") for k, v in cmds.items()} if isinstance(cmds, dict) else {}
         job_only = {str(k): str(v) for k, v in (spec.get("job_only") or {}).items()}
         sk.scripts[script] = {"cmds": set(map(str, cmds)) if cmds else None, "flags": flags, "inject": inject,
-                              "job_only": job_only, "words": words, "off": set()}
+                              "job_only": job_only, "words": words, "off": set(),
+                              "description": str(spec.get("description") or "").strip()}
     tools = raw.get("tools")
     if tools is not None:
         if not isinstance(tools, list) or not all(isinstance(t, str) and TOOL.match(t) for t in tools):

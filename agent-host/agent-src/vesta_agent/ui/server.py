@@ -523,7 +523,7 @@ class UI:
         scripts = []
         for script, spec in sorted(sk.scripts.items()):
             off = spec.get("off") or set()
-            scripts.append({"script": script, "flags": {k: (list(v) if isinstance(v, tuple) else v) for k, v in spec["flags"].items()},
+            scripts.append({"script": script, "description": spec.get("description", ""), "flags": {k: (list(v) if isinstance(v, tuple) else v) for k, v in spec["flags"].items()},
                             "whole_off": off is True,
                             "commands": [{"name": c, "words": spec["words"].get(c, ""), "on": off is not True and c not in off,
                                           "job_only": spec["job_only"].get(c)} for c in sorted(spec["cmds"] or [])]})

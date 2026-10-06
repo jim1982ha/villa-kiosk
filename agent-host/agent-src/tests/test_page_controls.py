@@ -220,3 +220,36 @@ def test_rules_tools_are_served_from_the_agents_list(ui):
     assert [x["name"] for x in t["never"]] == ["ha_restart"]
     assert {r["key"] for r in t["roles"]} >= {"cameras", "create_ticket"}
     shutil.rmtree(ui.data_dir)
+
+
+def test_the_skill_page_is_read_from_the_skills_own_files_at_every_look(ui):
+    # owner, 2026-10-06: "if a skill is suddenly modified to use another python file and/or another tool, the UI will
+    # properly adjust". Nothing about a skill is kept by the page: it is skill.yaml as it is now, at every request.
+    folder = os.path.join(ui.skills_dir, "pool-care")
+    os.makedirs(os.path.join(folder, "scripts"))
+    open(os.path.join(folder, "SKILL.md"), "w").write("---\nname: pool-care\n---\n")
+    for f in ("check.py", "dose.py"):
+        open(os.path.join(folder, "scripts", f), "w").write("print('{}')\n")
+    open(os.path.join(folder, "skill.yaml"), "w").write(
+        "description: pool\ntools: [ha_get_state]\nscripts:\n  check.py:\n    commands: {ph: the water's pH}\n")
+
+    async def look(c):
+        return await (await c.get("/api/skills/pool-care")).json()
+    before = call(ui, look)
+    with open(os.path.join(folder, "skill.yaml"), "w") as f:     # edited by hand: another script, tool, schedule
+        f.write("description: pool\ntools: [ha_get_history, web_search]\n"
+                "scripts:\n  check.py:\n    commands: {ph: pH, chlorine: chlorine}\n"
+                "  dose.py:\n    description: how much to add\n    flags: {--litres: text, --product: [chlorine, acid]}\n"
+                "schedule:\n  - when: \"Mon 09:00\"\n    run: \"check.py ph\"\n")
+    after = call(ui, look)
+    assert [n["tool"] for n in before["needs"]] == ["ha_get_state"]
+    assert [n["tool"] for n in after["needs"]] == ["ha_get_history", "web_search"]
+    assert [(s["script"], [c["name"] for c in s["commands"]]) for s in after["scripts"]] == \
+        [("check.py", ["chlorine", "ph"]), ("dose.py", [])]
+    dose = after["scripts"][1]
+    assert dose["description"] == "how much to add" and dose["flags"] == {"--litres": "text", "--product": ["chlorine", "acid"]}
+    assert any(a["when"].startswith("every Monday at 09:00") for a in after["acts"])
+    from vesta_agent.ui.server import STATIC
+    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
+    for starter in ("alert-desk", "villa-concierge", "roi-energy", "preventive-maintenance", "desk.py", "concierge.py"):
+        assert starter not in js, f"the page names {starter}: it must come from the skill's files"

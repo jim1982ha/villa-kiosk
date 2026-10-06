@@ -776,6 +776,7 @@ function rulesForms(doc, jobs = [], tools = null) {
       fill(probs, problemsBox(e.problems)); probs.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   };
+  acting.id = "rules-acting"; services.id = "rules-services";
   setBar({ save, discard: () => rules("forms"), idle: "Changes apply within seconds, no restart." });
   const canUse = tools ? toolsCard(f, tools, () => rules("forms")) : null;
   fill($view, doc.problems.length ? problemsBox(doc.problems, "To fix in this file:") : null, probs,
@@ -788,6 +789,16 @@ function rulesForms(doc, jobs = [], tools = null) {
 // (ha_read_tools), the agent's own tools a villa may switch off (agent_tools; web search is settings.web_search),
 // and what the facility manager may make it use (tool_access.fm). Saved with the rest of the form.
 let toolsTab = "ha";
+// a link to another card of the Rules page: scrolls to it and outlines it a moment
+function jump(id, label) {
+  return h("a", { href: `#${id}`, class: "jump", onclick: (e) => {
+    e.preventDefault();
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 1600);
+  } }, label);
+}
 let jumpTo = null;           // "tools": open Rules on "What the AI can use" (a skill's "Open Rules › What the AI can use")
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
@@ -842,7 +853,11 @@ function toolsCard(f, t, reload) {
         const isWeb = x.key === "web_search";
         const on = kind !== "choose" ? true : isWeb ? !!f.settings.web_search : f.agent_tools[x.key] !== false;
         const set = (v) => { if (isWeb) f.settings.web_search = v; else if (v) delete f.agent_tools[x.key]; else f.agent_tools[x.key] = false; };
-        return switchRow(on, set, x.label, [h("b", {}, x.label), h("div", { class: "muted" }, x.description),
+        // "set elsewhere": a link to each section that decides it (owner, 2026-10-06)
+        const words = x.kind === "elsewhere"
+          ? h("div", { class: "muted" }, "Decided by ", jump("rules-acting", "Acting on the villa"), " and ", jump("rules-services", "What the agent may do"), ": every action goes through those rules.")
+          : h("div", { class: "muted" }, x.description);
+        return switchRow(on, set, x.label, [h("b", {}, x.label), words,
           h("div", { class: "tool-meta" }, h("code", {}, x.key === "web_search" ? "WebSearch" : x.key), used(x.used))], kind !== "choose");
       })));
   };
@@ -1193,7 +1208,9 @@ function aboutSkill(name, d) {
       : h("div", { class: "cmd-row" },
         h("label", { class: "switch" }, h("input", { type: "checkbox", checked: !sc.whole_off, "aria-label": sc.script,
           onchange: (e) => setCommand(name, sc.script, null, e.target.checked, e.target) })),
-        h("div", { class: "cmd-text" }, h("b", {}, "the AI may run it"), Object.keys(sc.flags).length ? h("div", { class: "muted small" }, `options: ${Object.keys(sc.flags).join(" ")}`) : null))));
+        // a script without commands: what it does (skill.yaml `description`), then its options, each as written
+        h("div", { class: "cmd-text" }, h("span", { class: "plain" }, sc.description || "The AI may run it."),
+          Object.keys(sc.flags).length ? h("div", { class: "chips" }, Object.keys(sc.flags).map((fl) => h("code", { class: "flag" }, fl))) : null))));
   // Tools it needs: a one-line verdict; the list folded unless something is off
   let tools;
   if (d.needs === null || d.needs === undefined) tools = h("p", { class: "muted" }, "Its skill.yaml lists none: its reports get every tool switched on.");

@@ -2,11 +2,14 @@ description: Energy use and cost for a period, the pool filtration optimiser, an
 tools: []                     # its scripts read Home Assistant themselves
 scripts:
   energy_period.py:
+    description: the villa's energy use and cost for a week, a month or the days you name
     flags: {--period: [week, month, custom], --start: date, --end: date, --no-cache: switch, --out: outfile}
     inject: [pack, store, zone]
   filtration_optimiser.py:
+    description: how many hours the pool pump needs a day, and the cheapest hours to run it
     flags: {--asset: text, --as-of: date, --out: outfile}
     inject: [pack, zone]
   proposals.py:
+    description: the savings VESTA suggests, from a period's energy and the filtration proposal
     flags: {--period-json: infile, --optimiser-json: infile, --out: outfile}
     inject: [store]
