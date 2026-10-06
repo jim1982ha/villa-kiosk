@@ -1,3 +1,11 @@
+## 0.12.66
+
+The rest of the architecture review of 6 October, finished:
+
+- **Overview → Changes made on these pages: the instructions brought by an imported setup can be undone,** like every other change (before, Undo refused them).
+- Import a setup: the list of what will change is shown 10 lines a page, each line a card on a phone, like the other tables.
+- Inside, nothing you will see: the VESTA Agent page is now one file per tab instead of one file of 1,324 lines; every change made on the page is written and recorded in one place; the request behind "Try a command" is checked the same way by the page and by the agent.
+
 ## 0.12.65
 
 An internal tidy-up of how the agent is built (the architecture review of 6 October), with three fixes you could have met:
