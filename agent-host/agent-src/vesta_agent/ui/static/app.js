@@ -108,12 +108,12 @@ function dropdown(options, value, pick, label) {
 // says its width (a <col>, which the page's CSP allows where a style attribute is blocked) and where it goes
 // on a phone: "a" / "b" the first line's two halves, "ab" both, "c" / "d" the second line's, "cd" all of it.
 // The remove button is always at the end of the first line. Returns [table, its Add button].
-function editTable(rows, { cls, columns, cell, blank, add, changed = () => {} }) {
+function editTable(rows, { cls, columns, cell, blank, add, changed = () => {}, per = PER_PAGE }) {
   const body = h("tbody");
   const touched = () => { changed(); markDirty(); };
   const pager = pagedBlock(() => rows.length, (from, to) => body.replaceChildren(...rows.slice(from, to).map((row, k) => h("tr", {},
     columns.map((c, j) => h("td", { class: `ph-${c.phone}` }, cell(row, j, touched, () => pager.redraw()))),
-    h("td", { class: "x ph-x" }, h("button", { class: "btn icon ghost", title: "Remove", onclick: () => { rows.splice(from + k, 1); pager.redraw(); touched(); } }, "×"))))));
+    h("td", { class: "x ph-x" }, h("button", { class: "btn icon ghost", title: "Remove", onclick: () => { rows.splice(from + k, 1); pager.redraw(); touched(); } }, "×"))))), per);
   pager.redraw();
   const table = h("table", { class: `rows edit ${cls}` },
     h("colgroup", {}, columns.map((c) => h("col", { width: c.width || null })), h("col", { width: "44" })),
@@ -802,7 +802,7 @@ function rulesForms(doc, jobs = [], tools = null) {
   const services = h("section", { class: "card" },
     titleWithInfo("What the agent may do", "One line per Home Assistant service, and who decides. Anything not listed is refused. Restarts, shell commands, toggles and the like are refused whatever this says. For \"Only the devices chosen beside it\", choose the devices on the same line: the agent may act only on those, and still asks for approval.", "h2", ttl),
     ...editTable(svcRows, {
-      cls: "svc", add: "Add a service", blank: () => ["", "any"],
+      cls: "svc", add: "Add a service", blank: () => ["", "any"], per: 10,      // 10 lines a page (owner, 2026-10-06)
       changed: () => { f.allowed_services = Object.fromEntries(svcRows.filter(([k]) => k)); },
       columns: [{ title: "Service", width: "26%", phone: "ab" }, { title: "Who decides", width: "36%", phone: "cd" }, { title: "Devices it may act on", phone: "ef" }],
       cell: (row, k, touched, refresh) => [

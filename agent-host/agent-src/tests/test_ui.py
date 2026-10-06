@@ -483,6 +483,7 @@ def test_the_rules_lists_show_at_most_15_lines_a_page():
     assert "const PER_PAGE = 15;" in js
     edit = js.split("function editTable")[1].split("\nfunction ")[0]
     assert "pagedBlock(() => rows.length" in edit and "rows.slice(from, to)" in edit      # People, What the agent may do
+    assert 'cls: "svc", add: "Add a service", blank: () => ["", "any"], per: 10,' in js     # the services: 10 a page
     tools = js.split("function toolsCard")[1].split("\nfunction ")[0]
     assert "pagedBlock(() => lines.length" in tools                                    # Reading Home Assistant
 
