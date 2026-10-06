@@ -514,3 +514,17 @@ def test_the_lists_that_float_over_the_page_share_one_way_of_doing_it():
         assert "document.body.append(" not in js.split(owner)[1][:3000].split("\nfunction ")[0], owner
     assert js.count('class: "subtabs"') == 1 and js.count('class: "pager"') == 1
     assert "table.rows td input:not([type=checkbox]):not([type=radio])" in css
+
+
+def test_the_tools_are_cards_four_a_row_and_the_ai_notes_are_behind_an_info():
+    # owner, 2026-10-06: tools as cards (max 4 a row, fewer on a phone), both tabs; The AI's two notes in (i)s
+    import re
+    from vesta_agent.ui.server import STATIC
+    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
+    css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
+    tools = js.split("function toolsCard")[1].split("\nfunction ")[0]
+    assert tools.count('h("div", { class: "tool-grid" }') == 2 and "switchRow" not in tools
+    assert ".tool-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));" in css
+    assert re.search(r"@media \(max-width: 480px\) \{ \.tool-grid \{ grid-template-columns: 1fr; \} \}", css)
+    assert 'withInfo("Limit (US$)", limitNote)' in js and "At their limits" not in js.split("const ai =")[1][:400]
+    assert "Everything switched on, by role" not in js

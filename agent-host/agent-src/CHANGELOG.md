@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.49 (6 October 2026)
+
+- UI (owner):
+  - toolCard() in .tool-grid (4 / 3 / 2 / 1 columns) for both tool tabs, 16 a page.
+  - withInfo() for headings and fields; infoTip takes a function (the month's ceiling at open). The (i) is sized in em.
+  - The AI: New conversation on the chats' line; the notes are gone from below the table.
+  - Acting: a title switch only. Approval minutes on the services card's title line.
+  - The villa files option is reworded.
+  - test_ui pins it.
+
 ## 0.6.48 (6 October 2026)
 
 - UI (owner):
