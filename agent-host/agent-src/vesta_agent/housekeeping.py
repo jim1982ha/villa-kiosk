@@ -26,11 +26,24 @@ log = logging.getLogger("vesta.housekeeping")
 
 
 def _files_older(folder: str, days: int, now: float, suffixes: tuple[str, ...] | None = None,
-                 skip: tuple[str, ...] = ()) -> int:
-    """Delete the files under `folder` last written more than `days` ago. Returns how many."""
+                 skip: tuple[str, ...] = (), whole: bool = False) -> int:
+    """Delete the files under `folder` last written more than `days` ago. Returns how many.
+    `whole`: each entry directly in `folder` is one thing, judged by its own date and removed whole (the skills'
+    trash: skills.to_trash dates a folder the day it went there)."""
     if not os.path.isdir(folder):
         return 0
     cut, n = now - days * 86400, 0
+    if whole:
+        import shutil
+        for name in os.listdir(folder):
+            p = os.path.join(folder, name)
+            try:
+                if os.path.getmtime(p) < cut:
+                    shutil.rmtree(p) if os.path.isdir(p) else os.remove(p)
+                    n += 1
+            except OSError:
+                continue
+        return n
     for root, dirs, files in os.walk(folder):
         dirs[:] = [d for d in dirs if d not in skip]
         for f in files:
@@ -65,6 +78,9 @@ def tidy(settings, state, keep: dict[str, int], now: datetime | None = None) -> 
     out["daily_figures"] = _prune_figures(settings.store_path, now, keep["daily_figures_months"])
     from .history import History
     out["page changes"] = History(settings.history_path).prune(keep["records_days"], now)
+    # skills deleted or replaced on the page (skills/.trash): kept to undo a mistake, as long as the out folder's files
+    from .skills import TRASH
+    out["skills in the trash"] = _files_older(os.path.join(settings.skills_dir, TRASH), keep["files_days"], stamp, whole=True)
     return out
 
 

@@ -88,6 +88,7 @@ class SkillError(ValueError):
 
 
 VILLA_CHOICES = "villa.skill.yaml"
+TRASH = ".trash"              # skills deleted or replaced: kept to undo, trimmed by housekeeping (settings.keep.files_days)
 TOOL = re.compile(r"^[a-z][a-z0-9_]{1,60}$")
 KEPT = ".kept.json"           # starter skills the owner chose to keep as edited, with the release they kept them at
 
@@ -321,12 +322,7 @@ class Skills:
             tmp = dst + ".new"
             shutil.rmtree(tmp, ignore_errors=True)
             shutil.copytree(src, tmp, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", VILLA_PREFIX + "*"))
-            for root, _, files in os.walk(dst):              # the villa's own files go with it
-                for f in files:
-                    if f.startswith(VILLA_PREFIX):
-                        rel = os.path.relpath(os.path.join(root, f), dst)
-                        os.makedirs(os.path.dirname(os.path.join(tmp, rel)), exist_ok=True)
-                        shutil.copy2(os.path.join(root, f), os.path.join(tmp, rel))
+            carry_villa_files(dst, tmp)                      # the villa's own files go with it
             shutil.rmtree(old, ignore_errors=True)
             os.rename(dst, old)
             os.rename(tmp, dst)
@@ -415,21 +411,15 @@ class Skills:
         with open(os.path.join(self.dir, KEPT), "w", encoding="utf-8") as f:
             json.dump(kept, f, indent=1, sort_keys=True)
 
-    def take_release(self, name: str, trash: str) -> str:
-        """The skill replaced by this release's version; its villa.* files kept. The edited folder is moved to
-        `trash` (returned), never erased. From then on the skill follows the releases again."""
+    def take_release(self, name: str) -> str:
+        """The skill replaced by this release's version; its villa.* files kept. The edited folder goes to the trash
+        (to_trash; returned), never erased. From then on the skill follows the releases again."""
         src, dst = os.path.join(self.starter_dir, name), os.path.join(self.dir, name)
         tmp = dst + ".new"
         shutil.rmtree(tmp, ignore_errors=True)
         shutil.copytree(src, tmp, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", VILLA_PREFIX + "*"))
-        for root, _, files in os.walk(dst):
-            for f in files:
-                if f.startswith(VILLA_PREFIX):
-                    rel = os.path.relpath(os.path.join(root, f), dst)
-                    os.makedirs(os.path.dirname(os.path.join(tmp, rel)), exist_ok=True)
-                    shutil.copy2(os.path.join(root, f), os.path.join(tmp, rel))
-        os.makedirs(os.path.dirname(trash), exist_ok=True)
-        shutil.move(dst, trash)
+        carry_villa_files(dst, tmp)
+        trash = to_trash(self.dir, dst, name)
         os.rename(tmp, dst)
         return trash
 
@@ -518,6 +508,30 @@ def script_env(settings) -> dict:
         "VILLA_TZ": settings.timezone,
         "TZ": settings.timezone,
     }
+
+
+def to_trash(skills_dir: str, path: str, name: str) -> str:
+    """Move a skill folder aside, never erase it: skills/.trash/<name>-<when>, a dot folder no one loads. ⚠️ ITS DATE
+    IS SET TO NOW: housekeeping keeps a trashed skill `files_days` from the day it went there — its files keep their
+    own older dates, so judging them one by one would empty a skill trashed today. The ONE way into the trash."""
+    from datetime import datetime, timezone
+    dest = os.path.join(skills_dir, TRASH, f"{name}-{datetime.now(timezone.utc):%Y%m%dT%H%M%S%f}")
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    shutil.move(path, dest)
+    os.utime(dest)
+    return dest
+
+
+def carry_villa_files(old: str, new: str) -> None:
+    """This villa's own files (villa.*) of a skill folder, copied into its replacement where it has none: an update,
+    "Take the release version" and an import all keep them (VILLA_PREFIX)."""
+    for root, _, files in os.walk(old):
+        for f in files:
+            if f.startswith(VILLA_PREFIX):
+                rel = os.path.relpath(os.path.join(root, f), old)
+                if not os.path.exists(os.path.join(new, rel)):
+                    os.makedirs(os.path.dirname(os.path.join(new, rel)), exist_ok=True)
+                    shutil.copy2(os.path.join(root, f), os.path.join(new, rel))
 
 
 def _files(folder: str) -> dict[str, str]:

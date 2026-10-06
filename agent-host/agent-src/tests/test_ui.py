@@ -270,7 +270,8 @@ def test_the_costs_tab_reads_every_run_from_the_agents_records(ui):
     async def fn(c):
         return await (await c.get("/api/costs?days=30")).json(), await (await c.get("/api/costs?days=999")).json()
     c, other = call(ui, fn)
-    assert other["days"] == 30 and c["runs_count"] == 3 and c["period"] == 1.5
+    # an unknown period falls back to the tab's own default: the last 7 days (owner, 2026-10-06)
+    assert other["days"] == 7 and c["runs_count"] == 3 and c["period"] == 1.5
     assert [(g["name"], g["runs"], g["cost"]) for g in c["by_work"]] == [("fm-weekly", 1, 1.25), ("Chat replies", 2, 0.25)]
     assert {g["name"] for g in c["by_model"]} == {"claude-sonnet-5", "claude-haiku-4-5", "not recorded"}
     reply = next(r for r in c["runs"] if r["person"] == "Ann")

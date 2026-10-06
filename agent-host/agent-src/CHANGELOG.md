@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.46 (6 October 2026)
+
+- **UI:**
+  - Services: a devices column (the picker for "listed", first service of a domain; "same list as" for the others); the Allowed lists card removed; RULE_WORDS "listed" reworded. editTable passes refresh to cells.
+  - card() puts the lead behind an (i) (titleWithInfo), except in a card with no other content.
+  - The Overview setup card has two tabs.
+  - Costs defaults to 7 days (page and server) with period figures (total, runs, per run, busiest day).
+  - tryPanel in three steps, with a preview of the exact command.
+- **Retention, DRY (owner):**
+  - skills.to_trash is the one way into skills/.trash, and stamps the folder's date. Used by delete, take_release, Undo and import.
+  - carry_villa_files is the one copy of a skill's villa.* files (update_starters, take_release, import).
+  - housekeeping._files_older(whole=True) trims the trash under files_days. The separate folder helper and the history row cap went: the page's history follows records_days like every other record.
+  - Tests: the trash's dating (mutation-checked); the Costs default pinned at 7.
+
 ## 0.6.45 (6 October 2026)
 
 - UI (owner): pagedBlock(), 15 lines a page (PER_PAGE), for editTable (People, the services) and the Reading Home Assistant list (flat, group heading repeated per page). Roles table: fixed layout, switch columns centred; Guest is "—" with the reason. test_ui pins the paging.

@@ -215,7 +215,8 @@ def preview(settings, skills, setup: dict, server_tools: list[dict] | None) -> d
 
 def apply(ui, setup: dict, prev: dict) -> None:
     """Write what the preview showed: skills first (each checked as a save would), then the rules, then instructions."""
-    from .server import TRASH, Refused, _read, _write
+    from ..skills import TRASH, carry_villa_files, to_trash
+    from .server import Refused, _read, _write
     s = ui.s
     changed = {r["what"] for r in prev["rows"] if r["change"] != "same"}
     for name, files in sorted(setup["skills"].items()):
@@ -230,21 +231,14 @@ def apply(ui, setup: dict, prev: dict) -> None:
                 f.write(data)
         old = None
         if os.path.isdir(path):
-            for root, _, fs in os.walk(path):                  # this villa's own files go with it
-                for f in fs:
-                    if f.startswith(VILLA_PREFIX):
-                        rel = os.path.relpath(os.path.join(root, f), path)
-                        os.makedirs(os.path.dirname(os.path.join(new, rel)), exist_ok=True)
-                        shutil.copy2(os.path.join(root, f), os.path.join(new, rel))
+            carry_villa_files(path, new)                       # this villa's own files go with it
         try:
             ui._check_skill(name, new)
         except Refused:
             shutil.rmtree(new, ignore_errors=True)
             raise
         if os.path.isdir(path):
-            old = os.path.join(s.skills_dir, TRASH, f"{name}-{datetime.now(timezone.utc):%Y%m%dT%H%M%S%f}")
-            os.makedirs(os.path.dirname(old), exist_ok=True)
-            shutil.move(path, old)
+            old = to_trash(s.skills_dir, path, name)
         os.rename(new, path)
         ui.history.record("Import", f"{name} {'replaced' if old else 'added'} from a setup"
                                     + (f" (the previous one kept in skills/{TRASH})" if old else ""),

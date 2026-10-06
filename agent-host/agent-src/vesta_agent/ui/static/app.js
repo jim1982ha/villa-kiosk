@@ -92,7 +92,7 @@ function editTable(rows, { cls, columns, cell, blank, add, changed = () => {} })
   const body = h("tbody");
   const touched = () => { changed(); markDirty(); };
   const pager = pagedBlock(() => rows.length, (from, to) => body.replaceChildren(...rows.slice(from, to).map((row, k) => h("tr", {},
-    columns.map((c, j) => h("td", { class: `ph-${c.phone}` }, cell(row, j, touched))),
+    columns.map((c, j) => h("td", { class: `ph-${c.phone}` }, cell(row, j, touched, () => pager.redraw()))),
     h("td", { class: "x ph-x" }, h("button", { class: "btn icon ghost", title: "Remove", onclick: () => { rows.splice(from + k, 1); pager.redraw(); touched(); } }, "×"))))));
   pager.redraw();
   const table = h("table", { class: `rows edit ${cls}` },
@@ -132,8 +132,20 @@ function problemsBox(list, title = "Not saved:") {
   return h("div", { class: "problems" }, h("b", {}, title), h("ul", {}, list.map((p) => h("li", {}, p))));
 }
 
+// A card: its title, and what it is about behind an (i) beside it (owner, 2026-10-06: no description paragraph
+// under every title). Hover shows it; a tap (a phone has no hover) opens it under the title. A card with nothing
+// else in it (an empty state) keeps its text in view: there it IS the content.
 function card(title, lead, ...kids) {
-  return h("section", { class: "card" }, h("h2", {}, title), lead ? h("p", { class: "lead" }, lead) : null, ...kids);
+  const content = kids.flat().filter((k) => k !== null && k !== undefined && k !== false);
+  if (!lead || !content.length) return h("section", { class: "card" }, h("h2", {}, title), lead ? h("p", { class: "lead" }, lead) : null, ...kids);
+  return h("section", { class: "card" }, titleWithInfo(title, lead), ...kids);
+}
+
+function titleWithInfo(title, text, tag = "h2") {
+  const tip = h("p", { class: "lead info-text", hidden: true }, text);
+  const btn = h("button", { type: "button", class: "info", title: text, "aria-label": `About ${title}`, "aria-expanded": "false",
+    onclick: () => { tip.hidden = !tip.hidden; btn.setAttribute("aria-expanded", String(!tip.hidden)); } }, "i");
+  return h("div", { class: "card-title" }, h(tag, {}, title, btn), tip);
 }
 
 // A set of figures, each a number over its label: THE one way the page shows them (Overview's last
@@ -300,14 +312,18 @@ function runWhat(r) {
   return box;
 }
 
-async function costs(days = 30) {
+// ⚠️ EVERYTHING ON THIS TAB FOLLOWS THE PERIOD CHOSEN, 7 DAYS UNLESS ANOTHER IS (owner, 2026-10-06): the figures,
+// the chart, by work, by model, every run and the tools.
+async function costs(days = 7) {
   fill($view, h("p", { class: "muted" }, "Loading…"));
   const c = await api("GET", `api/costs?days=${days}`);
   PROFILES = c.profiles || PROFILES;
   if (c.none) return fill($view, card("Costs", "The agent has not recorded anything yet (it has not run in agent mode)."));
   const period = dropdown([[7, "Last 7 days"], [30, "Last 30 days"], [90, "Last 90 days"]], days, (v) => costs(Number(v)), "Period");
-  const kpis = figures([["Today", usd(c.today)], ["Last 7 days", usd(c.last_7_days)], ["This month", usd(c.this_month)],
-    [`Per run, last ${days} days (${c.runs_count} runs)`, usd(c.runs_count ? c.period / c.runs_count : 0)]]);
+  const busiest = c.by_day.reduce((m, d) => (d.cost > m.cost ? d : m), { day: null, cost: 0 });
+  const kpis = figures([[`Last ${days} days`, usd(c.period)], ["Runs", String(c.runs_count)],
+    ["Per run", usd(c.runs_count ? c.period / c.runs_count : 0)],
+    [busiest.day ? `Busiest day (${new Date(busiest.day + "T12:00:00").toLocaleDateString([], { day: "numeric", month: "short" })})` : "Busiest day", usd(busiest.cost)]]);
   // the cost of each day: bars drawn in SVG, with a Y axis (US$) and its grid lines (owner, 2026-10-01: "always
   // the Y axis and grid lines"), and a date under every bar for a week, every few days for longer
   const W = 640, H = 150, L = 52, T = 8, n = c.by_day.length;
@@ -344,9 +360,9 @@ async function costs(days = 30) {
       // The period's label and its selector on one line, the figures below a separator (owner, 2026-10-03).
       h("label", { class: "field row" }, h("span", {}, "Period"), period),
       h("div", { class: "divided" }, kpis), h("div", { class: "divided" }, h("h2", {}, "Per day"), chart)),
-    card("By work", "Chat replies, and each AI job.", groupTable(c.by_work, "Work")),
-    card("By model", "Which model did the work.", groupTable(c.by_model, "Model")),
-    card("Every run", `${c.runs_count} runs, newest first. Press a run to see what was asked and which tools it used (recorded from agent 0.6.42 on).`,
+    card(`By work · last ${days} days`, "Chat replies, and each AI job.", groupTable(c.by_work, "Work")),
+    card(`By model · last ${days} days`, "Which model did the work.", groupTable(c.by_model, "Model")),
+    card(`Every run · last ${days} days`, `${c.runs_count} runs, newest first. Press a run to see what was asked and which tools it used (recorded from agent 0.6.42 on).`,
       paged([{ v: "When", half: true }, { v: "What", half: true }, "Brain · model", "Tools used",
              { v: "Tokens in / out", cls: "num", half: true }, { v: "Cost", cls: "num", half: true }, ""], runRows)),
     card(`Tools in the last ${days} days`, "Each tool the AI called, in how many runs and how many times. A tool never used is a candidate to switch off (Rules › What the AI can use).",
@@ -420,7 +436,7 @@ async function overview() {
   } else {
     kids.push(card("The last 24 hours", "The agent has not recorded anything yet."));
   }
-  kids.push(await historyCard(), exportCard(), importCard());
+  kids.push(await historyCard(), setupCard());
   fill($view, ...kids);
 }
 
@@ -433,7 +449,7 @@ async function historyCard() {
     catch (e) { tell("Not undone", e.problems); }
   };
   const PLACE = { Rules: "", Skills: "warn", Release: "gray", Import: "", Undo: "gray" };
-  return card("Changes made on these pages", "Every save on the Rules and Skills tabs, newest first, kept as long as the agent's other records. Undo writes the previous version back through the same checks as a save, and is itself recorded here.",
+  return card("Changes made on these pages", "Every save on the Rules and Skills tabs, newest first. Kept as long as the agent's other records (Rules (file) › settings.keep.records_days, 90 days by default), and trimmed with them every night. Undo writes the previous version back through the same checks as a save, and is itself recorded here.",
     changes.length ? paged(["When", "Where", "What changed", ""], changes.map((c) => [
       new Date(c.at).toLocaleString([], { dateStyle: "short", timeStyle: "short" }),
       h("span", { class: "chip " + (PLACE[c.place] || "") }, c.place),
@@ -459,7 +475,7 @@ function exportCard() {
     } catch (e) { tell("Not downloaded", e.problems || [String(e)]); }
     btn.disabled = false;
   } }, "Download the setup");
-  return card("Copy this setup to another villa", "One file with the skills and the shareable part of the rules. On the other villa: Overview › Import a setup.",
+  return h("div", {}, h("p", { class: "muted" }, "One file with the skills and the shareable part of the rules. On the other villa: Import a setup."),
     h("div", { class: "grid two" },
       h("div", { class: "box" }, h("div", { class: "eyebrow" }, "Goes in the file"),
         tick("skills", "The skills, every file"), tick("villa_files", "…with this villa's own files (villa.*)", "untick to leave them out"),
@@ -472,6 +488,21 @@ function exportCard() {
         stay("Devices: protected, excluded, allowed lists, the siren", "entity ids are this villa's"),
         stay("Keys and tokens", "never in any file the page makes"), stay("Records, transcripts, costs"))),
     h("div", { class: "actions" }, btn));
+}
+
+// Overview › Copy the setup: Download and Import, two tabs of one card (owner, 2026-10-06: a cleaner overview)
+let setupTab = "out";
+function setupCard() {
+  const body = h("div");
+  const tabs = h("div", { class: "subtabs", role: "tablist" });
+  const draw = () => {
+    tabs.replaceChildren(...[["out", "Download this villa's setup"], ["in", "Import a setup"]].map(([k, l]) =>
+      h("button", { type: "button", role: "tab", class: setupTab === k ? "on" : "", "aria-selected": String(setupTab === k),
+                    onclick: () => { setupTab = k; draw(); } }, l)));
+    fill(body, setupTab === "out" ? exportCard() : importCard());
+  };
+  draw();
+  return card("Copy the setup to another villa", "The skills and the shareable part of the rules, in one file, and that file read on another villa. People, chats, devices, keys and records never leave a villa.", tabs, body);
 }
 
 function importCard() {
@@ -502,7 +533,7 @@ function importCard() {
           catch (e) { tell("Not imported", e.problems); }
         } }, p.changes ? `Apply ${plural(p.changes, "change", "changes")}` : "Nothing to change")));
   }
-  return card("Import a setup", "A file made by \"Download the setup\" on another villa. You see every change, and what does not fit this villa, before anything is written.",
+  return h("div", {}, h("p", { class: "muted" }, "A file made by \"Download the setup\" on another villa. You see every change, and what does not fit this villa, before anything is written."),
     h("label", { class: "field" }, h("span", {}, "Setup file"), input), out);
 }
 
@@ -637,19 +668,6 @@ function rulesForms(doc, jobs = [], tools = null) {
       field("Owner chat", chatId("owner"), "Escalations, monthly report, owner-only approvals."),
       field("Facility manager chat", chatId("fm"), "Alerts, reminders, daily digest, weekly page.")));
 
-  // services and their rule
-  const svcRows = Object.entries(f.allowed_services);
-  const ruleChoices = Object.entries(SCHEMA.rules).map(([k, l]) => [k, `${k} — ${l}`]);
-  const services = card("What the agent may do", "One line per Home Assistant service, and who decides. Anything not listed is refused. Restarts, shell commands, toggles and the like are refused whatever this says.",
-    ...editTable(svcRows, {
-      cls: "svc", add: "Add a service", blank: () => ["", "any"],
-      changed: () => { f.allowed_services = Object.fromEntries(svcRows.filter(([k]) => k)); },
-      columns: [{ title: "Service", width: "38%", phone: "ab" }, { title: "Rule", phone: "cd" }],
-      cell: (row, k, touched) => k === 0
-        ? h("input", { type: "text", value: row[0], placeholder: "light.turn_on", "aria-label": "Service", oninput: (e) => { row[0] = e.target.value.trim(); touched(); } })
-        : dropdown(ruleChoices, row[1], (v) => { row[1] = v; touched(); }, "Rule"),
-    }));
-
   // devices: chosen from the villa's own, by name (owner, 2026-10-01: "free form text inputs are not
   // suitable"). A box like a menu shows what is chosen; it opens a list with a search and a checkbox per
   // device (name, room · id). `one`: a single device (the siren), chosen by a click.
@@ -711,6 +729,36 @@ function rulesForms(doc, jobs = [], tools = null) {
     return box;
   };
   const many = (key, domains) => picker(() => f[key] || [], (v) => (f[key] = v), domains);
+  // services, who decides, and — for "only the devices in the lists" — which devices (owner, 2026-10-06: no separate
+  // "Allowed lists" card; the list opens where the rule that needs it is chosen). A domain's list is shared by its
+  // services (switch.turn_on and switch.turn_off): it is shown at the first of them, the others point to it.
+  const svcRows = Object.entries(f.allowed_services);
+  const ruleChoices = Object.entries(SCHEMA.rules).map(([k, l]) => [k, l[0].toUpperCase() + l.slice(1)]);
+  const listOf = Object.fromEntries(SCHEMA.lists.flatMap((l) => l.domains.map((d) => [d, l])));
+  const devicesCell = (row) => {
+    const dom = (row[0] || "").split(".")[0];
+    const l = listOf[dom];
+    if (row[1] !== "listed") return h("span", { class: "muted small na" }, "—");      // nothing to choose (hidden on a phone)
+    if (!l) return h("span", { class: "chip off" }, `no list for ${dom || "this service"}`);
+    const first = svcRows.find(([k, r]) => r === "listed" && k.split(".")[0] === dom);
+    if (first && first !== row) return h("span", { class: "muted small" }, `same list as ${first[0]}`);
+    const box = many(l.key, l.domains);
+    box.title = l.hint;
+    return box;
+  };
+  const services = card("What the agent may do", "One line per Home Assistant service, and who decides. Anything not listed is refused. Restarts, shell commands, toggles and the like are refused whatever this says. For \"listed\", choose the devices on the same line: the agent may act only on those, and still asks for approval.",
+    ...editTable(svcRows, {
+      cls: "svc", add: "Add a service", blank: () => ["", "any"],
+      changed: () => { f.allowed_services = Object.fromEntries(svcRows.filter(([k]) => k)); },
+      columns: [{ title: "Service", width: "26%", phone: "ab" }, { title: "Who decides", width: "36%", phone: "cd" }, { title: "Devices it may act on", phone: "ef" }],
+      cell: (row, k, touched, refresh) => [
+        () => h("input", { type: "text", value: row[0], placeholder: "light.turn_on", "aria-label": "Service",
+                           oninput: (e) => { row[0] = e.target.value.trim(); touched(); }, onchange: refresh }),
+        () => dropdown(ruleChoices, row[1], (v) => { row[1] = v; touched(); refresh(); }, "Who decides"),
+        () => devicesCell(row),
+      ][k](),
+    }));
+
   const devices = card("Protected devices", "Devices that need more care than the rules above give them.",
     h("div", { class: "grid" },
       field("Only the owner may approve", many("owner_only_entities", SCHEMA.actionable), "An action on these waits for the owner's Approve, whoever asks (locks, the gate, the siren)."),
@@ -718,8 +766,6 @@ function rulesForms(doc, jobs = [], tools = null) {
       field("Siren", picker(() => (f.siren_entity ? [f.siren_entity] : []), (v) => (f.siren_entity = v[0] || null), SCHEMA.siren_domains, true),
             "The siren the alert desk may ask the owner to sound."),
       field("Siren stops after (minutes)", h("input", { type: "number", min: 1, max: 60, value: f.siren_auto_off_min, oninput: on((t) => (f.siren_auto_off_min = num(t.value))) }))));
-  const lists = card("Allowed lists", "For a service whose rule above is \"only the devices in the lists below\": the agent may act only on the devices chosen here, and still asks for approval.",
-    h("div", { class: "grid" }, SCHEMA.lists.map((l) => field(l.label, many(l.key, l.domains), l.hint))));
 
   const save = async () => {
     try {
@@ -733,7 +779,7 @@ function rulesForms(doc, jobs = [], tools = null) {
   setBar({ save, discard: () => rules("forms"), idle: "Changes apply within seconds, no restart." });
   const canUse = tools ? toolsCard(f, tools, () => rules("forms")) : null;
   fill($view, doc.problems.length ? problemsBox(doc.problems, "To fix in this file:") : null, probs,
-    jobsBanner(missing, () => rules("forms")), acting, people, chats, services, devices, lists, canUse, ai);
+    jobsBanner(missing, () => rules("forms")), acting, people, chats, services, devices, canUse, ai);
   if (jumpTo === "tools" && canUse) { jumpTo = null; requestAnimationFrame(() => canUse.scrollIntoView({ block: "start" })); }
 }
 
@@ -855,8 +901,7 @@ async function skills(select = null) {
   fill($view, h("p", { class: "muted" }, "Loading…"));
   const { skills: list } = await api("GET", "api/skills");
   const side = h("div", { class: "card" },
-    h("h2", {}, "Skills"),
-    h("p", { class: "lead" }, "Each skill is a folder. A change counts at the agent's next use, no restart."),
+    titleWithInfo("Skills", "Each skill is a folder of files. A change counts at the agent's next use, no restart. The switch beside a skill turns it on or off for this villa."),
     // each skill: its name and line (opens it), and its On/Off switch beside it (owner, 2026-10-06)
     list.length ? list.map((s) => h("div", { class: "skill-item" + (s.name === select ? " on" : "") + (s.off ? " is-off" : "") },
       h("button", { type: "button", class: "skill-open", onclick: async () => { if (await guard()) skills(s.name); } },
@@ -886,48 +931,65 @@ async function switchTool(b) {
   await api("PUT", "api/policy/form", { form, rev: doc.rev });
 }
 
-// Skills › Try a command: run by the agent on the live villa, exactly as the AI would — nothing is sent
+// Skills › Try a command: run by the agent on the live villa, exactly as the AI would — nothing is sent.
+// Three steps (owner, 2026-10-06: "badly rendered, not understandable"): what to run, its options in words, then
+// the exact command it will run and the Run button.
+const FLAG_HELP = { date: "a day, e.g. 2026-10-05", text: "a word or a few", switch: "" };
 function tryPanel(name, d) {
   const out = h("div");
   const runnable = d.scripts.filter((sc) => !sc.whole_off);
   if (!runnable.length) return h("p", { class: "muted" }, "Every script of this skill is switched off for the AI.");
-  let script = runnable[0];
-  const form = h("div", { class: "try-form" });
-  const values = {};
-  let command = null;
-  const draw = () => {
-    const cmds = script.commands.filter((c) => c.on);
-    if (cmds.length && !cmds.some((c) => c.name === command)) command = cmds[0].name;
-    if (!cmds.length) command = null;
-    const flags = Object.entries(script.flags).filter(([, k]) => k !== "outfile" && k !== "infile");
-    form.replaceChildren(
-      field("Script", dropdown(runnable.map((sc) => [sc.script, sc.script]), script.script, (v) => { script = runnable.find((x) => x.script === v); draw(); }, "Script")),
-      cmds.length ? field("Command", dropdown(cmds.map((c) => [c.name, c.name]), command, (v) => { command = v; }, "Command")) : null,
-      ...flags.map(([flag, kind]) => field(flag, Array.isArray(kind)
-        ? dropdown([["", "—"], ...kind.map((k) => [k, k])], values[flag] || "", (v) => { values[flag] = v; }, flag)
-        : kind === "switch" ? h("label", { class: "switch" }, h("input", { type: "checkbox", checked: !!values[flag], onchange: (e) => { values[flag] = e.target.checked; } }), "on")
-        : h("input", { type: "text", value: values[flag] || "", placeholder: kind === "date" ? "2026-10-05" : "", oninput: (e) => { values[flag] = e.target.value; } }))),
-      h("button", { class: "btn primary", onclick: run }, "Run"));
-  };
-  async function run() {
-    const args = [...(command ? [command] : [])];
+  let script = runnable[0], command = null, values = {};
+  const what = h("div", { class: "try-row" }), opts = h("div", { class: "try-opts" }), preview = h("code", { class: "try-preview" });
+  const args = () => {
+    const a = command ? [command] : [];
     for (const [flag, kind] of Object.entries(script.flags)) {
       const v = values[flag];
-      if (kind === "switch") { if (v) args.push(flag); } else if (v) args.push(flag, String(v));
+      if (kind === "switch") { if (v) a.push(flag); } else if (v) a.push(flag, String(v));
     }
+    return a;
+  };
+  const showPreview = () => { preview.textContent = [script.script, ...args()].join(" "); };
+  const draw = () => {
+    const cmds = script.commands.filter((c) => c.on);
+    if (!cmds.some((c) => c.name === command)) command = cmds.length ? cmds[0].name : null;
+    fill(what,
+      field("Script", dropdown(runnable.map((sc) => [sc.script, sc.script]), script.script, (v) => { script = runnable.find((x) => x.script === v); values = {}; draw(); }, "Script")),
+      cmds.length ? field("Command", dropdown(cmds.map((c) => [c.name, c.words ? `${c.name} — ${c.words}` : c.name]), command, (v) => { command = v; showPreview(); }, "Command")) : null);
+    // files a script writes or reads are the AI's business: not offered here
+    const flags = Object.entries(script.flags).filter(([, k]) => k !== "outfile" && k !== "infile");
+    fill(opts, flags.length ? flags.map(([flag, kind]) => {
+      const label = flag.replace(/^--/, "").replace(/-/g, " ");
+      const input = Array.isArray(kind)
+        ? dropdown([["", "not set"], ...kind.map((k) => [k, k])], values[flag] || "", (v) => { values[flag] = v; showPreview(); }, label)
+        : kind === "switch"
+          ? h("label", { class: "switch" }, h("input", { type: "checkbox", checked: !!values[flag], "aria-label": label,
+              onchange: (e) => { values[flag] = e.target.checked; showPreview(); } }), "yes")
+          : h("input", { type: "text", value: values[flag] || "", placeholder: FLAG_HELP[kind] || "", "aria-label": label,
+              oninput: (e) => { values[flag] = e.target.value.trim(); showPreview(); } });
+      return field(label[0].toUpperCase() + label.slice(1), input, Array.isArray(kind) ? `one of: ${kind.join(", ")}` : flag);
+    }) : h("p", { class: "muted small" }, "This command takes no options."));
+    showPreview();
+  };
+  async function run() {
     fill(out, h("p", { class: "muted" }, "Running on the villa…"));
     try {
-      const r = await api("POST", `api/skills/${encodeURIComponent(name)}/try`, { script: script.script, args });
+      const r = await api("POST", `api/skills/${encodeURIComponent(name)}/try`, { script: script.script, args: args() });
       fill(out, r.ok === false && r.exit === undefined ? problemsBox([r.error], "Not run:") : [
-        h("p", { class: "muted" }, `Ran in ${r.seconds} s · exit ${r.exit}${r.exit === 2 ? " (nothing to do, or a missing setting)" : ""} · the same answer the AI gets. Messages and tickets in it are shown, never sent.`),
+        h("div", { class: "try-result" }, h("span", { class: "chip" + (r.exit === 0 ? "" : r.exit === 2 ? " warn" : " off") },
+          r.exit === 0 ? "Done" : r.exit === 2 ? "Nothing to do, or a setting is missing" : `Stopped (exit ${r.exit})`),
+          h("span", { class: "muted small" }, `${r.seconds} s · the answer the AI would get · nothing was sent`)),
         r.error ? problemsBox([r.error], "The script stopped:") : null,
         h("pre", { class: "out" }, pretty(r.output))]);
     } catch (e) { fill(out, problemsBox(e.problems, "Not run:")); }
   }
   draw();
-  return h("div", { class: "skill-sec" },
-    h("p", { class: "muted" }, "Runs one of the skill's commands on the live villa, exactly as the AI would — read-only, no AI, no cost. Use it after changing a script."),
-    form, out);
+  return h("div", { class: "skill-sec try" },
+    h("p", { class: "muted" }, "Runs one of this skill's commands on the villa, exactly as the AI would: it only reads, uses no AI and costs nothing. Messages or tickets it would create are shown here, never sent."),
+    h("h3", {}, "1 · What to run"), what,
+    h("h3", {}, "2 · Options"), opts,
+    h("h3", {}, "3 · Run"), h("div", { class: "try-go" }, preview, h("button", { class: "btn primary", onclick: run }, "Run")),
+    out);
 }
 
 function pretty(text) {

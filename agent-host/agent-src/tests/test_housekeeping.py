@@ -56,6 +56,10 @@ def test_each_kind_is_trimmed_at_its_own_limit(tmp_path):
     h = History(s.history_path)
     h.record("Rules", "old", {"kind": "policy"}, "a", "b", at=at(91))
     h.record("Rules", "recent", {"kind": "policy"}, "a", "b", at=at(89))
+    for name, days in (("old-skill-20260601", 91), ("new-skill-20261001", 10)):
+        d = os.path.join(s.skills_dir, ".trash", name)
+        os.makedirs(d)
+        os.utime(d, (NOW.timestamp() - days * 86400,) * 2)
 
     gone = housekeeping.tidy(s, st, KEEP_DEFAULT, now=NOW)
 
@@ -69,7 +73,10 @@ def test_each_kind_is_trimmed_at_its_own_limit(tmp_path):
     left = [r[0] for r in sqlite3.connect(s.store_path).execute("select day from features")]
     assert left == [(NOW - timedelta(days=700)).date().isoformat()]
     assert [r["what"] for r in h.rows()] == ["recent"]                     # the page's changes: the records' limit
-    assert gone == {"runs": 1, "records": 2, "conversations": 1, "files": 1, "daily_figures": 1, "page changes": 1}
+    assert os.listdir(os.path.join(s.skills_dir, ".trash")) == ["new-skill-20261001"]
+    assert gone == {"runs": 1, "records": 2, "conversations": 1, "files": 1, "daily_figures": 1, "page changes": 1,
+                    "skills in the trash": 1}
+
 
 
 def test_the_limits_are_the_villas_and_a_bad_one_keeps_its_default():
@@ -102,3 +109,21 @@ def test_saving_the_rules_form_keeps_the_villas_limits():
     form["settings"]["profile"] = "economy"
     out = yaml.safe_load(apply_form(text, form))
     assert out["settings"]["keep"] == {"runs_days": 60} and out["settings"]["profile"] == "economy"
+
+
+def test_a_skill_trashed_today_is_kept_whatever_the_age_of_its_files(tmp_path):
+    # owner, 2026-10-06 (DRY): the trash is trimmed by the same helper and limit as the out folder; its folders are
+    # judged whole, by the day they went there (skills.to_trash), not file by file
+    from vesta_agent.skills import TRASH, to_trash
+    s = settings(str(tmp_path))
+    old = os.path.join(s.skills_dir, "pool-care")
+    os.makedirs(os.path.join(old, "scripts"))
+    for f in ("SKILL.md", "scripts/x.py"):
+        open(os.path.join(old, f), "w").close()
+        os.utime(os.path.join(old, f), (1, 1))                  # 1970: older than any limit
+    os.utime(old, (1, 1))
+    to_trash(s.skills_dir, old, "pool-care")
+    gone = housekeeping.tidy(s, State(s.state_path), KEEP_DEFAULT)
+    (kept,) = os.listdir(os.path.join(s.skills_dir, TRASH))
+    assert kept.startswith("pool-care-") and gone["skills in the trash"] == 0
+    assert sorted(os.listdir(os.path.join(s.skills_dir, TRASH, kept))) == ["SKILL.md", "scripts"]

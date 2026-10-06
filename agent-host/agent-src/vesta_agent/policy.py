@@ -386,7 +386,7 @@ class Policy:
 RULE_WORDS = {
     "any": "the owner or the facility manager approves",
     "owner": "only the owner approves",
-    "listed": "only the devices in the lists below, then approval",
+    "listed": "only the devices chosen beside it, then approval",
     "direct": "no approval when a registered person asks",
 }
 RULES = tuple(RULE_WORDS)

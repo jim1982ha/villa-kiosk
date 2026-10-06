@@ -32,7 +32,7 @@ from .. import __version__, requests_box, status, tool_access
 from ..config import STARTER_DIR, Settings
 from ..history import History, file_change, policy_change
 from ..policy import Policy, problems as policy_problems
-from ..skills import FILE_NAME, SKILL_NAME, VILLA_CHOICES, SkillError, Skills, _parse, villa_choices
+from ..skills import FILE_NAME, SKILL_NAME, TRASH, VILLA_CHOICES, SkillError, Skills, _parse, to_trash, villa_choices
 from ..state import State
 from . import setup_copy
 from .policy_doc import apply_form, to_form
@@ -42,7 +42,6 @@ log = logging.getLogger("vesta.ui")
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATIC = os.path.join(HERE, "static")
 INGRESS_GATEWAY = "172.30.32.2"
-TRASH = ".trash"
 MAX_FILE = 512 * 1024
 MAX_SETUP = 6 * 1024 * 1024            # an imported setup (a zip of skills and rules), base64 in its JSON body
 
@@ -226,8 +225,8 @@ class UI:
         from zoneinfo import ZoneInfo
         from ..policy import Policy
         from ..routing import Routing
-        days = request.query.get("days", "30")
-        days = int(days) if days in ("7", "30", "90") else 30
+        days = request.query.get("days", "7")
+        days = int(days) if days in ("7", "30", "90") else 7          # the Costs tab opens on the last 7 days
         if not os.path.exists(self.s.state_path):
             return web.json_response({"days": days, "runs": [], "none": True})
         try:
@@ -393,10 +392,8 @@ class UI:
     async def skill_delete(self, request):
         name = request.match_info["name"]
         path = self._skill_dir(name)
-        # Moved aside, not erased: a dot folder is never loaded, and a mistake can be undone by hand.
-        dest = os.path.join(self.s.skills_dir, TRASH, f"{name}-{datetime.now(timezone.utc):%Y%m%dT%H%M%S}")
-        os.makedirs(os.path.dirname(dest), exist_ok=True)
-        shutil.move(path, dest)
+        # Moved aside, not erased: a dot folder is never loaded, and a mistake can be undone (Overview › Changes).
+        dest = to_trash(self.s.skills_dir, path, name)
         log.info("UI: skill %s deleted (kept in skills/%s)", name, TRASH)
         self.history.record("Skills", f"{name} deleted (kept in skills/{TRASH})", {"kind": "folder", "skill": name},
                             dest, None)
@@ -616,8 +613,7 @@ class UI:
         self._skill_dir(name)
         if self.skills.release_state(name)["state"] != "edited":
             raise Refused([f"{name} is not an edited starter skill."])
-        dest = os.path.join(self.s.skills_dir, TRASH, f"{name}-{datetime.now(timezone.utc):%Y%m%dT%H%M%S}")
-        self.skills.take_release(name, dest)
+        dest = self.skills.take_release(name)
         self.history.record("Skills", f"{name}: the release's version taken (the edited one kept in skills/{TRASH})",
                             {"kind": "folder", "skill": name}, dest, "present")
         log.info("UI: skill %s replaced by the release's version", name)
@@ -686,9 +682,7 @@ class UI:
             return
         if not os.path.isdir(path) or (old and not os.path.isdir(old)):
             raise Refused(["The skill or its previous copy is gone: nothing to put back."], 409)
-        dest = os.path.join(self.s.skills_dir, TRASH, f"{name}-{datetime.now(timezone.utc):%Y%m%dT%H%M%S%f}")
-        os.makedirs(os.path.dirname(dest), exist_ok=True)
-        shutil.move(path, dest)
+        dest = to_trash(self.s.skills_dir, path, name)
         if old:
             shutil.move(old, path)
         self.history.record("Undo", f"Undo: {ch['what']}", ch["target"], dest, "present" if old else None)
