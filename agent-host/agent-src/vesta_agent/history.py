@@ -117,7 +117,7 @@ WORDS = {"act_enabled": "The agent may act on the villa", "approval_ttl_minutes"
          "script_allowlist": "Scripts it may run", "button_allowlist": "Buttons it may press",
          "ha_read_tools": "Home Assistant tools the AI may read with", "skills_off": "Skills switched off",
          "settings.profile": "Brain for chat answers", "settings.reply_limit_usd": "Limit per reply (US$)",
-         "settings.web_search": "Web search", "settings.conversation_reset": "New conversation"}
+         "settings.web_search": "Web search", "settings.conversation_reset": "Delete conversation context at"}
 
 
 def _say(path: str) -> str:

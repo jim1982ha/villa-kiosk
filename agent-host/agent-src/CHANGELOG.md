@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.52 (6 October 2026)
+
+- UI: settings.conversation_reset is named "Delete conversation context at" (caption, aria-label, history wording, export line).
+
 ## 0.6.51 (6 October 2026)
 
 - UI: The AI's chat line puts the New conversation menu in a captioned cell (td.with-caption) aligned with the brain and limit. test_ui pins it.

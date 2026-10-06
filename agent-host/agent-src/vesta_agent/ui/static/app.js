@@ -528,7 +528,7 @@ function exportCard() {
       h("div", { class: "box" }, h("div", { class: "eyebrow" }, "Goes in the file"),
         tick("skills", "The skills, every file"), tick("villa_files", "This villa's own choices inside the skills",
           "the skills' villa.* files: e.g. which speech-to-text to use, the villa's extra report entries, the commands switched off on the Skills tab. Untick to send the skills as released, without them."),
-        tick("ai", "The AI: brains, spending limits, new conversation, web search"),
+        tick("ai", "The AI: brains, spending limits, when the conversation context is deleted, web search"),
         tick("actions", "What the agent may do: each service and who decides"),
         tick("tools", "What the AI can use: tool switches, per role, skills switched off"),
         tick("keep", "How long records are kept"), tick("instructions", "instructions.md", "your standing rules for the agent")),
@@ -667,8 +667,8 @@ function rulesForms(doc, jobs = [], tools = null) {
       // the chats' own setting, on the chats' line (owner, 2026-10-06): their tools are "everything switched on, by
       // role" — said in the (i) of "Tools it gets"
       // the menu on the line of the brain and the limit, its name under it like theirs ("for each reply")
-      h("td", { class: "with-caption" }, sel(RESETS, f.settings.conversation_reset, (v) => (f.settings.conversation_reset = v), "New conversation"),
-        h("div", { class: "muted" }, "new conversation")),
+      h("td", { class: "with-caption" }, sel(RESETS, f.settings.conversation_reset, (v) => (f.settings.conversation_reset = v), "Delete conversation context at"),
+        h("div", { class: "muted" }, "Delete conversation context at")),
       h("td", { class: "x" })),
     ...jobs.map((j) => {
       const cur = f.settings.jobs[j.name];
