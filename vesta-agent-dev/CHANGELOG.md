@@ -1,3 +1,7 @@
+## 0.12.55
+
+- **Rules → The AI: the "New conversation" menu lines up with the brain and the limit** on the Chat answers line, its name under it like "for each reply".
+
 ## 0.12.54
 
 - **Rules → What the agent may do shows 10 lines a page** (People keeps 15).
