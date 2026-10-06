@@ -1,3 +1,19 @@
+## 0.12.47
+
+- **A clearer skill page (Skills tab).**
+  - **On top:** the skill's name, its state and its On/Off switch. Then only what needs you: the "Not working" fix, or "another version of this skill" with Compare / Keep mine / Take the release version.
+  - **Four tabs:** About, Files, Try a command, Compare. One thing at a time instead of everything on one screen.
+  - **About** has three sections:
+    - **When it acts:** the schedule first, one aligned line each.
+    - **What the AI may run:** a switch per command, with what it does underneath.
+    - **Tools it needs:** one line ("12 tools, all switched on"), with only the tools that are off shown, and the full list folded away.
+  - **Files:** the editor and its file buttons; a dot marks a file that differs from the release or belongs to this villa.
+  - **Compare:** only the changed lines and two around them.
+- **On a phone:**
+  - Opening a skill shows it alone, with "‹ All skills" to go back. Before, the list pushed it a screen down.
+  - Rows stack; the comparison is one column with "here" and "release" labels.
+  - The skills list keeps each description to two lines.
+
 ## 0.12.46
 
 - **Choose what the AI can use: Rules → What the AI can use.** Three tabs:
