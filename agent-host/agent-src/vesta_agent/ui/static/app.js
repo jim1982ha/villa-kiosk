@@ -91,14 +91,14 @@ function dropdown(options, value, pick, label) {
 function editTable(rows, { cls, columns, cell, blank, add, changed = () => {} }) {
   const body = h("tbody");
   const touched = () => { changed(); markDirty(); };
-  const draw = () => body.replaceChildren(...rows.map((row, i) => h("tr", {},
-    columns.map((c, k) => h("td", { class: `ph-${c.phone}` }, cell(row, k, touched))),
-    h("td", { class: "x ph-x" }, h("button", { class: "btn icon ghost", title: "Remove", onclick: () => { rows.splice(i, 1); draw(); touched(); } }, "×")))));
-  draw();
+  const pager = pagedBlock(() => rows.length, (from, to) => body.replaceChildren(...rows.slice(from, to).map((row, k) => h("tr", {},
+    columns.map((c, j) => h("td", { class: `ph-${c.phone}` }, cell(row, j, touched))),
+    h("td", { class: "x ph-x" }, h("button", { class: "btn icon ghost", title: "Remove", onclick: () => { rows.splice(from + k, 1); pager.redraw(); touched(); } }, "×"))))));
+  pager.redraw();
   const table = h("table", { class: `rows edit ${cls}` },
     h("colgroup", {}, columns.map((c) => h("col", { width: c.width || null })), h("col", { width: "44" })),
     h("thead", {}, h("tr", {}, columns.map((c) => h("th", {}, c.title)), h("th", {}, ""))), body);
-  return [table, h("div", { class: "actions" }, h("button", { class: "btn ghost", onclick: () => { rows.push(blank()); draw(); touched(); } }, add))];
+  return [table, pager.nav, h("div", { class: "actions" }, h("button", { class: "btn ghost", onclick: () => { rows.push(blank()); pager.last(); touched(); } }, add))];
 }
 
 async function api(method, path, body) {
@@ -177,6 +177,25 @@ function paged(head, rows, per = 10) {
   draw();
   return h("div", {}, h("div", { class: "tbl" }, h("table", { class: "rows data" },
     h("thead", {}, h("tr", {}, head.map((c, i) => cell(c, "th", i)))), body)), nav);
+}
+
+// Pages of at most `per` lines for an editable list (owner, 2026-10-06: "max 15 lines, so the UI stays consistent").
+// `draw(slice, offset)` fills the page; returns [box, nav, api]: api.redraw() after a change, api.last() to show the
+// last page (after Add).
+const PER_PAGE = 15;
+function pagedBlock(count, draw, per = PER_PAGE) {
+  const nav = h("div", { class: "pager" });
+  let page = 0;
+  const pages = () => Math.max(1, Math.ceil(count() / per));
+  const redraw = () => {
+    page = Math.min(page, pages() - 1);
+    draw(page * per, Math.min(count(), page * per + per));
+    nav.replaceChildren(...(pages() > 1 ? [
+      h("button", { type: "button", class: "btn ghost", disabled: page === 0, onclick: () => { page--; redraw(); } }, "‹ Previous"),
+      h("span", { class: "muted" }, `Page ${page + 1} of ${pages()} · ${count()} lines`),
+      h("button", { type: "button", class: "btn ghost", disabled: page >= pages() - 1, onclick: () => { page++; redraw(); } }, "Next ›")] : []));
+  };
+  return { nav, redraw, last: () => { page = pages() - 1; redraw(); } };
 }
 
 // an SVG element (the bars of a chart: sizes are attributes, never a style — the page's rule allows no inline style)
@@ -746,12 +765,23 @@ function toolsCard(f, t, reload) {
       h("div", {}, h("b", {}, t.count ? `${[...on].filter((n) => t.groups.some((g) => g.tools.some((x) => x.name === n))).length} of ${t.count} tools on.` : "The list is not read yet."),
         h("span", { class: "muted" }, t.read_at ? ` From Home Assistant's MCP server${t.server ? " " + t.server : ""}, read ${new Date(t.read_at).toLocaleString()}.` : " The agent reads it when it starts.")),
       t.new_off ? h("span", { class: "chip warn" }, `${plural(t.new_off, "new tool", "new tools")} since an update — off`) : null, refresh);
-    const groups = t.groups.map((g) => h("div", { class: "tool-group" },
-      h("div", { class: "tool-group-head" }, h("b", {}, g.label), h("span", { class: "muted" }, ` ${g.tools.filter((x) => on.has(x.name)).length} of ${g.tools.length} on`)),
-      g.tools.map((x) => switchRow(on.has(x.name), (v) => { f.ha_read_tools = v ? [...f.ha_read_tools, x.name] : f.ha_read_tools.filter((n) => n !== x.name); },
-        x.title, [h("div", {}, h("b", {}, x.title), x.new ? h("span", { class: "chip warn" }, "New") : null),
-                  h("div", { class: "muted" }, x.description),
-                  h("div", { class: "tool-meta" }, h("code", {}, x.name), x.note ? h("span", { class: "badge" }, x.note) : null, used(x.used))]))));
+    // every tool in its group's order, 15 lines a page; a group's heading at its first tool on each page
+    const lines = t.groups.flatMap((g) => g.tools.map((x) => ({ g, x })));
+    const list = h("div");
+    const pages = pagedBlock(() => lines.length, (from, to) => {
+      let last = null;
+      list.replaceChildren(...lines.slice(from, to).flatMap(({ g, x }) => {
+        const head = g !== last ? h("div", { class: "tool-group-head tool-group" }, h("b", {}, g.label),
+          h("span", { class: "muted" }, ` ${g.tools.filter((y) => on.has(y.name)).length} of ${g.tools.length} on`)) : null;
+        last = g;
+        return [head, switchRow(on.has(x.name), (v) => { f.ha_read_tools = v ? [...f.ha_read_tools, x.name] : f.ha_read_tools.filter((n) => n !== x.name); },
+          x.title, [h("div", {}, h("b", {}, x.title), x.new ? h("span", { class: "chip warn" }, "New") : null),
+                    h("div", { class: "muted" }, x.description),
+                    h("div", { class: "tool-meta" }, h("code", {}, x.name), x.note ? h("span", { class: "badge" }, x.note) : null, used(x.used))])].filter(Boolean);
+      }));
+    });
+    pages.redraw();
+    const groups = [list, pages.nav];
     const unknown = t.unknown.length ? problemsBox(t.unknown.map((n) => `${n}: named in the file, but this Home Assistant's MCP server has no such tool.`), "Not on this Home Assistant:") : null;
     const never = t.never.length ? h("details", { class: "tool-group never" },
       h("summary", {}, h("b", {}, "Never available"), h("span", { class: "muted" }, ` ${plural(t.never.length, "tool", "tools")} that change Home Assistant — locked by the agent, whatever is chosen here`)),
@@ -772,8 +802,9 @@ function toolsCard(f, t, reload) {
   };
   const roles = () => {
     const fm = f.tool_access.fm || {};
-    return [h("p", { class: "muted" }, "When a person writes, the AI only gets the tools their role allows; in the facility manager's chat, never more than the facility manager's. A tool switched off in the first two tabs is off for everyone."),
+    return [h("p", { class: "muted" }, "When a person writes, the AI only gets the tools their role allows; in the facility manager's chat, never more than the facility manager's. A tool switched off in the first two tabs is off for everyone. Guests: the agent answers only the people in Rules › People (owner or facility manager), so a guest gets no answer at all for now."),
       h("table", { class: "rows roles" },
+        h("colgroup", {}, h("col", {}), h("col", { width: "18%" }), h("col", { width: "18%" }), h("col", { width: "14%" })),
         h("thead", {}, h("tr", {}, ["Tools", "Owner", "Facility manager", "Guest"].map((x) => h("th", {}, x)))),
         h("tbody", {}, t.roles.map((g) => h("tr", {},
           h("td", {}, h("b", {}, g.label)),
@@ -781,7 +812,7 @@ function toolsCard(f, t, reload) {
           h("td", {}, h("label", { class: "switch" }, h("input", { type: "checkbox", checked: fm[g.key] !== false, "aria-label": `${g.label}: facility manager`,
             onchange: (e) => { const m = { ...(f.tool_access.fm || {}) }; if (e.target.checked) delete m[g.key]; else m[g.key] = false;
                                if (Object.keys(m).length) f.tool_access.fm = m; else delete f.tool_access.fm; markDirty(); } }))),
-          h("td", { class: "muted" }, "later"))))),
+          h("td", { class: "muted", title: "There is no guest role yet: the agent answers only the owner and the facility manager" }, "—"))))),
       h("p", { class: "muted" }, "Asking for an action is decided by \"What the agent may do\": who approves stays there.")];
   };
   const tabs = h("div", { class: "subtabs", role: "tablist" });

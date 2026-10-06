@@ -349,7 +349,11 @@ dialog.ask .actions { justify-content: flex-end; margin-top: 0; }
 .tool-text .chip { margin-left: 8px; }
 .tool-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .tool-meta code { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-dim); }
+table.rows.roles { table-layout: fixed; }
 table.rows.roles td { padding: 8px 8px 8px 0; border-bottom: 1px solid var(--hairline); }
+/* the switch columns centred under their headings (owner, 2026-10-06: "align the columns") */
+table.rows.roles th:not(:first-child), table.rows.roles td:not(:first-child) { text-align: center; padding-right: 0; }
+table.rows.roles td .switch { justify-content: center; }
 table.rows.roles .switch { min-height: 0; }
 table.rows td .switch input { width: 44px; flex: none; }   /* not the cell-wide inputs of the editable tables */
 td.tools-got details.fold summary { padding: 0; color: var(--text-primary); }

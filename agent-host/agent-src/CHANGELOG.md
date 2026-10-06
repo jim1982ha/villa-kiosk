@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.45 (6 October 2026)
+
+- UI (owner): pagedBlock(), 15 lines a page (PER_PAGE), for editTable (People, the services) and the Reading Home Assistant list (flat, group heading repeated per page). Roles table: fixed layout, switch columns centred; Guest is "—" with the reason. test_ui pins the paging.
+
 ## 0.6.44 (6 October 2026)
 
 - UI, Skills (owner): skillSwitch() in each list row (the row is now a div: an open button plus the switch). The pane has no title, description or switch on a wide screen (.skill-head hidden); the state pill is on the tabs' line (.skill-bar). On a phone (≤760 px) the head comes back with the name, pill and switch, and the bar's pill is hidden. test_ui pins it. Rules → The AI: the tools column is a <details> summary ("N tools from <skill>") instead of chips; columns are fixed width and top-aligned, the header reads "Limit (US$)"; on a phone the × sits on the brain/limit row.

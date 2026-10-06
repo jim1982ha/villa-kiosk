@@ -472,3 +472,14 @@ def test_a_skill_is_named_and_switched_in_the_list_not_again_beside_it():
     assert "skillSwitch(s.name, !s.off, select)" in js                            # one switch per skill, in the list
     assert 'h("div", { class: "skill-bar" }, tabs, pill)' in js                    # the pill on the tabs' line
     assert "d.description ?" not in js.split("async function openSkill")[1].split("function aboutSkill")[0]
+
+
+def test_the_rules_lists_show_at_most_15_lines_a_page():
+    # owner, 2026-10-06: "paginate all the table to display a max number of 15 lines"
+    from vesta_agent.ui.server import STATIC
+    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
+    assert "const PER_PAGE = 15;" in js
+    edit = js.split("function editTable")[1].split("\nfunction ")[0]
+    assert "pagedBlock(() => rows.length" in edit and "rows.slice(from, to)" in edit      # People, What the agent may do
+    tools = js.split("function toolsCard")[1].split("\nfunction ")[0]
+    assert "pagedBlock(() => lines.length" in tools                                    # Reading Home Assistant
