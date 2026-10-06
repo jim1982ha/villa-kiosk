@@ -1,3 +1,7 @@
+## 0.12.54
+
+- **Rules → What the agent may do shows 10 lines a page** (People keeps 15).
+
 ## 0.12.53
 
 - **What the AI can use: each tool is a card** with its name, its switch, what it does and its notes. Cards sit at most four to a row: three, two or one as the screen narrows. Both "Reading Home Assistant" and "The agent's own tools" use them; the Reading tab shows 16 cards a page.
