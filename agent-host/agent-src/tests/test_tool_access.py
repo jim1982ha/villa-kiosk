@@ -21,7 +21,8 @@ from vesta_agent.skills import Skills, ToolError, validate_script_args
 OWNER, FM, FM_CHAT, OWNER_CHAT = 111, 222, -2002, -1001
 RO = {"readOnlyHint": True}
 SERVER = [{"name": "ha_get_state", "annotations": RO}, {"name": "ha_get_history", "annotations": RO},
-          {"name": "ha_get_camera_image", "annotations": RO},
+          {"name": "ha_get_camera_image", "annotations": RO,
+           "inputSchema": {"type": "object", "properties": {"entity_id": {"type": "string"}}}},
           {"name": "ha_config_set_automation", "annotations": {"destructiveHint": True}},
           {"name": "ha_manage_theme", "annotations": {"readOnlyHint": False}}]
 
@@ -213,25 +214,33 @@ def test_the_new_sections_are_checked_before_a_save():
     assert len(bad) == 4
 
 
-def send_tool(v, person, origin):
-    allowed = tool_access.allowed_for_person(v.policy(), v.server_tools, person.role, origin.chat)
-    return next(t for t in v.toolbox(allowed).tool_objects(person, origin) if t.name == "send_message")
 
 
-def test_a_photo_the_ai_was_asked_for_reaches_the_chat_and_only_with_cameras_on(agent):
-    # 2026-10-06: the AI looked with ha_get_camera_image, said "the image I just sent", and the chat got no photo
-    owner, fm = Person(OWNER, "Owner", "owner"), Person(FM, "FM", "fm")
-    send = send_tool(agent, owner, Origin(OWNER_CHAT, CONVERSATION))
-    assert "camera" in send.input_schema["properties"]
-    out = run(send.handler({"to": "here", "text": "The lounge now", "camera": "camera.lounge"}))
-    assert not out.get("is_error")
+def test_a_camera_picture_the_ai_looked_at_reaches_the_chat_with_its_answer(agent, monkeypatch):
+    # 2026-10-06, twice: asked to show the living room camera, the AI looked with ha_get_camera_image, wrote
+    # "here's the current view", and the chat got text only (an option to send it was not used by the model)
+    class Session:
+        @staticmethod
+        def call_raw(name, args):
+            if name == "ha_get_camera_image":
+                return {"content": [{"type": "image", "data": "SlBFRw==", "mimeType": "image/jpeg"}]}
+            return {"content": [{"type": "text", "text": "{}"}]}
+    agent.reader.mcp = Session
+    owner, built = Person(OWNER, "Owner", "owner"), []
+    real_toolbox = agent.toolbox
+    monkeypatch.setattr(agent, "toolbox", lambda allowed=None: built.append(real_toolbox(allowed)) or built[-1])
+
+    def converse_after(name, args):
+        async def the_ai(settings_, system, prompt, server, allowed, state, who, **kw):
+            tool = next(t for t in built[-1].tool_objects(owner, Origin(OWNER_CHAT, CONVERSATION)) if t.name == name)
+            await tool.handler(args)                                            # what the AI does in the run
+            return runner.RunResult("Here is the lounge now.", None, False, 0.01, [], None)
+        monkeypatch.setattr(runner, "run", the_ai)
+        agent.tg.sent.clear(), agent.tg.photos.clear()
+        run(agent.converse(OWNER_CHAT, owner, "show me the lounge camera"))
+
+    converse_after("ha_get_camera_image", {"entity_id": "camera.lounge"})
     assert agent.tg.photos == [(OWNER_CHAT, ("SlBFRw==", "image/jpeg"))]
-    # no picture: said, and nothing sent
-    out = run(send.handler({"to": "here", "text": "x", "camera": "camera.dark"}))
-    assert out.get("is_error") and "nothing was sent" in out["content"][0]["text"] and len(agent.tg.photos) == 1
-    # cameras switched off for the facility manager: no camera to send, even if the AI writes one
-    policy_edit(agent, tool_access={"fm": {"cameras": False}})
-    send = send_tool(agent, fm, Origin(FM, CONVERSATION))
-    assert "camera" not in send.input_schema["properties"]
-    out = run(send.handler({"to": "here", "text": "x", "camera": "camera.lounge"}))
-    assert out.get("is_error") and len(agent.tg.photos) == 1
+    assert [t for _, t, _ in agent.tg.sent] == ["Here is the lounge now."]       # one message: photo + caption
+    converse_after("ha_get_state", {})                                           # no picture: the answer alone
+    assert agent.tg.photos == [] and [t for _, t, _ in agent.tg.sent] == ["Here is the lounge now."]

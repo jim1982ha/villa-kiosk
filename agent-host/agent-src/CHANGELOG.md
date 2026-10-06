@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.54 (6 October 2026)
+
+- The model did not call send_message(camera=) (live, 20:19): removed. Toolbox.photos records every image a read tool returned in the run; converse() sends them (last 4, deduplicated) with the reply as the last one's caption; a refused photo falls back to the text. One mechanism, not chosen by the model.
+- telegram.send: a reply longer than a caption (1,000) continues as text after the photo (was cut).
+
 ## 0.6.53 (6 October 2026)
 
 - send_message takes `camera` (camera.*) when ha_get_camera_image is allowed for the run: the agent fetches the picture and sends it with sendPhoto, the text as caption; no picture or a refused photo is an error, never "Sent.". One fetch for both paths: `outcome.camera_photo` (also the alert desk's snapshot.get).

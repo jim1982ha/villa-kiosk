@@ -55,6 +55,7 @@ log = logging.getLogger("vesta")
 from .policy import LANGUAGES as LANG  # noqa: E402 — one list, also the VESTA Agent page's menu
 #: Commands the agent answers. Any other command belongs to Home Assistant's automations.
 OWN_COMMANDS = {"/ask", "/new", "/whoami"}
+PHOTOS_PER_REPLY = 4              # the camera pictures a reply carries, the last ones looked at
 
 
 def _now_local(tz: str) -> datetime:
@@ -563,7 +564,18 @@ class Vesta:
                 answer = (answer + "\n\n" if answer else "") + \
                     f"Stopped: this answer reached the {self.s.reply_limit_usd:g} USD limit per reply."
                 keyboard = {"inline_keyboard": [[{"text": "Continue", "callback_data": f"c:{cont}"}]]}
-            if answer or keyboard:
+            photos = tb.photos[-PHOTOS_PER_REPLY:]
+            if photos and answer and not keyboard:
+                # the pictures it looked at, the answer as the last one's caption
+                for photo in photos[:-1]:
+                    await self.send(cid, "", photo_b64=photo)
+                mid = await self.send(cid, answer, photo_b64=photos[-1])
+                if not mid:
+                    mid = await self.send(cid, answer + "\n\n(The camera picture could not be sent.)")
+                await self._job_notice_step(cid, self._job_notices.replied(cid, mid))
+            elif answer or keyboard:
+                for photo in photos:
+                    await self.send(cid, "", photo_b64=photo)
                 mid = await self.send(cid, answer or "…", keyboard=keyboard)
                 await self._job_notice_step(cid, self._job_notices.replied(cid, mid))
 

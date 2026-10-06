@@ -91,7 +91,9 @@ class Telegram:
             if not body.get("ok"):
                 # was a silent fall back to the caption alone: "here is the photo" with no photo
                 raise TelegramError(f"sendPhoto: {body.get('description')}")
-            return body["result"]["message_id"]
+            if len(text) <= 1000:
+                return body["result"]["message_id"]
+            text = text[1000:]                               # a caption holds 1,000: the rest follows as text
         parts = split_message(text or "…")
         for i, part in enumerate(parts):
             data: dict[str, Any] = {"chat_id": chat_id, "text": part}

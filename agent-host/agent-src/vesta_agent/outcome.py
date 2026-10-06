@@ -65,7 +65,7 @@ def has_work(res) -> bool:
 
 async def camera_photo(reader, entity_id) -> tuple[str, str] | None:
     """What a camera shows now, as (base64, mime) for Telegram's sendPhoto; None when it gave no image.
-    The one way a camera's picture reaches a chat: the alert desk's snapshot and the AI's send_message(camera=)."""
+    The alert desk's snapshot (a chat reply carries the pictures the AI looked at: tools.Toolbox.photos)."""
     if not str(entity_id or "").startswith("camera."):
         return None
     blocks = await asyncio.to_thread(reader.tool_content, "ha_get_camera_image", {"entity_id": entity_id})
