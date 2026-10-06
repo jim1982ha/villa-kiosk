@@ -457,6 +457,18 @@ def test_on_a_phone_an_open_skill_hides_the_list_and_offers_the_way_back():
     from vesta_agent.ui.server import STATIC
     css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
     js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
-    phone = re.search(r"@media \(max-width: 760px\) \{\s*\.skills\.has-open \.skills-side \{ display: none; \}\s*\.back-to-list \{ display: inline-flex; \}", css)
-    assert phone and re.search(r"\.back-to-list \{ display: none;", css)
+    phone = re.search(r"@media \(max-width: 760px\) \{([^}]*\}){0,6}?[^}]*?\.skills\.has-open \.skills-side \{ display: none; \}", css)
+    block = css[phone.start():css.index("\n}", phone.start())] if phone else ""
+    assert phone and ".back-to-list { display: inline-flex; }" in block and re.search(r"\.back-to-list \{ display: none;", css)
     assert 'pane.closest(".skills")?.classList.add("has-open")' in js and 'side.classList.add("skills-side")' in js
+
+
+def test_a_skill_is_named_and_switched_in_the_list_not_again_beside_it():
+    # owner, 2026-10-06: no repeated title or description over the tabs; the switch in the list, the pill by the tabs
+    from vesta_agent.ui.server import STATIC
+    css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
+    js = open(os.path.join(STATIC, "app.js"), encoding="utf-8").read()
+    assert ".skill-pane > .skill-head { display: none; }" in css
+    assert "skillSwitch(s.name, !s.off, select)" in js                            # one switch per skill, in the list
+    assert 'h("div", { class: "skill-bar" }, tabs, pill)' in js                    # the pill on the tabs' line
+    assert "d.description ?" not in js.split("async function openSkill")[1].split("function aboutSkill")[0]

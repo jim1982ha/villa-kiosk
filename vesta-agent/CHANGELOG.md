@@ -1,3 +1,10 @@
+## 0.12.48
+
+- **Skills: each skill's On/Off switch is in the list on the left,** beside its name.
+- **The skill page no longer repeats the skill's name and description** above the tabs: the list beside it already shows them. The state ("Follows the releases", "Edited here") sits on the tabs' line.
+- **On a phone, where the list is hidden while a skill is open,** the name, the state and the switch stay at the top of the page.
+- **Rules → The AI is tidy again.** "Tools it gets" is one line per report ("12 tools from reports"); tap it for the list. The columns line up. On a phone, each report's stop button sits beside its brain and limit.
+
 ## 0.12.47
 
 - **A clearer skill page (Skills tab).**

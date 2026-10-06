@@ -570,12 +570,12 @@ function rulesForms(doc, jobs = [], tools = null) {
       const what = h("td", {}, h("b", {}, j.name),
         h("div", { class: "muted" }, `${j.skill} · ${j.when_words}${j.on_request ? ", or when asked in a chat" : ""}`));
       // 1D: a report gets only the tools its skill lists (skill.yaml `tools`), among those switched on
+      // one line ("12 tools from reports"), the list unfolded on demand (owner, 2026-10-06: the chips were a wall)
       const got = h("td", { class: "tools-got" }, j.tools === null || j.tools === undefined
-        ? h("span", { class: "muted" }, "Everything switched on (its skill lists none)")
-        : [h("div", { class: "chips", title: j.tools.join("\n") }, j.tools.length
-            ? [...j.tools.slice(0, 4).map((t) => h("span", { class: "chip" }, t)), j.tools.length > 4 ? h("span", { class: "chip gray" }, `+${j.tools.length - 4} more`) : null]
-            : h("span", { class: "muted" }, "none")),
-           h("div", { class: "muted small" }, `from ${j.skill}/skill.yaml · tools`)]);
+        ? h("span", { class: "muted" }, "Everything switched on")
+        : !j.tools.length ? h("span", { class: "muted" }, "None of its own")
+        : h("details", { class: "fold" }, h("summary", {}, `${plural(j.tools.length, "tool", "tools")} from ${j.skill}`),
+            h("ul", { class: "tool-list" }, j.tools.map((t) => h("li", {}, t)))));
       if (!cur) {
         return h("tr", {}, what, h("td", { colspan: 2, class: "muted" }, "Not set: this job does not run."), got,
           h("td", { class: "x" }, h("button", { class: "btn icon ghost", title: "Set this job", onclick: () => { f.settings.jobs[j.name] = { ...j.default }; drawAi(); drawTotal(); markDirty(); } }, "+")));
@@ -587,7 +587,7 @@ function rulesForms(doc, jobs = [], tools = null) {
     }));
   drawAi(); drawTotal();
   const ai = card("The AI", "Which brain does each piece of work, the most ONE piece of work may cost (one chat reply, or one run of a job — not a monthly budget), and which tools a report gets: only those its skill lists. A reply that reaches its limit stops and offers Continue; a report that reaches it is still sent with what is done. A job that is not set does not run.",
-    h("table", { class: "rows ai" }, h("thead", {}, h("tr", {}, ["Work", "Brain", "Most it may cost (US$)", "Tools it gets", ""].map((x) => h("th", {}, x)))), aiBody),
+    h("table", { class: "rows ai" }, h("thead", {}, h("tr", {}, ["Work", "Brain", "Limit (US$)", "Tools it gets", ""].map((x) => h("th", {}, x)))), aiBody),
     total,
     h("p", { class: "muted" }, "To change what a report may use, edit its skill's tools list on the Skills tab: the choice then travels with the skill."),
     // web search is switched in "What the AI can use" (one place for every tool, 0.6.42)
@@ -808,15 +808,30 @@ function skillChips(s) {
           s.state === "edited" ? h("span", { class: "chip warn" }, "edited here") : null];
 }
 
+function skillSwitch(name, on, select) {
+  return h("label", { class: "switch skill-switch", title: on ? "On: the agent uses it" : "Off: kept, not used" },
+    h("input", { type: "checkbox", checked: on, "aria-label": `${name} on`, onchange: async (e) => {
+      const now = e.target.checked;
+      if (!now && !(await ask({ title: `Switch ${name} off?`, ok: "Switch off", danger: true,
+        text: "The agent stops using it at once: no schedule, no alert hook, not read in a chat. Its files are kept; switch it on again here." }))) { e.target.checked = true; return; }
+      if (!(await guard())) { e.target.checked = !now; return; }
+      try { await api("PUT", `api/skills/${encodeURIComponent(name)}/on`, { on: now }); toast(`${name} switched ${now ? "on" : "off"}.`); skills(select); }
+      catch (err) { e.target.checked = !now; tell("Not changed", err.problems); }
+    } }));
+}
+
 async function skills(select = null) {
   fill($view, h("p", { class: "muted" }, "Loading…"));
   const { skills: list } = await api("GET", "api/skills");
   const side = h("div", { class: "card" },
     h("h2", {}, "Skills"),
     h("p", { class: "lead" }, "Each skill is a folder. A change counts at the agent's next use, no restart."),
-    list.length ? list.map((s) => h("button", { class: "skill-item" + (s.name === select ? " on" : ""), onclick: async () => { if (await guard()) skills(s.name); } },
-      h("div", { class: "skill-name" }, h("b", {}, s.name), ...skillChips(s)),
-      h("div", { class: "d" }, s.off ? "Off · kept, not used" : s.ok ? s.description : s.problem.startsWith("It needs") ? "A tool it needs is switched off." : s.problem))) : h("p", { class: "muted" }, "No skill yet. The starter skills are copied at the agent's first start."),
+    // each skill: its name and line (opens it), and its On/Off switch beside it (owner, 2026-10-06)
+    list.length ? list.map((s) => h("div", { class: "skill-item" + (s.name === select ? " on" : "") + (s.off ? " is-off" : "") },
+      h("button", { type: "button", class: "skill-open", onclick: async () => { if (await guard()) skills(s.name); } },
+        h("div", { class: "skill-name" }, h("b", {}, s.name), ...skillChips(s)),
+        h("div", { class: "d" }, s.off ? "Off · kept, not used" : s.ok ? s.description : s.problem.startsWith("It needs") ? "A tool it needs is switched off." : s.problem)),
+      skillSwitch(s.name, !s.off, select))) : h("p", { class: "muted" }, "No skill yet. The starter skills are copied at the agent's first start."),
     h("div", { class: "actions" }, h("button", { class: "btn ghost", onclick: newSkill }, "New skill")));
   const pane = h("div");
   side.classList.add("skills-side");
@@ -944,22 +959,13 @@ async function openSkill(name, pane, info, path = ABOUT) {
   const goTo = async (p) => { if (p !== path && await guard()) openSkill(name, pane, info, p); };
   pane.closest(".skills")?.classList.add("has-open");
 
-  // ---- the head: name, state, switch
-  const onSwitch = h("label", { class: "switch skill-switch" }, h("input", { type: "checkbox", checked: !d.off, "aria-label": `${name} on`,
-    onchange: async (e) => {
-      const on = e.target.checked;
-      if (!on && !(await ask({ title: `Switch ${name} off?`, ok: "Switch off", danger: true,
-        text: "The agent stops using it at once: no schedule, no alert hook, not read in a chat. Its files are kept; switch it on again here." }))) { e.target.checked = true; return; }
-      try { await api("PUT", `api/skills/${enc}/on`, { on }); toast(`${name} switched ${on ? "on" : "off"}.`); skills(name); }
-      catch (err) { e.target.checked = !on; tell("Not changed", err.problems); }
-    } }), d.off ? "Off" : "On");
+  // ---- the head (a phone only: the list is hidden there) and the state pill, which sits on the tabs' line
+  const pill = rel.state ? h("span", { class: "chip" + (rel.state === "edited" ? " warn" : rel.state === "own" ? " gray" : "") }, STATE_WORDS[rel.state]) : null;
   const back = h("button", { class: "btn ghost back-to-list", onclick: async () => { if (await guard()) skills(); } }, "‹ All skills");
   const head = h("div", { class: "skill-head" },
-    h("div", { class: "skill-title" }, h("h2", {}, name),
-      h("div", { class: "chips" },
-        rel.state ? h("span", { class: "chip" + (rel.state === "edited" ? " warn" : rel.state === "own" ? " gray" : "") }, STATE_WORDS[rel.state]) : null,
-        d.off ? h("span", { class: "chip gray" }, "Off") : !d.ok ? h("span", { class: "chip off" }, "Not working") : null)),
-    onSwitch);
+    h("div", { class: "skill-title" }, h("h2", {}, name), pill ? pill.cloneNode(true) : null,     // the phone's place for the pill
+      d.off ? h("span", { class: "chip gray" }, "Off") : !d.ok ? h("span", { class: "chip off" }, "Not working") : null),
+    skillSwitch(name, !d.off, name));
 
   // ---- what needs the owner's attention, above everything
   const fixes = (d.blocked || []).filter((b) => b.fix);
@@ -993,8 +999,10 @@ async function openSkill(name, pane, info, path = ABOUT) {
       const on = p === ABOUT ? path === ABOUT : p === TRY || p === COMPARE ? path === p : isFile;
       return h("button", { type: "button", role: "tab", class: on ? "on" : "", "aria-selected": String(on), onclick: () => goTo(p) }, label);
     }));
-  const card = (...kids) => fill(pane, h("div", { class: "card skill-pane" }, back, head,
-    d.description ? h("p", { class: "lead" }, d.description) : null, blocked, notLoaded, releaseBanner, tabs, ...kids));
+  // ⚠️ NO TITLE, NO DESCRIPTION, NO SWITCH HERE ON A WIDE SCREEN (owner, 2026-10-06): the list beside it holds the
+  // name, the line and the switch. The name and the switch come back on a phone, where the list is hidden.
+  const card = (...kids) => fill(pane, h("div", { class: "card skill-pane" }, back, head, blocked, notLoaded, releaseBanner,
+    h("div", { class: "skill-bar" }, tabs, pill), ...kids));
 
   if (path === ABOUT) { card(aboutSkill(name, d)); setBar(null); return; }
   if (path === TRY) { card(tryPanel(name, d)); setBar(null); return; }
