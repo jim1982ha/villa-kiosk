@@ -9,7 +9,8 @@ import pytest
 import yaml
 
 from helpers import copy_skill, settings
-from test_telegram_events import BOT, FakeReader, FakeTelegram
+from telegram_fake import BOT, FakeTelegram
+from test_telegram_events import FakeReader
 from vesta_agent import runner
 from vesta_agent.app import Vesta
 from vesta_agent.kiosk import Kiosk
@@ -169,7 +170,8 @@ def test_every_report_a_person_may_ask_for_runs_as_its_job():
 
 
 
-def _asked_in_chat(agent, tmp_path, monkeypatch, page: bool, job_name: str = "fm-weekly", text_only: bool = False):
+def _asked_in_chat(agent, tmp_path, monkeypatch, page: bool, job_name: str = "fm-weekly", text_only: bool = False,
+                   fails: str | None = None):
     """The person asks in the chat; the conversation starts the job and replies; the job (a moment later)
     sends its page — or ends without one."""
     page_path = os.path.join(agent.s.out_dir, "fm_weekly.html")
@@ -183,7 +185,7 @@ def _asked_in_chat(agent, tmp_path, monkeypatch, page: bool, job_name: str = "fm
                 send = next(t for t in agent.toolbox().tool_objects(None, Origin(ASKER, JOB)) if t.name == "send_message")
                 await send.handler({"to": "here", "text": "Three things need attention.",
                                     **({} if text_only else {"attachment": "fm_weekly.html"})})
-            return runner.RunResult("", None, False, 0.1, [], None)
+            return runner.RunResult("", None, False, 0.1, [], None, problem=fails)
         await agent.start_job(job_name, ASKER)           # what the start_job tool does
         return runner.RunResult("Your weekly report is on its way.", None, False, 0.01, [], None)
     monkeypatch.setattr(runner, "run", fake_run)
@@ -236,3 +238,21 @@ def test_every_job_asked_for_in_a_chat_uses_the_same_one_message_rule():
              for j in (_y.safe_load(open(os.path.join(STARTER_SKILLS, f, "skill.yaml"))) or {}).get("schedule") or []
              if isinstance(j, dict) and j.get("on_request")]
     assert names == ["fm-daily", "fm-weekly", "owner-monthly"], names
+
+
+def test_a_report_asked_for_in_a_chat_that_fails_is_one_message_saying_why(agent, tmp_path, monkeypatch):
+    # architecture review, 2026-10-06: the job sent why it failed, then its waiting message ALSO became
+    # "ended without a result" — two messages for one failure. Its reason is its result: it replaces the wait.
+    tg = _asked_in_chat(agent, tmp_path, monkeypatch, page=False, fails="busy")
+    assert len(tg.deleted) == 1 and tg.edits == []
+    assert [t for _, t, _ in tg.sent][1:] == ["The fm-weekly report could not be prepared: Anthropic's servers were "
+                                              "overloaded or down. It will run again at its next time."]
+
+
+def test_the_ai_is_never_told_sent_for_a_message_telegram_refused(agent):
+    send = next(t for t in agent.toolbox().tool_objects(None, Origin(ASKER, JOB)) if t.name == "send_message")
+    agent.tg.refuse.add("send")
+    out = run(send.handler({"to": "here", "text": "The weekly report."}))
+    assert out.get("is_error") and "nothing was sent" in out["content"][0]["text"]
+    agent.tg.refuse.clear()
+    assert not run(send.handler({"to": "here", "text": "The weekly report."})).get("is_error")

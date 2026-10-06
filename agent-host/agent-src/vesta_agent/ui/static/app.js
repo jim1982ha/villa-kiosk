@@ -486,7 +486,7 @@ async function overview() {
     kids.push(card("The last 24 hours", "From the agent's own records.",
       figures([["alerts followed", count("critical_event")], ["buttons pressed", count("ladder")],
         ["actions done", count("executed") + count("direct")], ["replies written", count("run")],
-        ["AI cost (USD)", r.ai_cost_usd.toFixed(2)], ["failures", count("failed") + count("code_script_failed") + count("send_failed")]]),
+        ["AI cost (USD)", r.ai_cost_usd.toFixed(2)], ["failures", count("failed") + count("script_failed") + count("code_script_failed") + count("send_failed")]]),
       r.scheduled_jobs.length ? h("div", { class: "divided" }, h("h2", {}, "Scheduled jobs run"),
         paged(["Job", "Ran at"], [...r.scheduled_jobs].reverse().map((j) => [j.job, new Date(j.ran_at).toLocaleString()]))) : null));
   } else {
@@ -1084,9 +1084,10 @@ function tryPanel(name, d) {
       // a file it saved is offered to the next step at once
       try { d.out_files = (await api("GET", `api/skills/${encodeURIComponent(name)}`)).out_files; draw(); } catch { /* kept */ }
       fill(out, r.ok === false && r.exit === undefined ? problemsBox([r.error], "Not run:") : [
-        h("div", { class: "try-result" }, h("span", { class: "chip" + (r.exit === 0 ? "" : r.exit === 2 ? " warn" : " off") },
-          r.exit === 0 ? "Done" : r.exit === 2 ? "Nothing to do, or a setting is missing" : `Stopped (exit ${r.exit})`),
-          h("span", { class: "muted small" }, `${r.seconds} s · the answer the AI would get · nothing was sent`)),
+        // the verdict is the agent's (script_run.py), the same for every run: not worked out again here
+        h("div", { class: "try-result" }, h("span", { class: "chip" + ({ done: "", nothing: " warn" }[r.verdict] ?? " off") },
+          { done: "Done", nothing: "Nothing to do, or a setting is missing" }[r.verdict] || `Stopped (exit ${r.exit})`),
+          h("span", { class: "muted small" }, `${r.seconds} s · the script's own answer · nothing was sent`)),
         r.error ? problemsBox([r.error], "The script stopped:") : null,
         h("pre", { class: "out" }, pretty(r.output))]);
     } catch (e) { fill(out, problemsBox(e.problems, "Not run:")); }

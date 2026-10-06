@@ -32,7 +32,7 @@ from zoneinfo import ZoneInfo
 
 from vesta_shared.problems import CLEARED, Problems
 
-from .routing import JOB, Origin, Routing
+from .routing import Origin, Routing
 
 log = logging.getLogger("vesta.outcome")
 
@@ -74,6 +74,7 @@ async def camera_photo(reader, entity_id) -> tuple[str, str] | None:
 
 class Outcome:
     def __init__(self, *, policy: Callable, state, store_path: str, timezone: str, send: Callable[..., Awaitable],
+                 # send: delivery.Delivery.send — the message id, or None when nothing arrived
                  out_dir: str = "",
                  kiosk, actions, reader, skills, run_job: Callable[..., Awaitable] | None = None,
                  edit: Callable[..., Awaitable] | None = None):
@@ -97,7 +98,7 @@ class Outcome:
     # ------------------------------------------------------------------ carry out
     async def carry_out(self, res: dict, skill_name: str | None = None, origin: Origin | None = None) -> dict:
         """Do what the script decided. Returns what was done, for the caller's answer and the tests."""
-        done = {"sent": 0, "tickets": 0, "resolved": 0, "unrouted": 0}
+        done = {"sent": 0, "not_sent": 0, "tickets": 0, "resolved": 0, "unrouted": 0}
         if not isinstance(res, dict) or not res:
             return done
         route = Routing(self.policy())
@@ -134,8 +135,11 @@ class Outcome:
                     doc = path
                 else:
                     log.warning("Skill %s attached %r, which is not a file of the out folder: sent without it", skill_name, att)
-            mid = await self.send(chat, text, keyboard=kb, document=doc, from_job=bool(origin and origin.kind == JOB))
-            if kb and mid:
+            mid = await self.send(chat, text, keyboard=kb, document=doc, origin=origin)
+            if not mid:
+                done["not_sent"] += 1                         # delivery.py: refused, or Telegram off
+                continue
+            if kb:
                 # every message with this incident's buttons, in every chat: all of them settle together
                 self.state.remember_alert_message(iid, chat, mid, text)
             chats.add(chat)
@@ -150,9 +154,10 @@ class Outcome:
                                                   pol.siren_entity, {}, None, None)
             head = gate_prompt
             if msg:
-                await self.send(msg.chat_id, head + "\n\n" + msg.text, keyboard=msg.keyboard, approval_id=msg.approval_id)
+                await self.send(msg.chat_id, head + "\n\n" + msg.text, keyboard=msg.keyboard, approval_id=msg.approval_id,
+                                origin=origin)
             elif route.target("owner"):
-                await self.send(route.target("owner"), head + f"\n\nThe siren cannot be requested: {answer}")
+                await self.send(route.target("owner"), head + f"\n\nThe siren cannot be requested: {answer}", origin=origin)
         for a in res.get("actions") or []:
             kind = (a or {}).get("action")
             try:
@@ -167,7 +172,7 @@ class Outcome:
                     photo = await camera_photo(self.reader, a.get("entity_id"))
                     if photo:
                         for chat in chats:
-                            await self.send(chat, f"Snapshot, incident #{a.get('incident_id')}", photo_b64=photo)
+                            await self.send(chat, f"Snapshot, incident #{a.get('incident_id')}", photo=photo, origin=origin)
                 else:
                     self.state.log("action_ignored", {"action": kind, "skill": skill_name})
                     log.warning("Skill %s asked for an action this agent does not know: %s", skill_name, kind)

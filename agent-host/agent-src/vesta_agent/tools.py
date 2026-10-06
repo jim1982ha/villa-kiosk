@@ -32,12 +32,12 @@ from typing import Any, Awaitable, Callable
 
 from claude_agent_sdk import create_sdk_mcp_server, tool
 
-from . import __version__, status, tool_access
+from . import __version__, script_run, status, tool_access
 from .policy import Person, Policy
-from .routing import JOB, Origin, Routing
+from .routing import Origin, Routing
 from .outcome import has_work
 from .runner import WEB_SEARCH
-from .skills import FILE_NAME, Skills, ToolError, run_script, runnable, validate_script_args
+from .skills import FILE_NAME, Skills, ToolError, runnable, validate_script_args
 
 SERVER = "vesta"
 SAVE_MAX = 64 * 1024
@@ -140,8 +140,12 @@ class Toolbox:
         # got text. A send_message(camera=) option (0.12.57) was not used by the model either. The reply carries
         # them (app.converse): (base64, mime), in the order looked at, each picture once.
         self.photos: list[tuple[str, str]] = []
-        # tool_access.allowed_for_person / allowed_for_job; None: everything switched on (tests, the start log)
+        # ⚠️ tool_access DECIDES, THIS CLASS BUILDS (architecture review, 2026-10-06): allowed_for_person /
+        # allowed_for_job's answer is the whole list — every tool below is built only when it is in it, and the
+        # names the SDK may call are read off the built tools (for_run), so the two can never differ.
+        # None: everything switched on (tests, the start log).
         self.allowed = allowed if allowed is not None else tool_access.switched_on(policy, server_tools)
+        self._read_names = self._read_tools()
 
     def _on(self, key: str) -> bool:
         return key in self.allowed
@@ -150,33 +154,26 @@ class Toolbox:
         return self.s.secrets()
 
     # ------------------------------------------------------------------ names
-    def model_tool_names(self) -> list[str]:
-        names = [f"mcp__{SERVER}__{n}" for n in self.read_tool_names()]
-        names += [f"mcp__{SERVER}__{n}" for n in ("ha_call_service", "read_skill", "run_skill_script", "send_message",
-                                                  "agent_status", "save_file", "start_job") if self._on(n)]
-        if self.ticket and self._on("create_ticket"):
-            names.append(f"mcp__{SERVER}__create_ticket")
-        if self.include_web:
-            names.append(WEB_SEARCH)
-        return names
-
     @property
     def include_web(self) -> bool:
         return self._on("web_search")
 
     def read_tool_names(self) -> list[str]:
+        """The Home Assistant tools this run reads with, in policy.yaml's order."""
+        return list(self._read_names)
+
+    def _read_tools(self) -> list[str]:
         out = []
         for n in self.policy.ha_read_tools:
             t = self.server_tools.get(n)
-            if not t:
+            if not t or n not in self.allowed:
                 continue          # named in the policy, absent from the server: reported at start, never guessed
             if not tool_access.readable(t):
-                # ⚠️ ONLY WHAT THE SERVER MARKS READ-ONLY (0.6.42): before, only "destructive" was refused, so a
-                # writing tool not marked destructive could be named in the file and reach the AI
+                # ⚠️ ONLY WHAT THE SERVER MARKS READ-ONLY (0.6.42), checked again where the tool is built: the last
+                # guard before a Home Assistant call, with tool_access's own test (not a copy of it)
                 self.state.log("tool_denied", {"tool": n, "reason": "the server does not mark it read-only"})
                 continue
-            if n in self.allowed:
-                out.append(n)
+            out.append(n)
         return out
 
     def blocked(self, skill) -> list[dict]:
@@ -187,12 +184,13 @@ class Toolbox:
         """The AI's tools for one occasion: `origin` says who is asking (routing.Origin; None: a scheduled
         job or an alert hook), `person` who they are. What each tool allows follows from it, in routing."""
         chat_id = origin.chat if origin else None
-        tools = [self._proxy(n) for n in self.read_tool_names()]
-        tools += [self._read_skill(), self._run_script(origin), self._send(origin), self._save_file()]
-        if self._on("ha_call_service"):
-            tools.append(self._call_service(person, chat_id))
-        if self._on("agent_status"):
-            tools.append(self._status())
+        tools = [self._proxy(n) for n in self._read_names]
+        for key, build in (("read_skill", self._read_skill), ("run_skill_script", lambda: self._run_script(origin)),
+                           ("send_message", lambda: self._send(origin)), ("save_file", self._save_file),
+                           ("ha_call_service", lambda: self._call_service(person, chat_id)),
+                           ("agent_status", self._status)):
+            if self._on(key):
+                tools.append(build())
         if origin and origin.is_conversation and person is not None and self.start_job and self._on("start_job"):
             # a person asking, in a chat: never a job (even one started from a chat), so no job starts another
             tools.append(self._start_job(chat_id))
@@ -200,8 +198,11 @@ class Toolbox:
             tools.append(self._ticket())
         return tools
 
-    def server(self, person: Person | None, origin: Origin | None):
-        return create_sdk_mcp_server(name=SERVER, version=__version__, tools=self.tool_objects(person, origin))
+    def for_run(self, person: Person | None, origin: Origin | None) -> tuple[Any, set[str]]:
+        """The SDK server of this run and the tool names it may call — read off the same built tools."""
+        tools = self.tool_objects(person, origin)
+        names = {f"mcp__{SERVER}__{t.name}" for t in tools} | ({WEB_SEARCH} if self.include_web else set())
+        return create_sdk_mcp_server(name=SERVER, version=__version__, tools=tools), names
 
     def _proxy(self, name: str):
         t = self.server_tools[name]
@@ -215,7 +216,7 @@ class Toolbox:
         async def handler(args: dict) -> dict:
             args = dict(args or {})
             part = int(args.pop("vesta_part", 1) or 1)
-            if name not in self.read_tool_names():
+            if name not in self._read_names:
                 self.state.log("tool_denied", {"tool": name})
                 return _err(f"{name} is not allowed.")
             known = set(((t.get("inputSchema") or {}).get("properties") or {}).keys())
@@ -262,8 +263,8 @@ class Toolbox:
         async def handler(args: dict) -> dict:
             answer, msg = await asyncio.to_thread(self.actions.request, args.get("domain", ""), args.get("service", ""),
                                                   args.get("entity_id"), args.get("data") or {}, person, chat_id)
-            if msg:
-                await self.send(msg.chat_id, msg.text, keyboard=msg.keyboard, approval_id=msg.approval_id)
+            if msg and not await self.send(msg.chat_id, msg.text, keyboard=msg.keyboard, approval_id=msg.approval_id):
+                answer += " But the request with its Approve button could not be delivered in Telegram: nobody has it."
             return _ok(answer)
         return handler
 
@@ -375,26 +376,19 @@ class Toolbox:
                 # ⚠️ THE NEXT PART OF THE SAME RUN, NOT A NEW RUN: running it again would carry its
                 # tickets and messages out a second time.
                 return _ok(self.parts.serve(key, None, part))
-            code, out, err = await asyncio.to_thread(run_script, self.s, skill, sc, final)
-            if code not in (0, 2):
-                out = (out + "\n" + err).strip()
-                last = scrub(err.strip().splitlines()[-1] if err.strip() else "", self._secrets())
-                log.warning("Skill %s: %s failed (exit %s)%s", sk, sc, code, f": {last[:300]}" if last else "")
-            out = scrub(out, self._secrets())
-            self.state.log("script", {"skill": sk, "script": sc, "args": final, "exit": code})
-            if code in (0, 2) and self.carry_out:
+            ans = await asyncio.to_thread(script_run.run, self.s, self.state, skill, sc, final, by=script_run.AI)
+            out = ans.text()
+            if ans.ok and self.carry_out:
                 # ⚠️ THE SAME RESULT AS ON SCHEDULE (owner, 2026-10-01): its tickets are created and its
                 # messages sent to their chats; the model still answers the person itself.
-                try:
-                    res = json.loads(out or "{}")
-                except ValueError:
-                    res = None
+                res = ans.result()
                 if has_work(res):                                   # outcome.CARRIED_KEYS: carry_out's own list
                     done = await self.carry_out(res, sk, origin)
-                    out = (f"[Carried out by the VESTA Agent: {done['sent']} message(s) sent, {done['tickets']} ticket(s) "
-                           f"created, {done['resolved']} closed. Do not send or create them again.]\n") + out
+                    lost = f", {done['not_sent']} could not be delivered" if done.get("not_sent") else ""
+                    out = (f"[Carried out by the VESTA Agent: {done['sent']} message(s) sent{lost}, {done['tickets']} "
+                           f"ticket(s) created, {done['resolved']} closed. Do not send or create them again.]\n") + out
             text = self.parts.serve(key, out, part)
-            return _ok(text) if code in (0, 2) else _err(text or f"The script failed (exit {code}).")
+            return _ok(text) if ans.ok else _err(text or f"The script failed (exit {ans.code}).")
         return handler
 
     def _start_job(self, chat_id: int):
@@ -475,8 +469,11 @@ class Toolbox:
                 if not FILE_NAME.match(att) or not os.path.exists(os.path.join(self.s.out_dir, att)):
                     return _err(f"{att} is not a file in the out folder.")
                 path = os.path.join(self.s.out_dir, att)
-            await self.send(int(chat), args.get("text", ""), document=path,
-                            from_job=bool(origin and origin.kind == JOB))
-            self.state.log("sent", {"to": to, "chars": len(args.get("text", "")), "attachment": att})
+            mid = await self.send(int(chat), args.get("text", ""), document=path, origin=origin)
+            self.state.log("sent" if mid else "send_refused", {"to": to, "chars": len(args.get("text", "")), "attachment": att})
+            if not mid:
+                # ⚠️ NEVER "Sent." FOR WHAT DID NOT ARRIVE (architecture review, 2026-10-06): the AI then told the
+                # person "the report is in your chat"
+                return _err("Telegram did not take this message: nothing was sent. Say so plainly; do not retry in a loop.")
             return _ok("Sent.")
         return handler

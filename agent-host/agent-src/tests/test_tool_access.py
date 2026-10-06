@@ -10,7 +10,7 @@ import pytest
 import yaml
 
 from helpers import copy_skill, settings
-from test_telegram_events import FakeTelegram
+from telegram_fake import FakeTelegram
 from vesta_agent import runner, tool_access
 from vesta_agent.app import Vesta
 from vesta_agent.kiosk import Kiosk
@@ -242,14 +242,19 @@ def test_a_camera_picture_the_ai_looked_at_reaches_the_chat_with_its_answer(agen
     converse_after("ha_get_camera_image", {"entity_id": "camera.lounge"})
     assert agent.tg.photos == [(OWNER_CHAT, ("SlBFRw==", "image/jpeg"))]
     assert [t for _, t, _ in agent.tg.sent] == ["Here is the lounge now."]       # one message: photo + caption
+    agent.tg.refuse.add("photo")                                                   # Telegram refuses the picture:
+    converse_after("ha_get_camera_image", {"entity_id": "camera.lounge"})          # the answer still arrives, once
+    assert agent.tg.photos == [] and [t for _, t, _ in agent.tg.sent] == [
+        "Here is the lounge now.\n\n(The camera picture could not be sent.)"]
+    agent.tg.refuse.clear()
     converse_after("ha_get_state", {})                                           # no picture: the answer alone
     assert agent.tg.photos == [] and [t for _, t, _ in agent.tg.sent] == ["Here is the lounge now."]
 
 
 def test_the_chat_shows_typing_while_the_ai_works_and_not_after(agent, monkeypatch):
     # owner, 2026-10-06: dots "like if it was starting to write", gone once the answer is there
-    from vesta_agent import app as app_module
-    monkeypatch.setattr(app_module, "TYPING_EVERY_S", 0.01)
+    from vesta_agent import delivery
+    monkeypatch.setattr(delivery, "TYPING_EVERY_S", 0.01)
     seen = {}
 
     async def slow_ai(settings_, system, prompt, server, allowed, state, who, **kw):
@@ -267,3 +272,30 @@ def test_the_chat_shows_typing_while_the_ai_works_and_not_after(agent, monkeypat
     assert len(seen["during"]) >= 3 and set(seen["during"]) == {OWNER_CHAT}     # said again while it works
     assert len(agent.tg.typing_in) == after                                      # nothing once answered
     assert [t for _, t, _ in agent.tg.sent] == ["Done."]
+
+
+def test_the_names_the_ai_may_call_are_the_tools_it_was_given(agent):
+    # architecture review, 2026-10-06: the SDK's list of names and the built tools were two separate decisions
+    owner = Person(OWNER, "Owner", "owner")
+    for allowed in (None, tool_access.allowed_for_person(agent.policy(), agent.server_tools, "fm", FM) - {"save_file"}):
+        tb = agent.toolbox(allowed)
+        _, names = tb.for_run(owner, Origin(OWNER_CHAT, CONVERSATION))
+        built = {f"mcp__vesta__{t.name}" for t in tb.tool_objects(owner, Origin(OWNER_CHAT, CONVERSATION))}
+        assert names - {"WebSearch"} == built
+    assert "mcp__vesta__save_file" not in names                       # left out by tool_access: not built at all
+
+
+def test_reading_home_assistant_does_not_write_a_record_per_call(agent):
+    tb = agent.toolbox()
+    tool = next(t for t in tb.tool_objects(Person(OWNER, "Owner", "owner"), Origin(OWNER_CHAT, CONVERSATION))
+                if t.name == "ha_get_state")
+    before = len(agent.state.calls_since("1970"))
+
+    class Mcp:
+        @staticmethod
+        def call_raw(name, args):
+            return {"content": [{"type": "text", "text": "{}"}]}
+    agent.reader.mcp = Mcp
+    for _ in range(3):
+        run(tool.handler({}))
+    assert len(agent.state.calls_since("1970")) == before

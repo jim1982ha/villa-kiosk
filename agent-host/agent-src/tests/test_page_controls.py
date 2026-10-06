@@ -173,7 +173,7 @@ def test_a_long_try_does_not_hold_up_another_request(tmp_path):
 
 def test_try_a_command_is_checked_as_the_ai_and_nothing_is_carried_out(tmp_path):
     from test_tool_access import Reader
-    from test_telegram_events import FakeTelegram
+    from telegram_fake import FakeTelegram
     from vesta_agent.app import Vesta
     from vesta_agent.kiosk import Kiosk
     s = settings(str(tmp_path))

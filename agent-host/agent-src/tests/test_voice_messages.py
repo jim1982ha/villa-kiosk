@@ -13,37 +13,14 @@ import pytest
 import yaml
 
 from helpers import copy_skill, settings
+from telegram_fake import FakeTelegram
 from vesta_agent import app as app_module
 from vesta_agent.app import Vesta
 from vesta_agent.kiosk import Kiosk
 
+
 OWNER, GROUP = 111, -100123
 TONE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "voice_440hz.ogg")
-
-
-class FakeTelegram:
-    def __init__(self):
-        self.sent, self.fetched, self.typing_in = [], [], []
-
-    async def open(self):
-        return {"id": 8000, "username": "Villa_Test_bot"}
-
-    async def close(self):
-        pass
-
-    async def send(self, chat_id, text, keyboard=None, document=None, photo_b64=None):
-        self.sent.append((chat_id, text))
-        return 1
-
-    async def typing(self, chat_id):
-        self.typing_in.append(chat_id)
-
-    async def edit(self, chat_id, message_id, text):
-        pass
-
-    async def download(self, file_id):
-        self.fetched.append(file_id)
-        return open(TONE, "rb").read()
 
 
 class FakeReader:
@@ -73,7 +50,7 @@ def agent(tmp_path, monkeypatch):
     skill = copy_skill("villa-concierge", s.skills_dir)
     with open(os.path.join(skill, "villa.voice.yaml"), "w") as f:
         yaml.safe_dump({"stt": "stt.test_whisper"}, f)       # the villa names its speech-to-text: no lookup
-    v = Vesta(s, telegram=FakeTelegram(), reader=FakeReader(), kiosk=Kiosk("", ""))
+    v = Vesta(s, telegram=FakeTelegram(audio=open(TONE, "rb").read()), reader=FakeReader(), kiosk=Kiosk("", ""))
     v.bot_username = "Villa_Test_bot"
     v.conversed, v.stt_calls = [], []
 

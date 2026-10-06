@@ -32,19 +32,19 @@ import sys
 from datetime import datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from . import requests_box, runner, tool_access
+from . import requests_box, runner, script_run, tool_access
 from .actions import Actions
 from .api_errors import FOR_PERSON, NEEDS_THE_OWNER, for_job
+from .delivery import Delivery
 from .config import STARTER_DIR
 from .ha_events import HaEvents
 from .housekeeping import tidy
-from .job_notices import JobNotices
 from .kiosk import Kiosk, KioskError
 from .outcome import Outcome
 from .policy import Person, Policy, problems as policy_problems
 from .routing import CONVERSATION, JOB, Origin, Routing
 from .scheduler import Scheduler
-from .skills import Skills, run_command, script_env
+from .skills import Skills, script_env
 from .speech import speech_to_text
 from .state import State
 from .telegram import Telegram, TelegramError
@@ -55,28 +55,10 @@ log = logging.getLogger("vesta")
 from .policy import LANGUAGES as LANG  # noqa: E402 — one list, also the VESTA Agent page's menu
 #: Commands the agent answers. Any other command belongs to Home Assistant's automations.
 OWN_COMMANDS = {"/ask", "/new", "/whoami"}
-TYPING_EVERY_S = 4.0             # Telegram's "typing…" lasts about 5 s
-PHOTOS_PER_REPLY = 4              # the camera pictures a reply carries, the last ones looked at
 
 
 def _now_local(tz: str) -> datetime:
     return datetime.now(ZoneInfo(tz))
-
-
-_MD_LINK = re.compile(r"\[([^\]]+)\]\((https?://[^)\s]+)\)")
-
-
-def plain_text(s: str) -> str:
-    """What Telegram shows as written: the bot sends plain text, so Markdown the model
-    writes anyway (**bold**, # headings, `code`, [links](url)) would appear raw."""
-    if not s:
-        return s
-    s = _MD_LINK.sub(r"\1 (\2)", s)
-    s = re.sub(r"\*\*(.+?)\*\*", r"\1", s, flags=re.S)
-    s = re.sub(r"(?<!\w)__(.+?)__(?!\w)", r"\1", s, flags=re.S)
-    s = re.sub(r"`{1,3}([^`]*)`{1,3}", r"\1", s)
-    s = re.sub(r"(?m)^\s{0,3}#{1,6}\s+", "", s)
-    return s
 
 
 def _pretty(entity_id: str) -> str:
@@ -116,16 +98,16 @@ class Vesta:
             cf = {"CF-Access-Client-Id": settings.cf_access_id, "CF-Access-Client-Secret": settings.cf_access_secret}
         self.cf_headers = cf
         self.kiosk = kiosk if kiosk is not None else Kiosk(settings.kiosk_url, settings.kiosk_token, cf)
+        # everything that reaches a chat, and whether it did (delivery.py)
+        self.delivery = Delivery(self.tg, self.state, self.policy)
         self.actions = Actions(self.policy, self.state, self.writer_factory, names=self.name_of, related=self.related_entities)
         self.outcome = Outcome(policy=self.policy, state=self.state, store_path=settings.store_path, out_dir=settings.out_dir,
-                               timezone=settings.timezone, send=self.send, kiosk=self.kiosk, actions=self.actions,
+                               timezone=settings.timezone, send=self.delivery.send, kiosk=self.kiosk, actions=self.actions,
                                reader=self.reader, skills=self.skills, run_job=self.run_code_job,
                                edit=(self.tg.edit if self.tg else None))
         self.server_tools: list[dict] = []
         self.bot_username: str | None = None
         self._locks: dict[int, asyncio.Lock] = {}
-        # The "being prepared" message of a job asked for in a chat (job_notices.py decides, this file sends).
-        self._job_notices = JobNotices()
         self._pack = None
         self._pack_mtime = None
 
@@ -174,49 +156,12 @@ class Vesta:
     def toolbox(self, allowed: set[str] | None = None) -> Toolbox:
         """`allowed`: what the AI may use this time (tool_access); None: everything switched on."""
         return Toolbox(settings=self.s, policy=self.policy(), reader=self.reader, actions=self.actions,
-                       skills=self.skills, send=self.send, server_tools=self.server_tools, state=self.state,
+                       skills=self.skills, send=self.delivery.send, server_tools=self.server_tools, state=self.state,
                        ticket=self.outcome.create_ticket if self.kiosk.enabled else None,
                        carry_out=self.outcome.carry_out, start_job=self.start_job, allowed=allowed)
 
     def lock(self, chat_id: int) -> asyncio.Lock:
         return self._locks.setdefault(int(chat_id), asyncio.Lock())
-
-    # ------------------------------------------------------------------ sending
-    async def send(self, chat_id: int, text: str, keyboard: dict | None = None, approval_id: str | None = None,
-                   document: str | None = None, photo_b64=None, from_job: bool = False) -> int | None:
-        """`from_job`: sent by a job asked for in a chat — its result replaces the chat's "being prepared"
-        message, whatever form it takes (a page, the daily digest's text: owner, 2026-10-04, "all report
-        messages")."""
-        if self.tg is None:
-            self.state.log("send_skipped", {"chat": chat_id, "reason": "Telegram is off (telegram_takeover false)"})
-            log.info("Telegram off: a message for chat %s was not sent", chat_id)
-            return None
-        text = plain_text(text)
-        try:
-            mid = await self.tg.send(int(chat_id), text, keyboard=keyboard, document=document, photo_b64=photo_b64)
-            if from_job and mid:
-                await self._job_notice_step(int(chat_id), self._job_notices.result(int(chat_id)))
-        except TelegramError as e:
-            log.warning("send failed: %s", e)
-            self.state.log("send_failed", {"chat": chat_id, "error": str(e)})
-            return None
-        self.state.remember_message(chat_id, mid)
-        log.info("Sent to chat %s (%s)%s%s%s", chat_id, Routing(self.policy()).label(chat_id),
-                 " with buttons" if keyboard else "", " and a file" if document else "",
-                 " and a photo" if photo_b64 else "")
-        if approval_id and mid:
-            self.state.set_approval_message(approval_id, mid)
-        return mid
-
-    async def _job_notice_step(self, chat_id: int, step) -> None:
-        """Carry out what job_notices.py decided about a "being prepared" message."""
-        if step is None or self.tg is None:
-            return
-        what, mid, job = step
-        if what == "delete":
-            await self.tg.delete(chat_id, mid)
-        else:
-            await self.tg.edit(chat_id, mid, f"The {job} job ended without a result this time. Ask again in a moment.")
 
     # ------------------------------------------------------------------ start
     async def start(self):
@@ -302,23 +247,8 @@ class Vesta:
 
     # ------------------------------------------------------------------ code-run scripts
     def code_command(self, skill, command: str, values: dict | None = None, timeout: int = 900) -> dict:
-        try:
-            code, out, err = run_command(self.s, skill, command, values, timeout)
-        except (KeyError, ValueError, IndexError) as e:
-            log.error("Skill %s: the command %r cannot be filled (%s)", skill.name, command, type(e).__name__)
-            return {}
-        if code not in (0, 2):
-            self.state.log("code_script_failed", {"skill": skill.name, "command": command.split()[0],
-                                                  "stderr": scrub(err[-800:], self.s.secrets())})
-            last = scrub(err.strip().splitlines()[-1] if err.strip() else "", self.s.secrets())
-            log.warning("Skill %s: %s failed (exit %s)%s", skill.name, command.split()[0], code,
-                        f": {last[:300]}" if last else "")
-            return {}
-        try:
-            res = json.loads(out or "{}")
-        except ValueError:
-            return {}
-        return res if isinstance(res, dict) else {}
+        """A command the skill declares (a code job, a hook): its decision, or {} when it failed (script_run.py)."""
+        return script_run.run_command(self.s, self.state, skill, command, values, timeout=timeout).result()
 
     async def run_code_job(self, skill, command: str, timeout: int = 900, values: dict | None = None,
                            origin: Origin | None = None) -> dict:
@@ -410,7 +340,7 @@ class Vesta:
             self.state.log("ignored", {"reason": "group not listed in policy.yaml", "chat": cid})
             return                      # never leaveChat: the villa bot is Home Assistant's too
         if cmd == "/whoami":
-            await self.send(cid, f"Your Telegram id: {from_id}. This chat id: {cid}.")
+            await self.delivery.send(cid, f"Your Telegram id: {from_id}. This chat id: {cid}.")
             log.info("whoami: person %s (%s) in chat %s", from_id, m.get("from_first"), cid)
             return
         if is_group and not pol.chats:
@@ -425,13 +355,13 @@ class Vesta:
             log.info("Unregistered sender: id %s (%s) in chat %s", from_id, m.get("from_first"), cid)
             self.state.log("unknown_sender", {"telegram_id": from_id, "chat": cid})
             if not is_group:
-                await self.send(cid, f"You are not registered with the VESTA Agent. Your Telegram id is {from_id}.")
+                await self.delivery.send(cid, f"You are not registered with the VESTA Agent. Your Telegram id is {from_id}.")
             return
         if not is_group and pol.chats and int(cid) not in pol.people:
             return
         if cmd == "/new":
             self.state.set_session(cid, None)
-            await self.send(cid, "New conversation.")
+            await self.delivery.send(cid, "New conversation.")
             return
         if voice:
             # in a group, only a voice message that replies to the agent reaches here (no mention possible)
@@ -456,7 +386,7 @@ class Vesta:
             log.info("Voice message in chat %s not read: Telegram takeover is off", cid)
             return None
         if not hook:
-            await self.send(cid, "Voice messages are not set up here: no skill handles them.")
+            await self.delivery.send(cid, "Voice messages are not set up here: no skill handles them.")
             return None
         folder = os.path.join(self.s.out_dir, "voice")
         os.makedirs(folder, exist_ok=True)
@@ -467,7 +397,7 @@ class Vesta:
                 audio = await self.tg.download(file_id)
             except TelegramError as e:
                 log.warning("Voice message in chat %s: %s", cid, e)
-                await self.send(cid, "This voice message could not be fetched from Telegram.")
+                await self.delivery.send(cid, "This voice message could not be fetched from Telegram.")
                 return None
             with open(path, "wb") as f:
                 f.write(audio)
@@ -475,7 +405,7 @@ class Vesta:
             res = await asyncio.to_thread(self.code_command, sk, cmd, {"audio": path, "language": person.language}, 120)
             st = res.get("stt") if isinstance(res.get("stt"), dict) else None
             if not st:
-                await self.send(cid, str(res.get("error") or "This voice message could not be prepared."))
+                await self.delivery.send(cid, str(res.get("error") or "This voice message could not be prepared."))
                 return None
             wav = st.get("wav")
             text, why = await speech_to_text(self.s.ha_url, self.s.ha_token, st, self.cf_headers)
@@ -484,7 +414,7 @@ class Vesta:
             self.state.log("voice", {"chat": cid, "seconds": st.get("seconds"), "stt": st.get("entity"),
                                      "language": st.get("language"), "ok": bool(text), "why": why})
             if not text:
-                await self.send(cid, "I could not make out this voice message. Try again, or write it.")
+                await self.delivery.send(cid, "I could not make out this voice message. Try again, or write it.")
             return text
         finally:
             for f in (path, wav):        # a voice is the person's: kept no longer than it takes to read it
@@ -522,28 +452,12 @@ class Vesta:
                 f"Your skills: {skills or 'none'}. Read a skill with read_skill before doing its job.\n" + pol.summary() + "\n"
                 f"Villa time zone: {self.s.timezone}. Today: {_now_local(self.s.timezone):%A %d %B %Y, %H:%M}.")
 
-    async def _typing(self, cid: int, stop: asyncio.Event) -> None:
-        """"typing…" in the chat while the AI works (owner, 2026-10-06: "like if it was starting to write"). Telegram
-        shows it about 5 s, so it is said again every 4 s; it ends when the answer is sent (the bot's message clears it)."""
-        while not stop.is_set():
-            await self.tg.typing(int(cid))
-            try:
-                await asyncio.wait_for(stop.wait(), timeout=TYPING_EVERY_S)
-            except asyncio.TimeoutError:
-                pass
-
     async def converse(self, cid: int, person: Person | None, text: str, chat_role: str = "private",
                        resume: str | None = "auto", is_continue: bool = False, voice: bool = False):
-        stop = asyncio.Event()
-        typing = asyncio.create_task(self._typing(cid, stop)) if self.tg is not None else None
-        try:
-            await self._converse(cid, person, text, chat_role, resume, is_continue, voice, stop)
-        finally:
-            stop.set()
-            if typing:
-                await asyncio.gather(typing, return_exceptions=True)
+        async with self.delivery.typing(cid) as answered:
+            await self._converse(cid, person, text, chat_role, resume, is_continue, voice, answered)
 
-    async def _converse(self, cid, person, text, chat_role, resume, is_continue, voice, typing_stop: asyncio.Event):
+    async def _converse(self, cid, person, text, chat_role, resume, is_continue, voice, answered):
         async with self.lock(cid):
             if resume == "auto":
                 resume = self._resume_for(cid)
@@ -562,8 +476,7 @@ class Vesta:
             pol = self.policy()
             # what this person may make the AI use here (Rules → What the AI can use)
             tb = self.toolbox(tool_access.allowed_for_person(pol, self.server_tools, person.role if person else None, cid))
-            server = tb.server(person, Origin(cid, CONVERSATION))
-            allowed = set(tb.model_tool_names())
+            server, allowed = tb.for_run(person, Origin(cid, CONVERSATION))
             res = await runner.run(self.s, self.system_prompt(), prompt, server, allowed, self.state,
                                    who=f"{person.name if person else 'system'}@{cid}", resume=resume,
                                    asked=None if is_continue else text)
@@ -585,21 +498,9 @@ class Vesta:
                 answer = (answer + "\n\n" if answer else "") + \
                     f"Stopped: this answer reached the {self.s.reply_limit_usd:g} USD limit per reply."
                 keyboard = {"inline_keyboard": [[{"text": "Continue", "callback_data": f"c:{cont}"}]]}
-            typing_stop.set()                                # the answer is going out
-            photos = tb.photos[-PHOTOS_PER_REPLY:]
-            if photos and answer and not keyboard:
-                # the pictures it looked at, the answer as the last one's caption
-                for photo in photos[:-1]:
-                    await self.send(cid, "", photo_b64=photo)
-                mid = await self.send(cid, answer, photo_b64=photos[-1])
-                if not mid:
-                    mid = await self.send(cid, answer + "\n\n(The camera picture could not be sent.)")
-                await self._job_notice_step(cid, self._job_notices.replied(cid, mid))
-            elif answer or keyboard:
-                for photo in photos:
-                    await self.send(cid, "", photo_b64=photo)
-                mid = await self.send(cid, answer or "…", keyboard=keyboard)
-                await self._job_notice_step(cid, self._job_notices.replied(cid, mid))
+            answered()                                       # "typing…" ends: the answer is going out
+            # the camera pictures the AI looked at go with it (Toolbox.photos)
+            await self.delivery.reply(cid, answer, keyboard=keyboard, photos=tb.photos)
 
     # ------------------------------------------------------------------ button presses
     async def handle_callback(self, q: dict):
@@ -666,7 +567,7 @@ class Vesta:
                 ok = await asyncio.to_thread(self.actions.system, siren_domain, "turn_off", pol.siren_entity)
                 owner = Routing(pol).target("owner")
                 if owner:
-                    await self.send(owner, "Siren switched off." if ok else "The siren could not be switched off: check it now.")
+                    await self.delivery.send(owner, "Siren switched off." if ok else "The siren could not be switched off: check it now.")
             asyncio.create_task(off())
 
     # ------------------------------------------------------------------ scheduled model jobs
@@ -689,8 +590,8 @@ class Vesta:
                         "VESTA Agent page → Rules → AI jobs → Add them.", name, skill.name)
             self.state.log("job_not_set", {"job": name, "skill": skill.name})
             if origin:
-                await self.send(origin.chat, f"The {name} job is not set up yet (VESTA Agent page → Rules → AI jobs), "
-                                             "so it cannot run.")
+                await self.delivery.send(origin.chat, f"The {name} job is not set up yet (VESTA Agent page → Rules → "
+                                                      "AI jobs), so it cannot run.", origin=origin)
             return
         prompt = job["prompt"]
         try:
@@ -712,13 +613,12 @@ class Vesta:
             self.state.log("job_blocked", {"job": name, "skill": skill.name, "tools": [b["tool"] for b in stop]})
             to = Routing(pol).target("here" if origin else (job.get("to") or "owner"), origin)
             if to:
-                await self.send(to, f"The {name} report did not run. {why} (VESTA Agent page)")
+                await self.delivery.send(to, f"The {name} report did not run. {why} (VESTA Agent page)", origin=origin)
             return
         started = datetime.now(timezone.utc).isoformat()
         # a report gets only the tools its skill lists (skill.yaml `tools`), among those switched on
         tb = self.toolbox(tool_access.allowed_for_job(pol, self.server_tools, skill))
-        server = tb.server(None, origin)
-        allowed = set(tb.model_tool_names())
+        server, allowed = tb.for_run(None, origin)
         log.info("AI job %s started (%s, limit %g USD)%s", name, cfg["profile"], cfg["limit_usd"],
                  " on request" if origin else "")
         res = await runner.run(self.s, self.system_prompt(), prompt, server, allowed, self.state, who=f"job:{name}",
@@ -729,7 +629,7 @@ class Vesta:
             log.warning("AI job %s did not run: %s", name, problem)
             to = Routing(self.policy()).target("here" if origin else (job.get("to") or "owner"), origin)
             if to:
-                await self.send(to, for_job(name, problem))
+                await self.delivery.send(to, for_job(name, problem), origin=origin)
             await self._safe(self._tell_owner(problem, to))
             return
         log.info("AI job %s done (%s USD%s)", name, res.cost_usd,
@@ -752,7 +652,7 @@ class Vesta:
             return
         self.state.mark_owner_told(problem, now.isoformat())
         if int(owner) != int(already_told or 0):
-            await self.send(owner, text)
+            await self.delivery.send(owner, text)
 
     async def start_job(self, name: str, chat: int) -> str:
         """A job a skill marks on_request, started from a chat: it runs as itself (its model, its limit)."""
@@ -763,7 +663,7 @@ class Vesta:
         if name not in self.policy().jobs:
             return f"The {name} job is not set up yet (VESTA Agent page → Rules → AI jobs): it cannot run."
         sk, job = found[0]
-        self._job_notices.started(int(chat), name)
+        self.delivery.job_started(chat, name)
         asyncio.create_task(self._safe(self._requested_job(sk, job, int(chat))))
         return f"Started {name}: the result will be sent here when it is ready (a few minutes)."
 
@@ -773,7 +673,7 @@ class Vesta:
         try:
             await self.run_model_job(skill, job, Origin(chat, JOB))
         finally:
-            await self._job_notice_step(chat, self._job_notices.ended(chat, job["name"]))
+            await self.delivery.job_ended(chat, job["name"])
 
     async def housekeeping(self) -> None:
         if not self.server_tools and _now_local(self.s.timezone).minute % 10 == 0:
@@ -791,23 +691,18 @@ class Vesta:
         return {"ok": False, "error": "Unknown request."}
 
     def try_command(self, skill_name: str, script: str, args: list[str]) -> dict:
-        """Skills → Try a command: one command, checked exactly as when the AI asks for it, run on the live villa —
-        and NOT carried out: its messages and tickets are shown in the answer, never sent or recorded."""
-        from .skills import ToolError, run_script, validate_script_args
+        """Skills → Try a command: one command on the live villa, its arguments checked as when the AI asks, run
+        and judged as every run (script_run.py) — and NOT carried out: its messages and tickets are shown in the
+        answer, never sent or recorded. A switched-off skill can be tried: that is how its owner finds out."""
+        from .skills import ToolError, validate_script_args
         skill = self.skills.all(include_off=True).get(skill_name)
         try:
             final = validate_script_args(skill, skill_name, script, args, self.s.out_dir)
         except ToolError as e:
             return {"ok": False, "error": str(e)}
-        started = datetime.now(timezone.utc)
-        code, out, err = run_script(self.s, skill, script, final)
-        took = (datetime.now(timezone.utc) - started).total_seconds()
-        self.state.log("script_tried", {"skill": skill_name, "script": script, "args": final, "exit": code})
-        log.info("UI: tried %s %s %s (exit %s, %.1f s)", skill_name, script, " ".join(args), code, took)
-        last = err.strip().splitlines()[-1] if err.strip() else ""
-        return {"ok": code in (0, 2), "exit": code, "seconds": round(took, 1),
-                "output": scrub(out, self.s.secrets())[:60_000],
-                "error": scrub(last, self.s.secrets()) if code not in (0, 2) else None}
+        ans = script_run.run(self.s, self.state, skill, script, final, by=script_run.PAGE)
+        return {"ok": ans.ok, "exit": ans.code, "verdict": ans.verdict, "seconds": ans.seconds,
+                "output": ans.stdout[:60_000], "error": ans.error}
 
     async def _safe(self, coro):
         try:

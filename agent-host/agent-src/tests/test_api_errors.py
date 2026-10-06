@@ -12,6 +12,7 @@ import yaml
 from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock
 
 from helpers import settings
+from telegram_fake import FakeTelegram
 from vesta_agent import api_errors, runner
 from vesta_agent.app import Vesta
 from vesta_agent.kiosk import Kiosk
@@ -99,24 +100,6 @@ def test_a_failed_resume_is_not_retried_when_a_new_conversation_fails_the_same(m
     assert len(calls) == 1
 
 
-class Tg:
-    def __init__(self):
-        self.sent = []
-
-    async def open(self):
-        return {"id": 1, "username": "b"}
-
-    async def send(self, chat_id, text, keyboard=None, document=None, photo_b64=None):
-        self.sent.append((chat_id, text))
-        return len(self.sent)
-
-    async def typing(self, chat_id):
-        pass
-
-    async def edit(self, *a):
-        pass
-
-
 class Reader:
     class mcp:
         @staticmethod
@@ -136,7 +119,7 @@ def agent(tmp_path):
     with open(s.policy_path, "w") as f:
         yaml.safe_dump({"people": [{"telegram_id": FM, "name": "FM", "role": "fm"}],
                         "chats": {"owner": OWNER_CHAT, "fm": FM}}, f)
-    v = Vesta(s, telegram=Tg(), reader=Reader(), kiosk=Kiosk("", ""))
+    v = Vesta(s, telegram=FakeTelegram(), reader=Reader(), kiosk=Kiosk("", ""))
     v.server_tools = [{"name": "ha_get_state", "annotations": {"readOnlyHint": True}}]   # as HA MCP lists it
     return v
 
@@ -148,11 +131,11 @@ def test_a_person_reads_the_reason_and_the_owner_is_told_once(agent, monkeypatch
     person = agent.policy().person(FM)
     for _ in range(2):
         asyncio.run(agent.converse(FM, person, "is the pool OK?"))
-    to_fm = [t for c, t in agent.tg.sent if c == FM]
-    to_owner = [t for c, t in agent.tg.sent if c == OWNER_CHAT]
+    to_fm = [t for c, t, _ in agent.tg.sent if c == FM]
+    to_owner = [t for c, t, _ in agent.tg.sent if c == OWNER_CHAT]
     assert to_fm == [api_errors.FOR_PERSON["credit"]] * 2
     assert to_owner == [api_errors.NEEDS_THE_OWNER["credit"]]          # once, not at every reply
-    assert not any("API Error" in t or "{" in t for _, t in agent.tg.sent)
+    assert not any("API Error" in t or "{" in t for _, t, _ in agent.tg.sent)
 
 
 def test_a_report_that_cannot_run_says_so_instead_of_logging_done(agent, monkeypatch):
@@ -172,4 +155,4 @@ def test_a_report_that_cannot_run_says_so_instead_of_logging_done(agent, monkeyp
     sk = agent.skills.get("reports")
     job = next(j for s_, j in ai_jobs(agent.skills.all()) if j["name"] == "fm-daily")
     asyncio.run(agent.run_model_job(sk, job))
-    assert any("fm-daily report could not be prepared" in t and "could not be reached" in t for _, t in agent.tg.sent)
+    assert any("fm-daily report could not be prepared" in t and "could not be reached" in t for _, t, _ in agent.tg.sent)

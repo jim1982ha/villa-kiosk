@@ -10,7 +10,8 @@ import pytest
 import yaml
 
 from helpers import settings
-from test_telegram_events import BOT, FakeReader, FakeTelegram
+from telegram_fake import BOT, FakeTelegram
+from test_telegram_events import FakeReader
 from vesta_agent.app import Vesta
 from vesta_agent.policy import Policy
 from vesta_agent.routing import CONVERSATION, Origin, Routing

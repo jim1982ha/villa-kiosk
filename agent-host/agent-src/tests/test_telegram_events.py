@@ -15,45 +15,10 @@ from helpers import copy_skill, settings
 from vesta_agent.app import Vesta
 from vesta_agent.routing import CONVERSATION, Origin
 from vesta_agent.kiosk import Kiosk
+from telegram_fake import BOT, FakeTelegram  # noqa: F401 — the one fake (tests/telegram_fake.py)
 
 OWNER, FM, STRANGER = 111, 222, 999
 GROUP, PRIVATE = -100123, OWNER
-BOT = {"id": 8000, "username": "Villa_Test_bot"}
-
-
-class FakeTelegram:
-    def __init__(self):
-        self.sent, self.toasts, self.edits, self.deleted, self.next_id = [], [], [], [], 1000
-        self.photos, self.typing_in = [], []
-
-    async def open(self):
-        return BOT
-
-    async def close(self):
-        pass
-
-    async def send(self, chat_id, text, keyboard=None, document=None, photo_b64=None):
-        self.next_id += 1
-        self.sent.append((chat_id, text, keyboard))
-        if photo_b64:
-            self.photos.append((chat_id, photo_b64))
-        return self.next_id
-
-    async def answer_callback(self, qid, text):
-        self.toasts.append((qid, text))
-
-    async def typing(self, chat_id):
-        self.typing_in.append(chat_id)
-
-    async def edit(self, chat_id, message_id, text):
-        self.edits.append((chat_id, message_id, text))
-
-    async def delete(self, chat_id, message_id):
-        self.deleted.append((chat_id, message_id))
-        return True
-
-    def __getattr__(self, name):          # getUpdates, leaveChat... must never be reached
-        raise AssertionError(f"Telegram.{name} must never be called")
 
 
 class FakeReader:
@@ -152,7 +117,7 @@ def test_a_press_on_a_home_assistant_message_is_left_to_its_automation(agent):
 
 
 def test_a_press_on_the_agents_own_message_is_handled(agent):
-    mid = run(agent.send(GROUP, "Incident #1", keyboard={"inline_keyboard": []}))
+    mid = run(agent.delivery.send(GROUP, "Incident #1", keyboard={"inline_keyboard": []}))
     agent.state.put(f"inc:1:{GROUP}", "alert-desk")
     from vesta_shared.store import Store
     Store(agent.s.store_path).new_incident("k", "automation.x", "lock.front_door", "P2", {"message": "m"})
@@ -166,7 +131,7 @@ def test_a_press_on_the_agents_own_message_is_handled(agent):
 def test_a_press_in_a_private_chat_is_answered_there_and_its_buttons_go(agent):
     # the facility manager's chat is the group, but the alert was pressed in a private chat:
     # the answer goes where the press was, and the pressed message loses its buttons
-    mid = run(agent.send(FM, "🚨 Incident #1: pump stopped", keyboard={"inline_keyboard": [[{"text": "Done"}]]}))
+    mid = run(agent.delivery.send(FM, "🚨 Incident #1: pump stopped", keyboard={"inline_keyboard": [[{"text": "Done"}]]}))
     agent.state.set_alert_skill(1, FM, "alert-desk")
     agent.state.remember_alert_message(1, FM, mid, "🚨 Incident #1: pump stopped")     # as outcome.carry_out does
     from vesta_shared.store import Store
@@ -184,7 +149,7 @@ def test_a_press_in_a_private_chat_is_answered_there_and_its_buttons_go(agent):
 
 
 def test_telegram_gets_plain_text_not_markdown(agent):
-    run(agent.send(PRIVATE, "## Pool\n**Pump**: `on`, see [the log](https://example.invalid/x) — 2**3 stays"))
+    run(agent.delivery.send(PRIVATE, "## Pool\n**Pump**: `on`, see [the log](https://example.invalid/x) — 2**3 stays"))
     (_, text, _), = agent.tg.sent
     assert text == "Pool\nPump: on, see the log (https://example.invalid/x) — 2**3 stays"
 
@@ -222,7 +187,7 @@ def test_nothing_is_sent_while_telegram_is_off(tmp_path):
     s = settings(str(tmp_path), VESTA_TELEGRAM_ENABLED="false", VESTA_TELEGRAM_BOT_TOKEN="42:TG-TEST")
     v = Vesta(s, reader=FakeReader(), kiosk=Kiosk("", ""))
     assert v.tg is None
-    assert run(v.send(PRIVATE, "hello")) is None
+    assert run(v.delivery.send(PRIVATE, "hello")) is None
     assert v.state.calls("send_skipped")
 
 

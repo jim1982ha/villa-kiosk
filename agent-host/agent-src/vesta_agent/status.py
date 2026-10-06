@@ -13,7 +13,8 @@ from vesta_shared.agent_records import run_cost   # what a run cost: one reading
 
 # agent_status: the records worth telling a person about, and the fields of each (never a chat id or a token)
 STATUS_KINDS = ("critical_event", "ladder", "executed", "requested", "approved", "refused_by_person", "failed",
-                "action_failed", "send_failed", "code_script_failed", "script_refused", "pack", "ticket_skipped")
+                "action_failed", "send_failed", "script_failed", "code_script_failed", "script_refused", "pack",
+                "ticket_skipped")    # code_script_failed: a failed script before 0.6.60 (records kept settings.keep days)
 STATUS_FIELDS = ("rule", "phase", "handled", "incident", "by", "reply", "tool", "ticket", "entity", "service",
                  "skill", "script", "reason", "error", "code", "entities")
 

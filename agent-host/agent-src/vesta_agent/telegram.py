@@ -60,40 +60,47 @@ class Telegram:
             raise TelegramError(f"{method}: {body.get('error_code')} {body.get('description')}")
         return body.get("result")
 
+    async def _post_form(self, method: str, form: aiohttp.FormData) -> dict:
+        """A file upload (sendDocument, sendPhoto). ⚠️ FAILS AS api() FAILS: these posted directly, so a network
+        error escaped as something other than TelegramError, past every caller's `except TelegramError`."""
+        assert self.http is not None
+        try:
+            async with self.http.post(f"{self.base}/{method}", data=form) as r:
+                body = await r.json(content_type=None)
+        except Exception as e:  # never log the URL: it holds the token
+            raise TelegramError(f"{method}: {type(e).__name__}") from None
+        if not body.get("ok"):
+            raise TelegramError(f"{method}: {body.get('error_code')} {body.get('description')}")
+        return body.get("result") or {}
+
     async def send(self, chat_id: int, text: str, keyboard: dict | None = None, document: str | None = None,
                    photo_b64: tuple[str, str] | None = None, reply_to: int | None = None) -> int | None:
-        """Send text (split at Telegram's 4,096 characters); the keyboard goes on the last part. Returns its message id."""
-        last_id = None
-        if document:
-            assert self.http is not None
+        """Send text (split at Telegram's 4,096 characters), with at most one file or one photo: its caption holds
+        the first 1,000 characters, the rest follows as text. The keyboard goes on the last part. Returns the id of
+        the last message. Any failure is a TelegramError."""
+        if document and photo_b64:
+            raise TelegramError("one file or one photo per message")
+        if document or photo_b64:
             form = aiohttp.FormData()
             form.add_field("chat_id", str(chat_id))
             form.add_field("caption", text[:1000])
-            with open(document, "rb") as f:
-                form.add_field("document", f.read(), filename=os.path.basename(document))
-            async with self.http.post(f"{self.base}/sendDocument", data=form) as r:
-                body = await r.json(content_type=None)
-            if not body.get("ok"):
-                raise TelegramError(f"sendDocument: {body.get('description')}")
+            if document:
+                try:
+                    with open(document, "rb") as f:
+                        form.add_field("document", f.read(), filename=os.path.basename(document))
+                except OSError as e:
+                    raise TelegramError(f"sendDocument: the file cannot be read ({type(e).__name__})") from None
+                method = "sendDocument"
+            else:
+                import base64
+                data_b64, mime = photo_b64
+                form.add_field("photo", base64.b64decode(data_b64), filename="snapshot.jpg", content_type=mime or "image/jpeg")
+                method = "sendPhoto"     # a refused photo is an error: never the caption alone, "here is the photo"
+            res = await self._post_form(method, form)
             if len(text) <= 1000:
-                return body["result"]["message_id"]
+                return res.get("message_id")
             text = text[1000:]
-        if photo_b64:
-            import base64
-            assert self.http is not None
-            data_b64, mime = photo_b64
-            form = aiohttp.FormData()
-            form.add_field("chat_id", str(chat_id))
-            form.add_field("caption", text[:1000])
-            form.add_field("photo", base64.b64decode(data_b64), filename="snapshot.jpg", content_type=mime or "image/jpeg")
-            async with self.http.post(f"{self.base}/sendPhoto", data=form) as r:
-                body = await r.json(content_type=None)
-            if not body.get("ok"):
-                # was a silent fall back to the caption alone: "here is the photo" with no photo
-                raise TelegramError(f"sendPhoto: {body.get('description')}")
-            if len(text) <= 1000:
-                return body["result"]["message_id"]
-            text = text[1000:]                               # a caption holds 1,000: the rest follows as text
+        last_id = None
         parts = split_message(text or "…")
         for i, part in enumerate(parts):
             data: dict[str, Any] = {"chat_id": chat_id, "text": part}

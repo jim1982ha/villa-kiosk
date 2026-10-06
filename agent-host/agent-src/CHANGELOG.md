@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.60 (6 October 2026)
+
+Architecture review candidates 1–4 (candidate 5, splitting the page's files, not done):
+- `delivery.py` (new): every send, its failure verdict (id or None), photos/caption of a reply, "typing…", the job notices. Fixes: send_message answered "Sent." on a refused message; carry_out counted unsent as sent; a failed/blocked job asked for in a chat sent its reason AND its waiting message was edited (two messages) — its sends now carry the JOB origin and replace the wait. `Vesta.send` and `_job_notice_step` removed; Outcome and Toolbox take `Delivery.send(..., photo=, origin=)`.
+- `telegram.py`: sendDocument/sendPhoto go through `_post_form`, failing as TelegramError like `api()`; one attachment per message.
+- `script_run.py` (new): run + verdict (done/nothing/stopped) + scrub + JSON + one record (`script` / `script_failed`, with `by`) for the AI, jobs and the page; app.code_command, tools.run_skill_script and app.try_command use it; the page reads `verdict`. status counts `script_failed` (and old `code_script_failed`).
+- `Toolbox.for_run(person, origin)` → (server, names): names read off the built tools; every tool built only when tool_access allows it; read tools computed once per Toolbox (no tool_denied row per call). `model_tool_names` / `server` removed.
+- Tests: one Telegram stand-in `tests/telegram_fake.py` (4 copies removed), `test_telegram_fake.py` holds it to Telegram's interface; tests for each fix, each mutation-proven.
+
 ## 0.6.59 (6 October 2026)
 
 - converse(): sendChatAction "typing" every 4 s (TYPING_EVERY_S) from the start of the run until the reply is sent (`telegram.typing`, failures logged at debug only).

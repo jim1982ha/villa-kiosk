@@ -539,7 +539,7 @@ class UI:
         """The files the last runs left in the out folder, newest first: what Try a command offers for an option
         that takes one (compose.py fm-weekly --facts: the file facts.py wrote, 2026-10-06 "needs --facts")."""
         from ..skills import FILE_NAME
-        d = os.path.join(self.s.data_dir, "out")
+        d = self.s.out_dir
         try:
             names = [n for n in os.listdir(d) if FILE_NAME.match(n) and os.path.isfile(os.path.join(d, n))]
         except OSError:

@@ -115,7 +115,14 @@ Decisions of 2026-09-30 (owner):
 - One module per job (architecture review, 0.11.0): `outcome.py` carries out
   every script result (all callers), `routing.py` decides every chat,
   `policy.py` is the one reader of policy.yaml, `status.py` the one reading of
-  the agent's records.
+  the agent's records. Architecture review 2026-10-06 (0.12.65): `delivery.py`
+  is everything that reaches a chat and whether it did (`send` returns the id or
+  None — never "Sent." for what did not arrive; a message on behalf of a job
+  asked for in a chat is its result, job_notices); `script_run.py` runs and
+  judges every skill command (AI, job, page: one verdict, one record);
+  `tool_access` decides the AI's tools and `Toolbox.for_run` builds exactly
+  them, names read off the built tools. Tests use ONE Telegram stand-in,
+  `tests/telegram_fake.py`, held to the real interface by test_telegram_fake.
 - No PDF (owner, 2026-09-30): the reports are self-contained HTML pages sent
   as attachments. Chromium was ~480 MB of a 1.1 GB image for this alone.
 - ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent
