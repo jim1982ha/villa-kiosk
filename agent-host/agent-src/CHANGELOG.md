@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.55 (6 October 2026)
+
+- requests_box: `submit` / `result` (page polls GET /api/tries/<id> every second; POST /try answers {"pending": id} at once); the agent renames a request to <id>.taken.json and runs each as its own task. Cause: a 180 s page request outlived Cloudflare's 100 s (Error 524) on nightly.py. `ask` kept for refresh_tools.
+- subTabs: [key, label, info] puts an (i) beside the tab (`infoButton`, shared with withInfo).
+
 ## 0.6.54 (6 October 2026)
 
 - The model did not call send_message(camera=) (live, 20:19): removed. Toolbox.photos records every image a read tool returned in the run; converse() sends them (last 4, deduplicated) with the reply as the last one's caption; a refused photo falls back to the text. One mechanism, not chosen by the model.

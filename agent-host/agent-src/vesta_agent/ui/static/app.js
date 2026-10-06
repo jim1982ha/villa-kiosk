@@ -172,9 +172,14 @@ function titleWithInfo(title, text, tag = "h2", right = null) {
 
 // a label with its (i) — a column heading, a field: the (i) takes the size of the text it sits in (app.css em units)
 function withInfo(label, text) {
-  const btn = h("button", { type: "button", class: "info", "aria-label": `About ${label}`, "aria-expanded": "false" }, "i");
+  return h("span", { class: "with-info" }, label, infoButton(label, text));
+}
+
+// the (i) itself, its text shown on hover and on a tap (infoTip)
+function infoButton(about, text) {
+  const btn = h("button", { type: "button", class: "info", "aria-label": `About ${about}`, "aria-expanded": "false" }, "i");
   infoTip(btn, text);
-  return h("span", { class: "with-info" }, label, btn);
+  return btn;
 }
 
 let openTip = null;
@@ -234,9 +239,12 @@ function paged(head, rows, per = 10) {
 
 // ⚠️ THE ONE TAB BAR (DRY, owner 2026-10-06): What the AI can use, a skill's views, Copy the setup. `items`: [[key,
 // label], …]; `current`: the key shown; `pick(key)` on a press.
+// [key, label, info?]: a tab with an info text gets its (i) beside it (a button cannot hold another button)
 function subTabs(items, current, pick) {
-  return h("div", { class: "subtabs", role: "tablist" }, items.filter(Boolean).map(([k, l]) =>
-    h("button", { type: "button", role: "tab", class: k === current ? "on" : "", "aria-selected": String(k === current), onclick: () => pick(k) }, l)));
+  return h("div", { class: "subtabs", role: "tablist" }, items.filter(Boolean).map(([k, l, info]) => {
+    const tab = h("button", { type: "button", role: "tab", class: k === current ? "on" : "", "aria-selected": String(k === current), onclick: () => pick(k) }, l);
+    return info ? h("span", { class: "subtab-with-info" + (k === current ? " on" : "") }, tab, infoButton(l, info)) : tab;
+  }));
 }
 
 // Pages of at most `per` lines for an editable list (owner, 2026-10-06: "max 15 lines, so the UI stays consistent").
@@ -1042,10 +1050,24 @@ function tryPanel(name, d) {
       return field(label[0].toUpperCase() + label.slice(1), input, Array.isArray(kind) ? `one of: ${kind.join(", ")}` : flag);
     }) : h("p", { class: "muted small" }, "This command takes no options."));
   };
+  // the answer is asked for every second: a command may run for minutes (nightly.py), longer than a page request lives
+  const sleep = (ms) => new Promise((ok) => setTimeout(ok, ms));
+  async function waitFor(rid) {
+    const t0 = Date.now();
+    for (;;) {
+      const r = await api("GET", `api/tries/${encodeURIComponent(rid)}`);
+      if (!r.pending) return r;
+      const s = Math.round((Date.now() - t0) / 1000);
+      if (!r.started && s > 30) return { ok: false, error: "The agent did not start it: it is stopped, or waiting for a setting (see its log)." };
+      fill(out, h("p", { class: "muted" }, r.started ? `Running on the villa… ${s} s` : "Waiting for the agent…"));
+      await sleep(1000);
+    }
+  }
   async function run() {
     fill(out, h("p", { class: "muted" }, "Running on the villa…"));
     try {
-      const r = await api("POST", `api/skills/${encodeURIComponent(name)}/try`, { script: script.script, args: args() });
+      const { pending } = await api("POST", `api/skills/${encodeURIComponent(name)}/try`, { script: script.script, args: args() });
+      const r = await waitFor(pending);
       fill(out, r.ok === false && r.exit === undefined ? problemsBox([r.error], "Not run:") : [
         h("div", { class: "try-result" }, h("span", { class: "chip" + (r.exit === 0 ? "" : r.exit === 2 ? " warn" : " off") },
           r.exit === 0 ? "Done" : r.exit === 2 ? "Nothing to do, or a setting is missing" : `Stopped (exit ${r.exit})`),
@@ -1056,7 +1078,6 @@ function tryPanel(name, d) {
   }
   draw();
   return h("div", { class: "skill-sec try" },
-    h("p", { class: "muted" }, "Runs one of this skill's commands on the villa, exactly as the AI would: it only reads, uses no AI and costs nothing. Messages or tickets it would create are shown here, never sent."),
     h("h3", {}, "1 · What to run"), what,
     h("h3", {}, "2 · Options"), opts,
     h("div", { class: "actions" }, h("button", { class: "btn primary", onclick: run }, "Run")),
@@ -1158,7 +1179,7 @@ async function openSkill(name, pane, info, path = ABOUT) {
 
   // ---- the views
   const FILES = "\u0000files";             // the Files tab stands for whichever file is open
-  const tabs = subTabs([[ABOUT, "About"], [FILES, "Files"], d.scripts && d.scripts.length ? [TRY, "Try a command"] : null,
+  const tabs = subTabs([[ABOUT, "About"], [FILES, "Files"], d.scripts && d.scripts.length ? [TRY, "Try a command", "Runs one of this skill's commands on the villa, exactly as the AI would: it only reads, uses no AI and costs nothing. Messages or tickets it would create are shown here, never sent."] : null,
                         rel.state === "edited" ? [COMPARE, "Compare"] : null], isFile ? FILES : path,
                        (k) => goTo(k === FILES ? (isFile ? path : "SKILL.md") : k));
   // ⚠️ NO TITLE, NO DESCRIPTION, NO SWITCH HERE ON A WIDE SCREEN (owner, 2026-10-06): the list beside it holds the

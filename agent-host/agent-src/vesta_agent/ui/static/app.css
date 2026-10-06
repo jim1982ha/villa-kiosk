@@ -337,8 +337,10 @@ dialog.ask .actions { justify-content: flex-end; margin-top: 0; }
 .chip.gray { background: var(--bg-input); color: var(--text-secondary); }
 .badge { display: inline-flex; font-size: var(--text-xs); padding: 1px 8px; border-radius: 999px; border: 1px solid var(--hairline-strong); color: var(--text-secondary); }
 .subtabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 14px; border-bottom: 1px solid var(--hairline); }
-.subtabs button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 8px 12px; min-height: var(--touch-min); color: var(--text-secondary); cursor: pointer; font-weight: 500; }
-.subtabs button.on { color: var(--text-primary); border-bottom-color: var(--accent); }
+.subtab-with-info { display: inline-flex; align-items: center; gap: 2px; }
+.subtab-with-info button.info { margin-right: 6px; }
+.subtabs button:not(.info) { background: none; border: 0; border-bottom: 2px solid transparent; padding: 8px 12px; min-height: var(--touch-min); color: var(--text-secondary); cursor: pointer; font-weight: 500; }
+.subtabs button:not(.info).on { color: var(--text-primary); border-bottom-color: var(--accent); }
 .tools-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 0 0 12px; }
 .tools-head > div { flex: 1 1 260px; }
 .tool-group { border-top: 1px solid var(--hairline); padding: 12px 0 4px; }
@@ -453,7 +455,7 @@ ol.steps code { font-family: var(--font-mono); font-size: var(--text-xs); color:
 input[type=file] { font: inherit; color: var(--text-secondary); max-width: 100%; }
 input[type=file]::file-selector-button { font: inherit; font-weight: 500; min-height: var(--touch-min); padding: 0 18px; margin-right: 12px;
   border-radius: var(--radius); border: 1px solid var(--hairline-strong); background: transparent; color: var(--text-primary); cursor: pointer; }
-@media (max-width: 600px) { .subtabs { flex-wrap: nowrap; overflow-x: auto; } .subtabs button { white-space: nowrap; padding: 8px 9px; } }
+@media (max-width: 600px) { .subtabs { flex-wrap: nowrap; overflow-x: auto; } .subtabs button:not(.info) { white-space: nowrap; padding: 8px 9px; } }
 /* a card's title and its (i) (app.js card / titleWithInfo) */
 .card-title h2, .card-title h3 { display: flex; align-items: center; gap: 8px; }
 button.info { width: 22px; height: 22px; min-height: 0; padding: 0; border-radius: 50%; border: 1px solid var(--hairline-strong); background: none;

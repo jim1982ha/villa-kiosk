@@ -124,11 +124,51 @@ def test_try_a_command_goes_to_the_running_agent_and_comes_back(ui):
         stop = asyncio.Event()
         task = asyncio.create_task(agent(stop))
         st, body = await _json(c, "post", "/api/skills/villa-concierge/try", json={"script": "concierge.py", "args": ["status"]})
+        seen = []
+        for _ in range(50):                                                          # the page: every second
+            st2, got = await _json(c, "get", f"/api/tries/{body['pending']}")
+            seen.append(got)
+            if not got.get("pending"):
+                break
+            await asyncio.sleep(0.1)
+        again, _ = await _json(c, "get", f"/api/tries/{body['pending']}")
         stop.set(); await task
-        return st, body
-    st, body = call(ui, fn)
-    assert st == 200 and body["output"] == "villa-concierge concierge.py status"
+        return st, body, st2, seen, again
+    st, body, st2, seen, again = call(ui, fn)
+    assert st == 200 and set(body) == {"pending"}               # answered at once: nothing waits on the script
+    assert st2 == 200 and seen[-1]["output"] == "villa-concierge concierge.py status"
+    assert again == 404                                                            # read once
     assert os.listdir(requests_box.folder(ui.data_dir)) == []                     # nothing left behind
+
+
+def test_a_long_try_does_not_hold_up_another_request(tmp_path):
+    # nightly.py runs for minutes: "Read the list again" meanwhile must still be answered
+    gate = asyncio.Event()
+
+    async def handle(req):
+        if req["kind"] == "try":
+            await gate.wait()
+        return {"ok": True, "kind": req["kind"]}
+
+    async def main():
+        stop = asyncio.Event()
+        task = asyncio.create_task(requests_box.serve(str(tmp_path), handle, stop))
+        rid = requests_box.submit(str(tmp_path), "try", {"skill": "x", "script": "nightly.py", "args": []})
+        while requests_box.result(str(tmp_path), rid)[0] != "running":               # the long one has started
+            await asyncio.sleep(0.05)
+        quick = await requests_box.ask(str(tmp_path), "refresh_tools", {}, timeout=5)
+        before = requests_box.result(str(tmp_path), rid)[0]
+        gate.set()
+        for _ in range(50):
+            state, data = requests_box.result(str(tmp_path), rid)
+            if state == "done":
+                break
+            await asyncio.sleep(0.1)
+        stop.set(); await task
+        return quick, before, state, data
+    quick, before, state, data = asyncio.run(main())
+    assert quick == {"ok": True, "kind": "refresh_tools"} and before == "running"
+    assert state == "done" and data["kind"] == "try"
 
 
 def test_try_a_command_is_checked_as_the_ai_and_nothing_is_carried_out(tmp_path):

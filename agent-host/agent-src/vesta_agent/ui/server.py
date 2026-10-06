@@ -141,6 +141,7 @@ class UI:
         r.add_post("/api/skills/{name}/keep", self.skill_keep)
         r.add_post("/api/skills/{name}/take-release", self.skill_take_release)
         r.add_post("/api/skills/{name}/try", self.skill_try)
+        r.add_get("/api/tries/{rid}", self.try_result)
         r.add_get("/api/history", self.history_list)
         r.add_post("/api/history/{id}/undo", self.history_undo)
         r.add_post("/api/setup/export", self.setup_export)
@@ -627,11 +628,19 @@ class UI:
         args = body.get("args") or []
         if not isinstance(args, list) or not all(isinstance(a, str) and len(a) <= 300 for a in args) or len(args) > 20:
             raise Refused(["The command's arguments are not understood."])
-        res = await requests_box.ask(self.s.data_dir, "try", {"skill": name, "script": str(body.get("script") or ""),
-                                                              "args": args}, timeout=180)
-        if res is None:
-            raise Refused(["The agent did not answer: it is stopped, or waiting for a setting (see its log)."], 503)
-        return web.json_response(res)
+        # answered at once, the result asked for every second (/api/tries/<id>): a script running for minutes
+        # (nightly.py) would outlive a page request — Cloudflare closes one after 100 s ("Error 524", 2026-10-06)
+        rid = requests_box.submit(self.s.data_dir, "try", {"skill": name, "script": str(body.get("script") or ""),
+                                                           "args": args})
+        return web.json_response({"pending": rid})
+
+    async def try_result(self, request):
+        state, data = requests_box.result(self.s.data_dir, request.match_info["rid"])
+        if state == "done":
+            return web.json_response(data)
+        if state == "gone":
+            raise Refused(["This try's answer is gone: the agent restarted, or it was read already. Run it again."], 404)
+        return web.json_response({"pending": True, "started": state == "running"})
 
     # ------------------------------------------------------------------ changes made on these pages
     async def history_list(self, _request):

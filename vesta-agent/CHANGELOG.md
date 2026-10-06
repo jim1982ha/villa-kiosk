@@ -1,3 +1,8 @@
+## 0.12.59
+
+- **Skills → Try a command: a long command no longer ends in "Error 524".** Through the Cloudflare tunnel, a page that waits more than 100 seconds is cut off, and nightly.py checks every device for minutes. Run now answers at once; the page shows "Running on the villa… N s" and fetches the result when the command ends, however long it takes (up to 15 minutes). A long try no longer holds up another try or "Read the list again".
+- The explanation under "Try a command" is now in an (i) beside the tab's title, shown on hover or tap like the other (i)s.
+
 ## 0.12.58
 
 - **A camera picture the AI looks at now always comes with its answer.** 0.12.57 gave the AI a way to send the photo, but it did not use it: asked again for the living room camera, it looked, wrote "here's the current view", and you got text only. Now the agent itself attaches every camera picture the AI looked at while answering you: the photo arrives with the answer as its caption (up to 4 pictures per answer). Only where cameras are allowed (Rules → What the AI can use). If Telegram refuses the photo, the answer still arrives, saying the picture could not be sent.
