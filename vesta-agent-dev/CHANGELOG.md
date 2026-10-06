@@ -1,3 +1,12 @@
+## 0.12.65
+
+An internal tidy-up of how the agent is built (the architecture review of 6 October), with three fixes you could have met:
+
+- **The AI is never told "sent" for a message Telegram refused.** It then told you "the report is in your chat" when it was not. Now it is told nothing was sent, and says so.
+- **A report you ask for in a chat that cannot run is one message.** Before, you got why it could not run, and its "being prepared" message also changed to "ended without a result". Now the reason replaces the waiting message.
+- **A camera photo or a file that Telegram cannot take no longer stops the message** with an error the agent did not catch.
+- Overview → "failures" now counts a skill's script that failed whoever ran it (the AI, a scheduled job or Try a command), not only the scheduled ones. Try a command shows "the script's own answer".
+
 ## 0.12.64
 
 - Publishes 0.12.63 ("typing…" in Telegram while the AI works): 0.12.63 was not offered because a check on GitHub could not run. Nothing else changed.
