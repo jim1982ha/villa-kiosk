@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.66 (7 October 2026)
+
+- test_jobs: the typing test waits for the job's run to end (an Event, 10 s) instead of a fixed 0.15 s sleep — CI was slower and 0.12.70 failed there.
+
 ## 0.6.65 (7 October 2026)
 
 - Reports without the AI: skill.yaml AI jobs take `without_ai` (code steps in order; `{skill, run, on_schedule_only}` for another skill's script, checked when it runs). app.run_without_ai runs them on any LLM problem, each needing the one before (a stale file never stands in), carries out what a step sends, logs a `without_ai` record; for_job is sent only when nothing was. compose.py `--no-ai WHY` (with --finish): page banner, message note, an old notes.json ignored; fm-daily / owner-weekly gain a --finish send path. status.costs lists `without_ai` rows (cost 0, outside runs_count and the groups); costs.js shows them. api_errors.why_job / why_job_sentence.

@@ -1,3 +1,7 @@
+## 0.12.71
+
+The same as 0.12.70, which did not publish: one of the agent's own tests depended on how fast the build machine was. Nothing changes for you.
+
 ## 0.12.70
 
 What you will see:

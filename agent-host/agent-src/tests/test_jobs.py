@@ -261,6 +261,7 @@ def test_typing_goes_on_while_the_report_asked_for_is_made_and_stops_when_it_is_
     from vesta_agent import delivery
     monkeypatch.setattr(delivery, "TYPING_EVERY_S", 0.002)
     seen = {}
+    done = asyncio.Event()      # the job's run is over: a slow runner (CI) took longer than a fixed sleep
 
     async def act(run_):
         if run_["who"].startswith("job:"):
@@ -272,13 +273,14 @@ def test_typing_goes_on_while_the_report_asked_for_is_made_and_stops_when_it_is_
             seen["at_result"] = len(agent.tg.typing_in)
             await asyncio.sleep(0.03)                                   # the job's run goes on a moment after
             seen["after_result"] = len(agent.tg.typing_in) - seen["at_result"]
+            done.set()
         else:
             await agent.start_job("fm-weekly", ASKER)
     FakeAI(lambda r: "" if r["who"].startswith("job:") else "On its way.", act=act).install(monkeypatch)
 
     async def go():
         await agent.converse(ASKER, Person(ASKER, "Asker", "fm"), "the weekly report")
-        await asyncio.sleep(0.15)
+        await asyncio.wait_for(done.wait(), 10)
     run(go())
     assert seen["while_job"] >= 3 and set(agent.tg.typing_in) == {ASKER}
     assert seen["after_result"] == 0
