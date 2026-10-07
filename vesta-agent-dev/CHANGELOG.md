@@ -1,3 +1,14 @@
+## 0.12.77
+
+The fifth architecture review, carried out. What you may notice:
+- **Report buttons are for who may start a report.** In a group, anyone registered could press another person's report button while the AI was unavailable; now a press needs the same right as the offer (Rules › The agent's own tools › Start a report).
+- **A lock or a cover still moving is read again** before an approved action is called "not confirmed" (a lock "unlocking" a second before it was unlocked).
+- **Reports read Home Assistant less:** each thing once per report (the rules' logbooks were read four times for the weekly page, a pump's power up to three times).
+- **The monthly energy figures no longer fail** when the villa names a main meter that has a twin with a shorter name.
+- **Nothing secret in the Costs tab's tool list:** a token is now removed by its shape too, not only when it is one of the app's own keys.
+
+Under the hood: a report asked for in a chat, a job's code steps, and what happens when the AI cannot answer each became one piece of the agent instead of two or three, so the kind of bug found today (a button's report deleting the next answer) cannot come back from one path forgetting a step.
+
 ## 0.12.76
 
 What you will see:
