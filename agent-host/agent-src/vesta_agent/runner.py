@@ -25,7 +25,7 @@ from claude_agent_sdk import (AssistantMessage, ClaudeAgentOptions, ClaudeSDKCli
 from .api_errors import NO_RETRY, classify
 from .policy import PROFILES  # noqa: E402
 from .redact import scrub
-from vesta_shared.agent_records import run_cost
+from vesta_shared.agent_records import RUN, run_cost
 
 log = logging.getLogger("vesta.runner")
 
@@ -230,12 +230,16 @@ async def run(settings, system_prompt: str, prompt: str, server, allowed: set[st
                                          "cache_creation_input_tokens") if isinstance(usage.get(k), int)}
     # no tokens, no cost (agent_records.run_cost): a refused request is not 0.033 USD in the log or the record
     cost = run_cost({"cost_usd": cost, "tokens": tokens}) if cost is not None else None
-    state.log("run", {"who": who, "cost_usd": cost, "stopped_at_limit": stopped, "denied": denied, "error": err,
-                      "profile": profile if profile in PROFILES else getattr(settings, "profile", None), "model": opts.model, "tokens": tokens,
-                      "turns": turns, "ms": ms, "asked": (asked or "")[:160] or None, "problem": problem,
-                      # ⚠️ THE TOOLS IT USED (0.6.42): the Costs tab's "Tools used", and how often each tool is used
-                      "steps": steps})
-    if err and resume and not texts and problem not in NO_RETRY:
+    retrying = bool(err and resume and not texts and problem not in NO_RETRY)
+    if not (retrying and not cost):
+        # a resume that failed before doing anything is retried below as the same run: one row for one question
+        state.log(RUN, {"who": who, "cost_usd": cost, "stopped_at_limit": stopped, "denied": denied, "error": err,
+                        "profile": profile if profile in PROFILES else getattr(settings, "profile", None),
+                        "model": opts.model, "tokens": tokens, "turns": turns, "ms": ms,
+                        "asked": (asked or "")[:160] or None, "problem": problem,
+                        # ⚠️ THE TOOLS IT USED (0.6.42): the Costs tab's "Tools used", and how often each tool is used
+                        "steps": steps})
+    if retrying:
         # the session could not be resumed (lost, or from an older version): answer in a new one
         # the same run for the Costs tab: what was asked goes with it (it was dropped, so the answered run had none)
         return await run(settings, system_prompt, prompt, server, allowed, state, who, None, limit_usd, profile, asked)

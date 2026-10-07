@@ -86,6 +86,10 @@ KEEP = {
     "daily_figures_months": (24, 2, 120),   # the skills' daily figures per device (the baselines read 30 days)
 }
 #: A value the file leaves out. The starter policy.example.yaml writes the same ones.
+#: What a person policy.yaml does not know reads, wherever they write or press (one wording: a button press in
+#: actions.py said "registered with VESTA", the others "the VESTA Agent" — review 6).
+NOT_REGISTERED = "You are not registered with the VESTA Agent."
+
 DEFAULTS = {"act_enabled": False, "approval_ttl_minutes": 15, "siren_auto_off_min": 3}
 
 

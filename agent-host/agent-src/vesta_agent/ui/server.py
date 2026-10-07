@@ -95,6 +95,15 @@ def _write(path: str, data: bytes) -> None:
 
 TEXT_KINDS = ("policy", "instructions", "file")    # what Undo writes back as text (UI.text_change)
 
+def rules_problems(text: str) -> list[str]:
+    """What is wrong with policy.yaml's text, in words ([] when nothing): one reading for the Overview, Rules and
+    every write."""
+    try:
+        return policy_problems(yaml.safe_load(text) if text and text.strip() else {})
+    except yaml.YAMLError as e:
+        return [f"The file cannot be read as YAML: {e}"]
+
+
 class Refused(Exception):
     def __init__(self, problems: list[str], status: int = 400):
         super().__init__("; ".join(problems))
@@ -187,11 +196,7 @@ class UI:
 
     # ------------------------------------------------------------------ overview
     async def overview(self, _request):
-        text = _read(self.s.policy_path).decode("utf-8", "replace")
-        try:
-            pol = policy_problems(yaml.safe_load(text) if text else {})
-        except yaml.YAMLError as e:
-            pol = [f"The file cannot be read as YAML: {e}"]
+        pol = rules_problems(_read(self.s.policy_path).decode("utf-8", "replace"))
         report = None
         if os.path.exists(self.s.state_path):
             try:
@@ -262,28 +267,19 @@ class UI:
 
     async def policy_get(self, _request):
         text, r = self.policy_now()
+        probs = rules_problems(text)
         try:
-            form, probs = to_form(text), policy_problems(yaml.safe_load(text) if text else {})
-        except yaml.YAMLError as e:
-            form, probs = None, [f"The file cannot be read as YAML: {e}"]
+            form = to_form(text)
+        except yaml.YAMLError:
+            form = None
         from ..policy import LANGUAGES, form_schema, profile_labels
         return web.json_response({"text": text, "rev": r, "form": form, "problems": probs, "languages": LANGUAGES,
                                   "profiles": profile_labels(), "schema": form_schema()})
 
     def save_policy(self, new_text: str, base_rev: str, place: str = "Rules", what: str | None = None) -> dict:
-        text, r = self.policy_now()
-        if base_rev != r:
-            raise Refused(["policy.yaml changed since you opened it (another window, Studio Code Server). "
-                           "Reload to see the current file; your change was not saved."], 409)
-        try:
-            raw = yaml.safe_load(new_text) if new_text.strip() else {}
-        except yaml.YAMLError as e:
-            raise Refused([f"Not valid YAML: {e}"]) from None
-        probs = policy_problems(raw)
-        if probs:
-            raise Refused(probs)
+        text, _ = self.policy_now()
         data = new_text.encode("utf-8")
-        self.text_change(place, what or policy_change(text, new_text), {"kind": "policy"}, new_text)
+        self.text_change(place, what or policy_change(text, new_text), {"kind": "policy"}, new_text, base_rev=base_rev)
         log.info("UI: policy.yaml saved")
         return {"rev": rev(data), "text": new_text, "form": to_form(new_text)}
 
@@ -315,11 +311,9 @@ class UI:
             if not SKILL_NAME.match(n) or not os.path.isdir(path):
                 continue
             sk = loaded.get(n)
-            blocked = tool_access.blockers(pol, self._server_tools(), sk) if sk else []
-            rows.append({"name": n, "description": sk.description if sk else "", "ok": sk is not None and not blocked,
-                         "off": n in pol.skills_off, "state": self.skills.release_state(n)["state"],
-                         "problem": None if sk and not blocked else
-                         (" ".join(b["why"] for b in blocked) if sk else self.skills.problems().get(n) or "switched off")})
+            h = tool_access.health(pol, self._server_tools(), sk, self.skills.problems().get(n))
+            rows.append({"name": n, "description": sk.description if sk else "", "ok": h["ok"],
+                         "off": n in pol.skills_off, "state": self.skills.release_state(n)["state"], "problem": h["problem"]})
         return rows
 
     def _server_tools(self) -> list[dict] | None:
@@ -421,7 +415,7 @@ class UI:
 
     async def file_put(self, request):
         name = request.match_info["name"]
-        folder = self._skill_dir(name)
+        self._skill_dir(name)                        # the skill must exist; text_change checks the rest
         rel = self._rel(request.query.get("path", ""))
         body = await request.json()
         content = body.get("content")
@@ -430,23 +424,9 @@ class UI:
         data = content.encode("utf-8")
         if len(data) > MAX_FILE:
             raise Refused(["This file is too large."])
-        current = os.path.join(folder, rel)
-        if os.path.exists(current) and body.get("rev") != rev(_read(current)):
-            raise Refused([f"{rel} changed since you opened it. Reload it; your change was not saved."], 409)
-        if not os.path.exists(current) and body.get("rev"):
-            raise Refused([f"{rel} was deleted since you opened it."], 409)
-        if rel.endswith(".py"):
-            try:
-                compile(content, rel, "exec")
-            except SyntaxError as e:
-                raise Refused([f"{rel}, line {e.lineno}: {e.msg}. Not saved."]) from None
-        if rel.endswith((".yaml", ".yml")):
-            try:
-                yaml.safe_load(content)
-            except yaml.YAMLError as e:
-                raise Refused([f"{rel} is not valid YAML: {e}"]) from None
         self.text_change("Skills", lambda before: f"{name} › {file_change(rel, before, content)}",
-                          {"kind": "file", "skill": name, "path": rel.replace(os.sep, "/")}, content)
+                          {"kind": "file", "skill": name, "path": rel.replace(os.sep, "/")}, content,
+                          base_rev=str(body.get("rev") or ""))
         log.info("UI: skill %s, %s saved", name, rel)
         return web.json_response({"rev": rev(data)})
 
@@ -499,9 +479,10 @@ class UI:
         pol = Policy.load(self.s.policy_path)
         sk = self.skills.all(include_off=True).get(name)
         rel = self.skills.release_state(name)
+        h = tool_access.health(pol, self._server_tools(), sk, self.skills.problems().get(name))
         if sk is None:
             return web.json_response({"name": name, "ok": False, "off": name in pol.skills_off, "release": rel,
-                                      "problem": self.skills.problems().get(name) or "switched off"})
+                                      "problem": h["problem"]})
         listed = tool_access.read_list(self.s.data_dir)
         acts = [("every chat message, when the AI reads it", None)]
         acts += [(f"{describe(j['when'])[0]}" + (f" — {j['name']}" if j.get("name") else ""),
@@ -512,9 +493,9 @@ class UI:
         if sk.on_reply:
             acts.append(("an answer to one of its alerts", sk.on_reply))
         scripts = [spec.view() for _, spec in sorted(sk.scripts.items())]      # skills.Script: one reading
-        blocked = tool_access.blockers(pol, self._server_tools(), sk)
+        blocked = h["blocked"]
         return web.json_response({
-            "name": name, "ok": not blocked, "off": name in pol.skills_off, "description": sk.description,
+            "name": name, "ok": h["ok"], "off": name in pol.skills_off, "description": sk.description,
             "release": rel, "engine": __version__, "needs": tool_access.needs(pol, listed, sk) if sk.tools is not None else None,
             "acts": [{"when": w, "how": h} for w, h in acts], "scripts": scripts, "blocked": blocked,
             "out_files": self._out_files()})
@@ -681,11 +662,20 @@ class UI:
         path = self._text_path(t)
         return _read(path).decode("utf-8", "replace") if os.path.exists(path) else None
 
-    def text_change(self, place: str, what, target: dict, text: str | None) -> str | None:
+    def text_change(self, place: str, what, target: dict, text: str | None, base_rev: str | None = None) -> str | None:
         """Write one text (None: delete it) and record the change, when there is one. `what` is the line the
-        history shows, or a function of the text before. A skill's file is written only if the skill still loads
-        (_change). Returns the text before."""
+        history shows, or a function of the text before. Returns the text before.
+
+        ⚠️ VALID WHOEVER WRITES IT (architecture review 6, 2026-10-07): the rules' problems were checked only by a
+        save from Rules, a script's syntax only by a save from the editor — an Undo (Overview › Changes) or an
+        imported setup wrote either unchecked. Every text is checked here, by its kind (_check_text); a skill's
+        file is written only if the skill still loads (_change). `base_rev`: the version the person opened —
+        refused when the file changed since (another window, Studio Code Server)."""
         before = self._text_now(target)
+        if base_rev is not None:
+            self._check_rev(target, before, base_rev)
+        if text is not None:
+            self._check_text(target, text)
         data = text.encode("utf-8") if text is not None else None
         if target["kind"] == "file":
             self._change(target["skill"], self._rel(target["path"]), data)
@@ -697,6 +687,34 @@ class UI:
         if before != text:
             self.history.record(place, what(before) if callable(what) else what, target, before, text)
         return before
+
+    def _check_rev(self, target: dict, before: str | None, base_rev: str) -> None:
+        name = "policy.yaml" if target["kind"] == "policy" else target.get("path") or target["kind"]
+        if before is None and base_rev:
+            raise Refused([f"{name} was deleted since you opened it."], 409)
+        if before is not None and base_rev != rev(before.encode("utf-8")):
+            raise Refused([f"{name} changed since you opened it (another window, Studio Code Server). Reload it "
+                           "to see the current file; your change was not saved."], 409)
+
+    def _check_text(self, target: dict, text: str) -> None:
+        """What a text of this kind must be before it is written: the rules without problems, a script that
+        compiles, YAML that reads."""
+        if target["kind"] == "policy":
+            probs = rules_problems(text)
+            if probs:
+                raise Refused(probs)
+            return
+        rel = str(target.get("path") or "")
+        if rel.endswith(".py"):
+            try:
+                compile(text, rel, "exec")
+            except SyntaxError as e:
+                raise Refused([f"{rel}, line {e.lineno}: {e.msg}. Not saved."]) from None
+        if rel.endswith((".yaml", ".yml")):
+            try:
+                yaml.safe_load(text)
+            except yaml.YAMLError as e:
+                raise Refused([f"{rel} is not valid YAML: {e}"]) from None
 
     def folder_change(self, place: str, what: str, skill: str, before: str | None, after: str | None) -> None:
         """A skill folder created, deleted, replaced or imported (the move is the caller's): recorded. `before` is

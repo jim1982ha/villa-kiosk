@@ -53,8 +53,7 @@ def test_a_chat_job_runs_once_its_waiting_message_first_and_always_ends():
         await asyncio.sleep(0.01)
         assert jobs.running(7, "fm-weekly")
         gate.set()
-        while jobs.running(7, "fm-weekly") or jobs.running(8, "fm-weekly"):
-            await asyncio.sleep(0.005)
+        await jobs.idle()
     asyncio.run(go())
     mine = [s for s in notes.seen if s[0] == "work" or s[1] == 7]
     assert mine == [("started", 7, "fm-weekly"), ("waiting", 7, 42), ("work", Origin(7, JOB)), ("ended", 7, "fm-weekly")]

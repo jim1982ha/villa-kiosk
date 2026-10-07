@@ -182,6 +182,16 @@ def allowed_for_job(policy: Policy, server_tools: list[dict], skill) -> set[str]
     return (set(skill.tools) & on) | {k for k, v in OWN.items() if v[2] == ALWAYS}
 
 
+def health(policy: Policy, server_tools: list[dict] | None, skill, load_problem: str | None = None) -> dict:
+    """Is this skill working, and if not why, in words: {"ok", "problem", "blocked"}. `skill` None: it did not load
+    (`load_problem` says why; without one it was switched off). One answer for the page's list and a skill's page
+    (architecture review 6: each wrote its own)."""
+    if skill is None:
+        return {"ok": False, "problem": load_problem or "switched off", "blocked": []}
+    blocked = blockers(policy, server_tools, skill)
+    return {"ok": not blocked, "problem": " ".join(b["why"] for b in blocked) or None, "blocked": blocked}
+
+
 def blockers(policy: Policy, server_tools: list[dict] | None, skill) -> list[dict]:
     """Why the AI cannot use this skill now: each tool it needs that THE VILLA switched off, in plain words, with
     what turns it back on. [] when nothing stops it. A tool this Home Assistant does not have, or that changes it,

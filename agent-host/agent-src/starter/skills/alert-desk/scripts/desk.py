@@ -37,7 +37,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 from vesta_shared.store import Incident, Store  # noqa: E402  (PYTHONPATH is set by the engine)
 from vesta_shared.params import VillaParams  # noqa: E402
 from vesta_shared.timeutil import day_time_label, villa_time  # noqa: E402
-from vesta_shared.problems import DONE, Problems  # noqa: E402  (a problem's lifecycle: one owner)
+from vesta_shared.problems import Problems  # noqa: E402  (a problem's lifecycle: one owner)
 
 RULES = yaml.safe_load(open(os.path.join(HERE, "..", "rules.yaml"), encoding="utf-8"))
 LADDER_OPTIONS = ["Done", "Not found", "Need help", "Mute"]
@@ -171,10 +171,9 @@ def resolved(store: Store, ev: dict, now: datetime) -> dict:
     if not inc:
         return out
     was_chasing = inc["state"] in Incident.CHASED
-    store.update_incident(inc["id"], state=Incident.RESOLVED, closed_at=now.isoformat())
+    out["actions"] += Problems(store).close_incident(inc["id"], Incident.RESOLVED, now.isoformat(),
+                                                     "Cleared: Home Assistant reports it is back to normal.")
     out["incident_id"], out["decision"] = inc["id"], "resolved"
-    for tid in Problems(store).clear_source("incident", inc["id"], inc["rule_id"], inc["entity_id"]):
-        out["actions"].append({"action": "ticket.resolve", "task_id": tid, "note": "Cleared: Home Assistant reports it is back to normal."})
     # its alert and reminders, in every chat, lose their buttons: nobody presses for something already over
     out["settle"] = [{"incident_id": inc["id"], "note": "Cleared in Home Assistant, {time}. No reply needed."}]
     if was_chasing:
@@ -229,9 +228,8 @@ def reply(store: Store, iid: int, text: str, sender_role: str, now: datetime, pa
     if inc.get("closed_at") and not t.startswith("mute"):
         out["send"].append({"to": "here", "text": f"Incident #{iid} is already closed."}); return out
     if t.startswith("done"):
-        store.update_incident(iid, state=Incident.DONE, reply=text, closed_at=now.isoformat())
-        for tid in Problems(store).clear_source("incident", iid, inc["rule_id"], inc["entity_id"], status=DONE):
-            out["actions"].append({"action": "ticket.resolve", "task_id": tid, "note": f"Done, answered by the {sender_role}."})
+        out["actions"] += Problems(store).close_incident(iid, Incident.DONE, now.isoformat(),
+                                                         f"Done, answered by the {sender_role}.", reply=text)
         out["send"].append({"to": "here", "text": f"Thanks, incident #{iid} closed. The VESTA Agent will check it stays quiet."})
     elif t.startswith("not found"):
         store.update_incident(iid, state=Incident.NOT_FOUND, reply=text)
@@ -244,7 +242,8 @@ def reply(store: Store, iid: int, text: str, sender_role: str, now: datetime, pa
         days = int(params.behaviour("mute_days") if params else VillaParams().behaviour("mute_days"))
         until = (now + timedelta(days=days)).isoformat()
         store.mute(inc["rule_id"], inc["entity_id"], until, sender_role)
-        store.update_incident(iid, state=Incident.MUTED, reply=text, closed_at=now.isoformat())
+        # muted: the fault is still there, nobody wants to be told again — its task stays (Problems decides)
+        out["actions"] += Problems(store).close_incident(iid, Incident.MUTED, now.isoformat(), reply=text)
         out["send"].append({"to": "here", "text": f"Muted this alert for {days} days. The report will list it."})
     else:
         store.update_incident(iid, reply=text)
@@ -294,7 +293,7 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None) -> dict
     elif last:
         cur = store.find_open_incident("critical_internet---villa_silent|agent")
         if cur:
-            store.update_incident(cur["id"], closed_at=now.isoformat(), state=Incident.RECOVERED)
+            out["actions"] += Problems(store).close_incident(cur["id"], Incident.RECOVERED, now.isoformat())
             out["send"].append({"to": "fm", "text": "Villa back online: Home Assistant answers again."})
     # alert fatigue: a rule firing more than N times in 30 days without acknowledgement
     limit = (params or VillaParams()).behaviour("alert_fatigue_per_month")

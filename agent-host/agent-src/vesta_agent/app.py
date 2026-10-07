@@ -25,17 +25,21 @@ import asyncio
 import json
 import logging
 import os
-import re
 import signal
 import subprocess
 import sys
-from datetime import datetime, time, timedelta, timezone
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from typing import Awaitable, Callable
 from zoneinfo import ZoneInfo
 
-from . import ai_down, job_steps, requests_box, run_records, runner, script_run, tool_access
+from . import ai_down, button_data, intake, requests_box, runner, script_run, tool_access
+from .ai_jobs import AiJobs
+from vesta_shared import agent_records
 from .chat_jobs import ChatJobs
+from .siren import Siren
 from .actions import Actions
-from .api_errors import AI_DOWN, FOR_PERSON, NEEDS_THE_OWNER, for_job, why_job_sentence
+from .api_errors import AI_DOWN, FOR_PERSON, NEEDS_THE_OWNER
 from .delivery import Delivery
 from .config import STARTER_DIR
 from .ha_events import HaEvents
@@ -45,8 +49,8 @@ from .alert_buttons import AlertButtons
 from .outcome import Outcome
 from .voice import Voice
 from .tickets import Tickets
-from .policy import Person, Policy, problems as policy_problems
-from .routing import CONVERSATION, Origin, Routing, job_to
+from .policy import NOT_REGISTERED, Person, Policy, problems as policy_problems
+from .routing import CONVERSATION, Origin, Routing
 from .scheduler import Scheduler
 from .skills import Skills, script_env
 from .state import State
@@ -57,9 +61,6 @@ log = logging.getLogger("vesta")
 
 from .policy import LANGUAGES as LANG  # noqa: E402 — one list, also the VESTA Agent page's menu
 #: Commands the agent answers. Any other command belongs to Home Assistant's automations.
-OWN_COMMANDS = {"/ask", "/new", "/whoami"}
-
-
 def _now_local(tz: str) -> datetime:
     return datetime.now(ZoneInfo(tz))
 
@@ -69,12 +70,17 @@ def _pretty(entity_id: str) -> str:
     return obj.replace("_", " ").strip().capitalize()
 
 
-def _command_name(cmd: str, bot_username: str | None) -> tuple[str, bool]:
-    """('/ask', addressed) from '/ask' or '/ask@TheBot'. A command naming another bot is not ours."""
-    name, _, target = (cmd or "").partition("@")
-    if target:
-        return name.lower(), bool(bot_username) and target.lower() == bot_username.lower()
-    return name.lower(), True
+@dataclass
+class Press:
+    """A press on one of the agent's buttons, as its handler gets it."""
+    q: dict
+    chat: int
+    mid: int | None
+    msg: dict
+    presser: int | None
+    person: Person | None
+    parts: list[str]
+    toast: Callable[[str], Awaitable]
 
 
 class Vesta:
@@ -104,7 +110,9 @@ class Vesta:
         # everything that reaches a chat, and whether it did (delivery.py)
         self.delivery = Delivery(self.tg, self.state, self.policy)
         self.chat_jobs = ChatJobs(self.delivery, self._safe)     # a job asked for in a chat, start to end
-        self.actions = Actions(self.policy, self.state, self.writer_factory, names=self.name_of, related=self.related_entities)
+        self.actions = Actions(self.policy, self.state, self.writer_factory, names=self.name_of, related=self.related_entities,
+                               executed=lambda *a: self.siren.executed(*a))
+        self.siren = Siren(self.policy, self.state, self.actions, self._tell_owner_text)
         # a script's result carried out (outcome.py), with the alert buttons and the Kiosk's tickets as their own modules
         self.buttons = AlertButtons(state=self.state, skills=self.skills, store_path=settings.store_path,
                                     timezone=settings.timezone, edit=(self.tg.edit if self.tg else None),
@@ -116,6 +124,10 @@ class Vesta:
         self.outcome = Outcome(policy=self.policy, state=self.state, send=self.delivery.send, actions=self.actions,
                                reader=self.reader, tickets=self.tickets, buttons=self.buttons, out_dir=settings.out_dir)
         self.server_tools: list[dict] = []
+        # the reports (ai_jobs.py): run, made without the AI, started from a chat
+        self.jobs = AiJobs(settings, self.state, self.policy, self.skills, self.delivery, self.chat_jobs, self.outcome,
+                           server_tools=self._server_tools, toolbox=self.toolbox, system_prompt=self.system_prompt,
+                           tell_owner=self._tell_owner, safe=self._safe)
         self.bot_username: str | None = None
         self._locks: dict[int, asyncio.Lock] = {}
         self._pack = None
@@ -168,7 +180,7 @@ class Vesta:
         return Toolbox(settings=self.s, policy=self.policy(), reader=self.reader, actions=self.actions,
                        skills=self.skills, send=self.delivery.send, server_tools=self.server_tools, state=self.state,
                        ticket=self.tickets.create if self.kiosk.enabled else None,
-                       carry_out=self.outcome.carry_out, start_job=self.start_job, allowed=allowed)
+                       carry_out=self.outcome.carry_out, start_job=self.jobs.start, allowed=allowed)
 
     def lock(self, chat_id: int) -> asyncio.Lock:
         return self._locks.setdefault(int(chat_id), asyncio.Lock())
@@ -330,77 +342,39 @@ class Vesta:
 
     # ------------------------------------------------------------------ messages
     async def handle_message(self, event_type: str, m: dict):
-        """A Telegram message, as Home Assistant fired it (fields checked live on 2026-09-30)."""
-        try:
-            cid = int(m.get("chat_id"))
-        except (TypeError, ValueError):
-            return
-        is_group = cid < 0              # Telegram: groups negative, private chats positive; no type field
-        voice = event_type == "telegram_attachment"
-        if voice and not str(m.get("file_mime_type") or "").startswith("audio/"):
-            return                      # a photo or a file: nothing the agent does with it
-        pol = self.policy()
+        """A Telegram message, as Home Assistant fired it (fields checked live on 2026-09-30): intake.py decides."""
+        got = intake.gate(event_type, m, self.policy(), self.bot_username, self.state.is_own_message)
         from_id = m.get("user_id")
-        if event_type == "telegram_command":
-            cmd, addressed = _command_name(m.get("command") or "", self.bot_username)
-            if not addressed or cmd not in OWN_COMMANDS:
-                return                  # a command for Home Assistant's automations or another bot
-            args = " ".join(str(a) for a in (m.get("args") or []))
-        else:
-            cmd, args = "", ""
-        text = (args if cmd else (m.get("text") or "")).strip()
-        if is_group and pol.chats and pol.chat_role(cid) is None:
-            self.state.log("ignored", {"reason": "group not listed in policy.yaml", "chat": cid})
-            return                      # never leaveChat: the villa bot is Home Assistant's too
-        if cmd == "/whoami":
-            await self.delivery.send(cid, f"Your Telegram id: {from_id}. This chat id: {cid}.")
-            log.info("whoami: person %s (%s) in chat %s", from_id, m.get("from_first"), cid)
+        if got.action == "drop":
+            if got.why:
+                self.state.log("ignored", {"reason": got.why, "chat": got.chat})
             return
-        if is_group and not pol.chats:
-            return                      # chat ids not filled yet: in a group, only /whoami is answered
-        person = pol.person(from_id)
-        if is_group:
-            mention = bool(self.bot_username) and f"@{self.bot_username}".lower() in text.lower()
-            replied = self.state.is_own_message(cid, m.get("reply_to_message_id"))
-            if not (cmd or mention or replied):
-                return                  # people talking to each other: not for the agent, dropped by code
-        if person is None:
-            log.info("Unregistered sender: id %s (%s) in chat %s", from_id, m.get("from_first"), cid)
-            self.state.log("unknown_sender", {"telegram_id": from_id, "chat": cid})
-            if not is_group:
-                await self.delivery.send(cid, f"You are not registered with the VESTA Agent. Your Telegram id is {from_id}.")
+        if got.action == "whoami":
+            await self.delivery.send(got.chat, f"Your Telegram id: {from_id}. This chat id: {got.chat}.")
+            log.info("whoami: person %s (%s) in chat %s", from_id, m.get("from_first"), got.chat)
             return
-        if not is_group and pol.chats and int(cid) not in pol.people:
+        if got.action == "unregistered":
+            log.info("Unregistered sender: id %s (%s) in chat %s", from_id, m.get("from_first"), got.chat)
+            self.state.log("unknown_sender", {"telegram_id": from_id, "chat": got.chat})
+            if not got.group:
+                await self.delivery.send(got.chat, f"{NOT_REGISTERED} Your Telegram id is {from_id}.")
             return
-        if cmd == "/new":
-            self.state.set_session(cid, None)
-            await self.delivery.send(cid, "New conversation.")
+        if got.action == "new":
+            self.state.set_session(got.chat, None)
+            await self.delivery.send(got.chat, "New conversation.")
             return
-        if voice:
-            # in a group, only a voice message that replies to the agent reaches here (no mention possible)
-            text = await self.voice.transcribe(cid, person, str(m.get("file_id") or ""))
-        if self.bot_username:
-            text = re.sub(rf"@{re.escape(self.bot_username)}", "", text or "", flags=re.I).strip()
+        text = got.text
+        if got.voice_file is not None:
+            text = intake.without_mention(await self.voice.transcribe(got.chat, got.person, got.voice_file),
+                                          self.bot_username)
         if not text:
             return
-        await self.converse(cid, person, text, chat_role=pol.chat_role(cid) or "private", voice=voice)
+        await self.converse(got.chat, got.person, text, chat_role=self.policy().chat_role(got.chat) or "private",
+                            voice=got.voice_file is not None)
 
     def _resume_for(self, chat_id: int) -> str | None:
         sid, last = self.state.session(chat_id)
-        if not sid or not last:
-            return None
-        rule = self.s.conversation_reset
-        last_dt = datetime.fromisoformat(last)
-        now = datetime.now(timezone.utc)
-        if rule == "never":
-            return sid
-        if rule == "after_8h_silence":
-            return sid if now - last_dt < timedelta(hours=8) else None
-        local = now.astimezone(ZoneInfo(self.s.timezone))
-        cut = datetime.combine(local.date(), time(4, 0), tzinfo=local.tzinfo)
-        if local < cut:
-            cut -= timedelta(days=1)
-        return sid if last_dt >= cut.astimezone(timezone.utc) else None
+        return intake.resume_for(sid, last, self.s.conversation_reset, self.s.timezone)
 
     def system_prompt(self) -> str:
         pol = self.policy()
@@ -439,7 +413,7 @@ class Vesta:
             tb = self.toolbox(tool_access.allowed_for_person(pol, self.server_tools, person.role if person else None, cid))
             server, allowed = tb.for_run(person, Origin(cid, CONVERSATION))
             res = await runner.run(self.s, self.system_prompt(), prompt, server, allowed, self.state,
-                                   who=run_records.for_person(person.name if person else None, cid), resume=resume,
+                                   who=agent_records.for_person(person.name if person else None, cid), resume=resume,
                                    asked=None if is_continue else text)
             if res.session_id:
                 self.state.set_session(cid, res.session_id)
@@ -456,9 +430,9 @@ class Vesta:
             keyboard = None
             if res.problem in AI_DOWN and not is_continue and tool_access.may_start_job(pol, self.server_tools, person, cid):
                 # the AI cannot answer: a report asked for is still made from its figures (ai_down.py decides)
-                off = ai_down.offer(text, res.problem, self._without_ai_jobs())
+                off = ai_down.offer(text, res.problem, self.jobs.without_ai_able())
                 if off.start:
-                    answer += "\n\n" + self.start_without_ai(off.start["name"], res.problem, cid)
+                    answer += "\n\n" + self.jobs.start_without_ai(off.start["name"], res.problem, cid)
                 elif off.buttons:
                     answer += "\n\nA report can still be made without the AI, from its figures and charts:"
                     keyboard = ai_down.keyboard(res.problem, off.buttons)
@@ -466,7 +440,7 @@ class Vesta:
                 cont = self.state.new_continuation(cid, res.session_id, person.telegram_id if person else None)
                 answer = (answer + "\n\n" if answer else "") + \
                     f"Stopped: this answer reached the {self.s.reply_limit_usd:g} USD limit per reply."
-                keyboard = {"inline_keyboard": [[{"text": "Continue", "callback_data": f"c:{cont}"}]]}
+                keyboard = {"inline_keyboard": [[{"text": "Continue", "callback_data": button_data.make(button_data.CONTINUE, cont)}]]}
             answered()                                       # "typing…" ends: the answer is going out
             # the camera pictures the AI looked at go with it (Toolbox.photos)
             await self.delivery.reply(cid, answer, keyboard=keyboard, photos=tb.photos)
@@ -491,156 +465,64 @@ class Vesta:
             if self.tg and qid:
                 await self.tg.answer_callback(str(qid), text)
 
-        if data.startswith("a:"):
-            try:
-                _, aid, yn = data.split(":")
-            except ValueError:
-                return await toast("Unknown button.")
-            ap = self.state.approval(aid)
-            if ap and ap["chat_id"] != cid:
-                self.state.log("press_refused", {"approval": aid, "by": presser, "reason": "button pressed from another chat"})
-                return await toast("This button belongs to another chat.")
-            out = await asyncio.to_thread(self.actions.decide, aid, presser, yn == "y")
-            await toast(out["toast"])
-            if out.get("edit") and mid and self.tg:
-                await self.tg.edit(cid, mid, out["edit"])
-            if out.get("executed") and ap:
-                await self.after_execution(ap)
-            return
-        if data.startswith("c:"):
-            person = pol.person(presser)
-            if person is None:
-                return await toast("You are not registered with the VESTA Agent.")
-            cont = self.state.use_continuation(data[2:], cid, presser)
-            if not cont:
-                return await toast("Already continued.")
-            if cont.get("not_yours"):
-                return await toast("Only the person who asked can continue this answer.")
-            await toast("Continuing.")
-            return await self.converse(cid, person, "", chat_role=pol.chat_role(cid) or "private",
-                                       resume=cont["session_id"], is_continue=True)
-        if data.startswith("i:"):
-            return await self.buttons.press(q, cid, data, pol.person(presser), toast)
-        if data.startswith("w:"):
-            if pol.person(presser) is None:
-                return await toast("You are not registered with the VESTA Agent.")
-            if not tool_access.may_start_job(pol, self.server_tools, pol.person(presser), cid):
-                return await toast("Starting a report is not switched on for you here.")
-            _, problem, name = (data.split(":", 2) + ["", ""])[:3]
-            # the pressed message stands for the report until it arrives (chat_jobs.py)
-            said = self.start_without_ai(name, problem, cid, waiting_mid=int(mid) if mid else None)
-            await toast(said)
-            if mid and self.tg:
-                # the message itself says so, its buttons gone: a toast alone is easily missed ("nothing happened")
-                await self.tg.edit(cid, mid, f"{msg.get('text') or ''}\n\n{said}".strip())
-            return
-        await toast("Unknown button.")
+        # ⚠️ ONE TABLE OF BUTTON KINDS (button_data.py): each kind's handler below; who must be registered, once
+        kind, parts = button_data.read(data)
+        handle = {button_data.APPROVAL: self._press_approval, button_data.CONTINUE: self._press_continue,
+                  button_data.ALERT: self._press_alert, button_data.REPORT: self._press_report}.get(kind)
+        if handle is None:
+            return await toast("Unknown button.")
+        person = pol.person(presser)
+        if kind in button_data.FOR_PEOPLE_ONLY and person is None:
+            return await toast(NOT_REGISTERED)
+        await handle(Press(q, cid, mid, msg, presser, person, parts, toast))
 
-    async def after_execution(self, ap: dict):
-        """The siren switches itself off after a few minutes (alert-desk rules)."""
-        pol = self.policy()
-        act = ap["action"]
-        siren_domain = pol.siren_entity.split(".")[0] if pol.siren_entity else None
-        if pol.siren_entity and act["domain"] == siren_domain and act["service"] == "turn_on" and pol.siren_entity in act["entity_ids"]:
-            minutes = pol.siren_auto_off_min
+    async def _press_approval(self, p: "Press") -> None:
+        aid, yn = p.parts
+        ap = self.state.approval(aid)
+        if ap and ap["chat_id"] != p.chat:
+            self.state.log("press_refused", {"approval": aid, "by": p.presser, "reason": "button pressed from another chat"})
+            return await p.toast("This button belongs to another chat.")
+        out = await asyncio.to_thread(self.actions.decide, aid, p.presser, yn == "y")
+        await p.toast(out["toast"])
+        if out.get("edit") and p.mid and self.tg:
+            await self.tg.edit(p.chat, p.mid, out["edit"])
 
-            async def off():
-                await asyncio.sleep(minutes * 60)
-                ok = await asyncio.to_thread(self.actions.system, siren_domain, "turn_off", pol.siren_entity)
-                owner = Routing(pol).target("owner")
-                if owner:
-                    await self.delivery.send(owner, "Siren switched off." if ok else "The siren could not be switched off: check it now.")
-            asyncio.create_task(off())
+    async def _press_continue(self, p: "Press") -> None:
+        cont = self.state.use_continuation(p.parts[0], p.chat, p.presser)
+        if not cont:
+            return await p.toast("Already continued.")
+        if cont.get("not_yours"):
+            return await p.toast("Only the person who asked can continue this answer.")
+        await p.toast("Continuing.")
+        await self.converse(p.chat, p.person, "", chat_role=self.policy().chat_role(p.chat) or "private",
+                            resume=cont["session_id"], is_continue=True)
 
-    # ------------------------------------------------------------------ scheduled model jobs
-    def _language_of(self, role: str) -> str:
-        for p in self.policy().people.values():
-            if p.role == role:
-                return LANG.get(p.language, p.language)
-        return "English"
+    async def _press_alert(self, p: "Press") -> None:
+        await self.buttons.press(p.q, p.chat, p.parts, p.person, p.toast)
 
-    async def run_model_job(self, skill, job: dict, origin: Origin | None = None) -> None:
-        """An AI job of a skill: its model and spending limit are policy.yaml's settings.jobs[name].
+    async def _press_report(self, p: "Press") -> None:
+        if not tool_access.may_start_job(self.policy(), self.server_tools, p.person, p.chat):
+            return await p.toast("Starting a report is not switched on for you here.")
+        problem, name = p.parts
+        # the pressed message stands for the report until it arrives (chat_jobs.py)
+        said = self.jobs.start_without_ai(name, problem, p.chat, waiting_mid=int(p.mid) if p.mid else None)
+        await p.toast(said)
+        if p.mid and self.tg:
+            # the message itself says so, its buttons gone: a toast alone is easily missed ("nothing happened")
+            await self.tg.edit(p.chat, p.mid, f"{p.msg.get('text') or ''}\n\n{said}".strip())
 
-        ⚠️ NOT SET, NOT RUN (owner, 2026-10-01): a job policy.yaml does not name has no agreed cost, so it
-        is skipped and the log says so (the VESTA Agent page offers to add it). When the limit stops it,
-        the skill's `on_limit` code step still finishes the work (a report is sent with what is done)."""
-        name = job["name"]
-        cfg = self.policy().jobs.get(name)
-        if cfg is None:
-            log.warning("AI job %s (skill %s) is not set in policy.yaml: it does not run. "
-                        "VESTA Agent page → Rules → AI jobs → Add them.", name, skill.name)
-            self.state.log("job_not_set", {"job": name, "skill": skill.name})
-            if origin:
-                await self.delivery.send(origin.chat, f"The {name} job is not set up yet (VESTA Agent page → Rules → "
-                                                      "AI jobs), so it cannot run.", origin=origin)
-            return
-        prompt = job["prompt"]
-        try:
-            prompt = prompt.format(fm_language=self._language_of("fm"), owner_language=self._language_of("owner"))
-        except (KeyError, IndexError, ValueError):
-            pass                        # a prompt with other braces is used as written
-        if origin:
-            # where it all goes is routing's (Origin JOB holds every message to that chat); the AI is only told
-            # it was asked for, so it does not write "as scheduled"
-            prompt += "\n\nThis was asked for in a chat, not on schedule."
+    async def _server_tools(self) -> list[dict]:
+        """HA MCP's tool list, read again when the agent has none yet."""
         if not self.server_tools:
             await self.refresh_server_tools()
-        pol = self.policy()
-        stop = tool_access.blockers(pol, self.server_tools or None, skill)
-        if stop:
-            # ⚠️ NOT WORKING, AND SAID (0.6.42): a report whose skill needs a tool switched off does not run
-            why = " ".join(b["why"] for b in stop)
-            log.warning("AI job %s (skill %s) did not run: %s", name, skill.name, why)
-            self.state.log("job_blocked", {"job": name, "skill": skill.name, "tools": [b["tool"] for b in stop]})
-            to = Routing(pol).target(job_to(job, origin), origin)
-            if to:
-                await self.delivery.send(to, f"The {name} report did not run. {why} (VESTA Agent page)", origin=origin)
-            return
-        started = datetime.now(timezone.utc).isoformat()
-        # a report gets only the tools its skill lists (skill.yaml `tools`), among those switched on
-        tb = self.toolbox(tool_access.allowed_for_job(pol, self.server_tools, skill))
-        server, allowed = tb.for_run(None, origin)
-        log.info("AI job %s started (%s, limit %g USD)%s", name, cfg["profile"], cfg["limit_usd"],
-                 " on request" if origin else "")
-        res = await runner.run(self.s, self.system_prompt(), prompt, server, allowed, self.state, who=run_records.for_job(name),
-                               limit_usd=cfg["limit_usd"], profile=cfg["profile"])
-        if res.problem or (res.error and not res.text):
-            # before 0.6.41 a failed job logged "done" and nobody was told: the report simply never came
-            problem = res.problem or "unknown"
-            log.warning("AI job %s did not run: %s", name, problem)
-            to = Routing(self.policy()).target(job_to(job, origin), origin)
-            made = await self.run_without_ai(skill, job, problem, origin)
-            if to and not made:
-                await self.delivery.send(to, for_job(name, problem), origin=origin)
-            await self._safe(self._tell_owner(problem, to))
-            return
-        log.info("AI job %s done (%s USD%s)", name, res.cost_usd,
-                 ", stopped at its limit" if res.stopped_at_limit else "")
-        if res.stopped_at_limit and job.get("on_limit"):
-            await job_steps.run(self.s, self.state, self.skills, self.outcome, skill, job["on_limit"],
-                                {"to": job_to(job, origin), "started": started, "limit": f"{cfg['limit_usd']:g}"}, origin)
+        return self.server_tools
 
-    async def run_without_ai(self, skill, job: dict, problem: str, origin: Origin | None = None) -> bool:
-        """The job's `without_ai` steps (skill.yaml), when the AI could not run: True when they sent its work.
+    async def _tell_owner_text(self, text: str) -> None:
+        owner = Routing(self.policy()).target("owner")
+        if owner:
+            await self.delivery.send(owner, text)
 
-        ⚠️ A REPORT EVEN WITHOUT THE AI (owner, 2026-10-07: the Anthropic credit ran out and the weekly never came).
-        The figures and charts are code; only VESTA's readings need the AI. The steps run in order, each must
-        succeed (a later one reads an earlier one's file: a stale file must never stand in for a failed step), and
-        what a step decides to send is sent. The page and its message say why the AI was missing; the Costs tab
-        shows the run (a "without_ai" record, no cost)."""
-        steps = [st for st in job.get("without_ai") or [] if not (origin and st["on_schedule_only"])]
-        if not steps:
-            return False
-        name = job["name"]
-        done = await job_steps.run(self.s, self.state, self.skills, self.outcome, skill, steps,
-                                   {"to": job_to(job, origin), "why": why_job_sentence(problem)}, origin)
-        sent, failed = done.sent, done.failed
-        self.state.log(run_records.WITHOUT_AI, run_records.without_ai(name, problem, sent, failed))
-        log.warning("AI job %s made without the AI (%s): %s", name, problem,
-                    f"stopped at {failed}" if failed else f"{sent} message(s) sent")
-        return sent > 0
-
+    # ------------------------------------------------------------------ scheduled model jobs
     async def _tell_owner(self, problem: str | None, already_told: int | None) -> None:
         """No credit, a refused key: every reply and report stops until the owner acts. Told in the owner
         chat at most every 12 hours per kind, and not again in a chat that was just told."""
@@ -655,47 +537,6 @@ class Vesta:
         self.state.mark_owner_told(problem, now.isoformat())
         if int(owner) != int(already_told or 0):
             await self.delivery.send(owner, text)
-
-    async def start_job(self, name: str, chat: int) -> str:
-        """A job a skill marks on_request, started from a chat: it runs as itself (its model, its limit)."""
-        from .skills import ai_jobs
-        found = [(sk, j) for sk, j in ai_jobs(self.skills.all()) if j["name"] == name and j.get("on_request")]
-        if not found:
-            return f"There is no job {name} that can be started from a chat."
-        if name not in self.policy().jobs:
-            return f"The {name} job is not set up yet (VESTA Agent page → Rules → AI jobs): it cannot run."
-        sk, job = found[0]
-        # ⚠️ THE AGENT SAYS WHETHER IT IS RUNNING, NOT THE AI'S MEMORY (villa, 2026-10-07 01:22): asked again 30 s after
-        # the report was sent, the AI answered "already being generated" from the conversation and started nothing.
-        # A second start while one runs would make the report twice.
-        if not self.chat_jobs.start(chat, name, lambda origin: self.run_model_job(sk, job, origin)):
-            return f"The {name} job asked for here is still running: its result will be sent here when it is ready."
-        cfg = self.policy().jobs[name]
-        return (f"Started {name} now (brain {cfg['profile']}, limit {cfg['limit_usd']:g} USD): the result will be sent "
-                "here when it is ready (a few minutes).")
-
-    def _without_ai_jobs(self) -> list[dict]:
-        """The jobs a person may start from a chat that can be made without the AI (skill.yaml without_ai), set up."""
-        from .skills import ai_jobs
-        jobs = self.policy().jobs
-        return [j for _, j in ai_jobs(self.skills.all()) if j.get("on_request") and j.get("without_ai") and j["name"] in jobs]
-
-    def start_without_ai(self, name: str, problem: str, chat: int, waiting_mid: int | None = None) -> str:
-        """A report made from its figures because the AI cannot answer (named in a message, or its button pressed:
-        `waiting_mid`, the pressed message), sent here. What the person is told."""
-        from .skills import ai_jobs
-        found = [(sk, j) for sk, j in ai_jobs(self.skills.all()) if j["name"] == name]
-        if not found or not any(j["name"] == name for j in self._without_ai_jobs()):
-            return "This report cannot be made without the AI."
-        sk, job = found[0]
-
-        async def made(origin: Origin) -> None:
-            if not await self.run_without_ai(sk, job, problem if problem in AI_DOWN else "unknown", origin):
-                await self.delivery.send(chat, f"The {name} report could not be made without the AI either: its "
-                                               "figures could not be read. Try again later.", origin=origin)
-        if not self.chat_jobs.start(chat, name, made, waiting_mid):
-            return "This report is already being made: it will be sent here."
-        return f"Making the {job['button']} without the AI, from its figures and charts: it will be sent here."
 
     async def housekeeping(self) -> None:
         if not self.server_tools and _now_local(self.s.timezone).minute % 10 == 0:
@@ -739,7 +580,7 @@ class Vesta:
     async def main(self, stop: asyncio.Event):
         await self.start()
         await self._safe(self.tidy())
-        tasks = [asyncio.create_task(Scheduler(self.s, self.skills, self.state, self.run_code_job, self.run_model_job,
+        tasks = [asyncio.create_task(Scheduler(self.s, self.skills, self.state, self.run_code_job, self.jobs.run,
                                                self.rebuild_pack, self.housekeeping).run(stop))]
         if self.s.ha_url and self.s.ha_token:
             events = HaEvents(self.s.ha_url, self.s.ha_token, self.on_ha_event, self.beat, headers=self.cf_headers)
@@ -747,6 +588,7 @@ class Vesta:
         if self.kiosk.enabled:
             tasks.append(asyncio.create_task(self.kiosk.heartbeats(stop)))
         tasks.append(asyncio.create_task(requests_box.serve(self.s.data_dir, self.on_request, stop)))
+        tasks.append(asyncio.create_task(self.siren.watch(stop)))     # stops the siren on time, after a restart too
         await stop.wait()
         log.info("Stopping")
         for t in tasks:

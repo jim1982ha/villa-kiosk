@@ -546,3 +546,21 @@ def test_copying_a_setup_uses_only_the_pages_public_methods_and_each_exists():
     called = set(re.findall(r"\bui\.([A-Za-z_]+)\(", inspect.getsource(setup_copy)))
     assert called and not any(n.startswith("_") for n in called), called
     assert all(callable(getattr(UI, n, None)) and not inspect.iscoroutinefunction(getattr(UI, n)) for n in called), called
+
+
+def test_every_write_is_checked_by_its_kind_whoever_writes_it(ui):
+    # architecture review 6: the rules' problems were checked only by a save from Rules and a script's syntax only by
+    # the editor — an Undo (Overview › Changes) or an imported setup wrote either unchecked
+    from vesta_agent.ui.server import UI, Refused
+    page = UI(ui, "standalone")
+    for place in ("Undo", "Import"):
+        with pytest.raises(Refused, match="cannot be read as YAML"):
+            page.text_change(place, "x", {"kind": "policy"}, "people: [")
+        with pytest.raises(Refused, match="line 1"):
+            page.text_change(place, "x", {"kind": "file", "skill": "reports", "path": "scripts/compose.py"}, "def (:\n")
+        with pytest.raises(Refused, match="not valid YAML"):
+            page.text_change(place, "x", {"kind": "file", "skill": "reports", "path": "reports.yaml"}, "a: [")
+    text, r = page.policy_now()
+    with pytest.raises(Refused, match="changed since you opened it"):
+        page.text_change("Rules", "x", {"kind": "policy"}, text, base_rev="an-old-version")
+    page.text_change("Rules", "x", {"kind": "policy"}, text, base_rev=r)          # the current version: written

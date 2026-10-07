@@ -1,3 +1,13 @@
+## 0.12.79
+
+The sixth architecture review, carried out. What you may notice:
+- **The siren always stops by itself.** It was switched off after its minutes only when it had been approved with a button; a villa whose rules let it sound without asking had no stop at all, and a restart of the app forgot a stop that was due. Now every way of turning it on schedules its stop, and a restart still stops it on time.
+- **The page checks every change the same way.** Undoing a change (Overview › Changes) or importing a setup could write rules with problems or a script with a syntax error; now they are refused like a save from Rules or the editor.
+- **One message for someone the villa does not know**, whatever they press ("You are not registered with the VESTA Agent").
+- **The Costs tab:** a job made without the AI is kept as long as the AI runs beside it; a question answered after a lost conversation is one row, not two.
+
+Under the hood: the reports, incoming Telegram messages and the buttons each became one piece of the agent instead of being spread through it; closing an alert or a night-check finding closes its task and its fault in the Kiosk by one rule.
+
 ## 0.12.78
 
 What you will see:

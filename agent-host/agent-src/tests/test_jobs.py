@@ -60,13 +60,13 @@ def job(v, name):
 
 def test_a_job_policy_yaml_does_not_name_does_not_run(agent, caplog):
     sk = agent.skills.get("reports")
-    run(agent.run_model_job(sk, job(agent, "fm-daily")))
+    run(agent.jobs.run(sk, job(agent, "fm-daily")))
     assert agent.runs == []
     assert any("fm-daily" in r.getMessage() and "not set in policy.yaml" in r.getMessage() for r in caplog.records)
 
 
 def test_a_set_job_runs_with_its_own_brain_and_limit(agent):
-    run(agent.run_model_job(agent.skills.get("reports"), job(agent, "fm-weekly")))
+    run(agent.jobs.run(agent.skills.get("reports"), job(agent, "fm-weekly")))
     (r,) = agent.runs
     assert (r["profile"], r["limit_usd"], r["who"]) == ("performance", 2.5, "job:fm-weekly")
     assert agent.code == []                                               # finished within its limit
@@ -74,11 +74,11 @@ def test_a_set_job_runs_with_its_own_brain_and_limit(agent):
 
 def test_at_its_limit_a_report_job_still_sends_its_page(agent):
     agent.stop_at_limit = True
-    run(agent.run_model_job(agent.skills.get("reports"), job(agent, "fm-weekly")))
+    run(agent.jobs.run(agent.skills.get("reports"), job(agent, "fm-weekly")))
     (cmd, values, origin), = agent.code
     assert cmd == "compose.py" and values["to"] == "fm" and values["limit"] == "2.5" and values["started"]
     agent.code.clear()
-    run(agent.run_model_job(agent.skills.get("reports"), job(agent, "fm-weekly"), Origin(ASKER, JOB)))
+    run(agent.jobs.run(agent.skills.get("reports"), job(agent, "fm-weekly"), Origin(ASKER, JOB)))
     (cmd, values, origin), = agent.code
     assert values["to"] == "here" and origin == Origin(ASKER, JOB)               # asked in a chat: back to that chat
     assert "asked for in a chat" in agent.runs[-1]["prompt"]
@@ -86,13 +86,13 @@ def test_at_its_limit_a_report_job_still_sends_its_page(agent):
 
 def test_a_report_asked_for_in_a_chat_runs_as_its_job(agent):
     async def go():
-        msg = await agent.start_job("fm-weekly", ASKER)
+        msg = await agent.jobs.start("fm-weekly", ASKER)
         await asyncio.sleep(0.05)
         return msg
     msg = run(go())
     assert msg.startswith("Started fm-weekly") and agent.runs[-1]["profile"] == "performance"
-    assert run(agent.start_job("no-such-job", ASKER)).startswith("There is no job")
-    assert "not set up yet" in run(agent.start_job("fm-daily", ASKER))                # asked for, not in policy.yaml
+    assert run(agent.jobs.start("no-such-job", ASKER)).startswith("There is no job")
+    assert "not set up yet" in run(agent.jobs.start("fm-daily", ASKER))                # asked for, not in policy.yaml
     tb = agent.toolbox()
     person = Person(ASKER, "Asker", "fm")
     assert "start_job" in [t.name for t in tb.tool_objects(person, Origin(ASKER, CONVERSATION))]
@@ -105,7 +105,7 @@ def test_a_job_asked_for_in_a_chat_sends_only_to_that_chat(agent):
     """The group asks for the weekly: its page and the owner lines its steps address to fm and owner all
     come back to the group, never to the fm or owner chat (owner, 2026-10-01)."""
     async def go():
-        await agent.start_job("fm-weekly", ASKER)
+        await agent.jobs.start("fm-weekly", ASKER)
         await asyncio.sleep(0.05)
     run(go())
     tb = agent.toolbox()
@@ -189,7 +189,7 @@ def _asked_in_chat(agent, tmp_path, monkeypatch, page: bool, job_name: str = "fm
                 await send.handler({"to": "here", "text": "Three things need attention.",
                                     **({} if text_only else {"attachment": "fm_weekly.html"})})
         else:
-            await agent.start_job(job_name, ASKER)       # what the start_job tool does
+            await agent.jobs.start(job_name, ASKER)       # what the start_job tool does
 
     def answer(run_):
         if run_["who"].startswith("job:"):
@@ -284,7 +284,7 @@ def test_typing_goes_on_while_the_report_asked_for_is_made_and_stops_when_it_is_
             seen["after_result"] = len(agent.tg.typing_in) - seen["at_result"]
             done.set()
         else:
-            await agent.start_job("fm-weekly", ASKER)
+            await agent.jobs.start("fm-weekly", ASKER)
     FakeAI(lambda r: "" if r["who"].startswith("job:") else "On its way.", act=act).install(monkeypatch)
 
     async def go():
@@ -306,11 +306,11 @@ def test_asked_again_the_agent_not_the_ais_memory_says_whether_the_report_runs(a
     ai = FakeAI("", act=act).install(monkeypatch)
 
     async def go():
-        first = await agent.start_job("fm-weekly", ASKER)
-        again = await agent.start_job("fm-weekly", ASKER)
+        first = await agent.jobs.start("fm-weekly", ASKER)
+        again = await agent.jobs.start("fm-weekly", ASKER)
         gate.set()
         await asyncio.sleep(0.05)
-        after = await agent.start_job("fm-weekly", ASKER)
+        after = await agent.jobs.start("fm-weekly", ASKER)
         gate.set()
         await asyncio.sleep(0.05)
         return first, again, after

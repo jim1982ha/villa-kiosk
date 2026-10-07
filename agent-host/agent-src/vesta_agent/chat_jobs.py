@@ -21,6 +21,8 @@ class ChatJobs:
         self.delivery = delivery
         self._safe = safe                                  # logs what a task raised (app.Vesta._safe)
         self._running: set[tuple[int, str]] = set()
+        # the tasks, kept: asyncio holds only a weak reference to a task nobody keeps, and `idle` waits for them
+        self._tasks: set[asyncio.Task] = set()
 
     def running(self, chat: int, name: str) -> bool:
         return (int(chat), name) in self._running
@@ -42,5 +44,12 @@ class ChatJobs:
             finally:
                 self._running.discard((chat, name))
                 await self.delivery.job_ended(chat, name)
-        asyncio.create_task(self._safe(run()))
+        task = asyncio.create_task(self._safe(run()))
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
         return True
+
+    async def idle(self) -> None:
+        """Until every job started here has ended (its result sent, its waiting message dealt with)."""
+        while self._tasks:
+            await asyncio.gather(*list(self._tasks), return_exceptions=True)

@@ -22,7 +22,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable
 
-from .policy import Decision, Person, Policy, action_hash
+from . import button_data
+from .policy import NOT_REGISTERED, Decision, Person, Policy, action_hash
 from .routing import Routing
 from .state import State
 
@@ -79,8 +80,11 @@ def plain(decision: Decision, names: Callable[[str], str]) -> str:
 class Actions:
     def __init__(self, policy_loader: Callable[[], Policy], state: State,
                  writer_factory: Callable[[], Any], names: Callable[[str], str] | None = None,
-                 related: Callable[[list[str]], set[str]] | None = None):
+                 related: Callable[[list[str]], set[str]] | None = None,
+                 executed: Callable[[str, str, list[str]], None] | None = None):
         self.policy_loader = policy_loader
+        # executed(domain, service, entity_ids): told of every execution, whatever the path (siren.py)
+        self.on_executed = executed or (lambda *a: None)
         self.state = state
         self.writer_factory = writer_factory
         self.names = names or (lambda e: e)
@@ -136,8 +140,8 @@ class Actions:
         self.state.log("requested", dict(base, approval=aid, required_role=d.required_role))
         msg = Outgoing(int(target_chat),
                        f"{text}\nOnly {who} can approve. Expires in {policy.approval_ttl_minutes} min.",
-                       {"inline_keyboard": [[{"text": "Approve", "callback_data": f"a:{aid}:y"},
-                                             {"text": "Refuse", "callback_data": f"a:{aid}:n"}]]}, aid)
+                       {"inline_keyboard": [[{"text": "Approve", "callback_data": button_data.make(button_data.APPROVAL, aid, "y")},
+                                             {"text": "Refuse", "callback_data": button_data.make(button_data.APPROVAL, aid, "n")}]]}, aid)
         return (f"Approval requested from {who} (buttons sent). Nothing happens until a person approves. "
                 f"Do not say it is done."), msg
 
@@ -153,7 +157,7 @@ class Actions:
             return {"toast": "This request does not exist.", "edit": None, "executed": False}
         if person is None:
             self.state.log("press_refused", {"approval": aid, "by": presser_id, "reason": "not a registered person or anonymous"})
-            return {"toast": "You are not registered with VESTA.", "edit": None, "executed": False}
+            return {"toast": NOT_REGISTERED, "edit": None, "executed": False}
         if ap["status"] != "pending":
             return {"toast": f"Already {ap['status']}.", "edit": None, "executed": False}
         if datetime.fromisoformat(ap["expires_at"]) < now:
@@ -204,6 +208,10 @@ class Actions:
             log.warning("Approved %s.%s on %s failed: %s", d.domain, d.service, ", ".join(d.entity_ids) or "-", str(e)[:300])
             return {"ok": False, "text": f"Home Assistant refused or failed ({type(e).__name__}). Nothing confirmed."}
         self.state.log("executed", {"domain": d.domain, "service": d.service, "entities": d.entity_ids, "data": d.data})
+        try:
+            self.on_executed(d.domain, d.service, list(d.entity_ids))
+        except Exception:  # noqa: BLE001 — a failed hook never undoes what Home Assistant did
+            log.exception("after an execution")
         expect = EXPECT.get((d.domain, d.service))
         if not d.entity_ids or not expect:
             return {"ok": True, "text": "Sent."}

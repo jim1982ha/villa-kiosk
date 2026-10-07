@@ -173,6 +173,18 @@ Decisions of 2026-09-30 (owner):
   `run_records` writes and reads a run's `who` and the without-AI record;
   `KnowledgePack.row/name_of`; facts.Ctx reads each thing once per run; the page's write
   methods are public (setup_copy uses only them — test); a device "on its way" is read again.
+  Sixth review, 0.12.79: `siren.Siren` — every execution (actions `executed` hook) that
+  turns the configured siren on records its stop time in State; `watch` stops it, a restart
+  included. `ai_jobs.AiJobs` holds the reports (find, run, start, without the AI);
+  `intake.gate` decides each Telegram message (pure) and `intake.resume_for` the
+  conversation reset; `button_data` is the one table of button kinds (a/c/i/w), the press a
+  lookup, "registered?" once (`policy.NOT_REGISTERED`). The run record (kinds, who, the
+  without-AI record, `detail`) lives in `vesta_shared.agent_records` (run_records.py gone);
+  the Costs rows are pruned together; a failed resume is one row. `Problems.close_incident`
+  / `close_finding` close a source and what it owes, by its state. The page's
+  `text_change` checks the version and the text by kind for every write (Undo, Import
+  included); `tool_access.health` answers "is this skill working". ChatJobs keeps its
+  tasks; `idle()` replaces polling in tests.
 - No PDF (owner, 2026-09-30): the reports are self-contained HTML pages sent
   as attachments. Chromium was ~480 MB of a 1.1 GB image for this alone.
 - ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent

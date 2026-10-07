@@ -13,7 +13,7 @@ import threading
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from . import run_records
+from vesta_shared import agent_records
 
 SCHEMA = """
 create table if not exists approvals(
@@ -121,6 +121,16 @@ class State:
     # tools.py — each parsing its own. The stored keys are unchanged, so the
     # records an agent already holds keep working with no migration.
 
+    # When the siren must stop (siren.py): kept here so that a restart still stops it.
+    def siren_stop(self) -> str | None:
+        return self.get("siren:stop_at")
+
+    def set_siren_stop(self, at_iso: str | None) -> None:
+        if at_iso:
+            self.put("siren:stop_at", at_iso)
+        else:
+            self.drop("siren:stop_at")
+
     # A scheduled job's last slot: claimed once per slot, by one tick.
     def claim_job_slot(self, job: str, slot_iso: str) -> bool:
         """True if this tick claims `job` for `slot_iso`; False if it already ran in that slot.
@@ -198,11 +208,12 @@ class State:
         ("job:fm-daily"), so the Costs tab needs no second reading of old records (0.6.42). `names`: old → new."""
         n = 0
         with self._lock:
-            for r in self.db.execute("select id, detail from calls where kind = 'run' and detail like '%\"job:%'").fetchall():
+            for r in self.db.execute("select id, detail from calls where kind = ? and detail like '%\"job:%'",
+                                     (agent_records.RUN,)).fetchall():
                 d = json.loads(r["detail"] or "{}")
-                new = names.get(run_records.job_of(str(d.get("who") or "")) or "")
+                new = names.get(agent_records.job_of(str(d.get("who") or "")) or "")
                 if new:
-                    d["who"] = run_records.for_job(new)
+                    d["who"] = agent_records.for_job(new)
                     self.db.execute("update calls set detail=? where id=?", (json.dumps(d, default=str), r["id"]))
                     n += 1
             self.db.commit()
@@ -212,8 +223,12 @@ class State:
         """Housekeeping (settings.keep): the AI runs (the Costs tab) and the other records have their own
         limit; a pending approval and an unused Continue still waiting are never touched."""
         with self._lock:
-            runs = self.db.execute("delete from calls where kind = 'run' and at < ?", (runs_before,)).rowcount
-            other = self.db.execute("delete from calls where kind != 'run' and at < ?", (records_before,)).rowcount
+            # the Costs tab's rows (an AI run, a job made without the AI) go by the runs' limit, together
+            kinds = agent_records.COSTS_KINDS
+            marks = ",".join("?" * len(kinds))
+            runs = self.db.execute(f"delete from calls where kind in ({marks}) and at < ?", (*kinds, runs_before)).rowcount
+            other = self.db.execute(f"delete from calls where kind not in ({marks}) and at < ?",
+                                    (*kinds, records_before)).rowcount
             appr = self.db.execute("delete from approvals where status != 'pending' and created_at < ?",
                                    (records_before,)).rowcount
             cont = self.db.execute("delete from continuations where created_at < ?", (records_before,)).rowcount

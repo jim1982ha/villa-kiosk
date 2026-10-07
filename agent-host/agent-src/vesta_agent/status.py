@@ -5,12 +5,11 @@ and the UI's overview: one reading of the records, two places to show it.
 """
 from __future__ import annotations
 
-import json
 import os
 from datetime import datetime, timedelta, timezone
 
 from vesta_shared.agent_records import run_cost   # what a run cost: one reading, shared with the skills
-from . import run_records
+from vesta_shared import agent_records
 from .api_errors import why_job_sentence
 
 # agent_status: the records worth telling a person about, and the fields of each (never a chat id or a token)
@@ -38,11 +37,8 @@ def report(state, store_path: str, hours: int = 24, now: datetime | None = None)
     events = []
     for c in state.calls_since(since.isoformat()):
         counts[c["kind"]] = counts.get(c["kind"], 0) + 1
-        try:
-            d = json.loads(c["detail"] or "{}")
-        except ValueError:
-            d = {}
-        if c["kind"] == "run":
+        d = agent_records.detail(c)
+        if c["kind"] == agent_records.RUN:
             cost += run_cost(d)
         if c["kind"] in STATUS_KINDS:
             events.append({"at": c["at"], "what": c["kind"], **{k: v for k, v in d.items() if k in STATUS_FIELDS}})
@@ -76,14 +72,11 @@ def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_la
     local = (lambda t: t.astimezone(zone)) if zone else (lambda t: t)
     runs, made = [], []
     for c in state.calls_since(since.isoformat()):
-        if c["kind"] not in ("run", run_records.WITHOUT_AI):
+        if c["kind"] not in agent_records.COSTS_KINDS:
             continue
-        try:
-            d = json.loads(c["detail"] or "{}")
-        except ValueError:
-            d = {}
-        if c["kind"] == run_records.WITHOUT_AI:
-            # a job made by its code steps when the AI could not run (app.run_without_ai): shown among the runs,
+        d = agent_records.detail(c)
+        if c["kind"] == agent_records.WITHOUT_AI:
+            # a job made by its code steps when the AI could not run (ai_jobs.AiJobs.run_without_ai): shown among the runs,
             # at no cost, and not counted as an AI run
             made.append({"at": c["at"], "kind": "job", "work": str(d.get("job") or "?"), "person": None, "chat": None,
                          "asked": None, "profile": None, "model": None, "tokens_in": None, "tokens_out": None,
@@ -93,10 +86,10 @@ def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_la
                                         "failed": d.get("failed")}})
             continue
         who = str(d.get("who") or "")
-        if run_records.job_of(who) is not None:
-            kind, work, person, chat = "job", run_records.job_of(who), None, None
+        if agent_records.job_of(who) is not None:
+            kind, work, person, chat = "job", agent_records.job_of(who), None, None
         else:
-            name, cid = run_records.person_of(who)
+            name, cid = agent_records.person_of(who)
             kind, work, person = "chat", "Chat replies", name or None
             chat = chat_label(cid) if chat_label and cid.lstrip("-").isdigit() else None
         tok = d.get("tokens") or {}
@@ -160,13 +153,9 @@ def tool_usage(state, days: int = 7, now: datetime | None = None) -> dict[str, i
     since = (now or datetime.now(timezone.utc)) - timedelta(days=days)
     out: dict[str, int] = {}
     for c in state.calls_since(since.isoformat()):
-        if c["kind"] != "run":
+        if c["kind"] != agent_records.RUN:
             continue
-        try:
-            steps = json.loads(c["detail"] or "{}").get("steps") or []
-        except ValueError:
-            continue
-        for x in steps:
+        for x in agent_records.detail(c).get("steps") or []:
             if isinstance(x, dict) and x.get("tool"):
                 out[x["tool"]] = out.get(x["tool"], 0) + 1
     return out

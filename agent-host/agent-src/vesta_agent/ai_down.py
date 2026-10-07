@@ -13,6 +13,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from . import button_data
 from .api_errors import AI_DOWN
 
 
@@ -36,4 +37,5 @@ def offer(text: str, problem: str | None, jobs: list[dict]) -> Offer:
 
 
 def keyboard(problem: str, jobs: list[dict]) -> dict:
-    return {"inline_keyboard": [[{"text": j["button"], "callback_data": f"w:{problem}:{j['name']}"}] for j in jobs]}
+    return {"inline_keyboard": [[{"text": j["button"], "callback_data": button_data.make(button_data.REPORT, problem, j["name"])}]
+                                for j in jobs]}

@@ -312,13 +312,12 @@ def run(args) -> dict:
                 f.detail["last_reported_pct"] = f.detail.get("change_pct")
                 store.set_finding_detail(fid, f.detail)
     problems = Problems(store)
-    resolved_tasks = []
+    resolved = []
     for o in F.to_close(store.findings(status="open"), fired, STATE_RULES):
-        store.close_finding(o["rule_id"], o["entity_id"], today.isoformat())
         closed.append(o)
         # ⚠️ ITS TASK AND ITS KIOSK TICKET CLOSE WITH IT (villa, 2026-10-01): the finding closed, the
         # ticket stayed "Open fault" for ever, and the Kiosk's Cockpit filled with faults long gone
-        resolved_tasks += problems.clear_source("finding", o["id"], o["rule_id"], o["entity_id"])
+        resolved += problems.close_finding(o, today.isoformat(), "Cleared: the nightly check no longer sees it.")
 
     # ---- tasks for the FM (P2 and P3 new findings) --------------------------------
     tasks = []
@@ -336,7 +335,7 @@ def run(args) -> dict:
               + [f"resolved: {c['summary']}" for c in closed])
     result = {"as_of": today.isoformat(), "villa": pack.villa, "features_written": features_written,
               "new_findings": new, "still_open": still_open, "closed": closed, "muted": muted,
-              "tasks_to_create": tasks, "tasks_resolved": resolved_tasks, "notes": notes, "digest_lines": digest}
+              "tasks_to_create": tasks, "tasks_resolved": [a["task_id"] for a in resolved], "resolve_actions": resolved, "notes": notes, "digest_lines": digest}
     if args.out:
         with open(args.out, "w", encoding="utf-8") as fh:
             json.dump(result, fh, indent=1, default=str)
@@ -366,8 +365,7 @@ def main(argv=None):
     out["actions"] = [{"action": "ticket", "summary": t["todo_summary"], "task_id": t["task_id"],
                        "note": f"Check: {t['check']}" if t.get("check") else None,
                        "entity_id": t.get("entity_id")} for t in res["tasks_to_create"]]
-    out["actions"] += [{"action": "ticket.resolve", "task_id": tid,
-                        "note": "Cleared: the nightly check no longer sees it."} for tid in res["tasks_resolved"]]
+    out["actions"] += res["resolve_actions"]
     out["send"] = [{"to": "fm", "text": f"{_no_code(d.get('summary', ''))}\nWhat to check: {d.get('check', '')}"}
                    for d in res["new_findings"] if d.get("severity") == "P2"]
     print(json.dumps(out, indent=1, default=str))

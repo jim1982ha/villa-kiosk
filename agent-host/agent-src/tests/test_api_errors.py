@@ -138,7 +138,7 @@ def test_a_report_that_cannot_run_says_so_instead_of_logging_done(agent, monkeyp
     FakeAI("", problem="offline", cost_usd=None).install(monkeypatch)
     sk = agent.skills.get("reports")
     job = next(j for s_, j in ai_jobs(agent.skills.all()) if j["name"] == "fm-daily")
-    asyncio.run(agent.run_model_job(sk, job))
+    asyncio.run(agent.jobs.run(sk, job))
     assert any("fm-daily report could not be prepared" in t and "could not be reached" in t for _, t, _ in agent.tg.sent)
 
 
@@ -212,7 +212,7 @@ def _report_without_ai(agent, monkeypatch, *, fail=False, stale=False, run_job=T
     if not run_job:
         return
     job = next(j for s_, j in ai_jobs(agent.skills.all()) if j["name"] == "rep-weekly")
-    asyncio.run(agent.run_model_job(agent.skills.get("rep"), job))
+    asyncio.run(agent.jobs.run(agent.skills.get("rep"), job))
     return [t for c, t, _ in agent.tg.sent if c == FM]
 
 
@@ -251,10 +251,7 @@ def test_a_report_asked_for_while_the_ai_is_down_is_a_button_that_needs_no_ai(ag
         await agent.on_ha_event("telegram_callback", {"id": "cb1", "data": "w:credit:rep-weekly", "chat_id": FM,
                                                       "user_id": FM, "message": {"message_id": agent.tg.next_id,
                                                                                  "chat": {"id": FM}, "text": "No credit."}})
-        for _ in range(500):                                         # until the report is there (no fixed sleep)
-            if len([m for m in agent.tg.sent if m[0] == FM]) > 1:
-                break
-            await asyncio.sleep(0.01)
+        await agent.chat_jobs.idle()                                 # until the report is there
     asyncio.run(go())
     said = "Making the Weekly report without the AI, from its figures and charts: it will be sent here."
     assert agent.tg.toasts == [("cb1", said)]
@@ -280,10 +277,7 @@ def test_a_report_named_in_the_message_starts_without_asking(agent, monkeypatch)
 
     async def go():
         await agent.converse(FM, agent.policy().person(FM), "Generate the Weekly Report for last week now")
-        for _ in range(500):
-            if any("287 kWh" in t for c, t, _ in agent.tg.sent):
-                break
-            await asyncio.sleep(0.01)
+        await agent.chat_jobs.idle()
     asyncio.run(go())
     first = [m for m in agent.tg.sent if m[0] == FM][0]
     assert first[2] is None and first[1].endswith("Making the Weekly report without the AI, from its figures and "
@@ -303,12 +297,7 @@ def test_a_report_made_from_a_button_never_takes_the_next_answer_for_its_waiting
         await agent.on_ha_event("telegram_callback", {"id": "cb1", "data": "w:credit:rep-weekly", "chat_id": FM,
                                                       "user_id": FM, "message": {"message_id": pressed,
                                                                                  "chat": {"id": FM}, "text": "x"}})
-        for _ in range(500):
-            if any("287 kWh" in t for c, t, _ in agent.tg.sent):
-                break
-            await asyncio.sleep(0.01)
-        while agent.chat_jobs.running(FM, "rep-weekly"):            # the job's end, after its result
-            await asyncio.sleep(0.01)
+        await agent.chat_jobs.idle()                                 # the report sent and the job ended
         await agent.converse(FM, person, "a report please")
         return pressed
     pressed = asyncio.run(go())
@@ -353,3 +342,15 @@ def test_a_refused_run_that_read_and_wrote_nothing_cost_nothing(tmp_path):
     assert sorted(r["cost"] for r in c["runs"]) == [0.0, 0.05, 0.34] and c["period"] == 0.39
     assert run_cost({"cost_usd": 0.033, "tokens": {}}) == 0.033                 # counts unknown: the figure stands
     assert cost_between(str(tmp_path / "s.db"), "2000-01-01", "2100-01-01") == 0.39   # the reports read the same
+
+
+def test_a_button_pressed_by_someone_the_villa_does_not_know_is_refused_in_one_wording(agent, monkeypatch):
+    # architecture review 6: "not registered" was checked three times, one saying "VESTA" alone
+    from vesta_agent.policy import NOT_REGISTERED
+    _report_without_ai(agent, monkeypatch, run_job=False)
+    agent.state.remember_message(FM, 901)
+    for data in ("w:credit:rep-weekly", "c:abc", "i:7:done"):
+        asyncio.run(agent.on_ha_event("telegram_callback", {"id": data, "data": data, "chat_id": FM, "user_id": 555,
+                                                            "message": {"message_id": 901, "chat": {"id": FM}}}))
+    assert agent.tg.toasts == [(d, NOT_REGISTERED) for d in ("w:credit:rep-weekly", "c:abc", "i:7:done")]
+    assert "VESTA Agent" in NOT_REGISTERED

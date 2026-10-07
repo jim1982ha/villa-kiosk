@@ -33,6 +33,11 @@ STATUSES = (DONE, CLEARED, CLOSED_IN_KIOSK)
 _ORDER = {"P1": 0, "P2": 1, "P3": 2, "P4": 3}
 
 
+def _resolve(task_id: int, note: str) -> dict:
+    """The engine's action that resolves a task's fault in the VESTA Kiosk (vesta_agent/outcome.py)."""
+    return {"action": "ticket.resolve", "task_id": task_id, "note": note or None}
+
+
 class Problems:
     def __init__(self, store: Store):
         self.store = store
@@ -64,6 +69,24 @@ class Problems:
                 self.close(t["id"], status)
                 closed.append(t["id"])
         return closed
+
+    # ⚠️ CLOSING A SOURCE CLOSES WHAT IT OWES (architecture review 6, 2026-10-07). The alert desk and the night check
+    # each closed an incident or a finding, then had to remember to clear its task and resolve its Kiosk fault —
+    # and to agree with source_gone() on which states end a Problem (a muted alert does not: the fault is still
+    # there). The state decides here, once; the callers get back the fault actions to carry out.
+    def close_incident(self, iid: int, state: str, now_iso: str, note: str = "", **fields) -> list[dict]:
+        """The incident ends in `state` (closed now). When that state ends its Problem (Incident.ANSWERED_OR_CLEARED)
+        its open task closes too — done by a person, or cleared — and its Kiosk fault is to be resolved with `note`."""
+        self.store.update_incident(iid, state=state, closed_at=now_iso, **fields)
+        if state not in Incident.ANSWERED_OR_CLEARED:
+            return []
+        status = DONE if state == Incident.DONE else CLEARED
+        return [_resolve(tid, note) for tid in self.clear_source("incident", iid, status=status)]
+
+    def close_finding(self, finding: dict, day: str, note: str = "") -> list[dict]:
+        """The night check no longer sees a finding: it closes, its task is cleared, its Kiosk fault resolved."""
+        self.store.close_finding(finding["rule_id"], finding["entity_id"], day)
+        return [_resolve(tid, note) for tid in self.clear_source("finding", finding["id"])]
 
     def closed_in_kiosk(self, task_id: int) -> int | None:
         """A person closed the task's fault in the VESTA Kiosk: the task closes, and so does the incident

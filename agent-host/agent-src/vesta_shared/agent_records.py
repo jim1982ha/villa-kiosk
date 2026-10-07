@@ -12,6 +12,51 @@ import os
 import sqlite3
 from datetime import datetime
 
+# ⚠️ WHAT A RUN WAS, WRITTEN AND READ HERE (architecture review 6, 2026-10-07; moved from vesta_agent/run_records.py,
+# review 5). The record's kinds, its `who`, the without-AI record and the reading of a row's detail: the engine
+# writes them (runner, app), the Costs tab, the Overview and housekeeping read them (status, state), a skill reads
+# the cost (facts.py) — status.py parsed a row by hand three times, "run" was written in seven places, and
+# housekeeping kept the without-AI rows on the other records' limit while the runs beside them went by theirs.
+RUN = "run"
+
+JOB = "job:"
+WITHOUT_AI = "without_ai"        # the record's kind (state.log): a job made by its code steps, the AI unavailable
+
+
+def for_job(name: str) -> str:
+    return JOB + name
+
+
+def for_person(name: str | None, chat) -> str:
+    return f"{name or 'system'}@{chat}"
+
+
+def job_of(who: str) -> str | None:
+    """The job a run was for; None for a conversation."""
+    return who[len(JOB):] if who.startswith(JOB) else None
+
+
+def person_of(who: str) -> tuple[str | None, str]:
+    """(the person's name, the chat id as written) of a conversation's run."""
+    name, _, chat = who.partition("@")
+    return name or None, chat
+
+
+def without_ai(job: str, problem: str, sent: int, failed: str | None) -> dict:
+    return {"job": job, "problem": problem, "sent": sent, "failed": failed}
+
+
+COSTS_KINDS = (RUN, WITHOUT_AI)        # the Costs tab's rows: kept and pruned together (state.prune)
+
+
+def detail(row) -> dict:
+    """A record's detail (its JSON), {} when it is not readable."""
+    try:
+        d = json.loads((row["detail"] if not isinstance(row, (str, bytes)) else row) or "{}")
+    except (ValueError, TypeError):
+        return {}
+    return d if isinstance(d, dict) else {}
+
 
 def run_cost(detail: dict) -> float:
     """What one AI run cost, as the Anthropic API reported it (0.0 when it reported nothing).
@@ -45,8 +90,8 @@ def cost_between(path: str | None, since_iso: str, until_iso: str) -> float | No
     """The AI's cost between two instants (ISO, UTC); None without the agent's records."""
     if not path or not os.path.exists(path):
         return None
-    rows = _rows(path, "select detail from calls where kind='run' and at>=? and at<?", (since_iso, until_iso))
-    return round(sum(run_cost(json.loads(d or "{}")) for (d,) in rows), 2)
+    rows = _rows(path, "select detail from calls where kind=? and at>=? and at<?", (RUN, since_iso, until_iso))
+    return round(sum(run_cost(detail(d)) for (d,) in rows), 2)
 
 
 def listening_since(path: str | None) -> datetime | None:

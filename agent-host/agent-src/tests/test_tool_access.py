@@ -102,7 +102,7 @@ def test_the_run_of_a_report_is_given_exactly_those_tools(agent):
     from vesta_agent.skills import ai_jobs
     sk = agent.skills.get("reports")
     job = next(j for _, j in ai_jobs(agent.skills.all()) if j["name"] == "fm-weekly")
-    run(agent.run_model_job(sk, job))
+    run(agent.jobs.run(sk, job))
     (r,) = agent.runs
     assert "mcp__vesta__ha_get_history" in r["allowed"] and "mcp__vesta__ha_get_camera_image" not in r["allowed"]
 
@@ -114,7 +114,7 @@ def test_a_skill_that_needs_a_tool_switched_off_is_not_working_and_says_so(agent
     (b,) = tool_access.blockers(agent.policy(), agent.server_tools, sk)
     assert b["tool"] == "ha_get_history" and b["fix"] == "ha" and "switched off" in b["why"]
     job = next(j for _, j in ai_jobs(agent.skills.all()) if j["name"] == "fm-weekly")
-    run(agent.run_model_job(sk, job))
+    run(agent.jobs.run(sk, job))
     assert agent.runs == []                                                           # the report did not run
     assert any("fm-weekly report did not run" in t and "switched off" in t for _, t, _ in agent.tg.sent)
     tb = agent.toolbox()
@@ -289,3 +289,14 @@ def test_a_tool_call_kept_for_the_costs_tab_loses_a_token_by_its_shape():
     jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ4eXoxMjMifQ.abcdefghijk"
     (st,) = runner.kept_steps([{"tool": "ha_eval_template", "input": f"token={jwt} and password=hunter2xyz"}], ["known-secret-1"])
     assert jwt not in st["input"] and "hunter2xyz" not in st["input"] and st["tool"] == "ha_eval_template"
+
+
+def test_whether_a_skill_works_is_one_answer(monkeypatch):
+    # architecture review 6: the page's list and a skill's page each wrote their own "ok / why"
+    monkeypatch.setattr(tool_access, "blockers", lambda p, t, sk: [{"tool": "ha_get_history", "why": "History is off."}])
+    assert tool_access.health(None, [], None, "skill.yaml: bad") == {"ok": False, "problem": "skill.yaml: bad", "blocked": []}
+    assert tool_access.health(None, [], None)["problem"] == "switched off"
+    h = tool_access.health(None, [], object())
+    assert not h["ok"] and h["problem"] == "History is off." and h["blocked"][0]["tool"] == "ha_get_history"
+    monkeypatch.setattr(tool_access, "blockers", lambda p, t, sk: [])
+    assert tool_access.health(None, [], object()) == {"ok": True, "problem": None, "blocked": []}

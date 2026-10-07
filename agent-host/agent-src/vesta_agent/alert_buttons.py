@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Awaitable, Callable
 from zoneinfo import ZoneInfo
 
+from . import button_data
 from .routing import Origin
 
 log = logging.getLogger("vesta.outcome")
@@ -34,7 +35,7 @@ class AlertButtons:
     def keyboard(self, iid: int, chat: int, skill_name: str) -> dict:
         """The buttons of incident `iid`, for a message to `chat` from `skill_name` (whose on_reply answers them)."""
         self.state.set_alert_skill(iid, chat, skill_name)
-        return {"inline_keyboard": [[{"text": a, "callback_data": f"i:{iid}:{b}"} for a, b in LADDER]]}
+        return {"inline_keyboard": [[{"text": a, "callback_data": button_data.make(button_data.ALERT, iid, b)} for a, b in LADDER]]}
 
     def remember(self, iid: int, chat: int, mid: int, text: str) -> None:
         """A message sent with incident `iid`'s buttons: every one of them settles together."""
@@ -56,14 +57,11 @@ class AlertButtons:
             self.state.forget_alert_message(iid, chat, mid)
         return n
 
-    async def press(self, q: dict, chat: int, data: str, person, toast: Callable[[str], Awaitable]) -> None:
-        """Done / Not found / Need help / Mute on an alert: the skill's on_reply decides, answering `here`."""
-        if person is None:
-            return await toast("You are not registered with the VESTA Agent.")
-        try:
-            _, iid, opt = data.split(":")
-            int(iid)
-        except ValueError:
+    async def press(self, q: dict, chat: int, parts: list[str], person, toast: Callable[[str], Awaitable]) -> None:
+        """Done / Not found / Need help / Mute on an alert (button_data: its incident and option; the presser is a
+        registered person): the skill's on_reply decides, answering `here`."""
+        iid, opt = parts
+        if not iid.isdigit():
             return await toast("Unknown button.")
         options = {b: a for a, b in LADDER}
         if opt not in options:

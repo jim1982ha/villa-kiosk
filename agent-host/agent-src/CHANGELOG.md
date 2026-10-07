@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.74 (7 October 2026)
+
+Sixth architecture review (all candidates):
+- siren.Siren: Actions(executed=) hook on every execution; stop time in State (siren:stop_at); watch() task in main; app.after_execution removed. Tests: direct path, restart, wrong entity, failed stop.
+- ai_jobs.AiJobs: run / start / start_without_ai / run_without_ai / find / without_ai_able; not_set() one wording; app wires it (scheduler, toolbox start_job, ai_down, the press).
+- intake.gate (pure: drop / whoami / unregistered / new / converse) and intake.resume_for (tested for the first time); button_data (APPROVAL/CONTINUE/ALERT/REPORT make/read, FOR_PEOPLE_ONLY), handle_callback a lookup + Press; policy.NOT_REGISTERED (actions said "VESTA" alone).
+- agent_records holds RUN, COSTS_KINDS, who helpers, without_ai(), detail(); vesta_agent/run_records.py removed; status reads rows through detail(); state.prune keeps COSTS_KINDS on the runs' limit; runner does not record a retried resume that did nothing.
+- problems.close_incident / close_finding (state decides; returns ticket.resolve actions); desk.py resolved/reply(done, mute)/recovered and nightly use them.
+- ui/server: text_change(base_rev=) checks version (_check_rev) and kind (_check_text: rules problems, .py compile, YAML) for every write; rules_problems() one reading; tool_access.health for the list and the skill page.
+- ChatJobs keeps its tasks; idle(); tests await it instead of polling.
+
 ## 0.6.73 (7 October 2026)
 
 - agent_records.run_cost: a record whose token counts (input and output present) are all zero cost 0.0 — read side, so past records are corrected; runner records and logs the same figure. Records without counts keep theirs.
