@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.64 (7 October 2026)
+
+- FIX (regression from 0.6.62): skills.injected() named the declaration and the argument list both `inject` — every script ran without --pack/--store/--zone. Test drives the real list and a real script. script_run: exit 2 with an argparse usage error is "stopped", not "nothing to do".
+- Fourth review 1: knowledge_pack classifies by platform (mobile_app: a person's device; router integrations: network) — NOISE_PREFIXES with one villa's devices and a person's name removed; night-check thresholds into params.BEHAVIOUR_DEFAULTS (worsened takes its step).
+- Fourth review 2: vesta_shared/device_state (is_offline: unavailable only; battery_charge by unit, V against nominal); facts.py uses it and Ctx.params() (live_params); report template shows volts; rules.py uses battery_charge.
+- Fourth review 3: timeutil.villa_time / villa_date (UTC → villa; naive = UTC; dates kept); facts.offline "since" in villa time, kpis/kpis_month and compose's day comparisons through villa_date; ha_client.paged() — one paging rule for statistics, history, logbook.
+- telegram.typing logs a refusal as a warning, once per 10 min per reason.
+
 ## 0.6.63 (7 October 2026)
 
 Third architecture review, all six candidates, and two owner reports:

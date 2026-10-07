@@ -49,6 +49,21 @@ BEHAVIOUR_DEFAULTS: dict[str, float] = {
     "agent_deadman_hours": 36,
     "unavailable_minutes": 10,
     "on_threshold_fraction": 0.2,  # fraction of running power that counts as "on"
+    # ⚠️ NO THRESHOLD HIDDEN IN A SCRIPT (architecture review, 2026-10-07): these were literals in the night check;
+    # each is overridable by a vesta_<name> helper, as the rest of this table
+    "on_threshold_floor_w": 1.0,             # an asset with no data to judge from: "on" above this
+    "energy_gap_hours": 3,                   # a meter's day with more hours missing is not judged
+    "silence_history_hours": 72,             # how far back a quiet sensor's reporting is looked at
+    "silence_reporting_share": 0.5,          # it reported in at least this share of the hours: then silence is news
+    "silence_min_history_hours": 48,         # less history than this: too little to call it silent
+    "integration_down_devices": 3,           # this many devices of one integration offline: the integration is down
+    "restart_crowd_entities": 20,            # this many entities changing at once: Home Assistant restarted
+    "battery_trend_days": 14,                # a battery's trend over these days
+    "battery_trend_min_points": 7,           # with at least these readings
+    "battery_trend_drop_per_day": 0.5,       # falling faster than this (points a day) is a trend
+    "battery_trend_warn_days": 14,           # told when it would be empty within these days
+    "battery_low_fraction_of_nominal": 0.8,  # a voltage battery below this share of its nominal is low
+    "worsened_step_pct": 15,                 # an open finding worse by this many points is told again
 }
 
 

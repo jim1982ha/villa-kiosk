@@ -1,3 +1,16 @@
+## 0.12.69
+
+**An urgent fix.** Since 0.12.67 the skills' scripts ran without the villa's knowledge pack, store and time zone (a mistake in that release). This morning's daily digest stopped on it ("fm-daily needs --pack") and last night's maintenance check most likely did not run — and it was recorded as "nothing to do". Both are fixed: the scripts get them again, and a script that is called the wrong way now counts as a failure (Overview → failures), never as "nothing to do".
+
+Also:
+- **The weekly report reads batteries by their unit:** a battery that reports volts (the weather station's) is drawn against its nominal voltage and shows its volts — it showed "3 %, replace". Without a nominal voltage it is left out (the night check asks for it).
+- **"Offline" in the report means lost, as in the night check:** a sensor with no value just now (a wind chill on a warm day) is no longer counted as an offline device.
+- **Times in the report are the villa's:** "offline since" in a to-do was Home Assistant's UTC time; a task made early on Monday counted in the week before.
+- The device list no longer names one villa's phones or a person: a phone or tablet is known by Home Assistant's mobile app, network gear by its router integration — for any villa.
+- The night check's thresholds are named settings (overridable by a villa helper), none hidden in its code.
+- Reading Home Assistant can no longer loop on a page that keeps saying "more".
+- "typing…": if Telegram refuses it, the log now says why (it said nothing). The Anthropic account ran out of credit at 09:43 today: the weekly report (Opus) stopped there and said so.
+
 ## 0.12.68
 
 What you will see:
@@ -411,7 +424,7 @@ All three rules live in the villa-concierge skill (its instructions and scripts)
 ## 0.12.10
 
 ### Changed
-- **An alert's buttons go away everywhere at once.** An alert can be in several chats (a P1 goes to the owner's chat and the facility manager's) and repeated by reminders. When someone presses Done, Not found, Need help or Mute on any of them, or types "#2 done", every copy loses its buttons and shows who answered and when ("Done — Jean-Marie, 08:31"). When Home Assistant clears the incident itself, every copy says "Cleared in Home Assistant, 08:40. No reply needed."
+- **An alert's buttons go away everywhere at once.** An alert can be in several chats (a P1 goes to the owner's chat and the facility manager's) and repeated by reminders. When someone presses Done, Not found, Need help or Mute on any of them, or types "#2 done", every copy loses its buttons and shows who answered and when ("Done — Alex, 08:31"). When Home Assistant clears the incident itself, every copy says "Cleared in Home Assistant, 08:40. No reply needed."
 
 ## 0.12.9
 

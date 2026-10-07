@@ -34,12 +34,19 @@ class ScriptAnswer:
 
     @property
     def ok(self) -> bool:
-        return self.code in (0, NOTHING_TO_DO)
+        return self.code == 0 or (self.code == NOTHING_TO_DO and not self.usage_error)
+
+    @property
+    def usage_error(self) -> bool:
+        """Python's argparse also exits 2, when the command itself is wrong ("usage: … error: the following
+        arguments are required"): that is a script that did not run, not one with nothing to do. ⚠️ 0.12.67–68 ran
+        every script without --pack, and the night check's refusal looked like "nothing to do" (2026-10-07)."""
+        return self.code == NOTHING_TO_DO and "usage:" in self.stderr and "error:" in self.stderr
 
     @property
     def verdict(self) -> str:
         """done · nothing (to do, or a setting is missing) · stopped — the page shows it as it is."""
-        return "done" if self.code == 0 else "nothing" if self.code == NOTHING_TO_DO else "stopped"
+        return "done" if self.code == 0 else "nothing" if self.ok else "stopped"
 
     @property
     def error(self) -> str | None:

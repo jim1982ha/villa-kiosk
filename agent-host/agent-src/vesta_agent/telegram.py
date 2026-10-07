@@ -36,6 +36,7 @@ class Telegram:
         self.http: aiohttp.ClientSession | None = None
         self.username: str | None = None
         self.bot_id: int | None = None
+        self._typing_warned: dict[str, float] = {}
 
     async def open(self):
         self.http = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=75))
@@ -150,7 +151,13 @@ class Telegram:
         try:
             await self.api("sendChatAction", chat_id=chat_id, action="typing")
         except TelegramError as e:
-            log.debug("sendChatAction failed: %s", e)
+            # ⚠️ SAID, NOT HIDDEN (owner, 2026-10-07: "I don't see typing…" and the log could not tell why — this was
+            # logged at debug only). Once per 10 minutes per reason, so a refusal repeated every 4 s is one line.
+            import time
+            now, why = time.monotonic(), str(e)
+            if now - self._typing_warned.get(why, -1e9) >= 600:
+                self._typing_warned[why] = now
+                log.warning("Telegram refused \"typing…\" in chat %s: %s", chat_id, why)
 
     async def edit(self, chat_id: int, message_id: int, text: str):
         try:

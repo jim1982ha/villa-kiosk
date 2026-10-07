@@ -42,7 +42,13 @@ SUFFIXES = [
 ]
 
 GENERATION_WORDS = ("solar", "_pv", "pv_", "inverter", "battery_soc", "state_of_charge", "grid_export", "export")
-NOISE_PREFIXES = ("iphone_", "tablet_", "sm_f741b", "z_flip", "jean_maries", "unifi_network_", "default_rx", "tx_")
+# ⚠️ BY INTEGRATION, NEVER BY ONE VILLA'S NAMES (architecture review, 2026-10-07): a prefix list here named one
+# villa's phones and one person by name — against the repository's first rule, and
+# useless anywhere else. A person's phone or tablet is whatever Home Assistant's mobile app integration created;
+# network gear is whatever a router or access-point integration created.
+PERSONAL_PLATFORMS = ("mobile_app",)
+NETWORK_PLATFORMS = ("unifi", "fritz", "tplink_omada", "netgear", "asuswrt", "openwrt", "luci", "ubus", "mikrotik",
+                     "keenetic_ndms2", "nmap_tracker")
 
 
 def asset_slug(entity_id: str) -> str:
@@ -84,8 +90,11 @@ def family_of(e: dict) -> str | None:
     sc = e.get("state_class") or ""
     lname = (e.get("name") or obj).lower()
 
-    if any(obj.startswith(p) for p in NOISE_PREFIXES):
-        return None  # phones and tablets are not villa assets
+    platform = e.get("platform") or ""
+    if platform in PERSONAL_PLATFORMS:
+        return None  # a person's phone or tablet is not a villa asset
+    if platform in NETWORK_PLATFORMS:
+        return "network"
     if domain in ("todo", "input_number", "input_text", "input_boolean", "input_select",
                   "input_datetime", "counter", "schedule", "person", "zone", "automation", "script",
                   "button", "update", "image", "number", "select", "text"):

@@ -46,7 +46,7 @@ from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
 from vesta_shared.messaging import fmt_money, split_message  # noqa: E402
 from vesta_shared.axis import is_flat, label as axis_label, nice_axis  # noqa: E402  (the one axis rule)
 from vesta_shared.store import Incident, Store  # noqa: E402
-from vesta_shared.timeutil import day_label, day_time_label, villa_day  # noqa: E402  (the one day format)
+from vesta_shared.timeutil import day_label, day_time_label, villa_date, villa_day  # noqa: E402  (the one day format)
 from vesta_shared.problems import Problems  # noqa: E402  (what is still open: one owner)
 
 TPL = Environment(loader=FileSystemLoader(os.path.join(HERE, "..", "templates")), autoescape=True)
@@ -84,7 +84,9 @@ def fm_daily(pack: KnowledgePack, store: Store, as_of: date) -> str:
 
     yesterday = (as_of - timedelta(days=1)).isoformat()
     new = [f for f in store.findings(since_day=yesterday) if f["severity"] in ("P2", "P3")]
-    digest_inc = [i for i in store.incidents(open_only=True) if i["state"] == Incident.DIGEST and i["opened_at"][:10] >= yesterday]
+    zone = pack.time_zone or "UTC"
+    digest_inc = [i for i in store.incidents(open_only=True) if i["state"] == Incident.DIGEST
+                  and villa_date(i["opened_at"], zone).isoformat() >= yesterday]
     shown_new = {f"finding:{f['id']}" for f in new}
     open_now = [p for p in Problems(store).open_problems() if p["source"] not in shown_new]
     lines = [f"{pack.villa}, {day_label(as_of, weekday=True)} morning."]
@@ -110,7 +112,8 @@ def fm_daily(pack: KnowledgePack, store: Store, as_of: date) -> str:
 
 
 def owner_weekly(pack: KnowledgePack, store: Store, energy: dict) -> str:
-    inc = [i for i in store.incidents(open_only=False) if i["opened_at"][:10] >= energy["start"]]
+    inc = [i for i in store.incidents(open_only=False)
+           if energy["start"] <= villa_date(i["opened_at"], pack.time_zone or "UTC").isoformat() <= energy["end"]]
     p1 = sum(1 for i in inc if i["severity"] == "P1")
     open_tasks = len(Problems(store).open_problems())
     kwh = f"{energy['total_kwh']:.0f} kWh" if energy.get("total_kwh") is not None else "kWh n/a"
@@ -330,11 +333,12 @@ def page(facts: dict, notes: dict, limit: str | None = None) -> str:
             return s or ""
 
     def when(s):
+        # facts.py gives the villa's time already (facts._local); an aware time is converted
         try:
             t = datetime.fromisoformat(str(s))
         except ValueError:
             return s or ""
-        return day_time_label((t if t.tzinfo else t.replace(tzinfo=timezone.utc)).astimezone(zone), weekday=True)
+        return day_time_label(t.astimezone(zone) if t.tzinfo else t, weekday=True)
 
     def sentence(s, end="."):
         """A playbook phrase as a sentence: a capital first, a full stop (or `end`) last."""

@@ -170,6 +170,29 @@ class McpSession:
         return self._post("tools/call", {"name": name, "arguments": args}) or {}
 
 
+def paged(fetch, step: int, max_pages: int = 20) -> list:
+    """Every row of a paged read, each once. `fetch(offset) -> (rows, has_more, next_offset)`.
+
+    ⚠️ A PAGE MUST BRING NEW ROWS (ha-mcp 8.5.0 answered the same first page to every offset: one 3-day logbook read
+    became 20 identical calls). The reading stops at a page that adds nothing, at the last page, or after
+    `max_pages`. ONE RULE FOR EVERY PAGED READ (architecture review, 2026-10-07): only the logbook had it —
+    statistics and history could loop for ever on an empty page that said "more"."""
+    rows, seen, offset = [], set(), 0
+    for _ in range(max_pages):
+        batch, more, nxt = fetch(offset)
+        fresh = 0
+        for r in batch:
+            key = json.dumps(r, sort_keys=True, default=str)
+            if key not in seen:
+                seen.add(key)
+                rows.append(r)
+                fresh += 1
+        if not more or not fresh:
+            break
+        offset = nxt if isinstance(nxt, int) and nxt > offset else offset + (len(batch) or step)
+    return rows
+
+
 class McpClient(HABase):
     """The villa through ha-mcp. Read-only unless write=True (the agent's executor only)."""
 
@@ -235,17 +258,14 @@ class McpClient(HABase):
     def statistics(self, entity_ids, start, end, period="hour", types=("mean", "min", "max")):
         out = {}
         for eid in entity_ids:
-            rows, offset = [], 0
-            while True:
+            def fetch(offset, eid=eid):
                 body = self.tool("ha_get_history", {
                     "entity_ids": eid, "source": "statistics", "period": period, "statistic_types": list(types),
                     "start_time": start.astimezone(timezone.utc).isoformat(), "end_time": end.astimezone(timezone.utc).isoformat(),
                     "limit": 1000, "offset": offset})
                 ent = next(iter(body.get("entities") or []), {})
-                rows += ent.get("statistics") or []
-                if not ent.get("has_more"):
-                    break
-                offset = ent.get("next_offset") or offset + len(ent.get("statistics") or [])
+                return ent.get("statistics") or [], ent.get("has_more"), ent.get("next_offset")
+            rows = paged(fetch, 1000, max_pages=200)          # a year of hours is 9 pages: 200 is no loop
             for r in rows:
                 if not isinstance(r.get("start"), (int, float)):
                     r["start"] = int(datetime.fromisoformat(str(r["start"])).timestamp() * 1000)
@@ -255,18 +275,14 @@ class McpClient(HABase):
     def history(self, entity_ids, start, end):
         out = {}
         for eid in entity_ids:
-            rows, offset = [], 0
-            while True:
+            def fetch(offset, eid=eid):
                 body = self.tool("ha_get_history", {
                     "entity_ids": eid, "source": "history", "order": "asc", "minimal_response": True,
                     "significant_changes_only": False, "limit": 1000, "offset": offset,
                     "start_time": start.astimezone(timezone.utc).isoformat(), "end_time": end.astimezone(timezone.utc).isoformat()})
                 ent = next(iter(body.get("entities") or []), {})
-                rows += ent.get("states") or []
-                if not ent.get("has_more"):
-                    break
-                offset = ent.get("next_offset") or offset + len(ent.get("states") or [])
-            out[eid] = rows
+                return ent.get("states") or [], ent.get("has_more"), ent.get("next_offset")
+            out[eid] = paged(fetch, 1000, max_pages=200)
         return out
 
     def helpers(self):
@@ -340,24 +356,14 @@ class McpClient(HABase):
         # (seen on the villa: one 3-day read became 20 identical calls, and every flip of a
         # device was counted 20 times by the reconnect check). Rows are kept once each, and the
         # reading stops at the first page that adds nothing.
-        rows, seen, offset = [], set(), 0
-        while True:
+        def fetch(offset):
             args = {"source": "logbook", "hours_back": hours, "end_time": end.astimezone(timezone.utc).isoformat(),
                     "limit": 1000, "offset": offset, "order": "oldest"}
             if entity_id:
                 args["entity_id"] = entity_id
             body = self.tool("ha_get_logs", args)
-            batch = body.get("entries") or []
-            fresh = 0
-            for r in batch:
-                key = json.dumps(r, sort_keys=True, default=str)
-                if key not in seen:
-                    seen.add(key)
-                    rows.append(r)
-                    fresh += 1
-            if not body.get("has_more") or not fresh or offset >= 20000:   # 20 pages at most: a busy logbook is not a loop
-                break
-            offset += len(batch)
+            return body.get("entries") or [], body.get("has_more"), None
+        rows = paged(fetch, 1000)                   # 20 pages at most: a busy logbook is not a loop
         out = []
         for r in rows:
             try:

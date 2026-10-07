@@ -67,3 +67,31 @@ def test_the_overview_counts_every_failed_script():
     assert 'count("script_failed")' in js
     from vesta_agent.status import STATUS_KINDS
     assert "script_failed" in STATUS_KINDS
+
+
+def test_a_script_gets_the_pack_the_store_and_the_zone_its_skill_yaml_asks_for(tmp_path):
+    # 0.12.67–0.12.68: the list was emptied by a name used twice, every script ran without them (the 07:00 digest
+    # stopped: "fm-daily needs --pack"); the tests passed because they give those arguments themselves
+    from helpers import copy_skill
+    from vesta_agent.skills import Skills, injected
+    s = settings(str(tmp_path))
+    copy_skill("reports", s.skills_dir)
+    sk = Skills(s.skills_dir).get("reports")
+    args = injected(s, sk, "compose.py")
+    assert args == ["--pack", s.pack_path, "--store", s.store_path, "--zone", s.timezone]
+    # and through the real run: the script sees them
+    make_skill(s.skills_dir, "echo", {"description": "t", "scripts": {"e.py": {"inject": ["pack", "store", "zone"]}}},
+               {"e.py": "import json, sys\nprint(json.dumps(sys.argv[1:]))\n"})
+    from vesta_agent.skills import run_script
+    code, out, _ = run_script(s, Skills(s.skills_dir).get("echo"), "e.py", [])
+    assert code == 0 and json.loads(out) == ["--pack", s.pack_path, "--store", s.store_path, "--zone", s.timezone]
+
+
+def test_a_script_called_the_wrong_way_has_stopped_not_nothing_to_do(agent):
+    # argparse exits 2 on a missing argument, as a skill's "nothing to do" does: the night check missing --pack was
+    # recorded as fine
+    make_skill(agent.s.skills_dir, "strict", {"description": "t", "scripts": {"s.py": {}}},
+               {"s.py": "import argparse\nap = argparse.ArgumentParser(); ap.add_argument('--pack', required=True)\nap.parse_args()\n"})
+    ans = script_run.run(agent.s, agent.state, agent.skills.get("strict"), "s.py", [], by=script_run.JOB)
+    assert ans.code == 2 and not ans.ok and ans.verdict == "stopped" and "--pack" in ans.error
+    assert [r["skill"] for r in _records(agent, "script_failed")] == ["strict"]

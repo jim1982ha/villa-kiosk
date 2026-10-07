@@ -45,5 +45,49 @@ def test_a_home_assistant_time_on_the_report_is_the_villas():
     sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
     import compose
     html = compose.page({"zone": "Asia/Makassar", "order": ["monitoring"], "sections": {"monitoring": {
-        "offline": [{"item": "Pool pump", "since": "2026-10-06T08:15", "critical": False}], "ai_cost_usd": None}}}, {})
+        "offline": [{"item": "Pool pump", "since": "2026-10-06T08:15+00:00", "critical": False}], "ai_cost_usd": None}}}, {})
     assert "missing since Tue 6 Oct, 16:15" in html
+
+
+def test_a_devices_state_is_read_one_way_by_the_reports_and_the_night_check():
+    # architecture review, 2026-10-07: the weekly report counted "unknown" sensors as offline and read a 3.0 V
+    # battery as "3 %, replace"; the night check knew better
+    from vesta_shared.device_state import battery_charge, is_offline
+    assert is_offline("unavailable") and not is_offline("unknown") and not is_offline("12")
+    assert battery_charge(42, "%") == 42 and battery_charge(2.4, "V", 3.0) == 80.0
+    assert battery_charge(3.0, "V") is None                       # no nominal: not guessed
+
+
+def test_the_report_draws_a_volt_battery_against_its_nominal_and_skips_one_it_cannot_tell():
+    import types
+    sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
+    import facts
+    from vesta_shared.params import VillaParams
+    params = VillaParams(helpers=[{"entity_id": "input_number.station_battery_nominal_v", "helper_type": "input_number",
+                                   "id": "station_battery_nominal_v"}],
+                         states={"input_number.station_battery_nominal_v": "3.0"})
+    c = types.SimpleNamespace(
+        need=lambda *p: {"replace_below_pct": 20, "watch_below_pct": 35, "show": 8}[p[-1]],
+        pack=types.SimpleNamespace(families={"battery": [
+            {"entity_id": "sensor.station_battery", "name": "Station", "unit": "V", "asset": "station"},
+            {"entity_id": "sensor.other_battery", "name": "Other", "unit": "V", "asset": "other"},
+            {"entity_id": "sensor.door_battery", "name": "Door", "unit": "%", "asset": "door"}]}),
+        states=lambda: {"sensor.station_battery": {"state": "2.97"}, "sensor.other_battery": {"state": "3.1"},
+                        "sensor.door_battery": {"state": "55"}},
+        params=lambda: params)
+    rows = {r["name"]: r for r in facts.s_batteries(c)["rows"]}
+    assert rows["Station"]["pct"] == 99 and rows["Station"]["volts"] == 2.97 and rows["Station"]["level"] == "ok"
+    assert "Other" not in rows and rows["Door"]["pct"] == 55
+
+
+def test_a_home_assistant_or_store_time_is_the_villas_once_converted():
+    from vesta_shared.timeutil import villa_date, villa_time
+    z = "Asia/Makassar"                                                    # UTC+8
+    assert villa_time("2026-10-05T23:30:00+00:00", z).isoformat().startswith("2026-10-06T07:30")
+    assert villa_time("2026-10-05T23:30", z).hour == 7                    # its zone cut off: UTC
+    assert villa_date("2026-10-05T23:30:00+00:00", z).isoformat() == "2026-10-06"    # Monday morning, not Sunday
+    assert villa_date("2026-10-05", z).isoformat() == "2026-10-05"        # a villa date stays as it is
+    sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
+    import facts
+    assert facts._local("2026-10-06T08:15:02.1+00:00", z) == "2026-10-06T16:15"
+    assert facts._fill("since {since}", {"since": facts._local("2026-10-06T08:15:02+00:00", z)}).endswith("16:15")

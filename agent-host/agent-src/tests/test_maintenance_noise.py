@@ -254,3 +254,13 @@ def test_the_same_night_run_again_is_not_a_crash_nor_news_again(tmp_path):
     assert [d["rule_id"] for d in first["new_findings"]].count("PM-COUNTER-RESET") == 1
     again = _night(tmp_path, "--as-of", AS_OF)
     assert "PM-COUNTER-RESET" not in [d["rule_id"] for d in again["new_findings"]]   # told once, the first night
+
+
+def test_no_threshold_hides_in_the_night_check_s_code():
+    # architecture review, 2026-10-07: 3 h, 72 h, 0.5, 48 h, 3 devices, 20 entities, 14 days, 7 points, −0.5/day,
+    # 0.8 × nominal, 15 points were literals in the scripts; each is now a named default a villa can override
+    import re
+    for name in ("nightly.py", "rules.py", "features.py"):
+        src = open(os.path.join(STARTER_SKILLS, "preventive-maintenance", "scripts", name)).read()
+        assert "behaviour_text_default(" not in src, name
+        assert not re.search(r"step: float = \d", src) and "* nominal" not in src.replace('params.behaviour("battery_low_fraction_of_nominal") * nominal', ""), name

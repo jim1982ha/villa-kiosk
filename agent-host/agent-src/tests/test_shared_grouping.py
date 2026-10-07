@@ -27,8 +27,8 @@ def test_a_device_found_through_several_entities_is_one_name():
 
 
 def test_worsened_and_closed_tonight():
-    assert F.worsened(-40, -20) and not F.worsened(-30, -20) and not F.worsened(None, 10)
-    assert F.worsened(20, None)
+    assert F.worsened(-40, -20, 15) and not F.worsened(-30, -20, 15) and not F.worsened(None, 10, 15)
+    assert F.worsened(20, None, 15)
     rows = [{"rule_id": "S", "entity_id": "a"}, {"rule_id": "S", "entity_id": "b"}, {"rule_id": "E", "entity_id": "c"}]
     assert F.to_close(rows, {("S", "a")}, {"S"}) == [{"rule_id": "S", "entity_id": "b"}]
 
@@ -94,3 +94,14 @@ def test_one_day_format_everywhere():
                 src = open(os.path.join(root, f), encoding="utf-8").read()
                 hand += [f for _ in re.findall(r'strftime\("%d %b', src)]
     assert hand == [], hand
+
+
+def test_a_persons_phone_and_network_gear_are_known_by_their_integration_never_by_a_villas_names():
+    # architecture review, 2026-10-07: the classifier named one villa's phones and a person; any villa now
+    from vesta_shared.knowledge_pack import family_of
+    phone = {"entity_id": "sensor.any_phone_battery_level", "device_class": "battery", "unit_of_measurement": "%",
+             "platform": "mobile_app"}
+    router = {"entity_id": "switch.any_router_port_forward", "platform": "unifi"}
+    pump = {"entity_id": "sensor.example_pump_power", "device_class": "power", "unit_of_measurement": "W",
+            "platform": "shelly"}
+    assert family_of(phone) is None and family_of(router) == "network" and family_of(pump) == "power"

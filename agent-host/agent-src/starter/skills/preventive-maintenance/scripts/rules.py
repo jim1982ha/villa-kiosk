@@ -21,6 +21,7 @@ from typing import Any
 
 from vesta_shared.params import VillaParams, MissingParameter
 from vesta_shared.stats import med, pct_change, step_index
+from vesta_shared.device_state import battery_charge
 from vesta_shared.timeutil import day_label, schedule_hours_per_day, weekday_name
 
 P2, P3, INFO = "P2", "P3", "INFO"
@@ -192,14 +193,14 @@ def battery_rules(asset: dict, entity_id: str, unit: str | None, level: float | 
         elif level <= warn:
             out.append(Finding("PM-BATTERY-LOW", entity_id, slug, "battery", P3,
                                f"{asset['name']} battery at {level:.0f}%: replace within the week.", {"level": level}, "Replace the battery."))
-        # days to empty from the last 14 days
-        pts = [(i, v) for i, (_, v) in enumerate(series[-14:])]
-        if len(pts) >= 7:
+        # days to empty from the last days (vesta_shared.params: battery_trend_*)
+        pts = [(i, v) for i, (_, v) in enumerate(series[-int(params.behaviour("battery_trend_days")):])]
+        if len(pts) >= params.behaviour("battery_trend_min_points"):
             from vesta_shared.stats import slope_per_hour
             slope = slope_per_hour([(float(i), v) for i, v in pts])  # % per day here
-            if slope is not None and slope < -0.5 and level is not None:
+            if slope is not None and slope < -params.behaviour("battery_trend_drop_per_day") and level is not None:
                 days_left = (level - crit) / (-slope)
-                if days_left < 14:
+                if days_left < params.behaviour("battery_trend_warn_days"):
                     out.append(Finding("PM-BATTERY-TREND", entity_id, slug, "battery", INFO,
                                        f"{asset['name']} battery is falling {abs(slope):.1f} points a day, about {days_left:.0f} days left.",
                                        {"slope_per_day": round(slope, 2), "days_left": round(days_left)}, "Plan the replacement."))
@@ -209,9 +210,9 @@ def battery_rules(asset: dict, entity_id: str, unit: str | None, level: float | 
             out.append(Finding("PM-PARAM-MISSING", entity_id, slug, "battery", INFO,
                                f"{asset['name']} reports a battery voltage ({level} V) but no nominal voltage is set: "
                                f"create input_number.{slug}_battery_nominal_v to get a percentage.", {"reading_v": level}, ""))
-        elif level is not None and level < 0.8 * nominal:
+        elif level is not None and battery_charge(level, "V", nominal) < params.behaviour("battery_low_fraction_of_nominal") * 100:
             out.append(Finding("PM-BATTERY-LOW", entity_id, slug, "battery", P3,
-                               f"{asset['name']} battery at {level:.2f} V, below 80% of its {nominal:.2f} V nominal.",
+                               f"{asset['name']} battery at {level:.2f} V, below {params.behaviour('battery_low_fraction_of_nominal'):.0%} of its {nominal:.2f} V nominal.",
                                {"level_v": level, "nominal_v": nominal}, "Replace the battery."))
     return out
 

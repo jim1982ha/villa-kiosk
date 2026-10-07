@@ -176,7 +176,7 @@ svg{width:100%;height:auto;display:block}
 <section class="asset">
   <div class="t">Batteries <span class="st {{ 'watch' if s.status == 'Watch' else 'ok' }}">{{ s.status }}</span></div>
   <div class="s">{{ s.count }} sensors on batteries — the lowest {{ s.rows|length }}</div>
-  {% for b in s.rows %}<div class="bat"><span>{{ b.name }}</span><span class="bar"><i class="{{ b.level }}" style="width:{{ [b.pct, 2]|max }}%"></i></span><span class="num">{{ b.pct }}%</span></div>{% endfor %}
+  {% for b in s.rows %}<div class="bat"><span>{{ b.name }}</span><span class="bar"><i class="{{ b.level }}" style="width:{{ [b.pct, 2]|max }}%"></i></span><span class="num">{% if b.volts is not none %}{{ b.volts }} V{% else %}{{ b.pct }}%{% endif %}</span></div>{% endfor %}
   {% set r = reading("batteries") %}{% if r %}<div class="s">{{ r }}</div>{% elif s.replace_below_pct is not none %}<div class="s">Replace under {{ s.replace_below_pct }}%.</div>{% endif %}
 </section>
 {% elif sid == "energy_days" %}

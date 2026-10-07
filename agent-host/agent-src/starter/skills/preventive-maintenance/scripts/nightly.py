@@ -37,6 +37,7 @@ from vesta_shared.messaging import no_code as _no_code  # noqa: E402
 from vesta_shared.params import VillaParams, MissingParameter  # noqa: E402
 from vesta_shared.store import Store  # noqa: E402
 from vesta_shared.timeutil import villa_day  # noqa: E402
+from vesta_shared.device_state import is_offline  # noqa: E402
 from vesta_shared.problems import Problems  # noqa: E402  (a problem's lifecycle: one owner)
 from vesta_shared.stats import med  # noqa: E402
 from vesta_shared.timeutil import schedule_hours_per_day  # noqa: E402
@@ -63,7 +64,7 @@ def on_threshold_for(asset: dict, hour_rows: list[dict], params: VillaParams) ->
         except MissingParameter:
             helper_thr = None
     cands = [t for t in (data_thr, helper_thr) if t]
-    return min(cands) if cands else 1.0
+    return min(cands) if cands else params.behaviour("on_threshold_floor_w")
 
 
 def run(args) -> dict:
@@ -123,7 +124,7 @@ def run(args) -> dict:
                 # A day with NO power row counts as offline only from the plug's first data to the day judged:
                 # before its first day the plug's history simply was not there (a newer sensor), and
                 # dropping those days starved the baseline (villa replay: a real collapse found 16 days late).
-                gap_limit = params.behaviour_text_default("energy_gap_hours", 3)
+                gap_limit = params.behaviour("energy_gap_hours")
                 covered = (min(p_series), today) if p_series else None
 
                 def offline(d):
@@ -187,7 +188,7 @@ def run(args) -> dict:
                     hours = None
             # ⚠️ "unknown" IS NOT OFFLINE (villa, 2026-10-04): it is a sensor with no value to give — a
             # wind chill on a warm day — while its device reports. Lost is "unavailable".
-            if st.get("state") == "unavailable":
+            if is_offline(st.get("state")):
                 key = F.device_key(row, row["entity_id"])
                 g = unavailable_groups.setdefault(key, {"asset": asset, "entity_id": row["entity_id"], "hours": hours,
                                                         "state": st.get("state"), "names": [], "critical": asset.get("critical", False),
@@ -212,14 +213,14 @@ def run(args) -> dict:
     long_quiet = [(r, a, t) for r, a, t in quiet_rows if (now_ref - t).total_seconds() / 3600 >= silence_hours]
     if long_quiet:
         # judged on the hours just BEFORE it went quiet (features.reporting_share)
-        hist_hours = int(params.behaviour_text_default("silence_history_hours", 72))
-        share_min = params.behaviour_text_default("silence_reporting_share", 0.5)
+        hist_hours = int(params.behaviour("silence_history_hours"))
+        share_min = params.behaviour("silence_reporting_share")
         q_from = min(t for _, _, t in long_quiet) - timedelta(hours=hist_hours)
         q_stats = cli.statistics([r["entity_id"] for r, _, _ in long_quiet], q_from, now_ref, "hour", ("mean", "min", "max"))
         silent_groups: dict[str, dict] = {}
         for row, asset, since in long_quiet:
             share, hours = F.reporting_share(q_stats.get(row["entity_id"], []), int(since.timestamp() * 1000), hist_hours)
-            if share is None or hours < 48 or share < share_min:
+            if share is None or hours < params.behaviour("silence_min_history_hours") or share < share_min:
                 continue                  # reports on change only, or too little history to say: not a fault
             key = F.device_key(row, row["entity_id"])
             g = silent_groups.setdefault(key, {"asset": asset, "entity_id": row["entity_id"], "since": since, "names": []})
@@ -235,7 +236,7 @@ def run(args) -> dict:
     for key, g in unavailable_groups.items():
         by_platform.setdefault(g.get("platform") or key.split(":")[0], []).append(key)
     for plat, keys in by_platform.items():
-        if plat not in ("x", "None") and len(keys) >= 3:
+        if plat not in ("x", "None") and len(keys) >= params.behaviour("integration_down_devices"):
             first = unavailable_groups[keys[0]]
             merged = {"asset": {"slug": f"integration_{plat}", "name": f"{plat} integration ({len(keys)} devices)", "critical": True},
                       "entity_id": first["entity_id"], "hours": max((unavailable_groups[k]["hours"] or 0) for k in keys),
@@ -263,7 +264,7 @@ def run(args) -> dict:
         lb = cli.logbook(day_end - timedelta(days=3), day_end)
     except Exception:  # logbook is optional
         lb = []
-    flips = F.flips_per_day(lb, zone, int(params.behaviour_text_default("restart_crowd_entities", 20)))
+    flips = F.flips_per_day(lb, zone, int(params.behaviour("restart_crowd_entities")))
     # ONE finding per DEVICE, named as a person reads it (villa, 2026-10-04: a relay, its firmware
     # entity and its uptime sensor were three lines, two of them raw entity ids)
     rows_by_eid = {r["entity_id"]: r for fam in pack.families for r in pack.entities(fam)}
@@ -306,7 +307,7 @@ def run(args) -> dict:
         else:
             still_open.append(d)
             # a finding that worsens by 15 points earns a digest line again
-            if F.worsened(f.detail.get("change_pct"), f.detail.get("last_reported_pct")):
+            if F.worsened(f.detail.get("change_pct"), f.detail.get("last_reported_pct"), params.behaviour("worsened_step_pct")):
                 d["worsened"] = True
                 f.detail["last_reported_pct"] = f.detail.get("change_pct")
                 store.set_finding_detail(fid, f.detail)

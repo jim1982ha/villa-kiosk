@@ -16,6 +16,27 @@ def local_day(ms: int, zone: "str | ZoneInfo") -> date:
     return datetime.fromtimestamp(ms / 1000, tz=timezone.utc).astimezone(z).date()
 
 
+def villa_time(iso, zone: "str | ZoneInfo") -> datetime | None:
+    """A time Home Assistant or the store wrote, in the villa's zone. Both write UTC; a time with its zone cut off
+    (Home Assistant's last_changed[:16]) is UTC too. None when there is none.
+
+    ⚠️ ONE CONVERSION (architecture review, 2026-10-07): the reports cut these to 16 or 10 characters and showed or
+    compared them as the villa's — a to-do's "offline since" was UTC, a Monday-morning task fell in the week before."""
+    if not iso:
+        return None
+    t = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+    z = ZoneInfo(zone) if isinstance(zone, str) else zone
+    return (t if t.tzinfo else t.replace(tzinfo=timezone.utc)).astimezone(z)
+
+
+def villa_date(iso, zone: "str | ZoneInfo") -> date | None:
+    """The villa's day of such a time; a date alone (a finding's opened_day: the villa's already) is kept."""
+    if not iso:
+        return None
+    s = str(iso)
+    return date.fromisoformat(s) if len(s) == 10 else villa_time(s, zone).date()
+
+
 def villa_day(zone: "str | ZoneInfo", as_of: str | None = None, last_finished: bool = False) -> date:
     """The day a script works on: the one named (--as-of, YYYY-MM-DD), or today at the villa — or, for a check
     that judges a whole day, the last FINISHED one (the night's run at 02:00 judged the date it ran on: two hours

@@ -140,7 +140,7 @@ def device_name(names: list[str]) -> str:
     return names[0] + (f" (+{len(names) - 1} entities of the same device)" if len(names) > 1 else "")
 
 
-def worsened(change_pct: float | None, last_reported_pct: float | None, step: float = 15) -> bool:
+def worsened(change_pct: float | None, last_reported_pct: float | None, step: float) -> bool:
     """A still-open finding earns a digest line again when it moved `step` points further from normal
     than when it was last reported."""
     return change_pct is not None and abs(change_pct) - abs(last_reported_pct or 0) >= step

@@ -644,15 +644,17 @@ def record_shipped(starter_dir: str) -> list[str]:
 
 
 def injected(settings, skill: Skill, script: str) -> list[str]:
-    inject = skill.scripts[script].inject if script in skill.scripts else ["store"]
-    inject = []
-    if "pack" in inject:
-        inject += ["--pack", settings.pack_path]
-    if "store" in inject:
-        inject += ["--store", settings.store_path]
-    if "zone" in inject:
-        inject += ["--zone", settings.timezone]
-    return inject
+    # ⚠️ TWO NAMES (0.12.69): 0.12.67 named the declaration and the arguments both `inject`, the second emptied the
+    # first, and every script ran with no --pack / --store / --zone (the 07:00 digest: "fm-daily needs --pack")
+    wants = skill.scripts[script].inject if script in skill.scripts else ["store"]
+    args: list[str] = []
+    if "pack" in wants:
+        args += ["--pack", settings.pack_path]
+    if "store" in wants:
+        args += ["--store", settings.store_path]
+    if "zone" in wants:
+        args += ["--zone", settings.timezone]
+    return args
 
 
 def run_script(settings, skill: Skill, script: str, args: list[str], timeout: int = 900) -> tuple[int, str, str]:

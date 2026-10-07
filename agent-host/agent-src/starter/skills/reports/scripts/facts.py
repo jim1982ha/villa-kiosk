@@ -41,11 +41,11 @@ from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
 from vesta_shared.messaging import no_code as _no_code  # noqa: E402
 from vesta_shared.store import Store  # noqa: E402
 from vesta_shared.stats import slope_per_hour  # noqa: E402
-from vesta_shared.timeutil import day_label, day_time_label, local_day  # noqa: E402  (the one day format)
+from vesta_shared.timeutil import day_label, day_time_label, local_day, villa_date, villa_time  # noqa: E402  (the one day format)
 from vesta_shared import agent_records  # noqa: E402  (the agent's records: one reader)
 from vesta_shared.problems import Problems  # noqa: E402  (what is still open: one owner)
 
-OFF = {"unavailable", "unknown"}
+from vesta_shared.device_state import battery_charge, is_offline  # noqa: E402  (the night check's own reading)
 
 
 def load_cfg() -> dict:
@@ -123,6 +123,7 @@ class Ctx:
         self._todo = None
         self.problems: list[str] = []     # what a section could not say, for facts.json's problems
         self._states = None
+        self._params = None
 
     def need(self, *path):
         """A value of reports.yaml's thresholds. ⚠️ NO FALLBACK HERE (owner, 2026-10-01): a value the file
@@ -135,6 +136,16 @@ class Ctx:
         return v
 
     # ---- shared readings
+    def params(self):
+        """The villa's parameters (vesta_shared.params.live_params: kept ten minutes in the store)."""
+        if self._params is None:
+            from vesta_shared.params import VillaParams, live_params
+            try:
+                self._params = live_params(self.cli, self.store)
+            except Exception:  # noqa: BLE001 — a fixture client without helpers: the defaults
+                self._params = VillaParams()
+        return self._params
+
     def states(self) -> dict:
         if self._states is None:
             ids = [r["entity_id"] for fam in self.cfg.get("offline_families") or [] for r in self.pack.families.get(fam, [])]
@@ -277,11 +288,17 @@ class Ctx:
             for r in self.pack.families.get(fam, []):
                 st = self.states().get(r["entity_id"]) or {}
                 asset = r.get("asset") or r["entity_id"]
-                if (st.get("state") or "") in OFF and asset not in seen:
+                if is_offline(st.get("state")) and asset not in seen:
                     seen.add(asset)
-                    out.append({"name": r.get("name") or r["entity_id"], "since": (st.get("last_changed") or "")[:16],
+                    out.append({"name": r.get("name") or r["entity_id"], "since": _local(st.get("last_changed"), self.Z),
                                 "critical": fam in crit, "family": fam, "entity_id": r["entity_id"]})
         return out
+
+
+def _local(iso, zone) -> str:
+    """A Home Assistant time as the villa's, minute precision ("2026-10-06T16:15"): what _fill and compose show."""
+    t = villa_time(iso, zone) if iso else None
+    return t.replace(tzinfo=None).isoformat(timespec="minutes") if t else ""
 
 
 # ---------------------------------------------------------------- the clues (reports.yaml playbook)
@@ -629,8 +646,8 @@ def s_kpis(c: Ctx) -> dict:
     items = todo(c)
     inc = c.incidents()
     off = c.offline()
-    return {"open_tasks": len(items), "new": sum(1 for t in items if t["since"][:10] >= c.start.isoformat()),
-            "carried": sum(1 for t in items if t["since"][:10] < c.start.isoformat()),
+    return {"open_tasks": len(items), "new": sum(1 for t in items if (villa_date(t["since"], c.Z) or c.start) >= c.start),
+            "carried": sum(1 for t in items if (villa_date(t["since"], c.Z) or c.start) < c.start),
             "alerts": len(inc) + len(c.ha_alerts()), "alerts_open": sum(1 for i in inc if not i.get("closed_at")),
             "kwh": _r(c.energy.get("total_kwh")), "vs_prev_pct": _r(c.energy.get("total_vs_prev_pct")),
             "offline": len(off), "offline_critical": sum(1 for o in off if o["critical"])}
@@ -638,8 +655,8 @@ def s_kpis(c: Ctx) -> dict:
 
 def s_kpis_month(c: Ctx) -> dict:
     inc = c.incidents()
-    done = [t for t in c.store.tasks(None) if t.get("done_at") and c.start.isoformat() <= t["done_at"][:10] <= c.end.isoformat()]
-    made = [t for t in c.store.tasks(None) if c.start.isoformat() <= (t.get("created_at") or "")[:10] <= c.end.isoformat()]
+    done = [t for t in c.store.tasks(None) if t.get("done_at") and c.start <= villa_date(t["done_at"], c.Z) <= c.end]
+    made = [t for t in c.store.tasks(None) if t.get("created_at") and c.start <= villa_date(t["created_at"], c.Z) <= c.end]
     days = [(datetime.fromisoformat(t["done_at"]) - datetime.fromisoformat(t["created_at"])).total_seconds() / 86400
             for t in done if t.get("created_at")]
     nm = c.cfg.get("not_measured_yet") or {}
@@ -755,10 +772,14 @@ def s_batteries(c: Ctx) -> dict:
     rows = []
     for r in c.pack.families.get("battery", []):
         v = _num((c.states().get(r["entity_id"]) or {}).get("state"))
-        if v is None:
-            continue
-        lvl = "replace" if v < repl else ("watch" if v < watch else "ok")
-        rows.append({"name": r.get("name") or r["entity_id"], "pct": round(v), "level": lvl})
+        unit = (r.get("unit") or "%").strip()
+        nominal = c.params().asset_optional_number(r.get("asset") or "", "battery_nominal_v") if unit == "V" else None
+        pct = battery_charge(v, unit, nominal)
+        if pct is None:
+            continue                      # volts with no nominal: the night check asks for it, never a guess
+        lvl = "replace" if pct < repl else ("watch" if pct < watch else "ok")
+        rows.append({"name": r.get("name") or r["entity_id"], "pct": round(pct), "level": lvl,
+                     "volts": round(v, 2) if unit == "V" else None})
     rows.sort(key=lambda x: x["pct"])
     return {"count": len(rows), "rows": rows[: int(show)], "replace_below_pct": repl,
             "status": "Watch" if any(x["level"] != "ok" for x in rows) else "OK"}

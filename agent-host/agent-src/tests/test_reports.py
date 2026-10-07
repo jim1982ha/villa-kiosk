@@ -94,7 +94,7 @@ def test_the_weekly_facts_come_from_home_assistant_and_reports_yaml(tmp_path):
     assert [r["kwh"] for r in s["energy_days"]["rows"]][:2] == [40.0, 41.0]          # HA's daily statistics
     card = s["equipment"]["cards"][0]
     assert card["title"] == "Garden pump" and card["status"] == "Watch"                # 850 W → 740 W: a drop
-    assert s["batteries"]["rows"][0] == {"name": "Battery A", "pct": 12, "level": "replace"}
+    assert s["batteries"]["rows"][0] == {"name": "Battery A", "pct": 12, "level": "replace", "volts": None}
     assert s["kpis"]["offline_critical"] == 1                                          # the lock: a security device
     assert {w["id"] for w in printed["to_write"]} >= {"headline", "card-pump.reading"}
 
