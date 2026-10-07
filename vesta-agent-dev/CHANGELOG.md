@@ -1,3 +1,9 @@
+## 0.12.73
+
+What you will see:
+- **A report you name starts at once, even without the AI.** "Generate the weekly report…" while Anthropic is out of credit no longer offers buttons: the message names the weekly report, so it is made right away (from its figures and charts) and sent. The buttons appear only when the message names no report, or several.
+- **A tapped button's message changes:** its buttons go and it says "Making the Weekly report without the AI…" (before, only a brief toast showed, and the buttons stayed as if nothing had been pressed).
+
 ## 0.12.72
 
 What you will see:
