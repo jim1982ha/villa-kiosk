@@ -1,3 +1,8 @@
+## 0.12.78
+
+What you will see:
+- **The Costs tab no longer charges for refused requests.** While the Anthropic account was out of credit, every refused reply showed US$ 0.03 with 0 tokens in and out — the Claude client's own estimate, not Anthropic's bill (the Anthropic Console showed US$ 0.03 of Haiku for the whole day). A run that read and wrote nothing now counts US$ 0.00, past runs included, on the Costs tab and in the reports' "AI cost".
+
 ## 0.12.77
 
 The fifth architecture review, carried out. What you may notice:
