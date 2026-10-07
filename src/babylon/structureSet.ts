@@ -31,6 +31,7 @@ import { inferTypeFromEntityId } from "@/config/EntityMap";
 import { ceilingVerdict, isCeilingMesh, structureRole, isHelperMesh, STAIR_NAME_RE } from "./meshRoles";
 import { pointInPolygon } from "@/utils/geometry";
 import { stampedFloor } from "./floorOf";
+import { START_COVER, ceilingsShown, nextCover, shouldRecheck, type CoverState } from "./ceilingCover";
 
 // ⚠️ THE STAIR-FOOT TOLERANCE ("the lowest room floor + 0.30 m is the ground")
 // WAS HERE, and was the height rule storeys.ts retired everywhere else: the
@@ -200,6 +201,10 @@ export class StructureSet {
   private readonly deps: StructureDeps;
   /** Reused by the overhead probe. */
   private readonly ceilingRay = new Ray(Vector3.Zero(), new Vector3(0, 1, 0), 10);
+  /** Indoors (a ceiling over the eye) or outdoors, while walking — see ceilingCover.ts. */
+  private cover: CoverState = START_COVER;
+  /** Where and when the overhead ray was last cast (followEye throttles on it). */
+  private lastCheck: { x: number; z: number; at: number } | null = null;
 
   constructor(deps: StructureDeps) {
     this.deps = deps;
@@ -382,7 +387,7 @@ export class StructureSet {
         // you get wedged mid-staircase.
         m.metadata = { ...(m.metadata ?? {}), isCeiling: true };
         this.ceilingMeshes.push(m);
-        m.isVisible = this.view === "first-person";
+        m.isVisible = ceilingsShown(this.view, this.cover);
         m.checkCollisions = false;
         // ⚠️ THIS `continue` SKIPS THE REST OF THE LOOP, AND THE OPACITY
         // NORMALISATION AT THE BOTTOM OF IT IS ONE OF THE THINGS IT SKIPPED
@@ -851,7 +856,52 @@ export class StructureSet {
    *  of `isVisible` on a ceiling. */
   setView(view: ViewMode): void {
     this.view = view;
-    const show = view === "first-person";
+    // A walk starts indoors (its usual start, the staircase) and the next frame's
+    // followEye corrects it at once if not; the overview never shows a lid.
+    this.cover = START_COVER;
+    this.lastCheck = null;
+    this.showCeilings(ceilingsShown(view, this.cover));
+  }
+
+  /**
+   * WHILE WALKING, EVERY FRAME: the ceilings are drawn only while one is over
+   * the eye (owner, 2026-10-07: a 2F room showed the sky overhead, and "the roof
+   * must not appear when the person is outdoors on 2F"). One ray straight up
+   * against the ceilings of the storeys shown — the same question `ceilingState`
+   * asks for ?debug — cast again only when the eye moved 20 cm or 250 ms passed
+   * (ceilingCover.shouldRecheck). Hidden ceilings still count: they are hidden
+   * BECAUSE the walker was outdoors, and stepping back in must find them.
+   * Returns whether the ceilings' visibility changed.
+   */
+  followEye(eye: { x: number; y: number; z: number }, now: number): boolean {
+    if (this.view !== "first-person" || this.ceilingMeshes.length === 0) return false;
+    if (!shouldRecheck(this.lastCheck, eye, now)) return false;
+    this.lastCheck = { x: eye.x, z: eye.z, at: now };
+    const next = nextCover(this.cover, this.ceilingOver(eye), now);
+    const changed = next.indoors !== this.cover.indoors;
+    this.cover = next;
+    if (changed) this.showCeilings(ceilingsShown(this.view, next));
+    // the hold toward outdoors needs frames to run out in: keep them coming
+    if (changed || next.clearSince !== null) this.deps.requestRender();
+    return changed;
+  }
+
+  /** Whether the walker is indoors (a ceiling over the eye) — for ?debug and tests. */
+  get indoors(): boolean { return this.cover.indoors; }
+
+  private ceilingOver(eye: { x: number; y: number; z: number }): boolean {
+    this.ceilingRay.origin.set(eye.x, eye.y, eye.z);
+    this.ceilingRay.direction.set(0, 1, 0);
+    this.ceilingRay.length = 10;
+    for (const m of this.ceilingMeshes) {
+      // a storey switched off (above the active floor) is not over anyone
+      if (!m.isEnabled()) continue;
+      if (this.ceilingRay.intersectsMesh(m, false).hit) return true;
+    }
+    return false;
+  }
+
+  private showCeilings(show: boolean): void {
     for (const m of this.ceilingMeshes) {
       if (m.isVisible !== show) m.isVisible = show;
     }
