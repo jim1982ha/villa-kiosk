@@ -1,5 +1,5 @@
 // VESTA Agent page — the Overview tab: the agent's state, the changes made on these pages, copying the setup.
-import { $view, api, ask, card, figures, fill, go, h, jobsBanner, paged, plural, problemsBox, subTabs, tell, toast } from "./core.js";
+import { api, ask, card, figures, fill, go, h, jobsBanner, paged, plural, problemsBox, reasons, subTabs, tell, toast, $view } from "./core.js";
 
 // ---------------------------------------------------------------- overview
 export async function overview() {
@@ -40,7 +40,7 @@ export async function historyCard() {
   const undo = (c) => async () => {
     if (!(await ask({ title: "Undo this change?", text: c.what, ok: "Undo" }))) return;
     try { await api("POST", `api/history/${c.id}/undo`); toast("Undone."); go("overview"); }
-    catch (e) { tell("Not undone", e.problems); }
+    catch (e) { tell("Not undone", reasons(e)); }
   };
   const PLACE = { Rules: "", Skills: "warn", Release: "gray", Import: "", Undo: "gray" };
   return card("Changes made on these pages", "Every save on the Rules and Skills tabs, newest first. Kept as long as the agent's other records (Rules (file) › settings.keep.records_days, 90 days by default), and trimmed with them every night. Undo writes the previous version back through the same checks as a save, and is itself recorded here.",
@@ -66,7 +66,7 @@ export function exportCard() {
       const name = (r.headers.get("Content-Disposition") || "").match(/filename="([^"]+)"/)?.[1] || "vesta-agent-setup.zip";
       const a = h("a", { href: URL.createObjectURL(await r.blob()), download: name });
       document.body.append(a); a.click(); a.remove();
-    } catch (e) { tell("Not downloaded", e.problems || [String(e)]); }
+    } catch (e) { tell("Not downloaded", reasons(e)); }
     btn.disabled = false;
   } }, "Download the setup");
   return h("div", {}, h("p", { class: "muted" }, "One file with the skills and the shareable part of the rules. On the other villa: Import a setup."),
@@ -108,7 +108,7 @@ export function importCard() {
     let bin = ""; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
     zip = btoa(bin);
     try { show(file.name, await api("POST", "api/setup/import", { zip })); }
-    catch (e) { fill(out, problemsBox(e.problems, "Not a setup this agent can read:")); }
+    catch (e) { fill(out, problemsBox(reasons(e), "Not a setup this agent can read:")); }
   }
   function show(name, p) {
     const CH = { added: "", replaced: "", changed: "", same: "gray" };
@@ -124,7 +124,7 @@ export function importCard() {
         h("button", { class: "btn ghost", onclick: () => { fill(out); input.value = ""; } }, "Cancel"),
         h("button", { class: "btn primary", disabled: !p.changes, onclick: async () => {
           try { await api("POST", "api/setup/import", { zip, apply: true, fingerprint: p.fingerprint }); toast("Imported. Every change is in Changes made on these pages."); go("overview"); }
-          catch (e) { tell("Not imported", e.problems); }
+          catch (e) { tell("Not imported", reasons(e)); }
         } }, p.changes ? `Apply ${plural(p.changes, "change", "changes")}` : "Nothing to change")));
   }
   return h("div", {}, h("p", { class: "muted" }, "A file made by \"Download the setup\" on another villa. You see every change, and what does not fit this villa, before anything is written."),

@@ -19,8 +19,8 @@ Only critical_condition, critical_binary_trip and critical_presence_guard ever
 send "resolved"; critical_schedule, critical_system and critical_watchdog send
 "opened" only — their incidents close through the ladder (Done / Not found).
 
-The output is the engine's standard form: {"send": [{to, text, keyboard?}], "actions":
-[{action: ticket | ticket.resolve | snapshot.get, ...}], "incident_id", "siren_gate"?}.
+The output is the engine's standard form, built with vesta_shared/result.py (the shape there, every word here):
+{"send": [message], "actions": [fault | resolved | snapshot], "incident_id", "siren_gate"?, "settle"?}.
 """
 
 from __future__ import annotations
@@ -38,8 +38,22 @@ from vesta_shared.store import Incident, Store  # noqa: E402  (PYTHONPATH is set
 from vesta_shared.params import VillaParams  # noqa: E402
 from vesta_shared.timeutil import day_time_label, villa_time  # noqa: E402
 from vesta_shared.problems import Problems  # noqa: E402  (a problem's lifecycle: one owner)
+from vesta_shared import result as R  # noqa: E402  (what the engine is asked to do: its shape)
+from vesta_shared import script  # noqa: E402  (client, store, settings, zone: one set-up)
+from vesta_shared import skill_settings  # noqa: E402  (rules.yaml, the villa's on top)
 
-RULES = yaml.safe_load(open(os.path.join(HERE, "..", "rules.yaml"), encoding="utf-8"))
+SKILL = os.path.dirname(HERE)
+# rules.yaml with the villa's own villa.rules.yaml on top (kept by updates): a villa's route comes FIRST, so it
+# replaces the shipped one for its blueprint (the first that matches wins). It was read as shipped only.
+RULES = skill_settings.load(SKILL, "rules.yaml", first=("routes",))
+DEFAULTS = skill_settings.behaviour(RULES)           # the desk's timings (rules.yaml `behaviour:`)
+
+
+def _params(params: VillaParams | None) -> VillaParams:
+    """The villa's parameters with the desk's own timings to fall back on (none given: the timings alone)."""
+    if params is None:
+        return VillaParams(defaults=DEFAULTS)
+    return params if params.defaults else params.with_defaults(DEFAULTS)
 LADDER_OPTIONS = ["Done", "Not found", "Need help", "Mute"]
 #: The beat the engine writes every minute while its Home Assistant connection is up.
 HA_BEAT = "ha_events"
@@ -74,11 +88,14 @@ def normalise(ev: dict) -> dict:
             "phase": ev.get("phase") or "opened", "ha_incident": ev.get("incident_id")}
 
 
-def villa_mode() -> str:
-    """input_select.villa_mode, read through the read-only HA MCP client; "unknown" when it cannot be read."""
+def villa_mode(client=None) -> str:
+    """input_select.villa_mode, read through the script's Home Assistant client (vesta_shared.script: the live
+    client, or a test's fixture folder); "unknown" when it cannot be read."""
     try:
-        from vesta_shared.ha_client import McpClient
-        st = McpClient().states(["input_select.villa_mode"]).get("input_select.villa_mode") or {}
+        if client is None:
+            from vesta_shared.ha_client import McpClient
+            client = McpClient()
+        st = client.states(["input_select.villa_mode"]).get("input_select.villa_mode") or {}
         return str(st.get("state") or "unknown").lower()
     except Exception:  # noqa: BLE001
         return "unknown"
@@ -96,7 +113,9 @@ def _find_by_ha_incident(store: Store, ha_incident: str | None) -> dict | None:
     return None
 
 
-def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = None, mode_reader=villa_mode) -> dict:
+def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = None, mode_reader=villa_mode,
+           zone: str | None = None) -> dict:
+    """An alert from Home Assistant. `zone`: the villa's time zone (vesta_shared.script's one rule)."""
     ev = normalise(ev)
     if ev["phase"] == "resolved":
         return resolved(store, ev, now)
@@ -123,8 +142,8 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
             return out
         out["decision"] = "repeat"
         # the villa's time, written as every message writes one ("Mon 5 Oct, 08:00"): it showed "2026-10-03T00:00", UTC
-        since = day_time_label(villa_time(cur["opened_at"], os.environ.get("VILLA_TZ") or "UTC"), weekday=True)
-        out["send"].append({"to": "fm", "text": f"Still there: {ev['message']} ({cur['count'] + 1} times since {since})."})
+        since = day_time_label(villa_time(cur["opened_at"], zone or "UTC"), weekday=True)
+        out["send"].append(R.message("fm", f"Still there: {ev['message']} ({cur['count'] + 1} times since {since})."))
         if route.get("intrusion"):
             out["siren_gate"] = siren_gate(store, ev, now)
         return out
@@ -136,28 +155,21 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
         text += f"\nWhat to do: {route['check']}"
     text += f"\nIncident #{iid}."
     if ev.get("snapshot"):
-        out["actions"].append({"action": "snapshot.get", "entity_id": ev["snapshot"], "incident_id": iid})
+        out["actions"].append(R.snapshot(ev["snapshot"], iid))
     for role in recipients(sev):
-        msg = {"to": role, "text": text}
-        if route.get("ladder", True) and role == "fm":
-            msg["keyboard"] = True
-        out["send"].append(msg)
+        out["send"].append(R.message(role, text, incident=iid, buttons=bool(route.get("ladder", True) and role == "fm")))
     if sev in ("P1", "P2") and route.get("ladder", True):
         store.update_incident(iid, state=Incident.ASKED, asked_at=now.isoformat(), assignee="fm")
         tid, _ = Problems(store).open_task("incident", iid, rule_id, eid, ev["message"][:250], route.get("check") or "")
-        out["actions"].append({"action": "ticket", "summary": ev["message"][:200], "task_id": tid,
-                               "entity_id": eid if eid and "," not in eid else None, "note": route.get("check")})
+        out["actions"].append(R.fault(ev["message"][:200], task_id=tid, check=route.get("check"), entity_id=eid))
     elif sev == "P3":
         store.update_incident(iid, state=Incident.DIGEST)
     else:
         store.update_incident(iid, state=Incident.LOGGED)
     # intrusion: open the siren gate, never fire it
     if route.get("intrusion"):
-        gate = siren_gate(store, ev, now)
-        out["siren_gate"] = gate
-        if gate["armed"]:
-            out["send"].append({"to": "owner", "text": gate["prompt"]})
-            out["send"].append({"to": "fm", "text": gate["prompt"]})
+        # armed: the engine asks the owner to Approve the siren (no siren set: the warning goes to owner and fm)
+        out["siren_gate"] = siren_gate(store, ev, now)
     return out
 
 
@@ -175,9 +187,9 @@ def resolved(store: Store, ev: dict, now: datetime) -> dict:
                                                      "Cleared: Home Assistant reports it is back to normal.")
     out["incident_id"], out["decision"] = inc["id"], "resolved"
     # its alert and reminders, in every chat, lose their buttons: nobody presses for something already over
-    out["settle"] = [{"incident_id": inc["id"], "note": "Cleared in Home Assistant, {time}. No reply needed."}]
+    out["settle"] = [R.settle(inc["id"], "Cleared in Home Assistant, {time}. No reply needed.")]
     if was_chasing:
-        out["send"].append({"to": "fm", "text": f"Incident #{inc['id']} closed: Home Assistant reports it cleared. No reply needed."})
+        out["send"].append(R.message("fm", f"Incident #{inc['id']} closed: Home Assistant reports it cleared. No reply needed."))
     store.audit("alert-desk", "resolved", {"incident": inc["id"]})
     return out
 
@@ -190,7 +202,7 @@ def abandoned(store: Store, ev: dict, now: datetime) -> dict:
         return out
     store.update_incident(inc["id"], state=Incident.ESCALATED, escalated_at=now.isoformat(), assignee="owner")
     out["incident_id"], out["decision"] = inc["id"], "abandoned"
-    out["send"].append({"to": "owner", "text": f"Still not clear, and the rule has stopped watching it: {ev['message']} Incident #{inc['id']}."})
+    out["send"].append(R.message("owner", f"Still not clear, and the rule has stopped watching it: {ev['message']} Incident #{inc['id']}."))
     return out
 
 
@@ -215,51 +227,51 @@ def siren_gate(store: Store, ev: dict, now: datetime) -> dict:
         # The engine turns this into an Approve / Refuse request to the owner (outcome.carry_out).
         prompt = (f"Intrusion suspected: {len(signals)} independent sensors in {cfg['window_min']} min while the villa is {mode}: "
                   f"{', '.join(sorted(signals))}. Look at the snapshot. Approving sounds the siren for {siren_minutes()} min.")
-    return {"armed": armed, "signals": sorted(signals), "villa_mode": mode, "prompt": prompt,
-            "reason": None if armed else ("villa not vacant/away" if mode not in cfg["requires_villa_mode"] else "single signal")}
+    return R.siren(armed, prompt, ("owner", "fm"), signals=sorted(signals), villa_mode=mode,
+                   reason=None if armed else ("villa not vacant/away" if mode not in cfg["requires_villa_mode"] else "single signal"))
 
 
 def reply(store: Store, iid: int, text: str, sender_role: str, now: datetime, params: VillaParams | None = None) -> dict:
     inc = store.incident(iid)
     out = {"send": [], "actions": []}
     if not inc:
-        out["send"].append({"to": "here", "text": f"No incident #{iid}."}); return out
+        out["send"].append(R.message("here", f"No incident #{iid}.")); return out
     t = text.strip().lower()
     if inc.get("closed_at") and not t.startswith("mute"):
-        out["send"].append({"to": "here", "text": f"Incident #{iid} is already closed."}); return out
+        out["send"].append(R.message("here", f"Incident #{iid} is already closed.")); return out
     if t.startswith("done"):
         out["actions"] += Problems(store).close_incident(iid, Incident.DONE, now.isoformat(),
                                                          f"Done, answered by the {sender_role}.", reply=text)
-        out["send"].append({"to": "here", "text": f"Thanks, incident #{iid} closed. The VESTA Agent will check it stays quiet."})
+        out["send"].append(R.message("here", f"Thanks, incident #{iid} closed. The VESTA Agent will check it stays quiet."))
     elif t.startswith("not found"):
         store.update_incident(iid, state=Incident.NOT_FOUND, reply=text)
-        out["send"].append({"to": "here", "text": f"Noted for #{iid}. It stays open and goes in the weekly report; tell me if it comes back."})
+        out["send"].append(R.message("here", f"Noted for #{iid}. It stays open and goes in the weekly report; tell me if it comes back."))
     elif t.startswith("need help"):
         store.update_incident(iid, state=Incident.ESCALATED, reply=text, escalated_at=now.isoformat(), assignee="owner")
-        out["send"].append({"to": "owner", "text": f"The FM needs help on incident #{iid}: {json.loads(inc['payload'] or '{}').get('message', inc['rule_id'])}."})
-        out["send"].append({"to": "here", "text": "Owner notified."})
+        out["send"].append(R.message("owner", f"The FM needs help on incident #{iid}: {json.loads(inc['payload'] or '{}').get('message', inc['rule_id'])}."))
+        out["send"].append(R.message("here", "Owner notified."))
     elif t.startswith("mute"):
-        days = int(params.behaviour("mute_days") if params else VillaParams().behaviour("mute_days"))
+        days = int(_params(params).behaviour("mute_days"))
         until = (now + timedelta(days=days)).isoformat()
         store.mute(inc["rule_id"], inc["entity_id"], until, sender_role)
         # muted: the fault is still there, nobody wants to be told again — its task stays (Problems decides)
         out["actions"] += Problems(store).close_incident(iid, Incident.MUTED, now.isoformat(), reply=text)
-        out["send"].append({"to": "here", "text": f"Muted this alert for {days} days. The report will list it."})
+        out["send"].append(R.message("here", f"Muted this alert for {days} days. The report will list it."))
     else:
         store.update_incident(iid, reply=text)
-        out["send"].append({"to": "here", "text": f"Noted on #{iid}: {text}"})
+        out["send"].append(R.message("here", f"Noted on #{iid}: {text}"))
     # the answer, on the alert and its reminders in every chat (a button press has already done it, by name)
     said = next((w for w in ("Done", "Not found", "Need help", "Mute") if t.startswith(w.lower())), None)
     if said:
         who = {"owner": "the owner", "fm": "the facility manager"}.get(sender_role, sender_role)
-        out["settle"] = [{"incident_id": iid, "note": f"{said} — {who}, {{time}}"}]
+        out["settle"] = [R.settle(iid, f"{said} — {who}, {{time}}")]
     store.audit("alert-desk", "reply", {"incident": iid, "by": sender_role, "text": text})
     return out
 
 
 def tick(store: Store, now: datetime, params: VillaParams | None = None) -> dict:
     """Every 5 minutes: chase ladder, villa-silent watch, alert fatigue."""
-    params = params or VillaParams()               # no parameters given: the defaults table, never a copy of it here
+    params = _params(params)                       # no parameters given: the desk's own timings, never a copy here
     reask = params.behaviour("reask_minutes")
     escal = params.behaviour("escalate_minutes")
     silent_min = params.behaviour("villa_silent_minutes")
@@ -272,12 +284,12 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None) -> dict
         msg = json.loads(inc["payload"] or "{}").get("message", inc["rule_id"])
         if inc["state"] == Incident.ASKED and age >= timedelta(minutes=reask):
             store.update_incident(inc["id"], state=Incident.REASKED, reasked_at=now.isoformat())
-            out["send"].append({"to": "fm", "text": f"Reminder, incident #{inc['id']}: {msg}. Reply Done, Not found or Need help.",
-                                "keyboard": True})
+            out["send"].append(R.message("fm", f"Reminder, incident #{inc['id']}: {msg}. Reply Done, Not found or Need help.",
+                                         incident=inc["id"], buttons=True))
             out["reasked"].append(inc["id"])
         elif inc["state"] == Incident.REASKED and age >= timedelta(minutes=escal):
             store.update_incident(inc["id"], state=Incident.ESCALATED, escalated_at=now.isoformat(), assignee="owner")
-            out["send"].append({"to": "owner", "text": f"No answer from the FM after {int(escal)} min on incident #{inc['id']}: {msg}."})
+            out["send"].append(R.message("owner", f"No answer from the FM after {int(escal)} min on incident #{inc['id']}: {msg}."))
             out["escalated"].append(inc["id"])
     # villa silent: the engine's Home Assistant connection has been down too long
     last = store.last_beat(HA_BEAT)
@@ -289,14 +301,14 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None) -> dict
                                      now.isoformat())
             store.update_incident(iid, state=Incident.ASKED, asked_at=now.isoformat(), assignee="fm")
             for role in recipients("P1"):
-                out["send"].append({"to": role, "text": f"[P1] Villa silent since {last[:16]} UTC: no contact with Home Assistant. Check power, the router and the internet link. Incident #{iid}."})
+                out["send"].append(R.message(role, f"[P1] Villa silent since {last[:16]} UTC: no contact with Home Assistant. Check power, the router and the internet link. Incident #{iid}."))
     elif last:
         cur = store.find_open_incident("critical_internet---villa_silent|agent")
         if cur:
             out["actions"] += Problems(store).close_incident(cur["id"], Incident.RECOVERED, now.isoformat())
-            out["send"].append({"to": "fm", "text": "Villa back online: Home Assistant answers again."})
+            out["send"].append(R.message("fm", "Villa back online: Home Assistant answers again."))
     # alert fatigue: a rule firing more than N times in 30 days without acknowledgement
-    limit = (params or VillaParams()).behaviour("alert_fatigue_per_month")
+    limit = params.behaviour("alert_fatigue_per_month")
     since = (now - timedelta(days=30)).isoformat()
     rules = {i["rule_id"] for i in store.incidents(open_only=False) if i["opened_at"] >= since}
     for r in rules:
@@ -312,26 +324,18 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None) -> dict
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd", choices=["intake", "tick", "reply", "status"])
-    ap.add_argument("--store", default=os.environ.get("VESTA_STORE", "vesta_store.sqlite"))
+    script.arguments(ap)                           # --store --zone --fixture-dir --now: one set-up for every script
     ap.add_argument("--event"); ap.add_argument("--incident", type=int); ap.add_argument("--text"); ap.add_argument("--from", dest="sender", default="fm")
-    ap.add_argument("--now", help="ISO time, for tests")
-    ap.add_argument("--helpers", help="helpers fixture JSON for parameters")
-    ap.add_argument("--villa-mode", help="for tests: the villa mode instead of reading Home Assistant")
     a = ap.parse_args(argv)
-    store = Store(a.store)
+    ctx = script.Context(a, skill=SKILL, settings_file="rules.yaml")
+    store = ctx.store
     now = now_utc(a.now)
-    # the villa's own parameters (its maintenance mode, its timings): a test's fixture, else Home Assistant's live
-    # helpers kept ten minutes (params.live_params) — never None, so the defaults table is the only fall-back
-    if a.helpers:
-        params = VillaParams.from_fixture(a.helpers)
-    else:
-        from vesta_shared.ha_client import McpClient
-        from vesta_shared.params import live_params
-        params = live_params(McpClient, store)
+    # the villa's own parameters (its maintenance mode, its timings): Home Assistant's live helpers kept ten
+    # minutes (params.live_params) — a test gives its fixture folder, never a flag of its own
+    params = ctx.params
     if a.cmd == "intake":
         ev = json.load(open(a.event)) if a.event else json.load(sys.stdin)
-        reader = (lambda: a.villa_mode) if a.villa_mode else villa_mode
-        res = intake(store, ev, now, params, reader)
+        res = intake(store, ev, now, params, lambda: villa_mode(ctx.client), zone=ctx.zone)
     elif a.cmd == "tick":
         res = tick(store, now, params)
     elif a.cmd == "reply":

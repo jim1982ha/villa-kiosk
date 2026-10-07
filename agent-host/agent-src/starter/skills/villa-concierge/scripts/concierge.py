@@ -17,13 +17,11 @@ import json
 import os
 import sys
 import unicodedata
-from datetime import datetime, timezone
 
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-from vesta_shared.ha_client import client_from_args  # noqa: E402
+from vesta_shared import script  # noqa: E402  (pack, store, client: one set-up)
 from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
-from vesta_shared.params import VillaParams  # noqa: E402
 from vesta_shared.problems import Problems  # noqa: E402  (what is still open: one owner)
 from vesta_shared.store import Store  # noqa: E402
 
@@ -127,16 +125,11 @@ def find(pack: KnowledgePack, what: str | None, where: str | None, domains: list
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd", choices=["status", "find"])
-    ap.add_argument("--pack", required=True)
-    ap.add_argument("--fixture-dir"); ap.add_argument("--zone")
-    ap.add_argument("--store", default=os.environ.get("VESTA_STORE", "vesta_store.sqlite"))
+    script.arguments(ap, pack=True, pack_required=True)     # --pack --store --zone --fixture-dir --now
     ap.add_argument("--what"); ap.add_argument("--where")
-    ap.add_argument("--now")
     a = ap.parse_args(argv)
-    pack = KnowledgePack.load(a.pack)
-    store = Store(a.store)
-    now = datetime.fromisoformat(a.now) if a.now else datetime.now(timezone.utc)
-    cli = client_from_args(a) if (a.fixture_dir or os.environ.get("VESTA_HA_MCP_URL")) else None
+    s = script.Context(a)
+    pack, store, cli = s.pack, s.store, s.live_client
     if a.cmd == "status":
         res = status(pack, cli.states() if cli else {}, store)
     else:

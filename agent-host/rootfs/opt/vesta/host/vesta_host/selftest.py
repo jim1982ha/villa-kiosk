@@ -17,6 +17,7 @@ presses away from Home Assistant.
 from __future__ import annotations
 
 import json
+import re
 import socket
 import time
 import urllib.error
@@ -194,18 +195,36 @@ def interface_missing(r: HttpResult) -> str | None:
     return None
 
 
+def _sse_events(raw: str) -> list[str]:
+    """Each event's data. ⚠️ LINES SPLIT ON CR / LF ONLY, the SSE rule (architecture review 7): str.splitlines also
+    splits on U+2028 / U+2029, which a tool description may hold, and the self-test then read "no tools listed";
+    the data lines of one event are joined with a newline. The agent's reader (vesta_shared/ha_client.py) does
+    the same, held to it by tests/sse_samples.py (the host does not import the agent's code)."""
+    events, cur = [], []
+    for line in re.split(r"\r\n|\n|\r", raw):
+        if line == "":
+            if cur:
+                events.append("\n".join(cur))
+                cur = []
+        elif line.startswith("data:"):
+            v = line[5:]
+            cur.append(v[1:] if v.startswith(" ") else v)
+    if cur:
+        events.append("\n".join(cur))
+    return events
+
+
 def _mcp_messages(r: HttpResult) -> list[dict]:
     """A streamable-HTTP MCP reply is either one JSON body or an SSE stream."""
     ctype = r.headers.get("content-type", "")
     text = r.body.decode("utf-8", "replace")
     if "text/event-stream" in ctype:
         out = []
-        for line in text.splitlines():
-            if line.startswith("data:"):
-                try:
-                    out.append(json.loads(line[5:].strip()))
-                except ValueError:
-                    pass
+        for data in _sse_events(text):
+            try:
+                out.append(json.loads(data))
+            except ValueError:
+                pass
         return out
     try:
         msg = json.loads(text)

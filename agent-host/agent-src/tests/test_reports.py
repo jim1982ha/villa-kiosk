@@ -518,7 +518,7 @@ def test_a_missing_nominal_voltage_finding_carries_the_devices_name():
     import rules
     from vesta_shared.params import VillaParams
     (f,) = rules.battery_rules({"slug": "station", "name": "Weather station"}, "sensor.example_battery", "V", 3.1, [],
-                               VillaParams(), date(2026, 10, 7))
+                               VillaParams(defaults=rules.DEFAULTS), date(2026, 10, 7))
     assert f.rule_id == "PM-PARAM-MISSING" and f.detail["name"] == "Weather station"
 
 

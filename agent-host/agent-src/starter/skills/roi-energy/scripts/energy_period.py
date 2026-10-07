@@ -23,15 +23,12 @@ import json
 import os
 import sys
 from datetime import date, datetime, time, timedelta
-from zoneinfo import ZoneInfo
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-from vesta_shared.ha_client import client_from_args  # noqa: E402
-from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
-from vesta_shared.params import VillaParams, MissingParameter  # noqa: E402
+from vesta_shared import script  # noqa: E402  (client, pack, store, settings, zone: one set-up)
+from vesta_shared.params import MissingParameter  # noqa: E402
 from vesta_shared.stats import med, pct_change  # noqa: E402
-from vesta_shared.store import Store  # noqa: E402
 from vesta_shared.messaging import fmt_money  # noqa: E402
 from vesta_shared.timeutil import villa_day  # noqa: E402
 import vesta_shared.daily as F  # noqa: E402  (a day of a meter: shared, not another skill's file)
@@ -57,18 +54,16 @@ def sum_days(series: dict[date, dict], a: date, b: date) -> tuple[float, int]:
 
 
 def run(args) -> dict:
-    cli = client_from_args(args)
-    pack = KnowledgePack.load(args.pack)
-    Z = ZoneInfo(pack.time_zone)
-    helpers, hstates = cli.helpers()
-    params = VillaParams(helpers, hstates)
+    ctx = script.Context.of(args, skill=os.path.dirname(HERE))   # it ignored the --zone it was given: one rule now
+    args = ctx.args
+    cli, pack, params, Z = ctx.client, ctx.pack, ctx.params, ctx.Z
     end = villa_day(Z, args.end, last_finished=True)
     start_arg = date.fromisoformat(args.start) if args.start else None
     a, b = period_bounds(args.period, end, start_arg)
     n_days = (b - a).days + 1
     prev_a, prev_b = a - timedelta(days=n_days), a - timedelta(days=1)
     key = f"energy:{args.period}:{a}:{b}"
-    store = Store(args.store) if args.store else None
+    store = ctx.store
     if store and not args.no_cache:
         cached = store.cache_get(key)
         if cached:
@@ -184,11 +179,10 @@ def headline(r: dict) -> str:
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument("--pack", required=True)
+    script.arguments(ap, pack=True, pack_required=True, store="optional")
     ap.add_argument("--period", default="week", choices=["week", "month", "custom"])
     ap.add_argument("--start"); ap.add_argument("--end")
-    ap.add_argument("--fixture-dir"); ap.add_argument("--zone")
-    ap.add_argument("--store"); ap.add_argument("--no-cache", action="store_true")
+    ap.add_argument("--no-cache", action="store_true")
     ap.add_argument("--out")
     a = ap.parse_args(argv)
     res = run(a)

@@ -1,5 +1,5 @@
 // VESTA Agent page — the Rules tab (policy.yaml): the forms, the file, and What the AI can use.
-import { $view, api, card, dropdown, editTable, field, fill, floating, h, infoButton, infoTip, jobsBanner, jump, markDirty, page, pagedBlock, plural, problemsBox, setBar, showBar, subTabs, tell, titleWithInfo, toast, toggleCard, withInfo } from "./core.js";
+import { api, card, dropdown, editTable, field, fill, floating, h, infoButton, infoTip, jobsBanner, jump, markDirty, page, pagedBlock, plural, problemsBox, reasons, saveWith, setBar, showBar, subTabs, tell, titleWithInfo, toast, toggleCard, $view, withInfo } from "./core.js";
 
 // ---------------------------------------------------------------- rules (policy.yaml)
 // the rules, the lists and their domains, the siren's domains: policy.form_schema(), served with the file —
@@ -31,10 +31,9 @@ export function rulesFile(doc) {
   ta.value = doc.text;
   const probs = h("div");
   const save = async () => {
-    try {
-      doc = { ...doc, ...(await api("PUT", "api/policy/text", { text: ta.value, rev: doc.rev })) };
-      page.dirty = false; fill(probs); showBar(); toast("policy.yaml saved. The agent uses it within seconds.");
-    } catch (e) { fill(probs, problemsBox(e.problems)); }
+    const res = await saveWith(probs, () => api("PUT", "api/policy/text", { text: ta.value, rev: doc.rev }),
+                               "policy.yaml saved. The agent uses it within seconds.");
+    if (res) doc = { ...doc, ...res };
   };
   setBar({ save, discard: () => rules("file"), idle: "Everything, including what the forms do not show." });
   fill($view, doc.problems.length ? problemsBox(doc.problems, "To fix in this file:") : null, probs,
@@ -239,13 +238,9 @@ export function rulesForms(doc, jobs = [], tools = null) {
       field(W("siren_auto_off_min"), h("input", { type: "number", min: 1, max: 60, value: f.siren_auto_off_min, oninput: on((t) => (f.siren_auto_off_min = num(t.value))) }))));
 
   const save = async () => {
-    try {
-      const res = await api("PUT", "api/policy/form", { form: f, rev: doc.rev });
-      doc = { ...doc, ...res, problems: [] };
-      page.dirty = false; fill(probs); showBar(); toast("Saved. The agent uses the new rules within seconds.");
-    } catch (e) {
-      fill(probs, problemsBox(e.problems)); probs.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
+    const res = await saveWith(probs, () => api("PUT", "api/policy/form", { form: f, rev: doc.rev }),
+                               "Saved. The agent uses the new rules within seconds.");
+    if (res) doc = { ...doc, ...res, problems: [] };
   };
   acting.id = "rules-acting"; services.id = "rules-services";
   setBar({ save, discard: () => rules("forms"), idle: "Changes apply within seconds, no restart." });
@@ -275,7 +270,7 @@ export function toolsCard(f, t, reload) {
     const refresh = h("button", { class: "btn ghost", onclick: async () => {
       refresh.disabled = true; refresh.textContent = "Reading…";
       try { Object.assign(t, await api("POST", "api/tools/refresh")); toast("The list was read again."); }
-      catch (e) { tell("Not read", e.problems); }
+      catch (e) { tell("Not read", reasons(e)); }
       draw();
     } }, "Read the list again");
     const head = h("div", { class: "tools-head" },

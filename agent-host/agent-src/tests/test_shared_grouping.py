@@ -105,3 +105,14 @@ def test_a_persons_phone_and_network_gear_are_known_by_their_integration_never_b
     pump = {"entity_id": "sensor.example_pump_power", "device_class": "power", "unit_of_measurement": "W",
             "platform": "shelly"}
     assert family_of(phone) is None and family_of(router) == "network" and family_of(pump) == "power"
+
+
+def test_an_integration_down_is_one_group_named_for_it():
+    # architecture review 7: the merge sat inline in the night's run; a function in, groups out
+    g = lambda eid, plat, h: {"asset": {"slug": eid}, "entity_id": eid, "hours": h, "state": "unavailable",  # noqa: E731
+                              "names": [eid.title()], "critical": False, "platform": plat}
+    groups = {"d1": g("a", "zigbee", 2), "d2": g("b", "zigbee", 5), "d3": g("c", "zigbee", 1), "d4": g("d", "wifi", 3)}
+    out = F.integration_down(groups, 3)
+    assert set(out) == {"zigbee", "d4"} and out["zigbee"]["hours"] == 5 and out["zigbee"]["critical"]
+    assert out["zigbee"]["asset"]["name"] == "zigbee integration (3 devices)" and groups["d1"]   # the input untouched
+    assert F.integration_down(groups, 4) == groups

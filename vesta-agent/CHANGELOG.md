@@ -1,3 +1,12 @@
+## 0.12.80
+
+The seventh architecture review, carried out. What you may notice:
+- **An alert's buttons no longer depend on its wording.** A reminder found its incident by reading "#N" in its own sentence: rewording it in the skill would have silently lost the buttons. And with no siren set in Rules, an intrusion warning was sent nowhere; it now reaches the owner and the facility manager.
+- **The page always says why something failed.** When the connection drops (the Home Assistant session ended, the app restarting), a save or a switch showed an empty box or "Not changed" with no reason; it now says the VESTA Agent could not be reached, reload and try again.
+- **Each skill keeps its own thresholds**, in its own folder (alert desk: rules.yaml; night check and energy: settings.yaml), and a villa's own file (villa.rules.yaml, villa.settings.yaml) refines them and survives updates — the alert desk's routes included, which could only be changed by editing the shipped file before. A missing value is named, never guessed.
+- **One time zone rule for every script** (one of them ignored the villa's).
+- The host's self-test reads Home Assistant MCP's answer like the agent does (a tool description with a special line break would have made it say "no tools").
+
 ## 0.12.79
 
 The sixth architecture review, carried out. What you may notice:

@@ -71,3 +71,11 @@ people_roles:
   owner: [P1]
   fm: [P1, P2]
   digest: [P3]
+# The alert desk's timings (vesta_shared.params.behaviour): a villa helper input_number.vesta_<name> overrides
+# one; a villa's own villa.rules.yaml may change them too (kept by updates). Moved here from the shared library.
+behaviour:
+  reask_minutes: 15            # the facility manager is asked again after this long without an answer
+  escalate_minutes: 45         # then the owner is told
+  mute_days: 30                # "Mute" silences an alert for this many days
+  villa_silent_minutes: 30     # no contact with Home Assistant this long: the villa is silent (P1)
+  alert_fatigue_per_month: 20  # a rule firing more often than this in 30 days, unanswered, is named

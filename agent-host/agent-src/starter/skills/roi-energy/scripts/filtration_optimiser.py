@@ -33,14 +33,12 @@ import argparse
 import json
 import os
 import sys
-from datetime import date, datetime, time, timedelta
-from zoneinfo import ZoneInfo
+from datetime import datetime, time, timedelta
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-from vesta_shared.ha_client import client_from_args  # noqa: E402
-from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
-from vesta_shared.params import VillaParams, MissingParameter  # noqa: E402
+from vesta_shared import script  # noqa: E402  (client, pack, store, settings, zone: one set-up)
+from vesta_shared.params import MissingParameter  # noqa: E402
 from vesta_shared.stats import med  # noqa: E402
 from vesta_shared.timeutil import schedule_hours_per_day, hhmm_to_minutes  # noqa: E402
 from vesta_shared.messaging import fmt_money  # noqa: E402
@@ -80,17 +78,15 @@ def split_blocks(hours: float, n: int, window: str) -> list[tuple[str, str]]:
 
 
 def run(args) -> dict:
-    cli = client_from_args(args)
-    pack = KnowledgePack.load(args.pack)
-    Z = ZoneInfo(pack.time_zone)
-    helpers, hstates = cli.helpers()
-    params = VillaParams(helpers, hstates)
+    ctx = script.Context.of(args, skill=os.path.dirname(HERE))
+    args = ctx.args
+    cli, pack, params, Z = ctx.client, ctx.pack, ctx.params, ctx.Z
     asset = pack.assets.get(args.asset)
     if not asset:
         return {"ok": False, "error": f"asset {args.asset} not in the knowledge pack"}
     slug = asset["slug"]
     pool = slug.rsplit("_pump", 1)[0] if slug.endswith("_pump") else slug  # pool_pump -> pool
-    today = date.fromisoformat(args.as_of) if args.as_of else datetime.now(Z).date()
+    today = ctx.day(args.as_of)                    # the one "which day" rule (timeutil.villa_day)
     day_end = datetime.combine(today + timedelta(days=1), time(0, 0), tzinfo=Z)
 
     missing = []
@@ -110,7 +106,7 @@ def run(args) -> dict:
         curve = params.json(f"{slug}_curve")
     except MissingParameter:
         curve = None
-    blocks_n = int(params.optional_number(f"{slug}_blocks_per_day") or params.behaviour_text_default("blocks_per_day", 2))
+    blocks_n = int(params.optional_number(f"{slug}_blocks_per_day") or params.behaviour("blocks_per_day"))
     window = params.text_or(f"{slug}_window", "07:00-18:00")
 
     # measured signature: last 7 days of hourly statistics
@@ -192,10 +188,8 @@ def run(args) -> dict:
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument("--pack", required=True)
+    script.arguments(ap, pack=True, pack_required=True, store=False)
     ap.add_argument("--asset", default="pool_pump")
-    ap.add_argument("--fixture-dir")
-    ap.add_argument("--zone")
     ap.add_argument("--as-of")
     ap.add_argument("--out")
     a = ap.parse_args(argv)

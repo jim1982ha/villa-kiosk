@@ -25,20 +25,18 @@ import argparse
 import json
 import os
 import sys
-from datetime import date, datetime, time, timedelta, timezone
-from zoneinfo import ZoneInfo
+from datetime import datetime, time, timedelta, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-from vesta_shared.ha_client import client_from_args  # noqa: E402
-from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
+from vesta_shared import script  # noqa: E402  (client, pack, store, settings, zone: one set-up)
 from vesta_shared.messaging import no_code as _no_code  # noqa: E402
 from vesta_shared.params import VillaParams, MissingParameter  # noqa: E402
-from vesta_shared.store import Store  # noqa: E402
 from vesta_shared.timeutil import villa_day  # noqa: E402
 from vesta_shared.device_state import is_offline  # noqa: E402
 from vesta_shared.problems import Problems  # noqa: E402  (a problem's lifecycle: one owner)
+from vesta_shared import result  # noqa: E402  (what the engine is asked to do: its shape; R is rules.py)
 from vesta_shared.stats import med  # noqa: E402
 from vesta_shared.timeutil import schedule_hours_per_day  # noqa: E402
 import features as F  # noqa: E402
@@ -68,13 +66,11 @@ def on_threshold_for(asset: dict, hour_rows: list[dict], params: VillaParams) ->
 
 
 def run(args) -> dict:
-    cli = client_from_args(args)
-    pack = KnowledgePack.load(args.pack)
-    zone = pack.time_zone or cli.zone
-    Z = ZoneInfo(zone)
-    helpers, hstates = cli.helpers()
-    params = VillaParams(helpers, hstates)
-    store = Store(args.store)
+    ctx = script.Context.of(args, skill=os.path.dirname(HERE))   # client, pack, store, settings, zone: one set-up
+    args = ctx.args
+    cli, pack, store, params = ctx.client, ctx.pack, ctx.store, ctx.params
+    zone = ctx.zone
+    Z = ctx.Z
     # ⚠️ THE DAY JUDGED IS THE LAST FINISHED ONE (villa, 2026-10-04): the batch runs at 02:00 and judged
     # the date it ran on — two hours of data — so a pump's "last 2 days" were yesterday and a 2-hour
     # stub: "Onsen pump used 0.09 kWh/day against a normal 0.48". --as-of names the day to judge.
@@ -232,18 +228,7 @@ def run(args) -> dict:
             findings += R.silence_rules(a, g["entity_id"], (now_ref - g["since"]).total_seconds() / 3600, params)
 
     # three or more devices of one integration offline together = the integration is down, one finding
-    by_platform: dict[str, list[str]] = {}
-    for key, g in unavailable_groups.items():
-        by_platform.setdefault(g.get("platform") or key.split(":")[0], []).append(key)
-    for plat, keys in by_platform.items():
-        if plat not in ("x", "None") and len(keys) >= params.behaviour("integration_down_devices"):
-            first = unavailable_groups[keys[0]]
-            merged = {"asset": {"slug": f"integration_{plat}", "name": f"{plat} integration ({len(keys)} devices)", "critical": True},
-                      "entity_id": first["entity_id"], "hours": max((unavailable_groups[k]["hours"] or 0) for k in keys),
-                      "state": "unavailable", "names": [unavailable_groups[k]["names"][0] for k in keys], "critical": True}
-            for k in keys:
-                unavailable_groups.pop(k)
-            unavailable_groups[plat] = merged
+    unavailable_groups = F.integration_down(unavailable_groups, params.behaviour("integration_down_devices"))
     for key, g in unavailable_groups.items():
         a = dict(g["asset"]); a["critical"] = g["critical"]
         if len(g["names"]) > 1 and not a["slug"].startswith("integration_"):
@@ -283,50 +268,13 @@ def run(args) -> dict:
         findings += R.flap_rules(asset, g["eid"], g["per_day"], today, params)
 
     # ---- persist findings, dedup, close, mute ---------------------------------
-    new, still_open, closed, muted = [], [], [], []
-    fired = set()
-    for f in findings:
-        f.day = today.isoformat()
-        f.detail["check"] = f.check
-        if store.is_muted(f.rule_id, f.entity_id, day_end.astimezone(timezone.utc).isoformat()):
-            muted.append(f.as_dict()); continue
-        fired.add((f.rule_id, f.entity_id))
-        key_day = today.isoformat()
-        prev_row = store.open_finding(f.rule_id, f.entity_id)
-        prev = json.loads(prev_row["detail"] or "{}") if prev_row else {}
-        if prev and f.rule_id in STATE_RULES:
-            f.detail["last_reported_pct"] = prev.get("last_reported_pct", prev.get("change_pct"))
-        fid, is_new = store.raise_finding(f.rule_id, f.entity_id, f.family, key_day, f.severity, f.summary, f.detail)
-        d = f.as_dict(); d["id"] = fid
-        if f.rule_id in EVENT_RULES:
-            store.close_finding(f.rule_id, f.entity_id, key_day)  # events close the same night
-            if is_new:                                             # a rerun of the same night: told already
-                new.append(d)
-        elif is_new:
-            new.append(d)
-        else:
-            still_open.append(d)
-            # a finding that worsens by 15 points earns a digest line again
-            if F.worsened(f.detail.get("change_pct"), f.detail.get("last_reported_pct"), params.behaviour("worsened_step_pct")):
-                d["worsened"] = True
-                f.detail["last_reported_pct"] = f.detail.get("change_pct")
-                store.set_finding_detail(fid, f.detail)
-    problems = Problems(store)
-    resolved = []
-    for o in F.to_close(store.findings(status="open"), fired, STATE_RULES):
-        closed.append(o)
-        # ⚠️ ITS TASK AND ITS KIOSK TICKET CLOSE WITH IT (villa, 2026-10-01): the finding closed, the
-        # ticket stayed "Open fault" for ever, and the Kiosk's Cockpit filled with faults long gone
-        resolved += problems.close_finding(o, today.isoformat(), "Cleared: the nightly check no longer sees it.")
-
-    # ---- tasks for the FM (P2 and P3 new findings) --------------------------------
-    tasks = []
-    for d in new:
-        if d["severity"] in ("P2", "P3"):
-            tid, created = problems.open_task("finding", d["id"], d["rule_id"], d["entity_id"], d["summary"], d.get("check") or "")
-            if created:
-                tasks.append({"task_id": tid, "todo_summary": d["summary"][:250], "check": d.get("check") or "",
-                              "severity": d["severity"], "entity_id": d["entity_id"]})
+    # the night's ledger is Problems' (vesta_shared/problems.py); what is a state, an event, worse, a task: here
+    night = Problems(store).record_night(
+        findings, today.isoformat(), day_end.astimezone(timezone.utc).isoformat(), state_rules=STATE_RULES,
+        event_rules=EVENT_RULES, worsened_step=params.behaviour("worsened_step_pct"),
+        resolved_note="Cleared: the nightly check no longer sees it.")
+    new, still_open, closed, muted, tasks = night["new"], night["still_open"], night["closed"], night["muted"], night["tasks"]
+    resolved = night["resolve_actions"]
     store.beat("maintenance_nightly", day_end.astimezone(timezone.utc).isoformat())
     store.audit("preventive-maintenance", "nightly", {"as_of": today.isoformat(), "new": len(new), "closed": len(closed)})
 
@@ -349,10 +297,7 @@ def _plain_name(entity_id: str) -> str:
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument("--pack", required=True)
-    ap.add_argument("--store", default=os.environ.get("VESTA_STORE", "vesta_store.sqlite"))
-    ap.add_argument("--fixture-dir")
-    ap.add_argument("--zone")
+    script.arguments(ap, pack=True, pack_required=True)
     ap.add_argument("--as-of")
     ap.add_argument("--out")
     ap.add_argument("--skip-raw", action="store_true")
@@ -362,11 +307,10 @@ def main(argv=None):
     # The engine's standard output: each task a Facility ticket in the VESTA Kiosk, and a P2
     # finding sent to the facility manager at once rather than at the 07:00 digest.
     # the ticket's title says what is wrong, its note what to check (two fields, not one sentence)
-    out["actions"] = [{"action": "ticket", "summary": t["todo_summary"], "task_id": t["task_id"],
-                       "note": f"Check: {t['check']}" if t.get("check") else None,
-                       "entity_id": t.get("entity_id")} for t in res["tasks_to_create"]]
+    out["actions"] = [result.fault(t["todo_summary"], task_id=t["task_id"], check=t.get("check"), entity_id=t.get("entity_id"))
+                      for t in res["tasks_to_create"]]
     out["actions"] += res["resolve_actions"]
-    out["send"] = [{"to": "fm", "text": f"{_no_code(d.get('summary', ''))}\nWhat to check: {d.get('check', '')}"}
+    out["send"] = [result.message("fm", f"{_no_code(d.get('summary', ''))}\nWhat to check: {d.get('check', '')}")
                    for d in res["new_findings"] if d.get("severity") == "P2"]
     print(json.dumps(out, indent=1, default=str))
     return 0

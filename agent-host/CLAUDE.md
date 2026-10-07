@@ -185,6 +185,17 @@ Decisions of 2026-09-30 (owner):
   `text_change` checks the version and the text by kind for every write (Undo, Import
   included); `tool_access.health` answers "is this skill working". ChatJobs keeps its
   tasks; `idle()` replaces polling in tests.
+  Seventh review, 0.12.80: a script's result is built with `vesta_shared.result` (message
+  with its incident for the buttons, fault, resolved, snapshot, settle, siren) — outcome reads
+  fields, never the wording ("#N", the siren prompt's text); "Check: …" is the one fault note.
+  Every script starts from `vesta_shared.script` (arguments + Context: client with one test seam
+  --fixture-dir, pack, store — never invented —, params via live_params, ONE zone rule, day,
+  now). A skill's settings: `vesta_shared.skill_settings.load` (the villa.<file> on top; lists
+  added after, `first` keys before); thresholds live in each skill's settings file
+  (`behaviour:`; params.BEHAVIOUR_DEFAULTS gone; a missing one is named). The night's ledger
+  is `Problems.record_night`; `features.integration_down` is pure. The page's `api()` always
+  gives reasons (`core.reasons`, `saveWith`). The host self-test reads the SSE stream by the
+  SSE rule; tests/sse_samples.py holds it and the agent's reader to the same samples.
 - No PDF (owner, 2026-09-30): the reports are self-contained HTML pages sent
   as attachments. Chromium was ~480 MB of a 1.1 GB image for this alone.
 - ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent

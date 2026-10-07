@@ -38,7 +38,7 @@ import json
 import os
 import re
 import sys
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 from html import escape as _esc
 from zoneinfo import ZoneInfo
 
@@ -48,10 +48,13 @@ from markupsafe import Markup, escape
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
+from vesta_shared import result as R  # noqa: E402  (what the engine is asked to do: its shape)
+from vesta_shared import script  # noqa: E402  (pack, store, zone, day: one set-up)
+from vesta_shared.params import MissingParameter  # noqa: E402
 from vesta_shared.messaging import fmt_money, split_message  # noqa: E402
 from vesta_shared.axis import is_flat, label as axis_label, nice_axis  # noqa: E402  (the one axis rule)
 from vesta_shared.store import Incident, Store  # noqa: E402
-from vesta_shared.timeutil import day_label, day_time_label, villa_date, villa_day  # noqa: E402  (the one day format)
+from vesta_shared.timeutil import day_label, day_time_label, villa_date  # noqa: E402  (the one day format)
 from vesta_shared.problems import Problems  # noqa: E402  (what is still open: one owner)
 
 TPL = Environment(loader=FileSystemLoader(os.path.join(HERE, "..", "templates")), autoescape=True)
@@ -79,7 +82,11 @@ def fm_daily(pack: KnowledgePack, store: Store, as_of: date) -> str:
     is one line (reports.yaml todo.group_from / todo_groups — the weekly page's own grouping)."""
     from facts import load_cfg
     cfg = load_cfg()
-    group_from = int(((cfg.get("thresholds") or {}).get("todo") or {}).get("group_from") or 3)
+    # ⚠️ NAMED, NEVER GUESSED (review 7): a missing value fell back to 3 here, where facts.py names it
+    group_from = ((cfg.get("thresholds") or {}).get("todo") or {}).get("group_from")
+    if group_from is None:
+        raise MissingParameter("reports.yaml: parameter missing: thresholds.todo.group_from")
+    group_from = int(group_from)
     words = {k: v for k, v in (cfg.get("todo_groups") or {}).items() if k != "same_time"}
     def name_of(entity_id, text):
         # the device's name from the knowledge pack; the summary's own words for an entity it does not know
@@ -394,8 +401,8 @@ def without_ai_note(why: str) -> str:
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd", choices=["fm-daily", "fm-weekly", "owner-weekly", "owner-monthly"])
-    ap.add_argument("--pack"); ap.add_argument("--store", default=os.environ.get("VESTA_STORE", "vesta_store.sqlite"))
-    ap.add_argument("--zone"); ap.add_argument("--energy"); ap.add_argument("--as-of")
+    script.arguments(ap, pack=True)               # --pack --store --zone --fixture-dir --now
+    ap.add_argument("--energy"); ap.add_argument("--as-of")
     ap.add_argument("--facts"); ap.add_argument("--notes"); ap.add_argument("--out")
     ap.add_argument("--finish", choices=["here", "owner", "fm"], help="the job's on_limit step: send the page")
     ap.add_argument("--since"); ap.add_argument("--limit")
@@ -421,9 +428,9 @@ def main(argv=None):
         name = "weekly" if a.cmd == "fm-weekly" else "monthly"
         if mode == "limit" and (not os.path.exists(a.facts) or (a.since and datetime.fromtimestamp(
                 os.path.getmtime(a.facts)).astimezone() < datetime.fromisoformat(a.since))):
-            print(json.dumps({"send": [{"to": a.finish, "text": (
+            print(json.dumps({"send": [R.message(a.finish, (
                 f"The {name} report stopped at its {a.limit} USD limit before its figures were ready, so there is "
-                f"nothing to send. Its limit can be raised on the VESTA Agent page (Rules → AI jobs).")}]}))
+                f"nothing to send. Its limit can be raised on the VESTA Agent page (Rules → AI jobs)."))]}))
             return 0
         facts = json.load(open(a.facts, encoding="utf-8"))
         notes = {}
@@ -442,12 +449,12 @@ def main(argv=None):
                 f.write(html)
             res["html"] = a.out
         if mode == "no_ai":
-            res = {"send": [{"to": a.finish, "attachment": os.path.basename(a.out),
-                             "text": f"The {name} report.\n\n{without_ai_note(a.no_ai)}"}]}
+            res = {"send": [R.message(a.finish, f"The {name} report.\n\n{without_ai_note(a.no_ai)}",
+                                      attachment=os.path.basename(a.out))]}
         elif mode == "limit":
             head = good.get("headline") or good.get("hero") or f"The {name} report."
-            res = {"send": [{"to": a.finish, "attachment": os.path.basename(a.out),
-                             "text": f"{head}\n\n(This report stopped at its {a.limit} USD limit: some readings are missing.)"}]}
+            res = {"send": [R.message(a.finish, f"{head}\n\n(This report stopped at its {a.limit} USD limit: some readings "
+                                                "are missing.)", attachment=os.path.basename(a.out))]}
         print(json.dumps(res, indent=1)); return 0
 
     if a.cmd == "owner-weekly" and not a.energy:
@@ -456,18 +463,21 @@ def main(argv=None):
         return 1
     if not a.pack:
         print(f"{a.cmd} needs --pack.", file=sys.stderr); return 1
-    pack = KnowledgePack.load(a.pack)
-    store = Store(a.store)
-    Z = ZoneInfo(a.zone or pack.time_zone)
-    as_of = villa_day(Z, a.as_of)
+    s = script.Context(a)
+    pack, store = s.pack, s.store
+    as_of = s.day(a.as_of)
     if a.cmd == "fm-daily":
-        messages = split_message(fm_daily(pack, store, as_of))
+        try:
+            messages = split_message(fm_daily(pack, store, as_of))
+        except MissingParameter as e:
+            print(f"fm-daily: {e}", file=sys.stderr)
+            return 1
     else:
         messages = [owner_weekly(pack, store, json.load(open(a.energy)))]
     if mode == "no_ai":
         # a job's without_ai step: the messages are sent as written, saying they were made without the AI
         messages[-1] = messages[-1] + "\n\n" + without_ai_note(a.no_ai)
-        print(json.dumps({"send": [{"to": a.finish, "text": m} for m in messages]}, indent=1)); return 0
+        print(json.dumps({"send": [R.message(a.finish, m) for m in messages]}, indent=1)); return 0
     print(json.dumps({"messages": messages}, indent=1)); return 0
 
 

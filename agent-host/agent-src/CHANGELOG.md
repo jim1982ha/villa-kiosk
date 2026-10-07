@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.75 (7 October 2026)
+
+Seventh architecture review (all candidates):
+- vesta_shared.result (message/fault/fault_note/resolved/snapshot/settle/siren); desk, nightly, compose, problems and tickets.repair use it; outcome reads a message's incident_id (no "#N" regex) and an armed gate's prompt goes to gate["to"] when no siren is configured (no text-equality drop).
+- vesta_shared.script (arguments, Context: client / live_client / pack / store / settings / params / zone / Z / now / day; of()); nightly, energy_period, filtration_optimiser, proposals, facts, compose, desk, concierge, voice; desk drops --helpers / --villa-mode (fixture dir), intake takes zone; no store made unasked.
+- vesta_shared.skill_settings (load/merge/behaviour); params.BEHAVIOUR_DEFAULTS and behaviour_text_default removed; VillaParams.defaults / with_defaults, behaviour() raises MissingParameter; behaviour sections in alert-desk/rules.yaml, preventive-maintenance/settings.yaml, roi-energy/settings.yaml (+ proposals thresholds); facts.load_cfg via skill_settings, alert_blueprints from reports.yaml alert_words; compose names a missing todo.group_from.
+- Problems.record_night (+ worsened, closes_tonight); features.integration_down pure.
+- Page: api() always gives problems (UNREACHABLE, session ended), core.reasons, saveWith (rules ×2, skill file).
+- Host selftest._sse_events by the SSE rule; tests/sse_samples.py run against both readers.
+
 ## 0.6.74 (7 October 2026)
 
 Sixth architecture review (all candidates):

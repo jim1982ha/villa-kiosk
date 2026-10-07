@@ -1,0 +1,13 @@
+# The energy skill's thresholds (vesta_shared.params.behaviour for the scripts; `proposals` for proposals.py).
+# A villa helper input_number.vesta_<name> overrides a behaviour value; a villa's own villa.settings.yaml may
+# change any of them (kept by updates). Moved out of the code (architecture review 7, 2026-10-07).
+behaviour:
+  on_threshold_fraction: 0.2    # fraction of running power that counts as "on"
+  blocks_per_day: 2             # filtration blocks a day (a pool's own <slug>_blocks_per_day helper first)
+proposals:
+  unmetered_min_pct: 50         # this much of the electricity on no meter: propose metering the largest circuits
+  coverage_target_pct: 80       # what that metering would bring the report's coverage to
+  schedule_min_delta_hours: 0.5 # a filtration change smaller than this is not proposed
+  waste_min_vs_baseline_pct: 60 # a load this much above its usual level is worth a look…
+  waste_min_kwh: 5              # …when it used at least this much over the period…
+  waste_min_baseline_kwh: 2     # …and its usual level is at least this much

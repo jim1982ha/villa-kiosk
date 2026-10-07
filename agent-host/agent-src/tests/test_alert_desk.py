@@ -117,9 +117,12 @@ def test_the_cli_reads_an_event_file(tmp_path):
     import sys
     p = tmp_path / "ev.json"
     p.write_text(json.dumps(event()))
+    fx = tmp_path / "fx"                                             # the villa as a test sees it: one seam, no flags
+    fx.mkdir()
+    (fx / "states.json").write_text(json.dumps({"states": {"input_select.villa_mode": {"state": "Occupied"}}}))
     env = {**os.environ, "PYTHONPATH": PYTHONPATH}
     r = subprocess.run([sys.executable, os.path.join(STARTER_SKILLS, "alert-desk", "scripts", "desk.py"), "intake",
-                        "--event", str(p), "--store", str(tmp_path / "s.sqlite"), "--villa-mode", "occupied"],
+                        "--event", str(p), "--store", str(tmp_path / "s.sqlite"), "--fixture-dir", str(fx)],
                        capture_output=True, text=True, env=env, timeout=60)
     assert r.returncode == 0, r.stderr
     assert json.loads(r.stdout)["decision"] == "new"
@@ -160,13 +163,12 @@ def test_the_desk_reads_the_villas_parameters_kept_ten_minutes_and_never_crashes
     def down():
         raise RuntimeError("Home Assistant does not answer")
     assert live_params(down, store, now=t0 + timedelta(hours=2)).boolean("maintenance_mode", True) is False   # the last copy
-    assert live_params(down, Store(str(tmp_path / "empty.sqlite"))).behaviour("reask_minutes") == 15           # the defaults
+    assert live_params(down, Store(str(tmp_path / "empty.sqlite")), defaults=desk.DEFAULTS).behaviour("reask_minutes") == 15  # the desk's own
 
 
 def test_a_repeated_alert_says_since_when_in_the_villas_time(store, monkeypatch):
     # owner, 2026-10-07: "(4 times since 2026-10-03T00:00)" — UTC, written as a machine writes it
-    monkeypatch.setenv("VILLA_TZ", "Asia/Makassar")
-    desk.intake(store, event(), T0, mode_reader=lambda: "occupied")
-    res = desk.intake(store, event(), T0 + timedelta(hours=6), mode_reader=lambda: "occupied")
+    desk.intake(store, event(), T0, mode_reader=lambda: "occupied", zone="Asia/Makassar")
+    res = desk.intake(store, event(), T0 + timedelta(hours=6), mode_reader=lambda: "occupied", zone="Asia/Makassar")
     text = res["send"][0]["text"]
     assert text.endswith("since Thu 1 Oct, 17:00).")                    # 09:00 UTC is 17:00 in the villa

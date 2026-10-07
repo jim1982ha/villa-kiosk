@@ -17,20 +17,28 @@ import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-from vesta_shared.store import Store  # noqa: E402
+from vesta_shared import script  # noqa: E402  (the store when given: one set-up)
 from vesta_shared.messaging import fmt_money  # noqa: E402
 
 
-def build(period: dict, optimiser: dict | None, findings_open: list[dict] | None = None) -> list[dict]:
+def thresholds() -> dict:
+    """The proposals' thresholds: the skill's settings.yaml `proposals:` (a villa's villa.settings.yaml on top)."""
+    from vesta_shared.skill_settings import load
+    return load(os.path.dirname(HERE), "settings.yaml").get("proposals") or {}
+
+
+def build(period: dict, optimiser: dict | None, findings_open: list[dict] | None = None, th: dict | None = None) -> list[dict]:
+    # ⚠️ NO THRESHOLD IN THE CODE (architecture review 7): 50 %, 0.5 h, 60 %, 5 kWh and 2 kWh were literals here
+    th = th if th is not None else thresholds()
     out = []
     cur = period.get("currency") or ""
-    if period.get("unmetered_pct") is not None and period["unmetered_pct"] >= 50:
+    if period.get("unmetered_pct") is not None and period["unmetered_pct"] >= th["unmetered_min_pct"]:
         out.append({"kind": "measurement", "title": "Meter the largest unmetered circuits",
                     "detail": f"{period['unmetered_pct']:.0f}% of the villa's electricity ({period['unmetered_kwh']:.0f} kWh over the period) "
                               "is not attributed to any load. Air conditioning is the usual candidate. One energy clamp per AC circuit "
                               "makes the ROI report complete and lets the agent watch each unit.",
-                    "benefit": "Report coverage from " + f"{100 - period['unmetered_pct']:.0f}% to about 80%"})
-    if optimiser and optimiser.get("ok") and optimiser.get("delta_hours") is not None and abs(optimiser["delta_hours"]) >= 0.5:
+                    "benefit": "Report coverage from " + f"{100 - period['unmetered_pct']:.0f}% to about {th['coverage_target_pct']:g}%"})
+    if optimiser and optimiser.get("ok") and optimiser.get("delta_hours") is not None and abs(optimiser["delta_hours"]) >= th["schedule_min_delta_hours"]:
         sign = "more" if optimiser["delta_hours"] > 0 else "less"
         out.append({"kind": "schedule", "title": f"Set the {optimiser['pool'].replace('_', ' ')} filtration to {optimiser['hours_rounded']:g} h/day",
                     "detail": optimiser["message"],
@@ -43,7 +51,8 @@ def build(period: dict, optimiser: dict | None, findings_open: list[dict] | None
                     "benefit": "Removes the main uncertainty of the filtration schedule"})
     for l in period.get("loads", []):
         # a jump is worth a line only when both the load and its baseline are material
-        if l.get("vs_baseline_pct") is not None and l["vs_baseline_pct"] >= 60 and l["kwh"] >= 5 and (l.get("baseline_kwh") or 0) >= 2:
+        if l.get("vs_baseline_pct") is not None and l["vs_baseline_pct"] >= th["waste_min_vs_baseline_pct"] \
+                and l["kwh"] >= th["waste_min_kwh"] and (l.get("baseline_kwh") or 0) >= th["waste_min_baseline_kwh"]:
             out.append({"kind": "waste", "title": f"{l['name']}: {l['vs_baseline_pct']:+.0f}% versus its usual level",
                         "detail": f"{l['kwh']:.1f} kWh over the period against about {l['baseline_kwh']:.1f} kWh usually. "
                                   "Worth a look: a device left on, a changed schedule, or a new use.",
@@ -69,12 +78,12 @@ def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--period-json", required=True)
     ap.add_argument("--optimiser-json")
-    ap.add_argument("--store")
+    script.arguments(ap, store="optional")          # its proposals are recorded when it has the store
     ap.add_argument("--out")
     a = ap.parse_args(argv)
     period = json.load(open(a.period_json))
     opt = json.load(open(a.optimiser_json)) if a.optimiser_json else None
-    store = Store(a.store) if a.store else None
+    store = script.Context(a).store
     props = build(period, opt, store.findings(status="open") if store else None)
     if store:
         for p in props:

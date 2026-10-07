@@ -36,10 +36,8 @@ import yaml
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL = os.path.dirname(HERE)
-from vesta_shared.ha_client import client_from_args  # noqa: E402
-from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
+from vesta_shared import script  # noqa: E402  (client, pack, store, zone, now: one set-up)
 from vesta_shared.messaging import no_code as _no_code  # noqa: E402
-from vesta_shared.store import Store  # noqa: E402
 from vesta_shared.stats import slope_per_hour  # noqa: E402
 from vesta_shared.timeutil import day_label, day_time_label, local_day, villa_date, villa_time  # noqa: E402  (the one day format)
 from vesta_shared import agent_records  # noqa: E402  (the agent's records: one reader)
@@ -49,37 +47,19 @@ from vesta_shared.device_state import battery_charge, is_offline  # noqa: E402  
 
 
 def load_cfg() -> dict:
-    """reports.yaml, with the villa's own villa.reports.yaml on top: its playbook entries and cards are
-    added, its thresholds and nothing_happened words replace the shipped ones key by key. The villa's file
-    survives app updates (skills.VILLA_PREFIX), so the shipped file keeps updating."""
-    with open(os.path.join(SKILL, "reports.yaml"), encoding="utf-8") as f:
-        cfg = yaml.safe_load(f) or {}
-    villa = os.path.join(SKILL, "villa.reports.yaml")
-    if os.path.exists(villa):
-        with open(villa, encoding="utf-8") as f:
-            own = yaml.safe_load(f) or {}
-        for group, entries in (own.get("playbook") or {}).items():
-            cfg.setdefault("playbook", {}).setdefault(group, [])
-            cfg["playbook"][group] = list(cfg["playbook"][group] or []) + list(entries or [])
-        cfg["cards"] = list(cfg.get("cards") or []) + list(own.get("cards") or [])
-        for key in ("thresholds", "nothing_happened"):
-            for k, v in (own.get(key) or {}).items():
-                if isinstance(v, dict) and isinstance((cfg.get(key) or {}).get(k), dict):
-                    cfg[key][k] = {**cfg[key][k], **v}
-                else:
-                    cfg.setdefault(key, {})[k] = v
-    return cfg
+    """reports.yaml, with the villa's own villa.reports.yaml on top (vesta_shared.skill_settings: the one reader for
+    every skill): its playbook entries and cards are added, its thresholds and nothing_happened words replace the
+    shipped ones key by key. The villa's file survives app updates, so the shipped file keeps updating."""
+    from vesta_shared.skill_settings import load
+    return load(SKILL, "reports.yaml")
 
 
 def alert_blueprints() -> list[str]:
-    """The VESTA rules' blueprints, as the alert-desk skill routes them (its rules.yaml)."""
-    p = os.path.join(SKILL, "..", "alert-desk", "rules.yaml")
-    try:
-        with open(p, encoding="utf-8") as f:
-            routes = (yaml.safe_load(f) or {}).get("routes") or []
-    except OSError:
-        return []
-    return [r["blueprint"] for r in routes if r.get("blueprint")]
+    """The VESTA rules' blueprints: the ones this skill has words for (reports.yaml `alert_words`).
+
+    ⚠️ ITS OWN LIST (architecture review 7, 2026-10-07): it read the alert-desk skill's rules.yaml — no skill reads
+    another skill's folder. tests/test_reports.py holds the two lists equal."""
+    return list((load_cfg().get("alert_words") or {}).keys())
 
 
 def _num(v):
@@ -966,22 +946,16 @@ def facts(kind: str, c: Ctx) -> dict:
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd", choices=["fm-weekly", "owner-monthly"])
-    ap.add_argument("--pack", required=True)
-    ap.add_argument("--store", default=os.environ.get("VESTA_STORE", "vesta_store.sqlite"))
-    ap.add_argument("--zone")
+    script.arguments(ap, pack=True, pack_required=True)     # --pack --store --zone --fixture-dir --now
     ap.add_argument("--energy")
-    ap.add_argument("--fixture-dir")
-    ap.add_argument("--now", help="ISO time, for tests")
     ap.add_argument("--out")
     a = ap.parse_args(argv)
     if not a.energy:
         print(f"{a.cmd} needs --energy: first run roi-energy energy_period.py --period "
               f"{'month' if a.cmd == 'owner-monthly' else 'week'} --out <file>.json, then pass that file.", file=sys.stderr)
         return 1
-    pack = KnowledgePack.load(a.pack)
-    zone = a.zone or pack.time_zone
-    now = datetime.fromisoformat(a.now) if a.now else datetime.now(timezone.utc)
-    c = Ctx(a.cmd, pack, Store(a.store), client_from_args(a), json.load(open(a.energy)), load_cfg(), zone, now,
+    s = script.Context(a)
+    c = Ctx(a.cmd, s.pack, s.store, s.client, json.load(open(a.energy)), load_cfg(), s.zone, s.now,
             os.environ.get("VESTA_STATE"))
     res = facts(a.cmd, c)
     if a.out:

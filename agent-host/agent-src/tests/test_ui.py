@@ -564,3 +564,19 @@ def test_every_write_is_checked_by_its_kind_whoever_writes_it(ui):
     with pytest.raises(Refused, match="changed since you opened it"):
         page.text_change("Rules", "x", {"kind": "policy"}, text, base_rev="an-old-version")
     page.text_change("Rules", "x", {"kind": "policy"}, text, base_rev=r)          # the current version: written
+
+
+def test_every_error_the_page_shows_has_its_reason_in_words():
+    # architecture review 7: a dropped connection threw an error with no reasons; five places then showed an empty
+    # box, or a "Not changed" with no words. The page reads an error only through core.reasons().
+    import glob
+    import re
+    from helpers import STATIC
+    core = open(os.path.join(STATIC, "core.js"), encoding="utf-8").read()
+    assert "problems: [UNREACHABLE]" in body_of(core, "api") and "export async function saveWith" in core
+    for path in glob.glob(os.path.join(STATIC, "*.js")):
+        if path.endswith(("core.js", "errors.js")):
+            continue
+        src = open(path, encoding="utf-8").read()
+        assert not re.search(r"\b(e|err)\.problems\b", src), f"{os.path.basename(path)} reads an error's problems by hand"
+    assert len(re.findall(r"page\.dirty = false; fill\(probs\); showBar\(\)", page_js())) == 1    # one save: saveWith

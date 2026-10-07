@@ -1,5 +1,5 @@
 // VESTA Agent page — the Skills tab.
-import { $view, api, ask, dropdown, field, fill, go, guard, h, markDirty, page, plural, problemsBox, setBar, showBar, subTabs, tell, titleWithInfo, toast, toggleCard, withInfo } from "./core.js";
+import { api, ask, dropdown, field, fill, go, guard, h, markDirty, page, plural, problemsBox, reasons, saveWith, setBar, showBar, subTabs, tell, titleWithInfo, toast, toggleCard, $view, withInfo } from "./core.js";
 
 // ---------------------------------------------------------------- skills
 // A skill's state against this release: it follows the releases (never edited here), it was edited here (updates
@@ -20,7 +20,7 @@ export function skillSwitch(name, on, select) {
         text: "The agent stops using it at once: no schedule, no alert hook, not read in a chat. Its files are kept; switch it on again here." }))) { e.target.checked = true; return; }
       if (!(await guard())) { e.target.checked = !now; return; }
       try { await api("PUT", `api/skills/${encodeURIComponent(name)}/on`, { on: now }); toast(`${name} switched ${now ? "on" : "off"}.`); skills(select); }
-      catch (err) { e.target.checked = !now; tell("Not changed", err.problems); }
+      catch (err) { e.target.checked = !now; tell("Not changed", reasons(err)); }
     } }));
 }
 
@@ -48,7 +48,7 @@ const WHERE_TOOLS = "Switched on or off in Rules › What the AI can use. A tool
 
 export async function setCommand(skill, script, command, on, box) {
   try { await api("PUT", `api/skills/${encodeURIComponent(skill)}/commands`, { script, command, on }); toast(`${command || script} switched ${on ? "on" : "off"} for the AI.`); }
-  catch (e) { box.checked = !on; box.closest(".tool-card")?.classList.toggle("is-on", !on); tell("Not changed", e.problems); }
+  catch (e) { box.checked = !on; box.closest(".tool-card")?.classList.toggle("is-on", !on); tell("Not changed", reasons(e)); }
 }
 
 // 2C's one-press fix: the tool switched on through the same save as the Rules form
@@ -138,7 +138,7 @@ export function tryPanel(name, d) {
           h("span", { class: "muted small" }, `${r.seconds} s · the script's own answer · nothing was sent`)),
         r.error ? problemsBox([r.error], "The script stopped:") : null,
         h("pre", { class: "out" }, pretty(r.output))]);
-    } catch (e) { fill(out, problemsBox(e.problems, "Not run:")); }
+    } catch (e) { fill(out, problemsBox(reasons(e), "Not run:")); }
   }
   draw();
   return h("div", { class: "skill-sec try" },
@@ -188,7 +188,7 @@ export async function newSkill() {
   const name = await ask({ title: "New skill", text: "Its name: lower-case letters, digits, - and _.", ok: "Create", input: "e.g. pool-care" });
   if (!name || !(await guard())) return;
   try { await api("POST", "api/skills", { name }); toast(`Skill ${name} created.`); skills(name); }
-  catch (e) { tell("Not created", e.problems); }
+  catch (e) { tell("Not created", reasons(e)); }
 }
 
 export let filesOpen = false;
@@ -224,7 +224,7 @@ export async function openSkill(name, pane, info, path = ABOUT) {
     h("p", { class: "muted" }, "Its AI jobs (reports) do not run, and a reply that needed it says which setting stops it."),
     h("div", { class: "actions" },
       ...fixes.map((b) => h("button", { class: "btn primary", onclick: async () => {
-        try { await switchTool(b); toast(`${b.label} switched on.`); skills(name); } catch (err) { tell("Not changed", err.problems); }
+        try { await switchTool(b); toast(`${b.label} switched on.`); skills(name); } catch (err) { tell("Not changed", reasons(err)); }
       } }, `Switch ${b.label} on`)),
       h("button", { class: "btn ghost", onclick: async () => { if (await guard()) { page.jumpTo = "tools"; page.toolsTab = "ha"; go("rules"); } } }, "Open Rules › What the AI can use"))) : null;
   const notLoaded = info && !info.ok && !(d.blocked && d.blocked.length) && !d.off ? problemsBox([info.problem], "The agent does not use this skill:") : null;
@@ -238,7 +238,7 @@ export async function openSkill(name, pane, info, path = ABOUT) {
         if (!(await ask({ title: "Take the release version?", ok: "Take the release version", danger: true,
           text: "The skill's files are replaced by the release's; this villa's own files (villa.*) are kept. Your edits are moved to skills/.trash, and Undo (Overview › Changes) brings them back." }))) return;
         try { await api("POST", `api/skills/${enc}/take-release`); toast("The release's version is in place."); skills(name); }
-        catch (err) { tell("Not changed", err.problems); }
+        catch (err) { tell("Not changed", reasons(err)); }
       } }, "Take the release version"))) : null;
 
   // ---- the views
@@ -286,10 +286,9 @@ export async function openSkill(name, pane, info, path = ABOUT) {
   const onResize = () => (fileList.isConnected ? fits() : window.removeEventListener("resize", onResize));
   window.addEventListener("resize", onResize);
   const save = async () => {
-    try {
-      const r = await api("PUT", `api/skills/${enc}/file?path=${encodeURIComponent(path)}`, { content: ta.value, rev: fileRev });
-      fileRev = r.rev; page.dirty = false; fill(probs); showBar(); toast(`${path} saved.`);
-    } catch (e) { fill(probs, problemsBox(e.problems)); }
+    const r = await saveWith(probs, () => api("PUT", `api/skills/${enc}/file?path=${encodeURIComponent(path)}`,
+                                              { content: ta.value, rev: fileRev }), `${path} saved.`);
+    if (r) fileRev = r.rev;
   };
   const newFile = async () => {
     const p = await ask({ title: "New file", text: `In ${name}. A folder may be part of the name.`, ok: "Create",
@@ -298,18 +297,18 @@ export async function openSkill(name, pane, info, path = ABOUT) {
     try {
       await api("PUT", `api/skills/${enc}/file?path=${encodeURIComponent(p)}`, { content: p.endsWith(".py") ? "#!/usr/bin/env python3\n" : "", rev: null });
       toast(`${p} created.`); openSkill(name, pane, info, p);
-    } catch (e) { tell("Not created", e.problems); }
+    } catch (e) { tell("Not created", reasons(e)); }
   };
   const delFile = async () => {
     if (!(await ask({ title: `Delete ${path}?`, text: `It is removed from ${name}.`, ok: "Delete", danger: true }))) return;
     try { await api("DELETE", `api/skills/${enc}/file?path=${encodeURIComponent(path)}`); page.dirty = false; toast(`${path} deleted.`); openSkill(name, pane, info, "SKILL.md"); }
-    catch (e) { fill(probs, problemsBox(e.problems, "Not deleted:")); }
+    catch (e) { fill(probs, problemsBox(reasons(e), "Not deleted:")); }
   };
   const delSkill = async () => {
     if (!(await ask({ title: `Delete the skill ${name}?`, ok: "Delete the skill", danger: true,
                       text: "The agent stops using it at once. It is kept in skills/.trash, and does not come back on its own." }))) return;
     try { await api("DELETE", `api/skills/${enc}`); page.dirty = false; toast(`Skill ${name} deleted.`); skills(); }
-    catch (e) { tell("Not deleted", e.problems); }
+    catch (e) { tell("Not deleted", reasons(e)); }
   };
   card(h("div", { class: "files-row" }, fileList, more),
     (differs.size || villa.size) ? h("p", { class: "muted small legend" },

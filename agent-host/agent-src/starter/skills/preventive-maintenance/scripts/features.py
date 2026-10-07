@@ -140,13 +140,24 @@ def device_name(names: list[str]) -> str:
     return names[0] + (f" (+{len(names) - 1} entities of the same device)" if len(names) > 1 else "")
 
 
-def worsened(change_pct: float | None, last_reported_pct: float | None, step: float) -> bool:
-    """A still-open finding earns a digest line again when it moved `step` points further from normal
-    than when it was last reported."""
-    return change_pct is not None and abs(change_pct) - abs(last_reported_pct or 0) >= step
+def integration_down(groups: dict[str, dict], min_devices: float) -> dict[str, dict]:
+    """Offline devices grouped by device (key → group): `min_devices` or more of one integration offline together
+    are one group — the integration is down — named for it. Pure (architecture review 7: it sat in the night's run)."""
+    out = dict(groups)
+    by_platform: dict[str, list[str]] = {}
+    for key, g in groups.items():
+        by_platform.setdefault(g.get("platform") or key.split(":")[0], []).append(key)
+    for plat, keys in by_platform.items():
+        if plat not in ("x", "None") and len(keys) >= min_devices:
+            first = groups[keys[0]]
+            merged = {"asset": {"slug": f"integration_{plat}", "name": f"{plat} integration ({len(keys)} devices)", "critical": True},
+                      "entity_id": first["entity_id"], "hours": max((groups[k]["hours"] or 0) for k in keys),
+                      "state": "unavailable", "names": [groups[k]["names"][0] for k in keys], "critical": True}
+            for k in keys:
+                out.pop(k)
+            out[plat] = merged
+    return out
 
 
-def to_close(open_rows: list[dict], fired: set[tuple[str, str]], state_rules: set[str] | frozenset[str]) -> list[dict]:
-    """The open findings that close tonight: a STATE rule (a condition that holds or not) that did not fire
-    for its entity. An event rule closes the night it fires, never here."""
-    return [o for o in open_rows if o["rule_id"] in state_rules and (o["rule_id"], o["entity_id"]) not in fired]
+# a finding's life — worsened, closing tonight — belongs to vesta_shared.problems (review 7); named here as before
+from vesta_shared.problems import closes_tonight as to_close, worsened  # noqa: E402,F401

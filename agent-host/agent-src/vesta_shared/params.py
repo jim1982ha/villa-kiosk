@@ -24,47 +24,9 @@ class MissingParameter(Exception):
         super().__init__(f"missing villa parameter '{name}'" + (f": {hint}" if hint else ""))
 
 
-# Behavioural defaults. These shape how the rules confirm a finding; they
-# carry no physical meaning and can be overridden per villa with a helper of
-# the same name (input_number.vesta_<name>).
-BEHAVIOUR_DEFAULTS: dict[str, float] = {
-    "baseline_days": 30,          # window for the rolling median
-    "confirm_days": 2,            # consecutive days before a finding is raised
-    "drift_pct": 8,               # relative change of running power that counts
-    "energy_drop_pct": 60,        # daily kWh collapse versus baseline
-    "energy_rise_pct": 60,        # daily kWh jump versus baseline
-    "schedule_dev_pct": 25,       # run hours versus expected schedule
-    "sag_pct": 5,                 # within-run power sag over one run
-    "min_run_hours_for_baseline": 1.0,
-    "min_days_for_baseline": 7,
-    "battery_warn_pct": 20,
-    "battery_crit_pct": 10,
-    "silence_hours": 24,          # a sensor that has not reported for this long
-    "mute_days": 30,
-    "alert_fatigue_per_month": 20,
-    "reask_minutes": 15,
-    "escalate_minutes": 45,
-    "heartbeat_minutes": 10,
-    "villa_silent_minutes": 30,
-    "agent_deadman_hours": 36,
-    "unavailable_minutes": 10,
-    "on_threshold_fraction": 0.2,  # fraction of running power that counts as "on"
-    # ⚠️ NO THRESHOLD HIDDEN IN A SCRIPT (architecture review, 2026-10-07): these were literals in the night check;
-    # each is overridable by a vesta_<name> helper, as the rest of this table
-    "on_threshold_floor_w": 1.0,             # an asset with no data to judge from: "on" above this
-    "energy_gap_hours": 3,                   # a meter's day with more hours missing is not judged
-    "silence_history_hours": 72,             # how far back a quiet sensor's reporting is looked at
-    "silence_reporting_share": 0.5,          # it reported in at least this share of the hours: then silence is news
-    "silence_min_history_hours": 48,         # less history than this: too little to call it silent
-    "integration_down_devices": 3,           # this many devices of one integration offline: the integration is down
-    "restart_crowd_entities": 20,            # this many entities changing at once: Home Assistant restarted
-    "battery_trend_days": 14,                # a battery's trend over these days
-    "battery_trend_min_points": 7,           # with at least these readings
-    "battery_trend_drop_per_day": 0.5,       # falling faster than this (points a day) is a trend
-    "battery_trend_warn_days": 14,           # told when it would be empty within these days
-    "battery_low_fraction_of_nominal": 0.8,  # a voltage battery below this share of its nominal is low
-    "worsened_step_pct": 15,                 # an open finding worse by this many points is told again
-}
+# ⚠️ NO BEHAVIOUR TABLE HERE (architecture review 7, 2026-10-07). The alert desk's and the night check's thresholds
+# lived in this shared file (two of them read by nobody); each skill now keeps its own in its settings file's
+# `behaviour:` section (vesta_shared.skill_settings), still overridable per villa by a vesta_<name> helper.
 
 
 @dataclass
@@ -73,6 +35,8 @@ class VillaParams:
 
     helpers: list[dict] = field(default_factory=list)
     states: dict[str, str] = field(default_factory=dict)
+    # the skill's behaviour defaults (its settings file's `behaviour:`, skill_settings.behaviour)
+    defaults: dict[str, float] = field(default_factory=dict)
 
     # -- lookup ---------------------------------------------------------
     def _find(self, object_id: str) -> tuple[dict | None, str | None]:
@@ -127,13 +91,18 @@ class VillaParams:
             return None
 
     def behaviour(self, name: str) -> float:
-        """Behavioural setting: villa helper vesta_<name> if present, else default."""
+        """Behavioural setting: villa helper vesta_<name> if present, else the skill's default. A value neither gives
+        is named, never guessed (MissingParameter)."""
         v = self.optional_number(f"vesta_{name}")
         if v is not None:
             return v
-        if name not in BEHAVIOUR_DEFAULTS:
-            raise KeyError(name)
-        return BEHAVIOUR_DEFAULTS[name]
+        if name not in self.defaults:
+            raise MissingParameter(f"vesta_{name}", "no helper, and no default in the skill's settings file (behaviour:)")
+        return self.defaults[name]
+
+    def with_defaults(self, defaults: dict[str, float]) -> "VillaParams":
+        """The same villa, with a skill's behaviour defaults."""
+        return VillaParams(self.helpers, self.states, dict(defaults))
 
     def asset_optional_number(self, asset: str, parameter: str) -> float | None:
         return self.optional_number(f"{asset}_{parameter}")
@@ -158,11 +127,6 @@ class VillaParams:
         currency = unit.split("/")[0] if "/" in unit else self.text_or("villa_currency", "IDR")
         return val, currency
 
-    def behaviour_text_default(self, name: str, default):
-        """Behavioural default with a villa override vesta_<name>; used for counts and windows."""
-        v = self.optional_number(f"vesta_{name}")
-        return v if v is not None else default
-
     def text_or(self, object_id: str, default: str) -> str:
         try:
             return self.text(object_id)
@@ -176,7 +140,7 @@ class VillaParams:
         return cls(helpers=d.get("helpers", []), states=d.get("states", {}))
 
 
-def live_params(client, store, max_age_minutes: float = 10, now=None) -> "VillaParams":
+def live_params(client, store, max_age_minutes: float = 10, now=None, defaults: dict | None = None) -> "VillaParams":
     """The villa's parameters as Home Assistant has them now, kept for `max_age_minutes` in the skill store (a script
     run every five minutes would otherwise read every helper each time). Home Assistant not answering: the last
     copy kept, else the defaults — never a crash, never a guessed value. `client`: Home Assistant's client, or a
@@ -198,5 +162,5 @@ def live_params(client, store, max_age_minutes: float = 10, now=None) -> "VillaP
             store.cache_put("villa_params", kept)
         except Exception:  # noqa: BLE001 — Home Assistant unreachable: the last copy, or the defaults
             pass
-    return VillaParams(helpers=kept.get("helpers") or [], states=kept.get("states") or {})
+    return VillaParams(helpers=kept.get("helpers") or [], states=kept.get("states") or {}, defaults=dict(defaults or {}))
 

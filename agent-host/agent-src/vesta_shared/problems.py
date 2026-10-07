@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 
+from . import result
 from .messaging import no_code as _no_code
 from .store import Store, Incident
 
@@ -33,9 +34,18 @@ STATUSES = (DONE, CLEARED, CLOSED_IN_KIOSK)
 _ORDER = {"P1": 0, "P2": 1, "P3": 2, "P4": 3}
 
 
-def _resolve(task_id: int, note: str) -> dict:
-    """The engine's action that resolves a task's fault in the VESTA Kiosk (vesta_agent/outcome.py)."""
-    return {"action": "ticket.resolve", "task_id": task_id, "note": note or None}
+
+
+def worsened(change_pct: float | None, last_reported_pct: float | None, step: float) -> bool:
+    """A still-open finding earns a digest line again when it moved `step` points further from normal
+    than when it was last reported."""
+    return change_pct is not None and abs(change_pct) - abs(last_reported_pct or 0) >= step
+
+
+def closes_tonight(open_rows: list[dict], fired: set[tuple[str, str]], state_rules) -> list[dict]:
+    """The open findings that close tonight: a STATE rule (a condition that holds or not) that did not fire
+    for its entity. An event rule closes the night it fires, never here."""
+    return [o for o in open_rows if o["rule_id"] in state_rules and (o["rule_id"], o["entity_id"]) not in fired]
 
 
 class Problems:
@@ -81,12 +91,64 @@ class Problems:
         if state not in Incident.ANSWERED_OR_CLEARED:
             return []
         status = DONE if state == Incident.DONE else CLEARED
-        return [_resolve(tid, note) for tid in self.clear_source("incident", iid, status=status)]
+        return [result.resolved(tid, note) for tid in self.clear_source("incident", iid, status=status)]
 
     def close_finding(self, finding: dict, day: str, note: str = "") -> list[dict]:
         """The night check no longer sees a finding: it closes, its task is cleared, its Kiosk fault resolved."""
         self.store.close_finding(finding["rule_id"], finding["entity_id"], day)
-        return [_resolve(tid, note) for tid in self.clear_source("finding", finding["id"])]
+        return [result.resolved(tid, note) for tid in self.clear_source("finding", finding["id"])]
+
+    # ⚠️ THE NIGHT'S LEDGER, HERE (architecture review 7, 2026-10-07): nightly.py kept it inline — muted, raised,
+    # an event closed the same night, a rerun not news twice, worsened, closed tonight, its task opened. Which
+    # rules are states and which are events, the worsened step and which severities get a task stay the skill's.
+    def record_night(self, findings, day: str, muted_at_iso: str, *, state_rules, event_rules, worsened_step: float,
+                     task_severities=("P2", "P3"), resolved_note: str = "") -> dict:
+        """The night check's findings for `day`: {new, still_open, closed, muted, tasks, resolve_actions}.
+        A finding has rule_id, entity_id, family, severity, summary, detail, check, day and as_dict()."""
+        new, still_open, closed, muted, fired = [], [], [], [], set()
+        for f in findings:
+            f.day = day
+            f.detail["check"] = f.check
+            if self.store.is_muted(f.rule_id, f.entity_id, muted_at_iso):
+                muted.append(f.as_dict())
+                continue
+            fired.add((f.rule_id, f.entity_id))
+            prev_row = self.store.open_finding(f.rule_id, f.entity_id)
+            prev = json.loads(prev_row["detail"] or "{}") if prev_row else {}
+            if prev and f.rule_id in state_rules:
+                f.detail["last_reported_pct"] = prev.get("last_reported_pct", prev.get("change_pct"))
+            fid, is_new = self.store.raise_finding(f.rule_id, f.entity_id, f.family, day, f.severity, f.summary, f.detail)
+            d = f.as_dict()
+            d["id"] = fid
+            if f.rule_id in event_rules:
+                self.store.close_finding(f.rule_id, f.entity_id, day)        # events close the same night
+                if is_new:                                                    # a rerun of the same night: told already
+                    new.append(d)
+            elif is_new:
+                new.append(d)
+            else:
+                still_open.append(d)
+                # a finding that worsens by `worsened_step` points earns a digest line again
+                if worsened(f.detail.get("change_pct"), f.detail.get("last_reported_pct"), worsened_step):
+                    d["worsened"] = True
+                    f.detail["last_reported_pct"] = f.detail.get("change_pct")
+                    self.store.set_finding_detail(fid, f.detail)
+        resolve = []
+        for o in closes_tonight(self.store.findings(status="open"), fired, state_rules):
+            closed.append(o)
+            # ⚠️ ITS TASK AND ITS KIOSK TICKET CLOSE WITH IT (villa, 2026-10-01): the finding closed, the ticket
+            # stayed "Open fault" for ever, and the Kiosk's Cockpit filled with faults long gone
+            resolve += self.close_finding(o, day, resolved_note)
+        tasks = []
+        for d in new:
+            if d["severity"] in task_severities:
+                tid, created = self.open_task("finding", d["id"], d["rule_id"], d["entity_id"], d["summary"],
+                                              d.get("check") or "")
+                if created:
+                    tasks.append({"task_id": tid, "todo_summary": d["summary"][:250], "check": d.get("check") or "",
+                                  "severity": d["severity"], "entity_id": d["entity_id"]})
+        return {"new": new, "still_open": still_open, "closed": closed, "muted": muted, "tasks": tasks,
+                "resolve_actions": resolve}
 
     def closed_in_kiosk(self, task_id: int) -> int | None:
         """A person closed the task's fault in the VESTA Kiosk: the task closes, and so does the incident

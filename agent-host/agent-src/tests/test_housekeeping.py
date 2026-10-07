@@ -96,8 +96,14 @@ def test_the_agent_tidies_at_start_and_every_night():
 
 
 def test_no_stale_retention_promise_is_left_in_the_parameters():
-    from vesta_shared.params import BEHAVIOUR_DEFAULTS
-    assert not [k for k in BEHAVIOUR_DEFAULTS if "retention" in k]
+    # the thresholds are each skill's own now (settings.yaml / rules.yaml `behaviour:`, architecture review 7)
+    import glob
+    import yaml
+    from helpers import STARTER_SKILLS
+    from vesta_shared import skill_settings
+    keys = [k for d in glob.glob(os.path.join(STARTER_SKILLS, "*")) for f in ("settings.yaml", "rules.yaml")
+            for k in skill_settings.behaviour(skill_settings.load(d, f))]
+    assert keys and not [k for k in keys if "retention" in k]
 
 
 def test_saving_the_rules_form_keeps_the_villas_limits():

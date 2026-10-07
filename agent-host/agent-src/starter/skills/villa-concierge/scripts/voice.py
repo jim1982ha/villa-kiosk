@@ -137,11 +137,10 @@ def main(argv=None):
     ap.add_argument("--audio", required=True)
     ap.add_argument("--language")
     ap.add_argument("--stt")
-    ap.add_argument("--fixture-dir"); ap.add_argument("--zone")
-    ap.add_argument("--store")      # the engine gives every hook the store; this one does not need it
+    from vesta_shared import script
+    script.arguments(ap, store="optional")   # the engine gives every hook the store; this one does not need it
     a = ap.parse_args(argv)
-    from vesta_shared.ha_client import client_from_args
-    res = prepare(a.audio, a.language, client_from_args(a), a.stt)
+    res = prepare(a.audio, a.language, script.Context(a).client, a.stt)
     print(json.dumps(res))
     return 0 if "stt" in res else 2
 

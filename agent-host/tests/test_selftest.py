@@ -277,5 +277,16 @@ class Slot(Base):
         self.assertNotIn("agent-running", out)
 
 
+
+class StreamReader(unittest.TestCase):
+    """The self-test reads HA MCP's event stream as the agent does: the same samples (tests/sse_samples.py)."""
+
+    def test_each_sample_reads_its_last_message(self):
+        from sse_samples import SAMPLES
+        for raw, want in SAMPLES:
+            r = selftest.HttpResult(200, raw.encode("utf-8"), {"content-type": "text/event-stream"})
+            self.assertEqual(selftest._mcp_messages(r)[-1], want)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

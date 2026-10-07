@@ -2,12 +2,14 @@
 
 A skill script prints its decision in the standard form; this module does it:
 
-  send:       [{to: here | owner | fm, text, keyboard?: true, attachment?: <a file of the out folder>}]
-              keyboard = the alert buttons
+  send:       [{to: here | owner | fm, text, incident_id?, keyboard?: true, attachment?: <a file of the out folder>}]
+              keyboard = the alert buttons of the message's incident_id
+  (a skill builds these with vesta_shared/result.py: the shape there, the words in the skill)
   actions:    ticket {summary, entity_id?, note?, task_id?} · ticket.resolve {task_id | ticket_id, note?}
               snapshot.get {entity_id, incident_id}
-  siren_gate: {armed, prompt}  → an Approve / Refuse request to the owner for the policy's siren
-  incident_id                  → which incident the alert buttons belong to
+  siren_gate: {armed, prompt, to}  → an Approve / Refuse request to the owner for the policy's siren; with no
+              siren configured, the prompt itself to `to`
+  incident_id                  → the incident of the result (a message without its own)
   settle:     [{incident_id, note}]  → every message carrying that incident's buttons, in every chat,
               loses them and shows the note ("{time}": the villa's time now)
 
@@ -25,7 +27,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import re
 from typing import Awaitable, Callable
 
 from .routing import Origin, Routing
@@ -79,10 +80,13 @@ class Outcome:
         gate_prompt = gate.get("prompt") if gate.get("armed") else None
         sent: set[tuple[int, str]] = set()
         chats: set[int] = set()
-        for item in res.get("send") or []:
+        pol = self.policy()
+        items = list(res.get("send") or [])
+        if gate_prompt and not pol.siren_entity:
+            # no siren to ask for: the warning itself goes to the gate's people (it was dropped before, 0.12.80)
+            items += [{"to": to, "text": gate_prompt} for to in gate.get("to") or ("owner",)]
+        for item in items:
             text = (item or {}).get("text") or ""
-            if gate_prompt and text == gate_prompt:
-                continue                                     # sent below, as the owner's approval request
             chat = route.target(item.get("to"), origin)
             if not chat:
                 done["unrouted"] += 1
@@ -94,8 +98,9 @@ class Outcome:
             sent.add((chat, text))
             kb = None
             if item.get("keyboard") and skill_name:
-                m = re.search(r"#(\d+)", text)
-                iid = res.get("incident_id") or (int(m.group(1)) if m else None)
+                # ⚠️ ITS INCIDENT AS A FIELD (review 7): it was read out of the wording ("#N"), so a reworded
+                # reminder lost its buttons
+                iid = item.get("incident_id") or res.get("incident_id")
                 if iid:
                     kb = self.buttons.keyboard(iid, chat, skill_name)
             doc = None
@@ -119,7 +124,6 @@ class Outcome:
         for s in res.get("settle") or []:
             if isinstance(s, dict) and str(s.get("incident_id") or "").isdigit():
                 await self.buttons.settle(int(s["incident_id"]), str(s.get("note") or ""))
-        pol = self.policy()
         if gate_prompt and pol.siren_entity:
             # its own domain's turn_on (a switch or a siren entity: policy.SIREN_DOMAINS)
             answer, msg = await asyncio.to_thread(self.actions.request, pol.siren_entity.split(".")[0], "turn_on",

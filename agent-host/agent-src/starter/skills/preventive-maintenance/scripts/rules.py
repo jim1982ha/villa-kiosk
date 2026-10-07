@@ -26,6 +26,12 @@ from vesta_shared.timeutil import day_label, schedule_hours_per_day, weekday_nam
 
 P2, P3, INFO = "P2", "P3", "INFO"
 
+# the skill's own thresholds (settings.yaml `behaviour:`, a villa's villa.settings.yaml on top) — the defaults the
+# night check's parameters fall back to, here for a caller holding no Context (the tests)
+from vesta_shared.skill_settings import behaviour as _behaviour, load as _load_settings  # noqa: E402
+import os as _os  # noqa: E402
+DEFAULTS = _behaviour(_load_settings(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), "settings.yaml"))
+
 
 @dataclass
 class Finding:

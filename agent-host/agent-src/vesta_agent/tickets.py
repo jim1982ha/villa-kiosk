@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Awaitable, Callable
 
+from vesta_shared import result
 from vesta_shared.problems import CLEARED, Problems
 
 from .outcome_words import ticket_title
@@ -104,7 +105,7 @@ class Tickets:
             try:
                 check = problems.check_of(t)
                 if await self.create(problems.title_of(t), t.get("entity_id") or None,
-                                            f"Check: {check}" if check else None, t["id"]):
+                                            result.fault_note(check), t["id"]):
                     made += 1
             except Exception as e:  # noqa: BLE001 — the next start or night tries again
                 log.warning("A missing Kiosk ticket could not be created (%s)", type(e).__name__)

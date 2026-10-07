@@ -192,3 +192,25 @@ def test_an_open_fault_in_the_kiosk_says_what_is_wrong_now(agent):
     assert list(k.titles.values()) == ["Motion battery at 0%: replace now."]
     run(v.tickets.repair())                                              # nothing new: no write
     assert len(k.tickets) == 1
+
+
+def test_a_reworded_reminder_keeps_its_buttons_and_an_unarmed_siren_warns_anyway(agent):
+    # architecture review 7: the buttons' incident was read out of the wording ("#N"); with no siren configured,
+    # an intrusion warning was taken out of the messages and sent nowhere
+    from vesta_shared import result as R
+    v, _ = agent
+    run(v.outcome.carry_out({"send": [R.message("fm", "Reminder: the door. Answer below.", incident=42, buttons=True)]},
+                            "alert-desk"))
+    (_, text, kb), = v.tg.sent
+    assert kb and all(b["callback_data"].startswith("i:42:") for b in kb["inline_keyboard"][0])
+    v.tg.sent.clear()
+    run(v.outcome.carry_out({"siren_gate": R.siren(True, "Intrusion suspected.", ("fm",))}, "alert-desk"))
+    assert [t for _, t, _ in v.tg.sent] == ["Intrusion suspected."]
+
+
+def test_the_result_builder_refuses_buttons_without_their_incident():
+    from vesta_shared import result as R
+    with pytest.raises(ValueError):
+        R.message("fm", "x", buttons=True)
+    assert R.fault("Door open", task_id=3, check="the lock", entity_id="a,b") == {
+        "action": "ticket", "summary": "Door open", "task_id": 3, "note": "Check: the lock", "entity_id": None}

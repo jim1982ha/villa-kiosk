@@ -141,11 +141,41 @@ export async function api(method, path, body) {
     opts.headers["X-Vesta-UI"] = "1";
     opts.body = "{}";
   }
-  const r = await fetch(path, opts);                 // relative: works under Home Assistant's Ingress path
+  // ⚠️ EVERY FAILURE SAYS WHY (architecture review 7): a dropped connection (an Ingress session ended, the agent
+  // restarting) threw an error with no reasons, and the page showed an empty box or a "Not changed" with no words
+  let r;
+  try {
+    r = await fetch(path, opts);                     // relative: works under Home Assistant's Ingress path
+  } catch {
+    throw Object.assign(new Error("unreachable"), { status: 0, problems: [UNREACHABLE] });
+  }
   let data = {};
   try { data = await r.json(); } catch { /* an empty answer */ }
-  if (!r.ok) { const e = new Error("refused"); e.problems = data.problems || [`Error ${r.status}`]; e.status = r.status; throw e; }
+  if (!r.ok) {
+    const problems = Array.isArray(data.problems) && data.problems.length ? data.problems
+      : [r.status === 401 || r.status === 403 ? "The Home Assistant session has ended: reload the page." : `The agent answered with error ${r.status}.`];
+    throw Object.assign(new Error("refused"), { problems, status: r.status });
+  }
   return data;
+}
+
+export const UNREACHABLE = "The VESTA Agent could not be reached (the connection dropped, or the app is restarting). Reload the page, then try again.";
+
+// The reasons of any error, in words: a refusal's own, or what went wrong.
+export const reasons = (e) => (e && Array.isArray(e.problems) && e.problems.length ? e.problems : [String(e || "Something went wrong.")]);
+
+// ⚠️ ONE SAVE (review 7: three copies): send it, then mark the page clean, clear the problems and say so — or show
+// why it was not saved, in view.
+export async function saveWith(probs, send, okText) {
+  try {
+    const res = await send();
+    page.dirty = false; fill(probs); showBar(); toast(okText);
+    return res;
+  } catch (e) {
+    fill(probs, problemsBox(reasons(e)));
+    probs.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    return null;
+  }
 }
 
 // replaceChildren() prints a null as the text "null": the optional parts are filtered first.

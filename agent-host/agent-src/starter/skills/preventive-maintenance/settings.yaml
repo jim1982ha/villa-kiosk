@@ -1,0 +1,30 @@
+# The night check's thresholds (vesta_shared.params.behaviour): they shape how a finding is confirmed and carry no
+# physical meaning. A villa helper input_number.vesta_<name> overrides one; a villa's own villa.settings.yaml may
+# change them too (kept by updates). Moved here from the shared library (architecture review 7, 2026-10-07).
+behaviour:
+  baseline_days: 30                     # window for the rolling median
+  confirm_days: 2                       # consecutive days before a finding is raised
+  drift_pct: 8                          # relative change of running power that counts
+  energy_drop_pct: 60                   # daily kWh collapse versus baseline
+  energy_rise_pct: 60                   # daily kWh jump versus baseline
+  schedule_dev_pct: 25                  # run hours versus expected schedule
+  sag_pct: 5                            # within-run power sag over one run
+  min_days_for_baseline: 7
+  battery_warn_pct: 20
+  battery_crit_pct: 10
+  silence_hours: 24                     # a sensor that has not reported for this long
+  unavailable_minutes: 10
+  on_threshold_fraction: 0.2            # fraction of running power that counts as "on"
+  on_threshold_floor_w: 1.0             # an asset with no data to judge from: "on" above this
+  energy_gap_hours: 3                   # a meter's day with more hours missing is not judged
+  silence_history_hours: 72             # how far back a quiet sensor's reporting is looked at
+  silence_reporting_share: 0.5          # it reported in at least this share of the hours: then silence is news
+  silence_min_history_hours: 48         # less history than this: too little to call it silent
+  integration_down_devices: 3           # this many devices of one integration offline: the integration is down
+  restart_crowd_entities: 20            # this many entities changing at once: Home Assistant restarted
+  battery_trend_days: 14                # a battery's trend over these days
+  battery_trend_min_points: 7           # with at least these readings
+  battery_trend_drop_per_day: 0.5       # falling faster than this (points a day) is a trend
+  battery_trend_warn_days: 14           # told when it would be empty within these days
+  battery_low_fraction_of_nominal: 0.8  # a voltage battery below this share of its nominal is low
+  worsened_step_pct: 15                 # an open finding worse by this many points is told again
