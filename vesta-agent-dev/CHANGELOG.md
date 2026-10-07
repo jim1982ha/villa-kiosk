@@ -1,3 +1,16 @@
+## 0.12.71
+
+The same as 0.12.70, which did not publish: one of the agent's own tests depended on how fast the build machine was. Nothing changes for you.
+
+## 0.12.70
+
+What you will see:
+- **A report still arrives when the AI cannot run.** If Anthropic is out of credit, refuses the key, is overloaded or cannot be reached, the daily digest, the weekly report (and the owner's Monday lines) and the monthly report are still made from their figures and charts, and sent. The page and its message say at the top "Made without the AI", and why; VESTA's readings (and the translation) are what is missing. If even the figures cannot be made, you get "could not be prepared", as before. On the Costs tab such a run shows as "Without the AI", at no cost, with an (i) that says why.
+- **An open fault in the Cockpit says what is wrong now.** A battery reported at 5% kept saying 5% after it reached 0%: each night the Kiosk's open faults are brought up to date (the history keeps what they said before).
+- **A failed run on the Costs tab is a red (!)**: hover it (or tap on a phone) for the reason in plain words and the error itself, instead of the "api error 400" pill.
+- **Every chart in the daily, weekly and monthly reports shows its value** when you hover (or tap) a point or a bar: the day and the figure.
+- A repeated alert says since when in the villa's time ("4 times since Thu 1 Oct, 17:00").
+
 ## 0.12.69
 
 **An urgent fix.** Since 0.12.67 the skills' scripts ran without the villa's knowledge pack, store and time zone (a mistake in that release). This morning's daily digest stopped on it ("fm-daily needs --pack") and last night's maintenance check most likely did not run — and it was recorded as "nothing to do". Both are fixed: the scripts get them again, and a script that is called the wrong way now counts as a failure (Overview → failures), never as "nothing to do".
