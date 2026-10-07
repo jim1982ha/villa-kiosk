@@ -81,11 +81,9 @@ def fm_daily(pack: KnowledgePack, store: Store, as_of: date) -> str:
     cfg = load_cfg()
     group_from = int(((cfg.get("thresholds") or {}).get("todo") or {}).get("group_from") or 3)
     words = {k: v for k, v in (cfg.get("todo_groups") or {}).items() if k != "same_time"}
-    names = {r["entity_id"]: r["name"] for rows in pack.families.values() for r in rows if r.get("name")}
-
     def name_of(entity_id, text):
         # the device's name from the knowledge pack; the summary's own words for an entity it does not know
-        return names.get(entity_id) or text.split("\n")[0][:60]
+        return pack.name_of(entity_id) or text.split("\n")[0][:60]
 
     yesterday = (as_of - timedelta(days=1)).isoformat()
     new = [f for f in store.findings(since_day=yesterday) if f["severity"] in ("P2", "P3")]
@@ -403,13 +401,25 @@ def main(argv=None):
     ap.add_argument("--since"); ap.add_argument("--limit")
     ap.add_argument("--no-ai", metavar="WHY", help="the job's without_ai step: the AI could not run (WHY, in words)")
     a = ap.parse_args(argv)
+    # ⚠️ THREE WAYS, NAMED ONCE (architecture review 5, 2026-10-07): for the AI (no --finish); the job's on_limit step
+    # (--finish --since --limit: what is done, sent); its without_ai step (--finish --no-ai). They were told apart by
+    # five repeated flag tests, and a combination nobody uses (--finish without --out) silently sent nothing.
+    mode = "no_ai" if a.no_ai else "limit" if a.finish else "ai"
+    if (a.no_ai or a.since or a.limit) and not a.finish:
+        print("--no-ai, --since and --limit belong to a job's step: give --finish too.", file=sys.stderr); return 1
+    pages = a.cmd in ("fm-weekly", "owner-monthly")
+    if a.finish and pages and not a.out:
+        print(f"{a.cmd} --finish needs --out: the page it sends.", file=sys.stderr); return 1
+    if mode == "limit" and not (pages and a.limit):
+        print("--finish without --no-ai is the on_limit step of a page: give --limit (and --since).", file=sys.stderr)
+        return 1
 
-    if a.cmd in ("fm-weekly", "owner-monthly"):
+    if pages:
         if not a.facts:
             print(f"{a.cmd} needs --facts: first run facts.py {a.cmd} --energy <period>.json --out facts.json.", file=sys.stderr)
             return 1
         name = "weekly" if a.cmd == "fm-weekly" else "monthly"
-        if a.finish and not a.no_ai and (not os.path.exists(a.facts) or (a.since and datetime.fromtimestamp(
+        if mode == "limit" and (not os.path.exists(a.facts) or (a.since and datetime.fromtimestamp(
                 os.path.getmtime(a.facts)).astimezone() < datetime.fromisoformat(a.since))):
             print(json.dumps({"send": [{"to": a.finish, "text": (
                 f"The {name} report stopped at its {a.limit} USD limit before its figures were ready, so there is "
@@ -417,13 +427,13 @@ def main(argv=None):
             return 0
         facts = json.load(open(a.facts, encoding="utf-8"))
         notes = {}
-        if a.notes and os.path.exists(a.notes) and not a.no_ai:
+        if a.notes and os.path.exists(a.notes) and mode != "no_ai":
             try:
                 notes = json.load(open(a.notes, encoding="utf-8"))
             except ValueError:
                 notes = {}
         good, refused = checked_notes(facts, notes if isinstance(notes, dict) else {})
-        html = page(facts, good, a.limit if a.finish and not a.no_ai else None, a.no_ai)
+        html = page(facts, good, a.limit if mode == "limit" else None, a.no_ai)
         res = {"html_chars": len(html), "notes_used": sorted(good), "notes_refused": refused,
                "missing_notes": sorted(w["id"] for w in facts.get("to_write") or [] if w["id"] not in good),
                "problems": facts.get("problems") or []}
@@ -431,10 +441,10 @@ def main(argv=None):
             with open(a.out, "w", encoding="utf-8") as f:
                 f.write(html)
             res["html"] = a.out
-        if a.finish and a.out and a.no_ai:
+        if mode == "no_ai":
             res = {"send": [{"to": a.finish, "attachment": os.path.basename(a.out),
                              "text": f"The {name} report.\n\n{without_ai_note(a.no_ai)}"}]}
-        elif a.finish and a.out:
+        elif mode == "limit":
             head = good.get("headline") or good.get("hero") or f"The {name} report."
             res = {"send": [{"to": a.finish, "attachment": os.path.basename(a.out),
                              "text": f"{head}\n\n(This report stopped at its {a.limit} USD limit: some readings are missing.)"}]}
@@ -454,10 +464,9 @@ def main(argv=None):
         messages = split_message(fm_daily(pack, store, as_of))
     else:
         messages = [owner_weekly(pack, store, json.load(open(a.energy)))]
-    if a.finish:
+    if mode == "no_ai":
         # a job's without_ai step: the messages are sent as written, saying they were made without the AI
-        note = without_ai_note(a.no_ai) if a.no_ai else ""
-        messages[-1] = (messages[-1] + "\n\n" + note).strip()
+        messages[-1] = messages[-1] + "\n\n" + without_ai_note(a.no_ai)
         print(json.dumps({"send": [{"to": a.finish, "text": m} for m in messages]}, indent=1)); return 0
     print(json.dumps({"messages": messages}, indent=1)); return 0
 

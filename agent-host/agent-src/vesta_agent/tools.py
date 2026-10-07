@@ -34,6 +34,7 @@ from claude_agent_sdk import create_sdk_mcp_server, tool
 
 from . import __version__, script_run, status, tool_access
 from .policy import Person, Policy
+from .redact import scrub  # noqa: F401 — callers import it from here too
 from .routing import Origin, Routing
 from .outcome import has_work
 from .runner import WEB_SEARCH
@@ -52,28 +53,6 @@ READ_ARG_RULES: dict[str, dict[str, set]] = {
 READ_ARG_FORBIDDEN: dict[str, set] = {
     "ha_get_logs": {"slug"},
 }
-
-_SECRET_PATTERNS = [
-    re.compile(r"mcp_[A-Za-z0-9_-]{8,}"),
-    re.compile(r"sk-ant-[A-Za-z0-9_-]{10,}"),
-    re.compile(r"\b\d{8,10}:[A-Za-z0-9_-]{30,}\b"),                 # a Telegram bot token
-    re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}"),  # a JWT (Home Assistant tokens)
-    re.compile(r"(?i)bearer\s+[A-Za-z0-9._~+/=-]{12,}"),
-]
-_SECRET_KV = re.compile(r"(?i)(\\?\"?(?:access_token|refresh_token|token|api_key|apikey|password|passwd|secret|webhook_id|client_secret)\\?\"?\s*[:=]\s*\\?\"?)([^\"\\,}&\s]{4,})")
-
-
-def scrub(text: str, extra: list[str] | None = None) -> str:
-    """Remove secrets from anything the model is about to read."""
-    if not text:
-        return text
-    for sec in extra or []:
-        if sec and len(sec) >= 8:
-            text = text.replace(sec, "[redacted]")
-    for p in _SECRET_PATTERNS:
-        text = p.sub("[redacted]", text)
-    return _SECRET_KV.sub(lambda m: m.group(1) + "[redacted]", text)
-
 
 SKILL_PREFACE = """[How to run this skill inside VESTA]
 You have no shell. Run a script only with the tool run_skill_script(skill, script, args).

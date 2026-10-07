@@ -41,6 +41,15 @@ def agent(tmp_path, monkeypatch):
         v.code.append((command.split()[0], values, origin))
         return {}
     v.run_code_job = fake_code
+
+    async def fake_steps(settings, state, skills, outcome, skill, steps, values, origin=None):
+        # a job's code steps (job_steps.py): recorded, not run
+        for st in steps:
+            v.code.append((st["run"].split()[0], values, origin))
+        from vesta_agent.job_steps import Done
+        return Done(0, None)
+    import vesta_agent.job_steps as job_steps
+    monkeypatch.setattr(job_steps, "run", fake_steps)
     v.server_tools = [{"name": "ha_get_state", "annotations": {"readOnlyHint": True}}]   # as HA MCP lists it
     return v
 

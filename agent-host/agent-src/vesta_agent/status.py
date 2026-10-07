@@ -10,6 +10,7 @@ import os
 from datetime import datetime, timedelta, timezone
 
 from vesta_shared.agent_records import run_cost   # what a run cost: one reading, shared with the skills
+from . import run_records
 from .api_errors import why_job_sentence
 
 # agent_status: the records worth telling a person about, and the fields of each (never a chat id or a token)
@@ -75,13 +76,13 @@ def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_la
     local = (lambda t: t.astimezone(zone)) if zone else (lambda t: t)
     runs, made = [], []
     for c in state.calls_since(since.isoformat()):
-        if c["kind"] not in ("run", "without_ai"):
+        if c["kind"] not in ("run", run_records.WITHOUT_AI):
             continue
         try:
             d = json.loads(c["detail"] or "{}")
         except ValueError:
             d = {}
-        if c["kind"] == "without_ai":
+        if c["kind"] == run_records.WITHOUT_AI:
             # a job made by its code steps when the AI could not run (app.run_without_ai): shown among the runs,
             # at no cost, and not counted as an AI run
             made.append({"at": c["at"], "kind": "job", "work": str(d.get("job") or "?"), "person": None, "chat": None,
@@ -92,10 +93,10 @@ def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_la
                                         "failed": d.get("failed")}})
             continue
         who = str(d.get("who") or "")
-        if who.startswith("job:"):
-            kind, work, person, chat = "job", who[4:], None, None
+        if run_records.job_of(who) is not None:
+            kind, work, person, chat = "job", run_records.job_of(who), None, None
         else:
-            name, _, cid = who.partition("@")
+            name, cid = run_records.person_of(who)
             kind, work, person = "chat", "Chat replies", name or None
             chat = chat_label(cid) if chat_label and cid.lstrip("-").isdigit() else None
         tok = d.get("tokens") or {}

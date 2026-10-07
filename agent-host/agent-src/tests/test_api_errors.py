@@ -307,7 +307,7 @@ def test_a_report_made_from_a_button_never_takes_the_next_answer_for_its_waiting
             if any("287 kWh" in t for c, t, _ in agent.tg.sent):
                 break
             await asyncio.sleep(0.01)
-        while (FM, "rep-weekly") in agent._running_jobs:            # the job's end, after its result
+        while agent.chat_jobs.running(FM, "rep-weekly"):            # the job's end, after its result
             await asyncio.sleep(0.01)
         await agent.converse(FM, person, "a report please")
         return pressed
@@ -321,3 +321,19 @@ def test_no_report_button_for_a_question_about_something_else(agent, monkeypatch
     asyncio.run(agent.converse(FM, agent.policy().person(FM), "what do you see in the living camera now?"))
     (text, kb), = [(t, kb) for c, t, kb in agent.tg.sent if c == FM]
     assert kb is None and text == api_errors.FOR_PERSON["credit"]
+
+
+def test_a_report_button_pressed_by_someone_who_may_not_start_one_is_refused(agent, monkeypatch):
+    # architecture review 5: the buttons were offered only to who may start a report, but a press asked only
+    # "registered?" — in a group, anyone could press another person's report button
+    _report_without_ai(agent, monkeypatch, run_job=False)
+    with open(agent.s.policy_path) as f:
+        pol = yaml.safe_load(f)
+    pol.setdefault("agent_tools", {})["start_job"] = False
+    with open(agent.s.policy_path, "w") as f:
+        yaml.safe_dump(pol, f)
+    agent.state.remember_message(FM, 900)
+    asyncio.run(agent.on_ha_event("telegram_callback", {"id": "cb1", "data": "w:credit:rep-weekly", "chat_id": FM,
+                                                        "user_id": FM, "message": {"message_id": 900, "chat": {"id": FM}}}))
+    assert agent.tg.toasts == [("cb1", "Starting a report is not switched on for you here.")]
+    assert not agent.chat_jobs.running(FM, "rep-weekly") and agent.tg.edits == []

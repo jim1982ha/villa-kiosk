@@ -84,3 +84,9 @@ class Routing:
         if roles:
             return " and ".join(f"{r}" for r in sorted(roles)) + " chat"
         return "private chat" if int(chat_id) > 0 else "group"
+
+
+def job_to(job: dict, origin: Origin | None) -> str:
+    """Where a job's result goes, as a target word: `here` when it was asked for in a chat, else the job's `to`
+    (skill.yaml), the owner when it names none. Written four times in app.py before (architecture review 5)."""
+    return "here" if origin else (job.get("to") or "owner")

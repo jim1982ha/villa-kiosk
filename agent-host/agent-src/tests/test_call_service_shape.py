@@ -125,3 +125,30 @@ def test_direct_still_asks_for_a_job_or_an_alert_and_for_an_owner_only_device(vi
     _, msg = actions.request("cover", "open_cover", "cover.example_shutter", {}, JM, 111)    # rule `any`
     assert msg is not None
     assert session.calls == []                                                              # nothing ran
+
+
+def test_a_lock_still_unlocking_is_read_again_not_reported_unconfirmed(tmp_path, monkeypatch):
+    # architecture review 5: one read only for one device — a lock still "unlocking" read as "Not confirmed"
+    monkeypatch.delenv("VESTA_HA_READ_ONLY", raising=False)
+    import vesta_agent.actions as A
+    monkeypatch.setattr(A.time, "sleep", lambda s: None)
+    seen = iter(["unlocking", "unlocking", "unlocked"])
+
+    class Slow(McpClient):
+        def states(self, entity_ids=None):
+            return {e: {"state": next(seen)} for e in entity_ids or []}
+    actions = Actions(lambda: None, State(str(tmp_path / "state.db")),
+                      lambda: Slow("http://unused", "UTC", write=True, session=StrictSession()))
+    result = actions.execute(Decision(True, "test", "any", "lock", "unlock", ["lock.example_door"], {}))
+    assert result["ok"] and "unlocked" in result["text"], result
+
+    reads = []
+
+    class Wrong(McpClient):
+        def states(self, entity_ids=None):
+            reads.append(1)
+            return {e: {"state": "jammed"} for e in entity_ids or []}
+    actions = Actions(lambda: None, State(str(tmp_path / "state2.db")),
+                      lambda: Wrong("http://unused", "UTC", write=True, session=StrictSession()))
+    result = actions.execute(Decision(True, "test", "any", "lock", "unlock", ["lock.example_door"], {}))
+    assert not result["ok"] and len(reads) == 1                       # a final wrong state: said at once

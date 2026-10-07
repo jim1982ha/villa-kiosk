@@ -93,7 +93,7 @@ def _write(path: str, data: bytes) -> None:
         raise
 
 
-TEXT_KINDS = ("policy", "instructions", "file")    # what Undo writes back as text (UI._text_change)
+TEXT_KINDS = ("policy", "instructions", "file")    # what Undo writes back as text (UI.text_change)
 
 class Refused(Exception):
     def __init__(self, problems: list[str], status: int = 400):
@@ -256,12 +256,12 @@ class UI:
                                   "built": pack.generated_at if pack else None})
 
     # ------------------------------------------------------------------ policy.yaml
-    def _policy(self) -> tuple[str, str]:
+    def policy_now(self) -> tuple[str, str]:
         data = _read(self.s.policy_path)
         return data.decode("utf-8"), rev(data)
 
     async def policy_get(self, _request):
-        text, r = self._policy()
+        text, r = self.policy_now()
         try:
             form, probs = to_form(text), policy_problems(yaml.safe_load(text) if text else {})
         except yaml.YAMLError as e:
@@ -270,8 +270,8 @@ class UI:
         return web.json_response({"text": text, "rev": r, "form": form, "problems": probs, "languages": LANGUAGES,
                                   "profiles": profile_labels(), "schema": form_schema()})
 
-    def _save_policy(self, new_text: str, base_rev: str, place: str = "Rules", what: str | None = None) -> dict:
-        text, r = self._policy()
+    def save_policy(self, new_text: str, base_rev: str, place: str = "Rules", what: str | None = None) -> dict:
+        text, r = self.policy_now()
         if base_rev != r:
             raise Refused(["policy.yaml changed since you opened it (another window, Studio Code Server). "
                            "Reload to see the current file; your change was not saved."], 409)
@@ -283,23 +283,23 @@ class UI:
         if probs:
             raise Refused(probs)
         data = new_text.encode("utf-8")
-        self._text_change(place, what or policy_change(text, new_text), {"kind": "policy"}, new_text)
+        self.text_change(place, what or policy_change(text, new_text), {"kind": "policy"}, new_text)
         log.info("UI: policy.yaml saved")
         return {"rev": rev(data), "text": new_text, "form": to_form(new_text)}
 
     async def policy_form(self, request):
         body = await request.json()
-        text, _ = self._policy()
+        text, _ = self.policy_now()
         form = body.get("form")
         if not isinstance(form, dict):
             raise Refused(["No form sent."])
-        return web.json_response(self._save_policy(apply_form(text, form), str(body.get("rev") or "")))
+        return web.json_response(self.save_policy(apply_form(text, form), str(body.get("rev") or "")))
 
     async def policy_text(self, request):
         body = await request.json()
         if not isinstance(body.get("text"), str):
             raise Refused(["No text sent."])
-        return web.json_response(self._save_policy(body["text"], str(body.get("rev") or "")))
+        return web.json_response(self.save_policy(body["text"], str(body.get("rev") or "")))
 
     # ------------------------------------------------------------------ skills
     def _skill_rows(self) -> list[dict]:
@@ -344,7 +344,7 @@ class UI:
             raise Refused([f"{path!r} is not a file name this editor accepts (letters, digits, . - _; no leading dot)."])
         return os.path.join(*parts)
 
-    def _check_skill(self, name: str, folder: str) -> None:
+    def check_skill(self, name: str, folder: str) -> None:
         """The skill as the agent would read it, from a copy with the change applied."""
         if not os.path.isfile(os.path.join(folder, "SKILL.md")) or not os.path.isfile(os.path.join(folder, "skill.yaml")):
             raise Refused(["A skill needs both SKILL.md and skill.yaml."])
@@ -366,7 +366,7 @@ class UI:
                 os.makedirs(os.path.dirname(target), exist_ok=True)
                 with open(target, "wb") as f:
                     f.write(content)
-            self._check_skill(name, trial)
+            self.check_skill(name, trial)
         real = os.path.join(folder, rel)
         if content is None:
             os.unlink(real)
@@ -383,7 +383,7 @@ class UI:
         _write(os.path.join(path, "SKILL.md"), NEW_SKILL_MD.format(name=name).encode())
         _write(os.path.join(path, "skill.yaml"), NEW_SKILL_YAML.encode())
         log.info("UI: skill %s created", name)
-        self._folder_change("Skills", f"{name} created", name, None, "present")
+        self.folder_change("Skills", f"{name} created", name, None, "present")
         return web.json_response({"name": name})
 
     async def skill_delete(self, request):
@@ -392,7 +392,7 @@ class UI:
         # Moved aside, not erased: a dot folder is never loaded, and a mistake can be undone (Overview › Changes).
         dest = to_trash(self.s.skills_dir, path, name)
         log.info("UI: skill %s deleted (kept in skills/%s)", name, TRASH)
-        self._folder_change("Skills", f"{name} deleted (kept in skills/{TRASH})", name, dest, None)
+        self.folder_change("Skills", f"{name} deleted (kept in skills/{TRASH})", name, dest, None)
         return web.json_response({"deleted": name, "kept_in": f"{TRASH}/{os.path.basename(dest)}"})
 
     async def skill_files(self, request):
@@ -445,7 +445,7 @@ class UI:
                 yaml.safe_load(content)
             except yaml.YAMLError as e:
                 raise Refused([f"{rel} is not valid YAML: {e}"]) from None
-        self._text_change("Skills", lambda before: f"{name} › {file_change(rel, before, content)}",
+        self.text_change("Skills", lambda before: f"{name} › {file_change(rel, before, content)}",
                           {"kind": "file", "skill": name, "path": rel.replace(os.sep, "/")}, content)
         log.info("UI: skill %s, %s saved", name, rel)
         return web.json_response({"rev": rev(data)})
@@ -455,7 +455,7 @@ class UI:
         rel = self._rel(request.query.get("path", ""))
         if not os.path.isfile(os.path.join(self._skill_dir(name), rel)):
             raise Refused([f"No file {rel}."], 404)
-        self._text_change("Skills", f"{name} › {rel} deleted", {"kind": "file", "skill": name, "path": rel}, None)
+        self.text_change("Skills", f"{name} › {rel} deleted", {"kind": "file", "skill": name, "path": rel}, None)
         log.info("UI: skill %s, %s deleted", name, rel)
         return web.json_response({"deleted": rel})
 
@@ -485,8 +485,8 @@ class UI:
 
     def _edit_policy(self, change: dict, what: str, place: str = "Rules") -> dict:
         """One section of policy.yaml changed by a switch on the page: through the same checks as a save."""
-        text, r = self._policy()
-        return self._save_policy(apply_form(text, change), r, place, what)
+        text, r = self.policy_now()
+        return self.save_policy(apply_form(text, change), r, place, what)
 
     # ------------------------------------------------------------------ a fuller Skills tab
     WHEN = {"critical_event": "a critical alert from a VESTA rule", "voice_message": "a voice message"}
@@ -534,7 +534,7 @@ class UI:
         name = request.match_info["name"]
         self._skill_dir(name)
         on = bool((await request.json()).get("on"))
-        doc = to_form(self._policy()[0])
+        doc = to_form(self.policy_now()[0])
         off = [x for x in doc["skills_off"] if x != name] + ([] if on else [name])
         res = self._edit_policy({"skills_off": sorted(set(off))}, f"{name} switched {'on' if on else 'off'}", "Skills")
         log.info("UI: skill %s switched %s", name, "on" if on else "off")
@@ -559,7 +559,7 @@ class UI:
         if text is None and before is None:
             return web.json_response({"ok": True})
         label = f"{script}{' ' + command if command else ''}"
-        self._text_change("Skills", f"{name} › {label} switched {'on' if on else 'off'} for the AI",
+        self.text_change("Skills", f"{name} › {label} switched {'on' if on else 'off'} for the AI",
                           {"kind": "file", "skill": name, "path": rel}, text)
         log.info("UI: skill %s, %s switched %s", name, label, "on" if on else "off")
         return web.json_response({"ok": True})
@@ -593,7 +593,7 @@ class UI:
         if self.skills.release_state(name)["state"] != "edited":
             raise Refused([f"{name} is not an edited starter skill."])
         dest = self.skills.take_release(name)
-        self._folder_change("Skills", f"{name}: the release's version taken (the edited one kept in skills/{TRASH})",
+        self.folder_change("Skills", f"{name}: the release's version taken (the edited one kept in skills/{TRASH})",
                             name, dest, "present")
         log.info("UI: skill %s replaced by the release's version", name)
         return web.json_response({"ok": True})
@@ -640,7 +640,7 @@ class UI:
             if self._text_now(t) != ch["after"]:
                 raise Refused(["Something changed since (another save, or Studio Code Server): undo the later "
                                "change first."], 409)
-            self._text_change("Undo", f"Undo: {ch['what']}", t, ch["before"])
+            self.text_change("Undo", f"Undo: {ch['what']}", t, ch["before"])
         elif t["kind"] == "folder":
             self._undo_folder(t["skill"], ch)
         else:
@@ -657,19 +657,19 @@ class UI:
             if os.path.exists(path) or not old or not os.path.isdir(old):
                 raise Refused([f"{name} cannot come back: a skill of that name exists, or its copy is gone."], 409)
             shutil.move(old, path)
-            self._folder_change("Undo", f"Undo: {ch['what']}", name, None, "present")
+            self.folder_change("Undo", f"Undo: {ch['what']}", name, None, "present")
             return
         if not os.path.isdir(path) or (old and not os.path.isdir(old)):
             raise Refused(["The skill or its previous copy is gone: nothing to put back."], 409)
         dest = to_trash(self.s.skills_dir, path, name)
         if old:
             shutil.move(old, path)
-        self._folder_change("Undo", f"Undo: {ch['what']}", name, dest, "present" if old else None)
+        self.folder_change("Undo", f"Undo: {ch['what']}", name, dest, "present" if old else None)
 
     # ------------------------------------------------------------------ every recorded change goes through here
     # ⚠️ WRITTEN AND RECORDED IN ONE PLACE (architecture review, 2026-10-06): the history was recorded by hand at
     # eleven places, and one of them (a setup's instructions) recorded a kind Undo did not know. A text — the
-    # rules, the instructions, a skill's file — goes through _text_change, a skill folder through _folder_change.
+    # rules, the instructions, a skill's file — goes through text_change, a skill folder through folder_change.
     def _text_path(self, t: dict) -> str:
         if t["kind"] == "policy":
             return self.s.policy_path
@@ -681,7 +681,7 @@ class UI:
         path = self._text_path(t)
         return _read(path).decode("utf-8", "replace") if os.path.exists(path) else None
 
-    def _text_change(self, place: str, what, target: dict, text: str | None) -> str | None:
+    def text_change(self, place: str, what, target: dict, text: str | None) -> str | None:
         """Write one text (None: delete it) and record the change, when there is one. `what` is the line the
         history shows, or a function of the text before. A skill's file is written only if the skill still loads
         (_change). Returns the text before."""
@@ -698,7 +698,7 @@ class UI:
             self.history.record(place, what(before) if callable(what) else what, target, before, text)
         return before
 
-    def _folder_change(self, place: str, what: str, skill: str, before: str | None, after: str | None) -> None:
+    def folder_change(self, place: str, what: str, skill: str, before: str | None, after: str | None) -> None:
         """A skill folder created, deleted, replaced or imported (the move is the caller's): recorded. `before` is
         where the previous folder was kept (skills/.trash), `after` "present" or None."""
         self.history.record(place, what, {"kind": "folder", "skill": skill}, before, after)

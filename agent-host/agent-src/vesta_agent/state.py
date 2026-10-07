@@ -13,6 +13,8 @@ import threading
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from . import run_records
+
 SCHEMA = """
 create table if not exists approvals(
   id text primary key,
@@ -198,9 +200,9 @@ class State:
         with self._lock:
             for r in self.db.execute("select id, detail from calls where kind = 'run' and detail like '%\"job:%'").fetchall():
                 d = json.loads(r["detail"] or "{}")
-                new = names.get(str(d.get("who") or "")[4:])
+                new = names.get(run_records.job_of(str(d.get("who") or "")) or "")
                 if new:
-                    d["who"] = f"job:{new}"
+                    d["who"] = run_records.for_job(new)
                     self.db.execute("update calls set detail=? where id=?", (json.dumps(d, default=str), r["id"]))
                     n += 1
             self.db.commit()

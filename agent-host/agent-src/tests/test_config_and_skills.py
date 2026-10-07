@@ -238,7 +238,7 @@ def test_a_skills_instructions_never_name_a_command_the_skill_does_not_have():
     for name, sk in Skills(STARTER_SKILLS).all().items():
         md = open(sk.skill_md, encoding="utf-8").read()
         run = " ".join([j.get("run") or "" for j in sk.schedule] + [sk.every_5_min or "", sk.on_reply or ""]
-                       + list(sk.on_event.values()) + [j.get("on_limit") or "" for j in sk.schedule])
+                       + list(sk.on_event.values()) + [st["run"] for j in sk.schedule for st in j.get("on_limit") or []])
         for script, cmd in re.findall(r"`([a-z_]+\.py) ([a-z][a-z_-]+)\b", md):        # a command, written as code
             spec = sk.scripts.get(script)
             if spec is None or spec.commands is None:

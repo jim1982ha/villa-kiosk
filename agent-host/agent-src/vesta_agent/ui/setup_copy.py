@@ -236,23 +236,23 @@ def apply(ui, setup: dict, prev: dict) -> None:
         if os.path.isdir(path):
             carry_villa_files(path, new)                       # this villa's own files go with it
         try:
-            ui._check_skill(name, new)
+            ui.check_skill(name, new)
         except Refused:
             shutil.rmtree(new, ignore_errors=True)
             raise
         if os.path.isdir(path):
             old = to_trash(s.skills_dir, path, name)
         os.rename(new, path)
-        ui._folder_change("Import", f"{name} {'replaced' if old else 'added'} from a setup"
+        ui.folder_change("Import", f"{name} {'replaced' if old else 'added'} from a setup"
                                     + (f" (the previous one kept in skills/{TRASH})" if old else ""), name, old, "present")
     if setup["rules"] and any(r["kind"] == "rules" and r["change"] != "same" for r in prev["rows"]):
         from .policy_doc import apply_form, to_form
-        text, r = ui._policy()
+        text, r = ui.policy_now()
         merged = _merged_rules(_policy_raw(s.policy_path), setup["rules"])
         form = {k: merged[k] for k in ("settings", *ACTION_SECTIONS, *TOOL_SECTIONS) if k in merged}
         if "settings" in form:
             form["settings"] = {**to_form(text)["settings"], **form["settings"]}
-        ui._save_policy(apply_form(text, form), r, "Import", "Rules from a setup: " + policy_change(text, apply_form(text, form)))
+        ui.save_policy(apply_form(text, form), r, "Import", "Rules from a setup: " + policy_change(text, apply_form(text, form)))
     if setup["instructions"] is not None and "instructions.md" in changed:
         # undoable like any text (Overview › Changes): it was recorded as a kind Undo did not know
-        ui._text_change("Import", "instructions.md from a setup", {"kind": "instructions"}, setup["instructions"])
+        ui.text_change("Import", "instructions.md from a setup", {"kind": "instructions"}, setup["instructions"])

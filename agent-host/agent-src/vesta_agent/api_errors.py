@@ -65,6 +65,10 @@ NEEDS_THE_OWNER = {
 #: A failed resume is retried once in a new conversation — never for these: a new conversation fails the same way.
 NO_RETRY = {CREDIT, KEY, RATE, BUSY, OFFLINE}
 
+#: The AI cannot answer anyone now (ai_down.py offers the reports that need no AI). The same kinds today, a
+#: different question: kept apart so that changing one never changes the other.
+AI_DOWN = frozenset({CREDIT, KEY, RATE, BUSY, OFFLINE})
+
 
 def why_job(problem: str) -> str:
     """Why an AI job could not run, in a few words (a report made without the AI says it too)."""

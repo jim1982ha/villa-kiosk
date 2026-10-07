@@ -24,6 +24,7 @@ from claude_agent_sdk import (AssistantMessage, ClaudeAgentOptions, ClaudeSDKCli
 
 from .api_errors import NO_RETRY, classify
 from .policy import PROFILES  # noqa: E402
+from .redact import scrub
 
 log = logging.getLogger("vesta.runner")
 
@@ -193,6 +194,11 @@ def build_options(settings, system_prompt: str, server, allowed: set[str], state
     return opts, denied
 
 
+def kept_steps(steps: list[dict], secrets: list[str]) -> list[dict]:
+    """The tool calls kept with a run (the Costs tab), through the one scrubber (redact.py)."""
+    return [{**st, "input": scrub(st["input"], secrets)} for st in steps]
+
+
 async def run(settings, system_prompt: str, prompt: str, server, allowed: set[str], state, who: str,
               resume: str | None = None, limit_usd: float | None = None, profile: str | None = None,
               asked: str | None = None) -> RunResult:
@@ -211,8 +217,7 @@ async def run(settings, system_prompt: str, prompt: str, server, allowed: set[st
         if c.problem == "unknown":
             log.exception("agent run failed")
     texts, session_id, stopped, cost, usage, turns, ms = c.texts, c.session_id, c.stopped, c.cost, c.usage, c.turns, c.ms
-    secrets = [x for x in settings.secrets() if x and len(x) >= 8] if hasattr(settings, "secrets") else []
-    steps = [{**st, "input": _scrub(st["input"], secrets)} for st in c.steps]
+    steps = kept_steps(c.steps, settings.secrets() if hasattr(settings, "secrets") else [])
     err, problem = c.err or (f"api {c.kind}" if c.kind else None), c.problem
     if problem:
         # the kind and the status only: the raw prose may quote the request
@@ -233,8 +238,3 @@ async def run(settings, system_prompt: str, prompt: str, server, allowed: set[st
         return await run(settings, system_prompt, prompt, server, allowed, state, who, None, limit_usd, profile, asked)
     return RunResult("\n\n".join(texts).strip(), session_id, stopped, cost, denied, err, problem)
 
-
-def _scrub(text: str, secrets: list[str]) -> str:
-    for x in secrets:
-        text = text.replace(x, "[redacted]")
-    return text

@@ -261,6 +261,7 @@ class _Book:
         return {e: {"state": "on"} for e in entity_ids}
 
     def logbook(self, start, end, entity_id=None):
+        self.reads = getattr(self, "reads", 0) + 1
         rows = [{"when": w, "entity_id": entity_id, "message": "triggered by lock.example_door"} for w in self.runs.get(entity_id, [])]
         return rows + [{"when": "2026-09-30T12:00:00+00:00", "entity_id": entity_id, "message": "turned off"}]
 
@@ -268,14 +269,40 @@ class _Book:
 def test_an_alert_is_a_run_only_for_a_rule_that_alerts_on_every_run(tmp_path):
     # villa, 2026-10-01: 71 runs of the schedule rules (a daily check) showed as 71 "critical alerts"
     daily = [f"2026-09-{d:02d}T07:30:00+00:00" for d in range(28, 31)]
-    facts, c, store = _ctx(tmp_path, _Book(["2026-09-30T07:41:00+00:00"], daily))
+    book = _Book(["2026-09-30T07:41:00+00:00"], daily)
+    facts, c, store = _ctx(tmp_path, book)
     assert set(c.vesta_rules()) == {"automation.example_door", "automation.example_pump"}
     rows = facts._alert_rows(c)
     assert [(r["what"], r["source"]) for r in rows] == [("Entrance unlocked", "home_assistant")]
     # the same alert, followed by the agent: shown once, as the agent's
     store.new_incident("k", "automation.example_door", "lock.example_door", "P2",
                        {"message": "Entrance left unlocked"}, at="2026-09-30T07:41:00+00:00")
+    facts, c, store = _ctx(tmp_path, book)                         # the next report's run reads the store again
     assert [r["source"] for r in facts._alert_rows(c)] == ["agent"]
+
+
+def test_a_report_run_reads_home_assistant_once_per_thing(tmp_path):
+    # architecture review 5: the weekly page read the rules' logbooks 4 times and a pump's hourly power up to 3 times
+    book = _Book(["2026-09-30T07:41:00+00:00"], [])
+    facts, c, store = _ctx(tmp_path, book)
+    for _ in range(4):
+        c.ha_alerts()
+    assert book.reads == 1                                            # one VESTA rule alerts on every run: one read
+
+    class Counting:
+        def __init__(self):
+            self.calls = []
+
+        def statistics(self, ids, s, e, period, types):
+            self.calls.append((tuple(ids), s))
+            return {}
+    cli = Counting()
+    c.cli = cli
+    c.hourly_means("sensor.example_pump_power", 7)
+    c.hourly_means("sensor.example_pump_power", 30)                  # a longer window: read again, once
+    c.hourly_means("sensor.example_pump_power", 7)
+    c.hourly_means("sensor.example_pump_power", 30)
+    assert len(cli.calls) == 2
 
 
 def test_the_same_alert_repeated_is_one_row_with_its_count(tmp_path):
@@ -493,3 +520,46 @@ def test_a_missing_nominal_voltage_finding_carries_the_devices_name():
     (f,) = rules.battery_rules({"slug": "station", "name": "Weather station"}, "sensor.example_battery", "V", 3.1, [],
                                VillaParams(), date(2026, 10, 7))
     assert f.rule_id == "PM-PARAM-MISSING" and f.detail["name"] == "Weather station"
+
+
+def test_the_named_main_meter_is_the_one_read_even_with_a_shorter_twin(tmp_path):
+    # architecture review 5: one counter was kept per asset, the shortest id — the named main meter then had no
+    # figures and the total raised a KeyError instead of making a report
+    fx = _villa(tmp_path)
+    pack = json.load(open(tmp_path / "pack.json"))
+    pack["families"]["energy"] = [
+        {"entity_id": "sensor.example_main", "family": "energy", "name": "Main", "area": "Garden", "asset": "main"},
+        {"entity_id": "sensor.example_main_energy", "family": "energy", "name": "Main meter", "area": "Garden", "asset": "main"}]
+    (tmp_path / "pack.json").write_text(json.dumps(pack))
+    (fx / "helpers.json").write_text(json.dumps({"helpers": [{"entity_id": "input_text.villa_main_meter", "id": "villa_main_meter"}],
+                                                "states": {"input_text.villa_main_meter": "sensor.example_main_energy"}}))
+    r = _run(os.path.join(STARTER_SKILLS, "roi-energy", "scripts", "energy_period.py"), "--pack", str(tmp_path / "pack.json"),
+             "--period", "custom", "--start", "2026-09-28", "--end", "2026-10-04", "--fixture-dir", str(fx), "--zone", "UTC", "--out", str(tmp_path / "e.json"))
+    assert r.returncode == 0, r.stderr
+    out = json.load(open(tmp_path / "e.json"))
+    assert out["main_meter"] == "sensor.example_main_energy" and out["total_kwh"] and "note" not in out
+
+
+def test_the_pack_finds_an_entity_once_and_prefers_the_row_that_names_it():
+    from vesta_shared.knowledge_pack import KnowledgePack
+    pack = KnowledgePack("V", "UTC", "", None, {"power": [{"entity_id": "sensor.x", "asset": "pump"}],
+                                                "energy": [{"entity_id": "sensor.x", "name": "Pump", "asset": "pump"}]},
+                         {}, [], [], {}, [], [], {})
+    assert pack.name_of("sensor.x") == "Pump" and pack.row("sensor.x")["asset"] == "pump"
+    assert pack.name_of("sensor.unknown") is None and pack.name_of("sensor.unknown", "fallback") == "fallback"
+    assert "_by_entity" not in pack.to_json()
+
+
+def test_a_page_step_with_a_missing_part_is_refused_not_silently_unsent(tmp_path):
+    # architecture review 5: --finish without --out printed no "send": the job's step sent nothing, and said nothing
+    fx = _villa(tmp_path)
+    _facts(tmp_path, fx)
+    f = str(tmp_path / "facts.json")
+    for args, why in [(["--finish", "fm", "--no-ai", "x."], "needs --out"),
+                      (["--no-ai", "x.", "--out", "p.html"], "give --finish too"),
+                      (["--finish", "fm", "--out", str(tmp_path / "p.html")], "give --limit")]:
+        r = _run(COMPOSE, "fm-weekly", "--facts", f, *args)
+        assert r.returncode == 1 and why in r.stderr, (args, r.stderr)
+    r = _run(COMPOSE, "fm-daily", "--pack", str(tmp_path / "pack.json"), "--store", str(tmp_path / "s.sqlite"),
+             "--finish", "fm")
+    assert r.returncode == 1 and "on_limit step of a page" in r.stderr

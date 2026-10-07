@@ -292,10 +292,10 @@ def _ai_job(path: str, job: dict, where: str) -> dict:
     if not isinstance(default, dict) or set(default) - {"profile", "limit_usd"}:
         raise SkillError(f"{where}: default may give only profile and limit_usd")
     on_limit = job.get("on_limit")
-    if on_limit:
-        _check_command(path, str(on_limit), f"{where}.on_limit")
     return {"name": name, "to": to, "on_request": bool(job.get("on_request")), "default": dict(default),
-            "on_limit": str(on_limit) if on_limit else None, "description": str(job.get("description") or ""),
+            # on_limit is one step (skill.yaml gives a command), parsed and run like without_ai's (job_steps.py)
+            "on_limit": _without_ai(path, [str(on_limit)], f"{where}.on_limit") if on_limit else [],
+            "description": str(job.get("description") or ""),
             # the button that makes it without the AI when the AI cannot answer (app: AI_DOWN), its words the skill's
             "button": str(job.get("button") or name),
             "without_ai": _without_ai(path, job.get("without_ai"), f"{where}.without_ai")}

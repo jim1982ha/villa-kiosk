@@ -172,6 +172,25 @@ class KnowledgePack:
         engine and the VESTA Agent page each wrote by hand (0.6.42)."""
         return [r for rows in self.families.values() for r in rows if isinstance(r, dict) and r.get("entity_id")]
 
+    def row(self, entity_id: str) -> dict | None:
+        """An entity's row (the first one that names it, else the first one).
+
+        ⚠️ ONE LOOKUP BY ENTITY (architecture review 5, 2026-10-07): the engine, facts.py and compose.py each walked
+        every family by hand to find an entity's name or device — six walks, three rules about which row counts."""
+        idx = self.__dict__.get("_by_entity")
+        if idx is None:
+            idx = {}
+            for r in self.rows():
+                cur = idx.get(r["entity_id"])
+                if cur is None or (not cur.get("name") and r.get("name")):
+                    idx[r["entity_id"]] = r
+            self.__dict__["_by_entity"] = idx
+        return idx.get(entity_id)
+
+    def name_of(self, entity_id: str, default: str | None = None) -> str | None:
+        """An entity's name as the pack has it; `default` when the pack does not name it."""
+        return (self.row(entity_id) or {}).get("name") or default
+
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=1, ensure_ascii=False)
 

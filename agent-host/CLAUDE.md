@@ -129,8 +129,8 @@ Decisions of 2026-09-30 (owner):
   `core.js` (shared state `page`, helpers, dialog, `go`), `costs.js`,
   `overview.js`, `rules.js`, `skills.js`; tests read them all with
   `helpers.page_js()` / `body_of()`. Every page change is written AND recorded
-  by `UI._text_change` (rules, instructions, a skill's file) or
-  `UI._folder_change`; Undo of any text uses one rule. A try's payload is
+  by `UI.text_change` (rules, instructions, a skill's file) or
+  `UI.folder_change`; Undo of any text uses one rule. A try's payload is
   `requests_box.try_request` / `try_of` on both sides.
   Second review, 0.12.67: `policy.FIELDS` is the one table of policy.yaml's
   settings (sections, the words the page and history use, what the forms edit,
@@ -164,6 +164,15 @@ Decisions of 2026-09-30 (owner):
   app.run_without_ai still makes the report from its figures ("Made without the AI", why), each step
   needing the one before; the Costs tab lists it at no cost. Open Kiosk tickets follow their finding's
   current wording (tickets.repair → Kiosk.update_ticket).
+  Fifth review, 0.12.77: `chat_jobs.ChatJobs` is a job asked for in a chat from start to
+  end (never twice, its waiting message, typing, its end) — start_job and a report's button
+  both use it; `job_steps.run` runs on_limit and without_ai alike (one-step list / list,
+  stop at a failure, carry out what sends); `ai_down.offer` decides start / buttons / nothing
+  when the AI cannot answer, `api_errors.AI_DOWN`; `tool_access.may_start_job` judges the
+  offer AND the press; `routing.job_to`; `redact.scrub` is the one scrubber;
+  `run_records` writes and reads a run's `who` and the without-AI record;
+  `KnowledgePack.row/name_of`; facts.Ctx reads each thing once per run; the page's write
+  methods are public (setup_copy uses only them — test); a device "on its way" is read again.
 - No PDF (owner, 2026-09-30): the reports are self-contained HTML pages sent
   as attachments. Chromium was ~480 MB of a 1.1 GB image for this alone.
 - ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent

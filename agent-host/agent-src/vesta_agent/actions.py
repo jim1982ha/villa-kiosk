@@ -37,6 +37,8 @@ EXPECT = {
     ("automation", "turn_on"): "on", ("automation", "turn_off"): "off",
     ("input_boolean", "turn_on"): "on", ("input_boolean", "turn_off"): "off",
 }
+# Home Assistant's own words for a device on its way (a lock, a cover, a valve): read again, not "not confirmed"
+ON_ITS_WAY = {"locking", "unlocking", "opening", "closing"}
 VERB = {
     "turn_on": "Turn on", "turn_off": "Turn off", "lock": "Lock", "unlock": "Unlock",
     "open_cover": "Open", "close_cover": "Close", "set_cover_position": "Set the position of",
@@ -206,8 +208,10 @@ class Actions:
         if not d.entity_ids or not expect:
             return {"ok": True, "text": "Sent."}
         # One device: ha-mcp already waited for its new state. Several: it could not
-        # (see McpClient.call_service), so the read-back gives them a few seconds.
-        for attempt in range(1 if len(d.entity_ids) == 1 else 5):
+        # (see McpClient.call_service), so the read-back gives them a few seconds. ⚠️ A device still on its way
+        # ("unlocking": a lock that has not finished) is read again too (architecture review 5): it read "Not
+        # confirmed: … reads unlocking" for a lock that opened a second later.
+        for attempt in range(5):
             if attempt:
                 time.sleep(1)
             try:
@@ -216,7 +220,7 @@ class Actions:
                 st = {}
             rows = [(e, (st.get(e) or {}).get("state")) for e in d.entity_ids]
             bad = [(e, s) for e, s in rows if s != expect]
-            if not bad:
+            if not bad or (len(d.entity_ids) == 1 and not any(s in ON_ITS_WAY for _, s in bad)):
                 break
         self.state.log("readback", {"entities": d.entity_ids, "expect": expect, "states": dict(rows)})
         if not bad:

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.72 (7 October 2026)
+
+Fifth architecture review (all candidates):
+- chat_jobs.ChatJobs: one lifecycle for a job asked for in a chat (running set, job_started, job_waiting, Origin JOB, job_ended in finally); app._running_jobs and _requested_job removed; the press passes waiting_mid (no startswith("Making")).
+- job_steps.run: on_limit (now a one-step list from skills._without_ai) and without_ai run alike; routing.job_to replaces 4 copies.
+- ai_down.offer / keyboard (pure) + api_errors.AI_DOWN; tool_access.may_start_job for offer and press (the press checked only "registered").
+- redact.scrub, the one scrubber (runner._scrub removed; runner.kept_steps); run_records (who for job/person, without_ai record).
+- facts.Ctx: incidents, ha_alerts, rule_states, hourly_means read once per run; running_power/_days_power on hourly_means. energy_period keeps the named main meter for its asset; an unknown one is a note, not a KeyError.
+- KnowledgePack.row / name_of replace six hand-written walks (app, facts, compose).
+- UI: check_skill, folder_change, policy_now, save_policy, text_change public; setup_copy uses only public methods (test).
+- actions: a state in ON_ITS_WAY is read again (up to 5 s) for one device too.
+- compose.py: mode (ai / limit / no_ai) named once; --finish without --out, --no-ai/--since/--limit without --finish, and a chat text's --finish without --no-ai are refused.
+
 ## 0.6.71 (7 October 2026)
 
 - report.html: `.asset` align-content:start + min-width:0, its pill justify-self:start, `.wrap` overflow-wrap:anywhere; proposals say "To answer, write in the chat: accept N…" (no fake buttons); P1/P2 tasks say how they leave the list; detail/benefit as sentences.

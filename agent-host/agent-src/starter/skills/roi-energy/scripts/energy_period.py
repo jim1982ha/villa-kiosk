@@ -76,10 +76,13 @@ def run(args) -> dict:
             return cached
 
     energy_rows = pack.entities("energy") + pack.entities("generation")
-    # one energy counter per asset: a Shelly plug exposes "energy" and "energy_consumed" for the same kWh
+    main_name = params.text_or("villa_main_meter", "")
+    # one energy counter per asset: a Shelly plug exposes "energy" and "energy_consumed" for the same kWh.
+    # ⚠️ THE NAMED MAIN METER IS THE ONE KEPT for its asset (architecture review 5): the shortest id was, and the
+    # total then read a meter that had not been fetched — a KeyError instead of a report
     seen_asset: dict[str, str] = {}
     deduped = []
-    for r in sorted(energy_rows, key=lambda r: len(r["entity_id"])):
+    for r in sorted(energy_rows, key=lambda r: (r["entity_id"] != main_name, len(r["entity_id"]))):
         if "returned" in r["entity_id"]:
             continue
         if r["asset"] in seen_asset:
@@ -93,7 +96,6 @@ def run(args) -> dict:
     stats = cli.statistics(ids, win_start, win_end, "day", ("change", "sum")) if ids else {}
     series = {eid: F.energy_daily_features(stats.get(eid, []), pack.time_zone) for eid in ids}
 
-    main_name = params.text_or("villa_main_meter", "")
     main_eid = main_name or next((r["entity_id"] for r in energy_rows if "main" in r["asset"] and "phase" not in r["asset"]), None)
     try:
         tariff, currency = params.tariff()
@@ -116,8 +118,9 @@ def run(args) -> dict:
                       "vs_baseline_pct": pct_change(cur, base_daily * n_days) if base_daily else None,
                       "cost": round(cur * tariff) if tariff else None,
                       "first_seen": store.first_seen(eid) if store else None})
-    total, total_days = (sum_days(series[main_eid], a, b) if main_eid else (None, 0))
-    total_prev = sum_days(series[main_eid], prev_a, prev_b)[0] if main_eid else None
+    known_main = main_eid if main_eid in series else None
+    total, total_days = (sum_days(series[known_main], a, b) if known_main else (None, 0))
+    total_prev = sum_days(series[known_main], prev_a, prev_b)[0] if known_main else None
     metered = round(sum(l["kwh"] for l in loads if l["family"] == "energy"), 2)
     unmetered = round(total - metered, 2) if total is not None else None
     for l in loads:
@@ -154,6 +157,9 @@ def run(args) -> dict:
               "main_meter": main_eid, "from_cache": False}
     if not main_eid:
         result["note"] = "No main meter found: set input_text.villa_main_meter to the total energy entity."
+    elif main_eid not in series:
+        result["note"] = (f"input_text.villa_main_meter names {main_eid}, which is not one of the villa's energy "
+                          "meters in the knowledge pack: the total is not known.")
     result["headline"] = headline(result)
     if store:
         store.cache_put(key, result)

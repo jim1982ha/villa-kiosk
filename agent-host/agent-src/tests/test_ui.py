@@ -534,3 +534,15 @@ def test_the_tools_are_cards_four_a_row_and_the_ai_notes_are_behind_an_info():
     assert "Everything switched on, by role" not in js
     # the New conversation menu lines up with the brain and the limit: its name under it, not a label above it
     assert 'h("td", { class: "with-caption" }, sel(SCHEMA.resets' in js
+
+
+def test_copying_a_setup_uses_only_the_pages_public_methods_and_each_exists():
+    # architecture review 5: setup_copy called five of the page's private methods; a rename on one side broke it
+    # silently. Its calls on `ui` are the page's interface: public, and each one a real method of UI.
+    import inspect
+    import re
+    from vesta_agent.ui import setup_copy
+    from vesta_agent.ui.server import UI
+    called = set(re.findall(r"\bui\.([A-Za-z_]+)\(", inspect.getsource(setup_copy)))
+    assert called and not any(n.startswith("_") for n in called), called
+    assert all(callable(getattr(UI, n, None)) and not inspect.iscoroutinefunction(getattr(UI, n)) for n in called), called

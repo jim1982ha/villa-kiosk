@@ -124,6 +124,12 @@ class Ctx:
         self.problems: list[str] = []     # what a section could not say, for facts.json's problems
         self._states = None
         self._params = None
+        # ⚠️ ONE READING PER RUN (architecture review 5, 2026-10-07): the weekly page read the VESTA rules' logbooks
+        # 4 times, the rules' states twice and a pump's hourly power up to 3 times — each section asked again
+        self._incidents = None
+        self._ha_alerts = None
+        self._rule_states = None
+        self._hourly: dict[str, tuple[int, dict]] = {}
 
     def need(self, *path):
         """A value of reports.yaml's thresholds. ⚠️ NO FALLBACK HERE (owner, 2026-10-01): a value the file
@@ -154,11 +160,7 @@ class Ctx:
         return self._states
 
     def name(self, entity_id: str) -> str:
-        for rows in self.pack.families.values():
-            for r in rows:
-                if r.get("entity_id") == entity_id and r.get("name"):
-                    return r["name"]
-        return entity_id.split(".", 1)[-1].replace("_", " ").capitalize()
+        return self.pack.name_of(entity_id) or entity_id.split(".", 1)[-1].replace("_", " ").capitalize()
 
     def vesta_rules(self) -> dict[str, str]:
         """automation entity id -> its name, for the automations built on the alert-desk blueprints."""
@@ -191,10 +193,40 @@ class Ctx:
         return rules
 
     def incidents(self) -> list[dict]:
-        s, e = self.s_dt.astimezone(timezone.utc).isoformat(), self.e_dt.astimezone(timezone.utc).isoformat()
-        return [i for i in self.store.incidents(open_only=False) if s <= (i.get("opened_at") or "") < e]
+        if self._incidents is None:
+            s, e = self.s_dt.astimezone(timezone.utc).isoformat(), self.e_dt.astimezone(timezone.utc).isoformat()
+            self._incidents = [i for i in self.store.incidents(open_only=False) if s <= (i.get("opened_at") or "") < e]
+        return list(self._incidents)
+
+    def rule_states(self) -> dict:
+        """The VESTA rules' automations as Home Assistant has them now (on or off)."""
+        if self._rule_states is None:
+            info = self.vesta_rule_info()
+            self._rule_states = self.cli.states(sorted(info)) if info else {}
+        return self._rule_states
+
+    def hourly_means(self, entity_id: str, days: int) -> dict[date, list[float]]:
+        """An entity's hourly means per day over the last `days` days of the period, read once per run (a longer
+        window asked later reads again, once)."""
+        have = self._hourly.get(entity_id)
+        if have is None or have[0] < days:
+            s = datetime.combine(self.end - timedelta(days=days - 1), time(0), self.Z)
+            rows = self.cli.statistics([entity_id], s, self.e_dt, "hour", ("mean",)).get(entity_id, [])
+            per: dict[date, list[float]] = {}
+            for r in rows:
+                v = _num(r.get("mean"))
+                if v is not None:
+                    per.setdefault(local_day(r["start"], self.Z), []).append(v)
+            have = self._hourly[entity_id] = (days, per)
+        first = self.end - timedelta(days=days - 1)
+        return {d: v for d, v in have[1].items() if d >= first}
 
     def ha_alerts(self) -> list[dict]:
+        if self._ha_alerts is None:
+            self._ha_alerts = self._read_ha_alerts()
+        return list(self._ha_alerts)
+
+    def _read_ha_alerts(self) -> list[dict]:
         """The alerts of the VESTA rules from Home Assistant's own logbook, for the times the agent was not
         listening (the agent records every alert it hears as an incident): a run counts only for the
         blueprints reports.yaml lists in `alert_on_every_run`.
@@ -248,14 +280,8 @@ class Ctx:
     def running_power(self, entity_id: str, days: int) -> list[tuple[str, float]]:
         """Mean power per day over the hours the device ran (hourly mean above run_min_w)."""
         thr = float(self.need("pump", "run_min_w"))
-        s = datetime.combine(self.end - timedelta(days=days - 1), time(0), self.Z)
-        rows = self.cli.statistics([entity_id], s, self.e_dt, "hour", ("mean",)).get(entity_id, [])
-        per: dict[date, list[float]] = {}
-        for r in rows:
-            v = _num(r.get("mean"))
-            if v is not None and v > thr:
-                per.setdefault(local_day(r["start"], self.Z), []).append(v)
-        return [(d.isoformat(), round(statistics.mean(v))) for d, v in sorted(per.items())]
+        per = {d: [v for v in vals if v > thr] for d, vals in self.hourly_means(entity_id, days).items()}
+        return [(d.isoformat(), round(statistics.mean(v))) for d, v in sorted(per.items()) if v]
 
     def ai_cost(self) -> float | None:
         s, e = self.s_dt.astimezone(timezone.utc).isoformat(), self.e_dt.astimezone(timezone.utc).isoformat()
@@ -325,15 +351,8 @@ def _fill(text, figures: dict) -> str:
 def _days_power(c: "Ctx", entity_id: str, days: int) -> list[tuple[date, float, float]]:
     """Per day: (day, mean running power, hours running), from HA's hourly means."""
     thr = float(c.need("pump", "run_min_w"))
-    s = datetime.combine(c.end - timedelta(days=days - 1), time(0), c.Z)
-    rows = c.cli.statistics([entity_id], s, c.e_dt, "hour", ("mean",)).get(entity_id, [])
-    per: dict[date, list[float]] = {}
-    for r in rows:
-        v = _num(r.get("mean"))
-        if v is not None:
-            per.setdefault(local_day(r["start"], c.Z), []).append(v)
     out = []
-    for d, vals in sorted(per.items()):
+    for d, vals in sorted(c.hourly_means(entity_id, days).items()):
         run = [v for v in vals if v > thr]
         out.append((d, round(statistics.mean(run)) if run else 0.0, len(run)))
     return out
@@ -489,11 +508,8 @@ def _device(c: "Ctx", entity_id: str | None, fallback: str) -> str:
     """What an item is about: the device (the pack's asset) of its entity, so that a clue and a task
     about the same device become one item."""
     if entity_id:
-        for rows in c.pack.families.values():
-            for r in rows:
-                if r.get("entity_id") == entity_id:
-                    return r.get("asset") or r.get("device_id") or entity_id
-        return entity_id
+        r = c.pack.row(entity_id) or {}
+        return r.get("asset") or r.get("device_id") or entity_id
     return fallback
 
 
@@ -507,11 +523,7 @@ def todo(c: "Ctx") -> list[dict]:
 
     def name_of(entity_id):
         # the device's name as the knowledge pack has it; an entity it does not know keeps its own sentence
-        for rows in c.pack.families.values():
-            for r in rows:
-                if r.get("entity_id") == entity_id and r.get("name"):
-                    return r["name"]
-        return None
+        return c.pack.name_of(entity_id)
 
     c._todo = one_list(clues(c)[0], c.tasks(), device_of, name_of, c.need("horizon"),
                        int(c.need("todo", "group_from")), float(c.need("todo", "same_time_minutes")),
@@ -813,7 +825,7 @@ def s_monitoring(c: Ctx) -> dict:
     rows = [{"item": o["name"], "state": "Offline", "since": o["since"], "critical": o["critical"]} for o in c.offline()]
     resets = [f for f in c.store.findings(since_day=c.start.isoformat()) if f["rule_id"] == "PM-COUNTER-RESET"]
     rules = c.vesta_rules()
-    st = c.cli.states(sorted(rules)) if rules else {}
+    st = c.rule_states()
     on = sum(1 for eid in rules if (st.get(eid) or {}).get("state") == "on") if rules else None
     return {"offline": rows, "counter_resets": [{"item": c.name(f["entity_id"]), "day": f["opened_day"]} for f in resets],
             "rules_on": on, "rules_total": len(rules), "muted": [c.name(m["entity_id"]) for m in c.store.mutes()],
@@ -890,7 +902,7 @@ def s_quiet(c: Ctx) -> dict:
     every_run = {str(b).removesuffix(".yaml") for b in c.cfg.get("alert_on_every_run") or []}
     since = c.listening_since()
     knows = (lambda bp: True) if since is not None and since <= c.s_dt else (lambda bp: bp in every_run)
-    st = c.cli.states(sorted(info)) if info else {}
+    st = c.rule_states()
     return {"did_not_happen": [w for bp, w in words.items() if bp not in fired and knows(bp)],
             "rules_on": sum(1 for eid in info if (st.get(eid) or {}).get("state") == "on") if info else None,
             "rules_total": len(info)}

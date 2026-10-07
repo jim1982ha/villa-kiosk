@@ -282,3 +282,10 @@ def test_the_saved_list_reads_back_as_the_server_gave_it(tmp_path):
     back = {t["name"]: tool_access.readable(t) for t in tool_access.saved_server_tools(str(tmp_path))}
     assert back == {t["name"]: tool_access.readable(t) for t in SERVER}
     assert tool_access.saved_server_tools(str(tmp_path / "none")) is None
+
+
+def test_a_tool_call_kept_for_the_costs_tab_loses_a_token_by_its_shape():
+    # architecture review 5: runner had its own scrubber, which knew only the configured secrets
+    jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ4eXoxMjMifQ.abcdefghijk"
+    (st,) = runner.kept_steps([{"tool": "ha_eval_template", "input": f"token={jwt} and password=hunter2xyz"}], ["known-secret-1"])
+    assert jwt not in st["input"] and "hunter2xyz" not in st["input"] and st["tool"] == "ha_eval_template"

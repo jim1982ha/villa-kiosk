@@ -166,6 +166,13 @@ def allowed_for_person(policy: Policy, server_tools: list[dict], role: str | Non
     return tools
 
 
+def may_start_job(policy: Policy, server_tools: list[dict], person, chat_id: int | None) -> bool:
+    """May this person start a job from this chat (the start_job tool, switched on for them here)? One answer for the
+    AI's tool, the report buttons offered when the AI is unavailable, and a press on one (architecture review 5:
+    the press asked only "registered?", so in a group anyone could press another's report button)."""
+    return person is not None and "start_job" in allowed_for_person(policy, server_tools, person.role, chat_id)
+
+
 def allowed_for_job(policy: Policy, server_tools: list[dict], skill) -> set[str]:
     """A report (a skill's AI job): its skill's `tools`, among those switched on, plus the ones always on.
     A skill that lists none gets everything switched on but web search (a scheduled job never had it)."""
