@@ -36,6 +36,7 @@ import yaml
 HERE = os.path.dirname(os.path.abspath(__file__))
 from vesta_shared.store import Incident, Store  # noqa: E402  (PYTHONPATH is set by the engine)
 from vesta_shared.params import VillaParams  # noqa: E402
+from vesta_shared.timeutil import day_time_label, villa_time  # noqa: E402
 from vesta_shared.problems import DONE, Problems  # noqa: E402  (a problem's lifecycle: one owner)
 
 RULES = yaml.safe_load(open(os.path.join(HERE, "..", "rules.yaml"), encoding="utf-8"))
@@ -121,7 +122,9 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
             out["decision"] = "counted"  # repeat inside the cooldown: no message
             return out
         out["decision"] = "repeat"
-        out["send"].append({"to": "fm", "text": f"Still there: {ev['message']} ({cur['count'] + 1} times since {cur['opened_at'][:16]})."})
+        # the villa's time, written as every message writes one ("Mon 5 Oct, 08:00"): it showed "2026-10-03T00:00", UTC
+        since = day_time_label(villa_time(cur["opened_at"], os.environ.get("VILLA_TZ") or "UTC"), weekday=True)
+        out["send"].append({"to": "fm", "text": f"Still there: {ev['message']} ({cur['count'] + 1} times since {since})."})
         if route.get("intrusion"):
             out["siren_gate"] = siren_gate(store, ev, now)
         return out

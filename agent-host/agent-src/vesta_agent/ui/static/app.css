@@ -333,6 +333,7 @@ dialog.ask .actions { justify-content: flex-end; margin-top: 0; }
 .small { font-size: var(--text-xs); }
 .block { display: block; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips.one-line { flex-wrap: nowrap; white-space: nowrap; align-items: center; }
 .chip.warn { background: rgba(184, 128, 31, 0.14); color: var(--status-warning); }
 .chip.gray { background: var(--bg-input); color: var(--text-secondary); }
 .badge { display: inline-flex; font-size: var(--text-xs); padding: 1px 8px; border-radius: 999px; border: 1px solid var(--hairline-strong); color: var(--text-secondary); }
@@ -461,6 +462,11 @@ input[type=file]::file-selector-button { font: inherit; font-weight: 500; min-he
 button.info { width: 22px; height: 22px; min-height: 0; padding: 0; border-radius: 50%; border: 1px solid var(--hairline-strong); background: none;
   color: var(--text-secondary); font: italic 600 12px/1 Georgia, serif; cursor: help; display: inline-flex; align-items: center; justify-content: center; flex: none; }
 button.info:hover, button.info[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
+/* an alert's (!) and its tooltip: one colour for what went wrong (core.alertButton) */
+button.info.alert, button.info.alert:hover, button.info.alert[aria-expanded="true"] { color: var(--status-danger); border-color: var(--status-danger);
+  font-style: normal; font-weight: 700; }
+.tooltip.alert { border-left: 3px solid var(--status-danger); }
+.tooltip .tooltip-detail { margin-top: 6px; opacity: .75; font-family: var(--font-mono); font-size: var(--text-xs); overflow-wrap: anywhere; }
 .card-title { margin: 0 0 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
 .card-title h2 { margin: 0; }
 .card-title-right { margin-left: auto; }

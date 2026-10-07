@@ -172,3 +172,23 @@ def test_the_model_saves_its_sentences_but_never_over_a_scripts_file(agent):
     assert run(tool.handler({"name": "../policy.yaml", "content": "x"})).get("is_error")
     assert run(tool.handler({"name": "page.html", "content": "x"})).get("is_error")
     assert run(tool.handler({"name": "bad.json", "content": "{nope"})).get("is_error")
+
+
+def test_an_open_fault_in_the_kiosk_says_what_is_wrong_now(agent):
+    # owner, 2026-10-07: the Cockpit kept "battery at 5 %: replace now" for days while the battery read 0 %
+    v, k = agent
+    from vesta_shared.problems import Problems
+    from vesta_shared.store import Store
+    st = Store(v.s.store_path)
+    fid, _ = st.raise_finding("PM-BATTERY-CRIT", "sensor.example_battery", "battery", "2026-10-05", "P2",
+                              "Motion battery at 5%: replace now.", {})
+    tid, _ = Problems(st).open_task("finding", fid, "PM-BATTERY-CRIT", "sensor.example_battery",
+                                    "Motion battery at 5%: replace now.", "")
+    run(v.tickets.repair())                                              # the ticket is made with today's words
+    assert list(k.titles.values()) == ["Motion battery at 5%: replace now."]
+    st.raise_finding("PM-BATTERY-CRIT", "sensor.example_battery", "battery", "2026-10-07", "P2",
+                     "Motion battery at 0%: replace now.", {})          # the next night: still open, worse
+    run(v.tickets.repair())
+    assert list(k.titles.values()) == ["Motion battery at 0%: replace now."]
+    run(v.tickets.repair())                                              # nothing new: no write
+    assert len(k.tickets) == 1

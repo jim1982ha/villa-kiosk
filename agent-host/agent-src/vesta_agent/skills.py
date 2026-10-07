@@ -295,7 +295,39 @@ def _ai_job(path: str, job: dict, where: str) -> dict:
     if on_limit:
         _check_command(path, str(on_limit), f"{where}.on_limit")
     return {"name": name, "to": to, "on_request": bool(job.get("on_request")), "default": dict(default),
-            "on_limit": str(on_limit) if on_limit else None, "description": str(job.get("description") or "")}
+            "on_limit": str(on_limit) if on_limit else None, "description": str(job.get("description") or ""),
+            "without_ai": _without_ai(path, job.get("without_ai"), f"{where}.without_ai")}
+
+
+def _without_ai(path: str, steps, where: str) -> list[dict]:
+    """The code steps that still make a job's work when the AI cannot run (no credit, a refused key, Anthropic
+    unreachable…), in order: `"script.py args"` (this skill's), or `{skill: <another skill>, run: "script.py args",
+    on_schedule_only: true}`. Another skill's script is checked when it runs: skills load one by one."""
+    if steps is None:
+        return []
+    if not isinstance(steps, list):
+        raise SkillError(f"{where}: a list of code steps")
+    out = []
+    for i, step in enumerate(steps):
+        at = f"{where}[{i}]"
+        step = {"run": step} if isinstance(step, str) else step
+        if not isinstance(step, dict) or not step.get("run") or set(step) - {"run", "skill", "on_schedule_only"}:
+            raise SkillError(f"{at}: a command, or {{skill, run, on_schedule_only}}")
+        other = step.get("skill")
+        if other is None:
+            _check_command(path, str(step["run"]), at)
+        elif not SKILL_NAME.match(str(other)):
+            raise SkillError(f"{at}: skill must be a skill's folder name")
+        else:
+            try:
+                first = shlex.split(str(step["run"]))[:1]
+            except ValueError as e:
+                raise SkillError(f"{at}: {e}") from None
+            if not first or not FILE_NAME.match(first[0]) or not first[0].endswith(".py"):
+                raise SkillError(f"{at}: {first[0] if first else '(empty)'} is not a .py file name")
+        out.append({"run": str(step["run"]), "skill": str(other) if other else None,
+                    "on_schedule_only": bool(step.get("on_schedule_only"))})
+    return out
 
 
 def _check_command(path: str, cmd: str, where: str) -> str:

@@ -17,6 +17,7 @@ write here starts from the document just read and only adds or updates.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import secrets
 from datetime import datetime, timezone
@@ -106,7 +107,11 @@ class Kiosk:
                     raise KioskError(f"reading the Facility records answered {status}")
                 data = got.get("data") if isinstance(got.get("data"), dict) else {}
                 data = dict(data)
+                before = json.dumps(data, sort_keys=True, default=str)
                 result = change(data)
+                if json.dumps(data, sort_keys=True, default=str) == before:
+                    return result                    # nothing changed: no write (a write bumps the revision and
+                                                     # can turn a person's save into "changed since you opened it")
                 status, res = await self._req("PUT", "/agent/v1/fm-data", {"data": data, "rev": got.get("rev")})
                 if status == 200:
                     return result
@@ -133,12 +138,32 @@ class Kiosk:
 
     async def ticket_states(self) -> dict[str, str]:
         """{ticket id: status} of the Facility records, as the Kiosk holds them now."""
+        return {tid: t["status"] for tid, t in (await self.held_tickets()).items()}
+
+    async def held_tickets(self) -> dict[str, dict]:
+        """{ticket id: {status, title}} of the Facility records, as the Kiosk holds them now."""
         status, got = await self._req("GET", "/agent/v1/fm-data")
         if status != 200:
             raise KioskError(f"reading the Facility records answered {status}")
         data = got.get("data") if isinstance(got.get("data"), dict) else {}
-        return {t["id"]: str(t.get("status") or "") for t in data.get("tickets") or []
-                if isinstance(t, dict) and isinstance(t.get("id"), str)}
+        return {t["id"]: {"status": str(t.get("status") or ""), "title": str(t.get("title") or "")}
+                for t in data.get("tickets") or [] if isinstance(t, dict) and isinstance(t.get("id"), str)}
+
+    async def update_ticket(self, tid: str, title: str) -> bool:
+        """An open ticket says what is wrong NOW (owner, 2026-10-07: "battery at 5 %" stayed while it read 0 %): its
+        title follows, and its history says when it changed. False when it is gone, closed, or already says it."""
+        def change(data: dict) -> bool:
+            tickets = list(data.get("tickets") or [])
+            for i, t in enumerate(tickets):
+                if isinstance(t, dict) and t.get("id") == tid:
+                    if t.get("status") == "resolved" or t.get("title") == title[:200]:
+                        return False
+                    upd = {"at": _now(), "status": t.get("status") or "open", "photoIds": [], "note": f"Now: {title[:300]}"}
+                    tickets[i] = dict(t, title=title[:200], updates=list(t.get("updates") or []) + [upd])
+                    data["tickets"] = tickets
+                    return True
+            return False
+        return await self._edit(change)
 
     async def resolve_ticket(self, tid: str, note: str | None = None) -> bool:
         """Mark one of the agent's tickets resolved (the FM answered Done). False when it is gone or closed."""

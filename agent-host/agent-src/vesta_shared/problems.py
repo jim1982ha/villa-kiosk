@@ -100,6 +100,16 @@ class Problems:
         """What is wrong, without what to check."""
         return task.get("summary") or ""
 
+    def current_title(self, task: dict) -> str:
+        """What is wrong NOW: the finding's summary as the night check last wrote it (a battery's 5 % became 0 %),
+        else the task's own words. The task is written once; its finding is updated every night."""
+        kind, sid = self._source(task)
+        if kind == "finding":
+            row = self.store.finding(sid)
+            if row and row.get("status") == "open" and row.get("summary"):
+                return row["summary"]
+        return self.title_of(task)
+
     def check_of(self, task: dict) -> str:
         """What to check on site ("" when the task does not say)."""
         return task.get("check_text") or ""

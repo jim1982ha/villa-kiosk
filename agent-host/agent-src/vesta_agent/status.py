@@ -10,6 +10,7 @@ import os
 from datetime import datetime, timedelta, timezone
 
 from vesta_shared.agent_records import run_cost   # what a run cost: one reading, shared with the skills
+from .api_errors import why_job_sentence
 
 # agent_status: the records worth telling a person about, and the fields of each (never a chat id or a token)
 STATUS_KINDS = ("critical_event", "ladder", "executed", "requested", "approved", "refused_by_person", "failed",
@@ -60,6 +61,11 @@ def report(state, store_path: str, hours: int = 24, now: datetime | None = None)
             "incidents": incidents[-40:]}
 
 
+def _error_words(problem: str | None) -> str:
+    from .api_errors import FOR_PERSON
+    return FOR_PERSON.get(problem or "unknown", FOR_PERSON["unknown"])
+
+
 def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_label=None) -> dict:
     """What the AI cost, run by run, from the agent's own records (the cost the Anthropic API reported for each
     run): the VESTA Agent page's Costs tab. Each run: when, the work (a chat reply, or an AI job), who asked
@@ -67,14 +73,24 @@ def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_la
     now = now or datetime.now(timezone.utc)
     since = now - timedelta(days=days)
     local = (lambda t: t.astimezone(zone)) if zone else (lambda t: t)
-    runs = []
+    runs, made = [], []
     for c in state.calls_since(since.isoformat()):
-        if c["kind"] != "run":
+        if c["kind"] not in ("run", "without_ai"):
             continue
         try:
             d = json.loads(c["detail"] or "{}")
         except ValueError:
             d = {}
+        if c["kind"] == "without_ai":
+            # a job made by its code steps when the AI could not run (app.run_without_ai): shown among the runs,
+            # at no cost, and not counted as an AI run
+            made.append({"at": c["at"], "kind": "job", "work": str(d.get("job") or "?"), "person": None, "chat": None,
+                         "asked": None, "profile": None, "model": None, "tokens_in": None, "tokens_out": None,
+                         "cache_read": None, "cache_write": None, "cost": 0.0, "stopped": False, "error": None,
+                         "error_words": None, "turns": None, "seconds": None, "steps": [],
+                         "without_ai": {"why": why_job_sentence(d.get("problem") or "unknown"), "sent": int(d.get("sent") or 0),
+                                        "failed": d.get("failed")}})
+            continue
         who = str(d.get("who") or "")
         if who.startswith("job:"):
             kind, work, person, chat = "job", who[4:], None, None
@@ -89,6 +105,8 @@ def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_la
                      "tokens_in": tok.get("input_tokens"), "tokens_out": tok.get("output_tokens"),
                      "cache_read": tok.get("cache_read_input_tokens"), "cache_write": tok.get("cache_creation_input_tokens"),
                      "cost": round(cost, 4), "stopped": bool(d.get("stopped_at_limit")), "error": d.get("error"),
+                     # the reason in plain words (api_errors.FOR_PERSON), for the error's (!) on the Costs tab
+                     "error_words": _error_words(d.get("problem")) if d.get("error") else None,
                      "turns": d.get("turns"), "seconds": round(d["ms"] / 1000) if isinstance(d.get("ms"), (int, float)) else None,
                      "steps": [x for x in d.get("steps") or [] if isinstance(x, dict)]})
     runs.sort(key=lambda r: r["at"], reverse=True)
@@ -120,7 +138,8 @@ def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_la
             "by_day": [{"day": d, "cost": round(by_day.get(d, 0.0), 2)} for d in days_list],
             # the daily chart's Y axis, from the one axis rule (vesta_shared.axis): the page only draws it
             "axis": _cost_axis(max([by_day.get(d, 0.0) for d in days_list] + [0.01])),
-            "by_work": group("work"), "by_model": group("model"), "runs": runs[:300],
+            "by_work": group("work"), "by_model": group("model"),
+            "runs": sorted(runs + made, key=lambda r: r["at"], reverse=True)[:300],
             # the Costs tab's "Tools in this period": each tool, how many runs used it and how many times
             "tools": _tool_counts(runs)}
 

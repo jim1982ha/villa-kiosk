@@ -91,3 +91,16 @@ def test_a_home_assistant_or_store_time_is_the_villas_once_converted():
     import facts
     assert facts._local("2026-10-06T08:15:02.1+00:00", z) == "2026-10-06T16:15"
     assert facts._fill("since {since}", {"since": facts._local("2026-10-06T08:15:02+00:00", z)}).endswith("16:15")
+
+
+def test_every_point_of_a_reports_chart_says_its_day_and_value():
+    # owner, 2026-10-07: "a tooltip when hovering the trend to see the detailed values" — SVG and CSS, no script
+    sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
+    import compose
+    svg = compose.line([("2026-09-21", 100), ("2026-09-22", 59.4), ("2026-09-23", None), ("2026-09-24", 61)], "W")
+    assert svg.count('class="pt"') == 3 and "<title>Mon 21 Sep · 100 W</title>" not in svg
+    assert "<title>21 Sep · 100 W</title>" in svg and "<script" not in svg
+    bars = compose.bars([{"label": "W1", "value": 30}, {"label": "W2", "value": None}])
+    assert bars.count('class="pt"') == 1 and "<title>W1 · 30</title>" in bars
+    pairs = compose.pairs([{"day": "Mon", "kwh": 12.5, "prev_kwh": 10}])
+    assert "<title>Mon · 12 kWh · before 10</title>" in pairs

@@ -62,10 +62,11 @@ class Tickets:
         store = self._store()
         problems = Problems(store)
         try:
-            states = await self.kiosk.ticket_states()
+            held = await self.kiosk.held_tickets()
         except Exception as e:  # noqa: BLE001 — the next start or night tries again
             log.warning("The Kiosk's tickets could not be read (%s)", type(e).__name__)
             return 0
+        states = {tid: t["status"] for tid, t in held.items()}
         closed = cleared = 0
         for t in problems.open_tasks():
             uid = t.get("todo_uid")
@@ -81,6 +82,21 @@ class Tickets:
                 cleared += 1
         if closed or cleared:
             log.info("Kiosk tickets reconciled: %d task(s) closed in the Kiosk, %d cleared with their ticket", closed, cleared)
+        # ⚠️ AN OPEN FAULT SAYS WHAT IS WRONG NOW (owner, 2026-10-07): the ticket kept "battery at 5 %" for days while
+        # the night check's finding read 0 % — the ticket was written once
+        updated = 0
+        for t in problems.open_tasks():
+            uid = t.get("todo_uid")
+            now_title = ticket_title(problems.current_title(t))[:200]
+            if uid and uid in held and held[uid]["status"] != "resolved" and now_title and held[uid]["title"] != now_title:
+                try:
+                    if await self.kiosk.update_ticket(uid, now_title):
+                        updated += 1
+                except Exception as e:  # noqa: BLE001
+                    log.warning("A Kiosk ticket could not be brought up to date (%s)", type(e).__name__)
+                    break
+        if updated:
+            log.info("Kiosk tickets brought up to date: %d", updated)
         made = 0
         for t in problems.open_tasks():
             if t.get("todo_uid"):

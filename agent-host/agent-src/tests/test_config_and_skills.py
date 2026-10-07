@@ -244,3 +244,22 @@ def test_a_skills_instructions_never_name_a_command_the_skill_does_not_have():
             if spec is None or spec.commands is None:
                 continue
             assert cmd in spec.commands or f"{script} {cmd}" in run, f"{name}/SKILL.md names {script} {cmd}"
+
+
+def test_a_jobs_steps_without_the_ai_name_scripts_that_exist():
+    # owner, 2026-10-07: a report is still made when the AI cannot run. Another skill's script in those steps is
+    # only checked when it runs (skills load one by one): a misspelt one would surface the day the credit runs out.
+    import os
+    import pytest
+    from helpers import STARTER_SKILLS
+    from vesta_agent.skills import SkillError, Skills, _without_ai
+    skills = Skills(STARTER_SKILLS).all()
+    steps = [st for sk in skills.values() for j in sk.schedule for st in j.get("without_ai") or []]
+    assert {st["skill"] for st in steps} == {None, "roi-energy"} and len(steps) >= 10
+    for st in steps:
+        if st["skill"]:
+            assert os.path.isfile(os.path.join(skills[st["skill"]].path, "scripts", st["run"].split()[0])), st
+    with pytest.raises(SkillError, match="not a .py file in scripts"):
+        _without_ai(skills["reports"].path, ["nowhere.py --x"], "w")
+    with pytest.raises(SkillError, match="a command, or"):
+        _without_ai(skills["reports"].path, [{"run": "facts.py", "when": "now"}], "w")

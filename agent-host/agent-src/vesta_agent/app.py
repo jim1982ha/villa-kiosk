@@ -34,7 +34,7 @@ from zoneinfo import ZoneInfo
 
 from . import requests_box, runner, script_run, tool_access
 from .actions import Actions
-from .api_errors import FOR_PERSON, NEEDS_THE_OWNER, for_job
+from .api_errors import FOR_PERSON, NEEDS_THE_OWNER, for_job, why_job_sentence
 from .delivery import Delivery
 from .config import STARTER_DIR
 from .ha_events import HaEvents
@@ -263,6 +263,9 @@ class Vesta:
                            origin: Origin | None = None) -> dict:
         res = await asyncio.to_thread(self.code_command, skill, command, values, timeout)
         await self._safe(self.outcome.carry_out(res, skill.name, origin))
+        if any(res.get(k) for k in ("new_findings", "still_open", "closed")):
+            # the night check rewrote its findings: their open faults in the Kiosk say what is wrong now
+            await self._safe(self.tickets.repair())
         return res
 
     def build_pack(self) -> dict:
@@ -585,7 +588,8 @@ class Vesta:
             problem = res.problem or "unknown"
             log.warning("AI job %s did not run: %s", name, problem)
             to = Routing(self.policy()).target("here" if origin else (job.get("to") or "owner"), origin)
-            if to:
+            made = await self.run_without_ai(skill, job, problem, origin)
+            if to and not made:
                 await self.delivery.send(to, for_job(name, problem), origin=origin)
             await self._safe(self._tell_owner(problem, to))
             return
@@ -595,6 +599,35 @@ class Vesta:
             to = "here" if origin else (job.get("to") or "owner")
             await self.run_code_job(skill, job["on_limit"], 300,
                                     {"to": to, "started": started, "limit": f"{cfg['limit_usd']:g}"}, origin)
+
+    async def run_without_ai(self, skill, job: dict, problem: str, origin: Origin | None = None) -> bool:
+        """The job's `without_ai` steps (skill.yaml), when the AI could not run: True when they sent its work.
+
+        ⚠️ A REPORT EVEN WITHOUT THE AI (owner, 2026-10-07: the Anthropic credit ran out and the weekly never came).
+        The figures and charts are code; only VESTA's readings need the AI. The steps run in order, each must
+        succeed (a later one reads an earlier one's file: a stale file must never stand in for a failed step), and
+        what a step decides to send is sent. The page and its message say why the AI was missing; the Costs tab
+        shows the run (a "without_ai" record, no cost)."""
+        steps = [st for st in job.get("without_ai") or [] if not (origin and st["on_schedule_only"])]
+        if not steps:
+            return False
+        name = job["name"]
+        values = {"to": "here" if origin else (job.get("to") or "owner"), "why": why_job_sentence(problem)}
+        sent, failed = 0, None
+        for st in steps:
+            sk = self.skills.all().get(st["skill"]) if st["skill"] else skill
+            ans = None if sk is None else await asyncio.to_thread(
+                script_run.run_command, self.s, self.state, sk, st["run"], values, timeout=900)
+            if ans is None or not ans.ok:
+                failed = st["run"].split()[0] + (f" ({st['skill']}: not installed)" if sk is None else "")
+                break
+            res = ans.result()
+            if res.get("send"):
+                sent += (await self.outcome.carry_out(res, sk.name, origin))["sent"]
+        self.state.log("without_ai", {"job": name, "problem": problem, "sent": sent, "failed": failed})
+        log.warning("AI job %s made without the AI (%s): %s", name, problem,
+                    f"stopped at {failed}" if failed else f"{sent} message(s) sent")
+        return sent > 0
 
     async def _tell_owner(self, problem: str | None, already_told: int | None) -> None:
         """No credit, a refused key: every reply and report stops until the owner acts. Told in the owner

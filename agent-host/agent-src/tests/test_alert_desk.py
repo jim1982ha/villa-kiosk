@@ -161,3 +161,12 @@ def test_the_desk_reads_the_villas_parameters_kept_ten_minutes_and_never_crashes
         raise RuntimeError("Home Assistant does not answer")
     assert live_params(down, store, now=t0 + timedelta(hours=2)).boolean("maintenance_mode", True) is False   # the last copy
     assert live_params(down, Store(str(tmp_path / "empty.sqlite"))).behaviour("reask_minutes") == 15           # the defaults
+
+
+def test_a_repeated_alert_says_since_when_in_the_villas_time(store, monkeypatch):
+    # owner, 2026-10-07: "(4 times since 2026-10-03T00:00)" — UTC, written as a machine writes it
+    monkeypatch.setenv("VILLA_TZ", "Asia/Makassar")
+    desk.intake(store, event(), T0, mode_reader=lambda: "occupied")
+    res = desk.intake(store, event(), T0 + timedelta(hours=6), mode_reader=lambda: "occupied")
+    text = res["send"][0]["text"]
+    assert text.endswith("since Thu 1 Oct, 17:00).")                    # 09:00 UTC is 17:00 in the villa

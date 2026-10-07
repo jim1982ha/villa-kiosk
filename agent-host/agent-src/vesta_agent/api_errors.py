@@ -66,10 +66,20 @@ NEEDS_THE_OWNER = {
 NO_RETRY = {CREDIT, KEY, RATE, BUSY, OFFLINE}
 
 
+def why_job(problem: str) -> str:
+    """Why an AI job could not run, in a few words (a report made without the AI says it too)."""
+    return {CREDIT: "the Anthropic account has run out of credit", KEY: "Anthropic refused the API key",
+            RATE: "too many requests to Anthropic", BUSY: "Anthropic's servers were overloaded or down",
+            OFFLINE: "Anthropic could not be reached (internet down?)",
+            TOO_LONG: "its work grew too long for the model"}.get(problem, "an unexpected error")
+
+
+def why_job_sentence(problem: str) -> str:
+    """The same, as a sentence: what a report made without the AI, and its row on the Costs tab, say."""
+    why = why_job(problem)
+    return why[:1].upper() + why[1:] + "."
+
+
 def for_job(name: str, problem: str) -> str:
     """What the chat a report goes to reads when the job could not run."""
-    why = {CREDIT: "the Anthropic account has run out of credit", KEY: "Anthropic refused the API key",
-           RATE: "too many requests to Anthropic", BUSY: "Anthropic's servers were overloaded or down",
-           OFFLINE: "Anthropic could not be reached (internet down?)",
-           TOO_LONG: "its work grew too long for the model"}.get(problem, "an unexpected error")
-    return f"The {name} report could not be prepared: {why}. It will run again at its next time."
+    return f"The {name} report could not be prepared: {why_job(problem)}. It will run again at its next time."

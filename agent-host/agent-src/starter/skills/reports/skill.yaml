@@ -24,6 +24,9 @@ scripts:
 # Agent page → Rules → AI jobs); a job that policy.yaml does not name does not run. `default` is what
 # the page offers when it adds the job. `on_limit` is the code step that still sends the page, with what
 # is done, when the limit stops the job ({to}: here when asked in a chat, else the job's `to`).
+# `without_ai` are the code steps that still make the report when the AI cannot run (no credit, a refused key,
+# Anthropic unreachable): the figures and charts, said to be made without the AI ({why}), in order, each one
+# needing the one before; `skill:` runs another skill's script, `on_schedule_only` skips it when a chat asked.
 schedule:
   - when: "07:00"
     name: fm-daily
@@ -31,6 +34,8 @@ schedule:
     on_request: true
     description: the facility manager's daily digest (what is new since yesterday, what is still open)
     default: {profile: auto, limit_usd: 1}
+    without_ai:
+      - "compose.py fm-daily --finish {to} --no-ai {why}"
     prompt: >-
       It is 07:00. Read the reports skill, compose the facility manager daily digest (fm-daily) with
       run_skill_script, and send it to the fm chat with send_message, written in {fm_language}, keeping every
@@ -43,6 +48,11 @@ schedule:
     description: the facility manager's weekly report (last week, or the week a person names)
     default: {profile: auto, limit_usd: 2}
     on_limit: "compose.py fm-weekly --facts facts.json --notes notes.json --out fm_weekly.html --finish {to} --since {started} --limit {limit}"
+    without_ai:
+      - {skill: roi-energy, run: "energy_period.py --period week --out week.json"}
+      - "facts.py fm-weekly --energy week.json --out facts.json"
+      - "compose.py fm-weekly --facts facts.json --out fm_weekly.html --finish {to} --no-ai {why}"
+      - {run: "compose.py owner-weekly --energy week.json --finish owner --no-ai {why}", on_schedule_only: true}
     prompt: >-
       It is Monday 08:00. Read the reports skill and make the facility manager's weekly report, following its
       steps "A weekly or monthly report": the week's energy, facts.py fm-weekly, your readings from the clues,
@@ -57,6 +67,12 @@ schedule:
     description: the owner's monthly report (last month, or the month a person names)
     default: {profile: performance, limit_usd: 6}
     on_limit: "compose.py owner-monthly --facts facts.json --notes notes.json --out owner_monthly.html --finish {to} --since {started} --limit {limit}"
+    without_ai:
+      - {skill: roi-energy, run: "energy_period.py --period month --out month.json"}
+      - {skill: roi-energy, run: "filtration_optimiser.py --out optimiser.json"}
+      - {skill: roi-energy, run: "proposals.py --period-json month.json --optimiser-json optimiser.json"}
+      - "facts.py owner-monthly --energy month.json --out facts.json"
+      - "compose.py owner-monthly --facts facts.json --out owner_monthly.html --finish {to} --no-ai {why}"
     prompt: >-
       It is the first of the month, 08:00. Read the reports skill and make the owner's monthly report for last
       month, following its steps "A weekly or monthly report" (with the filtration optimiser and the proposals

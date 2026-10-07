@@ -1,5 +1,5 @@
 // VESTA Agent page — the Costs tab.
-import { $view, api, card, dropdown, figures, fill, h, page, paged, svg, titleWithInfo } from "./core.js";
+import { $view, alertButton, api, infoButton, card, dropdown, figures, fill, h, page, paged, svg, titleWithInfo } from "./core.js";
 
 // ---------------------------------------------------------------- costs
 export const usd = (v) => "US$ " + (v || 0).toFixed((v || 0) > 0 && v < 0.01 ? 4 : 2);
@@ -62,11 +62,13 @@ export async function costs(days = 7) {
   const runRows = c.runs.map((r) => [
     new Date(r.at).toLocaleString([], { dateStyle: "short", timeStyle: "short" }),
     runWhat(r),
-    brain(r.profile, r.model),
+    r.without_ai ? "Without the AI" : brain(r.profile, r.model),
     usedTools(r.steps),
     { v: r.tokens_in === null || r.tokens_in === undefined ? "—" : `${ktok((r.tokens_in || 0) + (r.cache_read || 0) + (r.cache_write || 0))} / ${ktok(r.tokens_out)}`, cls: "num" },
     { v: usd(r.cost), cls: "num" },
-    r.stopped ? h("span", { class: "chip off" }, "stopped at its limit") : r.error ? h("span", { class: "chip off" }, r.error) : ""]);
+    r.without_ai ? madeWithoutAi(r.without_ai)
+      : r.stopped ? h("span", { class: "chip off" }, "stopped at its limit") : r.error ? alertButton("This run failed", () => h("div", {}, h("b", {}, r.error_words || "This run failed."),
+      h("div", { class: "tooltip-detail" }, r.error))) : ""]);
   fill($view,
     // the period's selector on the title's line, on the right (owner, 2026-10-06); the figures below a separator
     h("section", { class: "card" },
@@ -81,6 +83,16 @@ export async function costs(days = 7) {
       c.tools && c.tools.length ? paged(["Tool", { v: "Runs", cls: "num" }, { v: "Calls", cls: "num" }],
         c.tools.map((t) => [h("code", {}, t.tool), { v: t.runs, cls: "num" }, { v: t.calls, cls: "num" }]))
         : h("p", { class: "muted" }, "No tool recorded in this period yet.")));
+}
+
+// A job its code steps made when the AI could not run (owner, 2026-10-07): the figures and charts were sent, said
+// to be made without the AI; or the steps failed too, and only "could not be prepared" was sent.
+export function madeWithoutAi(w) {
+  const ok = w.sent > 0 && !w.failed;
+  return h("span", { class: "chips one-line" }, h("span", { class: ok ? "chip warn" : "chip off" }, ok ? "without the AI" : "not made"),
+    infoButton(ok ? "Made without the AI" : "Not made", ok
+      ? `${w.why} The report was still made from its figures and charts, and sent saying so; VESTA's readings are missing.`
+      : `${w.why} Its figures could not be made either${w.failed ? ` (${w.failed} failed)` : ""}${w.sent ? "; part of it was sent" : ""}.`));
 }
 
 export function usedTools(steps) {

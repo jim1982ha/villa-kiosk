@@ -500,7 +500,7 @@ def test_an_info_icon_shows_a_tooltip_never_text_in_the_page():
     tip = body_of(js, "infoTip")
     for ev in ('"mouseenter"', '"focus"', '"click"'):
         assert ev in tip
-    assert 'h("div", { class: "tooltip", role: "tooltip" }' in tip and "floating(btn," in tip
+    assert 'h("div", { class: "tooltip" + (kind ? " " + kind : ""), role: "tooltip" }' in tip and "floating(btn," in tip
     assert 'titleWithInfo("What the AI cost"' in js and '"h2", period)' in js            # the period on the title's line
 
 

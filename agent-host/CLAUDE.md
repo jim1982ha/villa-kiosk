@@ -160,6 +160,10 @@ Decisions of 2026-09-30 (owner):
   pruned. release.py: each gate names its lane (test: port users → "sidecar").
   start_job answers whether the job still runs (never the AI's memory);
   Delivery keeps "typing…" while a job asked for in a chat runs.
+  0.12.70: an AI job may declare `without_ai` code steps (skill.yaml): on any LLM problem
+  app.run_without_ai still makes the report from its figures ("Made without the AI", why), each step
+  needing the one before; the Costs tab lists it at no cost. Open Kiosk tickets follow their finding's
+  current wording (tickets.repair → Kiosk.update_ticket).
 - No PDF (owner, 2026-09-30): the reports are self-contained HTML pages sent
   as attachments. Chromium was ~480 MB of a 1.1 GB image for this alone.
 - ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent

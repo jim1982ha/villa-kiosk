@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.65 (7 October 2026)
+
+- Reports without the AI: skill.yaml AI jobs take `without_ai` (code steps in order; `{skill, run, on_schedule_only}` for another skill's script, checked when it runs). app.run_without_ai runs them on any LLM problem, each needing the one before (a stale file never stands in), carries out what a step sends, logs a `without_ai` record; for_job is sent only when nothing was. compose.py `--no-ai WHY` (with --finish): page banner, message note, an old notes.json ignored; fm-daily / owner-weekly gain a --finish send path. status.costs lists `without_ai` rows (cost 0, outside runs_count and the groups); costs.js shows them. api_errors.why_job / why_job_sentence.
+- Kiosk tickets follow their finding: Kiosk.held_tickets / update_ticket (title + an update entry), _edit skips a no-op PUT; tickets.repair updates open titles from problems.current_title; run_code_job repairs after a night check that changed findings.
+- Costs: a failed run is core.alertButton (!) with api_errors.FOR_PERSON words and the raw error; infoTip takes a kind.
+- compose.py charts: one `_tip` per point/bar/day (title + hover/focus label, no script).
+- alert-desk: the repeat count's "since" through timeutil.day_time_label in the villa's time.
+
 ## 0.6.64 (7 October 2026)
 
 - FIX (regression from 0.6.62): skills.injected() named the declaration and the argument list both `inject` — every script ran without --pack/--store/--zone. Test drives the real list and a real script. script_run: exit 2 with an argparse usage error is "stopped", not "nothing to do".

@@ -21,6 +21,11 @@ which still builds the page with what is done ("not written: this report reached
 empty slots) and prints the message that sends it — unless facts.json is older than the job (the limit
 came before the figures): then it says so instead of sending last period's page.
 
+⚠️ A REPORT EVEN WHEN THE AI CANNOT RUN (owner, 2026-10-07: Anthropic's credit ran out and the weekly never
+came). A job's `without_ai` steps end with `--finish {to} --no-ai {why}`: the page (or the chat text) is built
+from the figures alone — an old notes.json is never used — and both the page and its message say it was made
+without the AI, and why.
+
 The page is sent as the HTML file itself, attached to the chat message: one self-contained file
 (CSS and charts inline, nothing fetched) that the phone opens in its browser and can print or
 save as PDF (owner, 2026-09-30: no PDF made here).
@@ -158,6 +163,19 @@ def _nice(v: float) -> str:
     return f"{v:,.0f}" if abs(v) >= 10 else f"{v:.2f}".rstrip("0").rstrip(".")
 
 
+def _tip(x: float, y: float, x0: float, x1: float, top: float, bottom: float, label: str, w_: float = W) -> str:
+    """A point's value on hover, or a tap on a phone (owner, 2026-10-07): a column of the chart answers with its day
+    and value. SVG and the page's CSS only (.pt in templates/report.html): nothing runs in the reader's browser."""
+    tw = 6.2 * len(label) + 14
+    bx = min(max(x - tw / 2, 2), w_ - tw - 2)
+    by = y - 30 if y - 30 > 2 else y + 10
+    return (f'<g class="pt" tabindex="0"><title>{_esc(label)}</title>'
+            f'<rect x="{x0:.1f}" y="{top:.1f}" width="{max(x1 - x0, 1):.1f}" height="{bottom - top:.1f}" fill="transparent"/>'
+            f'<circle class="pt-dot" cx="{x:.1f}" cy="{y:.1f}" r="4"/>'
+            f'<g class="pt-tip"><rect x="{bx:.1f}" y="{by:.1f}" width="{tw:.1f}" height="20" rx="4"/>'
+            f'<text x="{bx + tw / 2:.1f}" y="{by + 14:.1f}" font-size="11" text-anchor="middle">{_esc(label)}</text></g></g>')
+
+
 def _day(s: str) -> str:
     try:
         return day_label(date.fromisoformat(s))
@@ -195,8 +213,11 @@ def line(series: list, unit: str = "", ref: float | None = None, area: bool = Fa
             f'<text x="{lx - 6:.1f}" y="{ly - 8:.1f}" font-size="11" font-weight="600" text-anchor="end" fill="var(--ink)">'
             f'{_nice(pts[-1][1])}{(" " + _esc(unit)) if unit else ""}</text>',
             f'<text x="{PAD_L}" y="{H - 6}" font-size="10" fill="var(--ink2)">{_esc(_day(pts[0][0]))}</text>',
-            f'<text x="{W - PAD_R}" y="{H - 6}" font-size="10" text-anchor="end" fill="var(--ink2)">{_esc(_day(pts[-1][0]))}</text>',
-            "</svg>"]
+            f'<text x="{W - PAD_R}" y="{H - 6}" font-size="10" text-anchor="end" fill="var(--ink2)">{_esc(_day(pts[-1][0]))}</text>']
+    u = f" {unit}" if unit else ""
+    out += [_tip(x, yy, x - step / 2, x + step / 2, PAD_T, H - PAD_B, f"{_day(d)} · {_nice(v)}{u}")
+            for (d, v), (x, yy) in zip(pts, xy)]
+    out.append("</svg>")
     return "".join(out)
 
 
@@ -221,6 +242,9 @@ def bars(items: list, highlight_last: bool = True) -> str:
                 out.append(f'<text x="{x + w / 2:.1f}" y="{y(b["value"]) - 4:.1f}" font-size="10" text-anchor="middle" '
                            f'fill="var(--ink)">{_nice(b["value"])}</text>')
         out.append(f'<text x="{x + w / 2:.1f}" y="{H - 6}" font-size="9" text-anchor="middle" fill="var(--ink2)">{_esc(str(b["label"]))}</text>')
+        if b.get("value") is not None:
+            out.append(_tip(x + w / 2, y(b["value"]), PAD_L + i * slot, PAD_L + (i + 1) * slot, PAD_T, H - PAD_B,
+                            f"{b['label']} · {_nice(b['value'])}"))
     out.append("</svg>")
     return "".join(out)
 
@@ -246,6 +270,13 @@ def pairs(rows: list) -> str:
             if k == 1:
                 out.append(f'<text x="{x + w / 2:.1f}" y="{y(v) - 4:.1f}" font-size="10" text-anchor="middle" fill="var(--ink)">{_nice(v)}</text>')
         out.append(f'<text x="{x0 + w:.1f}" y="{h - 6}" font-size="10" text-anchor="middle" fill="var(--ink2)">{_esc(r["day"])}</text>')
+        now_, prev_ = r.get("kwh"), r.get("prev_kwh")
+        if now_ is not None or prev_ is not None:
+            words = " · ".join(t for t in ((f"{_nice(now_)} kWh" if now_ is not None else ""),
+                                           (f"before {_nice(prev_)}" if prev_ is not None else "")) if t)
+            top_v = max(v for v in (now_, prev_) if v is not None)
+            out.append(_tip(x0 + w, y(top_v), PAD_L + i * slot, PAD_L + (i + 1) * slot, PAD_T, h - PAD_B,
+                            f"{r['day']} · {words}", w_))
     out.append("</svg>")
     return "".join(out)
 
@@ -302,7 +333,8 @@ def checked_notes(facts: dict, notes: dict) -> tuple[dict, list[dict]]:
 
 
 # ---------------------------------------------------------------- the page
-def page(facts: dict, notes: dict, limit: str | None = None) -> str:
+def page(facts: dict, notes: dict, limit: str | None = None, without_ai: str | None = None) -> str:
+    """`without_ai`: why the AI could not write (its job's without_ai steps): the page says so at the top."""
     kinds = {w["id"]: w.get("kind", "reading") for w in facts.get("to_write") or []}
 
     def reading(k):
@@ -352,7 +384,13 @@ def page(facts: dict, notes: dict, limit: str | None = None) -> str:
         order=facts.get("order") or [], sections=sections, note=lambda k: notes.get(k, ""), reading=reading,
         num=num, pct=pct, day=day, sentence=sentence, when=when, money=lambda v, cur: fmt_money(v, cur) if v else "—",
         chart_line=lambda *a: Markup(line(*a)), chart_bars=lambda b: Markup(bars(b)),
-        chart_pairs=lambda r: Markup(pairs(r)))
+        chart_pairs=lambda r: Markup(pairs(r)), without_ai=without_ai)
+
+
+def without_ai_note(why: str) -> str:
+    """What a message made without the AI says (the job's without_ai steps): why, and what is missing."""
+    return (f"(Made without the AI: {why.strip()} Every figure is complete; VESTA's readings and "
+            "translation are missing.)")
 
 
 def main(argv=None):
@@ -363,6 +401,7 @@ def main(argv=None):
     ap.add_argument("--facts"); ap.add_argument("--notes"); ap.add_argument("--out")
     ap.add_argument("--finish", choices=["here", "owner", "fm"], help="the job's on_limit step: send the page")
     ap.add_argument("--since"); ap.add_argument("--limit")
+    ap.add_argument("--no-ai", metavar="WHY", help="the job's without_ai step: the AI could not run (WHY, in words)")
     a = ap.parse_args(argv)
 
     if a.cmd in ("fm-weekly", "owner-monthly"):
@@ -370,7 +409,7 @@ def main(argv=None):
             print(f"{a.cmd} needs --facts: first run facts.py {a.cmd} --energy <period>.json --out facts.json.", file=sys.stderr)
             return 1
         name = "weekly" if a.cmd == "fm-weekly" else "monthly"
-        if a.finish and (not os.path.exists(a.facts) or (a.since and datetime.fromtimestamp(
+        if a.finish and not a.no_ai and (not os.path.exists(a.facts) or (a.since and datetime.fromtimestamp(
                 os.path.getmtime(a.facts)).astimezone() < datetime.fromisoformat(a.since))):
             print(json.dumps({"send": [{"to": a.finish, "text": (
                 f"The {name} report stopped at its {a.limit} USD limit before its figures were ready, so there is "
@@ -378,13 +417,13 @@ def main(argv=None):
             return 0
         facts = json.load(open(a.facts, encoding="utf-8"))
         notes = {}
-        if a.notes and os.path.exists(a.notes):
+        if a.notes and os.path.exists(a.notes) and not a.no_ai:
             try:
                 notes = json.load(open(a.notes, encoding="utf-8"))
             except ValueError:
                 notes = {}
         good, refused = checked_notes(facts, notes if isinstance(notes, dict) else {})
-        html = page(facts, good, a.limit if a.finish else None)
+        html = page(facts, good, a.limit if a.finish and not a.no_ai else None, a.no_ai)
         res = {"html_chars": len(html), "notes_used": sorted(good), "notes_refused": refused,
                "missing_notes": sorted(w["id"] for w in facts.get("to_write") or [] if w["id"] not in good),
                "problems": facts.get("problems") or []}
@@ -392,7 +431,10 @@ def main(argv=None):
             with open(a.out, "w", encoding="utf-8") as f:
                 f.write(html)
             res["html"] = a.out
-        if a.finish and a.out:
+        if a.finish and a.out and a.no_ai:
+            res = {"send": [{"to": a.finish, "attachment": os.path.basename(a.out),
+                             "text": f"The {name} report.\n\n{without_ai_note(a.no_ai)}"}]}
+        elif a.finish and a.out:
             head = good.get("headline") or good.get("hero") or f"The {name} report."
             res = {"send": [{"to": a.finish, "attachment": os.path.basename(a.out),
                              "text": f"{head}\n\n(This report stopped at its {a.limit} USD limit: some readings are missing.)"}]}
@@ -409,8 +451,15 @@ def main(argv=None):
     Z = ZoneInfo(a.zone or pack.time_zone)
     as_of = villa_day(Z, a.as_of)
     if a.cmd == "fm-daily":
-        print(json.dumps({"messages": split_message(fm_daily(pack, store, as_of))}, indent=1)); return 0
-    print(json.dumps({"messages": [owner_weekly(pack, store, json.load(open(a.energy)))]}, indent=1)); return 0
+        messages = split_message(fm_daily(pack, store, as_of))
+    else:
+        messages = [owner_weekly(pack, store, json.load(open(a.energy)))]
+    if a.finish:
+        # a job's without_ai step: the messages are sent as written, saying they were made without the AI
+        note = without_ai_note(a.no_ai) if a.no_ai else ""
+        messages[-1] = (messages[-1] + "\n\n" + note).strip()
+        print(json.dumps({"send": [{"to": a.finish, "text": m} for m in messages]}, indent=1)); return 0
+    print(json.dumps({"messages": messages}, indent=1)); return 0
 
 
 if __name__ == "__main__":

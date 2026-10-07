@@ -176,3 +176,59 @@ def test_a_run_retried_after_a_lost_session_keeps_what_was_asked(monkeypatch, tm
     import json as _j
     runs = [_j.loads(c["detail"]) for c in st.calls_since("1970") if c["kind"] == "run"]
     assert runs[-1]["asked"] == "is the pool ok?"
+
+
+# ⚠️ A REPORT EVEN WITHOUT THE AI (owner, 2026-10-07: the Anthropic credit ran out and the weekly never came): a
+# job's without_ai steps still make it from its figures, saying why, and the Costs tab shows it.
+_WEEK = ("import argparse, json, os, sys\nap = argparse.ArgumentParser(); ap.add_argument('--out'); a = ap.parse_known_args()[0]\n"
+         "if os.path.exists('fail.flag'): sys.exit('no statistics today')\n"
+         "json.dump({'kwh': 287}, open(a.out, 'w')); print('{}')\n")
+_PAGE = ("import argparse, json\nap = argparse.ArgumentParser()\n"
+         "for f in ('--week', '--finish', '--no-ai'): ap.add_argument(f)\na = ap.parse_known_args()[0]\n"
+         "kwh = json.load(open(a.week))['kwh']\n"
+         "print(json.dumps({'send': [{'to': a.finish, 'text': f'{kwh} kWh this week. (Made without the AI: {a.no_ai})'}]}))\n")
+
+
+def _report_without_ai(agent, monkeypatch, *, fail=False, stale=False):
+    from helpers import make_skill
+    from vesta_agent.skills import ai_jobs
+    make_skill(agent.s.skills_dir, "figures", {"tools": []}, {"week.py": _WEEK})
+    make_skill(agent.s.skills_dir, "rep", {"tools": [], "schedule": [{
+        "when": "Mon 08:00", "name": "rep-weekly", "to": "fm", "prompt": "make it",
+        "without_ai": [{"skill": "figures", "run": "week.py --out week.json"},
+                       "page.py --week week.json --finish {to} --no-ai {why}"]}]}, {"page.py": _PAGE})
+    with open(agent.s.policy_path) as f:
+        pol = yaml.safe_load(f)
+    pol["settings"] = {"jobs": {"rep-weekly": {"profile": "economy", "limit_usd": 1}}}
+    with open(agent.s.policy_path, "w") as f:
+        yaml.safe_dump(pol, f)
+    import os
+    if fail:
+        open(os.path.join(agent.s.out_dir, "fail.flag"), "w").close()
+    if stale:
+        open(os.path.join(agent.s.out_dir, "week.json"), "w").write('{"kwh": 999}')    # last week's file
+    FakeAI("", problem="credit", cost_usd=0.0).install(monkeypatch)
+    job = next(j for s_, j in ai_jobs(agent.skills.all()) if j["name"] == "rep-weekly")
+    asyncio.run(agent.run_model_job(agent.skills.get("rep"), job))
+    return [t for c, t, _ in agent.tg.sent if c == FM]
+
+
+def test_a_report_the_ai_cannot_make_is_made_from_its_figures_and_says_why(agent, monkeypatch):
+    from vesta_agent import status
+    to_fm = _report_without_ai(agent, monkeypatch)
+    assert to_fm == ["287 kWh this week. (Made without the AI: The Anthropic account has run out of credit.)"]
+    assert [t for c, t, _ in agent.tg.sent if c == OWNER_CHAT] == [api_errors.NEEDS_THE_OWNER["credit"]]
+    (row,) = [r for r in status.costs(agent.state)["runs"] if r.get("without_ai")]
+    assert row["work"] == "rep-weekly" and row["cost"] == 0 and row["without_ai"] == {
+        "why": "The Anthropic account has run out of credit.", "sent": 1, "failed": None}
+    c = status.costs(agent.state)
+    assert c["runs_count"] == len([r for r in c["runs"] if not r.get("without_ai")])   # not an AI run
+    assert all(g["name"] != "rep-weekly" for g in c["by_work"])        # nor in what the AI cost
+
+
+def test_a_step_that_fails_stops_the_report_and_an_old_file_never_stands_in(agent, monkeypatch):
+    to_fm = _report_without_ai(agent, monkeypatch, fail=True, stale=True)
+    assert to_fm == [api_errors.for_job("rep-weekly", "credit")]      # not "999 kWh": last week's figures
+    from vesta_agent import status
+    (row,) = [r for r in status.costs(agent.state)["runs"] if r.get("without_ai")]
+    assert row["without_ai"]["sent"] == 0 and row["without_ai"]["failed"] == "week.py"

@@ -434,3 +434,25 @@ def test_the_one_list_is_built_from_plain_inputs():
     assert [r["title"] for r in rows] == ["Pump: power down", "3 sensors silent"]      # clue + task merged; 3 grouped
     assert rows[0]["severity"] == "P2" and rows[0]["task_ids"] == ["finding-1"]       # Now → P2; the task kept with it
     assert rows[1]["members"] == ["S2", "S3", "S4"] and "All since 1 Oct, 09:28: one cause." in rows[1]["why"]
+
+
+def test_a_report_made_without_the_ai_says_so_and_never_uses_old_readings(tmp_path):
+    # owner, 2026-10-07: the credit ran out and the weekly never came. The page is still made from its figures; an
+    # old notes.json (last week's readings) is never used, and the page and its message say why the AI is missing.
+    fx = _villa(tmp_path)
+    _facts(tmp_path, fx)
+    (tmp_path / "notes.json").write_text(json.dumps({"headline": "An old reading from last week."}))
+    why = "The Anthropic account has run out of credit."
+    r = _run(COMPOSE, "fm-weekly", "--facts", str(tmp_path / "facts.json"), "--notes", str(tmp_path / "notes.json"),
+             "--out", str(tmp_path / "page.html"), "--finish", "fm", "--no-ai", why)
+    (item,) = json.loads(r.stdout)["send"]
+    assert item["to"] == "fm" and item["attachment"] == "page.html"
+    assert f"(Made without the AI: {why} Every figure is complete" in item["text"]
+    page = (tmp_path / "page.html").read_text()
+    assert f"<b>Made without the AI.</b> {why}" in page and "<svg" in page
+    assert "An old reading from last week" not in page and "Not written" not in page
+    # the daily digest is a chat text: sent as written, its last message saying the same
+    r = _run(COMPOSE, "fm-daily", "--pack", str(tmp_path / "pack.json"), "--store", str(tmp_path / "s.sqlite"),
+             "--as-of", "2026-10-05", "--finish", "here", "--no-ai", why)
+    sent = json.loads(r.stdout)["send"]
+    assert {s["to"] for s in sent} == {"here"} and sent[-1]["text"].endswith("VESTA's readings and translation are missing.)")

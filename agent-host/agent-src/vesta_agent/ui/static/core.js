@@ -198,6 +198,14 @@ export function toggleCard(on, onChange, title, { chip = null, words = null, met
   return card;
 }
 
+// an alert's (!): the (i)'s behaviour — hover, tap — in the alert colour, for what went wrong (owner, 2026-10-07: "api error
+// 400" was a pill in the table)
+export function alertButton(about, text) {
+  const btn = h("button", { type: "button", class: "info alert", "aria-label": `${about}: details`, "aria-expanded": "false" }, "!");
+  infoTip(btn, text, "alert");
+  return btn;
+}
+
 // the (i) itself, its text shown on hover and on a tap (infoTip)
 export function infoButton(about, text) {
   const btn = h("button", { type: "button", class: "info", "aria-label": `About ${about}`, "aria-expanded": "false" }, "i");
@@ -206,13 +214,13 @@ export function infoButton(about, text) {
 }
 
 export let openTip = null;
-export function infoTip(btn, text) {
+export function infoTip(btn, text, kind = "") {
   let float = null, pinned = false;
   const close = () => { if (float) float.close(); };
   const open = () => {
     if (float) return;
     if (openTip) openTip();
-    float = floating(btn, h("div", { class: "tooltip", role: "tooltip" }, typeof text === "function" ? text() : text), { width: 360, center: true,
+    float = floating(btn, h("div", { class: "tooltip" + (kind ? " " + kind : ""), role: "tooltip" }, typeof text === "function" ? text() : text), { width: 360, center: true,
       onClose: () => { float = null; pinned = false; btn.setAttribute("aria-expanded", "false"); if (openTip === close) openTip = null; } });
     btn.setAttribute("aria-expanded", "true");
     openTip = close;

@@ -15,6 +15,7 @@ class FakeKiosk:
     def __init__(self):
         self.tickets, self.notes, self.resolved = [], [], []
         self.closed_by_hand, self.known = set(), set()
+        self.titles: dict[str, str] = {}             # a ticket's title as it is now (update_ticket changes it)
         self.info = {"contract": 1}
 
     async def check(self) -> bool:
@@ -29,10 +30,20 @@ class FakeKiosk:
     async def add_ticket(self, title, entity_id=None, note=None) -> str:
         self.tickets.append((title, entity_id))
         self.notes.append(note)
+        self.titles[f"t{len(self.tickets)}"] = title
         return f"t{len(self.tickets)}"
 
     async def resolve_ticket(self, tid, note=None) -> bool:
         self.resolved.append(tid)
+        return True
+
+    async def held_tickets(self) -> dict[str, dict]:
+        return {t: {"status": s, "title": self.titles.get(t, "")} for t, s in (await self.ticket_states()).items()}
+
+    async def update_ticket(self, tid, title) -> bool:
+        if tid not in self.titles or self.titles[tid] == title[:200] or tid in self.resolved:
+            return False
+        self.titles[tid] = title[:200]
         return True
 
     async def ticket_states(self) -> dict[str, str]:

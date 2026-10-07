@@ -11,6 +11,7 @@
 body{background:var(--paper);color:var(--ink);font-family:Jost,system-ui,sans-serif;padding:0 16px;padding-block:24px 48px;font-size:15px;line-height:1.45}
 .wrap{max-width:900px;margin:0 auto;display:grid;gap:28px}
 h1{font-family:"Cormorant Garamond",Georgia,serif;font-size:36px;font-weight:600;margin:0;line-height:1.1;text-wrap:balance}
+.pt{outline:none;cursor:default}.pt .pt-dot,.pt .pt-tip{opacity:0;transition:opacity .12s}.pt:hover .pt-dot,.pt:focus .pt-dot,.pt:hover .pt-tip,.pt:focus .pt-tip{opacity:1}.pt-dot{fill:var(--card);stroke:var(--ink);stroke-width:2}.pt-tip rect{fill:var(--ink)}.pt-tip text{fill:var(--card);font-weight:600}
 h2{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink2);margin:0 0 12px;font-weight:600}
 p{margin:0}
 .eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--acc);font-weight:600}
@@ -62,6 +63,7 @@ svg{width:100%;height:auto;display:block}
 .bat .num{font-variant-numeric:tabular-nums;color:var(--ink2)}
 .mark{display:inline-block;font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--acc);border:1px solid currentColor;border-radius:999px;padding:0 6px;margin-right:4px;vertical-align:1px;opacity:.85}
 .unwritten{font-size:13px;color:var(--warn);font-style:italic}
+.no-ai{border-left:3px solid var(--warn);background:var(--warnbg);padding:10px 14px;border-radius:8px;font-size:14px;margin-bottom:16px}
 .task .ask{margin-top:6px;font-size:14px;font-style:italic}
 .task .s{margin-top:6px;font-size:12px;color:var(--ink2)}
 .task.plan{grid-template-columns:auto 1fr auto}
@@ -69,6 +71,7 @@ svg{width:100%;height:auto;display:block}
 
 {% endraw %}</style></head>
 <body><main class="wrap">
+{% if without_ai %}<p class="no-ai" role="note"><b>Made without the AI.</b> {{ without_ai }} Every figure and chart below is complete; VESTA's readings are missing.</p>{% endif %}
 {% for sid in order %}{% set s = sections[sid] %}
 {% if s.error %}<section class="card"><p class="note">This part could not be prepared: {{ s.error }}</p></section>
 {% else %}
