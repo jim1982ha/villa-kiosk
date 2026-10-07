@@ -25,6 +25,7 @@ from claude_agent_sdk import (AssistantMessage, ClaudeAgentOptions, ClaudeSDKCli
 from .api_errors import NO_RETRY, classify
 from .policy import PROFILES  # noqa: E402
 from .redact import scrub
+from vesta_shared.agent_records import run_cost
 
 log = logging.getLogger("vesta.runner")
 
@@ -227,6 +228,8 @@ async def run(settings, system_prompt: str, prompt: str, server, allowed: set[st
     # what was asked — never the answer, never a secret. Before 0.6.9 only who and the cost were kept.
     tokens = {k: usage.get(k) for k in ("input_tokens", "output_tokens", "cache_read_input_tokens",
                                          "cache_creation_input_tokens") if isinstance(usage.get(k), int)}
+    # no tokens, no cost (agent_records.run_cost): a refused request is not 0.033 USD in the log or the record
+    cost = run_cost({"cost_usd": cost, "tokens": tokens}) if cost is not None else None
     state.log("run", {"who": who, "cost_usd": cost, "stopped_at_limit": stopped, "denied": denied, "error": err,
                       "profile": profile if profile in PROFILES else getattr(settings, "profile", None), "model": opts.model, "tokens": tokens,
                       "turns": turns, "ms": ms, "asked": (asked or "")[:160] or None, "problem": problem,

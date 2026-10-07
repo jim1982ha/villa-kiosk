@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.73 (7 October 2026)
+
+- agent_records.run_cost: a record whose token counts (input and output present) are all zero cost 0.0 — read side, so past records are corrected; runner records and logs the same figure. Records without counts keep theirs.
+
 ## 0.6.72 (7 October 2026)
 
 Fifth architecture review (all candidates):

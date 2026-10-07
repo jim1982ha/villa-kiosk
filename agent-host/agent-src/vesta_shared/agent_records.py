@@ -14,8 +14,18 @@ from datetime import datetime
 
 
 def run_cost(detail: dict) -> float:
-    """What one AI run cost, as the Anthropic API reported it (0.0 when it reported nothing)."""
-    c = (detail or {}).get("cost_usd")
+    """What one AI run cost, as the Anthropic API reported it (0.0 when it reported nothing).
+
+    ⚠️ NO TOKENS, NO COST (villa, 2026-10-07). Refused for lack of credit, each reply was recorded at 0.033 USD with
+    0 tokens in and 0 out — the Claude client's own figure, not Anthropic's bill: the Console showed 0.03 USD of Haiku
+    for the whole day, against about 0.40 USD on the Costs tab. A run whose record says it read and wrote nothing cost
+    nothing. A record without token counts (before 0.6.9) keeps its figure."""
+    d = detail or {}
+    tok = d.get("tokens")
+    if isinstance(tok, dict) and "input_tokens" in tok and "output_tokens" in tok and not any(
+            isinstance(v, (int, float)) and v > 0 for v in tok.values()):
+        return 0.0
+    c = d.get("cost_usd")
     return float(c) if isinstance(c, (int, float)) else 0.0
 
 

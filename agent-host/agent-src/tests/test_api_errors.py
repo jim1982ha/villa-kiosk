@@ -337,3 +337,19 @@ def test_a_report_button_pressed_by_someone_who_may_not_start_one_is_refused(age
                                                         "user_id": FM, "message": {"message_id": 900, "chat": {"id": FM}}}))
     assert agent.tg.toasts == [("cb1", "Starting a report is not switched on for you here.")]
     assert not agent.chat_jobs.running(FM, "rep-weekly") and agent.tg.edits == []
+
+
+def test_a_refused_run_that_read_and_wrote_nothing_cost_nothing(tmp_path):
+    # villa, 2026-10-07: refused for lack of credit, each reply was recorded at 0.033 USD with 0 tokens in and out;
+    # Anthropic's Console showed 0.03 USD of Haiku for the whole day. No tokens, no cost — past records included.
+    from vesta_agent import status
+    from vesta_shared.agent_records import cost_between, run_cost
+    st = State(str(tmp_path / "s.db"))
+    zero = {"input_tokens": 0, "output_tokens": 0, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}
+    st.log("run", {"who": "Owner@1", "cost_usd": 0.033, "error": "api error 400", "problem": "credit", "tokens": zero})
+    st.log("run", {"who": "job:fm-weekly", "cost_usd": 0.34, "tokens": {"input_tokens": 264000, "output_tokens": 4500}})
+    st.log("run", {"who": "Owner@1", "cost_usd": 0.05})                 # before 0.6.9: no token counts, kept
+    c = status.costs(st)
+    assert sorted(r["cost"] for r in c["runs"]) == [0.0, 0.05, 0.34] and c["period"] == 0.39
+    assert run_cost({"cost_usd": 0.033, "tokens": {}}) == 0.033                 # counts unknown: the figure stands
+    assert cost_between(str(tmp_path / "s.db"), "2000-01-01", "2100-01-01") == 0.39   # the reports read the same
