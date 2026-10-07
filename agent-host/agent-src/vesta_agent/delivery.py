@@ -153,6 +153,12 @@ class Delivery:
         stop = asyncio.Event()
         self._job_typing[int(chat_id)] = (stop, asyncio.create_task(self._typing_loop(int(chat_id), stop)), {job})
 
+    async def job_waiting(self, chat_id: int, mid: int) -> None:
+        """A job started by a button: the pressed message is its "being prepared" message. ⚠️ Without it the job
+        waited for a reply that never comes, and took the NEXT conversation's reply for it — deleted on arrival
+        (villa, 2026-10-07 14:17: the buttons offered after a tapped daily digest vanished at once)."""
+        await self._notice(int(chat_id), self.notices.replied(int(chat_id), mid))
+
     async def job_ended(self, chat_id: int, job: str) -> None:
         entry = self._job_typing.get(int(chat_id))
         if entry:

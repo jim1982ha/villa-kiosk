@@ -533,6 +533,8 @@ class Vesta:
             _, problem, name = (data.split(":", 2) + ["", ""])[:3]
             said = self.start_without_ai(name, problem, cid)
             await toast(said)
+            if mid and said.startswith("Making"):
+                await self.delivery.job_waiting(cid, int(mid))      # the pressed message is its waiting message
             if mid and self.tg:
                 # the message itself says so, its buttons gone: a toast alone is easily missed ("nothing happened")
                 await self.tg.edit(cid, mid, f"{msg.get('text') or ''}\n\n{said}".strip())

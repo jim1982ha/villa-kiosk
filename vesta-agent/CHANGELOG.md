@@ -1,3 +1,8 @@
+## 0.12.74
+
+What you will see:
+- **The report buttons no longer vanish.** After a report made from a button (the daily digest at 14:17), the next answer with buttons disappeared at once: the agent took it for that report's "being prepared" message and deleted it. Now the message whose button you tapped is the one replaced by the report, and later answers stay.
+
 ## 0.12.73
 
 What you will see:

@@ -289,3 +289,27 @@ def test_a_report_named_in_the_message_starts_without_asking(agent, monkeypatch)
     assert first[2] is None and first[1].endswith("Making the Weekly report without the AI, from its figures and "
                                                   "charts: it will be sent here.")
     assert any(t.startswith("287 kWh this week.") for c, t, _ in agent.tg.sent if c == FM)
+
+
+def test_a_report_made_from_a_button_never_takes_the_next_answer_for_its_waiting_message(agent, monkeypatch):
+    # villa, 2026-10-07 14:17: a tapped Daily digest was sent; the next answer (its buttons) vanished at once — the
+    # job, started without a reply, took that answer for its "being prepared" message and deleted it
+    _report_without_ai(agent, monkeypatch, run_job=False)
+    person = agent.policy().person(FM)
+
+    async def go():
+        await agent.converse(FM, person, "a report please")
+        pressed = agent.tg.next_id
+        await agent.on_ha_event("telegram_callback", {"id": "cb1", "data": "w:credit:rep-weekly", "chat_id": FM,
+                                                      "user_id": FM, "message": {"message_id": pressed,
+                                                                                 "chat": {"id": FM}, "text": "x"}})
+        for _ in range(500):
+            if any("287 kWh" in t for c, t, _ in agent.tg.sent):
+                break
+            await asyncio.sleep(0.01)
+        while (FM, "rep-weekly") in agent._running_jobs:            # the job's end, after its result
+            await asyncio.sleep(0.01)
+        await agent.converse(FM, person, "a report please")
+        return pressed
+    pressed = asyncio.run(go())
+    assert agent.tg.deleted == [(FM, pressed)]                      # the pressed message, replaced by the report
