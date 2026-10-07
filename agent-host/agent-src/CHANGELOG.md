@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.68 (7 October 2026)
+
+- AI down: a message naming exactly one report by its `button` words starts start_without_ai directly (no keyboard); the `w:` press edits its message (text + what is being made), which removes the buttons.
+
 ## 0.6.67 (7 October 2026)
 
 - converse: on an AI-down problem (api_errors.NO_RETRY), a person with start_job gets one button per on_request job with without_ai that policy sets up (skill.yaml `button`, callback `w:<problem>:<job>`); handle_callback `w:` → start_without_ai (registered presser, not twice per chat, job_started/ended, "could not be made without the AI either" when nothing was sent).

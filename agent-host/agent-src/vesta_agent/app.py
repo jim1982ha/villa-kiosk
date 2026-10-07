@@ -457,9 +457,15 @@ class Vesta:
                 # ⚠️ A REPORT ASKED FOR WHILE THE AI IS DOWN (villa, 2026-10-07 12:42: "Generate the weekly report"
                 # met "out of credit", and only the AI could have understood it and started the job). A button needs
                 # no AI to be understood: each report that can be made without it is offered.
-                rows = [[{"text": j["button"], "callback_data": f"w:{res.problem}:{j['name']}"}]
-                        for j in self._without_ai_jobs()]
-                if rows:
+                jobs = self._without_ai_jobs()
+                # ⚠️ NAMED, IT STARTS (owner, 2026-10-07: "I asked for a weekly report, I am not expecting buttons"):
+                # a message that names exactly one report by its button's words starts that one; otherwise, buttons
+                named = [j for j in jobs if not is_continue and j["button"].lower() in text.lower()]
+                rows = [] if len(named) == 1 else [[{"text": j["button"], "callback_data": f"w:{res.problem}:{j['name']}"}]
+                                                   for j in jobs]
+                if len(named) == 1:
+                    answer += "\n\n" + self.start_without_ai(named[0]["name"], res.problem, cid)
+                elif rows:
                     answer += "\n\nA report can still be made without the AI, from its figures and charts:"
                     keyboard = {"inline_keyboard": rows}
             if res.stopped_at_limit and res.session_id:
@@ -525,7 +531,12 @@ class Vesta:
             if pol.person(presser) is None:
                 return await toast("You are not registered with the VESTA Agent.")
             _, problem, name = (data.split(":", 2) + ["", ""])[:3]
-            return await toast(self.start_without_ai(name, problem, cid))
+            said = self.start_without_ai(name, problem, cid)
+            await toast(said)
+            if mid and self.tg:
+                # the message itself says so, its buttons gone: a toast alone is easily missed ("nothing happened")
+                await self.tg.edit(cid, mid, f"{msg.get('text') or ''}\n\n{said}".strip())
+            return
         await toast("Unknown button.")
 
     async def after_execution(self, ap: dict):
@@ -708,7 +719,7 @@ class Vesta:
                 self._running_jobs.discard((int(chat), name))
                 await self.delivery.job_ended(chat, name)
         asyncio.create_task(self._safe(made()))
-        return f"Making the {job['button']} without the AI: it will be sent here."
+        return f"Making the {job['button']} without the AI, from its figures and charts: it will be sent here."
 
     async def _requested_job(self, skill, job: dict, chat: int) -> None:
         """A job asked for in a chat. If it ends without sending its page, its "being prepared" message

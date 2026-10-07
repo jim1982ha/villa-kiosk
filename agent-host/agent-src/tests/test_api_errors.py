@@ -244,19 +244,21 @@ def test_a_report_asked_for_while_the_ai_is_down_is_a_button_that_needs_no_ai(ag
     person = agent.policy().person(FM)
 
     async def go():
-        await agent.converse(FM, person, "generate the weekly report")
+        await agent.converse(FM, person, "a report please")
         (chat, text, kb), = [m for m in agent.tg.sent if m[0] == FM]
         assert text.startswith(api_errors.FOR_PERSON["credit"]) and "without the AI" in text
         assert kb == {"inline_keyboard": [[{"text": "Weekly report", "callback_data": "w:credit:rep-weekly"}]]}
         await agent.on_ha_event("telegram_callback", {"id": "cb1", "data": "w:credit:rep-weekly", "chat_id": FM,
                                                       "user_id": FM, "message": {"message_id": agent.tg.next_id,
-                                                                                 "chat": {"id": FM}}})
+                                                                                 "chat": {"id": FM}, "text": "No credit."}})
         for _ in range(500):                                         # until the report is there (no fixed sleep)
             if len([m for m in agent.tg.sent if m[0] == FM]) > 1:
                 break
             await asyncio.sleep(0.01)
     asyncio.run(go())
-    assert agent.tg.toasts == [("cb1", "Making the Weekly report without the AI: it will be sent here.")]
+    said = "Making the Weekly report without the AI, from its figures and charts: it will be sent here."
+    assert agent.tg.toasts == [("cb1", said)]
+    assert agent.tg.edits == [(FM, agent.tg.next_id - 1, f"No credit.\n\n{said}")]   # its buttons gone, it says so
     assert [t for c, t, _ in agent.tg.sent if c == FM][1] == \
         "287 kWh this week. (Made without the AI: The Anthropic account has run out of credit.)"
 
@@ -270,3 +272,20 @@ def test_no_report_button_for_a_person_who_may_not_start_one(agent, monkeypatch)
         yaml.safe_dump(pol, f)
     asyncio.run(agent.converse(FM, agent.policy().person(FM), "generate the weekly report"))
     assert [kb for c, _, kb in agent.tg.sent if c == FM] == [None]
+
+
+def test_a_report_named_in_the_message_starts_without_asking(agent, monkeypatch):
+    # owner, 2026-10-07: "since I asked for a weekly report in the message, I am not expecting this response"
+    _report_without_ai(agent, monkeypatch, run_job=False)
+
+    async def go():
+        await agent.converse(FM, agent.policy().person(FM), "Generate the Weekly Report for last week now")
+        for _ in range(500):
+            if any("287 kWh" in t for c, t, _ in agent.tg.sent):
+                break
+            await asyncio.sleep(0.01)
+    asyncio.run(go())
+    first = [m for m in agent.tg.sent if m[0] == FM][0]
+    assert first[2] is None and first[1].endswith("Making the Weekly report without the AI, from its figures and "
+                                                  "charts: it will be sent here.")
+    assert any(t.startswith("287 kWh this week.") for c, t, _ in agent.tg.sent if c == FM)
