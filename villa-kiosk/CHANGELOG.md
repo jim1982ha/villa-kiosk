@@ -1,3 +1,8 @@
+## 2.496.309
+
+### Changed
+- Walking through the villa shows the ceilings everywhere again, as before 2.496.308. With 2.496.308 a ceiling appeared only once you were standing under it, which is not what you want. The overview still never shows them. Upstairs ceilings appear when your 3D model includes them (Blender pipeline 2.39.0 with "Display ceiling" ticked for the rooms in SweetHome 3D).
+
 ## 2.496.308
 
 ### Changed

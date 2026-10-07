@@ -572,10 +572,6 @@ export class SceneManager {
     // The ceiling's state while WALKING — see StructureSet.ceilingState.
     this.visuals.setCeilingState(() =>
       this.structure.ceilingState(this.camera.camera.position, this.scene.getActiveMeshes().data));
-    // Indoors or outdoors while walking: the ceilings follow the eye (StructureSet.followEye).
-    this.scene.onBeforeRenderObservable.add(() => {
-      if (this.viewMode === "first-person") this.structure.followEye(this.camera.camera.position, performance.now());
-    });
 
     // Render-quality stack (tone mapping, SSAO, shadows, IBL, light balance).
     // Created after both cameras exist so SSAO can attach to all of them; the
