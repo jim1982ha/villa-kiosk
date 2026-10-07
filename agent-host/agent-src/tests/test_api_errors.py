@@ -313,3 +313,11 @@ def test_a_report_made_from_a_button_never_takes_the_next_answer_for_its_waiting
         return pressed
     pressed = asyncio.run(go())
     assert agent.tg.deleted == [(FM, pressed)]                      # the pressed message, replaced by the report
+
+
+def test_no_report_button_for_a_question_about_something_else(agent, monkeypatch):
+    # owner, 2026-10-07: "what do you see in the living camera now?" got the report buttons
+    _report_without_ai(agent, monkeypatch, run_job=False)
+    asyncio.run(agent.converse(FM, agent.policy().person(FM), "what do you see in the living camera now?"))
+    (text, kb), = [(t, kb) for c, t, kb in agent.tg.sent if c == FM]
+    assert kb is None and text == api_errors.FOR_PERSON["credit"]

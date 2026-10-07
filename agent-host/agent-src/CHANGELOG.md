@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.70 (7 October 2026)
+
+- AI down: the report buttons are offered only when the message shares a word (4+ letters) with a report's `button` — the skill's words.
+
 ## 0.6.69 (7 October 2026)
 
 - FIX: a job started by a `w:` button registered no reply, so JobNotices kept a done notice and deleted the next conversation reply. Delivery.job_waiting makes the pressed message the waiting message (test, mutation-proven).

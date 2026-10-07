@@ -461,8 +461,13 @@ class Vesta:
                 # ⚠️ NAMED, IT STARTS (owner, 2026-10-07: "I asked for a weekly report, I am not expecting buttons"):
                 # a message that names exactly one report by its button's words starts that one; otherwise, buttons
                 named = [j for j in jobs if not is_continue and j["button"].lower() in text.lower()]
-                rows = [] if len(named) == 1 else [[{"text": j["button"], "callback_data": f"w:{res.problem}:{j['name']}"}]
-                                                   for j in jobs]
+                # ⚠️ ONLY WHEN A REPORT IS ASKED ABOUT (owner, 2026-10-07: "what do you see in the living camera?" got
+                # the report buttons): a word of a report's own button ("weekly", "digest", "report"…) must be in the
+                # message — the skill's words, no list here
+                said = set(re.findall(r"\w+", text.lower())) if not is_continue else set()
+                about = said & {w for j in jobs for w in re.findall(r"\w{4,}", j["button"].lower())}
+                rows = [] if len(named) == 1 or not about else \
+                    [[{"text": j["button"], "callback_data": f"w:{res.problem}:{j['name']}"}] for j in jobs]
                 if len(named) == 1:
                     answer += "\n\n" + self.start_without_ai(named[0]["name"], res.problem, cid)
                 elif rows:

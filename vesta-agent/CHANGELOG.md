@@ -1,3 +1,8 @@
+## 0.12.75
+
+What you will see:
+- **The report buttons appear only when you ask about a report.** While the AI is unavailable, "what do you see in the living camera?" got the report buttons as if you had asked for one. Now a question about anything else gets only the reason the AI cannot answer; the buttons come when your message uses a word of a report's name (daily, digest, weekly, monthly, report).
+
 ## 0.12.74
 
 What you will see:
