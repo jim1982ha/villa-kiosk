@@ -456,3 +456,40 @@ def test_a_report_made_without_the_ai_says_so_and_never_uses_old_readings(tmp_pa
              "--as-of", "2026-10-05", "--finish", "here", "--no-ai", why)
     sent = json.loads(r.stdout)["send"]
     assert {s["to"] for s in sent} == {"here"} and sent[-1]["text"].endswith("VESTA's readings and translation are missing.)")
+
+
+def test_a_proposal_says_how_to_answer_and_its_long_names_wrap(tmp_path):
+    # owner, 2026-10-07: "Accept / Later / Ignore": boxes that looked like buttons on a page that cannot press
+    # anything, and an entity id that ran out of its card
+    import sys as _s
+    _s.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
+    import compose
+    facts = {"zone": "UTC", "order": ["fixed_suggest"], "sections": {"fixed_suggest": {"fixed": [], "proposals": [
+        {"id": 4, "title": "Create the missing setting for Weather station", "detail": "No nominal voltage", "benefit": "Enables one rule"}]}}}
+    page = compose.page(facts, {})
+    assert 'class="btn"' not in page
+    assert "To answer, write in the chat: <b>accept 4</b>, <b>later 4</b> or <b>ignore 4</b>." in page
+    assert "No nominal voltage. Enables one rule." in page
+    assert ".wrap{overflow-wrap:anywhere}" in page and ".asset > .st{justify-self:start}" in page
+
+
+def test_a_missing_setting_proposal_names_the_device_not_its_id():
+    import sys as _s
+    _s.path.insert(0, os.path.join(STARTER_SKILLS, "roi-energy", "scripts"))
+    import proposals
+    found = [{"rule_id": "PM-PARAM-MISSING", "entity_id": "sensor.example_battery", "summary": "x",
+              "detail": json.dumps({"reading_v": 3.1, "name": "Weather station"})}]
+    (p,) = [x for x in proposals.build({}, None, found) if x["kind"] == "configuration"]
+    assert p["title"] == "Create the missing setting for Weather station"
+
+
+def test_a_missing_nominal_voltage_finding_carries_the_devices_name():
+    # the proposal names the device (above): the night check must hand that name on
+    import sys as _s
+    from datetime import date
+    _s.path.insert(0, os.path.join(STARTER_SKILLS, "preventive-maintenance", "scripts"))
+    import rules
+    from vesta_shared.params import VillaParams
+    (f,) = rules.battery_rules({"slug": "station", "name": "Weather station"}, "sensor.example_battery", "V", 3.1, [],
+                               VillaParams(), date(2026, 10, 7))
+    assert f.rule_id == "PM-PARAM-MISSING" and f.detail["name"] == "Weather station"

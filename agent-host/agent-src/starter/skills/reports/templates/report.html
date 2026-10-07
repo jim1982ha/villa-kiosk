@@ -42,7 +42,11 @@ td{padding:8px;border-bottom:1px solid var(--line);vertical-align:top}
 td.num{text-align:right;font-variant-numeric:tabular-nums}
 .tbl{overflow-x:auto}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
-.asset{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:6px}
+.asset{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:6px;align-content:start;min-width:0}
+.asset > .st{justify-self:start}
+.wrap{overflow-wrap:anywhere}
+.answer{font-size:12px;color:var(--ink2)}
+.answer b{color:var(--ink);font-weight:600}
 .asset .t{display:flex;justify-content:space-between;align-items:center;font-weight:600}
 .asset .s{font-size:13px;color:var(--ink2)}
 .st{font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px}
@@ -128,7 +132,7 @@ svg{width:100%;height:auto;display:block}
       {% set chk = note(t.id ~ ".check") or t.check %}{% set ask = note(t.id ~ ".ask") or t.ask %}
       {% if chk or ask %}<div class="act">{{ sentence(chk) }}{% if ask %} {{ sentence(ask, "?") }}{% endif %}</div>{% endif %}
       {% if t.also %}<div class="s">Also: {{ t.also|join("; ") }}</div>{% endif %}
-      {% if t.severity in ("P1", "P2") and t.task_ids %}<div class="btns"><span class="btn">Done</span><span class="btn">Not found</span><span class="btn">Need help</span></div>{% endif %}
+      {% if t.severity in ("P1", "P2") and t.task_ids %}<div class="answer">Answered <b>Done</b> in the chat, or closed in the VESTA Kiosk, it leaves this list.</div>{% endif %}
     </div></div>
   {% endif %}
   {% else %}
@@ -200,8 +204,8 @@ svg{width:100%;height:auto;display:block}
   <h2>What we fixed, what we suggest</h2>
   <div class="grid2">
   {% for f in s.fixed %}<div class="asset"><span class="st ok">Fixed</span><b>{{ f.title }}</b><div class="s">Closed {{ day(f.day) }}.</div></div>{% endfor %}
-  {% for p in s.proposals %}<div class="asset"><span class="st watch">Proposal</span><b>{{ p.title }}</b><div class="s">{{ p.detail }}{% if p.benefit %} {{ p.benefit }}{% endif %}</div>
-    <div class="btns"><span class="btn">Accept {{ p.id }}</span><span class="btn">Later {{ p.id }}</span><span class="btn">Ignore {{ p.id }}</span></div></div>{% endfor %}
+  {% for p in s.proposals %}<div class="asset"><span class="st watch">Proposal</span><b>{{ p.title }}</b><div class="s">{{ sentence(p.detail) }}{% if p.benefit %} {{ sentence(p.benefit) }}{% endif %}</div>
+    <div class="answer">To answer, write in the chat: <b>accept {{ p.id }}</b>, <b>later {{ p.id }}</b> or <b>ignore {{ p.id }}</b>.</div></div>{% endfor %}
   {% if not (s.fixed or s.proposals) %}<p class="note">Nothing fixed or proposed this month.</p>{% endif %}
   </div>
 </section>

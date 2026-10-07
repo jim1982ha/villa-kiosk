@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.71 (7 October 2026)
+
+- report.html: `.asset` align-content:start + min-width:0, its pill justify-self:start, `.wrap` overflow-wrap:anywhere; proposals say "To answer, write in the chat: accept N…" (no fake buttons); P1/P2 tasks say how they leave the list; detail/benefit as sentences.
+- preventive-maintenance: PM-PARAM-MISSING detail carries the asset's name; roi-energy proposals title the missing setting by it ("Create the missing setting for …").
+
 ## 0.6.70 (7 October 2026)
 
 - AI down: the report buttons are offered only when the message shares a word (4+ letters) with a report's `button` — the skill's words.

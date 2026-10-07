@@ -209,7 +209,7 @@ def battery_rules(asset: dict, entity_id: str, unit: str | None, level: float | 
         if nominal is None:
             out.append(Finding("PM-PARAM-MISSING", entity_id, slug, "battery", INFO,
                                f"{asset['name']} reports a battery voltage ({level} V) but no nominal voltage is set: "
-                               f"create input_number.{slug}_battery_nominal_v to get a percentage.", {"reading_v": level}, ""))
+                               f"create input_number.{slug}_battery_nominal_v to get a percentage.", {"reading_v": level, "name": asset["name"]}, ""))
         elif level is not None and battery_charge(level, "V", nominal) < params.behaviour("battery_low_fraction_of_nominal") * 100:
             out.append(Finding("PM-BATTERY-LOW", entity_id, slug, "battery", P3,
                                f"{asset['name']} battery at {level:.2f} V, below {params.behaviour('battery_low_fraction_of_nominal'):.0%} of its {nominal:.2f} V nominal.",

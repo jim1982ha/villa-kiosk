@@ -54,7 +54,14 @@ def build(period: dict, optimiser: dict | None, findings_open: list[dict] | None
                     "benefit": "Self-consumption share up"})
     for f in findings_open or []:
         if f.get("rule_id") == "PM-PARAM-MISSING":
-            out.append({"kind": "configuration", "title": f"Create the missing helper for {f['entity_id']}", "detail": f["summary"], "benefit": "Enables one rule"})
+            # ⚠️ THE DEVICE'S NAME, NOT ITS ID (owner, 2026-10-07: a raw entity id ran out of its card); the title
+            # stays one per device, since a proposal is stored once by title
+            try:
+                name = (json.loads(f.get("detail") or "{}") or {}).get("name")
+            except (TypeError, ValueError):
+                name = None
+            out.append({"kind": "configuration", "title": f"Create the missing setting for {name or f['entity_id']}",
+                        "detail": f["summary"], "benefit": "Enables one rule"})
     return out
 
 

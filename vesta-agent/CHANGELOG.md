@@ -1,3 +1,10 @@
+## 0.12.76
+
+What you will see:
+- **The monthly report's cards keep their text inside.** A long name (a Home Assistant id has no spaces) ran out of its card; the "Proposal" label no longer stretches with the card.
+- **No more buttons that do nothing.** "Accept / Later / Ignore" on a proposal looked like buttons, but a report page cannot press anything: it now says what to write in the chat ("accept 4", "later 4" or "ignore 4"). The weekly report's "Done / Not found / Need help" boxes became one line too: answered Done in the chat, or closed in the VESTA Kiosk, a task leaves the list.
+- **A missing setting is proposed by the device's name** ("Create the missing setting for Weather station Console Battery"), not by its Home Assistant id.
+
 ## 0.12.75
 
 What you will see:
