@@ -189,12 +189,13 @@ _PAGE = ("import argparse, json\nap = argparse.ArgumentParser()\n"
          "print(json.dumps({'send': [{'to': a.finish, 'text': f'{kwh} kWh this week. (Made without the AI: {a.no_ai})'}]}))\n")
 
 
-def _report_without_ai(agent, monkeypatch, *, fail=False, stale=False):
+def _report_without_ai(agent, monkeypatch, *, fail=False, stale=False, run_job=True):
     from helpers import make_skill
     from vesta_agent.skills import ai_jobs
     make_skill(agent.s.skills_dir, "figures", {"tools": []}, {"week.py": _WEEK})
     make_skill(agent.s.skills_dir, "rep", {"tools": [], "schedule": [{
-        "when": "Mon 08:00", "name": "rep-weekly", "to": "fm", "prompt": "make it",
+        "when": "Mon 08:00", "name": "rep-weekly", "to": "fm", "prompt": "make it", "on_request": True,
+        "button": "Weekly report",
         "without_ai": [{"skill": "figures", "run": "week.py --out week.json"},
                        "page.py --week week.json --finish {to} --no-ai {why}"]}]}, {"page.py": _PAGE})
     with open(agent.s.policy_path) as f:
@@ -208,6 +209,8 @@ def _report_without_ai(agent, monkeypatch, *, fail=False, stale=False):
     if stale:
         open(os.path.join(agent.s.out_dir, "week.json"), "w").write('{"kwh": 999}')    # last week's file
     FakeAI("", problem="credit", cost_usd=0.0).install(monkeypatch)
+    if not run_job:
+        return
     job = next(j for s_, j in ai_jobs(agent.skills.all()) if j["name"] == "rep-weekly")
     asyncio.run(agent.run_model_job(agent.skills.get("rep"), job))
     return [t for c, t, _ in agent.tg.sent if c == FM]
@@ -232,3 +235,38 @@ def test_a_step_that_fails_stops_the_report_and_an_old_file_never_stands_in(agen
     from vesta_agent import status
     (row,) = [r for r in status.costs(agent.state)["runs"] if r.get("without_ai")]
     assert row["without_ai"]["sent"] == 0 and row["without_ai"]["failed"] == "week.py"
+
+
+def test_a_report_asked_for_while_the_ai_is_down_is_a_button_that_needs_no_ai(agent, monkeypatch):
+    # villa, 2026-10-07 12:42: "Generate the weekly report" met "out of credit" — only the AI could have understood
+    # the words and started the job. The answer offers each report that can be made without it; a press makes it.
+    _report_without_ai(agent, monkeypatch, run_job=False)
+    person = agent.policy().person(FM)
+
+    async def go():
+        await agent.converse(FM, person, "generate the weekly report")
+        (chat, text, kb), = [m for m in agent.tg.sent if m[0] == FM]
+        assert text.startswith(api_errors.FOR_PERSON["credit"]) and "without the AI" in text
+        assert kb == {"inline_keyboard": [[{"text": "Weekly report", "callback_data": "w:credit:rep-weekly"}]]}
+        await agent.on_ha_event("telegram_callback", {"id": "cb1", "data": "w:credit:rep-weekly", "chat_id": FM,
+                                                      "user_id": FM, "message": {"message_id": agent.tg.next_id,
+                                                                                 "chat": {"id": FM}}})
+        for _ in range(500):                                         # until the report is there (no fixed sleep)
+            if len([m for m in agent.tg.sent if m[0] == FM]) > 1:
+                break
+            await asyncio.sleep(0.01)
+    asyncio.run(go())
+    assert agent.tg.toasts == [("cb1", "Making the Weekly report without the AI: it will be sent here.")]
+    assert [t for c, t, _ in agent.tg.sent if c == FM][1] == \
+        "287 kWh this week. (Made without the AI: The Anthropic account has run out of credit.)"
+
+
+def test_no_report_button_for_a_person_who_may_not_start_one(agent, monkeypatch):
+    _report_without_ai(agent, monkeypatch, run_job=False)
+    with open(agent.s.policy_path) as f:
+        pol = yaml.safe_load(f)
+    pol.setdefault("agent_tools", {})["start_job"] = False
+    with open(agent.s.policy_path, "w") as f:
+        yaml.safe_dump(pol, f)
+    asyncio.run(agent.converse(FM, agent.policy().person(FM), "generate the weekly report"))
+    assert [kb for c, _, kb in agent.tg.sent if c == FM] == [None]

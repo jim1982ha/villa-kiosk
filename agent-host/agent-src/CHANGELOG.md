@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.67 (7 October 2026)
+
+- converse: on an AI-down problem (api_errors.NO_RETRY), a person with start_job gets one button per on_request job with without_ai that policy sets up (skill.yaml `button`, callback `w:<problem>:<job>`); handle_callback `w:` → start_without_ai (registered presser, not twice per chat, job_started/ended, "could not be made without the AI either" when nothing was sent).
+- telegram.typing returns whether Telegram accepted it; Delivery logs the first acceptance per answer (INFO).
+
 ## 0.6.66 (7 October 2026)
 
 - test_jobs: the typing test waits for the job's run to end (an Event, 10 s) instead of a fixed 0.15 s sleep — CI was slower and 0.12.70 failed there.

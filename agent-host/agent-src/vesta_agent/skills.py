@@ -296,6 +296,8 @@ def _ai_job(path: str, job: dict, where: str) -> dict:
         _check_command(path, str(on_limit), f"{where}.on_limit")
     return {"name": name, "to": to, "on_request": bool(job.get("on_request")), "default": dict(default),
             "on_limit": str(on_limit) if on_limit else None, "description": str(job.get("description") or ""),
+            # the button that makes it without the AI when the AI cannot answer (app: AI_DOWN), its words the skill's
+            "button": str(job.get("button") or name),
             "without_ai": _without_ai(path, job.get("without_ai"), f"{where}.without_ai")}
 
 

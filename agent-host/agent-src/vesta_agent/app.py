@@ -34,7 +34,7 @@ from zoneinfo import ZoneInfo
 
 from . import requests_box, runner, script_run, tool_access
 from .actions import Actions
-from .api_errors import FOR_PERSON, NEEDS_THE_OWNER, for_job, why_job_sentence
+from .api_errors import FOR_PERSON, NEEDS_THE_OWNER, NO_RETRY, for_job, why_job_sentence
 from .delivery import Delivery
 from .config import STARTER_DIR
 from .ha_events import HaEvents
@@ -453,6 +453,15 @@ class Vesta:
                 answer = f"{answer}\n\n{said}" if answer else said
                 await self._safe(self._tell_owner(res.problem, cid))
             keyboard = None
+            if res.problem in NO_RETRY and person is not None and any(n.endswith("__start_job") for n in allowed):
+                # ⚠️ A REPORT ASKED FOR WHILE THE AI IS DOWN (villa, 2026-10-07 12:42: "Generate the weekly report"
+                # met "out of credit", and only the AI could have understood it and started the job). A button needs
+                # no AI to be understood: each report that can be made without it is offered.
+                rows = [[{"text": j["button"], "callback_data": f"w:{res.problem}:{j['name']}"}]
+                        for j in self._without_ai_jobs()]
+                if rows:
+                    answer += "\n\nA report can still be made without the AI, from its figures and charts:"
+                    keyboard = {"inline_keyboard": rows}
             if res.stopped_at_limit and res.session_id:
                 cont = self.state.new_continuation(cid, res.session_id, person.telegram_id if person else None)
                 answer = (answer + "\n\n" if answer else "") + \
@@ -512,6 +521,11 @@ class Vesta:
                                        resume=cont["session_id"], is_continue=True)
         if data.startswith("i:"):
             return await self.buttons.press(q, cid, data, pol.person(presser), toast)
+        if data.startswith("w:"):
+            if pol.person(presser) is None:
+                return await toast("You are not registered with the VESTA Agent.")
+            _, problem, name = (data.split(":", 2) + ["", ""])[:3]
+            return await toast(self.start_without_ai(name, problem, cid))
         await toast("Unknown button.")
 
     async def after_execution(self, ap: dict):
@@ -664,6 +678,37 @@ class Vesta:
         cfg = self.policy().jobs[name]
         return (f"Started {name} now (brain {cfg['profile']}, limit {cfg['limit_usd']:g} USD): the result will be sent "
                 "here when it is ready (a few minutes).")
+
+    def _without_ai_jobs(self) -> list[dict]:
+        """The jobs a person may start from a chat that can be made without the AI (skill.yaml without_ai), set up."""
+        from .skills import ai_jobs
+        jobs = self.policy().jobs
+        return [j for _, j in ai_jobs(self.skills.all()) if j.get("on_request") and j.get("without_ai") and j["name"] in jobs]
+
+    def start_without_ai(self, name: str, problem: str, chat: int) -> str:
+        """A report's button pressed when the AI could not answer: made from its figures, sent here. What the press
+        shows (a toast)."""
+        from .skills import ai_jobs
+        found = [(sk, j) for sk, j in ai_jobs(self.skills.all()) if j["name"] == name]
+        if not found or not any(j["name"] == name for j in self._without_ai_jobs()):
+            return "This report cannot be made without the AI."
+        if (int(chat), name) in self._running_jobs:
+            return "This report is already being made: it will be sent here."
+        sk, job = found[0]
+        self._running_jobs.add((int(chat), name))
+        self.delivery.job_started(chat, name)
+
+        async def made():
+            try:
+                origin = Origin(int(chat), JOB)
+                if not await self.run_without_ai(sk, job, problem if problem in NO_RETRY else "unknown", origin):
+                    await self.delivery.send(chat, f"The {name} report could not be made without the AI either: its "
+                                                   "figures could not be read. Try again later.", origin=origin)
+            finally:
+                self._running_jobs.discard((int(chat), name))
+                await self.delivery.job_ended(chat, name)
+        asyncio.create_task(self._safe(made()))
+        return f"Making the {job['button']} without the AI: it will be sent here."
 
     async def _requested_job(self, skill, job: dict, chat: int) -> None:
         """A job asked for in a chat. If it ends without sending its page, its "being prepared" message

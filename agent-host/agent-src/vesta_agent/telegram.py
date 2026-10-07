@@ -146,10 +146,12 @@ class Telegram:
             log.warning("deleteMessage failed: %s", e)
             return False
 
-    async def typing(self, chat_id: int) -> None:
-        """Telegram's "typing…" under the chat's name, for about 5 s or until the bot's next message."""
+    async def typing(self, chat_id: int) -> bool:
+        """Telegram's "typing…" under the chat's name, for about 5 s or until the bot's next message. True when
+        Telegram accepted it."""
         try:
             await self.api("sendChatAction", chat_id=chat_id, action="typing")
+            return True
         except TelegramError as e:
             # ⚠️ SAID, NOT HIDDEN (owner, 2026-10-07: "I don't see typing…" and the log could not tell why — this was
             # logged at debug only). Once per 10 minutes per reason, so a refusal repeated every 4 s is one line.
@@ -158,6 +160,7 @@ class Telegram:
             if now - self._typing_warned.get(why, -1e9) >= 600:
                 self._typing_warned[why] = now
                 log.warning("Telegram refused \"typing…\" in chat %s: %s", chat_id, why)
+            return False
 
     async def edit(self, chat_id: int, message_id: int, text: str):
         try:

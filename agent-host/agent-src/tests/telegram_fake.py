@@ -60,8 +60,9 @@ class FakeTelegram:
         self.deleted.append((chat_id, message_id))
         return True
 
-    async def typing(self, chat_id):
+    async def typing(self, chat_id) -> bool:
         self.typing_in.append(chat_id)
+        return True
 
     async def edit(self, chat_id, message_id, text):
         self.edits.append((chat_id, message_id, text))

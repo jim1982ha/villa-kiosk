@@ -125,8 +125,14 @@ class Delivery:
                 await task
 
     async def _typing_loop(self, chat_id: int, stop: asyncio.Event) -> None:
+        said = False
         while not stop.is_set():
-            await self.tg.typing(int(chat_id))
+            ok = await self.tg.typing(int(chat_id))
+            if ok and not said:
+                # ⚠️ PROOF IT WAS SHOWN (owner, 2026-10-07: "no typing indication", and the log had no refusal either):
+                # one line per answer when Telegram accepts it, so "not seen" can be told from "not sent"
+                said = True
+                log.info("\"typing…\" accepted by Telegram in chat %s", chat_id)
             try:
                 await asyncio.wait_for(stop.wait(), timeout=TYPING_EVERY_S)
             except asyncio.TimeoutError:
