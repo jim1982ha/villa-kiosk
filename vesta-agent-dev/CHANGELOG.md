@@ -1,3 +1,9 @@
+## 0.12.72
+
+What you will see:
+- **Asking for a report while the AI is unavailable gives you buttons.** At 12:42 "Generate the weekly report" got only "out of credit": understanding your words needs the AI, so nothing could start the report. Now that answer also offers "Daily digest", "Weekly report" and "Monthly report". A tap makes that report without the AI, from its figures and charts, and sends it in the chat. Buttons are offered only to people who may start reports (Rules › The agent's own tools › Start a report).
+- **"typing…" is now proven in the log:** each answer logs a line when Telegram accepts "typing…" (a refusal was already logged). If you still don't see it, the log will tell us whether it was sent.
+
 ## 0.12.71
 
 The same as 0.12.70, which did not publish: one of the agent's own tests depended on how fast the build machine was. Nothing changes for you.
