@@ -1,3 +1,9 @@
+## 2.496.308
+
+### Changed
+- Walking through the villa, a room's ceiling now shows only while you are under it. Step out onto a terrace or into the garden and the ceilings disappear, so no roof floats above you outdoors. The overview never shows them, as before.
+- To see a ceiling in the upstairs rooms, the 3D model needs one: the next export of the villa model (Blender pipeline 2.39.0) keeps the top floor's ceiling, which earlier exports removed. Until you upload that new model, the sky stays visible above you upstairs.
+
 ## 2.496.307
 
 ### Changed
