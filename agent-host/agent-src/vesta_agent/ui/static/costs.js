@@ -1,5 +1,5 @@
 // VESTA Agent page — the Costs tab.
-import { $view, alertButton, api, infoButton, card, dropdown, figures, fill, h, page, paged, svg, titleWithInfo } from "./core.js";
+import { $view, alertButton, api, infoButton, card, dropdown, figures, fill, h, page, paged, subTabs, svg, titleWithInfo } from "./core.js";
 
 // ---------------------------------------------------------------- costs
 export const usd = (v) => "US$ " + (v || 0).toFixed((v || 0) > 0 && v < 0.01 ? 4 : 2);
@@ -74,15 +74,36 @@ export async function costs(days = 7) {
     h("section", { class: "card" },
       titleWithInfo("What the AI cost", "As the Anthropic API reported it for each run: a chat reply, or a run of an AI job. Tokens in count what the agent re-read from its cache too. Everything on this tab follows the period chosen here.", "h2", period),
       h("div", { class: "divided" }, kpis), h("div", { class: "divided" }, h("h2", {}, "Per day"), chart)),
-    card(`By work · last ${days} days`, "Chat replies, and each AI job.", groupTable(c.by_work, "Work")),
-    card(`By model · last ${days} days`, "Which model did the work.", groupTable(c.by_model, "Model")),
-    card(`Every run · last ${days} days`, `${c.runs_count} runs, newest first. Press a run to see what was asked and which tools it used (recorded from agent 0.6.42 on).`,
-      paged([{ v: "When", half: true }, { v: "What", half: true }, "Brain · model", "Tools used",
-             { v: "Tokens in / out", cls: "num", half: true }, { v: "Cost", cls: "num", half: true }, ""], runRows)),
-    card(`Tools in the last ${days} days`, "Each tool the AI called, in how many runs and how many times. A tool never used is a candidate to switch off (Rules › What the AI can use).",
-      c.tools && c.tools.length ? paged(["Tool", { v: "Runs", cls: "num" }, { v: "Calls", cls: "num" }],
-        c.tools.map((t) => [h("code", {}, t.tool), { v: t.runs, cls: "num" }, { v: t.calls, cls: "num" }]))
-        : h("p", { class: "muted" }, "No tool recorded in this period yet.")));
+    // ⚠️ TWO CARDS OF TWO TABS (owner, 2026-10-08): "By work" and "By model" are one question asked two ways, and so
+    // are "Every run" and the tools those runs used — each pair is one card, its tab kept when the period changes
+    tabbedCard(`Where it went · last ${days} days`, "spend", [
+      ["work", "By work", "Chat replies, and each AI job.", () => groupTable(c.by_work, "Work")],
+      ["model", "By model", "Which model did the work.", () => groupTable(c.by_model, "Model")]]),
+    tabbedCard(`Runs · last ${days} days`, "runs", [
+      ["runs", "Every run", `${c.runs_count} runs, newest first. Press a run to see what was asked and which tools it used (recorded from agent 0.6.42 on).`,
+        () => paged([{ v: "When", half: true }, { v: "What", half: true }, "Brain · model", "Tools used",
+                     { v: "Tokens in / out", cls: "num", half: true }, { v: "Cost", cls: "num", half: true }, ""], runRows)],
+      ["tools", "Tools used", "Each tool the AI called, in how many runs and how many times. A tool never used is a candidate to switch off (Rules › What the AI can use).",
+        () => (c.tools && c.tools.length ? paged(["Tool", { v: "Runs", cls: "num" }, { v: "Calls", cls: "num" }],
+          c.tools.map((t) => [h("code", {}, t.tool), { v: t.runs, cls: "num" }, { v: t.calls, cls: "num" }]))
+          : h("p", { class: "muted" }, "No tool recorded in this period yet."))]]));
+}
+
+// Which tab each card shows: kept for the page's life, so changing the period keeps the tab you were on.
+const costTabs = { spend: "work", runs: "runs" };
+
+// A card of tabs (subTabs, each tab's own (i)): [key, label, what it is about, draw()]. Only the open tab is drawn.
+export function tabbedCard(title, id, tabs) {
+  const body = h("div");
+  const bar = h("div");
+  const show = (k) => {
+    costTabs[id] = k;
+    const tab = tabs.find((t) => t[0] === k) || tabs[0];
+    fill(bar, subTabs(tabs.map(([key, label, info]) => [key, label, info]), tab[0], show));
+    fill(body, tab[3]());
+  };
+  show(costTabs[id]);
+  return h("section", { class: "card" }, h("h2", {}, title), bar, body);
 }
 
 // A job its code steps made when the AI could not run (owner, 2026-10-07): the figures and charts were sent, said

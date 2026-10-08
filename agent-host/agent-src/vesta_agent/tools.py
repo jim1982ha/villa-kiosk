@@ -271,7 +271,9 @@ class Toolbox:
         return handler
 
     def status_report(self, hours: int = 24, now: datetime | None = None) -> dict:
-        return status.report(self.state, self.s.store_path, hours, now)
+        from .scheduler import job_label
+        return status.report(self.state, self.s.store_path, hours, now,
+                             label=lambda k: job_label(k, self.skills.all()))
 
     def _status(self):
         schema = {"type": "object", "properties": {

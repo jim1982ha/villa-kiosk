@@ -67,6 +67,35 @@ def describe(spec: str) -> tuple[str, float]:
     return f"every {DAYS.get(parts[0], parts[0])} at {parts[1]}", 4.35
 
 
+
+ENGINE_JOBS = {"engine:pack": "knowledge pack", "engine:housekeeping": "housekeeping"}
+
+
+def job_key(skill: str, index: int, when: str) -> str:
+    """A scheduled entry's slot key — what the state records (claim_job_slot) and the Overview lists. ⚠️ Never change
+    it: a new key is a slot never claimed, and today's job would run again."""
+    return f"{skill}:{index}:{when}"
+
+
+def job_label(key: str, skills: dict) -> str:
+    """What a person reads for a slot key (owner, 2026-10-08: "reports:0:07:00" repeated the time the Ran at column
+    already shows): an AI job's own name (fm-daily), a code job's skill and script (preventive-maintenance ›
+    nightly.py), the engine's jobs in words — never the entry's index or time."""
+    if key in ENGINE_JOBS:
+        return ENGINE_JOBS[key]
+    skill, _, rest = key.partition(":")
+    index, _, _when = rest.partition(":")
+    sk = skills.get(skill)
+    try:
+        job = sk.schedule[int(index)] if sk is not None else None
+    except (ValueError, IndexError):
+        job = None
+    if job and job.get("name"):
+        return job["name"]
+    if job and job.get("run"):
+        return f"{skill} › {str(job['run']).split()[0]}"
+    return skill
+
 class Scheduler:
     def __init__(self, settings, skills, state, run_code, run_model, rebuild_pack, housekeeping=None):
         self.s = settings
@@ -129,7 +158,7 @@ class Scheduler:
                 # ⚠️ ONE KEY FOR CLAIMING THE SLOT AND FOR "STILL RUNNING" (architecture review, 2026-10-07): the slot
                 # was claimed per entry (skill:i:when) and started per time (skill:when) — two jobs of a skill at the
                 # same time, and the second, claimed, was refused as "still running": lost for the day
-                key = f"{sk.name}:{i}:{job['when']}"
+                key = job_key(sk.name, i, job["when"])
                 if not slot or not self._claim(key, slot):
                     continue
                 name = f"{sk.name}:{job['when']}"

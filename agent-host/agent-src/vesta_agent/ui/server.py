@@ -200,7 +200,10 @@ class UI:
         report = None
         if os.path.exists(self.s.state_path):
             try:
-                report = status.report(State(self.s.state_path), self.s.store_path, 24)
+                from ..scheduler import job_label
+                skills = self.skills.all()
+                report = status.report(State(self.s.state_path), self.s.store_path, 24,
+                                       label=lambda k: job_label(k, skills))
             except Exception as e:  # noqa: BLE001 — the overview shows what it can
                 log.warning("UI: the agent's records could not be read (%s)", type(e).__name__)
         return web.json_response({"version": __version__, "app_version": os.environ.get("VESTA_APP_VERSION", ""),

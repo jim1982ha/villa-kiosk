@@ -6,6 +6,9 @@
 @font-face { font-family: "Public Sans"; font-style: normal; font-weight: 400 700; font-display: swap; src: url("fonts/public-sans-var.woff2") format("woff2"); }
 
 :root {
+  /* the page's width on a wide screen: 1650 px, half again the 1100 it was (owner, 2026-10-08: "less unused space
+     on the right and on the left"). One value, for the header, the tabs, the page and its error line. */
+  --page-width: 1650px;
   --bg-base: #F7F4EE;
   --bg-card: rgba(255, 253, 248, 0.92);
   --bg-input: rgba(23, 25, 26, 0.05);
@@ -84,18 +87,18 @@ body { min-height: 100vh; padding-bottom: 96px; }
 /* ---- header and tabs */
 /* One line: the title (with its short version) on the left, the theme toggle on the right
    (owner, 2026-10-03) — it fits a 320px phone; wider content would wrap the toggle, still right-aligned. */
-.top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 20px 20px 8px; max-width: 1100px; margin: 0 auto; }
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 20px 20px 8px; max-width: var(--page-width); margin: 0 auto; }
 .brand { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
 .mark { font-family: var(--font-display); font-weight: 500; font-size: var(--text-xl); letter-spacing: var(--tracking-brand); }
 .eyebrow { font-family: var(--font-display); text-transform: uppercase; letter-spacing: var(--tracking-eyebrow); font-size: var(--text-xs); color: var(--accent); }
 .ver { color: var(--text-dim); font-size: var(--text-xs); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.tabs { display: flex; gap: 6px; overflow-x: auto; padding: 8px 20px 0; max-width: 1100px; margin: 0 auto; border-bottom: 1px solid var(--hairline); }
+.tabs { display: flex; gap: 6px; overflow-x: auto; padding: 8px 20px 0; max-width: var(--page-width); margin: 0 auto; border-bottom: 1px solid var(--hairline); }
 .tabs button {
   background: none; border: 0; padding: 10px 14px; cursor: pointer; color: var(--text-secondary);
   border-bottom: 2px solid transparent; font-weight: 500; min-height: var(--touch-min);
 }
 .tabs button.on { color: var(--text-primary); border-bottom-color: var(--accent); }
-main { max-width: 1100px; margin: 0 auto; padding: 16px 20px; }
+main { max-width: var(--page-width); margin: 0 auto; padding: 16px 20px; }
 
 /* ---- cards */
 .card { background: var(--bg-card); border: 1px solid var(--hairline); border-radius: var(--panel-radius); padding: 20px; margin: 0 0 16px; box-shadow: 0 1px 2px var(--shadow); }
@@ -187,7 +190,7 @@ ul.plain li:last-child { border-bottom: 0; }
 .banner { display: flex; gap: 14px; align-items: center; justify-content: space-between; flex-wrap: wrap; background: rgba(184, 128, 31, 0.10);
   border: 1px solid var(--status-warning); border-radius: var(--panel-radius); padding: 14px 18px; margin: 0 0 16px; }
 
-.pageerror { max-width: 1100px; margin: 12px auto 0; padding: 10px 16px; border-radius: var(--radius); background: rgba(178, 66, 50, 0.12); color: var(--status-danger); font-size: var(--text-sm); }
+.pageerror { max-width: var(--page-width); margin: 12px auto 0; padding: 10px 16px; border-radius: var(--radius); background: rgba(178, 66, 50, 0.12); color: var(--status-danger); font-size: var(--text-sm); }
 
 /* layout helpers: the page's CSP refuses style attributes, so spacing lives here */
 .spaced { margin-top: 18px; }

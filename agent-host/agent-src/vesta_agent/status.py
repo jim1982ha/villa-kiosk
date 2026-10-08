@@ -20,7 +20,7 @@ STATUS_FIELDS = ("rule", "phase", "handled", "incident", "by", "reply", "tool", 
                  "skill", "script", "reason", "error", "code", "entities")
 
 
-def report(state, store_path: str, hours: int = 24, now: datetime | None = None) -> dict:
+def report(state, store_path: str, hours: int = 24, now: datetime | None = None, label=None) -> dict:
     """What the agent itself did: its scheduled jobs, the alerts it followed, the buttons pressed, the
     actions asked and done, the failures. Read from its own records only; it changes nothing."""
     now = now or datetime.now(timezone.utc)
@@ -29,7 +29,8 @@ def report(state, store_path: str, hours: int = 24, now: datetime | None = None)
     for job, slot in state.jobs_run():
         try:
             if datetime.fromisoformat(slot) >= since:
-                jobs.append({"job": job, "ran_at": slot})
+                # `label`: what a person reads for the slot key (scheduler.job_label) — the time is `ran_at`'s
+                jobs.append({"job": job, "label": label(job) if label else job, "ran_at": slot})
         except ValueError:
             continue
     counts: dict[str, int] = {}

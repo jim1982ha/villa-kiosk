@@ -26,7 +26,7 @@ export async function overview() {
         ["actions done", count("executed") + count("direct")], ["replies written", count("run")],
         ["AI cost (USD)", r.ai_cost_usd.toFixed(2)], ["failures", count("failed") + count("script_failed") + count("code_script_failed") + count("send_failed")]]),
       r.scheduled_jobs.length ? h("div", { class: "divided" }, h("h2", {}, "Scheduled jobs run"),
-        paged(["Job", "Ran at"], [...r.scheduled_jobs].reverse().map((j) => [j.job, new Date(j.ran_at).toLocaleString()]))) : null));
+        paged(["Job", "Ran at"], [...r.scheduled_jobs].reverse().map((j) => [j.label || j.job, new Date(j.ran_at).toLocaleString()]))) : null));
   } else {
     kids.push(card("The last 24 hours", "The agent has not recorded anything yet."));
   }

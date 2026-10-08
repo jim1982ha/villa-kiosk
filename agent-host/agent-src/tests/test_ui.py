@@ -595,3 +595,25 @@ def test_a_skills_command_cards_show_no_options_and_their_explanation_is_an_i():
     about = js[js.index("// What the AI may run: a card per command"):js.index("// Tools it needs:")]
     assert "sc.flags" not in about and 'class: "flag"' not in about
     assert 'withInfo("What the AI may run",' in js and 'h("p", { class: "muted small" }, "Switch a command off' not in js
+
+
+def test_a_scheduled_job_is_named_not_its_slot_key():
+    # owner, 2026-10-08: "reports:0:07:00" repeated the time the Ran at column shows
+    import types
+    from vesta_agent.scheduler import job_key, job_label
+    skills = {"reports": types.SimpleNamespace(schedule=[{"when": "07:00", "name": "fm-daily", "prompt": "x"}]),
+              "preventive-maintenance": types.SimpleNamespace(schedule=[{"when": "02:00", "run": "nightly.py --x"}])}
+    assert job_label(job_key("reports", 0, "07:00"), skills) == "fm-daily"
+    assert job_label(job_key("preventive-maintenance", 0, "02:00"), skills) == "preventive-maintenance › nightly.py"
+    assert job_label("engine:pack", skills) == "knowledge pack"
+    assert job_label("gone:3:Mon 08:00", skills) == "gone" and job_label("reports:9:07:00", skills) == "reports"
+    assert job_key("reports", 0, "Mon 08:00") == "reports:0:Mon 08:00"          # the stored key never changes
+    assert "j.label || j.job" in page_js()
+
+
+def test_the_costs_tab_is_two_cards_of_two_tabs_and_the_page_one_width():
+    # owner, 2026-10-08: By work + By model in one card, Every run + Tools in another; the page half again as wide
+    js = body_of(page_js(), "costs")
+    assert js.count("tabbedCard(") == 2 and '"By work"' in js and '"By model"' in js and '"Every run"' in js and '"Tools used"' in js
+    css = open(os.path.join(os.path.dirname(__file__), "..", "vesta_agent", "ui", "static", "app.css"), encoding="utf-8").read()
+    assert "--page-width: 1650px" in css and "1100px" not in css and css.count("max-width: var(--page-width)") == 4

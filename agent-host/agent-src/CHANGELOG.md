@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.78 (8 October 2026)
+
+- app.css --page-width 1650px (was 1100, four places). costs.js tabbedCard (subTabs, tab kept per page life): By work/By model, Every run/Tools used.
+- scheduler.job_key (the stored slot key, unchanged) and job_label (AI job name, skill › script, engine words); status.report(label=) → scheduled_jobs[].label; overview.js and the agent_status tool show it. Tests.
+
 ## 0.6.77 (8 October 2026)
 
 - skills.js About › What the AI may run: no flag chips on a whole-script card; the explanation is the title's withInfo (i). test_ui pin.
