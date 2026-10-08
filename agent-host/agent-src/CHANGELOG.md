@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.86 (8 October 2026)
+
+- DRY pass on the page, as the owner asked. core.table / cell / tableRow build every table: paged, editTable, Rules' AI and roles tables. core.tabbed builds every tab section: Costs' tabbedCard, setupCard, toolsCard and aboutSkill. Its open tab is kept in page.tabs (it replaces costTabs, setupTab, page.toolsTab and aboutTab).
+- A skill's "When" list is now paged(["When", "What runs"]); `.kv` is removed.
+- Dead CSS removed: .spaced, .tool-row/.tool-text, .cmd-row/.cmd-text, .try-row/.try-go/.try-preview, .files .special.
+- Phone fixes: the roles table's column widths, and the AI table's cells can now shrink. test_ui: a test that every table and tab section comes from one builder (checked to fail when one is built by hand).
+
 ## 0.6.85 (8 October 2026)
 
 - skills.js tryPanel: no code subtitle, no "Options" heading; the popup title is "Offline Test · <script> <command>". test_ui pin.

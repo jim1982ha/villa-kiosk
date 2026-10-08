@@ -388,7 +388,8 @@ def test_a_data_table_becomes_labelled_cards_on_a_phone():
     from vesta_agent.ui.server import STATIC
     js = page_js()
     css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
-    assert '"data-label": td ? label[i] : null' in js
+    assert 'cell(c, "td", { cls: half[i] ? "ph-half" : null, label: label[i] })' in body_of(js, "paged")
+    assert '"data-label": label' in body_of(js, "cell")
     assert "table.data td::before { content: attr(data-label);" in css and "table.data thead { display: none; }" in css
 
 
@@ -533,7 +534,7 @@ def test_the_tools_are_cards_four_a_row_and_the_ai_notes_are_behind_an_info():
     assert 'withInfo("Limit (US$)", limitNote)' in js and "At their limits" not in js.split("const ai =")[1][:400]
     assert "Everything switched on, by role" not in js
     # the New conversation menu lines up with the brain and the limit: its name under it, not a label above it
-    assert 'h("td", { class: "with-caption" }, sel(SCHEMA.resets' in js
+    assert '{ cls: "with-caption", v: [sel(SCHEMA.resets' in js
 
 
 def test_copying_a_setup_uses_only_the_pages_public_methods_and_each_exists():
@@ -594,7 +595,7 @@ def test_a_skills_command_cards_show_no_options_and_their_explanation_is_an_i():
     js = page_js()
     about = body_of(js, "aboutSkill")
     assert "sc.flags" not in about and 'class: "flag"' not in about
-    assert '["commands", ABOUT_TEXT.commands, ABOUT_TEXT.switches]' in about and 'h("p", { class: "muted small" }, "Switch a command off' not in js
+    assert '["commands", ABOUT_TEXT.commands, ABOUT_TEXT.switches, runs]' in about and 'h("p", { class: "muted small" }, "Switch a command off' not in js
 
 
 def test_a_scheduled_job_is_named_not_its_slot_key():
@@ -634,8 +635,8 @@ def test_a_skills_about_is_two_tabs_then_its_commands_each_with_its_offline_test
     assert '"When is the Skill called"' in js and '"Tools used by the Skill"' in js and '"Commands run by the Skill"' in js
     # owner, 2026-10-08 (later): when it is called on top, alone; below, one section of two tabs, commands then tools
     assert 'h("section", { class: "about-sec" }, h("h3", {}, ABOUT_TEXT.when), acts())' in about
-    assert 'subTabs([hasRuns && ["commands", ABOUT_TEXT.commands, ABOUT_TEXT.switches], ["tools", ABOUT_TEXT.tools]]' in about
-    assert about.index("ABOUT_TEXT.when), acts()") < about.index("tabBar, tabBody")
+    assert 'tabbed("about", [hasRuns && ["commands", ABOUT_TEXT.commands, ABOUT_TEXT.switches, runs], ["tools", ABOUT_TEXT.tools, null, tools]])' in about
+    assert about.index("ABOUT_TEXT.when), acts()") < about.index("tabs.bar, tabs.body")
     assert "tileCard(n.label" in about and "<details" not in about and '"fold"' not in about     # tools as cards, no fold
     assert about.count("offlineTestPill(") == 2                                             # a command's, a script's
     assert "What to run" not in test and "dropdown(runnable" not in test and "export function tryPanel(name, d, script, command = null)" in js
@@ -670,3 +671,29 @@ def test_the_offline_test_popup_has_no_subtitle_nor_options_heading_and_its_titl
     test, pill = body_of(js, "tryPanel"), body_of(js, "offlineTestPill")
     assert '"Options"' not in test and 'h("code", {}, command ?' not in test
     assert "popup(`Offline Test · ${command ? `${script.script} ${command}` : script.script}`" in pill
+
+
+def test_every_table_and_every_tabbed_section_comes_from_one_builder():
+    # owner, 2026-10-08: "all the tables formatted the same way, from the same centralised code" — a skill's "When is
+    # it called" was a grid of its own, its second column elsewhere than every table's; four tab sections were each
+    # drawn by hand. core.table builds every <table> (paged, editTable, the AI's work, the tools by role) and
+    # core.tabbed every tab bar over a body.
+    import re
+    from helpers import page_js as _js
+    from vesta_agent.ui.server import STATIC
+    files = {f: open(os.path.join(STATIC, f), encoding="utf-8").read() for f in os.listdir(STATIC) if f.endswith(".js")}
+    for f, src in files.items():
+        hand = re.findall(r'h\("(table|thead|tbody|th|td)"', src)
+        # a <tbody> its caller redraws is allowed: table() takes it as its body
+        if f == "core.js":
+            assert set(hand) <= {"table", "thead", "tbody"} and src.count('h("table"') == 1, hand   # core.table
+        else:
+            assert set(hand) <= {"tbody"}, (f, hand)
+        assert "subTabs(" not in src or f in ("core.js", "skills.js"), f          # skills.js: About / Files / Compare
+    assert files["skills.js"].count("subTabs(") == 1
+    about = body_of(_js(), "aboutSkill")
+    assert 'paged(["When", "What runs"]' in about and '"kv"' not in _js()
+    for f, call in (("costs.js", 'tabbed(id, tabs)'), ("overview.js", 'tabbed("setup"'), ("rules.js", 'tabbed("tools"'), ("skills.js", 'tabbed("about"')):
+        assert call in files[f], f
+    assert 'table(head, body, { cls: "data" })' in body_of(_js(), "paged")
+    assert "table([...columns.map((c) => c.title)" in body_of(_js(), "editTable")

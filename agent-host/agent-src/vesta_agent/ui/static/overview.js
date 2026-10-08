@@ -1,5 +1,5 @@
 // VESTA Agent page — the Overview tab: the agent's state, the changes made on these pages, copying the setup.
-import { api, ask, card, figures, fill, go, h, jobsBanner, paged, plural, problemsBox, reasons, subTabs, tell, toast, $view } from "./core.js";
+import { api, ask, card, figures, fill, go, h, jobsBanner, paged, plural, problemsBox, reasons, tabbed, tell, toast, $view } from "./core.js";
 
 // ---------------------------------------------------------------- overview
 export async function overview() {
@@ -86,16 +86,9 @@ export function exportCard() {
 }
 
 // Overview › Copy the setup: Download and Import, two tabs of one card (owner, 2026-10-06: a cleaner overview)
-export let setupTab = "out";
 export function setupCard() {
-  const body = h("div");
-  const tabs = h("div");
-  const draw = () => {
-    fill(tabs, subTabs([["out", "Download this villa's setup"], ["in", "Import a setup"]], setupTab, (k) => { setupTab = k; draw(); }));
-    fill(body, setupTab === "out" ? exportCard() : importCard());
-  };
-  draw();
-  return card("Copy the setup to another villa", "The skills and the shareable part of the rules, in one file, and that file read on another villa. People, chats, devices, keys and records never leave a villa.", tabs, body);
+  const t = tabbed("setup", [["out", "Download this villa's setup", null, exportCard], ["in", "Import a setup", null, importCard]]);
+  return card("Copy the setup to another villa", "The skills and the shareable part of the rules, in one file, and that file read on another villa. People, chats, devices, keys and records never leave a villa.", t.bar, t.body);
 }
 
 export function importCard() {

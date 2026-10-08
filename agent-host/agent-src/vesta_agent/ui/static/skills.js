@@ -1,5 +1,5 @@
 // VESTA Agent page — the Skills tab.
-import { api, ask, dropdown, field, fill, go, guard, h, markDirty, page, plural, popup, problemsBox, reasons, saveWith, setBar, showBar, subTabs, tell, tileCard, titleWithInfo, toast, toggleCard, $view, withInfo } from "./core.js";
+import { api, ask, dropdown, field, fill, go, guard, h, markDirty, page, paged, plural, popup, problemsBox, reasons, saveWith, setBar, showBar, subTabs, tabbed, tell, tileCard, titleWithInfo, toast, toggleCard, $view, withInfo } from "./core.js";
 
 // ---------------------------------------------------------------- skills
 // A skill's state against this release: it follows the releases (never edited here), it was edited here (updates
@@ -231,7 +231,7 @@ export async function openSkill(name, pane, info, path = ABOUT) {
       ...fixes.map((b) => h("button", { class: "btn primary", onclick: async () => {
         try { await switchTool(b); toast(`${b.label} switched on.`); skills(name); } catch (err) { tell("Not changed", reasons(err)); }
       } }, `Switch ${b.label} on`)),
-      h("button", { class: "btn ghost", onclick: async () => { if (await guard()) { page.jumpTo = "tools"; page.toolsTab = "ha"; go("rules"); } } }, "Open Rules › What the AI can use"))) : null;
+      h("button", { class: "btn ghost", onclick: async () => { if (await guard()) { page.jumpTo = "tools"; page.tabs.tools = "ha"; go("rules"); } } }, "Open Rules › What the AI can use"))) : null;
   const notLoaded = info && !info.ok && !(d.blocked && d.blocked.length) && !d.off ? problemsBox([info.problem], "The agent does not use this skill:") : null;
   const releaseBanner = rel.state === "edited" && !rel.kept ? h("div", { class: "banner" },
     h("div", {}, h("b", {}, "This version of the agent has another version of this skill."),
@@ -333,19 +333,17 @@ export const ABOUT_TEXT = {
   when: "When is the Skill called", tools: "Tools used by the Skill", commands: "Commands run by the Skill",
   switches: "Switch a command off and the AI cannot run it here. Saved in the skill's villa.skill.yaml: kept by updates, copied with the skill.",
 };
-let aboutTab = "commands";             // kept while the page is open: another skill opens on the same tab
 
 export function aboutSkill(name, d) {
   if (!d.acts) return h("p", { class: "muted" }, "The agent cannot read this skill's skill.yaml: open Files to fix it.");
-  const row = (left, right, extra) => h("div", { class: "kv" }, h("div", { class: "kv-k" }, left), h("div", { class: "kv-v" }, right), extra || null);
-  // When is the Skill called: the schedule first, then events, then the chats
-  const acts = () => [...d.acts.slice(1), d.acts[0]].map((a) => {          // the schedule first, the chats last
+  // When is the Skill called: the schedule first, then events, then the chats — a table like every other (core.paged)
+  const acts = () => paged(["When", "What runs"], [...d.acts.slice(1), d.acts[0]].map((a) => {    // the schedule first, the chats last
     const [when, job] = a.when.split(" — ");
     const kind = a.how === "AI job" ? "AI job" : a.how ? "code, no AI" : null;
-    return row(when.replace(/^every chat message, when the AI reads it$/, "in a chat"),
+    return [when.replace(/^every chat message, when the AI reads it$/, "in a chat"),
       [job ? h("b", {}, job) : a.how && a.how !== "AI job" ? h("code", {}, a.how.split(" ")[0]) : h("span", { class: "muted" }, "when a person asks about it"),
-       kind ? h("span", { class: "chip gray tiny" }, kind) : null]);
-  });
+       kind ? h("span", { class: "chip gray tiny" }, kind) : null]];
+  }));
   // Tools used by the Skill: a one-line verdict and its (i), then every tool as a card — core.tileCard, the commands'
   // own card without their switch (a tool is switched on or off in Rules, for every skill at once)
   const tools = () => {
@@ -375,17 +373,9 @@ export function aboutSkill(name, d) {
           action: !sc.whole_off ? offlineTestPill(name, d, sc, null) : null })])));
   // a skill without scripts has no Commands tab
   const hasRuns = !!(d.scripts && d.scripts.length);
-  const tabBody = h("div");
-  const tabBar = h("div");
-  const showTab = (k) => {
-    if (k === "commands" && !hasRuns) k = "tools";
-    aboutTab = k;
-    // what the switches do, behind the Commands tab's (i), as every other explanation on the page
-    fill(tabBar, subTabs([hasRuns && ["commands", ABOUT_TEXT.commands, ABOUT_TEXT.switches], ["tools", ABOUT_TEXT.tools]], k, showTab));
-    fill(tabBody, k === "tools" ? tools() : runs());
-  };
-  showTab(aboutTab);
+  // what the switches do, behind the Commands tab's (i), as every other explanation on the page
+  const tabs = tabbed("about", [hasRuns && ["commands", ABOUT_TEXT.commands, ABOUT_TEXT.switches, runs], ["tools", ABOUT_TEXT.tools, null, tools]]);
   return h("div", { class: "about" },
     h("section", { class: "about-sec" }, h("h3", {}, ABOUT_TEXT.when), acts()),
-    h("section", { class: "about-sec" }, tabBar, tabBody));
+    h("section", { class: "about-sec" }, tabs.bar, tabs.body));
 }

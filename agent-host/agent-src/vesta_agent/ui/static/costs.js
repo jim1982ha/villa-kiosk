@@ -1,5 +1,5 @@
 // VESTA Agent page — the Costs tab.
-import { $view, alertButton, api, infoButton, card, dropdown, figures, fill, h, page, paged, subTabs, svg, titleWithInfo } from "./core.js";
+import { $view, alertButton, api, infoButton, card, dropdown, figures, fill, h, page, paged, svg, tabbed, titleWithInfo } from "./core.js";
 
 // ---------------------------------------------------------------- costs
 export const usd = (v) => "US$ " + (v || 0).toFixed((v || 0) > 0 && v < 0.01 ? 4 : 2);
@@ -92,21 +92,11 @@ export async function costs(days = 7) {
           : h("p", { class: "muted" }, "No tool recorded in this period yet."))]]));
 }
 
-// Which tab each card shows: kept for the page's life, so changing the period keeps the tab you were on.
-const costTabs = { spend: "work", runs: "runs" };
 
 // A card of tabs (subTabs, each tab's own (i)): [key, label, what it is about, draw()]. Only the open tab is drawn.
 export function tabbedCard(title, id, tabs) {
-  const body = h("div");
-  const bar = h("div");
-  const show = (k) => {
-    costTabs[id] = k;
-    const tab = tabs.find((t) => t[0] === k) || tabs[0];
-    fill(bar, subTabs(tabs.map(([key, label, info]) => [key, label, info]), tab[0], show));
-    fill(body, tab[3]());
-  };
-  show(costTabs[id]);
-  return h("section", { class: "card" }, h("h2", {}, title), bar, body);
+  const t = tabbed(id, tabs);          // its tab kept in page.tabs, so changing the period keeps the tab you were on
+  return card(title, null, t.bar, t.body);
 }
 
 // A job its code steps made when the AI could not run (owner, 2026-10-07): the figures and charts were sent, said

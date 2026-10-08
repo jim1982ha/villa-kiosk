@@ -1,5 +1,5 @@
 // VESTA Agent page — the Rules tab (policy.yaml): the forms, the file, and What the AI can use.
-import { api, card, dropdown, editTable, field, fill, floating, h, infoButton, infoTip, jobsBanner, jump, markDirty, page, pagedBlock, plural, problemsBox, reasons, saveWith, setBar, showBar, subTabs, tell, titleWithInfo, toast, toggleCard, $view, withInfo } from "./core.js";
+import { api, card, dropdown, editTable, field, fill, floating, h, infoButton, jobsBanner, jump, markDirty, page, pagedBlock, plural, problemsBox, reasons, saveWith, setBar, table, tableRow, tabbed, tell, titleWithInfo, toast, toggleCard, $view, withInfo } from "./core.js";
 
 // ---------------------------------------------------------------- rules (policy.yaml)
 // the rules, the lists and their domains, the siren's domains: policy.form_schema(), served with the file —
@@ -72,43 +72,43 @@ export function rulesForms(doc, jobs = [], tools = null) {
       + `the scheduled runs cost at most about US$ ${n.toFixed(2)} a month. Chat replies, and reports asked for in a chat, come on top: `
       + "see the Costs tab for what was really spent.";
   };
+  // a line of the table (core.table): its cells, each a node, nodes, or {v, cls, colspan}
   const drawAi = () => aiBody.replaceChildren(
-    h("tr", {},
-      h("td", {}, h("b", {}, "Chat answers"), h("div", { class: "muted" }, "replies in the chats; a reply at its limit offers Continue")),
-      h("td", {}, sel(page.PROFILES, f.settings.profile, (v) => (f.settings.profile = v), "Brain")),
-      h("td", {}, limitInput(f.settings.reply_limit_usd, (v) => (f.settings.reply_limit_usd = v), W("settings.reply_limit_usd"), "for each reply")),
+    tableRow([
+      [h("b", {}, "Chat answers"), h("div", { class: "muted" }, "replies in the chats; a reply at its limit offers Continue")],
+      sel(page.PROFILES, f.settings.profile, (v) => (f.settings.profile = v), "Brain"),
+      limitInput(f.settings.reply_limit_usd, (v) => (f.settings.reply_limit_usd = v), W("settings.reply_limit_usd"), "for each reply"),
       // the chats' own setting, on the chats' line (owner, 2026-10-06): their tools are "everything switched on, by
       // role" — said in the (i) of "Tools it gets"
       // the menu on the line of the brain and the limit, its name under it like theirs ("for each reply")
-      h("td", { class: "with-caption" }, sel(SCHEMA.resets, f.settings.conversation_reset, (v) => (f.settings.conversation_reset = v), W("settings.conversation_reset")),
-        h("div", { class: "muted" }, W("settings.conversation_reset"))),
-      h("td", { class: "x" })),
+      { cls: "with-caption", v: [sel(SCHEMA.resets, f.settings.conversation_reset, (v) => (f.settings.conversation_reset = v), W("settings.conversation_reset")),
+        h("div", { class: "muted" }, W("settings.conversation_reset"))] },
+      { cls: "x", v: null }]),
     ...jobs.map((j) => {
       const cur = f.settings.jobs[j.name];
-      const what = h("td", {}, h("b", {}, j.name),
-        h("div", { class: "muted" }, `${j.skill} · ${j.when_words}${j.on_request ? ", or when asked in a chat" : ""}`));
+      const what = [h("b", {}, j.name),
+        h("div", { class: "muted" }, `${j.skill} · ${j.when_words}${j.on_request ? ", or when asked in a chat" : ""}`)];
       // 1D: a report gets only the tools its skill lists (skill.yaml `tools`), among those switched on
       // one line ("12 tools from reports"), the list unfolded on demand (owner, 2026-10-06: the chips were a wall)
-      const got = h("td", { class: "tools-got" }, j.tools === null || j.tools === undefined
+      const got = { cls: "tools-got", v: j.tools === null || j.tools === undefined
         ? h("span", { class: "muted" }, "Everything switched on")
         : !j.tools.length ? h("span", { class: "muted" }, "None of its own")
         : h("details", { class: "fold" }, h("summary", {}, `${plural(j.tools.length, "tool", "tools")} from ${j.skill}`),
-            h("ul", { class: "tool-list" }, j.tools.map((t) => h("li", {}, t)))));
+            h("ul", { class: "tool-list" }, j.tools.map((t) => h("li", {}, t)))) };
       if (!cur) {
-        return h("tr", {}, what, h("td", { colspan: 2, class: "muted" }, "Not set: this job does not run."), got,
-          h("td", { class: "x" }, h("button", { class: "btn icon ghost", title: "Set this job", onclick: () => { f.settings.jobs[j.name] = { ...j.default }; drawAi(); markDirty(); } }, "+")));
+        return tableRow([what, { colspan: 2, cls: "muted", v: "Not set: this job does not run." }, got,
+          { cls: "x", v: h("button", { class: "btn icon ghost", title: "Set this job", onclick: () => { f.settings.jobs[j.name] = { ...j.default }; drawAi(); markDirty(); } }, "+") }]);
       }
-      return h("tr", {}, what,
-        h("td", {}, sel(page.PROFILES, cur.profile, (v) => (cur.profile = v), "Brain")),
-        h("td", {}, limitInput(cur.limit_usd, (v) => (cur.limit_usd = v), `Limit per run of ${j.name} (USD)`, "for each run")), got,
-        h("td", { class: "x" }, h("button", { class: "btn icon ghost", title: "Stop this job", onclick: () => { delete f.settings.jobs[j.name]; drawAi(); markDirty(); } }, "×")));
+      return tableRow([what,
+        sel(page.PROFILES, cur.profile, (v) => (cur.profile = v), "Brain"),
+        limitInput(cur.limit_usd, (v) => (cur.limit_usd = v), `Limit per run of ${j.name} (USD)`, "for each run"), got,
+        { cls: "x", v: h("button", { class: "btn icon ghost", title: "Stop this job", onclick: () => { delete f.settings.jobs[j.name]; drawAi(); markDirty(); } }, "×") }]);
     }));
   drawAi();
   const ai = card("The AI", "Which brain does each piece of work, the most ONE piece of work may cost (one chat reply, or one run of a job — not a monthly budget), and which tools a report gets: only those its skill lists. A reply that reaches its limit stops and offers Continue; a report that reaches it is still sent with what is done. A job that is not set does not run.",
-    h("table", { class: "rows ai" }, h("thead", {}, h("tr", {},
-      h("th", {}, "Work"), h("th", {}, "Brain"), h("th", {}, withInfo("Limit (US$)", limitNote)),
-      h("th", {}, withInfo("Tools it gets", "Chat answers get every tool switched on in What the AI can use, by the person's role. A report gets only the tools its skill lists, among those switched on: to change them, edit the skill's tools list on the Skills tab — the choice then travels with the skill.")),
-      h("th", {}, ""))), aiBody));
+    table(["Work", "Brain", withInfo("Limit (US$)", limitNote),
+      withInfo("Tools it gets", "Chat answers get every tool switched on in What the AI can use, by the person's role. A report gets only the tools its skill lists, among those switched on: to change them, edit the skill's tools list on the Skills tab — the choice then travels with the skill."),
+      ""], aiBody, { cls: "ai" }));
   const missing = jobs.filter((j) => !(f.settings.jobs || {})[j.name]).map((j) => j.name);
 
   // people
@@ -258,7 +258,7 @@ export function rulesForms(doc, jobs = [], tools = null) {
 
 export function toolsCard(f, t, reload) {
   f.ha_read_tools = f.ha_read_tools || []; f.agent_tools = f.agent_tools || {}; f.tool_access = f.tool_access || {};
-  const body = h("div");
+  let draw = () => {};                 // the open tab drawn again (core.tabbed's redraw, once the tabs exist)
   // ⚠️ ONE CARD PER TOOL, BOTH TABS (owner, 2026-10-06): its name and switch on top, what it does, then its id and
   // notes; at most 4 a row, fewer on a narrower screen (app.css .tool-grid)
   // core.toggleCard, the one card for a switch: saved with the form, then the tab drawn again
@@ -321,26 +321,20 @@ export function toolsCard(f, t, reload) {
   const roles = () => {
     const fm = f.tool_access.fm || {};
     return [h("p", { class: "muted" }, "When a person writes, the AI only gets the tools their role allows; in the facility manager's chat, never more than the facility manager's. A tool switched off in the first two tabs is off for everyone. Guests: the agent answers only the people in Rules › People (owner or facility manager), so a guest gets no answer at all for now."),
-      h("table", { class: "rows roles" },
-        h("colgroup", {}, h("col", {}), h("col", { width: "18%" }), h("col", { width: "18%" }), h("col", { width: "14%" })),
-        h("thead", {}, h("tr", {}, ["Tools", "Owner", "Facility manager", "Guest"].map((x) => h("th", {}, x)))),
-        h("tbody", {}, t.roles.map((g) => h("tr", {},
-          h("td", {}, h("b", {}, g.label)),
-          h("td", {}, h("label", { class: "switch" }, h("input", { type: "checkbox", checked: true, disabled: true, "aria-label": `${g.label}: owner` }))),
-          h("td", {}, h("label", { class: "switch" }, h("input", { type: "checkbox", checked: fm[g.key] !== false, "aria-label": `${g.label}: facility manager`,
+      table(["Tools", "Owner", "Facility manager", "Guest"], t.roles.map((g) => [
+          h("b", {}, g.label),
+          h("label", { class: "switch" }, h("input", { type: "checkbox", checked: true, disabled: true, "aria-label": `${g.label}: owner` })),
+          h("label", { class: "switch" }, h("input", { type: "checkbox", checked: fm[g.key] !== false, "aria-label": `${g.label}: facility manager`,
             onchange: (e) => { const m = { ...(f.tool_access.fm || {}) }; if (e.target.checked) delete m[g.key]; else m[g.key] = false;
-                               if (Object.keys(m).length) f.tool_access.fm = m; else delete f.tool_access.fm; markDirty(); } }))),
-          h("td", { class: "muted", title: "There is no guest role yet: the agent answers only the owner and the facility manager" }, "—"))))),
+                               if (Object.keys(m).length) f.tool_access.fm = m; else delete f.tool_access.fm; markDirty(); } })),
+          { cls: "muted", v: h("span", { title: "There is no guest role yet: the agent answers only the owner and the facility manager" }, "—") }]),
+        { cls: "roles", widths: [null, "18%", "18%", "14%"] }),
       h("p", { class: "muted" }, "Asking for an action is decided by \"What the agent may do\": who approves stays there.")];
   };
-  const tabs = h("div");
-  function draw() {
-    fill(tabs, subTabs([["ha", "Reading Home Assistant"], ["own", "The agent's own tools"], ["roles", "Who may use what"]], page.toolsTab,
-                       (k) => { page.toolsTab = k; draw(); }));
-    fill(body, ...({ ha, own, roles })[page.toolsTab]());
-  }
-  draw();
-  const c = card("What the AI can use", "Each tool the AI may call. A tool switched off does not exist for it, in chats and in reports. Changes count at the next message.", tabs, body);
+  const tabs = tabbed("tools", [["ha", "Reading Home Assistant", null, ha], ["own", "The agent's own tools", null, own],
+                                ["roles", "Who may use what", null, roles]]);
+  draw = tabs.redraw;
+  const c = card("What the AI can use", "Each tool the AI may call. A tool switched off does not exist for it, in chats and in reports. Changes count at the next message.", tabs.bar, tabs.body);
   c.id = "rules-tools";
   return c;
 }

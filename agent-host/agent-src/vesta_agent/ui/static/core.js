@@ -6,7 +6,7 @@ export const page = {
   current: "overview",
   PROFILES: {},           // the brains as the server names them (policy.profile_labels): filled by Rules and Costs
   jumpTo: null,             // "tools": open Rules on "What the AI can use" (a skill's "Open Rules › What the AI can use")
-  toolsTab: "ha",
+  tabs: {},                 // the tab each tabbed section shows, by its id (core.tabbed): kept while the page is open
   views: {},                // the tabs, by name: filled by app.js
 };
 
@@ -118,17 +118,14 @@ export function dropdown(options, value, pick, label) {
 // says its width (a <col>, which the page's CSP allows where a style attribute is blocked) and where it goes
 // on a phone: "a" / "b" the first line's two halves, "ab" both, "c" / "d" the second line's, "cd" all of it.
 // The remove button is always at the end of the first line. Returns [table, its Add button].
-export function editTable(rows, { cls, columns, cell, blank, add, changed = () => {}, per = PER_PAGE }) {
+export function editTable(rows, { cls, columns, cell: draw, blank, add, changed = () => {}, per = PER_PAGE }) {
   const body = h("tbody");
   const touched = () => { changed(); markDirty(); };
-  const pager = pagedBlock(() => rows.length, (from, to) => body.replaceChildren(...rows.slice(from, to).map((row, k) => h("tr", {},
-    columns.map((c, j) => h("td", { class: `ph-${c.phone}` }, cell(row, j, touched, () => pager.redraw()))),
-    h("td", { class: "x ph-x" }, h("button", { class: "btn icon ghost", title: "Remove", onclick: () => { rows.splice(from + k, 1); pager.redraw(); touched(); } }, "×"))))), per);
+  const pager = pagedBlock(() => rows.length, (from, to) => body.replaceChildren(...rows.slice(from, to).map((row, k) => tableRow([
+    ...columns.map((c, j) => ({ cls: `ph-${c.phone}`, v: draw(row, j, touched, () => pager.redraw()) })),
+    { cls: "x ph-x", v: h("button", { class: "btn icon ghost", title: "Remove", onclick: () => { rows.splice(from + k, 1); pager.redraw(); touched(); } }, "×") }]))), per);
   pager.redraw();
-  const table = h("table", { class: `rows edit ${cls}` },
-    h("colgroup", {}, columns.map((c) => h("col", { width: c.width || null })), h("col", { width: "44" })),
-    h("thead", {}, h("tr", {}, columns.map((c) => h("th", {}, c.title)), h("th", {}, ""))), body);
-  return [table, pager.nav, h("div", { class: "actions" }, h("button", { class: "btn ghost", onclick: () => { rows.push(blank()); pager.last(); touched(); } }, add))];
+  return [table([...columns.map((c) => c.title), ""], body, { cls: `edit ${cls}`, widths: [...columns.map((c) => c.width), "44"] }), pager.nav, h("div", { class: "actions" }, h("button", { class: "btn ghost", onclick: () => { rows.push(blank()); pager.last(); touched(); } }, add))];
 }
 
 export async function api(method, path, body) {
@@ -293,19 +290,30 @@ export function paged(head, rows, per = 10) {
   const body = h("tbody");
   // each cell carries its column's name: on a phone the row becomes a card, every value labelled (app.css);
   // a column whose head says `half` shares its line there with the next half one (owner, 2026-10-05)
-  const label = head.map((c) => String(c && typeof c === "object" && "v" in c ? c.v : c || ""));
-  const half = head.map((c) => !!(c && typeof c === "object" && c.half));
-  const cell = (c, tag, i) => {
-    const td = tag === "td";
-    const cls = [c && typeof c === "object" && "v" in c ? c.cls : null, td && half[i] ? "ph-half" : null].filter(Boolean).join(" ") || null;
-    return h(tag, { class: cls, "data-label": td ? label[i] : null }, c && typeof c === "object" && "v" in c ? c.v : c);
-  };
+  const label = head.map((c) => String(isCell(c) ? c.v : c || ""));
+  const half = head.map((c) => !!(isCell(c) && c.half));
   // newest first: the pages go to "older" (the one pager, pagedBlock)
   const pager = pagedBlock(() => rows.length, (from, to) => body.replaceChildren(...rows.slice(from, to).map((cells) =>
-    h("tr", {}, cells.map((c, i) => cell(c, "td", i))))), per, ["‹ Newer", "Older ›", "rows"]);
+    h("tr", {}, cells.map((c, i) => cell(c, "td", { cls: half[i] ? "ph-half" : null, label: label[i] }))))), per, ["‹ Newer", "Older ›", "rows"]);
   pager.redraw();
-  return h("div", {}, h("div", { class: "tbl" }, h("table", { class: "rows data" },
-    h("thead", {}, h("tr", {}, head.map((c, i) => cell(c, "th", i)))), body)), pager.nav);
+  return h("div", {}, h("div", { class: "tbl" }, table(head, body, { cls: "data" })), pager.nav);
+}
+
+// ⚠️ THE ONE TABLE (DRY, owner 2026-10-08: "all the tables formatted the same way, from the same code"). Every table on
+// the page is built here and styled by table.rows: paged (read-only, 10 a page), editTable (rows added and removed),
+// the AI's work and the tools by role (Rules). `head`: the column titles; `body`: rows of cells, or a <tbody> its caller
+// fills; `widths`: one <col> each (the page's CSP blocks a style attribute). A cell is a node, a text, or {v, cls, colspan}.
+const isCell = (c) => !!c && typeof c === "object" && !(c instanceof Node) && "v" in c;
+export function cell(c, tag = "td", { cls = null, label = null } = {}) {
+  return h(tag, { class: [isCell(c) ? c.cls : null, cls].filter(Boolean).join(" ") || null, colspan: isCell(c) ? c.colspan : null,
+                  "data-label": label }, isCell(c) ? c.v : c);
+}
+export const tableRow = (cells) => h("tr", {}, cells.map((c) => cell(c)));
+export function table(head, body, { cls = "", widths = null } = {}) {
+  return h("table", { class: `rows ${cls}`.trim() },
+    widths ? h("colgroup", {}, widths.map((w) => h("col", { width: w || null }))) : null,
+    h("thead", {}, h("tr", {}, head.map((c) => cell(c, "th")))),
+    body instanceof Node ? body : h("tbody", {}, body.map(tableRow)));
 }
 
 // ⚠️ THE ONE TAB BAR (DRY, owner 2026-10-06): What the AI can use, a skill's views, Copy the setup. `items`: [[key,
@@ -316,6 +324,23 @@ export function subTabs(items, current, pick) {
     const tab = h("button", { type: "button", role: "tab", class: k === current ? "on" : "", "aria-selected": String(k === current), onclick: () => pick(k) }, l);
     return info ? h("span", { class: "subtab-with-info" + (k === current ? " on" : "") }, tab, infoButton(l, info)) : tab;
   }));
+}
+
+// ⚠️ THE ONE TABBED SECTION (DRY, owner 2026-10-08): a tab bar over the open tab's body — Costs' two cards, Copy the
+// setup, What the AI can use, a skill's About. `items`: [[key, label, info?, draw()], …] (a falsy item is left out);
+// only the open tab is drawn; its key is kept in page.tabs[id], so the section reopens on it (the first tab otherwise).
+// Returns {bar, body, redraw}: redraw() draws the open tab again after a change.
+export function tabbed(id, items) {
+  const bar = h("div"), body = h("div");
+  const list = items.filter(Boolean);
+  const show = (k) => {
+    const tab = list.find((t) => t[0] === k) || list[0];
+    page.tabs[id] = tab[0];
+    fill(bar, subTabs(list.map(([key, label, info]) => [key, label, info]), tab[0], show));
+    fill(body, tab[3]());
+  };
+  show(page.tabs[id]);
+  return { bar, body, redraw: () => show(page.tabs[id]) };
 }
 
 // Pages of at most `per` lines for an editable list (owner, 2026-10-06: "max 15 lines, so the UI stays consistent").

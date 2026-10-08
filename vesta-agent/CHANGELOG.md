@@ -1,3 +1,11 @@
+## 0.12.91
+
+What you will see:
+- Skills › About: "When is the Skill called" is now a table like the others, with "When" and "What runs" column headings. Its second column lines up the way it does in Overview's "Scheduled jobs run". On a phone each line becomes a small labelled card, as in every other table.
+- Every table on the page is now built by the same code, and so are all the sections with tabs (Costs, Copy the setup, What the AI can use, a skill's About). They look and behave the same everywhere.
+- Rules › Who may use what, on a phone: the "Facility manager" heading no longer runs into "Guest".
+- Rules › The AI, on a phone: a job using "Performance (Opus)" no longer pushes its × button past the edge of the card.
+
 ## 0.12.90
 
 What you will see:
