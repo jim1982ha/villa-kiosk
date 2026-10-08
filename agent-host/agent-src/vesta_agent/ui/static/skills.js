@@ -336,7 +336,7 @@ export const ABOUT_TEXT = {
 
 export function aboutSkill(name, d) {
   if (!d.acts) return h("p", { class: "muted" }, "The agent cannot read this skill's skill.yaml: open Files to fix it.");
-  // When is the Skill called: the schedule first, then events, then the chats — a table like every other (core.paged)
+  // When the skill runs: the schedule first, then events, then the chats — a table like every other (core.paged)
   const acts = () => paged(["When", "What runs"], [...d.acts.slice(1), d.acts[0]].map((a) => {    // the schedule first, the chats last
     const [when, job] = a.when.split(" — ");
     const kind = a.how === "AI job" ? "AI job" : a.how ? "code, no AI" : null;
@@ -344,7 +344,7 @@ export function aboutSkill(name, d) {
       [job ? h("b", {}, job) : a.how && a.how !== "AI job" ? h("code", {}, a.how.split(" ")[0]) : h("span", { class: "muted" }, "when a person asks about it"),
        kind ? h("span", { class: "chip gray tiny" }, kind) : null]];
   }));
-  // Tools used by the Skill: a one-line verdict and its (i), then every tool as a card — core.tileCard, the commands'
+  // Skill tools: a one-line verdict and its (i), then every tool as a card — core.tileCard, the commands'
   // own card without their switch (a tool is switched on or off in Rules, for every skill at once)
   const tools = () => {
     if (d.needs === null || d.needs === undefined) return h("p", { class: "muted" }, "Its skill.yaml lists none: its reports get every tool switched on.");
@@ -357,7 +357,7 @@ export function aboutSkill(name, d) {
         on: n.on, chip: n.on ? null : h("span", { class: "chip off tiny" }, state[n.state] || "off"),
         words: h("div", { class: "muted" }, h("code", {}, n.tool)) })))];
   };
-  // Commands run by the Skill: a card per command (core.toggleCard), three a line, each with its Offline Test
+  // Skill commands: a card per command (core.toggleCard), three a line, each with its Offline Test
   const runs = () => (d.scripts || []).map((sc) => h("div", { class: "cmd-group" },
     h("div", { class: "cmd-script" }, h("code", {}, sc.script)),
     h("div", { class: "tool-grid three" }, sc.commands.length

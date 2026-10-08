@@ -1,3 +1,8 @@
+## 0.12.94
+
+What you will see:
+- Skills › About: the three sections now have short names like the rest of the page: **When the skill runs**, **Skill commands** and **Skill tools**. "Skill tools" sits alongside "AI tools" and "Agent tools" in Rules.
+
 ## 0.12.93
 
 What you will see:

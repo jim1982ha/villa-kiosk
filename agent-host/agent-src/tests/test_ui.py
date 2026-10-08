@@ -633,7 +633,7 @@ def test_a_skills_about_is_two_tabs_then_its_commands_each_with_its_offline_test
     js = page_js()
     about, test = body_of(js, "aboutSkill"), body_of(js, "tryPanel")
     from vesta_agent.places import title
-    assert (title("skill_when"), title("skill_tools"), title("skill_commands")) == ("When is the Skill called", "Tools used by the Skill", "Commands run by the Skill")
+    assert (title("skill_when"), title("skill_tools"), title("skill_commands")) == ("When the skill runs", "Skill tools", "Skill commands")
     assert 'when: place("skill_when"), tools: place("skill_tools"), commands: place("skill_commands")' in js
     # owner, 2026-10-08 (later): when it is called on top, alone; below, one section of two tabs, commands then tools
     assert 'h("section", { class: "about-sec" }, h("h3", {}, ABOUT_TEXT.when), acts())' in about

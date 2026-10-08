@@ -33,13 +33,13 @@ PLACES: dict[str, tuple[str, str]] = {
     "ha_tools": ("Home Assistant tools", "Rules › AI tools"),
     "agent_tools": ("Agent tools", "Rules › AI tools"),
     "tool_roles": ("Tools by role", "Rules › AI tools"),
-    # Skills (the owner's own words, 2026-10-08)
+    # Skills (owner, 2026-10-08: short names like the others — "Skill tools" beside "AI tools" and "Agent tools")
     "skill_about": ("About", "Skills"),
     "skill_files": ("Files", "Skills"),
     "skill_compare": ("Compare", "Skills"),
-    "skill_when": ("When is the Skill called", "Skills › About"),
-    "skill_commands": ("Commands run by the Skill", "Skills › About"),
-    "skill_tools": ("Tools used by the Skill", "Skills › About"),
+    "skill_when": ("When the skill runs", "Skills › About"),
+    "skill_commands": ("Skill commands", "Skills › About"),
+    "skill_tools": ("Skill tools", "Skills › About"),
     # Costs
     "cost": ("AI cost", "Costs"),
     "cost_day": ("Per day", "Costs › AI cost"),

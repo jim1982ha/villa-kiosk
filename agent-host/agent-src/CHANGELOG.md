@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.89 (8 October 2026)
+
+- places.py: skill_when / skill_commands / skill_tools renamed "When the skill runs" / "Skill commands" / "Skill tools" (owner).
+
 ## 0.6.88 (8 October 2026)
 
 - Starter skills (asked for by the owner): villa-concierge SKILL.md says "Rules › Allowed actions"; the reports and villa-concierge skill.yaml comments say "Rules › AI tools". Both recorded in shipped-skills.json. test_ui's old-names guard now covers starter/.

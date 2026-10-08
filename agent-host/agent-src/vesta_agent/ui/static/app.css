@@ -478,7 +478,7 @@ a.jump { color: var(--accent); text-decoration: underline; text-underline-offset
 @media (max-width: 1060px) { .tool-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 800px) { .tool-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 480px) { .tool-grid { grid-template-columns: 1fr; } }
-/* three a line at most (Skills › About › Commands run by the Skill), two then one as the screen narrows */
+/* three a line at most (Skills › About › Skill commands), two then one as the screen narrows */
 .tool-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 @media (max-width: 900px) { .tool-grid.three { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 480px) { .tool-grid.three { grid-template-columns: 1fr; } }
@@ -502,7 +502,7 @@ th button.info, .field button.info { font-size: 1em; }
 .tool-card .muted { overflow-wrap: anywhere; }
 table.rows.ai td.with-caption .dropdown { max-width: 260px; }
 @media (max-width: 600px) { table.rows.ai td.with-caption { grid-column: 1 / -1; grid-row: 3; } }
-/* a chip after a name in a table cell keeps its distance (Skills › When is the Skill called: "fm-daily  AI job") */
+/* a chip after a name in a table cell keeps its distance (Skills › When the skill runs: "fm-daily  AI job") */
 table.rows td > * + .chip { margin-left: 8px; }
 /* the tools by role on a phone: "Facility manager" ran into "Guest" — its column wider there, the heads tighter */
 @media (max-width: 600px) {

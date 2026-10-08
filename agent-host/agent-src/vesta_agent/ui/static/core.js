@@ -221,7 +221,7 @@ export function withInfo(label, text) {
 
 // A switch as a card (owner, 2026-10-06/07): its title and switch on one line, what it does under it, a small line
 // of facts at the bottom. The one card for every switch the page draws as cards — Rules › AI tools and
-// Skills › About › Commands run by the Skill — laid out by `.tool-grid` (four a line; `.tool-grid.three`: three).
+// Skills › About › Skill commands — laid out by `.tool-grid` (four a line; `.tool-grid.three`: three).
 // onChange(checked, input): the card's own look follows at once.
 // ⚠️ ONE CARD (owner, 2026-10-08: a skill's tools "the same way cards are used to display commands"): its title,
 // a chip, what it is, a line under it — and on the right whatever the caller puts there (a switch: toggleCard).
