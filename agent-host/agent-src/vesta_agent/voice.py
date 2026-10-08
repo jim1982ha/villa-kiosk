@@ -38,7 +38,7 @@ class Voice:
         hook = next(((sk, sk.on_event["voice_message"]) for sk in self.skills.all().values()
                      if "voice_message" in sk.on_event), None)
         if not self.tg:
-            log.info("Voice message in chat %s not read: Telegram takeover is off", cid)
+            log.info("Voice message in chat %s not read: \"Agent replies on Telegram\" is off", cid)
             return None
         if not hook:
             await self.send(cid, "Voice messages are not set up here: no skill handles them.")

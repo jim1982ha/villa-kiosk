@@ -65,7 +65,7 @@ class Delivery:
         """The message's id, or None: nothing arrived. `origin`: on whose behalf — a job asked for in a chat
         (kind JOB) makes this its result, which replaces the chat's "being prepared" message."""
         if self.tg is None:
-            self.state.log("send_skipped", {"chat": chat_id, "reason": "Telegram is off (telegram_takeover false)"})
+            self.state.log("send_skipped", {"chat": chat_id, "reason": "Telegram is off (\"Agent replies on Telegram\" is off)"})
             log.info("Telegram off: a message for chat %s was not sent", chat_id)
             return None
         try:

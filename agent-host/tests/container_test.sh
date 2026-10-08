@@ -74,7 +74,7 @@ has "link Home Assistant: http://homeassistant:8123 · token set" && ok "banner:
 for link in "Home Assistant" "HA MCP" "VESTA Kiosk" "Anthropic" "Telegram"; do
   has "self-test ${link}: (pass|fail|skipped)" && ok "self-test line: ${link}" || bad "no self-test line for ${link}"
 done
-has "self-test Telegram: skipped — telegram_takeover is off" && ok "Telegram skipped, no call" || bad "Telegram not skipped"
+has "self-test Telegram: skipped — \"Agent replies on Telegram\" is off" && ok "Telegram skipped, no call" || bad "Telegram not skipped"
 [ -s "$WORK/data/host/selftest.json" ] && grep -q '"summary"' "$WORK/data/host/selftest.json" && ok "selftest.json written" || bad "selftest.json missing"
 grep -qF "$HATOKEN" "$WORK/data/host/selftest.json" && bad "a secret in selftest.json" || ok "no secret in selftest.json"
 has "time zone: Asia/Bangkok" && ok "banner: time zone from TZ" || bad "banner lacks TZ"

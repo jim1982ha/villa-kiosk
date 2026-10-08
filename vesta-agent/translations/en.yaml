@@ -30,15 +30,13 @@ configuration:
     name: VESTA Kiosk agent token
     description: The same value as the agent token set in the VESTA Kiosk.
   telegram_takeover:
-    name: Telegram takeover
+    name: Agent replies on Telegram
     description: >-
-      ON lets the agent send on the villa's bot. Home Assistant keeps receiving
-      the bot's messages and buttons either way; the agent reads them from Home
-      Assistant. While OFF the bot token is never given to the agent and it sends
-      nothing. Only one app (dev or stable) should have it ON.
+      Toggle to indicate if the Agent can send and answer messages to the
+      villa's Telegram bot (if OFF, the agent sends nothing)
   telegram_bot_token:
     name: Telegram bot token
-    description: The villa bot's token. Used only when Telegram takeover is ON.
+    description: The villa bot's token. Used only when "Agent replies on Telegram" is ON.
   log_level:
     name: Log level
     description: Detail of the host and agent logs. Secrets are never logged.

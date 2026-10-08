@@ -167,7 +167,7 @@ class Checks:
     def telegram(self) -> Result:
         link = "Telegram"
         if self.env.get("VESTA_TELEGRAM_ENABLED") != "true":
-            return Result(link, SKIPPED, "telegram_takeover is off — no call made")
+            return Result(link, SKIPPED, "\"Agent replies on Telegram\" is off — no call made")
         token = self.env.get("VESTA_TELEGRAM_BOT_TOKEN")
         if not token:
             return Result(link, SKIPPED, "telegram_bot_token not set")

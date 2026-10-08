@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.83 (8 October 2026)
+
+- Log lines name the app setting by its label, "Agent replies on Telegram" (the option key stays `telegram_takeover`).
+
 ## 0.6.82 (8 October 2026)
 
 - core.toggleCard `action`: a button in the card head left of the switch (`.tool-card-side`); the Offline Test pill moved there, "Offline " hidden by `@container (max-width: 300px)`. core.popup focuses Close (`autofocus`): showModal focused the title's (i), whose focus opened its tip. app.css `.about > * {min-width: 0}`. test_ui pins.

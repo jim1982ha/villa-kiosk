@@ -222,7 +222,7 @@ class Vesta:
             except TelegramError as e:
                 log.error("Telegram: %s", e)
         else:
-            log.info("Telegram: off (telegram_takeover is false): nothing is sent")
+            log.info("Telegram: off (the app's setting \"Agent replies on Telegram\" is off): nothing is sent")
         if self.kiosk.enabled:
             try:
                 await self.kiosk.check()

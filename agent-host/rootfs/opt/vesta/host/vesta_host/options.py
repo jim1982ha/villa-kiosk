@@ -132,5 +132,5 @@ def validate(o: Options) -> Options:
     if not o.has("kiosk_agent_token"):
         o.notes.append("kiosk_agent_token is empty: the VESTA Kiosk check will be skipped")
     if o.get("telegram_takeover") and not o.has("telegram_bot_token"):
-        o.notes.append("telegram_takeover is on but telegram_bot_token is empty: nothing can be sent on Telegram")
+        o.notes.append("\"Agent replies on Telegram\" is on but the Telegram bot token is empty: nothing can be sent on Telegram")
     return o
