@@ -258,9 +258,9 @@ svg.bars .base { stroke: var(--text-dim); }
 .tab-file:hover { color: var(--text-primary); text-decoration: underline; }
 .tab-file.on { color: var(--accent); text-decoration: underline; }
 /* the theme switch in the header */
-.themes { display: inline-flex; gap: 2px; padding: 2px; border-radius: 999px; border: 1px solid var(--hairline); align-self: center; margin-left: auto; }
-.themes button { border: 0; background: none; color: var(--text-secondary); font-size: var(--text-xs); padding: 4px 10px; border-radius: 999px; cursor: pointer; min-height: 28px; }
-.themes button.on { background: var(--accent-soft); color: var(--text-primary); }
+.themes, .seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 999px; border: 1px solid var(--hairline); align-self: center; margin-left: auto; }
+.themes button, .seg button { border: 0; background: none; color: var(--text-secondary); font-size: var(--text-xs); padding: 4px 10px; border-radius: 999px; cursor: pointer; min-height: 28px; }
+.themes button.on, .seg button.on { background: var(--accent-soft); color: var(--text-primary); }
 /* a device picker: a box like a menu (what is chosen), opening a list with a search and a checkbox each */
 .grid > * { min-width: 0; }
 .picker { position: relative; }
@@ -511,3 +511,23 @@ table.rows td > * + .chip { margin-left: 8px; }
 }
 /* an (i) beside a button: on its middle line (Skills › Compare: "Take the release version (i)") */
 .actions > button.info { align-self: center; }
+/* Skills › Files: a Markdown file formatted (markdown.js), its switch to the raw text on the legend's line */
+.file-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 4px 0 10px; }
+.file-bar .legend { margin: 0; }
+.seg { margin-left: auto; }
+.editor[hidden], .md-box[hidden] { display: none; }
+.md-box { border: 1px solid var(--hairline); border-radius: var(--radius); padding: 14px 18px; min-height: 30vh; overflow-wrap: anywhere; line-height: 1.55; }
+.md-box > :first-child { margin-top: 0; }
+.md-box h1, .md-box h2, .md-box h3, .md-box h4 { font-family: var(--font-display); font-weight: 600; margin: 20px 0 8px; }
+.md-box h1 { font-size: 1.4rem; } .md-box h2 { font-size: 1.15rem; } .md-box h3, .md-box h4 { font-size: 1rem; }
+.md-box p, .md-box ul, .md-box ol, .md-box blockquote, .md-box pre { margin: 8px 0; }
+.md-box ul, .md-box ol { padding-left: 22px; }
+.md-box code { font-family: var(--font-mono); font-size: .9em; background: var(--bg-input); padding: 1px 5px; border-radius: 4px; }
+.md-box pre { background: var(--bg-input); border-radius: var(--radius); padding: 10px 12px; overflow-x: auto; white-space: pre-wrap; }
+.md-box pre code { background: none; padding: 0; }
+.md-box blockquote { border-left: 3px solid var(--hairline-strong); padding-left: 12px; color: var(--text-secondary); }
+.md-box hr { border: 0; border-top: 1px solid var(--hairline); margin: 16px 0; }
+.md-box table.rows td, .md-box table.rows th { border-bottom: 1px solid var(--hairline); padding: 6px 10px 6px 0; vertical-align: top; }
+.md-box table.rows th { text-transform: none; letter-spacing: 0; font-size: var(--text-sm); color: var(--text-secondary); }
+.md-meta { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0 0 12px; padding-bottom: 10px; border-bottom: 1px solid var(--hairline); font-size: var(--text-sm); }
+.md-meta dt { color: var(--text-dim); } .md-meta dd { margin: 0; }

@@ -172,12 +172,12 @@ def test_the_page_names_its_files_with_the_version_and_reports_its_errors_to_the
         html = await (await c.get("/")).text()
         js = await c.get(f"/static/{__version__}/app.js")
         # the tab modules app.js imports, by relative paths: served from the same versioned folder
-        mods = [(await c.get(f"/static/{__version__}/{m}.js")).status for m in ("core", "costs", "overview", "rules", "skills")]
+        mods = [(await c.get(f"/static/{__version__}/{m}.js")).status for m in ("core", "costs", "overview", "rules", "skills", "markdown")]
         err = await c.post("/api/client-error", json={"message": "TypeError: x is undefined at app.js:12"}, headers=HDR)
         return html, js.status, err.status, mods
     html, js, err, mods = call(ui, fn)
     assert f'src="static/{__version__}/app.js"' in html and f'href="static/{__version__}/app.css"' in html
-    assert "{static}" not in html and js == 200 and err == 200 and mods == [200] * 5
+    assert "{static}" not in html and js == 200 and err == 200 and mods == [200] * 6
     assert any("UI: page error: TypeError: x is undefined at app.js:12" in r.getMessage() for r in caplog.records)
 
 
@@ -355,7 +355,7 @@ def test_the_title_line_holds_the_short_version_and_the_theme_toggle_on_the_righ
     brand = re.search(r'<div class="brand">(.*?)</div>', html).group(1)
     assert 'id="ver"' in brand                                   # inline with the title
     assert html.index('class="brand"') < html.index('class="themes"')
-    assert re.search(r"\.themes \{[^}]*margin-left: auto", css) and not re.search(r"\.ver \{[^}]*margin-left", css)
+    assert re.search(r"\.themes(, \.seg)? \{[^}]*margin-left: auto", css) and not re.search(r"\.ver \{[^}]*margin-left", css)
     assert "ver.textContent = `v${" in js and "ver.title = " in js   # short on screen, the full line on hover
 
 
@@ -749,4 +749,51 @@ def test_take_the_release_version_is_on_the_compare_tab_too():
     js = page_js()
     assert "takeReleaseButton(name)" in body_of(js, "comparePanel") and js.count('"Take the release version");') == 1
     assert "takeReleaseButton(name)" in body_of(js, "openSkill")
+
+
+def _markdown(text: str):
+    """markdown.js's parse() run by Node, as the browser runs it (a module of plain functions, no page needed)."""
+    import json, shutil, subprocess
+    from vesta_agent.ui.server import STATIC
+    node = shutil.which("node")
+    assert node, "Node is needed to test the page's Markdown reader (GitHub's runners have it)"     # never skipped
+    code = ("import { parse } from " + json.dumps("file://" + os.path.join(STATIC, "markdown.js")) + ";"
+            "let t = ''; process.stdin.on('data', (d) => t += d).on('end', () => console.log(JSON.stringify(parse(t))));")
+    r = subprocess.run([node, "--input-type=module", "-e", code], input=text, capture_output=True, text=True, timeout=30)
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout)
+
+
+def test_a_markdown_file_is_read_as_blocks_never_as_markup():
+    # owner, 2026-10-08: "show the formatted md file instead of the raw version" — no library (no internet), no HTML
+    b = _markdown("---\nname: reports\ndescription: a: b\n---\n\n# Title\n\nSome **bold _and_ it** `x*y` "
+                  "[web](https://e.org) <script>alert(1)</script>\n<!-- left out\nof the page -->\n\n- one\n  - two\n"
+                  "  more of two\n1. first\n\n| a | b |\n|---|:-:|\n| `c` | d |\n\n```yaml\nk: v\n```\n> said\n\n---\n")
+    assert [x["t"] for x in b] == ["meta", "h", "p", "list", "table", "code", "quote", "hr"]
+    assert b[0]["rows"] == [["name", "reports"], ["description", "a: b"]] and b[1] == {"t": "h", "level": 1, "inl": [{"t": "text", "v": "Title"}]}
+    p = b[2]["inl"]
+    assert p[1] == {"t": "b", "c": [{"t": "text", "v": "bold "}, {"t": "i", "c": [{"t": "text", "v": "and"}]}, {"t": "text", "v": " it"}]}
+    assert {"t": "code", "v": "x*y"} in p and {"t": "a", "href": "https://e.org", "c": [{"t": "text", "v": "web"}]} in p
+    assert p[-1] == {"t": "text", "v": " <script>alert(1)</script>"}           # text, drawn as text: never markup
+    assert "left out" not in json_dumps(b)                                    # an HTML comment is not read
+    assert [(i["depth"], i["ordered"]) for i in b[3]["items"]] == [(0, False), (1, False), (0, True)]
+    assert b[3]["items"][1]["inl"] == [{"t": "text", "v": "two more of two"}]
+    assert b[4]["head"] == [[{"t": "text", "v": "a"}], [{"t": "text", "v": "b"}]] and b[4]["rows"] == [[[{"t": "code", "v": "c"}], [{"t": "text", "v": "d"}]]]
+    assert b[5] == {"t": "code", "lang": "yaml", "text": "k: v"} and b[6]["inl"] == [{"t": "text", "v": "said"}]
+    # a "#" in front of a list line is a heading, as the owner found (2026-10-08): the reader shows it as one
+    assert _markdown("# - `scripts/facts.py` every figure")[0]["t"] == "h"
+
+
+def json_dumps(x):
+    import json
+    return json.dumps(x)
+
+
+def test_a_markdown_file_opens_formatted_and_its_raw_text_is_one_press_away():
+    js = page_js()
+    files = body_of(js, "openSkill")
+    assert 'segmented([["formatted", "Formatted"], ["raw", "Raw"]], page.mdView || "formatted"' in files
+    assert "const isMd = /\\.md$/i.test(path" in files and "fill(mdBox, markdownView(ta.value))" in files
+    view = body_of(js, "markdownView")
+    assert "parse(text).flatMap(" in view and "table(b.head.map(inl)" in view and "innerHTML" not in js
 

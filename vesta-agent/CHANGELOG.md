@@ -1,3 +1,9 @@
+## 0.12.98
+
+What you will see:
+- Skills › Files: a Markdown file (SKILL.md and other .md files) now opens **formatted**: headings, lists, tables, code and the skill's name and description at the top. A small **Formatted / Raw** switch beside it shows the raw text, where you edit. The choice is kept while the page is open.
+- In Formatted, the text is shown as it is in the editor, saved or not. Lines inside `<!-- … -->` are left out, as the AI also ignores them when reading. A line starting with `#` shows as a heading, which is what it is in Markdown.
+
 ## 0.12.97
 
 What you will see:

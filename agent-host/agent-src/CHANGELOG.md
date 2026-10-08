@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.93 (8 October 2026)
+
+- static/markdown.js: `parse(text)` turns Markdown into plain blocks (front matter, headings, paragraphs, nested lists, tables, fenced code, quotes, rules; inline code, bold, italic and links). HTML comments are dropped and no HTML string is produced. skills.js `markdownView` draws the blocks with core.h, tables with core.table, and opens a link only when it is an http(s) address. Nothing is fetched.
+- Files: a .md file opens Formatted by default; core.segmented gives the Formatted / Raw switch (styled like the theme switch); page.mdView keeps the choice.
+- test_ui: the reader is run in Node on real input (it fails, never skips, without Node; checked with two mutations), plus a pin on the Files view.
+
 ## 0.6.92 (8 October 2026)
 
 - skills.js `takeReleaseButton(name)`: one button, drawn by the release banner and the Compare tab (the banner is hidden after "Keep mine", while the Compare tab still described the button). test_ui pin; checked in the browser with a kept edit.

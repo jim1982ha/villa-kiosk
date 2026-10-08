@@ -333,6 +333,16 @@ export function subTabs(items, current, pick) {
   }));
 }
 
+// A small switch between a few views (Skills › Files: Formatted / Raw), drawn like the Light / Auto / Dark one.
+// `options`: [[value, label], …]; `pick(value)` on a press.
+export function segmented(options, value, pick, label) {
+  const box = h("div", { class: "seg", role: "radiogroup", "aria-label": label || null });
+  const draw = (v) => fill(box, options.map(([k, l]) => h("button", { type: "button", role: "radio", class: k === v ? "on" : "",
+    "aria-checked": String(k === v), onclick: () => { draw(k); pick(k); } }, l)));
+  draw(value);
+  return box;
+}
+
 // ⚠️ THE ONE TABBED SECTION (DRY, owner 2026-10-08): a tab bar over the open tab's body — Costs' two cards, Copy the
 // setup, AI tools, a skill's About. `items`: [[key, label, info?, draw()], …] (a falsy item is left out);
 // only the open tab is drawn; its key is kept in page.tabs[id], so the section reopens on it (the first tab otherwise).
