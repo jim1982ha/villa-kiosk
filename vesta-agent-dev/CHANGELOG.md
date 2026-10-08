@@ -1,3 +1,8 @@
+## 0.12.85
+
+What you will see:
+- Costs: the "Per day" chart is back to a compact height (about 180 px) on a laptop. Since the page got wider it had grown with it, text included, to about 500 px.
+
 ## 0.12.84
 
 What you will see:
