@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.96 (8 October 2026)
+
+Ninth architecture review: all six candidates and the live defects.
+- Live defects:
+  - An unparseable policy.yaml made api/jobs, api/overview and api/skills answer 500, and Rules (file) hung (fixed: changes.page_policy, and the file view asks for the file only).
+  - Keep mine had no catch.
+  - Stale words ("The AI", "only the devices in the lists", "allowed lists", "Try a command" in docstrings).
+  - Page copies of server facts ("WebSearch", "not recorded", the verdict words, which files may be deleted; the server allowed deleting SKILL.md and skill.yaml).
+- 1: GET api/rules returns the Rules tab in one answer. core.go shows a failed tab's reasons. page.PROFILES is gone (each tab keeps its own).
+- 2: places.ORDER and core.inOrder (the Rules section order is data). Code-shape test pins replaced by data, HTTP and Node tests.
+- 3: viewer.fileEditor (one editor for both). rules.openTools (the skill page no longer writes Rules' tab keys).
+- 4: dead CSS removed and duplicates merged. AI and roles column widths are data (core.table {width, cls}); no nth-child column rules. test_ui fails on an unused stylesheet class. Measured identical before and after on a laptop and a phone.
+- 5: setup_copy.offer, policy.ROLE_WORDS, history.CHIPS, places.TABS (index.html filled by the server), core.api({file}) for the export.
+- 6: ui/changes.PageFiles holds the write, check, record and Undo code, moved out of the HTTP class; setup_copy.apply takes PageFiles.
+
 ## 0.6.95 (8 October 2026)
 
 - core.cell: a labelled cell (paged) with several pieces wraps them in one span.cell-v, so the phone card's "label … value" keeps them together. Checked on all 48 phone cells: only the 3 "What runs" cells moved.

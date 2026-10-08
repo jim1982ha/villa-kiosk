@@ -1,6 +1,6 @@
 // VESTA Agent page — the Rules tab (policy.yaml): the forms, the file, and AI tools.
-import { api, card, dropdown, editTable, field, fill, floating, h, infoButton, jobsBanner, jump, markDirty, page, pagedBlock, place, plural, problemsBox, reasons, saveWith, setBar, tabbed, table, tableRow, tell, titleWithInfo, toast, toggleCard, $view, where, withInfo } from "./core.js";
-import { fileViewer } from "./viewer.js";
+import { api, card, dropdown, editTable, field, fill, floating, go, h, infoButton, inOrder, jobsBanner, jump, markDirty, page, pagedBlock, place, plural, problemsBox, reasons, saveWith, setBar, tabbed, table, tableRow, tell, titleWithInfo, toast, toggleCard, $view, where, withInfo } from "./core.js";
+import { fileEditor } from "./viewer.js";
 
 // ---------------------------------------------------------------- rules (policy.yaml)
 // the rules, the lists and their domains, the siren's domains: policy.form_schema(), served with the file —
@@ -12,36 +12,39 @@ const W = (path) => SCHEMA.words[path] || path;
 // the villa's devices, from the agent's knowledge pack: chosen by name, never typed as ids
 export const ENT = { list: [], byId: {} };
 
+let PROFILES = {};                     // the brains' names, from this tab's own answer (no shared page field)
+// Rules › AI tools › Home Assistant tools, opened from elsewhere (a skill's "Open Rules › AI tools"): Rules keeps its
+// own tab keys and scroll (the skill page wrote page.tabs.tools = "ha" and page.jumpTo itself, architecture review 9)
+let jumpToTools = false;
+export function openTools() {
+  jumpToTools = true; page.tabs.tools = "ha"; go("rules");
+}
+
 export async function rules(sub = "forms") {
   fill($view, h("p", { class: "muted" }, "Loading…"));
-  let doc = await api("GET", "api/policy");
-  SCHEMA = doc.schema || SCHEMA;
-  page.PROFILES = doc.profiles || page.PROFILES;
-  const { jobs } = await api("GET", "api/jobs");
-  const { entities } = await api("GET", "api/entities");
-  ENT.list = entities; ENT.byId = Object.fromEntries(entities.map((e) => [e.id, e]));
   page.dirty = false;
-  // the forms are "Rules", the raw file is "Rules (file)": two tabs at the top, no sub-menu (owner, 2026-10-01)
-  if (sub === "file" || !doc.form) return rulesFile(doc);
-  const tools = await api("GET", "api/tools");
-  return rulesForms(doc, jobs, tools);
+  // the forms are "Rules", the raw file is "Rules (file)": two tabs at the top, no sub-menu (owner, 2026-10-01).
+  // ⚠️ THE FILE ASKS FOR THE FILE ONLY (architecture review 9): it is where a broken policy.yaml is repaired, and it
+  // hung on "Loading…" behind the jobs and devices it never uses
+  if (sub === "file") return rulesFile(await api("GET", "api/policy"));
+  const v = await api("GET", "api/rules");           // the tab in one answer (server.rules_view)
+  SCHEMA = v.schema || SCHEMA;
+  PROFILES = v.profiles || {};
+  ENT.list = v.entities; ENT.byId = Object.fromEntries(v.entities.map((e) => [e.id, e]));
+  if (!v.form) return rulesFile(v);
+  return rulesForms(v, v.jobs, v.tools);
 }
 
 export function rulesFile(doc) {
-  const ta = h("textarea", { class: "editor", spellcheck: "false", oninput: markDirty });
-  ta.value = doc.text;
   const probs = h("div");
-  const save = async () => {
-    const res = await saveWith(probs, () => api("PUT", "api/policy/text", { text: ta.value, rev: doc.rev }),
-                               "policy.yaml saved. The agent uses it within seconds.");
-    if (res) doc = { ...doc, ...res };
-  };
-  setBar({ save, discard: () => rules("file"), idle: "Everything, including what the forms do not show." });
-  // formatted by default, the raw text one press away (owner, 2026-10-08: "do this for Rules (file) too")
-  const view = fileViewer(ta, "policy.yaml");
+  // the one file editor (viewer.fileEditor), as a skill's files: formatted by default, Tab indents, one save
+  const ed = fileEditor("policy.yaml", (text, rev) => api("PUT", "api/policy/text", { text, rev }), probs);
+  setBar({ save: () => ed.save("policy.yaml saved. The agent uses it within seconds."), discard: () => rules("file"),
+           idle: "Everything, including what the forms do not show." });
   fill($view, doc.problems.length ? problemsBox(doc.problems, "To fix in this file:") : null, probs,
     card("policy.yaml", "Comments start with #. Every save is checked with the agent's own rules first.",
-      h("div", { class: "file-bar" }, view.toggle), ta, view.box));
+      h("div", { class: "file-bar" }, ed.view.toggle), ed.ta, ed.view.box));
+  ed.set(doc.text, doc.rev);
 }
 
 export function rulesForms(doc, jobs = [], tools = null) {
@@ -80,7 +83,7 @@ export function rulesForms(doc, jobs = [], tools = null) {
   const drawAi = () => aiBody.replaceChildren(
     tableRow([
       [h("b", {}, "Chat answers"), h("div", { class: "muted" }, "replies in the chats; a reply at its limit offers Continue")],
-      sel(page.PROFILES, f.settings.profile, (v) => (f.settings.profile = v), "Brain"),
+      sel(PROFILES, f.settings.profile, (v) => (f.settings.profile = v), "Brain"),
       limitInput(f.settings.reply_limit_usd, (v) => (f.settings.reply_limit_usd = v), W("settings.reply_limit_usd"), "for each reply"),
       // the chats' own setting, on the chats' line (owner, 2026-10-06): their tools are "everything switched on, by
       // role" — said in the (i) of its "AI tools" column
@@ -104,7 +107,7 @@ export function rulesForms(doc, jobs = [], tools = null) {
           { cls: "x", v: h("button", { class: "btn icon ghost", title: "Set this job", onclick: () => { f.settings.jobs[j.name] = { ...j.default }; drawAi(); markDirty(); } }, "+") }]);
       }
       return tableRow([what,
-        sel(page.PROFILES, cur.profile, (v) => (cur.profile = v), "Brain"),
+        sel(PROFILES, cur.profile, (v) => (cur.profile = v), "Brain"),
         limitInput(cur.limit_usd, (v) => (cur.limit_usd = v), `Limit per run of ${j.name} (USD)`, "for each run"), got,
         { cls: "x", v: h("button", { class: "btn icon ghost", title: "Stop this job", onclick: () => { delete f.settings.jobs[j.name]; drawAi(); markDirty(); } }, "×") }]);
     }));
@@ -112,7 +115,7 @@ export function rulesForms(doc, jobs = [], tools = null) {
   const ai = card(place("ai"), "Which brain does each piece of work, the most ONE piece of work may cost (one chat reply, or one run of a job — not a monthly budget), and which tools a report gets: only those its skill lists. A reply that reaches its limit stops and offers Continue; a report that reaches it is still sent with what is done. A job that is not set does not run.",
     table(["Work", "Brain", withInfo("Limit (US$)", limitNote),
       withInfo(place("tools"), `Chat answers get every tool switched on in ${where("tools")}, by the person's role. A report gets only the tools its skill lists, among those switched on: to change them, edit the skill's tools list in ${where("skill_tools")} — the choice then travels with the skill.`),
-      ""], aiBody, { cls: "ai" }));
+      ""], aiBody, { cls: "ai", widths: ["30%", "22%", "15%", null, "44"] }));
   const missing = jobs.filter((j) => !j.set).map((j) => j.name);      // the agent's answer (server._jobs)
 
   // people
@@ -126,7 +129,7 @@ export function rulesForms(doc, jobs = [], tools = null) {
         () => h("input", { type: "text", value: p.name ?? "", "aria-label": "Name", oninput: (e) => { p.name = e.target.value; touched(); } }),
         () => h("input", { type: "text", inputmode: "numeric", value: p.telegram_id ?? "", "aria-label": "Telegram id",
                           oninput: (e) => { const t = e.target.value.trim(); p.telegram_id = /^-?\d+$/.test(t) ? Number(t) : e.target.value; touched(); } }),
-        () => sel({ owner: "Owner", fm: "Facility manager" }, p.role, (v) => (p.role = v), "Role"),
+        () => sel(SCHEMA.roles, p.role, (v) => (p.role = v), "Role"),            // policy.ROLE_WORDS
         () => sel(languages(p), p.language ?? "en", (v) => (p.language = v), "Language"),
       ][k](),
     }));
@@ -250,8 +253,9 @@ export function rulesForms(doc, jobs = [], tools = null) {
   setBar({ save, discard: () => rules("forms"), idle: "Changes apply within seconds, no restart." });
   const canUse = tools ? toolsCard(f, tools, () => rules("forms")) : null;
   fill($view, doc.problems.length ? problemsBox(doc.problems, "To fix in this file:") : null, probs,
-    jobsBanner(missing, () => rules("forms")), acting, people, chats, services, devices, ai, canUse);   // AI tools below AI brains and limits (owner, 2026-10-08)
-  if (page.jumpTo === "tools" && canUse) { page.jumpTo = null; requestAnimationFrame(() => canUse.scrollIntoView({ block: "start" })); }
+    jobsBanner(missing, () => rules("forms")),
+    inOrder("rules", { acting, people, chats, actions: services, protected: devices, ai, tools: canUse }));   // places.ORDER
+  if (jumpToTools && canUse) { jumpToTools = false; requestAnimationFrame(() => canUse.scrollIntoView({ block: "start" })); }
 }
 
 // ---------------------------------------------------------------- rules › what the AI can use
@@ -323,7 +327,7 @@ export function toolsCard(f, t, reload) {
         const words = x.kind === "elsewhere"
           ? h("div", { class: "muted" }, "Decided by ", jump("rules-acting", place("acting")), " and ", jump("rules-services", place("actions")), ": every action goes through those rules.")
           : h("div", { class: "muted" }, x.description);
-        return toolCard(on, set, x.label, { words, meta: [h("code", {}, x.key === "web_search" ? "WebSearch" : x.key), used(x.used)] },
+        return toolCard(on, set, x.label, { words, meta: [h("code", {}, x.code), used(x.used)] },
           kind !== "choose");
       }))));
   };
@@ -332,13 +336,13 @@ export function toolsCard(f, t, reload) {
   const roles = () => {
     const fm = f.tool_access.fm;             // group → allowed, as the form says it (policy_doc.to_form)
     return [
-      table(["Tools", "Owner", "Facility manager", "Guest"], t.roles.map((g) => [
+      table(["Tools", SCHEMA.roles.owner, SCHEMA.roles.fm, "Guest"], t.roles.map((g) => [
           h("b", {}, g.label),
           h("label", { class: "switch" }, h("input", { type: "checkbox", checked: true, disabled: true, "aria-label": `${g.label}: owner` })),
           h("label", { class: "switch" }, h("input", { type: "checkbox", checked: fm[g.key], "aria-label": `${g.label}: facility manager`,
             onchange: (e) => { fm[g.key] = e.target.checked; markDirty(); } })),
           { cls: "muted", v: h("span", { title: "There is no guest role yet: the agent answers only the owner and the facility manager" }, "—") }]),
-        { cls: "roles", widths: [null, "18%", "18%", "14%"] }),
+        { cls: "roles", widths: [null, { width: "18%", cls: "owner" }, { width: "18%", cls: "fm" }, { width: "14%", cls: "guest" }] }),
       h("p", { class: "muted" }, `Asking for an action is decided by "${place("actions")}": who approves stays there.`)];
   };
   const tabs = tabbed("tools", [["ha", place("ha_tools"), haInfo, ha], ["own", place("agent_tools"), null, own],

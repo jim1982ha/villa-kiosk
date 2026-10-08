@@ -3,7 +3,7 @@
 // files — sits in a textarea; this adds, for the kinds it can show, a Formatted view and the Formatted / Raw switch.
 // Markdown is drawn from markdown.js's blocks, YAML from yaml.js's pieces: plain data built with core.h, so a file
 // never puts markup in the page, and nothing is fetched. The choice is one for every file, kept while the page is open.
-import { fill, h, page, segmented, table } from "./core.js";
+import { fill, h, markDirty, page, saveWith, segmented, showBar, table } from "./core.js";
 import { parse } from "./markdown.js";
 import { lines } from "./yaml.js";
 
@@ -62,3 +62,28 @@ export function fileViewer(ta, path) {
   show();
   return { toggle, box, show };
 }
+
+// ⚠️ THE ONE FILE EDITOR (architecture review 9): Rules (file) and a skill's Files each built "a textarea, its version,
+// the viewer, a save" — and differed already: Tab indented in a skill's YAML, not in policy.yaml, where indentation
+// matters most. `path`: the file's name (its kind of view); `send(text, rev)`: the save request; `probs`: where a
+// refusal is shown. Returns {ta, view, set(text, rev), save(okText)}: set() after a load, save() from the save bar.
+export function fileEditor(path, send, probs) {
+  const ta = h("textarea", { class: "editor", spellcheck: "false", oninput: markDirty });
+  ta.addEventListener("keydown", (e) => {            // Tab indents instead of leaving the editor
+    if (e.key !== "Tab") return;
+    e.preventDefault();
+    const s = ta.selectionStart; ta.setRangeText("  ", s, ta.selectionEnd, "end"); markDirty();
+  });
+  const view = fileViewer(ta, path);
+  let rev = null;
+  return {
+    ta, view,
+    set(text, r) { ta.value = text; rev = r; page.dirty = false; showBar(); fill(probs); view.show(); },
+    async save(okText) {
+      const res = await saveWith(probs, () => send(ta.value, rev), okText);
+      if (res && res.rev) rev = res.rev;
+      return res;
+    },
+  };
+}
+

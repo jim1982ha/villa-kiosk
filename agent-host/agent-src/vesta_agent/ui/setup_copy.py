@@ -30,11 +30,34 @@ import yaml
 
 from .. import __version__, tool_access
 from ..history import policy_change
-from ..places import title
-from ..policy import WORDS, Policy, problems as policy_problems, setup_fields
+from ..places import title, where
+from ..policy import RULE_WORDS, WORDS, Policy, problems as policy_problems, setup_fields
 from ..skills import FILE_NAME, SKILL_NAME, VILLA_PREFIX, SkillError, skill_files, parse_skill, ai_jobs
 
-PARTS = ("skills", "villa_files", "ai", "actions", "tools", "keep", "instructions")
+# ⚠️ WHAT THE EXPORT OFFERS, IN ITS WORDS (architecture review 9): the page typed these and one named a card that no
+# longer existed ("The AI", "allowed lists"). key → (the words, the note under them, ticked at first), in order.
+PART_WORDS = {
+    "skills": ("The skills, every file", None, True),
+    "villa_files": ("This villa's own choices inside the skills",
+                    "the skills' villa.* files: e.g. which speech-to-text to use, the villa's extra report entries, the "
+                    "commands switched off on the Skills tab. Untick to send the skills as released, without them.", True),
+    "ai": (f"{title('ai')}: brains, spending limits, when the conversation context is deleted, web search", None, True),
+    "actions": (f"{title('actions')}: each service and who decides", None, True),
+    "tools": (f"{title('tools')}: tool switches, per role, skills switched off", None, True),
+    "keep": (WORDS["settings.keep"], None, True),
+    "instructions": ("instructions.md", "your standing rules for the agent", False),
+}
+PARTS = tuple(PART_WORDS)
+#: what never leaves a villa: (words, note)
+STAYS = (("People and their Telegram ids", None), ("Chat ids (owner, facility manager)", None),
+         ("Devices: protected, left alone, the devices each service may act on, the siren", "entity ids are this villa's"),
+         ("Keys and tokens", "never in any file the page makes"), ("Records, transcripts, costs", None))
+
+
+def offer() -> dict:
+    """The export's choices as the page draws them."""
+    return {"parts": [{"key": k, "words": w, "note": n, "on": on} for k, (w, n, on) in PART_WORDS.items()],
+            "stays": [{"words": w, "note": n} for w, n in STAYS]}
 # what each part carries: policy.FIELDS, the one table of the file's settings
 AI_SETTINGS = tuple(k.split(".", 1)[1] for k in setup_fields("ai"))
 TOOL_SECTIONS = tuple(setup_fields("tools"))
@@ -182,7 +205,7 @@ def preview(settings, skills, setup: dict, server_tools: list[dict] | None) -> d
         for svc, rule in (merged.get("allowed_services") or {}).items():
             dom = svc.split(".")[0]
             if rule == "listed" and not pol.lists.get(dom):
-                misfits.append(f"{title('actions')} names {svc} with \"only the devices in the lists\": this villa's "
+                misfits.append(f"{title('actions')} names {svc} with \"{RULE_WORDS['listed']}\": this villa's "
                                f"{dom} list is empty, so the agent will refuse it until devices are added.")
     if setup["instructions"] is not None:
         try:
@@ -203,7 +226,7 @@ def preview(settings, skills, setup: dict, server_tools: list[dict] | None) -> d
             misfits.append(f"{name} will not work until a tool is switched on: {b['why']}")
         for _, job in ai_jobs({name: sk}):
             if job["name"] not in jobs:
-                misfits.append(f"{name}'s AI job {job['name']} is not set in The AI: it will not run until it is (Add them).")
+                misfits.append(f"{name}'s AI job {job['name']} is not set in {where('ai')}: it will not run until it is (Add them).")
     try:
         with open(settings.policy_path, "rb") as f:
             policy_now = f.read()
@@ -217,11 +240,11 @@ def preview(settings, skills, setup: dict, server_tools: list[dict] | None) -> d
             "changes": sum(1 for r in rows if r["change"] != "same")}
 
 
-def apply(ui, setup: dict, prev: dict) -> None:
+def apply(pf, setup: dict, prev: dict) -> None:
     """Write what the preview showed: skills first (each checked as a save would), then the rules, then instructions."""
     from ..skills import TRASH, carry_villa_files, to_trash
-    from .server import Refused
-    s = ui.s
+    from .changes import Refused
+    s = pf.s
     changed = {r["what"] for r in prev["rows"] if r["change"] != "same"}
     for name, files in sorted(setup["skills"].items()):
         if name not in changed:
@@ -237,23 +260,23 @@ def apply(ui, setup: dict, prev: dict) -> None:
         if os.path.isdir(path):
             carry_villa_files(path, new)                       # this villa's own files go with it
         try:
-            ui.check_skill(name, new)
+            pf.check_skill(name, new)
         except Refused:
             shutil.rmtree(new, ignore_errors=True)
             raise
         if os.path.isdir(path):
             old = to_trash(s.skills_dir, path, name)
         os.rename(new, path)
-        ui.folder_change("Import", f"{name} {'replaced' if old else 'added'} from a setup"
+        pf.folder_change("Import", f"{name} {'replaced' if old else 'added'} from a setup"
                                     + (f" (the previous one kept in skills/{TRASH})" if old else ""), name, old, "present")
     if setup["rules"] and any(r["kind"] == "rules" and r["change"] != "same" for r in prev["rows"]):
         from .policy_doc import apply_form, to_form
-        text, r = ui.policy_now()
+        text, r = pf.policy_now()
         merged = _merged_rules(_policy_raw(s.policy_path), setup["rules"])
         form = {k: merged[k] for k in ("settings", *ACTION_SECTIONS, *TOOL_SECTIONS) if k in merged}
         if "settings" in form:
             form["settings"] = {**to_form(text)["settings"], **form["settings"]}
-        ui.save_policy(apply_form(text, form), r, "Import", "Rules from a setup: " + policy_change(text, apply_form(text, form)))
+        pf.save_policy(apply_form(text, form), r, "Import", "Rules from a setup: " + policy_change(text, apply_form(text, form)))
     if setup["instructions"] is not None and "instructions.md" in changed:
         # undoable like any text (Overview › Page changes): it was recorded as a kind Undo did not know
-        ui.text_change("Import", "instructions.md from a setup", {"kind": "instructions"}, setup["instructions"])
+        pf.text_change("Import", "instructions.md from a setup", {"kind": "instructions"}, setup["instructions"])

@@ -369,7 +369,7 @@ def test_the_agent_checks_a_try_it_finds_in_the_folder_as_the_page_does(tmp_path
 
 def test_undo_is_offered_exactly_for_what_undo_handles():
     # architecture review 8: one answer (server.undoable) for the list and the Undo itself
-    from vesta_agent.ui.server import TEXT_KINDS, undoable
+    from vesta_agent.ui.changes import TEXT_KINDS, undoable
     row = lambda place, kind, undone=None: {"place": place, "target": {"kind": kind}, "undone_by": undone}  # noqa: E731
     assert all(undoable(row("Rules", k)) for k in (*TEXT_KINDS, "folder"))
     assert not undoable(row("Release", "file")) and not undoable(row("Rules", "policy", 7)) and not undoable(row("Skills", "release"))
@@ -438,3 +438,58 @@ def test_a_skills_when_rows_come_as_fields_in_the_order_shown(ui):
     assert [a["job"] for a in acts[:3]] == ["fm-daily", "fm-weekly", "owner-monthly"]
     assert acts[-1]["when"] == "in a chat" and acts[-1]["note"] == "when a person asks about it" and acts[-1]["kind"] is None
 
+
+
+def test_a_broken_policy_file_still_opens_every_tab_and_names_its_problem(ui):
+    # architecture review 9: an unparseable policy.yaml made jobs, overview and skills answer 500, and Rules (file),
+    # the one place to repair it, hung on "Loading…" behind them
+    with open(ui.policy_path, "w") as f:
+        f.write("settings:\n  profile: auto\n bad: [unclosed\n")
+
+    async def fn(c):
+        out = {}
+        for p in ("/api/policy", "/api/rules", "/api/jobs", "/api/overview", "/api/skills", "/api/tools", "/api/costs?days=7"):
+            r = await c.get(p, headers=HDR)
+            out[p] = (r.status, await r.json())
+        return out
+    got = call(ui, fn)
+    assert {p: s for p, (s, _) in got.items()} == {p: 200 for p in got}
+    assert got["/api/policy"][1]["problems"] and got["/api/rules"][1]["problems"] and got["/api/overview"][1]["policy_problems"]
+    assert "rulesFile(await api(\"GET\", \"api/policy\"))" in page_js()          # the file view asks for the file only
+
+
+def test_the_rules_tab_comes_in_one_answer(ui):
+    async def fn(c):
+        return await (await c.get("/api/rules", headers=HDR)).json()
+    v = call(ui, fn)
+    assert {"text", "rev", "form", "problems", "profiles", "schema", "jobs", "entities", "tools"} <= set(v)
+    assert [j["name"] for j in v["jobs"]] == ["fm-daily", "fm-weekly", "owner-monthly"]
+
+
+def test_a_skills_own_files_cannot_be_deleted_and_the_list_says_so(ui):
+    # architecture review 9: the page hid "Delete this file" for SKILL.md and skill.yaml; the server deleted them
+    async def fn(c):
+        files = (await (await c.get("/api/skills/reports/files", headers=HDR)).json())["files"]
+        st, body = await _json(c, "delete", "/api/skills/reports/file?path=skill.yaml", json={})
+        return files, st, body
+    files, st, body = call(ui, fn)
+    by = {f["path"]: f["deletable"] for f in files}
+    assert by["SKILL.md"] is False and by["skill.yaml"] is False and by["reports.yaml"] is True
+    assert st == 400 and "part of every skill" in body["problems"][0]
+    assert os.path.isfile(os.path.join(ui.skills_dir, "reports", "skill.yaml"))
+
+
+def test_the_server_names_what_the_page_used_to_spell_out():
+    # architecture review 9: "WebSearch", "not recorded" and a try's verdict words were typed on the page
+    from vesta_agent import tool_access
+    from vesta_agent.script_run import ScriptAnswer
+    from vesta_agent.ui import setup_copy
+    from vesta_agent.places import title
+    own = {o["key"]: o["code"] for o in tool_access.catalog(Policy({}), None, {})["own"]}
+    assert own["web_search"] == "WebSearch" and own["create_ticket"] == "create_ticket"
+    words = {p["key"]: p["words"] for p in setup_copy.offer()["parts"]}
+    assert words["ai"].startswith(title("ai")) and words["tools"].startswith(title("tools"))
+    assert not [w for w in map(str, setup_copy.offer().values()) if "The AI:" in w or "allowed lists" in w]
+    assert "fetch(" not in page_js().split("export function exportCard")[1].split("export function")[0]
+    words_of = lambda code: ScriptAnswer(code, "", "", 1.0).verdict_words  # noqa: E731
+    assert (words_of(0), words_of(2), words_of(1)) == ("Done", "Nothing to do, or a setting is missing", "Stopped (exit 1)")

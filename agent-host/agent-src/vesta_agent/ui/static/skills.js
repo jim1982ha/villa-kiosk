@@ -1,6 +1,7 @@
 // VESTA Agent page — the Skills tab.
 import { api, ask, dropdown, field, fill, go, guard, h, infoButton, markDirty, page, paged, place, plural, popup, problemsBox, reasons, saveWith, setBar, showBar, subTabs, tabbed, tell, tileCard, titleWithInfo, toast, toggleCard, $view, where, withInfo } from "./core.js";
-import { fileViewer } from "./viewer.js";
+import { openTools } from "./rules.js";
+import { fileEditor } from "./viewer.js";
 
 // ---------------------------------------------------------------- skills
 // A skill's state against this release: it follows the releases (never edited here), it was edited here (updates
@@ -125,7 +126,7 @@ export function tryPanel(name, d, script, command = null) {
       fill(out, r.ok === false && r.exit === undefined ? problemsBox([r.error], "Not run:") : [
         // the verdict is the agent's (script_run.py), the same for every run: not worked out again here
         h("div", { class: "try-result" }, h("span", { class: "chip" + ({ done: "", nothing: " warn" }[r.verdict] ?? " off") },
-          { done: "Done", nothing: "Nothing to do, or a setting is missing" }[r.verdict] || `Stopped (exit ${r.exit})`),
+          r.verdict_words || r.verdict),
           h("span", { class: "muted small" }, `${r.seconds} s · the script's own answer · nothing was sent`)),
         r.error ? problemsBox([r.error], "The script stopped:") : null,
         h("pre", { class: "out" }, pretty(r.output))]);
@@ -166,10 +167,11 @@ export function shown(rows, around = 2) {
 // ⚠️ ONE "TAKE THE RELEASE VERSION" (owner, 2026-10-08: "i don't see any Take the release version button"): it was
 // only in the banner, which "Keep mine" hides for the rest of the release — the Compare tab described a button that
 // was not there. The banner and the Compare tab both draw this one.
+const TAKE_RELEASE_TEXT = () => `The skill's files are replaced by the release's; this villa's own files (villa.*) are kept. Your edits are moved to skills/.trash, and Undo (${where("changes")}) brings them back.`;
 export function takeReleaseButton(name) {
   const btn = h("button", { class: "btn primary", onclick: async () => {
     if (!(await ask({ title: "Take the release version?", ok: "Take the release version", danger: true,
-      text: `The skill's files are replaced by the release's; this villa's own files (villa.*) are kept. Your edits are moved to skills/.trash, and Undo (${where("changes")}) brings them back.` }))) return;
+      text: TAKE_RELEASE_TEXT() }))) return;
     try { await api("POST", `api/skills/${encodeURIComponent(name)}/take-release`); toast("The release's version is in place."); skills(name); }
     catch (err) { tell("Not changed", reasons(err)); }
   } }, "Take the release version");
@@ -193,7 +195,7 @@ export async function comparePanel(name, rel) {
           h("pre", { class: r.here === null ? "gap" : "", "data-side": "here" }, r.here ?? ""),
           h("pre", { class: r.release === null ? "gap" : "", "data-side": "release" }, r.release ?? "")))),
       h("div", { class: "actions" }, takeReleaseButton(name),
-        infoButton("Take the release version", "The skill's files are replaced by the release's and this villa's own files (villa.*) are kept. Your edits are moved to skills/.trash, and Undo brings them back.")));
+        infoButton("Take the release version", TAKE_RELEASE_TEXT())));
   };
   if (file) await draw(); else fill(box, h("p", { class: "muted" }, "No file differs."));
   return h("div", { class: "skill-sec" }, box);
@@ -241,14 +243,16 @@ export async function openSkill(name, pane, info, path = ABOUT) {
       ...fixes.map((b) => h("button", { class: "btn primary", onclick: async () => {
         try { await switchTool(b); toast(`${b.label} switched on.`); skills(name); } catch (err) { tell("Not changed", reasons(err)); }
       } }, `Switch ${b.label} on`)),
-      h("button", { class: "btn ghost", onclick: async () => { if (await guard()) { page.jumpTo = "tools"; page.tabs.tools = "ha"; go("rules"); } } }, `Open ${where("tools")}`))) : null;
+      h("button", { class: "btn ghost", onclick: async () => { if (await guard()) openTools(); } }, `Open ${where("tools")}`))) : null;
   const notLoaded = info && !info.ok && !(d.blocked && d.blocked.length) && !d.off ? problemsBox([info.problem], "The agent does not use this skill:") : null;
   const releaseBanner = rel.state === "edited" && !rel.kept ? h("div", { class: "banner" },
     h("div", {}, h("b", {}, "This version of the agent has another version of this skill."),
       h("div", { class: "muted" }, `It was edited here, so it was kept as it is (${plural(rel.differs.length, "file differs", "files differ")}).`)),
     h("div", { class: "actions" },
       h("button", { class: "btn ghost", onclick: () => goTo(COMPARE) }, "Compare"),
-      h("button", { class: "btn ghost", onclick: async () => { await api("POST", `api/skills/${enc}/keep`); toast("Kept as it is."); skills(name); } }, "Keep mine"),
+      h("button", { class: "btn ghost", onclick: async () => {
+        try { await api("POST", `api/skills/${enc}/keep`); toast("Kept as it is."); skills(name); } catch (err) { tell("Not kept", reasons(err)); }
+      } }, "Keep mine"),
       takeReleaseButton(name))) : null;
 
   // ---- the views
@@ -266,18 +270,12 @@ export async function openSkill(name, pane, info, path = ABOUT) {
 
   // ---- Files: the list, the editor, the file's actions
   const probs = h("div");
-  const ta = h("textarea", { class: "editor", spellcheck: "false", oninput: markDirty });
-  ta.addEventListener("keydown", (e) => {            // Tab indents instead of leaving the editor
-    if (e.key !== "Tab") return;
-    e.preventDefault();
-    const s = ta.selectionStart; ta.setRangeText("  ", s, ta.selectionEnd, "end"); markDirty();
-  });
-  let fileRev = null;
-  // ⚠️ A MARKDOWN OR YAML FILE OPENS FORMATTED (owner, 2026-10-08), the raw text one press away (viewer.fileViewer)
-  const view = fileViewer(ta, path);
+  // the one file editor (viewer.fileEditor): Tab-indent, Formatted / Raw, the file's version, its save
+  const ed = fileEditor(path, (content, rev) => api("PUT", `api/skills/${enc}/file?path=${encodeURIComponent(path)}`, { content, rev }), probs);
+  const { ta, view } = ed;
   const load = async (p) => {
     const f = await api("GET", `api/skills/${enc}/file?path=${encodeURIComponent(p)}`);
-    ta.value = f.content; fileRev = f.rev; page.dirty = false; showBar(); fill(probs); view.show();
+    ed.set(f.content, f.rev);
   };
   // one line of files while collapsed (the open one first, so it always shows); a button shows them all,
   // and appears only when they do not fit on that line. Open or closed is kept from skill to skill.
@@ -296,11 +294,7 @@ export async function openSkill(name, pane, info, path = ABOUT) {
   requestAnimationFrame(fits);
   const onResize = () => (fileList.isConnected ? fits() : window.removeEventListener("resize", onResize));
   window.addEventListener("resize", onResize);
-  const save = async () => {
-    const r = await saveWith(probs, () => api("PUT", `api/skills/${enc}/file?path=${encodeURIComponent(path)}`,
-                                              { content: ta.value, rev: fileRev }), `${path} saved.`);
-    if (r) fileRev = r.rev;
-  };
+  const save = () => ed.save(`${path} saved.`);
   const newFile = async () => {
     const p = await ask({ title: "New file", text: `In ${name}. A folder may be part of the name.`, ok: "Create",
                           input: "e.g. scripts/check.py or templates/page.html" });
@@ -328,7 +322,7 @@ export async function openSkill(name, pane, info, path = ABOUT) {
     probs, path ? [ta, view.box] : h("p", { class: "muted" }, "No file."),
     h("div", { class: "actions" },
       h("button", { class: "btn ghost", onclick: newFile }, "New file"),
-      path && !["SKILL.md", "skill.yaml"].includes(path) ? h("button", { class: "btn ghost", onclick: delFile }, "Delete this file") : null,
+      files.find((x) => x.path === path)?.deletable ? h("button", { class: "btn ghost", onclick: delFile }, "Delete this file") : null,
       h("button", { class: "btn danger push-right", onclick: delSkill }, "Delete the skill")));
   setBar({ save, discard: () => load(path), idle: path ? `Editing ${path}. Saves are checked before they are written.` : "" });
   if (path) await load(path);

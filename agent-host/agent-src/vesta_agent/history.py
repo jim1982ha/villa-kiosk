@@ -56,12 +56,16 @@ class History:
             self.db.commit()
             return c.lastrowid
 
+    #: where a change was made, and its chip's colour on the page (the page held this table, architecture review 9)
+    CHIPS = {"Rules": "", "Skills": "warn", "Release": "gray", "Import": "", "Undo": "gray"}
+
     def rows(self, limit: int = 200) -> list[dict]:
         out = []
         for r in self.db.execute("select id, at, place, what, target, undone_by, before is not null as had_before, "
                                  "after is not null as had_after from changes order by id desc limit ?", (limit,)):
             d = dict(r)
             d["target"] = json.loads(d["target"])
+            d["chip"] = self.CHIPS.get(d["place"], "")
             out.append(d)
         return out
 

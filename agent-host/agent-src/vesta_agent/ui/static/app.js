@@ -30,4 +30,4 @@ document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("cli
   go(tab);
 }));
 
-go(["overview", "rules", "rules-file", "skills", "costs"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "overview");
+go(location.hash.slice(1) in page.views ? location.hash.slice(1) : "overview");      // an address the page has, else Overview

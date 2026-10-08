@@ -4,7 +4,8 @@ import { alertButton, api, card, dropdown, figures, fill, h, infoButton, page, p
 // ---------------------------------------------------------------- costs
 export const usd = (v) => "US$ " + (v || 0).toFixed((v || 0) > 0 && v < 0.01 ? 4 : 2);
 export const ktok = (n) => (n === null || n === undefined ? "—" : n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1000 ? (n / 1000).toFixed(n >= 1e5 ? 0 : 1) + "k" : String(n));
-export const brain = (p, m) => [p ? (page.PROFILES[p] || p).replace(/ \(.*/, "") : null, m ? m.replace(/^claude-/, "") : null].filter(Boolean).join(" · ") || "—";
+let PROFILES = {};                     // the brains' names, from this tab's own answer (no shared page field)
+export const brain = (p, m) => [p ? (PROFILES[p] || p).replace(/ \(.*/, "") : null, m ? m.replace(/^claude-/, "") : null].filter(Boolean).join(" · ") || "—";
 
 // A run's "What": its label alone in the table; where it came from and what was asked as its tooltip
 // (owner, 2026-10-04: "don't show the details directly in the table"). A tap shows the same lines under
@@ -29,7 +30,7 @@ export function runWhat(r) {
 export async function costs(days = 7) {
   fill($view, h("p", { class: "muted" }, "Loading…"));
   const c = await api("GET", `api/costs?days=${days}`);
-  page.PROFILES = c.profiles || page.PROFILES;
+  PROFILES = c.profiles || {};
   if (c.none) return fill($view, card("Costs", "The agent has not recorded anything yet (it has not run in agent mode)."));
   const period = dropdown([[7, "Last 7 days"], [30, "Last 30 days"], [90, "Last 90 days"]], days, (v) => costs(Number(v)), "Period");
   const busiest = c.by_day.reduce((m, d) => (d.cost > m.cost ? d : m), { day: null, cost: 0 });
@@ -61,7 +62,7 @@ export async function costs(days = 7) {
       : null).filter(Boolean));
   const groupTable = (rows, title) => paged([title, { v: "Runs", cls: "num" }, { v: "Tokens in", cls: "num" }, { v: "Tokens out", cls: "num" },
     { v: "Cost", cls: "num" }, { v: "Per run", cls: "num" }], rows.map((g) => [g.name.replace(/^claude-/, ""), { v: g.runs, cls: "num" },
-    { v: g.name === "not recorded" ? "—" : ktok(g.tokens_in), cls: "num" }, { v: g.name === "not recorded" ? "—" : ktok(g.tokens_out), cls: "num" }, { v: usd(g.cost), cls: "num" }, { v: usd(g.cost / g.runs), cls: "num" }]));
+    { v: g.recorded ? ktok(g.tokens_in) : "—", cls: "num" }, { v: g.recorded ? ktok(g.tokens_out) : "—", cls: "num" }, { v: usd(g.cost), cls: "num" }, { v: usd(g.cost / g.runs), cls: "num" }]));
   const runRows = c.runs.map((r) => [
     new Date(r.at).toLocaleString([], { dateStyle: "short", timeStyle: "short" }),
     runWhat(r),

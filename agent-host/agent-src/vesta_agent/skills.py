@@ -76,6 +76,8 @@ REFERENCE = ".starter"      # the current starter skills, for reading: not loade
 # the villa's playbook entries and cards) is the villa's, never shipped. It does not count as an edit of
 # the skill, and an update keeps it — so the villa adds its own without losing the starter's updates.
 VILLA_PREFIX = "villa."
+#: the files a skill is made of: never deleted from the page (the page hid the button, the server allowed it, review 9)
+REQUIRED_FILES = ("SKILL.md", "skill.yaml")
 HOOK_EVENTS = {"critical_event", "voice_message"}
 JOB_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,40}$")
 JOB_TARGETS = ("owner", "fm")
@@ -123,7 +125,7 @@ class Script:
         return self.off_all or bool(self.off)
 
     def view(self) -> dict:
-        """What the page shows of it (Skills → About, Try a command)."""
+        """What the page shows of it (Skills › About, its Offline Test)."""
         return {"script": self.name, "description": self.description,
                 "flags": {k: (list(v) if isinstance(v, tuple) else v) for k, v in self.flags.items()},
                 "whole_off": self.off_all,

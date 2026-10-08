@@ -557,7 +557,7 @@ class Vesta:
         return {"ok": False, "error": "Unknown request."}
 
     def try_command(self, skill_name: str, script: str, args: list[str]) -> dict:
-        """Skills → Try a command: one command on the live villa, its arguments checked as when the AI asks, run
+        """Skills › Offline Test: one command on the live villa, its arguments checked as when the AI asks, run
         and judged as every run (script_run.py) — and NOT carried out: its messages and tickets are shown in the
         answer, never sent or recorded. A switched-off skill can be tried: that is how its owner finds out."""
         from .skills import ToolError, validate_script_args
@@ -567,7 +567,7 @@ class Vesta:
         except ToolError as e:
             return {"ok": False, "error": str(e)}
         ans = script_run.run(self.s, self.state, skill, script, final, by=script_run.PAGE)
-        return {"ok": ans.ok, "exit": ans.code, "verdict": ans.verdict, "seconds": ans.seconds,
+        return {"ok": ans.ok, "exit": ans.code, "verdict": ans.verdict, "verdict_words": ans.verdict_words, "seconds": ans.seconds,
                 "output": ans.stdout[:60_000], "error": ans.error}
 
     async def _safe(self, coro):

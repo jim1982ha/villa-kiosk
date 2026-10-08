@@ -105,7 +105,7 @@ main { max-width: var(--page-width); margin: 0 auto; padding: 16px 20px; }
 .card h2 { font-family: var(--font-display); font-weight: 500; font-size: var(--text-lg); margin: 0 0 4px; }
 .card .lead { color: var(--text-secondary); font-size: var(--text-sm); margin: 0 0 14px; line-height: 1.45; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
-/* A set of figures (app.js figures()): as many to a row as fit, two on a phone (min 120px each:
+/* A set of figures (core.js figures()): as many to a row as fit, two on a phone (min 120px each:
    two fit a 320px screen's card). min(…, 100%) keeps one from overflowing a very narrow card. */
 .figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(120px, 100%), 1fr)); gap: 16px 12px; }
 .figures > * { min-width: 0; }
@@ -158,11 +158,7 @@ table.rows td.x { width: 44px; }
 .chip.off { background: rgba(178, 66, 50, 0.12); color: var(--status-danger); }
 .problems { border-left: 3px solid var(--status-danger); background: rgba(178, 66, 50, 0.08); border-radius: 8px; padding: 10px 14px; margin: 0 0 14px; }
 .problems ul { margin: 6px 0 0; padding-left: 18px; }
-.ok { color: var(--status-on); }
 .muted { color: var(--text-secondary); font-size: var(--text-sm); }
-ul.plain { list-style: none; margin: 0; padding: 0; }
-ul.plain li { padding: 8px 0; border-bottom: 1px solid var(--hairline); }
-ul.plain li:last-child { border-bottom: 0; }
 
 /* ---- skills */
 /* the skills list: 30% wider than its old 280 px (owner, 2026-10-08), now the page is wider */
@@ -199,32 +195,26 @@ ul.plain li:last-child { border-bottom: 0; }
 
 /* AI jobs: the same fields and grid as "AI brains and limits", one block per job */
 /* a switch and a field side by side on one line; they stack when the screen is too narrow */
-.inline { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 32px; }
-.inline .field { min-width: 220px; }
 /* ⚠️ EDITABLE TABLES HAVE FIXED COLUMNS (owner, 2026-10-04, a phone screenshot: the services table ran off the
-   screen). An automatic table sizes a column to its longest unbreakable text, so one long rule ("listed — only
-   the devices in the lists below, then approval") widened the whole table and squeezed the service ids to
+   screen). An automatic table sizes a column to its longest unbreakable text, so one long rule's words
+   widened the whole table and squeezed the service ids to
    "cove". Fixed widths: a long choice ends in "…" inside its own column; on a phone each row stacks below. */
 table.rows.edit, table.rows.ai { table-layout: fixed; }   /* NOT the paged data tables: their numbers never wrap */
 table.rows td .dropdown, table.rows td input:not([type=checkbox]):not([type=radio]) { width: 100%; min-width: 0; }
-table.rows.ai th:nth-child(1) { width: 30%; }
-table.rows.ai th:nth-child(2) { width: 22%; }
-table.rows.ai th:nth-child(3) { width: 15%; }
 table.rows.ai td { vertical-align: top; padding-top: 10px; padding-bottom: 10px; border-top: 1px solid var(--hairline); }
 table.rows.ai td.tools-got { padding-top: 20px; }
 table.rows.ai td:first-child { padding-top: 12px; }
 ul.tool-list { margin: 4px 0 0; padding-left: 18px; font-size: var(--text-sm); color: var(--text-secondary); }
 ul.tool-list li { padding: 1px 0; }
-table.rows.ai th:last-child { width: 44px; }
 /* on a phone each AI row puts the work on its own line, its brain and limit below it */
 @media (max-width: 600px) {
-  table.rows.ai thead { display: none; }
+  table.rows.ai thead, table.rows.ai colgroup { display: none; }
   table.rows.ai tr { display: grid; grid-template-columns: 1fr 88px 44px; gap: 6px 8px; padding: 10px 0; border-top: 1px solid var(--hairline); }
   table.rows.ai tr:first-child { border-top: 0; }
   table.rows.ai td { padding: 0; min-width: 0; }   /* a long brain name ("Performance (Opus)") pushed the × off the card */
   table.rows.ai td:first-child { grid-column: 1 / -1; }
   table.rows.ai td[colspan] { grid-column: span 2; }
-  /* an editable table (app.js editTable): each column says where it goes, the remove button ends line one */
+  /* an editable table (core.js editTable): each column says where it goes, the remove button ends line one */
   table.rows.edit thead, table.rows.edit colgroup { display: none; }
   table.rows.edit tr { display: grid; grid-template-columns: 1fr 1fr 44px; gap: 6px 8px; padding: 10px 0; border-top: 1px solid var(--hairline); }
   table.rows.edit tr:first-child { border-top: 0; }
@@ -269,7 +259,7 @@ svg.bars .base { stroke: var(--text-dim); }
 .picker-box .caret { margin-left: auto; color: var(--text-dim); }
 .picker-chosen { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
 .picker-chosen .tag { padding: 2px 8px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; }
-/* the floating panels (app.js floating): the dropdown's list, the picker's list, the tooltip */
+/* the floating panels (core.js floating): the dropdown's list, the picker's list, the tooltip */
 .floating { position: fixed; z-index: 70; }
 .picker-panel { display: flex; flex-direction: column; overflow: hidden;
   background: var(--bg-base); border: 1px solid var(--hairline); border-radius: var(--radius); box-shadow: 0 12px 32px rgba(0, 0, 0, .28); padding: 8px; }
@@ -285,7 +275,7 @@ svg.bars .base { stroke: var(--text-dim); }
 .picker-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 8px; border-top: 1px solid var(--hairline); margin-top: 6px; }
 .pad { padding: 8px; }
 
-/* THE DROPDOWN (app.js dropdown()): the device picker's box, and its own list on the page body in place of
+/* THE DROPDOWN (core.js dropdown()): the device picker's box, and its own list on the page body in place of
    the platform's picker. 44 px rows, the touch minimum. */
 .dropdown { padding: 6px 12px; min-width: 0; }
 .dropdown:focus-visible, .dropdown[aria-expanded="true"] { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -298,13 +288,13 @@ svg.bars .base { stroke: var(--text-dim); }
 .dropdown-option.on { color: var(--accent); font-weight: 600; }
 .dropdown-option.on::after { content: "\2713"; margin-left: auto; padding-left: 12px; }
 
-/* A run's "What" (app.js runWhat): the details are its tooltip, and a tap shows them under it */
+/* A run's "What" (costs.js runWhat): the details are its tooltip, and a tap shows them under it */
 .what-tip { cursor: help; }
 .what-tip b { text-decoration: underline dotted var(--text-dim); text-underline-offset: 3px; }
 .what-tip .what-detail { display: none; font-size: var(--text-xs); margin-top: 2px; }
 .what-tip[aria-expanded="true"] .what-detail { display: block; }
 
-/* A paged data table (app.js paged) on a phone (owner, 2026-10-05: columns overlapped): each row a card,
+/* A paged data table (core.js paged) on a phone (owner, 2026-10-05: columns overlapped): each row a card,
    each value on its own line with its column's name; an empty value (a row's last chip column) takes no line. */
 @media (max-width: 600px) {
   table.data thead { display: none; }
@@ -321,7 +311,7 @@ svg.bars .base { stroke: var(--text-dim); }
   table.data td.ph-half:nth-child(even of .ph-half) { align-items: flex-end; text-align: right; }
 }
 
-/* ---- the page's own dialog (app.js ask): never the browser's confirm/alert/prompt (owner, 2026-10-06).
+/* ---- the page's own dialog (core.js ask): never the browser's confirm/alert/prompt (owner, 2026-10-06).
    Opaque (the card colour is translucent), the theme's fonts and buttons, phone-wide at most. */
 dialog.ask { border: 1px solid var(--hairline-strong); border-radius: var(--panel-radius); background: var(--bg-base);
   color: var(--text-primary); padding: 22px; width: min(440px, calc(100vw - 32px)); box-shadow: 0 12px 40px var(--shadow); }
@@ -372,7 +362,7 @@ table.rows td .switch input { width: 44px; flex: none; }   /* not the cell-wide 
 td.tools-got details.fold summary { padding: 0; color: var(--text-primary); }
 /* skills */
 .skill-name { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-/* one skill (app.js openSkill): head, banners, sub-tabs, then one view (owner, 2026-10-06: "very messy") */
+/* one skill (skills.js openSkill): head, banners, sub-tabs, then one view (owner, 2026-10-06: "very messy") */
 .skill-pane .lead { margin-top: 6px; }
 .skill-head { display: flex; align-items: flex-start; gap: 12px; }
 .skill-title { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
@@ -384,7 +374,7 @@ td.tools-got details.fold summary { padding: 0; color: var(--text-primary); }
 .skill-bar > .chip { flex: none; }
 .skill-pane > .skill-head { display: none; }           /* the list beside it names the skill (owner, 2026-10-06) */
 .skill-pane > .problems, .skill-pane > .banner { margin-bottom: 14px; }
-.skill-sec h3, .about-sec h3 { font-family: var(--font-display); font-weight: 500; font-size: var(--text-md); margin: 0 0 6px; }
+.about-sec h3 { font-family: var(--font-display); font-weight: 500; font-size: var(--text-md); margin: 0 0 6px; }
 .skill-sec code { font-family: var(--font-mono); font-size: var(--text-xs); }
 .about { display: grid; gap: 22px; }
 /* a grid item is as wide as its content by default: the phone's row of tabs (one line, scrolled) pushed the section 5 px out */
@@ -415,7 +405,6 @@ details.fold summary { cursor: pointer; color: var(--text-secondary); font-size:
   .compare-row.diff pre[data-side="release"] { background: rgba(52, 132, 90, 0.12); }
   .compare-row pre.gap { display: none; }
 }
-.skill-sec.try h3 { margin: 18px 0 8px; }
 .try-opts { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px 16px; align-items: start; }
 .try-result { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 16px 0 0; }
 pre.out { font-family: var(--font-mono); font-size: 12.5px; line-height: 1.6; background: var(--bg-input); border-radius: var(--radius); padding: 14px 16px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 60vh; overflow-y: auto; margin: 8px 0 0; }
@@ -446,15 +435,15 @@ ol.steps code { font-family: var(--font-mono); font-size: var(--text-xs); color:
   .compare-head, .compare-row { grid-template-columns: 1fr; }
   .compare-row pre + pre { border-left: 0; border-top: 1px dashed var(--hairline); }
 }
-.files.views { margin: 14px 0 8px; }
 input[type=file] { font: inherit; color: var(--text-secondary); max-width: 100%; }
 input[type=file]::file-selector-button { font: inherit; font-weight: 500; min-height: var(--touch-min); padding: 0 18px; margin-right: 12px;
   border-radius: var(--radius); border: 1px solid var(--hairline-strong); background: transparent; color: var(--text-primary); cursor: pointer; }
 @media (max-width: 600px) { .subtabs { flex-wrap: nowrap; overflow-x: auto; } .subtabs button:not(.info) { white-space: nowrap; padding: 8px 9px; } }
-/* a card's title and its (i) (app.js card / titleWithInfo) */
+/* a card's title and its (i) (core.js card / titleWithInfo) */
 .card-title h2, .card-title h3 { display: flex; align-items: center; gap: 8px; }
-button.info { width: 22px; height: 22px; min-height: 0; padding: 0; border-radius: 50%; border: 1px solid var(--hairline-strong); background: none;
-  color: var(--text-secondary); font: italic 600 12px/1 Georgia, serif; cursor: help; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.card-title h2 { margin: 0; }
+button.info { width: 1.45em; height: 1.45em; min-height: 0; padding: 0; border-radius: 50%; border: 1px solid var(--hairline-strong); background: none;
+  color: var(--text-secondary); font: italic 600 .85em/1 Georgia, serif; cursor: help; display: inline-flex; align-items: center; justify-content: center; flex: none; }
 button.info:hover, button.info[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
 /* an alert's (!) and its tooltip: one colour for what went wrong (core.alertButton) */
 button.info.alert, button.info.alert:hover, button.info.alert[aria-expanded="true"] { color: var(--status-danger); border-color: var(--status-danger);
@@ -462,7 +451,6 @@ button.info.alert, button.info.alert:hover, button.info.alert[aria-expanded="tru
 .tooltip.alert { border-left: 3px solid var(--status-danger); }
 .tooltip .tooltip-detail { margin-top: 6px; opacity: .75; font-family: var(--font-mono); font-size: var(--text-xs); overflow-wrap: anywhere; }
 .card-title { margin: 0 0 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
-.card-title h2 { margin: 0; }
 .card-title-right { margin-left: auto; }
 .card-title-right .dropdown { width: auto; }
 .tooltip { overflow: auto; padding: 10px 12px; border-radius: var(--radius); background: var(--text-primary); color: var(--bg-base);
@@ -470,10 +458,9 @@ button.info.alert, button.info.alert:hover, button.info.alert[aria-expanded="tru
 /* a device picker inside an editable table (the services' devices): top-aligned with the line's other fields */
 table.rows.edit td { vertical-align: top; }
 table.rows.edit td > .muted.small { display: block; padding-top: 12px; }
-code.flag { font-family: var(--font-mono); font-size: var(--text-xs); padding: 2px 8px; border-radius: 6px; background: var(--bg-input); color: var(--text-secondary); }
 a.jump { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .card.flash { outline: 2px solid var(--accent); outline-offset: 2px; transition: outline-color .4s; }
-/* the tools as cards (app.js toolsCard): at most 4 a row, 3 / 2 / 1 as the screen narrows */
+/* the tools as cards (rules.js toolsCard): at most 4 a row, 3 / 2 / 1 as the screen narrows */
 .tool-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 4px 0 16px; }
 @media (max-width: 1060px) { .tool-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 800px) { .tool-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -489,24 +476,22 @@ a.jump { color: var(--accent); text-decoration: underline; text-underline-offset
 .tool-card-head b { overflow-wrap: anywhere; }
 .tool-card-head .chip { margin-left: 6px; }
 .tool-card-head .switch { min-height: 0; flex: none; }
-.tool-card .muted { font-size: var(--text-xs); }
+.tool-card .muted { font-size: var(--text-xs); overflow-wrap: anywhere; }
 .tool-card .tool-meta { margin-top: auto; }
 .tool-card .tool-meta code { overflow-wrap: anywhere; }
 /* an (i) takes the size of the text it sits in (a card title, a column heading, a field's label) */
 .with-info { display: inline-flex; align-items: center; gap: 6px; }
-button.info { width: 1.45em; height: 1.45em; font-size: .85em; }
 th button.info, .field button.info { font-size: 1em; }
 .title-switch { min-height: 0; }
 .row-inline { flex-direction: row; align-items: center; gap: 8px; }
 .row-inline input[type=number] { width: 80px; }
-.tool-card .muted { overflow-wrap: anywhere; }
 table.rows.ai td.with-caption .dropdown { max-width: 260px; }
 @media (max-width: 600px) { table.rows.ai td.with-caption { grid-column: 1 / -1; grid-row: 3; } }
 /* a chip after a name in a table cell keeps its distance (Skills › When the skill runs: "fm-daily  AI job") */
 table.rows td > * + .chip, table.rows td .cell-v > * + .chip { margin-left: 8px; }
 /* the tools by role on a phone: "Facility manager" ran into "Guest" — its column wider there, the heads tighter */
 @media (max-width: 600px) {
-  table.rows.roles col:nth-child(2) { width: 19%; } table.rows.roles col:nth-child(3) { width: 30%; } table.rows.roles col:nth-child(4) { width: 12%; }
+  table.rows.roles col.owner { width: 19%; } table.rows.roles col.fm { width: 30%; } table.rows.roles col.guest { width: 12%; }
   table.rows.roles th { letter-spacing: 0; padding-right: 2px; }
 }
 /* an (i) beside a button: on its middle line (Skills › Compare: "Take the release version (i)") */
@@ -514,7 +499,6 @@ table.rows td > * + .chip, table.rows td .cell-v > * + .chip { margin-left: 8px;
 /* Skills › Files: a Markdown file formatted (markdown.js), its switch to the raw text on the legend's line */
 .file-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 4px 0 10px; }
 .file-bar .legend { margin: 0; }
-.seg { margin-left: auto; }
 .editor[hidden], .file-view[hidden] { display: none; }
 /* a YAML file formatted (viewer.yamlView): as written, each kind of piece in its colour */
 .yaml-box { border: 1px solid var(--hairline); border-radius: var(--radius); background: var(--bg-input); min-height: 30vh; }

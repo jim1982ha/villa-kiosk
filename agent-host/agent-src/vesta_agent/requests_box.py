@@ -1,7 +1,7 @@
 """What the VESTA Agent page asks the running agent to do: a folder of small files (0.6.42).
 
 ⚠️ THE PAGE HOLDS NO SECRET AND NEVER TALKS TO HOME ASSISTANT (agent-host CLAUDE.md, contract.ui_env). Two things
-on the page need Home Assistant all the same — "Try a command" (a skill's script, run on the live villa) and "Read
+on the page need Home Assistant all the same — "Offline Test" (a skill's command, run on the live villa) and "Read
 the list again" (HA MCP's tools) — so the page writes a request here and the agent, which has the access, carries
 it out and writes the answer beside it. The agent decides everything a request may do (app.Vesta.on_request): a
 command is checked exactly as when the AI asks for it, and nothing is ever sent or recorded in the Kiosk.

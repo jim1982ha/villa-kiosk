@@ -54,7 +54,10 @@ INDIRECT_TARGET_KEYS = {"area_id", "device_id", "floor_id", "label_id"}
 # Telegram ids that are not a person: an admin posting as the group, a channel.
 ANONYMOUS_TELEGRAM_IDS = {1087968824, 136817688, 777000}
 
-ROLES = ("owner", "fm")
+#: the people's roles and what the page calls them (architecture review 9: the page typed "Owner" / "Facility manager"
+#: twice, and the chats' words a third time)
+ROLE_WORDS = {"owner": "Owner", "fm": "Facility manager"}
+ROLES = tuple(ROLE_WORDS)
 
 # ------------------------------------------------------------------ the file's defaults, once
 # ⚠️ THE ONE READER OF policy.yaml (owner, 2026-10-01): the agent, the settings loader
@@ -380,8 +383,8 @@ FIELDS: dict[str, tuple[str, bool, str | None]] = {
     "approval_ttl_minutes": ("Approve buttons work for (minutes)", True, None),
     "people": (title("people"), True, None),
     "chats": (title("chats"), True, None),
-    "chats.owner": ("Owner chat", True, None),
-    "chats.fm": ("Facility manager chat", True, None),
+    "chats.owner": (f"{ROLE_WORDS['owner']} chat", True, None),
+    "chats.fm": (f"{ROLE_WORDS['fm']} chat", True, None),
     "allowed_services": (title("actions"), True, "actions"),
     "owner_only_entities": ("Only the owner may approve", True, None),
     "excluded_entities": ("Left alone", True, None),
@@ -417,7 +420,7 @@ def form_schema() -> dict:
     return {"rules": RULE_WORDS, "actionable": list(ACTIONABLE), "siren_domains": list(SIREN_DOMAINS),
             "lists": [{"key": k, "label": _LIST_WORDS[k][0], "hint": _LIST_WORDS[k][1], "domains": [d]}
                       for k, d in ENTITY_LISTS.items() if d],
-            "words": WORDS, "resets": RESET_WORDS}
+            "words": WORDS, "resets": RESET_WORDS, "roles": ROLE_WORDS}
 
 def _id(v: Any) -> int | None:
     """An id as the agent reads it (int(...)): a number, or a number written as text."""

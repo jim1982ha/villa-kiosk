@@ -2,7 +2,7 @@
 
 ⚠️ ONE VERDICT, ONE RECORD (architecture review, 2026-10-06). Three callers ran a skill's script and each read
 its result its own way: the scheduler and the hooks (app.code_command), the AI (tools.run_skill_script) and
-Skills → Try a command (app.try_command). Each repeated "exit 0 or 2 is fine", the last stderr line, the secret
+Skills › Offline Test (app.try_command). Each repeated "exit 0 or 2 is fine", the last stderr line, the secret
 scrub and the JSON; each logged its own kind of record, and only one of them counted as a failure on the
 Overview. The page then said "the answer the AI would get" of an answer made a different way.
 
@@ -47,6 +47,11 @@ class ScriptAnswer:
     def verdict(self) -> str:
         """done · nothing (to do, or a setting is missing) · stopped — the page shows it as it is."""
         return "done" if self.code == 0 else "nothing" if self.ok else "stopped"
+
+    @property
+    def verdict_words(self) -> str:
+        """The verdict as a person reads it (the page wrote these itself, architecture review 9)."""
+        return {"done": "Done", "nothing": "Nothing to do, or a setting is missing"}.get(self.verdict, f"Stopped (exit {self.code})")
 
     @property
     def error(self) -> str | None:

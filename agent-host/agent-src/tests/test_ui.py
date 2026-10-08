@@ -276,6 +276,8 @@ def test_the_costs_tab_reads_every_run_from_the_agents_records(ui):
     assert other["days"] == 7 and c["runs_count"] == 3 and c["period"] == 1.5
     assert [(g["name"], g["runs"], g["cost"]) for g in c["by_work"]] == [("fm-weekly", 1, 1.25), ("Chat replies", 2, 0.25)]
     assert {g["name"] for g in c["by_model"]} == {"claude-sonnet-5", "claude-haiku-4-5", "not recorded"}
+    # the group says itself that nothing was recorded (the page compared the name, architecture review 9)
+    assert {g["name"]: g["recorded"] for g in c["by_model"]}["not recorded"] is False and "g.recorded ?" in page_js()
     reply = next(r for r in c["runs"] if r["person"] == "Ann")
     assert reply["chat"] == "owner chat" and reply["asked"] == "is the pool ok?" and reply["tokens_in"] == 300
     bob = next(r for r in c["runs"] if r["person"] == "Bob")
@@ -437,7 +439,7 @@ def test_the_file_editors_wrap_long_lines_instead_of_scrolling_sideways():
     js = page_js()
     rule = re.search(r"textarea\.editor \{([^}]*)\}", css).group(1)
     assert "white-space: pre-wrap" in rule and "overflow-wrap: anywhere" in rule
-    assert 'wrap: "off"' not in js and "wrap=\"off\"" not in js and js.count('h("textarea", { class: "editor"') == 2
+    assert 'wrap: "off"' not in js and "wrap=\"off\"" not in js and js.count('h("textarea", { class: "editor"') == 1   # one editor (viewer.fileEditor)
 
 
 def test_the_page_never_uses_the_browsers_own_dialogs():
@@ -539,21 +541,24 @@ def test_the_tools_are_cards_four_a_row_and_the_ai_notes_are_behind_an_info():
 
 def test_copying_a_setup_uses_only_the_pages_public_methods_and_each_exists():
     # architecture review 5: setup_copy called five of the page's private methods; a rename on one side broke it
-    # silently. Its calls on `ui` are the page's interface: public, and each one a real method of UI.
+    # silently. Architecture review 9: it writes through changes.PageFiles (no HTTP class), only by public methods.
     import inspect
     import re
     from vesta_agent.ui import setup_copy
-    from vesta_agent.ui.server import UI
-    called = set(re.findall(r"\bui\.([A-Za-z_]+)\(", inspect.getsource(setup_copy)))
+    from vesta_agent.ui.changes import PageFiles
+    called = set(re.findall(r"\bpf\.([A-Za-z_]+)\(", inspect.getsource(setup_copy)))
     assert called and not any(n.startswith("_") for n in called), called
-    assert all(callable(getattr(UI, n, None)) and not inspect.iscoroutinefunction(getattr(UI, n)) for n in called), called
+    assert all(callable(getattr(PageFiles, n, None)) for n in called), called
+    assert "ui." not in inspect.getsource(setup_copy.apply)
 
 
 def test_every_write_is_checked_by_its_kind_whoever_writes_it(ui):
     # architecture review 6: the rules' problems were checked only by a save from Rules and a script's syntax only by
     # the editor — an Undo (Overview › Changes) or an imported setup wrote either unchecked
-    from vesta_agent.ui.server import UI, Refused
-    page = UI(ui, "standalone")
+    # architecture review 9: the checks live in changes.PageFiles, tested here without the page server
+    from vesta_agent.history import History
+    from vesta_agent.ui.changes import PageFiles, Refused
+    page = PageFiles(ui, History(ui.history_path))
     for place in ("Undo", "Import"):
         with pytest.raises(Refused, match="cannot be read as YAML"):
             page.text_change(place, "x", {"kind": "policy"}, "people: [")
@@ -628,24 +633,12 @@ def test_the_cost_chart_is_drawn_at_the_cards_width_not_stretched():
 
 
 def test_a_skills_about_is_two_tabs_then_its_commands_each_with_its_offline_test():
-    # owner, 2026-10-08: "Try a command" became an "Offline Test" pill on each command card, in a popup with no
-    # "What to run" step; when it is called and its tools are one section of two tabs, the tools as cards; renamed
+    # owner, 2026-10-08: "Try a command" became an "Offline Test" pill on each command card, in a popup; when it runs
+    # on top, then the commands and tools as two tabs. The rows come from the agent (test_page_controls); the names are
+    # places.py's. Kept here: the page draws no "Try a command" any more, and a pill opens the popup.
     js = page_js()
-    about, test = body_of(js, "aboutSkill"), body_of(js, "tryPanel")
-    from vesta_agent.places import title
-    assert (title("skill_when"), title("skill_tools"), title("skill_commands")) == ("When the skill runs", "Skill tools", "Skill commands")
-    assert 'when: place("skill_when"), tools: place("skill_tools"), commands: place("skill_commands")' in js
-    # owner, 2026-10-08 (later): when it is called on top, alone; below, one section of two tabs, commands then tools
-    assert 'h("section", { class: "about-sec" }, h("h3", {}, ABOUT_TEXT.when), acts())' in about
-    assert 'tabbed("about", [hasRuns && ["commands", ABOUT_TEXT.commands, ABOUT_TEXT.switches, runs], ["tools", ABOUT_TEXT.tools, null, tools]])' in about
-    assert about.index("ABOUT_TEXT.when), acts()") < about.index("tabs.bar, tabs.body")
-    assert "tileCard(n.label" in about and "<details" not in about and '"fold"' not in about     # tools as cards, no fold
-    assert about.count("offlineTestPill(") == 2                                             # a command's, a script's
-    assert "What to run" not in test and "dropdown(runnable" not in test and "export function tryPanel(name, d, script, command = null)" in js
-    assert '"Offline "), "Test"' in body_of(js, "offlineTestPill") and "popup(" in body_of(js, "offlineTestPill")
-    assert "Try a command" not in body_of(js, "openSkill")
-    assert "export function tileCard(" in js and "card = tileCard(title" in body_of(js, "toggleCard")   # one card
-
+    assert "Try a command" not in body_of(js, "openSkill") and "popup(" in body_of(js, "offlineTestPill")
+    assert 'tabbed("about"' in body_of(js, "aboutSkill") and "offlineTestPill(" in body_of(js, "aboutSkill")
 
 def test_a_tip_or_list_opened_inside_a_popup_is_drawn_inside_it():
     # a modal <dialog> is the top layer: the Offline Test popup's (i) opened its tip on the body, UNDER the popup
@@ -667,13 +660,9 @@ def test_the_offline_test_pill_sits_on_the_card_top_line_and_its_popup_opens_wit
 
 
 def test_the_offline_test_popup_has_no_subtitle_nor_options_heading_and_its_title_names_the_script():
-    # owner, 2026-10-08: "compose.py fm-daily" under the title and "Options" were redundant; the title keeps the script,
-    # since compose.py and facts.py both have an fm-weekly
+    # owner, 2026-10-08: no subtitle, no "Options"; the title names the script (two scripts share fm-weekly)
     js = page_js()
-    test, pill = body_of(js, "tryPanel"), body_of(js, "offlineTestPill")
-    assert '"Options"' not in test and 'h("code", {}, command ?' not in test
-    assert "popup(`Offline Test · ${command ? `${script.script} ${command}` : script.script}`" in pill
-
+    assert '"Options"' not in body_of(js, "tryPanel") and "${script.script} ${command}" in body_of(js, "offlineTestPill")
 
 def test_every_table_and_every_tabbed_section_comes_from_one_builder():
     # owner, 2026-10-08: "all the tables formatted the same way, from the same centralised code" — a skill's "When is
@@ -714,7 +703,8 @@ def test_every_place_is_named_once_and_the_page_reads_the_names_from_the_server(
         return await (await c.get("/")).text()
     html = call(ui, fn)
     m = re.search(r'<script type="application/json" id="places">(.*?)</script>', html, re.S)
-    assert m and json.loads(m.group(1)) == {k: list(v) for k, v in PLACES.items()} and "{places}" not in html
+    from vesta_agent.places import ORDER
+    assert m and json.loads(m.group(1)) == {"places": {k: list(v) for k, v in PLACES.items()}, "order": ORDER} and "{places}" not in html
     # the page's where() is the server's: "Tab › Card"
     assert "`${PLACES[k][1]} › ${PLACES[k][0]}`" in page_js() and where("tools") == "Rules › AI tools"
     # no title of two words or more is written by hand in the page's code, nor a "Tab › …" sentence
@@ -739,8 +729,12 @@ def test_every_place_is_named_once_and_the_page_reads_the_names_from_the_server(
 
 
 def test_rules_shows_ai_tools_right_below_ai_brains_and_limits():
-    # owner, 2026-10-08: "move the AI tools section below the AI brains and limits section"
-    assert "services, devices, ai, canUse);" in body_of(page_js(), "rulesForms")
+    # owner, 2026-10-08: "move the AI tools section below the AI brains and limits section". The order is data
+    # (places.ORDER, drawn by core.inOrder): this reads the list, not a line of code (architecture review 9)
+    from vesta_agent.places import ORDER
+    rules = ORDER["rules"]
+    assert rules.index("tools") == rules.index("ai") + 1 and rules[-1] == "tools"
+    assert 'inOrder("rules", {' in body_of(page_js(), "rulesForms")
 
 
 def test_take_the_release_version_is_on_the_compare_tab_too():
@@ -794,15 +788,11 @@ def json_dumps(x):
 
 
 def test_a_markdown_or_yaml_file_opens_formatted_and_its_raw_text_is_one_press_away():
-    # owner, 2026-10-08: a skill's Markdown, then "do this for Rules (file) too": ONE viewer, both places
+    # owner, 2026-10-08: a skill's Markdown, then "do this for Rules (file) too": ONE editor (viewer.fileEditor), both
+    # places; its drawing is plain data (markdown.js, yaml.js), tested in Node below; no markup ever reaches the page
     js = page_js()
-    viewer = body_of(js, "fileViewer")
-    assert 'segmented([["formatted", "Formatted"], ["raw", "Raw"]], page.fileView || "formatted"' in viewer
-    assert "const view = fileViewer(ta, path);" in body_of(js, "openSkill") and "view.show();" in body_of(js, "openSkill")
-    assert 'const view = fileViewer(ta, "policy.yaml");' in body_of(js, "rulesFile")
-    assert "parse(text).flatMap(" in body_of(js, "markdownView") and "table(b.head.map(inl)" in body_of(js, "markdownView")
-    assert "lines(text).flatMap(" in body_of(js, "yamlView") and "innerHTML" not in js
-
+    assert "fileEditor(path," in body_of(js, "openSkill") and 'fileEditor("policy.yaml",' in body_of(js, "rulesFile")
+    assert 'page.fileView || "formatted"' in body_of(js, "fileViewer") and "innerHTML" not in js
 
 def test_a_yaml_file_is_coloured_piece_by_piece_and_nothing_is_lost():
     import json
@@ -822,3 +812,34 @@ def test_a_cell_of_several_pieces_stays_one_value_on_a_phone():
     cell = body_of(page_js(), "cell")
     assert 'label !== null && Array.isArray(v)' in cell and 'many ? h("span", { class: "cell-v" }, v) : v' in cell
 
+
+
+def test_the_tabs_roles_and_change_chips_are_named_by_the_agent(ui):
+    # architecture review 9: names still typed on the page — the top tabs, the roles, the Page changes chips
+    from vesta_agent.places import TABS
+    from vesta_agent.policy import ROLE_WORDS, form_schema
+
+    async def fn(c):
+        html = await (await c.get("/")).text()
+        await c.put("/api/skills/reports/on", json={"on": False}, headers=HDR)
+        return html, (await (await c.get("/api/history")).json())["changes"]
+    html, changes = call(ui, fn)
+    assert "{tab:" not in html and all(f">{name}<" in html or f">{name} <" in html for name in TABS.values())
+    assert form_schema()["roles"] == ROLE_WORDS and "SCHEMA.roles" in page_js() and '"Facility manager"' not in page_js()
+    assert changes[0]["place"] == "Skills" and changes[0]["chip"] == "warn" and "const PLACE = {" not in page_js()
+
+
+def test_every_class_the_stylesheet_styles_is_used_by_the_page():
+    # architecture review 9: app.css only grew — rules for .ok, ul.plain, .inline, .files.views, code.flag, h3s that no
+    # longer exist. A class named nowhere in the page's code (comments left out) is a dead rule. Classes built from a
+    # prefix (`ph-${…}`, `y-${…}`) are named by the prefix.
+    import glob, re
+    from vesta_agent.ui.server import STATIC
+    css = re.sub(r"/\*.*?\*/", "", open(os.path.join(STATIC, "app.css"), encoding="utf-8").read(), flags=re.S)
+    code = "\n".join(re.sub(r"(^|\s)//.*$", "", line) for f in glob.glob(os.path.join(STATIC, "*.js"))
+                     for line in open(f, encoding="utf-8").read().split("\n"))
+    code += open(os.path.join(STATIC, "index.html"), encoding="utf-8").read()
+    words = set(re.findall(r"[A-Za-z][\w-]*", code))
+    dead = sorted({c for c in re.findall(r"\.([a-zA-Z][\w-]*)", css) if c not in words and not c.startswith(("ph-", "y-")) and c != "woff2"})
+    assert dead == [], dead
+    assert not re.search(r"\bcol:nth-child|th:nth-child\(\d", css)          # a column is named (core.table widths), not counted

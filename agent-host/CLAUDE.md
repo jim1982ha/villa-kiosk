@@ -203,6 +203,14 @@ Decisions of 2026-09-30 (owner):
   (`policy_doc.to_form`; `apply_form` writes the file's own shape back: absent means on, web search in settings).
   A skill's "When the skill runs" rows come as fields in display order. Tests of these go through HTTP
   (test_page_controls), not the page's source. places.py names every place once (titles and "Tab › Card").
+  Ninth review, 0.12.101 (the page): every write, check, history row and Undo is `ui/changes.PageFiles` (no
+  HTTP; the server and setup_copy call it); the page server reads policy.yaml through `changes.page_policy` (a
+  broken file answers with its problems, never 500); Rules is one request (`GET api/rules`), Rules (file) asks for
+  the file only, and `core.go` shows a failed tab's reasons. One file editor (`viewer.fileEditor`) for Rules (file)
+  and a skill's files. Names on the server: the export's parts (`setup_copy.offer`), roles (`policy.ROLE_WORDS`),
+  Page changes chips (`history.CHIPS`), top tabs (`places.TABS`, filled into index.html), a tab's section order
+  (`places.ORDER`, drawn by `core.inOrder`). A table's column is named, never counted (`core.table` widths may be
+  {width, cls}); test_ui fails on a stylesheet class the page never uses.
 - No PDF (owner, 2026-09-30): the reports are self-contained HTML pages sent
   as attachments. Chromium was ~480 MB of a 1.1 GB image for this alone.
 - ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent

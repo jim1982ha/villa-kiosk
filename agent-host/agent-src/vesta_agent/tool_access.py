@@ -289,6 +289,8 @@ def catalog(policy: Policy, listed: dict | None, usage: dict[str, int], now: dat
         "never": never,
         # named in the file, but this server has no such tool (an older or newer HA MCP): shown, never guessed
         "unknown": [n for n in policy.ha_read_tools if tools and n not in named],
-        "own": [{"key": k, "label": v[0], "description": v[1], "kind": v[2], "used": usage.get(k, 0)} for k, v in OWN.items()],
+        # `code`: the name it has for the AI — web search is Claude's own WebSearch (the page wrote that, review 9)
+        "own": [{"key": k, "code": "WebSearch" if k == "web_search" else k, "label": v[0], "description": v[1], "kind": v[2],
+                 "used": usage.get(k, 0)} for k, v in OWN.items()],
         "roles": [{"key": k, "label": lab} for k, lab in ROLE_GROUPS],
     }

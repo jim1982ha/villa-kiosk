@@ -128,7 +128,8 @@ def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_la
         out: dict[str, dict] = {}
         for r in runs:
             k = r[key] or "not recorded"
-            g = out.setdefault(k, {"name": k, "runs": 0, "cost": 0.0, "tokens_in": 0, "tokens_out": 0})
+            # `recorded`: whether its tokens were (the page compared the name with "not recorded", review 9)
+            g = out.setdefault(k, {"name": k, "recorded": bool(r[key]), "runs": 0, "cost": 0.0, "tokens_in": 0, "tokens_out": 0})
             g["runs"] += 1
             g["cost"] += r["cost"]
             g["tokens_in"] += (r["tokens_in"] or 0) + (r["cache_read"] or 0) + (r["cache_write"] or 0)

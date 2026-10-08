@@ -18,12 +18,9 @@ must not be able to edit the rules that bind it. Standalone: loopback only.
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import os
-import shutil
-import tempfile
 from datetime import datetime, timezone
 
 import yaml
@@ -31,19 +28,20 @@ from aiohttp import web
 
 from .. import __version__, requests_box, status, tool_access
 from ..config import STARTER_DIR, Settings
-from ..history import History, file_change, policy_change
-from ..places import PLACES
+from ..history import History, file_change
+from ..places import ORDER, PLACES, TABS
 from ..policy import Policy, problems as policy_problems
-from ..skills import FILE_NAME, SKILL_NAME, TRASH, VILLA_CHOICES, SkillError, Skills, parse_skill, switch_command, to_trash
+from ..skills import FILE_NAME, REQUIRED_FILES, SKILL_NAME, TRASH, VILLA_CHOICES, Skills, parse_skill, switch_command, to_trash
 from ..state import State
 from . import setup_copy
+from .changes import PageFiles, Refused, _read, _write, page_policy, rev, rules_problems, undoable
 from .policy_doc import apply_form, to_form
 
 log = logging.getLogger("vesta.ui")
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 #: the page's places (one name per place, places.py), as the page reads them: "</" escaped, so no name can close the tag
-PLACES_JSON = json.dumps(PLACES).replace("</", "<\\/")
+PLACES_JSON = json.dumps({"places": PLACES, "order": ORDER}).replace("</", "<\\/")
 STATIC = os.path.join(HERE, "static")
 INGRESS_GATEWAY = "172.30.32.2"
 MAX_FILE = 512 * 1024
@@ -69,56 +67,19 @@ NEW_SKILL_YAML = """description: What this skill is for, in one line.
 """
 
 
-def rev(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()[:16]
 
 
-def _read(path: str) -> bytes:
-    try:
-        with open(path, "rb") as f:
-            return f.read()
-    except FileNotFoundError:
-        return b""
 
 
-def _write(path: str, data: bytes) -> None:
-    """Whole or not at all: a half-written policy.yaml would be read by the running agent."""
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".ui-")
-    try:
-        with os.fdopen(fd, "wb") as f:
-            f.write(data)
-        if os.path.exists(path):
-            shutil.copymode(path, tmp)
-        os.replace(tmp, path)
-    except BaseException:
-        if os.path.exists(tmp):
-            os.unlink(tmp)
-        raise
 
 
-TEXT_KINDS = ("policy", "instructions", "file")    # what Undo writes back as text (UI.text_change)
 
 
-def undoable(ch: dict) -> bool:
-    """Whether Undo is offered for this change: the one answer for the Page changes list and the Undo itself
-    (architecture review 8: the page kept its own list and hid Undo for the instructions, which Undo does handle).
-    Whether the text is still what the change left is asked at the press (another save may have come since)."""
-    return ch["place"] != "Release" and not ch["undone_by"] and ch["target"]["kind"] in (*TEXT_KINDS, "folder")
-
-def rules_problems(text: str) -> list[str]:
-    """What is wrong with policy.yaml's text, in words ([] when nothing): one reading for the Overview, Rules and
-    every write."""
-    try:
-        return policy_problems(yaml.safe_load(text) if text and text.strip() else {})
-    except yaml.YAMLError as e:
-        return [f"The file cannot be read as YAML: {e}"]
 
 
-class Refused(Exception):
-    def __init__(self, problems: list[str], status: int = 400):
-        super().__init__("; ".join(problems))
-        self.problems, self.status = problems, status
+
+
+
 
 
 class UI:
@@ -126,8 +87,9 @@ class UI:
         self.s = settings
         self.allowed = {INGRESS_GATEWAY} if deployment == "ha_app" else {"127.0.0.1", "::1"}
         self.skills = Skills(settings.skills_dir, os.path.join(STARTER_DIR, "skills"),
-                             off=lambda: Policy.load(settings.policy_path).skills_off)
+                             off=lambda: page_policy(settings.policy_path).skills_off)
         self.history = History(settings.history_path)
+        self.files = PageFiles(settings, self.history)     # every write, checked and recorded (changes.py)
 
     # ------------------------------------------------------------------ plumbing
     def app(self) -> web.Application:
@@ -140,6 +102,7 @@ class UI:
         r.add_static(f"/static/{__version__}/", STATIC, follow_symlinks=False)
         r.add_get("/api/overview", self.overview)
         r.add_post("/api/client-error", self.client_error)
+        r.add_get("/api/rules", self.rules_view)
         r.add_get("/api/policy", self.policy_get)
         r.add_put("/api/policy/form", self.policy_form)
         r.add_put("/api/policy/text", self.policy_text)
@@ -199,6 +162,8 @@ class UI:
         # the previous page's code with the new data — seen on 0.12.0: no banner, no AI jobs card.
         with open(os.path.join(STATIC, "index.html"), encoding="utf-8") as f:
             html = f.read().replace("{static}", f"static/{__version__}").replace("{places}", PLACES_JSON)
+        for key, name in TABS.items():                  # the top tabs' names (places.TABS)
+            html = html.replace("{tab:%s}" % key, name)
         log.info("UI: page opened (agent %s)", __version__)
         return web.Response(text=html, content_type="text/html")
 
@@ -222,14 +187,15 @@ class UI:
         return web.json_response({"version": __version__, "app_version": os.environ.get("VESTA_APP_VERSION", ""),
                                   "instance": self.s.instance,
                                   "policy_problems": pol, "skills": self._skill_rows(), "last_24h": report,
-                                  "jobs_not_set": [j["name"] for j in self._jobs() if not j["set"]]})
+                                  "jobs_not_set": [j["name"] for j in self._jobs() if not j["set"]],
+                                  "setup": setup_copy.offer()})
 
     # ------------------------------------------------------------------ AI jobs
     def _jobs(self) -> list[dict]:
         """The AI jobs the skills declare, and whether policy.yaml sets their model and limit (else they do not run)."""
         from ..policy import Policy
         from ..skills import ai_jobs
-        set_ = Policy.load(self.s.policy_path).jobs
+        set_ = page_policy(self.s.policy_path).jobs
         from ..scheduler import describe
         listed = {t["name"]: t for t in (tool_access.read_list(self.s.data_dir) or {}).get("tools") or []}
         return [{"name": j["name"], "skill": sk.name, "when": j["when"], "to": j.get("to"),
@@ -249,10 +215,10 @@ class UI:
         missing = [j for j in self._jobs() if not j["set"]]
         if not missing:
             return web.json_response({"ok": True, "added": []})
-        settings = to_form(self.policy_now()[0])["settings"]
+        settings = to_form(self.files.policy_now()[0])["settings"]
         settings["jobs"] = {**settings["jobs"], **{j["name"]: dict(j["default"]) for j in missing}}
         names = [j["name"] for j in missing]
-        self._edit_policy({"settings": settings}, f"AI jobs added: {', '.join(names)}")
+        self.files.edit_policy({"settings": settings}, f"AI jobs added: {', '.join(names)}")
         return web.json_response({"ok": True, "added": names})
 
     # ------------------------------------------------------------------ what the AI cost
@@ -269,7 +235,7 @@ class UI:
             zone = ZoneInfo(self.s.timezone)
         except Exception:  # noqa: BLE001 — an unknown zone: UTC days
             zone = None
-        route = Routing(Policy.load(self.s.policy_path))
+        route = Routing(page_policy(self.s.policy_path))
         from ..policy import profile_labels
         return web.json_response({**status.costs(State(self.s.state_path), days, zone=zone,
                                                  chat_label=lambda cid: route.label(int(cid))),
@@ -277,6 +243,9 @@ class UI:
 
     # ------------------------------------------------------------------ the villa's devices
     async def entities(self, _request):
+        return web.json_response(self._entities())
+
+    def _entities(self) -> dict:
         """Every entity of the knowledge pack (id, name, area), for the pickers of the rules: chosen by name, not
         typed as ids. The UI has no Home Assistant token: the pack is what the agent last read (nightly)."""
         from vesta_shared.knowledge_pack import KnowledgePack
@@ -285,50 +254,50 @@ class UI:
         for r in pack.rows() if pack else []:
             if r["entity_id"] not in seen:
                 seen[r["entity_id"]] = {"id": r["entity_id"], "name": r.get("name") or r["entity_id"], "area": r.get("area") or ""}
-        return web.json_response({"entities": sorted(seen.values(), key=lambda e: (e["name"].lower(), e["id"])),
-                                  "built": pack.generated_at if pack else None})
+        return {"entities": sorted(seen.values(), key=lambda e: (e["name"].lower(), e["id"])),
+                "built": pack.generated_at if pack else None}
 
     # ------------------------------------------------------------------ policy.yaml
-    def policy_now(self) -> tuple[str, str]:
-        data = _read(self.s.policy_path)
-        return data.decode("utf-8"), rev(data)
+
+    async def rules_view(self, _request):
+        """The Rules tab in ONE answer (architecture review 9: four requests in a row, joined on the page): the file and
+        its form, the AI jobs, the devices for the pickers, the tools. Built from a lenient reading of policy.yaml, so a
+        broken file still answers, its problems named."""
+        return web.json_response({**self._policy_doc(), "jobs": self._jobs(), **self._entities(), "tools": self._tools()})
 
     async def policy_get(self, _request):
-        text, r = self.policy_now()
+        return web.json_response(self._policy_doc())
+
+    def _policy_doc(self) -> dict:
+        text, r = self.files.policy_now()
         probs = rules_problems(text)
         try:
             form = to_form(text)
         except yaml.YAMLError:
             form = None
         from ..policy import LANGUAGES, form_schema, profile_labels
-        return web.json_response({"text": text, "rev": r, "form": form, "problems": probs, "languages": LANGUAGES,
-                                  "profiles": profile_labels(), "schema": form_schema()})
+        return {"text": text, "rev": r, "form": form, "problems": probs, "languages": LANGUAGES,
+                "profiles": profile_labels(), "schema": form_schema()}
 
-    def save_policy(self, new_text: str, base_rev: str, place: str = "Rules", what: str | None = None) -> dict:
-        text, _ = self.policy_now()
-        data = new_text.encode("utf-8")
-        self.text_change(place, what or policy_change(text, new_text), {"kind": "policy"}, new_text, base_rev=base_rev)
-        log.info("UI: policy.yaml saved")
-        return {"rev": rev(data), "text": new_text, "form": to_form(new_text)}
 
     async def policy_form(self, request):
         body = await request.json()
-        text, _ = self.policy_now()
+        text, _ = self.files.policy_now()
         form = body.get("form")
         if not isinstance(form, dict):
             raise Refused(["No form sent."])
-        return web.json_response(self.save_policy(apply_form(text, form), str(body.get("rev") or "")))
+        return web.json_response(self.files.save_policy(apply_form(text, form), str(body.get("rev") or "")))
 
     async def policy_text(self, request):
         body = await request.json()
         if not isinstance(body.get("text"), str):
             raise Refused(["No text sent."])
-        return web.json_response(self.save_policy(body["text"], str(body.get("rev") or "")))
+        return web.json_response(self.files.save_policy(body["text"], str(body.get("rev") or "")))
 
     # ------------------------------------------------------------------ skills
     def _skill_rows(self) -> list[dict]:
         loaded = self.skills.all(include_off=True)
-        pol = Policy.load(self.s.policy_path)
+        pol = page_policy(self.s.policy_path)
         rows = []
         try:
             names = sorted(os.listdir(self.s.skills_dir))
@@ -352,74 +321,34 @@ class UI:
     async def skills_list(self, _request):
         return web.json_response({"skills": self._skill_rows()})
 
-    def _skill_dir(self, name: str, must_exist: bool = True) -> str:
-        if not SKILL_NAME.match(name or ""):
-            raise Refused(["A skill name is lower-case letters, digits, - and _ (for example pool-care)."])
-        path = os.path.join(self.s.skills_dir, name)
-        if must_exist and not os.path.isdir(path):
-            raise Refused([f"No skill {name}."], 404)
-        return path
 
-    def _rel(self, path: str) -> str:
-        """A file inside a skill: each part a plain file name, at most 4 levels deep."""
-        parts = (path or "").split("/")
-        if not path or len(parts) > 4 or not all(FILE_NAME.match(p) for p in parts):
-            raise Refused([f"{path!r} is not a file name this editor accepts (letters, digits, . - _; no leading dot)."])
-        return os.path.join(*parts)
 
-    def check_skill(self, name: str, folder: str) -> None:
-        """The skill as the agent would read it, from a copy with the change applied."""
-        if not os.path.isfile(os.path.join(folder, "SKILL.md")) or not os.path.isfile(os.path.join(folder, "skill.yaml")):
-            raise Refused(["A skill needs both SKILL.md and skill.yaml."])
-        try:
-            parse_skill(name, folder)
-        except (SkillError, yaml.YAMLError, OSError) as e:
-            raise Refused([f"The agent would switch this skill off: {e}"]) from None
 
-    def _change(self, name: str, rel: str, content: bytes | None) -> None:
-        """Write (or delete, content None) one file of a skill, only if the skill still loads after."""
-        folder = self._skill_dir(name)
-        with tempfile.TemporaryDirectory() as tmp:
-            trial = os.path.join(tmp, name)
-            shutil.copytree(folder, trial, ignore=shutil.ignore_patterns("__pycache__"))
-            target = os.path.join(trial, rel)
-            if content is None:
-                os.unlink(target)
-            else:
-                os.makedirs(os.path.dirname(target), exist_ok=True)
-                with open(target, "wb") as f:
-                    f.write(content)
-            self.check_skill(name, trial)
-        real = os.path.join(folder, rel)
-        if content is None:
-            os.unlink(real)
-        else:
-            _write(real, content)
 
     async def skill_create(self, request):
         body = await request.json()
         name = str(body.get("name") or "")
-        path = self._skill_dir(name, must_exist=False)
+        path = self.files.skill_dir(name, must_exist=False)
         if os.path.exists(path):
             raise Refused([f"A skill {name} already exists."], 409)
         os.makedirs(os.path.join(path, "scripts"))
         _write(os.path.join(path, "SKILL.md"), NEW_SKILL_MD.format(name=name).encode())
         _write(os.path.join(path, "skill.yaml"), NEW_SKILL_YAML.encode())
         log.info("UI: skill %s created", name)
-        self.folder_change("Skills", f"{name} created", name, None, "present")
+        self.files.folder_change("Skills", f"{name} created", name, None, "present")
         return web.json_response({"name": name})
 
     async def skill_delete(self, request):
         name = request.match_info["name"]
-        path = self._skill_dir(name)
+        path = self.files.skill_dir(name)
         # Moved aside, not erased: a dot folder is never loaded, and a mistake can be undone (Overview › Page changes).
         dest = to_trash(self.s.skills_dir, path, name)
         log.info("UI: skill %s deleted (kept in skills/%s)", name, TRASH)
-        self.folder_change("Skills", f"{name} deleted (kept in skills/{TRASH})", name, dest, None)
+        self.files.folder_change("Skills", f"{name} deleted (kept in skills/{TRASH})", name, dest, None)
         return web.json_response({"deleted": name, "kept_in": f"{TRASH}/{os.path.basename(dest)}"})
 
     async def skill_files(self, request):
-        folder = self._skill_dir(request.match_info["name"])
+        folder = self.files.skill_dir(request.match_info["name"])
         out = []
         for root, dirs, files in os.walk(folder):
             dirs[:] = sorted(d for d in dirs if FILE_NAME.match(d) and d != "__pycache__")
@@ -427,12 +356,13 @@ class UI:
                 if not FILE_NAME.match(f) or f.endswith(".pyc"):
                     continue
                 p = os.path.join(root, f)
-                out.append({"path": os.path.relpath(p, folder).replace(os.sep, "/"), "size": os.path.getsize(p)})
+                rel = os.path.relpath(p, folder).replace(os.sep, "/")
+                out.append({"path": rel, "size": os.path.getsize(p), "deletable": rel not in REQUIRED_FILES})
         return web.json_response({"files": out})
 
     async def file_get(self, request):
-        folder = self._skill_dir(request.match_info["name"])
-        rel = self._rel(request.query.get("path", ""))
+        folder = self.files.skill_dir(request.match_info["name"])
+        rel = self.files.rel(request.query.get("path", ""))
         data = _read(os.path.join(folder, rel))
         if len(data) > MAX_FILE:
             raise Refused(["This file is too large for the editor."])
@@ -444,8 +374,8 @@ class UI:
 
     async def file_put(self, request):
         name = request.match_info["name"]
-        self._skill_dir(name)                        # the skill must exist; text_change checks the rest
-        rel = self._rel(request.query.get("path", ""))
+        self.files.skill_dir(name)                        # the skill must exist; text_change checks the rest
+        rel = self.files.rel(request.query.get("path", ""))
         body = await request.json()
         content = body.get("content")
         if not isinstance(content, str):
@@ -453,7 +383,7 @@ class UI:
         data = content.encode("utf-8")
         if len(data) > MAX_FILE:
             raise Refused(["This file is too large."])
-        self.text_change("Skills", lambda before: f"{name} › {file_change(rel, before, content)}",
+        self.files.text_change("Skills", lambda before: f"{name} › {file_change(rel, before, content)}",
                           {"kind": "file", "skill": name, "path": rel.replace(os.sep, "/")}, content,
                           base_rev=str(body.get("rev") or ""))
         log.info("UI: skill %s, %s saved", name, rel)
@@ -461,10 +391,12 @@ class UI:
 
     async def file_delete(self, request):
         name = request.match_info["name"]
-        rel = self._rel(request.query.get("path", ""))
-        if not os.path.isfile(os.path.join(self._skill_dir(name), rel)):
+        rel = self.files.rel(request.query.get("path", ""))
+        if not os.path.isfile(os.path.join(self.files.skill_dir(name), rel)):
             raise Refused([f"No file {rel}."], 404)
-        self.text_change("Skills", f"{name} › {rel} deleted", {"kind": "file", "skill": name, "path": rel}, None)
+        if rel in REQUIRED_FILES:
+            raise Refused([f"{rel} is part of every skill: edit it, or delete the skill."])
+        self.files.text_change("Skills", f"{name} › {rel} deleted", {"kind": "file", "skill": name, "path": rel}, None)
         log.info("UI: skill %s, %s deleted", name, rel)
         return web.json_response({"deleted": rel})
 
@@ -478,10 +410,12 @@ class UI:
             return {}
 
     async def tools(self, _request):
+        return web.json_response(self._tools())
+
+    def _tools(self) -> dict:
         """Rules › AI tools: Home Assistant's tools as the agent last read them, with this file's
         switches; the agent's own tools; the facility manager's groups."""
-        pol = Policy.load(self.s.policy_path)
-        return web.json_response(tool_access.catalog(pol, tool_access.read_list(self.s.data_dir), self._usage()))
+        return tool_access.catalog(page_policy(self.s.policy_path), tool_access.read_list(self.s.data_dir), self._usage())
 
     async def tools_refresh(self, _request):
         """"Read the list again": the agent asks HA MCP (the page itself never talks to Home Assistant)."""
@@ -497,13 +431,9 @@ class UI:
         tool = str((await request.json()).get("tool") or "")
         if not tool:
             raise Refused(["No tool named."])
-        self._edit_policy(tool_access.switch_on(to_form(self.policy_now()[0]), tool), f"{tool_access.label(tool)} switched on", "Skills")
+        self.files.edit_policy(tool_access.switch_on(to_form(self.files.policy_now()[0]), tool), f"{tool_access.label(tool)} switched on", "Skills")
         return web.json_response({"ok": True})
 
-    def _edit_policy(self, change: dict, what: str, place: str = "Rules") -> dict:
-        """One section of policy.yaml changed by a switch on the page: through the same checks as a save."""
-        text, r = self.policy_now()
-        return self.save_policy(apply_form(text, change), r, place, what)
 
     # ------------------------------------------------------------------ a fuller Skills tab
     WHEN = {"critical_event": "a critical alert from a VESTA rule", "voice_message": "a voice message"}
@@ -512,8 +442,8 @@ class UI:
         """Skills → one skill: its state against the release, the tools it needs, when it acts, its commands."""
         from ..scheduler import describe
         name = request.match_info["name"]
-        self._skill_dir(name)
-        pol = Policy.load(self.s.policy_path)
+        self.files.skill_dir(name)
+        pol = page_policy(self.s.policy_path)
         sk = self.skills.all(include_off=True).get(name)
         rel = self.skills.release_state(name)
         h = tool_access.health(pol, self._server_tools(), sk, self.skills.problems().get(name))
@@ -544,7 +474,7 @@ class UI:
             "out_files": self._out_files()})
 
     def _out_files(self, limit: int = 60) -> list[str]:
-        """The files the last runs left in the out folder, newest first: what Try a command offers for an option
+        """The files the last runs left in the out folder, newest first: what an Offline Test offers for an option
         that takes one (compose.py fm-weekly --facts: the file facts.py wrote, 2026-10-06 "needs --facts")."""
         from ..skills import FILE_NAME
         d = self.s.out_dir
@@ -556,18 +486,18 @@ class UI:
 
     async def skill_on(self, request):
         name = request.match_info["name"]
-        self._skill_dir(name)
+        self.files.skill_dir(name)
         on = bool((await request.json()).get("on"))
-        doc = to_form(self.policy_now()[0])
+        doc = to_form(self.files.policy_now()[0])
         off = [x for x in doc["skills_off"] if x != name] + ([] if on else [name])
-        res = self._edit_policy({"skills_off": sorted(set(off))}, f"{name} switched {'on' if on else 'off'}", "Skills")
+        res = self.files.edit_policy({"skills_off": sorted(set(off))}, f"{name} switched {'on' if on else 'off'}", "Skills")
         log.info("UI: skill %s switched %s", name, "on" if on else "off")
         return web.json_response(res)
 
     async def skill_commands(self, request):
         """A command's checkbox: this villa's choice, in the skill's villa.skill.yaml (kept by updates, copied with it)."""
         name = request.match_info["name"]
-        folder = self._skill_dir(name)
+        folder = self.files.skill_dir(name)
         body = await request.json()
         script, command, on = str(body.get("script") or ""), body.get("command"), bool(body.get("on"))
         sk = self.skills.all(include_off=True).get(name)
@@ -583,7 +513,7 @@ class UI:
         if text is None and before is None:
             return web.json_response({"ok": True})
         label = f"{script}{' ' + command if command else ''}"
-        self.text_change("Skills", f"{name} › {label} switched {'on' if on else 'off'} for the AI",
+        self.files.text_change("Skills", f"{name} › {label} switched {'on' if on else 'off'} for the AI",
                           {"kind": "file", "skill": name, "path": rel}, text)
         log.info("UI: skill %s, %s switched %s", name, label, "on" if on else "off")
         return web.json_response({"ok": True})
@@ -592,8 +522,8 @@ class UI:
         """An edited starter skill's file beside the release's, line against line."""
         import difflib
         name = request.match_info["name"]
-        folder = self._skill_dir(name)
-        rel = self._rel(request.query.get("path", ""))
+        folder = self.files.skill_dir(name)
+        rel = self.files.rel(request.query.get("path", ""))
         src = os.path.join(STARTER_DIR, "skills", name, rel)
         here = _read(os.path.join(folder, rel)).decode("utf-8", "replace").splitlines()
         there = _read(src).decode("utf-8", "replace").splitlines()
@@ -606,26 +536,26 @@ class UI:
 
     async def skill_keep(self, request):
         name = request.match_info["name"]
-        self._skill_dir(name)
+        self.files.skill_dir(name)
         self.skills.keep_mine(name)
         log.info("UI: skill %s kept as edited here", name)
         return web.json_response({"ok": True})
 
     async def skill_take_release(self, request):
         name = request.match_info["name"]
-        self._skill_dir(name)
+        self.files.skill_dir(name)
         if self.skills.release_state(name)["state"] != "edited":
             raise Refused([f"{name} is not an edited starter skill."])
         dest = self.skills.take_release(name)
-        self.folder_change("Skills", f"{name}: the release's version taken (the edited one kept in skills/{TRASH})",
+        self.files.folder_change("Skills", f"{name}: the release's version taken (the edited one kept in skills/{TRASH})",
                             name, dest, "present")
         log.info("UI: skill %s replaced by the release's version", name)
         return web.json_response({"ok": True})
 
     async def skill_try(self, request):
-        """Skills → Try a command: run by the agent (it holds the access), checked as when the AI asks; nothing sent."""
+        """Skills › Offline Test: run by the agent (it holds the access), checked as when the AI asks; nothing sent."""
         name = request.match_info["name"]
-        self._skill_dir(name)
+        self.files.skill_dir(name)
         body = await request.json()
         try:
             payload = requests_box.try_request(name, body.get("script"), body.get("args") or [])
@@ -653,114 +583,8 @@ class UI:
             cid = int(request.match_info["id"])
         except ValueError:
             raise Refused(["No such change."], 404) from None
-        ch = self.history.get(cid)
-        if ch and ch["undone_by"]:
-            raise Refused(["Already undone."], 409)
-        if not ch or not undoable(ch):
-            raise Refused(["This change cannot be undone here."], 404)
-        t = ch["target"]
-        if t["kind"] in TEXT_KINDS:
-            # ⚠️ ONLY FROM WHERE THE CHANGE LEFT IT, the same rule for every text (history.py)
-            if self._text_now(t) != ch["after"]:
-                raise Refused(["Something changed since (another save, or Studio Code Server): undo the later "
-                               "change first."], 409)
-            self.text_change("Undo", f"Undo: {ch['what']}", t, ch["before"])
-        elif t["kind"] == "folder":
-            self._undo_folder(t["skill"], ch)
-        self.history.mark_undone(cid, max(r["id"] for r in self.history.rows(1)))
-        log.info("UI: change #%s undone", cid)
+        self.files.undo(cid)
         return web.json_response({"ok": True})
-
-    def _undo_folder(self, name: str, ch: dict) -> None:
-        """A skill created, deleted, replaced by the release's version or imported: its folder put back."""
-        path = os.path.join(self.s.skills_dir, name)
-        old = ch["before"]
-        if ch["after"] is None:                         # deleted: it comes back from the trash
-            if os.path.exists(path) or not old or not os.path.isdir(old):
-                raise Refused([f"{name} cannot come back: a skill of that name exists, or its copy is gone."], 409)
-            shutil.move(old, path)
-            self.folder_change("Undo", f"Undo: {ch['what']}", name, None, "present")
-            return
-        if not os.path.isdir(path) or (old and not os.path.isdir(old)):
-            raise Refused(["The skill or its previous copy is gone: nothing to put back."], 409)
-        dest = to_trash(self.s.skills_dir, path, name)
-        if old:
-            shutil.move(old, path)
-        self.folder_change("Undo", f"Undo: {ch['what']}", name, dest, "present" if old else None)
-
-    # ------------------------------------------------------------------ every recorded change goes through here
-    # ⚠️ WRITTEN AND RECORDED IN ONE PLACE (architecture review, 2026-10-06): the history was recorded by hand at
-    # eleven places, and one of them (a setup's instructions) recorded a kind Undo did not know. A text — the
-    # rules, the instructions, a skill's file — goes through text_change, a skill folder through folder_change.
-    def _text_path(self, t: dict) -> str:
-        if t["kind"] == "policy":
-            return self.s.policy_path
-        if t["kind"] == "instructions":
-            return self.s.instructions_path
-        return os.path.join(self._skill_dir(t["skill"]), self._rel(t["path"]))
-
-    def _text_now(self, t: dict) -> str | None:
-        path = self._text_path(t)
-        return _read(path).decode("utf-8", "replace") if os.path.exists(path) else None
-
-    def text_change(self, place: str, what, target: dict, text: str | None, base_rev: str | None = None) -> str | None:
-        """Write one text (None: delete it) and record the change, when there is one. `what` is the line the
-        history shows, or a function of the text before. Returns the text before.
-
-        ⚠️ VALID WHOEVER WRITES IT (architecture review 6, 2026-10-07): the rules' problems were checked only by a
-        save from Rules, a script's syntax only by a save from the editor — an Undo (Overview › Page changes) or an
-        imported setup wrote either unchecked. Every text is checked here, by its kind (_check_text); a skill's
-        file is written only if the skill still loads (_change). `base_rev`: the version the person opened —
-        refused when the file changed since (another window, Studio Code Server)."""
-        before = self._text_now(target)
-        if base_rev is not None:
-            self._check_rev(target, before, base_rev)
-        if text is not None:
-            self._check_text(target, text)
-        data = text.encode("utf-8") if text is not None else None
-        if target["kind"] == "file":
-            self._change(target["skill"], self._rel(target["path"]), data)
-        elif data is None:
-            if os.path.exists(self._text_path(target)):
-                os.unlink(self._text_path(target))
-        else:
-            _write(self._text_path(target), data)
-        if before != text:
-            self.history.record(place, what(before) if callable(what) else what, target, before, text)
-        return before
-
-    def _check_rev(self, target: dict, before: str | None, base_rev: str) -> None:
-        name = "policy.yaml" if target["kind"] == "policy" else target.get("path") or target["kind"]
-        if before is None and base_rev:
-            raise Refused([f"{name} was deleted since you opened it."], 409)
-        if before is not None and base_rev != rev(before.encode("utf-8")):
-            raise Refused([f"{name} changed since you opened it (another window, Studio Code Server). Reload it "
-                           "to see the current file; your change was not saved."], 409)
-
-    def _check_text(self, target: dict, text: str) -> None:
-        """What a text of this kind must be before it is written: the rules without problems, a script that
-        compiles, YAML that reads."""
-        if target["kind"] == "policy":
-            probs = rules_problems(text)
-            if probs:
-                raise Refused(probs)
-            return
-        rel = str(target.get("path") or "")
-        if rel.endswith(".py"):
-            try:
-                compile(text, rel, "exec")
-            except SyntaxError as e:
-                raise Refused([f"{rel}, line {e.lineno}: {e.msg}. Not saved."]) from None
-        if rel.endswith((".yaml", ".yml")):
-            try:
-                yaml.safe_load(text)
-            except yaml.YAMLError as e:
-                raise Refused([f"{rel} is not valid YAML: {e}"]) from None
-
-    def folder_change(self, place: str, what: str, skill: str, before: str | None, after: str | None) -> None:
-        """A skill folder created, deleted, replaced or imported (the move is the caller's): recorded. `before` is
-        where the previous folder was kept (skills/.trash), `after` "present" or None."""
-        self.history.record(place, what, {"kind": "folder", "skill": skill}, before, after)
 
     # ------------------------------------------------------------------ copy the setup to another villa
     async def setup_export(self, request):
@@ -791,7 +615,7 @@ class UI:
             return web.json_response(preview)
         if body.get("fingerprint") != preview["fingerprint"]:
             raise Refused(["Something changed since the preview: look at it again before applying."], 409)
-        setup_copy.apply(self, setup, preview)
+        setup_copy.apply(self.files, setup, preview)      # changes.PageFiles: the same checks and history
         log.info("UI: setup imported (%s changes)", sum(1 for r in preview["rows"] if r["change"] != "same"))
         return web.json_response({"ok": True})
 

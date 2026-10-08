@@ -27,7 +27,7 @@ export async function overview() {
   } else {
     kids.push(card(place("last_day"), "The agent has not recorded anything yet."));
   }
-  kids.push(await historyCard(), setupCard());
+  kids.push(await historyCard(), setupCard(o.setup));
   fill($view, ...kids);
 }
 
@@ -39,11 +39,10 @@ export async function historyCard() {
     try { await api("POST", `api/history/${c.id}/undo`); toast("Undone."); go("overview"); }
     catch (e) { tell("Not undone", reasons(e)); }
   };
-  const PLACE = { Rules: "", Skills: "warn", Release: "gray", Import: "", Undo: "gray" };
   return card(place("changes"), "Every save on the Rules and Skills tabs, newest first. Kept as long as the agent's other records (Rules (file) › settings.keep.records_days, 90 days by default), and trimmed with them every night. Undo writes the previous version back through the same checks as a save, and is itself recorded here.",
     changes.length ? paged(["When", "Where", "What changed", ""], changes.map((c) => [
       new Date(c.at).toLocaleString([], { dateStyle: "short", timeStyle: "short" }),
-      h("span", { class: "chip " + (PLACE[c.place] || "") }, c.place),
+      h("span", { class: "chip " + c.chip }, c.place),                   // its colour: history.CHIPS
       c.what,
       // the server says which changes Undo handles (server.undoable): the page kept its own list and left out the instructions
       c.undone_by ? h("span", { class: "muted" }, "undone") : c.undoable ? h("button", { class: "btn ghost", onclick: undo(c) }, "Undo") : ""]))
@@ -51,41 +50,31 @@ export async function historyCard() {
 }
 
 // ---------------------------------------------------------------- overview › copy this setup to another villa (3A, 3B)
-export function exportCard() {
-  const parts = { skills: true, villa_files: true, ai: true, actions: true, tools: true, keep: true, instructions: false };
+// the choices and their words are the agent's (setup_copy.offer): the page typed them, and one named a removed card
+export function exportCard(offer) {
+  const parts = Object.fromEntries(offer.parts.map((p) => [p.key, p.on]));
   const tick = (k, label, sub) => h("label", { class: "tick" }, h("input", { type: "checkbox", checked: parts[k], onchange: (e) => { parts[k] = e.target.checked; } }),
     h("span", {}, label, sub ? h("span", { class: "muted small block" }, sub) : null));
   const stay = (label, sub) => h("div", { class: "tick" }, h("span", { class: "lock" }, "✕"), h("span", {}, label, sub ? h("span", { class: "muted small block" }, sub) : null));
   const btn = h("button", { class: "btn primary", onclick: async () => {
     btn.disabled = true;
     try {
-      const r = await fetch("api/setup/export", { method: "POST", headers: { "Content-Type": "application/json", "X-Vesta-UI": "1" }, body: JSON.stringify(parts) });
-      if (!r.ok) throw Object.assign(new Error("refused"), { problems: ((await r.json().catch(() => ({}))).problems) || [`Error ${r.status}`] });
-      const name = (r.headers.get("Content-Disposition") || "").match(/filename="([^"]+)"/)?.[1] || "vesta-agent-setup.zip";
-      const a = h("a", { href: URL.createObjectURL(await r.blob()), download: name });
+      const { blob, name } = await api("POST", "api/setup/export", parts, { file: true });
+      const a = h("a", { href: URL.createObjectURL(blob), download: name || "vesta-agent-setup.zip" });
       document.body.append(a); a.click(); a.remove();
     } catch (e) { tell("Not downloaded", reasons(e)); }
     btn.disabled = false;
   } }, "Download the setup");
   return h("div", {}, h("p", { class: "muted" }, `One file with the skills and the shareable part of the rules. On the other villa: ${where("setup_in")}.`),
     h("div", { class: "grid two" },
-      h("div", { class: "box" }, h("div", { class: "eyebrow" }, "Goes in the file"),
-        tick("skills", "The skills, every file"), tick("villa_files", "This villa's own choices inside the skills",
-          "the skills' villa.* files: e.g. which speech-to-text to use, the villa's extra report entries, the commands switched off on the Skills tab. Untick to send the skills as released, without them."),
-        tick("ai", "The AI: brains, spending limits, when the conversation context is deleted, web search"),
-        tick("actions", `${place("actions")}: each service and who decides`),
-        tick("tools", `${place("tools")}: tool switches, per role, skills switched off`),
-        tick("keep", "How long records are kept"), tick("instructions", "instructions.md", "your standing rules for the agent")),
-      h("div", { class: "box" }, h("div", { class: "eyebrow" }, "Always stays here"),
-        stay("People and their Telegram ids"), stay("Chat ids (owner, facility manager)"),
-        stay("Devices: protected, excluded, allowed lists, the siren", "entity ids are this villa's"),
-        stay("Keys and tokens", "never in any file the page makes"), stay("Records, transcripts, costs"))),
+      h("div", { class: "box" }, h("div", { class: "eyebrow" }, "Goes in the file"), offer.parts.map((p) => tick(p.key, p.words, p.note))),
+      h("div", { class: "box" }, h("div", { class: "eyebrow" }, "Always stays here"), offer.stays.map((x) => stay(x.words, x.note)))),
     h("div", { class: "actions" }, btn));
 }
 
 // Overview › Copy the setup: Download and Import, two tabs of one card (owner, 2026-10-06: a cleaner overview)
-export function setupCard() {
-  const t = tabbed("setup", [["out", place("setup_out"), null, exportCard], ["in", place("setup_in"), null, importCard]]);
+export function setupCard(offer) {
+  const t = tabbed("setup", [["out", place("setup_out"), null, () => exportCard(offer)], ["in", place("setup_in"), null, importCard]]);
   return card(place("setup"), "The skills and the shareable part of the rules, in one file, and that file read on another villa. People, chats, devices, keys and records never leave a villa.", t.bar, t.body);
 }
 

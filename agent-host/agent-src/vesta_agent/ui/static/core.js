@@ -3,16 +3,17 @@
 // ⚠️ THE PAGE'S PLACES (owner, 2026-10-08: one name per place). vesta_agent/places.py names every card and tab, and
 // the server writes that table into the page: a title is place("tools"), a sentence that sends the reader there says
 // where("tools") — "Rules › AI tools". No section name is written anywhere else (tests/test_ui.py).
-const PLACES = (() => { try { return JSON.parse(document.getElementById("places").textContent); } catch { return {}; } })();
+const PAGE = (() => { try { return JSON.parse(document.getElementById("places").textContent); } catch { return {}; } })();
+const PLACES = PAGE.places || {};
 export const place = (k) => (PLACES[k] || [k])[0];
+// a tab's sections in their order (places.ORDER): `sections` by place key → the nodes, top to bottom
+export const inOrder = (tab, sections) => (PAGE.order?.[tab] || Object.keys(sections)).map((k) => sections[k]);
 export const where = (k) => (PLACES[k] ? `${PLACES[k][1]} › ${PLACES[k][0]}` : k);
 
 // what several tabs read and change: one object (a module cannot assign another module's variables)
 export const page = {
   dirty: false,           // unsaved changes on the current screen
   current: "overview",
-  PROFILES: {},           // the brains as the server names them (policy.profile_labels): filled by Rules and Costs
-  jumpTo: null,             // "tools": open Rules on AI tools (a skill's "Open Rules › AI tools")
   tabs: {},                 // the tab each tabbed section shows, by its id (core.tabbed): kept while the page is open
   views: {},                // the tabs, by name: filled by app.js
 };
@@ -135,7 +136,9 @@ export function editTable(rows, { cls, columns, cell: draw, blank, add, changed 
   return [table([...columns.map((c) => c.title), ""], body, { cls: `edit ${cls}`, widths: [...columns.map((c) => c.width), "44"] }), pager.nav, h("div", { class: "actions" }, h("button", { class: "btn ghost", onclick: () => { rows.push(blank()); pager.last(); touched(); } }, add))];
 }
 
-export async function api(method, path, body) {
+// `file`: the answer is a file to save ({blob, name}); its refusal still comes as reasons (the export used its own
+// fetch and its own error handling, architecture review 9)
+export async function api(method, path, body, { file = false } = {}) {
   const opts = { method, headers: {} };
   if (body !== undefined) {
     opts.headers["Content-Type"] = "application/json";
@@ -154,6 +157,7 @@ export async function api(method, path, body) {
   } catch {
     throw Object.assign(new Error("unreachable"), { status: 0, problems: [UNREACHABLE] });
   }
+  if (file && r.ok) return { blob: await r.blob(), name: (r.headers.get("Content-Disposition") || "").match(/filename="([^"]+)"/)?.[1] };
   let data = {};
   try { data = await r.json(); } catch { /* an empty answer */ }
   if (!r.ok) {
@@ -322,7 +326,8 @@ export function cell(c, tag = "td", { cls = null, label = null } = {}) {
 export const tableRow = (cells) => h("tr", {}, cells.map((c) => cell(c)));
 export function table(head, body, { cls = "", widths = null } = {}) {
   return h("table", { class: `rows ${cls}`.trim() },
-    widths ? h("colgroup", {}, widths.map((w) => h("col", { width: w || null }))) : null,
+    // a width, or {width, cls}: a column a phone rule names by its class, never by its position (nth-child)
+    widths ? h("colgroup", {}, widths.map((w) => h("col", w && typeof w === "object" ? { width: w.width || null, class: w.cls } : { width: w || null }))) : null,
     h("thead", {}, h("tr", {}, head.map((c) => cell(c, "th")))),
     body instanceof Node ? body : h("tbody", {}, body.map(tableRow)));
 }
@@ -478,7 +483,10 @@ export function go(tab) {
   history.replaceState(null, "", "#" + tab);
   document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab.replace("-file", "")));
   document.querySelector(".tab-file").classList.toggle("on", tab === "rules-file");
-  page.views[tab]();          // filled by app.js: the tabs
+  // ⚠️ A TAB THAT FAILS SAYS WHY (architecture review 9): an error left "Loading…" on screen for good
+  Promise.resolve().then(() => page.views[tab]()).catch((e) => {          // filled by app.js: the tabs
+    if (page.current === tab) fill($view, problemsBox(reasons(e), "This tab could not be shown:"));
+  });
 }
 // a link to another card of the Rules page: scrolls to it and outlines it a moment
 export function jump(id, label) {
@@ -489,5 +497,5 @@ export function jump(id, label) {
     el.scrollIntoView({ behavior: "smooth", block: "start" });
     el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 1600);
   } }, label);
-}           // "tools": open Rules on AI tools (a skill's "Open Rules › AI tools")
+}
 export const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;

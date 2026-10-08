@@ -13,6 +13,10 @@ call (Home Assistant's, or the agent's own); an ACTION is a change on the villa,
 
 from __future__ import annotations
 
+#: the page's top tabs: key (its address, #rules) → its name. index.html is filled from it (architecture review 9: the
+#: names were typed there, and again as the first word of every place below — checked against this at import)
+TABS = {"overview": "Overview", "rules": "Rules", "skills": "Skills", "costs": "Costs"}
+
 #: key → (the title the page shows, the place it sits in: a top tab, or "Tab › Card")
 PLACES: dict[str, tuple[str, str]] = {
     # Overview
@@ -50,6 +54,16 @@ PLACES: dict[str, tuple[str, str]] = {
     "every_run": ("Every run", "Costs › AI runs"),
     "tools_called": ("Tools called", "Costs › AI runs"),
 }
+
+
+assert all(place.split(" › ")[0] in TABS.values() for _, place in PLACES.values()), "a place outside the top tabs"
+
+#: the order of a tab's sections, top to bottom, by place key (architecture review 9: the order was a line of code,
+#: and every "move X below Y" edited it and the test that quoted it). The page draws its sections in this order.
+ORDER = {
+    "rules": ["acting", "people", "chats", "actions", "protected", "ai", "tools"],   # AI tools below AI brains (owner, 2026-10-08)
+}
+assert all(k in PLACES for keys in ORDER.values() for k in keys), "an ordered section with no place"
 
 
 def title(key: str) -> str:
