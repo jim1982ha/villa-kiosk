@@ -39,7 +39,8 @@ export function h(tag, attrs = {}, ...kids) {
 // of the page or a resize. `width`: a fixed width (else the anchor's, at least 180 px); `center`: centred on it.
 export function floating(anchor, panel, { width = null, center = false, onClose = () => {} } = {}) {
   panel.classList.add("floating");
-  document.body.append(panel);
+  // inside an open popup (a modal <dialog>, the top layer), a panel on the body would draw UNDER it
+  (anchor.closest && anchor.closest("dialog[open]") || document.body).append(panel);
   const place = () => {
     const b = anchor.getBoundingClientRect(), vw = window.innerWidth, vh = window.innerHeight;
     const w = Math.min(width || Math.max(b.width, 180), vw - 16);
@@ -218,13 +219,19 @@ export function withInfo(label, text) {
 // of facts at the bottom. The one card for every switch the page draws as cards — Rules › What the AI can use and
 // Skills › What the AI may run — laid out by `.tool-grid` (four a line; `.tool-grid.three`: three).
 // onChange(checked, input): the card's own look follows at once.
-export function toggleCard(on, onChange, title, { chip = null, words = null, meta = null, label = null } = {}, disabled = false) {
-  const card = h("div", { class: "tool-card" + (on ? " is-on" : "") + (disabled ? " locked" : "") });
-  card.append(
-    h("div", { class: "tool-card-head" }, h("b", {}, title, chip),
-      h("label", { class: "switch" }, h("input", { type: "checkbox", checked: on, disabled, "aria-label": label || title,
-        onchange: (e) => { card.classList.toggle("is-on", e.target.checked); onChange(e.target.checked, e.target); } }))),
+// ⚠️ ONE CARD (owner, 2026-10-08: a skill's tools "the same way cards are used to display commands"): its title,
+// a chip, what it is, a line under it — and on the right whatever the caller puts there (a switch: toggleCard).
+export function tileCard(title, { chip = null, words = null, meta = null, side = null, on = true, cls = "" } = {}) {
+  return h("div", { class: "tool-card" + (on ? " is-on" : "") + (cls ? " " + cls : "") },
+    h("div", { class: "tool-card-head" }, h("b", {}, title, chip), side),
     words, h("div", { class: "tool-meta" }, meta));
+}
+
+export function toggleCard(on, onChange, title, { chip = null, words = null, meta = null, label = null } = {}, disabled = false) {
+  let card = null;
+  const sw = h("label", { class: "switch" }, h("input", { type: "checkbox", checked: on, disabled, "aria-label": label || title,
+    onchange: (e) => { card.classList.toggle("is-on", e.target.checked); onChange(e.target.checked, e.target); } }));
+  card = tileCard(title, { chip, words, meta, side: sw, on, cls: disabled ? "locked" : "" });
   return card;
 }
 
@@ -364,6 +371,20 @@ export function ask({ title, text = "", ok = "OK", cancel = "Cancel", danger = f
   });
 }
 export const tell = (title, text) => ask({ title, text, cancel: null });
+
+// A part of the page in a popup over it (owner, 2026-10-08: a command's Offline Test opens from its card): the
+// same <dialog> as ask(), wider, closed by its Close button, Escape or a click on the backdrop.
+export function popup(title, body, info = null) {
+  const dlg = h("dialog", { class: "ask wide" },
+    h("div", { class: "popup-head" }, h("h3", {}, info ? withInfo(title, info) : title),
+      h("button", { type: "button", class: "btn ghost", onclick: () => dlg.close() }, "Close")),
+    body);
+  dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });
+  dlg.addEventListener("close", () => dlg.remove());
+  document.body.append(dlg);
+  dlg.showModal();
+  return dlg;
+}
 
 export function markDirty() { page.dirty = true; showBar(); }
 export async function guard() {

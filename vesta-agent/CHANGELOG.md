@@ -1,3 +1,11 @@
+## 0.12.86
+
+What you will see:
+- Skills › About: the "Try a command" tab is gone. Each command card under "Commands run by the Skill" now has an "Offline Test" button that opens the same test in a popup, already set to that command, so there is no "What to run" step.
+- Skills › About: "When is the Skill called" and "Tools used by the Skill" are now two tabs in one section at the top. Each tool is shown as a card, like the command cards, instead of in a fold-out list.
+- New names: "What the AI may run" is now "Commands run by the Skill", "When it acts" is now "When is the Skill called", and "Tools it needs" is now "Tools used by the Skill".
+- In the popup, an (i) now shows its explanation above the popup instead of behind it.
+
 ## 0.12.85
 
 What you will see:

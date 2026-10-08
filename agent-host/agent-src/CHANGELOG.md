@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.81 (8 October 2026)
+
+- skills.js: the Try tab removed; `offlineTestPill` on each command card (and on a whole-script card) opens `tryPanel(name, d, script, command)` in `core.popup`, with no script or command choice. About opens with `subTabs` of when/tools; the tools are `core.tileCard` cards (toggleCard builds on it); renames live in `ABOUT_TEXT`.
+- core.js: `floating` attaches a panel inside an open `<dialog>` (the top layer), so a tip or a list in a popup is drawn above it. test_ui pins.
+
 ## 0.6.80 (8 October 2026)
 
 - costs.js: the per-day chart's viewBox is the card's pixel width (no stretch); axis text 12 px. test_ui pin.

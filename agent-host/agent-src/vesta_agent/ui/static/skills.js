@@ -1,5 +1,5 @@
 // VESTA Agent page — the Skills tab.
-import { api, ask, dropdown, field, fill, go, guard, h, markDirty, page, plural, problemsBox, reasons, saveWith, setBar, showBar, subTabs, tell, titleWithInfo, toast, toggleCard, $view, withInfo } from "./core.js";
+import { api, ask, dropdown, field, fill, go, guard, h, markDirty, page, plural, popup, problemsBox, reasons, saveWith, setBar, showBar, subTabs, tell, tileCard, titleWithInfo, toast, toggleCard, $view, withInfo } from "./core.js";
 
 // ---------------------------------------------------------------- skills
 // A skill's state against this release: it follows the releases (never edited here), it was edited here (updates
@@ -61,15 +61,15 @@ export async function switchTool(b) {
   await api("PUT", "api/policy/form", { form, rev: doc.rev });
 }
 
-// Skills › Try a command: run by the agent on the live villa, exactly as the AI would — nothing is sent.
-// Two steps (owner, 2026-10-06: "badly rendered, not understandable"): what to run, its options in words; then Run.
+// A command's Offline Test: run by the agent on the live villa, exactly as the AI would — nothing is sent.
+// ⚠️ OPENED FROM ITS OWN CARD (owner, 2026-10-08: the "Try a command" tab became an "Offline Test" pill on each
+// command's card, in a popup): the script and the command are the card's, so only the options are asked; then Run.
 export const FLAG_HELP = { date: "a day, e.g. 2026-10-05", text: "a word or a few", switch: "" };
-export function tryPanel(name, d) {
+export const OFFLINE_TEST_INFO = "Runs this command on the villa, exactly as the AI would: it changes nothing in Home Assistant, uses no AI and costs nothing. Messages or tickets it would create are shown here, never sent. A file it saves stays in the agent's out folder, for a next step.";
+export function tryPanel(name, d, script, command = null) {
   const out = h("div");
-  const runnable = d.scripts.filter((sc) => !sc.whole_off);
-  if (!runnable.length) return h("p", { class: "muted" }, "Every script of this skill is switched off for the AI.");
-  let script = runnable[0], command = null, values = {};
-  const what = h("div", { class: "try-row" }), opts = h("div", { class: "try-opts" });
+  let values = {};
+  const opts = h("div", { class: "try-opts" });
   const args = () => {
     const a = command ? [command] : [];
     for (const [flag, kind] of Object.entries(script.flags)) {
@@ -79,11 +79,6 @@ export function tryPanel(name, d) {
     return a;
   };
   const draw = () => {
-    const cmds = script.commands.filter((c) => c.on);
-    if (!cmds.some((c) => c.name === command)) command = cmds.length ? cmds[0].name : null;
-    fill(what,
-      field("Script", dropdown(runnable.map((sc) => [sc.script, sc.script]), script.script, (v) => { script = runnable.find((x) => x.script === v); values = {}; draw(); }, "Script")),
-      cmds.length ? field("Command", dropdown(cmds.map((c) => [c.name, c.words ? `${c.name} — ${c.words}` : c.name]), command, (v) => { command = v; }, "Command")) : null);
     // A file it reads is one an earlier step left in the out folder (a page's --facts: the file the step before it
     // wrote): chosen among them, the one named after the option first. A file it writes is named here, for the next
     // step (--energy: the week's energy, saved by another skill's script, 2026-10-06)
@@ -142,10 +137,17 @@ export function tryPanel(name, d) {
   }
   draw();
   return h("div", { class: "skill-sec try" },
-    h("h3", {}, "1 · What to run"), what,
-    h("h3", {}, "2 · Options"), opts,
+    h("p", { class: "muted small" }, h("code", {}, command ? `${script.script} ${command}` : script.script)),
+    h("h3", {}, "Options"), opts,
     h("div", { class: "actions" }, h("button", { class: "btn primary", onclick: run }, "Run")),
     out);
+}
+
+// The pill on a command's card that opens its Offline Test (only while the AI may run it: switched off, it is not
+// what the AI would run)
+export function offlineTestPill(name, d, script, command) {
+  return h("button", { type: "button", class: "pill-btn", onclick: () =>
+    popup(`Offline Test · ${command || script.script}`, tryPanel(name, d, script, command), OFFLINE_TEST_INFO) }, "Offline Test");
 }
 
 export function pretty(text) {
@@ -193,16 +195,16 @@ export async function newSkill() {
 
 export let filesOpen = false;
 
-export const ABOUT = "\u0000about", TRY = "\u0000try", COMPARE = "\u0000compare";
+export const ABOUT = "\u0000about", COMPARE = "\u0000compare";
 
 // One skill: its name, state and switch on top, then four views (owner, 2026-10-06: "very messy" — one thing at a
-// time). About: when it acts, what the AI may run, the tools it needs. Files: the editor. Try a command. Compare.
+// time). About: when it is called and the tools it uses (tabs), the commands it runs (each with its Offline Test).
+// Files: the editor. Compare.
 export async function openSkill(name, pane, info, path = ABOUT) {
   const enc = encodeURIComponent(name);
   const [{ files }, d] = await Promise.all([api("GET", `api/skills/${enc}/files`), api("GET", `api/skills/${enc}`)]);
   if (path === COMPARE && (d.release || {}).state !== "edited") path = ABOUT;
-  if (path === TRY && !(d.scripts && d.scripts.length)) path = ABOUT;
-  const isFile = ![ABOUT, TRY, COMPARE].includes(path);
+  const isFile = ![ABOUT, COMPARE].includes(path);
   if (isFile && !files.some((x) => x.path === path)) path = files.length ? files[0].path : null;
   const rel = d.release || {};
   const goTo = async (p) => { if (p !== path && await guard()) openSkill(name, pane, info, p); };
@@ -243,7 +245,7 @@ export async function openSkill(name, pane, info, path = ABOUT) {
 
   // ---- the views
   const FILES = "\u0000files";             // the Files tab stands for whichever file is open
-  const tabs = subTabs([[ABOUT, "About"], [FILES, "Files"], d.scripts && d.scripts.length ? [TRY, "Try a command", "Runs one of this skill's commands on the villa, exactly as the AI would: it changes nothing in Home Assistant, uses no AI and costs nothing. Messages or tickets it would create are shown here, never sent. A file it saves stays in the agent's out folder, for a next step."] : null,
+  const tabs = subTabs([[ABOUT, "About"], [FILES, "Files"],
                         rel.state === "edited" ? [COMPARE, "Compare"] : null], isFile ? FILES : path,
                        (k) => goTo(k === FILES ? (isFile ? path : "SKILL.md") : k));
   // ⚠️ NO TITLE, NO DESCRIPTION, NO SWITCH HERE ON A WIDE SCREEN (owner, 2026-10-06): the list beside it holds the
@@ -252,7 +254,6 @@ export async function openSkill(name, pane, info, path = ABOUT) {
     h("div", { class: "skill-bar" }, tabs, pill), ...kids));
 
   if (path === ABOUT) { card(aboutSkill(name, d)); setBar(null); return; }
-  if (path === TRY) { card(tryPanel(name, d)); setBar(null); return; }
   if (path === COMPARE) { card(await comparePanel(name, rel)); setBar(null); return; }
 
   // ---- Files: the list, the editor, the file's actions
@@ -323,48 +324,63 @@ export async function openSkill(name, pane, info, path = ABOUT) {
   if (path) await load(path);
 }
 
-// Skills › About: three short sections, each a list of aligned rows
+// Skills › About (owner, 2026-10-08): on top ONE section of two tabs — when the skill is called, the tools it uses (as
+// cards) — then the commands it runs, each card with its Offline Test.
+export const ABOUT_TEXT = {
+  when: "When is the Skill called", tools: "Tools used by the Skill", commands: "Commands run by the Skill",
+  switches: "Switch a command off and the AI cannot run it here. Saved in the skill's villa.skill.yaml: kept by updates, copied with the skill.",
+};
+let aboutTab = "when";                 // kept while the page is open: another skill opens on the same tab
+
 export function aboutSkill(name, d) {
   if (!d.acts) return h("p", { class: "muted" }, "The agent cannot read this skill's skill.yaml: open Files to fix it.");
   const row = (left, right, extra) => h("div", { class: "kv" }, h("div", { class: "kv-k" }, left), h("div", { class: "kv-v" }, right), extra || null);
-  // When it acts: the schedule first, then events, then the chats
-  const acts = [...d.acts.slice(1), d.acts[0]].map((a) => {          // the schedule first, the chats last
+  // When is the Skill called: the schedule first, then events, then the chats
+  const acts = () => [...d.acts.slice(1), d.acts[0]].map((a) => {          // the schedule first, the chats last
     const [when, job] = a.when.split(" — ");
     const kind = a.how === "AI job" ? "AI job" : a.how ? "code, no AI" : null;
     return row(when.replace(/^every chat message, when the AI reads it$/, "in a chat"),
       [job ? h("b", {}, job) : a.how && a.how !== "AI job" ? h("code", {}, a.how.split(" ")[0]) : h("span", { class: "muted" }, "when a person asks about it"),
        kind ? h("span", { class: "chip gray tiny" }, kind) : null]);
   });
-  // What the AI may run: a card per command, as the tools' cards (core.toggleCard; owner, 2026-10-07), three a line
+  // Tools used by the Skill: a one-line verdict and its (i), then every tool as a card — core.tileCard, the commands'
+  // own card without their switch (a tool is switched on or off in Rules, for every skill at once)
+  const tools = () => {
+    if (d.needs === null || d.needs === undefined) return h("p", { class: "muted" }, "Its skill.yaml lists none: its reports get every tool switched on.");
+    if (!d.needs.length) return h("p", { class: "muted" }, "None: the AI needs no tool of its own for this skill.");
+    const off = d.needs.filter((n) => !n.on);
+    const verdict = off.length ? h("b", { class: "warn-text" }, `${off.length} of ${d.needs.length} not available`) : `${plural(d.needs.length, "tool", "tools")}, all switched on`;
+    const state = { off: "off", missing: "not on this Home Assistant", never: "never available" };
+    return [h("p", {}, withInfo(verdict, WHERE_TOOLS)),
+      h("div", { class: "tool-grid three" }, d.needs.map((n) => tileCard(n.label, {
+        on: n.on, chip: n.on ? null : h("span", { class: "chip off tiny" }, state[n.state] || "off"),
+        words: h("div", { class: "muted" }, h("code", {}, n.tool)) })))];
+  };
+  const tabBody = h("div");
+  const tabBar = h("div");
+  const showTab = (k) => {
+    aboutTab = k;
+    fill(tabBar, subTabs([["when", ABOUT_TEXT.when], ["tools", ABOUT_TEXT.tools]], k, showTab));
+    fill(tabBody, k === "tools" ? tools() : acts());
+  };
+  showTab(aboutTab);
+  // Commands run by the Skill: a card per command (core.toggleCard), three a line, each with its Offline Test
   const runs = (d.scripts || []).map((sc) => h("div", { class: "cmd-group" },
     h("div", { class: "cmd-script" }, h("code", {}, sc.script)),
     h("div", { class: "tool-grid three" }, sc.commands.length
       ? sc.commands.map((c) => toggleCard(c.on, (on, box) => setCommand(name, sc.script, c.name, on, box), c.name, {
           label: `${sc.script} ${c.name}`,
           words: c.words ? h("div", { class: "muted" }, c.words) : null,
-          meta: c.job_only ? h("span", { class: "muted small" }, `Asked for in a chat, it runs as the ${c.job_only} job.`) : null }))
+          meta: [c.job_only ? h("span", { class: "muted small" }, `Asked for in a chat, it runs as the ${c.job_only} job.`) : null,
+                 c.on ? h("div", { class: "card-actions" }, offlineTestPill(name, d, sc, c.name)) : null] }))
       // a script without commands: what it does (skill.yaml `description`). ⚠️ NOT ITS OPTIONS (owner, 2026-10-08:
-      // "--as-of, --out, --skip-raw: too much detail for this view") — they are on Try a command, where they are used
+      // "--as-of, --out, --skip-raw: too much detail for this view") — they are in its Offline Test, where they are used
       : [toggleCard(!sc.whole_off, (on, box) => setCommand(name, sc.script, null, on, box), sc.script, {
-          words: h("div", { class: "muted" }, sc.description || "The AI may run it.") })])));
-  // Tools it needs: a one-line verdict and its (i); the list folded unless something is off
-  let tools;
-  if (d.needs === null || d.needs === undefined) tools = h("p", { class: "muted" }, "Its skill.yaml lists none: its reports get every tool switched on.");
-  else if (!d.needs.length) tools = h("p", { class: "muted" }, "None: the AI needs no tool of its own for this skill.");
-  else {
-    const off = d.needs.filter((n) => !n.on);
-    const chip = (n) => h("span", { class: "chip" + (n.on ? "" : " off"), title: n.tool },
-      n.label + ({ off: " — off", missing: " — not on this Home Assistant", never: " — never available" }[n.state] || ""));
-    const verdict = off.length ? h("b", { class: "warn-text" }, `${off.length} of ${d.needs.length} not available`) : `${plural(d.needs.length, "tool", "tools")}, all switched on`;
-    tools = [h("p", {}, withInfo(verdict, WHERE_TOOLS)),
-      off.length ? h("div", { class: "chips" }, off.map(chip)) : null,
-      h("details", { class: "fold" }, h("summary", {}, off.length ? "All of them" : "Show them"), h("div", { class: "chips" }, d.needs.map(chip)))];
-  }
+          words: h("div", { class: "muted" }, sc.description || "The AI may run it."),
+          meta: !sc.whole_off ? h("div", { class: "card-actions" }, offlineTestPill(name, d, sc, null)) : null })])));
   return h("div", { class: "about" },
-    h("section", { class: "about-sec" }, h("h3", {}, "When it acts"), acts),
-    // what the switches do, behind the title's (i) (owner, 2026-10-08), as every other explanation on the page
-    d.scripts && d.scripts.length ? h("section", { class: "about-sec" }, h("h3", {}, withInfo("What the AI may run",
-      "Switch a command off and the AI cannot run it here. Saved in the skill's villa.skill.yaml: kept by updates, copied with the skill.")),
-      runs) : null,
-    h("section", { class: "about-sec" }, h("h3", {}, "Tools it needs"), tools));
+    h("section", { class: "about-sec" }, tabBar, tabBody),
+    // what the switches do, behind the title's (i), as every other explanation on the page
+    d.scripts && d.scripts.length ? h("section", { class: "about-sec" }, h("h3", {}, withInfo(ABOUT_TEXT.commands, ABOUT_TEXT.switches)),
+      runs) : null);
 }

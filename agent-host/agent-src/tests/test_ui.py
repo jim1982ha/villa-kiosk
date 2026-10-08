@@ -592,9 +592,9 @@ def test_a_skills_command_cards_show_no_options_and_their_explanation_is_an_i():
     # owner, 2026-10-08: "--as-of, --out, --skip-raw: too much detail for this view"; the sentence under the title
     # becomes its (i), as every other explanation on the page
     js = page_js()
-    about = js[js.index("// What the AI may run: a card per command"):js.index("// Tools it needs:")]
+    about = body_of(js, "aboutSkill")
     assert "sc.flags" not in about and 'class: "flag"' not in about
-    assert 'withInfo("What the AI may run",' in js and 'h("p", { class: "muted small" }, "Switch a command off' not in js
+    assert "withInfo(ABOUT_TEXT.commands, ABOUT_TEXT.switches)" in about and 'h("p", { class: "muted small" }, "Switch a command off' not in js
 
 
 def test_a_scheduled_job_is_named_not_its_slot_key():
@@ -624,3 +624,24 @@ def test_the_cost_chart_is_drawn_at_the_cards_width_not_stretched():
     # owner, 2026-10-08: on the wider page the 640-unit chart stretched to ~500 px tall
     js = body_of(page_js(), "costs")
     assert "const W = Math.max(320, Math.round(($view.clientWidth" in js and "const W = 640" not in js
+
+
+def test_a_skills_about_is_two_tabs_then_its_commands_each_with_its_offline_test():
+    # owner, 2026-10-08: "Try a command" became an "Offline Test" pill on each command card, in a popup with no
+    # "What to run" step; when it is called and its tools are one section of two tabs, the tools as cards; renamed
+    js = page_js()
+    about, test = body_of(js, "aboutSkill"), body_of(js, "tryPanel")
+    assert '"When is the Skill called"' in js and '"Tools used by the Skill"' in js and '"Commands run by the Skill"' in js
+    assert 'subTabs([["when", ABOUT_TEXT.when], ["tools", ABOUT_TEXT.tools]]' in about
+    assert "tileCard(n.label" in about and "<details" not in about and '"fold"' not in about     # tools as cards, no fold
+    assert about.count("offlineTestPill(") == 2                                             # a command's, a script's
+    assert "What to run" not in test and "dropdown(runnable" not in test and "export function tryPanel(name, d, script, command = null)" in js
+    assert '"Offline Test"' in body_of(js, "offlineTestPill") and "popup(" in body_of(js, "offlineTestPill")
+    assert "Try a command" not in body_of(js, "openSkill")
+    assert "export function tileCard(" in js and "card = tileCard(title" in body_of(js, "toggleCard")   # one card
+
+
+def test_a_tip_or_list_opened_inside_a_popup_is_drawn_inside_it():
+    # a modal <dialog> is the top layer: the Offline Test popup's (i) opened its tip on the body, UNDER the popup
+    fl = body_of(page_js(), "floating")
+    assert 'anchor.closest("dialog[open]") || document.body).append(panel)' in fl and "document.body.append(panel)" not in fl
