@@ -13,6 +13,8 @@ call (Home Assistant's, or the agent's own); an ACTION is a change on the villa,
 
 from __future__ import annotations
 
+import re
+
 #: the page's top tabs: key (its address, #rules) → its name. index.html is filled from it (architecture review 9: the
 #: names were typed there, and again as the first word of every place below — checked against this at import)
 TABS = {"overview": "Overview", "rules": "Rules", "skills": "Skills", "costs": "Costs"}
@@ -41,7 +43,8 @@ PLACES: dict[str, tuple[str, str]] = {
     "skill_about": ("About", "Skills"),
     "skill_files": ("Files", "Skills"),
     "skill_compare": ("Compare", "Skills"),
-    "skill_when": ("When the skill runs", "Skills › About"),
+    # "{skill}": the open skill's name (owner, 2026-10-08: "When the reports skill runs"), left out where no skill is
+    "skill_when": ("When the {skill} skill runs", "Skills › About"),
     "skill_commands": ("Skill commands", "Skills › About"),
     "skill_tools": ("Skill tools", "Skills › About"),
     # Costs
@@ -66,11 +69,11 @@ ORDER = {
 assert all(k in PLACES for keys in ORDER.values() for k in keys), "an ordered section with no place"
 
 
-def title(key: str) -> str:
-    return PLACES[key][0]
+def title(key: str, **names: str) -> str:
+    """A place's title; a {slot} is filled from `names`, or left out with its space ("When the skill runs")."""
+    return re.sub(r"\{(\w+)\} ?", lambda m: f"{names[m.group(1)]} " if names.get(m.group(1)) else "", PLACES[key][0])
 
 
 def where(key: str) -> str:
     """The way a sentence sends the reader there: "Rules › AI tools"."""
-    name, place = PLACES[key]
-    return f"{place} › {name}"
+    return f"{PLACES[key][1]} › {title(key)}"

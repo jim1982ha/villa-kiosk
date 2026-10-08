@@ -5,10 +5,11 @@
 // where("tools") — "Rules › AI tools". No section name is written anywhere else (tests/test_ui.py).
 const PAGE = (() => { try { return JSON.parse(document.getElementById("places").textContent); } catch { return {}; } })();
 const PLACES = PAGE.places || {};
-export const place = (k) => (PLACES[k] || [k])[0];
+// a {slot} in a title is filled from `names` ({skill: "reports"}), or left out with its space (places.title, the same rule)
+export const place = (k, names = {}) => (PLACES[k] || [k])[0].replace(/\{(\w+)\} ?/g, (_, v) => (names[v] ? `${names[v]} ` : ""));
 // a tab's sections in their order (places.ORDER): `sections` by place key → the nodes, top to bottom
 export const inOrder = (tab, sections) => (PAGE.order?.[tab] || Object.keys(sections)).map((k) => sections[k]);
-export const where = (k) => (PLACES[k] ? `${PLACES[k][1]} › ${PLACES[k][0]}` : k);
+export const where = (k) => (PLACES[k] ? `${PLACES[k][1]} › ${place(k)}` : k);
 
 // what several tabs read and change: one object (a module cannot assign another module's variables)
 export const page = {

@@ -1,3 +1,8 @@
+## 0.12.103
+
+What you will see:
+- Skills › About: the first section's title now names the skill that is open, for example "When the reports skill runs", so it is clear which skill the right side shows.
+
 ## 0.12.102
 
 What you will see:

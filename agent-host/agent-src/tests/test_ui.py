@@ -706,7 +706,12 @@ def test_every_place_is_named_once_and_the_page_reads_the_names_from_the_server(
     from vesta_agent.places import ORDER
     assert m and json.loads(m.group(1)) == {"places": {k: list(v) for k, v in PLACES.items()}, "order": ORDER} and "{places}" not in html
     # the page's where() is the server's: "Tab › Card"
-    assert "`${PLACES[k][1]} › ${PLACES[k][0]}`" in page_js() and where("tools") == "Rules › AI tools"
+    assert "`${PLACES[k][1]} › ${place(k)}`" in page_js() and where("tools") == "Rules › AI tools"
+    # a {slot} is filled the same way on both sides (owner, 2026-10-08: "When the reports skill runs")
+    from vesta_agent.places import title
+    assert (title("skill_when", skill="reports"), title("skill_when")) == ("When the reports skill runs", "When the skill runs")
+    assert '.replace(/\\{(\\w+)\\} ?/g, (_, v) => (names[v] ? `${names[v]} ` : ""))' in page_js()
+    assert 'place("skill_when", { skill: name })' in body_of(page_js(), "aboutSkill")
     # no title of two words or more is written by hand in the page's code, nor a "Tab › …" sentence
     # (the code without its comments, whole-line or at a line's end: a comment may name a place)
     js = {f: "\n".join(re.sub(r"(^|\s)//.*$", "", l) for l in open(f, encoding="utf-8").read().split("\n"))

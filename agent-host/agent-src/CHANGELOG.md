@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.98 (8 October 2026)
+
+- places.py: a title may carry a {slot} ("When the {skill} skill runs"). places.title(key, **names) and core.place(k, names) fill it, or drop it with its space, by the same rule. aboutSkill names the open skill. test_ui pins.
+
 ## 0.6.97 (8 October 2026)
 
 - viewer.fileViewer: "View" / "Edit".

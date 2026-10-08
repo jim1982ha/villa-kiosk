@@ -389,6 +389,6 @@ export function aboutSkill(name, d) {
   // what the switches do, behind the Commands tab's (i), as every other explanation on the page
   const tabs = tabbed("about", [hasRuns && ["commands", ABOUT_TEXT.commands, ABOUT_TEXT.switches, runs], ["tools", ABOUT_TEXT.tools, null, tools]]);
   return h("div", { class: "about" },
-    h("section", { class: "about-sec" }, h("h3", {}, ABOUT_TEXT.when), acts()),
+    h("section", { class: "about-sec" }, h("h3", {}, place("skill_when", { skill: name })), acts()),   // the open skill named
     h("section", { class: "about-sec" }, tabs.bar, tabs.body));
 }
