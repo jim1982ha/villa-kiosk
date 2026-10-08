@@ -1,5 +1,5 @@
 description: Answers about the villa's state (is everything OK? where is X?) and asks for actions, always by Approve / Refuse
-# the tools the AI needs to talk about the villa (VESTA Agent page → Rules → What the AI can use)
+# the tools the AI needs to talk about the villa (VESTA Agent page → Rules › AI tools)
 tools: [ha_get_state, ha_get_history, ha_search, ha_get_entity, ha_list_floors_areas, ha_call_service]
 scripts:
   concierge.py:

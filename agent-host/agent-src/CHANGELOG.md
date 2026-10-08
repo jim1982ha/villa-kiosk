@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.88 (8 October 2026)
+
+- Starter skills (asked for by the owner): villa-concierge SKILL.md says "Rules › Allowed actions"; the reports and villa-concierge skill.yaml comments say "Rules › AI tools". Both recorded in shipped-skills.json. test_ui's old-names guard now covers starter/.
+
 ## 0.6.87 (8 October 2026)
 
 - vesta_agent/places.py: one name per place on the page (title, and where it sits). The server writes the table into index.html as JSON; core.js `place(k)` / `where(k)` read it. policy.FIELDS section words, tool_access's "why", the history and setup_copy use it as well. Renamed as listed in the app's changelog.

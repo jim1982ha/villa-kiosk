@@ -83,7 +83,7 @@ Assistant and brings the text back here.
    command "to be sure".
 
 What may be asked, by whom, and who approves is the villa's (VESTA Agent page →
-Rules → What the agent may do). The siren is reachable only through the
+Rules › Allowed actions). The siren is reachable only through the
 alert-desk gate.
 
 ## The two special conversations

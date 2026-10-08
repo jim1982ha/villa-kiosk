@@ -730,8 +730,9 @@ def test_every_place_is_named_once_and_the_page_reads_the_names_from_the_server(
     # the names the agent used before this table are gone from its code and its page
     old = ("What the AI can use", "What the agent may do", "Who may use what", "The agent's own tools", "Reading Home Assistant",
            "Changes made on these pages", "Overview › Changes", "What the AI may run", "Where it went", "Tools it gets")
-    here = os.path.join(os.path.dirname(__file__), "..", "vesta_agent")
-    for f in glob.glob(os.path.join(here, "**", "*.*"), recursive=True):
-        if f.endswith((".py", ".js", ".css", ".html")) and not f.endswith("places.py"):
+    # the agent's code, and the starter skills and config (a SKILL.md is what the AI reads, and may quote in a chat)
+    root = os.path.join(os.path.dirname(__file__), "..")
+    for f in glob.glob(os.path.join(root, "vesta_agent", "**", "*.*"), recursive=True) + glob.glob(os.path.join(root, "starter", "**", "*.*"), recursive=True):
+        if f.endswith((".py", ".js", ".css", ".html", ".md", ".yaml")) and not f.endswith("places.py"):
             text = open(f, encoding="utf-8").read()
             assert not [o for o in old if o in text], (f, [o for o in old if o in text])
