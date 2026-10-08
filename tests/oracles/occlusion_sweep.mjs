@@ -11,7 +11,7 @@ import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
-const { OcclusionSweep } = await import("@/babylon/occlusionSweep");
+const { OcclusionSweep, owesLayout } = await import("@/babylon/occlusionSweep");
 
 function rig() {
   let t = 1000;
@@ -112,6 +112,52 @@ console.log("\n  the building does not move:");
   ck("every GLB mesh is frozen once the extents are adopted", /adoptModelExtents\(\);\s*mark\("applyStructure"\);[\s\S]{0,900}for \(const m of this\.loadedMeshes\) m\.freezeWorldMatrix\(\);/.test(src("SceneManager.ts")));
   ck("  ...and the one subsystem that moves a GLB mesh unfreezes what it claims", /m\.unfreezeWorldMatrix\(\);\s*m\.computeWorldMatrix\(true\);/.test(src("fanRigs.ts")));
   ck("the walk camera's per-frame step returns at once under the other camera", /private step\(\): void \{[\s\S]{0,300}if \(this\.scene\.activeCamera !== this\.camera\) return;/.test(src("CameraController.ts")));
+}
+
+console.log("\n  a camera that stops (owner, 2026-10-08: badges behind the kitchen wall stayed drawn):");
+{
+  // The CALLER as it is: cullLabels lays badges out only when the view changed or the layout is dirty, and only
+  // refreshWallOcclusion dirties it, when owesLayout says so. Stepping every frame (as above) cannot see that gate.
+  const r = rig();
+  const shown = [r.badge("cam.a", 4), r.badge("cam.b", 6), r.badge("cam.c", 8), r.badge("cam.d", 10)];
+  for (const b of shown) r.walls.add(b.id);
+  let dirty = true, frames = 0;
+  const frame = (viewChanged) => {
+    if (!viewChanged && !dirty) return;            // cullLabels' early return
+    dirty = false;
+    frames++;
+    if (owesLayout(run(r, shown))) dirty = true;    // refreshWallOcclusion
+  };
+  frame(true);                                       // the last step of a walk, or a teleport
+  for (let i = 0; i < 40; i++) { r.wait(16); frame(false); }   // then standing still, nothing else happening
+  ck("standing still after a move, every badge behind a wall is found", r.sweep.occluded.size === 4, [...r.sweep.occluded], frames);
+  ck("settling owes the caller a layout pass (else the sweep never starts)", owesLayout("settling") && owesLayout("sweeping") && !owesLayout("complete") && !owesLayout("idle"));
+}
+
+console.log("\n  the line of sight aims at the device, not its badge:");
+{
+  // A camera under a 2.44 m ceiling: its badge floats at 2.56 m, ABOVE a 2.51 m wall — a ray to the badge passed
+  // over the wall (measured on the villa: 93 hidden devices drawn → 1 when aimed at the device's centre).
+  let aimedAt = null;
+  const sweep = new OcclusionSweep({ settleMs: 0, nearM: 1.2, slackM: 0.1, now: () => 1e6,
+    cast: (ox, oy, oz, dx, dy, dz, len) => { aimedAt = oy + dy * (len + 0.1); return aimedAt < 2.51 ? "wall_1F" : null; } });
+  const cam = { id: "camera.patio", wx: 6, wy: 2.56, wz: 0, ty: 2.38 };
+  sweep.step([cam], { x: 0, y: 1.6, z: 0 }, 1000);
+  ck("the ray ends at the device's height (ty), not the badge's", Math.abs(aimedAt - 2.38) < 1e-6, aimedAt);
+  ck("  ...so the wall hides it", sweep.occluded.has("camera.patio"));
+  const ev = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
+  ck("every shown badge carries its device's height", /s\.ty = wp\.y - \(this\.sightDrop\.get\(id\) \?\? 0\);/.test(ev));
+  const refresh = ev.slice(ev.indexOf("  private refreshWallOcclusion("), ev.indexOf("\n  }\n", ev.indexOf("  private refreshWallOcclusion(")));
+  ck("the caller asks owesLayout (the pass it must not drop)", /if \(owesLayout\(pass\)\) \{\s*\/\/[\s\S]*?this\.layoutDirty = true;/.test(refresh));
+}
+
+console.log("\n  the walker's own room is never grouped (owner, 2026-10-08: inside Bedroom 2, its badges were a chip):");
+{
+  const ev = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
+  ck("the frame's exempt rooms include the walker's (walkExempt), the focus apart", /exempt: this\.walkExempt\(shown\),/.test(ev));
+  const pp = readFileSync(new URL("../../src/babylon/placementPass.ts", import.meta.url), "utf8");
+  ck("the solver and every grouping step read the exempt rooms", /placementItems\(shown, boxes, clearance, frame\.rooms, frame\.exempt,/.test(pp) && (pp.match(/const focus = this\.f\.exempt;/g) || []).length === 3);
+  ck("only a tap's focus hides the other rooms (suppressOthers)", /if \(!frame\.focus\.rooms\.has\(k\)\) this\.chipRoom\(k, "focus"\);/.test(pp));
 }
 
 done("✅ a stale wall never hides, or shows, a badge");

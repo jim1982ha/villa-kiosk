@@ -1,3 +1,13 @@
+## 2.496.311
+
+### Fixed
+- In the walk view, badges of things behind a wall no longer show through it, for example the outdoor cameras seen from the kitchen, or Bedroom 3's group seen from inside Bedroom 2. There were two causes:
+  - After you stopped walking or jumped to a room, the check for "is there a wall in between?" never ran until you turned your head, so every badge on the floor stayed visible.
+  - The check aimed at the badge, which floats just above its device. For a camera or sensor mounted under the ceiling, that point is higher than the top of the wall, so the line of sight passed over the wall. It now aims at the device itself.
+
+  On the villa's ground floor, the number of hidden devices still drawn went from 93 to 1.
+- In the walk view, the room you are standing in is never collapsed into its "Room (3)" group: its badges are shown individually, as when you tap a room.
+
 ## 2.496.310
 
 ### Fixed

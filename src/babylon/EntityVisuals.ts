@@ -110,7 +110,7 @@ import { Storeys } from "./storeys";
 import { FloorProbe } from "./floorProbe";
 import { axisWorldScale, stripExtent } from "./meshUnits";
 import type { LightReading } from "./lightPoolSet";
-import { OcclusionSweep } from "./occlusionSweep";
+import { OcclusionSweep, owesLayout } from "./occlusionSweep";
 import type { RoomChip } from "./roomChips";
 import { groupCardModel, roomChipModel, type SummaryFrame } from "./summaryLook";
 import { rungAt, referenceDepthAt, iconZoomAt, viewportPx } from "./badgeScale";
@@ -214,7 +214,7 @@ const OCCLUSION_NEAR_M = 1.2;
 /** How far short of the anchor the ray stops. A device is normally mounted ON
  *  a wall or under a ceiling, so a ray that reaches its anchor ends inside that
  *  surface and reports the device as occluded by the thing it is attached to. */
-const OCCLUSION_SLACK_M = 0.35;
+const OCCLUSION_SLACK_M = 0.10;   // aimed at the device's centre (occlusionSweep `ty`): measured 93 → 1 hidden devices drawn
 /** One-word revert for the whole first-person wall cull, in the style of
  *  `BADGE_PLACEMENT` / `CHIP_COLLISION` — the fastest way to bisect a "it feels
  *  laggier since" report against the tier that was added with it. */
@@ -800,6 +800,10 @@ export class EntityVisuals {
    *  badge at a fixed screen-space height regardless of how tall the asset
    *  actually was or how high up it sat. */
   private labelAnchors = new Map<string, TransformNode>();
+  /** Anchor → device centre, per entity (buildLabelAnchors): the line of sight aims at the device (occlusionSweep `ty`). */
+  private readonly sightDrop = new Map<string, number>();
+  /** Entity → its plan room (walkExempt), filled on demand, cleared with the anchors and on a new plan. */
+  private readonly planRoomCache = new Map<string, unknown>();
   /** Last seen HA state per entity, so a label rebuild (toggle on / icon edit)
    *  can repaint badges immediately instead of waiting for the next push. */
   private lastState = new Map<string, HassEntity>();
@@ -1811,6 +1815,8 @@ export class EntityVisuals {
       const { min, max } = bounds;
       const node = new TransformNode(`lblAnchor_${entityId}`, this.scene);
       node.position.set((min.x + max.x) / 2, max.y + LABEL_ANCHOR_MARGIN, (min.z + max.z) / 2);
+      // how far below its anchor the device's centre is: where a line of sight aims (occlusionSweep `ty`)
+      this.sightDrop.set(entityId, (max.y - min.y) / 2 + LABEL_ANCHOR_MARGIN);
       // Parent to the entity's mesh (world position preserved) so the anchor
       // inherits enabled-state: when FloorManager hides a floor, the label
       // culler sees the disabled anchor and hides the badge with the device.
@@ -1822,6 +1828,8 @@ export class EntityVisuals {
   private disposeLabelAnchors(): void {
     this.labelAnchors.forEach((n) => n.dispose());
     this.labelAnchors.clear();
+    this.sightDrop.clear();
+    this.planRoomCache.clear();
   }
 
   /** Full teardown for scene disposal. scene.dispose() reclaims most of what
@@ -1868,6 +1876,7 @@ export class EntityVisuals {
     // or their room summarises), so the room's own size no longer takes part
     // in any grouping decision and the cache is gone with the fan.
     this.plan = plan;
+    this.planRoomCache.clear();
     // The earliest moment the pools can take their rooms' shapes and floors.
     this.bulbs.setRooms(plan);
     this.requestRender();
@@ -3337,6 +3346,7 @@ export class EntityVisuals {
       s.wx = wp.x;
       s.wy = wp.y;
       s.wz = wp.z;
+      s.ty = wp.y - (this.sightDrop.get(id) ?? 0);
       s.inFront = p.z >= 0 && p.z <= 1;
       s.occluded = this.occlusion.occluded.has(id);
       shown[shownCount] = s;
@@ -3636,12 +3646,11 @@ export class EntityVisuals {
     if (pass === "idle") return;
     // Settling: no rays while moving, but a frame must come to start the sweep
     // the moment the camera stops.
-    if (pass === "settling") { this.requestRender(); return; }
-    this.reportWalkCost(shown.length);
-    if (pass === "sweeping") {
-      // The sweep owes answers and the camera may now stop moving — see the
-      // early-return in cullLabels, which would otherwise freeze half the
-      // badges on a stale answer.
+    if (pass !== "settling") this.reportWalkCost(shown.length);
+    if (owesLayout(pass)) {
+      // The sweep owes answers and the camera may now stop moving — see the early-return in cullLabels, which would
+      // otherwise freeze the badges on a stale answer. SETTLING too: without a dirty layout the frame it asked for
+      // returned early, the sweep never started, and every badge behind a wall stayed drawn (owesLayout).
       this.layoutDirty = true;
       this.requestRender();
     }
@@ -3936,6 +3945,37 @@ export class EntityVisuals {
     }
   }
 
+  /** The rooms never grouped this frame (PlacementFrame.exempt): the focused ones, and while walking the room the
+   *  walker stands in (owner, 2026-10-08: inside Bedroom 2, its badges were the "Bedroom 2 (3)" chip). Found as the
+   *  PLAN room containing the eye, then turned into the badges' own room keys through the badges standing in that
+   *  same plan room — no name has to match (a badge's room may be HA's Area name, the plan's is SweetHome's). */
+  private walkExempt(shown: readonly ShownLabel[]): ReadonlySet<string> {
+    const focus = this.focus.rooms;
+    const cam = this.scene.activeCamera;
+    if (!this.firstPerson || !cam) return focus;
+    const eye = cam.globalPosition;
+    const here = this.plan.roomAt(eye.x, eye.y, eye.z);
+    if (!here) return focus;                     // outdoors, a stairwell: no room to keep whole
+    let out: Set<string> | null = null;
+    for (const s of shown) {
+      if (this.planRoomOf(s.id) !== here) continue;
+      const k = roomKey(this.roomOf(s.id));
+      if (focus.has(k) || out?.has(k)) continue;
+      (out ??= new Set(focus)).add(k);
+    }
+    return out ?? focus;
+  }
+
+  /** A badge's PLAN room (Storeys.deviceRoomAt at its anchor), kept: anchors do not move between loads. */
+  private planRoomOf(id: string): unknown {
+    if (this.planRoomCache.has(id)) return this.planRoomCache.get(id);
+    const a = this.labels.get(id)?.anchor;
+    const p = a?.getAbsolutePosition();
+    const r = p ? this.plan.deviceRoomAt(p.x, p.y, p.z) : null;
+    this.planRoomCache.set(id, r);
+    return r;
+  }
+
   /** A badge's room, normalised — the single definition every grouping,
    *  chip and hit-test path reads, so none of them can disagree. */
   private roomOf(entityId: string): string {
@@ -4088,6 +4128,7 @@ export class EntityVisuals {
       ...this.cardShape(),
       rooms: this.resolvedRooms,
       focus: this.focus,
+      exempt: this.walkExempt(shown),
       scale,
       cardBudget: this.cardBudget(),
       cellCap: this.cardCellCap(),

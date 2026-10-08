@@ -28,7 +28,7 @@ function rig(rooms, chips = []) {
   pass.begin({
     metrics: { minGapPx: 2, cardIconFraction: 0.8, countPillFraction: 0.4, countFontFraction: 0.6 },
     summary: { size: 40, font: 16, countSize: 16, countFont: 10 }, perCardCap: MAX_GRID_CHIPS,
-    rooms, focus: new RoomFocus(), scale: 1, cardBudget: 10_000, cellCap: 6,
+    rooms, focus: new RoomFocus(), exempt: new Set(), scale: 1, cardBudget: 10_000, cellCap: 6,
     chips: { members: [], view: null, text: { charPx: 7, padPx: 20 }, budget: 0 },
   });
   // The chips an obstacle test collides with, fixed: what is under test here is

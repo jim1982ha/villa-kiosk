@@ -22,7 +22,11 @@
 // The ray cast is the seam: EntityVisuals' adapter tests the structure meshes
 // with Babylon's intersectsMesh; tests/oracles/occlusion_sweep.mjs uses a fake.
 
-export interface OcclusionTarget { id: string; wx: number; wy: number; wz: number; occluded?: boolean }
+/** `ty`: the HEIGHT the line of sight aims at — the device, not its badge. The badge's anchor floats above the
+ *  device's top (buildLabelAnchors), and a camera mounted under a ceiling has it ABOVE the wall's top (2.51 m on the
+ *  villa's ground floor, ceilings not tested): the ray passed over the wall (owner, 2026-10-08, cameras outside seen
+ *  from the kitchen; measured on the villa: 93 hidden devices drawn → 1 when aimed at the device's centre). */
+export interface OcclusionTarget { id: string; wx: number; wy: number; wz: number; ty?: number; occluded?: boolean }
 
 /** Is the segment from `o` along unit `d` for `len` metres blocked? The
  *  blocker's name, or null. Must skip occluders that are not visible. */
@@ -32,6 +36,12 @@ export type RayCast = (
 
 /** What a pass did — the caller keeps frames coming unless it is `idle`. */
 export type SweepPass = "idle" | "settling" | "sweeping" | "complete";
+
+/** Does this pass owe the caller another layout pass? SETTLING DOES: the caller skips its layout when the view has
+ *  not changed, so a camera that has just stopped never asks again and the sweep never starts — every badge on the
+ *  storey stayed drawn, walls or not, after a teleport or a walk-then-stop, until the view turned (owner, 2026-10-08;
+ *  the oracle stepped every frame and could not see the caller's early return). */
+export const owesLayout = (p: SweepPass): boolean => p === "settling" || p === "sweeping";
 
 export class OcclusionSweep {
   private readonly ids = new Set<string>();
@@ -117,7 +127,7 @@ export class OcclusionSweep {
       this.cursor++;
       this.swept++;
       rays++;
-      const dx = s.wx - eye.x, dy = s.wy - eye.y, dz = s.wz - eye.z;
+      const dx = s.wx - eye.x, dy = (s.ty ?? s.wy) - eye.y, dz = s.wz - eye.z;
       const dist = Math.hypot(dx, dy, dz);
       if (dist <= this.nearM) { this.answer(s, null); continue; }
       this.answer(s, this.cast(eye.x, eye.y, eye.z, dx / dist, dy / dist, dz / dist, dist - this.slackM));
