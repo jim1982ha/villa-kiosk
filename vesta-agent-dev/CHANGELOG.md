@@ -1,3 +1,9 @@
+## 0.12.88
+
+What you will see:
+- App settings: "Telegram takeover" is now called "Agent replies on Telegram", with a shorter description: "Toggle to indicate if the Agent can send and answer messages to the villa's Telegram bot (if OFF, the agent sends nothing)". Your current setting is kept.
+- The log lines about it use the new name.
+
 ## 0.12.87
 
 What you will see:
