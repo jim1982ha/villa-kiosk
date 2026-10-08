@@ -1,3 +1,13 @@
+## 0.12.101
+
+What you will see:
+- If policy.yaml cannot be read (for example after an edit in Studio Code Server), **Rules (file) still opens**, with the problem shown at the top, so you can fix it there. Overview, Skills and the Rules forms open too, instead of staying on "Loading…". Any tab that fails now says why.
+- "Keep mine" now says why when it is refused, instead of "The page met an error".
+- Rules (file) and a skill's files use the same editor now: the Tab key indents in policy.yaml too.
+- A skill's SKILL.md and skill.yaml can no longer be deleted from the page (a skill needs both). The button was already hidden, and now the agent refuses it too.
+- Out-of-date words fixed: the setup import and export said "The AI" and "allowed lists", which are now "AI brains and limits" and "the devices each service may act on".
+- Nothing else should look different. Behind the page, more names and rules now come from one place on the agent: the export's options, the role names, the Page changes labels, the top tabs, the order of the Rules sections, the Offline Test result words, and "WebSearch".
+
 ## 0.12.100
 
 What you will see:
