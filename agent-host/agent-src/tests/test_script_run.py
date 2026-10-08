@@ -62,11 +62,15 @@ def test_a_failure_is_recorded_alike_by_the_ai_a_job_and_the_page(agent):
     assert [r["by"] for r in _records(agent, "script")] == ["job", "page"]
 
 
-def test_the_overview_counts_every_failed_script():
-    js = page_js()
-    assert 'count("script_failed")' in js
-    from vesta_agent.status import STATUS_KINDS
-    assert "script_failed" in STATUS_KINDS
+def test_the_overview_counts_every_failure_and_only_failures():
+    # architecture review 8: the page summed four kinds itself and missed action_failed; the agent adds them up now
+    from vesta_agent.status import FAILURE_KINDS, STATUS_KINDS, figures
+    assert set(FAILURE_KINDS) <= set(STATUS_KINDS)
+    counts = {"failed": 1, "action_failed": 2, "send_failed": 3, "script_failed": 4, "code_script_failed": 5,
+              "script_refused": 100, "executed": 6, "direct": 7, "run": 8}
+    got = dict(figures(counts, 0.256))
+    assert got["failures"] == 15 and got["actions done"] == 13 and got["replies written"] == 8 and got["AI cost (USD)"] == "0.26"
+    assert "figures(r.figures)" in page_js() and "count(" not in page_js().split("export async function overview")[1].split("export ")[0]
 
 
 def test_a_script_gets_the_pack_the_store_and_the_zone_its_skill_yaml_asks_for(tmp_path):

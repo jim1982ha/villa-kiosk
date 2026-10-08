@@ -188,9 +188,22 @@ def health(policy: Policy, server_tools: list[dict] | None, skill, load_problem:
     (`load_problem` says why; without one it was switched off). One answer for the page's list and a skill's page
     (architecture review 6: each wrote its own)."""
     if skill is None:
-        return {"ok": False, "problem": load_problem or "switched off", "blocked": []}
+        problem = load_problem or "switched off"
+        return {"ok": False, "problem": problem, "line": problem, "blocked": []}
     blocked = blockers(policy, server_tools, skill)
-    return {"ok": not blocked, "problem": " ".join(b["why"] for b in blocked) or None, "blocked": blocked}
+    # `line`: the skills list's one line (the page parsed "It needs…" out of `problem`, architecture review 8)
+    line = None if not blocked else "A tool it needs is switched off." if len(blocked) == 1 else \
+        f"{len(blocked)} tools it needs are switched off."
+    return {"ok": not blocked, "problem": " ".join(b["why"] for b in blocked) or None, "line": line, "blocked": blocked}
+
+
+def switch_on(form: dict, tool: str) -> dict:
+    """The Rules form's sections that switch `tool` on (a skill's "Switch … on"), from the form as it is now
+    (ui.policy_doc.to_form): Home Assistant's in ha_read_tools, the agent's own in agent_tools — web search
+    included, written to settings.web_search by apply_form. The page wrote this itself before (review 8)."""
+    if tool in OWN:
+        return {"agent_tools": {**form["agent_tools"], tool: True}}
+    return {"ha_read_tools": form["ha_read_tools"] if tool in form["ha_read_tools"] else [*form["ha_read_tools"], tool]}
 
 
 def blockers(policy: Policy, server_tools: list[dict] | None, skill) -> list[dict]:

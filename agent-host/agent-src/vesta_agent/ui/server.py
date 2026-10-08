@@ -99,6 +99,13 @@ def _write(path: str, data: bytes) -> None:
 
 TEXT_KINDS = ("policy", "instructions", "file")    # what Undo writes back as text (UI.text_change)
 
+
+def undoable(ch: dict) -> bool:
+    """Whether Undo is offered for this change: the one answer for the Page changes list and the Undo itself
+    (architecture review 8: the page kept its own list and hid Undo for the instructions, which Undo does handle).
+    Whether the text is still what the change left is asked at the press (another save may have come since)."""
+    return ch["place"] != "Release" and not ch["undone_by"] and ch["target"]["kind"] in (*TEXT_KINDS, "folder")
+
 def rules_problems(text: str) -> list[str]:
     """What is wrong with policy.yaml's text, in words ([] when nothing): one reading for the Overview, Rules and
     every write."""
@@ -137,6 +144,7 @@ class UI:
         r.add_put("/api/policy/form", self.policy_form)
         r.add_put("/api/policy/text", self.policy_text)
         r.add_get("/api/jobs", self.jobs)
+        r.add_post("/api/jobs/missing", self.jobs_add_missing)
         r.add_get("/api/entities", self.entities)
         r.add_get("/api/costs", self.costs)
         r.add_get("/api/skills", self.skills_list)
@@ -149,6 +157,7 @@ class UI:
         # 0.6.42: what the AI can use, a fuller Skills tab, copying a setup, the changes and their Undo
         r.add_get("/api/tools", self.tools)
         r.add_post("/api/tools/refresh", self.tools_refresh)
+        r.add_post("/api/tools/on", self.tool_on)
         r.add_get("/api/skills/{name}", self.skill_detail)
         r.add_put("/api/skills/{name}/on", self.skill_on)
         r.add_put("/api/skills/{name}/commands", self.skill_commands)
@@ -233,6 +242,18 @@ class UI:
 
     async def jobs(self, _request):
         return web.json_response({"jobs": self._jobs()})
+
+    async def jobs_add_missing(self, _request):
+        """The banner's "Add them": every AI job policy.yaml does not set, with its skill's starter values — written
+        here, through the same checks as a save (the page read, changed and wrote the whole form itself, review 8)."""
+        missing = [j for j in self._jobs() if not j["set"]]
+        if not missing:
+            return web.json_response({"ok": True, "added": []})
+        settings = to_form(self.policy_now()[0])["settings"]
+        settings["jobs"] = {**settings["jobs"], **{j["name"]: dict(j["default"]) for j in missing}}
+        names = [j["name"] for j in missing]
+        self._edit_policy({"settings": settings}, f"AI jobs added: {', '.join(names)}")
+        return web.json_response({"ok": True, "added": names})
 
     # ------------------------------------------------------------------ what the AI cost
     async def costs(self, request):
@@ -320,7 +341,8 @@ class UI:
             sk = loaded.get(n)
             h = tool_access.health(pol, self._server_tools(), sk, self.skills.problems().get(n))
             rows.append({"name": n, "description": sk.description if sk else "", "ok": h["ok"],
-                         "off": n in pol.skills_off, "state": self.skills.release_state(n)["state"], "problem": h["problem"]})
+                         "off": n in pol.skills_off, "state": self.skills.release_state(n)["state"], "problem": h["problem"],
+                         "line": h["line"]})
         return rows
 
     def _server_tools(self) -> list[dict] | None:
@@ -470,6 +492,14 @@ class UI:
             raise Refused([res.get("error") or "Home Assistant's MCP server did not answer."], 502)
         return await self.tools(_request)
 
+    async def tool_on(self, request):
+        """A skill's "Switch … on": the tool it needs, switched on where tool_access says its switch is."""
+        tool = str((await request.json()).get("tool") or "")
+        if not tool:
+            raise Refused(["No tool named."])
+        self._edit_policy(tool_access.switch_on(to_form(self.policy_now()[0]), tool), f"{tool_access.label(tool)} switched on", "Skills")
+        return web.json_response({"ok": True})
+
     def _edit_policy(self, change: dict, what: str, place: str = "Rules") -> dict:
         """One section of policy.yaml changed by a switch on the page: through the same checks as a save."""
         text, r = self.policy_now()
@@ -491,20 +521,26 @@ class UI:
             return web.json_response({"name": name, "ok": False, "off": name in pol.skills_off, "release": rel,
                                       "problem": h["problem"]})
         listed = tool_access.read_list(self.s.data_dir)
-        acts = [("every chat message, when the AI reads it", None)]
-        acts += [(f"{describe(j['when'])[0]}" + (f" — {j['name']}" if j.get("name") else ""),
-                  j.get("run") or ("AI job" if j.get("prompt") else None)) for j in sk.schedule]
+        # ⚠️ ROWS, NOT SENTENCES (architecture review 8): each was "when — job" with "AI job" as a magic value, and the
+        # page split it, renamed one sentence by a regex and moved the chats' row to the end. In the order shown:
+        # the schedule, then what the skill answers, the chats last. `script`: the script a code step runs.
+        def row(when, job=None, script=None, ai=False):
+            return {"when": when, "job": job, "script": script.split()[0] if script else None,
+                    "kind": "ai" if ai else "code" if script else None}
+        acts = [row(describe(j["when"])[0], j.get("name"), j.get("run"), ai=bool(j.get("prompt")) and not j.get("run"))
+                for j in sk.schedule]
         if sk.every_5_min:
-            acts.append(("every 5 minutes", sk.every_5_min))
-        acts += [(self.WHEN.get(ev, ev), cmd) for ev, cmd in sk.on_event.items()]
+            acts.append(row("every 5 minutes", script=sk.every_5_min))
+        acts += [row(self.WHEN.get(ev, ev), script=cmd) for ev, cmd in sk.on_event.items()]
         if sk.on_reply:
-            acts.append(("an answer to one of its alerts", sk.on_reply))
+            acts.append(row("an answer to one of its alerts", script=sk.on_reply))
+        acts.append({**row("in a chat"), "note": "when a person asks about it"})
         scripts = [spec.view() for _, spec in sorted(sk.scripts.items())]      # skills.Script: one reading
         blocked = h["blocked"]
         return web.json_response({
             "name": name, "ok": h["ok"], "off": name in pol.skills_off, "description": sk.description,
             "release": rel, "engine": __version__, "needs": tool_access.needs(pol, listed, sk) if sk.tools is not None else None,
-            "acts": [{"when": w, "how": h} for w, h in acts], "scripts": scripts, "blocked": blocked,
+            "acts": acts, "scripts": scripts, "blocked": blocked,
             "out_files": self._out_files()})
 
     def _out_files(self, limit: int = 60) -> list[str]:
@@ -610,7 +646,7 @@ class UI:
 
     # ------------------------------------------------------------------ changes made on these pages
     async def history_list(self, _request):
-        return web.json_response({"changes": self.history.rows(200)})
+        return web.json_response({"changes": [{**c, "undoable": undoable(c)} for c in self.history.rows(200)]})
 
     async def history_undo(self, request):
         try:
@@ -618,10 +654,10 @@ class UI:
         except ValueError:
             raise Refused(["No such change."], 404) from None
         ch = self.history.get(cid)
-        if not ch or ch["place"] == "Release":
-            raise Refused(["This change cannot be undone here."], 404)
-        if ch["undone_by"]:
+        if ch and ch["undone_by"]:
             raise Refused(["Already undone."], 409)
+        if not ch or not undoable(ch):
+            raise Refused(["This change cannot be undone here."], 404)
         t = ch["target"]
         if t["kind"] in TEXT_KINDS:
             # ⚠️ ONLY FROM WHERE THE CHANGE LEFT IT, the same rule for every text (history.py)
@@ -631,8 +667,6 @@ class UI:
             self.text_change("Undo", f"Undo: {ch['what']}", t, ch["before"])
         elif t["kind"] == "folder":
             self._undo_folder(t["skill"], ch)
-        else:
-            raise Refused(["This change cannot be undone here."], 404)
         self.history.mark_undone(cid, max(r["id"] for r in self.history.rows(1)))
         log.info("UI: change #%s undone", cid)
         return web.json_response({"ok": True})

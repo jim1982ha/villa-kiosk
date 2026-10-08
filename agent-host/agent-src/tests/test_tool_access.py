@@ -294,9 +294,11 @@ def test_a_tool_call_kept_for_the_costs_tab_loses_a_token_by_its_shape():
 def test_whether_a_skill_works_is_one_answer(monkeypatch):
     # architecture review 6: the page's list and a skill's page each wrote their own "ok / why"
     monkeypatch.setattr(tool_access, "blockers", lambda p, t, sk: [{"tool": "ha_get_history", "why": "History is off."}])
-    assert tool_access.health(None, [], None, "skill.yaml: bad") == {"ok": False, "problem": "skill.yaml: bad", "blocked": []}
+    assert tool_access.health(None, [], None, "skill.yaml: bad") == {"ok": False, "problem": "skill.yaml: bad", "line": "skill.yaml: bad", "blocked": []}
     assert tool_access.health(None, [], None)["problem"] == "switched off"
     h = tool_access.health(None, [], object())
     assert not h["ok"] and h["problem"] == "History is off." and h["blocked"][0]["tool"] == "ha_get_history"
+    # the list's one line (architecture review 8: the page parsed "It needs…" out of the sentence)
+    assert h["line"] == "A tool it needs is switched off."
     monkeypatch.setattr(tool_access, "blockers", lambda p, t, sk: [])
-    assert tool_access.health(None, [], object()) == {"ok": True, "problem": None, "blocked": []}
+    assert tool_access.health(None, [], object()) == {"ok": True, "problem": None, "line": None, "blocked": []}

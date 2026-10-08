@@ -33,7 +33,7 @@ export async function skills(select = null) {
     list.length ? list.map((s) => h("div", { class: "skill-item" + (s.name === select ? " on" : "") + (s.off ? " is-off" : "") },
       h("button", { type: "button", class: "skill-open", onclick: async () => { if (await guard()) skills(s.name); } },
         h("div", { class: "skill-name" }, h("b", {}, s.name), ...skillChips(s)),
-        h("div", { class: "d" }, s.off ? "Off · kept, not used" : s.ok ? s.description : s.problem.startsWith("It needs") ? "A tool it needs is switched off." : s.problem)),
+        h("div", { class: "d" }, s.off ? "Off · kept, not used" : s.ok ? s.description : s.line)),
       skillSwitch(s.name, !s.off, select))) : h("p", { class: "muted" }, "No skill yet. The starter skills are copied at the agent's first start."),
     h("div", { class: "actions" }, h("button", { class: "btn ghost", onclick: newSkill }, "New skill")));
   const pane = h("div");
@@ -51,14 +51,9 @@ export async function setCommand(skill, script, command, on, box) {
   catch (e) { box.checked = !on; box.closest(".tool-card")?.classList.toggle("is-on", !on); tell("Not changed", reasons(e)); }
 }
 
-// 2C's one-press fix: the tool switched on through the same save as the Rules form
+// 2C's one-press fix: the agent switches the tool on where its switch is (tool_access.switch_on), same checks as a save
 export async function switchTool(b) {
-  const doc = await api("GET", "api/policy");
-  const form = doc.form;
-  if (b.fix === "ha") form.ha_read_tools = [...new Set([...(form.ha_read_tools || []), b.tool])];
-  else if (b.tool === "web_search") form.settings.web_search = true;
-  else { form.agent_tools = { ...(form.agent_tools || {}) }; delete form.agent_tools[b.tool]; }
-  await api("PUT", "api/policy/form", { form, rev: doc.rev });
+  await api("POST", "api/tools/on", { tool: b.tool });
 }
 
 // A command's Offline Test: run by the agent on the live villa, exactly as the AI would — nothing is sent.
@@ -337,13 +332,11 @@ export const ABOUT_TEXT = {
 export function aboutSkill(name, d) {
   if (!d.acts) return h("p", { class: "muted" }, "The agent cannot read this skill's skill.yaml: open Files to fix it.");
   // When the skill runs: the schedule first, then events, then the chats — a table like every other (core.paged)
-  const acts = () => paged(["When", "What runs"], [...d.acts.slice(1), d.acts[0]].map((a) => {    // the schedule first, the chats last
-    const [when, job] = a.when.split(" — ");
-    const kind = a.how === "AI job" ? "AI job" : a.how ? "code, no AI" : null;
-    return [when.replace(/^every chat message, when the AI reads it$/, "in a chat"),
-      [job ? h("b", {}, job) : a.how && a.how !== "AI job" ? h("code", {}, a.how.split(" ")[0]) : h("span", { class: "muted" }, "when a person asks about it"),
-       kind ? h("span", { class: "chip gray tiny" }, kind) : null]];
-  }));
+  // rows as the agent sends them, in their order (server.skill_detail): drawn, never parsed
+  const KIND = { ai: "AI job", code: "code, no AI" };
+  const acts = () => paged(["When", "What runs"], d.acts.map((a) => [a.when,
+    [a.job ? h("b", {}, a.job) : a.script ? h("code", {}, a.script) : h("span", { class: "muted" }, a.note || ""),
+     a.kind ? h("span", { class: "chip gray tiny" }, KIND[a.kind]) : null]]));
   // Skill tools: a one-line verdict and its (i), then every tool as a card — core.tileCard, the commands'
   // own card without their switch (a tool is switched on or off in Rules, for every skill at once)
   const tools = () => {

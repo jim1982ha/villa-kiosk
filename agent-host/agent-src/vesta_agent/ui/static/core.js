@@ -442,12 +442,9 @@ export function showBar() {
 // ---------------------------------------------------------------- AI jobs not set
 // A job policy.yaml does not name does not run (owner, 2026-10-01): say so where it is seen, and add them
 // with the starter values their skill offers, in one press.
+// written by the agent (POST api/jobs/missing): the page no longer reads, changes and writes the whole form for it
 export async function addMissingJobs() {
-  const [doc, { jobs }] = await Promise.all([api("GET", "api/policy"), api("GET", "api/jobs")]);
-  const form = doc.form;
-  form.settings.jobs = form.settings.jobs || {};
-  for (const j of jobs) if (!j.set) form.settings.jobs[j.name] = { ...j.default };
-  await api("PUT", "api/policy/form", { form, rev: doc.rev });
+  await api("POST", "api/jobs/missing", {});
 }
 
 export function jobsBanner(names, after) {

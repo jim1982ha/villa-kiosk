@@ -20,6 +20,21 @@ STATUS_FIELDS = ("rule", "phase", "handled", "incident", "by", "reply", "tool", 
                  "skill", "script", "reason", "error", "code", "entities")
 
 
+# ⚠️ THE FIGURES ARE ADDED UP HERE, never by the page (architecture review 8): the Overview summed four failure kinds
+# itself and missed action_failed — a failed action on the villa counted nowhere. A refusal (script_refused) is the
+# agent's guard working, not a failure.
+FAILURE_KINDS = ("failed", "action_failed", "send_failed", "script_failed", "code_script_failed")
+ACTION_KINDS = ("executed", "direct")
+
+
+def figures(counts: dict[str, int], cost: float) -> list[list]:
+    """The period's figures, [label, value] in the order the Overview shows them."""
+    n = lambda *kinds: sum(counts.get(k, 0) for k in kinds)  # noqa: E731
+    return [["alerts followed", n("critical_event")], ["buttons pressed", n("ladder")],
+            ["actions done", n(*ACTION_KINDS)], ["replies written", n(agent_records.RUN)],
+            ["AI cost (USD)", f"{cost:.2f}"], ["failures", n(*FAILURE_KINDS)]]
+
+
 def report(state, store_path: str, hours: int = 24, now: datetime | None = None, label=None) -> dict:
     """What the agent itself did: its scheduled jobs, the alerts it followed, the buttons pressed, the
     actions asked and done, the failures. Read from its own records only; it changes nothing."""
@@ -55,7 +70,7 @@ def report(state, store_path: str, hours: int = 24, now: datetime | None = None,
         except Exception as e:  # noqa: BLE001 — a status answer never fails on the store
             incidents.append({"error": type(e).__name__})
     return {"since": since.isoformat(), "until": now.isoformat(), "scheduled_jobs": jobs,
-            "counts": counts, "ai_cost_usd": round(cost, 3), "events": events[-60:],
+            "counts": counts, "figures": figures(counts, cost), "ai_cost_usd": round(cost, 3), "events": events[-60:],
             "incidents": incidents[-40:]}
 
 

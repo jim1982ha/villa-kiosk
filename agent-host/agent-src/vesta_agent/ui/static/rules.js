@@ -109,7 +109,7 @@ export function rulesForms(doc, jobs = [], tools = null) {
     table(["Work", "Brain", withInfo("Limit (US$)", limitNote),
       withInfo(place("tools"), `Chat answers get every tool switched on in ${where("tools")}, by the person's role. A report gets only the tools its skill lists, among those switched on: to change them, edit the skill's tools list in ${where("skill_tools")} — the choice then travels with the skill.`),
       ""], aiBody, { cls: "ai" }));
-  const missing = jobs.filter((j) => !(f.settings.jobs || {})[j.name]).map((j) => j.name);
+  const missing = jobs.filter((j) => !j.set).map((j) => j.name);      // the agent's answer (server._jobs)
 
   // people
   const languages = (p) => ({ ...doc.languages, ...(p.language && !(p.language in doc.languages) ? { [p.language]: p.language } : {}) });
@@ -312,9 +312,9 @@ export function toolsCard(f, t, reload) {
     return kinds.map(([kind, title, sub]) => h("div", { class: "tool-group" },
       h("div", { class: "tool-group-head" }, h("b", {}, title), sub ? h("span", { class: "muted" }, ` — ${sub}`) : null),
       h("div", { class: "tool-grid" }, t.own.filter((x) => x.kind === kind).map((x) => {
-        const isWeb = x.key === "web_search";
-        const on = kind !== "choose" ? true : isWeb ? !!f.settings.web_search : f.agent_tools[x.key] !== false;
-        const set = (v) => { if (isWeb) f.settings.web_search = v; else if (v) delete f.agent_tools[x.key]; else f.agent_tools[x.key] = false; };
+        // the form says on/off for each (policy_doc.to_form): where the file keeps it is the agent's business
+        const on = kind !== "choose" ? true : f.agent_tools[x.key];
+        const set = (v) => { f.agent_tools[x.key] = v; };
         // "set elsewhere": a link to each section that decides it (owner, 2026-10-06)
         const words = x.kind === "elsewhere"
           ? h("div", { class: "muted" }, "Decided by ", jump("rules-acting", place("acting")), " and ", jump("rules-services", place("actions")), ": every action goes through those rules.")
@@ -326,14 +326,13 @@ export function toolsCard(f, t, reload) {
   // what a role changes: the (i) of its tab (owner, 2026-10-08: a paragraph above the table became a tooltip)
   const ROLES_INFO = `When a person writes, the AI only gets the tools their role allows; in the facility manager's chat, never more than the facility manager's. A tool switched off in ${place("ha_tools")} or ${place("agent_tools")} is off for everyone. Guests: the agent answers only the people in ${where("people")} (owner or facility manager), so a guest gets no answer at all for now.`;
   const roles = () => {
-    const fm = f.tool_access.fm || {};
+    const fm = f.tool_access.fm;             // group → allowed, as the form says it (policy_doc.to_form)
     return [
       table(["Tools", "Owner", "Facility manager", "Guest"], t.roles.map((g) => [
           h("b", {}, g.label),
           h("label", { class: "switch" }, h("input", { type: "checkbox", checked: true, disabled: true, "aria-label": `${g.label}: owner` })),
-          h("label", { class: "switch" }, h("input", { type: "checkbox", checked: fm[g.key] !== false, "aria-label": `${g.label}: facility manager`,
-            onchange: (e) => { const m = { ...(f.tool_access.fm || {}) }; if (e.target.checked) delete m[g.key]; else m[g.key] = false;
-                               if (Object.keys(m).length) f.tool_access.fm = m; else delete f.tool_access.fm; markDirty(); } })),
+          h("label", { class: "switch" }, h("input", { type: "checkbox", checked: fm[g.key], "aria-label": `${g.label}: facility manager`,
+            onchange: (e) => { fm[g.key] = e.target.checked; markDirty(); } })),
           { cls: "muted", v: h("span", { title: "There is no guest role yet: the agent answers only the owner and the facility manager" }, "—") }]),
         { cls: "roles", widths: [null, "18%", "18%", "14%"] }),
       h("p", { class: "muted" }, `Asking for an action is decided by "${place("actions")}": who approves stays there.`)];

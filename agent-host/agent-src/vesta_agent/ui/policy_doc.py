@@ -15,6 +15,7 @@ from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 
 from ..policy import DEFAULT_BEHAVIOUR, DEFAULTS, ENTITY_LISTS, form_sections
+from ..tool_access import CHOOSE, OWN, ROLE_GROUPS
 
 #: What the forms edit. Everything else (system_actions, notify_recipients...) is edited in the file itself and
 #: never touched here. "AI tools" (0.6.42): ha_read_tools, agent_tools, tool_access, and the skills'
@@ -61,8 +62,11 @@ def to_form(text: str) -> dict:
         **{k: list(raw.get(k) or []) for k in LISTS},
         "ha_read_tools": [x for x in raw.get("ha_read_tools") or [] if isinstance(x, str)]
         if isinstance(raw.get("ha_read_tools"), list) else [],
-        "agent_tools": dict(raw.get("agent_tools") or {}) if isinstance(raw.get("agent_tools"), dict) else {},
-        "tool_access": dict(raw.get("tool_access") or {}) if isinstance(raw.get("tool_access"), dict) else {},
+        # ⚠️ EVERY SWITCH AS ON/OFF (architecture review 8): the file leaves a tool that is on out ("absent means on")
+        # and keeps web search in settings.web_search; the page read and wrote that rule itself, twice. The form says
+        # true or false for each switch, and apply_form writes the file's own shape back (_switches_out).
+        "agent_tools": _own_switches(raw, settings),
+        "tool_access": _role_switches(raw),
         "skills_off": list(raw.get("skills_off") or []) if isinstance(raw.get("skills_off"), list) else [],
     }
 
@@ -94,19 +98,51 @@ def _set(parent: CommentedMap, key: str, value: Any) -> None:
     parent[key] = _node(value)
 
 
+def _own_switches(raw: dict, settings: dict) -> dict:
+    """The agent tools a villa chooses: key → on."""
+    file = raw.get("agent_tools") if isinstance(raw.get("agent_tools"), dict) else {}
+    return {k: bool(settings.get("web_search")) if k == "web_search" else file.get(k, True) is not False
+            for k, v in OWN.items() if v[2] == CHOOSE}
+
+
+def _role_switches(raw: dict) -> dict:
+    """What the facility manager may make the AI use: group → allowed (other keys kept as written)."""
+    ta = dict(raw["tool_access"]) if isinstance(raw.get("tool_access"), dict) else {}
+    fm = ta.get("fm") if isinstance(ta.get("fm"), dict) else {}
+    return {**ta, "fm": {k: fm.get(k, True) is not False for k, _ in ROLE_GROUPS}}
+
+
+def _switches_out(form: dict) -> dict:
+    """The form's switches in the file's shape: only what is off is written (web search: settings.web_search)."""
+    out = dict(form)
+    if isinstance(form.get("agent_tools"), dict):
+        out["agent_tools"] = {k: False for k, v in form["agent_tools"].items() if k != "web_search" and v is False}
+    if isinstance(form.get("tool_access"), dict):
+        fm = {k: False for k, v in (form["tool_access"].get("fm") or {}).items() if v is False}
+        out["tool_access"] = {**{k: v for k, v in form["tool_access"].items() if k != "fm"}, **({"fm": fm} if fm else {})}
+    return out
+
+
 def apply_form(text: str, form: dict) -> str:
     """The file with the form's sections written in; comments and other sections kept."""
     y = _yaml()
     doc = y.load(text) if (text or "").strip() else None
     if not isinstance(doc, CommentedMap):
         doc = CommentedMap()
-    defaults = to_form("")
+    web = form["agent_tools"].get("web_search") if isinstance(form.get("agent_tools"), dict) else None
+    form, defaults = _switches_out(form), _switches_out(to_form(""))
     for key in FORM_KEYS:
         if key not in form:
             continue
         if key not in doc and form[key] == defaults[key]:
             continue                               # absent and still the default: the file stays as it was
         _set(doc, key, form[key])
+    if web is not None:                            # web search's switch: written in settings, where the agent reads it
+        settings = doc.get("settings")
+        if (settings or {}).get("web_search", DEFAULT_BEHAVIOUR.get("web_search", False)) != web:
+            if not isinstance(settings, CommentedMap):
+                doc["settings"] = settings = CommentedMap()
+            _set(settings, "web_search", web)
     buf = io.StringIO()
     y.dump(doc, buf)
     return buf.getvalue()

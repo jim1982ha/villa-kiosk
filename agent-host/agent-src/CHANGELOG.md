@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.91 (8 October 2026)
+
+Eighth architecture review: the page draws the agent's verdicts.
+- server.undoable is the one answer for Page changes and Undo; history rows carry `undoable`. Fixed: Undo was hidden for instructions.
+- status.figures and FAILURE_KINDS: `last_24h.figures`. Fixed: action_failed was not counted; script_refused (a refusal) is still not a failure.
+- tool_access.health `line` for the skills list. tool_access.switch_on with POST api/tools/on, and POST api/jobs/missing: the page no longer reads, changes and writes the whole form.
+- policy_doc: the form gives agent_tools and tool_access.fm as true/false switches, web search included. apply_form writes the file's own shape back; the file written for an unchanged form is byte-identical to before.
+- skill_detail `acts`: rows of {when, job, script, kind[, note]} in display order (no "when — job" sentence, no "AI job" magic value).
+- Tests through HTTP (test_page_controls): each new rule went red under a mutation.
+
 ## 0.6.90 (8 October 2026)
 
 - rules.js: the AI tools card after AI brains and limits (owner). test_ui pin.

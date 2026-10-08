@@ -339,7 +339,7 @@ def test_every_set_of_figures_is_drawn_once_and_sits_two_to_a_row_on_a_phone():
     from vesta_agent.ui.server import STATIC
     js = page_js()
     css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
-    assert js.count('class: "kpi"') == 1 and js.count("figures([") == 2   # one builder, both tabs call it
+    assert js.count('class: "kpi"') == 1 and js.count("figures([") == 1 and "figures(r.figures)" in js   # one builder, both tabs
     rule = re.search(r"\.figures \{[^}]*grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(min\((\d+)px", css)
     assert rule and 2 * int(rule.group(1)) + 12 <= 320 - 2 * 20, "two figures must fit a 320px phone's card"
 

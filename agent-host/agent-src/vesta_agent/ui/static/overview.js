@@ -13,7 +13,6 @@ export async function overview() {
   ver.title = `${o.app_version ? `app ${o.app_version} · ` : ""}agent ${o.version} · ${o.instance}`;
   const off = o.skills.filter((s) => !s.ok && !s.off);
   const r = o.last_24h;
-  const count = (k) => (r && r.counts[k]) || 0;
   const kids = [
     jobsBanner(o.jobs_not_set, () => go("overview")),
     // the Rules and Skills tabs are one click away: only what is wrong with them is shown here
@@ -22,9 +21,7 @@ export async function overview() {
   ];
   if (r) {
     kids.push(card(place("last_day"), "From the agent's own records.",
-      figures([["alerts followed", count("critical_event")], ["buttons pressed", count("ladder")],
-        ["actions done", count("executed") + count("direct")], ["replies written", count("run")],
-        ["AI cost (USD)", r.ai_cost_usd.toFixed(2)], ["failures", count("failed") + count("script_failed") + count("code_script_failed") + count("send_failed")]]),
+      figures(r.figures),                 // added up by the agent (status.figures), never here
       r.scheduled_jobs.length ? h("div", { class: "divided" }, h("h2", {}, place("jobs_run")),
         paged(["Job", "Ran at"], [...r.scheduled_jobs].reverse().map((j) => [j.label || j.job, new Date(j.ran_at).toLocaleString()]))) : null));
   } else {
@@ -48,8 +45,9 @@ export async function historyCard() {
       new Date(c.at).toLocaleString([], { dateStyle: "short", timeStyle: "short" }),
       h("span", { class: "chip " + (PLACE[c.place] || "") }, c.place),
       c.what,
-      c.undone_by ? h("span", { class: "muted" }, "undone") : c.place === "Release" || c.target.kind === "release" || c.target.kind === "instructions" ? ""
-        : h("button", { class: "btn ghost", onclick: undo(c) }, "Undo")])) : h("p", { class: "muted" }, "No change made here yet."));
+      // the server says which changes Undo handles (server.undoable): the page kept its own list and left out the instructions
+      c.undone_by ? h("span", { class: "muted" }, "undone") : c.undoable ? h("button", { class: "btn ghost", onclick: undo(c) }, "Undo") : ""]))
+    : h("p", { class: "muted" }, "No change made here yet."));
 }
 
 // ---------------------------------------------------------------- overview › copy this setup to another villa (3A, 3B)

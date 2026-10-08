@@ -1,3 +1,10 @@
+## 0.12.96
+
+What you will see:
+- Overview › Page changes: a change to the instructions now has its Undo button. Undo always worked for it, but the button was hidden.
+- Overview › The last 24 hours: "failures" now counts a failed action on the villa too. It was left out before.
+- Nothing else should look different. Behind the page, the agent now decides what the page shows: whether a change can be undone, the figures, why a skill is not working, which jobs are not set, and where each tool's switch is. The page no longer keeps its own copy of these rules.
+
 ## 0.12.95
 
 What you will see:

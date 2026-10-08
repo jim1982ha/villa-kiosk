@@ -196,6 +196,13 @@ Decisions of 2026-09-30 (owner):
   is `Problems.record_night`; `features.integration_down` is pure. The page's `api()` always
   gives reasons (`core.reasons`, `saveWith`). The host self-test reads the SSE stream by the
   SSE rule; tests/sse_samples.py holds it and the agent's reader to the same samples.
+  Eighth review, 0.12.96 (the page): the page draws the agent's verdicts, never its own copy of a rule —
+  `server.undoable` (the Page changes list and Undo), `status.figures` (the Overview's figures; FAILURE_KINDS),
+  `tool_access.health` `line` (the skills list), `tool_access.switch_on` (a skill's "Switch … on", POST
+  api/tools/on), POST api/jobs/missing (the banner's "Add them"). The Rules form says every tool switch true/false
+  (`policy_doc.to_form`; `apply_form` writes the file's own shape back: absent means on, web search in settings).
+  A skill's "When the skill runs" rows come as fields in display order. Tests of these go through HTTP
+  (test_page_controls), not the page's source. places.py names every place once (titles and "Tab › Card").
 - No PDF (owner, 2026-09-30): the reports are self-contained HTML pages sent
   as attachments. Chromium was ~480 MB of a 1.1 GB image for this alone.
 - ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent

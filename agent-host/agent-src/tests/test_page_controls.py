@@ -328,10 +328,13 @@ def test_imported_instructions_can_be_undone_like_any_text(ui, tmp_path):
         await _json(c, "post", "/api/setup/import", json={"zip": zb, "apply": True, "fingerprint": prev["fingerprint"]})
         imported = open(other.instructions_path).read()
         hist = (await (await c.get("/api/history")).json())["changes"]
-        cid = next(h["id"] for h in hist if h["target"]["kind"] == "instructions")
-        st, _ = await _json(c, "post", f"/api/history/{cid}/undo", json={})
-        return imported, st
-    imported, st = call(other, fn)
+        row = next(h for h in hist if h["target"]["kind"] == "instructions")
+        st, _ = await _json(c, "post", f"/api/history/{row['id']}/undo", json={})
+        after = next(h for h in (await (await c.get("/api/history")).json())["changes"] if h["id"] == row["id"])
+        return imported, st, row, after
+    imported, st, row, after = call(other, fn)
+    # architecture review 8: the list says Undo is offered (the page hid it for the instructions), then no more
+    assert row["undoable"] is True and after["undoable"] is False and after["undone_by"]
     assert imported.startswith("The instructions of the villa the setup comes from")
     assert st == 200 and open(other.instructions_path).read() == "This villa's own instructions.\n"
 
@@ -362,3 +365,76 @@ def test_the_agent_checks_a_try_it_finds_in_the_folder_as_the_page_does(tmp_path
     v = Vesta(settings(str(tmp_path)), telegram=FakeTelegram(), kiosk=Kiosk("", ""), reader=object())
     out = asyncio.run(v.on_request({"kind": "try", "skill": "x", "script": "y.py", "args": ["a" * 301]}))
     assert out == {"ok": False, "error": "The command's arguments are not understood."}
+
+
+def test_undo_is_offered_exactly_for_what_undo_handles():
+    # architecture review 8: one answer (server.undoable) for the list and the Undo itself
+    from vesta_agent.ui.server import TEXT_KINDS, undoable
+    row = lambda place, kind, undone=None: {"place": place, "target": {"kind": kind}, "undone_by": undone}  # noqa: E731
+    assert all(undoable(row("Rules", k)) for k in (*TEXT_KINDS, "folder"))
+    assert not undoable(row("Release", "file")) and not undoable(row("Rules", "policy", 7)) and not undoable(row("Skills", "release"))
+
+
+def test_add_them_sets_every_missing_ai_job_with_its_starter_values_in_one_recorded_change(ui):
+    # architecture review 8: the banner's button read, changed and wrote the whole form from the page
+    raw = yaml.safe_load(open(ui.policy_path))
+    raw.setdefault("settings", {})["jobs"] = {"fm-daily": {"profile": "economy", "limit_usd": 0.5}}
+    raw["settings"]["web_search"] = True
+    with open(ui.policy_path, "w") as f:
+        yaml.safe_dump(raw, f)
+
+    async def fn(c):
+        st, body = await _json(c, "post", "/api/jobs/missing", json={})
+        st2, again = await _json(c, "post", "/api/jobs/missing", json={})
+        hist = (await (await c.get("/api/history")).json())["changes"]
+        return st, body, st2, again, hist
+    st, body, st2, again, hist = call(ui, fn)
+    jobs = yaml.safe_load(open(ui.policy_path))["settings"]
+    assert st == 200 and body["added"] == ["fm-weekly", "owner-monthly"] and st2 == 200 and again["added"] == []
+    assert jobs["jobs"]["fm-daily"] == {"profile": "economy", "limit_usd": 0.5}             # a set job untouched
+    assert jobs["jobs"]["owner-monthly"] == {"profile": "performance", "limit_usd": 6}      # its skill's default
+    assert jobs["web_search"] is True and hist[0]["what"] == "AI jobs added: fm-weekly, owner-monthly"
+
+
+def test_switch_on_turns_each_kind_of_tool_on_where_its_switch_is(ui):
+    # architecture review 8: the page knew that web search lives in settings and an agent tool is on when absent
+    raw = yaml.safe_load(open(ui.policy_path))
+    raw["agent_tools"] = {"create_ticket": False, "start_job": False}
+    raw.setdefault("settings", {})["web_search"] = False
+    raw["ha_read_tools"] = ["ha_get_state"]
+    with open(ui.policy_path, "w") as f:
+        yaml.safe_dump(raw, f)
+
+    async def fn(c):
+        return [(await _json(c, "post", "/api/tools/on", json={"tool": t}))[0] for t in ("web_search", "create_ticket", "ha_get_history", "ha_get_history")]
+    assert call(ui, fn) == [200] * 4
+    p = Policy.load(ui.policy_path)
+    raw = yaml.safe_load(open(ui.policy_path))
+    assert raw["settings"]["web_search"] is True and raw["agent_tools"] == {"start_job": False}
+    assert p.ha_read_tools == ["ha_get_state", "ha_get_history"]                              # once, at the end
+
+
+def test_the_rules_form_says_every_switch_on_or_off_and_writes_the_files_shape_back():
+    # architecture review 8: the form carries true/false per switch; the file keeps "absent means on"
+    from vesta_agent.ui.policy_doc import apply_form, to_form
+    text = "settings:\n  web_search: false\nagent_tools:\n  create_ticket: false\ntool_access:\n  fm:\n    cameras: false\n"
+    f = to_form(text)
+    assert f["agent_tools"] == {"web_search": False, "create_ticket": False, "start_job": True, "agent_status": True}
+    assert f["tool_access"]["fm"]["cameras"] is False and f["tool_access"]["fm"]["states"] is True
+    f["agent_tools"].update(web_search=True, create_ticket=True, start_job=False)
+    f["tool_access"]["fm"].update(cameras=True, logs=False)
+    out = yaml.safe_load(apply_form(text, f))
+    assert out["settings"]["web_search"] is True and out["agent_tools"] == {"start_job": False}
+    assert out["tool_access"] == {"fm": {"logs": False}}
+    assert yaml.safe_load(apply_form("", to_form(""))) in (None, {})                       # nothing written by default
+
+
+def test_a_skills_when_rows_come_as_fields_in_the_order_shown(ui):
+    # architecture review 8: "every day at 07:00 — fm-daily" and "AI job" were split back apart by the page
+    async def fn(c):
+        return (await (await c.get("/api/skills/reports", headers=HDR)).json())["acts"]
+    acts = call(ui, fn)
+    assert acts[0] == {"when": "every day at 07:00", "job": "fm-daily", "script": None, "kind": "ai"}
+    assert [a["job"] for a in acts[:3]] == ["fm-daily", "fm-weekly", "owner-monthly"]
+    assert acts[-1]["when"] == "in a chat" and acts[-1]["note"] == "when a person asks about it" and acts[-1]["kind"] is None
+
