@@ -57,7 +57,7 @@ export function fileViewer(ta, path) {
     ta.hidden = formatted; box.hidden = !formatted;
     if (formatted) fill(box, VIEWS[kind](ta.value));
   };
-  const toggle = kind ? segmented([["formatted", "Formatted"], ["raw", "Raw"]], page.fileView || "formatted",
+  const toggle = kind ? segmented([["formatted", "View"], ["raw", "Edit"]], page.fileView || "formatted",
     (v) => { page.fileView = v; show(); }, "Show the file") : null;
   show();
   return { toggle, box, show };

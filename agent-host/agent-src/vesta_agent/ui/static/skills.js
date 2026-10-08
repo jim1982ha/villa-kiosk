@@ -21,7 +21,8 @@ export function skillSwitch(name, on, select) {
       if (!now && !(await ask({ title: `Switch ${name} off?`, ok: "Switch off", danger: true,
         text: "The agent stops using it at once: no schedule, no alert hook, not read in a chat. Its files are kept; switch it on again here." }))) { e.target.checked = true; return; }
       if (!(await guard())) { e.target.checked = !now; return; }
-      try { await api("PUT", `api/skills/${encodeURIComponent(name)}/on`, { on: now }); toast(`${name} switched ${now ? "on" : "off"}.`); skills(select); }
+      try { await api("PUT", `api/skills/${encodeURIComponent(name)}/on`, { on: now }); toast(`${name} switched ${now ? "on" : "off"}.`);
+        skills(document.querySelector(".skill-item.on")?.dataset.skill || select); }     // the skill open NOW (show() moves it)
       catch (err) { e.target.checked = !now; tell("Not changed", reasons(err)); }
     } }));
 }
@@ -32,8 +33,8 @@ export async function skills(select = null) {
   const side = h("div", { class: "card" },
     titleWithInfo("Skills", "Each skill is a folder of files. A change counts at the agent's next use, no restart. The switch beside a skill turns it on or off for this villa."),
     // each skill: its name and line (opens it), and its On/Off switch beside it (owner, 2026-10-06)
-    list.length ? list.map((s) => h("div", { class: "skill-item" + (s.name === select ? " on" : "") + (s.off ? " is-off" : "") },
-      h("button", { type: "button", class: "skill-open", onclick: async () => { if (await guard()) skills(s.name); } },
+    list.length ? list.map((s) => h("div", { class: "skill-item" + (s.name === select ? " on" : "") + (s.off ? " is-off" : ""), "data-skill": s.name },
+      h("button", { type: "button", class: "skill-open", onclick: () => show(s.name) },
         h("div", { class: "skill-name" }, h("b", {}, s.name), ...skillChips(s)),
         h("div", { class: "d" }, s.off ? "Off · kept, not used" : s.ok ? s.description : s.line)),
       skillSwitch(s.name, !s.off, select))) : h("p", { class: "muted" }, "No skill yet. The starter skills are copied at the agent's first start."),
@@ -43,6 +44,14 @@ export async function skills(select = null) {
   fill($view, h("div", { class: "skills" }, side, pane));
   page.dirty = false; setBar(null);
   if (select) openSkill(select, pane, list.find((s) => s.name === select));
+  // ⚠️ PICKING A SKILL REDRAWS ITS PANE, NOT THE LIST (owner, 2026-10-08: the list vanished and came back on every
+  // click): the highlight moves and the pane opens; a change to the list itself (a switch, a release) still redraws it
+  async function show(name) {
+    if (!(await guard())) return;
+    side.querySelectorAll(".skill-item").forEach((el) => el.classList.toggle("on", el.dataset.skill === name));
+    page.dirty = false; setBar(null);
+    openSkill(name, pane, list.find((s) => s.name === name));
+  }
 }
 
 // where the tools a skill needs are switched (Tools it needs: its (i))
@@ -277,8 +286,9 @@ export async function openSkill(name, pane, info, path = ABOUT) {
     const f = await api("GET", `api/skills/${enc}/file?path=${encodeURIComponent(p)}`);
     ed.set(f.content, f.rev);
   };
-  // one line of files while collapsed (the open one first, so it always shows); a button shows them all,
-  // and appears only when they do not fit on that line. Open or closed is kept from skill to skill.
+  // one line of files while collapsed; a button shows them all, and appears only when they do not fit on that line.
+  // Open or closed is kept from skill to skill. ⚠️ THE FILES KEEP THEIR ORDER (owner, 2026-10-08: the open one moved
+  // to the front): when the open file would be hidden off that line, the list opens instead.
   const differs = new Set(rel.differs || []), villa = new Set(rel.villa || []);
   const fileList = h("div", { class: "files" + (filesOpen ? "" : " collapsed") },
     files.map((x) => h("button", { class: x.path === path ? "on" : "", title: [differs.has(x.path) ? "differs from the release" : "", villa.has(x.path) ? "this villa's own file, kept by updates" : ""].filter(Boolean).join(" · ") || null,
@@ -286,12 +296,15 @@ export async function openSkill(name, pane, info, path = ABOUT) {
   const more = h("button", { class: "btn ghost files-more", hidden: true, onclick: () => {
     filesOpen = !filesOpen; fileList.classList.toggle("collapsed", !filesOpen); fits(); } });
   const fits = () => {
+    const on = fileList.querySelector("button.on"), first = fileList.firstElementChild;
+    if (!filesOpen && on && first && on.offsetTop > first.offsetTop) { filesOpen = true; fileList.classList.remove("collapsed"); }
     const overflow = fileList.scrollHeight > fileList.clientHeight + 1;
     more.hidden = !filesOpen && !overflow;
     more.textContent = filesOpen ? "Fewer" : `All ${files.length} files`;
   };
   // measured after layout and on a window resize (a ResizeObserver here loops: the button changes the width it watches)
   requestAnimationFrame(fits);
+  document.fonts?.ready.then(() => fileList.isConnected && fits());   // the file names' font widens them once it loads
   const onResize = () => (fileList.isConnected ? fits() : window.removeEventListener("resize", onResize));
   window.addEventListener("resize", onResize);
   const save = () => ed.save(`${path} saved.`);
@@ -326,6 +339,7 @@ export async function openSkill(name, pane, info, path = ABOUT) {
       h("button", { class: "btn danger push-right", onclick: delSkill }, "Delete the skill")));
   setBar({ save, discard: () => load(path), idle: path ? `Editing ${path}. Saves are checked before they are written.` : "" });
   if (path) await load(path);
+  if (fileList.isConnected) fits();
 }
 
 // Skills › About (owner, 2026-10-08): on top when the skill is called; below it ONE section of two tabs — the commands

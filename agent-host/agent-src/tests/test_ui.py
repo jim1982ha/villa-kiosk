@@ -843,3 +843,15 @@ def test_every_class_the_stylesheet_styles_is_used_by_the_page():
     dead = sorted({c for c in re.findall(r"\.([a-zA-Z][\w-]*)", css) if c not in words and not c.startswith(("ph-", "y-")) and c != "woff2"})
     assert dead == [], dead
     assert not re.search(r"\bcol:nth-child|th:nth-child\(\d", css)          # a column is named (core.table widths), not counted
+
+
+def test_files_keep_their_order_and_picking_a_skill_keeps_the_list(ui):
+    # owner, 2026-10-08: the open file moved to the front of the file tabs; the skills list vanished and came back on
+    # every pick; "Formatted / Raw" read as "View / Edit"
+    from vesta_agent.ui.server import STATIC
+    js = page_js()
+    css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
+    assert "order: -1" not in css and "on.offsetTop > first.offsetTop" in body_of(js, "openSkill")
+    skills = body_of(js, "skills")
+    assert "onclick: () => show(s.name)" in skills and "openSkill(name, pane," in skills
+    assert '[["formatted", "View"], ["raw", "Edit"]]' in body_of(js, "fileViewer")

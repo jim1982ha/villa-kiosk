@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.97 (8 October 2026)
+
+- viewer.fileViewer: "View" / "Edit".
+- skills.js: the CSS `order: -1` that moved the open file first is removed; fits() unfolds the list when the open file is off its first line (checked again once fonts load and after the file loads).
+- skills.js: show(name) moves the highlight and opens the pane without redrawing the list; a skill's switch reopens the skill open now. test_ui pin.
+
 ## 0.6.96 (8 October 2026)
 
 Ninth architecture review: all six candidates and the live defects.
