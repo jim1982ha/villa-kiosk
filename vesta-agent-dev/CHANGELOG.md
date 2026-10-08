@@ -1,3 +1,8 @@
+## 0.12.93
+
+What you will see:
+- The villa-concierge skill now refers to "Rules › Allowed actions", the section's current name, so the AI no longer points people to "What the agent may do". If you edited this skill in Home Assistant, your copy is kept and still has the old wording.
+
 ## 0.12.92
 
 What you will see: every section now has one name, used the same way everywhere.
