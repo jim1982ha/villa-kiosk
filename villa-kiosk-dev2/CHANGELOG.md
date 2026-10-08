@@ -1,3 +1,10 @@
+## 2.496.313
+
+### Fixed
+- A camera's red motion cone now points the way the camera points. When you turned a camera in SweetHome 3D (its Angle), the cone turned the opposite way. It only looked right near 90° and 270°, which is why 80° seemed fine and 60° did not.
+- The cone is also full size again. Pointing the wrong way, it ran into the nearest wall and was cut short: the staircase camera's cone at 60° reached 0.42 m instead of 2.65 m, and even at 80° only 1.54 m instead of the full 6 m.
+- Checked against your 3D model: for 11 of the 13 cameras, the corrected direction matches the camera model to within 2°.
+
 ## 2.496.311
 
 ### Fixed
