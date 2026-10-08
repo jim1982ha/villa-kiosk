@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.95 (8 October 2026)
+
+- core.cell: a labelled cell (paged) with several pieces wraps them in one span.cell-v, so the phone card's "label … value" keeps them together. Checked on all 48 phone cells: only the 3 "What runs" cells moved.
+
 ## 0.6.94 (8 October 2026)
 
 - static/viewer.js: the one file viewer, `fileViewer(ta, path)` returning {toggle, box, show}. Rules (file) and Skills › Files both use it. Markdown is drawn by markdownView (moved from skills.js), YAML by yamlView.

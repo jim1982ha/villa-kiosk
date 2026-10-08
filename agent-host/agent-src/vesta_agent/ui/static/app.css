@@ -503,7 +503,7 @@ th button.info, .field button.info { font-size: 1em; }
 table.rows.ai td.with-caption .dropdown { max-width: 260px; }
 @media (max-width: 600px) { table.rows.ai td.with-caption { grid-column: 1 / -1; grid-row: 3; } }
 /* a chip after a name in a table cell keeps its distance (Skills › When the skill runs: "fm-daily  AI job") */
-table.rows td > * + .chip { margin-left: 8px; }
+table.rows td > * + .chip, table.rows td .cell-v > * + .chip { margin-left: 8px; }
 /* the tools by role on a phone: "Facility manager" ran into "Guest" — its column wider there, the heads tighter */
 @media (max-width: 600px) {
   table.rows.roles col:nth-child(2) { width: 19%; } table.rows.roles col:nth-child(3) { width: 30%; } table.rows.roles col:nth-child(4) { width: 12%; }

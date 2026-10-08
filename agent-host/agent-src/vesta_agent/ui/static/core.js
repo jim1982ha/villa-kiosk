@@ -312,8 +312,12 @@ export function paged(head, rows, per = 10) {
 // fills; `widths`: one <col> each (the page's CSP blocks a style attribute). A cell is a node, a text, or {v, cls, colspan}.
 const isCell = (c) => !!c && typeof c === "object" && !(c instanceof Node) && "v" in c;
 export function cell(c, tag = "td", { cls = null, label = null } = {}) {
+  const v = isCell(c) ? c.v : c;
+  // ⚠️ SEVERAL PIECES ARE ONE VALUE (owner, 2026-10-08, a phone: "fm-daily" sat mid-card, its "AI job" chip at the
+  // edge): a labelled cell becomes "label … value" on a phone, and the card spread the pieces apart; held together
+  const many = label !== null && Array.isArray(v) && v.filter((x) => x !== null && x !== undefined && x !== false && x !== "").length > 1;
   return h(tag, { class: [isCell(c) ? c.cls : null, cls].filter(Boolean).join(" ") || null, colspan: isCell(c) ? c.colspan : null,
-                  "data-label": label }, isCell(c) ? c.v : c);
+                  "data-label": label }, many ? h("span", { class: "cell-v" }, v) : v);
 }
 export const tableRow = (cells) => h("tr", {}, cells.map((c) => cell(c)));
 export function table(head, body, { cls = "", widths = null } = {}) {

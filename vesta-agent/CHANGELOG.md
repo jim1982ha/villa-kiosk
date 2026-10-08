@@ -1,3 +1,8 @@
+## 0.12.100
+
+What you will see:
+- On a phone, in Skills › About › When the skill runs: the job name (fm-daily…) now lines up on the right under its time, with its "AI job" chip beside it. Before, the name sat in the middle of the line. This applies to every table cell that holds a name and a chip; no other table changed.
+
 ## 0.12.99
 
 What you will see:

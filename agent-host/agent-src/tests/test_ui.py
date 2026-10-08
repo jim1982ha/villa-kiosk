@@ -816,3 +816,9 @@ def test_a_yaml_file_is_coloured_piece_by_piece_and_nothing_is_lost():
                      ["key", "colon", "str"], ["dash", "val", "com"], ["key", "colon", "val"], ["com"]]
     assert ex[6][-1]["v"] == "http://x#y" and ex[4][-1] == {"t": "str", "v": '"a # b"'}         # a # inside a word or quotes stays
 
+
+def test_a_cell_of_several_pieces_stays_one_value_on_a_phone():
+    # owner, 2026-10-08 (a phone): "fm-daily" sat mid-card and its "AI job" chip at the edge, the card spreading them
+    cell = body_of(page_js(), "cell")
+    assert 'label !== null && Array.isArray(v)' in cell and 'many ? h("span", { class: "cell-v" }, v) : v' in cell
+
