@@ -1,3 +1,8 @@
+## 0.12.97
+
+What you will see:
+- Skills › Compare: the **Take the release version** button is now on the Compare tab. It used to be only in the banner at the top, which disappears once "Keep mine" has been pressed, so after that there was no way to go back to the release's version. Its (i) explains what it does.
+
 ## 0.12.96
 
 What you will see:
