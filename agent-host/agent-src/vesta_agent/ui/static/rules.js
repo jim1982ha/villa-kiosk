@@ -246,7 +246,7 @@ export function rulesForms(doc, jobs = [], tools = null) {
   setBar({ save, discard: () => rules("forms"), idle: "Changes apply within seconds, no restart." });
   const canUse = tools ? toolsCard(f, tools, () => rules("forms")) : null;
   fill($view, doc.problems.length ? problemsBox(doc.problems, "To fix in this file:") : null, probs,
-    jobsBanner(missing, () => rules("forms")), acting, people, chats, services, devices, canUse, ai);
+    jobsBanner(missing, () => rules("forms")), acting, people, chats, services, devices, ai, canUse);   // AI tools below AI brains and limits (owner, 2026-10-08)
   if (page.jumpTo === "tools" && canUse) { page.jumpTo = null; requestAnimationFrame(() => canUse.scrollIntoView({ block: "start" })); }
 }
 

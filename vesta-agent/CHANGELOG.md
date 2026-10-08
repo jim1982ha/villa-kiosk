@@ -1,3 +1,8 @@
+## 0.12.95
+
+What you will see:
+- Rules: the **AI tools** section now comes right after **AI brains and limits**, at the bottom of the page.
+
 ## 0.12.94
 
 What you will see:

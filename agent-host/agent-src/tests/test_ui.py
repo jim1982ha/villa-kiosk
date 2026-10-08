@@ -736,3 +736,8 @@ def test_every_place_is_named_once_and_the_page_reads_the_names_from_the_server(
         if f.endswith((".py", ".js", ".css", ".html", ".md", ".yaml")) and not f.endswith("places.py"):
             text = open(f, encoding="utf-8").read()
             assert not [o for o in old if o in text], (f, [o for o in old if o in text])
+
+
+def test_rules_shows_ai_tools_right_below_ai_brains_and_limits():
+    # owner, 2026-10-08: "move the AI tools section below the AI brains and limits section"
+    assert "services, devices, ai, canUse);" in body_of(page_js(), "rulesForms")

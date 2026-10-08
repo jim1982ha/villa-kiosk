@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.90 (8 October 2026)
+
+- rules.js: the AI tools card after AI brains and limits (owner). test_ui pin.
+
 ## 0.6.89 (8 October 2026)
 
 - places.py: skill_when / skill_commands / skill_tools renamed "When the skill runs" / "Skill commands" / "Skill tools" (owner).
