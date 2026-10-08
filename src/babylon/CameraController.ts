@@ -303,7 +303,7 @@ export class CameraController {
   private onKey = (e: KeyboardEvent): void => {
     // Not while typing in a field or with a dialog open (overviewKeys) —
     // arrow keys in a Settings field walked the villa behind it.
-    if (!keyIsForCamera(e.target) && e.type === "keydown") return;
+    if (!keyIsForCamera(e) && e.type === "keydown") return;
     this.shift = e.shiftKey;
     const map: Record<string, string> = {
       ArrowUp: "fwd", KeyW: "fwd", ArrowDown: "back", KeyS: "back",

@@ -472,7 +472,7 @@ export class OverviewController {
   private keyObserver: Observer<Scene> | null = null;
 
   private onKey = (e: KeyboardEvent): void => {
-    if (!keyIsForCamera(e.target)) return;
+    if (!keyIsForCamera(e)) return;
     if (e.type === "keyup") {
       // Released whatever it meant when pressed: Shift may have changed since,
       // and a key that stays "held" would drift the camera for ever.

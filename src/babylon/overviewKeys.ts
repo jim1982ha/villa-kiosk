@@ -93,10 +93,18 @@ export function overviewKeyHelp(natural: boolean): { keys: string; does: string 
   ];
 }
 
-/** Keys typed into a field, or pressed while a dialog is open, are not for
- *  the camera — both cameras ask this. */
-export function keyIsForCamera(target: EventTarget | null): boolean {
-  const el = target as (Element & { isContentEditable?: boolean }) | null;
+/** Keys typed into a field, pressed while a dialog is open, or already handled
+ *  by something on top, are not for the camera — both cameras ask this.
+ *
+ *  ⚠️ ALREADY HANDLED IS NOT FOR THE CAMERA (owner, 2026-10-08: "when I switch
+ *  from one camera to another with the left and right keys, the villa behind is
+ *  moving left and right too"). The camera feed's panel steps the feed on ←/→
+ *  from a document listener and marks the key handled (preventDefault); both 3D
+ *  cameras listen on the window, which hears the same key AFTER the document —
+ *  and moved the villa with it. A key a panel took is that panel's. */
+export function keyIsForCamera(e: { target: EventTarget | null; defaultPrevented?: boolean }): boolean {
+  if (e.defaultPrevented) return false;
+  const el = e.target as (Element & { isContentEditable?: boolean }) | null;
   if (!el || typeof el.closest !== "function") return true;
   if (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return false;
   return !el.closest(".modal, [role='dialog']");

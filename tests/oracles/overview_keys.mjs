@@ -38,9 +38,12 @@ ck("the help text says what the arrows do under each setting",
    && /↑ moves the view forward/.test(K.overviewKeyHelp(true)[1].does) && /↑ moves the view back/.test(K.overviewKeyHelp(false)[1].does));
 
 const el = (tag, inModal = false, editable = false) => ({ tagName: tag, isContentEditable: editable, closest: (sel) => (inModal && /modal/.test(sel) ? {} : null) });
+const key = (target, defaultPrevented = false) => ({ target, defaultPrevented });
 ck("not while typing, nor with a dialog open; otherwise the camera's",
-   !K.keyIsForCamera(el("INPUT")) && !K.keyIsForCamera(el("DIV", false, true)) && !K.keyIsForCamera(el("BUTTON", true))
-   && K.keyIsForCamera(el("BODY")) && K.keyIsForCamera(null));
+   !K.keyIsForCamera(key(el("INPUT"))) && !K.keyIsForCamera(key(el("DIV", false, true))) && !K.keyIsForCamera(key(el("BUTTON", true)))
+   && K.keyIsForCamera(key(el("BODY"))) && K.keyIsForCamera(key(null)));
+ck("a key something on top already handled is not the camera's (←/→ step a camera feed, not the villa behind)",
+   !K.keyIsForCamera(key(el("BODY"), true)) && !K.keyIsForCamera(key(null, true)));
 
 const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
 const oc = src("babylon/OverviewController.ts"), cc = src("babylon/CameraController.ts"), lg = src("components/hud/LegendModal.tsx");
@@ -53,7 +56,8 @@ ck("the overview listens only while it is the active view, and lets go on blur",
    && /disable\(\): void \{[\s\S]*?this\.inputSet\.detach\(\);\s*this\.releaseKeys\(\);/.test(oc));
 ck("  ...and moves through the gestures' own primitives, with the Natural Scroll setting",
    /overviewKeyStep\(this\.held, this\.naturalScrolling,/.test(oc) && /this\.applyPan\(k\.dragX, k\.dragY, DRAG_SENS\)/.test(oc) && /this\.applyTilt\(k\.tilt\)/.test(oc) && /clampRadius\(this\.camera\.radius \* k\.zoom/.test(oc));
-ck("walking shares the guard (arrow keys in a field no longer walk the villa)", /if \(!keyIsForCamera\(e\.target\) && e\.type === "keydown"\) return;/.test(cc));
+ck("walking shares the guard (arrow keys in a field no longer walk the villa)", /if \(!keyIsForCamera\(e\) && e\.type === "keydown"\) return;/.test(cc));
+ck("  ...and so does the overview — the whole event, so a handled key is seen as handled", /if \(!keyIsForCamera\(e\)\) return;/.test(oc));
 ck("the ? window lists the keys for the CURRENT setting", /overviewKeyHelp\(config\.naturalScrolling\)/.test(lg));
 
 done("✅ the bird's-eye view from the keyboard");
