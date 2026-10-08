@@ -586,3 +586,12 @@ def test_a_rows_icon_comes_first_so_every_icon_lines_up():
     # owner, 2026-10-08: the (i) of "without the AI" sat after its pill, out of line with a failed run's (!)
     body = body_of(page_js(), "madeWithoutAi")
     assert body.index("infoButton(") < body.index('"without the AI"')
+
+
+def test_a_skills_command_cards_show_no_options_and_their_explanation_is_an_i():
+    # owner, 2026-10-08: "--as-of, --out, --skip-raw: too much detail for this view"; the sentence under the title
+    # becomes its (i), as every other explanation on the page
+    js = page_js()
+    about = js[js.index("// What the AI may run: a card per command"):js.index("// Tools it needs:")]
+    assert "sc.flags" not in about and 'class: "flag"' not in about
+    assert 'withInfo("What the AI may run",' in js and 'h("p", { class: "muted small" }, "Switch a command off' not in js

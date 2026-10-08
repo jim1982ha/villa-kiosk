@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.77 (8 October 2026)
+
+- skills.js About › What the AI may run: no flag chips on a whole-script card; the explanation is the title's withInfo (i). test_ui pin.
+
 ## 0.6.76 (8 October 2026)
 
 - costs.js madeWithoutAi: the (i) before the chip, aligned with alertButton's (!) (test_ui pin).

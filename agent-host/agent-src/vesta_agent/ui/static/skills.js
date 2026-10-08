@@ -343,10 +343,10 @@ export function aboutSkill(name, d) {
           label: `${sc.script} ${c.name}`,
           words: c.words ? h("div", { class: "muted" }, c.words) : null,
           meta: c.job_only ? h("span", { class: "muted small" }, `Asked for in a chat, it runs as the ${c.job_only} job.`) : null }))
-      // a script without commands: what it does (skill.yaml `description`), its options as written
+      // a script without commands: what it does (skill.yaml `description`). ⚠️ NOT ITS OPTIONS (owner, 2026-10-08:
+      // "--as-of, --out, --skip-raw: too much detail for this view") — they are on Try a command, where they are used
       : [toggleCard(!sc.whole_off, (on, box) => setCommand(name, sc.script, null, on, box), sc.script, {
-          words: h("div", { class: "muted" }, sc.description || "The AI may run it."),
-          meta: Object.keys(sc.flags).map((fl) => h("code", { class: "flag" }, fl)) })])));
+          words: h("div", { class: "muted" }, sc.description || "The AI may run it.") })])));
   // Tools it needs: a one-line verdict and its (i); the list folded unless something is off
   let tools;
   if (d.needs === null || d.needs === undefined) tools = h("p", { class: "muted" }, "Its skill.yaml lists none: its reports get every tool switched on.");
@@ -362,7 +362,9 @@ export function aboutSkill(name, d) {
   }
   return h("div", { class: "about" },
     h("section", { class: "about-sec" }, h("h3", {}, "When it acts"), acts),
-    d.scripts && d.scripts.length ? h("section", { class: "about-sec" }, h("h3", {}, "What the AI may run"),
-      h("p", { class: "muted small" }, "Switch a command off and the AI cannot run it here. Saved in the skill's villa.skill.yaml: kept by updates, copied with the skill."), runs) : null,
+    // what the switches do, behind the title's (i) (owner, 2026-10-08), as every other explanation on the page
+    d.scripts && d.scripts.length ? h("section", { class: "about-sec" }, h("h3", {}, withInfo("What the AI may run",
+      "Switch a command off and the AI cannot run it here. Saved in the skill's villa.skill.yaml: kept by updates, copied with the skill.")),
+      runs) : null,
     h("section", { class: "about-sec" }, h("h3", {}, "Tools it needs"), tools));
 }
