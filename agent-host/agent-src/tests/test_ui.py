@@ -580,3 +580,9 @@ def test_every_error_the_page_shows_has_its_reason_in_words():
         src = open(path, encoding="utf-8").read()
         assert not re.search(r"\b(e|err)\.problems\b", src), f"{os.path.basename(path)} reads an error's problems by hand"
     assert len(re.findall(r"page\.dirty = false; fill\(probs\); showBar\(\)", page_js())) == 1    # one save: saveWith
+
+
+def test_a_rows_icon_comes_first_so_every_icon_lines_up():
+    # owner, 2026-10-08: the (i) of "without the AI" sat after its pill, out of line with a failed run's (!)
+    body = body_of(page_js(), "madeWithoutAi")
+    assert body.index("infoButton(") < body.index('"without the AI"')

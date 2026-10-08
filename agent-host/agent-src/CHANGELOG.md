@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.76 (8 October 2026)
+
+- costs.js madeWithoutAi: the (i) before the chip, aligned with alertButton's (!) (test_ui pin).
+
 ## 0.6.75 (7 October 2026)
 
 Seventh architecture review (all candidates):

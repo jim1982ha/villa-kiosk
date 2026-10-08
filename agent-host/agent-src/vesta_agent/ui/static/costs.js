@@ -87,12 +87,14 @@ export async function costs(days = 7) {
 
 // A job its code steps made when the AI could not run (owner, 2026-10-07): the figures and charts were sent, said
 // to be made without the AI; or the steps failed too, and only "could not be prepared" was sent.
+// ⚠️ THE (i) FIRST (owner, 2026-10-08): it sits where a failed run's (!) sits, so every row's icon lines up in the column.
 export function madeWithoutAi(w) {
   const ok = w.sent > 0 && !w.failed;
-  return h("span", { class: "chips one-line" }, h("span", { class: ok ? "chip warn" : "chip off" }, ok ? "without the AI" : "not made"),
+  return h("span", { class: "chips one-line" },
     infoButton(ok ? "Made without the AI" : "Not made", ok
       ? `${w.why} The report was still made from its figures and charts, and sent saying so; VESTA's readings are missing.`
-      : `${w.why} Its figures could not be made either${w.failed ? ` (${w.failed} failed)` : ""}${w.sent ? "; part of it was sent" : ""}.`));
+      : `${w.why} Its figures could not be made either${w.failed ? ` (${w.failed} failed)` : ""}${w.sent ? "; part of it was sent" : ""}.`),
+    h("span", { class: ok ? "chip warn" : "chip off" }, ok ? "without the AI" : "not made"));
 }
 
 export function usedTools(steps) {
