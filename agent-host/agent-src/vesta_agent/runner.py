@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import json
 
@@ -200,6 +202,14 @@ def kept_steps(steps: list[dict], secrets: list[str]) -> list[dict]:
     return [{**st, "input": scrub(st["input"], secrets)} for st in steps]
 
 
+def with_time(settings, prompt: str, now: datetime | None = None) -> str:
+    """The message with the villa's date and time at its head. ⚠️ HERE, NOT IN THE INSTRUCTIONS (2026-10-09): the
+    instructions are the cached prefix of every run; a clock in them changed it every minute, and each message of a
+    chat re-sent the whole conversation at full price instead of reading it from the cache."""
+    now = now or datetime.now(ZoneInfo(settings.timezone))
+    return f"[Villa time: {now:%A %d %B %Y, %H:%M}]\n{prompt}"
+
+
 async def run(settings, system_prompt: str, prompt: str, server, allowed: set[str], state, who: str,
               resume: str | None = None, limit_usd: float | None = None, profile: str | None = None,
               asked: str | None = None) -> RunResult:
@@ -209,7 +219,7 @@ async def run(settings, system_prompt: str, prompt: str, server, allowed: set[st
     c = Collector(resume)
     try:
         async with ClaudeSDKClient(options=opts) as client:
-            await client.query(prompt)
+            await client.query(with_time(settings, prompt))
             async for msg in client.receive_response():
                 c.feed(msg)
     except Exception as e:  # noqa: BLE001

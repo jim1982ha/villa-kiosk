@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.99 (9 October 2026)
+
+- Prompt cache: app.system_prompt no longer carries the clock (it changed the cached prefix every minute). runner.with_time puts "[Villa time: …]" at the head of every message (chats, Continue, AI jobs). tests/test_prompt_cache.py: the instructions are identical at two different times (checked to fail with the old line), and every run sends with_time.
+
 ## 0.6.98 (8 October 2026)
 
 - places.py: a title may carry a {slot} ("When the {skill} skill runs"). places.title(key, **names) and core.place(k, names) fill it, or drop it with its space, by the same rule. aboutSkill names the open skill. test_ui pins.

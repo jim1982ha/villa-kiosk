@@ -1,3 +1,9 @@
+## 0.12.105
+
+What you will see:
+- Chats should cost less from the second message on. The AI's instructions used to end with the time to the minute, so they changed every minute and Anthropic could not reuse the conversation it had already read: each message re-sent the whole chat at full price. The time now comes with each message instead, so a continuing chat can be read from Anthropic's cache, at about a tenth of the price. The AI still knows the villa's date and time.
+- In Costs, check "Tokens in" over the next days: more of it should now come from the cache.
+
 ## 0.12.104
 
 What you will see:

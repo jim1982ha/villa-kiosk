@@ -385,7 +385,10 @@ class Vesta:
                 "When asked to produce, check or run something, do it again now with your tools: never answer from an "
                 "earlier attempt in this conversation. Skills, data and fixes change between messages.\n" +
                 f"Your skills: {skills or 'none'}. Read a skill with read_skill before doing its job.\n" + pol.summary() + "\n"
-                f"Villa time zone: {self.s.timezone}. Today: {_now_local(self.s.timezone):%A %d %B %Y, %H:%M}.")
+                # ⚠️ NO CLOCK HERE (2026-10-09): the time changed these instructions every minute, so a resumed chat
+                # re-sent its whole conversation at full price instead of reading it from the prompt cache (about a
+                # tenth of the price). The date and time ride on each message instead (runner.run).
+                f"Villa time zone: {self.s.timezone}. The current villa date and time head each message.")
 
     async def converse(self, cid: int, person: Person | None, text: str, chat_role: str = "private",
                        resume: str | None = "auto", is_continue: bool = False, voice: bool = False):
