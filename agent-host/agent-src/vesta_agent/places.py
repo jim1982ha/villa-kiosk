@@ -1,0 +1,62 @@
+"""The VESTA Agent page's places: what each section is called, and where it is.
+
+⚠️ ONE NAME PER PLACE (owner, 2026-10-08: "all the titles and sub-titles consistent between the views, so the user
+knows what shows what, and where it is linked to"). A card, a tab or a section is named HERE, once: the page's titles
+and tabs read this table (the server writes it into the page), and so does every sentence that sends the reader
+somewhere ("switched off in Rules › AI tools"), on the page, in a chat, in the change history and in policy.FIELDS.
+Before this table the same tools were "What the AI can use" in Rules and "Tools used by the Skill" on a skill, and
+"Overview › Changes" sent the reader to a card titled "Changes made on these pages".
+
+The words: "the agent" is the VESTA Agent, the program; "the AI" is the model it asks; a TOOL is what the AI may
+call (Home Assistant's, or the agent's own); an ACTION is a change on the villa, which a person approves.
+"""
+
+from __future__ import annotations
+
+#: key → (the title the page shows, the place it sits in: a top tab, or "Tab › Card")
+PLACES: dict[str, tuple[str, str]] = {
+    # Overview
+    "last_day": ("The last 24 hours", "Overview"),
+    "jobs_run": ("Scheduled jobs run", "Overview › The last 24 hours"),
+    "changes": ("Page changes", "Overview"),
+    "setup": ("Copy the setup", "Overview"),
+    "setup_out": ("Download this villa's setup", "Overview › Copy the setup"),
+    "setup_in": ("Import a setup", "Overview › Copy the setup"),
+    # Rules
+    "acting": ("Acting on the villa", "Rules"),
+    "ai": ("AI brains and limits", "Rules"),
+    "people": ("People", "Rules"),
+    "chats": ("Chats", "Rules"),
+    "actions": ("Allowed actions", "Rules"),
+    "protected": ("Protected devices", "Rules"),
+    "tools": ("AI tools", "Rules"),
+    "ha_tools": ("Home Assistant tools", "Rules › AI tools"),
+    "agent_tools": ("Agent tools", "Rules › AI tools"),
+    "tool_roles": ("Tools by role", "Rules › AI tools"),
+    # Skills (the owner's own words, 2026-10-08)
+    "skill_about": ("About", "Skills"),
+    "skill_files": ("Files", "Skills"),
+    "skill_compare": ("Compare", "Skills"),
+    "skill_when": ("When is the Skill called", "Skills › About"),
+    "skill_commands": ("Commands run by the Skill", "Skills › About"),
+    "skill_tools": ("Tools used by the Skill", "Skills › About"),
+    # Costs
+    "cost": ("AI cost", "Costs"),
+    "cost_day": ("Per day", "Costs › AI cost"),
+    "cost_split": ("Cost breakdown", "Costs"),
+    "by_work": ("By work", "Costs › Cost breakdown"),
+    "by_model": ("By model", "Costs › Cost breakdown"),
+    "runs": ("AI runs", "Costs"),
+    "every_run": ("Every run", "Costs › AI runs"),
+    "tools_called": ("Tools called", "Costs › AI runs"),
+}
+
+
+def title(key: str) -> str:
+    return PLACES[key][0]
+
+
+def where(key: str) -> str:
+    """The way a sentence sends the reader there: "Rules › AI tools"."""
+    name, place = PLACES[key]
+    return f"{place} › {name}"

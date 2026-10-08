@@ -19,6 +19,7 @@ must not be able to edit the rules that bind it. Standalone: loopback only.
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import os
 import shutil
@@ -31,6 +32,7 @@ from aiohttp import web
 from .. import __version__, requests_box, status, tool_access
 from ..config import STARTER_DIR, Settings
 from ..history import History, file_change, policy_change
+from ..places import PLACES
 from ..policy import Policy, problems as policy_problems
 from ..skills import FILE_NAME, SKILL_NAME, TRASH, VILLA_CHOICES, SkillError, Skills, parse_skill, switch_command, to_trash
 from ..state import State
@@ -40,6 +42,8 @@ from .policy_doc import apply_form, to_form
 log = logging.getLogger("vesta.ui")
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+#: the page's places (one name per place, places.py), as the page reads them: "</" escaped, so no name can close the tag
+PLACES_JSON = json.dumps(PLACES).replace("</", "<\\/")
 STATIC = os.path.join(HERE, "static")
 INGRESS_GATEWAY = "172.30.32.2"
 MAX_FILE = 512 * 1024
@@ -185,7 +189,7 @@ class UI:
         # anywhere between the app and the screen (Home Assistant's frame, a phone's web view) can serve
         # the previous page's code with the new data — seen on 0.12.0: no banner, no AI jobs card.
         with open(os.path.join(STATIC, "index.html"), encoding="utf-8") as f:
-            html = f.read().replace("{static}", f"static/{__version__}")
+            html = f.read().replace("{static}", f"static/{__version__}").replace("{places}", PLACES_JSON)
         log.info("UI: page opened (agent %s)", __version__)
         return web.Response(text=html, content_type="text/html")
 
@@ -223,7 +227,7 @@ class UI:
                  "when_words": describe(j["when"])[0], "runs_per_month": describe(j["when"])[1],
                  "on_request": j.get("on_request", False), "description": j.get("description") or "",
                  "default": j.get("default") or {}, "set": j["name"] in set_, "current": set_.get(j["name"]),
-                 # Rules → The AI → "Tools it gets": its skill's list (None: everything switched on)
+                 # Rules › AI brains and limits › "AI tools": its skill's list (None: everything switched on)
                  "tools": None if sk.tools is None else [tool_access.label(t, listed) for t in sk.tools]}
                 for sk, j in ai_jobs(self.skills.all())]
 
@@ -386,7 +390,7 @@ class UI:
     async def skill_delete(self, request):
         name = request.match_info["name"]
         path = self._skill_dir(name)
-        # Moved aside, not erased: a dot folder is never loaded, and a mistake can be undone (Overview › Changes).
+        # Moved aside, not erased: a dot folder is never loaded, and a mistake can be undone (Overview › Page changes).
         dest = to_trash(self.s.skills_dir, path, name)
         log.info("UI: skill %s deleted (kept in skills/%s)", name, TRASH)
         self.folder_change("Skills", f"{name} deleted (kept in skills/{TRASH})", name, dest, None)
@@ -452,7 +456,7 @@ class UI:
             return {}
 
     async def tools(self, _request):
-        """Rules → What the AI can use: Home Assistant's tools as the agent last read them, with this file's
+        """Rules › AI tools: Home Assistant's tools as the agent last read them, with this file's
         switches; the agent's own tools; the facility manager's groups."""
         pol = Policy.load(self.s.policy_path)
         return web.json_response(tool_access.catalog(pol, tool_access.read_list(self.s.data_dir), self._usage()))
@@ -670,7 +674,7 @@ class UI:
         history shows, or a function of the text before. Returns the text before.
 
         ⚠️ VALID WHOEVER WRITES IT (architecture review 6, 2026-10-07): the rules' problems were checked only by a
-        save from Rules, a script's syntax only by a save from the editor — an Undo (Overview › Changes) or an
+        save from Rules, a script's syntax only by a save from the editor — an Undo (Overview › Page changes) or an
         imported setup wrote either unchecked. Every text is checked here, by its kind (_check_text); a skill's
         file is written only if the skill still loads (_change). `base_rev`: the version the person opened —
         refused when the file changed since (another window, Studio Code Server)."""

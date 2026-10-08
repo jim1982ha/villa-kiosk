@@ -30,6 +30,7 @@ import yaml
 
 from .. import __version__, tool_access
 from ..history import policy_change
+from ..places import title
 from ..policy import WORDS, Policy, problems as policy_problems, setup_fields
 from ..skills import FILE_NAME, SKILL_NAME, VILLA_PREFIX, SkillError, skill_files, parse_skill, ai_jobs
 
@@ -168,7 +169,7 @@ def preview(settings, skills, setup: dict, server_tools: list[dict] | None) -> d
         for label, keys in ((WORDS["settings"], [("settings", k) for k in AI_SETTINGS]),
                             (WORDS["settings.keep"], [("settings", "keep")]),
                             (WORDS["allowed_services"], [(k, None) for k in ACTION_SECTIONS]),
-                            ("What the AI can use", [(k, None) for k in TOOL_SECTIONS])):
+                            (title("tools"), [(k, None) for k in TOOL_SECTIONS])):
             def pick(d, keys=keys):
                 return {f"{a}.{b}" if b else a: ((d.get(a) or {}).get(b) if b else d.get(a)) for a, b in keys}
             if not any((a in setup["rules"] and (b is None or b in (setup["rules"].get(a) or {}))) for a, b in keys):
@@ -181,7 +182,7 @@ def preview(settings, skills, setup: dict, server_tools: list[dict] | None) -> d
         for svc, rule in (merged.get("allowed_services") or {}).items():
             dom = svc.split(".")[0]
             if rule == "listed" and not pol.lists.get(dom):
-                misfits.append(f"What the agent may do names {svc} with \"only the devices in the lists\": this villa's "
+                misfits.append(f"{title('actions')} names {svc} with \"only the devices in the lists\": this villa's "
                                f"{dom} list is empty, so the agent will refuse it until devices are added.")
     if setup["instructions"] is not None:
         try:
@@ -254,5 +255,5 @@ def apply(ui, setup: dict, prev: dict) -> None:
             form["settings"] = {**to_form(text)["settings"], **form["settings"]}
         ui.save_policy(apply_form(text, form), r, "Import", "Rules from a setup: " + policy_change(text, apply_form(text, form)))
     if setup["instructions"] is not None and "instructions.md" in changed:
-        # undoable like any text (Overview › Changes): it was recorded as a kind Undo did not know
+        # undoable like any text (Overview › Page changes): it was recorded as a kind Undo did not know
         ui.text_change("Import", "instructions.md from a setup", {"kind": "instructions"}, setup["instructions"])

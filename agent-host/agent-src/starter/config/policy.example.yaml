@@ -93,7 +93,7 @@ notify_recipients: []         # the agent writes on Telegram itself; notify.* st
 # after siren_auto_off_min needs no line here: switching the siren off is always allowed.)
 system_actions: []
 
-# What the AI can use (VESTA Agent page → Rules → What the AI can use). Left out: everything on.
+# AI tools (VESTA Agent page → Rules › AI tools). Left out: everything on.
 # agent_tools:                  the agent's own tools a villa may switch off
 #   start_job: false            "send me the weekly report" from a chat
 # tool_access:                  what the facility manager may make the AI use, by group (the owner: everything)

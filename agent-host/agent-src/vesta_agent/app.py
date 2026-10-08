@@ -252,7 +252,7 @@ class Vesta:
         names = {t["name"] for t in self.server_tools}
         info = getattr(self.reader.mcp, "server_info", None) or {}
         try:
-            # for the page (which holds no token): Rules → What the AI can use draws its switches from it
+            # for the page (which holds no token): Rules › AI tools draws its switches from it
             tool_access.save_list(self.s.data_dir, self.server_tools,
                                   " ".join(str(x) for x in (info.get("name"), info.get("version")) if x))
         except OSError as e:
@@ -409,7 +409,7 @@ class Vesta:
             if not self.server_tools:
                 await self.refresh_server_tools()
             pol = self.policy()
-            # what this person may make the AI use here (Rules → What the AI can use)
+            # what this person may make the AI use here (Rules › AI tools)
             tb = self.toolbox(tool_access.allowed_for_person(pol, self.server_tools, person.role if person else None, cid))
             server, allowed = tb.for_run(person, Origin(cid, CONVERSATION))
             res = await runner.run(self.s, self.system_prompt(), prompt, server, allowed, self.state,

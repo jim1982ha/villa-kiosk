@@ -1,11 +1,18 @@
 // VESTA Agent page — the shared pieces: the page's state, the helpers every tab draws with, the dialog, the tab switch.
 
+// ⚠️ THE PAGE'S PLACES (owner, 2026-10-08: one name per place). vesta_agent/places.py names every card and tab, and
+// the server writes that table into the page: a title is place("tools"), a sentence that sends the reader there says
+// where("tools") — "Rules › AI tools". No section name is written anywhere else (tests/test_ui.py).
+const PLACES = (() => { try { return JSON.parse(document.getElementById("places").textContent); } catch { return {}; } })();
+export const place = (k) => (PLACES[k] || [k])[0];
+export const where = (k) => (PLACES[k] ? `${PLACES[k][1]} › ${PLACES[k][0]}` : k);
+
 // what several tabs read and change: one object (a module cannot assign another module's variables)
 export const page = {
   dirty: false,           // unsaved changes on the current screen
   current: "overview",
   PROFILES: {},           // the brains as the server names them (policy.profile_labels): filled by Rules and Costs
-  jumpTo: null,             // "tools": open Rules on "What the AI can use" (a skill's "Open Rules › What the AI can use")
+  jumpTo: null,             // "tools": open Rules on AI tools (a skill's "Open Rules › AI tools")
   tabs: {},                 // the tab each tabbed section shows, by its id (core.tabbed): kept while the page is open
   views: {},                // the tabs, by name: filled by app.js
 };
@@ -213,8 +220,8 @@ export function withInfo(label, text) {
 }
 
 // A switch as a card (owner, 2026-10-06/07): its title and switch on one line, what it does under it, a small line
-// of facts at the bottom. The one card for every switch the page draws as cards — Rules › What the AI can use and
-// Skills › What the AI may run — laid out by `.tool-grid` (four a line; `.tool-grid.three`: three).
+// of facts at the bottom. The one card for every switch the page draws as cards — Rules › AI tools and
+// Skills › About › Commands run by the Skill — laid out by `.tool-grid` (four a line; `.tool-grid.three`: three).
 // onChange(checked, input): the card's own look follows at once.
 // ⚠️ ONE CARD (owner, 2026-10-08: a skill's tools "the same way cards are used to display commands"): its title,
 // a chip, what it is, a line under it — and on the right whatever the caller puts there (a switch: toggleCard).
@@ -316,7 +323,7 @@ export function table(head, body, { cls = "", widths = null } = {}) {
     body instanceof Node ? body : h("tbody", {}, body.map(tableRow)));
 }
 
-// ⚠️ THE ONE TAB BAR (DRY, owner 2026-10-06): What the AI can use, a skill's views, Copy the setup. `items`: [[key,
+// ⚠️ THE ONE TAB BAR (DRY, owner 2026-10-06): AI tools, a skill's views, Copy the setup. `items`: [[key,
 // label], …]; `current`: the key shown; `pick(key)` on a press.
 // [key, label, info?]: a tab with an info text gets its (i) beside it (a button cannot hold another button)
 export function subTabs(items, current, pick) {
@@ -327,7 +334,7 @@ export function subTabs(items, current, pick) {
 }
 
 // ⚠️ THE ONE TABBED SECTION (DRY, owner 2026-10-08): a tab bar over the open tab's body — Costs' two cards, Copy the
-// setup, What the AI can use, a skill's About. `items`: [[key, label, info?, draw()], …] (a falsy item is left out);
+// setup, AI tools, a skill's About. `items`: [[key, label, info?, draw()], …] (a falsy item is left out);
 // only the open tab is drawn; its key is kept in page.tabs[id], so the section reopens on it (the first tab otherwise).
 // Returns {bar, body, redraw}: redraw() draws the open tab again after a change.
 export function tabbed(id, items) {
@@ -471,5 +478,5 @@ export function jump(id, label) {
     el.scrollIntoView({ behavior: "smooth", block: "start" });
     el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 1600);
   } }, label);
-}           // "tools": open Rules on "What the AI can use" (a skill's "Open Rules › What the AI can use")
+}           // "tools": open Rules on AI tools (a skill's "Open Rules › AI tools")
 export const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;

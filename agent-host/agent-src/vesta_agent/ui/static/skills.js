@@ -1,5 +1,5 @@
 // VESTA Agent page — the Skills tab.
-import { api, ask, dropdown, field, fill, go, guard, h, markDirty, page, paged, plural, popup, problemsBox, reasons, saveWith, setBar, showBar, subTabs, tabbed, tell, tileCard, titleWithInfo, toast, toggleCard, $view, withInfo } from "./core.js";
+import { api, ask, dropdown, field, fill, go, guard, h, markDirty, page, paged, place, plural, popup, problemsBox, reasons, saveWith, setBar, showBar, subTabs, tabbed, tell, tileCard, titleWithInfo, toast, toggleCard, $view, where, withInfo } from "./core.js";
 
 // ---------------------------------------------------------------- skills
 // A skill's state against this release: it follows the releases (never edited here), it was edited here (updates
@@ -44,7 +44,7 @@ export async function skills(select = null) {
 }
 
 // where the tools a skill needs are switched (Tools it needs: its (i))
-const WHERE_TOOLS = "Switched on or off in Rules › What the AI can use. A tool switched off there makes this skill \"not working\": its AI jobs do not run.";
+const WHERE_TOOLS = `Switched on or off in ${where("tools")}. A tool switched off there makes this skill "not working": its AI jobs do not run.`;
 
 export async function setCommand(skill, script, command, on, box) {
   try { await api("PUT", `api/skills/${encodeURIComponent(skill)}/commands`, { script, command, on }); toast(`${command || script} switched ${on ? "on" : "off"} for the AI.`); }
@@ -167,7 +167,7 @@ export function shown(rows, around = 2) {
   return out;
 }
 
-// Skills › Compare with the release: an edited starter skill's file beside the release's
+// Skills › Compare: an edited starter skill's file beside the release's
 export async function comparePanel(name, rel) {
   const box = h("div");
   const list = rel.differs || [];
@@ -231,7 +231,7 @@ export async function openSkill(name, pane, info, path = ABOUT) {
       ...fixes.map((b) => h("button", { class: "btn primary", onclick: async () => {
         try { await switchTool(b); toast(`${b.label} switched on.`); skills(name); } catch (err) { tell("Not changed", reasons(err)); }
       } }, `Switch ${b.label} on`)),
-      h("button", { class: "btn ghost", onclick: async () => { if (await guard()) { page.jumpTo = "tools"; page.tabs.tools = "ha"; go("rules"); } } }, "Open Rules › What the AI can use"))) : null;
+      h("button", { class: "btn ghost", onclick: async () => { if (await guard()) { page.jumpTo = "tools"; page.tabs.tools = "ha"; go("rules"); } } }, `Open ${where("tools")}`))) : null;
   const notLoaded = info && !info.ok && !(d.blocked && d.blocked.length) && !d.off ? problemsBox([info.problem], "The agent does not use this skill:") : null;
   const releaseBanner = rel.state === "edited" && !rel.kept ? h("div", { class: "banner" },
     h("div", {}, h("b", {}, "This version of the agent has another version of this skill."),
@@ -241,15 +241,15 @@ export async function openSkill(name, pane, info, path = ABOUT) {
       h("button", { class: "btn ghost", onclick: async () => { await api("POST", `api/skills/${enc}/keep`); toast("Kept as it is."); skills(name); } }, "Keep mine"),
       h("button", { class: "btn primary", onclick: async () => {
         if (!(await ask({ title: "Take the release version?", ok: "Take the release version", danger: true,
-          text: "The skill's files are replaced by the release's; this villa's own files (villa.*) are kept. Your edits are moved to skills/.trash, and Undo (Overview › Changes) brings them back." }))) return;
+          text: `The skill's files are replaced by the release's; this villa's own files (villa.*) are kept. Your edits are moved to skills/.trash, and Undo (${where("changes")}) brings them back.` }))) return;
         try { await api("POST", `api/skills/${enc}/take-release`); toast("The release's version is in place."); skills(name); }
         catch (err) { tell("Not changed", reasons(err)); }
       } }, "Take the release version"))) : null;
 
   // ---- the views
   const FILES = "\u0000files";             // the Files tab stands for whichever file is open
-  const tabs = subTabs([[ABOUT, "About"], [FILES, "Files"],
-                        rel.state === "edited" ? [COMPARE, "Compare"] : null], isFile ? FILES : path,
+  const tabs = subTabs([[ABOUT, place("skill_about")], [FILES, place("skill_files")],
+                        rel.state === "edited" ? [COMPARE, place("skill_compare")] : null], isFile ? FILES : path,
                        (k) => goTo(k === FILES ? (isFile ? path : "SKILL.md") : k));
   // ⚠️ NO TITLE, NO DESCRIPTION, NO SWITCH HERE ON A WIDE SCREEN (owner, 2026-10-06): the list beside it holds the
   // name, the line and the switch. The name and the switch come back on a phone, where the list is hidden.
@@ -330,7 +330,7 @@ export async function openSkill(name, pane, info, path = ABOUT) {
 // Skills › About (owner, 2026-10-08): on top when the skill is called; below it ONE section of two tabs — the commands
 // it runs (each card with its Offline Test), the tools it uses (as cards).
 export const ABOUT_TEXT = {
-  when: "When is the Skill called", tools: "Tools used by the Skill", commands: "Commands run by the Skill",
+  when: place("skill_when"), tools: place("skill_tools"), commands: place("skill_commands"),
   switches: "Switch a command off and the AI cannot run it here. Saved in the skill's villa.skill.yaml: kept by updates, copied with the skill.",
 };
 

@@ -365,7 +365,7 @@ def test_the_costs_period_sits_on_the_titles_line_and_a_separator_comes_before_t
     from vesta_agent.ui.server import STATIC
     js = page_js()
     css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
-    assert 'titleWithInfo("What the AI cost"' in js and '"h2", period)' in js
+    assert 'titleWithInfo(place("cost")' in js and '"h2", period)' in js
     assert 'h("div", { class: "divided" }, kpis)' in js
     assert ".card-title-right { margin-left: auto; }" in css
 
@@ -486,10 +486,10 @@ def test_the_rules_lists_show_at_most_15_lines_a_page():
     js = page_js()
     assert "const PER_PAGE = 15;" in js
     edit = body_of(js, "editTable")
-    assert "pagedBlock(() => rows.length" in edit and "rows.slice(from, to)" in edit      # People, What the agent may do
+    assert "pagedBlock(() => rows.length" in edit and "rows.slice(from, to)" in edit      # People, Allowed actions
     assert 'cls: "svc", add: "Add a service", blank: () => ["", "any"], per: 10,' in js     # the services: 10 a page
     tools = body_of(js, "toolsCard")
-    assert "pagedBlock(() => lines.length" in tools                                    # Reading Home Assistant
+    assert "pagedBlock(() => lines.length" in tools                                    # Home Assistant tools
 
 
 def test_an_info_icon_shows_a_tooltip_never_text_in_the_page():
@@ -502,7 +502,7 @@ def test_an_info_icon_shows_a_tooltip_never_text_in_the_page():
     for ev in ('"mouseenter"', '"focus"', '"click"'):
         assert ev in tip
     assert 'h("div", { class: "tooltip" + (kind ? " " + kind : ""), role: "tooltip" }' in tip and "floating(btn," in tip
-    assert 'titleWithInfo("What the AI cost"' in js and '"h2", period)' in js            # the period on the title's line
+    assert 'titleWithInfo(place("cost")' in js and '"h2", period)' in js            # the period on the title's line
 
 
 def test_the_lists_that_float_over_the_page_share_one_way_of_doing_it():
@@ -615,7 +615,7 @@ def test_a_scheduled_job_is_named_not_its_slot_key():
 def test_the_costs_tab_is_two_cards_of_two_tabs_and_the_page_one_width():
     # owner, 2026-10-08: By work + By model in one card, Every run + Tools in another; the page half again as wide
     js = body_of(page_js(), "costs")
-    assert js.count("tabbedCard(") == 2 and '"By work"' in js and '"By model"' in js and '"Every run"' in js and '"Tools used"' in js
+    assert js.count("tabbedCard(") == 2 and all(f'place("{k}")' in js for k in ("by_work", "by_model", "every_run", "tools_called"))
     css = open(os.path.join(os.path.dirname(__file__), "..", "vesta_agent", "ui", "static", "app.css"), encoding="utf-8").read()
     assert "--page-width: 1650px" in css and "1100px" not in css and css.count("max-width: var(--page-width)") == 4
     assert ".skills { display: grid; grid-template-columns: 364px 1fr;" in css     # the skills list, 30% wider
@@ -632,7 +632,9 @@ def test_a_skills_about_is_two_tabs_then_its_commands_each_with_its_offline_test
     # "What to run" step; when it is called and its tools are one section of two tabs, the tools as cards; renamed
     js = page_js()
     about, test = body_of(js, "aboutSkill"), body_of(js, "tryPanel")
-    assert '"When is the Skill called"' in js and '"Tools used by the Skill"' in js and '"Commands run by the Skill"' in js
+    from vesta_agent.places import title
+    assert (title("skill_when"), title("skill_tools"), title("skill_commands")) == ("When is the Skill called", "Tools used by the Skill", "Commands run by the Skill")
+    assert 'when: place("skill_when"), tools: place("skill_tools"), commands: place("skill_commands")' in js
     # owner, 2026-10-08 (later): when it is called on top, alone; below, one section of two tabs, commands then tools
     assert 'h("section", { class: "about-sec" }, h("h3", {}, ABOUT_TEXT.when), acts())' in about
     assert 'tabbed("about", [hasRuns && ["commands", ABOUT_TEXT.commands, ABOUT_TEXT.switches, runs], ["tools", ABOUT_TEXT.tools, null, tools]])' in about
@@ -697,3 +699,39 @@ def test_every_table_and_every_tabbed_section_comes_from_one_builder():
         assert call in files[f], f
     assert 'table(head, body, { cls: "data" })' in body_of(_js(), "paged")
     assert "table([...columns.map((c) => c.title)" in body_of(_js(), "editTable")
+
+
+def test_every_place_is_named_once_and_the_page_reads_the_names_from_the_server(ui):
+    # owner, 2026-10-08: "all the titles and sub-titles consistent, so the user knows what shows what, and where it is
+    # linked to". The same tools were "What the AI can use" in Rules and "Tools used by the Skill" on a skill, and
+    # "Overview › Changes" sent the reader to a card titled "Changes made on these pages". places.py names each place
+    # once; the page gets the table in its HTML, the server's sentences use it too.
+    import glob, json, re
+    from vesta_agent.places import PLACES, where
+    from vesta_agent.ui.server import STATIC
+
+    async def fn(c):
+        return await (await c.get("/")).text()
+    html = call(ui, fn)
+    m = re.search(r'<script type="application/json" id="places">(.*?)</script>', html, re.S)
+    assert m and json.loads(m.group(1)) == {k: list(v) for k, v in PLACES.items()} and "{places}" not in html
+    # the page's where() is the server's: "Tab › Card"
+    assert "`${PLACES[k][1]} › ${PLACES[k][0]}`" in page_js() and where("tools") == "Rules › AI tools"
+    # no title of two words or more is written by hand in the page's code, nor a "Tab › …" sentence
+    # (the code without its comments, whole-line or at a line's end: a comment may name a place)
+    js = {f: "\n".join(re.sub(r"(^|\s)//.*$", "", l) for l in open(f, encoding="utf-8").read().split("\n"))
+          for f in glob.glob(os.path.join(STATIC, "*.js"))}
+    for name, _ in PLACES.values():
+        if " " in name:
+            for f, code in js.items():
+                assert not re.search(r'["`]' + re.escape(name) + r'["`]', code), (name, f)
+    for f, code in js.items():
+        assert not re.search(r'["`][^"`]*\b(Rules|Skills|Costs|Overview) › ', code), f
+    # the names the agent used before this table are gone from its code and its page
+    old = ("What the AI can use", "What the agent may do", "Who may use what", "The agent's own tools", "Reading Home Assistant",
+           "Changes made on these pages", "Overview › Changes", "What the AI may run", "Where it went", "Tools it gets")
+    here = os.path.join(os.path.dirname(__file__), "..", "vesta_agent")
+    for f in glob.glob(os.path.join(here, "**", "*.*"), recursive=True):
+        if f.endswith((".py", ".js", ".css", ".html")) and not f.endswith("places.py"):
+            text = open(f, encoding="utf-8").read()
+            assert not [o for o in old if o in text], (f, [o for o in old if o in text])

@@ -1,4 +1,4 @@
-"""What the AI can use (0.6.42, owner's design of 2026-10-06): one answer, built and refused in code.
+"""AI tools (0.6.42, owner's design of 2026-10-06): one answer, built and refused in code.
 
 Every check drives the real Toolbox / Vesta / Skills, never a copy of their tables."""
 from __future__ import annotations

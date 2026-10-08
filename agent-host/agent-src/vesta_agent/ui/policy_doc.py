@@ -17,7 +17,7 @@ from ruamel.yaml.comments import CommentedMap, CommentedSeq
 from ..policy import DEFAULT_BEHAVIOUR, DEFAULTS, ENTITY_LISTS, form_sections
 
 #: What the forms edit. Everything else (system_actions, notify_recipients...) is edited in the file itself and
-#: never touched here. "What the AI can use" (0.6.42): ha_read_tools, agent_tools, tool_access, and the skills'
+#: never touched here. "AI tools" (0.6.42): ha_read_tools, agent_tools, tool_access, and the skills'
 #: on/off switch (skills_off).
 FORM_KEYS = form_sections()     # policy.FIELDS: the one table of the file's settings
 LISTS = tuple(ENTITY_LISTS)     # policy.py's own table, not a copy

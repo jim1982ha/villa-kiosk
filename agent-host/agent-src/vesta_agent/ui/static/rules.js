@@ -1,5 +1,5 @@
-// VESTA Agent page — the Rules tab (policy.yaml): the forms, the file, and What the AI can use.
-import { api, card, dropdown, editTable, field, fill, floating, h, infoButton, jobsBanner, jump, markDirty, page, pagedBlock, plural, problemsBox, reasons, saveWith, setBar, table, tableRow, tabbed, tell, titleWithInfo, toast, toggleCard, $view, withInfo } from "./core.js";
+// VESTA Agent page — the Rules tab (policy.yaml): the forms, the file, and AI tools.
+import { api, card, dropdown, editTable, field, fill, floating, h, infoButton, jobsBanner, jump, markDirty, page, pagedBlock, place, plural, problemsBox, reasons, saveWith, setBar, tabbed, table, tableRow, tell, titleWithInfo, toast, toggleCard, $view, where, withInfo } from "./core.js";
 
 // ---------------------------------------------------------------- rules (policy.yaml)
 // the rules, the lists and their domains, the siren's domains: policy.form_schema(), served with the file —
@@ -48,9 +48,9 @@ export function rulesForms(doc, jobs = [], tools = null) {
 
   // acting: the title, its (i), then the switch — as every other title with a switch (owner, 2026-10-07: the
   // switch came first, and a line repeated what the (i) says); how long an Approve button works sits with the
-  // services that ask for one ("What the agent may do")
+  // services that ask for one (Allowed actions)
   const acting = h("section", { class: "card" }, h("div", { class: "card-title" },
-    h("h2", {}, "Acting on the villa", infoButton("Acting on the villa", "Off: the agent informs only, and never offers to do anything. On: it may act, within the rules below; every action still goes through \"What the agent may do\"."),
+    h("h2", {}, place("acting"), infoButton(place("acting"), `Off: the agent informs only, and never offers to do anything. On: it may act, within the rules below; every action still goes through "${place("actions")}".`),
       h("label", { class: "switch title-switch" }, h("input", { type: "checkbox", checked: f.act_enabled, "aria-label": W("act_enabled"),
         onchange: on((t) => { f.act_enabled = t.checked; }) })))));
 
@@ -59,7 +59,7 @@ export function rulesForms(doc, jobs = [], tools = null) {
   // AI jobs: each skill's scheduled AI work, with its own brain and spending limit
   f.settings.jobs = f.settings.jobs || {};
   // The AI: one table, one row per piece of AI work (chat answers, then each skill's AI job), like
-  // "What the agent may do"; then the conversation settings.
+  // Allowed actions; then the conversation settings.
   const aiBody = h("tbody");
   const limitInput = (value, set, label, per) => h("div", {},
     h("input", { type: "number", step: "0.05", min: 0.05, value, "aria-label": label, oninput: on((t) => set(num(t.value))) }),
@@ -79,7 +79,7 @@ export function rulesForms(doc, jobs = [], tools = null) {
       sel(page.PROFILES, f.settings.profile, (v) => (f.settings.profile = v), "Brain"),
       limitInput(f.settings.reply_limit_usd, (v) => (f.settings.reply_limit_usd = v), W("settings.reply_limit_usd"), "for each reply"),
       // the chats' own setting, on the chats' line (owner, 2026-10-06): their tools are "everything switched on, by
-      // role" — said in the (i) of "Tools it gets"
+      // role" — said in the (i) of its "AI tools" column
       // the menu on the line of the brain and the limit, its name under it like theirs ("for each reply")
       { cls: "with-caption", v: [sel(SCHEMA.resets, f.settings.conversation_reset, (v) => (f.settings.conversation_reset = v), W("settings.conversation_reset")),
         h("div", { class: "muted" }, W("settings.conversation_reset"))] },
@@ -105,9 +105,9 @@ export function rulesForms(doc, jobs = [], tools = null) {
         { cls: "x", v: h("button", { class: "btn icon ghost", title: "Stop this job", onclick: () => { delete f.settings.jobs[j.name]; drawAi(); markDirty(); } }, "×") }]);
     }));
   drawAi();
-  const ai = card("The AI", "Which brain does each piece of work, the most ONE piece of work may cost (one chat reply, or one run of a job — not a monthly budget), and which tools a report gets: only those its skill lists. A reply that reaches its limit stops and offers Continue; a report that reaches it is still sent with what is done. A job that is not set does not run.",
+  const ai = card(place("ai"), "Which brain does each piece of work, the most ONE piece of work may cost (one chat reply, or one run of a job — not a monthly budget), and which tools a report gets: only those its skill lists. A reply that reaches its limit stops and offers Continue; a report that reaches it is still sent with what is done. A job that is not set does not run.",
     table(["Work", "Brain", withInfo("Limit (US$)", limitNote),
-      withInfo("Tools it gets", "Chat answers get every tool switched on in What the AI can use, by the person's role. A report gets only the tools its skill lists, among those switched on: to change them, edit the skill's tools list on the Skills tab — the choice then travels with the skill."),
+      withInfo(place("tools"), `Chat answers get every tool switched on in ${where("tools")}, by the person's role. A report gets only the tools its skill lists, among those switched on: to change them, edit the skill's tools list in ${where("skill_tools")} — the choice then travels with the skill.`),
       ""], aiBody, { cls: "ai" }));
   const missing = jobs.filter((j) => !(f.settings.jobs || {})[j.name]).map((j) => j.name);
 
@@ -216,7 +216,7 @@ export function rulesForms(doc, jobs = [], tools = null) {
                  oninput: on((t) => (f.approval_ttl_minutes = num(t.value))) }), h("span", {}, "min"),
     infoButton(W("approval_ttl_minutes"), "An Approve or Refuse button older than this does nothing: the person asks again."))
   const services = h("section", { class: "card" },
-    titleWithInfo("What the agent may do", "One line per Home Assistant service, and who decides. Anything not listed is refused. Restarts, shell commands, toggles and the like are refused whatever this says. For \"Only the devices chosen beside it\", choose the devices on the same line: the agent may act only on those, and still asks for approval.", "h2", ttl),
+    titleWithInfo(place("actions"), "One line per Home Assistant service, and who decides. Anything not listed is refused. Restarts, shell commands, toggles and the like are refused whatever this says. For \"Only the devices chosen beside it\", choose the devices on the same line: the agent may act only on those, and still asks for approval.", "h2", ttl),
     ...editTable(svcRows, {
       cls: "svc", add: "Add a service", blank: () => ["", "any"], per: 10,      // 10 lines a page (owner, 2026-10-06)
       changed: () => { f.allowed_services = Object.fromEntries(svcRows.filter(([k]) => k)); },
@@ -229,7 +229,7 @@ export function rulesForms(doc, jobs = [], tools = null) {
       ][k](),
     }));
 
-  const devices = card("Protected devices", "Devices that need more care than the rules above give them.",
+  const devices = card(place("protected"), "Devices that need more care than the rules above give them.",
     h("div", { class: "grid" },
       field(W("owner_only_entities"), many("owner_only_entities", SCHEMA.actionable), "An action on these waits for the owner's Approve, whoever asks (locks, the gate, the siren)."),
       field(W("excluded_entities"), many("excluded_entities", null), "Never acted on, never reported (a test device)."),
@@ -265,6 +265,12 @@ export function toolsCard(f, t, reload) {
   const toolCard = (on, set, title, parts, disabled = false) =>
     toggleCard(on, (v) => { set(v); markDirty(); draw(); }, title, parts, disabled);
   const used = (n) => (n ? h("span", { class: "badge" }, `used ${n}× this week`) : null);
+  // the Home Assistant tools tab's (i), worked out when it opens: the count follows the switches
+  const haInfo = () => {
+    const on = new Set(f.ha_read_tools);
+    return (t.count ? `${[...on].filter((n) => t.groups.some((g) => g.tools.some((x) => x.name === n))).length} of ${t.count} tools on. ` : "The list is not read yet. ")
+      + (t.read_at ? `From Home Assistant's MCP server${t.server ? " " + t.server : ""}, read ${new Date(t.read_at).toLocaleString()}.` : "The agent reads it when it starts.");
+  };
   const ha = () => {
     const on = new Set(f.ha_read_tools);
     const refresh = h("button", { class: "btn ghost", onclick: async () => {
@@ -273,9 +279,8 @@ export function toolsCard(f, t, reload) {
       catch (e) { tell("Not read", reasons(e)); }
       draw();
     } }, "Read the list again");
-    const head = h("div", { class: "tools-head" },
-      h("div", {}, h("b", {}, t.count ? `${[...on].filter((n) => t.groups.some((g) => g.tools.some((x) => x.name === n))).length} of ${t.count} tools on.` : "The list is not read yet."),
-        h("span", { class: "muted" }, t.read_at ? ` From Home Assistant's MCP server${t.server ? " " + t.server : ""}, read ${new Date(t.read_at).toLocaleString()}.` : " The agent reads it when it starts.")),
+    // how many are on, and where the list comes from: the (i) of the tab (haInfo), not a line here (owner, 2026-10-08)
+    const head = h("div", { class: "tools-head" }, h("div"),
       t.new_off ? h("span", { class: "chip warn" }, `${plural(t.new_off, "new tool", "new tools")} since an update — off`) : null, refresh);
     // every tool in its group's order, 16 cards a page (four rows of four); a group's heading where its cards start
     const lines = t.groups.flatMap((g) => g.tools.map((x) => ({ g, x })));
@@ -312,15 +317,17 @@ export function toolsCard(f, t, reload) {
         const set = (v) => { if (isWeb) f.settings.web_search = v; else if (v) delete f.agent_tools[x.key]; else f.agent_tools[x.key] = false; };
         // "set elsewhere": a link to each section that decides it (owner, 2026-10-06)
         const words = x.kind === "elsewhere"
-          ? h("div", { class: "muted" }, "Decided by ", jump("rules-acting", "Acting on the villa"), " and ", jump("rules-services", "What the agent may do"), ": every action goes through those rules.")
+          ? h("div", { class: "muted" }, "Decided by ", jump("rules-acting", place("acting")), " and ", jump("rules-services", place("actions")), ": every action goes through those rules.")
           : h("div", { class: "muted" }, x.description);
         return toolCard(on, set, x.label, { words, meta: [h("code", {}, x.key === "web_search" ? "WebSearch" : x.key), used(x.used)] },
           kind !== "choose");
       }))));
   };
+  // what a role changes: the (i) of its tab (owner, 2026-10-08: a paragraph above the table became a tooltip)
+  const ROLES_INFO = `When a person writes, the AI only gets the tools their role allows; in the facility manager's chat, never more than the facility manager's. A tool switched off in ${place("ha_tools")} or ${place("agent_tools")} is off for everyone. Guests: the agent answers only the people in ${where("people")} (owner or facility manager), so a guest gets no answer at all for now.`;
   const roles = () => {
     const fm = f.tool_access.fm || {};
-    return [h("p", { class: "muted" }, "When a person writes, the AI only gets the tools their role allows; in the facility manager's chat, never more than the facility manager's. A tool switched off in the first two tabs is off for everyone. Guests: the agent answers only the people in Rules › People (owner or facility manager), so a guest gets no answer at all for now."),
+    return [
       table(["Tools", "Owner", "Facility manager", "Guest"], t.roles.map((g) => [
           h("b", {}, g.label),
           h("label", { class: "switch" }, h("input", { type: "checkbox", checked: true, disabled: true, "aria-label": `${g.label}: owner` })),
@@ -329,12 +336,12 @@ export function toolsCard(f, t, reload) {
                                if (Object.keys(m).length) f.tool_access.fm = m; else delete f.tool_access.fm; markDirty(); } })),
           { cls: "muted", v: h("span", { title: "There is no guest role yet: the agent answers only the owner and the facility manager" }, "—") }]),
         { cls: "roles", widths: [null, "18%", "18%", "14%"] }),
-      h("p", { class: "muted" }, "Asking for an action is decided by \"What the agent may do\": who approves stays there.")];
+      h("p", { class: "muted" }, `Asking for an action is decided by "${place("actions")}": who approves stays there.`)];
   };
-  const tabs = tabbed("tools", [["ha", "Reading Home Assistant", null, ha], ["own", "The agent's own tools", null, own],
-                                ["roles", "Who may use what", null, roles]]);
+  const tabs = tabbed("tools", [["ha", place("ha_tools"), haInfo, ha], ["own", place("agent_tools"), null, own],
+                                ["roles", place("tool_roles"), ROLES_INFO, roles]]);
   draw = tabs.redraw;
-  const c = card("What the AI can use", "Each tool the AI may call. A tool switched off does not exist for it, in chats and in reports. Changes count at the next message.", tabs.bar, tabs.body);
+  const c = card(place("tools"), "Each tool the AI may call. A tool switched off does not exist for it, in chats and in reports. Changes count at the next message.", tabs.bar, tabs.body);
   c.id = "rules-tools";
   return c;
 }

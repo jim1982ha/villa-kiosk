@@ -21,6 +21,7 @@ import yaml
 
 # the rules' settings as the page names them: policy.FIELDS, the one table (a path it does not know is shown as
 # written). This file kept its own copy, and two labels had drifted from the page's.
+from .places import title
 from .policy import WORDS
 
 SCHEMA = """
@@ -128,7 +129,7 @@ def _say(path: str) -> str:
     if parts[:2] == ["settings", "keep"] and len(parts) == 3:
         return f"Records kept: {parts[2].replace('_', ' ')}"
     if parts[0] == "allowed_services" and len(parts) >= 2:
-        return f"What the agent may do: {'.'.join(parts[1:])}"
+        return f"{title('actions')}: {'.'.join(parts[1:])}"
     return path
 
 

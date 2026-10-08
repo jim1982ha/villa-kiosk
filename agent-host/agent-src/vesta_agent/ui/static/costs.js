@@ -1,5 +1,5 @@
 // VESTA Agent page — the Costs tab.
-import { $view, alertButton, api, infoButton, card, dropdown, figures, fill, h, page, paged, svg, tabbed, titleWithInfo } from "./core.js";
+import { alertButton, api, card, dropdown, figures, fill, h, infoButton, page, paged, place, svg, tabbed, titleWithInfo, $view, where } from "./core.js";
 
 // ---------------------------------------------------------------- costs
 export const usd = (v) => "US$ " + (v || 0).toFixed((v || 0) > 0 && v < 0.01 ? 4 : 2);
@@ -75,18 +75,18 @@ export async function costs(days = 7) {
   fill($view,
     // the period's selector on the title's line, on the right (owner, 2026-10-06); the figures below a separator
     h("section", { class: "card" },
-      titleWithInfo("What the AI cost", "As the Anthropic API reported it for each run: a chat reply, or a run of an AI job. Tokens in count what the agent re-read from its cache too. Everything on this tab follows the period chosen here.", "h2", period),
-      h("div", { class: "divided" }, kpis), h("div", { class: "divided" }, h("h2", {}, "Per day"), chart)),
+      titleWithInfo(place("cost"), "As the Anthropic API reported it for each run: a chat reply, or a run of an AI job. Tokens in count what the agent re-read from its cache too. Everything on this tab follows the period chosen here.", "h2", period),
+      h("div", { class: "divided" }, kpis), h("div", { class: "divided" }, h("h2", {}, place("cost_day")), chart)),
     // ⚠️ TWO CARDS OF TWO TABS (owner, 2026-10-08): "By work" and "By model" are one question asked two ways, and so
     // are "Every run" and the tools those runs used — each pair is one card, its tab kept when the period changes
-    tabbedCard(`Where it went · last ${days} days`, "spend", [
-      ["work", "By work", "Chat replies, and each AI job.", () => groupTable(c.by_work, "Work")],
-      ["model", "By model", "Which model did the work.", () => groupTable(c.by_model, "Model")]]),
-    tabbedCard(`Runs · last ${days} days`, "runs", [
-      ["runs", "Every run", `${c.runs_count} runs, newest first. Press a run to see what was asked and which tools it used (recorded from agent 0.6.42 on).`,
-        () => paged([{ v: "When", half: true }, { v: "What", half: true }, "Brain · model", "Tools used",
+    tabbedCard(`${place("cost_split")} · last ${days} days`, "spend", [
+      ["work", place("by_work"), "Chat replies, and each AI job.", () => groupTable(c.by_work, "Work")],
+      ["model", place("by_model"), "Which model did the work.", () => groupTable(c.by_model, "Model")]]),
+    tabbedCard(`${place("runs")} · last ${days} days`, "runs", [
+      ["runs", place("every_run"), `${c.runs_count} runs, newest first. Press a run to see what was asked and which tools it used (recorded from agent 0.6.42 on).`,
+        () => paged([{ v: "When", half: true }, { v: "What", half: true }, "Brain · model", place("tools_called"),
                      { v: "Tokens in / out", cls: "num", half: true }, { v: "Cost", cls: "num", half: true }, ""], runRows)],
-      ["tools", "Tools used", "Each tool the AI called, in how many runs and how many times. A tool never used is a candidate to switch off (Rules › What the AI can use).",
+      ["tools", place("tools_called"), `Each tool the AI called, in how many runs and how many times. A tool never called is a candidate to switch off (${where("tools")}).`,
         () => (c.tools && c.tools.length ? paged(["Tool", { v: "Runs", cls: "num" }, { v: "Calls", cls: "num" }],
           c.tools.map((t) => [h("code", {}, t.tool), { v: t.runs, cls: "num" }, { v: t.calls, cls: "num" }]))
           : h("p", { class: "muted" }, "No tool recorded in this period yet."))]]));

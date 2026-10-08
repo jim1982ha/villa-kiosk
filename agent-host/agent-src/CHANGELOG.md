@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.87 (8 October 2026)
+
+- vesta_agent/places.py: one name per place on the page (title, and where it sits). The server writes the table into index.html as JSON; core.js `place(k)` / `where(k)` read it. policy.FIELDS section words, tool_access's "why", the history and setup_copy use it as well. Renamed as listed in the app's changelog.
+- Rules › AI tools: the Home Assistant tools count/source and the roles paragraph are now tab (i)s (tabbed's info; the count is worked out when the (i) opens).
+- test_ui: no multi-word place title and no "Tab › …" sentence is typed by hand in the page code, and the old names are gone from the code. Checked to fail with both kinds of mutation.
+
 ## 0.6.86 (8 October 2026)
 
 - DRY pass on the page, as the owner asked. core.table / cell / tableRow build every table: paged, editTable, Rules' AI and roles tables. core.tabbed builds every tab section: Costs' tabbedCard, setupCard, toolsCard and aboutSkill. Its open tab is kept in page.tabs (it replaces costTabs, setupTab, page.toolsTab and aboutTab).

@@ -1,5 +1,5 @@
 // VESTA Agent page — the Overview tab: the agent's state, the changes made on these pages, copying the setup.
-import { api, ask, card, figures, fill, go, h, jobsBanner, paged, plural, problemsBox, reasons, tabbed, tell, toast, $view } from "./core.js";
+import { api, ask, card, figures, fill, go, h, jobsBanner, paged, place, plural, problemsBox, reasons, tabbed, tell, toast, $view, where } from "./core.js";
 
 // ---------------------------------------------------------------- overview
 export async function overview() {
@@ -21,14 +21,14 @@ export async function overview() {
     off.length ? problemsBox(off.map((s) => `${s.name}: ${s.problem}`), `${plural(off.length, "skill", "skills")} not working:`) : null,
   ];
   if (r) {
-    kids.push(card("The last 24 hours", "From the agent's own records.",
+    kids.push(card(place("last_day"), "From the agent's own records.",
       figures([["alerts followed", count("critical_event")], ["buttons pressed", count("ladder")],
         ["actions done", count("executed") + count("direct")], ["replies written", count("run")],
         ["AI cost (USD)", r.ai_cost_usd.toFixed(2)], ["failures", count("failed") + count("script_failed") + count("code_script_failed") + count("send_failed")]]),
-      r.scheduled_jobs.length ? h("div", { class: "divided" }, h("h2", {}, "Scheduled jobs run"),
+      r.scheduled_jobs.length ? h("div", { class: "divided" }, h("h2", {}, place("jobs_run")),
         paged(["Job", "Ran at"], [...r.scheduled_jobs].reverse().map((j) => [j.label || j.job, new Date(j.ran_at).toLocaleString()]))) : null));
   } else {
-    kids.push(card("The last 24 hours", "The agent has not recorded anything yet."));
+    kids.push(card(place("last_day"), "The agent has not recorded anything yet."));
   }
   kids.push(await historyCard(), setupCard());
   fill($view, ...kids);
@@ -43,7 +43,7 @@ export async function historyCard() {
     catch (e) { tell("Not undone", reasons(e)); }
   };
   const PLACE = { Rules: "", Skills: "warn", Release: "gray", Import: "", Undo: "gray" };
-  return card("Changes made on these pages", "Every save on the Rules and Skills tabs, newest first. Kept as long as the agent's other records (Rules (file) › settings.keep.records_days, 90 days by default), and trimmed with them every night. Undo writes the previous version back through the same checks as a save, and is itself recorded here.",
+  return card(place("changes"), "Every save on the Rules and Skills tabs, newest first. Kept as long as the agent's other records (Rules (file) › settings.keep.records_days, 90 days by default), and trimmed with them every night. Undo writes the previous version back through the same checks as a save, and is itself recorded here.",
     changes.length ? paged(["When", "Where", "What changed", ""], changes.map((c) => [
       new Date(c.at).toLocaleString([], { dateStyle: "short", timeStyle: "short" }),
       h("span", { class: "chip " + (PLACE[c.place] || "") }, c.place),
@@ -69,14 +69,14 @@ export function exportCard() {
     } catch (e) { tell("Not downloaded", reasons(e)); }
     btn.disabled = false;
   } }, "Download the setup");
-  return h("div", {}, h("p", { class: "muted" }, "One file with the skills and the shareable part of the rules. On the other villa: Import a setup."),
+  return h("div", {}, h("p", { class: "muted" }, `One file with the skills and the shareable part of the rules. On the other villa: ${where("setup_in")}.`),
     h("div", { class: "grid two" },
       h("div", { class: "box" }, h("div", { class: "eyebrow" }, "Goes in the file"),
         tick("skills", "The skills, every file"), tick("villa_files", "This villa's own choices inside the skills",
           "the skills' villa.* files: e.g. which speech-to-text to use, the villa's extra report entries, the commands switched off on the Skills tab. Untick to send the skills as released, without them."),
         tick("ai", "The AI: brains, spending limits, when the conversation context is deleted, web search"),
-        tick("actions", "What the agent may do: each service and who decides"),
-        tick("tools", "What the AI can use: tool switches, per role, skills switched off"),
+        tick("actions", `${place("actions")}: each service and who decides`),
+        tick("tools", `${place("tools")}: tool switches, per role, skills switched off`),
         tick("keep", "How long records are kept"), tick("instructions", "instructions.md", "your standing rules for the agent")),
       h("div", { class: "box" }, h("div", { class: "eyebrow" }, "Always stays here"),
         stay("People and their Telegram ids"), stay("Chat ids (owner, facility manager)"),
@@ -87,8 +87,8 @@ export function exportCard() {
 
 // Overview › Copy the setup: Download and Import, two tabs of one card (owner, 2026-10-06: a cleaner overview)
 export function setupCard() {
-  const t = tabbed("setup", [["out", "Download this villa's setup", null, exportCard], ["in", "Import a setup", null, importCard]]);
-  return card("Copy the setup to another villa", "The skills and the shareable part of the rules, in one file, and that file read on another villa. People, chats, devices, keys and records never leave a villa.", t.bar, t.body);
+  const t = tabbed("setup", [["out", place("setup_out"), null, exportCard], ["in", place("setup_in"), null, importCard]]);
+  return card(place("setup"), "The skills and the shareable part of the rules, in one file, and that file read on another villa. People, chats, devices, keys and records never leave a villa.", t.bar, t.body);
 }
 
 export function importCard() {
@@ -116,7 +116,7 @@ export function importCard() {
       h("div", { class: "actions" },
         h("button", { class: "btn ghost", onclick: () => { fill(out); input.value = ""; } }, "Cancel"),
         h("button", { class: "btn primary", disabled: !p.changes, onclick: async () => {
-          try { await api("POST", "api/setup/import", { zip, apply: true, fingerprint: p.fingerprint }); toast("Imported. Every change is in Changes made on these pages."); go("overview"); }
+          try { await api("POST", "api/setup/import", { zip, apply: true, fingerprint: p.fingerprint }); toast(`Imported. Every change is in ${where("changes")}.`); go("overview"); }
           catch (e) { tell("Not imported", reasons(e)); }
         } }, p.changes ? `Apply ${plural(p.changes, "change", "changes")}` : "Nothing to change")));
   }

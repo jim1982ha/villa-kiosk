@@ -1,6 +1,6 @@
-"""What the AI can use: the one answer, for a chat, a report and the VESTA Agent page (0.6.42).
+"""AI tools: the one answer, for a chat, a report and the VESTA Agent page (0.6.42).
 
-Three switches decide it, all in policy.yaml, all edited on the page (Rules → What the AI can use):
+Three switches decide it, all in policy.yaml, all edited on the page (Rules › AI tools):
 
   ha_read_tools   the Home Assistant tools the AI may read with, name by name. Only a tool Home Assistant's
                   MCP server marks read-only can be on: anything that writes, restarts, installs or deletes
@@ -9,7 +9,7 @@ Three switches decide it, all in policy.yaml, all edited on the page (Rules → 
   agent_tools     the agent's own tools a villa may switch off: web search (settings.web_search, kept where
                   it always was), facility tickets, starting a report from a chat, reading its own activity.
                   The others are always on (the agent cannot work without them) or are decided elsewhere
-                  (an action on the villa: "What the agent may do").
+                  (an action on the villa: "Allowed actions").
   tool_access     what the facility manager may make the AI use, by group (the owner: everything switched on).
 
 A report gets only the tools its skill lists (skill.yaml `tools:`), among those switched on; a skill that
@@ -26,6 +26,7 @@ import os
 import re
 from datetime import datetime, timedelta, timezone
 
+from .places import title, where
 from .policy import Policy
 
 #: The groups the page shows Home Assistant's tools in, and the facility manager's switches use. A tool not
@@ -54,7 +55,7 @@ NOTES = {
 }
 
 CHOOSE, ELSEWHERE, ALWAYS = "choose", "elsewhere", "always"
-#: The agent's own tools: key → (label, what it does, kind). `web_search` is Claude's WebSearch.
+#: Agent tools (the agent's own): key → (label, what it does, kind). `web_search` is Claude's WebSearch.
 OWN: dict[str, tuple[str, str, str]] = {
     "web_search": ("Web search", "Claude's own search: weather warnings, manuals. Never used to decide an action.", CHOOSE),
     "create_ticket": ("Create a facility ticket", "Records a fault for the facility manager in the VESTA Kiosk. "
@@ -63,8 +64,8 @@ OWN: dict[str, tuple[str, str, str]] = {
                                                          "brain and limit.", CHOOSE),
     "agent_status": ("Read what the agent itself did", "For \"what did you do last night?\": jobs run, alerts followed, "
                                                        "actions, cost.", CHOOSE),
-    "ha_call_service": ("Ask for an action on the villa", "Decided by \"Acting on the villa\" and \"What the agent may "
-                                                          "do\": every action goes through those rules.", ELSEWHERE),
+    "ha_call_service": ("Ask for an action on the villa", f"Decided by \"{title('acting')}\" and \"{title('actions')}\": "
+                                                          "every action goes through those rules.", ELSEWHERE),
     "read_skill": ("Read a skill's instructions", "", ALWAYS),
     "run_skill_script": ("Run a skill's script", "Only the commands the skill lets the AI run.", ALWAYS),
     "save_file": ("Save a file for a skill's script", "A report's sentences, handed to its script.", ALWAYS),
@@ -203,11 +204,11 @@ def blockers(policy: Policy, server_tools: list[dict] | None, skill) -> list[dic
             if OWN[t][2] != CHOOSE or t in own_on(policy):
                 continue
             out.append({"tool": t, "label": OWN[t][0], "fix": "own",
-                        "why": f"It needs \"{OWN[t][0]}\", switched off in Rules › What the AI can use."})
+                        "why": f"It needs \"{OWN[t][0]}\", switched off in {where('tools')}."})
         elif (by is None or (t in by and readable(by[t]))) and t not in policy.ha_read_tools:
             name = _title(by[t]) if by else t
             out.append({"tool": t, "label": name, "fix": "ha",
-                        "why": f"It needs \"{name}\" ({t}), switched off in Rules › What the AI can use."})
+                        "why": f"It needs \"{name}\" ({t}), switched off in {where('tools')}."})
     return out
 
 
@@ -243,7 +244,7 @@ def label(tool: str, listed: dict[str, dict] | None = None) -> str:
 
 # ---------------------------------------------------------------------- the page
 def catalog(policy: Policy, listed: dict | None, usage: dict[str, int], now: datetime | None = None) -> dict:
-    """Rules → What the AI can use: the switches as the page draws them, from the list the agent saved."""
+    """Rules › AI tools: the switches as the page draws them, from the list the agent saved."""
     now = now or datetime.now(timezone.utc)
     tools = (listed or {}).get("tools") or []
     first_list = (listed or {}).get("first_list_at") or ""

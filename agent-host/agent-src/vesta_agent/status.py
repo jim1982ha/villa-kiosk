@@ -150,7 +150,7 @@ def _tool_counts(runs: list[dict]) -> list[dict]:
 
 
 def tool_usage(state, days: int = 7, now: datetime | None = None) -> dict[str, int]:
-    """How many times each tool was called in the last `days` (Rules → What the AI can use: "used 12× this week")."""
+    """How many times each tool was called in the last `days` (Rules › AI tools: "used 12× this week")."""
     since = (now or datetime.now(timezone.utc)) - timedelta(days=days)
     out: dict[str, int] = {}
     for c in state.calls_since(since.isoformat()):

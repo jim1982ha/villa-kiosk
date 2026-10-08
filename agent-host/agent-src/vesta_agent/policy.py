@@ -27,6 +27,8 @@ from typing import Any
 
 import yaml
 
+from .places import title
+
 # ------------------------------------------------------------------ constants
 # Refused even with an approval record. Not configurable.
 # The languages a person can be answered in: the agent writes in them, and the VESTA Agent page offers
@@ -183,7 +185,7 @@ class Policy:
         self.lists: dict[str, set[str]] = v["lists"]
         self.notify_recipients: set[str] = v["notify_recipients"]
         self.ha_read_tools: list[str] = v["ha_read_tools"]
-        # What the AI can use (0.6.42; tool_access.py reads these): absent means on / everything switched on
+        # AI tools (0.6.42; tool_access.py reads these): absent means on / everything switched on
         self.agent_tools: dict[str, bool] = v["agent_tools"]
         self.tool_access: dict[str, dict[str, bool]] = v["tool_access"]
         self.skills_off: set[str] = v["skills_off"]
@@ -364,9 +366,10 @@ _LIST_WORDS = {
 #: "Limit per reply (US$)" and "An Approve button works for" where the page said "(USD)" and "Approve buttons work
 #: for". path → (what the page and the history call it, edited by the Rules forms, the part of a copied setup that
 #: carries it — None: it stays with the villa). Everything else reads it: SECTIONS, policy_doc.FORM_KEYS,
-#: setup_copy, history.WORDS, and the page through form_schema()["words"].
+#: setup_copy, history.WORDS, and the page through form_schema()["words"]. A section's name is its place on the page
+#: (places.py), so the history and the page cannot call it two things.
 FIELDS: dict[str, tuple[str, bool, str | None]] = {
-    "settings": ("The AI", True, None),                      # its keys carry their own part
+    "settings": (title("ai"), True, None),                   # its keys carry their own part
     "settings.profile": ("Brain for chat answers", True, "ai"),
     "settings.reply_limit_usd": ("Limit per reply (US$)", True, "ai"),
     "settings.web_search": ("Web search", True, "ai"),
@@ -375,19 +378,19 @@ FIELDS: dict[str, tuple[str, bool, str | None]] = {
     "settings.keep": ("How long records are kept", True, "keep"),
     "act_enabled": ("The agent may act on the villa", True, None),
     "approval_ttl_minutes": ("Approve buttons work for (minutes)", True, None),
-    "people": ("People", True, None),
-    "chats": ("Chats", True, None),
+    "people": (title("people"), True, None),
+    "chats": (title("chats"), True, None),
     "chats.owner": ("Owner chat", True, None),
     "chats.fm": ("Facility manager chat", True, None),
-    "allowed_services": ("What the agent may do", True, "actions"),
+    "allowed_services": (title("actions"), True, "actions"),
     "owner_only_entities": ("Only the owner may approve", True, None),
     "excluded_entities": ("Left alone", True, None),
     "siren_entity": ("Siren", True, None),
     "siren_auto_off_min": ("Siren stops after (minutes)", True, None),
     **{k: (_LIST_WORDS[k][0], True, None) for k in _LIST_WORDS},
-    "ha_read_tools": ("Home Assistant tools the AI may read with", True, "tools"),
-    "agent_tools": ("The agent's own tools", True, "tools"),
-    "tool_access": ("Who may use what", True, "tools"),
+    "ha_read_tools": (title("ha_tools"), True, "tools"),
+    "agent_tools": (title("agent_tools"), True, "tools"),
+    "tool_access": (title("tool_roles"), True, "tools"),
     "skills_off": ("Skills switched off", True, "tools"),
     "notify_recipients": ("Who is notified", False, None),      # edited in the file itself
     "system_actions": ("What the agent's own code may do", False, None),
