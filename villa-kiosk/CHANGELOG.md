@@ -1,3 +1,12 @@
+## 2.496.315
+
+### Changed
+- Improved defaults now reach your kiosk. Until now each kiosk saved a copy of every setting, defaults included, so a better default in a new version never reached an installed kiosk. Now only the settings you changed are saved; everything else follows the current version.
+- In the walk view, the room whose badges stay shown one by one is now always the room named in the room banner. Before, the badges and the banner each worked out "your room" separately, and could disagree on a staircase or a split level.
+
+### Behind the scenes
+- No other visible change: these make the next changes in the 3D view safer. The camera cone's direction now comes from one place that is checked against SweetHome 3D's rule for every angle and tilt. Every input the badge layout depends on now redoes it (two did not). Yesterday's "badges behind walls after you stop" fix is now tested with the real code instead of a copy.
+
 ## 2.496.314
 
 ### Fixed

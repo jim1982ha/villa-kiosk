@@ -156,3 +156,16 @@ export class OcclusionSweep {
     }
   }
 }
+
+/** One wall-occlusion pass as the badge layer runs it: the sweep's step, and when it owes the caller a layout pass
+ *  (owesLayout — settling included), `markDirty` (the layout gate's). The CALLER's half of 2026-10-08's defect, as a
+ *  function the oracle can drive with the real LayoutGate (architecture review 10). */
+export function wallStep(
+  sweep: OcclusionSweep, shown: OcclusionTarget[], eye: { x: number; y: number; z: number }, budgetMs: number,
+  markDirty: () => void,
+): SweepPass {
+  const pass = sweep.step(shown, eye, budgetMs);
+  if (owesLayout(pass)) markDirty();
+  return pass;
+}
+

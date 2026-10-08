@@ -7,7 +7,7 @@ import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
-const { solvePlanToWorld, planAngleToDir } = await import("@/babylon/roomCalibration");
+const { solvePlanToWorld, planAngleToDir, cameraBeamDir } = await import("@/babylon/roomCalibration");
 
 // The "true" villa: plan centimetres → world metres, mirrored on X, rotated a little, offset.
 const th = 0.3, s = 0.01;
@@ -65,10 +65,26 @@ console.log("\n  a device's facing:");
   ck("every angle turns the way SweetHome turns the piece (not its mirror)", turns);
   const d60 = planAngleToDir(Math.PI / 3), d80 = planAngleToDir(80 * Math.PI / 180);
   ck("  ...so 80° → 60° turns it toward plan +Y, as the piece turned", d60.py > d80.py);
-  // ⚠️ AN UNTILTED PIECE GETS THE DEFAULT TILT (owner, 2026-10-08: every beam was level). SweetHome writes no pitch
-  // for 0, the plan reader stores 0, and `?? default` never fired: the caller must read 0 as "not set".
+  // ⚠️ A CAMERA PIECE → ITS BEAM (roomCalibration.cameraBeamDir, architecture review 10), driven by values: SweetHome's
+  // rule for every angle × tilt, through a plain and a MIRRORED plan→world fit. An untilted piece (pitch 0, what
+  // SweetHome writes as "no attribute") gets the default tilt (owner, 2026-10-08: every beam was level).
+  const plain = (x, y) => ({ x: x / 100, z: y / 100 });          // plan cm → world m
+  const mirrored = (x, y) => ({ x: -x / 100, z: y / 100 });
+  const DEG = Math.PI / 180;
+  let worst = 0;
+  for (const fit of [plain, mirrored]) for (const deg of [0, 30, 60, 80, 135, 200, 300]) for (const pitch of [0, 20 * DEG, 60 * DEG]) {
+    const got = cameraBeamDir({ x: 500, y: 300, angle: deg * DEG, pitch }, fit, 0, 45 * DEG);
+    const tilt = pitch || 45 * DEG, a = deg * DEG, sx = fit === mirrored ? -1 : 1;
+    const want = { x: sx * -Math.sin(a) * Math.cos(tilt), y: -Math.sin(tilt), z: Math.cos(a) * Math.cos(tilt) };
+    worst = Math.max(worst, Math.hypot(got.x - want.x, got.y - want.y, got.z - want.z));
+  }
+  ck("every angle × tilt, plain or mirrored plan: the beam is SweetHome's front, tilted down", worst < 1e-9, worst);
+  const level = cameraBeamDir({ x: 0, y: 0, angle: 0, pitch: 0 }, plain, 0, 45 * DEG);
+  ck("an untilted piece gets the default tilt (pitch 0 = not set), not a level beam", Math.abs(level.y + Math.sin(45 * DEG)) < 1e-12);
+  ck("a heading setting turns the lens from the front", Math.abs(cameraBeamDir({ x: 0, y: 0, angle: 0, pitch: 0 }, plain, Math.PI, 45 * DEG).z + Math.cos(45 * DEG)) < 1e-12);
+  ck("a fit that collapses the direction gives no beam", cameraBeamDir({ x: 0, y: 0, angle: 0 }, () => ({ x: 0, z: 0 }), 0, 0) === null);
   const sm = readFileSync(new URL("../../src/babylon/SceneManager.ts", import.meta.url), "utf8");
-  ck("a camera with no tilt in the plan gets cameraBeamTiltDeg, not 0", /const pitch = e\.pitch \? e\.pitch : defaultPitchRad;/.test(sm) && /this\.config\.cameraBeamTiltDeg \* DEG/.test(sm));
+  ck("the scene asks cameraBeamDir (no second copy of the maths)", /cameraBeamDir\(e, planToWorld, beamOffsetRad, defaultPitchRad\)/.test(sm) && !/Math\.cos\(pitch\)/.test(sm));
 }
 
 done("✅ the floor plan lands on the villa by known transforms");

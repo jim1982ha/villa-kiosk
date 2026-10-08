@@ -45,7 +45,8 @@ import { beginSpan } from "@/utils/perfSpans";
 import { runPerfProbe, type ProbeRow } from "./perfProbe";
 import { axisWorldScale } from "./meshUnits";
 import { ENTITY_CALIBRATION_CM, ROOM_POLYGONS_CM, polygonCentroid } from "@/config/Sh3dCalibration";
-import { solvePlanToWorld, planAngleToDir } from "./roomCalibration";
+import { cameraBeamDir, solvePlanToWorld } from "./roomCalibration";
+import { WalkerView } from "./walkerView";
 import { rayTargets } from "./meshRoles";
 import type { PlanWorldPair } from "@/utils/affineFit";
 import { pointInPolygon, type Pt2, boundsXZ } from "@/utils/geometry";
@@ -198,6 +199,8 @@ export class SceneManager {
   readonly sky: SkyDome;
   readonly floors: FloorManager;
   readonly pick: PickHandler;
+  /** The walker — walking or not, the room stood in: ONE owner (walkerView.ts), read by the badge layer. */
+  readonly walker = new WalkerView();
   readonly visuals: EntityVisuals;
   readonly renderFx: RenderEnhancements;
   /** The loaded model's lighting mode (lightingMode.ts) — unbaked until one
@@ -412,7 +415,7 @@ export class SceneManager {
     // in a sky they are meant to share.
     this.sky.setMoon(this.nightSky);
 
-    this.visuals = new EntityVisuals(this.scene, opts.config, this.frames);
+    this.visuals = new EntityVisuals(this.scene, opts.config, this.frames, this.walker);
 
     // A tap/long-press asks the GUI tiers FIRST (group card, badge, room chip —
     // resolveHit, which owns that order for all four gestures), falling through
@@ -483,7 +486,7 @@ export class SceneManager {
       this.overview.zoomStep(ZOOM_STEP_FACTOR, this.groundPointAt(x, y) ?? undefined);
     };
 
-    this.camera = new CameraController(this.scene, canvas, opts.config, {
+    this.camera = new CameraController(this.scene, canvas, opts.config, this.walker, {
       onRoomChange: opts.onRoomChange,
       // MOTION — every first-person pose change routes here. ⚠️ The OVERVIEW
       // controller's does NOT: its onActivity (below) only asks for a repaint,
@@ -1109,6 +1112,7 @@ export class SceneManager {
     // the walker must, and badge wall-occlusion only makes sense from inside
     // the villa (see EntityVisuals.setFirstPerson).
     this.structure.setView(this.viewMode);
+    this.walker.walking = mode === "first-person";             // the walker's fact, written here once (walkerView.ts)
     this.visuals.setFirstPerson(mode === "first-person");
     if (mode === "overview") {
       this.camera.setMovement(0, 0); // stop any in-flight walk
@@ -1859,6 +1863,7 @@ export class SceneManager {
     // A model can load in either view (the first-run boot walks, a reload from
     // the overview does not), so the badge occluder pass is told which one it
     // landed in rather than waiting for a toggle that may never come.
+    this.walker.walking = this.viewMode === "first-person";
     this.visuals.setFirstPerson(this.viewMode === "first-person");
     // The extents are final now (normalizeScale + recenterModel have run and
     // loadedMeshes is populated), so this is the first moment the overview can
@@ -2142,32 +2147,9 @@ export class SceneManager {
         const map = this.config.entityMap[e.entityId];
         const isCamera = map ? map.type === "camera" : e.entityId.startsWith("camera.");
         if (!isCamera) continue;
-        const d = planAngleToDir(e.angle + beamOffsetRad);
-        const p0 = planToWorld(e.x, e.y);
-        const p1 = planToWorld(e.x + d.px, e.y + d.py);
-        const wx = p1.x - p0.x, wz = p1.z - p0.z;
-        const len = Math.hypot(wx, wz);
-        if (len <= 1e-6) continue;
-        // ⚠️ A 0 IS "NOT SET": SweetHome writes no `pitch` attribute for an untilted piece, and the plan reader
-        // stores the missing value as 0 — so `e.pitch ?? default` never reached the default and every beam was
-        // level (owner, 2026-10-08). A camera meant to look straight ahead is set to a small tilt in SweetHome.
-        const pitch = e.pitch ? e.pitch : defaultPitchRad;
-        // CONFIRMED live (2026-07-03): positive pitch tilts the beam DOWN, as
-        // expected for a ceiling-mounted security camera looking into the
-        // room — no sign flip needed. Only sensible over roughly 0°..90°
-        // (level -> straight down); beyond 90° cos(pitch) goes negative and
-        // flips the HORIZONTAL component to the opposite compass direction
-        // while the vertical part stays downward (sin stays positive up to
-        // 180°) — mathematically correct for a literal axis rotation (past
-        // vertical the camera is now aiming behind-and-up), but easy to
-        // mistake for a bug: a pitch of e.g. 140° combined with a small yaw
-        // can point the beam at whatever's immediately behind the camera
-        // instead of continuing to tilt "further down", clipping to a
-        // near-invisible stub the instant it hits nearby geometry. Keep pitch
-        // within 0°..90° in SweetHome for an intuitive result.
-        const vy = -Math.sin(pitch);
-        const horizScale = Math.cos(pitch) / len;
-        cameraDirections.set(e.entityId, { x: wx * horizScale, y: vy, z: wz * horizScale });
+        // what a SweetHome camera piece means, turned into a world direction: roomCalibration.cameraBeamDir
+        const dir = cameraBeamDir(e, planToWorld, beamOffsetRad, defaultPitchRad);
+        if (dir) cameraDirections.set(e.entityId, dir);
       }
     }
     // The direction MATHS above is microseconds; `setCameraDirections` is what

@@ -110,7 +110,9 @@ import { Storeys } from "./storeys";
 import { FloorProbe } from "./floorProbe";
 import { axisWorldScale, stripExtent } from "./meshUnits";
 import type { LightReading } from "./lightPoolSet";
-import { OcclusionSweep, owesLayout } from "./occlusionSweep";
+import { OcclusionSweep, owesLayout, wallStep } from "./occlusionSweep";
+import { LayoutGate } from "./layoutGate";
+import { WalkerView, walkExemptRooms } from "./walkerView";
 import type { RoomChip } from "./roomChips";
 import { groupCardModel, roomChipModel, type SummaryFrame } from "./summaryLook";
 import { rungAt, referenceDepthAt, iconZoomAt, viewportPx } from "./badgeScale";
@@ -744,17 +746,14 @@ export class EntityVisuals {
   //      detachFanLabelAnchor) and a pulse only changes emissive colour, so
   //      neither has any effect on layout. The view-projection matrix is the
   //      honest test for "did anything about the camera change", covering
-  //      pan/orbit/zoom/fov in one comparison; `layoutDirty` covers everything
-  //      else (see markLayoutDirty's callers).
+  //      pan/orbit/zoom/fov in one comparison; a dirty mark covers everything
+  //      else (see markLayoutDirty's callers). Both in layoutGate.ts.
   //   2. When it DOES run, reuse the working arrays and their element objects
   //      instead of rebuilding them, so a genuine camera move costs CPU but
   //      not a fresh heap allocation per badge per frame.
   // The grouping ALGORITHM is untouched — same inputs, same world-space /
   // zoom-only decision, same outputs. Only allocation and scheduling change.
-  private layoutDirty = true;
-  private lastVpM: Float32Array | null = null;
-  private lastVpW = -1;
-  private lastVpH = -1;
+  private readonly gate = new LayoutGate();
   /** Grow-only store of ShownLabel objects, reused across frames. Kept
    *  SEPARATE from `shown` (which is truncated to the live count each pass) so
    *  truncation cannot drop the objects and force reallocation next frame. */
@@ -778,7 +777,7 @@ export class EntityVisuals {
    *  badge visibly stale, so every caller that touches label content, the
    *  label set, scale, floor or category filtering calls this. */
   private markLayoutDirty(): void {
-    this.layoutDirty = true;
+    this.gate.markDirty();
   }
   private pulseT = 0;
   /** Scratch for animatePulse — see its comment. */
@@ -872,7 +871,12 @@ export class EntityVisuals {
    *  containment test answers with `.rooms.json`'s load order. */
   private plan = new Storeys<{ name: string; pts: { x: number; z: number }[]; floorY: number; storey?: number }>([]);
   /** True while the walking camera is the active one — see setFirstPerson. */
-  private firstPerson = false;
+  private readonly walker: WalkerView;
+  /** Walking or not — the WALKER's fact (walkerView.ts), read, never copied. */
+  private get firstPerson(): boolean { return this.walker.walking; }
+  /** The walk state setFirstPerson last APPLIED its side effects for (the occlusion reset): the
+   *  hook's own bookkeeping, not a second copy anyone reads. */
+  private appliedWalk = false;
   /** Which badges are behind a wall from the walker's eye — see
    *  occlusionSweep.ts, which owns the answers, when they go stale and what a
    *  pass may spend. This file only supplies the ray cast. Empty in overview. */
@@ -971,9 +975,12 @@ export class EntityVisuals {
      *  longer be dropped: it was an optional second callback that fell back
      *  to the uncapped one. */
     frames: FrameRequests,
+    /** The walker (walkerView.ts): read here, written by SceneManager and CameraController. */
+    walker: WalkerView = new WalkerView(),
   ) {
     this.scene = scene;
     this.config = config;
+    this.walker = walker;
     this.requestRender = () => frames.repaint();
     this.requestAnimationRender = () => frames.animate();
     this.probe = new FloorProbe(scene);
@@ -1879,6 +1886,7 @@ export class EntityVisuals {
     this.planRoomCache.clear();
     // The earliest moment the pools can take their rooms' shapes and floors.
     this.bulbs.setRooms(plan);
+    this.markLayoutDirty();               // the layout reads the plan (walkExempt's plan rooms)
     this.requestRender();
   }
 
@@ -2539,6 +2547,7 @@ export class EntityVisuals {
    */
   setIconZoomFit(fitRadius: number): void {
     this.iconZoomFitRadius = fitRadius > 0 ? fitRadius : 0;
+    this.markLayoutDirty();               // cullLabels reads it (syncIconZoomToRung): an input of the layout
   }
 
   /** Applies an already-derived zoom scale, snapped onto the zoom lattice. */
@@ -3273,19 +3282,7 @@ export class EntityVisuals {
     // catches a resize. Compared BEFORE any allocation, so the common
     // animating-but-static-view frame (a spinning fan, a pulsing alert) costs
     // 16 float comparisons instead of a full relayout.
-    const m = tm.m;
-    if (!this.layoutDirty && this.lastVpM && this.lastVpW === vp.width && this.lastVpH === vp.height) {
-      let same = true;
-      for (let i = 0; i < 16; i++) {
-        if (this.lastVpM[i] !== m[i]) { same = false; break; }
-      }
-      if (same) return;
-    }
-    if (!this.lastVpM) this.lastVpM = new Float32Array(16);
-    for (let i = 0; i < 16; i++) this.lastVpM[i] = m[i];
-    this.lastVpW = vp.width;
-    this.lastVpH = vp.height;
-    this.layoutDirty = false;
+    if (!this.gate.open(tm.m, vp.width, vp.height)) return;     // nothing that moves a badge changed (layoutGate.ts)
 
     // Every badge that passes the non-view culls (category / floor / enabled).
     // Deliberately NOT filtered by what is currently framed — see groupBadges.
@@ -3642,18 +3639,13 @@ export class EntityVisuals {
     }
     // A TIME budget, halved on a phone — see occlusionSweep.ts.
     const budget = this.pointer === "coarse" ? OCCLUSION_MS_COARSE : OCCLUSION_MS_BUDGET;
-    const pass = this.occlusion.step(shown, cam.globalPosition, budget);
+    const pass = wallStep(this.occlusion, shown, cam.globalPosition, budget, () => this.markLayoutDirty());
     if (pass === "idle") return;
     // Settling: no rays while moving, but a frame must come to start the sweep
     // the moment the camera stops.
     if (pass !== "settling") this.reportWalkCost(shown.length);
-    if (owesLayout(pass)) {
-      // The sweep owes answers and the camera may now stop moving — see the early-return in cullLabels, which would
-      // otherwise freeze the badges on a stale answer. SETTLING too: without a dirty layout the frame it asked for
-      // returned early, the sweep never started, and every badge behind a wall stayed drawn (owesLayout).
-      this.layoutDirty = true;
-      this.requestRender();
-    }
+    // owed a pass (wallStep marked the layout dirty): a frame must come, or the gate never opens again
+    if (owesLayout(pass)) this.requestRender();
   }
 
   /** The occlusion sweep's adapter: is this segment blocked by a VISIBLE
@@ -3803,13 +3795,12 @@ export class EntityVisuals {
     );
   }
 
-  /** Which camera the badges are being drawn from. Set by SceneManager on every
-   *  view switch AND after a model load, because a load can land in either
-   *  view. Only wall-occlusion reads it — everything else that differs between
-   *  the two cameras already rides `VIEW_METRIC`/`setIconZoomFit`. */
+  /** The walk started or ended (SceneManager, on every view switch AND after a model load, which
+   *  can land in either view): the occlusion answers are reset and the layout redone. The fact
+   *  itself is the walker's (walkerView.ts); `on` is checked against it. */
   setFirstPerson(on: boolean): void {
-    if (on === this.firstPerson) return;
-    this.firstPerson = on;
+    if (on === this.appliedWalk) return;
+    this.appliedWalk = on;
     this.occlusion.reset(!on);
     this.markLayoutDirty();
   }
@@ -3946,24 +3937,13 @@ export class EntityVisuals {
   }
 
   /** The rooms never grouped this frame (PlacementFrame.exempt): the focused ones, and while walking the room the
-   *  walker stands in (owner, 2026-10-08: inside Bedroom 2, its badges were the "Bedroom 2 (3)" chip). Found as the
-   *  PLAN room containing the eye, then turned into the badges' own room keys through the badges standing in that
-   *  same plan room — no name has to match (a badge's room may be HA's Area name, the plan's is SweetHome's). */
+   *  walker stands in (owner, 2026-10-08: inside Bedroom 2, its badges were the "Bedroom 2 (3)" chip). The room is
+   *  the WALKER's (walkerView.ts: the one the room banner shows, by the feet — not a second answer by the eye,
+   *  architecture review 10), turned into the badges' own room keys through the badges standing in that plan room:
+   *  no badge name has to match (a badge's room may be HA's Area name, the plan's is SweetHome's). */
   private walkExempt(shown: readonly ShownLabel[]): ReadonlySet<string> {
-    const focus = this.focus.rooms;
-    const cam = this.scene.activeCamera;
-    if (!this.firstPerson || !cam) return focus;
-    const eye = cam.globalPosition;
-    const here = this.plan.roomAt(eye.x, eye.y, eye.z);
-    if (!here) return focus;                     // outdoors, a stairwell: no room to keep whole
-    let out: Set<string> | null = null;
-    for (const s of shown) {
-      if (this.planRoomOf(s.id) !== here) continue;
-      const k = roomKey(this.roomOf(s.id));
-      if (focus.has(k) || out?.has(k)) continue;
-      (out ??= new Set(focus)).add(k);
-    }
-    return out ?? focus;
+    return walkExemptRooms(this.focus.rooms, this.walker, shown,
+      (id) => (this.planRoomOf(id) as { name?: string } | null)?.name ?? null, (id) => roomKey(this.roomOf(id)));
   }
 
   /** A badge's PLAN room (Storeys.deviceRoomAt at its anchor), kept: anchors do not move between loads. */

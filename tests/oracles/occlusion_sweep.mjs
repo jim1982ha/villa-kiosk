@@ -11,7 +11,8 @@ import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
-const { OcclusionSweep, owesLayout } = await import("@/babylon/occlusionSweep");
+const { OcclusionSweep, owesLayout, wallStep } = await import("@/babylon/occlusionSweep");
+const { LayoutGate } = await import("@/babylon/layoutGate");
 
 function rig() {
   let t = 1000;
@@ -116,17 +117,19 @@ console.log("\n  the building does not move:");
 
 console.log("\n  a camera that stops (owner, 2026-10-08: badges behind the kitchen wall stayed drawn):");
 {
-  // The CALLER as it is: cullLabels lays badges out only when the view changed or the layout is dirty, and only
-  // refreshWallOcclusion dirties it, when owesLayout says so. Stepping every frame (as above) cannot see that gate.
+  // The CALLER, for real (architecture review 10): the badge layer's LayoutGate (runs only when the view changed or
+  // it was marked dirty) and its wallStep (the sweep, and "owes a pass" → the gate). Yesterday this was a hand copy.
   const r = rig();
   const shown = [r.badge("cam.a", 4), r.badge("cam.b", 6), r.badge("cam.c", 8), r.badge("cam.d", 10)];
   for (const b of shown) r.walls.add(b.id);
-  let dirty = true, frames = 0;
+  const gate = new LayoutGate();
+  let view = 0, frames = 0;
   const frame = (viewChanged) => {
-    if (!viewChanged && !dirty) return;            // cullLabels' early return
-    dirty = false;
+    if (viewChanged) view++;
+    const m = new Float32Array(16); m[0] = view;      // the view-projection matrix: changes only when the camera moves
+    if (!gate.open(m, 800, 600)) return;            // cullLabels' early return
     frames++;
-    if (owesLayout(run(r, shown))) dirty = true;    // refreshWallOcclusion
+    wallStep(r.sweep, shown, r.eye, 1000, () => gate.markDirty());   // refreshWallOcclusion
   };
   frame(true);                                       // the last step of a walk, or a teleport
   for (let i = 0; i < 40; i++) { r.wait(16); frame(false); }   // then standing still, nothing else happening
@@ -148,7 +151,7 @@ console.log("\n  the line of sight aims at the device, not its badge:");
   const ev = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
   ck("every shown badge carries its device's height", /s\.ty = wp\.y - \(this\.sightDrop\.get\(id\) \?\? 0\);/.test(ev));
   const refresh = ev.slice(ev.indexOf("  private refreshWallOcclusion("), ev.indexOf("\n  }\n", ev.indexOf("  private refreshWallOcclusion(")));
-  ck("the caller asks owesLayout (the pass it must not drop)", /if \(owesLayout\(pass\)\) \{\s*\/\/[\s\S]*?this\.layoutDirty = true;/.test(refresh));
+  ck("the caller runs wallStep with the gate's mark (the pass it must not drop)", /wallStep\(this\.occlusion, shown, cam\.globalPosition, budget, \(\) => this\.markLayoutDirty\(\)\)/.test(refresh));
 }
 
 console.log("\n  the walker's own room is never grouped (owner, 2026-10-08: inside Bedroom 2, its badges were a chip):");
@@ -157,6 +160,42 @@ console.log("\n  the walker's own room is never grouped (owner, 2026-10-08: insi
   ck("the frame's exempt rooms include the walker's (walkExempt), the focus apart", /exempt: this\.walkExempt\(shown\),/.test(ev));
   const pp = readFileSync(new URL("../../src/babylon/placementPass.ts", import.meta.url), "utf8");
   ck("the solver and every grouping step read the exempt rooms", /placementItems\(shown, boxes, clearance, frame\.rooms, frame\.exempt,/.test(pp) && (pp.match(/const focus = this\.f\.exempt;/g) || []).length === 3);
+  // ⚠️ THE WALKER'S ROOM IS THE BANNER'S (architecture review 10): one answer, by the feet (walkerView.ts); the badge
+  // layer worked out a second one by the eye on 2026-10-08, which storeys.ts says can differ at a staircase.
+  const { WalkerView, walkExemptRooms } = await import("@/babylon/walkerView");
+  const plan = { "light.a": "Bedroom2", "fan.a": "Bedroom2", "sensor.b": "Bedroom3" };
+  const key = { "light.a": "bedroom 2", "fan.a": "bedroom 2", "sensor.b": "bedroom 3" };
+  const shownIds = Object.keys(plan).map((id) => ({ id }));
+  const w = new WalkerView();
+  const focus = new Set();
+  const run2 = () => walkExemptRooms(focus, w, shownIds, (id) => plan[id], (id) => key[id]);
+  ck("in the overview nothing is kept whole (the focus itself is returned)", run2() === focus);
+  w.walking = true; w.room = "Bedroom2";
+  ck("walking in Bedroom2: its badges' room is kept whole, Bedroom3 is not", [...run2()].join() === "bedroom 2");
+  w.room = null;
+  ck("walking outdoors or on a stair (no room): nothing added", run2() === focus);
+  const ev2 = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
+  const cc = readFileSync(new URL("../../src/babylon/CameraController.ts", import.meta.url), "utf8");
+  ck("the badge layer asks the walker (no room of its own by the eye)", /walkExemptRooms\(this\.focus\.rooms, this\.walker,/.test(ev2) && !/this\.plan\.roomAt\(eye/.test(ev2));
+  ck("  ...and every room the camera announces is the walker's too", (cc.match(/this\.cb\.onRoomChange\(/g) || []).length === (cc.match(/this\.walker\.room = /g) || []).length);
+  // ⚠️ EVERY INPUT OF THE LAYOUT REDOES IT (architecture review 10): cullLabels skips its pass on an unchanged view
+  // unless the layout is dirty, so a setter that forgets is unseen until something else moves — 2026-10-08's walls
+  // were exactly that; setPlan and setIconZoomFit forgot too. Every public setter of the badge layer either dirties
+  // the layout or is named here with WHY it is not an input (a new setter must choose).
+  const NOT_LAYOUT = {
+    setRoomPoints: "room highlight polygons only",
+    setLightingMode: "lights and shadows only",
+    setCameraDirectionsOnly: "the camera beams only (rebuilt by setCameraDirections)",
+    setCameraDirections: "the camera beams only",
+    setWalkFloorCost: "walk telemetry only",
+    setCeilingState: "light pools only",
+    setProbeCacheKey: "the floor probe's and beams' caches only",
+    setLightPoolIntensity: "light pools only",
+  };
+  const setters = [...ev2.matchAll(/^  (set[A-Z]\w*)\([^)]*\)[^{]*\{([\s\S]*?)^  \}$/gm)].map((m) => [m[1], m[2]]);
+  const forgot = setters.filter(([n, body]) => !(n in NOT_LAYOUT) && !/this\.markLayoutDirty\(\)/.test(body)).map(([n]) => n);
+  ck("every setter of the badge layer redoes the layout, or says why it is not an input", setters.length > 10 && forgot.length === 0, forgot);
+  ck("  ...and the layout's only gate is the LayoutGate (no second flag)", /if \(!this\.gate\.open\(tm\.m, vp\.width, vp\.height\)\) return;/.test(ev2) && !/this\.layoutDirty/.test(ev2));
   ck("only a tap's focus hides the other rooms (suppressOthers)", /if \(!frame\.focus\.rooms\.has\(k\)\) this\.chipRoom\(k, "focus"\);/.test(pp));
 }
 

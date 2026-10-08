@@ -29,6 +29,29 @@ ck("  ...and are skipped for a patch that carries no map ({ maps: false }) — c
    "cover.x__open" in A.normaliseConfig({ ...withVariant, walkSpeed: null }, { maps: false }).entityMap
    && A.normaliseConfig({ ...withVariant, walkSpeed: null }, { maps: false }).walkSpeed === 1);
 
+// ⚠️ ONLY WHAT THE OWNER CHANGED IS STORED (architecture review 10, 2026-10-09): the whole config was, from the
+// first load, so a changed default reached no installed kiosk (twice on 2026-10-08 a key had to be renamed).
+{
+  const mem = new Map();
+  globalThis.localStorage = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, String(v)), removeItem: (k) => mem.delete(k) };
+  const raw = () => JSON.parse([...mem.values()][0] ?? "{}");
+  A.saveConfig(A.normaliseConfig({ ...A.DEFAULT_CONFIG }));
+  ck("an untouched config stores nothing", Object.keys(raw()).length === 0, raw());
+  const changed = A.normaliseConfig({ ...A.DEFAULT_CONFIG, walkSpeed: 2.5, render: { ...A.DEFAULT_CONFIG.render, exposure: 1.7 } });
+  A.saveConfig(changed);
+  ck("a change stores that change only (render field by field)", JSON.stringify(raw()) === JSON.stringify({ walkSpeed: 2.5, render: { exposure: 1.7 } }), raw());
+  const was = A.DEFAULT_CONFIG.cameraBeamTiltDeg, wasContrast = A.DEFAULT_CONFIG.render.contrast;
+  A.DEFAULT_CONFIG.cameraBeamTiltDeg = 50; A.DEFAULT_CONFIG.render.contrast = wasContrast + 0.25;   // a later release changes two defaults
+  const back = A.loadConfig();
+  ck("a changed default reaches a kiosk that saved before it", back.cameraBeamTiltDeg === 50 && back.render.contrast === wasContrast + 0.25, [back.cameraBeamTiltDeg, back.render.contrast]);
+  ck("  ...and what the owner changed is kept", back.walkSpeed === 2.5 && back.render.exposure === 1.7);
+  A.DEFAULT_CONFIG.cameraBeamTiltDeg = was; A.DEFAULT_CONFIG.render.contrast = wasContrast;
+  const map = A.normaliseConfig({ ...A.DEFAULT_CONFIG, entityMap: { "light.a": { type: "light" } } });
+  A.saveConfig(map);
+  ck("a villa map is stored whole once it differs (no default can resurrect a deleted entry)", JSON.stringify(raw().entityMap) === JSON.stringify(map.entityMap));
+  delete globalThis.localStorage;
+}
+
 const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
 // update() takes a patch or an edit (config/mappingEdits.ts, 2.496.224); both
 // reach the same completion, inside the state updater.

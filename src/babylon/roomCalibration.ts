@@ -56,6 +56,37 @@ export function planAngleToDir(angleRad: number): { px: number; py: number } {
 }
 
 /**
+ * The world direction a SweetHome camera PIECE's motion beam points (architecture review 10: this lived inline in
+ * a 280-line calibration, three conventions in three files — and both 2026-10-08 defects, a mirrored heading and a
+ * level tilt, were conversions here). `piece`: plan position, `angle` (radians, planAngleToDir's rule) and `pitch`
+ * (radians, SweetHome's "Horizontal rotation around X axis"); `planToWorld`: the calibration's fit (translation
+ * cancels: two nearby points are transformed and differenced, so any strategy or mirror works); `headingRad`: the
+ * lens relative to the piece's front; `defaultTiltRad`: the tilt of a piece that has none. A unit vector, or null
+ * when the fit collapses the direction.
+ *
+ * ⚠️ A PITCH OF 0 IS "NOT SET": SweetHome writes no `pitch` attribute for an untilted piece and the plan reader
+ * stores it as 0 — read as `?? default`, the default never applied and every beam was level (owner, 2026-10-08).
+ * A camera meant to look straight ahead gets a small tilt in SweetHome.
+ * Positive pitch tilts DOWN (confirmed live 2026-07-03). Past 90° cos goes negative and the beam aims behind the
+ * camera — mathematically right for an axis rotation, so keep pitch within 0°..90° in SweetHome.
+ */
+export function cameraBeamDir(
+  piece: { x: number; y: number; angle: number; pitch?: number },
+  planToWorld: (x: number, y: number) => { x: number; z: number },
+  headingRad: number, defaultTiltRad: number,
+): { x: number; y: number; z: number } | null {
+  const d = planAngleToDir(piece.angle + headingRad);
+  const p0 = planToWorld(piece.x, piece.y);
+  const p1 = planToWorld(piece.x + d.px, piece.y + d.py);
+  const wx = p1.x - p0.x, wz = p1.z - p0.z;
+  const len = Math.hypot(wx, wz);
+  if (len <= 1e-6) return null;
+  const pitch = piece.pitch ? piece.pitch : defaultTiltRad;
+  const h = Math.cos(pitch) / len;
+  return { x: wx * h, y: -Math.sin(pitch), z: wz * h };
+}
+
+/**
  * Build the plan→world transform. Three strategies, in order of accuracy:
  *   1. ≥3 well-spread entity meshes → full affine fit (exact; any rotation/mirror).
  *   2. 1–2 entity meshes → solve sign + translation against the bbox scale

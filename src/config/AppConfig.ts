@@ -507,9 +507,43 @@ function adoptRenderLookDefaults(render: RenderConfig): RenderConfig {
   return out;
 }
 
+const sameJson = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
+
+/**
+ * What this device CHANGED from the app's defaults — the only thing stored.
+ *
+ * ⚠️ A STORED DEFAULT IS A FROZEN DEFAULT (architecture review 10, 2026-10-09).
+ * The whole config used to be written, from the very first load (ConfigContext
+ * saves on mount), and read back as `{...DEFAULT_CONFIG, ...stored}`: every
+ * kiosk held its own copy of every default, so an improved default reached no
+ * installed kiosk. Twice on 2026-10-08 a fix had to RENAME its key to land (the
+ * camera beam's heading and tilt). Now a value equal to its default is not
+ * written, and loadConfig applies the current default.
+ *
+ * `render` is compared field by field (loadConfig already merges it that way).
+ * Every other key is compared whole: a map such as entityMap is stored whole
+ * once it differs, so a deleted entry can never be resurrected by a default.
+ * An install from before this keeps what it stored then (its old defaults look
+ * like choices); only values equal to TODAY's default are dropped from it.
+ */
+export function overrides(config: AppConfig): Partial<AppConfig> {
+  const out: Record<string, unknown> = {};
+  const def = DEFAULT_CONFIG as unknown as Record<string, unknown>;
+  for (const [k, v] of Object.entries(config)) {
+    if (k === "render" && v && typeof v === "object") {
+      const r: Record<string, unknown> = {};
+      for (const [f, fv] of Object.entries(v)) if (!sameJson(fv, (DEFAULT_RENDER as unknown as Record<string, unknown>)[f])) r[f] = fv;
+      if (Object.keys(r).length) out[k] = r;
+    } else if (!sameJson(v, def[k])) {
+      out[k] = v;
+    }
+  }
+  return out as Partial<AppConfig>;
+}
+
 export function saveConfig(config: AppConfig): void {
   // Said, not swallowed: a full quota here loses this device's own settings.
-  if (!writeJson(CONFIG_KEY, config)) console.error("[AppConfig] failed to save (storage full or disabled)");
+  if (!writeJson(CONFIG_KEY, overrides(config))) console.error("[AppConfig] failed to save (storage full or disabled)");
 }
 
 export function resetConfig(): void {
