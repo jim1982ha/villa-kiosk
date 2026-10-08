@@ -1,3 +1,8 @@
+## 0.12.89
+
+What you will see:
+- Skills › About: "When is the Skill called" now sits alone at the top. Below it, one section has two tabs: "Commands run by the Skill" (opened first) and "Tools used by the Skill". The (i) explaining the command switches is beside the Commands tab.
+
 ## 0.12.88
 
 What you will see:

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.84 (8 October 2026)
+
+- skills.js aboutSkill: "When" is its own section on top; the tabs are Commands (with the switches' (i), via subTabs' info) and Tools; Commands first, absent for a skill without scripts. test_ui pins.
+
 ## 0.6.83 (8 October 2026)
 
 - Log lines name the app setting by its label, "Agent replies on Telegram" (the option key stays `telegram_takeover`).

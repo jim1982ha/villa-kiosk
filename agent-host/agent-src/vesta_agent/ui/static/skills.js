@@ -326,13 +326,13 @@ export async function openSkill(name, pane, info, path = ABOUT) {
   if (path) await load(path);
 }
 
-// Skills › About (owner, 2026-10-08): on top ONE section of two tabs — when the skill is called, the tools it uses (as
-// cards) — then the commands it runs, each card with its Offline Test.
+// Skills › About (owner, 2026-10-08): on top when the skill is called; below it ONE section of two tabs — the commands
+// it runs (each card with its Offline Test), the tools it uses (as cards).
 export const ABOUT_TEXT = {
   when: "When is the Skill called", tools: "Tools used by the Skill", commands: "Commands run by the Skill",
   switches: "Switch a command off and the AI cannot run it here. Saved in the skill's villa.skill.yaml: kept by updates, copied with the skill.",
 };
-let aboutTab = "when";                 // kept while the page is open: another skill opens on the same tab
+let aboutTab = "commands";             // kept while the page is open: another skill opens on the same tab
 
 export function aboutSkill(name, d) {
   if (!d.acts) return h("p", { class: "muted" }, "The agent cannot read this skill's skill.yaml: open Files to fix it.");
@@ -358,16 +358,8 @@ export function aboutSkill(name, d) {
         on: n.on, chip: n.on ? null : h("span", { class: "chip off tiny" }, state[n.state] || "off"),
         words: h("div", { class: "muted" }, h("code", {}, n.tool)) })))];
   };
-  const tabBody = h("div");
-  const tabBar = h("div");
-  const showTab = (k) => {
-    aboutTab = k;
-    fill(tabBar, subTabs([["when", ABOUT_TEXT.when], ["tools", ABOUT_TEXT.tools]], k, showTab));
-    fill(tabBody, k === "tools" ? tools() : acts());
-  };
-  showTab(aboutTab);
   // Commands run by the Skill: a card per command (core.toggleCard), three a line, each with its Offline Test
-  const runs = (d.scripts || []).map((sc) => h("div", { class: "cmd-group" },
+  const runs = () => (d.scripts || []).map((sc) => h("div", { class: "cmd-group" },
     h("div", { class: "cmd-script" }, h("code", {}, sc.script)),
     h("div", { class: "tool-grid three" }, sc.commands.length
       ? sc.commands.map((c) => toggleCard(c.on, (on, box) => setCommand(name, sc.script, c.name, on, box), c.name, {
@@ -380,9 +372,19 @@ export function aboutSkill(name, d) {
       : [toggleCard(!sc.whole_off, (on, box) => setCommand(name, sc.script, null, on, box), sc.script, {
           words: h("div", { class: "muted" }, sc.description || "The AI may run it."),
           action: !sc.whole_off ? offlineTestPill(name, d, sc, null) : null })])));
+  // a skill without scripts has no Commands tab
+  const hasRuns = !!(d.scripts && d.scripts.length);
+  const tabBody = h("div");
+  const tabBar = h("div");
+  const showTab = (k) => {
+    if (k === "commands" && !hasRuns) k = "tools";
+    aboutTab = k;
+    // what the switches do, behind the Commands tab's (i), as every other explanation on the page
+    fill(tabBar, subTabs([hasRuns && ["commands", ABOUT_TEXT.commands, ABOUT_TEXT.switches], ["tools", ABOUT_TEXT.tools]], k, showTab));
+    fill(tabBody, k === "tools" ? tools() : runs());
+  };
+  showTab(aboutTab);
   return h("div", { class: "about" },
-    h("section", { class: "about-sec" }, tabBar, tabBody),
-    // what the switches do, behind the title's (i), as every other explanation on the page
-    d.scripts && d.scripts.length ? h("section", { class: "about-sec" }, h("h3", {}, withInfo(ABOUT_TEXT.commands, ABOUT_TEXT.switches)),
-      runs) : null);
+    h("section", { class: "about-sec" }, h("h3", {}, ABOUT_TEXT.when), acts()),
+    h("section", { class: "about-sec" }, tabBar, tabBody));
 }

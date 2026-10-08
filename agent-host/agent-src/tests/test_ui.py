@@ -594,7 +594,7 @@ def test_a_skills_command_cards_show_no_options_and_their_explanation_is_an_i():
     js = page_js()
     about = body_of(js, "aboutSkill")
     assert "sc.flags" not in about and 'class: "flag"' not in about
-    assert "withInfo(ABOUT_TEXT.commands, ABOUT_TEXT.switches)" in about and 'h("p", { class: "muted small" }, "Switch a command off' not in js
+    assert '["commands", ABOUT_TEXT.commands, ABOUT_TEXT.switches]' in about and 'h("p", { class: "muted small" }, "Switch a command off' not in js
 
 
 def test_a_scheduled_job_is_named_not_its_slot_key():
@@ -632,7 +632,10 @@ def test_a_skills_about_is_two_tabs_then_its_commands_each_with_its_offline_test
     js = page_js()
     about, test = body_of(js, "aboutSkill"), body_of(js, "tryPanel")
     assert '"When is the Skill called"' in js and '"Tools used by the Skill"' in js and '"Commands run by the Skill"' in js
-    assert 'subTabs([["when", ABOUT_TEXT.when], ["tools", ABOUT_TEXT.tools]]' in about
+    # owner, 2026-10-08 (later): when it is called on top, alone; below, one section of two tabs, commands then tools
+    assert 'h("section", { class: "about-sec" }, h("h3", {}, ABOUT_TEXT.when), acts())' in about
+    assert 'subTabs([hasRuns && ["commands", ABOUT_TEXT.commands, ABOUT_TEXT.switches], ["tools", ABOUT_TEXT.tools]]' in about
+    assert about.index("ABOUT_TEXT.when), acts()") < about.index("tabBar, tabBody")
     assert "tileCard(n.label" in about and "<details" not in about and '"fold"' not in about     # tools as cards, no fold
     assert about.count("offlineTestPill(") == 2                                             # a command's, a script's
     assert "What to run" not in test and "dropdown(runnable" not in test and "export function tryPanel(name, d, script, command = null)" in js
