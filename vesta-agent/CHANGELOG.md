@@ -1,3 +1,8 @@
+## 0.12.84
+
+What you will see:
+- Skills: the list of skills on the left is 30% wider on a laptop, so a skill's name and description fit better. Phones are unchanged.
+
 ## 0.12.83
 
 What you will see:

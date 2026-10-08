@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.79 (8 October 2026)
+
+- app.css .skills: the list column 280 → 364 px (test_ui pin).
+
 ## 0.6.78 (8 October 2026)
 
 - app.css --page-width 1650px (was 1100, four places). costs.js tabbedCard (subTabs, tab kept per page life): By work/By model, Every run/Tools used.

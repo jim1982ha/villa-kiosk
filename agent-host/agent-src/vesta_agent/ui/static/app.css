@@ -165,7 +165,8 @@ ul.plain li { padding: 8px 0; border-bottom: 1px solid var(--hairline); }
 ul.plain li:last-child { border-bottom: 0; }
 
 /* ---- skills */
-.skills { display: grid; grid-template-columns: 280px 1fr; gap: 16px; align-items: start; }
+/* the skills list: 30% wider than its old 280 px (owner, 2026-10-08), now the page is wider */
+.skills { display: grid; grid-template-columns: 364px 1fr; gap: 16px; align-items: start; }
 .skills > * { min-width: 0; }   /* a long line in the editor scrolls inside it, never widens the page */
 @media (max-width: 760px) { .skills { grid-template-columns: 1fr; } }
 .skill-item { display: flex; align-items: flex-start; gap: 8px; border: 1px solid transparent; border-radius: var(--radius); padding: 4px 8px 4px 0; }

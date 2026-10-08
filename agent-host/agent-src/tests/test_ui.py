@@ -617,3 +617,4 @@ def test_the_costs_tab_is_two_cards_of_two_tabs_and_the_page_one_width():
     assert js.count("tabbedCard(") == 2 and '"By work"' in js and '"By model"' in js and '"Every run"' in js and '"Tools used"' in js
     css = open(os.path.join(os.path.dirname(__file__), "..", "vesta_agent", "ui", "static", "app.css"), encoding="utf-8").read()
     assert "--page-width: 1650px" in css and "1100px" not in css and css.count("max-width: var(--page-width)") == 4
+    assert ".skills { display: grid; grid-template-columns: 364px 1fr;" in css     # the skills list, 30% wider
