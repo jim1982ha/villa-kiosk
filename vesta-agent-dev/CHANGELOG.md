@@ -1,3 +1,8 @@
+## 0.12.81
+
+What you will see:
+- On the Costs tab, the (i) of a "without the AI" run now comes before its label, so it lines up with a failed run's (!) in the same column.
+
 ## 0.12.80
 
 The seventh architecture review, carried out. What you may notice:
