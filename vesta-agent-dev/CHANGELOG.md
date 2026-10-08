@@ -1,3 +1,8 @@
+## 0.12.90
+
+What you will see:
+- Offline Test popup: the line under the title (for example "compose.py fm-daily") and the "Options" heading are gone. The title now names the script and the command, for example "Offline Test · compose.py fm-daily", because two scripts can have a command with the same name.
+
 ## 0.12.89
 
 What you will see:
