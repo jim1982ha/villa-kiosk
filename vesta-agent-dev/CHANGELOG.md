@@ -1,3 +1,10 @@
+## 0.12.83
+
+What you will see:
+- **A wider page on a laptop**: the agent's page now uses up to 1,650 px of width instead of 1,100, so less empty space on each side. Phones are unchanged.
+- **Costs**: "By work" and "By model" are now one card with two tabs ("Where it went"), and "Every run" and the tools those runs used are another ("Runs"). The tab you chose stays when you change the period.
+- **Overview › Scheduled jobs run** names each job instead of repeating its time: "fm-daily" instead of "reports:0:07:00", "preventive-maintenance › nightly.py", "knowledge pack" — the time is in the "Ran at" column. The AI's own status report uses the same names.
+
 ## 0.12.82
 
 What you will see, on a skill's About page (Skills):
