@@ -2116,7 +2116,7 @@ export class SceneManager {
     // unit vector without needing its own world-transform trip.
     //
     // The heading offset and the default tilt are CONFIGURATION, not constants
-    // — see AppConfig.cameraBeamHeadingDeg / cameraBeamPitchDeg for the full
+    // — see AppConfig.cameraBeamHeadingDeg / cameraBeamTiltDeg for the full
     // reasoning. In short: a plan's `angle` is measured against the furniture
     // MODEL's own front axis, and which way a model faces at angle 0 depends
     // on how that model was authored. That is not derivable from the angle
@@ -2126,7 +2126,7 @@ export class SceneManager {
     // heading is a value to change, not a code change.
     const DEG = Math.PI / 180;
     const beamOffsetRad = this.config.cameraBeamHeadingDeg * DEG;
-    const defaultPitchRad = this.config.cameraBeamPitchDeg * DEG;
+    const defaultPitchRad = this.config.cameraBeamTiltDeg * DEG;
     const cameraDirections = new Map<string, { x: number; y: number; z: number }>();
     if (this.config.sh3dEntities?.length) {
       for (const e of this.config.sh3dEntities) {
@@ -2148,7 +2148,10 @@ export class SceneManager {
         const wx = p1.x - p0.x, wz = p1.z - p0.z;
         const len = Math.hypot(wx, wz);
         if (len <= 1e-6) continue;
-        const pitch = e.pitch ?? defaultPitchRad;
+        // ⚠️ A 0 IS "NOT SET": SweetHome writes no `pitch` attribute for an untilted piece, and the plan reader
+        // stores the missing value as 0 — so `e.pitch ?? default` never reached the default and every beam was
+        // level (owner, 2026-10-08). A camera meant to look straight ahead is set to a small tilt in SweetHome.
+        const pitch = e.pitch ? e.pitch : defaultPitchRad;
         // CONFIRMED live (2026-07-03): positive pitch tilts the beam DOWN, as
         // expected for a ceiling-mounted security camera looking into the
         // room — no sign flip needed. Only sensible over roughly 0°..90°

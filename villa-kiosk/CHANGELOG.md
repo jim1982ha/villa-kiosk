@@ -1,3 +1,10 @@
+## 2.496.314
+
+### Fixed
+- A camera's red motion cone now tilts down toward the floor, at 45°, instead of pointing straight ahead.
+- Every camera without a tilt of its own in SweetHome 3D used to get a level cone: the 30° default tilt meant for them never applied. The default is now 45° and applies to them, with no need to upload the plan again.
+- A camera you tilt yourself in SweetHome 3D (its "Horizontal rotation around X axis" field) keeps its own tilt.
+
 ## 2.496.313
 
 ### Fixed

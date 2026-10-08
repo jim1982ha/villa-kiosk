@@ -4,6 +4,7 @@
 // villas whose true transform is known, so each strategy is checked against
 // the answer, not against itself.
 import { register } from "node:module";
+import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { solvePlanToWorld, planAngleToDir } = await import("@/babylon/roomCalibration");
@@ -64,6 +65,10 @@ console.log("\n  a device's facing:");
   ck("every angle turns the way SweetHome turns the piece (not its mirror)", turns);
   const d60 = planAngleToDir(Math.PI / 3), d80 = planAngleToDir(80 * Math.PI / 180);
   ck("  ...so 80° → 60° turns it toward plan +Y, as the piece turned", d60.py > d80.py);
+  // ⚠️ AN UNTILTED PIECE GETS THE DEFAULT TILT (owner, 2026-10-08: every beam was level). SweetHome writes no pitch
+  // for 0, the plan reader stores 0, and `?? default` never fired: the caller must read 0 as "not set".
+  const sm = readFileSync(new URL("../../src/babylon/SceneManager.ts", import.meta.url), "utf8");
+  ck("a camera with no tilt in the plan gets cameraBeamTiltDeg, not 0", /const pitch = e\.pitch \? e\.pitch : defaultPitchRad;/.test(sm) && /this\.config\.cameraBeamTiltDeg \* DEG/.test(sm));
 }
 
 done("✅ the floor plan lands on the villa by known transforms");

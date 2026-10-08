@@ -252,19 +252,26 @@ export interface AppConfig {
    * re-aiming every camera in the plan.
    *
    * Applies to the horizontal heading only; the downward tilt comes from each
-   * piece's own `pitch` (or cameraBeamPitchDeg below when it has none).
+   * piece's own `pitch` (or cameraBeamTiltDeg below when it has none).
    */
   cameraBeamHeadingDeg: number;
   /**
    * Downward tilt in degrees for a camera whose plan piece specifies no
-   * `pitch`. Default 30.
+   * `pitch`. Default 45 (owner, 2026-10-08: "head down at 45° to the floor").
+   *
+   * ⚠️ RENAMED FROM cameraBeamPitchDeg (default 30) on 2026-10-08, because a
+   * stored copy of the old 30 would have outlived the new default. That 30
+   * never applied anyway: the plan reader turned a missing `pitch` into 0, and
+   * `pitch ?? default` only replaces a missing one, so every beam was level.
+   * SweetHome writes no `pitch` attribute when the tilt is 0, so a 0 is read as
+   * "not set" (SceneManager).
    *
    * Most catalog camera pieces are placed without a pitch, which left every
    * beam perfectly level — pointing across the room at head height rather than
    * at the floor area the camera actually watches. A per-piece `pitch` set in
    * the plan still wins over this.
    */
-  cameraBeamPitchDeg: number;
+  cameraBeamTiltDeg: number;
   /** Global size multiplier for the in-scene state-icon badges (1 = default).
    *  In the bird's-eye view this is further scaled by the zoom level.
    *  Clamped to [ENTITY_ICON_SCALE_MIN, ENTITY_ICON_SCALE_MAX] by
@@ -335,7 +342,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   // native (unscaled) size — still user-adjustable via the Settings slider.
   entityIconScale: 1.0,
   cameraBeamHeadingDeg: 0,
-  cameraBeamPitchDeg: 30,
+  cameraBeamTiltDeg: 45,
   badgeStyle: "card",
   showSummaryBar: true,
   deviceGroups: [],
