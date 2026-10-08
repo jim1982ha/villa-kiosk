@@ -751,17 +751,21 @@ def test_take_the_release_version_is_on_the_compare_tab_too():
     assert "takeReleaseButton(name)" in body_of(js, "openSkill")
 
 
-def _markdown(text: str):
-    """markdown.js's parse() run by Node, as the browser runs it (a module of plain functions, no page needed)."""
+def _node(module: str, fn: str, text: str):
+    """A function of one of the page's plain modules run by Node, as the browser runs it (no page needed)."""
     import json, shutil, subprocess
     from vesta_agent.ui.server import STATIC
     node = shutil.which("node")
-    assert node, "Node is needed to test the page's Markdown reader (GitHub's runners have it)"     # never skipped
-    code = ("import { parse } from " + json.dumps("file://" + os.path.join(STATIC, "markdown.js")) + ";"
-            "let t = ''; process.stdin.on('data', (d) => t += d).on('end', () => console.log(JSON.stringify(parse(t))));")
+    assert node, "Node is needed to test the page's file readers (GitHub's runners have it)"     # never skipped
+    code = (f"import {{ {fn} }} from " + json.dumps("file://" + os.path.join(STATIC, module)) + ";"
+            f"let t = ''; process.stdin.on('data', (d) => t += d).on('end', () => console.log(JSON.stringify({fn}(t))));")
     r = subprocess.run([node, "--input-type=module", "-e", code], input=text, capture_output=True, text=True, timeout=30)
     assert r.returncode == 0, r.stderr
     return json.loads(r.stdout)
+
+
+def _markdown(text: str):
+    return _node("markdown.js", "parse", text)
 
 
 def test_a_markdown_file_is_read_as_blocks_never_as_markup():
@@ -789,11 +793,26 @@ def json_dumps(x):
     return json.dumps(x)
 
 
-def test_a_markdown_file_opens_formatted_and_its_raw_text_is_one_press_away():
+def test_a_markdown_or_yaml_file_opens_formatted_and_its_raw_text_is_one_press_away():
+    # owner, 2026-10-08: a skill's Markdown, then "do this for Rules (file) too": ONE viewer, both places
     js = page_js()
-    files = body_of(js, "openSkill")
-    assert 'segmented([["formatted", "Formatted"], ["raw", "Raw"]], page.mdView || "formatted"' in files
-    assert "const isMd = /\\.md$/i.test(path" in files and "fill(mdBox, markdownView(ta.value))" in files
-    view = body_of(js, "markdownView")
-    assert "parse(text).flatMap(" in view and "table(b.head.map(inl)" in view and "innerHTML" not in js
+    viewer = body_of(js, "fileViewer")
+    assert 'segmented([["formatted", "Formatted"], ["raw", "Raw"]], page.fileView || "formatted"' in viewer
+    assert "const view = fileViewer(ta, path);" in body_of(js, "openSkill") and "view.show();" in body_of(js, "openSkill")
+    assert 'const view = fileViewer(ta, "policy.yaml");' in body_of(js, "rulesFile")
+    assert "parse(text).flatMap(" in body_of(js, "markdownView") and "table(b.head.map(inl)" in body_of(js, "markdownView")
+    assert "lines(text).flatMap(" in body_of(js, "yamlView") and "innerHTML" not in js
+
+
+def test_a_yaml_file_is_coloured_piece_by_piece_and_nothing_is_lost():
+    import json
+    from vesta_agent.config import STARTER_DIR
+    text = open(os.path.join(STARTER_DIR, "config", "policy.example.yaml"), encoding="utf-8").read()
+    got = _node("yaml.js", "lines", text)
+    assert "\n".join("".join(p["v"] for p in line) for line in got) == text.replace("\r\n", "\n")   # as written
+    ex = _node("yaml.js", "lines", 'settings:\n  profile: economy   # the brain\n  n: 1.5\n  on: true\n  s: "a # b"\n  - item # c\nurl: http://x#y\n# all')
+    kinds = [[p["t"] for p in line if p["t"] not in ("text", "ind")] for line in ex]
+    assert kinds == [["key", "colon"], ["key", "colon", "val", "com"], ["key", "colon", "num"], ["key", "colon", "bool"],
+                     ["key", "colon", "str"], ["dash", "val", "com"], ["key", "colon", "val"], ["com"]]
+    assert ex[6][-1]["v"] == "http://x#y" and ex[4][-1] == {"t": "str", "v": '"a # b"'}         # a # inside a word or quotes stays
 

@@ -1,3 +1,9 @@
+## 0.12.99
+
+What you will see:
+- Rules (file): policy.yaml now opens **formatted**, with the same **Formatted / Raw** switch as a skill's files. Comments are dimmed, setting names, numbers and switches each have their own colour, and the indentation is kept. Raw is the editor, as before.
+- Skills › Files: the `.yaml` files (skill.yaml, reports.yaml, villa.*.yaml…) now open formatted the same way. The Formatted / Raw choice is shared by every file and kept while the page is open.
+
 ## 0.12.98
 
 What you will see:

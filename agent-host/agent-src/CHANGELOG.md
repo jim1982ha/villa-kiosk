@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.94 (8 October 2026)
+
+- static/viewer.js: the one file viewer, `fileViewer(ta, path)` returning {toggle, box, show}. Rules (file) and Skills › Files both use it. Markdown is drawn by markdownView (moved from skills.js), YAML by yamlView.
+- static/yaml.js: `lines(text)` turns each line into pieces (indent, comment, dash, key, colon, number, switch, quoted text, value). A `#` inside a word or quotes is not a comment, and the pieces join back to the exact text. No HTML string is produced.
+- page.fileView replaces page.mdView. test_ui: the tokenizer is run in Node on policy.example.yaml (lossless) and on edge cases, checked with two mutations.
+
 ## 0.6.93 (8 October 2026)
 
 - static/markdown.js: `parse(text)` turns Markdown into plain blocks (front matter, headings, paragraphs, nested lists, tables, fenced code, quotes, rules; inline code, bold, italic and links). HTML comments are dropped and no HTML string is produced. skills.js `markdownView` draws the blocks with core.h, tables with core.table, and opens a link only when it is an http(s) address. Nothing is fetched.

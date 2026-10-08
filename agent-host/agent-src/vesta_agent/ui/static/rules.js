@@ -1,5 +1,6 @@
 // VESTA Agent page — the Rules tab (policy.yaml): the forms, the file, and AI tools.
 import { api, card, dropdown, editTable, field, fill, floating, h, infoButton, jobsBanner, jump, markDirty, page, pagedBlock, place, plural, problemsBox, reasons, saveWith, setBar, tabbed, table, tableRow, tell, titleWithInfo, toast, toggleCard, $view, where, withInfo } from "./core.js";
+import { fileViewer } from "./viewer.js";
 
 // ---------------------------------------------------------------- rules (policy.yaml)
 // the rules, the lists and their domains, the siren's domains: policy.form_schema(), served with the file —
@@ -36,8 +37,11 @@ export function rulesFile(doc) {
     if (res) doc = { ...doc, ...res };
   };
   setBar({ save, discard: () => rules("file"), idle: "Everything, including what the forms do not show." });
+  // formatted by default, the raw text one press away (owner, 2026-10-08: "do this for Rules (file) too")
+  const view = fileViewer(ta, "policy.yaml");
   fill($view, doc.problems.length ? problemsBox(doc.problems, "To fix in this file:") : null, probs,
-    card("policy.yaml", "Comments start with #. Every save is checked with the agent's own rules first.", ta));
+    card("policy.yaml", "Comments start with #. Every save is checked with the agent's own rules first.",
+      h("div", { class: "file-bar" }, view.toggle), ta, view.box));
 }
 
 export function rulesForms(doc, jobs = [], tools = null) {

@@ -1,6 +1,6 @@
 // VESTA Agent page — the Skills tab.
-import { api, ask, dropdown, field, fill, go, guard, h, infoButton, markDirty, page, paged, place, plural, popup, problemsBox, reasons, saveWith, segmented, setBar, showBar, subTabs, table, tabbed, tell, tileCard, titleWithInfo, toast, toggleCard, $view, where, withInfo } from "./core.js";
-import { parse } from "./markdown.js";
+import { api, ask, dropdown, field, fill, go, guard, h, infoButton, markDirty, page, paged, place, plural, popup, problemsBox, reasons, saveWith, setBar, showBar, subTabs, tabbed, tell, tileCard, titleWithInfo, toast, toggleCard, $view, where, withInfo } from "./core.js";
+import { fileViewer } from "./viewer.js";
 
 // ---------------------------------------------------------------- skills
 // A skill's state against this release: it follows the releases (never edited here), it was edited here (updates
@@ -149,36 +149,6 @@ export function offlineTestPill(name, d, script, command) {
     h("span", { class: "long" }, "Offline "), "Test");
 }
 
-// A Markdown file as a reader sees it (markdown.js parses, this draws with h: no markup from the file reaches the page).
-// A link opens only when it is a web address; a table is core.table, like every table on the page.
-const inl = (list) => list.map((x) => x.t === "text" ? x.v : x.t === "code" ? h("code", {}, x.v) : x.t === "b" ? h("strong", {}, inl(x.c))
-  : x.t === "i" ? h("em", {}, inl(x.c)) : /^https?:\/\//.test(x.href) ? h("a", { href: x.href, target: "_blank", rel: "noopener noreferrer" }, inl(x.c))
-  : h("span", { title: x.href }, inl(x.c)));
-function listView(items) {
-  // nested by depth; a list of the other kind at the same depth starts beside it
-  const root = { depth: -1, el: h("div"), last: null }, stack = [root];
-  for (const it of items) {
-    while (stack.length > 1 && stack[stack.length - 1].depth > it.depth) stack.pop();
-    const tag = it.ordered ? "ol" : "ul";
-    let top = stack[stack.length - 1];
-    if (top.depth === it.depth && top.el.tagName.toLowerCase() !== tag) { stack.pop(); top = stack[stack.length - 1]; }
-    if (top.depth < it.depth) {
-      const list = h(tag);
-      (top.last || top.el).append(list);
-      top = { depth: it.depth, el: list, last: null }; stack.push(top);
-    }
-    top.last = h("li", {}, inl(it.inl)); top.el.append(top.last);
-  }
-  return [...root.el.childNodes];
-}
-export function markdownView(text) {
-  // flatMap, never map: core.h and fill flatten ONE level, and a list is several nodes (an array inside lost them)
-  return parse(text).flatMap((b) => b.t === "meta" ? h("dl", { class: "md-meta" }, b.rows.flatMap(([k, v]) => [h("dt", {}, k), h("dd", {}, v)]))
-    : b.t === "h" ? h(`h${b.level}`, {}, inl(b.inl)) : b.t === "p" ? h("p", {}, inl(b.inl)) : b.t === "list" ? listView(b.items)
-    : b.t === "code" ? h("pre", {}, h("code", {}, b.text)) : b.t === "quote" ? h("blockquote", {}, inl(b.inl)) : b.t === "hr" ? h("hr")
-    : table(b.head.map(inl), b.rows.map((r) => r.map(inl))));
-}
-
 export function pretty(text) {
   try { return JSON.stringify(JSON.parse(text), null, 2); } catch { return text || "(no output)"; }
 }
@@ -303,20 +273,11 @@ export async function openSkill(name, pane, info, path = ABOUT) {
     const s = ta.selectionStart; ta.setRangeText("  ", s, ta.selectionEnd, "end"); markDirty();
   });
   let fileRev = null;
-  // ⚠️ A MARKDOWN FILE OPENS FORMATTED (owner, 2026-10-08), the raw text one press away; the choice is kept while the
-  // page is open. Formatted shows the editor's text as it is now, saved or not; editing is in Raw.
-  const isMd = /\.md$/i.test(path || "");
-  const mdBox = h("div", { class: "md-box", hidden: true });
-  const showMode = () => {
-    const formatted = isMd && page.mdView !== "raw";
-    ta.hidden = formatted; mdBox.hidden = !formatted;
-    if (formatted) fill(mdBox, markdownView(ta.value));
-  };
-  const modeSwitch = isMd ? segmented([["formatted", "Formatted"], ["raw", "Raw"]], page.mdView || "formatted",
-    (v) => { page.mdView = v; showMode(); }, "Show the file") : null;
+  // ⚠️ A MARKDOWN OR YAML FILE OPENS FORMATTED (owner, 2026-10-08), the raw text one press away (viewer.fileViewer)
+  const view = fileViewer(ta, path);
   const load = async (p) => {
     const f = await api("GET", `api/skills/${enc}/file?path=${encodeURIComponent(p)}`);
-    ta.value = f.content; fileRev = f.rev; page.dirty = false; showBar(); fill(probs); showMode();
+    ta.value = f.content; fileRev = f.rev; page.dirty = false; showBar(); fill(probs); view.show();
   };
   // one line of files while collapsed (the open one first, so it always shows); a button shows them all,
   // and appears only when they do not fit on that line. Open or closed is kept from skill to skill.
@@ -361,10 +322,10 @@ export async function openSkill(name, pane, info, path = ABOUT) {
     catch (e) { tell("Not deleted", reasons(e)); }
   };
   card(h("div", { class: "files-row" }, fileList, more),
-    (differs.size || villa.size || modeSwitch) ? h("div", { class: "file-bar" }, (differs.size || villa.size) ? h("p", { class: "muted small legend" },
+    (differs.size || villa.size || view.toggle) ? h("div", { class: "file-bar" }, (differs.size || villa.size) ? h("p", { class: "muted small legend" },
       differs.size ? [h("span", { class: "dot warn" }), " differs from the release  "] : null,
-      villa.size ? [h("span", { class: "dot" }), " this villa's own file, kept by updates"] : null) : null, modeSwitch) : null,
-    probs, path ? [ta, mdBox] : h("p", { class: "muted" }, "No file."),
+      villa.size ? [h("span", { class: "dot" }), " this villa's own file, kept by updates"] : null) : null, view.toggle) : null,
+    probs, path ? [ta, view.box] : h("p", { class: "muted" }, "No file."),
     h("div", { class: "actions" },
       h("button", { class: "btn ghost", onclick: newFile }, "New file"),
       path && !["SKILL.md", "skill.yaml"].includes(path) ? h("button", { class: "btn ghost", onclick: delFile }, "Delete this file") : null,

@@ -515,7 +515,16 @@ table.rows td > * + .chip { margin-left: 8px; }
 .file-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 4px 0 10px; }
 .file-bar .legend { margin: 0; }
 .seg { margin-left: auto; }
-.editor[hidden], .md-box[hidden] { display: none; }
+.editor[hidden], .file-view[hidden] { display: none; }
+/* a YAML file formatted (viewer.yamlView): as written, each kind of piece in its colour */
+.yaml-box { border: 1px solid var(--hairline); border-radius: var(--radius); background: var(--bg-input); min-height: 30vh; }
+.yaml-view { margin: 0; padding: 12px 14px; font-family: var(--font-mono); font-size: var(--text-sm); line-height: 1.6;
+  white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-primary); }
+.y-key { color: var(--accent-strong); font-weight: 600; }
+.y-com { color: var(--text-dim); font-style: italic; }
+.y-num, .y-bool { color: var(--status-warning); }
+.y-str { color: var(--status-on); }
+.y-dash, .y-colon { color: var(--text-secondary); }
 .md-box { border: 1px solid var(--hairline); border-radius: var(--radius); padding: 14px 18px; min-height: 30vh; overflow-wrap: anywhere; line-height: 1.55; }
 .md-box > :first-child { margin-top: 0; }
 .md-box h1, .md-box h2, .md-box h3, .md-box h4 { font-family: var(--font-display); font-weight: 600; margin: 20px 0 8px; }
