@@ -1,3 +1,8 @@
+## 0.12.104
+
+What you will see:
+- Nothing in the app changes. Behind it, a release can no longer get stuck for hours on GitHub: the step that installs Debian packages before the tests now has a 10-minute limit. If GitHub's package download hangs again, as it did for 0.12.103, the run fails after 10 minutes instead of waiting up to 6 hours, and a "Re-run all jobs" publishes it.
+
 ## 0.12.103
 
 What you will see:
