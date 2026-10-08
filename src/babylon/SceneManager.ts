@@ -2116,7 +2116,7 @@ export class SceneManager {
     // unit vector without needing its own world-transform trip.
     //
     // The heading offset and the default tilt are CONFIGURATION, not constants
-    // — see AppConfig.cameraBeamOffsetDeg / cameraBeamPitchDeg for the full
+    // — see AppConfig.cameraBeamHeadingDeg / cameraBeamPitchDeg for the full
     // reasoning. In short: a plan's `angle` is measured against the furniture
     // MODEL's own front axis, and which way a model faces at angle 0 depends
     // on how that model was authored. That is not derivable from the angle
@@ -2125,7 +2125,7 @@ export class SceneManager {
     // mis-aim every beam for any other villa. Being settings means a wrong
     // heading is a value to change, not a code change.
     const DEG = Math.PI / 180;
-    const beamOffsetRad = this.config.cameraBeamOffsetDeg * DEG;
+    const beamOffsetRad = this.config.cameraBeamHeadingDeg * DEG;
     const defaultPitchRad = this.config.cameraBeamPitchDeg * DEG;
     const cameraDirections = new Map<string, { x: number; y: number; z: number }>();
     if (this.config.sh3dEntities?.length) {

@@ -18,7 +18,7 @@ const stored = { ...A.DEFAULT_CONFIG, walkSpeed: null, naturalScrolling: null, b
   cameraBeamPitchDeg: undefined, entityIconScale: 0, northOffsetDeg: null };
 const n = A.normaliseConfig(stored);
 ck("a missing or null setting takes its default", n.walkSpeed === 1 && n.naturalScrolling === true && n.badgeStyle === "card" && n.showSummaryBar === true && n.northOffsetDeg === 0);
-ck("  ...the camera beam's angles are defaults in the table, not at the read site", n.cameraBeamPitchDeg === 30 && A.DEFAULT_CONFIG.cameraBeamOffsetDeg === 180);
+ck("  ...the camera beam's angles are defaults in the table, not at the read site", n.cameraBeamPitchDeg === 30 && A.DEFAULT_CONFIG.cameraBeamHeadingDeg === 0);
 ck("the badge size is clamped once — a stored 0 reads as the minimum everywhere", n.entityIconScale === A.clampIconScale(0) && n.entityIconScale > 0);
 ck("a value that was set is kept", A.normaliseConfig({ ...A.DEFAULT_CONFIG, walkSpeed: 2.5, badgeStyle: "classic" }).walkSpeed === 2.5);
 ck("the seeds stay EMPTY (CLAUDE.md: a seeded table resurrects deleted entries)",

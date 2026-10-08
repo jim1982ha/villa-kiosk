@@ -230,8 +230,16 @@ export interface AppConfig {
    */
   extraGlassHints?: string[];
   /**
-   * Degrees to rotate every camera's motion beam relative to the `angle` its
-   * piece carries in the floor plan. Default 180.
+   * Degrees to rotate every camera's motion beam relative to the FRONT of its
+   * piece, as SweetHome turned it by the plan's `angle`. Default 0: the villa's
+   * camera model looks out of its front (measured 2026-10-08 on 13 cameras).
+   *
+   * ⚠️ RENAMED FROM cameraBeamOffsetDeg (default 180) on 2026-10-08. That 180
+   * compensated a MIRRORED angle (planAngleToDir turned the beam clockwise where
+   * SweetHome turns the piece the other way on its Y-down plan): it was right
+   * only near 90° and 270°, so turning a camera from 80° to 60° in SweetHome
+   * swung its beam 40° the wrong way, into a wall (0.42 m left of it). A stored
+   * cameraBeamOffsetDeg meant that compensation and is ignored.
    *
    * This exists because a plan's `angle` is measured against the FURNITURE
    * MODEL's own front axis, and which way a given 3D model faces at angle 0 is
@@ -246,7 +254,7 @@ export interface AppConfig {
    * Applies to the horizontal heading only; the downward tilt comes from each
    * piece's own `pitch` (or cameraBeamPitchDeg below when it has none).
    */
-  cameraBeamOffsetDeg: number;
+  cameraBeamHeadingDeg: number;
   /**
    * Downward tilt in degrees for a camera whose plan piece specifies no
    * `pitch`. Default 30.
@@ -326,7 +334,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   // devices in a room fall within the same clash radius). 1.0x is the badge's
   // native (unscaled) size — still user-adjustable via the Settings slider.
   entityIconScale: 1.0,
-  cameraBeamOffsetDeg: 180,
+  cameraBeamHeadingDeg: 0,
   cameraBeamPitchDeg: 30,
   badgeStyle: "card",
   showSummaryBar: true,

@@ -52,8 +52,18 @@ console.log("\n  strategy 3, no devices at all:");
 console.log("\n  a device's facing:");
 {
   const d0 = planAngleToDir(0), d90 = planAngleToDir(Math.PI / 2);
-  ck("SweetHome angles are RADIANS: 0 faces plan +Y, π/2 faces plan +X (not a 1.57° turn)",
-     Math.abs(d0.px) < 1e-12 && d0.py === 1 && Math.abs(d90.px - 1) < 1e-12 && Math.abs(d90.py) < 1e-12);
+  ck("SweetHome angles are RADIANS: 0 faces plan +Y, π/2 faces plan −X (not a 1.57° turn)",
+     Math.abs(d0.px) < 1e-12 && d0.py === 1 && Math.abs(d90.px + 1) < 1e-12 && Math.abs(d90.py) < 1e-12);
+  // ⚠️ THE TURN IS SWEETHOME'S (owner, 2026-10-08: a camera turned from 80° to 60° in SweetHome, its beam swung the
+  // other way into a wall). Java's rotate of the +Y front: (x, y) → (x·cos − y·sin, x·sin + y·cos).
+  const sweethome = (a) => ({ px: -Math.sin(a), py: Math.cos(a) });
+  const turns = [30, 60, 80, 120, 200, 300].every((deg) => {
+    const a = deg * Math.PI / 180, d = planAngleToDir(a), s = sweethome(a);
+    return Math.abs(d.px - s.px) < 1e-12 && Math.abs(d.py - s.py) < 1e-12;
+  });
+  ck("every angle turns the way SweetHome turns the piece (not its mirror)", turns);
+  const d60 = planAngleToDir(Math.PI / 3), d80 = planAngleToDir(80 * Math.PI / 180);
+  ck("  ...so 80° → 60° turns it toward plan +Y, as the piece turned", d60.py > d80.py);
 }
 
 done("✅ the floor plan lands on the villa by known transforms");
