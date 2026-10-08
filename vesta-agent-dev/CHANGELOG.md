@@ -1,3 +1,13 @@
+## 0.12.92
+
+What you will see: every section now has one name, used the same way everywhere.
+- Rules: "What the AI can use" is now **AI tools**, with the tabs **Home Assistant tools**, **Agent tools** and **Tools by role**. A skill's "Tools used by the Skill" lists some of these same tools.
+- Rules › AI tools: the "15 of 77 tools on. From Home Assistant's MCP server…" line is now the (i) beside the Home Assistant tools tab. The paragraph about roles is now the (i) beside the Tools by role tab.
+- Rules: "The AI" is now **AI brains and limits**, and its "Tools it gets" column is now **AI tools**. "What the agent may do" is now **Allowed actions**.
+- Overview: "Changes made on these pages" is now **Page changes**, and "Copy the setup to another villa" is now **Copy the setup**. Every sentence that sends you to one of them uses those names.
+- Costs: **AI cost**, **Cost breakdown** (By work, By model) and **AI runs** (Every run, Tools called). "Tools used" is now "Tools called", since it lists what the AI actually called.
+- The messages that say where to switch something on, such as "switched off in Rules › AI tools", and the entries in Page changes use the same names.
+
 ## 0.12.91
 
 What you will see:
