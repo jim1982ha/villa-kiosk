@@ -1,3 +1,9 @@
+## 0.12.82
+
+What you will see, on a skill's About page (Skills):
+- "What the AI may run" no longer lists each script's options (--as-of, --out…) on its card: the cards say what each command does, and the options stay on "Try a command", where they are used.
+- The sentence explaining the switches moved into an (i) beside "What the AI may run", like every other explanation on the page.
+
 ## 0.12.81
 
 What you will see:
