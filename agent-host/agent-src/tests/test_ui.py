@@ -636,7 +636,7 @@ def test_a_skills_about_is_two_tabs_then_its_commands_each_with_its_offline_test
     assert "tileCard(n.label" in about and "<details" not in about and '"fold"' not in about     # tools as cards, no fold
     assert about.count("offlineTestPill(") == 2                                             # a command's, a script's
     assert "What to run" not in test and "dropdown(runnable" not in test and "export function tryPanel(name, d, script, command = null)" in js
-    assert '"Offline Test"' in body_of(js, "offlineTestPill") and "popup(" in body_of(js, "offlineTestPill")
+    assert '"Offline "), "Test"' in body_of(js, "offlineTestPill") and "popup(" in body_of(js, "offlineTestPill")
     assert "Try a command" not in body_of(js, "openSkill")
     assert "export function tileCard(" in js and "card = tileCard(title" in body_of(js, "toggleCard")   # one card
 
@@ -645,3 +645,16 @@ def test_a_tip_or_list_opened_inside_a_popup_is_drawn_inside_it():
     # a modal <dialog> is the top layer: the Offline Test popup's (i) opened its tip on the body, UNDER the popup
     fl = body_of(page_js(), "floating")
     assert 'anchor.closest("dialog[open]") || document.body).append(panel)' in fl and "document.body.append(panel)" not in fl
+
+
+def test_the_offline_test_pill_sits_on_the_card_top_line_and_its_popup_opens_with_no_tip():
+    # owner, 2026-10-08: the pill left of the switch (a line saved), "Test" alone on a narrow card; the popup opened
+    # with the title's (i) tip showing: showModal focuses the first control, the (i), and a focus opens its tip
+    js, css = page_js(), open(os.path.join(os.path.dirname(__file__), "..", "vesta_agent", "ui", "static", "app.css")).read()
+    about = body_of(js, "aboutSkill")
+    assert about.count("action: c.on ? offlineTestPill(") == 1 and about.count("action: !sc.whole_off ? offlineTestPill(") == 1
+    assert "card-actions" not in about
+    assert 'h("div", { class: "tool-card-side" }, action, sw)' in body_of(js, "toggleCard")
+    assert 'h("span", { class: "long" }, "Offline "), "Test")' in body_of(js, "offlineTestPill")
+    assert "@container (max-width: 300px) { .pill-btn .long { display: none; } }" in css and ".tool-card { container-type: inline-size; }" in css
+    assert 'class: "btn ghost", autofocus: true' in body_of(js, "popup")

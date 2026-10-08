@@ -1,3 +1,10 @@
+## 0.12.87
+
+What you will see:
+- Skills › About: the "Offline Test" button is now on the command card's top line, left of the switch, so each card is one line shorter. On a narrow card it reads just "Test".
+- The Offline Test popup no longer opens with the (i) explanation already showing. It shows only when you point at or tap the (i).
+- On a phone, the About sections no longer stick out a few pixels past the right edge of the page.
+
 ## 0.12.86
 
 What you will see:

@@ -332,7 +332,10 @@ dialog.ask .popup-head { display: flex; align-items: center; justify-content: sp
 dialog.ask .popup-head h3 { margin: 0; }
 .pill-btn { border: 1px solid var(--hairline-strong); background: var(--accent-soft); color: var(--accent-strong); border-radius: 999px;
   padding: 3px 12px; font: inherit; font-size: var(--text-xs); cursor: pointer; }
-.tool-card .card-actions { margin-top: 8px; display: flex; gap: 6px; }
+.tool-card-side { display: flex; align-items: center; gap: 8px; flex: none; }
+.tool-card-side .pill-btn { white-space: nowrap; }
+.tool-card { container-type: inline-size; }
+@container (max-width: 300px) { .pill-btn .long { display: none; } }
 .pill-btn:hover { background: var(--accent); color: var(--bg-base); }
 dialog.ask h3 { font-family: var(--font-display); font-size: var(--text-lg); font-weight: 500; margin: 0 0 8px; overflow-wrap: anywhere; }
 dialog.ask p, dialog.ask ul { color: var(--text-secondary); margin: 0 0 16px; overflow-wrap: anywhere; }
@@ -390,6 +393,8 @@ td.tools-got details.fold summary { padding: 0; color: var(--text-primary); }
 .skill-sec h3, .about-sec h3 { font-family: var(--font-display); font-weight: 500; font-size: var(--text-md); margin: 0 0 6px; }
 .skill-sec code { font-family: var(--font-mono); font-size: var(--text-xs); }
 .about { display: grid; gap: 22px; }
+/* a grid item is as wide as its content by default: the phone's row of tabs (one line, scrolled) pushed the section 5 px out */
+.about > * { min-width: 0; }
 .about-sec p { margin: 4px 0 8px; }
 .kv { display: grid; grid-template-columns: minmax(150px, 34%) 1fr; gap: 4px 16px; padding: 9px 0; border-bottom: 1px solid var(--hairline); align-items: baseline; }
 .kv:last-child { border-bottom: 0; }

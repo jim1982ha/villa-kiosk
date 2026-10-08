@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.82 (8 October 2026)
+
+- core.toggleCard `action`: a button in the card head left of the switch (`.tool-card-side`); the Offline Test pill moved there, "Offline " hidden by `@container (max-width: 300px)`. core.popup focuses Close (`autofocus`): showModal focused the title's (i), whose focus opened its tip. app.css `.about > * {min-width: 0}`. test_ui pins.
+
 ## 0.6.81 (8 October 2026)
 
 - skills.js: the Try tab removed; `offlineTestPill` on each command card (and on a whole-script card) opens `tryPanel(name, d, script, command)` in `core.popup`, with no script or command choice. About opens with `subTabs` of when/tools; the tools are `core.tileCard` cards (toggleCard builds on it); renames live in `ABOUT_TEXT`.

@@ -227,11 +227,14 @@ export function tileCard(title, { chip = null, words = null, meta = null, side =
     words, h("div", { class: "tool-meta" }, meta));
 }
 
-export function toggleCard(on, onChange, title, { chip = null, words = null, meta = null, label = null } = {}, disabled = false) {
+// `action`: a button on the card's top line, left of its switch (owner, 2026-10-08: the Offline Test pill there,
+// not a line of its own)
+export function toggleCard(on, onChange, title, { chip = null, words = null, meta = null, label = null, action = null } = {}, disabled = false) {
   let card = null;
   const sw = h("label", { class: "switch" }, h("input", { type: "checkbox", checked: on, disabled, "aria-label": label || title,
     onchange: (e) => { card.classList.toggle("is-on", e.target.checked); onChange(e.target.checked, e.target); } }));
-  card = tileCard(title, { chip, words, meta, side: sw, on, cls: disabled ? "locked" : "" });
+  card = tileCard(title, { chip, words, meta, side: action ? h("div", { class: "tool-card-side" }, action, sw) : sw, on,
+                           cls: disabled ? "locked" : "" });
   return card;
 }
 
@@ -377,7 +380,7 @@ export const tell = (title, text) => ask({ title, text, cancel: null });
 export function popup(title, body, info = null) {
   const dlg = h("dialog", { class: "ask wide" },
     h("div", { class: "popup-head" }, h("h3", {}, info ? withInfo(title, info) : title),
-      h("button", { type: "button", class: "btn ghost", onclick: () => dlg.close() }, "Close")),
+      h("button", { type: "button", class: "btn ghost", autofocus: true, onclick: () => dlg.close() }, "Close")),
     body);
   dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });
   dlg.addEventListener("close", () => dlg.remove());

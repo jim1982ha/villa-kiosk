@@ -147,7 +147,9 @@ export function tryPanel(name, d, script, command = null) {
 // what the AI would run)
 export function offlineTestPill(name, d, script, command) {
   return h("button", { type: "button", class: "pill-btn", onclick: () =>
-    popup(`Offline Test · ${command || script.script}`, tryPanel(name, d, script, command), OFFLINE_TEST_INFO) }, "Offline Test");
+    popup(`Offline Test · ${command || script.script}`, tryPanel(name, d, script, command), OFFLINE_TEST_INFO) },
+    // on a narrow card only "Test" (app.css: a container query on .tool-card)
+    h("span", { class: "long" }, "Offline "), "Test");
 }
 
 export function pretty(text) {
@@ -371,13 +373,13 @@ export function aboutSkill(name, d) {
       ? sc.commands.map((c) => toggleCard(c.on, (on, box) => setCommand(name, sc.script, c.name, on, box), c.name, {
           label: `${sc.script} ${c.name}`,
           words: c.words ? h("div", { class: "muted" }, c.words) : null,
-          meta: [c.job_only ? h("span", { class: "muted small" }, `Asked for in a chat, it runs as the ${c.job_only} job.`) : null,
-                 c.on ? h("div", { class: "card-actions" }, offlineTestPill(name, d, sc, c.name)) : null] }))
+          action: c.on ? offlineTestPill(name, d, sc, c.name) : null,
+          meta: c.job_only ? h("span", { class: "muted small" }, `Asked for in a chat, it runs as the ${c.job_only} job.`) : null }))
       // a script without commands: what it does (skill.yaml `description`). ⚠️ NOT ITS OPTIONS (owner, 2026-10-08:
       // "--as-of, --out, --skip-raw: too much detail for this view") — they are in its Offline Test, where they are used
       : [toggleCard(!sc.whole_off, (on, box) => setCommand(name, sc.script, null, on, box), sc.script, {
           words: h("div", { class: "muted" }, sc.description || "The AI may run it."),
-          meta: !sc.whole_off ? h("div", { class: "card-actions" }, offlineTestPill(name, d, sc, null)) : null })])));
+          action: !sc.whole_off ? offlineTestPill(name, d, sc, null) : null })])));
   return h("div", { class: "about" },
     h("section", { class: "about-sec" }, tabBar, tabBody),
     // what the switches do, behind the title's (i), as every other explanation on the page
