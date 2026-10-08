@@ -1,3 +1,8 @@
+## 2.496.310
+
+### Fixed
+- Switching camera feeds with the left and right arrow keys no longer moves the villa behind the video. The arrows now change the feed only; with no camera open, they move the view as before.
+
 ## 2.496.309
 
 ### Changed
