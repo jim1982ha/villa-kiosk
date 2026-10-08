@@ -38,7 +38,10 @@ export async function costs(days = 7) {
     [busiest.day ? `Busiest day (${new Date(busiest.day + "T12:00:00").toLocaleDateString([], { day: "numeric", month: "short" })})` : "Busiest day", usd(busiest.cost)]]);
   // the cost of each day: bars drawn in SVG, with a Y axis (US$) and its grid lines (owner, 2026-10-01: "always
   // the Y axis and grid lines"), and a date under every bar for a week, every few days for longer
-  const W = 640, H = 150, L = 52, T = 8, n = c.by_day.length;
+  // ⚠️ DRAWN AT THE CARD'S OWN WIDTH (owner, 2026-10-08: "taking way too much vertical space"). It was 640 units wide
+  // and stretched to the card: the wider page (0.12.83) made it — and its text — half again as tall. Now one unit is
+  // one pixel, so the chart is ~180 px tall at any width and its labels keep their size.
+  const W = Math.max(320, Math.round(($view.clientWidth || 684) - 44)), H = 150, L = 52, T = 8, n = c.by_day.length;
   // the Y axis is the server's (status.costs → vesta_shared.axis, the reports' own rule): this only draws it
   const max = c.axis.top, ticks = c.axis.ticks, slot = (W - L) / n;
   const y = (v) => T + H - (v / max) * H;

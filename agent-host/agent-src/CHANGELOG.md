@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.80 (8 October 2026)
+
+- costs.js: the per-day chart's viewBox is the card's pixel width (no stretch); axis text 12 px. test_ui pin.
+
 ## 0.6.79 (8 October 2026)
 
 - app.css .skills: the list column 280 → 364 px (test_ui pin).

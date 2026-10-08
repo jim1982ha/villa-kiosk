@@ -250,7 +250,7 @@ table.data .num { text-align: right; font-variant-numeric: tabular-nums; white-s
 /* the cost per day */
 svg.bars { width: 100%; height: auto; display: block; }
 svg.bars .bar { fill: var(--accent); }
-svg.bars .axis { fill: var(--text-secondary); font-size: 9px; font-variant-numeric: tabular-nums; }
+svg.bars .axis { fill: var(--text-secondary); font-size: 12px; font-variant-numeric: tabular-nums; }
 svg.bars .grid { stroke: var(--hairline); stroke-dasharray: 3 3; }
 svg.bars .base { stroke: var(--text-dim); }
 .tbl { overflow-x: auto; }

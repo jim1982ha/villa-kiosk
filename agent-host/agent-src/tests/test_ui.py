@@ -618,3 +618,9 @@ def test_the_costs_tab_is_two_cards_of_two_tabs_and_the_page_one_width():
     css = open(os.path.join(os.path.dirname(__file__), "..", "vesta_agent", "ui", "static", "app.css"), encoding="utf-8").read()
     assert "--page-width: 1650px" in css and "1100px" not in css and css.count("max-width: var(--page-width)") == 4
     assert ".skills { display: grid; grid-template-columns: 364px 1fr;" in css     # the skills list, 30% wider
+
+
+def test_the_cost_chart_is_drawn_at_the_cards_width_not_stretched():
+    # owner, 2026-10-08: on the wider page the 640-unit chart stretched to ~500 px tall
+    js = body_of(page_js(), "costs")
+    assert "const W = Math.max(320, Math.round(($view.clientWidth" in js and "const W = 640" not in js
