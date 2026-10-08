@@ -741,3 +741,12 @@ def test_every_place_is_named_once_and_the_page_reads_the_names_from_the_server(
 def test_rules_shows_ai_tools_right_below_ai_brains_and_limits():
     # owner, 2026-10-08: "move the AI tools section below the AI brains and limits section"
     assert "services, devices, ai, canUse);" in body_of(page_js(), "rulesForms")
+
+
+def test_take_the_release_version_is_on_the_compare_tab_too():
+    # owner, 2026-10-08: "i don't see any Take the release version button" — it was only in the banner, which
+    # "Keep mine" hides for the rest of the release, while the Compare tab described it
+    js = page_js()
+    assert "takeReleaseButton(name)" in body_of(js, "comparePanel") and js.count('"Take the release version");') == 1
+    assert "takeReleaseButton(name)" in body_of(js, "openSkill")
+

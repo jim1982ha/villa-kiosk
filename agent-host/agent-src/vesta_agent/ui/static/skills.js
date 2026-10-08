@@ -1,5 +1,5 @@
 // VESTA Agent page — the Skills tab.
-import { api, ask, dropdown, field, fill, go, guard, h, markDirty, page, paged, place, plural, popup, problemsBox, reasons, saveWith, setBar, showBar, subTabs, tabbed, tell, tileCard, titleWithInfo, toast, toggleCard, $view, where, withInfo } from "./core.js";
+import { api, ask, dropdown, field, fill, go, guard, h, infoButton, markDirty, page, paged, place, plural, popup, problemsBox, reasons, saveWith, setBar, showBar, subTabs, tabbed, tell, tileCard, titleWithInfo, toast, toggleCard, $view, where, withInfo } from "./core.js";
 
 // ---------------------------------------------------------------- skills
 // A skill's state against this release: it follows the releases (never edited here), it was edited here (updates
@@ -162,7 +162,20 @@ export function shown(rows, around = 2) {
   return out;
 }
 
-// Skills › Compare: an edited starter skill's file beside the release's
+// ⚠️ ONE "TAKE THE RELEASE VERSION" (owner, 2026-10-08: "i don't see any Take the release version button"): it was
+// only in the banner, which "Keep mine" hides for the rest of the release — the Compare tab described a button that
+// was not there. The banner and the Compare tab both draw this one.
+export function takeReleaseButton(name) {
+  const btn = h("button", { class: "btn primary", onclick: async () => {
+    if (!(await ask({ title: "Take the release version?", ok: "Take the release version", danger: true,
+      text: `The skill's files are replaced by the release's; this villa's own files (villa.*) are kept. Your edits are moved to skills/.trash, and Undo (${where("changes")}) brings them back.` }))) return;
+    try { await api("POST", `api/skills/${encodeURIComponent(name)}/take-release`); toast("The release's version is in place."); skills(name); }
+    catch (err) { tell("Not changed", reasons(err)); }
+  } }, "Take the release version");
+  return btn;
+}
+
+// Skills › Compare: an edited starter skill's file beside the release's, and the way back to the release's version
 export async function comparePanel(name, rel) {
   const box = h("div");
   const list = rel.differs || [];
@@ -178,7 +191,8 @@ export async function comparePanel(name, rel) {
         shown(rows).map((r) => r === null ? h("div", { class: "compare-gap" }, "…") : h("div", { class: "compare-row" + (r.same ? "" : " diff") },
           h("pre", { class: r.here === null ? "gap" : "", "data-side": "here" }, r.here ?? ""),
           h("pre", { class: r.release === null ? "gap" : "", "data-side": "release" }, r.release ?? "")))),
-      h("p", { class: "muted small" }, "\"Take the release version\" replaces the skill's files with the release's and keeps this villa's own files (villa.*). Your edits are moved to skills/.trash."));
+      h("div", { class: "actions" }, takeReleaseButton(name),
+        infoButton("Take the release version", "The skill's files are replaced by the release's and this villa's own files (villa.*) are kept. Your edits are moved to skills/.trash, and Undo brings them back.")));
   };
   if (file) await draw(); else fill(box, h("p", { class: "muted" }, "No file differs."));
   return h("div", { class: "skill-sec" }, box);
@@ -234,12 +248,7 @@ export async function openSkill(name, pane, info, path = ABOUT) {
     h("div", { class: "actions" },
       h("button", { class: "btn ghost", onclick: () => goTo(COMPARE) }, "Compare"),
       h("button", { class: "btn ghost", onclick: async () => { await api("POST", `api/skills/${enc}/keep`); toast("Kept as it is."); skills(name); } }, "Keep mine"),
-      h("button", { class: "btn primary", onclick: async () => {
-        if (!(await ask({ title: "Take the release version?", ok: "Take the release version", danger: true,
-          text: `The skill's files are replaced by the release's; this villa's own files (villa.*) are kept. Your edits are moved to skills/.trash, and Undo (${where("changes")}) brings them back.` }))) return;
-        try { await api("POST", `api/skills/${enc}/take-release`); toast("The release's version is in place."); skills(name); }
-        catch (err) { tell("Not changed", reasons(err)); }
-      } }, "Take the release version"))) : null;
+      takeReleaseButton(name))) : null;
 
   // ---- the views
   const FILES = "\u0000files";             // the Files tab stands for whichever file is open

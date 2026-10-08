@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.92 (8 October 2026)
+
+- skills.js `takeReleaseButton(name)`: one button, drawn by the release banner and the Compare tab (the banner is hidden after "Keep mine", while the Compare tab still described the button). test_ui pin; checked in the browser with a kept edit.
+
 ## 0.6.91 (8 October 2026)
 
 Eighth architecture review: the page draws the agent's verdicts.

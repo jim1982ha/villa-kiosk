@@ -509,3 +509,5 @@ table.rows td > * + .chip { margin-left: 8px; }
   table.rows.roles col:nth-child(2) { width: 19%; } table.rows.roles col:nth-child(3) { width: 30%; } table.rows.roles col:nth-child(4) { width: 12%; }
   table.rows.roles th { letter-spacing: 0; padding-right: 2px; }
 }
+/* an (i) beside a button: on its middle line (Skills › Compare: "Take the release version (i)") */
+.actions > button.info { align-self: center; }
