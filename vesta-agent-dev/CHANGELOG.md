@@ -1,3 +1,10 @@
+## 0.12.102
+
+What you will see:
+- Skills › Files and Rules (file): the switch now reads **View / Edit** (was Formatted / Raw).
+- Skills › Files: the file tabs stay in the same order, whichever file is open. When the file list is folded to one line and the open file would be hidden, the list unfolds.
+- Skills: picking another skill in the list now opens it on the right without redrawing the list: the list stays put and only the highlight moves.
+
 ## 0.12.101
 
 What you will see:
