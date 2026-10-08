@@ -1,4 +1,4 @@
-## 2.496.312
+## 2.496.313
 
 ### Fixed
 - A camera's red motion cone now points the way the camera points. When you turned a camera in SweetHome 3D (its Angle), the cone turned the opposite way. It only looked right near 90° and 270°, which is why 80° seemed fine and 60° did not.

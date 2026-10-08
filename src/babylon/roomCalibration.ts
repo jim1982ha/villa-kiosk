@@ -48,7 +48,7 @@ export interface CalibrationSolution {
  * SweetHome's plan is Y-down (X east, Y south): a piece's front faces plan +Y at angle 0, and the angle turns it as
  * Java's AffineTransform.rotate does — (x, y) → (x·cos − y·sin, x·sin + y·cos) — so its front goes to (−sin, cos).
  * ⚠️ VERIFIED 2026-10-08 against the villa's GLB: for 11 of 13 cameras the mesh's axis matches this to ≤ 2°
- * (tests/_probe/cam_axes.mjs, local); the earlier (sin, cos) was its MIRROR, right only near 90°/270° (a 180°
+ * (measured with a local GLB probe); the earlier (sin, cos) was its MIRROR, right only near 90°/270° (a 180°
  * setting hid it there), and turned a camera's beam the wrong way when the owner changed its angle.
  */
 export function planAngleToDir(angleRad: number): { px: number; py: number } {
