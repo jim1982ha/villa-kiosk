@@ -137,8 +137,7 @@ export function tryPanel(name, d, script, command = null) {
   }
   draw();
   return h("div", { class: "skill-sec try" },
-    h("p", { class: "muted small" }, h("code", {}, command ? `${script.script} ${command}` : script.script)),
-    h("h3", {}, "Options"), opts,
+    opts,
     h("div", { class: "actions" }, h("button", { class: "btn primary", onclick: run }, "Run")),
     out);
 }
@@ -147,7 +146,9 @@ export function tryPanel(name, d, script, command = null) {
 // what the AI would run)
 export function offlineTestPill(name, d, script, command) {
   return h("button", { type: "button", class: "pill-btn", onclick: () =>
-    popup(`Offline Test · ${command || script.script}`, tryPanel(name, d, script, command), OFFLINE_TEST_INFO) },
+    // the title names the script too: two scripts may share a command name (compose.py and facts.py both have fm-weekly);
+    // no subtitle and no "Options" heading under it (owner, 2026-10-08: redundant)
+    popup(`Offline Test · ${command ? `${script.script} ${command}` : script.script}`, tryPanel(name, d, script, command), OFFLINE_TEST_INFO) },
     // on a narrow card only "Test" (app.css: a container query on .tool-card)
     h("span", { class: "long" }, "Offline "), "Test");
 }

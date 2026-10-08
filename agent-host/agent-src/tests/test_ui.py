@@ -661,3 +661,12 @@ def test_the_offline_test_pill_sits_on_the_card_top_line_and_its_popup_opens_wit
     assert 'h("span", { class: "long" }, "Offline "), "Test")' in body_of(js, "offlineTestPill")
     assert "@container (max-width: 300px) { .pill-btn .long { display: none; } }" in css and ".tool-card { container-type: inline-size; }" in css
     assert 'class: "btn ghost", autofocus: true' in body_of(js, "popup")
+
+
+def test_the_offline_test_popup_has_no_subtitle_nor_options_heading_and_its_title_names_the_script():
+    # owner, 2026-10-08: "compose.py fm-daily" under the title and "Options" were redundant; the title keeps the script,
+    # since compose.py and facts.py both have an fm-weekly
+    js = page_js()
+    test, pill = body_of(js, "tryPanel"), body_of(js, "offlineTestPill")
+    assert '"Options"' not in test and 'h("code", {}, command ?' not in test
+    assert "popup(`Offline Test · ${command ? `${script.script} ${command}` : script.script}`" in pill

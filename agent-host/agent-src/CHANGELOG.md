@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.85 (8 October 2026)
+
+- skills.js tryPanel: no code subtitle, no "Options" heading; the popup title is "Offline Test · <script> <command>". test_ui pin.
+
 ## 0.6.84 (8 October 2026)
 
 - skills.js aboutSkill: "When" is its own section on top; the tabs are Commands (with the switches' (i), via subTabs' info) and Tools; Commands first, absent for a skill without scripts. test_ui pins.
