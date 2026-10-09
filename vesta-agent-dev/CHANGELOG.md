@@ -1,3 +1,9 @@
+## 0.12.109
+
+What you will see:
+- In the report pages, the links inside "what to check" and the question that follows are now real links you can tap. In 0.12.108 they showed as raw code ("<a class=…>"). The links in "VESTA's reading" already worked.
+- If you took the release version of the reports skill, this update reaches it by itself.
+
 ## 0.12.108
 
 What you will see:
