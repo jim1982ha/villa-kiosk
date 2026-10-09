@@ -1,7 +1,13 @@
+## 0.12.110
+
+What you will see:
+- The update notes no longer turn into one long blue link. The 0.12.109 notes described a bug with a piece of web page code, and Home Assistant read it as a real link. Every release is now checked for this before it is published.
+- Nothing changes in the reports: a test now confirms that any such code the AI writes shows as plain text and never breaks the page or its links.
+
 ## 0.12.109
 
 What you will see:
-- In the report pages, the links inside "what to check" and the question that follows are now real links you can tap. In 0.12.108 they showed as raw code ("<a class=…>"). The links in "VESTA's reading" already worked.
+- In the report pages, the links inside "what to check" and the question that follows are now real links you can tap. In 0.12.108 they showed as raw code instead of a link. The links in "VESTA's reading" already worked.
 - If you took the release version of the reports skill, this update reaches it by itself.
 
 ## 0.12.108
@@ -74,7 +80,7 @@ What you will see:
 
 What you will see:
 - Skills › Files: a Markdown file (SKILL.md and other .md files) now opens **formatted**: headings, lists, tables, code and the skill's name and description at the top. A small **Formatted / Raw** switch beside it shows the raw text, where you edit. The choice is kept while the page is open.
-- In Formatted, the text is shown as it is in the editor, saved or not. Lines inside `<!-- … -->` are left out, as the AI also ignores them when reading. A line starting with `#` shows as a heading, which is what it is in Markdown.
+- In Formatted, the text is shown as it is in the editor, saved or not. Lines inside an HTML comment are left out, as the AI also ignores them when reading. A line starting with `#` shows as a heading, which is what it is in Markdown.
 
 ## 0.12.97
 
