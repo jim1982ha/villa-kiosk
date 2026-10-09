@@ -24,6 +24,7 @@ class AlertButtons:
         self.store_path = store_path
         self.thread = thread            # incident_thread.IncidentThread: what each chat shows of an incident
         self.run_job = run_job          # (skill, command, timeout, values, origin) -> result: the on_reply hook
+        self._pressing: set[tuple[str, int]] = set()   # (incident, chat) whose press is being handled now
 
     def _store(self):
         from vesta_shared.store import Store
@@ -53,7 +54,21 @@ class AlertButtons:
             if inc.get("severity") in ("P1", "P2"):
                 self.state.log("press_refused", {"incident": iid, "by": person.telegram_id, "reason": "mute of a P1/P2 is owner only"})
                 return await toast("Only the owner can mute a P1 or P2 alert.")
-        label = options[opt]
+        # ⚠️ ONE PRESS, ONE ANSWER (architecture review 15, 2026-10-10): approvals and Continue were taken once, the alert
+        # buttons were not — a quick double tap on Done ran the skill's answer twice, and the second ("Already closed")
+        # replaced the first in the chat; a double Need help told the owner twice. A press while one is handled, or on
+        # an incident this chat already shows as settled, changes nothing.
+        key = (iid, int(chat))
+        if key in self._pressing or (self.thread.shown(int(iid)).get(int(chat)) or {}).get("settled"):
+            self.state.log("press_refused", {"incident": iid, "by": person.telegram_id, "reason": "already answered"})
+            return await toast("Already answered.")
+        self._pressing.add(key)
+        try:
+            await self._answer(iid, opt, options[opt], skill, chat, person, toast)
+        finally:
+            self._pressing.discard(key)
+
+    async def _answer(self, iid: str, opt: str, label: str, skill, chat: int, person, toast) -> None:
         await toast(f"{label}: noted.")
         self.state.log("ladder", {"incident": iid, "by": person.name, "reply": label})
         log.info("Button %s on incident #%s pressed by %s", label, iid, person.name)

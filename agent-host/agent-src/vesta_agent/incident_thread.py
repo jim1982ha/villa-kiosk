@@ -18,7 +18,9 @@ from datetime import datetime
 from typing import Awaitable, Callable
 from zoneinfo import ZoneInfo
 
-from vesta_shared.messaging import incident_tag
+from vesta_shared.messaging import TELEGRAM_LIMIT, incident_tag, tg_len
+
+from .delivery import fit
 
 Edit = Callable[[int, int, str], Awaitable]
 Delete = Callable[[int, int], Awaitable]
@@ -59,7 +61,9 @@ class IncidentThread:
         for chat, rec in self.state.incident_chats(iid):
             if not rec.get("buttons") or rec.get("settled"):
                 continue
-            text = f"{rec['text'].rstrip()}\n\n{note}"[:4096] if note else rec["text"]
+            # the note is kept whole, the alert's own text shortened to make room (architecture review 15: cut at 4,096
+            # characters, a long alert lost "Done — Marie, 09:14" at its end)
+            text = f"{fit(rec['text'].rstrip(), TELEGRAM_LIMIT - tg_len(note) - 2)}\n\n{note}" if note else rec["text"]
             if self.edit and note:
                 await self.edit(chat, rec["mid"], text)
                 n += 1

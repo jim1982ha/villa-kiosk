@@ -21,6 +21,12 @@ class _Delivery:
         self.tg = FakeTelegram()
         self.on_job_result = None
 
+    async def edit(self, chat, mid, text):                 # delivery.Delivery's own (architecture review 15)
+        return await self.tg.edit(chat, mid, text)
+
+    async def delete(self, chat, mid):
+        return await self.tg.delete(chat, mid)
+
     async def typing_loop(self, chat, stop, job=None):
         while not stop.is_set():
             await self.tg.typing(chat)

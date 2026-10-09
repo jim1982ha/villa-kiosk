@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from dataclasses import dataclass
 from typing import Any
 
 import aiohttp
@@ -26,7 +27,47 @@ log = logging.getLogger("vesta.telegram")
 
 
 class TelegramError(RuntimeError):
-    pass
+    def __init__(self, *a, delivered: list[int] | None = None):
+        super().__init__(*a)
+        # the messages that DID arrive before it failed (a long reply cut in parts): never "nothing arrived"
+        self.delivered: list[int] = list(delivered or [])
+
+
+#: A photo's or a file's caption: the first part of its text (Telegram takes 1,024; kept under it).
+CAPTION = 1000
+
+
+@dataclass(frozen=True)
+class Part:
+    """One call to Telegram of a message: `media` "photo", "document" or None (text only)."""
+    text: str
+    media: str | None = None
+    keyboard: dict | None = None
+    reply_to: int | None = None
+
+
+def layout(text: str, keyboard: dict | None = None, media: str | None = None, reply_to: int | None = None) -> list[Part]:
+    """How one message reaches Telegram, in order: a photo or a file first with the start of the text as its caption,
+    the rest of the text in parts it takes, the buttons on the LAST part, the reply on the first. Pure: the real
+    Telegram and the tests' fake both send what it says.
+
+    ⚠️ ONE LAYOUT (architecture review 15, 2026-10-10): it was decided inside the HTTP calls and never tested — the
+    buttons of a message with a file were dropped (the file's form never carried them), a long list went out before
+    its introduction, and the fake kept rules of its own."""
+    text = text or ""
+    parts: list[Part] = []
+    if media:
+        head = split_message(text, CAPTION) if text else [""]
+        rest = text[len(head[0]):].lstrip("\n") if len(head) > 1 else ""
+        parts.append(Part(head[0], media))
+        text = rest
+        if not text:
+            return [Part(parts[0].text, media, keyboard, reply_to)]
+    parts += [Part(p) for p in split_message(text or "…")]
+    first = parts[0]
+    parts[0] = Part(first.text, first.media, first.keyboard, reply_to)
+    parts[-1] = Part(parts[-1].text, parts[-1].media, keyboard, parts[-1].reply_to)
+    return parts
 
 
 class Telegram:
@@ -75,43 +116,48 @@ class Telegram:
         return body.get("result") or {}
 
     async def send(self, chat_id: int, text: str, keyboard: dict | None = None, document: str | None = None,
-                   photo_b64: tuple[str, str] | None = None, reply_to: int | None = None) -> int | None:
-        """Send text (split at Telegram's 4,096 characters), with at most one file or one photo: its caption holds
-        the first 1,000 characters, the rest follows as text. The keyboard goes on the last part. Returns the id of
-        the last message. Any failure is a TelegramError."""
+                   photo_b64: tuple[str, str] | None = None, reply_to: int | None = None) -> list[int]:
+        """Send one message as `layout` says, with at most one file or one photo. Returns the id of EVERY message it
+        made, in order (a reply to any of them is a reply to the agent). Any failure is a TelegramError, carrying the
+        ids that did arrive before it (`delivered`)."""
         if document and photo_b64:
             raise TelegramError("one file or one photo per message")
-        if document or photo_b64:
+        ids: list[int] = []
+        for part in layout(text, keyboard, "document" if document else "photo" if photo_b64 else None, reply_to):
+            try:
+                res = await self._part(chat_id, part, document, photo_b64)
+            except TelegramError as e:
+                raise TelegramError(str(e), delivered=ids) from None
+            if res.get("message_id"):
+                ids.append(res["message_id"])
+        return ids
+
+    async def _part(self, chat_id: int, part: Part, document: str | None, photo_b64) -> dict:
+        if part.media:
             form = aiohttp.FormData()
             form.add_field("chat_id", str(chat_id))
-            form.add_field("caption", text[:1000])
-            if document:
+            form.add_field("caption", part.text)
+            if part.keyboard:
+                form.add_field("reply_markup", json.dumps(part.keyboard))
+            if part.reply_to:
+                form.add_field("reply_parameters", json.dumps({"message_id": part.reply_to, "allow_sending_without_reply": True}))
+            if part.media == "document":
                 try:
                     with open(document, "rb") as f:
                         form.add_field("document", f.read(), filename=os.path.basename(document))
                 except OSError as e:
                     raise TelegramError(f"sendDocument: the file cannot be read ({type(e).__name__})") from None
-                method = "sendDocument"
-            else:
-                import base64
-                data_b64, mime = photo_b64
-                form.add_field("photo", base64.b64decode(data_b64), filename="snapshot.jpg", content_type=mime or "image/jpeg")
-                method = "sendPhoto"     # a refused photo is an error: never the caption alone, "here is the photo"
-            res = await self._post_form(method, form)
-            if len(text) <= 1000:
-                return res.get("message_id")
-            text = text[1000:]
-        last_id = None
-        parts = split_message(text or "…")
-        for i, part in enumerate(parts):
-            data: dict[str, Any] = {"chat_id": chat_id, "text": part}
-            if keyboard and i == len(parts) - 1:
-                data["reply_markup"] = keyboard
-            if reply_to and i == 0:
-                data["reply_parameters"] = {"message_id": reply_to, "allow_sending_without_reply": True}
-            res = await self.api("sendMessage", **data)
-            last_id = res.get("message_id")
-        return last_id
+                return await self._post_form("sendDocument", form)
+            import base64
+            data_b64, mime = photo_b64
+            form.add_field("photo", base64.b64decode(data_b64), filename="snapshot.jpg", content_type=mime or "image/jpeg")
+            return await self._post_form("sendPhoto", form)     # refused: an error, never the caption alone
+        data: dict[str, Any] = {"chat_id": chat_id, "text": part.text}
+        if part.keyboard:
+            data["reply_markup"] = part.keyboard
+        if part.reply_to:
+            data["reply_parameters"] = {"message_id": part.reply_to, "allow_sending_without_reply": True}
+        return await self.api("sendMessage", **data) or {}
 
     async def download(self, file_id: str, limit: int = 20 * 1024 * 1024) -> bytes:
         """A file a person sent, by the id Home Assistant's telegram_attachment event gave.

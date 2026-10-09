@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.114 (10 October 2026)
+
+Architecture review 15 (the agent's edges), candidates A, B and C:
+- telegram.layout: one message as Telegram calls (photo or file first, caption at most CAPTION, the rest in parts, the buttons on the last part, also with a file; the reply on the first). Telegram.send follows it and returns every message id; a failure carries the ids that arrived (TelegramError.delivered). tests/telegram_fake follows the same layout (it kept one id and the buttons the real one dropped).
+- messaging.split_message keeps the order and cuts between paragraphs, else lines, counting Telegram's UTF-16 units (tg_len): a paragraph longer than a message went out before the text above it, cut mid-line.
+- Delivery.send remembers every part (a reply to the first part of a long answer in a group was dropped), and a partly sent message counts as sent (Delivery.reply sent the whole answer again with NO_PICTURE).
+- Delivery.edit / delete / toast: the one way to Telegram for a message's whole life (plain_text, fit between lines); IncidentThread, ChatJobs and the button presses use them. IncidentThread.close shortens the alert's own text to keep its note whole.
+- AlertButtons.press: one press per incident and chat at a time, none on an incident the chat shows settled ("Already answered.").
+- Tests (tests/test_telegram_messages.py): order and lines, Telegram's count, buttons with a file, every part remembered, a partly sent reply not sent again, an edit keeps its note and its plain text, a double tap answers once. Each shown red with the old behaviour.
+
 ## 0.6.113 (10 October 2026)
 
 Architecture review 16, its defects:

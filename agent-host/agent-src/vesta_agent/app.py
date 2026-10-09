@@ -127,8 +127,8 @@ class Vesta:
         self.siren = Siren(self.policy, self.state, self.actions, self._tell_owner_text)
         # a script's result carried out (outcome.py), with the alert buttons and the Kiosk's tickets as their own modules
         # what each chat shows of an incident (incident_thread.py), and an alert's buttons and their press
-        self.thread = IncidentThread(self.state, settings.timezone, edit=(self.tg.edit if self.tg else None),
-                                     delete=(self.tg.delete if self.tg else None))
+        self.thread = IncidentThread(self.state, settings.timezone, edit=(self.delivery.edit if self.tg else None),
+                                     delete=(self.delivery.delete if self.tg else None))
         self.buttons = AlertButtons(state=self.state, skills=self.skills, store_path=settings.store_path,
                                     thread=self.thread, run_job=self.run_code_job)
         self.tickets = Tickets(kiosk=self.kiosk, state=self.state, store_path=settings.store_path,
@@ -489,8 +489,7 @@ class Vesta:
         pol = self.policy()
 
         async def toast(text: str):
-            if self.tg and qid:
-                await self.tg.answer_callback(str(qid), text)
+            await self.delivery.toast(qid, text)
 
         # ⚠️ ONE TABLE OF BUTTON KINDS (button_data.py): each kind's handler below; who must be registered, once
         kind, parts = button_data.read(data)
@@ -511,8 +510,8 @@ class Vesta:
             return await p.toast("This button belongs to another chat.")
         out = await asyncio.to_thread(self.actions.decide, aid, p.presser, yn == "y")
         await p.toast(out["toast"])
-        if out.get("edit") and p.mid and self.tg:
-            await self.tg.edit(p.chat, p.mid, out["edit"])
+        if out.get("edit") and p.mid:
+            await self.delivery.edit(p.chat, p.mid, out["edit"])
 
     async def _press_continue(self, p: "Press") -> None:
         cont = self.state.use_continuation(p.parts[0], p.chat, p.presser)
@@ -534,9 +533,9 @@ class Vesta:
         # the pressed message stands for the report until it arrives (chat_jobs.py)
         said = self.jobs.start_without_ai(name, problem, p.chat, waiting_mid=int(p.mid) if p.mid else None)
         await p.toast(said)
-        if p.mid and self.tg:
+        if p.mid:
             # the message itself says so, its buttons gone: a toast alone is easily missed ("nothing happened")
-            await self.tg.edit(p.chat, p.mid, f"{p.msg.get('text') or ''}\n\n{said}".strip())
+            await self.delivery.edit(p.chat, p.mid, f"{p.msg.get('text') or ''}\n\n{said}".strip())
 
     async def _server_tools(self) -> list[dict]:
         """HA MCP's tool list, read again when the agent has none yet."""

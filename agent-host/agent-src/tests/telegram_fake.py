@@ -5,18 +5,22 @@ fakes; each new method (typing) or argument (photo_b64) had to be added to each 
 hid failures. tests/test_telegram_fake.py fails when this class and Telegram stop having the same public methods
 with the same parameters.
 
+⚠️ IT SENDS WHAT telegram.layout SAYS, LIKE THE REAL ONE (architecture review 15): it kept rules of its own (one id,
+the buttons kept with a file the real one dropped), so tests passed on what the villa never saw.
+
 What it records, in the order it happened:
-  sent       (chat, text, keyboard)      every message, a photo's or a file's caption included
+  sent       (chat, text, keyboard)      every message Telegram would show, each part of a long one, a caption included
   photos     (chat, (base64, mime))      documents  (chat, path)
   toasts     (callback id, text)         edits      (chat, message id, text)
   deleted    (chat, message id)          fetched    file ids     typing_in   chats
 `refuse = {"send"}` makes send fail as Telegram does (TelegramError); `{"photo"}` only a message with a photo;
+`{"second part"}` fails from a message's second part on, the first having arrived (TelegramError.delivered);
 `{"delete"}` makes delete answer False (a message past Telegram's 48 hours). Anything else reached on it — getUpdates,
 leaveChat — raises: the agent must never call them.
 """
 from __future__ import annotations
 
-from vesta_agent.telegram import TelegramError
+from vesta_agent.telegram import TelegramError, layout
 
 BOT = {"id": 8000, "username": "Villa_Test_bot"}
 
@@ -42,13 +46,18 @@ class FakeTelegram:
             raise TelegramError("sendPhoto: 400 refused by the test")
         if document and photo_b64:
             raise TelegramError("one file or one photo per message")
-        self.next_id += 1
-        self.sent.append((chat_id, text, keyboard))
-        if photo_b64:
-            self.photos.append((chat_id, photo_b64))
-        if document:
-            self.documents.append((chat_id, document))
-        return self.next_id
+        ids: list[int] = []
+        for i, part in enumerate(layout(text, keyboard, "document" if document else "photo" if photo_b64 else None, reply_to)):
+            if i and "second part" in self.refuse:
+                raise TelegramError("sendMessage: 429 Too Many Requests (the test)", delivered=ids)
+            self.next_id += 1
+            self.sent.append((chat_id, part.text, part.keyboard))
+            if part.media == "photo":
+                self.photos.append((chat_id, photo_b64))
+            if part.media == "document":
+                self.documents.append((chat_id, document))
+            ids.append(self.next_id)
+        return ids
 
     async def download(self, file_id, limit=20 * 1024 * 1024):
         self.fetched.append(file_id)

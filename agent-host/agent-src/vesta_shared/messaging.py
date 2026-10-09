@@ -18,18 +18,37 @@ def no_code(s: str) -> str:
     return re.sub(r"^\s*\[[^\]]{2,80}\]\s*", "", s or "").strip()
 
 
+def tg_len(text: str) -> int:
+    """A text's length as Telegram counts it: UTF-16 units (an emoji is two)."""
+    return len(text.encode("utf-16-le")) // 2
+
+
 def split_message(text: str, limit: int = TELEGRAM_LIMIT) -> list[str]:
-    if len(text) <= limit:
+    """`text` in parts Telegram takes (at most `limit` of its units each), IN ORDER, cut between paragraphs, else
+    between lines, else — a single line longer than a message — inside it.
+
+    ⚠️ IN ORDER (architecture review 15, 2026-10-10): a paragraph longer than a message (a long list with no blank
+    line) was sent before the text above it, cut in the middle of a line — the list arrived first, its introduction
+    second."""
+    if tg_len(text) <= limit:
         return [text]
-    parts, cur = [], ""
+    pieces: list[str] = []                       # the smallest units, in order, each with what joins it to the next
     for para in text.split("\n\n"):
-        if len(para) > limit:  # a single huge paragraph: hard split
-            while len(para) > limit:
-                parts.append(para[:limit]); para = para[limit:]
-        if len(cur) + len(para) + 2 > limit:
-            parts.append(cur.rstrip()); cur = para + "\n\n"
-        else:
-            cur += para + "\n\n"
+        lines = para.split("\n")
+        for i, line in enumerate(lines):
+            while tg_len(line) > limit:          # one line longer than a message: cut inside it
+                cut = limit
+                while tg_len(line[:cut]) > limit:
+                    cut -= 1
+                pieces.append(line[:cut] + "\n")
+                line = line[cut:]
+            pieces.append(line + ("\n" if i < len(lines) - 1 else "\n\n"))
+    parts, cur = [], ""
+    for p in pieces:
+        if cur and tg_len((cur + p).rstrip()) > limit:
+            parts.append(cur.rstrip())
+            cur = ""
+        cur += p
     if cur.strip():
         parts.append(cur.rstrip())
     return parts

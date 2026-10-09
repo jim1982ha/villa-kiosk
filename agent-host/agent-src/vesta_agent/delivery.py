@@ -24,6 +24,8 @@ import re
 from datetime import datetime
 from typing import AsyncIterator, Awaitable, Callable
 
+from vesta_shared.messaging import TELEGRAM_LIMIT, split_message, tg_len
+
 from .routing import JOB, Origin, Routing
 from .telegram import TelegramError
 
@@ -53,6 +55,15 @@ def plain_text(s: str) -> str:
     s = re.sub(r"`{1,3}([^`]*)`{1,3}", r"\1", s)
     s = re.sub(r"(?m)^\s{0,3}#{1,6}\s+", "", s)
     return s
+
+
+def fit(text: str, limit: int = TELEGRAM_LIMIT) -> str:
+    """One message's text at most `limit` (Telegram's units), cut between lines with "…" — for an edit, which cannot
+    be split as a send is."""
+    if tg_len(text) <= limit:
+        return text
+    head = split_message(text, limit - 2)[0]
+    return head.rstrip() + "\n…"
 
 
 def typing_timeline(times: list[tuple[float, float, bool]]) -> str:
@@ -92,15 +103,23 @@ class Delivery:
             log.info("Telegram off: a message for chat %s was not sent", chat_id)
             return None
         try:
-            mid = await self.tg.send(int(chat_id), plain_text(text), keyboard=keyboard, document=document,
+            ids = await self.tg.send(int(chat_id), plain_text(text), keyboard=keyboard, document=document,
                                      photo_b64=photo)
         except TelegramError as e:
-            log.warning("send failed: %s", e)
-            self.state.log("send_failed", {"chat": chat_id, "error": str(e)})
-            return None
+            ids = e.delivered
+            log.warning("send failed%s: %s", f" after {len(ids)} part(s) arrived" if ids else "", e)
+            self.state.log("send_failed", {"chat": chat_id, "error": str(e), "parts_arrived": len(ids)})
+            if not ids:
+                return None
+            # ⚠️ PARTLY ARRIVED IS NOT "NOTHING ARRIVED" (architecture review 15): a reply whose picture and first part
+            # arrived was sent again whole, with "the picture could not be sent" — the person read it twice
+        # ⚠️ EVERY PART IS THE AGENT'S (architecture review 15): only the last was remembered, so in a group a reply to
+        # the first part of a long answer was taken for people talking to each other, and dropped without a word
+        for mid in ids:
+            self.state.remember_message(chat_id, mid)
+        mid = ids[-1] if ids else None
         if not mid:
             return None
-        self.state.remember_message(chat_id, mid)
         log.info("Sent to chat %s (%s)%s%s%s", chat_id, Routing(self.policy()).label(chat_id),
                  " with buttons" if keyboard else "", " and a file" if document else "", " and a photo" if photo else "")
         if approval_id:
@@ -108,6 +127,32 @@ class Delivery:
         if origin is not None and origin.kind == JOB and self.on_job_result:
             await self.on_job_result(origin)                    # its waiting message goes, its "typing…" stops
         return mid
+
+    # ------------------------------------------------------------------ a message already there
+    # ⚠️ ONE WAY TO TELEGRAM FOR A MESSAGE'S WHOLE LIFE (architecture review 15, 2026-10-10): sending came here, but the
+    # incident thread, the chat jobs and the button presses edited and deleted on Telegram themselves — each deciding
+    # again whether Telegram was on, cutting a long text where a send splits it, and skipping plain_text.
+    async def edit(self, chat_id: int, message_id: int, text: str) -> bool:
+        """Rewrite one of the agent's messages (its buttons go), as a send would show it: plain text, and — one message
+        cannot be split — at most Telegram's limit, cut between lines. False: Telegram is off, or refused."""
+        if self.tg is None:
+            return False
+        text = fit(plain_text(text))
+        ok = await self.tg.edit(int(chat_id), int(message_id), text)
+        if not ok:
+            self.state.log("edit_refused", {"chat": chat_id, "message": message_id})
+        return bool(ok)
+
+    async def delete(self, chat_id: int, message_id: int) -> bool:
+        """Delete one of the agent's messages. False: Telegram is off, or refused (past its 48 hours)."""
+        if self.tg is None:
+            return False
+        return bool(await self.tg.delete(int(chat_id), int(message_id)))
+
+    async def toast(self, callback_id: str | None, text: str) -> None:
+        """The short notice over a pressed button."""
+        if self.tg is not None and callback_id:
+            await self.tg.answer_callback(str(callback_id), text)
 
     # ------------------------------------------------------------------ a conversation's reply
     async def reply(self, chat_id: int, text: str, *, keyboard: dict | None = None,

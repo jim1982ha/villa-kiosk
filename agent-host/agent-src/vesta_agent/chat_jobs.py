@@ -130,16 +130,15 @@ class ChatJobs:
     # ------------------------------------------------------------------ the waiting message, "typing…"
     async def _carry(self, chat: int, step) -> None:
         """Carry out what job_notices.py decided about a waiting message."""
-        tg = self.delivery.tg
-        if step is None or tg is None:
+        if step is None or self.delivery.tg is None:
             return
         what, mid, job = step
         log.info("Waiting message %s in chat %s: %s", mid, chat, "deleted (its result came)" if what == "delete"
                  else f"says the {job} job ended without a result")
         if what == "delete":
-            await tg.delete(chat, mid)
+            await self.delivery.delete(chat, mid)
         else:
-            await tg.edit(chat, mid, f"The {job} job ended without a result this time. Ask again in a moment.")
+            await self.delivery.edit(chat, mid, f"The {job} job ended without a result this time. Ask again in a moment.")
 
     def _typing_on(self, chat: int, name: str) -> None:
         """⚠️ "typing…" UNTIL THE RESULT IS THERE (owner, 2026-10-07), one loop per chat whatever the number of jobs:

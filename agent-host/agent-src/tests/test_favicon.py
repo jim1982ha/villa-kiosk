@@ -95,5 +95,5 @@ def test_a_file_is_sent_on_telegram_exactly_as_written(tmp_path):
     (tmp_path / "page.html").write_text(page)
     tg = Telegram("t0k3n")
     tg.http = _Http()
-    assert asyncio.run(tg.send(1, "This week's report", document=str(tmp_path / "page.html"))) == 7
+    assert asyncio.run(tg.send(1, "This week's report", document=str(tmp_path / "page.html"))) == [7]
     assert tg.http.sent == ("sendDocument", page.encode())
