@@ -160,6 +160,9 @@ class KnowledgePack:
     retention: dict
     # Each area's other names in Home Assistant ("Cuisine" for Kitchen): a person may say either.
     area_aliases: dict[str, list[str]] = field(default_factory=dict)
+    # Home Assistant's devices, by device id: {"name", "manufacturer", "model"} — the name the owner gave it first.
+    # Empty in a pack built before 0.6.108 (then nothing is grouped by device).
+    devices: dict[str, dict] = field(default_factory=dict)
 
     def entities(self, family: str) -> list[dict]:
         return self.families.get(family, [])
@@ -186,6 +189,18 @@ class KnowledgePack:
                     idx[r["entity_id"]] = r
             self.__dict__["_by_entity"] = idx
         return idx.get(entity_id)
+
+    def device_label(self, device_id: str | None) -> str | None:
+        """A device as the owner reads it: its name in Home Assistant; with none, "Unnamed" and its maker and model;
+        "" for a device Home Assistant knows nothing about (no name, maker or model — a phone seen on the Wi-Fi);
+        None when the pack does not have this device (no device, or a pack built before devices were kept)."""
+        d = self.devices.get(device_id or "")
+        if d is None:
+            return None
+        if d.get("name"):
+            return d["name"]
+        what = " ".join(x for x in (d.get("manufacturer"), d.get("model")) if x)
+        return f"Unnamed {what}" if what else ""
 
     def name_of(self, entity_id: str, default: str | None = None) -> str | None:
         """An entity's name as the pack has it; `default` when the pack does not name it."""
@@ -353,6 +368,9 @@ def build_pack(registry: dict, helpers: list[dict], states: dict | None = None,
         retention=retention,
         area_aliases={a.get("name"): [x for x in (a.get("aliases") or []) if x]
                       for a in registry.get("areas", []) if a.get("name") and a.get("aliases")},
+        devices={d["device_id"]: {"name": d.get("name_by_user") or d.get("name") or "",
+                                  "manufacturer": d.get("manufacturer") or "", "model": d.get("model") or ""}
+                 for d in registry.get("devices", []) if d.get("device_id")},
     )
 
 

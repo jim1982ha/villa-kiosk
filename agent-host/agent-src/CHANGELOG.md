@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.108 (9 October 2026)
+
+- reports: the monitoring table, the offline count and the "devices offline" line list DEVICES (owner: "only devices, not entities related to a device"). facts.Ctx.offline groups offline sensors by Home Assistant device: its name (the owner's first), the earliest time a sensor went, critical if any is. A sensor with no device keeps its own row; a device Home Assistant knows nothing about (no name, maker or model: a phone seen on the Wi-Fi, the "RX"/"TX" rows) is left out; one with no name but a maker or model shows as "Unnamed <maker> <model>". KnowledgePack keeps the devices (devices, device_label) from the registry already fetched. app.pack_needs_build rebuilds at start a pack built before devices were kept (format change, its migration). Tests: one row per device, nameless left out, an old pack groups nothing; the migration (each shown red).
+
 ## 0.6.107 (9 October 2026)
 
 - "typing…" every 5.5 s (delivery.TYPING_EVERY_S). Measured on 9 October: at 4.4 s apart (group, 16:47) Telegram Web showed it with long gaps; at 2.4 s apart (private chat, 17:26, 24 of 24 accepted, longest gap 2.5 s) it never showed. Every signal was accepted both times, so one sent while the previous still runs is not passed on; 5.5 s sends each just after the last has ended.

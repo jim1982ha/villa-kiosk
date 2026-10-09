@@ -288,16 +288,34 @@ class Ctx:
                 for p in Problems(self.store).open_problems()]
 
     def offline(self) -> list[dict]:
+        """The DEVICES offline: one row per Home Assistant device, by its name, since its first sensor went.
+
+        ⚠️ DEVICES, NOT THEIR SENSORS (owner, 2026-10-09: "make sure this table only reports devices, and not entities
+        related to a device"). It listed sensors: a phone's Wi-Fi traffic as two rows "RX" and "TX", one pump plug as
+        "Jacuzzi Pump Power" beside its relay. A sensor with no device keeps its own row; a device Home Assistant
+        knows nothing about (no name, maker or model: a phone seen on the Wi-Fi) is not one of the villa's."""
         crit = set(self.cfg.get("critical_families") or [])
-        out, seen = [], set()
+        out: list[dict] = []
+        by_key: dict = {}
         for fam in self.cfg.get("offline_families") or []:
             for r in self.pack.families.get(fam, []):
                 st = self.states().get(r["entity_id"]) or {}
-                asset = r.get("asset") or r["entity_id"]
-                if is_offline(st.get("state")) and asset not in seen:
-                    seen.add(asset)
-                    out.append({"name": r.get("name") or r["entity_id"], "since": _local(st.get("last_changed"), self.Z),
-                                "critical": fam in crit, "family": fam, "entity_id": r["entity_id"]})
+                if not is_offline(st.get("state")):
+                    continue
+                label = self.pack.device_label(r.get("device_id"))
+                if label == "":
+                    continue
+                key = ("device", r["device_id"]) if label is not None else ("asset", r.get("asset") or r["entity_id"])
+                since = _local(st.get("last_changed"), self.Z)
+                cur = by_key.get(key)
+                if cur is None:
+                    by_key[key] = cur = {"name": label or r.get("name") or r["entity_id"], "since": since,
+                                         "critical": fam in crit, "family": fam, "entity_id": r["entity_id"]}
+                    out.append(cur)
+                else:
+                    cur["critical"] = cur["critical"] or fam in crit
+                    if since and (not cur["since"] or since < cur["since"]):
+                        cur["since"] = since
         return out
 
 

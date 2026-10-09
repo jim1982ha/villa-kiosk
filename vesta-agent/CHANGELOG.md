@@ -1,3 +1,10 @@
+## 0.12.114
+
+What you will see:
+- In the weekly and monthly reports, "Is the monitoring itself healthy" lists devices, one row each with the name it has in Home Assistant, instead of each of their sensors. A pump plug is now one row, not one row per sensor. The count of devices offline and the "devices offline" line follow the same rule.
+- A phone or tablet seen on the Wi-Fi, which Home Assistant knows nothing about (no name, maker or model), is no longer listed: that was the "RX" and "TX" rows. A device with no name but a known maker shows as "Unnamed" and its maker, so you can name it in Home Assistant.
+- The app rebuilds its list of the villa's devices when it starts after this update, so the next report already uses it.
+
 ## 0.12.113
 
 What you will see:

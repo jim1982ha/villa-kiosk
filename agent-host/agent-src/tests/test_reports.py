@@ -613,3 +613,61 @@ def test_html_like_text_the_ai_writes_shows_as_text_and_breaks_nothing():
     assert ('<a class="src" href="https://www.example.org/pump/" target="_blank" rel="noopener noreferrer">'
             'https://www.example.org/pump/</a>.') in page
     assert page.count("<a ") == page.count("</a>")
+
+
+def test_the_monitoring_table_lists_devices_not_their_sensors():
+    # owner, 2026-10-09: "make sure this table only reports devices (and not entities related to a device)" — it listed
+    # a phone's Wi-Fi traffic as two rows "RX" and "TX", and one pump plug's sensors as rows of their own
+    import sys as _s
+    from zoneinfo import ZoneInfo
+    _s.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
+    import facts
+    from vesta_shared.knowledge_pack import KnowledgePack
+    row = lambda eid, name, dev, fam: {"entity_id": eid, "name": name, "device_id": dev, "asset": eid.split(".")[1],
+                                       "family": fam}
+    pack = KnowledgePack(villa="V", time_zone="UTC", generated_at="", ha_version=None, families={
+        "power": [row("sensor.spa_pump_power", "Spa Pump Power", "plug", "power"),
+                  row("sensor.jet_pump_power", "Jet Pump Power", "plug", "power")],
+        "switch": [row("switch.spa_relay", "Spa Relay", "plug", "switch")],
+        "network": [row("sensor.rx", "RX", "phone", "network"), row("sensor.tx", "TX", "phone", "network"),
+                    row("sensor.ap_rx", "AP RX", "ap", "network")],
+        "battery": [row("sensor.lone_battery", "Lone Battery", None, "battery")]},
+        assets={}, areas=[], people=[], channels={}, unknown_area=[], unclassified=[], retention={},
+        devices={"plug": {"name": "Spa Plug", "manufacturer": "Shelly", "model": "Plus 1PM"},
+                 "phone": {"name": "", "manufacturer": "", "model": ""},
+                 "ap": {"name": "", "manufacturer": "Ubiquiti", "model": "U6 Lite"}})
+    c = facts.Ctx.__new__(facts.Ctx)
+    c.pack, c.Z = pack, ZoneInfo("UTC")
+    c.cfg = {"offline_families": ["power", "switch", "network", "battery"], "critical_families": ["switch"]}
+    off = lambda at: {"state": "unavailable", "last_changed": at}
+    c._states = {"sensor.spa_pump_power": off("2026-10-09T09:05:00+00:00"), "sensor.jet_pump_power": off("2026-10-09T09:01:00+00:00"),
+                 "switch.spa_relay": off("2026-10-09T09:03:00+00:00"), "sensor.rx": off("2026-10-09T08:00:00+00:00"),
+                 "sensor.tx": off("2026-10-09T08:00:00+00:00"), "sensor.ap_rx": off("2026-10-09T07:00:00+00:00"),
+                 "sensor.lone_battery": off("2026-10-09T06:00:00+00:00")}
+    got = {o["name"]: o for o in c.offline()}
+    # the plug is ONE row under its own name, since its first sensor went, critical because its relay is
+    assert set(got) == {"Spa Plug", "Unnamed Ubiquiti U6 Lite", "Lone Battery"}, sorted(got)
+    assert got["Spa Plug"]["since"] == "2026-10-09T09:01" and got["Spa Plug"]["critical"] is True
+    assert "RX" not in got and "TX" not in got                        # a nameless Wi-Fi client is not a villa device
+    assert got["Lone Battery"]["since"] == "2026-10-09T06:00"         # a sensor with no device keeps its own row
+    # a pack built before devices were kept groups nothing and hides nothing
+    pack.devices = {}
+    assert {o["name"] for o in c.offline()} >= {"Spa Pump Power", "RX", "Lone Battery"}
+
+
+def test_a_pack_built_before_devices_were_kept_is_rebuilt_at_start(tmp_path):
+    # a format change carries its migration: an older pack has no devices, and the monitoring table would list
+    # sensors instead of devices until the 01:30 rebuild
+    import inspect
+    import json as _j
+    from vesta_agent.app import Vesta, pack_needs_build
+    from vesta_shared.knowledge_pack import KnowledgePack
+    base = dict(villa="V", time_zone="UTC", generated_at="", ha_version=None, families={}, assets={}, areas=[], people=[],
+                channels={}, unknown_area=[], unclassified=[], retention={})
+    old = tmp_path / "old.json"
+    old.write_text(_j.dumps(base))
+    new = tmp_path / "new.json"
+    new.write_text(KnowledgePack(**base, devices={"d1": {"name": "Pump", "manufacturer": "", "model": ""}}).to_json())
+    assert pack_needs_build(str(tmp_path / "none.json")) and pack_needs_build(str(old))
+    assert not pack_needs_build(str(new))
+    assert "if pack_needs_build(self.s.pack_path):" in inspect.getsource(Vesta.start)

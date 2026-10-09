@@ -83,6 +83,16 @@ class Press:
     toast: Callable[[str], Awaitable]
 
 
+def pack_needs_build(path: str) -> bool:
+    """Build the knowledge pack at start: none yet, unreadable, or built before it kept Home Assistant's devices.
+
+    ⚠️ A FORMAT CHANGE CARRIES ITS MIGRATION (0.6.108): an older pack has no devices, and the reports would list
+    sensors instead of devices until the 01:30 rebuild."""
+    from vesta_shared.knowledge_pack import KnowledgePack
+    pack = KnowledgePack.read(path)
+    return pack is None or not pack.devices
+
+
 class Vesta:
     def __init__(self, settings, telegram: Telegram | None = None, reader=None, writer_factory=None,
                  kiosk: Kiosk | None = None, skills: Skills | None = None):
@@ -235,7 +245,7 @@ class Vesta:
             stop = tool_access.blockers(self.policy(), self.server_tools or None, sk)
             if stop:
                 log.warning("Skill %s is not working: %s", sk.name, " ".join(b["why"] for b in stop))
-        if not os.path.exists(self.s.pack_path):
+        if pack_needs_build(self.s.pack_path):
             await asyncio.to_thread(self.build_pack)
         pol = self.policy()
         if not pol.people:
