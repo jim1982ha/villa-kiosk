@@ -1,3 +1,8 @@
+## 0.12.111
+
+What you will see:
+- Nothing changes in the chat. The app's log now records the whole timeline of a report asked for in a chat: when your message reached the agent, every "typing…" signal with its time and how long Telegram took to answer, the longest silence between two of them, then the report and the removal of the waiting message. This is to find out why "typing…" disappears before the report arrives.
+
 ## 0.12.110
 
 What you will see:
