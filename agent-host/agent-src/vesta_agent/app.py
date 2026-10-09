@@ -44,6 +44,7 @@ from .delivery import Delivery
 from .config import STARTER_DIR
 from .ha_events import CONTEXT_KEY, HaEvents
 from .incident_thread import IncidentThread
+from vesta_shared.result import FAULTS_CHANGED
 from .housekeeping import tidy
 from .kiosk import Kiosk, KioskError
 from .alert_buttons import AlertButtons
@@ -290,7 +291,7 @@ class Vesta:
                            origin: Origin | None = None) -> dict:
         res = await asyncio.to_thread(self.code_command, skill, command, values, timeout)
         await self._safe(self.outcome.carry_out(res, skill.name, origin))
-        if any(res.get(k) for k in ("new_findings", "still_open", "closed")):
+        if res.get(FAULTS_CHANGED):
             # the night check rewrote its findings: their open faults in the Kiosk say what is wrong now
             await self._safe(self.tickets.repair())
         return res

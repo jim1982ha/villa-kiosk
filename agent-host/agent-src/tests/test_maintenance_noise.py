@@ -264,3 +264,23 @@ def test_no_threshold_hides_in_the_night_check_s_code():
         src = open(os.path.join(STARTER_SKILLS, "preventive-maintenance", "scripts", name)).read()
         assert "behaviour_text_default(" not in src, name
         assert not re.search(r"step: float = \d", src) and "* nominal" not in src.replace('params.behaviour("battery_low_fraction_of_nominal") * nominal', ""), name
+
+
+def test_the_night_tells_the_engine_when_the_kiosks_faults_change(tmp_path):
+    # architecture review 13 (live defect): the engine repairs the Kiosk's faults when a result says they changed; it
+    # looked for new_findings / still_open / closed, which the night check computed but never printed
+    from vesta_shared.result import FAULTS_CHANGED
+    _pump(tmp_path, [0.1, 0.1])
+    r = _run(NIGHTLY, "--pack", str(tmp_path / "pack.json"), "--store", str(tmp_path / "s.sqlite"),
+             "--fixture-dir", str(tmp_path / "fx"), "--skip-raw", "--as-of", AS_OF)
+    assert r.returncode == 0, r.stderr
+    assert json.loads(r.stdout)[FAULTS_CHANGED] is True                # a collapse found: the faults change
+    quiet = tmp_path / "quiet"
+    quiet.mkdir()
+    _pump(quiet, [0.5, 0.5])
+    r = _run(NIGHTLY, "--pack", str(quiet / "pack.json"), "--store", str(quiet / "s.sqlite"),
+             "--fixture-dir", str(quiet / "fx"), "--skip-raw", "--as-of", AS_OF)
+    assert json.loads(r.stdout)[FAULTS_CHANGED] is False               # nothing found: nothing to repair
+    import inspect
+    from vesta_agent.app import Vesta
+    assert "if res.get(FAULTS_CHANGED):" in inspect.getsource(Vesta.run_code_job)   # the engine reads that one key

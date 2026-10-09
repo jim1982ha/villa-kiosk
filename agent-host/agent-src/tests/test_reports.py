@@ -705,3 +705,57 @@ def test_every_sentence_of_a_to_do_line_reaches_the_page_one_way():
         assert page.count(f'href="{url}"') == 1, url
     assert "&lt;a " not in page and "<b>today</b>" not in page and "&lt;b&gt;today&lt;/b&gt;" in page
     assert page.count("<a ") == page.count("</a>")
+
+
+def test_an_equipment_card_is_watched_when_the_to_do_list_names_its_device():
+    # architecture review 13 (a regression of 0.12.115): the to-do list names devices by device_of, the cards
+    # compared them with the asset slug — no card was set to "Watch" by it
+    import sys as _s
+    _s.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
+    import facts
+    from vesta_shared.knowledge_pack import KnowledgePack
+    pack = KnowledgePack(villa="V", time_zone="UTC", generated_at="", ha_version=None,
+                         families={"power": [{"entity_id": "sensor.pool_power", "name": "Pool Power", "device_id": "plug",
+                                              "asset": "pool", "family": "power"}]},
+                         assets={"pool": {"slug": "pool", "name": "Pool pump", "kind": "motor",
+                                          "entities": {"power": "sensor.pool_power"}}},
+                         areas=[], people=[], channels={}, unknown_area=[], unclassified=[], retention={},
+                         devices={"plug": {"name": "Pool Plug", "manufacturer": "", "model": ""}})
+    c = facts.Ctx.__new__(facts.Ctx)
+    c.pack, c.cfg = pack, {}
+    c.need = lambda *p: {"card_days": 14, "watch_drop_pct": 10}[p[-1]]
+    c.running_power = lambda eid, days: [("2026-10-01", 700.0), ("2026-10-02", 700.0)]        # steady: no drop of its own
+    c._todo = [{"device": "device:plug"}]
+    (card,) = facts.s_equipment(c)["cards"]
+    assert card["status"] == "Watch"
+    c._todo = []
+    assert facts.s_equipment(c)["cards"][0]["status"] != "Watch"
+
+
+def test_a_volt_battery_is_judged_by_its_charge_not_its_reading():
+    # architecture review 13 (live defect): a 3.0 V cell was read as "3 %" by the "battery falling" clue
+    import sys as _s
+    _s.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
+    import facts
+    from datetime import date
+    from zoneinfo import ZoneInfo
+    from vesta_shared.params import VillaParams
+    from vesta_shared.knowledge_pack import KnowledgePack
+    pack = KnowledgePack(villa="V", time_zone="UTC", generated_at="", ha_version=None,
+                         families={"battery": [{"entity_id": "sensor.station_battery", "name": "Station", "unit": "V",
+                                                "asset": "station", "family": "battery"}]},
+                         assets={}, areas=[], people=[], channels={}, unknown_area=[], unclassified=[], retention={})
+    c = facts.Ctx.__new__(facts.Ctx)
+    c.pack, c.Z, c.end = pack, ZoneInfo("UTC"), date(2026, 10, 4)
+    c.e_dt = None
+    c.need = lambda *p: 20
+    c._states = {"sensor.station_battery": {"state": "1.0"}}
+    days = [{"mean": 1.3 - i * 0.03} for i in range(11)]                          # 1.30 V down to 1.00 V of 3.0
+    c.cli = type("Cli", (), {"statistics": lambda self, ids, s, e, p, k: {"sensor.station_battery": days}})()
+    params = VillaParams(helpers=[{"entity_id": "input_number.station_battery_nominal_v", "helper_type": "input_number",
+                                   "id": "station_battery_nominal_v"}], states={"input_number.station_battery_nominal_v": "3.0"})
+    c.params = lambda: params
+    (clue,) = facts.clue_battery_trend(c, {"below_pct": 40, "days": 10})
+    assert clue["level_pct"] == 33 and clue["fall_per_week"] > 0                # 1.0 V of 3.0 is 33 %, not "1 %"
+    c.params = lambda: VillaParams()
+    assert facts.clue_battery_trend(c, {"below_pct": 40, "days": 10}) == []        # no nominal: never a guess

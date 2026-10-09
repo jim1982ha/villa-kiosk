@@ -304,6 +304,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
     res = run(args)
     out = {k: res[k] for k in ("as_of", "features_written", "digest_lines", "tasks_to_create", "notes")}
+    out[result.FAULTS_CHANGED] = bool(res["new_findings"] or res["still_open"] or res["closed"])
     # The engine's standard output: each task a Facility ticket in the VESTA Kiosk, and a P2
     # finding sent to the facility manager at once rather than at the 07:00 digest.
     # the ticket's title says what is wrong, its note what to check (two fields, not one sentence)

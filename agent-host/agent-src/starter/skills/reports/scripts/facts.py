@@ -413,11 +413,13 @@ def clue_battery_trend(c, when):
     s = datetime.combine(c.end - timedelta(days=days - 1), time(0), c.Z)
     out = []
     for r in c.pack.families.get("battery", []):
-        now_v = _num((c.states().get(r["entity_id"]) or {}).get("state"))
+        # ⚠️ ITS CHARGE, NOT ITS READING (architecture review 13): a 3.0 V cell was read as "3 %" here and made a
+        # false "battery falling" clue, while the batteries section converted it — both ask battery_pct now
+        now_v = battery_pct(c, r, _num((c.states().get(r["entity_id"]) or {}).get("state")))
         if now_v is None or now_v >= float(when["below_pct"]):
             continue
         rows = c.cli.statistics([r["entity_id"]], s, c.e_dt, "day", ("mean",)).get(r["entity_id"], [])
-        pts = [(i, _num(x.get("mean"))) for i, x in enumerate(rows) if _num(x.get("mean")) is not None]
+        pts = [(i, p) for i, x in enumerate(rows) if (p := battery_pct(c, r, _num(x.get("mean")))) is not None]
         fall = None
         if len(pts) >= 5:
             fall = round(-(slope_per_hour(pts) or 0) * 7, 1)      # the points are (day index, level): per day
@@ -744,7 +746,9 @@ def s_equipment(c: Ctx) -> dict:
         series = c.running_power(pw, days)
         if len(series) < 2:
             continue                                  # did not run in the period: no card to draw
-        status = "Watch" if (slug in watched or pw in watched) else _status_from(series, drop)
+        # ⚠️ BY THE ONE DEVICE IDENTITY (architecture review 13): the to-do list names devices by device_of, and this
+        # compared them with the asset slug — no card was ever set to "Watch" by it (a regression of 0.12.115)
+        status = "Watch" if _device(c, pw, slug) in watched else _status_from(series, drop)
         cards.append({"id": f"card-{slug}", "title": a.get("name") or slug, "subtitle": f"Running power per day, last {days} days",
                       "unit": "W", "series": series, "status": status,
                       "figures": {"first": series[0][1] if series else None, "last": series[-1][1] if series else None,
@@ -773,14 +777,21 @@ def _extra_card(c: Ctx, spec: dict, days: int) -> dict:
                         "alert_at": alert}}
 
 
+def battery_pct(c, r: dict, value) -> float | None:
+    """A battery's charge in %, from its reading: % as it is, volts against the nominal the villa set for it
+    (device_state.battery_charge); None when it cannot be told (volts with no nominal: never a guess)."""
+    unit = (r.get("unit") or "%").strip()
+    nominal = c.params().asset_optional_number(r.get("asset") or "", "battery_nominal_v") if unit == "V" else None
+    return battery_charge(value, unit, nominal)
+
+
 def s_batteries(c: Ctx) -> dict:
     repl, watch, show = c.need("battery", "replace_below_pct"), c.need("battery", "watch_below_pct"), c.need("battery", "show")
     rows = []
     for r in c.pack.families.get("battery", []):
         v = _num((c.states().get(r["entity_id"]) or {}).get("state"))
         unit = (r.get("unit") or "%").strip()
-        nominal = c.params().asset_optional_number(r.get("asset") or "", "battery_nominal_v") if unit == "V" else None
-        pct = battery_charge(v, unit, nominal)
+        pct = battery_pct(c, r, v)
         if pct is None:
             continue                      # volts with no nominal: the night check asks for it, never a guess
         lvl = "replace" if pct < repl else ("watch" if pct < watch else "ok")

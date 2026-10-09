@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.110 (9 October 2026)
+
+Architecture review 13 (the skills' data path), its three live defects:
+- facts.s_equipment compares the to-do list's devices by the one identity (knowledge_pack.device_of): since 0.6.109 it compared them with the asset slug and no card reached "Watch" through the to-do list (a regression of review 12).
+- The night check prints result.FAULTS_CHANGED (new, still open or closed findings), the key app.run_code_job reads to repair the Kiosk's faults; it read new_findings / still_open / closed, which the night check never printed.
+- facts.battery_pct: a battery's charge from its reading, % as it is, volts against its nominal; clue_battery_trend and s_batteries both ask it (the clue read 3.0 V as 3 %).
+- Tests: a card watched through its device, the night check's printed key and the engine reading it, a volt cell's clue in %; each shown red without its fix.
+
 ## 0.6.109 (9 October 2026)
 
 Architecture review 12 (the chat path), all five candidates:

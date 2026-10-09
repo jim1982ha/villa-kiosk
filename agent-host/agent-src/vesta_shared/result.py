@@ -15,6 +15,12 @@ The engine's reader is vesta_agent/outcome.py (carry_out); its keys:
 from __future__ import annotations
 
 
+#: A script result's mark that the Kiosk's faults must be brought up to date (its findings opened, still open or
+#: closed): the engine repairs them (app.run_code_job). ⚠️ ONE KEY, WRITTEN AND READ HERE (architecture review 13): the
+#: engine looked for new_findings / still_open / closed, which the night check computed but never printed.
+FAULTS_CHANGED = "faults_changed"
+
+
 def message(to: str, text: str, *, incident: int | None = None, buttons: bool = False,
             attachment: str | None = None) -> dict:
     """A message for `to` (here · owner · fm). `buttons`: the alert's Done / Not found / … for `incident`."""
