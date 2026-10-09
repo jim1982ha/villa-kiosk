@@ -58,6 +58,12 @@ the conclusions are yours.
    running as long as before means less water moved, not less running; many devices stopping in the
    same minute is one cause, not many faults). Drop what the data does not support — say so in the
    reading rather than inventing a cause. Say each thing ONCE: the page repeats nothing.
+   For every line whose check asks to repair, replace or adjust something (a part, a battery,
+   a pump, a relay, a filter, a Wi-Fi link), run web_search once before you write it: look up
+   that device's model, or the symptom, and add the most useful link to the sentence (the
+   manual, the usual cause, a typical price). These searches are part of the report, not extra
+   spending. Use the web to back what Home Assistant shows, never instead of it. If no reliable
+   source comes up, write "no reliable source found".
 4. Write every sentence of `to_write` in the reader's language: conclusions, not descriptions —
    what it is, what it means, what to do, when, and the question to ask. Your numbers may be your
    own (what you read in Home Assistant); write them as you would to the owner, rounded and dated.

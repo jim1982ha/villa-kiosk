@@ -1,3 +1,10 @@
+## 0.12.108
+
+What you will see:
+- In the weekly and monthly report pages, every web address the report cites is now a link you can tap. It opens in a new tab. Before, it was plain text.
+- The reports skill that comes with the app now includes your web search changes: the web_search tool, and the instruction to look up each repair, replacement or adjustment and give its link. Your edited copy of the reports skill is kept as it is. Open Skills › reports › Compare: the only difference left is the new link handling. "Take the release version" now keeps your web search lines, because the release has them too.
+- When a report asked for in a chat ends, the app's log says how many times "typing…" was sent. This is to find out why it disappeared before the weekly report arrived.
+
 ## 0.12.107
 
 What you will see:

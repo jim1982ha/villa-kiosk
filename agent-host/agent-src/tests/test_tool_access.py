@@ -90,7 +90,8 @@ def test_an_own_tool_switched_off_does_not_exist_for_the_ai(agent):
 def test_a_report_gets_only_its_skills_tools_among_those_switched_on(agent):
     sk = agent.skills.get("reports")
     got = tool_access.allowed_for_job(agent.policy(), agent.server_tools, sk)
-    assert "ha_get_history" in got and "ha_get_camera_image" not in got and "web_search" not in got
+    # the reports skill lists web_search (owner, 2026-10-09: its sources back a repair) — given while it is on
+    assert "ha_get_history" in got and "ha_get_camera_image" not in got and "web_search" in got
     assert {"send_message", "save_file", "read_skill", "run_skill_script"} <= got
     # a skill that lists none: everything switched on, but web search (a scheduled job never had it)
     sk.tools = None

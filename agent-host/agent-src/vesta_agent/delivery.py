@@ -20,6 +20,7 @@ import asyncio
 import contextlib
 import logging
 import re
+from datetime import datetime
 from typing import AsyncIterator, Callable
 
 from .job_notices import JobNotices
@@ -129,10 +130,17 @@ class Delivery:
             if task:
                 await task
 
-    async def _typing_loop(self, chat_id: int, stop: asyncio.Event) -> None:
+    async def _typing_loop(self, chat_id: int, stop: asyncio.Event, job: str | None = None) -> None:
+        """`job`: the loop of a job asked for in a chat, which says at its end how many times it was sent."""
         said = False
+        sent = accepted = 0
+        last = None
         while not stop.is_set():
             ok = await self.tg.typing(int(chat_id))
+            sent += 1
+            if ok:
+                accepted += 1
+                last = datetime.now().strftime("%H:%M:%S")
             if ok and not said:
                 # ⚠️ PROOF IT WAS SHOWN (owner, 2026-10-07: "no typing indication", and the log had no refusal either):
                 # one line per answer when Telegram accepts it, so "not seen" can be told from "not sent"
@@ -142,6 +150,11 @@ class Delivery:
                 await asyncio.wait_for(stop.wait(), timeout=TYPING_EVERY_S)
             except asyncio.TimeoutError:
                 pass
+        if job:
+            # ⚠️ SAID AT THE END (villa, 2026-10-09 15:27: "typing…" vanished before the weekly report came, and the log
+            # held only the first one): whether the repeats ran until the result, or stopped early
+            log.info("\"typing…\" for %s in chat %s: sent %d times, %d accepted, last accepted at %s",
+                     job, chat_id, sent, accepted, last or "never")
 
     # ------------------------------------------------------------------ jobs asked for in a chat
     # ⚠️ "typing…" UNTIL THE REPORT IS THERE (owner, 2026-10-07): the conversation's reply ("on its way") ended the
@@ -157,7 +170,7 @@ class Delivery:
             entry[2].add(job)
             return
         stop = asyncio.Event()
-        self._job_typing[int(chat_id)] = (stop, asyncio.create_task(self._typing_loop(int(chat_id), stop)), {job})
+        self._job_typing[int(chat_id)] = (stop, asyncio.create_task(self._typing_loop(int(chat_id), stop, job)), {job})
 
     async def job_waiting(self, chat_id: int, mid: int) -> None:
         """A job started by a button: the pressed message is its "being prepared" message. ⚠️ Without it the job

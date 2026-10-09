@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.102 (9 October 2026)
+
+- reports: every web address in a reading or a check is a link (compose.linked: escaped around it, a quote or angle bracket ends it, a closing full stop or bracket is not part of it; opens in a new tab; style a.src wraps on a phone). The reports skill lists web_search, and step 3 of SKILL.md asks for one search per line whose check repairs, replaces or adjusts something (the owner's wording, 2026-10-09). test_reports pins the links (three mutations shown red); test_tool_access expects web_search for a report while it is switched on.
+- delivery.py: a chat job's "typing…" loop says at its end how often it was sent and accepted, and when last (villa, 15:27: it vanished before the weekly report came).
+
 ## 0.6.101 (9 October 2026)
 
 - delivery.py logs each step of a chat job's waiting message (job asked for, the reply recorded, the result, the delete or the edit), with job_notices.JobNotices.describe. Villa, 15:03: a weekly report asked for in the group arrived and "on its way" stayed, with no delete tried; the notice lives in memory only and the case did not reproduce with the test stand-ins (private chat and group). Instrument only: no behaviour change.

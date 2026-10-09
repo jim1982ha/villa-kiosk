@@ -55,3 +55,23 @@ def test_a_new_turn_after_an_unreplied_result_starts_fresh():
     n.started(C, "b")
     assert n.replied(C, 200) is None                   # not deleted for the OLD job's result
     assert n.ended(C, "b") == ("edit", 200, "b")
+
+
+def test_a_chat_jobs_typing_says_at_its_end_how_often_it_was_sent(tmp_path, caplog):
+    # villa, 2026-10-09 15:27: "typing…" vanished before the weekly report came; the log held only the first one,
+    # so "the repeats stopped" could not be told from "the app stopped showing them"
+    import asyncio
+    import logging
+    from helpers import make_agent
+    from vesta_agent.routing import JOB, Origin
+    v = make_agent(tmp_path, {"chats": {"owner": -100777, "fm": 222}})
+
+    async def go():
+        v.delivery.job_started(-100777, "fm-weekly")
+        await asyncio.sleep(0.05)
+        await v.delivery.send(-100777, "Weekly report", origin=Origin(-100777, JOB))   # its result: typing stops
+        await asyncio.sleep(0.05)
+    with caplog.at_level(logging.INFO, logger="vesta"):
+        asyncio.run(go())
+    said = [r.getMessage() for r in caplog.records if "sent" in r.getMessage() and "typing" in r.getMessage()]
+    assert said and said[-1].startswith("\"typing…\" for fm-weekly in chat -100777: sent 1 times, 1 accepted, last accepted at ")

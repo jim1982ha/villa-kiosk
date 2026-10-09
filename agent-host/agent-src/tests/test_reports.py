@@ -563,3 +563,26 @@ def test_a_page_step_with_a_missing_part_is_refused_not_silently_unsent(tmp_path
     r = _run(COMPOSE, "fm-daily", "--pack", str(tmp_path / "pack.json"), "--store", str(tmp_path / "s.sqlite"),
              "--finish", "fm")
     assert r.returncode == 1 and "on_limit step of a page" in r.stderr
+
+
+def test_a_source_the_report_cites_is_a_link_that_cannot_break_the_page():
+    # owner, 2026-10-09: "I expect to see a clickable link instead of a raw text" — the web_search sources in the
+    # readings and the checks were escaped whole, so a cited page could not be opened from the phone
+    import sys as _s
+    _s.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
+    import compose
+    out = str(compose.linked("Note its firmware. https://github.com/home-assistant/core/issues/183069. Then ask."))
+    assert ('<a class="src" href="https://github.com/home-assistant/core/issues/183069" target="_blank" '
+            'rel="noopener noreferrer">https://github.com/home-assistant/core/issues/183069</a>. Then ask.') in out
+    assert out.startswith("Note its firmware. ")
+    # what surrounds it stays escaped, and a quote ends the address: nothing written can leave the link
+    evil = str(compose.linked('<b>x</b> https://a.example/p?q=1&r=2"onclick="x'))
+    assert "<b>" not in evil and 'href="https://a.example/p?q=1&amp;r=2"' in evil and 'onclick="x' not in evil
+    assert str(compose.linked("")) == "" and not compose.linked("")
+    # both kinds of sentence on the page go through it: the readings and the checks
+    facts = {"zone": "UTC", "order": ["headline"], "to_write": [{"id": "headline", "kind": "reading"}],
+             "sections": {"headline": {"colour": "amber", "text": "Amber"}}}
+    page = compose.page(facts, {"headline": "See https://example.org/guide."})
+    assert '<a class="src" href="https://example.org/guide"' in page and "a.src{" in page
+    src = open(os.path.join(STARTER_SKILLS, "reports", "scripts", "compose.py"), encoding="utf-8").read()
+    assert "note=lambda k: linked(notes.get(k, \"\"))" in src and "return mark + linked(text)" in src

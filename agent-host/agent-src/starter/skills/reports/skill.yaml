@@ -2,7 +2,7 @@ description: The facility manager's daily digest and weekly page, the owner's we
 # The tools a report's AI gets (among those switched on in Rules › AI tools): what VESTA's readings
 # look at in Home Assistant, the notes it saves for compose.py, and the message that carries the page.
 tools: [ha_get_state, ha_get_history, ha_search, ha_get_entity, ha_get_device, ha_eval_template, ha_get_logs,
-        ha_get_automation_traces, ha_list_floors_areas, ha_get_overview, save_file, send_message]
+        ha_get_automation_traces, ha_list_floors_areas, ha_get_overview, save_file, send_message, web_search]
 scripts:
   facts.py:                    # every figure, and the clues, of a weekly or monthly page (reports.yaml)
     commands:

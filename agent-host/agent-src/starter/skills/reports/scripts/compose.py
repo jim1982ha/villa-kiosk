@@ -338,6 +338,28 @@ def checked_notes(facts: dict, notes: dict) -> tuple[dict, list[dict]]:
 
 
 # ---------------------------------------------------------------- the page
+#: A web address in a sentence the AI wrote (its web_search sources). Quotes and angle brackets end it, so it can
+#: never leave the link; a full stop or a bracket that closes the sentence is not part of it.
+_URL = re.compile(r"https?://[^\s<>\"']+")
+_URL_TAIL = ".,;:!?)]"
+
+
+def linked(text) -> Markup:
+    """`text`, escaped, with every web address a link that opens in a new tab.
+
+    ⚠️ CLICKABLE (owner, 2026-10-09: "I expect to see a clickable link instead of a raw text"): the readings and
+    checks were escaped whole, so the sources the report cites were dead text on the phone."""
+    text = str(text or "")
+    out, at = [], 0
+    for m in _URL.finditer(text):
+        url = m.group(0).rstrip(_URL_TAIL)
+        out.append(escape(text[at:m.start()]))
+        out.append(Markup('<a class="src" href="{0}" target="_blank" rel="noopener noreferrer">{0}</a>').format(url))
+        at = m.start() + len(url)
+    out.append(escape(text[at:]))
+    return Markup("").join(out)
+
+
 def page(facts: dict, notes: dict, limit: str | None = None, without_ai: str | None = None) -> str:
     """`without_ai`: why the AI could not write (its job's without_ai steps): the page says so at the top."""
     kinds = {w["id"]: w.get("kind", "reading") for w in facts.get("to_write") or []}
@@ -349,7 +371,7 @@ def page(facts: dict, notes: dict, limit: str | None = None, without_ai: str | N
             return Markup(f'<span class="unwritten">Not written: this report reached its {escape(limit)} USD limit.</span>') \
                 if limit and k in kinds else ""
         mark = Markup('<span class="mark">VESTA\'s reading</span> ') if kinds.get(k) == "reading" else ""
-        return mark + escape(text)
+        return mark + linked(text)
 
     def num(v, nd=1):
         if v is None:
@@ -386,7 +408,7 @@ def page(facts: dict, notes: dict, limit: str | None = None, without_ai: str | N
     header = sections.get("header") or {}
     return TPL.get_template("report.html").render(
         title=header.get("title") or facts.get("villa", ""), eyebrow=facts.get("eyebrow", ""),
-        order=facts.get("order") or [], sections=sections, note=lambda k: notes.get(k, ""), reading=reading,
+        order=facts.get("order") or [], sections=sections, note=lambda k: linked(notes.get(k, "")), reading=reading,
         num=num, pct=pct, day=day, sentence=sentence, when=when, money=lambda v, cur: fmt_money(v, cur) if v else "—",
         chart_line=lambda *a: Markup(line(*a)), chart_bars=lambda b: Markup(bars(b)),
         chart_pairs=lambda r: Markup(pairs(r)), without_ai=without_ai)
