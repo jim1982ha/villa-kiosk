@@ -1,3 +1,12 @@
+## 0.12.115
+
+What you will see:
+- When the facility manager answers an alert with "Need help", the owner's message about it now keeps its Done / Not found / Need help buttons. Until now the buttons disappeared the moment it arrived, so the owner could not answer it.
+- When you ask for two reports in a row, each one's "on its way" message is removed when that report arrives, even if an earlier reply failed to send.
+- "typing…" for a report starts once the agent's "on its way" reply is sent, so the two never overlap.
+- In the reports, a device is named the same way in every section: the to-do list, the monitoring table and the batteries, which now show the device's name.
+- Behind the scenes: the agent's records of what each chat shows about an incident are now one record per chat, cleaned up with the other records. The ones kept so far are converted when the app starts.
+
 ## 0.12.114
 
 What you will see:
