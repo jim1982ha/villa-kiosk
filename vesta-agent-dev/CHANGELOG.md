@@ -1,3 +1,10 @@
+## 0.12.119
+
+Fixes for two mistakes in 0.12.118, and one older miscount:
+- On the VESTA Agent page, a switched-off skill no longer makes a working one show "Not working". This happened when you kept a switched-off copy of a skill (to edit it) that uses the same report name: the page, the Offline Test and the setup copy treated the real skill as off, while the agent used it normally.
+- Skills, Offline Test: the file list again offers the files your last reports made (this morning's facts.json, for example), each one saying which report made it and when. It no longer offers only older files from before 0.12.118.
+- The Overview counts a ticket the AI creates for the facility manager once, not twice.
+
 ## 0.12.118
 
 What you will see:
