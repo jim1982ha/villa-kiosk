@@ -67,7 +67,8 @@ ck("numeric device charts (sensor, pumps, device groups) ask for the trend, thro
 // reading.mjs); this pins that the grouped panel charts by that kind.
 ck("a device-group member that is unavailable NOW still gets its chart",
    /readingOf\(id, entity, domainOf\(id\) === "binary_sensor" \? "binary_sensor" : "sensor"/.test(src("components/panels/DeviceGroupPanel.tsx"))
-   && /r\.reading\.kind === "measurement" && \(r\.numeric !== undefined \|\| r\.unit !== ""\)/.test(src("components/panels/DeviceGroupPanel.tsx")));
+   // by config/reading's historyOf since architecture review 11 ("numbers" = a measurement, offline included)
+   && /historyOf\(r\.reading\) === "numbers" && \(r\.numeric !== undefined \|\| r\.unit !== ""\)/.test(src("components/panels/DeviceGroupPanel.tsx")));
 const { cameraBarState } = await import("@/components/panels/cameraStatusBar");
 ck("the camera bar paints a lost motion sensor as unavailable, not 'online'",
    cameraBarState("idle", "unavailable", true) === "motion-unavailable" && cameraBarState("idle", undefined, true) === "motion-unavailable"

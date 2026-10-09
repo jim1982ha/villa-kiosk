@@ -254,6 +254,17 @@ export function toCelsius(value: number, unit: string): number {
   return /f/i.test(unit) ? (value - 32) * (5 / 9) : value;
 }
 
+/** A temperature HISTORY in °C, as the live readings are (stationReadings).
+ *  ⚠️ ONE UNIT ON ONE SCREEN (architecture review 11, 2026-10-09): live readings were converted and the history was
+ *  not, both printed with a bare "°" — on a °F station "Outside 22.0°" sat above "Today 68.0° – 77.0°". */
+export function celsiusSeries<S extends { points: { t: number; v: number }[] }>(s: S | undefined, unit: string): S | undefined {
+  if (!s || !/f/i.test(unit)) return s;
+  return { ...s, points: s.points.map((p) => ({ ...p, v: toCelsius(p.v, unit) })) };
+}
+
+/** The station's roles that hold a temperature (converted to °C everywhere they are shown). */
+export const TEMPERATURE_ROLES: ReadonlySet<WeatherRole> = new Set(["temperature", "feelsLike", "dewPoint", "indoorTemperature", "indoorDewPoint"] as WeatherRole[]);
+
 // ── The Weather window's words: the headline, the comfort scale, advice ──
 //
 // ⚠️ RULES, NOT A FORECAST, AND NOT A MODEL. Each is a fixed reading of the

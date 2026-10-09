@@ -111,7 +111,9 @@ ck("  ...a list row and the camera's next/prev open exactly the entity they name
    && /go\(\{ type: "openFromList", panel: panelFor\(entityId\) \}\)/.test(d)
    && /onOpenEntity=\{\(id\) => go\(\{ type: "switchPanel", panel: panelFor\(id\) \}\)\}/.test(d));
 ck("the open panel lists its device's readings, each opening its own panel",
-   /identity\.readingsOf\(activePanel\.entityId\)/.test(d) && /readings: panelReadings,/.test(d) && /onOpenReading: openReading,/.test(d) && /go\(\{ type: "openReading", panel: panelFor\(entityId\) \}\)/.test(d)
+   // the open panel's actions: components/panels/useOpenPanelActions (architecture review 11), fed the identity by the page
+   /useOpenPanelActions\(\{ screen, go, panelFor, readingsOf: identity\.readingsOf \}\)/.test(d) && /<PanelActionsProvider value=\{openPanel\.actions/.test(d)
+   && /readingsOf\(activePanel\.entityId\)/.test(src("components/panels/useOpenPanelActions.ts")) && /onOpenReading: openReading,/.test(src("components/panels/useOpenPanelActions.ts")) && /go\(\{ type: "openReading", panel: panelFor\(entityId\) \}\)/.test(src("components/panels/useOpenPanelActions.ts"))
    && /rows\.map\(\(r\) =>/.test(src("components/panels/DeviceReadings.tsx")) && /onOpenReading\(r\.id\)/.test(src("components/panels/DeviceReadings.tsx")));
 ck("grouping never trades controls for a summary: only a READING-led group opens the combined view",
    /if \(group && \(mapping\.type === "sensor" \|\| mapping\.type === "binary_sensor"\)\)/.test(router)

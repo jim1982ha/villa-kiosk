@@ -33,6 +33,7 @@ import type { ReadinessResult } from "@/fm/readiness";
 import type { FmSavedDocument } from "@/fm/fmTypes";
 import MarkdownPreview from "./MarkdownPreview";
 import SavedDocumentsList from "./SavedDocumentsList";
+import { downloadFile } from "@/utils/download";
 
 /** Previous month by default: the recap is written about a month that has
  *  finished, and it is due by the 10th of the one after it. */
@@ -79,12 +80,7 @@ export default function RecapTab({
 
   const download = () => {
     if (!markdown) return;
-    const url = URL.createObjectURL(new Blob([markdown], { type: "text/markdown" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${villaName.replace(/\s+/g, "-").toLowerCase()}-operations-${month}.md`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadFile(`${villaName.replace(/\s+/g, "-").toLowerCase()}-operations-${month}.md`, markdown, "text/markdown");
   };
 
   const save = async () => {

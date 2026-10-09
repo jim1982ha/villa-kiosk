@@ -18,7 +18,7 @@
 import { useState, type ReactNode } from "react";
 import { useInterval } from "@/hooks/useInterval";
 import { CloudSun } from "lucide-react";
-import { fmtChartValue, fmtChartTick, fmtChartTime, fmtChartStamp } from "./chartUtils";
+import { fmtChartValue, fmtChartTick, fmtChartTime, fmtChartStamp, fmtDuration } from "./chartUtils";
 import { formatUnitValue } from "@/utils/entityValue";
 import BarChart from "./BarChart";
 import { DataWindow, Figure, LiveNote, ObservationCards } from "./WindowPieces";
@@ -34,18 +34,15 @@ import type { HassEntity, HistorySeries } from "@/types/ha.types";
 import {
   beaufort, compass, pressureTendency, uvBand, stationReadings, barometerAngle, thermometerFraction, rainTubeTop,
   weatherHistoryFigures, UV_BANDS, UV_SCALE_TOP, uvScalePosition, sunshineFraction, rainBand,
-  comfortHeadline, comfortPosition, COMFORT_BANDS, windowAdvice, laundryAdvice, outdoorsAdvice,
+  comfortHeadline, comfortPosition, COMFORT_BANDS, windowAdvice, laundryAdvice, outdoorsAdvice, celsiusSeries, TEMPERATURE_ROLES,
   type Advice, type WeatherRole, type WeatherStation,
 } from "@/config/weatherStation";
 
 
-/** "16 s ago", "3 min ago", "2 h ago". */
+/** "16 s ago", "3 min ago", "1 h 29 min ago" — the app's one duration
+ *  (chartUtils.fmtDuration); this read "1 h ago" for 89 minutes. */
 function ago(iso: string | undefined, now: number): string {
-  if (!iso) return "";
-  const s = Math.max(0, Math.round((now - Date.parse(iso)) / 1000));
-  if (s < 60) return `${s} s ago`;
-  if (s < 3600) return `${Math.round(s / 60)} min ago`;
-  return `${Math.round(s / 3600)} h ago`;
+  return iso ? `${fmtDuration(now - Date.parse(iso))} ago` : "";
 }
 const f1 = (v: number | undefined) => (v === undefined ? "—" : v.toFixed(1));
 const f0 = (v: number | undefined) => (v === undefined ? "—" : String(Math.round(v)));
@@ -176,11 +173,14 @@ function Tile({ title, center, k, children }: { title: string; center?: boolean;
 
 /** Today's low and high, from the recorder's 5-minute statistics since midnight. */
 function useTodayRange(entityId: string | undefined): { min: number; max: number } | null {
+  const { entities } = useHA();
   const { data } = useHistorySource(entityId ? { today: {
     kind: "statistics", ids: [entityId], period: "5minute", fields: ["min", "max"],
     since: localMidnight(Date.now()) } } : null);
-  const lo = seriesExtent(entityId ? data?.today[entityId]?.min : undefined);
-  const hi = seriesExtent(entityId ? data?.today[entityId]?.max : undefined);
+  // in °C, as the "Outside" bar above it (weatherStation.celsiusSeries)
+  const unit = String((entityId && entities[entityId]?.attributes.unit_of_measurement) ?? "");
+  const lo = seriesExtent(celsiusSeries(entityId ? data?.today[entityId]?.min : undefined, unit));
+  const hi = seriesExtent(celsiusSeries(entityId ? data?.today[entityId]?.max : undefined, unit));
   return lo && hi ? { min: lo.min, max: hi.max } : null;
 }
 
@@ -373,7 +373,9 @@ function HistoryView({ station, range }: { station: WeatherStation; range: Histo
 
   const series = (role: WeatherRole, key: MeasuredField = "mean"): HistorySeries | undefined => {
     const id = station.roles[role];
-    return id ? data?.measured[id]?.[key] : undefined;
+    const s = id ? data?.measured[id]?.[key] : undefined;
+    // a temperature in °C, as the live tiles show it (weatherStation.celsiusSeries)
+    return id && TEMPERATURE_ROLES.has(role) ? celsiusSeries(s, String(entities[id]?.attributes.unit_of_measurement ?? "")) : s;
   };
   const t = seriesExtent(series("temperature", "min")), T = seriesExtent(series("temperature", "max"));
   const gustRole: WeatherRole = station.roles.windGust ? "windGust" : "windSpeed";

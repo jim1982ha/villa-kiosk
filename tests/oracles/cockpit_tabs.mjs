@@ -21,7 +21,7 @@ ck("the Facility window is gone, and nothing opens it",
 // The moves themselves (Faults tab, device filled in, guest's report instead)
 // are pages/screen's, driven by value in screen.mjs; the page only sends them.
 ck("a device's 'report a fault' opens the Cockpit on Faults with the device filled in",
-   /onReportFault: canReportFault \? \(\) => go\(\{ type: "reportFault" \}\)/.test(dash)
+   /onReportFault: canReportFault \? \(\) => go\(\{ type: "reportFault" \}\)/.test(rd("components/panels/useOpenPanelActions.ts"))
    && /reportFaultFor=\{screen\.faultFor \?\? undefined\}/.test(dash));
 ck("the top bar opens it on Overview; Back from a device returns to the tab it left (the tab is held by the page)",
    /onOpenCockpit=\{\(\) => go\(\{ type: "openWindow", window: "cockpit", tab: "overview" \}\)\}/.test(dash)

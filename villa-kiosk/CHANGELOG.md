@@ -1,3 +1,15 @@
+## 2.496.316
+
+### Fixed
+- A power or an energy now reads the same everywhere. The Energy window wrote 3,000 W as "3.00 kW" while the top bar wrote "3 kW", and 3,456 W as "3.46 kW" against "3.5 kW". It now follows the badges: "3 kW", "3.5 kW", "4.2 kWh".
+- The Energy window no longer paints meters and devices in the red ("needs attention") and amber ("lost contact") status colours just because of the order they are listed in. They now get neutral colours. A day well above normal stays red, because that one is a warning.
+- A sensor whose state is words (an access point's "connected") now shows its history inside a device group, as it already did in its own window. A grouped on/off sensor's pill also gets its icon back.
+- On a weather station that reports in °F, today's range and the charts are now converted to °C like the live readings. Before, the same screen mixed both units under a bare "°".
+- Weather's "updated … ago" now says "1 h 29 min ago" instead of rounding to "1 h ago", like the rest of the app.
+
+### Behind the scenes
+- The Spend and Recap tabs save their files through the shared download helper, which always frees the file from memory. The Cockpit's activity list loads through the shared history loader. Six style rules for screen parts that no longer exist are gone. The open device panel's header buttons are built in one place instead of inside the main page. New checks keep all of this from coming back.
+
 ## 2.496.315
 
 ### Changed

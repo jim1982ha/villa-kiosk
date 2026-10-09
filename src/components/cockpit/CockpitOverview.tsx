@@ -11,7 +11,7 @@
 // selectableDeviceIds/entityMap/resolvedRooms, never a raw HA domain query
 // (see cockpitData.ts's own docstring).
 
-import { useEffect, useMemo, useState, type ComponentType } from "react";
+import { useMemo, useState, type ComponentType } from "react";
 import { createPortal } from "react-dom";
 import {
   TriangleAlert, AlertOctagon, MapPin, Building2, LayoutGrid,
@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import SegmentedGroup from "@/components/common/SegmentedGroup";
 import { fmtChartTime } from "@/components/panels/chartUtils";
+import { useHistory } from "@/hooks/useHistory";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
@@ -93,18 +94,14 @@ export default function CockpitOverview({ onOpenEntity, doors }: {
   // cockpitData.ts's buildActivityFeed — HA's raw logbook is unfiltered and
   // genuinely noisy (a bare date/time helper alone produced roughly one
   // entry every six seconds in a real pull).
-  const [rawActivity, setRawActivity] = useState<Awaited<ReturnType<typeof fetchLogbookEvents>> | "loading" | "error">("loading");
-  useEffect(() => {
-    let cancelled = false;
-    fetchLogbookEvents(ws, 6)
-      .then((entries) => { if (!cancelled) setRawActivity(entries); })
-      .catch(() => { if (!cancelled) setRawActivity("error"); });
-    return () => { cancelled = true; };
-  }, [ws]);
+  // The fetch-and-say-where-it-stands effect is hooks/useHistory's, the one
+  // every chart uses (architecture review 11: this was its eighth copy).
+  const activity = useHistory("logbook-6h", () => fetchLogbookEvents(ws, 6), [] as Awaited<ReturnType<typeof fetchLogbookEvents>>);
   const villaActivity = useMemo((): ActivityEntry[] | "loading" | "error" => {
-    if (!Array.isArray(rawActivity)) return rawActivity;
-    return buildActivityFeed(rawActivity, entities, config.entityMap, selectableIds);
-  }, [rawActivity, entities, config.entityMap, selectableIds]);
+    if (activity.status === "loading") return "loading";
+    if (activity.status === "failed") return "error";
+    return buildActivityFeed(activity.data, entities, config.entityMap, selectableIds);
+  }, [activity.status, activity.data, entities, config.entityMap, selectableIds]);
 
   // Firmware/add-on updates available — HA's own `update` domain already
   // tracks this per device AND per add-on (including this one). A small

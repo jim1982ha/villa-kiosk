@@ -33,6 +33,7 @@ import { formatMoney } from "@/utils/money";
 import CostFields from "./CostFields";
 import { useDeviceChoice } from "./useDeviceChoice";
 import FormActions from "./FormActions";
+import { downloadFile } from "@/utils/download";
 
 export default function SpendTab(
   { onOpenEntity, deviceOptions }: {
@@ -98,12 +99,7 @@ export default function SpendTab(
   };
   const downloadStatement = () => {
     if (!statement) return;
-    const url = URL.createObjectURL(new Blob([statement], { type: "text/markdown" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${villaName.replace(/\s+/g, "-").toLowerCase()}-spend-${month}.md`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadFile(`${villaName.replace(/\s+/g, "-").toLowerCase()}-spend-${month}.md`, statement, "text/markdown");
   };
   const saveStatement = async () => {
     if (!statement) return;

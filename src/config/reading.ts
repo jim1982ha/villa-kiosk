@@ -107,3 +107,16 @@ export function rowTone(r: Reading): string | undefined {
   if (r.pill) return r.pill;
   return r.level === "normal" ? undefined : r.level;
 }
+
+/** Which history goes under a reading: the states of an on/off sensor, the
+ *  words of a words sensor (with a legend, its states being open-ended), or
+ *  the numbers of a measurement — offline included, whose chart shades the
+ *  outage. A numeric parse of a words sensor would drop every row.
+ *
+ *  ⚠️ ONE RULE FOR EVERY WINDOW (architecture review 11, 2026-10-09). The
+ *  sensor window and the grouped device window each chose for themselves, and
+ *  drifted: a words sensor in a group showed no history at all. */
+export type ReadingHistory = "states" | "words" | "numbers";
+export function historyOf(r: Reading): ReadingHistory {
+  return r.kind === "binary" ? "states" : r.kind === "text" ? "words" : "numbers";
+}

@@ -631,8 +631,7 @@
 @media (hover: hover) {
   .summary-tile:hover:not(:disabled) { background: var(--bg-input); }
 }
-.summary-tile.is-info, .summary-tile:disabled { cursor: default; }
-.summary-tile:disabled { opacity: 0.9; }
+.summary-tile:disabled { cursor: default; opacity: 0.9; }
 
 /* A tile that is ONLY its glyph (the Scene button). It carries no label and no
    value, so the asymmetric right padding — which exists purely to separate the
