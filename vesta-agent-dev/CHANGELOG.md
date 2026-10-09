@@ -1,3 +1,8 @@
+## 0.12.113
+
+What you will see:
+- "typing…" should now show while a report is made. Every 2 seconds made it disappear completely, and every 4 seconds showed it only now and then, although Telegram accepted every signal both times. A signal sent while the previous one is still showing seems to be ignored, so the app now sends one every 5.5 seconds, just after the previous one ends.
+
 ## 0.12.112
 
 What you will see:
