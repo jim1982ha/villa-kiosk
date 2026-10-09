@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.100 (9 October 2026)
+
+- One message per incident per chat (owner). alert_buttons.AlertButtons.replace: a message with an incident_id is sent, then the incident's earlier messages in that chat are deleted (state inclast:*); one past Telegram's 48 hours is edited to a pointer. adopt: Home Assistant's own messages of the run (ha_events now listens to telegram_sent; every event's context id travels as data["_context_id"]; state.note_ha_sent / ha_sent, kept 24 h) are rewritten and tracked under the incident. outcome: new key ha_messages (vesta_shared.result.ha_message); two messages of one result for one incident and chat keep the one with the buttons. vesta_shared.messaging.incident_tag / incident_message: the one layout ("Incident #N · status", the original alert, what to answer). alert-desk: every message through desk.about (the original alert and what to check repeated), escalations and the owner's messages carry the buttons; reports' digest lists "Incident #N · …". tests/test_one_message_per_incident.py (each check shown to fail by a mutation).
+
 ## 0.6.99 (9 October 2026)
 
 - Prompt cache: app.system_prompt no longer carries the clock (it changed the cached prefix every minute). runner.with_time puts "[Villa time: …]" at the head of every message (chats, Continue, AI jobs). tests/test_prompt_cache.py: the instructions are identical at two different times (checked to fail with the old line), and every run sends with_time.

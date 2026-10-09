@@ -169,6 +169,39 @@ class State:
     def forget_alert_message(self, incident: int | str, chat: int | str, message_id: int | str) -> None:
         self.drop(f"incmsg:{incident}:{chat}:{message_id}")
 
+    # Every message about an incident in each chat — with or without buttons: the newest replaces the others
+    # (alert_buttons.AlertButtons.replace; owner, 2026-10-09: "only show the latest message for a given incident").
+    def remember_incident_message(self, incident: int | str, chat: int | str, message_id: int | str) -> None:
+        self.put(f"inclast:{incident}:{chat}:{message_id}", "")
+
+    def incident_messages(self, incident: int | str, chat: int | str) -> list[int]:
+        """The ids of the messages about this incident still shown in this chat."""
+        return sorted(int(k.rsplit(":", 1)[1]) for k in self.kv_prefix(f"inclast:{incident}:{chat}:"))
+
+    def forget_incident_message(self, incident: int | str, chat: int | str, message_id: int | str) -> None:
+        self.drop(f"inclast:{incident}:{chat}:{message_id}")
+        self.drop(f"incmsg:{incident}:{chat}:{message_id}")
+
+    # Home Assistant's own Telegram messages (its telegram_sent event), by the context of the automation run that
+    # sent them: a VESTA rule's vesta_critical_event comes from the same run, so its incident can take them over.
+    HA_SENT_KEEP_H = 24
+
+    def note_ha_sent(self, context_id: str, chat: int | str, message_id: int | str, at: datetime | None = None) -> None:
+        now = at or utcnow()
+        self.put(f"hasent:{context_id}:{chat}:{message_id}", now.isoformat())
+        cutoff = (now - timedelta(hours=self.HA_SENT_KEEP_H)).isoformat()
+        for k, when in self.kv_prefix("hasent:").items():
+            if when < cutoff:
+                self.drop(k)
+
+    def ha_sent(self, context_id: str) -> list[tuple[int, int]]:
+        """(chat, message id) of every message Home Assistant sent in this automation run."""
+        out = []
+        for k in self.kv_prefix(f"hasent:{context_id}:"):
+            chat, mid = k.split(":")[-2:]
+            out.append((int(chat), int(mid)))
+        return sorted(out)
+
     # A file in the out folder that the MODEL saved (a script's output may not be overwritten by it).
     def owner_told(self, problem: str) -> str | None:
         """When the owner was last told that `problem` (no credit, a refused key) stops the agent."""

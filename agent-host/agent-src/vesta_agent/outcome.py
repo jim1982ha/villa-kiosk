@@ -12,6 +12,12 @@ A skill script prints its decision in the standard form; this module does it:
   incident_id                  → the incident of the result (a message without its own)
   settle:     [{incident_id, note}]  → every message carrying that incident's buttons, in every chat,
               loses them and shows the note ("{time}": the villa's time now)
+  ha_messages [{incident_id, text, context}]  → Home Assistant's own messages of that automation run (its
+              telegram_sent events, same context) are rewritten as `text` and become the incident's messages
+
+⚠️ ONE MESSAGE PER INCIDENT PER CHAT (owner, 2026-10-09). A message with an incident_id replaces that incident's
+earlier messages in its chat (alert_buttons.AlertButtons.replace), whoever sent them; two messages of one result
+for the same incident and chat (the owner and the FM sharing a chat) send only one — the one with the buttons.
 
 ⚠️ ONE PATH FOR EVERY CALLER (owner, 2026-10-01). Before, only the scheduler and the
 Home Assistant hooks carried a result out; a script the model ran in a chat had its
@@ -32,6 +38,11 @@ from typing import Awaitable, Callable
 from .routing import Origin, Routing
 
 from .outcome_words import clean_summary, ticket_title  # noqa: F401 — the words of a record, shared with tickets.py
+from vesta_shared.messaging import incident_tag
+
+#: How long Home Assistant's telegram_sent may trail its own vesta_critical_event (both come from one run, the
+#: message first; the socket hands them over in order, so this is a margin, not a wait that normally happens).
+HA_SENT_WAIT_S = (0.5, 1.0, 2.0)
 
 log = logging.getLogger("vesta.outcome")
 
@@ -39,7 +50,7 @@ log = logging.getLogger("vesta.outcome")
 #: What a script result can ask the engine to carry out — the keys carry_out reads. ⚠️ ONE LIST
 #: (architecture review, 0.12.38): the model's run_skill_script tool kept its own copy, so a key added here
 #: would be carried out on schedule and silently skipped when the model ran the same script.
-CARRIED_KEYS = ("send", "actions", "siren_gate", "settle")
+CARRIED_KEYS = ("send", "actions", "siren_gate", "settle", "ha_messages")
 
 
 def has_work(res) -> bool:
@@ -85,6 +96,10 @@ class Outcome:
         if gate_prompt and not pol.siren_entity:
             # no siren to ask for: the warning itself goes to the gate's people (it was dropped before, 0.12.80)
             items += [{"to": to, "text": gate_prompt} for to in gate.get("to") or ("owner",)]
+        # Home Assistant's own messages first: the desk's messages below then replace them where both land
+        for h in res.get("ha_messages") or []:
+            await self.adopt_ha(h)
+        items = self._one_per_incident(items, route, origin)
         for item in items:
             text = (item or {}).get("text") or ""
             chat = route.target(item.get("to"), origin)
@@ -116,7 +131,11 @@ class Outcome:
             if not mid:
                 done["not_sent"] += 1                         # delivery.py: refused, or Telegram off
                 continue
-            if kb:
+            if item.get("incident_id"):
+                # the incident's newest message in this chat: the earlier ones go (and its buttons settle with
+                # the others, in every chat)
+                await self.buttons.replace(int(item["incident_id"]), chat, mid, text, buttons=bool(kb))
+            elif kb:
                 # every message with this incident's buttons, in every chat: all of them settle together
                 self.buttons.remember(iid, chat, mid, text)
             chats.add(chat)
@@ -148,7 +167,7 @@ class Outcome:
                     photo = await camera_photo(self.reader, a.get("entity_id"))
                     if photo:
                         for chat in chats:
-                            await self.send(chat, f"Snapshot, incident #{a.get('incident_id')}", photo=photo, origin=origin)
+                            await self.send(chat, f"{incident_tag(a.get('incident_id'))} · Snapshot", photo=photo, origin=origin)
                 else:
                     self.state.log("action_ignored", {"action": kind, "skill": skill_name})
                     log.warning("Skill %s asked for an action this agent does not know: %s", skill_name, kind)
@@ -156,3 +175,37 @@ class Outcome:
                 self.state.log("action_failed", {"action": kind, "error": type(e).__name__})
                 log.warning("action %s failed (%s)", kind, type(e).__name__)
         return done
+
+    @staticmethod
+    def _one_per_incident(items: list, route: Routing, origin) -> list:
+        """Of several messages for one incident landing in one chat (the owner and the FM share a chat), the one
+        with the buttons — else the last. Any other message is kept as it is."""
+        best: dict[tuple, int] = {}
+        for n, it in enumerate(items):
+            iid = (it or {}).get("incident_id")
+            chat = route.target((it or {}).get("to"), origin) if iid else None
+            if not chat:
+                continue
+            k = (chat, int(iid))
+            if k not in best or it.get("keyboard") or not items[best[k]].get("keyboard"):
+                best[k] = n
+        keep = set(best.values())
+        return [it for n, it in enumerate(items)
+                if not (it or {}).get("incident_id") or not route.target(it.get("to"), origin) or n in keep]
+
+    async def adopt_ha(self, h: dict) -> int:
+        """Home Assistant's messages of one automation run become incident messages (outcome key ha_messages)."""
+        ctx, iid, text = (h or {}).get("context"), (h or {}).get("incident_id"), (h or {}).get("text") or ""
+        if not (ctx and str(iid or "").isdigit() and text):
+            return 0
+        found = self.state.ha_sent(ctx)
+        for wait in HA_SENT_WAIT_S:
+            if found:
+                break
+            await asyncio.sleep(wait)
+            found = self.state.ha_sent(ctx)
+        for chat, mid in found:
+            await self.buttons.adopt(int(iid), chat, mid, text)
+        if not found:
+            log.info("Incident #%s: no Home Assistant message of its run to take over", iid)
+        return len(found)

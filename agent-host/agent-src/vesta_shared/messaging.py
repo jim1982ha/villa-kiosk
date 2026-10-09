@@ -40,3 +40,22 @@ def fmt_money(amount: float, currency: str) -> str:
         return f"{amount:,.0f} IDR"
     return f"{amount:,.2f} {currency}"
 
+
+
+# ------------------------------------------------------------------ an incident's message
+# ⚠️ ONE LAYOUT FOR EVERY MESSAGE ABOUT AN INCIDENT (owner, 2026-10-09). Each chat shows only an incident's
+# LATEST message — the engine deletes the earlier ones when a new one lands (outcome.py) — so every message
+# must stand on its own: its number, where it stands now, and the original alert. The number was written five
+# ways ("Incident #9.", "Reminder, incident #9:", "on incident #9:", "#9", none at all on Home Assistant's own
+# message), and a reminder repeated half of the alert.
+
+def incident_tag(iid: int | str) -> str:
+    """How an incident is named in every chat and report: "Incident #10"."""
+    return f"Incident #{iid}"
+
+
+def incident_message(iid: int | str, status: str, details: str = "", ask: str = "") -> str:
+    """An incident's message: "Incident #10 · <where it stands>", then the original alert (`details`), then what
+    to answer (`ask`). The words are the skill's; this is only their order."""
+    head = f"{incident_tag(iid)} · {status.strip()}" if status.strip() else incident_tag(iid)
+    return "\n".join(p for p in (head, (details or "").strip(), (ask or "").strip()) if p)

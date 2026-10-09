@@ -42,7 +42,7 @@ from .actions import Actions
 from .api_errors import AI_DOWN, FOR_PERSON, NEEDS_THE_OWNER
 from .delivery import Delivery
 from .config import STARTER_DIR
-from .ha_events import HaEvents
+from .ha_events import CONTEXT_KEY, HaEvents
 from .housekeeping import tidy
 from .kiosk import Kiosk, KioskError
 from .alert_buttons import AlertButtons
@@ -116,7 +116,7 @@ class Vesta:
         # a script's result carried out (outcome.py), with the alert buttons and the Kiosk's tickets as their own modules
         self.buttons = AlertButtons(state=self.state, skills=self.skills, store_path=settings.store_path,
                                     timezone=settings.timezone, edit=(self.tg.edit if self.tg else None),
-                                    run_job=self.run_code_job)
+                                    delete=(self.tg.delete if self.tg else None), run_job=self.run_code_job)
         self.tickets = Tickets(kiosk=self.kiosk, state=self.state, store_path=settings.store_path,
                                settle_alert=self.buttons.settle)
         # a voice message's words (voice.py): the skill prepares the audio, Home Assistant reads it
@@ -310,6 +310,12 @@ class Vesta:
     async def on_ha_event(self, event_type: str, data: dict) -> None:
         if event_type == "vesta_critical_event":
             return await self.on_critical(data)
+        if event_type == "telegram_sent":
+            # Home Assistant's own message: kept by its run's context, for the incident that run raises
+            ctx, chat, mid = data.get(CONTEXT_KEY), data.get("chat_id"), data.get("message_id")
+            if ctx and chat is not None and mid is not None:
+                self.state.note_ha_sent(str(ctx), int(chat), int(mid))
+            return None
         bot = data.get("bot") or {}
         if bot.get("username"):
             self.bot_username = bot["username"]

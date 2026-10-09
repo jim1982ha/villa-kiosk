@@ -6,6 +6,9 @@
   telegram_command       for its own automations: the agent reads Telegram from here
   telegram_callback      and never from Telegram itself (telegram.py sends only)
   telegram_attachment    a photo, a file or a VOICE MESSAGE: only its file id travels here
+  telegram_sent          a message Home Assistant itself sent on the bot (its chat and message id). With the
+                         automation run's context, which its vesta_critical_event shares, it tells which of
+                         Home Assistant's messages belongs to which incident (one message per incident per chat)
 
 Decision D1 (owner, 2026-09-30): an exception to "Home Assistant only through HA
 MCP", because HA MCP has no event-listening tool. The socket subscribes to these
@@ -30,7 +33,10 @@ import aiohttp
 log = logging.getLogger("vesta.ha_events")
 
 EVENT_TYPES = ("vesta_critical_event", "telegram_text", "telegram_command", "telegram_callback",
-               "telegram_attachment")
+               "telegram_attachment", "telegram_sent")
+#: Where an event's data carries the context id of whatever fired it (an automation run: its message and its
+#: vesta_critical_event share it). Home Assistant puts the context beside the data; this copies it in.
+CONTEXT_KEY = "_context_id"
 BACKOFF_START = 5
 BACKOFF_MAX = 300
 BEAT_EVERY = 60
@@ -142,7 +148,11 @@ class HaEvents:
             return
         # ⚠️ A TASK, NEVER AWAITED HERE: a conversation takes the model tens of seconds,
         # and the socket must keep reading (and answering Home Assistant's pings) meanwhile.
-        task = asyncio.create_task(self._handle(et, ev.get("data") or {}))
+        data = dict(ev.get("data") or {})
+        ctx = (ev.get("context") or {}).get("id")
+        if ctx:
+            data[CONTEXT_KEY] = ctx
+        task = asyncio.create_task(self._handle(et, data))
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
 

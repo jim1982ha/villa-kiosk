@@ -113,7 +113,7 @@ def test_a_press_on_the_agents_own_message_is_handled(agent):
              "message": {"message_id": mid, "chat": {"id": GROUP}}, "bot": BOT}
     run(agent.on_ha_event("telegram_callback", press))
     assert agent.tg.toasts and agent.tg.toasts[0][1] == "Not found: noted."
-    assert any("Noted for #1" in t for _, t, _ in agent.tg.sent)
+    assert any(t.startswith("Incident #1 · Not found") for _, t, _ in agent.tg.sent)
 
 
 def test_a_press_in_a_private_chat_is_answered_there_and_its_buttons_go(agent):

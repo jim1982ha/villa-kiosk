@@ -34,11 +34,18 @@ The decision is one of:
 - `muted`: nothing sent, counted.
 - `maintenance_mode`: `input_boolean.maintenance_mode` is on, nothing sent unless P1.
 - `counted`: the same rule on the same entity is already open and inside its cooldown. Nothing sent.
-- `repeat`: open and past the cooldown: one "still there, N times since" line to the FM.
+- `repeat`: open and past the cooldown: one "still there, N times since" message to the FM.
 - `new`: the owner and FM (P1) or the FM (P2) get the message, the FM's with the ladder buttons;
   a P1 or P2 also becomes a Facility ticket in the VESTA Kiosk; a camera snapshot travels with
   the message when the event names one.
 - P3 goes to the store with state `digest`; the reports skill picks it up at 07:00. P4 is logged only.
+
+## One message per incident per chat
+
+Every message about an incident starts with `Incident #N · <where it stands>`, then repeats the original
+alert and what to check, then what to answer when someone is still asked. A chat shows only an incident's
+latest message: the engine deletes the earlier ones when a new one lands, Home Assistant's own alert
+included (it is rewritten with the incident's number as soon as the desk knows it).
 
 ## The chase ladder (every 5 minutes: `desk.py tick`)
 

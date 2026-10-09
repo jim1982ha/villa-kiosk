@@ -51,7 +51,7 @@ from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
 from vesta_shared import result as R  # noqa: E402  (what the engine is asked to do: its shape)
 from vesta_shared import script  # noqa: E402  (pack, store, zone, day: one set-up)
 from vesta_shared.params import MissingParameter  # noqa: E402
-from vesta_shared.messaging import fmt_money, split_message  # noqa: E402
+from vesta_shared.messaging import fmt_money, incident_tag, split_message  # noqa: E402
 from vesta_shared.axis import is_flat, label as axis_label, nice_axis  # noqa: E402  (the one axis rule)
 from vesta_shared.store import Incident, Store  # noqa: E402
 from vesta_shared.timeutil import day_label, day_time_label, villa_date  # noqa: E402  (the one day format)
@@ -108,12 +108,12 @@ def fm_daily(pack: KnowledgePack, store: Store, as_of: date) -> str:
         lines.append("Also noted (no action needed yet):")
         lines += [f"- {json.loads(i['payload'] or '{}').get('message') or i['rule_id']}" for i in digest_inc]
     if open_now:
-        # ⚠️ "#N" ONLY WHERE "#N done" WORKS: an alert's incident number. It used to print task numbers,
+        # ⚠️ AN INCIDENT NUMBER ONLY WHERE "#N done" WORKS: an alert's incident number. It used to print task numbers,
         # which no reply could close; a maintenance finding is closed in the VESTA Kiosk instead.
         lines.append(f"Still open: {len(open_now)}. An alert: reply with its number and Done, Not found or Need help; "
                      "the rest: close it in the VESTA Kiosk (Facility → Faults) when it is done.")
         alerts = [p for p in open_now if p["incident"]]
-        lines += [f"- #{p['incident']} {p['title'][:160]}" for p in alerts]
+        lines += [f"- {incident_tag(p['incident'])} · {p['title'][:160]}" for p in alerts]
         lines += _grouped([{"kind": p["rule_id"], "severity": p["severity"], "subject": name_of(p["entity_id"], p["title"]),
                             "title": p["title"][:160]} for p in open_now if not p["incident"]], group_from, words)[:8]
     if len(lines) == 1:

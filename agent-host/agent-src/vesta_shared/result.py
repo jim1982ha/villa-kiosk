@@ -10,6 +10,7 @@ The engine's reader is vesta_agent/outcome.py (carry_out); its keys:
     send        [message(...)]            settle   [settle(...)]
     actions     [fault(...), resolved(...), snapshot(...)]
     siren_gate  siren(...)
+    ha_messages [ha_message(...)]
 """
 from __future__ import annotations
 
@@ -53,6 +54,12 @@ def snapshot(entity_id: str, incident: int) -> dict:
 def settle(incident: int, note: str) -> dict:
     """Every message carrying the incident's buttons loses them and shows `note` ("{time}": the villa's time)."""
     return {"incident_id": int(incident), "note": note}
+
+
+def ha_message(incident: int, text: str, context: str | None) -> dict:
+    """Home Assistant's own messages of the automation run `context` (the event's context) become `incident`'s
+    messages, rewritten as `text` — its number and the original alert, like every other message about it."""
+    return {"incident_id": int(incident), "text": text, "context": context}
 
 
 def siren(armed: bool, prompt: str | None, to: tuple[str, ...] = ("owner", "fm"), **detail) -> dict:

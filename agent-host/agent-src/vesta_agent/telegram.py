@@ -162,11 +162,14 @@ class Telegram:
                 log.warning("Telegram refused \"typing…\" in chat %s: %s", chat_id, why)
             return False
 
-    async def edit(self, chat_id: int, message_id: int, text: str):
+    async def edit(self, chat_id: int, message_id: int, text: str) -> bool:
+        """Rewrite one of the bot's messages (its buttons go). False when Telegram refuses."""
         try:
             await self.api("editMessageText", chat_id=chat_id, message_id=message_id, text=text[:4096])
+            return True
         except TelegramError as e:
             log.warning("editMessageText failed: %s", e)
+            return False
 
 def dump(obj: Any) -> str:
     return json.dumps(obj, default=str)[:500]

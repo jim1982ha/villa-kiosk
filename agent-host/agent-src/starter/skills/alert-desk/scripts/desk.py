@@ -41,6 +41,7 @@ from vesta_shared.problems import Problems  # noqa: E402  (a problem's lifecycle
 from vesta_shared import result as R  # noqa: E402  (what the engine is asked to do: its shape)
 from vesta_shared import script  # noqa: E402  (client, store, settings, zone: one set-up)
 from vesta_shared import skill_settings  # noqa: E402  (rules.yaml, the villa's on top)
+from vesta_shared.messaging import incident_message, incident_tag  # noqa: E402  (an incident's message: one layout)
 
 SKILL = os.path.dirname(HERE)
 # rules.yaml with the villa's own villa.rules.yaml on top (kept by updates): a villa's route comes FIRST, so it
@@ -55,6 +56,8 @@ def _params(params: VillaParams | None) -> VillaParams:
         return VillaParams(defaults=DEFAULTS)
     return params if params.defaults else params.with_defaults(DEFAULTS)
 LADDER_OPTIONS = ["Done", "Not found", "Need help", "Mute"]
+#: What a person still being asked can answer: the last line of every message that carries the buttons.
+ASK = "Reply Done, Not found or Need help."
 #: The beat the engine writes every minute while its Home Assistant connection is up.
 HA_BEAT = "ha_events"
 
@@ -76,6 +79,29 @@ def route_for(rule_id: str, blueprint: str | None = None) -> dict:
 
 def recipients(severity: str) -> list[str]:
     return [role for role, sevs in RULES["people_roles"].items() if severity in sevs and role != "digest"]
+
+
+def details(payload: dict, rule_id: str) -> str:
+    """The original alert — Home Assistant's own message, and what to check — as every later message about the
+    incident repeats it (owner, 2026-10-09: a chat keeps only an incident's latest message, so each one says
+    everything)."""
+    text = payload.get("message") or rule_id
+    check = route_for(rule_id, payload.get("blueprint")).get("check")
+    return f"{text}\nWhat to do: {check}" if check else text
+
+
+def about(inc: dict, status: str, ask: str = "", extra: str = "") -> str:
+    """A message about an open incident: its number and where it stands, the original alert, `extra` (what just
+    happened, in Home Assistant's words), then what to answer."""
+    inc = dict(inc)                                # a store row (find_open_incident) or a dict
+    body = details(json.loads(inc.get("payload") or "{}"), inc["rule_id"])
+    return incident_message(inc["id"], status, f"{body}\n{extra}" if extra else body, ask)
+
+
+def chased(inc: dict) -> bool:
+    """Someone is still asked to answer it: its messages keep the buttons."""
+    inc = dict(inc)
+    return inc.get("state") in Incident.CHASED and not inc.get("closed_at")
 
 
 def normalise(ev: dict) -> dict:
@@ -137,27 +163,31 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
         last = datetime.fromisoformat(cur["last_seen_at"])
         store.touch_incident(cur["id"], now.isoformat())
         out["incident_id"] = cur["id"]
-        if (now - last) < timedelta(minutes=route["cooldown_min"]):
-            out["decision"] = "counted"  # repeat inside the cooldown: no message
-            return out
-        out["decision"] = "repeat"
         # the villa's time, written as every message writes one ("Mon 5 Oct, 08:00"): it showed "2026-10-03T00:00", UTC
         since = day_time_label(villa_time(cur["opened_at"], zone or "UTC"), weekday=True)
-        out["send"].append(R.message("fm", f"Still there: {ev['message']} ({cur['count'] + 1} times since {since})."))
+        status = f"Still there: {cur['count'] + 1} times since {since}"
+        # Home Assistant's own new message for it takes the incident's number, and replaces its older ones
+        out["ha_messages"] = [R.ha_message(cur["id"], about(cur, status), ev.get("_context_id"))]
+        if (now - last) < timedelta(minutes=route["cooldown_min"]):
+            out["decision"] = "counted"  # repeat inside the cooldown: no message of the desk's own
+            return out
+        out["decision"] = "repeat"
+        ask = chased(cur)
+        out["send"].append(R.message("fm", about(cur, status, ASK if ask else ""), incident=cur["id"], buttons=ask))
         if route.get("intrusion"):
             out["siren_gate"] = siren_gate(store, ev, now)
         return out
     iid = store.new_incident(key, rule_id, eid, sev, ev, now.isoformat())
     out["incident_id"] = iid
     out["decision"] = "new"
-    text = ev["message"]
-    if route.get("check"):
-        text += f"\nWhat to do: {route['check']}"
-    text += f"\nIncident #{iid}."
+    text = incident_message(iid, "New alert", details(ev, rule_id))
     if ev.get("snapshot"):
         out["actions"].append(R.snapshot(ev["snapshot"], iid))
+    out["ha_messages"] = [R.ha_message(iid, text, ev.get("_context_id"))]
     for role in recipients(sev):
-        out["send"].append(R.message(role, text, incident=iid, buttons=bool(route.get("ladder", True) and role == "fm")))
+        ladder = bool(route.get("ladder", True) and role == "fm")
+        out["send"].append(R.message(role, incident_message(iid, "New alert", details(ev, rule_id), ASK if ladder else ""),
+                                     incident=iid, buttons=ladder))
     if sev in ("P1", "P2") and route.get("ladder", True):
         store.update_incident(iid, state=Incident.ASKED, asked_at=now.isoformat(), assignee="fm")
         tid, _ = Problems(store).open_task("incident", iid, rule_id, eid, ev["message"][:250], route.get("check") or "")
@@ -188,8 +218,11 @@ def resolved(store: Store, ev: dict, now: datetime) -> dict:
     out["incident_id"], out["decision"] = inc["id"], "resolved"
     # its alert and reminders, in every chat, lose their buttons: nobody presses for something already over
     out["settle"] = [R.settle(inc["id"], "Cleared in Home Assistant, {time}. No reply needed.")]
+    # Home Assistant's all-clear takes the incident's number and the original alert, and replaces its older ones
+    out["ha_messages"] = [R.ha_message(inc["id"], about(inc, ev["message"]), ev.get("_context_id"))]
     if was_chasing:
-        out["send"].append(R.message("fm", f"Incident #{inc['id']} closed: Home Assistant reports it cleared. No reply needed."))
+        out["send"].append(R.message("fm", about(inc, "Closed: Home Assistant reports it cleared. No reply needed."),
+                                     incident=inc["id"]))
     store.audit("alert-desk", "resolved", {"incident": inc["id"]})
     return out
 
@@ -202,7 +235,9 @@ def abandoned(store: Store, ev: dict, now: datetime) -> dict:
         return out
     store.update_incident(inc["id"], state=Incident.ESCALATED, escalated_at=now.isoformat(), assignee="owner")
     out["incident_id"], out["decision"] = inc["id"], "abandoned"
-    out["send"].append(R.message("owner", f"Still not clear, and the rule has stopped watching it: {ev['message']} Incident #{inc['id']}."))
+    text = about(inc, "Still not clear, and the rule has stopped watching it", ASK, extra=ev["message"])
+    out["ha_messages"] = [R.ha_message(inc["id"], text, ev.get("_context_id"))]
+    out["send"].append(R.message("owner", text, incident=inc["id"], buttons=True))
     return out
 
 
@@ -235,35 +270,40 @@ def reply(store: Store, iid: int, text: str, sender_role: str, now: datetime, pa
     inc = store.incident(iid)
     out = {"send": [], "actions": []}
     if not inc:
-        out["send"].append(R.message("here", f"No incident #{iid}.")); return out
+        out["send"].append(R.message("here", f"There is no {incident_tag(iid)}.")); return out
     t = text.strip().lower()
+    who = {"owner": "the owner", "fm": "the facility manager"}.get(sender_role, sender_role)
+
+    def here(status: str) -> dict:
+        """The answer in the chat it came from: it replaces the incident's message there, so it says it all."""
+        return R.message("here", about(inc, status), incident=iid)
     if inc.get("closed_at") and not t.startswith("mute"):
-        out["send"].append(R.message("here", f"Incident #{iid} is already closed.")); return out
+        out["send"].append(here("Already closed")); return out
     if t.startswith("done"):
         out["actions"] += Problems(store).close_incident(iid, Incident.DONE, now.isoformat(),
                                                          f"Done, answered by the {sender_role}.", reply=text)
-        out["send"].append(R.message("here", f"Thanks, incident #{iid} closed. The VESTA Agent will check it stays quiet."))
+        out["send"].append(here(f"Closed: done, answered by {who}. The VESTA Agent will check it stays quiet."))
     elif t.startswith("not found"):
         store.update_incident(iid, state=Incident.NOT_FOUND, reply=text)
-        out["send"].append(R.message("here", f"Noted for #{iid}. It stays open and goes in the weekly report; tell me if it comes back."))
+        out["send"].append(here(f"Not found, answered by {who}: it stays open and goes in the weekly report. "
+                                "Tell me if it comes back."))
     elif t.startswith("need help"):
         store.update_incident(iid, state=Incident.ESCALATED, reply=text, escalated_at=now.isoformat(), assignee="owner")
-        out["send"].append(R.message("owner", f"The FM needs help on incident #{iid}: {json.loads(inc['payload'] or '{}').get('message', inc['rule_id'])}."))
-        out["send"].append(R.message("here", "Owner notified."))
+        out["send"].append(R.message("owner", about(inc, f"{who.capitalize()} needs help", ASK), incident=iid, buttons=True))
+        out["send"].append(here("Need help: the owner has been told"))
     elif t.startswith("mute"):
         days = int(_params(params).behaviour("mute_days"))
         until = (now + timedelta(days=days)).isoformat()
         store.mute(inc["rule_id"], inc["entity_id"], until, sender_role)
         # muted: the fault is still there, nobody wants to be told again — its task stays (Problems decides)
         out["actions"] += Problems(store).close_incident(iid, Incident.MUTED, now.isoformat(), reply=text)
-        out["send"].append(R.message("here", f"Muted this alert for {days} days. The report will list it."))
+        out["send"].append(here(f"Muted for {days} days by {who}. The report will list it."))
     else:
         store.update_incident(iid, reply=text)
-        out["send"].append(R.message("here", f"Noted on #{iid}: {text}"))
+        out["send"].append(here(f"Noted from {who}: {text}"))
     # the answer, on the alert and its reminders in every chat (a button press has already done it, by name)
     said = next((w for w in ("Done", "Not found", "Need help", "Mute") if t.startswith(w.lower())), None)
     if said:
-        who = {"owner": "the owner", "fm": "the facility manager"}.get(sender_role, sender_role)
         out["settle"] = [R.settle(iid, f"{said} — {who}, {{time}}")]
     store.audit("alert-desk", "reply", {"incident": iid, "by": sender_role, "text": text})
     return out
@@ -281,15 +321,15 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None) -> dict
             continue
         asked = datetime.fromisoformat(inc["asked_at"])
         age = now - asked
-        msg = json.loads(inc["payload"] or "{}").get("message", inc["rule_id"])
         if inc["state"] == Incident.ASKED and age >= timedelta(minutes=reask):
             store.update_incident(inc["id"], state=Incident.REASKED, reasked_at=now.isoformat())
-            out["send"].append(R.message("fm", f"Reminder, incident #{inc['id']}: {msg}. Reply Done, Not found or Need help.",
+            out["send"].append(R.message("fm", about(inc, f"Reminder: no answer after {int(reask)} min", ASK),
                                          incident=inc["id"], buttons=True))
             out["reasked"].append(inc["id"])
         elif inc["state"] == Incident.REASKED and age >= timedelta(minutes=escal):
             store.update_incident(inc["id"], state=Incident.ESCALATED, escalated_at=now.isoformat(), assignee="owner")
-            out["send"].append(R.message("owner", f"No answer from the FM after {int(escal)} min on incident #{inc['id']}: {msg}."))
+            out["send"].append(R.message("owner", about(inc, f"No answer from the facility manager after {int(escal)} min", ASK),
+                                         incident=inc["id"], buttons=True))
             out["escalated"].append(inc["id"])
     # villa silent: the engine's Home Assistant connection has been down too long
     last = store.last_beat(HA_BEAT)
@@ -301,12 +341,15 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None) -> dict
                                      now.isoformat())
             store.update_incident(iid, state=Incident.ASKED, asked_at=now.isoformat(), assignee="fm")
             for role in recipients("P1"):
-                out["send"].append(R.message(role, f"[P1] Villa silent since {last[:16]} UTC: no contact with Home Assistant. Check power, the router and the internet link. Incident #{iid}."))
+                out["send"].append(R.message(role, incident_message(
+                    iid, f"[P1] Villa silent since {last[:16]} UTC",
+                    "No contact with Home Assistant. Check power, the router and the internet link."), incident=iid))
     elif last:
         cur = store.find_open_incident("critical_internet---villa_silent|agent")
         if cur:
             out["actions"] += Problems(store).close_incident(cur["id"], Incident.RECOVERED, now.isoformat())
-            out["send"].append(R.message("fm", "Villa back online: Home Assistant answers again."))
+            out["send"].append(R.message("fm", about(cur, "Closed: the villa is back online, Home Assistant answers again"),
+                                         incident=cur["id"]))
     # alert fatigue: a rule firing more than N times in 30 days without acknowledgement
     limit = params.behaviour("alert_fatigue_per_month")
     since = (now - timedelta(days=30)).isoformat()

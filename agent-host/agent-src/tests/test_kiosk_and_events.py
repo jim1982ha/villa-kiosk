@@ -164,7 +164,8 @@ def test_the_websocket_listens_to_its_event_types_and_sends_nothing_else():
         await asyncio.wait_for(task, 10)
         await runner.cleanup()
         assert [m["type"] for m in sent_by_agent] == ["auth"] + ["subscribe_events"] * len(EVENT_TYPES)
-        assert len(EVENT_TYPES) == 5                     # + telegram_attachment (voice messages, 0.6.39)
+        assert len(EVENT_TYPES) == 6                     # + telegram_attachment (voice messages, 0.6.39), telegram_sent
+                                                         # (Home Assistant's own messages, one per incident: 0.12.106)
         assert sorted(m["event_type"] for m in sent_by_agent[1:]) == sorted(EVENT_TYPES)
         assert [e for e, _ in got] == ["vesta_critical_event", "telegram_text"]      # state_changed ignored
         assert beats                                                               # the villa-silent watch

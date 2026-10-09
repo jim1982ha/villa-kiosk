@@ -10,7 +10,8 @@ What it records, in the order it happened:
   photos     (chat, (base64, mime))      documents  (chat, path)
   toasts     (callback id, text)         edits      (chat, message id, text)
   deleted    (chat, message id)          fetched    file ids     typing_in   chats
-`refuse = {"send"}` makes send fail as Telegram does (TelegramError); `{"photo"}` only a message with a photo. Anything else reached on it — getUpdates,
+`refuse = {"send"}` makes send fail as Telegram does (TelegramError); `{"photo"}` only a message with a photo;
+`{"delete"}` makes delete answer False (a message past Telegram's 48 hours). Anything else reached on it — getUpdates,
 leaveChat — raises: the agent must never call them.
 """
 from __future__ import annotations
@@ -57,6 +58,8 @@ class FakeTelegram:
         self.toasts.append((callback_id, text))
 
     async def delete(self, chat_id, message_id):
+        if "delete" in self.refuse:          # Telegram's 48 hours are over: the message stays
+            return False
         self.deleted.append((chat_id, message_id))
         return True
 
@@ -66,6 +69,7 @@ class FakeTelegram:
 
     async def edit(self, chat_id, message_id, text):
         self.edits.append((chat_id, message_id, text))
+        return True
 
     def __getattr__(self, name):          # getUpdates, leaveChat... must never be reached
         raise AssertionError(f"Telegram.{name} must never be called")
