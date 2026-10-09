@@ -111,6 +111,14 @@ if changelog.exists():
     if not m or m.group(1) != str(cfg.get("version")):
         problems.append(f"CHANGELOG.md's top entry is {m.group(1) if m else 'missing'}, "
                         f"config.yaml is {cfg.get('version')} — the update dialog shows the top entry")
+    # ⚠️ THE UPDATE DIALOG RENDERS IT (owner, 2026-10-09): 0.12.109's entry wrote `("<a class=…>")` to describe a bug,
+    # Home Assistant took it for a link and the rest of the entry turned into one blue link. No HTML-like text,
+    # even inside backticks: say it in words.
+    for n, line in enumerate(changelog.read_text().splitlines(), start=1):
+        tag = re.search(r"<\s*/?[A-Za-z!]", line)
+        if tag:
+            problems.append(f"CHANGELOG.md line {n} has HTML-like text ({line[tag.start():tag.start() + 12]!r}): "
+                            "Home Assistant's update dialog renders it — describe it in words")
 else:
     problems.append("CHANGELOG.md is missing")
 

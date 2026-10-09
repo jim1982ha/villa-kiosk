@@ -593,3 +593,23 @@ def test_a_source_the_report_cites_is_a_link_that_cannot_break_the_page():
     assert ('Empty the baskets: <a class="src" href="https://www.example.org/pump-not-working/" target="_blank" '
             'rel="noopener noreferrer">https://www.example.org/pump-not-working/</a>. Was a valve moved?') in page
     assert "&lt;a class" not in page
+
+
+def test_html_like_text_the_ai_writes_shows_as_text_and_breaks_nothing():
+    # owner, 2026-10-09 (after 0.12.109's changelog turned blue from an unclosed "<a class=…>"): a report must not
+    # do that. Whatever the AI writes — an unclosed tag, a script — is shown as the characters it wrote, and the
+    # rest of the page, its links included, is untouched.
+    import sys as _s
+    _s.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
+    import compose
+    facts = {"zone": "UTC", "order": ["headline", "todo"], "to_write": [{"id": "headline", "kind": "reading"}],
+             "sections": {"headline": {"colour": "amber", "text": "Amber"},
+                          "todo": {"rows": [{"id": "t1", "title": "Pool pump", "severity": "P2", "why": "Less water"}]}}}
+    page = compose.page(facts, {"headline": 'It showed as raw code ("<a class=…>"). <script>alert(1)</script>',
+                                "t1.check": "empty the baskets: https://www.example.org/pump/."})
+    assert "&lt;a class=…&gt;" in page and "&lt;script&gt;alert(1)&lt;/script&gt;" in page
+    assert "<a class=…>" not in page and "<script>" not in page
+    # the link further down is still exactly one link, closed where it should be
+    assert ('<a class="src" href="https://www.example.org/pump/" target="_blank" rel="noopener noreferrer">'
+            'https://www.example.org/pump/</a>.') in page
+    assert page.count("<a ") == page.count("</a>")

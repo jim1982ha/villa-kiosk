@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.104 (9 October 2026)
+
+- test_reports: HTML-like text the AI writes in a report (an unclosed tag, a script) shows as its characters and breaks nothing; the links stay one each, opened and closed. Shown to fail with the escaping switched off. Owner, after 0.12.109's changelog turned blue: "I want to make sure the reports will NOT have this issue".
+
 ## 0.6.103 (9 October 2026)
 
 - reports: a check and its question showed the raw <a> tag (villa, 15:56). note() returned an already linked text, and the template's sentence() made it a string again, so it was escaped a second time. Now note() returns the text as written and sentence() makes the links after the words. test_reports renders a "Do this week" check and its question; with the old code it fails (the cache cleared between runs: a mutation and its restore in the same second left a stale .pyc that hid the result).
