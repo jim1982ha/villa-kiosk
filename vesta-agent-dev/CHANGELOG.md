@@ -1,3 +1,13 @@
+## 0.12.106
+
+What you will see:
+- Each chat now shows only the latest message about an incident. When a reminder, an escalation, an answer or an all-clear arrives, the earlier messages about the same incident are deleted from that chat. This works in the group and in your private chat, for the owner and the facility manager alike.
+- Every message about an incident starts the same way, "Incident #10 · " and then where it stands ("New alert", "Reminder: no answer after 15 min", "No answer from the facility manager after 45 min", "Closed: …"). It then repeats the original alert and what to check, so the latest message is enough on its own.
+- Home Assistant's own alert in the group now gets the incident number as well: the agent rewrites it as soon as it knows the number, and deletes it when a newer message about that incident lands in the group.
+- The owner now gets the Done / Not found / Need help buttons when an incident is escalated to them.
+- The morning summary lists open alerts as "Incident #7 · …".
+- If you changed the alert-desk skill yourself, open Skills › alert-desk › Compare and use "Take the release version" to get this. Otherwise it updates by itself.
+
 ## 0.12.105
 
 What you will see:
