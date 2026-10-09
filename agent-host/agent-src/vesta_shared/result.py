@@ -20,6 +20,29 @@ from __future__ import annotations
 #: engine looked for new_findings / still_open / closed, which the night check computed but never printed.
 FAULTS_CHANGED = "faults_changed"
 
+#: The night check's rule ids another skill reads (the reports' counter resets, roi-energy's "create the missing
+#: setting" proposal). ⚠️ WRITTEN ONCE (architecture review 13): each reader spelled the id itself, so a renamed
+#: rule would have emptied their lists without a sound.
+PARAM_MISSING = "PM-PARAM-MISSING"
+COUNTER_RESET = "PM-COUNTER-RESET"
+
+
+def finding_detail(finding: dict) -> dict:
+    """A stored finding's detail (its JSON), {} when it has none or cannot be read."""
+    import json
+    d = finding.get("detail")
+    if isinstance(d, dict):
+        return d
+    try:
+        return json.loads(d or "{}") or {}
+    except (TypeError, ValueError):
+        return {}
+
+
+def finding_name(finding: dict) -> str | None:
+    """The name the night check gave a finding's device (its detail's "name"), None without one."""
+    return finding_detail(finding).get("name")
+
 
 def message(to: str, text: str, *, incident: int | None = None, buttons: bool = False,
             attachment: str | None = None) -> dict:

@@ -20,6 +20,7 @@ from datetime import date, timedelta
 from typing import Any
 
 from vesta_shared.params import VillaParams, MissingParameter
+from vesta_shared.result import COUNTER_RESET, PARAM_MISSING  # the ids other skills read: written once
 from vesta_shared.stats import med, pct_change, step_index
 from vesta_shared.device_state import battery_charge
 from vesta_shared.timeutil import day_label, schedule_hours_per_day, weekday_name
@@ -159,7 +160,7 @@ def power_rules(asset: dict, entity_id: str, series: dict[date, dict], today: da
                                         "profile": profile}, check))
             resets = [d for d in e_days[-confirm:] if energy_series[d].get("counter_reset")]
             if resets:
-                out.append(Finding("PM-COUNTER-RESET", asset["entities"].get("energy", entity_id), slug, "energy", INFO,
+                out.append(Finding(COUNTER_RESET, asset["entities"].get("energy", entity_id), slug, "energy", INFO,
                                    f"{asset['name']} energy counter went backwards on {', '.join(day_label(d) for d in resets)}: "
                                    "the meter restarted, the day's kWh is unreliable.", {"days": [d.isoformat() for d in resets]},
                                    "Nothing to do on site; noted for the reports."))
@@ -213,7 +214,7 @@ def battery_rules(asset: dict, entity_id: str, unit: str | None, level: float | 
     elif unit == "V":
         nominal = params.asset_optional_number(slug, "battery_nominal_v")
         if nominal is None:
-            out.append(Finding("PM-PARAM-MISSING", entity_id, slug, "battery", INFO,
+            out.append(Finding(PARAM_MISSING, entity_id, slug, "battery", INFO,
                                f"{asset['name']} reports a battery voltage ({level} V) but no nominal voltage is set: "
                                f"create input_number.{slug}_battery_nominal_v to get a percentage.", {"reading_v": level, "name": asset["name"]}, ""))
         elif level is not None and battery_charge(level, "V", nominal) < params.behaviour("battery_low_fraction_of_nominal") * 100:

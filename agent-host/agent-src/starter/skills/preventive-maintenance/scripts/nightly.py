@@ -38,31 +38,15 @@ from vesta_shared.device_state import is_offline  # noqa: E402
 from vesta_shared.problems import Problems  # noqa: E402  (a problem's lifecycle: one owner)
 from vesta_shared import result  # noqa: E402  (what the engine is asked to do: its shape; R is rules.py)
 from vesta_shared.stats import med  # noqa: E402
+from vesta_shared import daily  # noqa: E402  (a device's day: the one running threshold)
 from vesta_shared.timeutil import schedule_hours_per_day  # noqa: E402
 import features as F  # noqa: E402
 import rules as R  # noqa: E402
 
 STATE_RULES = {"PM-POWER-CHANGE", "PM-ENERGY-CHANGE", "PM-UNAVAILABLE",
                "PM-BATTERY-LOW", "PM-BATTERY-CRIT", "PM-SILENT", "PM-RECONNECT-LOOP", "PM-LEVEL-HIGH",
-               "PM-PARAM-MISSING"}
-EVENT_RULES = {"PM-RUNHOURS", "PM-RUN-SAG", "PM-EXPECTED-SILENT", "PM-COUNTER-RESET", "PM-BATTERY-TREND"}
-
-
-def on_threshold_for(asset: dict, hour_rows: list[dict], params: VillaParams) -> float:
-    """Power above which the asset counts as running. Derived from the data
-    (a fraction of the typical hourly maximum) and capped by the baseline
-    helper when one exists. Nothing hardcoded per pump."""
-    frac = params.behaviour("on_threshold_fraction")
-    maxes = [r["max"] for r in hour_rows if r.get("max") and r["max"] > 0]
-    data_thr = (med(maxes) or 0) * frac if maxes else 0
-    helper_thr = None
-    if asset.get("baseline_helper"):
-        try:
-            helper_thr = params.number(asset["baseline_helper"].split(".", 1)[1]) * frac
-        except MissingParameter:
-            helper_thr = None
-    cands = [t for t in (data_thr, helper_thr) if t]
-    return min(cands) if cands else params.behaviour("on_threshold_floor_w")
+               result.PARAM_MISSING}
+EVENT_RULES = {"PM-RUNHOURS", "PM-RUN-SAG", "PM-EXPECTED-SILENT", result.COUNTER_RESET, "PM-BATTERY-TREND"}
 
 
 def run(args) -> dict:
@@ -100,7 +84,7 @@ def run(args) -> dict:
         p_series, e_series = {}, {}
         if p_eid:
             rows = hour_stats.get(p_eid, [])
-            thr = on_threshold_for(asset, rows, params)
+            thr = daily.running_threshold(asset, rows, params)       # the one "running" (vesta_shared.daily)
             p_series = F.power_daily_features(rows, zone, thr)
             # raw runs for the closing day
             if not args.skip_raw:

@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """Filtration optimiser: how many hours a day the pool pump should run.
 
-  python filtration_optimiser.py --pack pack.json --asset pool_pump [--fixture-dir DIR] [--as-of 2026-09-29] [--out proposal.json]
+  python filtration_optimiser.py --pack pack.json [--asset pool_pump] [--fixture-dir DIR] [--as-of 2026-09-29] [--out proposal.json]
+
+Without --asset: the villa's filtration pump, from the knowledge pack — the motor whose slug ends in "_pump" and whose
+pool volume helper exists (the first by slug when several do), else the only "_pump" asset, whose missing helpers
+are then named; several and none set up: each one's volume helper is named, never a guess.
 
 hours per day = pool volume x turnovers per day / real flow
 
@@ -77,15 +81,41 @@ def split_blocks(hours: float, n: int, window: str) -> list[tuple[str, str]]:
     return out
 
 
+def pool_of(slug: str) -> str:
+    return slug.rsplit("_pump", 1)[0] if slug.endswith("_pump") else slug  # pool_pump -> pool
+
+
+def filtration_pump(pack, params) -> tuple[str | None, list[str]]:
+    """The villa's filtration pump: (its slug, the "_pump" assets considered). The first by slug whose pool has a
+    volume helper; with none, the only "_pump" asset (its missing helpers are then named); several and none set
+    up: None — which one filters the pool is the villa's to say, never a guess.
+
+    ⚠️ DERIVED, NOT NAMED IN THE CODE (architecture review 13, 2026-10-09): --asset defaulted to one villa's
+    "pool_pump", which the monthly report relies on (it passes no --asset)."""
+    pumps = sorted(s for s in pack.assets if s.endswith("_pump"))
+    with_pool = [s for s in pumps if params.optional_number(f"{pool_of(s)}_volume_m3") is not None]
+    if with_pool:
+        return with_pool[0], pumps
+    return (pumps[0] if len(pumps) == 1 else None), pumps
+
+
 def run(args) -> dict:
     ctx = script.Context.of(args, skill=os.path.dirname(HERE))
     args = ctx.args
     cli, pack, params, Z = ctx.client, ctx.pack, ctx.params, ctx.Z
-    asset = pack.assets.get(args.asset)
+    slug, pumps = (args.asset, []) if args.asset else filtration_pump(pack, params)
+    if not slug and pumps:
+        missing = [f"input_number.{pool_of(s)}_volume_m3 (pool volume in m3, for {s})" for s in pumps]
+        return {"ok": False, "missing": missing, "message": "Cannot compute the filtration schedule yet: which pump filters "
+                "the pool is not set. Missing one of: " + "; ".join(missing) + "."}
+    if not slug:
+        return {"ok": False, "error": "no filtration pump in the knowledge pack (an asset whose name ends in _pump): "
+                                      "pass --asset"}
+    asset = pack.assets.get(slug)
     if not asset:
-        return {"ok": False, "error": f"asset {args.asset} not in the knowledge pack"}
+        return {"ok": False, "error": f"asset {slug} not in the knowledge pack"}
     slug = asset["slug"]
-    pool = slug.rsplit("_pump", 1)[0] if slug.endswith("_pump") else slug  # pool_pump -> pool
+    pool = pool_of(slug)
     today = ctx.day(args.as_of)                    # the one "which day" rule (timeutil.villa_day)
     day_end = datetime.combine(today + timedelta(days=1), time(0, 0), tzinfo=Z)
 
@@ -114,8 +144,7 @@ def run(args) -> dict:
     measured_w, measured_hours, days_used = None, None, 0
     if p_eid:
         rows = cli.statistics([p_eid], day_end - timedelta(days=8), day_end, "hour", ("mean", "min", "max")).get(p_eid, [])
-        thr = (med([r["max"] for r in rows if r.get("max")]) or 0) * params.behaviour("on_threshold_fraction")
-        feats = F.power_daily_features(rows, pack.time_zone, thr)
+        _, feats = F.power_days(asset, rows, pack.time_zone, params)                       # the one "running"
         last7 = [feats[d] for d in sorted(feats) if today - timedelta(days=7) < d <= today]
         rp = [f["running_power"] for f in last7 if f.get("running_power")]
         rh = [f["run_hours"] for f in last7 if f.get("run_hours") is not None]
@@ -138,6 +167,10 @@ def run(args) -> dict:
         if not rated_flow: missing.append(f"input_number.{slug}_rated_flow_m3h (from the pump plate)")
         if not rated_power: missing.append(f"input_number.{slug}_rated_power_w (from the pump plate)")
         if not measured_w: missing.append(f"a measured running power for {slug} (no statistics in the last 7 days)")
+    try:
+        tariff, currency = params.tariff()
+    except MissingParameter as e:          # the tariff or its currency: said with the rest, never a crash
+        missing.append(f"{e.name} ({e.hint})")
     if missing:
         return {"ok": False, "asset": slug, "missing": missing,
                 "message": "Cannot compute the filtration schedule yet. Missing: " + "; ".join(missing) + "."}
@@ -145,7 +178,6 @@ def run(args) -> dict:
     hours = volume * turnovers / flow
     hours_rounded = round(hours * 2) / 2
     blocks = split_blocks(hours_rounded, blocks_n, window)
-    tariff, currency = params.tariff()
     kwh_day = measured_w * hours_rounded / 1000
     cost_month = kwh_day * tariff * 30.4
 
@@ -189,7 +221,7 @@ def run(args) -> dict:
 def main(argv=None):
     ap = argparse.ArgumentParser()
     script.arguments(ap, pack=True, pack_required=True, store=False)
-    ap.add_argument("--asset", default="pool_pump")
+    ap.add_argument("--asset", help="the pump's asset slug; without it, the villa's filtration pump (filtration_pump)")
     ap.add_argument("--as-of")
     ap.add_argument("--out")
     a = ap.parse_args(argv)

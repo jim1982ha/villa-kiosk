@@ -9,6 +9,8 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import date
 
+from .params import MissingParameter
+from .stats import med
 from .timeutil import local_day
 
 
@@ -38,6 +40,38 @@ def power_daily_features(hour_rows: list[dict], zone: str, on_threshold_w: float
             "hours_with_data": len(rows),
         }
     return out
+
+
+def running_threshold(asset: dict | None, hour_rows: list[dict], params) -> float:
+    """Power above which a device counts as running: a fraction of its typical hourly maximum, capped by its baseline
+    helper when it has one; the floor when there is neither. Nothing hardcoded per pump.
+
+    ⚠️ ONE "RUNNING" (architecture review 13, 2026-10-09): the night check, the energy figures and the filtration
+    optimiser each had a copy, and only the night check's had the cap and the floor — the same pump had two run-hour
+    numbers when its baseline helper was set."""
+    frac = params.behaviour("on_threshold_fraction")
+    maxes = [r["max"] for r in hour_rows if r.get("max") and r["max"] > 0]
+    data_thr = (med(maxes) or 0) * frac if maxes else 0
+    helper_thr = None
+    if (asset or {}).get("baseline_helper"):
+        try:
+            helper_thr = params.number(asset["baseline_helper"].split(".", 1)[1]) * frac
+        except MissingParameter:
+            helper_thr = None
+    cands = [t for t in (data_thr, helper_thr) if t]
+    return min(cands) if cands else params.behaviour("on_threshold_floor_w")
+
+
+def power_days(asset: dict | None, hour_rows: list[dict], zone: str, params) -> tuple[float | None, dict[date, dict]]:
+    """A device's days from its hourly power statistics, judged by the one running threshold: (threshold, days).
+    No rows: (None, {}) — nothing to judge. No hourly maximum above zero: its run hours are 0 whatever the threshold
+    (they are weighted by the maximum), so the floor is not asked for (roi-energy has no floor setting: it never
+    needed one) and the threshold is 0."""
+    if not hour_rows:
+        return None, {}
+    drew = any((r.get("max") or 0) > 0 for r in hour_rows)
+    thr = running_threshold(asset, hour_rows, params) if drew else 0.0
+    return thr, power_daily_features(hour_rows, zone, thr)
 
 
 def energy_daily_features(day_rows: list[dict], zone: str) -> dict[date, dict]:

@@ -224,6 +224,18 @@ class Problems:
         out.sort(key=lambda r: (_ORDER.get(r["severity"], 9), r["since"]))
         return out
 
+    def since(self, day: str) -> dict[str, list[dict]]:
+        """The open problems split by when they opened: {"new": opened on or after `day`, "still_open": before it,
+        "open": all of them}, each most severe first.
+
+        ⚠️ ONE "NEW" (architecture review 13, 2026-10-09): the morning digest decided it from its own query (findings
+        opened since yesterday, closed ones included) while the weekly page asked open_problems; the two disagreed
+        on what was new and on how many were still open."""
+        out: dict[str, list[dict]] = {"new": [], "still_open": [], "open": self.open_problems()}
+        for p in out["open"]:
+            out["new" if p["since"] >= day else "still_open"].append(p)
+        return out
+
     # ---------------------------------------------------------------- inside
     @staticmethod
     def _source(task: dict | None) -> tuple[str | None, int | None]:

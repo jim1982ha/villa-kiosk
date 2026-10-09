@@ -19,6 +19,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 from vesta_shared import script  # noqa: E402  (the store when given: one set-up)
 from vesta_shared.messaging import fmt_money  # noqa: E402
+from vesta_shared import result  # noqa: E402  (the night check's rule ids and a finding's detail: written once)
 
 
 def thresholds() -> dict:
@@ -62,13 +63,10 @@ def build(period: dict, optimiser: dict | None, findings_open: list[dict] | None
                     "detail": "Solar generation is measured. The filtration blocks can sit inside the generation window to use self-produced energy first.",
                     "benefit": "Self-consumption share up"})
     for f in findings_open or []:
-        if f.get("rule_id") == "PM-PARAM-MISSING":
+        if f.get("rule_id") == result.PARAM_MISSING:
             # ⚠️ THE DEVICE'S NAME, NOT ITS ID (owner, 2026-10-07: a raw entity id ran out of its card); the title
             # stays one per device, since a proposal is stored once by title
-            try:
-                name = (json.loads(f.get("detail") or "{}") or {}).get("name")
-            except (TypeError, ValueError):
-                name = None
+            name = result.finding_name(f)
             out.append({"kind": "configuration", "title": f"Create the missing setting for {name or f['entity_id']}",
                         "detail": f["summary"], "benefit": "Enables one rule"})
     return out

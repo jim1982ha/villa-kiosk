@@ -209,13 +209,23 @@ class KnowledgePack:
         Wi-Fi) — not one of the villa's, left out of a report's lists of devices.
 
         ⚠️ ONE IDENTITY FOR EVERY SECTION (architecture review 12, 2026-10-09): the monitoring table grouped by device,
-        the to-do list by asset, the batteries by entity — the same thing under three names in one report."""
+        the to-do list by asset, the batteries by entity — the same thing under three names in one report. Every name a
+        page shows of a device comes from here (architecture review 13): the clues, the cards and the trends named the
+        pack's asset, the counter resets and the mutes the entity."""
         r = self.row(entity_id) or {}
         dev = r.get("device_id")
         label = self.device_label(dev)
         if label is not None:
             return f"device:{dev}", (label or None)
-        return f"asset:{r.get('asset') or entity_id}", (r.get("name") or entity_id)
+        asset = r.get("asset") or entity_id
+        return f"asset:{asset}", ((self.assets.get(asset) or {}).get("name") or r.get("name") or entity_id)
+
+    def device_name(self, entity_id: str | None, default: str | None) -> str | None:
+        """The name of what `entity_id` belongs to, as every page names it (device_of); `default` for an entity the
+        pack does not have, or a device Home Assistant knows nothing about."""
+        if not entity_id or self.row(entity_id) is None:
+            return default
+        return self.device_of(entity_id)[1] or default
 
     def name_of(self, entity_id: str, default: str | None = None) -> str | None:
         """An entity's name as the pack has it; `default` when the pack does not name it."""

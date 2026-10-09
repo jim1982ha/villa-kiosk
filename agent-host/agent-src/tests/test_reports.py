@@ -447,6 +447,7 @@ def test_the_one_list_is_built_from_plain_inputs():
     spec = importlib.util.spec_from_file_location("facts", FACTS)
     facts = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(facts)
+    import playbook                                                      # the one list's own module (review 13)
     clue = {"id": "clue-1", "group": "pumps", "entry": "running power stepped down", "subject": "Pump",
             "figures": {"entity_id": "sensor.pump_power", "step_date": "2026-09-20"}, "horizon": "Now", "severity": None,
             "title": "Pump: power down", "group_title": None, "playbook": {"means": "less water", "check": "the basket"}}
@@ -454,7 +455,7 @@ def test_the_one_list_is_built_from_plain_inputs():
                  "title": "Pump draws less", "since": "2026-09-21", "figures": {}, "check": ""}
     silent = [{"id": f"finding-{k}", "kind": "PM-SILENT", "entity_id": f"sensor.s{k}", "severity": "P3",
                "title": f"S{k} silent", "since": "2026-10-01T09:28", "figures": {}} for k in range(2, 5)]
-    rows = facts.one_list([clue], [pump_task, *silent], lambda eid, fb: {"sensor.pump_power": "pump"}.get(eid, eid or fb),
+    rows = playbook.one_list([clue], [pump_task, *silent], lambda eid, fb: {"sensor.pump_power": "pump"}.get(eid, eid or fb),
                           lambda eid: {"sensor.s2": "S2", "sensor.s3": "S3", "sensor.s4": "S4"}.get(eid),
                           {"P1": "Now", "P2": "Now", "P3": "Soon", "P4": "Plan"}, 3, 10,
                           {"PM-SILENT": "{n} sensors silent", "same_time": "All since {since}: one cause."})
@@ -622,6 +623,7 @@ def test_the_monitoring_table_lists_devices_not_their_sensors():
     from zoneinfo import ZoneInfo
     _s.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
     import facts
+    import playbook
     from vesta_shared.knowledge_pack import KnowledgePack
     row = lambda eid, name, dev, fam: {"entity_id": eid, "name": name, "device_id": dev, "asset": eid.split(".")[1],
                                        "family": fam}
@@ -713,6 +715,7 @@ def test_an_equipment_card_is_watched_when_the_to_do_list_names_its_device():
     import sys as _s
     _s.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
     import facts
+    import playbook
     from vesta_shared.knowledge_pack import KnowledgePack
     pack = KnowledgePack(villa="V", time_zone="UTC", generated_at="", ha_version=None,
                          families={"power": [{"entity_id": "sensor.pool_power", "name": "Pool Power", "device_id": "plug",
@@ -728,6 +731,7 @@ def test_an_equipment_card_is_watched_when_the_to_do_list_names_its_device():
     c._todo = [{"device": "device:plug"}]
     (card,) = facts.s_equipment(c)["cards"]
     assert card["status"] == "Watch"
+    assert card["title"] == "Pool Plug"                      # named as the device, like the to-do list and the tables
     c._todo = []
     assert facts.s_equipment(c)["cards"][0]["status"] != "Watch"
 
@@ -737,6 +741,7 @@ def test_a_volt_battery_is_judged_by_its_charge_not_its_reading():
     import sys as _s
     _s.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
     import facts
+    import playbook
     from datetime import date
     from zoneinfo import ZoneInfo
     from vesta_shared.params import VillaParams
@@ -755,7 +760,102 @@ def test_a_volt_battery_is_judged_by_its_charge_not_its_reading():
     params = VillaParams(helpers=[{"entity_id": "input_number.station_battery_nominal_v", "helper_type": "input_number",
                                    "id": "station_battery_nominal_v"}], states={"input_number.station_battery_nominal_v": "3.0"})
     c.params = lambda: params
-    (clue,) = facts.clue_battery_trend(c, {"below_pct": 40, "days": 10})
+    (clue,) = playbook.clue_battery_trend(c, {"below_pct": 40, "days": 10})
     assert clue["level_pct"] == 33 and clue["fall_per_week"] > 0                # 1.0 V of 3.0 is 33 %, not "1 %"
     c.params = lambda: VillaParams()
-    assert facts.clue_battery_trend(c, {"below_pct": 40, "days": 10}) == []        # no nominal: never a guess
+    assert playbook.clue_battery_trend(c, {"below_pct": 40, "days": 10}) == []        # no nominal: never a guess
+
+
+def test_every_page_names_a_device_one_way():
+    # architecture review 13: the clues, cards and trends named the pack's asset, the counter resets and mutes the
+    # entity, the offline table and the to-do list the device — one name per device now, from the pack
+    from vesta_shared.knowledge_pack import KnowledgePack
+    pack = KnowledgePack(villa="V", time_zone="UTC", generated_at="", ha_version=None,
+                         families={"power": [{"entity_id": "sensor.pool_power", "name": "Pool Power", "device_id": "plug", "asset": "pool"},
+                                             {"entity_id": "sensor.spa_power", "name": "Spa Power", "asset": "spa"},
+                                             {"entity_id": "sensor.rx", "name": "RX", "device_id": "phone", "asset": "rx"}]},
+                         assets={"pool": {"name": "Pool pump"}, "spa": {"name": "Spa heater"}},
+                         areas=[], people=[], channels={}, unknown_area=[], unclassified=[], retention={},
+                         devices={"plug": {"name": "Pool Plug"}, "phone": {"name": "", "manufacturer": "", "model": ""}})
+    assert pack.device_name("sensor.pool_power", "x") == "Pool Plug"        # its Home Assistant device
+    assert pack.device_name("sensor.spa_power", "x") == "Spa heater"        # no device: the pack's asset
+    assert pack.device_name("sensor.rx", "x") == "x"                        # a device Home Assistant knows nothing about
+    assert pack.device_name("sensor.unknown", None) is None                 # not in the pack: the caller's own words
+    import re
+    src = open(os.path.join(STARTER_SKILLS, "reports", "scripts", "facts.py")).read()
+    assert not re.search(r"a\.get\(.name.\) or slug", src)                # no section names a device by its asset
+
+
+def _problems_villa(tmp_path):
+    """A villa's store on the morning of 5 October: a finding new last night, one closed again, one from last week,
+    an alert being chased, and an alert only noted for the morning list."""
+    from vesta_shared.store import Incident, Store
+    from vesta_shared.knowledge_pack import KnowledgePack
+    store = Store(str(tmp_path / "s.sqlite"))
+    store.raise_finding("PM-SILENT", "sensor.pool_power", "power", "2026-10-04", "P3", "Pool Power silent", {})
+    store.raise_finding("PM-SILENT", "sensor.spa_power", "power", "2026-10-04", "P3", "Spa Power silent", {})
+    store.close_finding("PM-SILENT", "sensor.spa_power", "2026-10-04")
+    store.raise_finding("PM-BATTERY", "sensor.door_battery", "battery", "2026-09-28", "P3", "Door battery low", {})
+    store.new_incident("k1", "VESTA-LEAK", "binary_sensor.leak", "P2", {"message": "Leak in the kitchen"},
+                       at="2026-10-04T10:00:00+00:00")
+    noted = store.new_incident("k2", "VESTA-HUMID", "sensor.humid", "P4", {"message": "Humid cellar"},
+                               at="2026-10-04T11:00:00+00:00")
+    store.update_incident(noted, state=Incident.DIGEST)
+    pack = KnowledgePack(villa="V", time_zone="UTC", generated_at="", ha_version=None, families={}, assets={}, areas=[],
+                         people=[], channels={}, unknown_area=[], unclassified=[], retention={})
+    return pack, store
+
+
+def test_the_morning_digest_says_what_is_new_and_still_open_as_problems_answer_it(tmp_path):
+    # architecture review 13: the digest read its own "new" (a finding closed again was still "new") and listed a
+    # noted alert twice, under "Also noted" and "Still open"
+    sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
+    import compose
+    from datetime import date
+    pack, store = _problems_villa(tmp_path)
+    text = compose.fm_daily(pack, store, date(2026, 10, 5))
+    new, rest = text.split("Also noted")
+    assert "Pool Power silent" in new and "Spa Power silent" not in text          # closed again: not news
+    assert text.count("Humid cellar") == 1                                         # noted once, not open twice
+    assert "Still open: 2." in rest                                                # the leak and the battery
+    assert "Door battery low" in rest and "Leak in the kitchen" in rest
+
+
+def test_the_owners_weekly_line_counts_alerts_apart_from_maintenance(tmp_path):
+    sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
+    import compose
+    pack, store = _problems_villa(tmp_path)
+    text = compose.owner_weekly(pack, store, {"start": "2026-09-28", "end": "2026-10-04", "total_kwh": None})
+    assert "2 still open; 2 maintenance problem(s) open" in text                  # not "4 FM task(s)"
+
+
+def test_every_field_the_page_prints_is_one_facts_gives(tmp_path):
+    # architecture review 13: facts.json → about forty template fields, checked by nobody — a renamed field printed
+    # a blank. A field the page only TESTS may be absent (an optional "error"); one it PRINTS may not.
+    sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
+    import compose
+    from jinja2 import Undefined
+    from jinja2.exceptions import UndefinedError
+
+    class Printed(Undefined):
+        def __str__(self):
+            raise UndefinedError(self._undefined_message)
+        __html__ = __str__
+
+    fx = _villa(tmp_path)
+    _, facts = _facts(tmp_path, fx)
+    was = compose.TPL.undefined
+    compose.TPL.undefined = Printed
+    try:
+        compose.page(facts, {})
+    finally:
+        compose.TPL.undefined = was
+
+
+def test_the_rule_ids_other_skills_read_are_written_once():
+    # architecture review 13: the reports and roi-energy spelled the night check's rule ids themselves
+    import glob
+    from vesta_shared import result
+    for rid in (result.PARAM_MISSING, result.COUNTER_RESET):
+        spelled = [p for p in glob.glob(os.path.join(STARTER_SKILLS, "*", "scripts", "*.py")) if f'"{rid}"' in open(p).read()]
+        assert spelled == [], (rid, spelled)

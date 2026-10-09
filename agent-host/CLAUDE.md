@@ -218,6 +218,15 @@ Decisions of 2026-09-30 (owner):
   (`JobNotices`, keyed by turn), its "typing…" (one loop per chat, started after the reply) and its result
   (`routing.Origin.job`, `Delivery.on_job_result`); Delivery only sends. `KnowledgePack.device_of` is the one device
   identity of every report section. `compose.say` is the one way a sentence reaches the report page.
+  Thirteenth review, 0.12.116–0.12.117 (the skills' data path): a device's NAME on every page comes from
+  `KnowledgePack.device_name` (the night check's stored `features.device_key` stays its own: it is a finding's
+  identity; the to-do list matches tasks by entity). "Running" is `vesta_shared.daily.running_threshold` /
+  `power_days` for the night check and roi-energy (the weekly page still uses reports.yaml's run_min_w: moving it is a
+  skill-file change, the owner's call); the weekly page's power steps use `stats.step_index`, as the night check does.
+  "New / still open" is `Problems.since`. A report's settings come through `script.Context.params`; the currency and
+  the filtration pump are no longer defaulted in code (the 07:00-18:00 window still is: its home is a skill file,
+  the owner's call). Rule ids another skill reads and a finding's detail are
+  in `vesta_shared.result`. The clues and the one list live in `reports/scripts/playbook.py`, not facts.py.
 - No PDF (owner, 2026-09-30): the reports are self-contained HTML pages sent
   as attachments. Chromium was ~480 MB of a 1.1 GB image for this alone.
 - ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent

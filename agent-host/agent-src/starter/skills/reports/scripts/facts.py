@@ -38,12 +38,15 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL = os.path.dirname(HERE)
 from vesta_shared import script  # noqa: E402  (client, pack, store, zone, now: one set-up)
 from vesta_shared.messaging import no_code as _no_code  # noqa: E402
-from vesta_shared.stats import slope_per_hour  # noqa: E402
+from vesta_shared.daily import energy_daily_features  # noqa: E402  (a meter's day: one reading for every skill)
+from vesta_shared import result  # noqa: E402  (the night check's rule ids, written once)
 from vesta_shared.timeutil import day_label, day_time_label, local_day, villa_date, villa_time  # noqa: E402  (the one day format)
 from vesta_shared import agent_records  # noqa: E402  (the agent's records: one reader)
 from vesta_shared.problems import Problems  # noqa: E402  (what is still open: one owner)
 
-from vesta_shared.device_state import battery_charge, is_offline  # noqa: E402  (the night check's own reading)
+from vesta_shared.device_state import is_offline  # noqa: E402  (the night check's own reading)
+from playbook import (  # noqa: E402  (the clues and the one list of what needs doing)
+    MissingParameter, _device, _num, _when, battery_pct, clues, todo)
 
 
 def load_cfg() -> dict:
@@ -62,32 +65,14 @@ def alert_blueprints() -> list[str]:
     return list((load_cfg().get("alert_words") or {}).keys())
 
 
-def _num(v):
-    try:
-        return float(v)
-    except (TypeError, ValueError):
-        return None
-
-
 def followed_by_agent(rule_eid: str, when: datetime, known: list[tuple[str, datetime]], window_s: float) -> bool:
     """Whether an alert Home Assistant's logbook shows is one the agent already recorded as an incident
     (the same rule, within the window): then it is shown once, as the agent's."""
     return any(rid == rule_eid and abs((when - at).total_seconds()) < window_s for rid, at in known)
 
 
-def _when(row: dict) -> datetime | None:
-    try:
-        return datetime.fromisoformat(str(row.get("when") or ""))
-    except ValueError:
-        return None
-
-
-class MissingParameter(Exception):
-    pass
-
-
 class Ctx:
-    def __init__(self, kind, pack, store, cli, energy, cfg, zone, now, state_path):
+    def __init__(self, kind, pack, store, cli, energy, cfg, zone, now, state_path, params=None):
         self.kind, self.pack, self.store, self.cli, self.energy, self.cfg = kind, pack, store, cli, energy, cfg
         self.Z = ZoneInfo(zone)
         self.now = now
@@ -104,6 +89,7 @@ class Ctx:
         self.problems: list[str] = []     # what a section could not say, for facts.json's problems
         self._states = None
         self._params = None
+        self._params_of = params          # script.Context's: the one way a script reads the villa's settings
         # ⚠️ ONE READING PER RUN (architecture review 5, 2026-10-07): the weekly page read the VESTA rules' logbooks
         # 4 times, the rules' states twice and a pump's hourly power up to 3 times — each section asked again
         self._incidents = None
@@ -123,13 +109,17 @@ class Ctx:
 
     # ---- shared readings
     def params(self):
-        """The villa's parameters (vesta_shared.params.live_params: kept ten minutes in the store)."""
+        """The villa's parameters, as every script reads them (vesta_shared.script.Context.params: live_params,
+        kept ten minutes in the store).
+
+        ⚠️ ONE WAY IN (architecture review 13, 2026-10-09): this built its own and turned any error into "no
+        parameters" — a volt battery's nominal that could not be read made it leave the batteries table, unsaid."""
         if self._params is None:
             from vesta_shared.params import VillaParams, live_params
-            try:
-                self._params = live_params(self.cli, self.store)
-            except Exception:  # noqa: BLE001 — a fixture client without helpers: the defaults
-                self._params = VillaParams()
+            if self._params_of is not None:
+                self._params = self._params_of()
+            else:                                 # a Ctx built by hand (a test): the same reading, without a Context
+                self._params = live_params(self.cli, self.store) if self.store is not None else VillaParams()
         return self._params
 
     def states(self) -> dict:
@@ -250,12 +240,10 @@ class Ctx:
         s = datetime.combine(start, time(0), self.Z)
         e = datetime.combine(end + timedelta(days=1), time(0), self.Z)
         rows = self.cli.statistics([entity_id], s, e, "day", ("change", "sum")).get(entity_id, [])
-        out: dict[date, float] = {}
-        for r in rows:
-            v = _num(r.get("change"))
-            if v is not None and v >= 0:                     # a counter stepping back is not consumption
-                out[local_day(r["start"], self.Z)] = round(v, 2)
-        return out
+        # one reading of a meter's day (vesta_shared.daily, as roi-energy reads it): a counter stepping back is a
+        # reset, not consumption
+        return {d: round(f["kwh"], 2) for d, f in energy_daily_features(rows, self.pack.time_zone).items()
+                if f["kwh"] is not None and not f["counter_reset"]}
 
     def running_power(self, entity_id: str, days: int) -> list[tuple[str, float]]:
         """Mean power per day over the hours the device ran (hourly mean above run_min_w)."""
@@ -322,307 +310,6 @@ def _local(iso, zone) -> str:
     """A Home Assistant time as the villa's, minute precision ("2026-10-06T16:15"): what _fill and compose show."""
     t = villa_time(iso, zone) if iso else None
     return t.replace(tzinfo=None).isoformat(timespec="minutes") if t else ""
-
-
-# ---------------------------------------------------------------- the clues (reports.yaml playbook)
-def _fill(text, figures: dict) -> str:
-    """A playbook text with the clue's figures in it; a date as a person writes it ("23 Sep")."""
-    def show(v):
-        if isinstance(v, str) and len(v) == 16 and v[10] == "T":
-            try:
-                return day_time_label(datetime.fromisoformat(v))
-            except ValueError:
-                return v
-        if isinstance(v, str) and len(v) == 10 and v[4] == "-" and v[7] == "-":
-            try:
-                return day_label(date.fromisoformat(v))
-            except ValueError:
-                return v
-        return v
-    try:
-        return str(text or "").format(**{k: show(v) for k, v in figures.items() if not isinstance(v, (list, dict))})
-    except (KeyError, IndexError, ValueError):
-        return str(text or "")
-
-
-def _days_power(c: "Ctx", entity_id: str, days: int) -> list[tuple[date, float, float]]:
-    """Per day: (day, mean running power, hours running), from HA's hourly means."""
-    thr = float(c.need("pump", "run_min_w"))
-    out = []
-    for d, vals in sorted(c.hourly_means(entity_id, days).items()):
-        run = [v for v in vals if v > thr]
-        out.append((d, round(statistics.mean(run)) if run else 0.0, len(run)))
-    return out
-
-
-def _best_split(vals: list[float], min_days: int) -> tuple[int, float] | None:
-    """Where the series steps the most: (index of the first day after, change in % of the before mean)."""
-    best = None
-    for k in range(min_days, len(vals) - min_days + 1):
-        before, after = statistics.mean(vals[:k]), statistics.mean(vals[k:])
-        if before:
-            ch = (after - before) / before * 100
-            if best is None or abs(ch) > abs(best[1]):
-                best = (k, ch)
-    return best
-
-
-def clue_power_step(c, when):
-    out = []
-    for slug, a in sorted(c.pack.assets.items()):
-        pw = (a.get("entities") or {}).get("power")
-        if a.get("kind") != "motor" or not pw:
-            continue
-        rows = [r for r in _days_power(c, pw, int(when.get("days", 30))) if r[2] > 0]
-        best = _best_split([r[1] for r in rows], int(when.get("min_days", 3)))
-        if best and -best[1] >= float(when["drop_pct"]):
-            k = best[0]
-            if min(statistics.mean(r[2] for r in rows[:k]), statistics.mean(r[2] for r in rows[k:])) < float(when.get("min_hours", 0)):
-                continue                             # a few minutes a day: its hourly means are not its power
-            out.append({"subject": a.get("name") or slug, "entity_id": pw, "step_date": rows[k][0].isoformat(),
-                        "before_w": round(statistics.mean(r[1] for r in rows[:k])),
-                        "after_w": round(statistics.mean(r[1] for r in rows[k:])), "drop_pct": round(-best[1]),
-                        "hours_before": round(statistics.mean(r[2] for r in rows[:k]), 1),
-                        "hours_after": round(statistics.mean(r[2] for r in rows[k:]), 1)})
-    return out
-
-
-def clue_run_change(c, when):
-    out = []
-    for slug, a in sorted(c.pack.assets.items()):
-        pw = (a.get("entities") or {}).get("power")
-        if a.get("kind") != "motor" or not pw:
-            continue
-        rows = _days_power(c, pw, int(when.get("days", 30)))
-        best = _best_split([float(r[2]) for r in rows], int(when.get("min_days", 3)))
-        if best and abs(best[1]) >= float(when["change_pct"]):
-            k = best[0]
-            before = statistics.mean(r[2] for r in rows[:k])
-            after = statistics.mean(r[2] for r in rows[k:])
-            if max(before, after) < float(when.get("min_hours", 0)):
-                continue                             # a few minutes a day either way: not a change to report
-            out.append({"subject": a.get("name") or slug, "entity_id": pw, "change_date": rows[k][0].isoformat(),
-                        "hours_before": round(statistics.mean(r[2] for r in rows[:k]), 1),
-                        "hours_after": round(statistics.mean(r[2] for r in rows[k:]), 1), "change_pct": round(best[1])})
-    return out
-
-
-def clue_battery_trend(c, when):
-    repl = float(c.need("battery", "replace_below_pct"))
-    days = int(when.get("days", 30))
-    s = datetime.combine(c.end - timedelta(days=days - 1), time(0), c.Z)
-    out = []
-    for r in c.pack.families.get("battery", []):
-        # ⚠️ ITS CHARGE, NOT ITS READING (architecture review 13): a 3.0 V cell was read as "3 %" here and made a
-        # false "battery falling" clue, while the batteries section converted it — both ask battery_pct now
-        now_v = battery_pct(c, r, _num((c.states().get(r["entity_id"]) or {}).get("state")))
-        if now_v is None or now_v >= float(when["below_pct"]):
-            continue
-        rows = c.cli.statistics([r["entity_id"]], s, c.e_dt, "day", ("mean",)).get(r["entity_id"], [])
-        pts = [(i, p) for i, x in enumerate(rows) if (p := battery_pct(c, r, _num(x.get("mean")))) is not None]
-        fall = None
-        if len(pts) >= 5:
-            fall = round(-(slope_per_hour(pts) or 0) * 7, 1)      # the points are (day index, level): per day
-        if not fall or fall <= 0 or now_v <= repl:
-            continue                    # no trend to project, or already due: the batteries section shows it
-        out.append({"subject": r.get("name") or r["entity_id"], "entity_id": r["entity_id"], "level_pct": round(now_v),
-                    "fall_per_week": fall, "weeks_left": round((now_v - repl) / fall, 1), "replace_below_pct": repl})
-    return out
-
-
-def clue_offline(c, when):
-    fams = set(when.get("families") or [])
-    return [{"subject": o["name"], "since": o["since"], "family": o["family"], "entity_id": o["entity_id"]}
-            for o in c.offline() if o["family"] in fams]
-
-
-def clue_use_while_empty(c, when):
-    meter, ent = c.energy.get("main_meter"), when.get("mode_entity")
-    if not meter or not ent:
-        return []
-    days = int(when.get("days", 10))
-    start = max(c.start, c.end - timedelta(days=days - 1))
-    s = datetime.combine(start, time(0), c.Z)
-    hist = sorted(c.cli.history([ent], s, c.e_dt).get(ent, []), key=lambda h: h.get("last_changed", ""))
-    if not hist:
-        return []
-    empty = {str(x).lower() for x in when.get("empty") or []}
-    per = c.daily_kwh(meter, start, c.end)
-    empty_days, other_days = [], []
-    for k in range((c.end - start).days + 1):
-        d = start + timedelta(days=k)
-        noon = datetime.combine(d, time(12), c.Z)
-        state = None
-        for h in hist:
-            if datetime.fromisoformat(h["last_changed"]) <= noon:
-                state = str(h.get("state") or "").lower()
-        if d in per and state is not None:
-            (empty_days if state in empty else other_days).append(per[d])
-    if not empty_days:
-        return []
-    return [{"subject": "the villa", "empty_days": len(empty_days),
-             "kwh_per_empty_day": round(statistics.mean(empty_days), 1),
-             "kwh_per_other_day": round(statistics.mean(other_days), 1) if other_days else "no occupied day"}]
-
-
-CLUES = {"power_step": clue_power_step, "run_change": clue_run_change, "battery_trend": clue_battery_trend,
-         "offline": clue_offline, "use_while_empty": clue_use_while_empty}
-
-
-def clues(c: "Ctx") -> tuple[list[dict], list[str]]:
-    """Every playbook entry whose `when` holds, as clues: the entry's guidance filled with the clue's figures."""
-    if c._clues is not None:
-        return c._clues
-    out, problems = [], []
-    for group, entries in (c.cfg.get("playbook") or {}).items():
-        for e in entries or []:
-            when = e.get("when") or {}
-            if not when:
-                continue                             # knowledge only: handed to the AI, never a clue
-            fn = CLUES.get(when.get("kind"))
-            if fn is None:
-                problems.append(f"playbook {group}/{e.get('name')}: unknown when kind {when.get('kind')!r}")
-                continue
-            try:
-                found = fn(c, when)
-            except MissingParameter as ex:
-                problems.append(f"playbook {group}/{e.get('name')}: {ex}")
-                continue
-            except (KeyError, TypeError, ValueError) as ex:
-                problems.append(f"playbook {group}/{e.get('name')}: {type(ex).__name__}: {ex}")
-                continue
-            for f in found:
-                out.append({"id": f"clue-{len(out) + 1}", "group": group, "entry": e.get("name"), "subject": f.get("subject"),
-                            "figures": f, "horizon": e.get("horizon"), "severity": e.get("severity"),
-                            "title": _fill(e.get("title") or "{subject}: " + str(e.get("name") or ""), f),
-                            "group_title": e.get("group_title"),
-                            "playbook": {k: _fill(e.get(k), f) for k in ("look_at", "means", "check", "ask", "cost_of_ignoring")
-                                         if e.get(k)}})
-    c._clues = (out, problems)
-    return c._clues
-
-
-# ---------------------------------------------------------------- the one list of what needs doing
-def _device(c: "Ctx", entity_id: str | None, fallback: str) -> str:
-    """What an item is about: the device of its entity (knowledge_pack.device_of, the one identity of every section),
-    so that a clue and a task about the same device become one item."""
-    return c.pack.device_of(entity_id)[0] if entity_id else fallback
-
-
-def todo(c: "Ctx") -> list[dict]:
-    """The report's one list for this period: Ctx reads its inputs, one_list builds it."""
-    if c._todo is not None:
-        return c._todo
-
-    def device_of(entity_id, fallback):
-        return _device(c, entity_id, fallback)
-
-    def name_of(entity_id):
-        # the device's name as the knowledge pack has it; an entity it does not know keeps its own sentence
-        return c.pack.name_of(entity_id)
-
-    c._todo = one_list(clues(c)[0], c.tasks(), device_of, name_of, c.need("horizon"),
-                       int(c.need("todo", "group_from")), float(c.need("todo", "same_time_minutes")),
-                       c.cfg.get("todo_groups") or {})
-    return c._todo
-
-
-SEVERITY_ORDER = {"P1": 0, "P2": 1, "P3": 2, "P4": 3}
-
-
-def group_kinds(items: list[dict], group_from: int, group_words: dict) -> list[tuple[dict | None, list[dict]]]:
-    """Items of one KIND made one line: at least `group_from` of them, and a group line for the kind (the
-    item's own `group_title`, else reports.yaml todo_groups). Each item has `kind`, `severity`, `subject`
-    (its name) and may have `since` (members are listed oldest first). Returns, in first-seen order,
-    (group, members) — group None for an item that stands alone — where group is {title, names, shown,
-    severity (the worst member's)}.
-
-    ⚠️ ONE GROUPING (architecture review, 0.12.27): the 07:00 digest grouped with its own copy, which
-    guessed each name by cutting the summary at " has " / " dropped ", took the FIRST member's severity
-    and formatted the line without {kind} — a group line naming {kind} raised KeyError there only."""
-    kinds: dict[str, list[dict]] = {}
-    for it in items:
-        kinds.setdefault(it["kind"], []).append(it)
-    out: list[tuple[dict | None, list[dict]]] = []
-    for kind, its in kinds.items():
-        title = its[0].get("group_title") or group_words.get(kind)
-        if len(its) < group_from or not title:
-            out += [(None, [it]) for it in its]
-            continue
-        its.sort(key=lambda x: x.get("since") or "")
-        n = len(its)
-        names = [x["subject"] for x in its]
-        out.append(({"title": title.format(n=n, kind=kind.split("/")[-1]), "names": names,
-                     "shown": ", ".join(names[:8]) + (f" and {n - 8} more" if n > 8 else ""),
-                     "severity": min((x["severity"] for x in its), key=lambda s_: SEVERITY_ORDER.get(s_, 9))}, its))
-    return out
-
-
-def one_list(clue_rows: list[dict], problems: list[dict], device_of, name_of, horizon: dict,
-             group_from: int, same_minutes: float, group_words: dict) -> list[dict]:
-    """What needs doing, ONCE: the playbook's clues and the open problems (vesta_shared.problems), merged
-    by device (a clue and a problem about one device are one item), then the items of one kind grouped
-    when there are at least `group_from` and `group_words` (reports.yaml todo_groups) or the playbook
-    entry gives that kind a group line. The PDF mock-ups' "Do this week": one list, no repeats.
-
-    ⚠️ PLAIN INPUTS (architecture review, 2026-10-01): it reads nothing itself — `device_of(entity_id,
-    fallback)` and `name_of(entity_id)` are the only questions it asks — so its rules are tested with
-    lists, without a villa, a store or Home Assistant."""
-    order = SEVERITY_ORDER
-    items: dict[str, dict] = {}
-
-    def add(it: dict):
-        cur = items.get(it["device"])
-        if cur is None:
-            items[it["device"]] = it
-            return
-        keep, other = (cur, it) if cur["from"] == "clue" or order.get(cur["severity"], 9) <= order.get(it["severity"], 9) else (it, cur)
-        keep["severity"] = min(keep["severity"], other["severity"], key=lambda s: order.get(s, 9))
-        keep["task_ids"] = keep["task_ids"] + other["task_ids"]
-        keep["also"] = keep["also"] + [other["title"]] + other["also"]
-        items[it["device"]] = keep
-
-    def severity_for(h):
-        # a playbook entry's horizon as a severity: the LAST one reports.yaml maps to it (Now → P2, not
-        # P1: a clue is never an emergency by itself)
-        found = [sev for sev, hz in horizon.items() if hz == h]
-        return found[-1] if found else "P4"
-
-    for cl in clue_rows:
-        f = cl["figures"]
-        sev = cl.get("severity") or severity_for(cl.get("horizon"))
-        add({"from": "clue", "kind": f"{cl['group']}/{cl['entry']}", "device": device_of(f.get("entity_id"), cl["subject"] or cl["id"]),
-             "subject": cl["subject"], "title": cl["title"], "severity": sev, "horizon": cl.get("horizon") or horizon.get(sev),
-             "why": cl["playbook"].get("means", ""), "check": cl["playbook"].get("check", ""), "ask": cl["playbook"].get("ask", ""),
-             "cost": cl["playbook"].get("cost_of_ignoring", ""), "since": str(f.get("since") or f.get("step_date") or f.get("change_date") or ""),
-             "figures": f, "task_ids": [], "also": [], "group_title": cl.get("group_title"), "look_at": cl["playbook"].get("look_at", "")})
-    for pr in problems:
-        title = pr["title"].split("\n")[0]
-        add({"from": "task", "kind": pr["kind"], "device": device_of(pr.get("entity_id"), pr["id"]),
-             "subject": name_of(pr.get("entity_id")) or title, "title": title, "severity": pr["severity"],
-             "horizon": horizon.get(pr["severity"]), "why": "", "check": pr.get("check") or "", "ask": "", "cost": "",
-             "since": pr["since"], "figures": pr["figures"], "task_ids": [pr["id"]], "also": [], "group_title": None})
-
-    out = []
-    for group, its in group_kinds(list(items.values()), group_from, group_words):
-        if group is None:
-            out += its                               # a kind with no group line: each is its own problem
-            continue
-        n = len(its)
-        why = group["shown"] + "."
-        times = [_when({"when": x["since"]}) for x in its]
-        if all(t_ is not None and len(x["since"]) > 10 for t_, x in zip(times, its)):
-            spread = (max(times) - min(times)).total_seconds() / 60
-            if spread <= same_minutes and group_words.get("same_time"):
-                why += " " + group_words["same_time"].format(n=n, since=day_time_label(min(times)))
-        out.append({**its[0], "title": group["title"], "subject": f"{n} items", "why": why,
-                    "ask": "", "severity": group["severity"],
-                    "task_ids": [i for x in its for i in x["task_ids"]], "also": [], "members": group["names"],
-                    "devices": [x["device"] for x in its]})
-    out.sort(key=lambda x: (order.get(x["severity"], 9), x["since"]))
-    for k, it in enumerate(out):
-        it["id"] = f"todo-{k + 1}"
-    return out
 
 
 # ---------------------------------------------------------------- the sections
@@ -749,7 +436,7 @@ def s_equipment(c: Ctx) -> dict:
         # ⚠️ BY THE ONE DEVICE IDENTITY (architecture review 13): the to-do list names devices by device_of, and this
         # compared them with the asset slug — no card was ever set to "Watch" by it (a regression of 0.12.115)
         status = "Watch" if _device(c, pw, slug) in watched else _status_from(series, drop)
-        cards.append({"id": f"card-{slug}", "title": a.get("name") or slug, "subtitle": f"Running power per day, last {days} days",
+        cards.append({"id": f"card-{slug}", "title": c.pack.device_name(pw, slug), "subtitle": f"Running power per day, last {days} days",
                       "unit": "W", "series": series, "status": status,
                       "figures": {"first": series[0][1] if series else None, "last": series[-1][1] if series else None,
                                   "min": min((v for _, v in series), default=None), "max": max((v for _, v in series), default=None)}})
@@ -777,14 +464,6 @@ def _extra_card(c: Ctx, spec: dict, days: int) -> dict:
                         "alert_at": alert}}
 
 
-def battery_pct(c, r: dict, value) -> float | None:
-    """A battery's charge in %, from its reading: % as it is, volts against the nominal the villa set for it
-    (device_state.battery_charge); None when it cannot be told (volts with no nominal: never a guess)."""
-    unit = (r.get("unit") or "%").strip()
-    nominal = c.params().asset_optional_number(r.get("asset") or "", "battery_nominal_v") if unit == "V" else None
-    return battery_charge(value, unit, nominal)
-
-
 def s_batteries(c: Ctx) -> dict:
     repl, watch, show = c.need("battery", "replace_below_pct"), c.need("battery", "watch_below_pct"), c.need("battery", "show")
     rows = []
@@ -796,7 +475,7 @@ def s_batteries(c: Ctx) -> dict:
             continue                      # volts with no nominal: the night check asks for it, never a guess
         lvl = "replace" if pct < repl else ("watch" if pct < watch else "ok")
         # named as the device it powers, like every list of devices in the report (knowledge_pack.device_of)
-        rows.append({"name": c.pack.device_of(r["entity_id"])[1] or r.get("name") or r["entity_id"], "pct": round(pct), "level": lvl,
+        rows.append({"name": c.pack.device_name(r["entity_id"], r.get("name") or r["entity_id"]), "pct": round(pct), "level": lvl,
                      "volts": round(v, 2) if unit == "V" else None})
     rows.sort(key=lambda x: x["pct"])
     return {"count": len(rows), "rows": rows[: int(show)], "replace_below_pct": repl,
@@ -829,12 +508,15 @@ def s_circuits(c: Ctx) -> dict:
 
 def s_monitoring(c: Ctx) -> dict:
     rows = [{"item": o["name"], "state": "Offline", "since": o["since"], "critical": o["critical"]} for o in c.offline()]
-    resets = [f for f in c.store.findings(since_day=c.start.isoformat()) if f["rule_id"] == "PM-COUNTER-RESET"]
+    resets = [f for f in c.store.findings(since_day=c.start.isoformat()) if f["rule_id"] == result.COUNTER_RESET]
     rules = c.vesta_rules()
     st = c.rule_states()
     on = sum(1 for eid in rules if (st.get(eid) or {}).get("state") == "on") if rules else None
-    return {"offline": rows, "counter_resets": [{"item": c.name(f["entity_id"]), "day": f["opened_day"]} for f in resets],
-            "rules_on": on, "rules_total": len(rules), "muted": [c.name(m["entity_id"]) for m in c.store.mutes()],
+    # named as the device, once each, like the offline rows (knowledge_pack.device_of)
+    return {"offline": rows, "counter_resets": [{"item": c.pack.device_name(f["entity_id"], c.name(f["entity_id"])), "day": f["opened_day"]}
+                                                for f in resets],
+            "rules_on": on, "rules_total": len(rules),
+            "muted": list(dict.fromkeys(c.pack.device_name(m["entity_id"], c.name(m["entity_id"])) for m in c.store.mutes())),
             "ai_cost_usd": c.ai_cost()}
 
 
@@ -871,7 +553,7 @@ def s_trends(c: Ctx) -> dict:
             continue
         series = [(d.isoformat(), v) for d, v in sorted(c.daily_kwh(en, c.start, c.end).items())]
         if series and max(v for _, v in series) > 0:
-            charts.append({"id": f"trend-{slug}", "kind": "line", "title": f"{a.get('name') or slug}, kWh per day",
+            charts.append({"id": f"trend-{slug}", "kind": "line", "title": f"{c.pack.device_name(en, slug)}, kWh per day",
                            "unit": "kWh", "series": series,
                            "figures": {"first": series[0][1], "last": series[-1][1], "min": min(v for _, v in series),
                                        "max": max(v for _, v in series)}})
@@ -982,7 +664,7 @@ def main(argv=None):
         return 1
     s = script.Context(a)
     c = Ctx(a.cmd, s.pack, s.store, s.client, json.load(open(a.energy)), load_cfg(), s.zone, s.now,
-            os.environ.get("VESTA_STATE"))
+            os.environ.get("VESTA_STATE"), params=lambda: s.params)
     res = facts(a.cmd, c)
     if a.out:
         with open(a.out, "w", encoding="utf-8") as f:

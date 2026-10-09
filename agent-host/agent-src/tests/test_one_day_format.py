@@ -62,6 +62,7 @@ def test_the_report_draws_a_volt_battery_against_its_nominal_and_skips_one_it_ca
     import types
     sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
     import facts
+    import playbook
     from vesta_shared.params import VillaParams
     params = VillaParams(helpers=[{"entity_id": "input_number.station_battery_nominal_v", "helper_type": "input_number",
                                    "id": "station_battery_nominal_v"}],
@@ -92,8 +93,9 @@ def test_a_home_assistant_or_store_time_is_the_villas_once_converted():
     assert villa_date("2026-10-05", z).isoformat() == "2026-10-05"        # a villa date stays as it is
     sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
     import facts
+    import playbook
     assert facts._local("2026-10-06T08:15:02.1+00:00", z) == "2026-10-06T16:15"
-    assert facts._fill("since {since}", {"since": facts._local("2026-10-06T08:15:02+00:00", z)}).endswith("16:15")
+    assert playbook._fill("since {since}", {"since": facts._local("2026-10-06T08:15:02+00:00", z)}).endswith("16:15")
 
 
 def test_every_point_of_a_reports_chart_says_its_day_and_value():

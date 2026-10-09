@@ -120,11 +120,15 @@ class VillaParams:
         return [h for h in self.helpers if h.get("helper_type") == "person"]
 
     def tariff(self) -> tuple[float, str]:
-        """Tariff per kWh and its currency, from input_number.electricity_tariff_kwh."""
+        """Tariff per kWh and its currency, from input_number.electricity_tariff_kwh (its unit, "<currency>/kWh"),
+        else input_text.villa_currency. Neither: MissingParameter — never a guessed currency (architecture review 13:
+        it was one villa's own, written in the code)."""
         val = self.number("electricity_tariff_kwh", "tariff helper missing")
         h, _ = self._find("electricity_tariff_kwh")
         unit = (h or {}).get("unit_of_measurement", "") or ""
-        currency = unit.split("/")[0] if "/" in unit else self.text_or("villa_currency", "IDR")
+        currency = unit.split("/")[0].strip() if "/" in unit else self.text_or("villa_currency", "")
+        if not currency:
+            raise MissingParameter("villa_currency", "give the tariff the unit <currency>/kWh, or add input_text.villa_currency")
         return val, currency
 
     def text_or(self, object_id: str, default: str) -> str:

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.111 (10 October 2026)
+
+Architecture review 13 (the skills' data path), candidates 1 to 6:
+- One device name: KnowledgePack.device_name (device_of's name, the asset's name for a row without a device, the caller's words for an entity the pack does not have). The step / run / battery clues, the equipment cards, the trend charts, the counter resets, the mutes (once each), the to-do list's and the digest's subjects, roi-energy's loads and pumps. features.device_key stays the night check's stored finding identity (no migration; nothing compares it with device_of).
+- One "running": vesta_shared.daily.running_threshold / power_days (a fraction of the typical peak, capped by the baseline helper, the floor without data; no floor asked when nothing peaked). nightly, energy_period and filtration_optimiser ask it. The weekly page's own 15 W (reports.yaml pump.run_min_w) is unchanged: moving it is a skill-file change. facts._best_split asks stats.step_index; facts.daily_kwh reads daily.energy_daily_features.
+- One "new / still open": Problems.since(day). compose.fm_daily takes New and Still open from it (it read closed findings as new and listed a noted alert twice); owner_weekly counts alerts apart from maintenance problems.
+- One way to the settings: facts.Ctx takes script.Context.params. params.tariff raises MissingParameter(villa_currency) instead of defaulting to one villa's currency; filtration_optimiser has no --asset default (filtration_pump: the "_pump" asset whose pool volume is set, the only one, or each one's missing helper named) and says a missing tariff with the rest.
+- Written once in vesta_shared.result: PARAM_MISSING, COUNTER_RESET, finding_detail / finding_name (rules.py writes them; facts, proposals and nightly read them).
+- reports/scripts/playbook.py: the clues and the one list moved out of facts.py (facts.py 1,008 → 685 lines).
+- Tests: device names on every page; the threshold's cap, floor and no-floor; no script keeps its own threshold; the step detector against noise; the digest's new / noted / still open and the owner's counts; the currency, the pump choice, the settings' way in; every field the page prints exists; the rule ids written once. Each shown red with the old behaviour.
+
 ## 0.6.110 (9 October 2026)
 
 Architecture review 13 (the skills' data path), its three live defects:

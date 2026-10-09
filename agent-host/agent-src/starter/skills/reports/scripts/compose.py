@@ -63,8 +63,8 @@ NUM = re.compile(r"(?<![\w.])-?\d{1,3}(?:,\d{3})+(?:\.\d+)?|(?<![\w.])-?\d+(?:\.
 
 def _grouped(items: list[dict], group_from: int, words: dict) -> list[str]:
     """Items ({kind, severity, subject, title}) -> chat lines, grouped the way the weekly page groups them
-    (facts.group_kinds: one grouping for both)."""
-    from facts import group_kinds
+    (playbook.group_kinds: one grouping for both)."""
+    from playbook import group_kinds
     out = []
     for group, its in group_kinds(items, group_from, words):
         if group is None:
@@ -90,23 +90,24 @@ def fm_daily(pack: KnowledgePack, store: Store, as_of: date) -> str:
     words = {k: v for k, v in (cfg.get("todo_groups") or {}).items() if k != "same_time"}
     def name_of(entity_id, text):
         # the device's name from the knowledge pack; the summary's own words for an entity it does not know
-        return pack.name_of(entity_id) or text.split("\n")[0][:60]
+        return pack.device_name(entity_id, None) or text.split("\n")[0][:60]
 
+    # ⚠️ NEW AND STILL OPEN AS PROBLEMS ANSWER THEM (architecture review 13): this read its own "new" (findings
+    # since yesterday, a closed one included) and listed a noted alert twice, under "Also noted" and "Still open"
     yesterday = (as_of - timedelta(days=1)).isoformat()
-    new = [f for f in store.findings(since_day=yesterday) if f["severity"] in ("P2", "P3")]
-    zone = pack.time_zone or "UTC"
-    digest_inc = [i for i in store.incidents(open_only=True) if i["state"] == Incident.DIGEST
-                  and villa_date(i["opened_at"], zone).isoformat() >= yesterday]
-    shown_new = {f"finding:{f['id']}" for f in new}
-    open_now = [p for p in Problems(store).open_problems() if p["source"] not in shown_new]
+    view = Problems(store).since(yesterday)
+    new = [p for p in view["new"] if not p["incident"]]
+    noted = {p["incident"] for p in view["new"] if p["incident"]
+             and (store.incident(p["incident"]) or {}).get("state") == Incident.DIGEST}
+    open_now = [p for p in view["open"] if p not in new and p["incident"] not in noted]
     lines = [f"{pack.villa}, {day_label(as_of, weekday=True)} morning."]
     if new:
         lines.append("New:")
-        lines += _grouped([{"kind": f["rule_id"], "severity": f["severity"], "subject": name_of(f["entity_id"], f["summary"]),
-                            "title": f["summary"]} for f in new], group_from, words)
-    if digest_inc:
+        lines += _grouped([{"kind": p["rule_id"], "severity": p["severity"], "subject": name_of(p["entity_id"], p["title"]),
+                            "title": p["title"]} for p in new], group_from, words)
+    if noted:
         lines.append("Also noted (no action needed yet):")
-        lines += [f"- {json.loads(i['payload'] or '{}').get('message') or i['rule_id']}" for i in digest_inc]
+        lines += [f"- {p['title']}" for p in view["new"] if p["incident"] in noted]
     if open_now:
         # ⚠️ AN INCIDENT NUMBER ONLY WHERE "#N done" WORKS: an alert's incident number. It used to print task numbers,
         # which no reply could close; a maintenance finding is closed in the VESTA Kiosk instead.
@@ -125,13 +126,17 @@ def owner_weekly(pack: KnowledgePack, store: Store, energy: dict) -> str:
     inc = [i for i in store.incidents(open_only=False)
            if energy["start"] <= villa_date(i["opened_at"], pack.time_zone or "UTC").isoformat() <= energy["end"]]
     p1 = sum(1 for i in inc if i["severity"] == "P1")
-    open_tasks = len(Problems(store).open_problems())
+    # the alerts and the maintenance problems still open, counted apart as the concierge counts them: every open
+    # problem was called an "FM task", an alert included
+    still = Problems(store).open_problems()
+    alerts_open = sum(1 for p in still if p["incident"])
+    open_tasks = len(still) - alerts_open
     kwh = f"{energy['total_kwh']:.0f} kWh" if energy.get("total_kwh") is not None else "kWh n/a"
     vs = f" ({energy['total_vs_prev_pct']:+.0f}%)" if energy.get("total_vs_prev_pct") is not None else ""
     cost = f", {fmt_money(energy['total_cost'], energy['currency'])}" if energy.get("total_cost") else ""
     return (f"{pack.villa}, week to {energy['end']}: {kwh}{vs}{cost}.\n"
-            f"{len(inc)} alert(s), {p1} critical; {open_tasks} FM task(s) open.\n"
-            + ("All quiet." if not open_tasks and not p1 else "Details in the FM weekly page."))
+            f"{len(inc)} alert(s), {p1} critical, {alerts_open} still open; {open_tasks} maintenance problem(s) open.\n"
+            + ("All quiet." if not still and not p1 else "Details in the FM weekly page."))
 
 
 # ---------------------------------------------------------------- the charts

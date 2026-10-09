@@ -1,3 +1,14 @@
+## 0.12.117
+
+What you will see:
+- In the reports, a device has the same name everywhere: the clues, the equipment cards, the trend charts, the counter resets, the muted list, the morning digest and the energy figures use the device's name in Home Assistant, as the to-do list and the monitoring table already did.
+- The morning digest's "New" lists only what is still open: a problem found and closed again during the night no longer shows as news. An alert noted for the morning list shows once, under "Also noted", not again under "Still open". New and still open are now decided the same way as in the weekly report.
+- The owner's weekly line counts open alerts and open maintenance problems separately. Before, every open problem was called an "FM task", alerts included.
+- A pump's run hours in the energy figures and the filtration schedule are worked out the same way as in the night check. This only changes the numbers for a pump with a baseline power setting.
+- The weekly report says a pump's running power "stepped" only when one clear change explains the readings, as the night check does. A day-to-day wobble no longer counts as a step.
+- The filtration schedule no longer assumes a pump called "pool pump". It uses the pump whose pool volume is set. If several pumps exist and none is set up, it lists the setting each one needs.
+- When the electricity tariff gives no currency (a unit such as "EUR/kWh", or an input_text.villa_currency helper), costs ask for one instead of assuming one. Your tariff already gives it.
+
 ## 0.12.116
 
 What you will see:

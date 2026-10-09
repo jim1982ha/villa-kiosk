@@ -106,7 +106,7 @@ def run(args) -> dict:
         prev, _ = sum_days(series[eid], prev_a, prev_b)
         base_vals = [series[eid][d]["kwh"] for d in series[eid] if a - timedelta(days=30) <= d < a and series[eid][d].get("kwh") is not None]
         base_daily = med(base_vals)
-        loads.append({"entity_id": eid, "asset": r["asset"], "name": pack.assets.get(r["asset"], {}).get("name", r["name"]),
+        loads.append({"entity_id": eid, "asset": r["asset"], "name": pack.device_name(eid, r["name"] or eid),
                       "area": r["area"], "family": r["family"], "kwh": cur, "days_with_data": days, "prev_kwh": prev,
                       "vs_prev_pct": pct_change(cur, prev) if prev else None,
                       "baseline_kwh": round(base_daily * n_days, 2) if base_daily is not None else None,
@@ -133,12 +133,11 @@ def run(args) -> dict:
         rows = hstats.get(r["entity_id"], [])
         if not rows or pack.assets.get(r["asset"], {}).get("kind", "appliance") != "motor":
             continue
-        thr = (med([x["max"] for x in rows if x.get("max")]) or 0) * params.behaviour("on_threshold_fraction")
-        feats = F.power_daily_features(rows, pack.time_zone, thr)
+        _, feats = F.power_days(pack.assets.get(r["asset"]), rows, pack.time_zone, params)   # the one "running"
         hrs = [feats[d]["run_hours"] for d in feats if a <= d <= b]
         rp = [feats[d]["running_power"] for d in feats if a <= d <= b and feats[d].get("running_power")]
         if hrs:
-            pumps.append({"asset": r["asset"], "name": pack.assets.get(r["asset"], {}).get("name", r["name"]),
+            pumps.append({"asset": r["asset"], "name": pack.device_name(r["entity_id"], r["name"] or r["entity_id"]),
                           "run_hours_total": round(sum(hrs), 1), "run_hours_per_day": round(sum(hrs) / len(hrs), 2),
                           "running_power_w": round(med(rp), 0) if rp else None})
 
