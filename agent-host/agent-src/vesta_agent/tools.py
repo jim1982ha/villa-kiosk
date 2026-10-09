@@ -275,7 +275,7 @@ class Toolbox:
                 tid = await self.ticket(title=title[:200], entity_id=ent, note=str(args.get("note") or "")[:2000] or None)
             except Exception as e:  # noqa: BLE001
                 return _err(f"The Kiosk did not record the ticket ({type(e).__name__}).")
-            self.state.log("executed", {"tool": "create_ticket", "ticket": tid, "entity": ent})
+            # recorded once, by tickets.create (architecture review 16: logged here too, each ticket counted twice)
             return _ok("Recorded.")
         return handler
 

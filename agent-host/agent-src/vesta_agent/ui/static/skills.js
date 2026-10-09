@@ -92,14 +92,15 @@ export function tryPanel(name, d, script, command = null) {
     fill(opts, flags.length ? flags.map(([flag, kind]) => {
       const label = flag.replace(/^--/, "").replace(/-/g, " ");
       if (kind === "infile" && values[flag] === undefined) {
-        const own = (d.out_files || []).find((f) => f.replace(/\.[^.]+$/, "") === flag.replace(/^--/, ""));
-        values[flag] = own || "";
+        // the newest file named after the option, a report's or an earlier test's ({value, label}: server._out_files)
+        const own = (d.out_files || []).find((f) => f.value.split("/").pop().replace(/\.[^.]+$/, "") === flag.replace(/^--/, ""));
+        values[flag] = own ? own.value : "";
       }
       const input = kind === "outfile"
         ? h("input", { type: "text", value: values[flag] || "", placeholder: "not saved, e.g. week.json", "aria-label": label,
             oninput: (e) => { values[flag] = e.target.value.trim(); } })
         : kind === "infile"
-        ? dropdown([["", "not given"], ...(d.out_files || []).map((f) => [f, f])], values[flag], (v) => { values[flag] = v; }, label)
+        ? dropdown([["", "not given"], ...(d.out_files || []).map((f) => [f.value, f.label])], values[flag], (v) => { values[flag] = v; }, label)
         : Array.isArray(kind)
         ? dropdown([["", "not set"], ...kind.map((k) => [k, k])], values[flag] || "", (v) => { values[flag] = v; }, label)
         : kind === "switch"

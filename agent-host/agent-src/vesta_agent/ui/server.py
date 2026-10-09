@@ -472,16 +472,22 @@ class UI:
             "acts": acts, "scripts": scripts, "without": h["without"],
             "out_files": self._out_files()})
 
-    def _out_files(self, limit: int = 60) -> list[str]:
-        """The files the last runs left in the out folder, newest first: what an Offline Test offers for an option
-        that takes one (compose.py fm-weekly --facts: the file facts.py wrote, 2026-10-06 "needs --facts")."""
-        from ..skills import FILE_NAME
-        d = self.s.out_dir
-        try:
-            names = [n for n in os.listdir(d) if FILE_NAME.match(n) and os.path.isfile(os.path.join(d, n))]
-        except OSError:
-            return []
-        return sorted(names, key=lambda n: os.path.getmtime(os.path.join(d, n)), reverse=True)[:limit]
+    def _out_files(self, limit: int = 60) -> list[dict]:
+        """The files an Offline Test offers for an option that takes one, newest first (compose.py fm-weekly --facts: the
+        file facts.py wrote, 2026-10-06 "needs --facts"): {value, label} — the label says which report made it, and when."""
+        from zoneinfo import ZoneInfo
+        from vesta_shared.timeutil import day_time_label
+        from ..skills import out_files
+        zone = ZoneInfo(self.s.timezone)
+        rows = []
+        for value, at in out_files(self.s.out_dir)[:limit]:
+            when = day_time_label(datetime.fromtimestamp(at, zone), weekday=True)
+            if value.startswith("runs/"):
+                run = value.split("/")[1].rsplit("-", 1)[0]          # ai_jobs.run_folder: <job>-<time>
+                rows.append({"value": value, "label": f"{value.rsplit('/', 1)[1]} — {run} report, {when}"})
+            else:
+                rows.append({"value": value, "label": f"{value} — Offline Test, {when}"})
+        return rows
 
     async def skill_on(self, request):
         name = request.match_info["name"]

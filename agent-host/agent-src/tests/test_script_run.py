@@ -99,3 +99,22 @@ def test_a_script_called_the_wrong_way_has_stopped_not_nothing_to_do(agent):
     ans = script_run.run(agent.s, agent.state, agent.skills.get("strict"), "s.py", [], by=script_run.JOB)
     assert ans.code == 2 and not ans.ok and ans.verdict == "stopped" and "--pack" in ans.error
     assert [r["skill"] for r in _records(agent, "script_failed")] == ["strict"]
+
+
+def test_an_offline_test_reads_the_file_a_report_run_left(agent):
+    # architecture review 16: since each report works in its own folder (0.12.118), the Offline Test could not reach
+    # this morning's facts.json — and offered an older one from the out folder itself, with old figures
+    from vesta_agent.skills import take_run_file
+    out = agent.s.out_dir
+    os.makedirs(os.path.join(out, "runs", "fm-weekly-20261010T080301000000"), exist_ok=True)
+    with open(os.path.join(out, "runs", "fm-weekly-20261010T080301000000", "facts.json"), "w") as f:
+        f.write('{"kwh": 287}')
+    with open(os.path.join(out, "facts.json"), "w") as f:
+        f.write('{"kwh": 999}')                                                   # an older one
+    assert take_run_file(out, "runs/fm-weekly-20261010T080301000000/facts.json") == "facts.json"
+    assert open(os.path.join(out, "facts.json")).read() == '{"kwh": 287}'        # the report's, where the test runs
+    assert take_run_file(out, "runs/../../etc/passwd") == "runs/../../etc/passwd"   # never outside the runs
+    assert take_run_file(out, "notes.json") == "notes.json"
+    import inspect
+    from vesta_agent.app import Vesta
+    assert "take_run_file(self.s.out_dir, a)" in inspect.getsource(Vesta.try_command)

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.113 (10 October 2026)
+
+Architecture review 16, its defects:
+- Skills.all claims an AI job's name by the villa's own switches whatever the reader (include_off): a switched-off skill claims no name and is refused for none. 0.6.112 judged it on the reader's `off`, so the page's reading let a switched-off copy that sorted first knock out the live skill (page, Offline Test, setup copy), and each page read flipped the load log.
+- skills.out_files / take_run_file: the Offline Test offers the files of the last ten report runs (runs/NAME-TIME/FILE, labelled with the report and the time) beside the out folder's own; a chosen one is copied into the out folder, where the test runs, and checked as every file argument. ui.server._out_files returns {value, label}.
+- create_ticket no longer logs `executed` itself: tickets.create does (each AI ticket was two actions on the Overview).
+- Tests: a switched-off copy sorting before or after the live skill; the run files offered and copied, never outside out/runs; one action per ticket. Each shown red with the old behaviour.
+
 ## 0.6.112 (10 October 2026)
 
 Architecture review 14 (one AI turn), all six candidates and the owner's rule on tools:

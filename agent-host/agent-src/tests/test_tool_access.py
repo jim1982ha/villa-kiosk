@@ -419,3 +419,36 @@ def test_the_ai_is_sent_to_start_job_only_when_it_has_it(agent):
     policy_edit(agent, tool_access={"fm": {"start_job": False}})
     said = refusal(fm, FM)
     assert said.get("is_error") and "start_job" not in said["content"][0]["text"] and "switched off" in said["content"][0]["text"]
+
+
+def test_a_switched_off_copy_never_knocks_out_the_live_skill(agent):
+    # architecture review 16 (a defect of 0.12.118): the page reads the skills with the switched-off ones included, and
+    # the copy that sorted first claimed the report name — the live skill read "not working" on the page and in the
+    # Offline Test while the agent used it
+    from helpers import make_skill
+    make_skill(agent.s.skills_dir, "draft-reports", {"schedule": [{"when": "Tue 08:00", "name": "fm-weekly",
+                                                                   "prompt": "x", "to": "fm"}]})
+    policy_edit(agent, skills_off=["draft-reports"])
+    for include_off in (False, True):
+        got = agent.skills.all(include_off=include_off)
+        assert "reports" in got and "reports" not in agent.skills.problems()
+    assert "draft-reports" in agent.skills.all(include_off=True) and "draft-reports" not in agent.skills.all()
+    # a copy that sorts AFTER it, switched off: not refused either (refusing it flipped the log on every page read)
+    make_skill(agent.s.skills_dir, "reports-old", {"schedule": [{"when": "Tue 08:00", "name": "fm-weekly",
+                                                                 "prompt": "x", "to": "fm"}]})
+    policy_edit(agent, skills_off=["draft-reports", "reports-old"])
+    agent.skills.all(include_off=True)
+    assert "reports-old" not in agent.skills.problems() and "reports" not in agent.skills.problems()
+
+
+def test_a_ticket_the_ai_creates_is_one_action(agent, monkeypatch):
+    # architecture review 16: logged by the tool and by tickets.create, each ticket counted twice on the Overview
+    async def create(**k):
+        agent.state.log("executed", {"tool": "ticket", "ticket": "T1"})
+        return "T1"
+    tb = agent.toolbox()
+    tb.ticket = create
+    tool = next(t for t in tb.tool_objects(Person(OWNER, "O", "owner"), Origin(OWNER_CHAT, CONVERSATION)) if t.name == "create_ticket")
+    before = sum(1 for c in agent.state.calls_since("1970") if c["kind"] == "executed")
+    run(tool.handler({"title": "Pool pump noisy"}))
+    assert sum(1 for c in agent.state.calls_since("1970") if c["kind"] == "executed") == before + 1

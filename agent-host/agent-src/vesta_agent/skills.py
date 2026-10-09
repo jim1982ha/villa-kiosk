@@ -62,6 +62,51 @@ log = logging.getLogger("vesta.skills")
 
 SKILL_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,60}$")
 FILE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,120}$")
+#: A file a report run left in its own folder (config.Settings.in_folder, ai_jobs.run_folder): runs/<run>/<file>.
+RUN_FILE = re.compile(r"^runs/[A-Za-z0-9][A-Za-z0-9._-]{0,160}/[A-Za-z0-9][A-Za-z0-9._-]{0,120}$")
+
+
+def out_files(out_root: str, runs: int = 10) -> list[tuple[str, float]]:
+    """The files an Offline Test may read, newest first: (its value, when written). Those of the out folder itself (an
+    earlier Offline Test's), and those of the last `runs` report runs — `runs/<run>/<file>`.
+
+    ⚠️ THE REPORTS' FILES TOO (architecture review 16, 2026-10-10): since each report works in its own folder (0.12.118),
+    the Offline Test offered only the top of the out folder — never this morning's facts.json, sometimes one from before
+    0.12.118 with old figures."""
+    found: list[tuple[str, float]] = []
+
+    def add(folder: str, prefix: str) -> None:
+        try:
+            names = os.listdir(folder)
+        except OSError:
+            return
+        for n in names:
+            p = os.path.join(folder, n)
+            if FILE_NAME.match(n) and os.path.isfile(p):
+                found.append((prefix + n, os.path.getmtime(p)))
+    add(out_root, "")
+    runs_dir = os.path.join(out_root, "runs")
+    try:
+        recent = sorted((d for d in os.listdir(runs_dir) if os.path.isdir(os.path.join(runs_dir, d))),
+                        key=lambda d: os.path.getmtime(os.path.join(runs_dir, d)), reverse=True)[:runs]
+    except OSError:
+        recent = []
+    for d in recent:
+        add(os.path.join(runs_dir, d), f"runs/{d}/")
+    return sorted(found, key=lambda f: f[1], reverse=True)
+
+
+def take_run_file(out_root: str, value: str) -> str:
+    """A report run's file chosen in an Offline Test (`runs/<run>/<file>`), copied into the out folder itself, where the
+    test runs: its plain name, checked as every file argument is. Any other value comes back unchanged."""
+    if not RUN_FILE.match(value or ""):
+        return value
+    src = os.path.realpath(os.path.join(out_root, value))
+    if not src.startswith(os.path.realpath(os.path.join(out_root, "runs")) + os.sep) or not os.path.isfile(src):
+        return value
+    name = os.path.basename(src)
+    shutil.copyfile(src, os.path.join(out_root, name))
+    return name
 DATE_LIKE = re.compile(r"^[0-9T:+.\-]{4,40}$")
 WHEN = re.compile(r"^(?:(Mon|Tue|Wed|Thu|Fri|Sat|Sun|[1-9]|[12][0-9]|3[01]) )?([01][0-9]|2[0-3]):([0-5][0-9])$")
 FLAG_KINDS = {"text", "date", "outfile", "infile", "switch"}
@@ -434,7 +479,8 @@ class Skills:
     # ------------------------------------------------------------------ reading
     def all(self, include_off: bool = False) -> dict[str, Skill]:
         """The skills the agent uses — without those the villa switched off, unless `include_off` (the page)."""
-        off = set() if include_off else set(self._off() or ())
+        switched_off = set(self._off() or ())
+        off = set() if include_off else switched_off
         out: dict[str, Skill] = {}
         try:
             names = sorted(os.listdir(self.dir))
@@ -457,16 +503,21 @@ class Skills:
                 # shared all three, and start_job ran whichever came first. The second one is refused, and said.
                 jobs = [j["name"] for j in sk.schedule if j.get("prompt")]
                 twice = next((n for n in jobs if jobs.count(n) > 1), None)
-                taken = next((n for n in jobs if n in claimed), None) if name not in off else None
-                if twice or taken:
+                # ⚠️ BY THE VILLA'S OWN SWITCHES, WHOEVER ASKS (architecture review 16): judged on `off`, the page's reading
+                # (include_off: nothing off) let a switched-off copy claim the name first, and the live skill read "not
+                # working" on the page and in the Offline Test while the agent used it. A switched-off skill claims nothing
+                # and is refused for nothing: it is off.
+                taken = next((n for n in jobs if n in claimed), None) if name not in switched_off else None
+                if (twice and name not in switched_off) or taken:
                     whose = f"the skill {claimed[taken]}'s" if taken else "another of its own"
                     self._report(name, f"its AI job {twice or taken} has the same name as {whose}: rename it in "
                                        "skill.yaml: switched off")
                     seen.add(name)
                     continue
                 self._report(name, "")
-                if name not in off:
+                if name not in switched_off:
                     claimed.update({n: name for n in jobs})
+                if name not in off:
                     out[name] = sk
             except (SkillError, yaml.YAMLError, OSError) as e:
                 self._report(name, f"skill.yaml refused ({e}): switched off")

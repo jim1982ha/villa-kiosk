@@ -587,8 +587,10 @@ class Vesta:
         """Skills › Offline Test: one command on the live villa, its arguments checked as when the AI asks, run
         and judged as every run (script_run.py) — and NOT carried out: its messages and tickets are shown in the
         answer, never sent or recorded. A switched-off skill can be tried: that is how its owner finds out."""
-        from .skills import ToolError, validate_script_args
+        from .skills import ToolError, take_run_file, validate_script_args
         skill = self.skills.all(include_off=True).get(skill_name)
+        # a report run's file chosen on the page is copied in first (skills.take_run_file): the test runs in out/ itself
+        args = [take_run_file(self.s.out_dir, a) for a in args]
         try:
             final = validate_script_args(skill, skill_name, script, args, self.s.out_dir)
         except ToolError as e:

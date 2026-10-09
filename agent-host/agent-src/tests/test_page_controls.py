@@ -304,11 +304,21 @@ def test_try_a_command_offers_the_files_earlier_steps_left(ui):
             f.write("{}")
         os.utime(os.path.join(out, n), (1000 + i, 1000 + i))
     os.makedirs(os.path.join(out, "a-folder"))
+    # ⚠️ AND THE REPORTS' OWN (architecture review 16): since 0.12.118 each report works in out/runs/<job>-<time>
+    run_dir = os.path.join(out, "runs", "fm-weekly-20261010T080301000000")
+    os.makedirs(run_dir)
+    with open(os.path.join(run_dir, "facts.json"), "w") as f:
+        f.write("{}")
+    os.utime(os.path.join(run_dir, "facts.json"), (2000, 2000))
 
     async def fn(c):
         return await _json(c, "get", "/api/skills/reports")
     st, body = call(ui, fn)
-    assert st == 200 and body["out_files"] == ["facts.json", "notes.json"]          # newest first, files only
+    assert st == 200
+    assert [f["value"] for f in body["out_files"]] == ["runs/fm-weekly-20261010T080301000000/facts.json", "facts.json",
+                                                       "notes.json"]                # newest first, files only
+    assert body["out_files"][0]["label"].startswith("facts.json — fm-weekly report, ")
+    assert body["out_files"][1]["label"].startswith("facts.json — Offline Test, ")
     compose = next(sc for sc in body["scripts"] if sc["script"] == "compose.py")
     assert compose["flags"]["--facts"] == "infile"
 
