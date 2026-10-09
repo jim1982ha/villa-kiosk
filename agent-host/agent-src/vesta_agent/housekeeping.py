@@ -69,7 +69,8 @@ def tidy(settings, state, keep: dict[str, int], now: datetime | None = None) -> 
     """Apply settings.keep. Returns what was removed, by kind (logged by the caller)."""
     now = now or datetime.now(timezone.utc)
     ago = lambda days: (now - timedelta(days=days)).isoformat()            # noqa: E731
-    out = state.prune(runs_before=ago(keep["runs_days"]), records_before=ago(keep["records_days"]))
+    out = state.prune(runs_before=ago(keep["runs_days"]), records_before=ago(keep["records_days"]),
+                      sessions_before=ago(keep["conversations_days"]))
     stamp = now.timestamp()
     # The AI's transcripts: the CLI writes one file per conversation under its config folder (projects/).
     out["conversations"] = _files_older(os.path.join(settings.claude_dir, "projects"), keep["conversations_days"],

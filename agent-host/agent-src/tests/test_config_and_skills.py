@@ -263,3 +263,57 @@ def test_a_jobs_steps_without_the_ai_name_scripts_that_exist():
         _without_ai(skills["reports"].path, ["nowhere.py --x"], "w")
     with pytest.raises(SkillError, match="a command, or"):
         _without_ai(skills["reports"].path, [{"run": "facts.py", "when": "now"}], "w")
+
+
+def test_take_the_release_stopped_half_way_never_leaves_the_skill_only_in_the_trash(tmp_path, monkeypatch):
+    # architecture review 16: "Take the release version" moved the edited skill to the trash, then renamed the new copy
+    # in — stopped between the two, the skill was only in the trash and the next start took it for deleted by the owner
+    import os as _os
+    from vesta_agent.skills import EDITED, TRASH
+    old = _starters(tmp_path / "old", {"pool-care": "v1"})
+    new = _starters(tmp_path / "new", {"pool-care": "v2"})
+    skills = tmp_path / "skills"
+    Skills(str(skills), old).seed()
+    (skills / "pool-care" / "scripts" / "check.py").write_text("print('mine')\n")      # edited here
+    s = Skills(str(skills), new)
+    assert s.verdict("pool-care") == EDITED and s.release_state("pool-care")["state"] == "edited"
+    real, calls = _os.rename, []
+
+    def stops(a, b):
+        calls.append(a)
+        if len(calls) == 2:
+            raise OSError("the agent stopped here")
+        return real(a, b)
+    monkeypatch.setattr(_os, "rename", stops)
+    try:
+        s.take_release("pool-care")
+    except OSError:
+        pass
+    monkeypatch.setattr(_os, "rename", real)
+    Skills(str(skills), new).recover("pool-care")                                       # the next start
+    assert (skills / "pool-care" / "scripts" / "check.py").read_text() == "print('mine')\n"
+    assert not (skills / "pool-care.new").exists() and not (skills / "pool-care.old").exists()
+    # stopped after both renames, before the trash: at the next start the edited one goes to the trash, not lost
+    Skills(str(skills), new)._replace("pool-care")
+    Skills(str(skills), new).recover("pool-care")
+    assert not (skills / "pool-care.old").exists() and (skills / TRASH).exists()
+    (skills / "pool-care" / "scripts" / "check.py").write_text("print('mine')\n")
+    # done whole, the edited one goes to the trash, never erased
+    trash = Skills(str(skills), new).take_release("pool-care")
+    assert (skills / "pool-care" / "scripts" / "check.py").read_text() == "print('v2')\n"
+    assert open(_os.path.join(trash, "scripts", "check.py")).read() == "print('mine')\n" and TRASH in trash
+
+
+def test_the_page_and_the_start_judge_a_skill_alike_and_the_page_moves_nothing(tmp_path):
+    from vesta_agent.skills import GONE, SAME, UPDATE
+    old = _starters(tmp_path / "old", {"pool-care": "v1"})
+    new = _starters(tmp_path / "new", {"pool-care": "v2"})
+    skills = tmp_path / "skills"
+    Skills(str(skills), old).seed()
+    s = Skills(str(skills), new)
+    assert s.verdict("pool-care") == UPDATE and s.release_state("pool-care") == {"state": "follows", "villa": [],
+                                                                               "update_at_start": True}
+    s.update_starters()
+    assert s.verdict("pool-care") == SAME and s.release_state("pool-care")["state"] == "follows"
+    (skills / "pool-care").rename(skills / "pool-care.old")                             # mid-replacement, seen by the page
+    assert s.verdict("pool-care") == GONE and (skills / "pool-care.old").exists()        # read only: nothing moved

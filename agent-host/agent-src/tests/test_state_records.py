@@ -110,3 +110,46 @@ def test_a_state_file_from_before_gains_the_keys_date(tmp_path):
     from vesta_agent.state import State
     st = State(path)
     assert st.alert_skill(1, -100) == "alert-desk"                  # kept, its clock started now
+
+
+def test_every_record_family_has_a_declared_lifetime(tmp_path):
+    # architecture review 16: saved_by_model:, owner_told: and the job slots were never deleted, inc: and incthread:
+    # were by name — each family had its own way, or none. Every record the state writes is in KV_FAMILIES, and prune
+    # deletes exactly the RECORDS ones once old.
+    from datetime import datetime, timedelta, timezone
+    from vesta_agent.state import CURRENT, KV_FAMILIES, RECORDS
+    s = _state(tmp_path)
+    s.set_alert_skill(1, -100, "alert-desk")
+    s.set_incident_message(1, -100, {"mid": 5, "text": "x", "buttons": True, "settled": False})
+    s.note_ha_sent("ctx", -100, 9)
+    s.mark_saved_by_model("runs/fm-weekly-1/notes.json")
+    s.mark_owner_told("credit", "2026-10-01T00:00:00+00:00")
+    s.claim_job_slot("reports:0:Mon 08:00", "2026-10-05T08:00:00+08:00")
+    s.set_siren_stop("2026-10-05T08:00:00+00:00")
+    keys = [r[0] for r in s.db.execute("select k from kv")]
+    undeclared = [k for k in keys if not any(k.startswith(p) for p in KV_FAMILIES)]
+    assert undeclared == [], f"a record family with no declared lifetime: {undeclared}"
+    assert all(r[0] for r in s.db.execute("select at from kv")), "a record without its date cannot be pruned"
+    soon = (datetime.now(timezone.utc) + timedelta(minutes=1)).isoformat()
+    s.prune(runs_before="1970", records_before=soon)
+    left = {k for (k,) in s.db.execute("select k from kv")}
+    assert all(KV_FAMILIES[p] == CURRENT for p in KV_FAMILIES if any(k.startswith(p) for k in left))
+    assert not any(k.startswith(p) for k in left for p, life in KV_FAMILIES.items() if life == RECORDS)
+    assert s.get("listening_since") and s.jobs_run()                               # what is current stays
+    # the ones that piled up: an alert's records, Home Assistant's messages, every file the AI saved, the owner's pauses
+    assert not any(k.startswith(("inc:", "incthread:", "hasent:", "saved_by_model:", "owner_told:")) for k in left)
+
+
+def test_when_the_agent_started_listening_does_not_move_with_housekeeping(tmp_path):
+    # read as the oldest record kept, it moved forward each night as housekeeping deleted old records
+    from vesta_agent.state import State
+    from vesta_shared import agent_records
+    path = str(tmp_path / "s.sqlite")
+    s = State(path)
+    s.drop("listening_since")                                                     # an agent from before 0.6.115
+    s.db.execute("insert into calls(at, kind, detail) values('2026-01-01T00:00:00+00:00', 'run', '{}')")
+    s.db.commit()
+    s = State(path)                                                               # it starts again: kept from its records
+    s.db.execute("delete from calls")                                             # housekeeping, months later
+    s.db.commit()
+    assert agent_records.listening_since(path).isoformat() == "2026-01-01T00:00:00+00:00"

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.115 (10 October 2026)
+
+Architecture review 16, candidates C and E:
+- state.KV_FAMILIES: every named record family with its lifetime (RECORDS: pruned with the records; CURRENT: one per thing); prune walks it. saved_by_model:, owner_told: and hasent: now go with the records (saved_by_model: was one row per file per run, forever); claim_job_slot writes its date. A pending approval goes once expired and past the records' limit (it stayed forever); sessions go by the conversations' limit (prune sessions_before, housekeeping passes it).
+- state keeps listening_since once (from the oldest record at first start); agent_records.listening_since reads it before min(at), which housekeeping moved forward each night.
+- Skills.verdict (OWN / GONE / SAME / UPDATE / EDITED), read only: update_starters and release_state judge by it; Skills._replace is the one two-rename replace (name.old aside), used by update_starters and take_release; Skills.recover, at start only, brings back a skill cut mid-replace and trashes a leftover name.old. take_release trashed the folder before renaming the new one in.
+- Tests: every family written has a declared lifetime and a date, prune leaves only CURRENT ones and removes the five that piled up; listening_since survives housekeeping; take_release stopped after its first rename, and after both, never loses the skill; the page's verdict moves nothing. Each shown red with the old behaviour. tests/test_housekeeping: an expired pending approval now goes, one within its time stays.
+
 ## 0.6.114 (10 October 2026)
 
 Architecture review 15 (the agent's edges), candidates A, B and C:

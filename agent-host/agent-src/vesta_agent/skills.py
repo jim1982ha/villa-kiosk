@@ -61,6 +61,8 @@ import yaml
 log = logging.getLogger("vesta.skills")
 
 SKILL_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,60}$")
+#: A skill against this release (Skills.verdict).
+OWN, GONE, SAME, UPDATE, EDITED = "own", "gone", "same", "update", "edited"
 FILE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,120}$")
 #: A file a report run left in its own folder (config.Settings.in_folder, ai_jobs.run_folder): runs/<run>/<file>.
 RUN_FILE = re.compile(r"^runs/[A-Za-z0-9][A-Za-z0-9._-]{0,160}/[A-Za-z0-9][A-Za-z0-9._-]{0,120}$")
@@ -437,36 +439,17 @@ class Skills:
         copy would stay on the machine forever, whatever later releases fix in it."""
         if not self.starter_dir or not os.path.isdir(self.starter_dir):
             return [], []
-        try:
-            with open(os.path.join(os.path.dirname(self.starter_dir), SHIPPED), encoding="utf-8") as f:
-                shipped: dict = json.load(f)
-        except (OSError, ValueError):
-            shipped = {}
         updated, kept = [], []
         for name in sorted(os.listdir(self.starter_dir)):
-            src, dst = os.path.join(self.starter_dir, name), os.path.join(self.dir, name)
-            if not os.path.isdir(src):
+            if not os.path.isdir(os.path.join(self.starter_dir, name)):
                 continue
-            old = dst + ".old"
-            if not os.path.exists(dst) and os.path.isdir(old):
-                os.rename(old, dst)                       # a replacement cut short: the skill comes back as it was
-            if not os.path.isdir(dst):
-                continue                                  # deleted by the owner, or never copied
-            have, new = fingerprint(dst), fingerprint(src)
-            if have == new:
-                continue
-            if have not in shipped.get(name, []):
+            self.recover(name)
+            v = self.verdict(name)
+            if v == EDITED:
                 kept.append(name)
-                continue
-            tmp = dst + ".new"
-            shutil.rmtree(tmp, ignore_errors=True)
-            shutil.copytree(src, tmp, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", VILLA_PREFIX + "*"))
-            carry_villa_files(dst, tmp)                      # the villa's own files go with it
-            shutil.rmtree(old, ignore_errors=True)
-            os.rename(dst, old)
-            os.rename(tmp, dst)
-            shutil.rmtree(old, ignore_errors=True)
-            updated.append(name)
+            elif v == UPDATE:
+                shutil.rmtree(self._replace(name), ignore_errors=True)
+                updated.append(name)
         ref = os.path.join(self.dir, REFERENCE)
         shutil.rmtree(ref, ignore_errors=True)
         if kept:
@@ -530,27 +513,70 @@ class Skills:
         return self.all().get(name)
 
     # ------------------------------------------------------------------ against the release (the page)
+    # ⚠️ ONE VERDICT, ONE REPLACE (architecture review 16, 2026-10-10): the start-up update compared fingerprints and the
+    # page compared files, each reading the shipped list itself; and "Take the release version" replaced the folder
+    # without the .old step the update had — stopped between the two moves, the skill was left only in the trash, the
+    # next start took it for deleted by the owner, and a stray name.new stayed.
+    def _shipped(self) -> dict:
+        try:
+            with open(os.path.join(os.path.dirname(self.starter_dir), SHIPPED), encoding="utf-8") as f:
+                return json.load(f)
+        except (OSError, ValueError):
+            return {}
+
+    def verdict(self, name: str) -> str:
+        """A skill against this release: OWN (not a starter skill), GONE (a starter skill not here: deleted by the owner),
+        SAME (as the release), UPDATE (a version a release shipped: updated at start), EDITED (changed here). It only
+        reads: the page asks it from its own process, which must never move a folder the agent may be replacing."""
+        src, dst = os.path.join(self.starter_dir or "", name), os.path.join(self.dir, name)
+        if not self.starter_dir or not os.path.isdir(src):
+            return OWN
+        if not os.path.isdir(dst):
+            return GONE
+        have = fingerprint(dst)
+        if have == fingerprint(src):
+            return SAME
+        return UPDATE if have in self._shipped().get(name, []) else EDITED
+
+    def recover(self, name: str) -> None:
+        """A replacement cut short (_replace stopped between its two renames): the skill comes back as it was, the
+        half-made copy goes. The agent alone calls it, at start, before anything reads the skills."""
+        dst = os.path.join(self.dir, name)
+        if not os.path.exists(dst) and os.path.isdir(dst + ".old"):
+            os.rename(dst + ".old", dst)
+        elif os.path.isdir(dst + ".old"):
+            to_trash(self.dir, dst + ".old", name)       # replaced, then stopped before it was set aside: never erased
+        shutil.rmtree(dst + ".new", ignore_errors=True)
+
+    def _replace(self, name: str) -> str:
+        """The skill replaced by this release's version, its villa.* files kept, in two renames with the old one set aside
+        as name.old (verdict brings it back if this stops half way). Returns name.old, for the caller to drop or trash."""
+        src, dst = os.path.join(self.starter_dir, name), os.path.join(self.dir, name)
+        tmp, old = dst + ".new", dst + ".old"
+        shutil.rmtree(tmp, ignore_errors=True)
+        shutil.copytree(src, tmp, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", VILLA_PREFIX + "*"))
+        carry_villa_files(dst, tmp)                      # the villa's own files go with it
+        shutil.rmtree(old, ignore_errors=True)
+        os.rename(dst, old)
+        os.rename(tmp, dst)
+        return old
+
     def release_state(self, name: str) -> dict:
         """A skill against this release's starter: `follows` (equal to a version a release shipped), `edited`
         (a starter skill changed here: updates paused), `own` (not a starter skill). For an edited one, the files
         that differ, and whether the owner already chose to keep it as it is for this release."""
-        dst = os.path.join(self.dir, name)
-        src = os.path.join(self.starter_dir, name) if self.starter_dir else ""
-        if not src or not os.path.isdir(src):
+        v = self.verdict(name)
+        if v == OWN:
             return {"state": "own"}
+        dst, src = os.path.join(self.dir, name), os.path.join(self.starter_dir, name)
         have, new = skill_files(dst), skill_files(src)
         villa = sorted(k for k in have if os.path.basename(k).startswith(VILLA_PREFIX))
-        mine = {k: v for k, v in have.items() if k not in villa}
-        differs = sorted(k for k in set(mine) | set(new) if mine.get(k) != new.get(k))
-        if not differs:
+        if v == SAME:
             return {"state": "follows", "villa": villa}
-        try:
-            with open(os.path.join(os.path.dirname(self.starter_dir), SHIPPED), encoding="utf-8") as f:
-                shipped = json.load(f).get(name, [])
-        except (OSError, ValueError):
-            shipped = []
-        if fingerprint(dst) in shipped:
+        if v == UPDATE:
             return {"state": "follows", "villa": villa, "update_at_start": True}
+        mine = {k: v_ for k, v_ in have.items() if k not in villa}
+        differs = sorted(k for k in set(mine) | set(new) if mine.get(k) != new.get(k))
         return {"state": "edited", "villa": villa, "differs": differs,
                 "only_here": sorted(set(mine) - set(new)), "only_release": sorted(set(new) - set(mine)),
                 "kept": self._kept().get(name) == fingerprint(src)}
@@ -573,14 +599,8 @@ class Skills:
     def take_release(self, name: str) -> str:
         """The skill replaced by this release's version; its villa.* files kept. The edited folder goes to the trash
         (to_trash; returned), never erased. From then on the skill follows the releases again."""
-        src, dst = os.path.join(self.starter_dir, name), os.path.join(self.dir, name)
-        tmp = dst + ".new"
-        shutil.rmtree(tmp, ignore_errors=True)
-        shutil.copytree(src, tmp, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", VILLA_PREFIX + "*"))
-        carry_villa_files(dst, tmp)
-        trash = to_trash(self.dir, dst, name)
-        os.rename(tmp, dst)
-        return trash
+        # the same two renames as an update (_replace), the old one then trashed: never a moment with the skill only there
+        return to_trash(self.dir, self._replace(name), name)
 
     def _report(self, name: str, problem: str) -> None:
         """Log a skill's problem once, and once more when it is fixed — never every tick."""

@@ -40,7 +40,8 @@ def test_each_kind_is_trimmed_at_its_own_limit(tmp_path):
     st.db.executemany(
         "insert into approvals(id, created_at, expires_at, status, required_role, chat_id, action_hash, action)"
         " values(?,?,?,?, 'owner', 1, 'h', '{}')",
-        [("old-done", at(91), at(91), "done"), ("old-pending", at(91), at(91), "pending"), ("new", at(5), at(5), "refused")])
+        [("old-done", at(91), at(91), "done"), ("old-pending", at(91), at(91), "pending"), ("new", at(5), at(5), "refused"),
+         ("waiting", at(91), at(-1), "pending")])
     st.db.commit()
     old_file(os.path.join(s.claude_dir, "projects", "-work", "old.jsonl"), 31)
     old_file(os.path.join(s.claude_dir, "projects", "-work", "new.jsonl"), 29)
@@ -65,7 +66,9 @@ def test_each_kind_is_trimmed_at_its_own_limit(tmp_path):
 
     kinds = sorted((r["kind"], r["at"][:10]) for r in st.calls())
     assert kinds == [("run", at(399)[:10]), ("voice", at(89)[:10])], kinds
-    assert sorted(r[0] for r in st.db.execute("select id from approvals")) == ["new", "old-pending"]
+    # an approval nobody pressed goes once it has long expired (architecture review 16: it stayed forever); one
+    # still within its time stays, however old
+    assert sorted(r[0] for r in st.db.execute("select id from approvals")) == ["new", "waiting"]
     assert os.listdir(os.path.join(s.claude_dir, "projects", "-work")) == ["new.jsonl"]
     assert os.path.exists(os.path.join(s.claude_dir, "settings.json"))
     assert not os.path.exists(os.path.join(s.out_dir, "events"))          # emptied, then removed
@@ -74,7 +77,7 @@ def test_each_kind_is_trimmed_at_its_own_limit(tmp_path):
     assert left == [(NOW - timedelta(days=700)).date().isoformat()]
     assert [r["what"] for r in h.rows()] == ["recent"]                     # the page's changes: the records' limit
     assert os.listdir(os.path.join(s.skills_dir, ".trash")) == ["new-skill-20261001"]
-    assert gone == {"runs": 1, "records": 2, "conversations": 1, "files": 1, "daily_figures": 1, "page changes": 1,
+    assert gone == {"runs": 1, "records": 3, "conversations": 1, "files": 1, "daily_figures": 1, "page changes": 1,
                     "skills in the trash": 1}
 
 

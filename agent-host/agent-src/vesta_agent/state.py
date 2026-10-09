@@ -63,6 +63,25 @@ create table if not exists calls(
 """
 
 
+#: Every family of named records (the kv table), and how long it lives. ⚠️ DECLARED ONCE (architecture review 16,
+#: 2026-10-10): each family was added with its own way of being deleted — or none. saved_by_model: (one row per file
+#: the AI saved, per report run, forever), owner_told: and the job slots were never pruned; inc: and incthread: were,
+#: by name. `prune` walks this table; a family written but not listed here fails tests/test_state_records.py.
+#:   RECORDS  deleted with the agent's other records (settings.keep records_days)
+#:   CURRENT  one row per thing that exists (a job, the siren, the agent itself): replaced, never piled up
+RECORDS, CURRENT = "records", "current"
+KV_FAMILIES: dict[str, str] = {
+    "inc:": RECORDS,                # which skill answers an alert's buttons in a chat
+    "incthread:": RECORDS,          # what a chat shows of an incident (incident_thread.py)
+    "hasent:": RECORDS,             # Home Assistant's own messages (also cleared after 24 hours as they are written)
+    "saved_by_model:": RECORDS,     # a file the AI saved (its run folder is deleted with the out folder's files)
+    "owner_told:": RECORDS,         # when the owner was last told of a problem (a 12-hour pause)
+    "job:": CURRENT,                # a scheduled job's last slot: the Overview's "last run", one per job
+    "siren:": CURRENT,              # when the siren must stop
+    "listening_since": CURRENT,     # when the agent's record started (agent_records.listening_since)
+}
+
+
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -81,6 +100,11 @@ class State:
             self.db.execute("update kv set at = ?", (utcnow().isoformat(),))
         self.db.commit()
         self._migrate_incident_messages()
+        # ⚠️ WHEN THE RECORD STARTED, KEPT (architecture review 16): read as the oldest record kept, it moved forward every
+        # night as housekeeping deleted the old ones — a monthly report then left rules out of "what did not happen"
+        if self.get("listening_since") is None:
+            first = self.db.execute("select min(at) from calls").fetchone()[0]
+            self.put("listening_since", first or utcnow().isoformat())
 
     # ------------------------------------------------------------------ log
     def log(self, kind: str, detail: dict[str, Any]) -> None:
@@ -141,7 +165,8 @@ class State:
             r = self.db.execute("select v from kv where k=?", (k,)).fetchone()
             if r and r["v"] == slot_iso:
                 return False
-            self.db.execute("insert into kv(k, v) values(?,?) on conflict(k) do update set v=excluded.v", (k, slot_iso))
+            self.db.execute("insert into kv(k, v, at) values(?,?,?) on conflict(k) do update set v=excluded.v, at=excluded.at",
+                            (k, slot_iso, utcnow().isoformat()))
             self.db.commit()
             return True
 
@@ -262,9 +287,11 @@ class State:
             self.db.commit()
         return n
 
-    def prune(self, runs_before: str, records_before: str) -> dict[str, int]:
-        """Housekeeping (settings.keep): the AI runs (the Costs tab) and the other records have their own
-        limit; a pending approval and an unused Continue still waiting are never touched."""
+    def prune(self, runs_before: str, records_before: str, sessions_before: str | None = None) -> dict[str, int]:
+        """Housekeeping (settings.keep): the AI runs (the Costs tab) and the other records have their own limit. A
+        pending approval is kept until it has expired and the records' limit has passed; every named record family by
+        KV_FAMILIES; a conversation not used since `sessions_before` (the conversations' limit: its transcript is
+        deleted then) is forgotten."""
         with self._lock:
             # the Costs tab's rows (an AI run, a job made without the AI) go by the runs' limit, together
             kinds = agent_records.COSTS_KINDS
@@ -272,15 +299,20 @@ class State:
             runs = self.db.execute(f"delete from calls where kind in ({marks}) and at < ?", (*kinds, runs_before)).rowcount
             other = self.db.execute(f"delete from calls where kind not in ({marks}) and at < ?",
                                     (*kinds, records_before)).rowcount
-            appr = self.db.execute("delete from approvals where status != 'pending' and created_at < ?",
-                                   (records_before,)).rowcount
+            # ⚠️ AN APPROVAL NOBODY PRESSED (architecture review 16): it was expired only when someone pressed after its time,
+            # and a pending one was never deleted — every ignored approval stayed forever
+            appr = self.db.execute("delete from approvals where (status != 'pending' and created_at < ?) "
+                                   "or (status = 'pending' and expires_at < ?)", (records_before, records_before)).rowcount
+            sess = self.db.execute("delete from sessions where last_used < ?", (sessions_before,)).rowcount \
+                if sessions_before else 0
             cont = self.db.execute("delete from continuations where created_at < ?", (records_before,)).rowcount
             msgs = self.db.execute("delete from own_messages where sent_at < ?", (records_before,)).rowcount
-            # an alert's button records go with the agent's other records (its messages are pruned just above)
-            msgs += self.db.execute("delete from kv where (k like 'inc:%' or k like 'incthread:%') and at < ?",
-                                    (records_before,)).rowcount
+            for prefix, life in KV_FAMILIES.items():
+                if life == RECORDS:
+                    msgs += self.db.execute("delete from kv where substr(k, 1, ?) = ? and at < ?",
+                                            (len(prefix), prefix, records_before)).rowcount
             self.db.commit()
-        return {"runs": runs, "records": other + appr + cont + msgs}
+        return {"runs": runs, "records": other + appr + cont + msgs + sess}
 
     # ------------------------------------------------------------------ approvals
     def new_approval(self, action: dict, action_hash: str, required_role: str, chat_id: int,

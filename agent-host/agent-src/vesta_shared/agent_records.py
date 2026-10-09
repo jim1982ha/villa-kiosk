@@ -95,7 +95,14 @@ def cost_between(path: str | None, since_iso: str, until_iso: str) -> float | No
 
 
 def listening_since(path: str | None) -> datetime | None:
-    """When the agent's own record starts (its first run or event); None without one."""
+    """When the agent's own record starts (its first run or event); None without one. Kept once by the agent's state
+    (vesta_agent.state: listening_since), never read again from the oldest record kept, which housekeeping moves on."""
+    kept = _rows(path, "select v from kv where k='listening_since'", ())
+    if kept and kept[0][0]:
+        try:
+            return datetime.fromisoformat(kept[0][0])
+        except ValueError:
+            pass
     rows = _rows(path, "select min(at) from calls", ())
     try:
         return datetime.fromisoformat(rows[0][0]) if rows and rows[0][0] else None
