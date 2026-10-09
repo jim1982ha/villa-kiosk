@@ -1,3 +1,13 @@
+## 0.12.120
+
+What you will see in Telegram:
+- A long answer arrives in order. A long list no longer comes before its introduction, and a line is no longer cut in two between messages.
+- In a group, replying to the first part of a long answer gets an answer. Until now only the last part counted as the agent's, so a reply to an earlier part was ignored without a word.
+- If Telegram refuses the end of a reply after its picture arrived, the reply is no longer sent a second time whole with "the camera picture could not be sent".
+- When the agent updates one of its messages (an alert answered, a report on its way), the update looks like any of its messages and is never cut off: a long alert keeps "Done — name, time" at its end.
+- Tapping "Done" (or any alert button) twice quickly counts once: the chat no longer ends on "Already closed", and the owner is not told twice. A second tap shows "Already answered."
+- A message with a file attached keeps its buttons.
+
 ## 0.12.119
 
 Fixes for two mistakes in 0.12.118, and one older miscount:
