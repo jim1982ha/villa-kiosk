@@ -203,8 +203,6 @@ table.rows td .dropdown, table.rows td input:not([type=checkbox]):not([type=radi
 table.rows.ai td { vertical-align: top; padding-top: 10px; padding-bottom: 10px; border-top: 1px solid var(--hairline); }
 table.rows.ai td.tools-got { padding-top: 20px; }
 table.rows.ai td:first-child { padding-top: 12px; }
-ul.tool-list { margin: 4px 0 0; padding-left: 18px; font-size: var(--text-sm); color: var(--text-secondary); }
-ul.tool-list li { padding: 1px 0; }
 /* on a phone each AI row puts the work on its own line, its brain and limit below it */
 @media (max-width: 600px) {
   table.rows.ai thead, table.rows.ai colgroup { display: none; }
@@ -358,7 +356,6 @@ table.rows.roles th:not(:first-child), table.rows.roles td:not(:first-child) { t
 table.rows.roles td .switch { justify-content: center; }
 table.rows.roles .switch { min-height: 0; }
 table.rows td .switch input { width: 44px; flex: none; }   /* not the cell-wide inputs of the editable tables */
-td.tools-got details.fold summary { padding: 0; color: var(--text-primary); }
 /* skills */
 .skill-name { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 /* one skill (skills.js openSkill): head, banners, sub-tabs, then one view (owner, 2026-10-06: "very messy") */
@@ -383,7 +380,6 @@ td.tools-got details.fold summary { padding: 0; color: var(--text-primary); }
 .cmd-group { margin: 10px 0 0; }
 .cmd-script code { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-dim); }
 .warn-text { color: var(--status-warning); }
-details.fold summary { cursor: pointer; color: var(--text-secondary); font-size: var(--text-sm); padding: 4px 0 8px; }
 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-left: 6px; vertical-align: middle; }
 .dot.warn { background: var(--status-warning); }
 .legend .dot { margin: 0 4px 0 0; }

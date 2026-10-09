@@ -1,6 +1,7 @@
 """The UI server (vesta_agent.ui), through HTTP as the page uses it. Synthetic data only."""
 from __future__ import annotations
 
+from helpers import run_kit, run_terms
 import asyncio
 import os
 
@@ -10,6 +11,7 @@ from aiohttp.test_utils import TestClient, TestServer
 
 from helpers import copy_skill, settings, page_js, body_of
 from vesta_agent.ui.server import UI
+from vesta_agent.policy import PROFILES
 
 HDR = {"X-Vesta-UI": "1"}
 
@@ -310,10 +312,10 @@ def test_a_run_records_its_brain_model_tokens_and_what_was_asked(ui, monkeypatch
                                 usage={"input_tokens": 800, "output_tokens": 90, "cache_read_input_tokens": 5000})
     monkeypatch.setattr(runner, "ClaudeSDKClient", Fake)
     st = State(ui.state_path)
-    asyncio.run(runner.run(ui, "sys", "prompt", None, set(), st, who="job:fm-weekly", profile="economy", asked="x" * 300))
+    asyncio.run(runner.run(ui, "sys", "prompt", run_kit(), run_terms(who="job:fm-weekly", profile="economy"), st, asked="x" * 300))
     import json
     (d,) = [json.loads(c["detail"]) for c in st.calls_since("2000-01-01") if c["kind"] == "run"]
-    assert d["profile"] == "economy" and d["model"] == runner.PROFILES["economy"][0] and d["turns"] == 3 and d["ms"] == 4200
+    assert d["profile"] == "economy" and d["model"] == PROFILES["economy"][0] and d["turns"] == 3 and d["ms"] == 4200
     assert d["tokens"] == {"input_tokens": 800, "output_tokens": 90, "cache_read_input_tokens": 5000}
     assert d["cost_usd"] == 0.12 and len(d["asked"]) == 160
 

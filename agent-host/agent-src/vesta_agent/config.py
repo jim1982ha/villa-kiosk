@@ -53,6 +53,8 @@ class Settings:
     skills_dir: str = "/config/skills"
     app_dir: str = APP_DIR
     _policy_cache: dict = field(default_factory=dict, repr=False)
+    # a run's own folder under out/ (in_folder); "" for the engine's own work
+    run_folder: str = ""
 
     # ------------------------------------------------------------------ paths
     @property
@@ -82,7 +84,21 @@ class Settings:
 
     @property
     def out_dir(self) -> str:
-        return os.path.join(self.data_dir, "out")
+        """Where scripts write and read their files: the run's own folder (in_folder), else out/ itself."""
+        base = os.path.join(self.data_dir, "out")
+        return os.path.join(base, self.run_folder) if self.run_folder else base
+
+    def in_folder(self, name: str) -> "Settings":
+        """These settings for one run, its files in out/<name> (made now).
+
+        ⚠️ ONE FOLDER PER RUN (architecture review 14, 2026-10-10): every run wrote into out/ itself, and the reports
+        skill names its files the same for both reports (facts.json, notes.json) — the weekly and the monthly report
+        start together at 08:00 when the 1st is a Monday (1 June 2026, 1 February 2027), and either page could be
+        built from the other's figures. A run's arguments, saved files and attachments all resolve in its folder."""
+        from dataclasses import replace
+        run = replace(self, run_folder=name)
+        os.makedirs(run.out_dir, exist_ok=True)
+        return run
 
     @property
     def work_dir(self) -> str:

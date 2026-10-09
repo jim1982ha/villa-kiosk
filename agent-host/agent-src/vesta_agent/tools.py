@@ -28,7 +28,7 @@ import logging
 import os
 import re
 from datetime import datetime
-from typing import Any, Awaitable, Callable
+from typing import Any, Awaitable, Callable, NamedTuple
 
 from claude_agent_sdk import create_sdk_mcp_server, tool
 
@@ -94,6 +94,14 @@ def _err(text: str) -> dict:
     return {"content": [{"type": "text", "text": text}], "is_error": True}
 
 
+class Kit(NamedTuple):
+    """One run's tools as built: the SDK server, the names the guard allows, the tool objects themselves (a test's
+    stand-in AI calls those, so it can only use what the run was really given — architecture review 14)."""
+    server: Any
+    names: set[str]
+    tools: list
+
+
 class Toolbox:
     def __init__(self, *, settings, policy: Policy, reader, actions, skills: Skills,
                  send: Callable[..., Awaitable[Any]], server_tools: list[dict], state,
@@ -118,8 +126,8 @@ class Toolbox:
         # got text. A send_message(camera=) option (0.12.57) was not used by the model either. The reply carries
         # them (app.converse): (base64, mime), in the order looked at, each picture once.
         self.photos: list[tuple[str, str]] = []
-        # ⚠️ tool_access DECIDES, THIS CLASS BUILDS (architecture review, 2026-10-06): allowed_for_person /
-        # allowed_for_job's answer is the whole list — every tool below is built only when it is in it, and the
+        # ⚠️ tool_access DECIDES, THIS CLASS BUILDS (architecture review, 2026-10-06): allowed_for's answer — through
+        # turn.Terms — is the whole list — every tool below is built only when it is in it, and the
         # names the SDK may call are read off the built tools (for_run), so the two can never differ.
         # None: everything switched on (tests, the start log).
         self.allowed = allowed if allowed is not None else tool_access.switched_on(policy, server_tools)
@@ -154,8 +162,9 @@ class Toolbox:
             out.append(n)
         return out
 
-    def blocked(self, skill) -> list[dict]:
-        return tool_access.blockers(self.policy, list(self.server_tools.values()) or None, skill)
+    def lacks(self, skill) -> list[dict]:
+        """The tools this skill uses that THIS run does not have (tool_access.unavailable, against its own tools)."""
+        return tool_access.unavailable(self.policy, list(self.server_tools.values()) or None, skill, self.allowed)
 
     # ------------------------------------------------------------------ build
     def tool_objects(self, person: Person | None, origin: Origin | None) -> list:
@@ -171,16 +180,16 @@ class Toolbox:
                 tools.append(build())
         if origin and origin.is_conversation and person is not None and self.start_job and self._on("start_job"):
             # a person asking, in a chat: never a job (even one started from a chat), so no job starts another
-            tools.append(self._start_job(chat_id))
+            tools.append(self._start_job(chat_id, person.role))
         if self.ticket and self._on("create_ticket"):
             tools.append(self._ticket())
         return tools
 
-    def for_run(self, person: Person | None, origin: Origin | None) -> tuple[Any, set[str]]:
-        """The SDK server of this run and the tool names it may call — read off the same built tools."""
+    def for_run(self, person: Person | None, origin: Origin | None) -> "Kit":
+        """This run's tools: the SDK server, the names it may call and the built tools — all read off the same list."""
         tools = self.tool_objects(person, origin)
         names = {f"mcp__{SERVER}__{t.name}" for t in tools} | ({WEB_SEARCH} if self.include_web else set())
-        return create_sdk_mcp_server(name=SERVER, version=__version__, tools=tools), names
+        return Kit(create_sdk_mcp_server(name=SERVER, version=__version__, tools=tools), names, tools)
 
     def _proxy(self, name: str):
         t = self.server_tools[name]
@@ -298,11 +307,6 @@ class Toolbox:
             skill = self.skills.get(sk)
             if skill is None:
                 return _err(f"No skill {sk}. Your skills: {', '.join(self.skills.all()) or 'none'}.")
-            stop = self.blocked(skill)
-            if stop:
-                # ⚠️ SAID, NOT WORKED AROUND (0.6.42): a skill that needs a tool switched off is "not working"
-                return _err(f"The skill {sk} cannot be used now. " + " ".join(b["why"] for b in stop) +
-                            " Tell the person plainly which setting stops it (the VESTA Agent page); do not try another way.")
             scripts = []
             for name, spec in sorted(skill.scripts.items()):
                 if spec.commands is None:
@@ -318,8 +322,14 @@ class Toolbox:
                     body = f.read()
             except OSError:
                 return _err(f"The skill {sk} could not be read.")
+            # ⚠️ IT WORKS WITHOUT THEM, AND KNOWS IT (owner, 2026-10-10): what this skill uses that THIS run lacks — by the
+            # villa's switches or by who asked — is said, so the AI adapts and tells the person what is missing.
+            # Until 0.6.112 it refused the whole skill, judged on the villa's switches and not on the run's own tools.
+            lacks = self.lacks(skill)
             return _ok(SKILL_PREFACE + f"Scripts you may run for this skill: {', '.join(scripts) or 'none'}."
                        + (f" Switched off for this villa: some commands of {', '.join(off)}." if off else "")
+                       + (" You do not have these tools here: " + " ".join(b["why"] for b in lacks) +
+                          " Do the skill without them, and say in one short sentence what that leaves out." if lacks else "")
                        + "\n\n" + body)
         return handler
 
@@ -334,8 +344,6 @@ class Toolbox:
         async def handler(args: dict) -> dict:
             sk, sc = args.get("skill", ""), args.get("script", "")
             skill = self.skills.get(sk)
-            if skill and self.blocked(skill):
-                return _err(f"The skill {sk} cannot be used now: " + " ".join(b["why"] for b in self.blocked(skill)))
             job = (skill.scripts[sc].job_only.get(str((args.get("args") or [""])[0])) if sc in skill.scripts else None) \
                 if skill and origin and origin.is_conversation else None
             if job:
@@ -343,6 +351,11 @@ class Toolbox:
                 # conversation, it used the chat's brain and limit, and the AI followed the job's own steps
                 # to the fm chat — the group that asked got "Done" (villa, 2026-10-01 17:31).
                 self.state.log("script_refused", {"skill": sk, "script": sc, "args": args.get("args"), "reason": f"job {job}"})
+                if not (self.start_job and self._on("start_job")):
+                    # the redirect only where start_job IS one of this run's tools (architecture review 14): with it
+                    # switched off for this person, the AI was sent to a tool it did not have
+                    return _err(f"This command is the {job} report's own, and starting reports from a chat is switched off "
+                                "for this person here. Say so plainly; do not try another way.")
                 return _err(f"Asked for in a chat, this is the {job} job: call start_job with name {job}. "
                             "It runs with its own brain and limit and sends its result to this chat.")
             try:
@@ -363,7 +376,7 @@ class Toolbox:
                 # messages sent to their chats; the model still answers the person itself.
                 res = ans.result()
                 if has_work(res):                                   # outcome.CARRIED_KEYS: carry_out's own list
-                    done = await self.carry_out(res, sk, origin)
+                    done = await self.carry_out(res, sk, origin, self.s.out_dir)
                     lost = f", {done['not_sent']} could not be delivered" if done.get("not_sent") else ""
                     out = (f"[Carried out by the VESTA Agent: {done['sent']} message(s) sent{lost}, {done['tickets']} "
                            f"ticket(s) created, {done['resolved']} closed. Do not send or create them again.]\n") + out
@@ -371,7 +384,7 @@ class Toolbox:
             return _ok(text) if ans.ok else _err(text or f"The script failed (exit {ans.code}).")
         return handler
 
-    def _start_job(self, chat_id: int):
+    def _start_job(self, chat_id: int, role: str | None):
         from .skills import ai_jobs
         jobs = [(sk, j) for sk, j in ai_jobs(self.skills.all()) if j.get("on_request")]
         names = [j["name"] for _, j in jobs] or ["none"]
@@ -386,7 +399,7 @@ class Toolbox:
                            + listing,
               schema)
         async def handler(args: dict) -> dict:
-            answer = await self.start_job(str(args.get("name") or ""), chat_id)
+            answer = await self.start_job(str(args.get("name") or ""), chat_id, role)
             self.state.log("job_requested", {"job": args.get("name"), "answer": answer[:80]})
             return _ok(answer)
         return handler
@@ -413,12 +426,15 @@ class Toolbox:
             path = os.path.join(self.s.out_dir, name)
             # ⚠️ ONLY ITS OWN FILES: a file a script wrote (facts.json, a report page) is that script's
             # output; the model saving over it would put its own figures in a report.
-            if os.path.exists(path) and not self.state.saved_by_model(name):
+            # by its place in the run's folder (architecture review 14): by name alone, the model's notes.json of one
+            # run let it overwrite a script's notes.json in another
+            key = f"{self.s.run_folder}/{name}" if self.s.run_folder else name
+            if os.path.exists(path) and not self.state.saved_by_model(key):
                 return _err(f"{name} was made by a script: choose another name.")
             os.makedirs(self.s.out_dir, exist_ok=True)
             with open(path, "w", encoding="utf-8") as f:
                 f.write(content)
-            self.state.mark_saved_by_model(name)
+            self.state.mark_saved_by_model(key)
             self.state.log("saved_file", {"name": name, "bytes": len(content)})
             return _ok(f"Saved {name}.")
         return handler

@@ -138,7 +138,7 @@ class _Outcome:
     def __init__(self):
         self.out = []
 
-    async def carry_out(self, res, skill_name, origin):
+    async def carry_out(self, res, skill_name, origin, folder=None):
         self.out.append((res, skill_name, origin))
         return {"sent": len(res.get("send") or [])}
 

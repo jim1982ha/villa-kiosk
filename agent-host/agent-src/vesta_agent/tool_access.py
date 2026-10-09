@@ -12,9 +12,14 @@ Three switches decide it, all in policy.yaml, all edited on the page (Rules › 
                   (an action on the villa: "Allowed actions").
   tool_access     what the facility manager may make the AI use, by group (the owner: everything switched on).
 
-A report gets only the tools its skill lists (skill.yaml `tools:`), among those switched on; a skill that
-lists none gets everything switched on. A skill that needs a tool switched off is NOT WORKING: the AI is told
-plainly which setting stops it, and its AI jobs do not run (blockers()).
+⚠️ WHO ASKS DECIDES, NEVER THE SKILL (owner, 2026-10-10: "the report skill shall never limit the tool access. Only
+the user role shall control what is available, and the skill shall adjust to it"). A run gets what is switched on
+for whoever triggered it (allowed_for): the owner everything, the facility manager — or anyone in the facility
+manager's chat — less tool_access.fm, a scheduled job (SYSTEM: nobody asked) everything. A skill's `tools:` list
+limits nothing and stops nothing: it says what the skill uses, so the AI is told what this run lacks and works
+without it (unavailable), and the page offers to switch it on. Until 0.6.112 the list was the report's whole
+tool set (the weekly report skipped web search until the owner edited skill.yaml) and a tool switched off
+stopped the skill's reports altogether.
 
 ⚠️ ONE OWNER FOR "MAY THE AI USE THIS": tools.Toolbox builds only what allowed_for_*() returns, and the page
 draws its switches from catalog() — the page keeps no copy of these tables.
@@ -119,7 +124,7 @@ def read_list(data_dir: str) -> dict | None:
 
 
 def saved_server_tools(data_dir: str) -> list[dict] | None:
-    """The saved list back in the server's own shape, for blockers()/readable() on the page; None before the
+    """The saved list back in the server's own shape, for unavailable()/readable() on the page; None before the
     agent first read it. The one place that knows both shapes (save_list writes the other)."""
     listed = read_list(data_dir)
     if not listed:
@@ -157,10 +162,17 @@ def _without_groups(tools: set[str], denied: set[str]) -> set[str]:
                                                          and group_of(t) in denied)}
 
 
-def allowed_for_person(policy: Policy, server_tools: list[dict], role: str | None, chat_id: int | None) -> set[str]:
-    """A chat: everything switched on for the owner; the facility manager loses what tool_access.fm refuses —
-    and so does anyone in the facility manager's chat (never more there than the facility manager may use)."""
+#: The asker of a scheduled job or an alert hook: nobody asked, everything switched on.
+SYSTEM = "system"
+
+
+def allowed_for(policy: Policy, server_tools: list[dict], role: str | None, chat_id: int | None = None) -> set[str]:
+    """What a run may use, from who triggered it alone: everything switched on for the owner and for SYSTEM; the
+    facility manager loses what tool_access.fm refuses — and so does anyone in the facility manager's chat (never
+    more there than the facility manager may use), or a person the policy does not know (role None)."""
     tools = switched_on(policy, server_tools)
+    if role == SYSTEM:
+        return tools
     fm_chat = chat_id is not None and policy.chats.get("fm") == chat_id
     if role != "owner" or fm_chat:
         tools = _without_groups(tools, fm_denied(policy))
@@ -171,30 +183,22 @@ def may_start_job(policy: Policy, server_tools: list[dict], person, chat_id: int
     """May this person start a job from this chat (the start_job tool, switched on for them here)? One answer for the
     AI's tool, the report buttons offered when the AI is unavailable, and a press on one (architecture review 5:
     the press asked only "registered?", so in a group anyone could press another's report button)."""
-    return person is not None and "start_job" in allowed_for_person(policy, server_tools, person.role, chat_id)
-
-
-def allowed_for_job(policy: Policy, server_tools: list[dict], skill) -> set[str]:
-    """A report (a skill's AI job): its skill's `tools`, among those switched on, plus the ones always on.
-    A skill that lists none gets everything switched on but web search (a scheduled job never had it)."""
-    on = switched_on(policy, server_tools)
-    if getattr(skill, "tools", None) is None:
-        return on - {"web_search"}
-    return (set(skill.tools) & on) | {k for k, v in OWN.items() if v[2] == ALWAYS}
+    return person is not None and "start_job" in allowed_for(policy, server_tools, person.role, chat_id)
 
 
 def health(policy: Policy, server_tools: list[dict] | None, skill, load_problem: str | None = None) -> dict:
-    """Is this skill working, and if not why, in words: {"ok", "problem", "blocked"}. `skill` None: it did not load
-    (`load_problem` says why; without one it was switched off). One answer for the page's list and a skill's page
-    (architecture review 6: each wrote its own)."""
+    """Is this skill working, and what it goes without, in words: {"ok", "problem", "line", "without"}. `skill` None:
+    it did not load (`load_problem` says why; without one it was switched off). A loaded skill works: a tool it uses
+    that the villa switched off is in `without` — said, offered to switch on, never a reason it stops (owner,
+    2026-10-10). One answer for the page's list and a skill's page (architecture review 6: each wrote its own)."""
     if skill is None:
         problem = load_problem or "switched off"
-        return {"ok": False, "problem": problem, "line": problem, "blocked": []}
-    blocked = blockers(policy, server_tools, skill)
+        return {"ok": False, "problem": problem, "line": problem, "without": []}
+    without = unavailable(policy, server_tools, skill)
     # `line`: the skills list's one line (the page parsed "It needs…" out of `problem`, architecture review 8)
-    line = None if not blocked else "A tool it needs is switched off." if len(blocked) == 1 else \
-        f"{len(blocked)} tools it needs are switched off."
-    return {"ok": not blocked, "problem": " ".join(b["why"] for b in blocked) or None, "line": line, "blocked": blocked}
+    line = None if not without else "Works without a tool switched off." if len(without) == 1 else \
+        f"Works without {len(without)} tools switched off."
+    return {"ok": True, "problem": None, "line": line, "without": without}
 
 
 def switch_on(form: dict, tool: str) -> dict:
@@ -206,22 +210,31 @@ def switch_on(form: dict, tool: str) -> dict:
     return {"ha_read_tools": form["ha_read_tools"] if tool in form["ha_read_tools"] else [*form["ha_read_tools"], tool]}
 
 
-def blockers(policy: Policy, server_tools: list[dict] | None, skill) -> list[dict]:
-    """Why the AI cannot use this skill now: each tool it needs that THE VILLA switched off, in plain words, with
-    what turns it back on. [] when nothing stops it. A tool this Home Assistant does not have, or that changes it,
-    stops nothing: the AI goes without it (needs() shows it on the page)."""
+def unavailable(policy: Policy, server_tools: list[dict] | None, skill, allowed: set[str] | None = None) -> list[dict]:
+    """The tools this skill uses (skill.yaml `tools:`) that a run goes without, in plain words: those THE VILLA
+    switched off (with what turns each back on: `fix`), and — given `allowed`, a run's own tools — those this asker
+    may not use here. [] when it has them all. A tool this Home Assistant does not have, or that changes it, is not
+    listed: the AI simply goes without it (needs() shows it on the page)."""
     out = []
     by = {t["name"]: t for t in server_tools} if server_tools else None
     for t in getattr(skill, "tools", None) or []:
         if t in OWN:
-            if OWN[t][2] != CHOOSE or t in own_on(policy):
+            if OWN[t][2] != CHOOSE:
                 continue
-            out.append({"tool": t, "label": OWN[t][0], "fix": "own",
-                        "why": f"It needs \"{OWN[t][0]}\", switched off in {where('tools')}."})
-        elif (by is None or (t in by and readable(by[t]))) and t not in policy.ha_read_tools:
+            if t not in own_on(policy):
+                out.append({"tool": t, "label": OWN[t][0], "fix": "own",
+                            "why": f"It uses \"{OWN[t][0]}\", switched off in {where('tools')}."})
+            elif allowed is not None and t not in allowed:
+                out.append({"tool": t, "label": OWN[t][0], "fix": None,
+                            "why": f"\"{OWN[t][0]}\" is not for the person who asked (the facility manager's tools)."})
+        elif by is None or (t in by and readable(by[t])):
             name = _title(by[t]) if by else t
-            out.append({"tool": t, "label": name, "fix": "ha",
-                        "why": f"It needs \"{name}\" ({t}), switched off in {where('tools')}."})
+            if t not in policy.ha_read_tools:
+                out.append({"tool": t, "label": name, "fix": "ha",
+                            "why": f"It uses \"{name}\" ({t}), switched off in {where('tools')}."})
+            elif allowed is not None and t not in allowed:
+                out.append({"tool": t, "label": name, "fix": None,
+                            "why": f"\"{name}\" ({t}) is not for the person who asked (the facility manager's tools)."})
     return out
 
 

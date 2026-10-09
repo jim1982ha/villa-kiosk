@@ -38,6 +38,9 @@ class Origin:
     # A job asked for in this chat (kind JOB): which one — its result is told by name, never guessed
     # (chat_jobs.ChatJobs.result; architecture review 12).
     job: str | None = None
+    # The role of the person who asked (a job they started): what its run may use is theirs (tool_access.allowed_for;
+    # owner, 2026-10-10: "only adjust to who is triggering the request"). None: nobody known.
+    role: str | None = None
 
     @property
     def holds(self) -> bool:

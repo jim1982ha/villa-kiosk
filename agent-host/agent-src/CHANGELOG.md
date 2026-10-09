@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.112 (10 October 2026)
+
+Architecture review 14 (one AI turn), all six candidates and the owner's rule on tools:
+- turn.Turns: chat_terms / job_terms decide a run's tools, brain (policy.PROFILES), limit and record once; each turn gets its folder, the runner takes tools.Kit (server, names, tool objects) and turn.Terms, and returns into one TurnResult (answer, photos, problem, limit). The owner is told by the turn when no retry helps. runner.run had eleven parameters and chose the brain itself; Settings.reply_limit_usd was read in three places.
+- Who asks decides (owner, 2026-10-10): tool_access.allowed_for(policy, tools, role, chat), SYSTEM for a scheduled job; Origin.role carries who asked a job (start_job, ChatJobs.start). allowed_for_person / allowed_for_job / blockers removed: a skill's tools list limits and stops nothing; tool_access.unavailable says what a run lacks (read_skill tells the AI; health gives "without", ok stays true; the page shows "Works without a tool"). The job_only refusal sends the AI to start_job only when the run has it.
+- One folder per run: config.Settings.in_folder (run_folder); ai_jobs.run_folder for a job and its on_limit / without_ai steps; out/chats/ID for a chat. Outcome.carry_out(folder=) for attachments; save_file's guard keyed by folder and name.
+- One running record: ChatJobs.held for a scheduled job, where it sends. Skills.all refuses a skill whose AI job name another skill (or itself) already declares.
+- tests/ai_fake.FakeAI: the run's record has call(name, args) through the run's own tools, refused when not given; tests use it instead of a hand-built toolbox.
+- Tests: two reports at once in two folders; a run's terms by who asks; the facility manager's report cannot use a tool refused to them; a scheduled report asked for meanwhile runs once; a duplicate job name refused; the start_job redirect only with start_job; a skill works without a switched-off tool and the AI is told; what a skill lacks judged on the run's own tools. Each shown red with the old behaviour.
+
 ## 0.6.111 (10 October 2026)
 
 Architecture review 13 (the skills' data path), candidates 1 to 6:

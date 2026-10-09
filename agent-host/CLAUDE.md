@@ -227,6 +227,12 @@ Decisions of 2026-09-30 (owner):
   the filtration pump are no longer defaulted in code (the 07:00-18:00 window still is: its home is a skill file,
   the owner's call). Rule ids another skill reads and a finding's detail are
   in `vesta_shared.result`. The clues and the one list live in `reports/scripts/playbook.py`, not facts.py.
+  Fourteenth review, 0.12.118 (one AI turn): `turn.Turns` runs every AI turn — `chat_terms` / `job_terms` decide its
+  tools (by who asks: `Origin.role`, `tool_access.SYSTEM` on schedule), brain, limit and record once; the runner takes
+  a `tools.Kit` and those `Terms` and chooses nothing. Each run works in its own folder (`Settings.in_folder`: a job
+  and its on_limit / without_ai steps share out/runs/NAME-TIME, a chat out/chats/ID). One "running" record:
+  `ChatJobs.held` registers a scheduled job where it sends. A job name two skills declare: the second is switched
+  off. The tests' FakeAI acts through the run's own tools (`run_["call"]`), refused like the real guard.
 - No PDF (owner, 2026-09-30): the reports are self-contained HTML pages sent
   as attachments. Chromium was ~480 MB of a 1.1 GB image for this alone.
 - ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent
@@ -236,9 +242,10 @@ Decisions of 2026-09-30 (owner):
 ## What the AI can use, and the page's controls (0.12.46)
 
 - `vesta_agent/tool_access.py` is the one answer to "may the AI use this tool": Toolbox builds only its
-  `allowed_for_person` / `allowed_for_job` set; the page draws its switches from `catalog()`. Only a tool HA MCP
-  marks `readOnlyHint` (and not destructive) can be on. A skill's `tools:` bound its AI jobs; a needed tool the
-  villa switched off makes the skill "not working" (`blockers`).
+  `allowed_for` set (by who asks; `SYSTEM` for a scheduled job); the page draws its switches from `catalog()`. Only
+  a tool HA MCP marks `readOnlyHint` (and not destructive) can be on. A skill's `tools:` limits and stops NOTHING
+  (owner, 2026-10-10: "only the user role shall control what is available, and the skill shall adjust to it"):
+  `unavailable` says what a run lacks, to the AI (read_skill) and on the page ("Works without a tool").
 - The page holds no token: the agent saves HA MCP's list to `<data>/ha_tools.json`; "Try a command" and "Read the
   list again" go through `vesta_agent/requests_box.py` (files the agent answers). A try is checked like the AI's
   call and never carried out.

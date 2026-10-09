@@ -1,6 +1,7 @@
 """Architecture review 6: what a run was is written, read and pruned in one module (vesta_shared.agent_records)."""
 from __future__ import annotations
 
+from helpers import run_kit, run_terms
 import asyncio
 from datetime import datetime, timedelta, timezone
 
@@ -56,7 +57,7 @@ def test_a_resume_that_failed_before_doing_anything_is_one_row_not_two(monkeypat
     monkeypatch.setattr(runner, "ClaudeSDKClient", Fake)
     s = settings(str(tmp_path))
     st = State(s.state_path)
-    res = asyncio.run(runner.run(s, "sys", "p", None, set(), st, who="Owner@1", resume="old", asked="all ok?"))
+    res = asyncio.run(runner.run(s, "sys", "p", run_kit(), run_terms(who="Owner@1"), st, resume="old", asked="all ok?"))
     assert res.text == "All quiet."
     rows = [r for r in status.costs(st)["runs"]]
     assert len(rows) == 1 and rows[0]["asked"] == "all ok?" and rows[0]["cost"] == 0.01

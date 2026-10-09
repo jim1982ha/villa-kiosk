@@ -4,9 +4,9 @@ A skill is one folder in VESTA_SKILLS_DIR holding SKILL.md (what the model reads
 and skill.yaml (what the engine needs):
 
     description: one line
-    tools: [ha_get_state, ha_get_history, send_message]   optional: the tools the AI needs for this skill's
-                                     job — its AI jobs get only these (among those switched on), and the skill is
-                                     "not working" while one is switched off (tool_access.py). Absent: everything.
+    tools: [ha_get_state, ha_get_history, send_message]   optional: the tools this skill uses. They limit nothing
+                                     (who asks decides, tool_access.allowed_for): the AI is told which of them a
+                                     run lacks, and the page offers to switch one on (tool_access.unavailable).
     scripts:                         the ONLY scripts the model may run, with the flags it may pass
       energy_period.py:
         commands: [week, month]      optional: allowed first argument (or {week: "what it does", ...})
@@ -441,6 +441,7 @@ class Skills:
         except OSError:
             return out
         seen = set()
+        claimed: dict[str, str] = {}       # an AI job's name → the skill that declares it
         for name in names:
             path = os.path.join(self.dir, name)
             if not SKILL_NAME.match(name) or not os.path.isdir(path):
@@ -451,8 +452,21 @@ class Skills:
                 continue
             try:
                 sk = parse_skill(name, path)
+                # ⚠️ ONE JOB PER NAME (architecture review 14, 2026-10-10): a job's name is its key in policy.yaml (its
+                # brain and limit), its Costs row and its "already running" — a copied test skill declaring fm-weekly
+                # shared all three, and start_job ran whichever came first. The second one is refused, and said.
+                jobs = [j["name"] for j in sk.schedule if j.get("prompt")]
+                twice = next((n for n in jobs if jobs.count(n) > 1), None)
+                taken = next((n for n in jobs if n in claimed), None) if name not in off else None
+                if twice or taken:
+                    whose = f"the skill {claimed[taken]}'s" if taken else "another of its own"
+                    self._report(name, f"its AI job {twice or taken} has the same name as {whose}: rename it in "
+                                       "skill.yaml: switched off")
+                    seen.add(name)
+                    continue
                 self._report(name, "")
                 if name not in off:
+                    claimed.update({n: name for n in jobs})
                     out[name] = sk
             except (SkillError, yaml.YAMLError, OSError) as e:
                 self._report(name, f"skill.yaml refused ({e}): switched off")

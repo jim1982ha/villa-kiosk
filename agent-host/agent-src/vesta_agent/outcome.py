@@ -82,8 +82,10 @@ class Outcome:
         self.out_dir = out_dir
 
     # ------------------------------------------------------------------ carry out
-    async def carry_out(self, res: dict, skill_name: str | None = None, origin: Origin | None = None) -> dict:
-        """Do what the script decided. Returns what was done, for the caller's answer and the tests."""
+    async def carry_out(self, res: dict, skill_name: str | None = None, origin: Origin | None = None,
+                        folder: str | None = None) -> dict:
+        """Do what the script decided. Returns what was done, for the caller's answer and the tests. `folder`: the run's
+        own (config.Settings.in_folder), where its attachments are; the out folder itself without one."""
         done = {"sent": 0, "not_sent": 0, "tickets": 0, "resolved": 0, "unrouted": 0}
         if not isinstance(res, dict) or not res:
             return done
@@ -127,8 +129,9 @@ class Outcome:
             att = item.get("attachment")
             if att:
                 from .skills import FILE_NAME
-                path = os.path.join(self.out_dir, str(att))
-                if FILE_NAME.match(str(att)) and self.out_dir and os.path.isfile(path):
+                where = folder or self.out_dir
+                path = os.path.join(where, str(att))
+                if FILE_NAME.match(str(att)) and where and os.path.isfile(path):
                     doc = path
                 else:
                     log.warning("Skill %s attached %r, which is not a file of the out folder: sent without it", skill_name, att)

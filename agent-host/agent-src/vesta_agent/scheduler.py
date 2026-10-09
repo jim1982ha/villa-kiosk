@@ -102,7 +102,7 @@ class Scheduler:
         self.skills = skills
         self.state = state
         self.run_code = run_code            # async (skill, command, timeout) -> None
-        self.run_model = run_model          # async (skill, prompt, name) -> None
+        self.run_model = run_model          # async (skill, job) -> None: ai_jobs.AiJobs.run
         self.rebuild_pack = rebuild_pack    # async () -> None
         self.housekeeping = housekeeping    # async () -> None, every tick
         self._last_every: datetime | None = None

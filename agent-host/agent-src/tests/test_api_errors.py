@@ -5,6 +5,7 @@ The SDK reports a failure as an AssistantMessage whose `error` is set and whose 
 Each common case is driven through the real runner (a fake SDK client) and the real agent."""
 from __future__ import annotations
 
+from helpers import run_kit, run_terms
 import asyncio
 
 import pytest
@@ -70,7 +71,7 @@ def run_with(monkeypatch, tmp_path, messages, raise_at_end=None, resume=None):
     s = settings(str(tmp_path))
     st = State(s.state_path)
     monkeypatch.setattr(runner, "ClaudeSDKClient", fake_client(messages, raise_at_end))
-    return asyncio.run(runner.run(s, "sys", "prompt", None, set(), st, who="x", resume=resume))
+    return asyncio.run(runner.run(s, "sys", "prompt", run_kit(), run_terms(), st, resume=resume))
 
 
 def test_the_raw_api_error_text_is_never_the_answer(monkeypatch, tmp_path):
@@ -91,13 +92,13 @@ def test_a_failed_resume_is_not_retried_when_a_new_conversation_fails_the_same(m
     real = runner.run
 
     async def counting(*a, **k):
-        calls.append(k.get("resume", a[7] if len(a) > 7 else None))
+        calls.append(k.get("resume", a[6] if len(a) > 6 else None))
         return await real(*a, **k)
     msgs = [AssistantMessage(content=[TextBlock(text=RAW)], model="m", error="billing_error"), failed_result(400, RAW)]
     monkeypatch.setattr(runner, "run", counting)
     s = settings(str(tmp_path))
     monkeypatch.setattr(runner, "ClaudeSDKClient", fake_client(msgs))
-    asyncio.run(runner.run(s, "sys", "p", None, set(), State(s.state_path), who="x", resume="old-session"))
+    asyncio.run(runner.run(s, "sys", "p", run_kit(), run_terms(), State(s.state_path), resume="old-session"))
     assert len(calls) == 1
 
 
@@ -171,7 +172,7 @@ def test_a_run_retried_after_a_lost_session_keeps_what_was_asked(monkeypatch, tm
     monkeypatch.setattr(runner, "ClaudeSDKClient", Fake)
     s = settings(str(tmp_path))
     st = State(s.state_path)
-    res = asyncio.run(runner.run(s, "sys", "p", None, set(), st, who="x", resume="old", asked="is the pool ok?"))
+    res = asyncio.run(runner.run(s, "sys", "p", run_kit(), run_terms(), st, resume="old", asked="is the pool ok?"))
     assert res.text == "The pool is fine."
     import json as _j
     runs = [_j.loads(c["detail"]) for c in st.calls_since("1970") if c["kind"] == "run"]
@@ -181,7 +182,7 @@ def test_a_run_retried_after_a_lost_session_keeps_what_was_asked(monkeypatch, tm
 # ⚠️ A REPORT EVEN WITHOUT THE AI (owner, 2026-10-07: the Anthropic credit ran out and the weekly never came): a
 # job's without_ai steps still make it from its figures, saying why, and the Costs tab shows it.
 _WEEK = ("import argparse, json, os, sys\nap = argparse.ArgumentParser(); ap.add_argument('--out'); a = ap.parse_known_args()[0]\n"
-         "if os.path.exists('fail.flag'): sys.exit('no statistics today')\n"
+         "if os.path.exists(os.path.join(os.path.dirname(__file__), 'fail.flag')): sys.exit('no statistics today')\n"
          "json.dump({'kwh': 287}, open(a.out, 'w')); print('{}')\n")
 _PAGE = ("import argparse, json\nap = argparse.ArgumentParser()\n"
          "for f in ('--week', '--finish', '--no-ai'): ap.add_argument(f)\na = ap.parse_known_args()[0]\n"
@@ -205,9 +206,10 @@ def _report_without_ai(agent, monkeypatch, *, fail=False, stale=False, run_job=T
         yaml.safe_dump(pol, f)
     import os
     if fail:
-        open(os.path.join(agent.s.out_dir, "fail.flag"), "w").close()
+        open(os.path.join(agent.s.skills_dir, "figures", "scripts", "fail.flag"), "w").close()
     if stale:
-        open(os.path.join(agent.s.out_dir, "week.json"), "w").write('{"kwh": 999}')    # last week's file
+        # last week's file, where every run wrote before 0.6.112: a run's own folder never holds it
+        open(os.path.join(agent.s.out_dir, "week.json"), "w").write('{"kwh": 999}')
     FakeAI("", problem="credit", cost_usd=0.0).install(monkeypatch)
     if not run_job:
         return

@@ -15,6 +15,7 @@ Delivery only sends. job_notices.JobNotices still decides what happens to the wa
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import time
 from typing import Awaitable, Callable
@@ -68,9 +69,10 @@ class ChatJobs:
                 self._typing_on(chat, name)
 
     # ------------------------------------------------------------------ a job
-    def start(self, chat: int, name: str, work: Work, waiting_mid: int | None = None) -> bool:
+    def start(self, chat: int, name: str, work: Work, waiting_mid: int | None = None, role: str | None = None) -> bool:
         """Start `work` as this chat's job `name`; False when it already runs here (never twice). `waiting_mid`: the
-        message that stands for it until its result (a pressed button's); without one, the turn's reply does."""
+        message that stands for it until its result (a pressed button's); without one, the turn's reply does.
+        `role`: who asked (routing.Origin.role): the run uses what they may."""
         chat = int(chat)
         if (chat, name) in self._jobs:
             return False
@@ -84,7 +86,7 @@ class ChatJobs:
                 if waiting_mid:
                     await self._carry(chat, self.notices.replied(key, int(waiting_mid)))
                     self._typing_on(chat, name)
-                await work(Origin(chat, JOB, job=name))
+                await work(Origin(chat, JOB, job=name, role=role))
             finally:
                 self._jobs.pop((chat, name), None)
                 self._typing_off(chat, name)
@@ -94,11 +96,27 @@ class ChatJobs:
         task.add_done_callback(self._tasks.discard)
         return True
 
+    @contextlib.asynccontextmanager
+    async def held(self, chat: int | None, name: str):
+        """A job that runs on schedule, sending to `chat`: while it runs, the same job asked for there is "already
+        being made", with its start time — one record of what runs, whatever started it (architecture review 14: the
+        schedule kept its own, and a report asked for in the facility manager's chat at 08:01 ran a second time
+        beside the scheduled one). No waiting message, no "typing…": nobody asked."""
+        key = (int(chat), name) if chat else None
+        mine = key is not None and key not in self._jobs
+        if mine:
+            self._jobs[key] = {"started": time.time(), "turn": None}
+        try:
+            yield
+        finally:
+            if mine:
+                self._jobs.pop(key, None)
+
     async def result(self, origin: Origin) -> None:
         """A message sent on behalf of job `origin.job` reached `origin.chat`: its waiting message goes, its
         "typing…" stops."""
         j = self._jobs.get((int(origin.chat), origin.job or ""))
-        if j is None:
+        if j is None or j["turn"] is None:
             return
         log.info("Job result in chat %s: waiting notice before it: %s", origin.chat, self.notices.describe(j["turn"]))
         await self._carry(int(origin.chat), self.notices.result(j["turn"]))

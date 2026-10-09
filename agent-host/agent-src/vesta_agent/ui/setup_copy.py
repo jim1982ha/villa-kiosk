@@ -222,8 +222,8 @@ def preview(settings, skills, setup: dict, server_tools: list[dict] | None) -> d
         for t in sk.tools or []:
             if server_tools is not None and t.startswith("ha_") and t != "ha_call_service" and t not in by:
                 misfits.append(f"{name} needs {t}, which this Home Assistant's MCP server does not have: the AI goes without it.")
-        for b in tool_access.blockers(pol, server_tools, sk):
-            misfits.append(f"{name} will not work until a tool is switched on: {b['why']}")
+        for b in tool_access.unavailable(pol, server_tools, sk):
+            misfits.append(f"{name} will work without a tool switched off here: {b['why']}")
         for _, job in ai_jobs({name: sk}):
             if job["name"] not in jobs:
                 misfits.append(f"{name}'s AI job {job['name']} is not set in {where('ai')}: it will not run until it is (Add them).")

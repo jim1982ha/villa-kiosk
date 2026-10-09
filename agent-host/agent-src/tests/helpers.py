@@ -99,3 +99,15 @@ def make_skill(skills_dir: str, name: str, spec: dict, scripts: dict[str, str] |
         with open(os.path.join(d, "scripts", fname), "w", encoding="utf-8") as f:
             f.write(code)
     return d
+
+
+def run_kit(names=(), server=None, tools=()):
+    """A run's built tools (tools.Kit) for a test that calls runner.run itself."""
+    from vesta_agent.tools import Kit
+    return Kit(server, set(names), list(tools))
+
+
+def run_terms(who="x", profile="auto", limit_usd=1.0, tools=()):
+    """A run's terms (turn.Terms) for a test that calls runner.run itself."""
+    from vesta_agent.turn import Terms
+    return Terms(frozenset(tools), profile, float(limit_usd), who)

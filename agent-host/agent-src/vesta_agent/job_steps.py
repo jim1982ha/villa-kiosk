@@ -21,6 +21,7 @@ class Done:
 
 
 async def run(settings, state, skills, outcome, skill, steps: list[dict], values: dict, origin=None) -> Done:
+    """`settings`: the job run's own (config.Settings.in_folder) — its steps read the files its AI run wrote."""
     sent = 0
     for st in steps:
         if origin and st.get("on_schedule_only"):
@@ -34,5 +35,5 @@ async def run(settings, state, skills, outcome, skill, steps: list[dict], values
             return Done(sent, script)
         res = ans.result()
         if res.get("send"):
-            sent += (await outcome.carry_out(res, sk.name, origin))["sent"]
+            sent += (await outcome.carry_out(res, sk.name, origin, settings.out_dir if settings else None))["sent"]
     return Done(sent, None)

@@ -33,9 +33,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Awaitable, Callable
 from zoneinfo import ZoneInfo
 
-from . import ai_down, button_data, intake, requests_box, runner, script_run, tool_access
+from . import ai_down, button_data, intake, requests_box, script_run, tool_access
 from .ai_jobs import AiJobs
-from vesta_shared import agent_records
 from .chat_jobs import ChatJobs
 from .siren import Siren
 from .actions import Actions
@@ -52,12 +51,13 @@ from .outcome import Outcome
 from .voice import Voice
 from .tickets import Tickets
 from .policy import NOT_REGISTERED, Person, Policy, problems as policy_problems
-from .routing import CONVERSATION, Origin, Routing
+from .routing import Origin, Routing
 from .scheduler import Scheduler
 from .skills import Skills, script_env
 from .state import State
 from .telegram import Telegram, TelegramError
 from .tools import Toolbox, scrub
+from .turn import Turns
 
 log = logging.getLogger("vesta")
 
@@ -140,9 +140,11 @@ class Vesta:
                                out_dir=settings.out_dir)
         self.server_tools: list[dict] = []
         # the reports (ai_jobs.py): run, made without the AI, started from a chat
+        # one AI turn, decided once: its tools by who asks, its brain, limit, record and folder (turn.py)
+        self.turns = Turns(settings, self.state, self.policy, server_tools=self._server_tools, toolbox=self.toolbox,
+                           system_prompt=self.system_prompt, tell_owner=self._tell_owner, safe=self._safe)
         self.jobs = AiJobs(settings, self.state, self.policy, self.skills, self.delivery, self.chat_jobs, self.outcome,
-                           server_tools=self._server_tools, toolbox=self.toolbox, system_prompt=self.system_prompt,
-                           tell_owner=self._tell_owner, safe=self._safe)
+                           turns=self.turns, safe=self._safe)
         self.bot_username: str | None = None
         self._locks: dict[int, asyncio.Lock] = {}
         self._pack = None
@@ -190,9 +192,10 @@ class Vesta:
             pass
         return out
 
-    def toolbox(self, allowed: set[str] | None = None) -> Toolbox:
-        """`allowed`: what the AI may use this time (tool_access); None: everything switched on."""
-        return Toolbox(settings=self.s, policy=self.policy(), reader=self.reader, actions=self.actions,
+    def toolbox(self, allowed: set[str] | None = None, settings=None) -> Toolbox:
+        """`allowed`: what the AI may use this time (turn.Terms.tools); None: everything switched on. `settings`: the
+        run's own (config.Settings.in_folder: its files' folder); the agent's without one."""
+        return Toolbox(settings=settings or self.s, policy=self.policy(), reader=self.reader, actions=self.actions,
                        skills=self.skills, send=self.delivery.send, server_tools=self.server_tools, state=self.state,
                        ticket=self.tickets.create if self.kiosk.enabled else None,
                        carry_out=self.outcome.carry_out, start_job=self.jobs.start, allowed=allowed)
@@ -247,9 +250,10 @@ class Vesta:
                 log.warning("VESTA Kiosk: %s", e)
         await self.refresh_server_tools()
         for sk in self.skills.all().values():
-            stop = tool_access.blockers(self.policy(), self.server_tools or None, sk)
-            if stop:
-                log.warning("Skill %s is not working: %s", sk.name, " ".join(b["why"] for b in stop))
+            without = tool_access.unavailable(self.policy(), self.server_tools or None, sk)
+            if without:
+                # it works without them (owner, 2026-10-10: who asks decides, never the skill)
+                log.info("Skill %s works without: %s", sk.name, " ".join(b["why"] for b in without))
         if pack_needs_build(self.s.pack_path):
             await asyncio.to_thread(self.build_pack)
         pol = self.policy()
@@ -435,15 +439,9 @@ class Vesta:
                 prompt = (f"{said.capitalize()} from {person.name if person else 'someone'} (role "
                           f"{person.role if person else '?'}; language saved for them: {lang}) in the {chat_role} chat:\n"
                           f"\"\"\"{text}\"\"\"\nAnswer short.")
-            if not self.server_tools:
-                await self.refresh_server_tools()
             pol = self.policy()
-            # what this person may make the AI use here (Rules › AI tools)
-            tb = self.toolbox(tool_access.allowed_for_person(pol, self.server_tools, person.role if person else None, cid))
-            server, allowed = tb.for_run(person, Origin(cid, CONVERSATION))
-            res = await runner.run(self.s, self.system_prompt(), prompt, server, allowed, self.state,
-                                   who=agent_records.for_person(person.name if person else None, cid), resume=resume,
-                                   asked=None if is_continue else text)
+            # what this person may make the AI use here, the chat's brain and limit, its folder: turn.py decides
+            res = await self.turns.chat(person, cid, prompt, resume=resume, asked=None if is_continue else text)
             if res.session_id:
                 self.state.set_session(cid, res.session_id)
             log.info("Answered %s in chat %s (%s)%s", person.name if person else "system", cid,
@@ -451,11 +449,10 @@ class Vesta:
                      f", error {res.error}" if res.error else "")
             answer = res.text
             if res.problem or res.error:
-                # ⚠️ NEVER THE RAW ERROR (owner, 2026-10-06): the reason in plain words (api_errors), and the
-                # owner told when no retry can help (no credit, a refused key)
+                # ⚠️ NEVER THE RAW ERROR (owner, 2026-10-06): the reason in plain words (api_errors); the owner was
+                # told by the turn when no retry can help (no credit, a refused key)
                 said = FOR_PERSON.get(res.problem or "unknown", FOR_PERSON["unknown"])
                 answer = f"{answer}\n\n{said}" if answer else said
-                await self._safe(self._tell_owner(res.problem, cid))
             keyboard = None
             if res.problem in AI_DOWN and not is_continue and tool_access.may_start_job(pol, self.server_tools, person, cid):
                 # the AI cannot answer: a report asked for is still made from its figures (ai_down.py decides)
@@ -468,11 +465,11 @@ class Vesta:
             if res.stopped_at_limit and res.session_id:
                 cont = self.state.new_continuation(cid, res.session_id, person.telegram_id if person else None)
                 answer = (answer + "\n\n" if answer else "") + \
-                    f"Stopped: this answer reached the {self.s.reply_limit_usd:g} USD limit per reply."
+                    f"Stopped: this answer reached the {res.limit_usd:g} USD limit per reply."
                 keyboard = {"inline_keyboard": [[{"text": "Continue", "callback_data": button_data.make(button_data.CONTINUE, cont)}]]}
             answered()                                       # "typing…" ends: the answer is going out
             # the camera pictures the AI looked at go with it (Toolbox.photos)
-            mid = await self.delivery.reply(cid, answer, keyboard=keyboard, photos=tb.photos)
+            mid = await self.delivery.reply(cid, answer, keyboard=keyboard, photos=res.photos)
             await self.chat_jobs.replied(cid, mid)            # this turn's jobs: their waiting message, their "typing…"
 
     # ------------------------------------------------------------------ button presses

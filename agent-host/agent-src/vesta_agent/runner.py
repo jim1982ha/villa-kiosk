@@ -25,7 +25,6 @@ from claude_agent_sdk import (AssistantMessage, ClaudeAgentOptions, ClaudeSDKCli
                               PermissionResultAllow, PermissionResultDeny, ResultMessage, TextBlock, ToolUseBlock)
 
 from .api_errors import NO_RETRY, classify
-from .policy import PROFILES  # noqa: E402
 from .redact import scrub
 from vesta_shared.agent_records import RUN, run_cost
 
@@ -168,9 +167,12 @@ def make_guard(allowed: set[str], state, who: str):
     return can_use_tool, pre_tool_use, denied
 
 
-def build_options(settings, system_prompt: str, server, allowed: set[str], state, who: str,
-                  resume: str | None, limit_usd: float, profile: str | None = None) -> tuple[ClaudeAgentOptions, list[str]]:
-    can_use_tool, pre_hook, denied = make_guard(allowed, state, who)
+def build_options(settings, system_prompt: str, kit, terms, state,
+                  resume: str | None) -> tuple[ClaudeAgentOptions, list[str]]:
+    """The SDK's options for one run: `kit` the tools it was built (tools.Kit), `terms` what it may do (turn.Terms) —
+    the brain and the limit are the terms', never chosen here (architecture review 14)."""
+    server, allowed = kit.server, kit.names
+    can_use_tool, pre_hook, denied = make_guard(allowed, state, terms.who)
     # WebSearch exists for the CLI only when this run allows it; every other built-in stays off and denied.
     web = WEB_SEARCH in allowed
     opts = ClaudeAgentOptions(
@@ -188,10 +190,9 @@ def build_options(settings, system_prompt: str, server, allowed: set[str], state
              # sessions kept under the data folder so a conversation survives a restart of the app
              "CLAUDE_CONFIG_DIR": settings.claude_dir,
              "DISABLE_AUTOUPDATER": "1", "DISABLE_TELEMETRY": "1", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"},
-        # an AI job's own profile (policy.yaml settings.jobs), else the villa's chat profile
-        model=PROFILES[profile][0] if profile in PROFILES else settings.model,
-        effort=PROFILES[profile][1] if profile in PROFILES else settings.effort,
-        max_budget_usd=float(limit_usd),
+        model=terms.model,
+        effort=terms.effort,
+        max_budget_usd=float(terms.limit_usd),
         resume=resume,
     )
     return opts, denied
@@ -210,12 +211,11 @@ def with_time(settings, prompt: str, now: datetime | None = None) -> str:
     return f"[Villa time: {now:%A %d %B %Y, %H:%M}]\n{prompt}"
 
 
-async def run(settings, system_prompt: str, prompt: str, server, allowed: set[str], state, who: str,
-              resume: str | None = None, limit_usd: float | None = None, profile: str | None = None,
+async def run(settings, system_prompt: str, prompt: str, kit, terms, state, resume: str | None = None,
               asked: str | None = None) -> RunResult:
+    """One run: `kit` its built tools (tools.Toolbox.for_run), `terms` its brain, limit and record (turn.Terms)."""
     clean_environ()
-    opts, denied = build_options(settings, system_prompt, server, allowed, state, who, resume,
-                                 limit_usd if limit_usd is not None else settings.reply_limit_usd, profile)
+    opts, denied = build_options(settings, system_prompt, kit, terms, state, resume)
     c = Collector(resume)
     try:
         async with ClaudeSDKClient(options=opts) as client:
@@ -243,8 +243,8 @@ async def run(settings, system_prompt: str, prompt: str, server, allowed: set[st
     retrying = bool(err and resume and not texts and problem not in NO_RETRY)
     if not (retrying and not cost):
         # a resume that failed before doing anything is retried below as the same run: one row for one question
-        state.log(RUN, {"who": who, "cost_usd": cost, "stopped_at_limit": stopped, "denied": denied, "error": err,
-                        "profile": profile if profile in PROFILES else getattr(settings, "profile", None),
+        state.log(RUN, {"who": terms.who, "cost_usd": cost, "stopped_at_limit": stopped, "denied": denied, "error": err,
+                        "profile": terms.profile,
                         "model": opts.model, "tokens": tokens, "turns": turns, "ms": ms,
                         "asked": (asked or "")[:160] or None, "problem": problem,
                         # ⚠️ THE TOOLS IT USED (0.6.42): the Costs tab's "Tools used", and how often each tool is used
@@ -252,6 +252,6 @@ async def run(settings, system_prompt: str, prompt: str, server, allowed: set[st
     if retrying:
         # the session could not be resumed (lost, or from an older version): answer in a new one
         # the same run for the Costs tab: what was asked goes with it (it was dropped, so the answered run had none)
-        return await run(settings, system_prompt, prompt, server, allowed, state, who, None, limit_usd, profile, asked)
+        return await run(settings, system_prompt, prompt, kit, terms, state, None, asked)
     return RunResult("\n\n".join(texts).strip(), session_id, stopped, cost, denied, err, problem)
 

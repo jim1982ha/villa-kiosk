@@ -95,13 +95,9 @@ export function rulesForms(doc, jobs = [], tools = null) {
       const cur = f.settings.jobs[j.name];
       const what = [h("b", {}, j.name),
         h("div", { class: "muted" }, `${j.skill} · ${j.when_words}${j.on_request ? ", or when asked in a chat" : ""}`)];
-      // 1D: a report gets only the tools its skill lists (skill.yaml `tools`), among those switched on
-      // one line ("12 tools from reports"), the list unfolded on demand (owner, 2026-10-06: the chips were a wall)
-      const got = { cls: "tools-got", v: j.tools === null || j.tools === undefined
-        ? h("span", { class: "muted" }, "Everything switched on")
-        : !j.tools.length ? h("span", { class: "muted" }, "None of its own")
-        : h("details", { class: "fold" }, h("summary", {}, `${plural(j.tools.length, "tool", "tools")} from ${j.skill}`),
-            h("ul", { class: "tool-list" }, j.tools.map((t) => h("li", {}, t)))) };
+      // ⚠️ WHO ASKS DECIDES, NEVER THE SKILL (owner, 2026-10-10): on schedule everything switched on; asked for in a
+      // chat, what that person may use there. Its skill's list is shown on the skill's page, as what it uses.
+      const got = { cls: "tools-got", v: h("span", { class: "muted" }, "By who asks") };
       if (!cur) {
         return tableRow([what, { colspan: 2, cls: "muted", v: "Not set: this job does not run." }, got,
           { cls: "x", v: h("button", { class: "btn icon ghost", title: "Set this job", onclick: () => { f.settings.jobs[j.name] = { ...j.default }; drawAi(); markDirty(); } }, "+") }]);
@@ -112,9 +108,9 @@ export function rulesForms(doc, jobs = [], tools = null) {
         { cls: "x", v: h("button", { class: "btn icon ghost", title: "Stop this job", onclick: () => { delete f.settings.jobs[j.name]; drawAi(); markDirty(); } }, "×") }]);
     }));
   drawAi();
-  const ai = card(place("ai"), "Which brain does each piece of work, the most ONE piece of work may cost (one chat reply, or one run of a job — not a monthly budget), and which tools a report gets: only those its skill lists. A reply that reaches its limit stops and offers Continue; a report that reaches it is still sent with what is done. A job that is not set does not run.",
+  const ai = card(place("ai"), "Which brain does each piece of work, the most ONE piece of work may cost (one chat reply, or one run of a job — not a monthly budget), and which tools a report gets: what the person who asks may use (on schedule, everything switched on). A reply that reaches its limit stops and offers Continue; a report that reaches it is still sent with what is done. A job that is not set does not run.",
     table(["Work", "Brain", withInfo("Limit (US$)", limitNote),
-      withInfo(place("tools"), `Chat answers get every tool switched on in ${where("tools")}, by the person's role. A report gets only the tools its skill lists, among those switched on: to change them, edit the skill's tools list in ${where("skill_tools")} — the choice then travels with the skill.`),
+      withInfo(place("tools"), `Every answer and every report gets the tools switched on in ${where("tools")}, by the role of the person who asks: the owner everything, the facility manager (and anyone in their chat) less what ${where("tools")} refuses them. A report on schedule gets everything switched on. A skill's own list limits nothing: the AI works without what a run lacks.`),
       ""], aiBody, { cls: "ai", widths: ["30%", "22%", "15%", null, "44"] }));
   const missing = jobs.filter((j) => !j.set).map((j) => j.name);      // the agent's answer (server._jobs)
 

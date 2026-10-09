@@ -15,6 +15,7 @@ from vesta_agent.chat_jobs import ChatJobs
 from vesta_agent.routing import JOB, Origin
 from vesta_agent.skills import Skills
 from vesta_agent.state import State
+from vesta_agent.turn import Turns
 
 ASKER = 77
 
@@ -38,8 +39,11 @@ class Delivery:
 
 
 class Toolbox:
+    photos: list = []
+
     def for_run(self, person, origin):
-        return None, set()
+        from helpers import run_kit
+        return run_kit()
 
 
 @pytest.fixture
@@ -66,12 +70,12 @@ def jobs(tmp_path, monkeypatch):
         return job_steps.Done(1 if steps_sent[0] else 0, None if steps_sent[0] else "page.py")
     steps_sent = [True]
     monkeypatch.setattr(job_steps, "run", fake_steps)
-    monkeypatch.setattr("vesta_agent.tool_access.blockers", lambda *a: [])
-    monkeypatch.setattr("vesta_agent.tool_access.allowed_for_job", lambda *a: set())
+    monkeypatch.setattr("vesta_agent.tool_access.allowed_for", lambda *a: set())
     d = Delivery()
-    j = AiJobs(s, State(s.state_path), lambda: pol, Skills(s.skills_dir), d, ChatJobs(d, safe), None,
-               server_tools=server_tools, toolbox=lambda allowed: Toolbox(), system_prompt=lambda: "sys",
-               tell_owner=tell_owner, safe=safe)
+    st = State(s.state_path)
+    turns = Turns(s, st, lambda: pol, server_tools=server_tools, toolbox=lambda allowed, settings=None: Toolbox(),
+                  system_prompt=lambda: "sys", tell_owner=tell_owner, safe=safe)
+    j = AiJobs(s, st, lambda: pol, Skills(s.skills_dir), d, ChatJobs(d, safe), None, turns=turns, safe=safe)
     return types.SimpleNamespace(j=j, d=d, pol=pol, told=told, steps=steps, steps_sent=steps_sent)
 
 

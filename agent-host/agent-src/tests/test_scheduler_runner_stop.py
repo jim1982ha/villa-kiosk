@@ -79,9 +79,8 @@ def _options(allowed):
         work_dir = "/tmp"
         claude_dir = "/tmp/claude"
         anthropic_api_key = "k"
-        model = "sonnet"
-        effort = "medium"
-    opts, _ = runner.build_options(S(), "p", {"type": "sdk"}, allowed, State(":memory:"), "t", None, 1.0)
+    from helpers import run_kit, run_terms
+    opts, _ = runner.build_options(S(), "p", run_kit(allowed, {"type": "sdk"}), run_terms(who="t"), State(":memory:"), None)
     return opts
 
 

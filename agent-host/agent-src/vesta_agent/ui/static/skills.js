@@ -239,21 +239,23 @@ export async function openSkill(name, pane, info, path = ABOUT) {
   const back = h("button", { class: "btn ghost back-to-list", onclick: async () => { if (await guard()) skills(); } }, "‹ All skills");
   const head = h("div", { class: "skill-head" },
     h("div", { class: "skill-title" }, h("h2", {}, name), pill ? pill.cloneNode(true) : null,     // the phone's place for the pill
-      d.off ? h("span", { class: "chip gray" }, "Off") : !d.ok ? h("span", { class: "chip off" }, "Not working") : null),
+      d.off ? h("span", { class: "chip gray" }, "Off") : !d.ok ? h("span", { class: "chip off" }, "Not working") :
+        d.without && d.without.length ? h("span", { class: "chip warn" }, "Works without a tool") : null),
     skillSwitch(name, !d.off, name));
 
   // ---- what needs the owner's attention, above everything
-  const fixes = (d.blocked || []).filter((b) => b.fix);
-  const blocked = d.blocked && d.blocked.length ? h("div", { class: "problems" },
-    h("b", {}, "The agent cannot use this skill right now."),
-    h("ul", {}, d.blocked.map((b) => h("li", {}, b.why))),
-    h("p", { class: "muted" }, "Its AI jobs (reports) do not run, and a reply that needed it says which setting stops it."),
+  // a tool it uses that is switched off: it still works, without it (owner, 2026-10-10: who asks decides, never the skill)
+  const fixes = (d.without || []).filter((b) => b.fix);
+  const blocked = d.without && d.without.length ? h("div", { class: "problems" },
+    h("b", {}, "The agent uses this skill without:"),
+    h("ul", {}, d.without.map((b) => h("li", {}, b.why))),
+    h("p", { class: "muted" }, "Its reports still run and the AI works without it; switch it on for the whole skill."),
     h("div", { class: "actions" },
       ...fixes.map((b) => h("button", { class: "btn primary", onclick: async () => {
         try { await switchTool(b); toast(`${b.label} switched on.`); skills(name); } catch (err) { tell("Not changed", reasons(err)); }
       } }, `Switch ${b.label} on`)),
       h("button", { class: "btn ghost", onclick: async () => { if (await guard()) openTools(); } }, `Open ${where("tools")}`))) : null;
-  const notLoaded = info && !info.ok && !(d.blocked && d.blocked.length) && !d.off ? problemsBox([info.problem], "The agent does not use this skill:") : null;
+  const notLoaded = info && !info.ok && !d.off ? problemsBox([info.problem], "The agent does not use this skill:") : null;
   const releaseBanner = rel.state === "edited" && !rel.kept ? h("div", { class: "banner" },
     h("div", {}, h("b", {}, "This version of the agent has another version of this skill."),
       h("div", { class: "muted" }, `It was edited here, so it was kept as it is (${plural(rel.differs.length, "file differs", "files differ")}).`)),

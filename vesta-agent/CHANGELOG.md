@@ -1,3 +1,14 @@
+## 0.12.118
+
+What you will see:
+- Two reports made at the same time no longer mix up their figures. The weekly and the monthly report start together at 08:00 when the 1st of the month is a Monday (next on 1 February 2027), and a report asked for in a chat can overlap the scheduled one. Each now works in its own folder.
+- What a report may use depends only on who asks for it. On schedule it gets every tool switched on. Asked for by the facility manager, or in their chat, it gets only what the facility manager may use. The tools listed in a skill no longer limit anything: the weekly report has web search whenever web search is on.
+- A tool switched off no longer stops a skill. Its reports still run, and the AI says in one sentence what that leaves out. On the VESTA Agent page the skill shows "Works without a tool" with its Switch on button, instead of "Not working".
+- Asking for the weekly report in the facility manager's chat while the scheduled one is being made now says it is already being made, with its start time, instead of making it a second time.
+- A skill that declares a report name another skill already uses (a copied test skill) is switched off, and the page says why.
+- When starting reports from a chat is switched off for a person, the AI says so plainly instead of trying a tool it does not have.
+- Note for Skills, Offline Test: the files a report made are now in that report's own folder, so the file list offers only what an Offline Test made itself. Run facts.py first, then compose.py, as before.
+
 ## 0.12.117
 
 What you will see:

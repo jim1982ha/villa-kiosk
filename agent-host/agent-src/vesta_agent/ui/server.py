@@ -466,11 +466,10 @@ class UI:
             acts.append(row("an answer to one of its alerts", script=sk.on_reply))
         acts.append({**row("in a chat"), "note": "when a person asks about it"})
         scripts = [spec.view() for _, spec in sorted(sk.scripts.items())]      # skills.Script: one reading
-        blocked = h["blocked"]
         return web.json_response({
             "name": name, "ok": h["ok"], "off": name in pol.skills_off, "description": sk.description,
             "release": rel, "engine": __version__, "needs": tool_access.needs(pol, listed, sk) if sk.tools is not None else None,
-            "acts": acts, "scripts": scripts, "blocked": blocked,
+            "acts": acts, "scripts": scripts, "without": h["without"],
             "out_files": self._out_files()})
 
     def _out_files(self, limit: int = 60) -> list[str]:

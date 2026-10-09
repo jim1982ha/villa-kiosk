@@ -19,13 +19,18 @@ from typing import Awaitable, Callable
 
 from vesta_shared import agent_records
 
-from . import job_steps, runner, tool_access
+from . import job_steps
 from .api_errors import AI_DOWN, for_job, why_job_sentence
 from .policy import LANGUAGES as LANG
 from .routing import Origin, Routing, job_to
 from .skills import ai_jobs
 
 log = logging.getLogger("vesta")
+
+
+def run_folder(name: str) -> str:
+    """A job run's folder under out/: the job and the time it started, unique per run."""
+    return f"runs/{name}-{datetime.now(timezone.utc):%Y%m%dT%H%M%S%f}"
 
 
 def not_set(name: str) -> str:
@@ -39,12 +44,10 @@ JUST_STARTED_S = 60
 
 class AiJobs:
     def __init__(self, settings, state, policy: Callable, skills, delivery, chat_jobs, outcome, *,
-                 server_tools: Callable[[], Awaitable[list]], toolbox: Callable, system_prompt: Callable[[], str],
-                 tell_owner: Callable[[str, int | None], Awaitable[None]], safe: Callable[[Awaitable], Awaitable[None]]):
+                 turns, safe: Callable[[Awaitable], Awaitable[None]]):
         self.s, self.state, self.policy, self.skills = settings, state, policy, skills
         self.delivery, self.chat_jobs, self.outcome = delivery, chat_jobs, outcome
-        self.server_tools, self.toolbox, self.system_prompt = server_tools, toolbox, system_prompt
-        self.tell_owner, self._safe = tell_owner, safe
+        self.turns, self._safe = turns, safe          # turn.Turns: the run itself, its terms decided there
 
     # ------------------------------------------------------------------ lookups
     def all(self) -> list[tuple]:
@@ -84,43 +87,33 @@ class AiJobs:
             # where it all goes is routing's (Origin JOB holds every message to that chat); the AI is only told
             # it was asked for, so it does not write "as scheduled"
             prompt += "\n\nThis was asked for in a chat, not on schedule."
-        server_tools = await self.server_tools()
-        pol = self.policy()
-        stop = tool_access.blockers(pol, server_tools or None, skill)
-        if stop:
-            # ⚠️ NOT WORKING, AND SAID (0.6.42): a report whose skill needs a tool switched off does not run
-            why = " ".join(b["why"] for b in stop)
-            log.warning("AI job %s (skill %s) did not run: %s", name, skill.name, why)
-            self.state.log("job_blocked", {"job": name, "skill": skill.name, "tools": [b["tool"] for b in stop]})
-            to = Routing(pol).target(job_to(job, origin), origin)
-            if to:
-                await self.delivery.send(to, f"The {name} report did not run. {why} (VESTA Agent page)", origin=origin)
-            return
+        # ⚠️ ITS OWN FOLDER (architecture review 14): the AI run and the steps after it (on_limit) read and write there,
+        # never in another report's — the weekly and monthly reports start together when the 1st is a Monday
+        folder = self.s.in_folder(run_folder(name))
         started = datetime.now(timezone.utc).isoformat()
-        # a report gets only the tools its skill lists (skill.yaml `tools`), among those switched on
-        tb = self.toolbox(tool_access.allowed_for_job(pol, server_tools, skill))
-        server, allowed = tb.for_run(None, origin)
+        to = Routing(self.policy()).target(job_to(job, origin), origin)
         log.info("AI job %s started (%s, limit %g USD)%s", name, cfg["profile"], cfg["limit_usd"],
                  " on request" if origin else "")
-        res = await runner.run(self.s, self.system_prompt(), prompt, server, allowed, self.state, who=agent_records.for_job(name),
-                               limit_usd=cfg["limit_usd"], profile=cfg["profile"])
-        if res.problem or (res.error and not res.text):
+        if origin:
+            res = await self.turns.job(name, cfg, prompt, origin, folder, to)
+        else:
+            async with self.chat_jobs.held(to, name):       # on schedule: asked for meanwhile, it is "already being made"
+                res = await self.turns.job(name, cfg, prompt, origin, folder, to)
+        if res.failed:
             # before 0.6.41 a failed job logged "done" and nobody was told: the report simply never came
             problem = res.problem or "unknown"
             log.warning("AI job %s did not run: %s", name, problem)
-            to = Routing(self.policy()).target(job_to(job, origin), origin)
-            made = await self.run_without_ai(skill, job, problem, origin)
+            made = await self.run_without_ai(skill, job, problem, origin, folder)
             if to and not made:
                 await self.delivery.send(to, for_job(name, problem), origin=origin)
-            await self._safe(self.tell_owner(problem, to))
             return
         log.info("AI job %s done (%s USD%s)", name, res.cost_usd,
                  ", stopped at its limit" if res.stopped_at_limit else "")
         if res.stopped_at_limit and job.get("on_limit"):
-            await job_steps.run(self.s, self.state, self.skills, self.outcome, skill, job["on_limit"],
+            await job_steps.run(folder, self.state, self.skills, self.outcome, skill, job["on_limit"],
                                 {"to": job_to(job, origin), "started": started, "limit": f"{cfg['limit_usd']:g}"}, origin)
 
-    async def run_without_ai(self, skill, job: dict, problem: str, origin: Origin | None = None) -> bool:
+    async def run_without_ai(self, skill, job: dict, problem: str, origin: Origin | None = None, folder=None) -> bool:
         """The job's `without_ai` steps (skill.yaml), when the AI could not run: True when they sent its work.
 
         ⚠️ A REPORT EVEN WITHOUT THE AI (owner, 2026-10-07: the Anthropic credit ran out and the weekly never came).
@@ -132,7 +125,8 @@ class AiJobs:
         if not steps:
             return False
         name = job["name"]
-        done = await job_steps.run(self.s, self.state, self.skills, self.outcome, skill, steps,
+        folder = folder or self.s.in_folder(run_folder(name))      # its own, or the failed AI run's
+        done = await job_steps.run(folder, self.state, self.skills, self.outcome, skill, steps,
                                    {"to": job_to(job, origin), "why": why_job_sentence(problem)}, origin)
         sent, failed = done.sent, done.failed
         self.state.log(agent_records.WITHOUT_AI, agent_records.without_ai(name, problem, sent, failed))
@@ -140,8 +134,9 @@ class AiJobs:
                     f"stopped at {failed}" if failed else f"{sent} message(s) sent")
         return sent > 0
 
-    async def start(self, name: str, chat: int) -> str:
-        """A job a skill marks on_request, started from a chat: it runs as itself (its model, its limit)."""
+    async def start(self, name: str, chat: int, role: str | None = None) -> str:
+        """A job a skill marks on_request, started from a chat: its own model and limit, and what the person who asked
+        (`role`) may use there (turn.job_terms)."""
         found = self.find(name)
         if not found or not found[1].get("on_request"):
             return f"There is no job {name} that can be started from a chat."
@@ -152,7 +147,7 @@ class AiJobs:
         # the report was sent, the AI answered "already being generated" from the conversation and started nothing.
         # A second start while one runs would make the report twice.
         cfg = self.policy().jobs[name]
-        started = self.chat_jobs.start(chat, name, lambda origin: self.run(sk, job, origin))
+        started = self.chat_jobs.start(chat, name, lambda origin: self.run(sk, job, origin), role=role)
         at = self.chat_jobs.started_at(chat, name)
         when = datetime.fromtimestamp(at or time.time(), ZoneInfo(self.s.timezone)).strftime("%H:%M")
         # ⚠️ THE START TIME, SAID BY THE AGENT (owner, 2026-10-09: the waiting message read "Still in progress" for a
