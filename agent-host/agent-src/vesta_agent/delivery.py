@@ -83,6 +83,9 @@ class Delivery:
         if approval_id:
             self.state.set_approval_message(approval_id, mid)
         if origin is not None and origin.kind == JOB:
+            # ⚠️ SAID IN THE LOG (villa, 2026-10-09 15:03): the weekly report came and "on its way" stayed, with no
+            # delete tried and no way to tell which step lost it — this notice lives in memory only
+            log.info("Job result in chat %s: waiting notice before it: %s", chat_id, self.notices.describe(int(chat_id)))
             await self._notice(int(chat_id), self.notices.result(int(chat_id)))
             entry = self._job_typing.get(int(chat_id))
             if entry and len(entry[2]) <= 1:
@@ -108,6 +111,8 @@ class Delivery:
             for p in photos:
                 await self.send(chat_id, "", photo=p)
             mid = await self.send(chat_id, text or "…", keyboard=keyboard)
+        if self.notices.describe(int(chat_id)) != "none":
+            log.info("Reply %s in chat %s, while a job asked for here runs: %s", mid, chat_id, self.notices.describe(int(chat_id)))
         await self._notice(int(chat_id), self.notices.replied(int(chat_id), mid))
         return mid
 
@@ -144,6 +149,7 @@ class Delivery:
     # group — until its result reaches the chat, or it ends without one.
     def job_started(self, chat_id: int, job: str) -> None:
         self.notices.started(int(chat_id), job)
+        log.info("Job %s asked for in chat %s: %s", job, chat_id, self.notices.describe(int(chat_id)))
         if self.tg is None:
             return
         entry = self._job_typing.get(int(chat_id))
@@ -177,6 +183,8 @@ class Delivery:
         if step is None or self.tg is None:
             return
         what, mid, job = step
+        log.info("Waiting message %s in chat %s: %s", mid, chat_id, "deleted (its result came)" if what == "delete"
+                 else f"says the {job} job ended without a result")
         if what == "delete":
             await self.tg.delete(chat_id, mid)
         else:

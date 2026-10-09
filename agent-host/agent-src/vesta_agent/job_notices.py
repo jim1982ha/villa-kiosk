@@ -34,6 +34,14 @@ class JobNotices:
     def __init__(self) -> None:
         self._by_chat: dict[int, _Notice] = {}
 
+    def describe(self, chat: int) -> str:
+        """This chat's notice in one line, for the log: which jobs, which waiting message, what already came."""
+        n = self._by_chat.get(chat)
+        if n is None:
+            return "none"
+        return (f"jobs={sorted(n.jobs)} waiting_message={n.mid} result_came={n.done}"
+                + (f" ended_without_result={n.failed}" if n.failed else ""))
+
     def started(self, chat: int, job: str) -> None:
         """A job was started from this chat's current turn. A finished notice from an earlier turn whose
         reply never came is not this one."""

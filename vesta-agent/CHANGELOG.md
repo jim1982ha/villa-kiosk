@@ -1,3 +1,8 @@
+## 0.12.107
+
+What you will see:
+- Nothing changes on screen. When a report asked for in a chat arrives and its "on its way" message stays, the app's log now says why, step by step. Today at 15:03 the weekly report came and "Weekly report is on its way" stayed in the group, and the log could not say why. Ask for the weekly report in the group again after installing this; the next report will show where it goes wrong.
+
 ## 0.12.106
 
 What you will see:
