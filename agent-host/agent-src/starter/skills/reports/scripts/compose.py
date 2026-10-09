@@ -400,15 +400,17 @@ def page(facts: dict, notes: dict, limit: str | None = None, without_ai: str | N
         return day_time_label(t.astimezone(zone) if t.tzinfo else t, weekday=True)
 
     def sentence(s, end="."):
-        """A playbook phrase as a sentence: a capital first, a full stop (or `end`) last."""
+        """A playbook phrase or a check you wrote as a sentence: a capital first, a full stop (or `end`) last, its
+        web addresses links. ⚠️ THE LINKS ARE MADE HERE, AFTER THE WORDS (villa, 2026-10-09 15:56): a check came
+        here already linked, was turned back into text and escaped again, and the page showed the raw <a> tag."""
         s = str(s or "").strip()
-        return "" if not s else s[:1].upper() + s[1:] + ("" if s[-1] in ".?!" else end)
+        return linked("" if not s else s[:1].upper() + s[1:] + ("" if s[-1] in ".?!" else end))
 
     sections = facts.get("sections") or {}
     header = sections.get("header") or {}
     return TPL.get_template("report.html").render(
         title=header.get("title") or facts.get("villa", ""), eyebrow=facts.get("eyebrow", ""),
-        order=facts.get("order") or [], sections=sections, note=lambda k: linked(notes.get(k, "")), reading=reading,
+        order=facts.get("order") or [], sections=sections, note=lambda k: notes.get(k, ""), reading=reading,
         num=num, pct=pct, day=day, sentence=sentence, when=when, money=lambda v, cur: fmt_money(v, cur) if v else "—",
         chart_line=lambda *a: Markup(line(*a)), chart_bars=lambda b: Markup(bars(b)),
         chart_pairs=lambda r: Markup(pairs(r)), without_ai=without_ai)

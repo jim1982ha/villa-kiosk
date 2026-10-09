@@ -584,5 +584,12 @@ def test_a_source_the_report_cites_is_a_link_that_cannot_break_the_page():
              "sections": {"headline": {"colour": "amber", "text": "Amber"}}}
     page = compose.page(facts, {"headline": "See https://example.org/guide."})
     assert '<a class="src" href="https://example.org/guide"' in page and "a.src{" in page
-    src = open(os.path.join(STARTER_SKILLS, "reports", "scripts", "compose.py"), encoding="utf-8").read()
-    assert "note=lambda k: linked(notes.get(k, \"\"))" in src and "return mark + linked(text)" in src
+    # a check and its question, as the AI wrote them, on the "Do this week" list (villa, 15:56: the link was
+    # escaped a second time there and the page showed "<a class=...>" as text)
+    facts = {"zone": "UTC", "order": ["todo"], "to_write": [],
+             "sections": {"todo": {"rows": [{"id": "t1", "title": "Pool pump", "severity": "P2", "why": "Less water"}]}}}
+    page = compose.page(facts, {"t1.check": "empty the baskets: https://www.example.org/pump-not-working/.",
+                                "t1.ask": "Was a valve moved"})
+    assert ('Empty the baskets: <a class="src" href="https://www.example.org/pump-not-working/" target="_blank" '
+            'rel="noopener noreferrer">https://www.example.org/pump-not-working/</a>. Was a valve moved?') in page
+    assert "&lt;a class" not in page

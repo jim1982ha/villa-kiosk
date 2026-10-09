@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.103 (9 October 2026)
+
+- reports: a check and its question showed the raw <a> tag (villa, 15:56). note() returned an already linked text, and the template's sentence() made it a string again, so it was escaped a second time. Now note() returns the text as written and sentence() makes the links after the words. test_reports renders a "Do this week" check and its question; with the old code it fails (the cache cleared between runs: a mutation and its restore in the same second left a stale .pyc that hid the result).
+
 ## 0.6.102 (9 October 2026)
 
 - reports: every web address in a reading or a check is a link (compose.linked: escaped around it, a quote or angle bracket ends it, a closing full stop or bracket is not part of it; opens in a new tab; style a.src wraps on a phone). The reports skill lists web_search, and step 3 of SKILL.md asks for one search per line whose check repairs, replaces or adjusts something (the owner's wording, 2026-10-09). test_reports pins the links (three mutations shown red); test_tool_access expects web_search for a report while it is switched on.
