@@ -351,6 +351,10 @@ class Vesta:
         """A Telegram message, as Home Assistant fired it (fields checked live on 2026-09-30): intake.py decides."""
         got = intake.gate(event_type, m, self.policy(), self.bot_username, self.state.is_own_message)
         from_id = m.get("user_id")
+        if got.action != "drop":
+            # ⚠️ THE START OF THE TIMELINE (owner, 2026-10-09: the log must cover "the moment the message to request a
+            # report is sent / read by the agent" until the report is shown): when the message reached the agent
+            log.info("Message received in chat %s (%s)", got.chat, event_type)
         if got.action == "drop":
             if got.why:
                 self.state.log("ignored", {"reason": got.why, "chat": got.chat})

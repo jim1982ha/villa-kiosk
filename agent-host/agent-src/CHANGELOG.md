@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.105 (9 October 2026)
+
+- The log covers a report asked for in a chat from end to end: "Message received in chat …" when the message reaches the agent (app.handle_message), and at the job's end every "typing…" with its time, how long Telegram took when over a second, refusals, and the longest gap (delivery.typing_timeline). Owner, 16:21: "no signal at all from a certain point", while the log said only "sent 34 times, 34 accepted", which cannot tell an even spread from bursts. Code checked: Home Assistant reads and skill scripts run in threads (asyncio.to_thread), so they do not stall the loop. Test: the timeline and its longest gap (shown red with min for max).
+
 ## 0.6.104 (9 October 2026)
 
 - test_reports: HTML-like text the AI writes in a report (an unclosed tag, a script) shows as its characters and breaks nothing; the links stay one each, opened and closed. Shown to fail with the escaping switched off. Owner, after 0.12.109's changelog turned blue: "I want to make sure the reports will NOT have this issue".

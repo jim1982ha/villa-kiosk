@@ -75,3 +75,14 @@ def test_a_chat_jobs_typing_says_at_its_end_how_often_it_was_sent(tmp_path, capl
         asyncio.run(go())
     said = [r.getMessage() for r in caplog.records if "sent" in r.getMessage() and "typing" in r.getMessage()]
     assert said and said[-1].startswith("\"typing…\" for fm-weekly in chat -100777: sent 1 times, 1 accepted, last accepted at ")
+
+
+def test_the_typing_timeline_names_every_one_and_the_longest_silence():
+    # owner, 2026-10-09 16:21: "no signal at all from a certain point" while the log only said "sent 34 times"
+    from datetime import datetime
+    from vesta_agent.delivery import typing_timeline
+    t = datetime(2026, 10, 9, 16, 21, 52).timestamp()
+    line = typing_timeline([(t, 0.2, True), (t + 4.3, 0.3, True), (t + 40, 6.5, True), (t + 44.3, 0.2, False)])
+    assert line.startswith("16:21:52, 16:21:56, 16:22:32 (Telegram took 6.5 s), 16:22:36 (refused)")
+    assert line.endswith("; longest gap 35.7 s after 16:21:56")
+    assert typing_timeline([]) == "none sent"

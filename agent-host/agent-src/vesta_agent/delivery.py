@@ -51,6 +51,25 @@ def plain_text(s: str) -> str:
     return s
 
 
+def typing_timeline(times: list[tuple[float, float, bool]]) -> str:
+    """Every "typing…" of a job, for the log: its time, how long Telegram took when that was over a second (and a
+    refusal), then the longest silence between two of them — over Telegram's 5 seconds, the sign went out."""
+    if not times:
+        return "none sent"
+    parts = []
+    for at, took, ok in times:
+        p = datetime.fromtimestamp(at).strftime("%H:%M:%S")
+        if took >= 1:
+            p += f" (Telegram took {took:.1f} s)"
+        if not ok:
+            p += " (refused)"
+        parts.append(p)
+    gaps = [(b[0] - a[0], a[0]) for a, b in zip(times, times[1:])]
+    longest = max(gaps) if gaps else (0.0, times[0][0])
+    return (", ".join(parts) + f"; longest gap {longest[0]:.1f} s after "
+            f"{datetime.fromtimestamp(longest[1]).strftime('%H:%M:%S')}")
+
+
 class Delivery:
     def __init__(self, tg, state, policy: Callable):
         self.tg = tg                  # telegram.Telegram, or None when the takeover is off: nothing is sent
@@ -135,12 +154,17 @@ class Delivery:
         said = False
         sent = accepted = 0
         last = None
+        times: list[tuple[float, float, bool]] = []         # (sent at, seconds Telegram took, accepted)
+        loop = asyncio.get_running_loop()
         while not stop.is_set():
+            t0 = loop.time()
+            at = datetime.now()
             ok = await self.tg.typing(int(chat_id))
+            times.append((at.timestamp(), loop.time() - t0, bool(ok)))
             sent += 1
             if ok:
                 accepted += 1
-                last = datetime.now().strftime("%H:%M:%S")
+                last = at.strftime("%H:%M:%S")
             if ok and not said:
                 # ⚠️ PROOF IT WAS SHOWN (owner, 2026-10-07: "no typing indication", and the log had no refusal either):
                 # one line per answer when Telegram accepts it, so "not seen" can be told from "not sent"
@@ -155,6 +179,9 @@ class Delivery:
             # held only the first one): whether the repeats ran until the result, or stopped early
             log.info("\"typing…\" for %s in chat %s: sent %d times, %d accepted, last accepted at %s",
                      job, chat_id, sent, accepted, last or "never")
+            # ⚠️ EVERY ONE, WITH ITS TIME (owner, 2026-10-09 16:21: "no signal at all from a certain point" while the count
+            # said 34 of 34): the count could not tell an even spread from bursts with long silences between them
+            log.info("\"typing…\" for %s in chat %s: %s", job, chat_id, typing_timeline(times))
 
     # ------------------------------------------------------------------ jobs asked for in a chat
     # ⚠️ "typing…" UNTIL THE REPORT IS THERE (owner, 2026-10-07): the conversation's reply ("on its way") ended the
