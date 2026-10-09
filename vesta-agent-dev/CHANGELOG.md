@@ -1,3 +1,9 @@
+## 0.12.112
+
+What you will see:
+- When you ask for a report in a chat, the waiting message says it has just started (with its time), instead of "Still in progress" or "Still running", which made a new report sound like an old one stuck. Asked again later, it says when the report started.
+- "typing…" is sent every 2 seconds instead of every 4 while a report is made. The app already sent it without a gap, and Telegram accepted every one. Telegram decides when to show it, so this may or may not make it appear more steadily in Telegram Web.
+
 ## 0.12.111
 
 What you will see:
