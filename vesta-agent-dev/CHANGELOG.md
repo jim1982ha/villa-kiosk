@@ -1,3 +1,10 @@
+## 0.12.116
+
+What you will see:
+- In the weekly and monthly reports, an equipment card is marked "Watch" again when the to-do list has something about that device. Since 0.12.115 the to-do list and the cards named devices differently, so no card was marked by it.
+- The Kiosk's list of faults is brought up to date right after the night check, when the night check found, kept or closed a problem. Until now it was only brought up to date by the 01:30 rebuild.
+- A battery measured in volts is no longer reported as "falling" by mistake: its reading (3.0 V) was taken as a charge (3 %). It is now converted with the nominal voltage you set for it, as the batteries table already did. Without a nominal voltage it is left out instead of guessed.
+
 ## 0.12.115
 
 What you will see:
