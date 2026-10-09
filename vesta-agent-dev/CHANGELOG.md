@@ -1,3 +1,11 @@
+## 0.12.121
+
+What changes for you:
+- The agent's own records no longer grow forever. Several kinds of notes it keeps were never cleaned up: a request for your approval that nobody answered, a note for every file the AI saved for a report, when you were last warned about a problem, and old conversations. They are now cleaned up with the others (Rules, how long things are kept). A request still waiting within its time is never deleted.
+- The date the agent started listening is kept once. It used to be worked out from the oldest record, which moved forward every night as old records were deleted, so a monthly report could leave some rules out of "what did not happen".
+- "Take the release version" on a skill's page is safer. If the agent stopped in the middle of it, the skill could end up only in the trash, and the next start took it for deleted. It now always comes back as it was, and the old version still goes to the trash, never erased.
+- The page and the agent's start now judge "is this skill as the release" in exactly the same way.
+
 ## 0.12.120
 
 What you will see in Telegram:
