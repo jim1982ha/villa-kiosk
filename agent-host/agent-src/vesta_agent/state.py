@@ -80,6 +80,7 @@ class State:
             self.db.execute("alter table kv add column at text")
             self.db.execute("update kv set at = ?", (utcnow().isoformat(),))
         self.db.commit()
+        self._migrate_incident_messages()
 
     # ------------------------------------------------------------------ log
     def log(self, kind: str, detail: dict[str, Any]) -> None:
@@ -155,32 +156,41 @@ class State:
     def alert_skill(self, incident: int | str, chat: int | str) -> str | None:
         return self.get(f"inc:{incident}:{chat}")
 
-    def remember_alert_message(self, incident: int | str, chat: int | str, message_id: int | str, text: str) -> None:
-        self.put(f"incmsg:{incident}:{chat}:{message_id}", text)
+    # An incident's message in each chat (incident_thread.IncidentThread): ONE record per incident and chat — the
+    # message shown, its text, whether it carries the buttons and whether they were settled. ⚠️ ONE RECORD, ONE
+    # LIFETIME (architecture review 12, 2026-10-09): two families (incmsg: with the buttons, inclast: the latest) had
+    # two lifetimes, one was never pruned, and settling one after posting the other took the owner's new buttons.
+    def incident_message(self, incident: int | str, chat: int | str) -> dict | None:
+        v = self.get(f"incthread:{incident}:{chat}")
+        return json.loads(v) if v else None
 
-    def alert_messages(self, incident: int | str) -> list[tuple[int, int, str]]:
-        """(chat, message id, text) of every message still carrying this incident's buttons."""
-        out = []
-        for k, text in self.kv_prefix(f"incmsg:{incident}:").items():
-            _, _, chat, mid = k.split(":")
-            out.append((int(chat), int(mid), text))
-        return out
+    def set_incident_message(self, incident: int | str, chat: int | str, record: dict) -> None:
+        self.put(f"incthread:{incident}:{chat}", json.dumps(record))
 
-    def forget_alert_message(self, incident: int | str, chat: int | str, message_id: int | str) -> None:
-        self.drop(f"incmsg:{incident}:{chat}:{message_id}")
+    def incident_chats(self, incident: int | str) -> list[tuple[int, dict]]:
+        """(chat, record) of every chat this incident's message is shown in."""
+        return sorted((int(k.rsplit(":", 1)[1]), json.loads(v)) for k, v in self.kv_prefix(f"incthread:{incident}:").items())
 
-    # Every message about an incident in each chat — with or without buttons: the newest replaces the others
-    # (alert_buttons.AlertButtons.replace; owner, 2026-10-09: "only show the latest message for a given incident").
-    def remember_incident_message(self, incident: int | str, chat: int | str, message_id: int | str) -> None:
-        self.put(f"inclast:{incident}:{chat}:{message_id}", "")
-
-    def incident_messages(self, incident: int | str, chat: int | str) -> list[int]:
-        """The ids of the messages about this incident still shown in this chat."""
-        return sorted(int(k.rsplit(":", 1)[1]) for k in self.kv_prefix(f"inclast:{incident}:{chat}:"))
-
-    def forget_incident_message(self, incident: int | str, chat: int | str, message_id: int | str) -> None:
-        self.drop(f"inclast:{incident}:{chat}:{message_id}")
-        self.drop(f"incmsg:{incident}:{chat}:{message_id}")
+    def _migrate_incident_messages(self) -> None:
+        """Records of 0.12.106–0.12.114 (incmsg: with the buttons, inclast: the latest message) into one record per
+        incident and chat: the newest message wins; it carries the buttons when it was among incmsg:."""
+        old = self.kv_prefix("incmsg:") | self.kv_prefix("inclast:")
+        if not old:
+            return
+        best: dict[tuple[str, str], dict] = {}
+        for k, v in old.items():
+            fam, iid, chat, mid = k.split(":")
+            cur = best.setdefault((iid, chat), {"mid": int(mid), "text": "", "buttons": False, "settled": False})
+            if int(mid) > cur["mid"]:
+                cur.update(mid=int(mid), text="", buttons=False)
+            if int(mid) == cur["mid"] and fam == "incmsg":
+                cur.update(text=v, buttons=True)
+        for (iid, chat), rec in best.items():
+            if self.incident_message(iid, chat) is None:
+                self.set_incident_message(iid, chat, rec)
+        with self._lock:
+            self.db.execute("delete from kv where k like 'incmsg:%' or k like 'inclast:%'")
+            self.db.commit()
 
     # Home Assistant's own Telegram messages (its telegram_sent event), by the context of the automation run that
     # sent them: a VESTA rule's vesta_critical_event comes from the same run, so its incident can take them over.
@@ -190,9 +200,9 @@ class State:
         now = at or utcnow()
         self.put(f"hasent:{context_id}:{chat}:{message_id}", now.isoformat())
         cutoff = (now - timedelta(hours=self.HA_SENT_KEEP_H)).isoformat()
-        for k, when in self.kv_prefix("hasent:").items():
-            if when < cutoff:
-                self.drop(k)
+        with self._lock:
+            self.db.execute("delete from kv where k like 'hasent:%' and v < ?", (cutoff,))
+            self.db.commit()
 
     def ha_sent(self, context_id: str) -> list[tuple[int, int]]:
         """(chat, message id) of every message Home Assistant sent in this automation run."""
@@ -267,7 +277,7 @@ class State:
             cont = self.db.execute("delete from continuations where created_at < ?", (records_before,)).rowcount
             msgs = self.db.execute("delete from own_messages where sent_at < ?", (records_before,)).rowcount
             # an alert's button records go with the agent's other records (its messages are pruned just above)
-            msgs += self.db.execute("delete from kv where (k like 'inc:%' or k like 'incmsg:%') and at < ?",
+            msgs += self.db.execute("delete from kv where (k like 'inc:%' or k like 'incthread:%') and at < ?",
                                     (records_before,)).rowcount
             self.db.commit()
         return {"runs": runs, "records": other + appr + cont + msgs}

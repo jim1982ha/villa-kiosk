@@ -202,6 +202,21 @@ class KnowledgePack:
         what = " ".join(x for x in (d.get("manufacturer"), d.get("model")) if x)
         return f"Unnamed {what}" if what else ""
 
+    def device_of(self, entity_id: str) -> tuple[str, str | None]:
+        """What `entity_id` belongs to, as a report names it: (key, name). The key is its Home Assistant device when
+        the pack has it, else the pack's asset (a slug from the entity id), else the entity; the name is the device's
+        (device_label), else the entity's. Name None: a device Home Assistant knows nothing about (a phone seen on the
+        Wi-Fi) — not one of the villa's, left out of a report's lists of devices.
+
+        ⚠️ ONE IDENTITY FOR EVERY SECTION (architecture review 12, 2026-10-09): the monitoring table grouped by device,
+        the to-do list by asset, the batteries by entity — the same thing under three names in one report."""
+        r = self.row(entity_id) or {}
+        dev = r.get("device_id")
+        label = self.device_label(dev)
+        if label is not None:
+            return f"device:{dev}", (label or None)
+        return f"asset:{r.get('asset') or entity_id}", (r.get("name") or entity_id)
+
     def name_of(self, entity_id: str, default: str | None = None) -> str | None:
         """An entity's name as the pack has it; `default` when the pack does not name it."""
         return (self.row(entity_id) or {}).get("name") or default

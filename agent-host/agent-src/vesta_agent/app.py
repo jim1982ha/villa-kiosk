@@ -43,6 +43,7 @@ from .api_errors import AI_DOWN, FOR_PERSON, NEEDS_THE_OWNER
 from .delivery import Delivery
 from .config import STARTER_DIR
 from .ha_events import CONTEXT_KEY, HaEvents
+from .incident_thread import IncidentThread
 from .housekeeping import tidy
 from .kiosk import Kiosk, KioskError
 from .alert_buttons import AlertButtons
@@ -124,15 +125,18 @@ class Vesta:
                                executed=lambda *a: self.siren.executed(*a))
         self.siren = Siren(self.policy, self.state, self.actions, self._tell_owner_text)
         # a script's result carried out (outcome.py), with the alert buttons and the Kiosk's tickets as their own modules
+        # what each chat shows of an incident (incident_thread.py), and an alert's buttons and their press
+        self.thread = IncidentThread(self.state, settings.timezone, edit=(self.tg.edit if self.tg else None),
+                                     delete=(self.tg.delete if self.tg else None))
         self.buttons = AlertButtons(state=self.state, skills=self.skills, store_path=settings.store_path,
-                                    timezone=settings.timezone, edit=(self.tg.edit if self.tg else None),
-                                    delete=(self.tg.delete if self.tg else None), run_job=self.run_code_job)
+                                    thread=self.thread, run_job=self.run_code_job)
         self.tickets = Tickets(kiosk=self.kiosk, state=self.state, store_path=settings.store_path,
-                               settle_alert=self.buttons.settle)
+                               settle_alert=self.thread.close)
         # a voice message's words (voice.py): the skill prepares the audio, Home Assistant reads it
         self.voice = Voice(self.s, self.tg, self.skills, self.code_command, self.delivery.send, self.state, self.cf_headers)
         self.outcome = Outcome(policy=self.policy, state=self.state, send=self.delivery.send, actions=self.actions,
-                               reader=self.reader, tickets=self.tickets, buttons=self.buttons, out_dir=settings.out_dir)
+                               reader=self.reader, tickets=self.tickets, buttons=self.buttons, thread=self.thread,
+                               out_dir=settings.out_dir)
         self.server_tools: list[dict] = []
         # the reports (ai_jobs.py): run, made without the AI, started from a chat
         self.jobs = AiJobs(settings, self.state, self.policy, self.skills, self.delivery, self.chat_jobs, self.outcome,
@@ -417,6 +421,7 @@ class Vesta:
 
     async def _converse(self, cid, person, text, chat_role, resume, is_continue, voice, answered):
         async with self.lock(cid):
+            self.chat_jobs.turn(cid)                         # a job started now belongs to this turn (chat_jobs.py)
             if resume == "auto":
                 resume = self._resume_for(cid)
             lang = LANG.get(person.language, person.language) if person else "English"
@@ -466,7 +471,8 @@ class Vesta:
                 keyboard = {"inline_keyboard": [[{"text": "Continue", "callback_data": button_data.make(button_data.CONTINUE, cont)}]]}
             answered()                                       # "typing…" ends: the answer is going out
             # the camera pictures the AI looked at go with it (Toolbox.photos)
-            await self.delivery.reply(cid, answer, keyboard=keyboard, photos=tb.photos)
+            mid = await self.delivery.reply(cid, answer, keyboard=keyboard, photos=tb.photos)
+            await self.chat_jobs.replied(cid, mid)            # this turn's jobs: their waiting message, their "typing…"
 
     # ------------------------------------------------------------------ button presses
     async def handle_callback(self, q: dict):

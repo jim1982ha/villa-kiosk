@@ -186,7 +186,9 @@ def _asked_in_chat(agent, tmp_path, monkeypatch, page: bool, job_name: str = "fm
             await asyncio.sleep(0.02)                    # the job takes a while
             if page:
                 # through the job's own send_message tool, as the model sends its result
-                send = next(t for t in agent.toolbox().tool_objects(None, Origin(ASKER, JOB)) if t.name == "send_message")
+                # the origin the job runs with: its chat and its name (chat_jobs.ChatJobs.start)
+                send = next(t for t in agent.toolbox().tool_objects(None, Origin(ASKER, JOB, job=job_name))
+                            if t.name == "send_message")
                 await send.handler({"to": "here", "text": "Three things need attention.",
                                     **({} if text_only else {"attachment": "fm_weekly.html"})})
         else:
@@ -278,7 +280,8 @@ def test_typing_goes_on_while_the_report_asked_for_is_made_and_stops_when_it_is_
             n = len(agent.tg.typing_in)
             await asyncio.sleep(0.03)                                   # the job works, after the reply was sent
             seen["while_job"] = len(agent.tg.typing_in) - n
-            send = next(t for t in agent.toolbox().tool_objects(None, Origin(ASKER, JOB)) if t.name == "send_message")
+            send = next(t for t in agent.toolbox().tool_objects(None, Origin(ASKER, JOB, job="fm-weekly"))
+                        if t.name == "send_message")
             await send.handler({"to": "here", "text": "The page."})
             seen["at_result"] = len(agent.tg.typing_in)
             await asyncio.sleep(0.03)                                   # the job's run goes on a moment after

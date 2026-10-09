@@ -302,14 +302,13 @@ class Ctx:
                 st = self.states().get(r["entity_id"]) or {}
                 if not is_offline(st.get("state")):
                     continue
-                label = self.pack.device_label(r.get("device_id"))
-                if label == "":
+                key, name = self.pack.device_of(r["entity_id"])
+                if name is None:
                     continue
-                key = ("device", r["device_id"]) if label is not None else ("asset", r.get("asset") or r["entity_id"])
                 since = _local(st.get("last_changed"), self.Z)
                 cur = by_key.get(key)
                 if cur is None:
-                    by_key[key] = cur = {"name": label or r.get("name") or r["entity_id"], "since": since,
+                    by_key[key] = cur = {"name": name, "since": since,
                                          "critical": fam in crit, "family": fam, "entity_id": r["entity_id"]}
                     out.append(cur)
                 else:
@@ -503,12 +502,9 @@ def clues(c: "Ctx") -> tuple[list[dict], list[str]]:
 
 # ---------------------------------------------------------------- the one list of what needs doing
 def _device(c: "Ctx", entity_id: str | None, fallback: str) -> str:
-    """What an item is about: the device (the pack's asset) of its entity, so that a clue and a task
-    about the same device become one item."""
-    if entity_id:
-        r = c.pack.row(entity_id) or {}
-        return r.get("asset") or r.get("device_id") or entity_id
-    return fallback
+    """What an item is about: the device of its entity (knowledge_pack.device_of, the one identity of every section),
+    so that a clue and a task about the same device become one item."""
+    return c.pack.device_of(entity_id)[0] if entity_id else fallback
 
 
 def todo(c: "Ctx") -> list[dict]:
@@ -788,7 +784,8 @@ def s_batteries(c: Ctx) -> dict:
         if pct is None:
             continue                      # volts with no nominal: the night check asks for it, never a guess
         lvl = "replace" if pct < repl else ("watch" if pct < watch else "ok")
-        rows.append({"name": r.get("name") or r["entity_id"], "pct": round(pct), "level": lvl,
+        # named as the device it powers, like every list of devices in the report (knowledge_pack.device_of)
+        rows.append({"name": c.pack.device_of(r["entity_id"])[1] or r.get("name") or r["entity_id"], "pct": round(pct), "level": lvl,
                      "volts": round(v, 2) if unit == "V" else None})
     rows.sort(key=lambda x: x["pct"])
     return {"count": len(rows), "rows": rows[: int(show)], "replace_below_pct": repl,

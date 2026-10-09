@@ -360,6 +360,19 @@ def linked(text) -> Markup:
     return Markup("").join(out)
 
 
+def say(s, end: str = ".") -> Markup:
+    """A sentence as the page shows it: a capital first, a full stop (or `end`) last, its web addresses links.
+
+    ⚠️ THE ONE WAY A SENTENCE REACHES THE PAGE (architecture review 12, 2026-10-09). The links are made here, after
+    the words: a check came in already linked, was turned back into text and escaped again, and the page showed the
+    raw <a> tag (villa, 15:56). A sentence already made for the page (Markup: a reading, its mark and links) is
+    kept as it is, so nothing can escape it twice."""
+    if isinstance(s, Markup):
+        return s
+    s = str(s or "").strip()
+    return linked("" if not s else s[:1].upper() + s[1:] + ("" if s[-1] in ".?!" else end))
+
+
 def page(facts: dict, notes: dict, limit: str | None = None, without_ai: str | None = None) -> str:
     """`without_ai`: why the AI could not write (its job's without_ai steps): the page says so at the top."""
     kinds = {w["id"]: w.get("kind", "reading") for w in facts.get("to_write") or []}
@@ -399,19 +412,12 @@ def page(facts: dict, notes: dict, limit: str | None = None, without_ai: str | N
             return s or ""
         return day_time_label(t.astimezone(zone) if t.tzinfo else t, weekday=True)
 
-    def sentence(s, end="."):
-        """A playbook phrase or a check you wrote as a sentence: a capital first, a full stop (or `end`) last, its
-        web addresses links. ⚠️ THE LINKS ARE MADE HERE, AFTER THE WORDS (villa, 2026-10-09 15:56): a check came
-        here already linked, was turned back into text and escaped again, and the page showed the raw <a> tag."""
-        s = str(s or "").strip()
-        return linked("" if not s else s[:1].upper() + s[1:] + ("" if s[-1] in ".?!" else end))
-
     sections = facts.get("sections") or {}
     header = sections.get("header") or {}
     return TPL.get_template("report.html").render(
         title=header.get("title") or facts.get("villa", ""), eyebrow=facts.get("eyebrow", ""),
         order=facts.get("order") or [], sections=sections, note=lambda k: notes.get(k, ""), reading=reading,
-        num=num, pct=pct, day=day, sentence=sentence, when=when, money=lambda v, cur: fmt_money(v, cur) if v else "—",
+        num=num, pct=pct, day=day, sentence=say, when=when, money=lambda v, cur: fmt_money(v, cur) if v else "—",
         chart_line=lambda *a: Markup(line(*a)), chart_bars=lambda b: Markup(bars(b)),
         chart_pairs=lambda r: Markup(pairs(r)), without_ai=without_ai)
 

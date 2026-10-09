@@ -66,12 +66,15 @@ def test_the_report_draws_a_volt_battery_against_its_nominal_and_skips_one_it_ca
     params = VillaParams(helpers=[{"entity_id": "input_number.station_battery_nominal_v", "helper_type": "input_number",
                                    "id": "station_battery_nominal_v"}],
                          states={"input_number.station_battery_nominal_v": "3.0"})
+    from vesta_shared.knowledge_pack import KnowledgePack
     c = types.SimpleNamespace(
         need=lambda *p: {"replace_below_pct": 20, "watch_below_pct": 35, "show": 8}[p[-1]],
-        pack=types.SimpleNamespace(families={"battery": [
+        # a real pack (the one device lookup every section asks: knowledge_pack.device_of), with no devices kept
+        pack=KnowledgePack(villa="V", time_zone="UTC", generated_at="", ha_version=None, families={"battery": [
             {"entity_id": "sensor.station_battery", "name": "Station", "unit": "V", "asset": "station"},
             {"entity_id": "sensor.other_battery", "name": "Other", "unit": "V", "asset": "other"},
-            {"entity_id": "sensor.door_battery", "name": "Door", "unit": "%", "asset": "door"}]}),
+            {"entity_id": "sensor.door_battery", "name": "Door", "unit": "%", "asset": "door"}]},
+            assets={}, areas=[], people=[], channels={}, unknown_area=[], unclassified=[], retention={}),
         states=lambda: {"sensor.station_battery": {"state": "2.97"}, "sensor.other_battery": {"state": "3.1"},
                         "sensor.door_battery": {"state": "55"}},
         params=lambda: params)

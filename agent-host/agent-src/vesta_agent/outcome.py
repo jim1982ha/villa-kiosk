@@ -10,7 +10,7 @@ A skill script prints its decision in the standard form; this module does it:
   siren_gate: {armed, prompt, to}  → an Approve / Refuse request to the owner for the policy's siren; with no
               siren configured, the prompt itself to `to`
   incident_id                  → the incident of the result (a message without its own)
-  settle:     [{incident_id, note}]  → every message carrying that incident's buttons, in every chat,
+  settle:     [{incident_id, note}]  → before this result's messages: every message still carrying that incident's buttons, in every chat,
               loses them and shows the note ("{time}": the villa's time now)
   ha_messages [{incident_id, text, context}]  → Home Assistant's own messages of that automation run (its
               telegram_sent events, same context) are rewritten as `text` and become the incident's messages
@@ -70,14 +70,15 @@ async def camera_photo(reader, entity_id) -> tuple[str, str] | None:
 
 class Outcome:
     def __init__(self, *, policy: Callable, state, send: Callable[..., Awaitable], actions, reader, tickets, buttons,
-                 out_dir: str = ""):
+                 thread, out_dir: str = ""):
         self.policy = policy
         self.state = state
         self.send = send                # delivery.Delivery.send — the message id, or None when nothing arrived
         self.actions = actions
         self.reader = reader
         self.tickets = tickets          # tickets.Tickets: ticket, ticket.resolve
-        self.buttons = buttons          # alert_buttons.AlertButtons: the alert's buttons, settle
+        self.buttons = buttons          # alert_buttons.AlertButtons: an alert's buttons
+        self.thread = thread            # incident_thread.IncidentThread: what each chat shows of an incident
         self.out_dir = out_dir
 
     # ------------------------------------------------------------------ carry out
@@ -99,6 +100,11 @@ class Outcome:
         # Home Assistant's own messages first: the desk's messages below then replace them where both land
         for h in res.get("ha_messages") or []:
             await self.adopt_ha(h)
+        # ⚠️ SETTLED BEFORE THIS RESULT'S MESSAGES ARE POSTED (architecture review 12, 2026-10-09): "Need help" sends the
+        # owner a new message with the buttons; settled after it, that message lost them the moment it arrived
+        for s in res.get("settle") or []:
+            if isinstance(s, dict) and str(s.get("incident_id") or "").isdigit():
+                await self.thread.close(int(s["incident_id"]), str(s.get("note") or ""))
         items = self._one_per_incident(items, route, origin)
         for item in items:
             text = (item or {}).get("text") or ""
@@ -112,12 +118,11 @@ class Outcome:
                 continue                                     # rule 4: owner and fm share this chat
             sent.add((chat, text))
             kb = None
-            if item.get("keyboard") and skill_name:
-                # ⚠️ ITS INCIDENT AS A FIELD (review 7): it was read out of the wording ("#N"), so a reworded
-                # reminder lost its buttons
-                iid = item.get("incident_id") or res.get("incident_id")
-                if iid:
-                    kb = self.buttons.keyboard(iid, chat, skill_name)
+            # ⚠️ ITS INCIDENT AS A FIELD (review 7): it was read out of the wording ("#N"), so a reworded reminder
+            # lost its buttons. A message with the buttons and no incident of its own is the result's incident's.
+            iid = item.get("incident_id") or (res.get("incident_id") if item.get("keyboard") else None)
+            if item.get("keyboard") and skill_name and iid:
+                kb = self.buttons.keyboard(iid, chat, skill_name)
             doc = None
             att = item.get("attachment")
             if att:
@@ -131,18 +136,11 @@ class Outcome:
             if not mid:
                 done["not_sent"] += 1                         # delivery.py: refused, or Telegram off
                 continue
-            if item.get("incident_id"):
-                # the incident's newest message in this chat: the earlier ones go (and its buttons settle with
-                # the others, in every chat)
-                await self.buttons.replace(int(item["incident_id"]), chat, mid, text, buttons=bool(kb))
-            elif kb:
-                # every message with this incident's buttons, in every chat: all of them settle together
-                self.buttons.remember(iid, chat, mid, text)
+            if iid:
+                # the incident's message in this chat now: the earlier one there goes
+                await self.thread.post(int(iid), chat, mid, text, buttons=bool(kb))
             chats.add(chat)
             done["sent"] += 1
-        for s in res.get("settle") or []:
-            if isinstance(s, dict) and str(s.get("incident_id") or "").isdigit():
-                await self.buttons.settle(int(s["incident_id"]), str(s.get("note") or ""))
         if gate_prompt and pol.siren_entity:
             # its own domain's turn_on (a switch or a siren entity: policy.SIREN_DOMAINS)
             answer, msg = await asyncio.to_thread(self.actions.request, pol.siren_entity.split(".")[0], "turn_on",
@@ -205,7 +203,7 @@ class Outcome:
             await asyncio.sleep(wait)
             found = self.state.ha_sent(ctx)
         for chat, mid in found:
-            await self.buttons.adopt(int(iid), chat, mid, text)
+            await self.thread.adopt(int(iid), chat, mid, text)
         if not found:
             log.info("Incident #%s: no Home Assistant message of its run to take over", iid)
         return len(found)

@@ -211,6 +211,13 @@ Decisions of 2026-09-30 (owner):
   Page changes chips (`history.CHIPS`), top tabs (`places.TABS`, filled into index.html), a tab's section order
   (`places.ORDER`, drawn by `core.inOrder`). A table's column is named, never counted (`core.table` widths may be
   {width, cls}); test_ui fails on a stylesheet class the page never uses.
+  Twelfth review, 0.12.115 (the chat path): `incident_thread.IncidentThread` is what each chat shows of an incident —
+  one record per incident and chat (`state.incident_message`; incmsg:/inclast: migrated), `post` / `adopt` / `close`;
+  `outcome.carry_out` settles before it posts (a "Need help" escalation kept its buttons). `chat_jobs.ChatJobs` owns a
+  job asked for in a chat end to end: its turn (`turn`, `replied` from `_converse`), its waiting message
+  (`JobNotices`, keyed by turn), its "typing…" (one loop per chat, started after the reply) and its result
+  (`routing.Origin.job`, `Delivery.on_job_result`); Delivery only sends. `KnowledgePack.device_of` is the one device
+  identity of every report section. `compose.say` is the one way a sentence reaches the report page.
 - No PDF (owner, 2026-09-30): the reports are self-contained HTML pages sent
   as attachments. Chromium was ~480 MB of a 1.1 GB image for this alone.
 - ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent

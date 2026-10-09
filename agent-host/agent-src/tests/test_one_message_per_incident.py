@@ -125,3 +125,31 @@ def test_home_assistants_messages_of_another_run_are_never_taken(agent):
     run(agent.on_ha_event("telegram_sent", {"chat_id": GROUP, "message_id": 777, "bot": BOT, CONTEXT_KEY: "OTHER"}))
     ha_alert(agent, context="RUN-1", mid=500)
     assert all(mid != 777 for _c, mid, _t in agent.tg.edits) and (GROUP, 777) not in agent.tg.deleted
+
+
+def test_need_help_reaches_the_owner_with_the_buttons_to_answer(agent):
+    # architecture review 12 (live defect): the owner's escalation lost its buttons the moment it arrived — the
+    # answer's settle ran after its sends and edited every message holding the buttons, the new one included
+    ha_alert(agent)
+    tick(agent, 20)                                                     # the FM's reminder, with the buttons
+    reminder = 1000 + len(agent.tg.sent)
+    iid = agent.tg.sent[-1][2]["inline_keyboard"][0][0]["callback_data"].split(":")[1]
+    run(agent.on_ha_event("telegram_callback", {"id": "cb", "data": f"i:{iid}:need_help", "chat_id": FM_CHAT, "user_id": FM,
+                                                "message": {"message_id": reminder, "chat": {"id": FM_CHAT}}, "bot": BOT}))
+    owner = agent.thread.shown(int(iid))[GROUP]
+    assert owner["buttons"] and not owner["settled"], owner
+    assert owner["text"].startswith("Incident #1 · The facility manager needs help") and SUMMARY in owner["text"]
+    assert all(mid != owner["mid"] for _, mid, _ in agent.tg.edits)     # never edited: its buttons are still there
+    (fm,) = shown(agent, FM_CHAT)
+    assert fm.startswith("Incident #1 · Need help: the owner has been told")
+
+
+def test_a_second_close_changes_nothing_and_the_records_are_pruned_with_the_others(agent):
+    ha_alert(agent)
+    iid = 1
+    assert run(agent.thread.close(iid, "Done — FM, {time}")) == 1      # the FM's alert (Home Assistant's has no buttons)
+    assert run(agent.thread.close(iid, "Done — FM, {time}")) == 0
+    from datetime import datetime, timedelta, timezone
+    soon = (datetime.now(timezone.utc) + timedelta(minutes=1)).isoformat()
+    agent.state.prune(runs_before="1970", records_before=soon)
+    assert agent.thread.shown(iid) == {}

@@ -8,8 +8,9 @@ and they disagreed where it mattered:
     "ended without a result": two messages for one failure, the case job_notices.py exists to prevent.
 Now `send` returns the message id, or None when nothing arrived (Telegram off, or refused), and every caller
 reads that one answer. A message sent on behalf of a job asked for in a chat (an Origin of kind JOB) is that
-job's result whatever it says — its report, its daily text, or why it could not run — so it replaces the
-chat's "being prepared" message (job_notices.py decides; this module carries it out).
+job's result whatever it says — its report, its daily text, or why it could not run — and chat_jobs.py, told by
+`on_job_result`, takes its "being prepared" message away (architecture review 12: the waiting message and the job's
+"typing…" were kept here, keyed by chat; they are chat_jobs.ChatJobs's now).
 
 Also here, because they are what a chat SEES of the agent: the conversation's reply (the camera pictures the AI
 looked at, its answer as the last one's caption) and "typing…" while the AI works.
@@ -21,9 +22,8 @@ import contextlib
 import logging
 import re
 from datetime import datetime
-from typing import AsyncIterator, Callable
+from typing import AsyncIterator, Awaitable, Callable
 
-from .job_notices import JobNotices
 from .routing import JOB, Origin, Routing
 from .telegram import TelegramError
 
@@ -79,9 +79,8 @@ class Delivery:
         self.tg = tg                  # telegram.Telegram, or None when the takeover is off: nothing is sent
         self.state = state
         self.policy = policy
-        self.notices = JobNotices()
-        # chat → (stop, the loop, the jobs running): "typing…" while a job asked for in a chat works
-        self._job_typing: dict[int, tuple[asyncio.Event, asyncio.Task, set[str]]] = {}
+        # a message sent on behalf of a job asked for in a chat is its result: chat_jobs.ChatJobs.result, set by it
+        self.on_job_result: Callable[[Origin], Awaitable[None]] | None = None
 
     # ------------------------------------------------------------------ one message
     async def send(self, chat_id: int, text: str, *, keyboard: dict | None = None, approval_id: str | None = None,
@@ -106,14 +105,8 @@ class Delivery:
                  " with buttons" if keyboard else "", " and a file" if document else "", " and a photo" if photo else "")
         if approval_id:
             self.state.set_approval_message(approval_id, mid)
-        if origin is not None and origin.kind == JOB:
-            # ⚠️ SAID IN THE LOG (villa, 2026-10-09 15:03): the weekly report came and "on its way" stayed, with no
-            # delete tried and no way to tell which step lost it — this notice lives in memory only
-            log.info("Job result in chat %s: waiting notice before it: %s", chat_id, self.notices.describe(int(chat_id)))
-            await self._notice(int(chat_id), self.notices.result(int(chat_id)))
-            entry = self._job_typing.get(int(chat_id))
-            if entry and len(entry[2]) <= 1:
-                self._stop_job_typing(int(chat_id))             # its result is there: nothing is pending any more
+        if origin is not None and origin.kind == JOB and self.on_job_result:
+            await self.on_job_result(origin)                    # its waiting message goes, its "typing…" stops
         return mid
 
     # ------------------------------------------------------------------ a conversation's reply
@@ -135,9 +128,6 @@ class Delivery:
             for p in photos:
                 await self.send(chat_id, "", photo=p)
             mid = await self.send(chat_id, text or "…", keyboard=keyboard)
-        if self.notices.describe(int(chat_id)) != "none":
-            log.info("Reply %s in chat %s, while a job asked for here runs: %s", mid, chat_id, self.notices.describe(int(chat_id)))
-        await self._notice(int(chat_id), self.notices.replied(int(chat_id), mid))
         return mid
 
     @contextlib.asynccontextmanager
@@ -145,7 +135,7 @@ class Delivery:
         """"typing…" in the chat until the block ends or the yielded stop() is called (owner, 2026-10-06: "like if
         it was starting to write"). Telegram shows it about 5 s, so it is said again every TYPING_EVERY_S."""
         stop = asyncio.Event()
-        task = asyncio.create_task(self._typing_loop(chat_id, stop)) if self.tg is not None else None
+        task = asyncio.create_task(self.typing_loop(chat_id, stop)) if self.tg is not None else None
         try:
             yield stop.set
         finally:
@@ -153,7 +143,7 @@ class Delivery:
             if task:
                 await task
 
-    async def _typing_loop(self, chat_id: int, stop: asyncio.Event, job: str | None = None) -> None:
+    async def typing_loop(self, chat_id: int, stop: asyncio.Event, job: str | None = None) -> None:
         """`job`: the loop of a job asked for in a chat, which says at its end how many times it was sent."""
         said = False
         sent = accepted = 0
@@ -186,50 +176,3 @@ class Delivery:
             # ⚠️ EVERY ONE, WITH ITS TIME (owner, 2026-10-09 16:21: "no signal at all from a certain point" while the count
             # said 34 of 34): the count could not tell an even spread from bursts with long silences between them
             log.info("\"typing…\" for %s in chat %s: %s", job, chat_id, typing_timeline(times))
-
-    # ------------------------------------------------------------------ jobs asked for in a chat
-    # ⚠️ "typing…" UNTIL THE REPORT IS THERE (owner, 2026-10-07): the conversation's reply ("on its way") ended the
-    # sign while the job still worked for minutes. A job asked for in a chat keeps it in that chat — private or a
-    # group — until its result reaches the chat, or it ends without one.
-    def job_started(self, chat_id: int, job: str) -> None:
-        self.notices.started(int(chat_id), job)
-        log.info("Job %s asked for in chat %s: %s", job, chat_id, self.notices.describe(int(chat_id)))
-        if self.tg is None:
-            return
-        entry = self._job_typing.get(int(chat_id))
-        if entry and not entry[0].is_set():
-            entry[2].add(job)
-            return
-        stop = asyncio.Event()
-        self._job_typing[int(chat_id)] = (stop, asyncio.create_task(self._typing_loop(int(chat_id), stop, job)), {job})
-
-    async def job_waiting(self, chat_id: int, mid: int) -> None:
-        """A job started by a button: the pressed message is its "being prepared" message. ⚠️ Without it the job
-        waited for a reply that never comes, and took the NEXT conversation's reply for it — deleted on arrival
-        (villa, 2026-10-07 14:17: the buttons offered after a tapped daily digest vanished at once)."""
-        await self._notice(int(chat_id), self.notices.replied(int(chat_id), mid))
-
-    async def job_ended(self, chat_id: int, job: str) -> None:
-        entry = self._job_typing.get(int(chat_id))
-        if entry:
-            entry[2].discard(job)
-            if not entry[2]:
-                self._stop_job_typing(int(chat_id))
-        await self._notice(int(chat_id), self.notices.ended(int(chat_id), job))
-
-    def _stop_job_typing(self, chat_id: int) -> None:
-        entry = self._job_typing.pop(chat_id, None)
-        if entry:
-            entry[0].set()
-
-    async def _notice(self, chat_id: int, step) -> None:
-        """Carry out what job_notices.py decided about a "being prepared" message."""
-        if step is None or self.tg is None:
-            return
-        what, mid, job = step
-        log.info("Waiting message %s in chat %s: %s", mid, chat_id, "deleted (its result came)" if what == "delete"
-                 else f"says the {job} job ended without a result")
-        if what == "delete":
-            await self.tg.delete(chat_id, mid)
-        else:
-            await self.tg.edit(chat_id, mid, f"The {job} job ended without a result this time. Ask again in a moment.")

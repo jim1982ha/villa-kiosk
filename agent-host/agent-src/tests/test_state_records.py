@@ -27,16 +27,34 @@ def test_a_job_slot_is_claimed_once(tmp_path):
     assert s.jobs_run() == [("engine:pack", "2026-10-03T01:30:00+08:00"), ("reports:0:07:00", "2026-10-04T07:00:00+08:00")]
 
 
-def test_an_alerts_messages_are_remembered_listed_and_forgotten(tmp_path):
+def test_an_incidents_message_is_one_record_per_chat(tmp_path):
     s = _state(tmp_path)
     s.set_alert_skill(12, -100200, "alert-desk")
-    s.remember_alert_message(12, -100200, 55, "Leak in the laundry")
-    s.remember_alert_message(12, 3001, 9, "Leak in the laundry")
-    s.remember_alert_message(13, 3001, 10, "Other")
+    s.set_incident_message(12, -100200, {"mid": 55, "text": "Leak", "buttons": True, "settled": False})
+    s.set_incident_message(12, 3001, {"mid": 9, "text": "Leak", "buttons": False, "settled": False})
+    s.set_incident_message(12, 3001, {"mid": 11, "text": "Leak, reminder", "buttons": True, "settled": False})
+    s.set_incident_message(13, 3001, {"mid": 10, "text": "Other", "buttons": False, "settled": False})
     assert s.alert_skill(12, -100200) == "alert-desk" and s.alert_skill(12, 3001) is None
-    assert sorted(s.alert_messages(12)) == [(-100200, 55, "Leak in the laundry"), (3001, 9, "Leak in the laundry")]
-    s.forget_alert_message(12, 3001, 9)
-    assert s.alert_messages(12) == [(-100200, 55, "Leak in the laundry")] and s.alert_messages(13)
+    assert [(c, r["mid"]) for c, r in s.incident_chats(12)] == [(-100200, 55), (3001, 11)]     # the latest, once per chat
+    assert s.incident_message(13, 3001)["text"] == "Other"
+
+
+def test_the_two_old_record_families_become_one_record_per_chat(tmp_path):
+    # 0.12.106–0.12.114 kept incmsg: (messages with the buttons) and inclast: (the latest message), two lifetimes,
+    # inclast: never pruned (architecture review 12): an agent updated in place keeps what its chats show
+    from vesta_agent.state import State
+    path = str(tmp_path / "s.sqlite")
+    s = State(path)
+    s.put("incmsg:7:3001:42", "An old alert")
+    s.put("inclast:7:3001:42", "")
+    s.put("inclast:7:3001:50", "")
+    s.put("inclast:7:-100:44", "")
+    s.put("incmsg:8:3001:60", "Another")
+    s = State(path)                                                          # the next start migrates them
+    assert s.incident_message(7, 3001) == {"mid": 50, "text": "", "buttons": False, "settled": False}
+    assert s.incident_message(7, -100)["mid"] == 44
+    assert s.incident_message(8, 3001) == {"mid": 60, "text": "Another", "buttons": True, "settled": False}
+    assert s.kv_prefix("incmsg:") == {} and s.kv_prefix("inclast:") == {}
 
 
 def test_a_file_the_model_saved_is_known_as_its_own(tmp_path):
@@ -51,10 +69,9 @@ def test_records_stored_before_the_named_records_are_read_as_they_were(tmp_path)
     s = _state(tmp_path)
     s.put("job:engine:pack", "2026-10-02T01:30:00+08:00")
     s.put("inc:7:3001", "alert-desk")
-    s.put("incmsg:7:3001:42", "An old alert")
     s.put("saved_by_model:old.json", "old.json")
     assert s.claim_job_slot("engine:pack", "2026-10-02T01:30:00+08:00") is False
-    assert s.alert_skill(7, 3001) == "alert-desk" and s.alert_messages(7) == [(3001, 42, "An old alert")]
+    assert s.alert_skill(7, 3001) == "alert-desk"
     assert s.saved_by_model("old.json")
 
 
@@ -64,7 +81,7 @@ def test_no_module_but_state_writes_these_key_layouts():
         for f in files:
             if f.endswith(".py") and f != "state.py":
                 text = open(os.path.join(dirpath, f), encoding="utf-8").read()
-                if re.search(r'f?"(inc|incmsg|saved_by_model):|kv_prefix\(|state\.(get|put|drop)\(', text):
+                if re.search(r'f?"(inc|incmsg|inclast|incthread|hasent|saved_by_model):|kv_prefix\(|state\.(get|put|drop)\(', text):
                     owners.append(f)
     assert owners == [], f"raw keys outside state.py: {owners}"
 
@@ -75,11 +92,11 @@ def test_an_alerts_button_records_are_kept_as_long_as_the_other_records(tmp_path
     from vesta_agent.state import State
     st = State(str(tmp_path / "s.sqlite"))
     st.set_alert_skill(1, -100, "alert-desk")
-    st.remember_alert_message(1, -100, 55, "Door open")
+    st.set_incident_message(1, -100, {"mid": 55, "text": "Door open", "buttons": True, "settled": False})
     st.put("job:x", "2026-10-01")
     soon = (datetime.now(timezone.utc) + timedelta(minutes=1)).isoformat()
     st.prune(runs_before="1970", records_before=soon)
-    assert st.alert_skill(1, -100) is None and st.alert_messages(1) == []
+    assert st.alert_skill(1, -100) is None and st.incident_chats(1) == []
     assert st.get("job:x") == "2026-10-01"                          # the scheduler's slots are not records
 
 

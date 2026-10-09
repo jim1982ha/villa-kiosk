@@ -67,9 +67,15 @@ def test_a_chat_jobs_typing_says_at_its_end_how_often_it_was_sent(tmp_path, capl
     v = make_agent(tmp_path, {"chats": {"owner": -100777, "fm": 222}})
 
     async def go():
-        v.delivery.job_started(-100777, "fm-weekly")
+        gate = asyncio.Event()
+
+        async def work(origin):
+            await gate.wait()
+        v.chat_jobs.start(-100777, "fm-weekly", work, waiting_mid=99)          # a pressed message: "typing…" at once
         await asyncio.sleep(0.05)
-        await v.delivery.send(-100777, "Weekly report", origin=Origin(-100777, JOB))   # its result: typing stops
+        await v.delivery.send(-100777, "Weekly report", origin=Origin(-100777, JOB, job="fm-weekly"))  # typing stops
+        gate.set()
+        await v.chat_jobs.idle()
         await asyncio.sleep(0.05)
     with caplog.at_level(logging.INFO, logger="vesta"):
         asyncio.run(go())

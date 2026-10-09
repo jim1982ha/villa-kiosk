@@ -183,6 +183,10 @@ class AiJobs:
             if not await self.run_without_ai(sk, job, problem if problem in AI_DOWN else "unknown", origin):
                 await self.delivery.send(chat, f"The {name} report could not be made without the AI either: its "
                                                "figures could not be read. Try again later.", origin=origin)
-        if not self.chat_jobs.start(chat, name, made, waiting_mid):
-            return "This report is already being made: it will be sent here."
-        return f"Making the {job['button']} without the AI, from its figures and charts: it will be sent here."
+        started = self.chat_jobs.start(chat, name, made, waiting_mid)
+        at = self.chat_jobs.started_at(chat, name)
+        # the same "just started" window as start (architecture review 12: this path had none)
+        if started or (at is not None and time.time() - at < JUST_STARTED_S):
+            return f"Making the {job['button']} without the AI, from its figures and charts: it will be sent here."
+        when = datetime.fromtimestamp(at or time.time(), ZoneInfo(self.s.timezone)).strftime("%H:%M")
+        return f"This report is already being made since {when}: it will be sent here."

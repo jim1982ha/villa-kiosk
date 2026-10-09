@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.109 (9 October 2026)
+
+Architecture review 12 (the chat path), all five candidates:
+- incident_thread.IncidentThread: what each chat shows of an incident, one record per incident and chat (state.incident_message; the incmsg: and inclast: families migrated at start, inclast: was never pruned). post / adopt / close; AlertButtons keeps keyboard and press. outcome.carry_out settles before it posts: "Need help" had taken the owner's new buttons away the moment the escalation arrived (live defect). The hasent: clean-up is one delete, not a scan on every write.
+- chat_jobs.ChatJobs owns a job asked for in a chat: its turn (turn, replied, called by app._converse), its waiting message (JobNotices keyed by turn: a failed reply no longer lets the next answer be taken for it, two jobs from two turns no longer share one), one "typing…" loop per chat started once the conversation's reply is out, and its result told by name (routing.Origin.job, Delivery.on_job_result). Delivery only sends. start_without_ai has the 60 s "just started" window too.
+- KnowledgePack.device_of: one device identity for every report section (the to-do list, the offline table, the batteries).
+- compose.say: the one way a sentence reaches the report page; text already made for the page is kept, never escaped twice.
+- Tests: Need help keeps the buttons, a second close changes nothing, records pruned, the migration; each turn its own waiting message; the to-do list, the offline table and the batteries name one device; every sentence of a to-do line shown once, linked once. Each shown red with the old behaviour.
+
 ## 0.6.108 (9 October 2026)
 
 - reports: the monitoring table, the offline count and the "devices offline" line list DEVICES (owner: "only devices, not entities related to a device"). facts.Ctx.offline groups offline sensors by Home Assistant device: its name (the owner's first), the earliest time a sensor went, critical if any is. A sensor with no device keeps its own row; a device Home Assistant knows nothing about (no name, maker or model: a phone seen on the Wi-Fi, the "RX"/"TX" rows) is left out; one with no name but a maker or model shows as "Unnamed <maker> <model>". KnowledgePack keeps the devices (devices, device_label) from the registry already fetched. app.pack_needs_build rebuilds at start a pack built before devices were kept (format change, its migration). Tests: one row per device, nameless left out, an old pack groups nothing; the migration (each shown red).

@@ -22,7 +22,7 @@ class Tickets:
         self.kiosk = kiosk
         self.state = state
         self.store_path = store_path
-        self.settle_alert = settle_alert      # alert_buttons.AlertButtons.settle: an incident closed in the Kiosk
+        self.settle_alert = settle_alert      # incident_thread.IncidentThread.close: an incident closed in the Kiosk
 
     def _store(self):
         from vesta_shared.store import Store

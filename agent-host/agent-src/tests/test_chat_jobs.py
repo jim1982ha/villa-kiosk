@@ -14,19 +14,20 @@ WEEKLY = {"name": "fm-weekly", "button": "Weekly report"}
 DAILY = {"name": "fm-daily", "button": "Daily digest"}
 
 
-class Notes:
-    """Delivery's job steps, in order."""
+class _Delivery:
+    """What chat_jobs.py needs of delivery.Delivery: the Telegram stand-in and the typing loop."""
     def __init__(self):
-        self.seen = []
+        from telegram_fake import FakeTelegram
+        self.tg = FakeTelegram()
+        self.on_job_result = None
 
-    def job_started(self, chat, name):
-        self.seen.append(("started", chat, name))
-
-    async def job_waiting(self, chat, mid):
-        self.seen.append(("waiting", chat, mid))
-
-    async def job_ended(self, chat, name):
-        self.seen.append(("ended", chat, name))
+    async def typing_loop(self, chat, stop, job=None):
+        while not stop.is_set():
+            await self.tg.typing(chat)
+            try:
+                await asyncio.wait_for(stop.wait(), 0.005)
+            except asyncio.TimeoutError:
+                pass
 
 
 async def _safe(coro):
@@ -37,12 +38,14 @@ async def _safe(coro):
 
 
 def test_a_chat_job_runs_once_its_waiting_message_first_and_always_ends():
-    notes = Notes()
-    jobs = ChatJobs(notes, _safe)
+    d = _Delivery()
+    jobs = ChatJobs(d, _safe)
+    assert d.on_job_result == jobs.result                           # a result sent by Delivery reaches its job
     gate = asyncio.Event()
+    seen = []
 
     async def work(origin):
-        notes.seen.append(("work", origin))
+        seen.append(origin)
         await gate.wait()
         raise RuntimeError("the job failed")
 
@@ -50,13 +53,47 @@ def test_a_chat_job_runs_once_its_waiting_message_first_and_always_ends():
         assert jobs.start(7, "fm-weekly", work, waiting_mid=42)
         assert not jobs.start(7, "fm-weekly", work)                  # never twice in one chat
         assert jobs.start(8, "fm-weekly", lambda o: asyncio.sleep(0))  # another chat: its own
-        await asyncio.sleep(0.01)
-        assert jobs.running(7, "fm-weekly")
+        await asyncio.sleep(0.03)
+        assert jobs.running(7, "fm-weekly") and 7 in d.tg.typing_in  # "typing…" while it works
         gate.set()
         await jobs.idle()
     asyncio.run(go())
-    mine = [s for s in notes.seen if s[0] == "work" or s[1] == 7]
-    assert mine == [("started", 7, "fm-weekly"), ("waiting", 7, 42), ("work", Origin(7, JOB)), ("ended", 7, "fm-weekly")]
+    assert seen == [Origin(7, JOB, job="fm-weekly")]                  # the job runs knowing its own name
+    assert not jobs.running(7, "fm-weekly")
+    # it ended without a result: its waiting message (the pressed one) says so
+    assert d.tg.edits == [(7, 42, "The fm-weekly job ended without a result this time. Ask again in a moment.")]
+
+
+def test_each_turn_has_its_own_waiting_message():
+    # architecture review 12: the waiting message was kept by CHAT — a failed reply let the next turn's answer be
+    # taken for it, and a job started in a later turn shared the earlier one's (its "on its way" never went)
+    d = _Delivery()
+    jobs = ChatJobs(d, _safe)
+    gates = {"a": asyncio.Event(), "b": asyncio.Event()}
+
+    def work(name):
+        async def w(origin):
+            await gates[name].wait()
+            await d.tg.send(9, f"{name} report")
+            await jobs.result(origin)
+        return w
+
+    async def go():
+        jobs.turn(9)
+        jobs.start(9, "a", work("a"))
+        await jobs.replied(9, None)                                  # turn 1's reply never arrived
+        jobs.turn(9)
+        await jobs.replied(9, 500)                                   # turn 2: an answer with no job — never a waiting message
+        jobs.turn(9)
+        jobs.start(9, "b", work("b"))
+        await jobs.replied(9, 501)                                   # turn 3 starts b: 501 stands for b
+        gates["a"].set()
+        await asyncio.sleep(0.02)
+        assert d.tg.deleted == []                                    # a's result deletes nothing of b's, nor 500
+        gates["b"].set()
+        await jobs.idle()
+    asyncio.run(go())
+    assert d.tg.deleted == [(9, 501)]
 
 
 def test_a_jobs_result_goes_to_the_chat_that_asked_else_its_own_target():

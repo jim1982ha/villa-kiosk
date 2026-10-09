@@ -650,6 +650,18 @@ def test_the_monitoring_table_lists_devices_not_their_sensors():
     assert got["Spa Plug"]["since"] == "2026-10-09T09:01" and got["Spa Plug"]["critical"] is True
     assert "RX" not in got and "TX" not in got                        # a nameless Wi-Fi client is not a villa device
     assert got["Lone Battery"]["since"] == "2026-10-09T06:00"         # a sensor with no device keeps its own row
+    # every section names a device the same way (knowledge_pack.device_of): the to-do list groups a clue and a task
+    # about one plug under its device, and the batteries are named as the device they power
+    assert facts._device(c, "sensor.spa_pump_power", "x") == facts._device(c, "switch.spa_relay", "x") == "device:plug"
+    c.need = lambda *p: {"replace_below_pct": 20, "watch_below_pct": 35, "show": 8}[p[-1]]
+    pack.families["battery"].append(row("sensor.plug_battery", "Plug Battery", "plug", "battery"))
+    pack.families["battery"].append(row("sensor.porch_battery", "Porch Battery", None, "battery"))
+    c._states["sensor.plug_battery"] = {"state": "15"}
+    c._states["sensor.porch_battery"] = {"state": "50"}
+    c.params = lambda: None
+    pack.__dict__.pop("_by_entity", None)
+    names = {r["name"] for r in facts.s_batteries(c)["rows"]}
+    assert names == {"Spa Plug", "Porch Battery"}, names
     # a pack built before devices were kept groups nothing and hides nothing
     pack.devices = {}
     assert {o["name"] for o in c.offline()} >= {"Spa Pump Power", "RX", "Lone Battery"}
@@ -671,3 +683,25 @@ def test_a_pack_built_before_devices_were_kept_is_rebuilt_at_start(tmp_path):
     assert pack_needs_build(str(tmp_path / "none.json")) and pack_needs_build(str(old))
     assert not pack_needs_build(str(new))
     assert "if pack_needs_build(self.s.pack_path):" in inspect.getsource(Vesta.start)
+
+
+def test_every_sentence_of_a_to_do_line_reaches_the_page_one_way():
+    # architecture review 12: each slot of the page chose its own helper, and a link went through two of them and was
+    # escaped twice. Every sentence — the reading, the check, the question, the time — is shown once, linked once.
+    import sys as _s
+    from markupsafe import Markup
+    _s.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
+    import compose
+    assert compose.say(Markup('<a class="src" href="https://e.org">https://e.org</a>')) == \
+        Markup('<a class="src" href="https://e.org">https://e.org</a>')                 # already made: kept, never re-escaped
+    assert str(compose.say("check https://e.org/x")) == \
+        'Check <a class="src" href="https://e.org/x" target="_blank" rel="noopener noreferrer">https://e.org/x</a>.'
+    facts = {"zone": "UTC", "order": ["todo"], "to_write": [{"id": "t1.reading", "kind": "reading"}],
+             "sections": {"todo": {"rows": [{"id": "t1", "title": "Pool pump", "severity": "P2", "why": "x"}]}}}
+    notes = {"t1.reading": "Flow fell, see https://a.example/1.", "t1.check": "clean it: https://b.example/2.",
+             "t1.ask": "Was a valve moved <b>today</b>", "t1.when": "since 20 Sep"}
+    page = compose.page(facts, notes)
+    for url in ("https://a.example/1", "https://b.example/2"):
+        assert page.count(f'href="{url}"') == 1, url
+    assert "&lt;a " not in page and "<b>today</b>" not in page and "&lt;b&gt;today&lt;/b&gt;" in page
+    assert page.count("<a ") == page.count("</a>")

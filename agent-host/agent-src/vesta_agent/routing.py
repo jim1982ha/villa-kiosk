@@ -35,6 +35,9 @@ class Origin:
     hook — nobody asked, messages go to their role's chat."""
     chat: int
     kind: str = PRESS
+    # A job asked for in this chat (kind JOB): which one — its result is told by name, never guessed
+    # (chat_jobs.ChatJobs.result; architecture review 12).
+    job: str | None = None
 
     @property
     def holds(self) -> bool:
