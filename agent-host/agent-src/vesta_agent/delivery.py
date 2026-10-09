@@ -29,7 +29,9 @@ from .telegram import TelegramError
 
 log = logging.getLogger("vesta")
 
-TYPING_EVERY_S = 4.0             # Telegram's "typing…" lasts about 5 s
+# Telegram's "typing…" lasts about 5 s. ⚠️ EVERY 2 s (owner, 2026-10-09): every 4 s left each signal arriving close to
+# the previous one's end, and Telegram Web showed long stretches without it while the log had all of them accepted
+TYPING_EVERY_S = 2.0
 PHOTOS_PER_REPLY = 4             # the camera pictures a reply carries, the last ones looked at
 NO_PICTURE = "\n\n(The camera picture could not be sent.)"
 

@@ -3,6 +3,7 @@ Synthetic skills and data only."""
 from __future__ import annotations
 
 import asyncio
+import re
 import os
 
 import pytest
@@ -305,17 +306,25 @@ def test_asked_again_the_agent_not_the_ais_memory_says_whether_the_report_runs(a
             await gate.wait()
     ai = FakeAI("", act=act).install(monkeypatch)
 
+    from vesta_agent import ai_jobs as AJ
+
     async def go():
         first = await agent.jobs.start("fm-weekly", ASKER)
+        # owner, 2026-10-09: the model called start_job twice in one turn and told the person a report that had just
+        # started was "still in progress" — asked again at once, it is still the report that just started
+        twice = await agent.jobs.start("fm-weekly", ASKER)
+        monkeypatch.setattr(AJ, "JUST_STARTED_S", 0)                    # later on: it is running, since its start
         again = await agent.jobs.start("fm-weekly", ASKER)
         gate.set()
         await asyncio.sleep(0.05)
         after = await agent.jobs.start("fm-weekly", ASKER)
         gate.set()
         await asyncio.sleep(0.05)
-        return first, again, after
-    first, again, after = run(go())
-    assert first.startswith("Started fm-weekly now (brain performance")
-    assert "still running" in again
+        return first, twice, again, after
+    first, twice, again, after = run(go())
+    assert re.match(r"Started fm-weekly now, at \d\d:\d\d \(brain performance", first)
+    assert "Do not say it is still running or in progress." in first
+    assert twice.startswith("Started fm-weekly now, at ") and "still being made" not in twice
+    assert re.match(r"The fm-weekly report asked for here started at \d\d:\d\d and is still being made", again)
     assert after.startswith("Started fm-weekly now")                     # it ended: a new ask starts it again
-    assert sum(r["who"] == "job:fm-weekly" for r in ai.runs) == 2
+    assert sum(r["who"] == "job:fm-weekly" for r in ai.runs) == 2        # never twice at once

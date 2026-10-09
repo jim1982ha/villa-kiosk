@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.106 (9 October 2026)
+
+- start_job answers with the report's start time (ai_jobs.AiJobs.start, ChatJobs.started_at). A report started under JUST_STARTED_S (60 s) ago is "started now" even when asked again: the model called start_job twice in one turn, the second answer said "still running", and the group read "Still in progress" for a report that had just started. Later on, the answer says when it started. test_jobs pins it (shown red without the window).
+- "typing…" every 2 s (delivery.TYPING_EVERY_S, was 4). The log at 16:47 had 30 of 30 accepted, evenly spaced (longest gap 4.4 s), while Telegram Web showed long stretches without it; tried at the owner's request, with no promise of how Telegram displays it.
+
 ## 0.6.105 (9 October 2026)
 
 - The log covers a report asked for in a chat from end to end: "Message received in chat …" when the message reaches the agent (app.handle_message), and at the job's end every "typing…" with its time, how long Telegram took when over a second, refusals, and the longest gap (delivery.typing_timeline). Owner, 16:21: "no signal at all from a certain point", while the log said only "sent 34 times, 34 accepted", which cannot tell an even spread from bursts. Code checked: Home Assistant reads and skill scripts run in threads (asyncio.to_thread), so they do not stall the loop. Test: the timeline and its longest gap (shown red with min for max).

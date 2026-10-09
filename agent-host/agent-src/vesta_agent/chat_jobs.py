@@ -9,6 +9,7 @@ the NEXT answer in the chat for its waiting message and deleted it (villa, 14:17
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import Awaitable, Callable
 
 from .routing import JOB, Origin
@@ -21,11 +22,16 @@ class ChatJobs:
         self.delivery = delivery
         self._safe = safe                                  # logs what a task raised (app.Vesta._safe)
         self._running: set[tuple[int, str]] = set()
+        self._started: dict[tuple[int, str], float] = {}  # when each running job started (time.time())
         # the tasks, kept: asyncio holds only a weak reference to a task nobody keeps, and `idle` waits for them
         self._tasks: set[asyncio.Task] = set()
 
     def running(self, chat: int, name: str) -> bool:
         return (int(chat), name) in self._running
+
+    def started_at(self, chat: int, name: str) -> float | None:
+        """When this chat's job `name` started (time.time()), while it runs; None otherwise."""
+        return self._started.get((int(chat), name))
 
     def start(self, chat: int, name: str, work: Work, waiting_mid: int | None = None) -> bool:
         """Start `work` as this chat's job `name`; False when it already runs here (never twice). `waiting_mid`: the
@@ -34,6 +40,7 @@ class ChatJobs:
         if (chat, name) in self._running:
             return False
         self._running.add((chat, name))
+        self._started[(chat, name)] = time.time()
         self.delivery.job_started(chat, name)
 
         async def run() -> None:
@@ -43,6 +50,7 @@ class ChatJobs:
                 await work(Origin(chat, JOB))
             finally:
                 self._running.discard((chat, name))
+                self._started.pop((chat, name), None)
                 await self.delivery.job_ended(chat, name)
         task = asyncio.create_task(self._safe(run()))
         self._tasks.add(task)

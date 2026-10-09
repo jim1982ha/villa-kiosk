@@ -12,7 +12,9 @@ in the middle of the agent's wiring. Tests had to build the whole agent to reach
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from typing import Awaitable, Callable
 
 from vesta_shared import agent_records
@@ -29,6 +31,10 @@ log = logging.getLogger("vesta")
 def not_set(name: str) -> str:
     """What a chat reads when a job policy.yaml does not name is asked for (it has no agreed model or limit)."""
     return f"The {name} job is not set up yet (VESTA Agent page → Rules → AI jobs), so it cannot run."
+
+
+#: A report asked for again this soon after it started is the same request, not a second one.
+JUST_STARTED_S = 60
 
 
 class AiJobs:
@@ -145,11 +151,20 @@ class AiJobs:
         # ⚠️ THE AGENT SAYS WHETHER IT IS RUNNING, NOT THE AI'S MEMORY (villa, 2026-10-07 01:22): asked again 30 s after
         # the report was sent, the AI answered "already being generated" from the conversation and started nothing.
         # A second start while one runs would make the report twice.
-        if not self.chat_jobs.start(chat, name, lambda origin: self.run(sk, job, origin)):
-            return f"The {name} job asked for here is still running: its result will be sent here when it is ready."
         cfg = self.policy().jobs[name]
-        return (f"Started {name} now (brain {cfg['profile']}, limit {cfg['limit_usd']:g} USD): the result will be sent "
-                "here when it is ready (a few minutes).")
+        started = self.chat_jobs.start(chat, name, lambda origin: self.run(sk, job, origin))
+        at = self.chat_jobs.started_at(chat, name)
+        when = datetime.fromtimestamp(at or time.time(), ZoneInfo(self.s.timezone)).strftime("%H:%M")
+        # ⚠️ THE START TIME, SAID BY THE AGENT (owner, 2026-10-09: the waiting message read "Still in progress" for a
+        # report that had just started). The model called start_job twice in one turn, the second answer said "still
+        # running", and the model told the person that. A report started in the last minute IS just started: both
+        # answers say so, with its time, and say what to tell the person.
+        if started or (at is not None and time.time() - at < JUST_STARTED_S):
+            return (f"Started {name} now, at {when} (brain {cfg['profile']}, limit {cfg['limit_usd']:g} USD). Tell the "
+                    "person in one short sentence that it has just started and will arrive in this chat in a few "
+                    "minutes. Do not say it is still running or in progress.")
+        return (f"The {name} report asked for here started at {when} and is still being made: its result will be sent "
+                "here when it is ready. Tell the person when it started.")
 
     def without_ai_able(self) -> list[dict]:
         """The jobs a person may start from a chat that can be made without the AI (skill.yaml without_ai), set up."""
