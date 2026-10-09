@@ -29,9 +29,11 @@ from .telegram import TelegramError
 
 log = logging.getLogger("vesta")
 
-# Telegram's "typing…" lasts about 5 s. ⚠️ EVERY 2 s (owner, 2026-10-09): every 4 s left each signal arriving close to
-# the previous one's end, and Telegram Web showed long stretches without it while the log had all of them accepted
-TYPING_EVERY_S = 2.0
+# Telegram's "typing…" lasts about 5 s. ⚠️ JUST PAST ITS END, NEVER INSIDE IT (owner, 2026-10-09, measured): every
+# signal accepted in both runs, yet at 4.4 s apart the group showed it with long gaps and at 2.4 s apart a private chat
+# never showed it at all — sent while the previous one still runs, Telegram does not pass it on. Every 5.5 s each one
+# arrives once the last has ended.
+TYPING_EVERY_S = 5.5
 PHOTOS_PER_REPLY = 4             # the camera pictures a reply carries, the last ones looked at
 NO_PICTURE = "\n\n(The camera picture could not be sent.)"
 

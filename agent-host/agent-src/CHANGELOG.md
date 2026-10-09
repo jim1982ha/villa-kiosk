@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.107 (9 October 2026)
+
+- "typing…" every 5.5 s (delivery.TYPING_EVERY_S). Measured on 9 October: at 4.4 s apart (group, 16:47) Telegram Web showed it with long gaps; at 2.4 s apart (private chat, 17:26, 24 of 24 accepted, longest gap 2.5 s) it never showed. Every signal was accepted both times, so one sent while the previous still runs is not passed on; 5.5 s sends each just after the last has ended.
+
 ## 0.6.106 (9 October 2026)
 
 - start_job answers with the report's start time (ai_jobs.AiJobs.start, ChatJobs.started_at). A report started under JUST_STARTED_S (60 s) ago is "started now" even when asked again: the model called start_job twice in one turn, the second answer said "still running", and the group read "Still in progress" for a report that had just started. Later on, the answer says when it started. test_jobs pins it (shown red without the window).
