@@ -86,3 +86,20 @@ def test_the_agent_wires_the_siren_to_its_actions_and_watches_it(tmp_path):
     assert agent.state.siren_stop() is not None
     import inspect
     assert "self.siren.watch(stop)" in inspect.getsource(type(agent).main)      # and the agent runs its watch
+
+
+def test_the_stop_is_kept_when_the_rules_cannot_be_read(tmp_path):
+    # architecture review 17: the stop was cleared before the rules were read; a reading that failed lost it for good
+    s, told = _siren(tmp_path)
+    s.executed("switch", "turn_on", ["switch.example_siren"], now=T0)
+
+    def broken():
+        raise TypeError("unhashable type: 'list'")
+    s.policy = broken
+    try:
+        asyncio.run(s.tick(T0 + timedelta(minutes=4)))
+    except TypeError:
+        pass
+    assert s.state.siren_stop() is not None                                    # still due
+    s.policy = lambda: POLICY
+    assert asyncio.run(s.tick(T0 + timedelta(minutes=5))) and s.actions.calls  # switched off at the next tick

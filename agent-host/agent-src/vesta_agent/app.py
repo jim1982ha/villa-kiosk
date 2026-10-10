@@ -186,9 +186,10 @@ class Vesta:
         pack = self.pack()
         return (pack.name_of(entity_id) if pack else None) or _pretty(entity_id)
 
-    def related_entities(self, entity_ids: list[str]) -> set[str]:
+    def related_entities(self, entity_ids: list[str]) -> set[str] | None:
         """What these ids stand for: the members of a group (its entity_id attribute) and the other entities
-        of the same device (knowledge pack). An owner-only device behind a wrapper is found this way."""
+        of the same device (knowledge pack). An owner-only device behind a wrapper is found this way. None: Home
+        Assistant could not say what they hold — actions._wrap_check then asks the owner, never acts on its own."""
         out: set[str] = set()
         pack = self.pack()
         rows = pack.rows() if pack else []
@@ -200,7 +201,10 @@ class Vesta:
                 if isinstance(members, list):
                     out |= {str(m).lower() for m in members}
         except Exception:  # noqa: BLE001
-            pass
+            # ⚠️ UNKNOWN IS NOT EMPTY (architecture review 17, 2026-10-10): swallowed, a slow Home Assistant made a light
+            # group look as if it hid nothing, and a "direct" rule switched an owner-only light on with no approval
+            log.warning("What %s holds could not be read from Home Assistant: the owner is asked", ", ".join(entity_ids))
+            return None
         return out
 
     def toolbox(self, allowed: set[str] | None = None, settings=None) -> Toolbox:

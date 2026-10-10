@@ -129,6 +129,12 @@ class Settings:
                 v = Policy.load(self.policy_path)
             except (OSError, yaml.YAMLError):
                 v = Policy({})
+            except Exception as e:  # noqa: BLE001 — a value nothing foresaw: the last good rules, never a stop
+                # ⚠️ (architecture review 17): any other error stopped every message, alert and press at each reading
+                import logging
+                logging.getLogger("vesta").error("policy.yaml could not be read (%s): the last good rules are kept",
+                                                 type(e).__name__)
+                v = self._policy_cache.get("value") or Policy({})
             self._policy_cache.update(mtime=m, value=v)
         return self._policy_cache["value"]
 

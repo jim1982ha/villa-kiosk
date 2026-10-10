@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.121 (10 October 2026)
+
+Architecture review 17, defects A and B:
+- policy._one_of: every value of the file tested against its choices (profile, conversation_reset, a job's profile, a person's role, an action's rule) is a word first — a list or a mapping raised TypeError at every reading. config.Settings.policy keeps the last good rules on any other error; ui.changes.rules_problems names it instead of an error 500; siren.tick reads the rules before it clears the stop.
+- app.related_entities returns None when Home Assistant cannot say what the entities hold; actions._wrap_check then asks the owner (required_role owner, never direct). It swallowed the error and a group looked empty.
+- Tests: no shape in any section raises; the last good rules kept; the siren's stop kept across a failed reading; an unreadable group asks the owner. Each shown red with the old behaviour.
+
 ## 0.6.120 (10 October 2026)
 
 - app.housekeeping reads the Kiosk every KIOSK_EVERY_S (300 s): tickets.repair, so a fault closed in the Cockpit settles its alert's messages within minutes (it ran at start, at 01:30 and after the night check only).

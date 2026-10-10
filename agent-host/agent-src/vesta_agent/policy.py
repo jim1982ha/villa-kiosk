@@ -459,6 +459,13 @@ def problems(raw: Any) -> list[str]:
     return read_policy(raw)[1]
 
 
+def _one_of(value, choices) -> bool:
+    """Is a value written in the file one of `choices`? ⚠️ NEVER A CRASH (architecture review 17, 2026-10-10): a list
+    or a mapping where a word belongs ("profile: [opus]", by hand) made `value in choices` raise TypeError, and the
+    agent stopped at every reading of its rules — no answer, no alert, and the siren's stop forgotten."""
+    return isinstance(value, str) and value in choices
+
+
 def read_policy(raw: dict) -> tuple[dict, list[str]]:
     """policy.yaml read ONCE: (the values the agent uses, what is wrong in plain words).
 
@@ -483,7 +490,7 @@ def read_policy(raw: dict) -> tuple[dict, list[str]]:
         out.append("settings must be a set of name: value.")
     for k, val in (s or {}).items() if isinstance(s, dict) else ():
         if k == "profile":
-            if val in PROFILES:
+            if _one_of(val, PROFILES):
                 beh["profile"] = val
             else:
                 out.append(f"settings.profile must be one of {', '.join(PROFILES)}.")
@@ -498,7 +505,7 @@ def read_policy(raw: dict) -> tuple[dict, list[str]]:
             else:
                 out.append("settings.web_search must be true or false.")
         elif k == "conversation_reset":
-            if val in CONVERSATION_RESETS:
+            if _one_of(val, CONVERSATION_RESETS):
                 beh["conversation_reset"] = val
             else:
                 out.append(f"settings.conversation_reset must be one of {', '.join(CONVERSATION_RESETS)}.")
@@ -512,7 +519,7 @@ def read_policy(raw: dict) -> tuple[dict, list[str]]:
                     out.append(f"settings.jobs.{name} must give profile and limit_usd only.")
                     continue
                 ok = True
-                if j.get("profile") not in PROFILES:
+                if not _one_of(j.get("profile"), PROFILES):
                     out.append(f"settings.jobs.{name}.profile must be one of {', '.join(PROFILES)}.")
                     ok = False
                 lim = j.get("limit_usd")
@@ -573,7 +580,7 @@ def read_policy(raw: dict) -> tuple[dict, list[str]]:
         elif any(e.telegram_id == tid and e.role == p.get("role") for e in entries):
             out.append(f"people, {who}: telegram_id {tid} is listed twice as {p.get('role')}.")
             ok = False
-        if p.get("role") not in ROLES:
+        if not _one_of(p.get("role"), ROLES):
             out.append(f"people, {who}: role must be owner or fm.")
             ok = False
         name = str(p.get("name") or "").strip()
@@ -649,7 +656,7 @@ def read_policy(raw: dict) -> tuple[dict, list[str]]:
         if svc.split(".")[0] in NEVER_DOMAINS or svc in NEVER_SERVICES or "toggle" in svc.split(".")[1]:
             out.append(f"allowed_services: {svc} is never allowed, whatever the file says.")
             ok = False
-        if rule not in RULES:
+        if not _one_of(rule, RULES):
             out.append(f"allowed_services: {svc} has the rule {rule!r}; use any, owner, listed or direct.")
             ok = False
         elif rule == "listed" and svc.split(".")[0] not in {d for d in ENTITY_LISTS.values() if d}:

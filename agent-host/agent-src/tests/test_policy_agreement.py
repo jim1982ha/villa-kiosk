@@ -121,3 +121,23 @@ def test_one_person_in_both_roles_is_named_as_each_chat_knows_them():
     assert p.name_in(2, 1) == "Fabien_FM" and p.name_in(2, -5) == "Fabien"                    # a press's footer
     twice = Policy({"people": [{"telegram_id": 2, "name": "A", "role": "fm"}, {"telegram_id": 2, "name": "B", "role": "fm"}]})
     assert [e.name for e in twice.entries] == ["A"]                         # twice in ONE role: still refused
+
+
+def test_no_value_written_by_hand_stops_the_agent():
+    # architecture review 17, 2026-10-10: "profile: [opus]" written by hand raised TypeError at every reading of the
+    # rules — no answer, no alert, no press, the page in error 500. Any shape in any section is a named problem.
+    from vesta_agent.policy import problems
+    odd = [["x"], {"a": 1}, None, 3, True, "zz"]
+    sections = {"settings": ["profile", "conversation_reset", "reply_limit_usd", "web_search", "jobs", "keep"],
+                "people": None, "chats": ["owner", "fm"], "allowed_services": ["light.turn_on"], "tool_access": ["fm"],
+                "agent_tools": ["web_search"], "ha_read_tools": None, "siren_entity": None, "skills_off": None,
+                "act_enabled": None, "approval_ttl_minutes": None, "owner_only_entities": None}
+    for section, keys in sections.items():
+        for v in odd:
+            shapes = [v] if keys is None else [{k: v} for k in keys] + [{"x": {"profile": v, "limit_usd": v}}]
+            if section == "people":
+                shapes = [v, [v], [{"telegram_id": 1, "name": "A", "role": v, "language": v}]]
+            for shape in shapes:
+                raw = {section: shape}
+                Policy(raw)                                                  # never raises
+                assert isinstance(problems(raw), list)

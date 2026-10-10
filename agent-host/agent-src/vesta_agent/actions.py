@@ -95,7 +95,12 @@ class Actions:
     def _wrap_check(self, policy: Policy, d: Decision) -> Decision:
         if not d.allowed:
             return d
-        hidden = set(self.related(d.entity_ids)) - set(d.entity_ids)
+        related = self.related(d.entity_ids)
+        if related is None:
+            # Home Assistant could not say what these hold: what cannot be checked is the owner's to approve
+            d.required_role, d.direct = "owner", False
+            return d
+        hidden = set(related) - set(d.entity_ids)
         if hidden & policy.excluded:
             d.allowed, d.reason = False, "It includes an excluded device."
         elif hidden & policy.owner_only:

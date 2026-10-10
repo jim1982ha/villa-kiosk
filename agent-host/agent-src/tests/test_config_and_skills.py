@@ -317,3 +317,21 @@ def test_the_page_and_the_start_judge_a_skill_alike_and_the_page_moves_nothing(t
     assert s.verdict("pool-care") == SAME and s.release_state("pool-care")["state"] == "follows"
     (skills / "pool-care").rename(skills / "pool-care.old")                             # mid-replacement, seen by the page
     assert s.verdict("pool-care") == GONE and (skills / "pool-care.old").exists()        # read only: nothing moved
+
+
+def test_the_agent_keeps_its_last_good_rules_when_the_file_cannot_be_read(tmp_path, monkeypatch):
+    # architecture review 17: an error nothing foresaw stopped every message, alert and press at each reading
+    import os as _os
+    from helpers import settings as _settings
+    from vesta_agent import config as config_module
+    s = _settings(str(tmp_path))
+    with open(s.policy_path, "w") as f:
+        f.write("act_enabled: true\n")
+    good = s.policy()
+    assert good.act_enabled is True
+
+    def broken(path):
+        raise RuntimeError("a value nothing foresaw")
+    monkeypatch.setattr(config_module.Policy, "load", staticmethod(broken))
+    _os.utime(s.policy_path, (1, _os.path.getmtime(s.policy_path) + 5))
+    assert s.policy() is good                                                 # the last good rules, never a stop

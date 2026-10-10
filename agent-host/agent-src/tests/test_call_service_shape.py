@@ -152,3 +152,15 @@ def test_a_lock_still_unlocking_is_read_again_not_reported_unconfirmed(tmp_path,
                       lambda: Wrong("http://unused", "UTC", write=True, session=StrictSession()))
     result = actions.execute(Decision(True, "test", "any", "lock", "unlock", ["lock.example_door"], {}))
     assert not result["ok"] and len(reads) == 1                       # a final wrong state: said at once
+
+
+def test_a_group_whose_members_cannot_be_read_asks_the_owner(villa, tmp_path, monkeypatch):
+    # architecture review 17, 2026-10-10: a slow Home Assistant made a group look as if it held nothing, and a "direct"
+    # rule switched an owner-only light on with no approval — what cannot be checked is the owner's to approve
+    _, session = villa
+    pol = Policy({"act_enabled": True, "people": [{"telegram_id": 111, "name": "Registered", "role": "fm"}],
+                  "chats": {"fm": 111, "owner": -100}, "allowed_services": {"light.turn_on": "direct"}})
+    blind = Actions(lambda: pol, State(str(tmp_path / "blind.db")),
+                    lambda: Writer("http://unused", "UTC", write=True, session=session), related=lambda ids: None)
+    answer, msg = blind.request("light", "turn_on", "light.example_group", {}, JM, 111)
+    assert msg is not None and "Only the owner" in msg.text and session.calls == []

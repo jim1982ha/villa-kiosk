@@ -37,8 +37,10 @@ class Siren:
         due = self.state.siren_stop()
         if not due or datetime.fromisoformat(due) > (now or datetime.now(timezone.utc)):
             return False
-        self.state.set_siren_stop(None)
+        # ⚠️ THE RULES READ BEFORE THE STOP IS FORGOTTEN (architecture review 17): cleared first, a reading that failed
+        # lost it for good — the siren was never switched off, even after a restart
         pol = self.policy()
+        self.state.set_siren_stop(None)
         if not pol.siren_entity:
             return True
         ok = await asyncio.to_thread(self.actions.system, pol.siren_entity.split(".")[0], "turn_off", pol.siren_entity)
