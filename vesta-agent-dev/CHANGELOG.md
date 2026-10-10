@@ -1,3 +1,9 @@
+## 0.12.131
+
+What you will see:
+- The first line of every alert message now gives its priority: "For: the Facility Manager, P2 Incident: New #18".
+- When no person of a role is listed in People, the heading writes the role with capitals: "the Owner", "the Facility Manager" (also in the history lines).
+
 ## 0.12.130
 
 What you will see:
