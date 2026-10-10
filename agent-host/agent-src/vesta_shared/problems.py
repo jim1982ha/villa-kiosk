@@ -37,6 +37,18 @@ _ORDER = {"P1": 0, "P2": 1, "P3": 2, "P4": 3}
 AGAIN_DAYS = 7
 
 
+def occurrences(finding: dict | None) -> list[str]:
+    """The days a finding was seen in the AGAIN_DAYS up to its latest reopening (kept to that window as it reopens)."""
+    if not finding:
+        return []
+    return json.loads(finding.get("occurrences") or "null") or [finding["opened_day"]]
+
+
+def again_title(summary: str, again: int | None) -> str:
+    """A problem's title with how often it came back: the Kiosk fault, the digest and the AI all read this one."""
+    return f"{summary} (again: {again + 1} times in {AGAIN_DAYS} days)" if again else summary
+
+
 
 
 def worsened(change_pct: float | None, last_reported_pct: float | None, step: float) -> bool:
@@ -127,7 +139,7 @@ class Problems:
             d = f.as_dict()
             d["id"] = fid
             if back is not None:
-                d["again"] = f.detail["again"]
+                d["again"] = len(occurrences(self.store.finding(fid))) - 1
                 again.append(d)
             elif f.rule_id in event_rules:
                 self.store.close_finding(f.rule_id, f.entity_id, day)        # events close the same night
@@ -151,11 +163,13 @@ class Problems:
         tasks = []
         for d in new + again:
             if d["severity"] in task_severities:
-                title = d["summary"] + (f" (again: {d['again'] + 1} times in {AGAIN_DAYS} days)" if d.get("again") else "")
+                title = again_title(d["summary"], d.get("again"))
                 tid, created = self.open_task("finding", d["id"], d["rule_id"], d["entity_id"], title,
                                               d.get("check") or "")
                 if created:
-                    tasks.append({"task_id": tid, "todo_summary": d["summary"][:250], "check": d.get("check") or "",
+                    # the Kiosk fault's title IS the task's, "(again: …)" included (architecture review 23: only the
+                    # task row carried it — the Cockpit never said it)
+                    tasks.append({"task_id": tid, "todo_summary": title[:250], "check": d.get("check") or "",
                                   "severity": d["severity"], "entity_id": d["entity_id"]})
         return {"new": new, "still_open": still_open, "closed": closed, "again": again, "tasks": tasks,
                 "resolve_actions": resolve}
@@ -164,7 +178,11 @@ class Problems:
         """⚠️ THE SAME PROBLEM, BACK (architecture review 22): a device offline every night and back by noon was closed
         in the day (recheck.py) and raised as NEW each night — a new Kiosk fault and a "new" digest line every morning,
         never "it keeps happening". A state finding closed in the last AGAIN_DAYS days is opened again, its count kept
-        (detail "again"). Returns its id, or None."""
+        (the store's reopened_day / reopened_at / occurrences). Returns its id, or None.
+
+        ⚠️ AN OCCURRENCE OF ITS OWN (architecture review 23): reopened as it was, it kept its first day (listed "still
+        open since the 5th", never "again") and the task a person closed the time before — which hid it from every
+        reader while the Kiosk showed it open. A person's close counts only after the latest reopening."""
         if not may:
             return None
         from datetime import date, timedelta
@@ -172,8 +190,8 @@ class Problems:
         last = self.store.last_closed_finding(f.rule_id, f.entity_id, since, day)
         if not last:
             return None
-        f.detail["again"] = int(json.loads(last["detail"] or "{}").get("again") or 0) + 1
-        self.store.reopen_finding(last["id"], f.severity, f.summary, f.detail)
+        seen = [x for x in (json.loads(last.get("occurrences") or "null") or [last["opened_day"]]) if x >= since] + [day]
+        self.store.reopen_finding(last["id"], f.severity, f.summary, f.detail, day, seen)
         return last["id"]
 
     def closed_in_kiosk(self, task_id: int) -> int | None:
@@ -228,16 +246,23 @@ class Problems:
         """THE answer to "what is still open", for every reader (the weekly list, the daily digest, the
         owner's lines, the concierge): the open findings and incidents, less a finding whose task a
         person has closed (done, or closed in the Kiosk) while its condition lasts. Most severe first."""
-        handled = {t["source"] for t in self.store.tasks(None)
-                   if t.get("source") and t["status"] in (DONE, CLOSED_IN_KIOSK)}
+        handled: dict[str, list[str]] = {}
+        for t in self.store.tasks(None):
+            if t.get("source") and t["status"] in (DONE, CLOSED_IN_KIOSK):
+                handled.setdefault(t["source"], []).append(t.get("done_at") or "")
         out = []
         for f in self.store.findings(status="open"):
-            if f["severity"] not in _ORDER or f"finding:{f['id']}" in handled:
+            # a person's close counts for THIS occurrence only: after the finding's latest reopening (_came_back)
+            closed_by_hand = [at for at in handled.get(f"finding:{f['id']}", []) if at > (f.get("reopened_at") or "")]
+            if f["severity"] not in _ORDER or closed_by_hand:
                 continue
             d = json.loads(f.get("detail") or "{}")
+            since = f.get("reopened_day") or f["opened_day"]
+            back = len(occurrences(f)) - 1
             out.append({"id": f"finding-{f['id']}", "source": f"finding:{f['id']}", "rule_id": f["rule_id"],
-                        "entity_id": f["entity_id"], "severity": f["severity"], "title": _no_code(f["summary"]),
-                        "check": d.get("check") or "", "since": f["opened_day"], "incident": None,
+                        "entity_id": f["entity_id"], "severity": f["severity"],
+                        "title": again_title(_no_code(f["summary"]), back), "again": back,
+                        "check": d.get("check") or "", "since": since, "incident": None,
                         "figures": {k: v for k, v in d.items() if isinstance(v, (int, float, str)) and k != "check"}})
         for i in self.store.incidents(open_only=True):
             p = json.loads(i.get("payload") or "{}")

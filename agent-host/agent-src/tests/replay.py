@@ -29,6 +29,8 @@ def replay(pack: str, fixture_dir: str, start: date, end: date, store: str | Non
         res = nightly.run(ns)
         for f in res["new_findings"]:
             timeline.append({"night": d.isoformat(), "kind": "new", **f})
+        for f in res["again"]:                     # the same problem back (vesta_shared.problems AGAIN_DAYS)
+            timeline.append({"night": d.isoformat(), "kind": "again", **f})
         for f in res["still_open"]:
             if f.get("worsened"):
                 timeline.append({"night": d.isoformat(), "kind": "update", **f})

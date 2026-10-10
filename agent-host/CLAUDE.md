@@ -266,6 +266,13 @@ Decisions of 2026-09-30 (owner):
   press it are one answer, `Policy.may_approve_in`. A chat job and a scheduled run are recorded while they run and taken
   up at start (`ChatJobs.recover`, `Scheduler._cut`); a cancelled run keeps its record. `tests/helpers.restarted` stops
   and starts a real agent on the same records.
+  Review 22, 0.12.146: "is it over" is judged by the RULE's own bad states — the critical_condition / critical_watchdog
+  blueprints send `bad_states` (and `mode`, `still_true` on abandoned); `device_state.out_of` is the one "is it back".
+  Owed copies are retried by DURATION (`OWED_FOR`), housekeeping runs every 30 s. A state finding that comes back
+  within `AGAIN_DAYS` is reopened, never new. `state.RUNNING_JOB` marks a scheduled run delivered from Delivery.send.
+  Review 23, 0.12.147: a reopened finding is its own occurrence (findings.reopened_day/_at/occurrences); every reader
+  goes through `Problems.open_problems` and `again_title`. An incident back within `reopen_hours` reopens (desk
+  `came_back`); after Done the desk reads the device once (`quiet_after_done`, `rule_states`).
 - No PDF (owner, 2026-09-30): the reports are self-contained HTML pages sent
   as attachments. Chromium was ~480 MB of a 1.1 GB image for this alone.
 - ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent

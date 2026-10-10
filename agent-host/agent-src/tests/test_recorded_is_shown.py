@@ -314,3 +314,27 @@ def test_a_message_sent_on_behalf_of_a_scheduled_run_marks_it_delivered(tmp_path
         await v.delivery.send(JM, "The weekly report.")
     run(run_job())
     assert v.state.jobs_cut() == {}                                        # cut now: delivered, never run again
+
+
+def test_a_copy_given_up_once_gets_its_own_two_hours_at_its_next_change(tmp_path, monkeypatch):
+    # architecture review 23: the given-up copy kept its old clock, so a later failed change was given up at once
+    from datetime import datetime, timedelta, timezone
+    from vesta_agent import incident_thread
+    v = _villa(tmp_path)
+    _, msg = v.actions.request("cover", "open_cover", "cover.bedroom3", {}, v.policy().person(JM), JM)
+    run(v.approvals.ask(msg))
+    v.tg.refuse.add("edit")
+    _press(v, msg)
+    t0 = datetime.now(timezone.utc)
+
+    def at(delta):
+        class Later(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return t0 + delta
+        monkeypatch.setattr(incident_thread, "datetime", Later)
+    at(timedelta(hours=3))
+    run(v.housekeeping())
+    assert v.state.incident_messages_owed() == []                          # given up
+    run(v.thread.rewrite(f"approval-{msg.approval_id}", "Opened Bedroom3 Curtain."))   # a later change, refused too
+    assert v.state.incident_messages_owed()                                # tried again: its own two hours

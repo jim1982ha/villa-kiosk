@@ -98,9 +98,10 @@ def test_an_answer_replaces_the_alert_where_it_was_given(agent):
     run(agent.on_ha_event("telegram_callback", {"id": "cb", "data": f"i:{iid}:done", "chat_id": FM_CHAT, "user_id": FM,
                                                 "message": {"message_id": reminder, "chat": {"id": FM_CHAT}}, "bot": BOT}))
     (fm,) = shown(agent, FM_CHAT)
-    # the alert first, then where it stands, with when (owner, 2026-10-10)
-    assert re.fullmatch(r"Closed: done, answered by the facility manager on \d\d/\d\d/\d{4} \d\d:\d\d\. The VESTA Agent "
-                        r"will check it stays quiet\.", status(fm)) and body(fm).index(SUMMARY) < body(fm).index("Closed:")
+    # the alert first, then where it stands, with when (owner, 2026-10-10) — and no promise of a check this alert's rule
+    # gives no states for (architecture review 23: "will check it stays quiet" was never kept)
+    assert re.fullmatch(r"Closed: done, answered by the facility manager on \d\d/\d\d/\d{4} \d\d:\d\d\.", status(fm)) \
+        and body(fm).index(SUMMARY) < body(fm).index("Closed:")
 
 
 def test_a_message_past_telegrams_48_hours_becomes_a_pointer(agent):
@@ -254,3 +255,18 @@ def test_a_press_puts_where_it_stands_last_in_place_of_the_old_status():
                          status="Waiting for approval")
     assert layout.render(layout.changed(siren, status="Approved by JM", body="Turned on Siren.")) == \
         "For: the Owner\n-------\nIntrusion suspected: 2 sensors.\nTurned on Siren.\n-------\nApproved by JM"
+
+
+def test_home_assistants_cleared_in_time_message_says_cleared_with_its_time(agent):
+    # architecture review 23: its "✅ cleared just inside the limit", taken over, read "🔶 no longer tracked"
+    ha_alert(agent)
+    run(agent.on_ha_event("telegram_sent", {"chat_id": GROUP, "message_id": 600, "bot": BOT, CONTEXT_KEY: "RUN-2"}))
+    run(agent.on_ha_event("vesta_critical_event", {
+        "blueprint": "critical_condition", "rule_id": "automation.critical_condition_laundry",
+        "incident_id": "automation.critical_condition_laundry-1", "phase": "abandoned", "severity": "critical",
+        "label": "Laundry door unlocked", "entities": ["lock.laundry"], "still_true": False,
+        "summary": "🔶 Laundry door unlocked — no longer tracked after 30 min", CONTEXT_KEY: "RUN-2",
+        "timestamp": datetime.now(timezone.utc).isoformat()}))
+    adopted = [t for c, mid, t in agent.tg.edits if (c, mid) == (GROUP, 600)]
+    assert adopted and re.fullmatch(r"Cleared on \d\d/\d\d/\d{4} \d\d:\d\d: back to normal when Home Assistant stopped "
+                                    r"watching\.", status(adopted[-1]))

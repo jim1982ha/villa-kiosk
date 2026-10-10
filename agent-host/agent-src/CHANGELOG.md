@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.141 (10 October 2026)
+
+Architecture review 23, all points:
+- Findings that come back: store columns reopened_day / reopened_at / occurrences (migration); Problems._came_back keeps the days seen in AGAIN_DAYS; open_problems lists it as of reopened_day with `again_title` and ignores a person's close older than the reopening; the task and the Kiosk fault carry the same title; nightly.told_now tells a returning P2; nightly's unread digest_lines removed; tests/replay.py records "again".
+- alert-desk: abandoned+cleared adopts Home Assistant's message with the closing note; came_back/_reopen reopen an incident closed within reopen_hours (rules.yaml, 4) — counted, ladder and fault again, ha_incident updated; `_ladder` shared with a new incident; Done sets check_quiet when the rule names its states and quiet_after_done reads the device once (rule_states; watched_for keeps the abandoned gate); seen_again tolerates offline when the rule does (device_state.out_of offline_ok); normalise turns a one-word bad_states into a list.
+- outcome.adopt_ha fills "{time}" in an adopted status; incident_thread drops owed_since when it gives up.
+- Tests: recurrence in every reader, reopening, the Done check, offline tolerance, the adopted wording; 17 mutants, each red (four survivors first: three tests added, one redundant filter removed).
+
 ## 0.6.140 (10 October 2026)
 
 Architecture review 22, all points:

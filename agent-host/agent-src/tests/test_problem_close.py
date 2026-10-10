@@ -109,17 +109,36 @@ def test_a_device_offline_every_night_is_the_same_problem_again_not_a_new_one(tm
     store = Store(str(tmp_path / "s.sqlite"))
     pb = Problems(store)
     rules = dict(state_rules={"PM-UNAVAILABLE"}, event_rules=set(), worsened_step=15)
-    first = pb.record_night([_F("PM-UNAVAILABLE", "switch.plug", "P2")], "2026-10-07", **rules)
+    first = pb.record_night([_F("PM-UNAVAILABLE", "switch.plug", "P2", summary="Plug offline")], "2026-10-07", **rules)
     (fid,) = [d["id"] for d in first["new"]]
     for n, day in enumerate(("2026-10-08", "2026-10-09"), start=1):
         pb.close_finding(store.finding(fid), day, "Cleared: back online.")              # back by noon
-        night = pb.record_night([_F("PM-UNAVAILABLE", "switch.plug", "P2")], day, **rules)
+        night = pb.record_night([_F("PM-UNAVAILABLE", "switch.plug", "P2", summary="Plug offline")], day, **rules)
         assert night["new"] == [] and [d["id"] for d in night["again"]] == [fid] and night["again"][0]["again"] == n
-        assert night["tasks"] and f"again: {n + 1} times in 7 days" in store.task(night["tasks"][0]["task_id"])["summary"]
+        # architecture review 23: the Kiosk fault says it too — its title is the task's
+        (task,) = night["tasks"]
+        assert task["todo_summary"] == f"Plug offline (again: {n + 1} times in 7 days)"
+        # ...and so does what every reader shows: listed as of the day it came back, never "still open since the 7th"
+        (row,) = pb.since(day)["new"]
+        assert row["title"] == f"Plug offline (again: {n + 1} times in 7 days)" and row["since"] == day
     # a week and more later: a new problem again
     pb.close_finding(store.finding(fid), "2026-10-09", "Cleared: back online.")
     later = pb.record_night([_F("PM-UNAVAILABLE", "switch.plug", "P2")], "2026-10-20", **rules)
     assert [d["id"] for d in later["new"]] != [fid] and later["again"] == []
+
+
+def test_a_fault_closed_by_hand_the_time_before_never_hides_it_when_it_comes_back(tmp_path):
+    # architecture review 23: closed in the Kiosk while still offline, back two nights later — the Kiosk showed it open,
+    # the digest, the weekly page and the AI said nothing was open
+    store = Store(str(tmp_path / "s.sqlite"))
+    pb = Problems(store)
+    rules = dict(state_rules={"PM-UNAVAILABLE"}, event_rules=set(), worsened_step=15)
+    first = pb.record_night([_F("PM-UNAVAILABLE", "switch.plug", "P2")], "2026-10-07", **rules)
+    pb.closed_in_kiosk(first["tasks"][0]["task_id"])                                   # closed by hand
+    assert pb.open_problems() == []                                                    # handled: not listed
+    pb.close_finding(store.finding(first["new"][0]["id"]), "2026-10-08", "Cleared: back online.")
+    pb.record_night([_F("PM-UNAVAILABLE", "switch.plug", "P2")], "2026-10-09", **rules)
+    assert [p["source"] for p in pb.open_problems()] == [f"finding:{first['new'][0]['id']}"]
 
 
 def test_an_event_finding_is_never_counted_again(tmp_path):

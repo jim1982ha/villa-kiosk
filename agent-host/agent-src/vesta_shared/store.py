@@ -98,6 +98,12 @@ class Store:
         for col in ("source", "check_text"):
             if col not in cols:
                 self.db.execute(f"ALTER TABLE tasks ADD COLUMN {col} TEXT")
+        # a finding that comes back (vesta_shared.problems AGAIN_DAYS) keeps when it came back and the days it was seen —
+        # columns of their own, since the night rewrites `detail` each time it sees it (architecture review 23)
+        cols = {r["name"] for r in self.db.execute("PRAGMA table_info(findings)")}
+        for col in ("reopened_day", "reopened_at", "occurrences"):
+            if col not in cols:
+                self.db.execute(f"ALTER TABLE findings ADD COLUMN {col} TEXT")
         # ...and its rows are rewritten ONCE in today's shape (0.6.42), so no reader keeps a second way of
         # reading them: a task's source is the latest finding, else incident, of its rule and device
         # ("none:0" when neither exists: it then waits for a person, as before), and its "<what> Check: <how>"
@@ -156,9 +162,11 @@ class Store:
                             "AND opened_day<? ORDER BY id DESC LIMIT 1", (rule_id, entity_id, since_day, before_day)).fetchone()
         return dict(r) if r else None
 
-    def reopen_finding(self, fid: int, severity: str, summary: str, detail: dict) -> None:
-        self.db.execute("UPDATE findings SET detail=?, summary=?, severity=?, status='open', closed_day=NULL WHERE id=?",
-                        (json.dumps(detail), summary, severity, fid))
+    def reopen_finding(self, fid: int, severity: str, summary: str, detail: dict, day: str, seen: list[str]) -> None:
+        """Open again on `day` (reopened_at: now), with the days it was seen."""
+        self.db.execute("UPDATE findings SET detail=?, summary=?, severity=?, status='open', closed_day=NULL, reopened_day=?, "
+                        "reopened_at=?, occurrences=? WHERE id=?",
+                        (json.dumps(detail), summary, severity, day, _now(), json.dumps(seen), fid))
         self.db.commit()
 
     def close_finding(self, rule_id: str, entity_id: str, day: str):

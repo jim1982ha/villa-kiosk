@@ -12,7 +12,7 @@ Reads (one pass, never a loop during the day):
 
 Writes: the feature store and the findings table in the agent store. It
 never writes to Home Assistant. The result JSON lists what the agent should
-now do: create tasks (Kiosk tickets), send the digest lines, ask the owner about
+now do: create tasks (Kiosk tickets), send a P2 at once, ask the owner about
 new devices. The agent does those through the action catalogue.
 
 --as-of replays a past night: the batch only sees data up to that day. The
@@ -35,7 +35,7 @@ from vesta_shared.messaging import no_code as _no_code  # noqa: E402
 from vesta_shared.params import VillaParams, MissingParameter  # noqa: E402
 from vesta_shared.timeutil import villa_day  # noqa: E402
 from vesta_shared.device_state import is_offline  # noqa: E402
-from vesta_shared.problems import AGAIN_DAYS, Problems  # noqa: E402  (a problem's lifecycle: one owner)
+from vesta_shared.problems import Problems, again_title  # noqa: E402  (a problem's lifecycle: one owner)
 from vesta_shared import result  # noqa: E402  (what the engine is asked to do: its shape; R is rules.py)
 from vesta_shared.stats import med  # noqa: E402
 from vesta_shared import daily  # noqa: E402  (a device's day: the one running threshold)
@@ -263,17 +263,21 @@ def run(args) -> dict:
     store.beat("maintenance_nightly", day_end.astimezone(timezone.utc).isoformat())
     store.audit("preventive-maintenance", "nightly", {"as_of": today.isoformat(), "new": len(new), "closed": len(closed)})
 
-    digest = ([f"{d['severity']}: {d['summary']}" for d in new]
-              + [f"again ({d['again'] + 1} times in {AGAIN_DAYS} days): {d['summary']}" for d in again]
-              + [f"update: {d['summary']}" for d in still_open if d.get("worsened")]
-              + [f"resolved: {c['summary']}" for c in closed])
     result = {"as_of": today.isoformat(), "villa": pack.villa, "features_written": features_written,
               "new_findings": new, "still_open": still_open, "closed": closed, "again": again,
-              "tasks_to_create": tasks, "tasks_resolved": [a["task_id"] for a in resolved], "resolve_actions": resolved, "notes": notes, "digest_lines": digest}
+              "tasks_to_create": tasks, "tasks_resolved": [a["task_id"] for a in resolved], "resolve_actions": resolved, "notes": notes}
     if args.out:
         with open(args.out, "w", encoding="utf-8") as fh:
             json.dump(result, fh, indent=1, default=str)
     return result
+
+
+def told_now(res: dict) -> list[dict]:
+    """The facility manager's messages at 02:00: each P2 found new — or back again, with how often (architecture review
+    23: it came back in silence) — with what to check."""
+    return [result.message("fm", f"{_no_code(again_title(d.get('summary', ''), d.get('again')))}\n"
+                                 f"What to check: {d.get('check', '')}")
+            for d in res["new_findings"] + res["again"] if d.get("severity") == "P2"]
 
 
 def _plain_name(entity_id: str) -> str:
@@ -289,7 +293,7 @@ def main(argv=None):
     ap.add_argument("--skip-raw", action="store_true")
     args = ap.parse_args(argv)
     res = run(args)
-    out = {k: res[k] for k in ("as_of", "features_written", "digest_lines", "tasks_to_create", "notes")}
+    out = {k: res[k] for k in ("as_of", "features_written", "tasks_to_create", "notes")}
     out[result.FAULTS_CHANGED] = bool(res["new_findings"] or res["still_open"] or res["closed"] or res["again"])
     # The engine's standard output: each task a Facility ticket in the VESTA Kiosk, and a P2
     # finding sent to the facility manager at once rather than at the 07:00 digest.
@@ -297,8 +301,7 @@ def main(argv=None):
     out["actions"] = [result.fault(t["todo_summary"], task_id=t["task_id"], check=t.get("check"), entity_id=t.get("entity_id"))
                       for t in res["tasks_to_create"]]
     out["actions"] += res["resolve_actions"]
-    out["send"] = [result.message("fm", f"{_no_code(d.get('summary', ''))}\nWhat to check: {d.get('check', '')}")
-                   for d in res["new_findings"] if d.get("severity") == "P2"]
+    out["send"] = told_now(res)
     print(json.dumps(out, indent=1, default=str))
     return 0
 

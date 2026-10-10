@@ -105,6 +105,8 @@ class IncidentThread:
         rec = {k: v for k, v in rec.items() if k not in ("owed", "owed_since", "owed_tries")} | {"parts": p, "text": text}
         if not ok:
             rec |= {"owed": now - datetime.fromisoformat(since) < OWED_FOR, "owed_since": since}
+            if not rec["owed"]:
+                rec.pop("owed_since")   # given up: a later change starts its own two hours (architecture review 23)
             log.info("%s in chat %s: message %s not updated (%s)", iid, chat, rec["mid"],
                      "tried again later" if rec["owed"] else "given up")
         self.state.set_incident_message(iid, chat, rec)

@@ -14,16 +14,16 @@ def is_offline(state) -> bool:
     return str(state or "") in OFFLINE
 
 
-def out_of(row: dict, bad, now, minutes: float, unknown_tells: bool = False) -> bool:
-    """Has this entity (a state row: state, last_changed) been out of the `bad` states for `minutes`? Offline is never
-    out of them; "unknown" counts as out only when `unknown_tells` (a device that reports, its sensor without a value:
+def out_of(row: dict, bad, now, minutes: float, unknown_tells: bool = False, offline_ok: bool = False) -> bool:
+    """Has this entity (a state row: state, last_changed) been out of the `bad` states for `minutes`? Offline counts as
+    out of them only when `offline_ok` (a rule that does not list it); "unknown" only when `unknown_tells` (a device that reports, its sensor without a value:
     back online — never "the door is locked").
 
     ⚠️ ONE ANSWER TO "IS IT BACK" (architecture review 22): the alert desk said "unknown" was not back, the night check's
     recheck said it was, and the desk knew only "unavailable" — a Wi-Fi access point "disconnected" never closed."""
     from datetime import datetime, timedelta, timezone
     st, since = str(row.get("state") or ""), row.get("last_changed")
-    if not st or st in bad or is_offline(st) or (st == "unknown" and not unknown_tells) or not since:
+    if not st or st in bad or (is_offline(st) and not offline_ok) or (st == "unknown" and not unknown_tells) or not since:
         return False
     return now - datetime.fromisoformat(since).astimezone(timezone.utc) >= timedelta(minutes=minutes)
 

@@ -74,3 +74,25 @@ def test_an_integration_down_finding_names_every_device_it_stands_for():
               for k, e in zip(("a", "b", "c"), ENTS)}
     (merged,) = F.integration_down(groups, 3).values()
     assert merged["entity_ids"] == ENTS
+
+
+def test_a_p2_back_again_is_told_at_once_with_how_often():
+    sys.path.insert(0, os.path.join(SKILL, "scripts"))
+    import nightly
+    said = nightly.told_now({"new_findings": [], "again": [{"severity": "P2", "summary": "Plug offline", "again": 2,
+                                                            "check": "Look at the plug."},
+                                                           {"severity": "P3", "summary": "Weak pump", "again": 1}]})
+    assert [m["text"] for m in said] == ["Plug offline (again: 3 times in 7 days)\nWhat to check: Look at the plug."]
+
+
+def test_the_night_runs_output_carries_those_messages(monkeypatch, capsys):
+    # the caller, pinned: what main() prints is what the engine sends
+    sys.path.insert(0, os.path.join(SKILL, "scripts"))
+    import nightly
+    back = {"severity": "P2", "summary": "Plug offline", "again": 1, "check": "Look."}
+    monkeypatch.setattr(nightly, "run", lambda args: {"as_of": "2026-10-10", "features_written": 0, "tasks_to_create": [],
+                                                      "notes": [], "new_findings": [], "still_open": [], "closed": [],
+                                                      "again": [back], "resolve_actions": []})
+    nightly.main(["--pack", "p.json"])
+    out = json.loads(capsys.readouterr().out)
+    assert [m["text"] for m in out["send"]] == ["Plug offline (again: 2 times in 7 days)\nWhat to check: Look."]

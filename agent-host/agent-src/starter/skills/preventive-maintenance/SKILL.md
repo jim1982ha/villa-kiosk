@@ -47,7 +47,9 @@ closure, and never raise the same thing twice.
      the VESTA Kiosk's Facility records and keeps its id so the reply loop can close it.
    - `send`: each P2 finding (a critical device offline, a battery at 10%), to the
      FM at once with the check to perform.
-   - `digest_lines`: for the reports skill's 07:00 FM digest. Not sent at 02:00.
+   - The 07:00 FM digest (reports skill) reads the open problems themselves
+     (`vesta_shared.problems`): a problem that came back within 7 days is listed
+     as new, "(again: N times in 7 days)", and so is its Kiosk fault.
    - `notes`: configuration gaps (a schedule with no time blocks, a missing
      nominal voltage). They go to the weekly report section "what would help".
 3. The night costs no token. The 07:00 digest carries the words.

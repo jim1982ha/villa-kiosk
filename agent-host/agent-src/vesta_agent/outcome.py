@@ -33,9 +33,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
 from . import layout
+from .notice import when
 from .posting import Poster
 from .routing import Origin, Routing
 
@@ -245,7 +247,9 @@ class Outcome:
         for chat, mid in found:
             # Home Assistant's own alert, taken over: the incident's text, the earlier messages' times, its buttons
             kb = self.buttons.keyboard(int(iid), chat, skill_name) if skill_name and self.buttons.open(iid) else None
-            p = layout.parts(body=text, status=h.get("status") or "",
+            # "{time}" in its status: the villa's time now, as every message of the agent's writes it
+            status = (h.get("status") or "").replace("{time}", when(datetime.now(timezone.utc), self.poster.tz))
+            p = layout.parts(body=text, status=status,
                              head=self.notices.heading(chat, int(iid)) if self.notices else "")
             await self.thread.adopt(int(iid), chat, mid, p, keyboard=kb)
         if not found:
