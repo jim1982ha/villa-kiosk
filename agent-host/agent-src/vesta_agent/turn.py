@@ -53,6 +53,7 @@ class TurnResult:
     error: str | None
     photos: list[tuple[str, str]] = field(default_factory=list)   # (base64, mime) the AI looked at, each once
     limit_usd: float = 0.0         # the limit it ran under (its Terms): what "Stopped at the limit" says
+    approvals: list[str] = field(default_factory=list)   # the approval requests it sent (Toolbox.approvals)
 
     @property
     def failed(self) -> bool:
@@ -106,7 +107,7 @@ class Turns:
         res = await runner.run(run_settings, self.system_prompt(), prompt, kit, terms, self.state, resume=resume, asked=asked,
                                image=image)
         out = TurnResult(res.text, res.session_id, res.stopped_at_limit, res.cost_usd, res.problem, res.error,
-                         list(tb.photos), terms.limit_usd)
+                         list(tb.photos), terms.limit_usd, list(tb.approvals))
         if out.problem:
             # no credit, a refused key: every reply and report stops until the owner acts (app._tell_owner decides)
             await self._safe(self.tell_owner(out.problem, told))

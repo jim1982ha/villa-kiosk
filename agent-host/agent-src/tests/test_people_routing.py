@@ -141,7 +141,7 @@ def test_a_chat_listed_for_both_roles_is_headed_for_both(tmp_path):
     assert heads == {JM: "For: JM_O", GROUP: "For: JM_O, Fabien_FM", FABIEN: "For: Fabien_FM"}
 
 
-def test_the_agents_own_approvals_and_warnings_carry_the_heading_but_not_in_the_askers_chat(tmp_path):
+def test_the_agents_own_approvals_and_warnings_carry_the_heading_in_every_chat(tmp_path):
     # architecture review 18: approvals and "the siren cannot be requested" went without the heading
     v = make_agent(tmp_path, {"people": PEOPLE, "act_enabled": True,
                               "allowed_services": {"light.turn_on": "owner", "cover.open_cover": "any"}})
@@ -152,7 +152,10 @@ def test_the_agents_own_approvals_and_warnings_carry_the_heading_but_not_in_the_
     _, msg = v.actions.request("cover", "open_cover", "cover.pool", {}, v.policy().person(JM), JM)
     run(v.outcome.ask(msg))
     (chat, text, _), = v.tg.sent
-    assert chat == JM and not text.startswith("For:")              # asked here: part of the answer to the asker
+    # asked here, and still in the agent's layout (owner, 2026-10-10): heading, the action, then where it stands
+    assert chat == JM and text.startswith("For: ") and re.search(
+        r"\n-------\nWaiting for approval by the owner or the facility manager \(asked on \d\d/\d\d/\d{4} \d\d:\d\d, "
+        r"expires in 15 min\)\.$", text)
 
 
 def test_an_unreadable_rules_file_keeps_the_last_good_rules_and_the_siren_that_sounds_stops(tmp_path):
@@ -226,3 +229,25 @@ def test_in_a_listed_group_everyone_acts_with_the_groups_role_whatever_their_own
                               {"telegram_id": JM, "name": "JM_O", "role": "owner"}]})
     # "irrespective of their own individual role" (owner, 2026-10-10): a group of both roles is the narrower, for all
     assert both.member(JM, GROUP).role == "fm" and both.member(555, GROUP).role == "fm" and both.member(JM, JM).role == "owner"
+
+
+def test_the_answer_that_says_an_approval_was_asked_goes_once_it_is_decided(tmp_path, monkeypatch):
+    # owner, 2026-10-10: "I expect the message 'Request sent… Awaiting approval.' to disappear when it has been approved"
+    from ai_fake import FakeAI
+    v = make_agent(tmp_path, {"people": [{"telegram_id": JM, "name": "JM", "role": "owner"},
+                                         {"telegram_id": GROUP, "name": "Group", "role": "fm"}],
+                              "act_enabled": True, "allowed_services": {"cover.close_cover": "any"}})
+
+    async def asks(call):
+        await call["call"]("ha_call_service", {"domain": "cover", "service": "close_cover", "entity_id": "cover.bedroom"})
+    FakeAI("Request sent. Awaiting approval.", act=asks).install(monkeypatch)
+    run(v.converse(JM, v.policy().person(JM), "close the bedroom curtain"))
+    (req_n, (_, req, kb)), = [(n, s) for n, s in enumerate(v.tg.sent, start=1001) if s[2]]
+    answer_n = next(n for n, (c, t, k) in enumerate(v.tg.sent, start=1001) if t == "Request sent. Awaiting approval.")
+    assert req.startswith("For: JM\n-------\n") and "\n-------\nWaiting for approval by " in req     # the agent's layout
+    press = {"id": "cb", "data": kb["inline_keyboard"][0][1]["callback_data"], "chat_id": JM, "user_id": JM,
+             "message": {"message_id": req_n, "chat": {"id": JM}, "text": req}, "bot": BOT}
+    run(v.on_ha_event("telegram_callback", press))
+    assert (JM, answer_n) in v.tg.deleted                                   # the "awaiting" answer is gone
+    (_, mid, settled), = v.tg.edits
+    assert mid == req_n and re.search(r"\n-------\nRefused by JM on \d\d/\d\d/\d{4} \d\d:\d\d\. Nothing was done\.$", settled)

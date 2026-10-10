@@ -128,6 +128,8 @@ class Toolbox:
         # got text. A send_message(camera=) option (0.12.57) was not used by the model either. The reply carries
         # them (app.converse): (base64, mime), in the order looked at, each picture once.
         self.photos: list[tuple[str, str]] = []
+        # the approval requests this run sent: the answer that says "awaiting approval" goes when one is decided
+        self.approvals: list[str] = []
         # ⚠️ tool_access DECIDES, THIS CLASS BUILDS (architecture review, 2026-10-06): allowed_for's answer — through
         # turn.Terms — is the whole list — every tool below is built only when it is in it, and the
         # names the SDK may call are read off the built tools (for_run), so the two can never differ.
@@ -254,6 +256,8 @@ class Toolbox:
                                                   args.get("entity_id"), args.get("data") or {}, person, chat_id)
             if msg and not await self.ask(msg):
                 answer += " But the request with its Approve button could not be delivered in Telegram: nobody has it."
+            elif msg:
+                self.approvals.append(msg.approval_id)
             return _ok(answer)
         return handler
 

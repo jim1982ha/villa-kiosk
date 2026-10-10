@@ -119,9 +119,9 @@ def test_direct_still_asks_for_a_job_or_an_alert_and_for_an_owner_only_device(vi
     _, msg = actions.request("light", "turn_on", "light.example_pool", {}, stranger, 111)
     assert msg is not None
     _, msg = actions.request("light", "turn_on", "light.example_gate_lamp", {}, JM, 111)    # owner-only
-    assert msg is not None and "Only the owner" in msg.text
+    assert msg is not None and "approval by the owner (" in msg.text
     _, msg = actions.request("light", "turn_on", "light.example_group", {}, JM, 111)        # owner-only inside
-    assert msg is not None and "Only the owner" in msg.text
+    assert msg is not None and "approval by the owner (" in msg.text
     _, msg = actions.request("cover", "open_cover", "cover.example_shutter", {}, JM, 111)    # rule `any`
     assert msg is not None
     assert session.calls == []                                                              # nothing ran
@@ -163,4 +163,4 @@ def test_a_group_whose_members_cannot_be_read_asks_the_owner(villa, tmp_path, mo
     blind = Actions(lambda: pol, State(str(tmp_path / "blind.db")),
                     lambda: Writer("http://unused", "UTC", write=True, session=session), related=lambda ids: None)
     answer, msg = blind.request("light", "turn_on", "light.example_group", {}, JM, 111)
-    assert msg is not None and "Only the owner" in msg.text and session.calls == []
+    assert msg is not None and "approval by the owner (" in msg.text and session.calls == []

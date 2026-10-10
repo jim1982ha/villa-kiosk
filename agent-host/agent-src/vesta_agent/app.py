@@ -528,6 +528,8 @@ class Vesta:
             answered()                                       # "typing…" ends: the answer is going out
             # the camera pictures the AI looked at go with it (Toolbox.photos)
             mid = await self.delivery.reply(cid, answer, keyboard=keyboard, photos=res.photos)
+            for aid in res.approvals:                          # "awaiting approval": gone once it is decided
+                self.state.set_approval_answer(aid, cid, mid)
             await self.chat_jobs.replied(cid, mid)            # this turn's jobs: their waiting message, their "typing…"
 
     def before_answer(self) -> str:
@@ -592,6 +594,12 @@ class Vesta:
                 await self.thread.post(thread, p.chat, int(p.mid), str(p.msg.get("text") or ""), buttons=True)
             # every copy of the request, in every chat, says what was decided, by whom and when (Outcome.ask)
             await self.thread.close(thread, out["note"])
+            # ⚠️ AND THE ANSWER THAT SAID IT WAS ASKED GOES (owner, 2026-10-10: "I expect the message 'Request sent…
+            # Awaiting approval.' to disappear when it has been approved"): the request itself now says what happened
+            said = self.state.approval_answer(aid)
+            if said:
+                await self.delivery.delete(*said)
+                self.state.set_approval_answer(aid, None)
 
     async def _press_continue(self, p: "Press") -> None:
         cont = self.state.use_continuation(p.parts[0], p.chat, p.presser)

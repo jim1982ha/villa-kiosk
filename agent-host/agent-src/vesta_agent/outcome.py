@@ -205,10 +205,10 @@ class Outcome:
         text = f"{head}\n\n{msg.text}" if head else msg.text
         n = 0
         for chat in msg.chats:
-            # under its heading, as everything the agent sends on its own — not in the chat it was asked from: there it
-            # is part of the answer to the person who asked
+            # under its heading, as everything the agent sends on its own — in the chat it was asked from too (owner,
+            # 2026-10-10: "make sure the confirmation message respects the format, with the header and the footer")
             if await self._post(chat, text, roles={msg.to} if msg.to else (), keyboard=msg.keyboard,
-                                thread=approval_thread(msg.approval_id), plain=chat == msg.asked_in, origin=origin):
+                                thread=approval_thread(msg.approval_id), origin=origin):
                 n += 1
         return n
 

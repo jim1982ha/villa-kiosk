@@ -42,6 +42,7 @@ class Delivery:
 
 class Toolbox:
     photos: list = []
+    approvals: list = []
 
     def for_run(self, person, origin):
         from helpers import run_kit

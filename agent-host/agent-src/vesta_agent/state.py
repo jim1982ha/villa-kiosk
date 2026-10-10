@@ -81,6 +81,7 @@ KV_FAMILIES: dict[str, str] = {
     "siren:": CURRENT,              # when the siren must stop
     "listening_since": CURRENT,     # when the agent's record started (agent_records.listening_since)
     "unreachable:": CURRENT,        # a chat Telegram refused the last message to (the Overview names it)
+    "apprreply:": RECORDS,          # the answer that said an approval was asked: deleted when it is decided
 }
 
 
@@ -158,6 +159,18 @@ class State:
             self.put(f"unreachable:{int(chat)}", json.dumps({"at": utcnow().isoformat(), "error": error[:300]}))
         elif self.get(f"unreachable:{int(chat)}") is not None:
             self.drop(f"unreachable:{int(chat)}")
+
+    # The answer that told the asker an approval request was sent ("Awaiting approval"): it goes once the request is
+    # decided — its copies then say who decided what, when (owner, 2026-10-10).
+    def approval_answer(self, aid: str) -> tuple[int, int] | None:
+        v = self.get(f"apprreply:{aid}")
+        return tuple(json.loads(v)) if v else None
+
+    def set_approval_answer(self, aid: str, chat: int | None, mid: int | None = None) -> None:
+        if chat is not None and mid:
+            self.put(f"apprreply:{aid}", json.dumps([int(chat), int(mid)]))
+        else:
+            self.drop(f"apprreply:{aid}")
 
     # When the siren must stop (siren.py): kept here so that a restart still stops it.
     def siren_stop(self) -> str | None:

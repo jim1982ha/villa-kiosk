@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable
 
+from vesta_shared.messaging import RULE
 from . import button_data
 from .policy import NOT_REGISTERED, Decision, Person, Policy, action_hash
 from .routing import Routing
@@ -54,7 +55,6 @@ class Outgoing:
     keyboard: dict | None = None
     approval_id: str | None = None
     to: str | None = None       # the role it goes to its chats for ("owner"), for the heading; None: the chat's own
-    asked_in: int | None = None  # the chat it was asked from: there it is part of the answer, without a heading
 
 
 def plain(decision: Decision, names: Callable[[str], str]) -> str:
@@ -146,11 +146,13 @@ class Actions:
         who = "the owner" if d.required_role == "owner" else "the owner or the facility manager"
         self.state.log("requested", dict(base, approval=aid, required_role=d.required_role))
         msg = Outgoing([int(c) for c in targets],
-                       f"{text}\nOnly {who} can approve. Expires in {policy.approval_ttl_minutes} min.",
+                       # the action, then — under the line — where it stands, replaced by the decision when pressed
+                       # (owner, 2026-10-10: every message of the agent's in the same layout, the asker's chat included)
+                       f"{text}\n{RULE}\nWaiting for approval by {who} (asked on {{time}}, expires in "
+                       f"{policy.approval_ttl_minutes} min).",
                        {"inline_keyboard": [[{"text": "Approve", "callback_data": button_data.make(button_data.APPROVAL, aid, "y")},
                                              {"text": "Refuse", "callback_data": button_data.make(button_data.APPROVAL, aid, "n")}]]}, aid,
-                       to="owner" if targets == policy.chats_for("owner") else None,
-                       asked_in=int(origin_chat) if origin_chat is not None else None)
+                       to="owner" if targets == policy.chats_for("owner") else None)
         return (f"Approval requested from {who} (buttons sent). Nothing happens until a person approves. "
                 f"Do not say it is done."), msg
 

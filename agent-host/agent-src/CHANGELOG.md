@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.129 (10 October 2026)
+
+- Approvals in the notice layout everywhere: actions.request writes the action, RULE, "Waiting for approval by … (asked on {time}, …)"; Outcome.ask composes the heading in the asking chat too (Outgoing.asked_in gone); a decision replaces the status (with_status).
+- The answer that said an approval was asked is deleted once it is decided: Toolbox.approvals → TurnResult.approvals → state `apprreply:` (RECORDS) set after the reply, read and dropped by app._press_approval. Test of the round trip; three mutations red.
+
 ## 0.6.128 (10 October 2026)
 
 - Policy.member: in a listed group everyone — a listed person included — acts with the group's role (fm when listed for both); a person's row applies in their private chat. Test shown red without it; the approval test presses in the owner's private chat.
