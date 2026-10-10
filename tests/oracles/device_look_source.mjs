@@ -129,7 +129,8 @@ console.log("\n  the callers ask it (pin the caller):");
 {
   const src = (f) => readFileSync(new URL(`../../src/${f}`, import.meta.url), "utf8")
     .replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
-  const ev = src("babylon/EntityVisuals.ts"), sg = src("components/panels/SummaryGroupPanel.tsx"), db = src("pages/Dashboard.tsx"),
+  const ev = src("babylon/EntityVisuals.ts"), sg = src("components/panels/SummaryGroupPanel.tsx"), // the page and the open panel's actions it provides (components/panels/useOpenPanelActions, review 11)
+    db = src("pages/Dashboard.tsx") + src("components/panels/useOpenPanelActions.ts"),
     ph = src("components/panels/panelHeader.ts");
   ck("the map paints badges, cells and chip members from deviceLook through its one source",
      (ev.match(/deviceLook\([^)]*this\.lookSource\)/g) ?? []).length >= 4 && /mapLookSource\(this\.lastState, this\.mapping/.test(ev));

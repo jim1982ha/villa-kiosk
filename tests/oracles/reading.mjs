@@ -10,7 +10,7 @@ import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
-const { readingOf, rowTone } = await import("@/config/reading");
+const { readingOf, rowTone, historyOf } = await import("@/config/reading");
 const { readingRows } = await import("@/config/readingRows");
 
 const ent = (id, state, attributes = {}) => ({ entity_id: id, state, attributes, last_changed: "", last_updated: "" });
@@ -67,5 +67,19 @@ console.log("\n  every window asks it, and none assembles its own");
     ck(`${name} asks readingOf, and imports none of the pieces it replaces`,
        /readingOf\(/.test(t) && !/from "@\/config\/(binaryLook|sensorReading)"|from "\.\/(binaryLook|sensorReading)"|formatSensorParts/.test(t));
   }
+}
+console.log("\n  which history goes under it (architecture review 11)");
+{
+  const of = (id, state, attrs, type) => historyOf(readingOf(id, ent(id, state, attrs), type, {}));
+  ck("an on/off sensor: its states", of("binary_sensor.leak", "on", { device_class: "moisture" }, "binary_sensor") === "states");
+  ck("a words sensor ('connected'): its words, never a numeric chart that drops every row", of("sensor.ap", "connected", {}, "sensor") === "words");
+  ck("a measurement: its numbers", of("sensor.t", "21.4", { unit_of_measurement: "°C" }, "sensor") === "numbers");
+  ck("  ...offline too — its chart shades the outage", of("sensor.t", "unavailable", { unit_of_measurement: "°C" }, "sensor") === "numbers");
+  const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
+  const g = src("components/panels/DeviceGroupPanel.tsx");
+  ck("both windows choose by historyOf, and the group draws a words member's timeline (the caller)",
+     /historyOf\(r\)/.test(src("components/panels/SensorPanel.tsx")) && /historyOf\(r\.reading\) !== "numbers"/.test(g) && /LastDayTimeline entityId=\{r\.id\} legend/.test(g)
+     && !/stateColor\)\.map/.test(g));
+  ck("both windows draw a pill through ReadingPill", ["SensorPanel", "DeviceGroupPanel"].every((f) => /<ReadingPill /.test(src(`components/panels/${f}.tsx`)) && !/className=\{`status-pill/.test(src(`components/panels/${f}.tsx`))));
 }
 done("✅ a reading is one answer in every window");

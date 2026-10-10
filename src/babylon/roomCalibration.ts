@@ -45,15 +45,45 @@ export interface CalibrationSolution {
  * wrong way (usually straight into the nearest wall and clipped to nothing)
  * instead of missing outright — which is why a camera with motion correctly
  * wired up still showed no visible red beam.
- * SweetHome's plan is Y-down (X east, Y south) and the angle spinner turns
- * furniture CLOCKWISE from its modelled "south-facing" (plan +Y) default —
- * the sin/cos mapping below is still unverified against a real rotated
- * camera's ACTUAL facing direction in-app (only the unit bug is confirmed);
- * if a live test shows the beam pointing the wrong way, this is the one
- * place to flip the sign or swap sin/cos.
+ * SweetHome's plan is Y-down (X east, Y south): a piece's front faces plan +Y at angle 0, and the angle turns it as
+ * Java's AffineTransform.rotate does — (x, y) → (x·cos − y·sin, x·sin + y·cos) — so its front goes to (−sin, cos).
+ * ⚠️ VERIFIED 2026-10-08 against the villa's GLB: for 11 of 13 cameras the mesh's axis matches this to ≤ 2°
+ * (measured with a local GLB probe); the earlier (sin, cos) was its MIRROR, right only near 90°/270° (a 180°
+ * setting hid it there), and turned a camera's beam the wrong way when the owner changed its angle.
  */
 export function planAngleToDir(angleRad: number): { px: number; py: number } {
-  return { px: Math.sin(angleRad), py: Math.cos(angleRad) };
+  return { px: -Math.sin(angleRad), py: Math.cos(angleRad) };
+}
+
+/**
+ * The world direction a SweetHome camera PIECE's motion beam points (architecture review 10: this lived inline in
+ * a 280-line calibration, three conventions in three files — and both 2026-10-08 defects, a mirrored heading and a
+ * level tilt, were conversions here). `piece`: plan position, `angle` (radians, planAngleToDir's rule) and `pitch`
+ * (radians, SweetHome's "Horizontal rotation around X axis"); `planToWorld`: the calibration's fit (translation
+ * cancels: two nearby points are transformed and differenced, so any strategy or mirror works); `headingRad`: the
+ * lens relative to the piece's front; `defaultTiltRad`: the tilt of a piece that has none. A unit vector, or null
+ * when the fit collapses the direction.
+ *
+ * ⚠️ A PITCH OF 0 IS "NOT SET": SweetHome writes no `pitch` attribute for an untilted piece and the plan reader
+ * stores it as 0 — read as `?? default`, the default never applied and every beam was level (owner, 2026-10-08).
+ * A camera meant to look straight ahead gets a small tilt in SweetHome.
+ * Positive pitch tilts DOWN (confirmed live 2026-07-03). Past 90° cos goes negative and the beam aims behind the
+ * camera — mathematically right for an axis rotation, so keep pitch within 0°..90° in SweetHome.
+ */
+export function cameraBeamDir(
+  piece: { x: number; y: number; angle: number; pitch?: number },
+  planToWorld: (x: number, y: number) => { x: number; z: number },
+  headingRad: number, defaultTiltRad: number,
+): { x: number; y: number; z: number } | null {
+  const d = planAngleToDir(piece.angle + headingRad);
+  const p0 = planToWorld(piece.x, piece.y);
+  const p1 = planToWorld(piece.x + d.px, piece.y + d.py);
+  const wx = p1.x - p0.x, wz = p1.z - p0.z;
+  const len = Math.hypot(wx, wz);
+  if (len <= 1e-6) return null;
+  const pitch = piece.pitch ? piece.pitch : defaultTiltRad;
+  const h = Math.cos(pitch) / len;
+  return { x: wx * h, y: -Math.sin(pitch), z: wz * h };
 }
 
 /**

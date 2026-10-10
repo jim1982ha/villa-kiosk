@@ -47,7 +47,7 @@ const costRows = B.barTipRows({ t: 0, segs: [seg(45000, "cost")] }, money);
 ck("the cost chart's row is money — not 'Cost 45,000 kWh'", costRows.length === 1 && /IDR|Rp/.test(costRows[0].text) && !/kWh/.test(costRows[0].text), costRows);
 const kwh = (v) => `${fmtKwh(v)} kWh`;
 const stack = B.barTipRows({ t: 0, segs: [seg(2, "a"), seg(0, "b"), seg(1, "c")] }, kwh);
-ck("a stack: its total first, then each segment that is not zero", stack.map((r) => r.key).join() === "_total,a,c" && stack[0].text === "Total 3.00 kWh", stack);
+ck("a stack: its total first, then each segment that is not zero", stack.map((r) => r.key).join() === "_total,a,c" && stack[0].text === "Total 3 kWh", stack); // a whole number, as every badge writes it (display_numbers.mjs)
 ck("a dry hour still says 0", B.barTipRows({ t: 0, segs: [seg(0)] }, (v) => `${v} mm`)[0].text === "Used 0 mm");
 ck("no reading says so", B.barTipRows({ t: 0, segs: null }, kwh)[0].text === "No reading");
 ck("nothing yet says nothing", B.barTipRows({ t: 0, segs: [] }, kwh).length === 0);

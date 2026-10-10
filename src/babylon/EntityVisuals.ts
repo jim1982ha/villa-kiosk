@@ -110,7 +110,9 @@ import { Storeys } from "./storeys";
 import { FloorProbe } from "./floorProbe";
 import { axisWorldScale, stripExtent } from "./meshUnits";
 import type { LightReading } from "./lightPoolSet";
-import { OcclusionSweep } from "./occlusionSweep";
+import { OcclusionSweep, owesLayout, wallStep } from "./occlusionSweep";
+import { LayoutGate } from "./layoutGate";
+import { WalkerView, walkExemptRooms } from "./walkerView";
 import type { RoomChip } from "./roomChips";
 import { groupCardModel, roomChipModel, type SummaryFrame } from "./summaryLook";
 import { rungAt, referenceDepthAt, iconZoomAt, viewportPx } from "./badgeScale";
@@ -214,7 +216,7 @@ const OCCLUSION_NEAR_M = 1.2;
 /** How far short of the anchor the ray stops. A device is normally mounted ON
  *  a wall or under a ceiling, so a ray that reaches its anchor ends inside that
  *  surface and reports the device as occluded by the thing it is attached to. */
-const OCCLUSION_SLACK_M = 0.35;
+const OCCLUSION_SLACK_M = 0.10;   // aimed at the device's centre (occlusionSweep `ty`): measured 93 → 1 hidden devices drawn
 /** One-word revert for the whole first-person wall cull, in the style of
  *  `BADGE_PLACEMENT` / `CHIP_COLLISION` — the fastest way to bisect a "it feels
  *  laggier since" report against the tier that was added with it. */
@@ -744,17 +746,14 @@ export class EntityVisuals {
   //      detachFanLabelAnchor) and a pulse only changes emissive colour, so
   //      neither has any effect on layout. The view-projection matrix is the
   //      honest test for "did anything about the camera change", covering
-  //      pan/orbit/zoom/fov in one comparison; `layoutDirty` covers everything
-  //      else (see markLayoutDirty's callers).
+  //      pan/orbit/zoom/fov in one comparison; a dirty mark covers everything
+  //      else (see markLayoutDirty's callers). Both in layoutGate.ts.
   //   2. When it DOES run, reuse the working arrays and their element objects
   //      instead of rebuilding them, so a genuine camera move costs CPU but
   //      not a fresh heap allocation per badge per frame.
   // The grouping ALGORITHM is untouched — same inputs, same world-space /
   // zoom-only decision, same outputs. Only allocation and scheduling change.
-  private layoutDirty = true;
-  private lastVpM: Float32Array | null = null;
-  private lastVpW = -1;
-  private lastVpH = -1;
+  private readonly gate = new LayoutGate();
   /** Grow-only store of ShownLabel objects, reused across frames. Kept
    *  SEPARATE from `shown` (which is truncated to the live count each pass) so
    *  truncation cannot drop the objects and force reallocation next frame. */
@@ -778,7 +777,7 @@ export class EntityVisuals {
    *  badge visibly stale, so every caller that touches label content, the
    *  label set, scale, floor or category filtering calls this. */
   private markLayoutDirty(): void {
-    this.layoutDirty = true;
+    this.gate.markDirty();
   }
   private pulseT = 0;
   /** Scratch for animatePulse — see its comment. */
@@ -800,6 +799,10 @@ export class EntityVisuals {
    *  badge at a fixed screen-space height regardless of how tall the asset
    *  actually was or how high up it sat. */
   private labelAnchors = new Map<string, TransformNode>();
+  /** Anchor → device centre, per entity (buildLabelAnchors): the line of sight aims at the device (occlusionSweep `ty`). */
+  private readonly sightDrop = new Map<string, number>();
+  /** Entity → its plan room (walkExempt), filled on demand, cleared with the anchors and on a new plan. */
+  private readonly planRoomCache = new Map<string, unknown>();
   /** Last seen HA state per entity, so a label rebuild (toggle on / icon edit)
    *  can repaint badges immediately instead of waiting for the next push. */
   private lastState = new Map<string, HassEntity>();
@@ -868,7 +871,12 @@ export class EntityVisuals {
    *  containment test answers with `.rooms.json`'s load order. */
   private plan = new Storeys<{ name: string; pts: { x: number; z: number }[]; floorY: number; storey?: number }>([]);
   /** True while the walking camera is the active one — see setFirstPerson. */
-  private firstPerson = false;
+  private readonly walker: WalkerView;
+  /** Walking or not — the WALKER's fact (walkerView.ts), read, never copied. */
+  private get firstPerson(): boolean { return this.walker.walking; }
+  /** The walk state setFirstPerson last APPLIED its side effects for (the occlusion reset): the
+   *  hook's own bookkeeping, not a second copy anyone reads. */
+  private appliedWalk = false;
   /** Which badges are behind a wall from the walker's eye — see
    *  occlusionSweep.ts, which owns the answers, when they go stale and what a
    *  pass may spend. This file only supplies the ray cast. Empty in overview. */
@@ -967,9 +975,12 @@ export class EntityVisuals {
      *  longer be dropped: it was an optional second callback that fell back
      *  to the uncapped one. */
     frames: FrameRequests,
+    /** The walker (walkerView.ts): read here, written by SceneManager and CameraController. */
+    walker: WalkerView = new WalkerView(),
   ) {
     this.scene = scene;
     this.config = config;
+    this.walker = walker;
     this.requestRender = () => frames.repaint();
     this.requestAnimationRender = () => frames.animate();
     this.probe = new FloorProbe(scene);
@@ -1811,6 +1822,8 @@ export class EntityVisuals {
       const { min, max } = bounds;
       const node = new TransformNode(`lblAnchor_${entityId}`, this.scene);
       node.position.set((min.x + max.x) / 2, max.y + LABEL_ANCHOR_MARGIN, (min.z + max.z) / 2);
+      // how far below its anchor the device's centre is: where a line of sight aims (occlusionSweep `ty`)
+      this.sightDrop.set(entityId, (max.y - min.y) / 2 + LABEL_ANCHOR_MARGIN);
       // Parent to the entity's mesh (world position preserved) so the anchor
       // inherits enabled-state: when FloorManager hides a floor, the label
       // culler sees the disabled anchor and hides the badge with the device.
@@ -1822,6 +1835,8 @@ export class EntityVisuals {
   private disposeLabelAnchors(): void {
     this.labelAnchors.forEach((n) => n.dispose());
     this.labelAnchors.clear();
+    this.sightDrop.clear();
+    this.planRoomCache.clear();
   }
 
   /** Full teardown for scene disposal. scene.dispose() reclaims most of what
@@ -1868,8 +1883,10 @@ export class EntityVisuals {
     // or their room summarises), so the room's own size no longer takes part
     // in any grouping decision and the cache is gone with the fan.
     this.plan = plan;
+    this.planRoomCache.clear();
     // The earliest moment the pools can take their rooms' shapes and floors.
     this.bulbs.setRooms(plan);
+    this.markLayoutDirty();               // the layout reads the plan (walkExempt's plan rooms)
     this.requestRender();
   }
 
@@ -2530,6 +2547,7 @@ export class EntityVisuals {
    */
   setIconZoomFit(fitRadius: number): void {
     this.iconZoomFitRadius = fitRadius > 0 ? fitRadius : 0;
+    this.markLayoutDirty();               // cullLabels reads it (syncIconZoomToRung): an input of the layout
   }
 
   /** Applies an already-derived zoom scale, snapped onto the zoom lattice. */
@@ -3264,19 +3282,7 @@ export class EntityVisuals {
     // catches a resize. Compared BEFORE any allocation, so the common
     // animating-but-static-view frame (a spinning fan, a pulsing alert) costs
     // 16 float comparisons instead of a full relayout.
-    const m = tm.m;
-    if (!this.layoutDirty && this.lastVpM && this.lastVpW === vp.width && this.lastVpH === vp.height) {
-      let same = true;
-      for (let i = 0; i < 16; i++) {
-        if (this.lastVpM[i] !== m[i]) { same = false; break; }
-      }
-      if (same) return;
-    }
-    if (!this.lastVpM) this.lastVpM = new Float32Array(16);
-    for (let i = 0; i < 16; i++) this.lastVpM[i] = m[i];
-    this.lastVpW = vp.width;
-    this.lastVpH = vp.height;
-    this.layoutDirty = false;
+    if (!this.gate.open(tm.m, vp.width, vp.height)) return;     // nothing that moves a badge changed (layoutGate.ts)
 
     // Every badge that passes the non-view culls (category / floor / enabled).
     // Deliberately NOT filtered by what is currently framed — see groupBadges.
@@ -3337,6 +3343,7 @@ export class EntityVisuals {
       s.wx = wp.x;
       s.wy = wp.y;
       s.wz = wp.z;
+      s.ty = wp.y - (this.sightDrop.get(id) ?? 0);
       s.inFront = p.z >= 0 && p.z <= 1;
       s.occluded = this.occlusion.occluded.has(id);
       shown[shownCount] = s;
@@ -3632,19 +3639,13 @@ export class EntityVisuals {
     }
     // A TIME budget, halved on a phone — see occlusionSweep.ts.
     const budget = this.pointer === "coarse" ? OCCLUSION_MS_COARSE : OCCLUSION_MS_BUDGET;
-    const pass = this.occlusion.step(shown, cam.globalPosition, budget);
+    const pass = wallStep(this.occlusion, shown, cam.globalPosition, budget, () => this.markLayoutDirty());
     if (pass === "idle") return;
     // Settling: no rays while moving, but a frame must come to start the sweep
     // the moment the camera stops.
-    if (pass === "settling") { this.requestRender(); return; }
-    this.reportWalkCost(shown.length);
-    if (pass === "sweeping") {
-      // The sweep owes answers and the camera may now stop moving — see the
-      // early-return in cullLabels, which would otherwise freeze half the
-      // badges on a stale answer.
-      this.layoutDirty = true;
-      this.requestRender();
-    }
+    if (pass !== "settling") this.reportWalkCost(shown.length);
+    // owed a pass (wallStep marked the layout dirty): a frame must come, or the gate never opens again
+    if (owesLayout(pass)) this.requestRender();
   }
 
   /** The occlusion sweep's adapter: is this segment blocked by a VISIBLE
@@ -3794,13 +3795,12 @@ export class EntityVisuals {
     );
   }
 
-  /** Which camera the badges are being drawn from. Set by SceneManager on every
-   *  view switch AND after a model load, because a load can land in either
-   *  view. Only wall-occlusion reads it — everything else that differs between
-   *  the two cameras already rides `VIEW_METRIC`/`setIconZoomFit`. */
+  /** The walk started or ended (SceneManager, on every view switch AND after a model load, which
+   *  can land in either view): the occlusion answers are reset and the layout redone. The fact
+   *  itself is the walker's (walkerView.ts); `on` is checked against it. */
   setFirstPerson(on: boolean): void {
-    if (on === this.firstPerson) return;
-    this.firstPerson = on;
+    if (on === this.appliedWalk) return;
+    this.appliedWalk = on;
     this.occlusion.reset(!on);
     this.markLayoutDirty();
   }
@@ -3934,6 +3934,26 @@ export class EntityVisuals {
       this.badgeGeomUnsettled = 0;
       return;
     }
+  }
+
+  /** The rooms never grouped this frame (PlacementFrame.exempt): the focused ones, and while walking the room the
+   *  walker stands in (owner, 2026-10-08: inside Bedroom 2, its badges were the "Bedroom 2 (3)" chip). The room is
+   *  the WALKER's (walkerView.ts: the one the room banner shows, by the feet — not a second answer by the eye,
+   *  architecture review 10), turned into the badges' own room keys through the badges standing in that plan room:
+   *  no badge name has to match (a badge's room may be HA's Area name, the plan's is SweetHome's). */
+  private walkExempt(shown: readonly ShownLabel[]): ReadonlySet<string> {
+    return walkExemptRooms(this.focus.rooms, this.walker, shown,
+      (id) => (this.planRoomOf(id) as { name?: string } | null)?.name ?? null, (id) => roomKey(this.roomOf(id)));
+  }
+
+  /** A badge's PLAN room (Storeys.deviceRoomAt at its anchor), kept: anchors do not move between loads. */
+  private planRoomOf(id: string): unknown {
+    if (this.planRoomCache.has(id)) return this.planRoomCache.get(id);
+    const a = this.labels.get(id)?.anchor;
+    const p = a?.getAbsolutePosition();
+    const r = p ? this.plan.deviceRoomAt(p.x, p.y, p.z) : null;
+    this.planRoomCache.set(id, r);
+    return r;
   }
 
   /** A badge's room, normalised — the single definition every grouping,
@@ -4088,6 +4108,7 @@ export class EntityVisuals {
       ...this.cardShape(),
       rooms: this.resolvedRooms,
       focus: this.focus,
+      exempt: this.walkExempt(shown),
       scale,
       cardBudget: this.cardBudget(),
       cellCap: this.cardCellCap(),

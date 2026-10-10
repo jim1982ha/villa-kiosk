@@ -59,7 +59,7 @@ ck("today at 13:00, 11.7 kWh against 29.9: 'A quiet day — 39% of a typical one
    E.todayHeadline(11.7, 29.89, 13 / 24, "13:00") === "A quiet day — 39% of a typical one by 13:00.", E.todayHeadline(11.7, 29.89, 13 / 24, "13:00"));
 ck("on pace: a usual day; well over: a busy one",
    /^A usual day/.test(E.todayHeadline(15, 30, 0.5, "12:00")) && /^A busy day/.test(E.todayHeadline(25, 30, 0.5, "12:00")));
-ck("no history yet: just the figure", E.todayHeadline(4.2, undefined, 0.5, "12:00") === "4.20 kWh so far today.");
+ck("no history yet: just the figure", E.todayHeadline(4.2, undefined, 0.5, "12:00") === "4.2 kWh so far today.");
 const leafs = setup.devices.filter((d) => d.children.length === 0);
 const typ = { "sensor.spa_pump_energy": 0, "sensor.jet_pump_energy": 0, "sensor.pool_pump_energy": 5.26 };
 const up = E.risers(leafs, (id) => fri[id], (id) => typ[id] ?? 0.0);

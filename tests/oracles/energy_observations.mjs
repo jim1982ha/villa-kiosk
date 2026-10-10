@@ -60,8 +60,8 @@ console.log("\n  the history's figures:");
 const gappy = E.energyPeriod(setup, { "sensor.grid_in": series(hours.slice(0, 6), [1, 2, null, 4, 1, 1]) }, hours.slice(0, 6), H, hours[6] + H);
 const F = O.historyFigures(gappy, "hour", (t) => `${new Date(t).getHours()}:00`, "IDR", "en-US");
 ck("Energy, Cost, Per hour, Busiest hour", F.map((f) => f.label).join() === "Energy,Cost,Per hour,Busiest hour");
-ck("per hour over the hours WITH a reading (9 kWh / 5), not the six shown", F[2].value === "1.80 kWh", F[2]);
-ck("the busiest hour names its time and kWh", F[3].value === "3:00 · 4.00", F[3]);
+ck("per hour over the hours WITH a reading (9 kWh / 5), not the six shown", F[2].value === "1.8 kWh", F[2]);
+ck("the busiest hour names its time and kWh", F[3].value === "3:00 · 4", F[3]);
 ck("no cost statistic: a dash, not 0", F[1].value === "—");
 ck("a share is a whole percent, and 0 of nothing (never NaN)", O.share(1, 3) === 33 && O.share(5, 0) === 0);
 

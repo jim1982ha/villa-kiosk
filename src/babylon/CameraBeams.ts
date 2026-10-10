@@ -95,7 +95,7 @@ export class CameraBeams {
    * The length is a pure function of the beam's origin, its direction and the
    * structure's geometry. Origin and geometry are fixed by the GLB, which the
    * store's key already pins; the DIRECTION is not — it moves with the
-   * `cameraBeamOffsetDeg`/`cameraBeamPitchDeg` settings — so it goes in the
+   * `cameraBeamHeadingDeg`/`cameraBeamTiltDeg` settings — so it goes in the
    * entry key, and changing either setting simply misses and re-probes.
    */
   private clips = new Map<string, number>();

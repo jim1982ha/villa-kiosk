@@ -6,15 +6,17 @@
 // plus one dual-axis 24h graph when there are exactly two numeric series
 // (the common case) or a stacked line chart per series otherwise.
 
-import { AlertTriangle, Layers } from "lucide-react";
+import { Layers } from "lucide-react";
 import BasePanel from "./BasePanel";
 import NumericHistory from "./NumericHistory";
+import ReadingPill from "./ReadingPill";
 import UnavailableNotice from "./UnavailableNotice";
 import { useHA } from "@/ha/HAStateStore";
 import type { DeviceGroup } from "@/config/AppConfig";
 import type { EntityMapping } from "@/types/scene.types";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
-import { readingOf } from "@/config/reading";
+import { historyOf, readingOf } from "@/config/reading";
+import { binarySensorClassInfo } from "@/config/BinarySensorClasses";
 import { domainOf } from "@/utils/entityDomain";
 import { useConfig } from "@/config/ConfigContext";
 import LastDayTimeline from "./LastDayTimeline";
@@ -72,7 +74,7 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
   // A reading with a unit is a measurement even while it is UNAVAILABLE —
   // that is exactly when its chart's shaded outage has something to say
   // (config/sensorReading, the rule the sensor panel shares).
-  const numericRows = rows.filter((r) => r.reading.kind === "measurement" && (r.numeric !== undefined || r.unit !== ""));
+  const numericRows = rows.filter((r) => historyOf(r.reading) === "numbers" && (r.numeric !== undefined || r.unit !== ""));
   return (
     <BasePanel
       title={group.label ?? primaryMapping.label}
@@ -104,9 +106,9 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
                   // alarm's capitals ("SMOKE DETECTED") broke awkwardly — kept
                   // inside its column: on a phone it wraps within the pill
                   // rather than running into its neighbour.
-                  ? <span className={`status-pill ${r.reading.pill}`} style={{ fontSize: "var(--text-lg)", maxWidth: "100%", justifyContent: "center" }}>
-                      {r.reading.alarm && <AlertTriangle size={18} />}{r.reading.value}
-                    </span>
+                  ? <ReadingPill r={r.reading} size={18}
+                      icon={binarySensorClassInfo(entities[r.id]?.attributes.device_class).icon}
+                      style={{ fontSize: "var(--text-lg)", maxWidth: "100%", justifyContent: "center" }} />
                   : <span style={{ color: r.reading.color }}>{r.reading.value}{r.reading.unit && <span className="value-unit" style={{ fontSize: "var(--text-md)", marginLeft: 3 }}>{r.reading.unit}</span>}</span>}
               </div>
               <div className="muted body-text">{r.label}</div>
@@ -119,11 +121,14 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
           different windows would invite exactly the wrong comparison. */}
       <NumericHistory named series={numericRows.map((r, i) => ({
         id: r.id, label: r.label, unit: r.unit, color: SERIES_COLORS[i % SERIES_COLORS.length] }))} />
-      {/* each binary member's own state history, coloured as in its own window */}
-      {rows.filter((r) => r.reading.stateColor).map((r) => (
+      {/* each on/off or words member's own state history, drawn as in its own
+          window (config/reading's historyOf — a words member had none here) */}
+      {rows.filter((r) => historyOf(r.reading) !== "numbers").map((r) => (
         <div key={`h-${r.id}`}>
           <div className="muted body-text" style={{ margin: "12px 0 4px" }}>{r.label}</div>
-          <LastDayTimeline entityId={r.id} colorFor={r.reading.stateColor!} />
+          {historyOf(r.reading) === "states"
+            ? <LastDayTimeline entityId={r.id} colorFor={r.reading.stateColor ?? undefined} />
+            : <LastDayTimeline entityId={r.id} legend />}
         </div>
       ))}
     </BasePanel>

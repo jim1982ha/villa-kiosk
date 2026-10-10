@@ -14,7 +14,7 @@ import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
-const { buildAttentionItems, groupAttention, attentionFor, attentionLine } = await import("@/config/attention");
+const { buildAttentionItems, groupAttention, attentionFor, attentionLine, attentionLineIn } = await import("@/config/attention");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
 
 const ent = (id, state, name) => ({ entity_id: id, state, attributes: { friendly_name: name } });
@@ -63,11 +63,17 @@ const ghostRow = ghost.find((g) => g.entityId === "sensor.renamed_away");
 ck("an entity the fold does not know is its own device: a row of its own, as before grouping",
    ghostRow?.key === "device:sensor.renamed_away" && ghostRow.items.length === 1);
 const lone = groupAttention(before).find((g) => g.entityId === "light.lamp");
-ck("a device with ONE problem reads exactly as the item did (title, room, the item itself)",
-   lone?.title === "Hall lamp" && lone.room === "Hall" && lone.items.length === 1 && lone.items[0].detail === "Unavailable");
+ck("a device with ONE problem: its row is the device, the problem its line",
+   lone?.title === "Hall lamp" && lone.room === "Hall" && lone.items.length === 1 && attentionLineIn(lone, lone.items[0]) === "Unavailable");
 const loneFault = groupAttention(build([ticket("va-4", "Back door stiff", "lock.back")])).find((g) => g.entityId === "lock.back");
-ck("  ...and a lone ticket with no room of its own (the agent's) takes its device's room",
-   loneFault?.title === "Back door stiff" && loneFault.room === "Garden", loneFault);
+// ⚠️ ONE SHAPE (owner, 2026-10-10): a lone fault titled its row with its own text ("Back door stiff") where the same
+// device with two problems was titled "Back door" — the Cockpit showed three shapes of row
+ck("  ...and a lone ticket is titled by its DEVICE, the fault its line, the device's room taken",
+   loneFault?.title === "Back door" && loneFault.room === "Garden"
+     && attentionLineIn(loneFault, loneFault.items[0]) === "Open fault: Back door stiff", loneFault);
+const noDevice = groupAttention(build([ticket("t-n", "Pool pump noisy")])).find((g) => g.key === "item:fault:t-n");
+ck("  ...and a problem with no device stands for itself: its line says only its status, never its title twice",
+   noDevice?.title === "Pool pump noisy" && attentionLineIn(noDevice, noDevice.items[0]) === "Open fault", noDevice);
 const warnOnly = groupAttention(build([ticket("w1", "Squeaks", "lock.back"), ticket("w2", "Loose handle", "lock.back")]));
 const backRow = warnOnly.find((g) => g.key === "device:lock.back");
 ck("two faults on one device: one row under the device's name, both faults inside",

@@ -25,6 +25,7 @@ import { PointerRoster } from "./pointerRoster";
 // Babylon prototype patches this module depends on — see babylonSideEffects.
 import "./babylonSideEffects";
 import { keyLook, PITCH_LIMIT } from "./keyLook";
+import type { WalkerView } from "./walkerView";
 import { keyIsForCamera } from "./overviewKeys";
 import { canvasInput, type CanvasInput } from "./canvasInput";
 
@@ -97,7 +98,11 @@ export class CameraController {
   private autoStuck = 0;
   private shift = false;
 
-  constructor(scene: Scene, canvas: HTMLCanvasElement, config: AppConfig, cb: CameraCallbacks) {
+  /** The walker's room is written here, where the room banner's is worked out (walkerView.ts). */
+  private readonly walker: WalkerView;
+
+  constructor(scene: Scene, canvas: HTMLCanvasElement, config: AppConfig, walker: WalkerView, cb: CameraCallbacks) {
+    this.walker = walker;
     this.scene = scene;
     this.config = config;
     this.cb = cb;
@@ -303,7 +308,7 @@ export class CameraController {
   private onKey = (e: KeyboardEvent): void => {
     // Not while typing in a field or with a dialog open (overviewKeys) —
     // arrow keys in a Settings field walked the villa behind it.
-    if (!keyIsForCamera(e.target) && e.type === "keydown") return;
+    if (!keyIsForCamera(e) && e.type === "keydown") return;
     this.shift = e.shiftKey;
     const map: Record<string, string> = {
       ArrowUp: "fwd", KeyW: "fwd", ArrowDown: "back", KeyS: "back",
@@ -995,6 +1000,7 @@ export class CameraController {
 
     if (room !== this.currentRoom) {
       this.currentRoom = room;
+      this.walker.room = room;
       this.cb.onRoomChange(room);
     }
   }
@@ -1042,6 +1048,7 @@ export class CameraController {
       this.camera.setTarget(lookAt);
       this.groundCamera(); // stand on the real floor at eye height
       this.currentRoom = point.name;
+      this.walker.room = point.name;
       this.cb.onRoomChange(point.name);
       return;
     }
@@ -1067,6 +1074,7 @@ export class CameraController {
       this.animating = false;
       this.groundCamera(); // settle to floor + eye height on arrival
       this.currentRoom = point.name;
+      this.walker.room = point.name;
       this.cb.onRoomChange(point.name);
     });
   }

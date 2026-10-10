@@ -69,6 +69,7 @@ const dash = readFileSync(new URL("../../src/pages/Dashboard.tsx", import.meta.u
 const css = readFileSync(new URL("../../src/styles/04-modals.css", import.meta.url), "utf8");
 ck("the list paints the tone, the page builds its rows here, and the tones have colours",
    /className=\{`panel-reading-value\$\{r\.tone \? ` \$\{r\.tone\}` : ""\}`\}/.test(list)
-   && /readingRows\(identity\.readingsOf\(/.test(dash)
+   // the open panel's actions live in components/panels/useOpenPanelActions since architecture review 11
+   && /readingsOf: identity\.readingsOf/.test(dash) && /readingRows\(readingsOf\(activePanel\.entityId\)/.test(readFileSync(new URL("../../src/components/panels/useOpenPanelActions.ts", import.meta.url), "utf8"))
    && ["on", "danger", "unavailable"].every((t) => new RegExp(`\\.panel-reading-value\\.${t} \\{ color: var\\(--status-`).test(css)));
 done("✅ a detector finding nothing wrong reads green, on its pill and its history");

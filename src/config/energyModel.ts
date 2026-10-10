@@ -17,6 +17,7 @@
 import { localMidnight, localMonthStart } from "@/utils/localDay";
 import { COMPILE_GRACE_MS } from "@/utils/statisticsSeries";
 import { toBaseUnit } from "./SensorClasses";
+import { formatUnitValue, kwhNumber } from "@/utils/entityValue";
 
 /** One `energy/get_prefs` device-consumption entry. */
 export interface EnergyDevicePref {
@@ -335,11 +336,14 @@ export function powerKw(state: unknown, unit: string | undefined): number | unde
 /** Live power, from kW: watts below 1 kW ("948 W"), else kW ("3.08 kW").
  *  The flow wrote it three ways, and the grid's "0.95 kW" beside a
  *  device's "948 W". */
+// ⚠️ THE KIOSK'S ONE WAY OF WRITING A POWER OR AN ENERGY (architecture review 11, 2026-10-09): these were a
+// fourth copy of "W or kW" and disagreed with every badge and tile — 3,000 W was "3 kW" on the top bar and
+// "3.00 kW" in the Energy flow. They now ask utils/entityValue (formatUnitValue, kwhNumber).
 export function fmtPower(kw: number): string {
-  return Math.abs(kw) < 1 ? `${Math.round(kw * 1000)} W` : `${kw.toFixed(2)} kW`;
+  return formatUnitValue(kw * 1000, "W");
 }
 
 export function fmtKwh(v: number): string {
-  return v >= 100 ? String(Math.round(v)) : v >= 10 ? v.toFixed(1) : v.toFixed(2);
+  return kwhNumber(v);
 }
 

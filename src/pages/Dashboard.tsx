@@ -20,6 +20,7 @@ import { hasSeenFirstRunTips } from "@/utils/viewPrefs";
 import TeleportMenu from "@/components/teleport/TeleportMenu";
 import PanelRouter from "@/components/panels/PanelRouter";
 import { PanelActionsProvider } from "@/components/panels/PanelActionsContext";
+import { useOpenPanelActions } from "@/components/panels/useOpenPanelActions";
 import SettingsModal from "@/components/settings/SettingsModal";
 import ConfigEditorModal from "@/components/settings/ConfigEditorModal";
 import { useConfig } from "@/config/ConfigContext";
@@ -28,33 +29,27 @@ import RoomChoiceSheet, { type RoomChoice } from "@/components/hud/RoomChoiceShe
 import { useProfile } from "@/auth/ProfileContext";
 import { isTypeAllowed, panelMapping, roleCan } from "@/auth/permissions";
 import { doorsFor } from "@/auth/doors";
-import { patchMapping } from "@/config/mappingEdits";
 import AgentModal from "@/components/agent/AgentModal";
 import { useAgent } from "@/agent/AgentContext";
 import GuestReportModal from "@/components/fm/GuestReportModal";
 import { useHA } from "@/ha/HAStateStore";
-import { displayLabelFor, resolveRooms, labelOf } from "@/config/EntityMap";
+import { displayLabelFor, resolveRooms } from "@/config/EntityMap";
 import { deriveHaScenes, scenesForRoom } from "@/config/haScenes";
 import { CATEGORY_ICONS, CATEGORY_LABELS } from "@/config/EntityCategories";
 import { deviceLook, storeLookSource } from "@/utils/deviceActivity";
 import { chipRooms, shown as surfaceShown, mergeTeleportPoints, roomChoicesFor, type Surface } from "./surfaces";
-import { START, backLabel, screenReducer, type Screen, type ScreenAction } from "./screen";
+import { START, screenReducer, type Screen, type ScreenAction } from "./screen";
 import type { Doors } from "@/auth/doors";
 import CockpitModal from "@/components/cockpit/CockpitModal";
 import { isMotionSensor } from "@/config/BinarySensorClasses";
 import { isQuickToggle } from "@/utils/quickAction";
-import { useOptimisticToggle } from "@/hooks/useOptimisticToggle";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { installDailyAutoReload } from "@/utils/autoReload";
 import type { SceneManager } from "@/babylon/SceneManager";
 import type { ActivePanel } from "@/types/panel.types";
 import type { TeleportPoint } from "@/types/scene.types";
 import { VillaModelProvider, useVillaSets, useDeviceIdentity } from "@/config/VillaModel";
-import { readingRows } from "@/config/readingRows";
 import { categoryMembers } from "@/config/villaVisibility";
-import { deviceSwitch } from "@/utils/devicePower";
-import { panelHeader } from "@/components/panels/panelHeader";
-import { useAskFirst } from "@/hooks/useAskFirst";
 import AskDialog from "@/components/common/AskDialog";
 import { readSceneMirror } from "./sceneMirror";
 
@@ -70,10 +65,6 @@ export default function Dashboard() {
   // check below must (and does) treat that as "nothing allowed," same as an
   // unrecognised role would.
   const canControl = roleCan(role, "controlEntities");
-  // Facility workspace: the facility manager (whose job it is) and the owner
-  // (accountable for the property, signs off the monthly report).
-  const canReportFault = roleCan(role, "reportFault");
-  const canEditConfig = roleCan(role, "editConfig");
   // Read inside the onScene effect below (which intentionally
   // only depends on [manager], so its closure would otherwise see a stale
   // config.teleportPoints from whenever that effect last ran).
@@ -397,59 +388,14 @@ export default function Dashboard() {
   const handOver = useCallback(
     (from: Surface, entityId: string) => go({ type: "handOver", from, panel: panelFor(identity.deviceOf(entityId)) }),
     [panelFor, identity, go]);
-  /** A device's reading, opened from the device's panel: Back returns to it. */
-  const openReading = useCallback(
-    (entityId: string) => go({ type: "openReading", panel: panelFor(entityId) }), [panelFor, go]);
   /** A device opened from the open room or category list (the list closes). */
   const openFromList = useCallback(
     (entityId: string) => go({ type: "openFromList", panel: panelFor(entityId) }), [panelFor, go]);
-  const goBack = useCallback(() => go({ type: "back" }), [go]);
-  const backText = backLabel(screen, (id) => labelOf(id, config.entityMap, entities), (c) => CATEGORY_LABELS[c]);
-  const panelReadings = activePanel
-    ? readingRows(identity.readingsOf(activePanel.entityId), entities, config.entityMap, config.alertThresholds)
-    : [];
-
-  // The open panel's LINKED entity (EntityMapping.linkedEntityId) — resolved
-  // at top level rather than inside the provider's value below, because its
-  // switch is optimistic and hooks can't run inside that conditional IIFE.
-  // Optimistic because the switch otherwise can't move until the device
-  // itself confirms, which for some integrations (an AP LED, say) genuinely
-  // takes seconds — see useOptimisticToggle for the full reasoning.
-  const linkedEntityId = activePanel
-    ? (config.entityMap[activePanel.entityId] ?? activePanel.mapping).linkedEntityId
-    : undefined;
-  // Its power is devicePower's: a linked LOCK is "on" when unlocked and is
-  // flipped with lock/unlock (it has no toggle); unknown when HA lost it.
-  // deviceSwitch adds whether to ask first: a linked lock's unlock, or a
-  // linked device the owner set to "ask before switching" — this switch asked
-  // nothing before 2.496.259.
-  const linkedLabel = linkedEntityId
-    ? labelOf(linkedEntityId, config.entityMap, entities)
-    : "";
-  const linkedPower = linkedEntityId
-    ? deviceSwitch(entities[linkedEntityId], linkedEntityId,
-        { label: linkedLabel, requireConfirm: config.entityMap[linkedEntityId]?.requireConfirm })
-    : null;
-  const linkedSend = useCallback(
-    () => (linkedEntityId ? HAServices.power(ws, entities[linkedEntityId], linkedEntityId) : undefined),
-    [ws, linkedEntityId, entities]);
-  const linkedToggle = useOptimisticToggle(
-    linkedEntityId,
-    linkedPower?.position === "on",
-    linkedSend,
-  );
-  // The panel row and the camera's rail both draw this switch; the question
-  // is asked HERE, as a dialog, so neither can skip it and the camera's
-  // narrow rail needs no room for an inline prompt.
-  const linkedAsk = useAskFirst(linkedPower?.ask ?? null, linkedToggle.toggle);
-
-  // The open panel's header — badge, linked switch, motion line — derived in
-  // one place (components/panels/panelHeader); the switch's state is the
-  // optimistic hook's above, passed in.
-  const header = activePanel
-    ? panelHeader({ panel: activePanel, entities, config, canControl,
-        linkedSwitch: linkedPower ? { isOn: linkedToggle.isOn, known: linkedPower.position !== "unknown" } : null })
-    : null;
+  // The open panel's header actions — Back, readings, edit, report, badge,
+  // the linked switch and its "ask first" — are components/panels/
+  // useOpenPanelActions'; this page only provides them and draws the dialog.
+  const openPanel = useOpenPanelActions({ screen, go, panelFor, readingsOf: identity.readingsOf });
+  const linkedAsk = openPanel.linkedAsk;
 
   // Everything React shows of the scene's own state, read from EACH new scene
   // (a cold start, or a model reload remounting the canvas) — the view it
@@ -793,34 +739,7 @@ export default function Dashboard() {
       )}
 
       {activePanel && (
-        <PanelActionsProvider
-          value={{
-            entityId: activePanel.entityId,
-            readings: panelReadings,
-            onOpenReading: openReading,
-            back: backText ? { label: backText, go: goBack } : undefined,
-            // Owner-only: jump straight to this device's row in Advanced Settings.
-            onEdit: canEditConfig ? () => go({ type: "editDevice" }) : undefined,
-            // Same capability that gates the Facility workspace itself —
-            // offering a shortcut into a screen the profile can't open would
-            // be a dead end.
-            // Every profile can report; only some can MANAGE. A guest gets a
-            // one-screen report form, an owner/facility manager lands in the
-            // Faults tab with the device filled in — same button, same intent,
-            // the destination differs only by what the profile can act on.
-            onReportFault: canReportFault ? () => go({ type: "reportFault" }) : undefined,
-            // The device's exact map badge, its linked switch and its motion
-            // line — components/panels/panelHeader, from the open panel and
-            // live data; the switch's state is the optimistic hook's.
-            badge: header!.badge,
-            onSetBadgeColor: canEditConfig
-              ? (hex) => update(patchMapping(
-                  activePanel.entityId, { badgeColor: hex ?? undefined }, activePanel.mapping))
-              : undefined,
-            linked: header!.linked ? { ...header!.linked, toggle: linkedAsk.request } : undefined,
-            motion: header!.motion ?? undefined,
-          }}
-        >
+        <PanelActionsProvider value={openPanel.actions ?? {}}>
           <PanelRouter
             active={activePanel}
             onClose={closePanel}

@@ -24,7 +24,8 @@ const { roomKey, NO_ROOM_LABEL } = await import("@/config/roomKey");
 const metrics = { minGapPx: 2, cardIconFraction: 0.8, countPillFraction: 0.4, countFontFraction: 0.6 };
 const frameOf = (rooms, focus) => ({
   metrics, summary: { size: 40, font: 16, countSize: 16, countFont: 10 }, perCardCap: MAX_GRID_CHIPS,
-  rooms, focus, scale: 1, cardBudget: 10_000, cellCap: 6,
+  // outside the walk view the exempt rooms are the focus (EntityVisuals.walkExempt); read live, as a tap changes it
+  rooms, focus, get exempt() { return focus.rooms; }, scale: 1, cardBudget: 10_000, cellCap: 6,
   chips: { members: [], view: null, text: { charPx: 7, padPx: 20 }, budget: 0 },
 });
 function rig(rooms) {

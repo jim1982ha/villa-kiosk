@@ -12,7 +12,7 @@ const { localMidnight, localMonthStart } = await import("@/utils/localDay");
 
 
 console.log("  the rules:");
-ck("power under 1 kW is in watts; the grid's 0.948 kW reads '948 W', like a device's", fmtPower(0.948) === "948 W" && fmtPower(3.084) === "3.08 kW" && fmtPower(1) === "1.00 kW");
+ck("power under 1 kW is in watts; the grid's 0.948 kW reads '948 W', like a device's", fmtPower(0.948) === "948 W" && fmtPower(3.084) === "3.1 kW" && fmtPower(1) === "1 kW");
 const t = new Date(2026, 8, 26, 15, 30).getTime();
 ck("local midnight is the day's 00:00 in the villa's own clock", new Date(localMidnight(t)).getHours() === 0 && new Date(localMidnight(t)).getDate() === 26);
 ck("  ...moved by whole days, across a month's end", new Date(localMidnight(t, 5)).getDate() === 1 && new Date(localMidnight(t, 5)).getMonth() === 9);
@@ -31,7 +31,10 @@ const files = walk(SRC).map((f) => [f.slice(SRC.length), readFileSync(f, "utf8")
 const having = (re) => files.filter(([, s]) => re.test(s)).map(([f]) => f);
 ck("local midnight: localDay.ts only", having(/setHours\(0, 0, 0, 0\)/).join() === "utils/localDay.ts", having(/setHours\(0, 0, 0, 0\)/));
 ck("no unit fold of its own in the Energy window (toBaseUnit is the table)", !/toLowerCase\(\);\s*return u === "kw"/.test(readFileSync(new URL("../../src/components/panels/EnergyPanel.tsx", import.meta.url), "utf8")));
-ck("the W / kW rule: fmtPower only", having(/Math\.round\(kw \* 1000\)/).join() === "config/energyModel.ts", having(/Math\.round\(kw \* 1000\)/));
+// The W / kW rule is utils/entityValue's since architecture review 11 — the Energy window's own copy had drifted
+// ("3.00 kW" beside a tile's "3 kW"); fmtPower now hands its watts there (display_numbers.mjs drives both by value).
+ck("the W / kW rule: no copy of its own in the Energy window (fmtPower delegates)", having(/Math\.round\(kw \* 1000\)/).length === 0
+   && /function fmtPower\(kw: number\): string \{\s*return formatUnitValue\(kw \* 1000, "W"\);/.test(readFileSync(new URL("../../src/config/energyModel.ts", import.meta.url), "utf8")), having(/Math\.round\(kw \* 1000\)/));
 ck("the observation cards' markup: WindowPieces only", having(/className="weather-advice"/).join() === "components/panels/WindowPieces.tsx", having(/className="weather-advice"/));
 ck("the figure: WindowPieces only", having(/function Figure\(/).join() === "components/panels/WindowPieces.tsx", having(/function Figure\(/));
 ck("both windows use them", ["components/panels/WeatherPanel.tsx", "components/panels/EnergyPanel.tsx"].every((f) => having(/<ObservationCards cards=/).includes(f) && having(/<Figure\b[^>]*\blabel=/).includes(f)));

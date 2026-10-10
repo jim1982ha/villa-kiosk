@@ -1,3 +1,76 @@
+## 2.496.318
+
+### Fixed
+- Cockpit, "Needs attention": the whole card now opens its device, not only its top half. A fault's "Close" button on its line still works on its own.
+
+## 2.496.317
+
+### Changed
+- Cockpit, "Needs attention": every line now has the same shape. Each one is a card titled by the device (for example "Entrance door"), with its room, and its problems listed inside the card, one line each, even when there is only one. Before, three shapes were mixed: a device with one problem showed it in grey under its name; a device with only an open fault was titled by the fault's text ("Entrance door unlocked"), with a tall "Close" box beside it that cut the text short; a device with several problems listed them outside its card.
+- "Close" on an open fault is now at the end of that fault's own line, inside the card.
+- A problem that belongs to no device (a task for the whole villa) keeps its own title, with "Open fault" as its line.
+
+## 2.496.316
+
+### Fixed
+- A power or an energy now reads the same everywhere. The Energy window wrote 3,000 W as "3.00 kW" while the top bar wrote "3 kW", and 3,456 W as "3.46 kW" against "3.5 kW". It now follows the badges: "3 kW", "3.5 kW", "4.2 kWh".
+- The Energy window no longer paints meters and devices in the red ("needs attention") and amber ("lost contact") status colours just because of the order they are listed in. They now get neutral colours. A day well above normal stays red, because that one is a warning.
+- A sensor whose state is words (an access point's "connected") now shows its history inside a device group, as it already did in its own window. A grouped on/off sensor's pill also gets its icon back.
+- On a weather station that reports in °F, today's range and the charts are now converted to °C like the live readings. Before, the same screen mixed both units under a bare "°".
+- Weather's "updated … ago" now says "1 h 29 min ago" instead of rounding to "1 h ago", like the rest of the app.
+
+### Behind the scenes
+- The Spend and Recap tabs save their files through the shared download helper, which always frees the file from memory. The Cockpit's activity list loads through the shared history loader. Six style rules for screen parts that no longer exist are gone. The open device panel's header buttons are built in one place instead of inside the main page. New checks keep all of this from coming back.
+
+## 2.496.315
+
+### Changed
+- Improved defaults now reach your kiosk. Until now each kiosk saved a copy of every setting, defaults included, so a better default in a new version never reached an installed kiosk. Now only the settings you changed are saved; everything else follows the current version.
+- In the walk view, the room whose badges stay shown one by one is now always the room named in the room banner. Before, the badges and the banner each worked out "your room" separately, and could disagree on a staircase or a split level.
+
+### Behind the scenes
+- No other visible change: these make the next changes in the 3D view safer. The camera cone's direction now comes from one place that is checked against SweetHome 3D's rule for every angle and tilt. Every input the badge layout depends on now redoes it (two did not). Yesterday's "badges behind walls after you stop" fix is now tested with the real code instead of a copy.
+
+## 2.496.314
+
+### Fixed
+- A camera's red motion cone now tilts down toward the floor, at 45°, instead of pointing straight ahead.
+- Every camera without a tilt of its own in SweetHome 3D used to get a level cone: the 30° default tilt meant for them never applied. The default is now 45° and applies to them, with no need to upload the plan again.
+- A camera you tilt yourself in SweetHome 3D (its "Horizontal rotation around X axis" field) keeps its own tilt.
+
+## 2.496.313
+
+### Fixed
+- A camera's red motion cone now points the way the camera points. When you turned a camera in SweetHome 3D (its Angle), the cone turned the opposite way. It only looked right near 90° and 270°, which is why 80° seemed fine and 60° did not.
+- The cone is also full size again. Pointing the wrong way, it ran into the nearest wall and was cut short: the staircase camera's cone at 60° reached 0.42 m instead of 2.65 m, and even at 80° only 1.54 m instead of the full 6 m.
+- Checked against your 3D model: for 11 of the 13 cameras, the corrected direction matches the camera model to within 2°.
+
+## 2.496.311
+
+### Fixed
+- In the walk view, badges of things behind a wall no longer show through it, for example the outdoor cameras seen from the kitchen, or Bedroom 3's group seen from inside Bedroom 2. There were two causes:
+  - After you stopped walking or jumped to a room, the check for "is there a wall in between?" never ran until you turned your head, so every badge on the floor stayed visible.
+  - The check aimed at the badge, which floats just above its device. For a camera or sensor mounted under the ceiling, that point is higher than the top of the wall, so the line of sight passed over the wall. It now aims at the device itself.
+
+  On the villa's ground floor, the number of hidden devices still drawn went from 93 to 1.
+- In the walk view, the room you are standing in is never collapsed into its "Room (3)" group: its badges are shown individually, as when you tap a room.
+
+## 2.496.310
+
+### Fixed
+- Switching camera feeds with the left and right arrow keys no longer moves the villa behind the video. The arrows now change the feed only; with no camera open, they move the view as before.
+
+## 2.496.309
+
+### Changed
+- Walking through the villa shows the ceilings everywhere again, as before 2.496.308. With 2.496.308 a ceiling appeared only once you were standing under it, which is not what you want. The overview still never shows them. Upstairs ceilings appear when your 3D model includes them (Blender pipeline 2.39.0 with "Display ceiling" ticked for the rooms in SweetHome 3D).
+
+## 2.496.308
+
+### Changed
+- Walking through the villa, a room's ceiling now shows only while you are under it. Step out onto a terrace or into the garden and the ceilings disappear, so no roof floats above you outdoors. The overview never shows them, as before.
+- To see a ceiling in the upstairs rooms, the 3D model needs one: the next export of the villa model (Blender pipeline 2.39.0) keeps the top floor's ceiling, which earlier exports removed. Until you upload that new model, the sky stays visible above you upstairs.
+
 ## 2.496.307
 
 ### Changed

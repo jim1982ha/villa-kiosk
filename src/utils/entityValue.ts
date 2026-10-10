@@ -58,12 +58,20 @@ export interface ValueParts {
  * hardcoded `totalW > 3000` that once sat in SummaryBar and was removed for
  * being exactly the per-site constant the first hard rule forbids.
  */
+/** An energy in kWh as a number: whole from 100, one decimal from 10, two below — so a device's 0.05 kWh day is
+ *  not "0.1" (architecture review 11: the Energy window and the badges each had their own rule and disagreed). */
+export function kwhNumber(v: number): string {
+  const a = Math.abs(v);
+  return a >= 100 ? String(Math.round(v)) : trim(v, a >= 10 ? 1 : 2);
+}
+
 export function formatUnitParts(n: number, unit: string): ValueParts {
   const raw = unit.trim();
   const u = raw.toLowerCase();
   const abs = Math.abs(n);
   if (u === "w" && abs >= 1000) return { value: trim(n / 1000, 1), unit: "kW" };
-  if (u === "wh" && abs >= 1000) return { value: trim(n / 1000, 1), unit: "kWh" };
+  if (u === "wh" && abs >= 1000) return { value: kwhNumber(n / 1000), unit: "kWh" };
+  if (u === "kwh") return { value: kwhNumber(n), unit: raw };
   if (u === "va" && abs >= 1000) return { value: trim(n / 1000, 1), unit: "kVA" };
   if (u === "%") return { value: `${Math.round(n)}%`, unit: "" };
   if (u === "°c" || u === "°f" || u === "°") return { value: `${trim(n, 1)}${raw}`, unit: "" };

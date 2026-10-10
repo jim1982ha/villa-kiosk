@@ -247,6 +247,8 @@ export interface ShownLabel {
   wx: number;
   wy: number;
   wz: number;
+  /** The height a walker's line of sight aims at: the DEVICE's centre, below its anchor (occlusionSweep `ty`). */
+  ty?: number;
   /** Where the badge's BOX IS DRAWN on this pass's view plane, in GUI pixels —
    *  THE input to grouping. The anchor projected (see badgeProjection for why
    *  the decision is made in this plane rather than in world space or in true
@@ -492,6 +494,10 @@ export interface PlacementFrame extends CardShapeInput {
   /** entity id → resolved room label (empty or absent: the no-room bucket). */
   rooms: Readonly<Record<string, string | undefined>>;
   focus: RoomFocus;
+  /** Rooms never grouped this frame: the focused ones (a tap), and in the walk view the room the walker stands in
+   *  (owner, 2026-10-08: standing in Bedroom 2, its badges showed as the "Bedroom 2 (3)" chip — nothing told the
+   *  badge layer which room the walker was in). Only `focus.rooms` hides the OTHER rooms (suppressOthers). */
+  exempt: ReadonlySet<string>;
   /** The badges' drawn scale (effectiveScale). */
   scale: number;
   /** The widest a card may be drawn, in arrangement units. */
@@ -561,7 +567,7 @@ export class PlacementPass {
     pending.length = 0;
     let solved: PlacementStats | null = null;
     if (clearance) {
-      const items = placementItems(shown, boxes, clearance, frame.rooms, frame.focus.rooms, this.items, this.glass);
+      const items = placementItems(shown, boxes, clearance, frame.rooms, frame.exempt, this.items, this.glass);
       const result = solvePlacement(
         items, clearance.gap, clearance.minSep, BADGE_PLACEMENT, this.scratch,
         drawableMaxOf(frame.cellCap),
@@ -864,7 +870,7 @@ export class PlacementPass {
      * `others` is passed rather than closed over because this runs in two
      * passes and they need different sets — see below.
      */
-    const focus = this.f.focus.rooms;
+    const focus = this.f.exempt;
     // ── WHY a seat was refused, in pixels (the `seat` debug channel) ───────
     // `fits` is a boolean, and a boolean cannot answer "they are not even
     // touching". This records the blocker and the per-axis SHORTFALL — how
@@ -1442,7 +1448,7 @@ export class PlacementPass {
     clearance: MeasureFrame & { gap: number; minSep: number },
     pending: PendingEntityGroup[],
   ): void {
-    const focus = this.f.focus.rooms;
+    const focus = this.f.exempt;
     if (focus.size === 0) return;
     // Indices into `shown`, so a strip's members map straight back.
     const idx = this.focusIdx;
@@ -1712,7 +1718,7 @@ export class PlacementPass {
     }
     const scale = this.f.scale;
     const gapPx = this.f.metrics.minGapPx * scale;
-    const focus = this.f.focus.rooms;
+    const focus = this.f.exempt;
     const half = (this.f.summary.size / 2) * scale;
     // One round per room is the worst case: each has to be able to escalate,
     // and nothing can un-escalate. The `<=` is the belt to that braces.

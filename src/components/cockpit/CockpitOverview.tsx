@@ -11,7 +11,7 @@
 // selectableDeviceIds/entityMap/resolvedRooms, never a raw HA domain query
 // (see cockpitData.ts's own docstring).
 
-import { useEffect, useMemo, useState, type ComponentType } from "react";
+import { useMemo, useState, type ComponentType } from "react";
 import { createPortal } from "react-dom";
 import {
   TriangleAlert, AlertOctagon, MapPin, Building2, LayoutGrid,
@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import SegmentedGroup from "@/components/common/SegmentedGroup";
 import { fmtChartTime } from "@/components/panels/chartUtils";
+import { useHistory } from "@/hooks/useHistory";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
@@ -37,7 +38,7 @@ import {
   buildCategoryTiles, buildRoomGroups, buildFloorGroups,
   buildActivityFeed, pivotTiles, tileLine, type Pivot, type ActivityEntry,
 } from "./cockpitData";
-import { attentionLine, type AttentionGroup, type AttentionItem, type AttentionKind } from "@/config/attention";
+import { attentionLineIn, type AttentionGroup, type AttentionItem, type AttentionKind } from "@/config/attention";
 
 
 const ATTENTION_ICON: Record<AttentionKind, typeof TriangleAlert> = {
@@ -93,18 +94,14 @@ export default function CockpitOverview({ onOpenEntity, doors }: {
   // cockpitData.ts's buildActivityFeed — HA's raw logbook is unfiltered and
   // genuinely noisy (a bare date/time helper alone produced roughly one
   // entry every six seconds in a real pull).
-  const [rawActivity, setRawActivity] = useState<Awaited<ReturnType<typeof fetchLogbookEvents>> | "loading" | "error">("loading");
-  useEffect(() => {
-    let cancelled = false;
-    fetchLogbookEvents(ws, 6)
-      .then((entries) => { if (!cancelled) setRawActivity(entries); })
-      .catch(() => { if (!cancelled) setRawActivity("error"); });
-    return () => { cancelled = true; };
-  }, [ws]);
+  // The fetch-and-say-where-it-stands effect is hooks/useHistory's, the one
+  // every chart uses (architecture review 11: this was its eighth copy).
+  const activity = useHistory("logbook-6h", () => fetchLogbookEvents(ws, 6), [] as Awaited<ReturnType<typeof fetchLogbookEvents>>);
   const villaActivity = useMemo((): ActivityEntry[] | "loading" | "error" => {
-    if (!Array.isArray(rawActivity)) return rawActivity;
-    return buildActivityFeed(rawActivity, entities, config.entityMap, selectableIds);
-  }, [rawActivity, entities, config.entityMap, selectableIds]);
+    if (activity.status === "loading") return "loading";
+    if (activity.status === "failed") return "error";
+    return buildActivityFeed(activity.data, entities, config.entityMap, selectableIds);
+  }, [activity.status, activity.data, entities, config.entityMap, selectableIds]);
 
   // Firmware/add-on updates available — HA's own `update` domain already
   // tracks this per device AND per add-on (including this one). A small
@@ -236,10 +233,11 @@ export default function CockpitOverview({ onOpenEntity, doors }: {
   );
 }
 
-/** One device's row: its name, room and most serious problem's icon. With
- *  more than one problem, each is a line of its own under it — a fault keeps
- *  its own Close (cockpitData.groupAttention, 2.496.246). With one, the row
- *  reads exactly as it did before grouping. */
+/** One row of "Needs attention", ONE SHAPE whatever it holds (owner, 2026-10-10: "make sure each reported issue
+ *  appears in a consistent way"): a card titled by the device (or by the problem, when no device stands behind it)
+ *  with its room, and every problem as a line INSIDE the card — one or several — a fault's Close at the end of its
+ *  own line. It had three shapes: one problem in the subtitle, a fault titled by its own text with a tall Close box
+ *  beside the card (cutting the title), and several problems as lines outside the card. */
 function CockpitAttentionRow({ group, onOpenEntity, canCloseFault }: {
   group: AttentionGroup;
   onOpenEntity: (id: string) => void;
@@ -247,47 +245,40 @@ function CockpitAttentionRow({ group, onOpenEntity, canCloseFault }: {
 }) {
   const Icon = ATTENTION_ICON[group.kind];
   const tappable = !!group.entityId;
-  const Row = tappable ? "button" : "div";
-  const lone = group.items.length === 1 ? group.items[0] : null;
-  const loneClose = useFaultClose(lone, canCloseFault);
+  const Head = tappable ? "button" : "div";
   return (
-    <div className="cockpit-attention-item">
-      <div className="cockpit-attention-line">
-        <Row
-          className={`cockpit-attention-row${tappable ? " tappable" : ""}`}
-          {...(tappable ? { onClick: () => onOpenEntity(group.entityId as string) } : {})}
-        >
-          <Icon size={16} className={`cockpit-attention-icon cockpit-attention-${group.kind}`} />
-          <span className="cockpit-attention-body">
-            <span className="cockpit-attention-title">{group.title}</span>
-            <span className="muted body-text" style={{ fontSize: "var(--text-2xs)" }}>
-              {lone ? lone.detail : `${group.items.length} problems`}{group.room ? ` · ${group.room}` : ""}
-            </span>
-          </span>
-          {tappable && <ChevronRight size={16} className="muted" />}
-        </Row>
-        {loneClose.button}
-      </div>
-      {loneClose.panel}
-      {!lone && (
-        <ul className="cockpit-attention-subs">
-          {group.items.map((item) => (
-            <CockpitAttentionSub key={item.id} item={item} canCloseFault={canCloseFault} />
-          ))}
-        </ul>
-      )}
+    <div className={`cockpit-attention-item${tappable ? " tappable" : ""}`}>
+      <Head
+        type={tappable ? "button" : undefined}
+        className={`cockpit-attention-row${tappable ? " tappable" : ""}`}
+        {...(tappable ? { onClick: () => onOpenEntity(group.entityId as string) } : {})}
+      >
+        <Icon size={16} className={`cockpit-attention-icon cockpit-attention-${group.kind}`} />
+        <span className="cockpit-attention-body">
+          <span className="cockpit-attention-title">{group.title}</span>
+          {group.room && <span className="muted body-text" style={{ fontSize: "var(--text-2xs)" }}>{group.room}</span>}
+        </span>
+        {tappable && <ChevronRight size={16} className="muted" />}
+      </Head>
+      <ul className="cockpit-attention-subs">
+        {group.items.map((item) => (
+          <CockpitAttentionSub key={item.id} group={group} item={item} canCloseFault={canCloseFault} />
+        ))}
+      </ul>
     </div>
   );
 }
 
-function CockpitAttentionSub({ item, canCloseFault }: { item: AttentionItem; canCloseFault: boolean }) {
+function CockpitAttentionSub({ group, item, canCloseFault }: {
+  group: AttentionGroup; item: AttentionItem; canCloseFault: boolean;
+}) {
   const Icon = ATTENTION_ICON[item.kind];
   const close = useFaultClose(item, canCloseFault);
   return (
     <li className="cockpit-attention-sub">
       <div className="cockpit-attention-sub-line">
         <Icon size={14} className={`cockpit-attention-icon cockpit-attention-${item.kind}`} />
-        <span className="cockpit-attention-sub-text">{attentionLine(item)}</span>
+        <span className="cockpit-attention-sub-text">{attentionLineIn(group, item)}</span>
         {close.button}
       </div>
       {close.panel}
@@ -296,8 +287,8 @@ function CockpitAttentionSub({ item, canCloseFault }: { item: AttentionItem; can
 }
 
 /** A fault can be closed from its line in one step ("no action needed" — the
- *  same write as the Faults tab's, FmDataContext.closeTicket). The button is
- *  BESIDE the row, never inside it: the row itself may be a <button>. */
+ *  same write as the Faults tab's, FmDataContext.closeTicket). The button ends
+ *  the fault's own line, never inside the card's head: that may be a <button>. */
 function useFaultClose(item: AttentionItem | null, canCloseFault: boolean) {
   const { closeTicket } = useFmData();
   const [confirming, setConfirming] = useState(false);

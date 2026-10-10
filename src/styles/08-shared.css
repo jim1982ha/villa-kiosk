@@ -134,24 +134,28 @@
 
 /* --- Cockpit page (CockpitModal) — villa-wide status report ------------- */
 .cockpit-attention-list { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
-/* One item: the row, with a fault's "Close" BESIDE it (the row itself may be
-   a button), and its "sure?" on a line of its own beneath, wrapping on a phone. */
-.cockpit-attention-item { display: flex; flex-direction: column; gap: 4px; }
-.cockpit-attention-line { display: flex; align-items: stretch; gap: 6px; }
-.cockpit-attention-line > .cockpit-attention-row { flex: 1 1 auto; min-width: 0; }
+/* One row, ONE SHAPE (owner, 2026-10-10): a card — its head (the device, its room; tappable) and every problem as
+   a line inside it, a fault's "Close" ending its own line and its "sure?" beneath, wrapping on a phone. */
+.cockpit-attention-item {
+  position: relative; display: flex; flex-direction: column; border-radius: 10px; background: var(--bg-input);
+}
+/* ⚠️ THE WHOLE CARD OPENS THE DEVICE (owner, 2026-10-10: "only the upper half seems clickable"): the head is the one
+   <button>, its hit area stretched over the card; a fault's Close and its "sure?" sit above it and stay their own. */
+button.cockpit-attention-row.tappable::after { content: ""; position: absolute; inset: 0; border-radius: 10px; }
+.cockpit-attention-close, .cockpit-attention-confirm, .cockpit-attention-item .fm-inline-error { position: relative; z-index: 1; }
 .cockpit-attention-close {
   flex: none; display: inline-flex; align-items: center; gap: 2px;
-  min-height: 36px; padding: 0 var(--space-2); font-size: var(--text-xs);
+  min-height: 32px; padding: 0 var(--space-2); font-size: var(--text-xs);
 }
 .cockpit-attention-confirm .modal-actions { flex-wrap: wrap; align-items: center; }
 .cockpit-attention-row {
   display: flex; align-items: center; gap: 10px; width: 100%;
-  padding: 10px 12px; border-radius: 10px; text-align: left;
-  background: var(--bg-input); border: none; color: inherit; font: inherit;
+  padding: 10px 12px 4px; text-align: left;
+  background: transparent; border: none; color: inherit; font: inherit;
 }
 button.cockpit-attention-row.tappable { cursor: pointer; }
 @media (hover: hover) {
-  button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var(--accent) 12%, var(--bg-input)); }
+  .cockpit-attention-item.tappable:hover { background: color-mix(in srgb, var(--accent) 12%, var(--bg-input)); }
 }
 .cockpit-attention-icon { flex: 0 0 auto; }
 /* These two were SWAPPED, which inverted the one distinction the status
@@ -170,12 +174,11 @@ button.cockpit-attention-row.tappable { cursor: pointer; }
   font-size: var(--text-sm); color: var(--text-primary);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-/* A device with several problems (cockpitData.groupAttention): one line per
-   problem under its row, indented to the row's title (12px padding + 16px
-   icon + 10px gap), each fault with its own Close beside it. */
+/* The row's problems, one or several (config/attention.groupAttention): one line each inside the card, indented to
+   its title (12px padding + 16px icon + 10px gap), a fault's Close at the end of its line. */
 .cockpit-attention-subs {
-  list-style: none; margin: 0; padding: 0 0 0 38px;
-  display: flex; flex-direction: column; gap: 4px;
+  list-style: none; margin: 0; padding: 0 8px 6px 38px;
+  display: flex; flex-direction: column; gap: 2px;
 }
 .cockpit-attention-sub { display: flex; flex-direction: column; gap: 4px; }
 .cockpit-attention-sub-line { display: flex; align-items: center; gap: 8px; min-height: 36px; }

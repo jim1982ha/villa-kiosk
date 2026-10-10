@@ -5,13 +5,14 @@
 // config/reading's, the one answer the grouped device window and "Also on
 // this device" share; this window only lays it out.
 
-import { Activity, AlertTriangle } from "lucide-react";
+import { Activity } from "lucide-react";
 import BasePanel from "./BasePanel";
 import LastDayTimeline from "./LastDayTimeline";
 import NumericHistory from "./NumericHistory";
+import ReadingPill from "./ReadingPill";
 import type { PanelProps } from "@/types/panel.types";
 import { useConfig } from "@/config/ConfigContext";
-import { readingOf } from "@/config/reading";
+import { historyOf, readingOf } from "@/config/reading";
 import { binarySensorClassInfo } from "@/config/BinarySensorClasses";
 import { effectiveSensorClass, SENSOR_CLASS_ICON } from "@/config/SensorClasses";
 
@@ -37,10 +38,7 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
     <BasePanel title={mapping.label} entityId={mapping.entityId} icon={icon} history={false} onClose={onClose}>
       <div className="center" style={{ padding: "12px 0 6px", margin: isBinary ? undefined : "6px 0 12px" }}>
         {r.pill ? (
-          <div className={`status-pill ${r.pill}`} style={{ fontSize: "var(--text-xl)", padding: "14px 24px" }}>
-            {r.alarm ? <AlertTriangle size={22} /> : <BinaryIcon size={22} />}
-            {r.value}
-          </div>
+          <ReadingPill r={r} icon={BinaryIcon} size={22} style={{ fontSize: "var(--text-xl)", padding: "14px 24px" }} />
         ) : (
           <>
             {/* ⚠️ THE SAME RULE THE BADGE USES (utils/entityValue, inside
@@ -51,12 +49,10 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
           </>
         )}
       </div>
-      {/* ONE history, by what the sensor reports: states for an on/off or a
-          words sensor (a numeric parse would drop every row), numbers with
-          their gaps for a measurement — offline included, whose chart shades
-          the outage. */}
-      {isBinary ? <LastDayTimeline entityId={mapping.entityId} colorFor={r.stateColor ?? undefined} />
-        : r.kind === "text" ? <LastDayTimeline entityId={mapping.entityId} legend />
+      {/* ONE history, by what the sensor reports — config/reading's historyOf,
+          the rule the grouped device window shares. */}
+      {historyOf(r) === "states" ? <LastDayTimeline entityId={mapping.entityId} colorFor={r.stateColor ?? undefined} />
+        : historyOf(r) === "words" ? <LastDayTimeline entityId={mapping.entityId} legend />
         : <NumericHistory series={[{ id: mapping.entityId, label: "Reading", unit, color: r.seriesColor }]} />}
     </BasePanel>
   );

@@ -230,8 +230,16 @@ export interface AppConfig {
    */
   extraGlassHints?: string[];
   /**
-   * Degrees to rotate every camera's motion beam relative to the `angle` its
-   * piece carries in the floor plan. Default 180.
+   * Degrees to rotate every camera's motion beam relative to the FRONT of its
+   * piece, as SweetHome turned it by the plan's `angle`. Default 0: the villa's
+   * camera model looks out of its front (measured 2026-10-08 on 13 cameras).
+   *
+   * ⚠️ RENAMED FROM cameraBeamOffsetDeg (default 180) on 2026-10-08. That 180
+   * compensated a MIRRORED angle (planAngleToDir turned the beam clockwise where
+   * SweetHome turns the piece the other way on its Y-down plan): it was right
+   * only near 90° and 270°, so turning a camera from 80° to 60° in SweetHome
+   * swung its beam 40° the wrong way, into a wall (0.42 m left of it). A stored
+   * cameraBeamOffsetDeg meant that compensation and is ignored.
    *
    * This exists because a plan's `angle` is measured against the FURNITURE
    * MODEL's own front axis, and which way a given 3D model faces at angle 0 is
@@ -244,19 +252,26 @@ export interface AppConfig {
    * re-aiming every camera in the plan.
    *
    * Applies to the horizontal heading only; the downward tilt comes from each
-   * piece's own `pitch` (or cameraBeamPitchDeg below when it has none).
+   * piece's own `pitch` (or cameraBeamTiltDeg below when it has none).
    */
-  cameraBeamOffsetDeg: number;
+  cameraBeamHeadingDeg: number;
   /**
    * Downward tilt in degrees for a camera whose plan piece specifies no
-   * `pitch`. Default 30.
+   * `pitch`. Default 45 (owner, 2026-10-08: "head down at 45° to the floor").
+   *
+   * ⚠️ RENAMED FROM cameraBeamPitchDeg (default 30) on 2026-10-08, because a
+   * stored copy of the old 30 would have outlived the new default. That 30
+   * never applied anyway: the plan reader turned a missing `pitch` into 0, and
+   * `pitch ?? default` only replaces a missing one, so every beam was level.
+   * SweetHome writes no `pitch` attribute when the tilt is 0, so a 0 is read as
+   * "not set" (SceneManager).
    *
    * Most catalog camera pieces are placed without a pitch, which left every
    * beam perfectly level — pointing across the room at head height rather than
    * at the floor area the camera actually watches. A per-piece `pitch` set in
    * the plan still wins over this.
    */
-  cameraBeamPitchDeg: number;
+  cameraBeamTiltDeg: number;
   /** Global size multiplier for the in-scene state-icon badges (1 = default).
    *  In the bird's-eye view this is further scaled by the zoom level.
    *  Clamped to [ENTITY_ICON_SCALE_MIN, ENTITY_ICON_SCALE_MAX] by
@@ -326,8 +341,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   // devices in a room fall within the same clash radius). 1.0x is the badge's
   // native (unscaled) size — still user-adjustable via the Settings slider.
   entityIconScale: 1.0,
-  cameraBeamOffsetDeg: 180,
-  cameraBeamPitchDeg: 30,
+  cameraBeamHeadingDeg: 0,
+  cameraBeamTiltDeg: 45,
   badgeStyle: "card",
   showSummaryBar: true,
   deviceGroups: [],
@@ -492,9 +507,43 @@ function adoptRenderLookDefaults(render: RenderConfig): RenderConfig {
   return out;
 }
 
+const sameJson = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
+
+/**
+ * What this device CHANGED from the app's defaults — the only thing stored.
+ *
+ * ⚠️ A STORED DEFAULT IS A FROZEN DEFAULT (architecture review 10, 2026-10-09).
+ * The whole config used to be written, from the very first load (ConfigContext
+ * saves on mount), and read back as `{...DEFAULT_CONFIG, ...stored}`: every
+ * kiosk held its own copy of every default, so an improved default reached no
+ * installed kiosk. Twice on 2026-10-08 a fix had to RENAME its key to land (the
+ * camera beam's heading and tilt). Now a value equal to its default is not
+ * written, and loadConfig applies the current default.
+ *
+ * `render` is compared field by field (loadConfig already merges it that way).
+ * Every other key is compared whole: a map such as entityMap is stored whole
+ * once it differs, so a deleted entry can never be resurrected by a default.
+ * An install from before this keeps what it stored then (its old defaults look
+ * like choices); only values equal to TODAY's default are dropped from it.
+ */
+export function overrides(config: AppConfig): Partial<AppConfig> {
+  const out: Record<string, unknown> = {};
+  const def = DEFAULT_CONFIG as unknown as Record<string, unknown>;
+  for (const [k, v] of Object.entries(config)) {
+    if (k === "render" && v && typeof v === "object") {
+      const r: Record<string, unknown> = {};
+      for (const [f, fv] of Object.entries(v)) if (!sameJson(fv, (DEFAULT_RENDER as unknown as Record<string, unknown>)[f])) r[f] = fv;
+      if (Object.keys(r).length) out[k] = r;
+    } else if (!sameJson(v, def[k])) {
+      out[k] = v;
+    }
+  }
+  return out as Partial<AppConfig>;
+}
+
 export function saveConfig(config: AppConfig): void {
   // Said, not swallowed: a full quota here loses this device's own settings.
-  if (!writeJson(CONFIG_KEY, config)) console.error("[AppConfig] failed to save (storage full or disabled)");
+  if (!writeJson(CONFIG_KEY, overrides(config))) console.error("[AppConfig] failed to save (storage full or disabled)");
 }
 
 export function resetConfig(): void {
