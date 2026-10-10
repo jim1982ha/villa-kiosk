@@ -150,6 +150,17 @@ class Store:
         self.db.commit()
         return c.lastrowid, True
 
+    def last_closed_finding(self, rule_id: str, entity_id: str, since_day: str, before_day: str) -> dict | None:
+        """The latest finding for rule+entity closed on `since_day` or later, opened before `before_day`."""
+        r = self.db.execute("SELECT * FROM findings WHERE rule_id=? AND entity_id=? AND status='closed' AND closed_day>=? "
+                            "AND opened_day<? ORDER BY id DESC LIMIT 1", (rule_id, entity_id, since_day, before_day)).fetchone()
+        return dict(r) if r else None
+
+    def reopen_finding(self, fid: int, severity: str, summary: str, detail: dict) -> None:
+        self.db.execute("UPDATE findings SET detail=?, summary=?, severity=?, status='open', closed_day=NULL WHERE id=?",
+                        (json.dumps(detail), summary, severity, fid))
+        self.db.commit()
+
     def close_finding(self, rule_id: str, entity_id: str, day: str):
         self.db.execute("UPDATE findings SET status='closed', closed_day=? WHERE rule_id=? AND entity_id=? AND status='open'",
                         (day, rule_id, entity_id))

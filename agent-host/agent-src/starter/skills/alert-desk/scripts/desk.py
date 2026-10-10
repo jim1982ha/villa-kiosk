@@ -43,7 +43,7 @@ from vesta_shared import result as R  # noqa: E402  (what the engine is asked to
 from vesta_shared import script  # noqa: E402  (client, store, settings, zone: one set-up)
 from vesta_shared import skill_settings  # noqa: E402  (rules.yaml, the villa's on top)
 from vesta_shared.messaging import incident_tag  # noqa: E402
-from vesta_shared.device_state import OFFLINE  # noqa: E402  (what "offline" is, once)
+from vesta_shared.device_state import out_of  # noqa: E402  ("is it back": one answer)
 
 SKILL = os.path.dirname(HERE)
 # rules.yaml with the villa's own villa.rules.yaml on top (kept by updates): a villa's route comes FIRST, so it
@@ -64,10 +64,14 @@ HA_BEAT = "ha_events"
 
 #: ⚠️ OVER WHEN HOME ASSISTANT NO LONGER SAYS SO (villa, 2026-10-10: the Cockpit kept "Entrance door unlocked" hours
 #: after the door was locked, and a relay "unavailable" 5 hours after it was back). critical_condition stops watching
-#: after its "Repeat after" (30 min: "abandoned") — a door locked later was never said over; critical_watchdog never
-#: says a device came back. For these the desk reads the entity again (tick): its state when the incident opened is
-#: the problem; another state, held `clear_minutes`, ends it. A number is never compared (a temperature changes all
-#: the time): such an incident waits for Home Assistant or a person, as every other blueprint's.
+#: after its "Repeat after" ("abandoned") — a door locked later was never said over; critical_watchdog never says a
+#: device came back. For these the desk reads the entities again (tick).
+#: ⚠️ BY THE RULE'S OWN BAD STATES, NEVER A GUESS (architecture review 22): 0.12.145 took the state at the alert as "the
+#: problem" and any other as "over" — a lock gone from unlocked to jammed was closed as cleared, and a rule watching
+#: two locks closed when the OTHER one was unlocked. The rules now send their list (bad_states) with the alert: over is
+#: NO watched entity in ANY of them, each readable and out of them `clear_minutes`. A condition is judged only once its
+#: rule stopped watching (until then Home Assistant says it itself), and only in its "state" mode — a number waits
+#: for Home Assistant or a person.
 SEEN_AGAIN = ("critical_condition", "critical_watchdog")
 
 
@@ -137,10 +141,15 @@ def villa_mode(client=None) -> str:
         return "unknown"
 
 
-def _find_by_ha_incident(store: Store, ha_incident: str | None) -> dict | None:
+def _find_by_ha_incident(store: Store, ha_incident: str | None, closed_within: timedelta | None = None,
+                         now: datetime | None = None) -> dict | None:
+    """The open incident of Home Assistant's `ha_incident` — or, with `closed_within`, one closed that recently."""
     if not ha_incident:
         return None
-    for inc in store.incidents(open_only=True):
+    rows = store.incidents(open_only=closed_within is None)
+    if closed_within is not None:
+        rows = [i for i in rows if i.get("closed_at") and now - datetime.fromisoformat(i["closed_at"]) <= closed_within]
+    for inc in rows:
         try:
             if json.loads(inc.get("payload") or "{}").get("ha_incident") == ha_incident:
                 return inc
@@ -218,6 +227,12 @@ def resolved(store: Store, ev: dict, now: datetime) -> dict:
     out = {"send": [], "actions": [], "incident_id": None, "decision": "resolved_unknown"}
     inc = _find_by_ha_incident(store, ev.get("ha_incident")) or store.find_open_incident(f"{ev['rule_id']}|{ev.get('entity_id', '')}")
     if not inc:
+        # ⚠️ ALREADY CLOSED HERE, STILL ITS MESSAGE (architecture review 22): the desk saw it over first (seen_again, a
+        # Done) — Home Assistant's all-clear then stayed a second message in the group, without its incident's number
+        late = _find_by_ha_incident(store, ev.get("ha_incident"), closed_within=timedelta(days=1), now=now)
+        if late:
+            out["incident_id"], out["decision"] = late["id"], "resolved_late"
+            out["ha_messages"] = [R.ha_message(late["id"], context=ev.get("_context_id"), **about(late, ev["message"]))]
         return out
     _close(store, inc, now, out, "Cleared in Home Assistant on {time}.",
            "Closed: Home Assistant reports it cleared on {time}. No reply needed.")
@@ -228,96 +243,78 @@ def resolved(store: Store, ev: dict, now: datetime) -> dict:
     return out
 
 
-def _close(store: Store, inc: dict, now: datetime, out: dict, settled: str, told: str) -> None:
-    """An incident that is over: closed with its task and Kiosk fault, its messages in every chat lose their buttons
-    and say `settled`; the facility manager, when still chased, is told `told` (no reply needed)."""
-    out["actions"] += Problems(store).close_incident(inc["id"], Incident.RESOLVED, now.isoformat(),
-                                                     "Cleared: Home Assistant reports it is back to normal.")
+def _close(store: Store, inc: dict, now: datetime, out: dict, settled: str, told: str,
+           note: str = "Cleared: Home Assistant reports it is back to normal.") -> None:
+    """An incident that is over: closed with its task and its Kiosk fault (`note`: what the fault says), its messages in
+    every chat lose their buttons and say `settled`; the facility manager, when still chased, is told `told`."""
+    out["actions"] += Problems(store).close_incident(inc["id"], Incident.RESOLVED, now.isoformat(), note)
     # its alert and reminders, in every chat, lose their buttons: nobody presses for something already over
     out.setdefault("settle", []).append(R.settle(inc["id"], settled))
     if inc["state"] in Incident.CHASED:
         out["send"].append(R.message("fm", **about(inc, told), incident=inc["id"], stage="update"))
 
 
-def held_states(store: Store, inc: dict, client) -> dict[str, str] | None:
-    """{entity: the state that IS the problem} of an incident whose end the desk reads itself (SEEN_AGAIN); None for
-    any other, or when it cannot be known. A watchdog's event names it; a condition's is the entity's state when the
-    incident opened, read once from Home Assistant's history and kept in the incident."""
+def watched_for(inc: dict) -> tuple[list[str], set[str]] | None:
+    """(entities, bad states) of an incident whose end the desk reads itself (SEEN_AGAIN); None for any other — or
+    when the rule did not say what is bad (an alert sent before the rules carried bad_states: a person ends it)."""
     p = json.loads(inc.get("payload") or "{}")
-    if p.get("blueprint") not in SEEN_AGAIN:
-        return None
-    if p.get("held"):
-        return p["held"]
     ents = [e for e in (p.get("entities") or [inc["entity_id"]]) if e]
-    if not ents:
-        return None
     if p.get("blueprint") == "critical_watchdog":
-        held = {e: p.get("state") for e in ents} if p.get("state") in OFFLINE else None
+        bad = p.get("bad_states") or ([p["state"]] if p.get("state") else [])
+    elif p.get("blueprint") == "critical_condition" and p.get("abandoned") and p.get("mode") == "state":
+        bad = p.get("bad_states") or []
     else:
-        opened = datetime.fromisoformat(inc["opened_at"])
-        try:
-            hist = client.history(ents, opened - timedelta(minutes=1), opened)
-        except Exception:  # noqa: BLE001 — unreadable now: looked at again at the next tick
-            return None
-        held = {}
-        for e in ents:
-            rows = hist.get(e) or []
-            st = str((rows[-1] if rows else {}).get("state") or "")
-            if not st or st in OFFLINE or st == "unknown" or _number(st):
-                return None                       # unknown, or a number: never compared
-            held[e] = st
-    if held:
-        store.update_incident(inc["id"], payload=json.dumps({**p, "held": held}))
-    return held
-
-
-def _number(s: str) -> bool:
-    try:
-        float(s)
-        return True
-    except ValueError:
-        return False
+        return None
+    return (ents, set(bad)) if ents and bad else None
 
 
 def seen_again(store: Store, now: datetime, client, clear_minutes: float, out: dict) -> list[int]:
-    """Every open incident Home Assistant will never say is over (SEEN_AGAIN), read again: one whose entities have all
-    left the state that was the problem — and stayed out of it `clear_minutes`, and are not offline — is closed
-    (`_close`). Returns their ids."""
+    """Every open incident Home Assistant will never say is over (watched_for), read again: one with NO watched entity
+    in any of its rule's bad states — each readable, and out of them `clear_minutes` — is closed (`_close`). Returns
+    their ids."""
     closed = []
     for inc in store.incidents(open_only=True):
-        held = held_states(store, inc, client)
-        if not held:
+        watched = watched_for(inc)
+        if not watched:
             continue
+        ents, bad = watched
         try:
-            now_states = client.states(list(held))
+            now_states = client.states(ents)
         except Exception:  # noqa: BLE001 — Home Assistant not readable now: the next tick
             return closed
-        back = []
-        for e, bad in held.items():
-            st = now_states.get(e) or {}
-            s, since = st.get("state"), st.get("last_changed")
-            if not s or s == bad or s in OFFLINE or s == "unknown" or not since:
-                break
-            if now - datetime.fromisoformat(since).astimezone(timezone.utc) < timedelta(minutes=clear_minutes):
-                break
-            back.append(f"{(st.get('attributes') or {}).get('friendly_name') or e} is {s}")
-        else:
-            said = "; ".join(back)
-            _close(store, inc, now, out, f"Cleared on {{time}}: {said} again.",
-                   f"Closed on {{time}}: {said} again. No reply needed.")
-            store.audit("alert-desk", "seen_again", {"incident": inc["id"], "now": said})
-            closed.append(inc["id"])
+        if not all(out_of(now_states.get(e) or {}, bad, now, clear_minutes) for e in ents):
+            continue
+        said = "; ".join(f"{(now_states[e].get('attributes') or {}).get('friendly_name') or e} is {now_states[e]['state']}"
+                         for e in ents)
+        _close(store, inc, now, out, f"Cleared on {{time}}: {said}.", f"Closed on {{time}}: {said}. No reply needed.",
+               note="Cleared: back to normal, read again by the VESTA Agent.")
+        store.audit("alert-desk", "seen_again", {"incident": inc["id"], "now": said})
+        closed.append(inc["id"])
     return closed
 
 
 def abandoned(store: Store, ev: dict, now: datetime) -> dict:
-    """The rule stopped watching while the condition was STILL true: the owner hears it."""
+    """The rule stopped watching. Still true: the owner hears it, and the desk reads it again from now on (seen_again).
+    Back to normal just as it gave up (its `still_true` false): the incident is over.
+
+    ⚠️ "STOPPED WATCHING" IS NOT "STILL NOT CLEAR" (architecture review 22): the rule's own message said "cleared just
+    inside the limit — back to normal now", and the desk told the owner "Still not clear" with Done / Need help."""
     out = {"send": [], "actions": [], "incident_id": None, "decision": "abandoned_unknown"}
     inc = _find_by_ha_incident(store, ev.get("ha_incident")) or store.find_open_incident(f"{ev['rule_id']}|{ev.get('entity_id', '')}")
     if not inc:
         return out
+    out["incident_id"] = inc["id"]
+    if str(ev.get("still_true")).lower() == "false":
+        _close(store, inc, now, out, "Cleared on {time}: back to normal when Home Assistant stopped watching.",
+               "Closed on {time}: back to normal. No reply needed.")
+        out["decision"] = "abandoned_cleared"
+        out["ha_messages"] = [R.ha_message(inc["id"], context=ev.get("_context_id"), **about(inc, ev["message"]))]
+        return out
+    p = json.loads(inc.get("payload") or "{}")
+    p.update({"abandoned": True, **{k: ev[k] for k in ("mode", "bad_states") if ev.get(k) is not None}})
+    store.update_incident(inc["id"], payload=json.dumps(p))
     store.update_incident(inc["id"], state=Incident.ESCALATED, escalated_at=now.isoformat(), assignee="owner")
-    out["incident_id"], out["decision"] = inc["id"], "abandoned"
+    out["decision"] = "abandoned"
     said = about(inc, "Still not clear, and the rule has stopped watching it", extra=ev["message"])
     out["ha_messages"] = [R.ha_message(inc["id"], context=ev.get("_context_id"), stage="escalated", **said)]
     out["send"].append(R.message("owner", **said, incident=inc["id"], buttons=True, stage="escalated"))

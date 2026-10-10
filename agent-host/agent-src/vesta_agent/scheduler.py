@@ -26,6 +26,8 @@ import logging
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from .state import RUNNING_JOB
+
 log = logging.getLogger("vesta.scheduler")
 
 TICK_SECONDS = 30
@@ -174,6 +176,7 @@ class Scheduler:
 
                 async def run(sk=sk, job=job, key=key, slot=slot):
                     self.state.job_running(key, slot.isoformat())
+                    RUNNING_JOB.set(key)              # this task's own context: what it sends marks it delivered
                     cut = False
                     try:
                         await self._after_pack()

@@ -35,7 +35,7 @@ from vesta_shared.messaging import no_code as _no_code  # noqa: E402
 from vesta_shared.params import VillaParams, MissingParameter  # noqa: E402
 from vesta_shared.timeutil import villa_day  # noqa: E402
 from vesta_shared.device_state import is_offline  # noqa: E402
-from vesta_shared.problems import Problems  # noqa: E402  (a problem's lifecycle: one owner)
+from vesta_shared.problems import AGAIN_DAYS, Problems  # noqa: E402  (a problem's lifecycle: one owner)
 from vesta_shared import result  # noqa: E402  (what the engine is asked to do: its shape; R is rules.py)
 from vesta_shared.stats import med  # noqa: E402
 from vesta_shared import daily  # noqa: E402  (a device's day: the one running threshold)
@@ -258,15 +258,17 @@ def run(args) -> dict:
         event_rules=EVENT_RULES, worsened_step=params.behaviour("worsened_step_pct"),
         resolved_note="Cleared: the nightly check no longer sees it.")
     new, still_open, closed, tasks = night["new"], night["still_open"], night["closed"], night["tasks"]
+    again = night["again"]
     resolved = night["resolve_actions"]
     store.beat("maintenance_nightly", day_end.astimezone(timezone.utc).isoformat())
     store.audit("preventive-maintenance", "nightly", {"as_of": today.isoformat(), "new": len(new), "closed": len(closed)})
 
     digest = ([f"{d['severity']}: {d['summary']}" for d in new]
+              + [f"again ({d['again'] + 1} times in {AGAIN_DAYS} days): {d['summary']}" for d in again]
               + [f"update: {d['summary']}" for d in still_open if d.get("worsened")]
               + [f"resolved: {c['summary']}" for c in closed])
     result = {"as_of": today.isoformat(), "villa": pack.villa, "features_written": features_written,
-              "new_findings": new, "still_open": still_open, "closed": closed,
+              "new_findings": new, "still_open": still_open, "closed": closed, "again": again,
               "tasks_to_create": tasks, "tasks_resolved": [a["task_id"] for a in resolved], "resolve_actions": resolved, "notes": notes, "digest_lines": digest}
     if args.out:
         with open(args.out, "w", encoding="utf-8") as fh:
@@ -288,7 +290,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
     res = run(args)
     out = {k: res[k] for k in ("as_of", "features_written", "digest_lines", "tasks_to_create", "notes")}
-    out[result.FAULTS_CHANGED] = bool(res["new_findings"] or res["still_open"] or res["closed"])
+    out[result.FAULTS_CHANGED] = bool(res["new_findings"] or res["still_open"] or res["closed"] or res["again"])
     # The engine's standard output: each task a Facility ticket in the VESTA Kiosk, and a P2
     # finding sent to the facility manager at once rather than at the 07:00 digest.
     # the ticket's title says what is wrong, its note what to check (two fields, not one sentence)

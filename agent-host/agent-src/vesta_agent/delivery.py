@@ -126,6 +126,7 @@ class Delivery:
         if not mid:
             return None
         self.state.set_unreachable(chat_id, None)
+        self.state.job_delivered()                              # a scheduled run's message arrived: never run twice
         log.info("Sent to chat %s (%s)%s%s%s", chat_id, Routing(self.policy()).label(chat_id),
                  " with buttons" if keyboard else "", " and a file" if document else "", " and a photo" if photo else "")
         if origin is not None and origin.kind == JOB and self.on_job_result:

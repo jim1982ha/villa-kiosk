@@ -90,17 +90,27 @@ def test_a_copy_telegram_did_not_take_is_tried_again_until_it_shows(tmp_path):
     assert len(v.tg.edits) == 1                                            # shown: never sent again
 
 
-def test_a_copy_that_can_never_change_is_given_up(tmp_path, monkeypatch):
+def test_a_copy_is_tried_again_for_two_hours_whatever_the_pace_then_given_up(tmp_path, monkeypatch):
+    # architecture review 22: 12 tries at one every 30 s were 6 minutes — a 10-minute internet cut outlived them
+    from datetime import datetime, timedelta, timezone
     from vesta_agent import incident_thread
-    monkeypatch.setattr(incident_thread, "OWED_TRIES", 2)
     v = _villa(tmp_path)
     _, msg = v.actions.request("cover", "open_cover", "cover.bedroom3", {}, v.policy().person(JM), JM)
     run(v.approvals.ask(msg))
     v.tg.refuse.add("edit")                                                # deleted in the chat: refused for ever
     _press(v, msg)
-    for _ in range(3):
+    for _ in range(40):                                                    # 20 minutes of passes, every 30 s
         run(v.housekeeping())
-    assert v.state.incident_messages_owed() == []
+    assert v.state.incident_messages_owed()                                # still tried
+    t0 = datetime.now(timezone.utc)
+
+    class Later(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return t0 + timedelta(hours=2, minutes=1)
+    monkeypatch.setattr(incident_thread, "datetime", Later)
+    run(v.housekeeping())
+    assert v.state.incident_messages_owed() == []                          # two hours on: given up
 
 
 def test_a_photos_message_is_changed_through_its_caption():
@@ -237,3 +247,70 @@ def test_a_scheduled_run_cut_by_a_stop_runs_again_in_its_window(tmp_path):
     run(tick(again))
     run(tick(Scheduler(s, Skills(), st, quick, None, noop)))
     assert ran == ["x.py", "x.py"]                                         # once: it ended, nothing left to take up
+
+
+def test_a_report_whose_result_came_is_never_said_stopped(tmp_path):
+    # architecture review 22: a stop after the report arrived said "stopped by a restart: ask again" under it
+    from vesta_agent.routing import JOB, Origin
+    v = _villa(tmp_path)
+
+    async def sends_then_hangs(origin):
+        await v.delivery.send(JM, "The weekly report.", origin=origin)
+        await asyncio.Event().wait()
+
+    async def ask():
+        v.chat_jobs.start(JM, "weekly", sends_then_hangs, waiting_mid=4242)
+        for _ in range(5):
+            await asyncio.sleep(0)
+    run(ask())
+    edits = len(v.tg.edits)
+    v = restarted(v)
+    assert len(v.tg.edits) == edits and not any("stopped by a restart" in t for _, t, _ in v.tg.sent)
+
+
+def test_a_scheduled_report_that_arrived_is_not_sent_again_after_a_stop(tmp_path):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    from vesta_agent.scheduler import Scheduler
+    from vesta_agent.state import State
+    from helpers import settings
+    s = settings(str(tmp_path))
+    st = State(s.state_path)
+    ran = []
+
+    class Skill:
+        name, every_5_min = "reports", None
+        schedule = [{"when": "07:00", "run": "x.py", "timeout": 60}]
+
+    class Skills:
+        def all(self):
+            return {"reports": Skill()}
+
+    async def sends_then_hangs(sk, cmd, timeout):
+        ran.append(cmd)
+        st.job_delivered()                                                 # what Delivery.send does once it arrived
+        await asyncio.Event().wait()
+
+    async def noop():
+        pass
+    at = datetime(2026, 10, 10, 7, 5, tzinfo=ZoneInfo(s.timezone))
+
+    async def tick(sch):
+        await sch.tick(at)
+        await asyncio.sleep(0)
+    run(tick(Scheduler(s, Skills(), st, sends_then_hangs, None, noop)))
+    run(tick(Scheduler(s, Skills(), st, sends_then_hangs, None, noop)))   # the next start, in the same window
+    assert ran == ["x.py"]
+
+
+def test_a_message_sent_on_behalf_of_a_scheduled_run_marks_it_delivered(tmp_path):
+    # the seam the scheduler relies on: Delivery.send, inside the run's own task
+    from vesta_agent.state import RUNNING_JOB
+    v = _villa(tmp_path)
+    v.state.job_running("reports:0:07:00", "2026-10-10T07:00:00+08:00")
+
+    async def run_job():
+        RUNNING_JOB.set("reports:0:07:00")
+        await v.delivery.send(JM, "The weekly report.")
+    run(run_job())
+    assert v.state.jobs_cut() == {}                                        # cut now: delivered, never run again

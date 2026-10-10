@@ -23,11 +23,14 @@ decides alone to act on the villa.
      `abandoned`: the rule stopped watching while it was still true (the owner hears it).
    - Only `critical_condition`, `critical_binary_trip` and `critical_presence_guard` ever send
      `resolved`. Incidents of `critical_schedule` and `critical_system` close through the ladder only.
-   - What Home Assistant never says is over, the desk reads again every 5 minutes (`tick`): a
-     `critical_watchdog` device back online, or a `critical_condition` whose rule stopped watching
-     (`abandoned`) and whose device has left the state it alerted on, for `clear_minutes` (10) —
-     the incident closes with its Kiosk fault, and its messages say what the device reads now.
-     A number (a temperature) is never compared: those wait for Home Assistant or a person.
+   - What Home Assistant never says is over, the desk reads again every 5 minutes (`tick`), by the
+     rule's own `bad_states` (sent with every phase): a `critical_watchdog` device, or a
+     `critical_condition` in "state" mode whose rule stopped watching (`abandoned`). Over means NO
+     watched entity in ANY bad state, each readable, for `clear_minutes` (10): the incident closes
+     with its Kiosk fault, and its messages say what each device reads now. A number (numeric or
+     group mode) and an alert sent before the rules carried `bad_states` wait for a person.
+   - `abandoned` with `still_true: false` (back to normal just as the rule gave up) closes the
+     incident; still true, the owner hears it.
 2. The engine's own connection to Home Assistant: while it is up, a beat every minute. Its absence
    is how the desk knows the villa is cut off (internet, power, Home Assistant down).
 3. Ladder button presses (Done / Need help) carrying the incident number.

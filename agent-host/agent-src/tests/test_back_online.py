@@ -49,7 +49,8 @@ def test_an_integration_back_online_closes_its_fault_with_its_task(tmp_path):
     assert _run(tmp_path, one_still_down, T0)["actions"] == []
     just_back = {**one_still_down, ENTS[2]: _st("0.0", 3)}
     assert _run(tmp_path, just_back, T0)["actions"] == []                  # back 3 min ago: not yet
-    out = _run(tmp_path, {e: _st("0.0", 15) for e in ENTS}, T0)
+    # a device that reports again, its sensor still without a value ("unknown"), is back online
+    out = _run(tmp_path, {**{e: _st("0.0", 15) for e in ENTS}, ENTS[2]: _st("unknown", 15)}, T0)
     assert [a["action"] for a in out["actions"]] == ["ticket.resolve"] and out["faults_changed"] is True
     assert Store(str(tmp_path / "s.sqlite")).finding(fid)["status"] == "closed"
     assert _run(tmp_path, {e: _st("0.0", 20) for e in ENTS}, T0)["actions"] == []        # closed once

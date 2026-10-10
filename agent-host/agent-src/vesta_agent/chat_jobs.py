@@ -158,6 +158,10 @@ class ChatJobs:
         if j is None or j["turn"] is None:
             return
         log.info("Job result in chat %s: waiting notice before it: %s", origin.chat, self.notices.describe(j["turn"]))
+        # ⚠️ ITS RESULT CAME: NOTHING TO SAY AT THE NEXT START (architecture review 22): a stop after the report arrived
+        # told the chat "it was stopped by a restart: ask again" under the report itself
+        if self.state is not None:
+            self.state.chat_job(int(origin.chat), origin.job or "", None)
         await self._carry(int(origin.chat), self.notices.result(j["turn"]))
         self._typing_off(int(origin.chat), origin.job or "")
 

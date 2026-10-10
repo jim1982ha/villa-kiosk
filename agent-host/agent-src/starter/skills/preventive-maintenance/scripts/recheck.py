@@ -15,14 +15,14 @@ import argparse
 import json
 import os
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 from vesta_shared import result, script  # noqa: E402
-from vesta_shared.device_state import is_offline  # noqa: E402
+from vesta_shared.device_state import OFFLINE, out_of  # noqa: E402  ("is it back": one answer)
 from vesta_shared.problems import Problems  # noqa: E402
 
 OFFLINE_RULE = "PM-UNAVAILABLE"
@@ -39,19 +39,12 @@ def back_online(store, client, now: datetime, minutes: float, zone: str) -> dict
     day = now.astimezone(ZoneInfo(zone)).date().isoformat()
     closed, actions = [], []
     for f in rows:
-        if all(_back(states.get(e) or {}, now, minutes) for e in ents[f["id"]]):
+        if all(out_of(states.get(e) or {}, OFFLINE, now, minutes, unknown_tells=True) for e in ents[f["id"]]):
             actions += Problems(store).close_finding(f, day, "Cleared: back online.")
             closed.append(f["id"])
     if closed:
         store.audit("preventive-maintenance", "back_online", {"findings": closed})
     return {"closed": closed, "actions": actions}
-
-
-def _back(st: dict, now: datetime, minutes: float) -> bool:
-    since = st.get("last_changed")
-    if not st.get("state") or is_offline(st.get("state")) or not since:
-        return False
-    return now - datetime.fromisoformat(since).astimezone(timezone.utc) >= timedelta(minutes=minutes)
 
 
 def main(argv=None):

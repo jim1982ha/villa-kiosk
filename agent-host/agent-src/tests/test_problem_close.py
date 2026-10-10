@@ -101,3 +101,30 @@ def test_mute_leftovers_close_and_an_edited_skill_still_runs(tmp_path):
     assert store.is_muted("r", "e") is False and store.mutes() == [] and store.mute("r", "e", NOW, "owner") is None
     old_call = Problems(store).record_night([], "2026-10-07", NOW, state_rules=set(), event_rules=set(), worsened_step=15)
     assert old_call["new"] == []
+
+
+def test_a_device_offline_every_night_is_the_same_problem_again_not_a_new_one(tmp_path):
+    # architecture review 22: offline at 02:00, back by noon (recheck.py closes it), offline again the next night — a new
+    # finding, task and Kiosk fault every morning, a "new" digest line, never "it keeps happening"
+    store = Store(str(tmp_path / "s.sqlite"))
+    pb = Problems(store)
+    rules = dict(state_rules={"PM-UNAVAILABLE"}, event_rules=set(), worsened_step=15)
+    first = pb.record_night([_F("PM-UNAVAILABLE", "switch.plug", "P2")], "2026-10-07", **rules)
+    (fid,) = [d["id"] for d in first["new"]]
+    for n, day in enumerate(("2026-10-08", "2026-10-09"), start=1):
+        pb.close_finding(store.finding(fid), day, "Cleared: back online.")              # back by noon
+        night = pb.record_night([_F("PM-UNAVAILABLE", "switch.plug", "P2")], day, **rules)
+        assert night["new"] == [] and [d["id"] for d in night["again"]] == [fid] and night["again"][0]["again"] == n
+        assert night["tasks"] and f"again: {n + 1} times in 7 days" in store.task(night["tasks"][0]["task_id"])["summary"]
+    # a week and more later: a new problem again
+    pb.close_finding(store.finding(fid), "2026-10-09", "Cleared: back online.")
+    later = pb.record_night([_F("PM-UNAVAILABLE", "switch.plug", "P2")], "2026-10-20", **rules)
+    assert [d["id"] for d in later["new"]] != [fid] and later["again"] == []
+
+
+def test_an_event_finding_is_never_counted_again(tmp_path):
+    store = Store(str(tmp_path / "s.sqlite"))
+    pb = Problems(store)
+    rules = dict(state_rules=set(), event_rules={"E-RUN"}, worsened_step=15)
+    pb.record_night([_F("E-RUN", "c", "P3")], "2026-10-07", **rules)
+    assert len(pb.record_night([_F("E-RUN", "c", "P3")], "2026-10-08", **rules)["new"]) == 1

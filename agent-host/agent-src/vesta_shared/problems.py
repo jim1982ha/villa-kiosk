@@ -33,6 +33,9 @@ STATUSES = (DONE, CLEARED, CLOSED_IN_KIOSK)
 
 _ORDER = {"P1": 0, "P2": 1, "P3": 2, "P4": 3}
 
+#: A state finding closed this many days ago or less that the night sees again is the SAME problem, back — not a new one.
+AGAIN_DAYS = 7
+
 
 
 
@@ -103,10 +106,11 @@ class Problems:
     # rules are states and which are events, the worsened step and which severities get a task stay the skill's.
     def record_night(self, findings, day: str, _muted_at_iso: str | None = None, *, state_rules, event_rules, worsened_step: float,
                      task_severities=("P2", "P3"), resolved_note: str = "") -> dict:
-        """The night check's findings for `day`: {new, still_open, closed, tasks, resolve_actions}. (`_muted_at_iso`: what a
+        """The night check's findings for `day`: {new, still_open, closed, again (came back: AGAIN_DAYS), tasks,
+        resolve_actions}. (`_muted_at_iso`: what a
         night check edited before 0.12.132 still passes — Mute is gone, it is ignored.)
         A finding has rule_id, entity_id, family, severity, summary, detail, check, day and as_dict()."""
-        new, still_open, closed, fired = [], [], [], set()
+        new, still_open, closed, again, fired = [], [], [], [], set()
         for f in findings:
             f.day = day
             f.detail["check"] = f.check
@@ -115,10 +119,17 @@ class Problems:
             prev = json.loads(prev_row["detail"] or "{}") if prev_row else {}
             if prev and f.rule_id in state_rules:
                 f.detail["last_reported_pct"] = prev.get("last_reported_pct", prev.get("change_pct"))
-            fid, is_new = self.store.raise_finding(f.rule_id, f.entity_id, f.family, day, f.severity, f.summary, f.detail)
+            back = self._came_back(f, day, prev_row is None and f.rule_id in state_rules)
+            if back is not None:
+                fid, is_new = back, False
+            else:
+                fid, is_new = self.store.raise_finding(f.rule_id, f.entity_id, f.family, day, f.severity, f.summary, f.detail)
             d = f.as_dict()
             d["id"] = fid
-            if f.rule_id in event_rules:
+            if back is not None:
+                d["again"] = f.detail["again"]
+                again.append(d)
+            elif f.rule_id in event_rules:
                 self.store.close_finding(f.rule_id, f.entity_id, day)        # events close the same night
                 if is_new:                                                    # a rerun of the same night: told already
                     new.append(d)
@@ -138,15 +149,32 @@ class Problems:
             # stayed "Open fault" for ever, and the Kiosk's Cockpit filled with faults long gone
             resolve += self.close_finding(o, day, resolved_note)
         tasks = []
-        for d in new:
+        for d in new + again:
             if d["severity"] in task_severities:
-                tid, created = self.open_task("finding", d["id"], d["rule_id"], d["entity_id"], d["summary"],
+                title = d["summary"] + (f" (again: {d['again'] + 1} times in {AGAIN_DAYS} days)" if d.get("again") else "")
+                tid, created = self.open_task("finding", d["id"], d["rule_id"], d["entity_id"], title,
                                               d.get("check") or "")
                 if created:
                     tasks.append({"task_id": tid, "todo_summary": d["summary"][:250], "check": d.get("check") or "",
                                   "severity": d["severity"], "entity_id": d["entity_id"]})
-        return {"new": new, "still_open": still_open, "closed": closed, "tasks": tasks,
+        return {"new": new, "still_open": still_open, "closed": closed, "again": again, "tasks": tasks,
                 "resolve_actions": resolve}
+
+    def _came_back(self, f, day: str, may: bool) -> int | None:
+        """⚠️ THE SAME PROBLEM, BACK (architecture review 22): a device offline every night and back by noon was closed
+        in the day (recheck.py) and raised as NEW each night — a new Kiosk fault and a "new" digest line every morning,
+        never "it keeps happening". A state finding closed in the last AGAIN_DAYS days is opened again, its count kept
+        (detail "again"). Returns its id, or None."""
+        if not may:
+            return None
+        from datetime import date, timedelta
+        since = (date.fromisoformat(day) - timedelta(days=AGAIN_DAYS)).isoformat()
+        last = self.store.last_closed_finding(f.rule_id, f.entity_id, since, day)
+        if not last:
+            return None
+        f.detail["again"] = int(json.loads(last["detail"] or "{}").get("again") or 0) + 1
+        self.store.reopen_finding(last["id"], f.severity, f.summary, f.detail)
+        return last["id"]
 
     def closed_in_kiosk(self, task_id: int) -> int | None:
         """A person closed the task's fault in the VESTA Kiosk: the task closes, and so does the incident

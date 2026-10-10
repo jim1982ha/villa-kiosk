@@ -194,32 +194,18 @@ def test_only_done_and_need_help_and_an_old_not_found_is_chased_again(tmp_path):
 
 # ---------------------------------------------------------------------- over when Home Assistant no longer says so
 class Villa:
-    """Home Assistant as the desk reads it again: each entity's states over time [(since, state)], and the asks."""
+    """Home Assistant's states as the desk reads them again: each entity's timeline [(since, state)]."""
     def __init__(self, **timeline):
         self.timeline = timeline
         self.now = T0
-        self.history_asks = 0
-
-    def _at(self, e, t):
-        rows = [(since, st) for since, st in self.timeline.get(e, []) if since <= t]
-        return rows[-1] if rows else (None, None)
-
-    def history(self, ids, start, end):
-        self.history_asks += 1
-        out = {}
-        for e in ids:
-            since, st = self._at(e, start)                  # Home Assistant gives the state at the window's start too
-            rows = [{"state": st, "last_changed": start.isoformat()}] if st else []
-            rows += [{"state": s, "last_changed": t.isoformat()} for t, s in self.timeline.get(e, []) if start < t < end]
-            out[e] = rows
-        return out
 
     def states(self, ids):
         out = {}
         for e in ids:
-            since, st = self._at(e, self.now)
-            if st:
-                out[e] = {"state": st, "last_changed": since.isoformat(), "attributes": {"friendly_name": "Front door"}}
+            rows = [(since, st) for since, st in self.timeline.get(e, []) if since <= self.now]
+            if rows:
+                since, st = rows[-1]
+                out[e] = {"state": st, "last_changed": since.isoformat(), "attributes": {"friendly_name": e.split(".")[1]}}
         return out
 
 
@@ -228,43 +214,113 @@ def _tick(store, villa, minutes):
     return desk.tick(store, villa.now, client=villa)
 
 
+LOCKS = ("lock.front_door", "lock.back_door")
+BAD = ["unlocked", "open", "jammed"]
+
+
+def _left_unlocked(store, entities=("lock.front_door",), abandon=True, still_true=True, **extra):
+    """A door rule shaped like the live critical_condition: every watched entity, its list of bad states."""
+    iid = desk.intake(store, event(entities=entities, mode="state", bad_states=BAD, **extra), T0,
+                      mode_reader=lambda: "occupied")["incident_id"]
+    if abandon:
+        desk.intake(store, event(phase="abandoned", entities=entities, mode="state", bad_states=BAD, still_true=still_true,
+                                 **extra), T0 + timedelta(minutes=30))
+    return iid
+
+
 def test_a_door_locked_after_its_rule_stopped_watching_closes_its_alert(store):
-    # villa, 2026-10-10: "Entrance door unlocked" was still an open fault hours after the door was locked — the rule had
+    # villa, 2026-10-10: "Entrance door unlocked" stayed an open fault hours after the door was locked — the rule had
     # given up after 30 min ("abandoned") and nobody ever said the door was locked
     villa = Villa(**{"lock.front_door": [(T0 - timedelta(minutes=10), "unlocked"), (T0 + timedelta(minutes=95), "locked")]})
-    iid = desk.intake(store, event(), T0, mode_reader=lambda: "occupied")["incident_id"]
-    desk.intake(store, event(phase="abandoned"), T0 + timedelta(minutes=30))
+    iid = _left_unlocked(store)
     assert not _tick(store, villa, 60).get("cleared")                   # still unlocked
     assert not _tick(store, villa, 100).get("cleared")                  # locked 5 min ago: not yet
     res = _tick(store, villa, 106)
     assert res["cleared"] == [iid] and store.incident(iid)["state"] == "resolved"
-    assert res["settle"] == [{"incident_id": iid, "note": "Cleared on {time}: Front door is locked again."}]
+    assert res["settle"] == [{"incident_id": iid, "note": "Cleared on {time}: front_door is locked."}]
     assert [a for a in res["actions"] if a["action"] == "ticket.resolve"]          # its Kiosk fault closes too
     assert [s for s in res["send"] if s["to"] == "fm" and "No reply needed" in s["status"]]
-    assert villa.history_asks == 1                                      # the problem's state read once, then kept
     assert not _tick(store, villa, 120).get("cleared")                  # closed once
 
 
+def test_a_lock_gone_from_unlocked_to_jammed_is_never_cleared(store):
+    # architecture review 22: 0.12.145 took "not the state it alerted on" for over — "jammed" closed the alert
+    villa = Villa(**{"lock.front_door": [(T0 - timedelta(minutes=10), "unlocked"), (T0 + timedelta(minutes=20), "jammed"),
+                                         (T0 + timedelta(minutes=300), "unavailable")]})
+    _left_unlocked(store)
+    for minutes in (60, 200, 400):                                      # jammed, then nothing readable: never over
+        assert not _tick(store, villa, minutes).get("cleared")
+    villa.timeline["lock.front_door"].append((T0 + timedelta(minutes=410), "unknown"))
+    for minutes in (430, 600):                                          # "unknown" says nothing of the door
+        assert not _tick(store, villa, minutes).get("cleared")
+
+
+def test_a_rule_watching_two_doors_is_over_when_neither_is_open(store):
+    villa = Villa(**{"lock.front_door": [(T0 - timedelta(minutes=10), "unlocked"), (T0 + timedelta(minutes=90), "locked")],
+                     "lock.back_door": [(T0 - timedelta(days=1), "locked")]})
+    iid = _left_unlocked(store, entities=LOCKS)
+    assert not _tick(store, villa, 95).get("cleared")
+    assert _tick(store, villa, 101)["cleared"] == [iid]                 # the back door locked all along counts as fine
+
+
+def test_a_condition_home_assistant_still_watches_is_left_to_it(store):
+    villa = Villa(**{"lock.front_door": [(T0 - timedelta(minutes=10), "unlocked"), (T0 + timedelta(minutes=15), "locked")]})
+    _left_unlocked(store, abandon=False)
+    assert not _tick(store, villa, 60).get("cleared")                   # Home Assistant says "resolved" itself
+
+
+def test_a_rule_that_stopped_watching_once_back_to_normal_never_tells_the_owner_still_not_clear(store):
+    # architecture review 22: the rule said "cleared just inside the limit", the desk told the owner "Still not clear"
+    iid = desk.intake(store, event(), T0, mode_reader=lambda: "occupied")["incident_id"]
+    res = desk.intake(store, event(phase="abandoned", still_true=False), T0 + timedelta(minutes=30))
+    assert res["decision"] == "abandoned_cleared" and store.incident(iid)["state"] == "resolved"
+    assert not [s for s in res["send"] if s["to"] == "owner"] and res["ha_messages"]
+
+
+def test_a_number_or_an_alert_from_before_the_bad_states_waits_for_a_person(store):
+    villa = Villa(**{"sensor.cabinet": [(T0 + timedelta(minutes=5), "40.2")],
+                     "lock.front_door": [(T0 + timedelta(minutes=5), "locked")]})
+    # a numeric rule sends its bad states too (the blueprint's default: unavailable) — never read as "over"
+    desk.intake(store, event(rule="automation.critical_condition_cabinet", entities=("sensor.cabinet",), mode="numeric",
+                             bad_states=["unavailable"]), T0, mode_reader=lambda: "occupied")
+    desk.intake(store, event(phase="abandoned", rule="automation.critical_condition_cabinet", entities=("sensor.cabinet",),
+                             mode="numeric", bad_states=["unavailable"]), T0 + timedelta(minutes=30))
+    desk.intake(store, event(), T0, mode_reader=lambda: "occupied")                  # no bad_states: an older rule
+    desk.intake(store, event(phase="abandoned"), T0 + timedelta(minutes=30))
+    assert not _tick(store, villa, 120).get("cleared") and len(store.incidents(open_only=True)) == 2
+
+
+def _watchdog(store, state, bad_states=None):
+    extra = {"bad_states": bad_states} if bad_states else {}
+    return desk.intake(store, event(blueprint="critical_watchdog", rule="automation.critical_devices_unavailable_watchdog",
+                                    entities=("sensor.ap_state",), label="Critical device unavailable", state=state,
+                                    **extra), T0, mode_reader=lambda: "occupied")["incident_id"]
+
+
 def test_a_device_back_after_the_watchdog_alerted_closes_its_alert(store):
-    # the watchdog says a device went unavailable, never that it came back
-    villa = Villa(**{"switch.pool_relay": [(T0 - timedelta(minutes=10), "unavailable"), (T0 + timedelta(hours=2), "off")]})
-    iid = desk.intake(store, event(blueprint="critical_watchdog", rule="automation.critical_devices_unavailable_watchdog",
-                                   entities=("switch.pool_relay",), label="Critical device unavailable",
-                                   state="unavailable"), T0, mode_reader=lambda: "occupied")["incident_id"]
-    assert not _tick(store, villa, 60).get("cleared")
+    # the watchdog says a device went bad, never that it came back — an access point "disconnected" too
+    villa = Villa(**{"sensor.ap_state": [(T0 - timedelta(minutes=10), "disconnected"), (T0 + timedelta(minutes=50), "heartbeat_missed"),
+                                         (T0 + timedelta(hours=2), "connected")]})
+    iid = _watchdog(store, "disconnected", ["unavailable", "disconnected", "heartbeat_missed"])
+    assert not _tick(store, villa, 60).get("cleared")                   # another bad state: not back
     assert _tick(store, villa, 135)["cleared"] == [iid]
-    assert villa.history_asks == 0                                      # the event said which state is the problem
 
 
-def test_a_number_or_another_kind_of_alert_is_never_closed_by_the_desk(store):
-    villa = Villa(**{"sensor.cabinet": [(T0 - timedelta(minutes=10), "61.5"), (T0 + timedelta(minutes=5), "40.2")],
-                     "binary_sensor.leak": [(T0 - timedelta(minutes=10), "on"), (T0 + timedelta(minutes=5), "off")]})
-    desk.intake(store, event(rule="automation.critical_condition_cabinet", entities=("sensor.cabinet",)), T0,
-                mode_reader=lambda: "occupied")
-    desk.intake(store, event(blueprint="critical_binary_trip", rule="automation.critical_water_leak",
-                             entities=("binary_sensor.leak",)), T0, mode_reader=lambda: "occupied")
-    assert not _tick(store, villa, 120).get("cleared")                  # a temperature changes all the time; a trip latches
-    assert len(store.incidents(open_only=True)) == 2
+def test_a_watchdog_alert_from_before_the_bad_states_still_closes_on_its_own_state(store):
+    villa = Villa(**{"sensor.ap_state": [(T0 - timedelta(minutes=10), "unavailable"), (T0 + timedelta(hours=2), "connected")]})
+    iid = _watchdog(store, "unavailable")
+    assert _tick(store, villa, 135)["cleared"] == [iid]
+
+
+def test_home_assistants_late_all_clear_joins_the_incident_the_desk_closed(store):
+    # architecture review 22: closed here first, Home Assistant's "resolved" stayed a second message without its number
+    villa = Villa(**{"sensor.ap_state": [(T0 - timedelta(minutes=10), "unavailable"), (T0 + timedelta(hours=2), "connected")]})
+    iid = _watchdog(store, "unavailable")
+    _tick(store, villa, 135)
+    res = desk.intake(store, event(blueprint="critical_watchdog", rule="automation.critical_devices_unavailable_watchdog",
+                                   phase="resolved", entities=("sensor.ap_state",)), T0 + timedelta(minutes=140))
+    assert res["decision"] == "resolved_late" and res["ha_messages"][0]["incident_id"] == iid
+    assert not res["send"] and not res["actions"]                       # never closed twice
 
 
 def test_the_ticks_cli_reads_home_assistant_again(tmp_path):

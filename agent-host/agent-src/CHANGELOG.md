@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.140 (10 October 2026)
+
+Architecture review 22, all points:
+- alert-desk: `watched_for` replaces `held_states` (no history sampling): critical_watchdog and abandoned critical_condition in "state" mode are judged by the event's `bad_states` (a watchdog alert from before: its `state`); over = every watched entity out of every bad state for clear_minutes (`device_state.out_of`). `abandoned` with `still_true` false closes (`abandoned_cleared`); otherwise it marks the payload abandoned with mode/bad_states. `resolved` adopts Home Assistant's all-clear into an incident closed in the last day (`resolved_late`). The Kiosk note says the agent read it again.
+- Blueprints (live, saved through HA): critical_condition sends mode and bad_states with every phase and still_true with "abandoned"; critical_watchdog sends bad_states.
+- vesta_shared.device_state.out_of: the one "is it back" (recheck.py uses it, "unknown" counting as back there only).
+- incident_thread: owed copies retried for OWED_FOR (2 h, `owed_since`), not 12 tries (housekeeping runs every 30 s).
+- problems.record_night: a state finding closed in the last AGAIN_DAYS (7) days is reopened as "again" (detail count; store.last_closed_finding / reopen_finding); its task says "again: N times in 7 days"; the digest line too.
+- chat_jobs.result drops the job's record; state.RUNNING_JOB (set by the scheduler in the run's task) lets Delivery.send mark a scheduled run delivered, and a delivered run cut by a stop is not run again.
+- Tests: the live blueprint's shape (several entities, several bad states) in test_alert_desk.py, recurrence, delivered runs, a result before a stop; 17 mutants, each red.
+
 ## 0.6.139 (10 October 2026)
 
 Faults that are over close by themselves (villa, 2026-10-10: three of nine Cockpit rows were long over):

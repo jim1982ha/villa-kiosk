@@ -6,6 +6,8 @@ approval records and the model cannot reach either file (it has no file tool).
 
 from __future__ import annotations
 
+import contextvars
+
 import json
 import secrets
 import sqlite3
@@ -70,6 +72,11 @@ create table if not exists calls(
 #:   RECORDS  deleted with the agent's other records (settings.keep records_days)
 #:   CURRENT  one row per thing that exists (a job, the siren, the agent itself): replaced, never piled up
 RECORDS, CURRENT = "records", "current"
+
+#: The scheduled run the code runs on behalf of (scheduler.Scheduler sets it in the run's own task); "|delivered" on its
+#: record once a message of it reached a chat.
+RUNNING_JOB: contextvars.ContextVar[str | None] = contextvars.ContextVar("running_job", default=None)
+DELIVERED = "|delivered"
 KV_FAMILIES: dict[str, str] = {
     "inc:": RECORDS,                # which skill answers an alert's buttons in a chat
     "incthread:": RECORDS,          # what a chat shows of an incident (incident_thread.py)
@@ -196,18 +203,27 @@ class State:
             return True
 
     def job_running(self, job: str, slot_iso: str | None) -> None:
-        """A scheduled run of `job` for `slot_iso` started (None: it ended, however) — scheduler.Scheduler."""
+        """A scheduled run of `job` for `slot_iso` started (None: it ended, however) — scheduler.Scheduler. While it
+        runs, RUNNING_JOB names it: a message it gets to a chat marks it delivered (`job_delivered`)."""
         if slot_iso:
             self.put(f"jobrun:{job}", slot_iso)
         else:
             self.drop(f"jobrun:{job}")
 
+    def job_delivered(self) -> None:
+        """The scheduled run in progress (RUNNING_JOB) got a message to a chat (delivery.Delivery.send): cut by a stop
+        from now on, it is not run again — its report arrived (architecture review 22: two 07:00 reports)."""
+        job = RUNNING_JOB.get()
+        if job and self.get(f"jobrun:{job}") and not self.get(f"jobrun:{job}", "").endswith(DELIVERED):
+            self.put(f"jobrun:{job}", self.get(f"jobrun:{job}") + DELIVERED)
+
     def jobs_cut(self) -> dict[str, str]:
-        """{job: slot} of the scheduled runs a stop cut (still recorded running), read once at start and cleared."""
+        """{job: slot} of the scheduled runs a stop cut before they got anything to a chat, read once at start; every
+        record left by a stop is cleared."""
         cut = {k[len("jobrun:"):]: v for k, v in self.kv_prefix("jobrun:").items()}
         for k in cut:
             self.drop(f"jobrun:{k}")
-        return cut
+        return {k: v for k, v in cut.items() if not v.endswith(DELIVERED)}
 
     def chat_job(self, chat: int, name: str, record: dict | None) -> None:
         """A job asked for in `chat` runs (`record`: when it started, its waiting message) — None: it ended (chat_jobs)."""

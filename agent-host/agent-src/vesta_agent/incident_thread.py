@@ -14,7 +14,7 @@ shown before it, whatever order the caller uses.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Awaitable, Callable
 
 import logging
@@ -29,8 +29,10 @@ log = logging.getLogger("vesta.thread")
 Edit = Callable[..., Awaitable]     # (chat, message id, text[, keyboard])
 Delete = Callable[[int, int], Awaitable]
 
-#: How many times a copy Telegram refused to update is tried again (housekeeping: about an hour), then given up.
-OWED_TRIES = 12
+#: How long a copy Telegram refused to update is tried again (at every housekeeping pass), then given up.
+#: ⚠️ A DURATION, NEVER A COUNT (architecture review 22): 12 tries were meant as "about an hour" at one pass every five
+#: minutes — housekeeping runs every 30 seconds, so a 10-minute internet cut outlived them and left the buttons.
+OWED_FOR = timedelta(hours=2)
 
 
 class IncidentThread:
@@ -98,18 +100,19 @@ class IncidentThread:
         a shown one and never tried again — one chat kept Done / Need help, "Already answered." at every press."""
         text = layout.render(p)
         ok = bool(self.edit and await self.edit(chat, rec["mid"], text))
-        tries = 0 if ok else int(rec.get("owed_tries") or 0) + 1
-        rec = {k: v for k, v in rec.items() if k not in ("owed", "owed_tries")} | {"parts": p, "text": text}
+        now = datetime.now(timezone.utc)
+        since = rec.get("owed_since") or now.isoformat()
+        rec = {k: v for k, v in rec.items() if k not in ("owed", "owed_since", "owed_tries")} | {"parts": p, "text": text}
         if not ok:
-            rec |= {"owed": tries < OWED_TRIES, "owed_tries": tries}
+            rec |= {"owed": now - datetime.fromisoformat(since) < OWED_FOR, "owed_since": since}
             log.info("%s in chat %s: message %s not updated (%s)", iid, chat, rec["mid"],
                      "tried again later" if rec["owed"] else "given up")
         self.state.set_incident_message(iid, chat, rec)
         return ok
 
     async def catch_up(self) -> int:
-        """Every copy a refused edit left behind is tried again (housekeeping, every few minutes; at most OWED_TRIES times
-        each — a message deleted in the chat can never be changed). Returns how many are shown now."""
+        """Every copy a refused edit left behind is tried again (housekeeping, every 30 seconds; for OWED_FOR — a message
+        deleted in the chat can never be changed). Returns how many are shown now."""
         n = 0
         for iid, chat, rec in self.state.incident_messages_owed():
             n += await self._show(iid, chat, rec, layout.of(rec))
