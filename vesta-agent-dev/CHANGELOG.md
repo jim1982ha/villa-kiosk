@@ -1,3 +1,9 @@
+## 0.12.134
+
+What you will see:
+- In a group listed in People, everyone acts with the group's role, whatever their own row says. With the group listed as Owner, you and Fabien can approve the siren or a lock there, even though your own rows say Facility manager; in your private chats, your own rows' role applies. A group listed for both roles makes everyone in it a Facility manager.
+- The agent's log no longer says "the agent answers nobody" when People lists only groups: it says so only when People is empty.
+
 ## 0.12.133
 
 What you will see:
