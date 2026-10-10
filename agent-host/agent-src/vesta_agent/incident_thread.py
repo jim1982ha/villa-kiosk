@@ -17,7 +17,9 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
-from vesta_shared.messaging import TELEGRAM_LIMIT, incident_tag, tg_len
+import logging
+
+from vesta_shared.messaging import RULE, TELEGRAM_LIMIT, incident_tag, tg_len
 
 from .delivery import fit
 from .notice import when
@@ -28,8 +30,23 @@ def approval_thread(approval_id: str) -> str:
     return f"approval-{approval_id}"
 
 
+log = logging.getLogger("vesta.thread")
+
 Edit = Callable[..., Awaitable]     # (chat, message id, text[, keyboard])
 Delete = Callable[[int, int], Awaitable]
+
+
+def with_status(text: str, note: str) -> str:
+    """A message with `note` as where it stands now: under a line at its bottom, in place of the status it had there.
+
+    ⚠️ WHERE IT STANDS IS ALWAYS LAST (owner, 2026-10-10: "the update of the message shall appear at the bottom, after a
+    ------- line"). A notice is heading / alert / status, each under a line (notice.py, messaging.incident_message):
+    a press replaces the status ("Reminder: no answer after 15 min" becomes "Done pressed by JM_O on 10/10/2026 15:04");
+    a message with no status of its own gets the note under a line. The note is kept whole: the rest is shortened."""
+    sep = f"\n{RULE}\n"
+    parts = text.rstrip().split(sep)
+    base = sep.join(parts[:-1]) if len(parts) >= 3 else text.rstrip()
+    return f"{fit(base, TELEGRAM_LIMIT - tg_len(note) - len(sep))}{sep}{note}"
 
 
 class IncidentThread:
@@ -47,6 +64,9 @@ class IncidentThread:
             if not gone and self.edit:
                 # past Telegram's 48 hours: the old message cannot go, so it stops repeating the incident
                 await self.edit(chat, old["mid"], f"{incident_tag(iid)} · see the newer message below.")
+            # what happened to the earlier copy, said (owner, 2026-10-10: two messages of #14 stayed in the group)
+            log.info("%s in chat %s: message %s replaced by %s (%s)", iid, chat, old["mid"], mid,
+                     "deleted" if gone else "kept, now a pointer" if self.edit else "kept")
         self.state.set_incident_message(iid, chat, {"mid": mid, "text": text, "buttons": buttons, "settled": False})
 
     async def adopt(self, iid: int, chat: int, mid: int, text: str, keyboard: dict | None = None) -> None:
@@ -70,7 +90,7 @@ class IncidentThread:
                 continue
             # the note is kept whole, the alert's own text shortened to make room (architecture review 15: cut at 4,096
             # characters, a long alert lost "Done — Marie, 09:14" at its end)
-            text = f"{fit(rec['text'].rstrip(), TELEGRAM_LIMIT - tg_len(note) - 2)}\n\n{note}" if note else rec["text"]
+            text = with_status(rec["text"], note) if note else rec["text"]
             if self.edit and note:
                 await self.edit(chat, rec["mid"], text)
                 n += 1

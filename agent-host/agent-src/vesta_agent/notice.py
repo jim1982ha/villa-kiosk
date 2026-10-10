@@ -23,9 +23,10 @@ from datetime import datetime, timezone
 from typing import Callable
 from zoneinfo import ZoneInfo
 
+from vesta_shared.messaging import RULE  # the one line between a notice's parts
+
 #: A notice's kind (vesta_shared.result.message `stage`), as its history line says it.
 STAGES = {"new": "First time seen", "reminder": "Reminded", "escalated": "Escalated", "update": "Updated"}
-RULE = "-------"
 ROLE_WORDS = {"owner": "the owner", "fm": "the facility manager"}
 WHEN = "%d/%m/%Y %H:%M"
 

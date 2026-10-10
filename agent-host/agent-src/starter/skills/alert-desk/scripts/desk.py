@@ -179,7 +179,7 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
     iid = store.new_incident(key, rule_id, eid, sev, ev, now.isoformat())
     out["incident_id"] = iid
     out["decision"] = "new"
-    text = incident_message("New alert", details(ev, rule_id))
+    text = incident_message("", details(ev, rule_id))      # "New" is the heading's (Incident: New #N)
     if ev.get("snapshot"):
         out["actions"].append(R.snapshot(ev["snapshot"], iid))
     out["ha_messages"] = [R.ha_message(iid, text, ev.get("_context_id"), stage="new")]
@@ -219,7 +219,7 @@ def resolved(store: Store, ev: dict, now: datetime) -> dict:
     # Home Assistant's all-clear takes the incident's number and the original alert, and replaces its older ones
     out["ha_messages"] = [R.ha_message(inc["id"], about(inc, ev["message"]), ev.get("_context_id"))]
     if was_chasing:
-        out["send"].append(R.message("fm", about(inc, "Closed: Home Assistant reports it cleared. No reply needed."),
+        out["send"].append(R.message("fm", about(inc, "Closed: Home Assistant reports it cleared on {time}. No reply needed."),
                                      incident=inc["id"], stage="update"))
     store.audit("alert-desk", "resolved", {"incident": inc["id"]})
     return out
@@ -280,26 +280,26 @@ def reply(store: Store, iid: int, text: str, sender_role: str, now: datetime, pa
     if t.startswith("done"):
         out["actions"] += Problems(store).close_incident(iid, Incident.DONE, now.isoformat(),
                                                          f"Done, answered by the {sender_role}.", reply=text)
-        out["send"].append(here(f"Closed: done, answered by {who}. The VESTA Agent will check it stays quiet."))
+        out["send"].append(here(f"Closed: done, answered by {who} on {{time}}. The VESTA Agent will check it stays quiet."))
     elif t.startswith("not found"):
         store.update_incident(iid, state=Incident.NOT_FOUND, reply=text)
-        out["send"].append(here(f"Not found, answered by {who}: it stays open and goes in the weekly report. "
+        out["send"].append(here(f"Not found, answered by {who} on {{time}}: it stays open and goes in the weekly report. "
                                 "Tell me if it comes back."))
     elif t.startswith("need help"):
         store.update_incident(iid, state=Incident.ESCALATED, reply=text, escalated_at=now.isoformat(), assignee="owner")
         out["send"].append(R.message("owner", about(inc, f"{who.capitalize()} needs help"), incident=iid, buttons=True,
                                      stage="escalated"))
-        out["send"].append(here("Need help: the owner has been told"))
+        out["send"].append(here(f"Need help, answered by {who} on {{time}}: the owner has been told"))
     elif t.startswith("mute"):
         days = int(_params(params).behaviour("mute_days"))
         until = (now + timedelta(days=days)).isoformat()
         store.mute(inc["rule_id"], inc["entity_id"], until, sender_role)
         # muted: the fault is still there, nobody wants to be told again — its task stays (Problems decides)
         out["actions"] += Problems(store).close_incident(iid, Incident.MUTED, now.isoformat(), reply=text)
-        out["send"].append(here(f"Muted for {days} days by {who}. The report will list it."))
+        out["send"].append(here(f"Muted for {days} days by {who} on {{time}}. The report will list it."))
     else:
         store.update_incident(iid, reply=text)
-        out["send"].append(here(f"Noted from {who}: {text}"))
+        out["send"].append(here(f"Noted from {who} on {{time}}: {text}"))
     # the answer, on the alert and its reminders in every chat (a button press has already done it, by name)
     said = next((w for w in ("Done", "Not found", "Need help", "Mute") if t.startswith(w.lower())), None)
     if said:
@@ -347,7 +347,7 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None) -> dict
         cur = store.find_open_incident("critical_internet---villa_silent|agent")
         if cur:
             out["actions"] += Problems(store).close_incident(cur["id"], Incident.RECOVERED, now.isoformat())
-            out["send"].append(R.message("fm", about(cur, "Closed: the villa is back online, Home Assistant answers again"), stage="update",
+            out["send"].append(R.message("fm", about(cur, "Closed on {time}: the villa is back online, Home Assistant answers again"), stage="update",
                                          incident=cur["id"]))
     # alert fatigue: a rule firing more than N times in 30 days without acknowledgement
     limit = params.behaviour("alert_fatigue_per_month")

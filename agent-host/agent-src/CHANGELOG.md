@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.124 (10 October 2026)
+
+The owner's notice layout (2026-10-10): heading / alert / status, each under messaging.RULE.
+- messaging.incident_message(status, details): the alert first, the status under a line (RULE moved here; notice imports it).
+- incident_thread.with_status: a settle note replaces the status (or goes under a line); IncidentThread.post logs each replacement (deleted, pointer, kept).
+- Outcome fills "{time}" (the villa's time, notice.when) in a message when it is sent; Outcome takes timezone_name.
+- alert-desk: no "New alert" status (the heading says New); every answer and all-clear says when ("on {time}"). Starter fingerprint recorded.
+- Tests: helpers.status; the layout, the replacement and the time each shown red without their change.
+
 ## 0.6.123 (10 October 2026)
 
 Architecture review 18 (points 1 to 5), and the owner's rule for group members:

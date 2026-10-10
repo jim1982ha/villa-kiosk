@@ -1,3 +1,10 @@
+## 0.12.130
+
+What you will see:
+- Every alert message now reads in the same order: who it is for and the incident's history, a line, the alert itself (what happened, what to do), then, under another line, where it stands. A new alert has no status line: its first line already says "New".
+- When someone presses a button or answers, the status line at the bottom is replaced by what happened, who did it and when: "Done pressed by JM_O on 10/10/2026 15:04", "Closed: done, answered by the owner on 10/10/2026 15:04. The VESTA Agent will check it stays quiet." The same goes for an approval (Approved / Refused by … on …) and for an alert Home Assistant clears.
+- The agent's log now says, each time an alert message replaces an earlier one in a chat, whether the earlier one was deleted. This is to find why incident #14 left two messages in the group.
+
 ## 0.12.129
 
 What you will see:

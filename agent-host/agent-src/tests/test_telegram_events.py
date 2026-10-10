@@ -11,7 +11,7 @@ import re
 import pytest
 import yaml
 
-from helpers import copy_skill, make_agent, settings, body
+from helpers import copy_skill, make_agent, settings, body, status
 from ha_fake import FakeHA, tool
 from vesta_agent.app import Vesta
 from vesta_agent.routing import CONVERSATION, Origin
@@ -116,7 +116,7 @@ def test_a_press_on_the_agents_own_message_is_handled(agent):
              "message": {"message_id": mid, "chat": {"id": GROUP}}, "bot": BOT}
     run(agent.on_ha_event("telegram_callback", press))
     assert agent.tg.toasts and agent.tg.toasts[0][1] == "Not found: noted."
-    assert any(body(t).startswith("Not found") for _, t, _ in agent.tg.sent)
+    assert any(status(t).startswith("Not found") for _, t, _ in agent.tg.sent)
 
 
 def test_a_press_in_a_private_chat_is_answered_there_and_its_buttons_go(agent):
@@ -136,7 +136,7 @@ def test_a_press_in_a_private_chat_is_answered_there_and_its_buttons_go(agent):
     assert replies and all(chat == FM for chat, _, _ in replies)           # never the group
     (chat, m, text), = agent.tg.edits
     assert (chat, m) == (FM, mid)
-    assert text.startswith("🚨 Incident #1: pump stopped\n\nDone pressed by FM on ")    # what, who, when
+    assert text.startswith("🚨 Incident #1: pump stopped\n-------\nDone pressed by FM on ")    # what, then who and when, under a line
     assert re.search(r" on \d\d/\d\d/\d{4} \d\d:\d\d$", text)
 
 
@@ -237,7 +237,7 @@ def test_an_answer_settles_the_alert_in_every_chat_and_its_reminder(agent):
     edited = sorted((c, body(t).split("\n")[0]) for c, _, t in agent.tg.edits)       # its body's first line
     assert edited == sorted([(OWNER, f"🔒 Door unlocked. Incident #{iid}."), (GROUP, f"🔒 Door unlocked. Incident #{iid}."),
                              (FM, f"Reminder, incident #{iid}: m.")])
-    assert all(re.search(r"\n\nDone pressed by FM on \d\d/\d\d/\d{4} \d\d:\d\d$", t) for _, _, t in agent.tg.edits)
+    assert all(re.search(r"\n-------\nDone pressed by FM on \d\d/\d\d/\d{4} \d\d:\d\d$", t) for _, _, t in agent.tg.edits)
     # settled once: no chat still shows the incident's buttons unanswered
     assert not [c for c, r in agent.thread.shown(iid).items() if r["buttons"] and not r["settled"]]
 
@@ -248,5 +248,5 @@ def test_an_incident_home_assistant_clears_settles_its_alerts(agent):
     run(agent.outcome.carry_out({"send": [{"to": "fm", "text": f"Incident #{iid}.", "keyboard": True}], "incident_id": iid}, "alert-desk"))
     run(agent.outcome.carry_out({"settle": [{"incident_id": iid, "note": "Cleared in Home Assistant, {time}. No reply needed."}]}, "alert-desk"))
     assert sorted(c for c, _, _ in agent.tg.edits) == sorted([FM, GROUP])     # every chat of the role: each settled
-    assert all(re.search(r"\n\nCleared in Home Assistant, \d\d/\d\d/\d{4} \d\d:\d\d\. No reply needed\.$", text)
+    assert all(re.search(r"\n-------\nCleared in Home Assistant, \d\d/\d\d/\d{4} \d\d:\d\d\. No reply needed\.$", text)
                for _, _, text in agent.tg.edits)

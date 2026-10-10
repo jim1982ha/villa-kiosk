@@ -172,4 +172,4 @@ def test_a_repeated_alert_says_since_when_in_the_villas_time(store, monkeypatch)
     desk.intake(store, event(), T0, mode_reader=lambda: "occupied", zone="Asia/Makassar")
     res = desk.intake(store, event(), T0 + timedelta(hours=6), mode_reader=lambda: "occupied", zone="Asia/Makassar")
     text = res["send"][0]["text"]
-    assert text.splitlines()[0].endswith("since Thu 1 Oct, 17:00")      # 09:00 UTC is 17:00 in the villa
+    assert text.splitlines()[-1].endswith("since Thu 1 Oct, 17:00")     # 09:00 UTC is 17:00 in the villa (the status: last)

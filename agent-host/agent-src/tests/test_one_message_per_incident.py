@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from helpers import make_agent, body
+from helpers import make_agent, body, status
 from ha_fake import FakeHA, tool
 from telegram_fake import BOT
 from vesta_agent.ha_events import CONTEXT_KEY
@@ -72,20 +72,20 @@ def shown(v, chat):
 def test_home_assistants_alert_takes_the_incidents_number(agent):
     ha_alert(agent)
     (grp,) = shown(agent, GROUP)
-    assert grp.startswith("For: ") and ", Incident: New #1\n" in grp and body(grp).startswith("New alert\n") and SUMMARY in grp and "What to do:" in grp
+    assert grp.startswith("For: ") and ", Incident: New #1\n" in grp and status(grp) == "" and body(grp).startswith("🔓") and SUMMARY in grp and "What to do:" in grp
     (fm,) = shown(agent, FM_CHAT)
-    assert body(fm).startswith("New alert\n") and SUMMARY in fm and "Press Done" not in fm and "Reply Done" not in fm
+    assert status(fm) == "" and body(fm).startswith("🔓") and SUMMARY in fm and "Press Done" not in fm and "Reply Done" not in fm
 
 
 def test_each_chat_keeps_only_the_latest_message_and_it_recalls_the_alert(agent):
     ha_alert(agent)
     tick(agent, 20)                            # the reminder replaces the alert in the FM's chat
     (fm,) = shown(agent, FM_CHAT)
-    assert body(fm).startswith("Reminder: no answer after 15 min\n") and SUMMARY in fm and "What to do:" in fm
+    assert status(fm) == "Reminder: no answer after 15 min" and SUMMARY in fm and "What to do:" in fm
     assert agent.tg.sent[-1][2], "the reminder carries the buttons"
     tick(agent, 50)                            # the escalation replaces Home Assistant's alert in the owner's chat
     (grp,) = shown(agent, GROUP)
-    assert body(grp).startswith("No answer from the facility manager after 45 min\n") and SUMMARY in grp
+    assert status(grp) == "No answer from the facility manager after 45 min" and SUMMARY in grp
     assert (GROUP, 500) in agent.tg.deleted
     assert len(shown(agent, FM_CHAT)) == 1     # the FM's reminder is untouched by the owner's message
 
@@ -98,7 +98,9 @@ def test_an_answer_replaces_the_alert_where_it_was_given(agent):
     run(agent.on_ha_event("telegram_callback", {"id": "cb", "data": f"i:{iid}:done", "chat_id": FM_CHAT, "user_id": FM,
                                                 "message": {"message_id": reminder, "chat": {"id": FM_CHAT}}, "bot": BOT}))
     (fm,) = shown(agent, FM_CHAT)
-    assert body(fm).startswith("Closed: done, answered by the facility manager.") and SUMMARY in fm
+    # the alert first, then where it stands, with when (owner, 2026-10-10)
+    assert re.fullmatch(r"Closed: done, answered by the facility manager on \d\d/\d\d/\d{4} \d\d:\d\d\. The VESTA Agent "
+                        r"will check it stays quiet\.", status(fm)) and body(fm).index(SUMMARY) < body(fm).index("Closed:")
 
 
 def test_a_message_past_telegrams_48_hours_becomes_a_pointer(agent):
@@ -141,10 +143,11 @@ def test_need_help_reaches_the_owner_with_the_buttons_to_answer(agent):
                                                 "message": {"message_id": reminder, "chat": {"id": FM_CHAT}}, "bot": BOT}))
     owner = agent.thread.shown(int(iid))[GROUP]
     assert owner["buttons"] and not owner["settled"], owner
-    assert body(owner["text"]).startswith("The facility manager needs help") and SUMMARY in owner["text"]
+    assert status(owner["text"]) == "The facility manager needs help" and SUMMARY in owner["text"]
     assert all(mid != owner["mid"] for _, mid, _ in agent.tg.edits)     # never edited: its buttons are still there
     (fm,) = shown(agent, FM_CHAT)
-    assert body(fm).startswith("Need help: the owner has been told")
+    assert re.fullmatch(r"Need help, answered by the facility manager on \d\d/\d\d/\d{4} \d\d:\d\d: the owner has been told",
+                        status(fm))
 
 
 def test_a_second_close_changes_nothing_and_the_records_are_pruned_with_the_others(agent):
@@ -230,3 +233,14 @@ def test_the_kiosk_answer_gives_who_closed_a_fault_and_when():
     held = run(k.held_tickets())
     assert held["va-1"]["by"] == "Owner" and held["va-1"]["resolved_at"] == "2026-10-10T09:13:00.000Z"
     assert held["va-2"]["by"] == "" and held["va-2"]["status"] == "open"
+
+
+def test_a_press_puts_where_it_stands_last_in_place_of_the_old_status():
+    # owner, 2026-10-10: "the update of the message (when clicked) shall appear at the bottom, after a ------- line",
+    # with its time — never stacked under an older status
+    from vesta_agent.incident_thread import with_status
+    reminder = "For: JM_FM\n-------\nDoor left open\nWhat to do: close it\n-------\nReminder: no answer after 15 min"
+    assert with_status(reminder, "Done pressed by JM_O on 10/10/2026 15:04") == \
+        "For: JM_FM\n-------\nDoor left open\nWhat to do: close it\n-------\nDone pressed by JM_O on 10/10/2026 15:04"
+    new = "For: JM_FM, Incident: New #14\n-------\nDoor left open"
+    assert with_status(new, "Done pressed by JM_O on 10/10/2026 15:04") == f"{new}\n-------\nDone pressed by JM_O on 10/10/2026 15:04"

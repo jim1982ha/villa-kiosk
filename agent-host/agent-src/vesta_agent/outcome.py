@@ -33,9 +33,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Awaitable, Callable
 
 from .incident_thread import approval_thread
+from .notice import when
 from .routing import Origin, Routing
 from .outcome_words import clean_summary, ticket_title  # noqa: F401 — the words of a record, shared with tickets.py
 from vesta_shared.messaging import incident_tag
@@ -73,7 +75,7 @@ async def camera_photo(reader, entity_id) -> tuple[str, str] | None:
 
 class Outcome:
     def __init__(self, *, policy: Callable, state, send: Callable[..., Awaitable], actions, reader, tickets, buttons,
-                 thread, notices=None, out_dir: str = ""):
+                 thread, notices=None, out_dir: str = "", timezone_name: str = "UTC"):
         self.policy = policy
         self.state = state
         self.send = send                # delivery.Delivery.send — the message id, or None when nothing arrived
@@ -84,6 +86,7 @@ class Outcome:
         self.thread = thread            # incident_thread.IncidentThread: what each chat shows of an incident
         self.notices = notices          # notice.Notices: the heading of every message the agent sends on its own
         self.out_dir = out_dir
+        self.tz = timezone_name          # "{time}" in a message: the villa's time when it is sent
 
     # ------------------------------------------------------------------ carry out
     async def carry_out(self, res: dict, skill_name: str | None = None, origin: Origin | None = None,
@@ -217,6 +220,9 @@ class Outcome:
         in their chat, or is `plain`; then the send; then its `thread` (an incident, an approval, a snapshot): the
         earlier copy in this chat goes. Three sends in this module did part of this by hand (the siren's warning and
         the approvals had no heading, a snapshot piled up). The message id, or None when nothing arrived."""
+        if "{time}" in text:
+            # the moment it says what happened, as every notice writes one (10/10/2026 15:04, the villa's time)
+            text = text.replace("{time}", when(datetime.now(timezone.utc), self.tz))
         if self.notices and not plain and not (origin and origin.holds and chat == origin.chat):
             text = self.notices.compose(chat, text, incident, roles)
         mid = await self.send(chat, text, keyboard=keyboard, document=document, photo=photo, origin=origin)

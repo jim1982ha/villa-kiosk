@@ -54,7 +54,7 @@ def test_an_approval_for_the_owner_reaches_every_owner_chat_and_one_press_settle
     run(v.on_ha_event("telegram_callback", press))
     # every copy, in every chat, says who refused and when — its buttons gone (one mechanism: incident_thread.py)
     assert sorted(c for c, _, _ in v.tg.edits) == sorted([FABIEN, JM, GROUP])
-    assert all(re.search(r"\n\nRefused by Fabien_O on \d\d/\d\d/\d{4} \d\d:\d\d\. Nothing was done\.$", t)
+    assert all(re.search(r"\n-------\nRefused by Fabien_O on \d\d/\d\d/\d{4} \d\d:\d\d\. Nothing was done\.$", t)
                for _, _, t in v.tg.edits)
 
 

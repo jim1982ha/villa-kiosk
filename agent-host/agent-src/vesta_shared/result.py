@@ -52,7 +52,8 @@ STAGES = ("new", "reminder", "escalated", "update")
 def message(to: str, text: str, *, incident: int | None = None, buttons: bool = False,
             attachment: str | None = None, stage: str | None = None) -> dict:
     """A message for `to` (here · owner · fm). `buttons`: the alert's Done / Not found / … for `incident`; `stage`: what
-    this notice about it is (STAGES) — the engine writes its heading and its history line."""
+    this notice about it is (STAGES) — the engine writes its heading and its history line. "{time}" in `text` is the
+    villa's time when it is sent (10/10/2026 15:04), as in a settle note."""
     m = {"to": to, "text": text}
     if stage is not None:
         if stage not in STAGES:

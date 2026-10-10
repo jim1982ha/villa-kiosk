@@ -147,7 +147,7 @@ class Vesta:
         self.notices = Notices(self.state, self.policy, settings.timezone)
         self.outcome = Outcome(policy=self.policy, state=self.state, send=self.delivery.send, actions=self.actions,
                                reader=self.reader, tickets=self.tickets, buttons=self.buttons, thread=self.thread,
-                               notices=self.notices, out_dir=settings.out_dir)
+                               notices=self.notices, out_dir=settings.out_dir, timezone_name=settings.timezone)
         self.server_tools: list[dict] = []
         # the reports (ai_jobs.py): run, made without the AI, started from a chat
         # one AI turn, decided once: its tools by who asks, its brain, limit, record and folder (turn.py)
