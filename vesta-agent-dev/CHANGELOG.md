@@ -1,3 +1,9 @@
+## 0.12.127
+
+Two safety fixes:
+- A value of the wrong kind written by hand in the rules file (for example a list where one word is expected) no longer stops the agent. Before, it stopped answering messages, alerts and buttons, the Rules page showed "Error 500", and a siren sounding at that moment was never switched off. Now the value is named as a problem and its default is used; if the file still cannot be read, the agent keeps its last good rules, and the siren always stops on time.
+- When Home Assistant cannot say what a group of devices holds (it is slow or busy), an action on that group now asks the owner for approval. Before, the agent treated the group as holding nothing protected, and a rule allowing the action without approval could switch on a device reserved for the owner.
+
 ## 0.12.126
 
 What you will see:
