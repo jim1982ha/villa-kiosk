@@ -189,3 +189,15 @@ def test_no_test_store_ships_inside_the_app():
     if r.returncode:                                   # not a git checkout (an image): nothing to look at
         return
     assert [f for f in r.stdout.split() if f.endswith((".sqlite", ".db")) or ".sqlite-" in f] == []
+
+
+def test_a_returning_fault_the_kiosk_never_had_is_made_with_its_check_note(tmp_path):
+    # villa, 2026-10-11: the Onsen pump's fault, made new at its return, read "Back again." instead of "Check: …"
+    k = FakeKiosk()
+    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
+    st, pb = Store(v.s.store_path), Problems(Store(v.s.store_path))
+    fid, _ = st.raise_finding("PM-ENERGY-CHANGE", "sensor.onsen_energy", "energy", "2026-10-09", "P3", "Onsen pump low", {})
+    tid, _ = pb.open_task("finding", fid, "PM-ENERGY-CHANGE", "sensor.onsen_energy", "Onsen pump low",
+                          "Look at the pump's strainer.")
+    assert run(v.tickets.reopen({"task_id": tid, "title": "Onsen pump low (again: 2 times in 7 days)", "note": "Back again."}))
+    assert k.notes[-1] == "Check: Look at the pump's strainer."

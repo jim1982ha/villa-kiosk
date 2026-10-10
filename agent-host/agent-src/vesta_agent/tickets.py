@@ -67,8 +67,10 @@ class Tickets:
         if uid and await self.kiosk.reopen_ticket(uid, ticket_title(a.get("title") or task.get("summary") or ""), a.get("note")):
             log.info("Kiosk ticket %s open again: %s", uid, (a.get("title") or "")[:80])
             return True
+        # a new fault is a fault like any other: its note says what to check (villa, 2026-10-11: the Onsen pump's new
+        # fault read "Back again." where "Check: …" belongs — the reopening's note was taken for the fault's)
         return bool(await self.create(a.get("title") or task.get("summary") or "", task.get("entity_id") or None,
-                                      a.get("note") or None, task["id"]))
+                                      result.fault_note(Problems(self._store()).check_of(task)), task["id"]))
 
     async def resolve(self, a: dict) -> bool:
         """ticket.resolve {task_id | ticket_id, note?}: the Kiosk's ticket resolved."""

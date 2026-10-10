@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.144 (11 October 2026)
+
+- Tickets.reopen, when it makes a new fault (none, or the Kiosk lost it): its note is the task's check (result.fault_note), never the reopening's "Back again." (villa: the Onsen pump's new fault). Test shown failing without it.
+
 ## 0.6.143 (11 October 2026)
 
 Architecture review 25, all points:
