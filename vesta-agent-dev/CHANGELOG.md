@@ -1,3 +1,8 @@
+## 0.12.150
+
+What you will see:
+- A fault that comes back and has to be made anew in the Cockpit (the Kiosk no longer had the old one) now says what to check ("Check: …"), like every other fault — it read "Back again." in its place.
+
 ## 0.12.149
 
 What you will see (architecture review 25, every point):
