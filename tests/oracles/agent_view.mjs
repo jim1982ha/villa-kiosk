@@ -140,8 +140,15 @@ const loose = ["FaultsTab", "RecentWorkList", "SpendTab", "TodayTab", "ScheduleE
   .filter((f) => { const s = src(`components/fm/${f}.tsx`), m = s.indexOf("<AgentMark");
     return !(s.indexOf("<RecordMeta") > -1 && s.indexOf("<RecordMeta") < m && m < s.indexOf("</RecordMeta>")); });
 ck("every Facility card: its pills and when on one line under the title (RecordMeta)", loose.length === 0, loose);
+{
+  // owner, 2026-10-11: "only show the latest one" of the agent's "Now: …" title records — driven through the function
+  const { latestTitleChangeOnly } = await import("../../src/fm/faultNotes.ts");
+  const shown = latestTitleChangeOnly?.(["Cleared: x", "Now: 0 %", "Done, y", "Now: 2 %", "Now: 7 %"]);
+  ck("a fault card shows only the latest \"Now: …\" line, every other note kept in order",
+     JSON.stringify(shown) === JSON.stringify(["Cleared: x", "Done, y", "Now: 7 %"]), shown);
+}
 ck("a fault card no longer repeats its history's status lines",
-   !/fm-timeline-head|fm-timeline-dot/.test(src("components/fm/FaultsTab.tsx")) && /RecordNotes notes=\{\[t\.note, \.\.\.\(t\.updates/.test(src("components/fm/FaultsTab.tsx")));
+   !/fm-timeline-head|fm-timeline-dot/.test(src("components/fm/FaultsTab.tsx")) && /RecordNotes notes=\{\[t\.note, \.\.\.latestTitleChangeOnly\(\(t\.updates/.test(src("components/fm/FaultsTab.tsx")));
 
 console.log("\n  the agreement's sample, as the app reads it (2.496.234):");
 {

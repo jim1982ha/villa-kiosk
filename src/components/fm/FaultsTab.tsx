@@ -24,6 +24,7 @@ import NotesField from "./NotesField";
 import DeviceSearchPicker, { type DeviceOption } from "./DeviceSearchPicker";
 import AgentMark from "./AgentMark";
 import RecordMeta, { RecordNotes } from "./RecordMeta";
+import { latestTitleChangeOnly } from "@/fm/faultNotes";
 import InlineConfirm from "@/components/common/InlineConfirm";
 import { useDeviceChoice } from "./useDeviceChoice";
 import FormActions from "./FormActions";
@@ -324,7 +325,10 @@ export default function FaultsTab(
                   <span className="fm-entity-chip" style={{ cursor: "default" }}>{t.deviceLabel}</span>
                 ) : null}
               </RecordMeta>
-              <RecordNotes notes={[t.note, ...(t.updates ?? []).map((u) => u.note)]} />
+              {/* "Now: …" is the agent's record of a title change: only the latest one shows, the earlier
+                  ones were what it said before (owner, 2026-10-11: "only show the latest one") — the other
+                  notes stay */}
+              <RecordNotes notes={[t.note, ...latestTitleChangeOnly((t.updates ?? []).map((u) => u.note))]} />
               {/* The photos themselves, not a count of them. "3 photo(s)"
                   is a claim; a thumbnail you can open is the evidence. */}
               {t.photoIds.length > 0 && (
