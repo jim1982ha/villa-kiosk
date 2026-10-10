@@ -416,7 +416,9 @@ export const CLOSED_WITHOUT_ACTION = "Closed without action";
  * as work would inflate every "work done" figure (see withTicketAdvanced).
  * A fault already resolved, or unknown, is left exactly as it is.
  */
-export function withTicketClosed(d: FmData, id: string, k: Pick<FmStamp, "now">): FmData {
+/** `by`: the profile that closed it ("Owner", "Facility manager") — the VESTA Agent's note on the alert's Telegram
+ *  messages says who and when (owner, 2026-10-10). */
+export function withTicketClosed(d: FmData, id: string, k: Pick<FmStamp, "now">, by?: string): FmData {
   const t = d.tickets.find((x) => x.id === id);
   if (!t || isTicketResolved(t)) return d;
   const at = k.now;
@@ -426,7 +428,7 @@ export function withTicketClosed(d: FmData, id: string, k: Pick<FmStamp, "now">)
       ...x,
       status: "resolved",
       resolvedAt: at,
-      updates: [...(x.updates ?? []), { at, status: "resolved", note: CLOSED_WITHOUT_ACTION, photoIds: [] }],
+      updates: [...(x.updates ?? []), { at, status: "resolved", note: CLOSED_WITHOUT_ACTION, photoIds: [], ...(by ? { by } : {}) }],
     })),
   };
 }

@@ -154,7 +154,14 @@
 }
 button.cockpit-attention-row.tappable { cursor: pointer; }
 @media (hover: hover) {
-  .cockpit-attention-item.tappable:hover { background: color-mix(in srgb, var(--accent) 12%, var(--bg-input)); }
+  /* the card lights up as the device it opens — never while the pointer is on a fault's Close or its "sure?", which
+     light up themselves (owner, 2026-10-10: "I don't see the close button highlighted, rather the whole card") */
+  .cockpit-attention-item.tappable:hover:not(:has(.cockpit-attention-close:hover, .cockpit-attention-confirm:hover)) {
+    background: color-mix(in srgb, var(--accent) 12%, var(--bg-input));
+  }
+  .cockpit-attention-close:hover {
+    background: color-mix(in srgb, var(--accent) 18%, transparent); border-color: var(--accent);
+  }
 }
 .cockpit-attention-icon { flex: 0 0 auto; }
 /* These two were SWAPPED, which inverted the one distinction the status

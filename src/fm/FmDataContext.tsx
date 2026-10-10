@@ -21,6 +21,8 @@ import {
   fetchFmData, saveFmData, fmId, diffFmData, fmDiffIsEmpty, applyFmDiff,
 } from "./fmApi";
 import { SyncedDocument } from "@/utils/syncedDocument";
+import { useProfile } from "@/auth/ProfileContext";
+import { ROLE_LABELS } from "@/auth/roles";
 import { useStoreRefresh, STORE_ACTIVE_MS, STORE_HEARTBEAT_MS } from "@/hooks/useStoreRefresh";
 import { useSyncReporter } from "@/utils/syncTelemetry";
 import {
@@ -310,8 +312,10 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
     cost?: Omit<FmCost, "id" | "at" | "photoIds">,
   ) => mutate((d) => withTicketAdvanced(d, id, to, step, cost, stamp())), [mutate]);
 
+  // who closed it: the signed-in profile, recorded on the ticket for the agent's note on Telegram
+  const { role } = useProfile();
   const closeTicket = useCallback((id: string) =>
-    mutate((d) => withTicketClosed(d, id, stamp())), [mutate]);
+    mutate((d) => withTicketClosed(d, id, stamp(), role ? ROLE_LABELS[role] : undefined)), [mutate, role]);
 
   const saveDocument = useCallback((doc: Omit<FmSavedDocument, "id" | "generatedAt">) =>
     mutate((d) => ({
