@@ -6,7 +6,7 @@ Sub-commands (all print JSON the engine acts on; none sends anything itself):
   desk.py intake   --event event.json     one vesta_critical_event from Home Assistant (or a PM finding)
   desk.py tick                            every 5 min: re-asks, escalations, villa-silent check, fatigue
   desk.py reply    --incident 12 --text "Done" --from fm
-  desk.py status                          open incidents, muted rules, last beats
+  desk.py status                          open incidents, last beats
 
 The event is the one the VESTA rules fire AFTER their own Telegram message
 (checked live on 2026-09-29/30; INTEGRATION-PLAN 6b). Every phase of one incident
@@ -17,7 +17,7 @@ carries the same incident_id:
    "summary": "the rule's own message", "timestamp": "...", "reason"?: "...", ...}
 Only critical_condition, critical_binary_trip and critical_presence_guard ever
 send "resolved"; critical_schedule, critical_system and critical_watchdog send
-"opened" only — their incidents close through the ladder (Done / Not found).
+"opened" only — their incidents close through the ladder (Done).
 
 The output is the engine's standard form, built with vesta_shared/result.py (the shape there, every word here):
 {"send": [message], "actions": [fault | resolved | snapshot], "incident_id", "siren_gate"?, "settle"?}.
@@ -55,7 +55,7 @@ def _params(params: VillaParams | None) -> VillaParams:
     if params is None:
         return VillaParams(defaults=DEFAULTS)
     return params if params.defaults else params.with_defaults(DEFAULTS)
-LADDER_OPTIONS = ["Done", "Not found", "Need help", "Mute"]
+LADDER_OPTIONS = ["Done", "Need help"]      # owner, 2026-10-10: Not found and Mute removed, "too complex for now"
 #: What a person still being asked can answer: the last line of every message that carries the buttons.
 #: The beat the engine writes every minute while its Home Assistant connection is up.
 HA_BEAT = "ha_events"
@@ -151,8 +151,6 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
     sev = route["severity"] if ev.get("severity") in (None, "critical") else ev["severity"]
     key = f"{rule_id}|{eid}"
     out = {"send": [], "actions": [], "incident_id": None, "decision": None}
-    if store.is_muted(rule_id, eid, now.isoformat()):
-        out["decision"] = "muted"; store.audit("alert-desk", "muted", ev); return out
     if params and params.boolean("maintenance_mode", default=False) and sev != "P1":
         out["decision"] = "maintenance_mode"; store.audit("alert-desk", "suppressed_maintenance", ev); return out
     if route.get("intrusion") and not ev.get("villa_mode"):
@@ -275,33 +273,22 @@ def reply(store: Store, iid: int, text: str, sender_role: str, now: datetime, pa
     def here(status: str) -> dict:
         """The answer in the chat it came from: it replaces the incident's message there, so it says it all."""
         return R.message("here", about(inc, status), incident=iid, stage="update")
-    if inc.get("closed_at") and not t.startswith("mute"):
+    if inc.get("closed_at"):
         out["send"].append(here("Already closed")); return out
     if t.startswith("done"):
         out["actions"] += Problems(store).close_incident(iid, Incident.DONE, now.isoformat(),
                                                          f"Done, answered by the {sender_role}.", reply=text)
         out["send"].append(here(f"Closed: done, answered by {who} on {{time}}. The VESTA Agent will check it stays quiet."))
-    elif t.startswith("not found"):
-        store.update_incident(iid, state=Incident.NOT_FOUND, reply=text)
-        out["send"].append(here(f"Not found, answered by {who} on {{time}}: it stays open and goes in the weekly report. "
-                                "Tell me if it comes back."))
     elif t.startswith("need help"):
         store.update_incident(iid, state=Incident.ESCALATED, reply=text, escalated_at=now.isoformat(), assignee="owner")
         out["send"].append(R.message("owner", about(inc, f"{who.capitalize()} needs help"), incident=iid, buttons=True,
                                      stage="escalated"))
         out["send"].append(here(f"Need help, answered by {who} on {{time}}: the owner has been told"))
-    elif t.startswith("mute"):
-        days = int(_params(params).behaviour("mute_days"))
-        until = (now + timedelta(days=days)).isoformat()
-        store.mute(inc["rule_id"], inc["entity_id"], until, sender_role)
-        # muted: the fault is still there, nobody wants to be told again — its task stays (Problems decides)
-        out["actions"] += Problems(store).close_incident(iid, Incident.MUTED, now.isoformat(), reply=text)
-        out["send"].append(here(f"Muted for {days} days by {who} on {{time}}. The report will list it."))
     else:
         store.update_incident(iid, reply=text)
         out["send"].append(here(f"Noted from {who} on {{time}}: {text}"))
     # the answer, on the alert and its reminders in every chat (a button press has already done it, by name)
-    said = next((w for w in ("Done", "Not found", "Need help", "Mute") if t.startswith(w.lower())), None)
+    said = next((w for w in LADDER_OPTIONS if t.startswith(w.lower())), None)
     if said:
         out["settle"] = [R.settle(iid, f"{said} answered by {who} on {{time}}")]
     store.audit("alert-desk", "reply", {"incident": iid, "by": sender_role, "text": text})
@@ -383,7 +370,7 @@ def main(argv=None):
     elif a.cmd == "reply":
         res = reply(store, a.incident, a.text or "", a.sender, now, params)
     else:
-        res = {"open": store.incidents(), "muted": store.mutes(), "beats": {n: store.last_beat(n) for n in (HA_BEAT, "agent_tick", "maintenance_nightly")}}
+        res = {"open": store.incidents(), "beats": {n: store.last_beat(n) for n in (HA_BEAT, "agent_tick", "maintenance_nightly")}}
     print(json.dumps(res, indent=1, default=str))
     return 0
 

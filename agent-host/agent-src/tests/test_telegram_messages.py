@@ -41,7 +41,7 @@ def test_telegrams_own_count_is_used():
 
 
 def test_the_buttons_go_on_the_last_part_and_stay_with_a_file():
-    # the file's form never carried the buttons: an alert with a file attached lost Done / Not found / Need help
+    # the file's form never carried the buttons: an alert with a file attached lost Done / Need help
     kb = {"inline_keyboard": [[{"text": "Done", "callback_data": "a:1:done"}]]}
     (only,) = layout("Incident #1 · leak", kb, "document")
     assert only.media == "document" and only.keyboard == kb
@@ -112,5 +112,5 @@ def test_a_double_tap_on_done_answers_once(tmp_path):
         await asyncio.gather(b.press({}, GROUP, ["5", "done"], person, toast), b.press({}, GROUP, ["5", "done"], person, toast))
     asyncio.run(twice())
     assert len(ran) == 1 and "Already answered." in toasts
-    asyncio.run(b.press({}, GROUP, ["5", "not_found"], person, toast))              # later, on a settled incident
+    asyncio.run(b.press({}, GROUP, ["5", "need_help"], person, toast))              # later, on a settled incident
     assert len(ran) == 1

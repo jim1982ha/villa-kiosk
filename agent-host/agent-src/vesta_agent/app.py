@@ -14,7 +14,7 @@ a voice message's audio to Home Assistant's speech-to-text (/api/stt), which
 changes nothing in the villa.
 
 Runs without the model (code only, zero tokens): alert intake, the 5-minute chase,
-the ladder buttons (Done / Not found / Need help / Mute), approvals, execution and
+the ladder buttons (Done / Need help), approvals, execution and
 read-back, the knowledge pack, the night's checks. With the model: conversations,
 and the scheduled jobs that need words (the skills' `prompt:` jobs).
 """

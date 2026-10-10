@@ -19,7 +19,7 @@ def _incident_with_task(tmp_path):
 
 @pytest.mark.parametrize("state,closes_as", [
     (Incident.DONE, DONE), (Incident.RESOLVED, CLEARED),          # a person answered / Home Assistant cleared it
-    (Incident.MUTED, None), (Incident.RECOVERED, None),           # the fault is still there: its task stays
+    (Incident.RECOVERED, None),                                   # the fault is still there: its task stays
 ])
 def test_an_incident_closed_in_a_state_closes_its_task_only_when_that_state_ends_the_problem(tmp_path, state, closes_as):
     store, iid, tid = _incident_with_task(tmp_path)
@@ -61,15 +61,13 @@ def test_the_nights_ledger_list_in_list_out(tmp_path):
     pb = Problems(store)
     rules = dict(state_rules={"S-POWER", "S-GONE"}, event_rules={"E-RUN"}, worsened_step=15)
     n1 = pb.record_night([_F("S-POWER", "a", "P2", change_pct=-20), _F("S-GONE", "b"), _F("E-RUN", "c", "P4")],
-                         "2026-10-06", NOW, **rules)
+                         "2026-10-06", **rules)
     assert {d["rule_id"] for d in n1["new"]} == {"S-POWER", "S-GONE", "E-RUN"}
     assert [t["entity_id"] for t in n1["tasks"]] == ["a", "b"]                          # P2 and P3 only
     assert store.finding(next(d["id"] for d in n1["new"] if d["rule_id"] == "E-RUN"))["status"] == "closed"
-    store.mute("S-POWER", "a", "2099-01-01T00:00:00+00:00", "owner")
-    n2 = pb.record_night([_F("S-POWER", "a", "P2", change_pct=-40), _F("E-RUN", "c", "P4")], "2026-10-07", NOW, **rules)
-    assert [d["rule_id"] for d in n2["muted"]] == ["S-POWER"]
-    # not seen tonight: closed with its task and fault. A muted state finding counts as not seen, so it closes too
-    # (as before this module took the ledger: kept, and named to the owner as a question)
+    n2 = pb.record_night([_F("E-RUN", "c", "P4")], "2026-10-07", **rules)
+    assert "muted" not in n2                                        # nothing is silenced any more (owner, 2026-10-10)
+    # not seen tonight: closed with its task and fault
     assert sorted(c["rule_id"] for c in n2["closed"]) == ["S-GONE", "S-POWER"]
     assert sorted(a["task_id"] for a in n2["resolve_actions"]) == sorted(t["task_id"] for t in n1["tasks"])
 
@@ -78,9 +76,9 @@ def test_a_still_open_finding_that_worsened_is_news_again(tmp_path):
     store = Store(str(tmp_path / "s.sqlite"))
     pb = Problems(store)
     rules = dict(state_rules={"S-POWER"}, event_rules=set(), worsened_step=15)
-    pb.record_night([_F("S-POWER", "a", change_pct=-20)], "2026-10-06", NOW, **rules)
-    same = pb.record_night([_F("S-POWER", "a", change_pct=-25)], "2026-10-07", NOW, **rules)
-    worse = pb.record_night([_F("S-POWER", "a", change_pct=-40)], "2026-10-08", NOW, **rules)
+    pb.record_night([_F("S-POWER", "a", change_pct=-20)], "2026-10-06", **rules)
+    same = pb.record_night([_F("S-POWER", "a", change_pct=-25)], "2026-10-07", **rules)
+    worse = pb.record_night([_F("S-POWER", "a", change_pct=-40)], "2026-10-08", **rules)
     assert not same["new"] and not same["still_open"][0].get("worsened")
     assert worse["still_open"][0]["worsened"] is True
 
@@ -89,6 +87,6 @@ def test_the_same_night_run_again_tells_an_event_once(tmp_path):
     # an event finding closes the night it fires; the same night run again (the page's Try) is not news twice
     store = Store(str(tmp_path / "s.sqlite"))
     rules = dict(state_rules=set(), event_rules={"E-RUN"}, worsened_step=15)
-    first = Problems(store).record_night([_F("E-RUN", "c", "P3")], "2026-10-07", NOW, **rules)
-    again = Problems(store).record_night([_F("E-RUN", "c", "P3")], "2026-10-07", NOW, **rules)
+    first = Problems(store).record_night([_F("E-RUN", "c", "P3")], "2026-10-07", **rules)
+    again = Problems(store).record_night([_F("E-RUN", "c", "P3")], "2026-10-07", **rules)
     assert len(first["new"]) == 1 and again["new"] == [] and again["tasks"] == []

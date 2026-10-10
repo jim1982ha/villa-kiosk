@@ -173,3 +173,21 @@ def test_a_repeated_alert_says_since_when_in_the_villas_time(store, monkeypatch)
     res = desk.intake(store, event(), T0 + timedelta(hours=6), mode_reader=lambda: "occupied", zone="Asia/Makassar")
     text = res["send"][0]["text"]
     assert text.splitlines()[-1].endswith("since Thu 1 Oct, 17:00")     # 09:00 UTC is 17:00 in the villa (the status: last)
+
+
+def test_only_done_and_need_help_and_an_old_not_found_is_chased_again(tmp_path):
+    # owner, 2026-10-10: "remove all the Mute and Not Found … too complex for now"
+    import sqlite3
+    from vesta_agent.alert_buttons import LADDER
+    from vesta_shared.store import Store
+    assert [label for label, _ in LADDER] == ["Done", "Need help"]
+    path = str(tmp_path / "old.sqlite")
+    st = Store(path)
+    iid = st.new_incident("k", "automation.x", "lock.x", "P2", {"message": "m"})
+    st.update_incident(iid, state="not_found")
+    st.db.execute("CREATE TABLE mutes (rule_id TEXT, entity_id TEXT, until TEXT, by TEXT)")   # a store from before
+    st.db.commit()
+    again = Store(path)                                                  # the next start: migrated once
+    assert again.incident(iid)["state"] == "asked" and again.incident(iid)["asked_at"]
+    tables = {r[0] for r in sqlite3.connect(path).execute("select name from sqlite_master where type='table'")}
+    assert "mutes" not in tables

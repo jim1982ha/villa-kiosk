@@ -1,6 +1,6 @@
 ---
 name: alert-desk
-description: Receives every critical alert of the VESTA rules (Home Assistant's vesta_critical_event), removes duplicates, routes by severity to the owner and facility-manager chats, runs the Done / Not found / Need help chase with the 15 and 45 minute ladder, gates the siren behind two signals and one human approval, and watches the villa from outside (villa silent). The engine runs it on every alert, every ladder button and every 5 minutes; you only read its status.
+description: Receives every critical alert of the VESTA rules (Home Assistant's vesta_critical_event), removes duplicates, routes by severity to the owner and facility-manager chats, runs the Done / Need help chase with the 15 and 45 minute ladder, gates the siren behind two signals and one human approval, and watches the villa from outside (villa silent). The engine runs it on every alert, every ladder button and every 5 minutes; you only read its status.
 ---
 
 # alert-desk
@@ -26,12 +26,11 @@ decides alone to act on the villa.
      through the ladder only.
 2. The engine's own connection to Home Assistant: while it is up, a beat every minute. Its absence
    is how the desk knows the villa is cut off (internet, power, Home Assistant down).
-3. Ladder button presses (Done / Not found / Need help / Mute) carrying the incident number.
+3. Ladder button presses (Done / Need help) carrying the incident number.
 
 ## Procedure per alert (`desk.py intake`)
 
 The decision is one of:
-- `muted`: nothing sent, counted.
 - `maintenance_mode`: `input_boolean.maintenance_mode` is on, nothing sent unless P1.
 - `counted`: the same rule on the same entity is already open and inside its cooldown. Nothing sent.
 - `repeat`: open and past the cooldown: one "still there, N times since" message to the FM.
@@ -66,9 +65,7 @@ message then says who pressed what, and when. Typing the word works too.
 | Button | Effect |
 |---|---|
 | Done | incident closed, its Kiosk ticket resolved, a "stays quiet" check the next night |
-| Not found | stays open, mentioned in the weekly report |
 | Need help | escalated to the owner with the detail |
-| Mute | rule + entity muted 30 days, listed in the report |
 
 ## The siren: strict human validation
 
@@ -84,7 +81,7 @@ is always sent before the question so the human looks first.
 
 ## What you may do
 
-`desk.py status` shows the open incidents, the muted rules and the last beats: use it to
+`desk.py status` shows the open incidents and the last beats: use it to
 answer "what is open?". Everything else is the engine's.
 
 ## Never

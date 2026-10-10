@@ -1,6 +1,6 @@
 # What the engine needs to run this skill. Read again at every use: an edit
 # counts at once. SKILL.md is what the model reads.
-description: Critical alerts from the VESTA rules — dedup, routing, the Done / Not found / Need help chase, the siren gate, the villa-silent watch
+description: Critical alerts from the VESTA rules — dedup, routing, the Done / Need help chase, the siren gate, the villa-silent watch
 tools: []                     # the AI needs no Home Assistant tool for this skill: the code follows the alerts
 scripts:                      # what the MODEL may run (the code runs the hooks below itself)
   desk.py:

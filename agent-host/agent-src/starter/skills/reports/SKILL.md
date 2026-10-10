@@ -86,7 +86,7 @@ clues point to, not the whole villa. If the limit stops you, the page is still s
   message (the headline and the key numbers), not as text. The file is
   self-contained: it opens in the phone's browser, which can print it or save
   it as PDF.
-- Muted rules, devices with no room, and missing helpers are listed under
+- Devices with no room and missing helpers are listed under
   "monitoring health" and "what would help" so nothing silently disappears.
 - Proposals carry their store id; the reply "accept N / later N / ignore N" is
   handled by villa-concierge.

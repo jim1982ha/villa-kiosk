@@ -1,4 +1,4 @@
-"""The alert buttons — Done / Not found / Need help / Mute — on a message, and what a press does.
+"""The alert buttons — Done / Need help — on a message, and what a press does.
 
 Taken out of outcome.py (architecture review, 2026-10-07): `keyboard` puts the buttons on an alert, `press` answers a
 press through the skill's on_reply. What a chat shows of an incident — which message, replaced or settled — is
@@ -14,7 +14,10 @@ from .routing import Origin
 
 log = logging.getLogger("vesta.outcome")
 
-LADDER = [("Done", "done"), ("Not found", "not_found"), ("Need help", "need_help"), ("Mute", "mute")]
+# ⚠️ TWO BUTTONS (owner, 2026-10-10: Not found and Mute removed, "too complex for now, I want to simplify it")
+LADDER = [("Done", "done"), ("Need help", "need_help")]
+#: The buttons an older message may still show: a press says what to use instead, never "Unknown button."
+RETIRED = {"not_found", "mute"}
 
 
 class AlertButtons:
@@ -42,12 +45,14 @@ class AlertButtons:
 
     async def press(self, q: dict, chat: int, parts: list[str], person, toast: Callable[[str], Awaitable],
                     name: str | None = None) -> None:
-        """Done / Not found / Need help / Mute on an alert (button_data: its incident and option; the presser is a
+        """Done / Need help on an alert (button_data: its incident and option; the presser is a
         registered person): the skill's on_reply decides, answering `here`."""
         iid, opt = parts
         if not iid.isdigit():
             return await toast("Unknown button.")
         options = {b: a for a, b in LADDER}
+        if opt in RETIRED:
+            return await toast("This button is no longer offered: press Done or Need help.")
         if opt not in options:
             return await toast("Unknown button.")
         skill_name = self.state.alert_skill(iid, chat)
@@ -55,11 +60,6 @@ class AlertButtons:
         if skill is None or not skill.on_reply:
             self.state.log("press_refused", {"incident": iid, "by": person.telegram_id, "reason": "not sent to this chat, or its skill is gone"})
             return await toast("This button belongs to another chat.")
-        if opt == "mute" and person.role != "owner":
-            inc = self._store().incident(int(iid)) or {}
-            if inc.get("severity") in ("P1", "P2"):
-                self.state.log("press_refused", {"incident": iid, "by": person.telegram_id, "reason": "mute of a P1/P2 is owner only"})
-                return await toast("Only the owner can mute a P1 or P2 alert.")
         # ⚠️ ONE PRESS, ONE ANSWER (architecture review 15, 2026-10-10): approvals and Continue were taken once, the alert
         # buttons were not — a quick double tap on Done ran the skill's answer twice, and the second ("Already closed")
         # replaced the first in the chat; a double Need help told the owner twice. A press while one is handled, or on

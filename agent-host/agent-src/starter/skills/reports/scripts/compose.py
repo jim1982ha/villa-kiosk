@@ -111,7 +111,7 @@ def fm_daily(pack: KnowledgePack, store: Store, as_of: date) -> str:
     if open_now:
         # ⚠️ AN INCIDENT NUMBER ONLY WHERE "#N done" WORKS: an alert's incident number. It used to print task numbers,
         # which no reply could close; a maintenance finding is closed in the VESTA Kiosk instead.
-        lines.append(f"Still open: {len(open_now)}. An alert: reply with its number and Done, Not found or Need help; "
+        lines.append(f"Still open: {len(open_now)}. An alert: press Done or Need help on its message; "
                      "the rest: close it in the VESTA Kiosk (Facility → Faults) when it is done.")
         alerts = [p for p in open_now if p["incident"]]
         lines += [f"- {incident_tag(p['incident'])} · {p['title'][:160]}" for p in alerts]

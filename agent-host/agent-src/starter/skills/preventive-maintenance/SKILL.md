@@ -90,9 +90,7 @@ A P2 or P3 finding becomes one Facility ticket `summary. Check: ...`. The
 chase (15 minutes re-ask, 45 minutes escalation to the owner) belongs to the
 alert-desk skill; this skill only opens and closes. Replies:
 - Done: close the task; if the finding is still there the next night, reopen with "still measured after your intervention".
-- Not found: keep the finding open, add the reply to it, mention it in the weekly report.
 - Need help: escalate to the owner with the finding detail.
-- Mute: `Store.mute(rule, entity, until)` for 30 days (helper `vesta_mute_days`); the report lists what is muted.
 
 ## Acceptance test (run before any change to rules.py)
 

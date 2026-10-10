@@ -112,11 +112,16 @@ def test_a_press_on_the_agents_own_message_is_handled(agent):
     agent.state.put(f"inc:1:{GROUP}", "alert-desk")
     from vesta_shared.store import Store
     Store(agent.s.store_path).new_incident("k", "automation.x", "lock.front_door", "P2", {"message": "m"})
-    press = {"id": "cb2", "data": "i:1:not_found", "chat_id": GROUP, "user_id": FM,
-             "message": {"message_id": mid, "chat": {"id": GROUP}}, "bot": BOT}
+    # owner, 2026-10-10: Not found and Mute removed — a button an older message still shows says what to use instead
+    old = {"id": "cb1", "data": "i:1:not_found", "chat_id": GROUP, "user_id": FM,
+           "message": {"message_id": mid, "chat": {"id": GROUP}}, "bot": BOT}
+    run(agent.on_ha_event("telegram_callback", old))
+    assert agent.tg.toasts[-1][1] == "This button is no longer offered: press Done or Need help." and agent.tg.sent == [
+        agent.tg.sent[0]]                                                  # nothing else happened
+    press = {**old, "id": "cb2", "data": "i:1:need_help"}
     run(agent.on_ha_event("telegram_callback", press))
-    assert agent.tg.toasts and agent.tg.toasts[0][1] == "Not found: noted."
-    assert any(status(t).startswith("Not found") for _, t, _ in agent.tg.sent)
+    assert agent.tg.toasts[-1][1] == "Need help: noted."
+    assert any(status(t) == "The facility manager needs help" for _, t, _ in agent.tg.sent)   # the owner is told
 
 
 def test_a_press_in_a_private_chat_is_answered_there_and_its_buttons_go(agent):

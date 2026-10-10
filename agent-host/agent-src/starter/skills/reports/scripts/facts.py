@@ -516,7 +516,6 @@ def s_monitoring(c: Ctx) -> dict:
     return {"offline": rows, "counter_resets": [{"item": c.pack.device_name(f["entity_id"], c.name(f["entity_id"])), "day": f["opened_day"]}
                                                 for f in resets],
             "rules_on": on, "rules_total": len(rules),
-            "muted": list(dict.fromkeys(c.pack.device_name(m["entity_id"], c.name(m["entity_id"])) for m in c.store.mutes())),
             "ai_cost_usd": c.ai_cost()}
 
 

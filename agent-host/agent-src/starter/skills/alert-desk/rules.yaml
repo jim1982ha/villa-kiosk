@@ -10,7 +10,7 @@
 defaults:
   severity: P3
   cooldown_min: 60
-  ladder: true          # Done / Not found / Need help with the 15 / 45 min chase
+  ladder: true          # Done / Need help with the 15 / 45 min chase
 
 routes:
   - blueprint: critical_binary_trip
@@ -76,6 +76,5 @@ people_roles:
 behaviour:
   reask_minutes: 15            # the facility manager is asked again after this long without an answer
   escalate_minutes: 45         # then the owner is told
-  mute_days: 30                # "Mute" silences an alert for this many days
   villa_silent_minutes: 30     # no contact with Home Assistant this long: the villa is silent (P1)
   alert_fatigue_per_month: 20  # a rule firing more often than this in 30 days, unanswered, is named

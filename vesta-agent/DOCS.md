@@ -186,7 +186,7 @@ Telegram button.
 
 | When | What | AI (cost) |
 |---|---|---|
-| A VESTA rule fires | the alert follow-up: the facility manager gets the alert with Done / Not found / Need help / Mute, a ticket in the Kiosk; a reminder after 15 min, the owner after 45 min; closed when Home Assistant says it cleared | No |
+| A VESTA rule fires | the alert follow-up: the facility manager gets the alert with Done / Need help, a ticket in the Kiosk; a reminder after 15 min, the owner after 45 min; closed when Home Assistant says it cleared | No |
 | Every 2 min | presence in the VESTA Kiosk (online / offline) | No |
 | 01:30 · 02:00 | inventory of Home Assistant, the night's maintenance checks, a ticket per job, anything urgent to the facility manager at once | No |
 | 07:00 | the facility manager's daily digest (also the agent's daily sign of life) | Yes |
@@ -291,7 +291,7 @@ lights without an approval.
 | `Telegram: off` | *Telegram takeover* is off: nothing is sent |
 | `Unregistered sender: id …` | someone not in `policy.yaml` wrote to the agent |
 | `Alert received: opened — …` | Home Assistant sent a critical alert; the next line says what the agent did with it |
-| `Alert handled by alert-desk: new, incident #…` | the follow-up started (`repeat`, `counted`, `muted`, `resolved`, `abandoned` otherwise) |
+| `Alert handled by alert-desk: new, incident #…` | the follow-up started (`repeat`, `counted`, `resolved`, `abandoned` otherwise) |
 | `Sent to chat … (fm chat)` | one message sent, and to which chat |
 | `Button Done on incident #… pressed by …` | someone answered an alert |
 | `Kiosk ticket … created / resolved` | a fault in the Kiosk's Facility records |

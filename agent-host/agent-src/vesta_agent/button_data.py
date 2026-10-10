@@ -9,7 +9,7 @@ from __future__ import annotations
 
 APPROVAL = "a"      # Approve / Refuse an action:      a:<approval id>:<y|n>
 CONTINUE = "c"      # Continue an answer at its limit:  c:<continuation id>
-ALERT = "i"         # Done / Not found / … on an alert: i:<incident id>:<option>
+ALERT = "i"         # Done / Need help on an alert: i:<incident id>:<option>
 REPORT = "w"        # a report without the AI:          w:<problem>:<job>
 
 PARTS = {APPROVAL: 2, CONTINUE: 1, ALERT: 2, REPORT: 2}

@@ -251,13 +251,13 @@ def run(args) -> dict:
         asset["name"] = asset.get("name") or g["name"] or _plain_name(g["eid"])
         findings += R.flap_rules(asset, g["eid"], g["per_day"], today, params)
 
-    # ---- persist findings, dedup, close, mute ---------------------------------
+    # ---- persist findings, dedup, close ---------------------------------------
     # the night's ledger is Problems' (vesta_shared/problems.py); what is a state, an event, worse, a task: here
     night = Problems(store).record_night(
-        findings, today.isoformat(), day_end.astimezone(timezone.utc).isoformat(), state_rules=STATE_RULES,
+        findings, today.isoformat(), state_rules=STATE_RULES,
         event_rules=EVENT_RULES, worsened_step=params.behaviour("worsened_step_pct"),
         resolved_note="Cleared: the nightly check no longer sees it.")
-    new, still_open, closed, muted, tasks = night["new"], night["still_open"], night["closed"], night["muted"], night["tasks"]
+    new, still_open, closed, tasks = night["new"], night["still_open"], night["closed"], night["tasks"]
     resolved = night["resolve_actions"]
     store.beat("maintenance_nightly", day_end.astimezone(timezone.utc).isoformat())
     store.audit("preventive-maintenance", "nightly", {"as_of": today.isoformat(), "new": len(new), "closed": len(closed)})
@@ -266,7 +266,7 @@ def run(args) -> dict:
               + [f"update: {d['summary']}" for d in still_open if d.get("worsened")]
               + [f"resolved: {c['summary']}" for c in closed])
     result = {"as_of": today.isoformat(), "villa": pack.villa, "features_written": features_written,
-              "new_findings": new, "still_open": still_open, "closed": closed, "muted": muted,
+              "new_findings": new, "still_open": still_open, "closed": closed,
               "tasks_to_create": tasks, "tasks_resolved": [a["task_id"] for a in resolved], "resolve_actions": resolved, "notes": notes, "digest_lines": digest}
     if args.out:
         with open(args.out, "w", encoding="utf-8") as fh:

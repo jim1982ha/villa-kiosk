@@ -82,8 +82,8 @@ class Problems:
 
     # ⚠️ CLOSING A SOURCE CLOSES WHAT IT OWES (architecture review 6, 2026-10-07). The alert desk and the night check
     # each closed an incident or a finding, then had to remember to clear its task and resolve its Kiosk fault —
-    # and to agree with source_gone() on which states end a Problem (a muted alert does not: the fault is still
-    # there). The state decides here, once; the callers get back the fault actions to carry out.
+    # and to agree with source_gone() on which states end a Problem. The state decides here, once; the callers get
+    # back the fault actions to carry out.
     def close_incident(self, iid: int, state: str, now_iso: str, note: str = "", **fields) -> list[dict]:
         """The incident ends in `state` (closed now). When that state ends its Problem (Incident.ANSWERED_OR_CLEARED)
         its open task closes too — done by a person, or cleared — and its Kiosk fault is to be resolved with `note`."""
@@ -98,20 +98,17 @@ class Problems:
         self.store.close_finding(finding["rule_id"], finding["entity_id"], day)
         return [result.resolved(tid, note) for tid in self.clear_source("finding", finding["id"])]
 
-    # ⚠️ THE NIGHT'S LEDGER, HERE (architecture review 7, 2026-10-07): nightly.py kept it inline — muted, raised,
+    # ⚠️ THE NIGHT'S LEDGER, HERE (architecture review 7, 2026-10-07): nightly.py kept it inline — raised,
     # an event closed the same night, a rerun not news twice, worsened, closed tonight, its task opened. Which
     # rules are states and which are events, the worsened step and which severities get a task stay the skill's.
-    def record_night(self, findings, day: str, muted_at_iso: str, *, state_rules, event_rules, worsened_step: float,
+    def record_night(self, findings, day: str, *, state_rules, event_rules, worsened_step: float,
                      task_severities=("P2", "P3"), resolved_note: str = "") -> dict:
-        """The night check's findings for `day`: {new, still_open, closed, muted, tasks, resolve_actions}.
+        """The night check's findings for `day`: {new, still_open, closed, tasks, resolve_actions}.
         A finding has rule_id, entity_id, family, severity, summary, detail, check, day and as_dict()."""
-        new, still_open, closed, muted, fired = [], [], [], [], set()
+        new, still_open, closed, fired = [], [], [], set()
         for f in findings:
             f.day = day
             f.detail["check"] = f.check
-            if self.store.is_muted(f.rule_id, f.entity_id, muted_at_iso):
-                muted.append(f.as_dict())
-                continue
             fired.add((f.rule_id, f.entity_id))
             prev_row = self.store.open_finding(f.rule_id, f.entity_id)
             prev = json.loads(prev_row["detail"] or "{}") if prev_row else {}
@@ -147,7 +144,7 @@ class Problems:
                 if created:
                     tasks.append({"task_id": tid, "todo_summary": d["summary"][:250], "check": d.get("check") or "",
                                   "severity": d["severity"], "entity_id": d["entity_id"]})
-        return {"new": new, "still_open": still_open, "closed": closed, "muted": muted, "tasks": tasks,
+        return {"new": new, "still_open": still_open, "closed": closed, "tasks": tasks,
                 "resolve_actions": resolve}
 
     def closed_in_kiosk(self, task_id: int) -> int | None:
@@ -171,8 +168,7 @@ class Problems:
             row = self.store.finding(sid)
             return bool(row) and row["status"] != "open"
         if kind == "incident":
-            # over when it was answered or cleared — not when it was muted (the fault is still there,
-            # nobody wants to be told again) nor when its rule stopped watching it
+            # over when it was answered or cleared — not when its rule stopped watching it
             inc = self.store.incident(sid)
             return bool(inc) and bool(inc.get("closed_at")) and inc.get("state") in Incident.ANSWERED_OR_CLEARED
         return False                                     # no source of its own: it waits for a person

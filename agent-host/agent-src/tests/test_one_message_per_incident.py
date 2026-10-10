@@ -114,7 +114,7 @@ def test_a_message_past_telegrams_48_hours_becomes_a_pointer(agent):
 def test_the_owner_and_the_fm_in_one_chat_get_one_message_with_the_buttons(agent):
     from vesta_shared import result as R
     res = {"send": [R.message("owner", "Incident #9 · New alert\nx"),
-                    R.message("fm", "Incident #9 · New alert\nx\nPress Done, Not found or Need help.", incident=9, buttons=True),
+                    R.message("fm", "Incident #9 · New alert\nx\nPress Done or Need help.", incident=9, buttons=True),
                     R.message("owner", "Incident #9 · New alert\nx", incident=9)], "incident_id": 9}
     from vesta_agent.routing import Routing
     route = Routing(agent.policy())

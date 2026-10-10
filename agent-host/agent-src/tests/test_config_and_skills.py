@@ -212,10 +212,10 @@ def test_a_code_job_runs_with_its_placeholders_filled(tmp_path):
     d = _minimal_skill(tmp_path / "skills")
     (d / "scripts" / "echo.py").write_text("import json, sys; print(json.dumps({'argv': sys.argv[1:]}))\n")
     sk = Skills(s.skills_dir).get("pool-care")
-    code, out, _ = run_command(s, sk, "echo.py --incident {incident} --text {text}", {"incident": 7, "text": "Not found"})
+    code, out, _ = run_command(s, sk, "echo.py --incident {incident} --text {text}", {"incident": 7, "text": "Need help"})
     assert code == 0
     import json
-    assert json.loads(out)["argv"][:4] == ["--incident", "7", "--text", "Not found"]
+    assert json.loads(out)["argv"][:4] == ["--incident", "7", "--text", "Need help"]
 
 
 def test_the_villas_own_file_in_a_starter_skill_is_kept_and_does_not_stop_its_updates(tmp_path):

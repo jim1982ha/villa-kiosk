@@ -9,7 +9,6 @@ Tables:
               their source ("finding:N" / "incident:N") and what to check — opened and closed through
               vesta_shared.problems, the one owner of a problem's lifecycle
   proposals   "VESTA suggests" items and their accept / later / ignore status
-  mutes       rule + entity snoozed until a date
   cache       rendered reports and computed periods, keyed
   pack_seen   entity ids seen in the knowledge pack, for the onboarding diff
   heartbeat   the Home Assistant connection (ha_events) and the last agent tick
@@ -50,9 +49,6 @@ CREATE TABLE IF NOT EXISTS proposals (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   kind TEXT, title TEXT, detail TEXT, benefit TEXT,
   created_at TEXT, status TEXT DEFAULT 'open', decided_at TEXT);
-CREATE TABLE IF NOT EXISTS mutes (
-  rule_id TEXT NOT NULL, entity_id TEXT NOT NULL, until TEXT NOT NULL, by TEXT,
-  PRIMARY KEY (rule_id, entity_id));
 CREATE TABLE IF NOT EXISTS cache (
   key TEXT PRIMARY KEY, created_at TEXT, value TEXT);
 CREATE TABLE IF NOT EXISTS pack_seen (
@@ -70,11 +66,11 @@ class Incident:
     ⚠️ ONE VOCABULARY (architecture review, 2026-10-07): the desk wrote these words, problems.py and the reports read
     them, each spelled by hand; "answered or cleared" existed twice."""
     ASKED, REASKED, ESCALATED = "asked", "reasked", "escalated"          # the facility manager is being chased
-    DONE, NOT_FOUND, MUTED = "done", "not_found", "muted"                # a person's answer
+    DONE = "done"                                                        # a person's answer
     RESOLVED, RECOVERED = "resolved", "recovered"                        # its rule cleared / its source came back
     DIGEST, LOGGED = "digest", "logged"                                  # never chased: the morning list, the record
     CHASED = (ASKED, REASKED, ESCALATED)
-    ANSWERED_OR_CLEARED = (DONE, RESOLVED)    # over: its task and ticket close with it (not muted, not recovered)
+    ANSWERED_OR_CLEARED = (DONE, RESOLVED)    # over: its task and ticket close with it (not recovered)
 
 
 def _now() -> str:
@@ -89,6 +85,12 @@ class Store:
         self.db.executescript(SCHEMA)
         # ⚠️ A FORMAT CHANGE CARRIES ITS MIGRATION: a store written before 0.6.16 has tasks without
         # these columns, and outlives the release that adds them.
+        # ⚠️ NO "NOT FOUND", NO "MUTE" (owner, 2026-10-10: "too complex for now, I want to simplify it"): an incident
+        # answered "Not found" is chased again from now (asked, its 15 minutes restarting), and the mutes go — an alert
+        # is never silenced any more. A muted incident stays closed as it was; its fault waits in the Kiosk.
+        self.db.execute("UPDATE incidents SET state='asked', asked_at=? WHERE state='not_found' AND closed_at IS NULL",
+                        (_now(),))
+        self.db.execute("DROP TABLE IF EXISTS mutes")
         cols = {r["name"] for r in self.db.execute("PRAGMA table_info(tasks)")}
         for col in ("source", "check_text"):
             if col not in cols:
@@ -253,19 +255,6 @@ class Store:
     def decide_proposal(self, pid: int, status: str):
         self.db.execute("UPDATE proposals SET status=?, decided_at=? WHERE id=?", (status, _now(), pid))
         self.db.commit()
-
-    # mutes -----------------------------------------------------------------
-    def mute(self, rule_id: str, entity_id: str, until_iso: str, by: str):
-        self.db.execute("INSERT OR REPLACE INTO mutes VALUES (?,?,?,?)", (rule_id, entity_id, until_iso, by))
-        self.db.commit()
-
-    def is_muted(self, rule_id: str, entity_id: str, now_iso: str | None = None) -> bool:
-        now_iso = now_iso or _now()
-        r = self.db.execute("SELECT until FROM mutes WHERE rule_id=? AND entity_id IN (?, '*')", (rule_id, entity_id)).fetchone()
-        return bool(r and r["until"] > now_iso)
-
-    def mutes(self) -> list[dict]:
-        return [dict(r) for r in self.db.execute("SELECT * FROM mutes WHERE until>? ORDER BY until", (_now(),))]
 
     # cache -----------------------------------------------------------------
     def cache_get(self, key: str) -> Any | None:

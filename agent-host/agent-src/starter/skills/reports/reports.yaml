@@ -160,11 +160,10 @@ incident_words:
   escalated: Escalated to the owner
   done: Done
   resolved: Cleared in Home Assistant
-  not_found: Not found
   abandoned: Stopped being watched
   digest: In the morning digest
   logged: Recorded
-  muted: Muted
+  muted: Muted (before Mute was removed)
   recovered: Back to normal
 
 # A VESTA rule in the alerts table: per blueprint, the words for an alert it SENT. {subject}: the rule's

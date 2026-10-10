@@ -1,3 +1,11 @@
+## 0.12.132
+
+What you will see:
+- An alert now has two buttons: Done and Need help. "Not found" and "Mute" are gone, everywhere: on the messages, in the alert follow-up, in the night check and in the reports.
+- An alert answered "Not found" before this update is followed up again from the moment you update: a reminder after 15 minutes, then the owner after 45, until someone presses Done.
+- No alert is silenced any more: alerts muted before this update come again when their rule fires. A fault already muted stays in the VESTA Kiosk until it is closed there.
+- An older message still showing "Not found" or "Mute" answers "This button is no longer offered: press Done or Need help." when pressed.
+
 ## 0.12.131
 
 What you will see:

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.126 (10 October 2026)
+
+Not found and Mute removed (owner, 2026-10-10: "too complex for now, I want to simplify it"):
+- alert_buttons.LADDER is Done / Need help; RETIRED buttons on older messages answer what to use instead.
+- Store: Incident.NOT_FOUND / MUTED, the mutes table, mute / is_muted / mutes gone. Migration at open: an open not_found incident becomes asked (asked_at now: the chase restarts); DROP TABLE mutes.
+- alert-desk: no mute check at intake, no Not found / Mute replies, LADDER_OPTIONS, status without mutes, rules.yaml without mute_days; SKILL.md and skill.yaml say Done / Need help. Problems.record_night has no muted list (no muted_at argument); nightly.py follows. Reports: no "Muted alerts" row; "muted" kept only as the word for an older closed incident.
+- Tests updated; the two buttons, the retired-button answer and the migration each shown red without their change.
+
 ## 0.6.125 (10 October 2026)
 
 - notice.Notices(severity=): the heading says the incident's priority ("P2 Incident: New #18"), read from the store (app._severity, P1-P4 only; any failure leaves it out). ROLE_WORDS capitalised ("the Facility Manager"). Tests pin both; the priority shown red without it.

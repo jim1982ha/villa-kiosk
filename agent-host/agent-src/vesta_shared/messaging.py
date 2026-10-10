@@ -81,7 +81,7 @@ def incident_message(status: str, details: str = "") -> str:
     """The body of a notice about an incident: the original alert (`details`), then — under a line — where it stands
     (`status`; "{time}" in it is the villa's time when it is sent). Its number, who it is for and its earlier notices
     are the heading the engine writes (vesta_agent/notice.py); what to answer is the buttons under it (owner,
-    2026-10-10: "never mention any redundant text like Reply Done, Not found or Need help").
+    2026-10-10: "never mention any redundant text like Reply Done or Need help").
 
     ⚠️ THE ALERT FIRST, WHERE IT STANDS LAST (owner, 2026-10-10): "the update of the message shall appear at the bottom,
     after a ------- line", with its time. A button pressed later replaces that last part (IncidentThread.close)."""
