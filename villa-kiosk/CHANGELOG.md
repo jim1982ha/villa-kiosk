@@ -1,3 +1,9 @@
+## 2.496.319
+
+### Fixed
+- Cockpit, "Needs attention": the "Close" button on a fault works again. Since 2.496.318 the card took every click, so pressing "Close" opened the device instead.
+- The same problem is no longer shown twice. When an open fault is about the very sensor whose state is already listed (the laundry door "Unlocked" and its fault "Laundry Room door unlocked"; a pump "Unavailable" and its fault "offline for 9 h"), they are one line: "Unlocked — open fault: Laundry Room door unlocked", with its "Close". A fault about another part of the device keeps its own line.
+
 ## 2.496.318
 
 ### Fixed

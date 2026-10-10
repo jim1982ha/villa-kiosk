@@ -81,7 +81,7 @@ ck("the store erases a fault through withoutTicket", /mutate\(\(d\) => withoutTi
 ck("the one-step close goes through the store's one writer (mutate), and both screens call it",
    /mutate\(\(d\) => withTicketClosed\(d, id, stamp\(\)\)\)/.test(src("fm/FmDataContext.tsx"))
    && /closeTicket\(id\)/.test(src("components/fm/FaultsTab.tsx"))
-   && /closeTicket\(item\.ticketId/.test((src("components/cockpit/CockpitModal.tsx") + src("components/cockpit/CockpitOverview.tsx")))
+   && /closeTicket\(fault\.ticketId/.test((src("components/cockpit/CockpitModal.tsx") + src("components/cockpit/CockpitOverview.tsx")))
    && /ticketId: t\.id/.test(src("config/attention.ts")));
 
 done("✅ the Facility rules, in the engine");

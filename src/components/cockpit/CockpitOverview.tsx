@@ -246,12 +246,16 @@ function CockpitAttentionRow({ group, onOpenEntity, canCloseFault }: {
   const Icon = ATTENTION_ICON[group.kind];
   const tappable = !!group.entityId;
   const Head = tappable ? "button" : "div";
+  // ⚠️ THE CARD TAKES THE CLICK, A FAULT'S CLOSE TAKES ITS OWN (owner, 2026-10-10: "Close is not clickable because
+  // the whole card takes the priority"): an invisible layer stretched from the head over the card lay on top of Close.
+  // The card listens; the head stays the one <button> (keyboard and screen readers), its click bubbling to the card;
+  // Close and its "sure?" stop their clicks there.
   return (
-    <div className={`cockpit-attention-item${tappable ? " tappable" : ""}`}>
+    <div className={`cockpit-attention-item${tappable ? " tappable" : ""}`}
+      {...(tappable ? { onClick: () => onOpenEntity(group.entityId as string) } : {})}>
       <Head
         type={tappable ? "button" : undefined}
         className={`cockpit-attention-row${tappable ? " tappable" : ""}`}
-        {...(tappable ? { onClick: () => onOpenEntity(group.entityId as string) } : {})}
       >
         <Icon size={16} className={`cockpit-attention-icon cockpit-attention-${group.kind}`} />
         <span className="cockpit-attention-body">
@@ -293,11 +297,13 @@ function useFaultClose(item: AttentionItem | null, canCloseFault: boolean) {
   const { closeTicket } = useFmData();
   const [confirming, setConfirming] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
-  const closable = !!item && canCloseFault && item.kind === "fault" && !!item.ticketId;
+  // the fault itself, or the fault merged onto a live state's line (config/attention.mergeFaults)
+  const fault = item?.kind === "fault" ? item : item?.fault;
+  const closable = !!fault && canCloseFault && !!fault.ticketId;
   const close = async () => {
-    if (!item?.ticketId) return;
+    if (!fault?.ticketId) return;
     setProblem(null);
-    const { done, note: why } = fmSaveOutcome(await closeTicket(item.ticketId));
+    const { done, note: why } = fmSaveOutcome(await closeTicket(fault.ticketId));
     const failed = done ? null : why;
     // On success the fault leaves this list; only a failure stays to say so.
     setConfirming(false);
@@ -306,15 +312,15 @@ function useFaultClose(item: AttentionItem | null, canCloseFault: boolean) {
   return {
     button: closable && !confirming ? (
       <button type="button" className="btn ghost cockpit-attention-close"
-        aria-label={`Close the fault “${item?.title}”`}
-        onClick={() => { setProblem(null); setConfirming(true); }}>
+        aria-label={`Close the fault “${fault?.title}”`}
+        onClick={(e) => { e.stopPropagation(); setProblem(null); setConfirming(true); }}>
         <X size={14} /> Close
       </button>
     ) : null,
     panel: (
       <>
         {confirming && (
-          <div className="cockpit-attention-confirm">
+          <div className="cockpit-attention-confirm" onClick={(e) => e.stopPropagation()}>
             <InlineConfirm
               question="Close this fault? No action needed."
               confirmLabel="Close fault"

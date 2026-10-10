@@ -40,11 +40,16 @@ const after = build([ticket("va-1", "Entrance door unlocked", "lock.door")]);
 const gBefore = groupAttention(before), gAfter = groupAttention(after);
 const door = gAfter.find((g) => g.entityId === "lock.door");
 ck("the agent's ticket on an unlocked door joins the door's row: still ONE row, the count does not move",
-   gBefore.length === gAfter.length && door?.items.map((i) => i.kind).join() === "alarm,fault", gAfter.map((g) => [g.title, g.items.map((i) => i.id)]));
+   gBefore.length === gAfter.length && door?.items.map((i) => i.kind).join() === "alarm" && door.items[0].fault?.ticketId === "va-1",
+   gAfter.map((g) => [g.title, g.items.map((i) => i.id)]));
 ck("  ...the row is named after the device, opens the lock, and leads with the red state",
    door?.title === "Front door" && door.kind === "alarm" && door.room === "Entrance", door);
-ck("  ...its lines: the state's word, then the fault naming itself",
-   door?.items.map(attentionLine).join(" | ") === "Unlocked | Open fault: Entrance door unlocked", door?.items.map(attentionLine));
+// ⚠️ ONE PROBLEM, ONE LINE (owner, 2026-10-10: "why do we see 2 lines for the same issue?"): the ticket is about the
+// very lock whose state is listed — it was a second line, "Open fault: Entrance door unlocked", under "Unlocked"
+ck("  ...ONE line: the state's word, then its fault naming itself (the fault keeps its ticket, so its Close)",
+   door?.items.map(attentionLine).join(" | ") === "Unlocked — open fault: Entrance door unlocked", door?.items.map(attentionLine));
+ck("  ...and the villa's own items are never written on: the ticket gone, the state line has no fault",
+   !before.concat(after).some((i) => i.fault) && !groupAttention(before).some((g) => g.items.some((i) => i.fault)));
 ck("  ...and the row keeps its place when the ticket lands (ordered by worst problem and name, not arrival)",
    gBefore.findIndex((g) => g.entityId === "lock.door") === gAfter.findIndex((g) => g.entityId === "lock.door"));
 const battery = groupAttention(build([ticket("va-2", "Battery low", "sensor.door_battery")]));
@@ -99,9 +104,11 @@ for (let run = 0; run < 300; run++) {
       ...(dev ? { entityId: `${dev}.e${rnd(2)}`, device: { key: dev, label: dev.toUpperCase() } } : {}) };
   });
   const groups = groupAttention(items);
-  const out = groups.flatMap((g) => g.items.map((i) => i.id)).sort().join();
+  // every item once: as a line, or as the fault of the live line about the same entity (mergeFaults)
+  const shown = (g) => g.items.flatMap((i) => (i.fault ? [i, i.fault] : [i]));
+  const out = groups.flatMap((g) => shown(g).map((i) => i.id)).sort().join();
   if (out !== items.map((i) => i.id).sort().join()) conserved = false;
-  const tickets = groups.flatMap((g) => g.items.map((i) => i.ticketId).filter(Boolean)).sort().join();
+  const tickets = groups.flatMap((g) => shown(g).map((i) => i.ticketId).filter(Boolean)).sort().join();
   if (tickets !== items.map((i) => i.ticketId).filter(Boolean).sort().join()) conserved = false;
   if (groups.some((g) => g.items.some((i) => (i.device?.key ?? `item:${i.id}`) !== (g.items[0].device?.key ?? `item:${g.items[0].id}`)))) conserved = false;
   const shuffled = [...items].reverse();
@@ -170,5 +177,13 @@ ck("the villa model hands buildAttentionItems the device fold, and leaves the gr
 ck("the Cockpit draws one row per group, and every fault line inside a row has its own Close",
    /attentionGroups\.map\(\(group\) => \(\s*<CockpitAttentionRow key=\{group\.key\} group=\{group\}/.test(cockpit)
    && /function CockpitAttentionSub[\s\S]*?useFaultClose\(item, canCloseFault\)/.test(cockpit));
+// ⚠️ CLOSE TAKES ITS OWN CLICK (owner, 2026-10-10: "Close is not clickable because the whole card takes the
+// priority"): 2.496.318 stretched an invisible layer from the head over the card, on top of Close
+const css08 = src("styles/08-shared.css");
+ck("the card takes the click and Close stops its own there; no layer stretched over the card",
+   /className=\{`cockpit-attention-item[\s\S]{0,120}onClick: \(\) => onOpenEntity/.test(cockpit)
+   && /cockpit-attention-close"[\s\S]{0,200}onClick=\{\(e\) => \{ e\.stopPropagation\(\)/.test(cockpit)
+   && /cockpit-attention-confirm" onClick=\{\(e\) => e\.stopPropagation\(\)\}/.test(cockpit)
+   && !/cockpit-attention-row[^{]*::after/.test(css08));
 
 done("✅ one row per device in Needs attention");
