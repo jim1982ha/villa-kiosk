@@ -252,6 +252,13 @@ Decisions of 2026-09-30 (owner):
   `decided_name`). Who acts with which role: `Policy.member` and `Policy.knows_chat` only. Mute's leftovers: an
   incident "muted" counts as ended (`Incident.ENDED`), and Store / record_night keep Mute's old calls as no-ops for a
   skill edited before.
+  Review 20, 0.12.143: `posting.Poster` puts one message in one chat (heading, parts laid out to the message's limit —
+  a caption's 1,024 too —, send, thread record); Outcome and Approvals are both handed it, and Outcome gets `ask` at
+  construction. `approvals.STATES` is the one table of a request's states and their words (pending, approved, moving,
+  done, failed, blocked — the rules refused at the press —, refused, expired, unknown); the AI is told decisions by
+  their time; `expire_approval` claims once; resume ends a request left "approved" by a stop. `layout.render` drops the
+  head's oldest history first and never asks for a negative room. Tests press Approve through handle_callback and wait
+  with `Approvals.idle()`.
 - No PDF (owner, 2026-09-30): the reports are self-contained HTML pages sent
   as attachments. Chromium was ~480 MB of a 1.1 GB image for this alone.
 - ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.137 (10 October 2026)
+
+Architecture review 20, all seven points:
+- posting.py (new): Poster.post (from Outcome._post) — the message's limit by its media (CAPTION for a photo or a file), its parts and limit recorded; Outcome(poster=, ask=) at construction, a guard when ask is missing; approval_thread moves to approvals.py.
+- approvals.STATES: one table (AI words, toast) — "blocked" for the rules refusing at the press; now() reads decisions by decided_at (state.approvals_decided_since) and words each state with "(by X on …)"; expire only announces what expire_approval claimed (it now returns bool); resume ends an "approved" left by a stop (device read: done, else unknown); Approvals.idle().
+- layout.render(p, limit): the head's oldest history lines go first ("… N earlier notices", counted in the fit), the head at most half the message, the status capped, never a negative room.
+- Tests: Approve pressed through handle_callback with the follow-up; a decision on a request asked 3 h before; a half-done approval after a restart; expiry racing a press; the rules' refusal worded; a long head as one caption through Poster; each shown red without its fix (three tests strengthened after their mutants stayed green).
+
 ## 0.6.136 (10 October 2026)
 
 Architecture review 19, all seven points:

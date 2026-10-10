@@ -16,7 +16,6 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Awaitable, Callable
 
-from .incident_thread import approval_thread
 from .notice import when
 from .policy import Decision
 
@@ -28,6 +27,30 @@ FOLLOW_EVERY_S, FOLLOW_FOR_S = 5, 90
 #: How far back the AI is told of decided requests (the waiting ones, whatever their age, until they expire).
 DECIDED_FOR = timedelta(hours=2)
 EXPIRED = "Expired on {time}: nothing was done."
+#: A request "approved" this long ago with no outcome recorded: the agent stopped while carrying it out (resume ends it).
+STUCK_AFTER = timedelta(minutes=2)
+
+#: ⚠️ ONE TABLE OF A REQUEST'S STATES (architecture review 20): their words were written in four places and "failed" meant
+#: three things — the villa's rules refused it at the press (nothing tried), Home Assistant refused it, or the device never
+#: got there — told to the AI as "failed by JM". state → (what the AI is told, after "by <name> on <time>"; the press's
+#: toast when it comes after this state).
+STATES: dict[str, tuple[str, str]] = {
+    "pending": ("waiting for approval", "Still waiting."),
+    "approved": ("approved, its result not recorded yet", "Already approved."),
+    "moving": ("approved; the device was still on its way", "Already approved: on its way."),
+    "done": ("approved, and done", "Already approved and done."),
+    "failed": ("approved, but it did not happen", "Already approved; it did not happen."),
+    "blocked": ("pressed, but the villa's rules no longer allowed it: nothing was tried", "No longer allowed."),
+    "refused": ("refused", "Already refused."),
+    "expired": ("expired: nobody answered in time", "Expired. Ask again."),
+    "unknown": ("approved; the agent restarted before it could see the result", "Already approved."),
+}
+
+
+def approval_thread(approval_id: str) -> str:
+    """The thread of an approval request: its copies in every chat it was sent to, settled together by a press, as an
+    incident's are (owner, 2026-10-10: one mechanism for every message that has copies in several chats)."""
+    return f"approval-{approval_id}"
 
 
 class Approvals:
@@ -86,6 +109,11 @@ class Approvals:
         self._watching.add(task)
         task.add_done_callback(self._watching.discard)
 
+    async def idle(self) -> None:
+        """Until every device being followed has its verdict (tests, a clean stop)."""
+        while self._watching:
+            await asyncio.gather(*list(self._watching))
+
     async def _follow(self, aid: str, decision: Decision) -> None:
         """Read the device again until it gets there (or FOLLOW_FOR_S passes); then the record and every copy say the same
         thing: done, or not done."""
@@ -104,23 +132,39 @@ class Approvals:
         self.state.finish_approval(aid, status, {"ok": status == "done", "text": body})
         await self.thread.rewrite(approval_thread(aid), body)
 
-    async def resume(self) -> None:
-        """At start: every request still "moving" (its device was being followed when the agent stopped) is followed
-        again — never left saying "Opening…" for good."""
+    async def resume(self, now: datetime | None = None) -> None:
+        """At start: a request still "moving" (its device was being followed when the agent stopped) is followed again —
+        never left saying "Opening…" for good; one "approved" for minutes with no outcome (the agent stopped while carrying
+        it out) is ended by reading its device now, or said unknown (architecture review 20)."""
+        now = now or datetime.now(timezone.utc)
         for ap in self.state.approvals_in("moving"):
-            a = ap["action"]
-            self._watch(ap["id"], Decision(True, "", ap["required_role"], a.get("domain", ""), a.get("service", ""),
-                                           list(a.get("entity_ids") or []), dict(a.get("data") or {})))
+            self._watch(ap["id"], self._decision(ap))
+        for ap in self.state.approvals_in("approved"):
+            if ap.get("decided_at") and now - datetime.fromisoformat(ap["decided_at"]) > STUCK_AFTER:
+                # its copies may still carry the buttons (the press stopped before them): who approved it, and what is
+                # known now — the device in the state asked for is done, anything else is said unknown, never "failed"
+                body = await asyncio.to_thread(self.actions.recheck, self._decision(ap))
+                status = "done" if body else "unknown"
+                said = body or "The agent restarted before it could see the result: check the device."
+                self.state.finish_approval(ap["id"], status, {"ok": bool(body), "text": said})
+                await self.thread.close(approval_thread(ap["id"]),
+                                        f"Approved by {ap.get('decided_name') or 'someone'} on {self._at(ap['decided_at'])}.", said)
+
+    @staticmethod
+    def _decision(ap: dict) -> Decision:
+        a = ap["action"]
+        return Decision(True, "", ap["required_role"], a.get("domain", ""), a.get("service", ""),
+                        list(a.get("entity_ids") or []), dict(a.get("data") or {}))
 
     # ------------------------------------------------------------------ nobody answered
     async def expire(self, now: datetime | None = None) -> int:
         """Every request past its time that nobody answered says so, in every chat, and loses its buttons (before, only a
-        press after the time did: a request kept "Waiting for approval" and its buttons for days). Returns how many."""
+        press after the time did: a request kept "Waiting for approval" and its buttons for days). Only an expiry that was
+        recorded is announced: a press that claimed the request first keeps its own outcome. Returns how many."""
         now = now or datetime.now(timezone.utc)
         n = 0
         for ap in self.state.approvals_in("pending"):
-            if datetime.fromisoformat(ap["expires_at"]) <= now:
-                self.state.expire_approval(ap["id"])
+            if datetime.fromisoformat(ap["expires_at"]) <= now and self.state.expire_approval(ap["id"]):
                 await self.thread.close(approval_thread(ap["id"]), EXPIRED)
                 n += 1
         return n
@@ -128,21 +172,22 @@ class Approvals:
     # ------------------------------------------------------------------ what the AI is told
     def now(self, now: datetime | None = None) -> str:
         """The requests as they stand now, for the AI before it answers: every one still waiting, whatever its age, and
-        the ones decided lately — by whom, when — as the messages say them.
+        those DECIDED in the last two hours, whenever they were asked — what became of each, by whom, when.
 
         ⚠️ NEVER FROM ITS MEMORY (owner, 2026-10-10): asked again for the curtain, the AI answered "Approval request already
         sent 22 min ago" — it remembered asking, never learnt it had been approved. A press goes to the agent, not to the
-        conversation: the agent says what is waiting and what was decided."""
+        conversation: the agent says what is waiting and what was decided (review 20: by the decision's time — a request
+        asked three hours before and approved now was in neither list)."""
         now = now or datetime.now(timezone.utc)
         waiting = [a for a in self.state.approvals_in("pending") if datetime.fromisoformat(a["expires_at"]) > now]
-        decided = [a for a in self.state.approvals_since((now - DECIDED_FOR).isoformat()) if a["status"] != "pending"][:5]
+        decided = self.state.approvals_decided_since((now - DECIDED_FOR).isoformat())[:5]
         lines = [f"- waiting: {a['action'].get('plain', '?')} (asked {self._at(a['created_at'])})" for a in waiting] \
             or ["- nothing is waiting for approval"]
-        words = {"moving": "approved, the device still on its way", "approved": "approved"}
         for a in decided:
-            by = f" by {a['decided_name']}" if a.get("decided_name") else ""
-            at = f" on {self._at(a['decided_at'])}" if a.get("decided_at") else ""
-            lines.append(f"- {words.get(a['status'], a['status'])}{by}{at}: {a['action'].get('plain', '?')}")
+            words = STATES.get(a["status"], (a["status"], ""))[0]
+            who = [f"by {a['decided_name']}"] if a.get("decided_name") and a["status"] != "expired" else []
+            when_ = [f"on {self._at(a['decided_at'])}"] if a.get("decided_at") else []
+            lines.append(f"- {a['action'].get('plain', '?')} — {words} ({' '.join(who + when_)})")
         return ("[Requests for approval, checked just now; answer from this, never from memory. An action asked now is "
                 "a new request: call ha_call_service for it, whatever was asked before]\n" + "\n".join(lines))
 

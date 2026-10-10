@@ -28,12 +28,33 @@ def parts(body: str = "", status: str = "", head: str = "", lead: str = "") -> d
     return {"head": head or "", "lead": lead or "", "body": body or "", "status": status or ""}
 
 
-def render(p: dict) -> str:
-    """The text Telegram shows: head, then lead and body, then status — each under a line. The head and the status are
-    kept whole; the middle is shortened to fit Telegram's 4,096 characters (architecture review 15)."""
-    head, status = (p.get("head") or "").strip(), (p.get("status") or "").strip()
+#: What the middle (the alert, the action) always keeps, however long the head's history and the status are.
+MIDDLE_FLOOR = 300
+
+
+def render(p: dict, limit: int | None = None) -> str:
+    """The text Telegram shows: head, then lead and body, then status — each under a line, in ONE message of `limit`
+    characters (4,096; a photo's or a file's caption 1,024 — the message's own `limit` when it recorded one). The status is
+    kept whole and the head's first line too; the head's oldest history lines go first when room is short (replaced by
+    "… N earlier"), then the middle is shortened (architecture review 15, 20).
+
+    ⚠️ NEVER A NEGATIVE ROOM (architecture review 20): a head and a status longer than the limit asked fit() for a negative
+    size, which never returns — the agent would have stopped answering."""
+    limit = int(limit or p.get("limit") or TELEGRAM_LIMIT)
+    status = fit((p.get("status") or "").strip(), max(limit // 4, 40))
+    lines = [x for x in (p.get("head") or "").strip().split("\n") if x]
     middle = "\n".join(x.strip() for x in (p.get("lead"), p.get("body")) if x and x.strip())
-    room = TELEGRAM_LIMIT - tg_len(head) - tg_len(status) - 2 * len(SEP)
+    floor = min(MIDDLE_FLOOR, tg_len(middle))
+    dropped, head_cap = 0, max(limit // 2, 40)        # the head never takes more than half the message
+
+    def joined() -> str:                               # the head as sent: "… N earlier notices" under its first line
+        more = [f"… {dropped} earlier notice{'s' if dropped > 1 else ''}"] if dropped else []
+        return "\n".join(lines[:1] + more + lines[1:])
+    while len(lines) > 1 and (tg_len(joined()) > head_cap or tg_len(joined()) + tg_len(status) + 2 * len(SEP) + floor > limit):
+        lines.pop(1)                                   # the oldest notice of the history first
+        dropped += 1
+    head = fit(joined(), head_cap) if lines else ""
+    room = max(limit - tg_len(head) - tg_len(status) - 2 * len(SEP), 20)
     return SEP.join(x for x in (head, fit(middle, room) if middle else "", status) if x)
 
 

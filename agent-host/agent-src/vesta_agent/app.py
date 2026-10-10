@@ -45,6 +45,7 @@ from .config import STARTER_DIR
 from .ha_events import CONTEXT_KEY, HaEvents
 from . import layout
 from .approvals import Approvals
+from .posting import Poster
 from .incident_thread import IncidentThread
 from vesta_shared.result import FAULTS_CHANGED
 from .housekeeping import tidy
@@ -147,13 +148,16 @@ class Vesta:
         self.voice = Voice(self.s, self.tg, self.skills, self.code_command, self.delivery.send, self.state, self.cf_headers)
         # the heading of every message the agent sends on its own (notice.py): who it is for, the incident, its history
         self.notices = Notices(self.state, self.policy, settings.timezone, severity=self._severity)
-        self.outcome = Outcome(policy=self.policy, state=self.state, send=self.delivery.send, actions=self.actions,
-                               reader=self.reader, tickets=self.tickets, buttons=self.buttons, thread=self.thread,
-                               notices=self.notices, out_dir=settings.out_dir, timezone_name=settings.timezone)
+        # putting one message in one chat (posting.py): the alerts and the approval requests both use it
+        self.poster = Poster(send=self.delivery.send, thread=self.thread, notices=self.notices,
+                             timezone_name=settings.timezone)
         # an approval request from start to end (approvals.py); the siren's gate asks through it too
         self.approvals = Approvals(state=self.state, policy=self.policy, actions=self.actions, thread=self.thread,
-                                   post=self.outcome._post, timezone_name=settings.timezone, safe=self._safe)
-        self.outcome.ask = self.approvals.ask
+                                   post=self.poster.post, timezone_name=settings.timezone, safe=self._safe)
+        self.outcome = Outcome(policy=self.policy, state=self.state, send=self.delivery.send, actions=self.actions,
+                               reader=self.reader, tickets=self.tickets, buttons=self.buttons, thread=self.thread,
+                               notices=self.notices, out_dir=settings.out_dir, timezone_name=settings.timezone,
+                               poster=self.poster, ask=self.approvals.ask)
         self.server_tools: list[dict] = []
         # the reports (ai_jobs.py): run, made without the AI, started from a chat
         # one AI turn, decided once: its tools by who asks, its brain, limit, record and folder (turn.py)

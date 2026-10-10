@@ -367,9 +367,9 @@ class State:
         d["action"] = json.loads(d["action"])
         return d
 
-    def approvals_since(self, since_iso: str) -> list[dict]:
-        """The approval requests asked since `since_iso`, newest first, their action read back."""
-        rows = [dict(r) for r in self.db.execute("select * from approvals where created_at >= ? order by created_at desc",
+    def approvals_decided_since(self, since_iso: str) -> list[dict]:
+        """The approval requests DECIDED since `since_iso` — whenever they were asked — newest decision first."""
+        rows = [dict(r) for r in self.db.execute("select * from approvals where decided_at >= ? order by decided_at desc",
                                                  (since_iso,))]
         for r in rows:
             r["action"] = json.loads(r["action"])
@@ -399,10 +399,14 @@ class State:
                             (status, json.dumps(result, default=str), aid))
             self.db.commit()
 
-    def expire_approval(self, aid: str) -> None:
+    def expire_approval(self, aid: str) -> bool:
+        """A pending request past its time is expired — once: False when a press claimed it first (architecture review
+        20: the expiry wrote "nothing was done" on a request a press had just carried out)."""
         with self._lock:
-            self.db.execute("update approvals set status='expired' where id=? and status='pending'", (aid,))
+            cur = self.db.execute("update approvals set status='expired', decided_at=? where id=? and status='pending'",
+                                  (utcnow().isoformat(), aid))
             self.db.commit()
+            return cur.rowcount == 1
 
     # ------------------------------------------------------------------ sessions
     def session(self, chat_id: int) -> tuple[str | None, str | None]:

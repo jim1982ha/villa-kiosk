@@ -121,7 +121,7 @@ def body(text: str) -> str:
 
 def status(text: str) -> str:
     """Where a notice says it stands: its last part, under the last "-------" (messaging.incident_message — the alert
-    first, the status last; a press's note replaces it: incident_thread.with_status)."""
+    first, the status last; a press's note replaces it: vesta_agent/layout.py)."""
     from vesta_shared.messaging import RULE
     parts = text.split(f"\n{RULE}\n")            # heading / alert / status
     return parts[-1] if len(parts) >= 3 else ""

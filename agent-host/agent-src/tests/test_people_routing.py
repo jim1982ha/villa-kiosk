@@ -327,7 +327,7 @@ def test_a_curtain_still_moving_is_said_to_be_and_the_request_says_opened_once_i
 
     async def go():
         await v.on_ha_event("telegram_callback", press)
-        await asyncio.gather(*v.approvals._watching)
+        await v.approvals.idle()
     run(go())
     first, last = v.tg.edits[0][2], v.tg.edits[-1][2]
     assert "\n-------\nOpening " in first and "\n-------\nApproved by JM on " in first     # on its way, right away
@@ -347,7 +347,8 @@ def test_the_ai_is_told_what_is_waiting_and_what_was_decided_never_left_to_its_m
     assert "- waiting: Open Bedroom3 Curtain" in v.approvals.now(now=t0 + timedelta(minutes=1))
     v.state.claim_approval(aid, "approved", JM, now=t0 + timedelta(minutes=1), name="JM")
     later = v.approvals.now(now=t0 + timedelta(minutes=22))
-    assert "- nothing is waiting for approval" in later and "- approved by JM on " in later and "never from memory" in later
+    assert "- nothing is waiting for approval" in later and " — approved, its result not recorded yet (by JM on " in later
+    assert "never from memory" in later
     assert "Requests for approval" in v.before_answer()                 # in front of every message, acting on
 
 
@@ -378,9 +379,9 @@ def test_a_moving_curtain_is_recorded_moving_then_done_and_the_ai_reads_the_same
     run(v.approvals.ask(msg))
     out = v.actions.decide(msg.approval_id, JM, True, chat=JM)
     assert v.state.approval(msg.approval_id)["status"] == "moving" and out["toast"] == "Approved: on its way."
-    assert "approved, the device still on its way by JM" in v.approvals.now()
+    assert " — approved; the device was still on its way (by JM on " in v.approvals.now()
     run(v.approvals._follow(msg.approval_id, out["follow"]))
-    assert v.state.approval(msg.approval_id)["status"] == "done" and "- done by JM" in v.approvals.now()
+    assert v.state.approval(msg.approval_id)["status"] == "done" and " — approved, and done (by JM on " in v.approvals.now()
 
 
 def test_a_follow_cut_by_a_restart_is_taken_up_again(tmp_path, monkeypatch):
@@ -393,7 +394,7 @@ def test_a_follow_cut_by_a_restart_is_taken_up_again(tmp_path, monkeypatch):
 
     async def restart():
         await v.approvals.resume()
-        await asyncio.gather(*v.approvals._watching)
+        await v.approvals.idle()
     run(restart())
     assert v.state.approval(msg.approval_id)["status"] == "done"
     assert v.tg.edits and "\n-------\nOpened " in v.tg.edits[-1][2]
@@ -453,3 +454,109 @@ def test_who_acts_with_which_role_is_one_answer_everywhere(chat, who, known_as, 
     assert (got.person.role if got.action == "converse" else None) == acts
     assert pol.knows_chat(chat) is bool(acts)
     assert Routing(pol).approver_chats("any", chat) == ([chat] if acts else pol.chats_for("owner"))
+
+
+def _press(v, msg, yn="y", chat=JM, who=JM):
+    """Approve / Refuse pressed in Telegram, through the agent's real path (handle_callback → Approvals.press)."""
+    mid = next(n for n, (c, _t, k) in enumerate(v.tg.sent, start=1001) if c == chat and k)
+    data = msg.keyboard["inline_keyboard"][0][0 if yn == "y" else 1]["callback_data"]
+
+    async def go():
+        await v.on_ha_event("telegram_callback", {"id": "cb", "data": data, "chat_id": chat, "user_id": who,
+                                                  "message": {"message_id": mid, "chat": {"id": chat}}, "bot": BOT})
+        await v.approvals.idle()
+    run(go())
+
+
+def test_approve_pressed_as_the_owner_does_it_ends_in_one_verdict_everywhere(tmp_path, monkeypatch):
+    # architecture review 20: no test pressed Approve — the hand-over of the body and the follow-up went untested
+    from vesta_agent import approvals as appr_mod
+    monkeypatch.setattr(appr_mod, "FOLLOW_EVERY_S", 0)
+    v = _curtain_villa(tmp_path, ["closed", "closed", "open"])
+    _, msg = v.actions.request("cover", "open_cover", "cover.bedroom3", {}, v.policy().person(JM), JM)
+    run(v.approvals.ask(msg))
+    _press(v, msg)
+    assert v.tg.toasts[-1][1] == "Approved: on its way."
+    texts = [t for _, _, t in v.tg.edits]
+    assert "\n-------\nOpening " in texts[0]                                   # right away: on its way, who, when
+    body, status = texts[-1].split("\n-------\n")[1:]
+    assert body.startswith("Opened ") and status.startswith("Approved by JM on ")
+    assert v.state.approval(msg.approval_id)["status"] == "done" and " — approved, and done (by JM on " in v.approvals.now()
+
+
+def test_a_decision_on_a_request_asked_hours_ago_is_told_to_the_ai(tmp_path):
+    # architecture review 20: asked at 09:00, approved at 11:30 — in neither "waiting" nor "decided lately"
+    from datetime import datetime, timedelta, timezone
+    v = _curtain_villa(tmp_path, ["open"], ttl=300)
+    t0 = datetime.now(timezone.utc) - timedelta(hours=3)
+    aid = v.state.new_approval({"plain": "Open Bedroom3 Curtain?"}, "h", "any", JM, JM, 300, now=t0)
+    v.state.claim_approval(aid, "refused", JM, name="JM")
+    assert "- Open Bedroom3 Curtain? — refused (by JM on " in v.approvals.now()
+
+
+def test_an_approval_left_half_done_by_a_restart_is_ended(tmp_path):
+    from datetime import datetime, timedelta, timezone
+    v = _curtain_villa(tmp_path, ["open"])
+    _, msg = v.actions.request("cover", "open_cover", "cover.bedroom3", {}, v.policy().person(JM), JM)
+    run(v.approvals.ask(msg))
+    v.state.claim_approval(msg.approval_id, "approved", JM, name="JM")          # the agent stopped right here
+    run(v.approvals.resume(now=datetime.now(timezone.utc) + timedelta(minutes=5)))
+    assert v.state.approval(msg.approval_id)["status"] == "done"                # the curtain reads open: done
+    (_, _, text), = v.tg.edits
+    assert "\n-------\nApproved by JM on " in text and "Opened " in text     # its buttons gone, what happened said
+
+
+def test_expiry_never_overrides_a_press_that_came_first(tmp_path):
+    from datetime import datetime, timedelta, timezone
+    v = _curtain_villa(tmp_path, ["open"])
+    _, msg = v.actions.request("cover", "open_cover", "cover.bedroom3", {}, v.policy().person(JM), JM)
+    run(v.approvals.ask(msg))
+    listed = v.state.approvals_in("pending")                                    # the expiry read it as still waiting…
+    v.state.claim_approval(msg.approval_id, "approved", JM, name="JM")          # …and a press claimed it just then
+    v.state.approvals_in = lambda status: listed if status == "pending" else []
+    assert run(v.approvals.expire(now=datetime.now(timezone.utc) + timedelta(hours=1))) == 0
+    assert v.tg.edits == [] and v.state.approval(msg.approval_id)["status"] == "approved"
+
+
+def test_a_press_the_rules_now_refuse_is_told_as_such_never_failed(tmp_path):
+    v = _curtain_villa(tmp_path, [])
+    _, msg = v.actions.request("cover", "open_cover", "cover.bedroom3", {}, v.policy().person(JM), JM)
+    run(v.approvals.ask(msg))
+    import yaml
+    raw = yaml.safe_load(open(v.s.policy_path))
+    raw["allowed_services"] = {}                                                 # the rules changed meanwhile
+    import os
+    import time
+    open(v.s.policy_path, "w").write(yaml.safe_dump(raw))
+    os.utime(v.s.policy_path, (time.time() + 5, time.time() + 5))
+    _press(v, msg)
+    assert v.state.approval(msg.approval_id)["status"] == "blocked"
+    assert "rules no longer allowed it: nothing was tried (by JM on " in v.approvals.now()
+
+
+def test_a_long_incidents_snapshot_is_one_message_and_nothing_hangs():
+    # architecture review 20: a caption is 1,024 characters; a head and a status past the limit must never hang render
+    from vesta_agent import layout
+    head = "For: JM, P1 Incident: Follow Up #9\n" + "\n".join(f"Notice {i:02d} on 10/10/2026 10:00, to JM, Fabien" for i in range(20))
+    text = layout.render(layout.parts(head=head, body="Camera snapshot"), 1000)
+    assert len(text) <= 1000 and "Camera snapshot" in text and "earlier notice" in text and text.startswith("For: JM, P1")
+    assert "Notice 19 " in text and "Notice 00 " not in text                    # the newest kept, the oldest dropped
+    huge = layout.render(layout.parts(head="For: X\n" + "y" * 9000, body="z", status="s" * 9000), 4096)
+    assert len(huge) <= 4096 + 10
+
+
+def test_a_photo_with_a_long_heading_is_posted_as_one_message_and_recorded_as_sent():
+    from vesta_agent import layout
+    from vesta_agent.posting import Poster
+    sent = []
+
+    async def send(chat, text, **k):
+        sent.append((text, k.get("photo")))
+        return 1
+
+    class Notices:
+        def heading(self, chat, incident, roles):
+            return "For: JM, P1 Incident: Follow Up #9\n" + "\n".join(f"Reminded on 10/10/2026 1{i % 10}:00, to JM" for i in range(30))
+    run(Poster(send=send, notices=Notices()).post(JM, "Camera snapshot", incident=9, photo=("SlBFRw==", "image/jpeg")))
+    (text, photo), = sent
+    assert photo and len(text) <= 1000 and text.endswith("-------\nCamera snapshot")       # one caption: one message

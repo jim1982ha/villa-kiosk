@@ -1,3 +1,13 @@
+## 0.12.143
+
+What you will see (architecture review 20, every point):
+- A request approved long after it was asked (your buttons can stay valid for hours) is now known to the agent: asked about it, it says what was decided, by whom, when.
+- A press right at the expiry time is never shown as "Expired … nothing was done" when it was carried out.
+- If the agent stops in the few seconds between an approval and its result, the request is finished at the next start: the device is read and the message says what happened.
+- The agent tells exactly what became of a request: done, still on its way, refused, expired, Home Assistant refused it, or "the villa's rules no longer allowed it: nothing was tried" — never "failed by JM" for all of them.
+- In a very long incident, a camera snapshot stays one message: the heading keeps its newest notices ("… 10 earlier notices"), and the next snapshot replaces it.
+- Behind the scenes: one step puts every message in a chat, and the tests now press Approve as you do.
+
 ## 0.12.142
 
 What you will see (architecture review 19, every point):

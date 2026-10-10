@@ -206,7 +206,8 @@ class Actions:
             self.state.log("press_refused", {"approval": aid, "by": presser_id, "reason": "not a registered person or anonymous"})
             return {"toast": NOT_REGISTERED, "note": None, "executed": False}
         if ap["status"] != "pending":
-            return {"toast": f"Already {ap['status']}.", "note": None, "executed": False}
+            from .approvals import STATES                    # one table of a request's states and their words
+            return {"toast": STATES.get(ap["status"], ("", f"Already {ap['status']}."))[1], "note": None, "executed": False}
         if datetime.fromisoformat(ap["expires_at"]) < now:
             self.state.expire_approval(aid)
             self.state.log("press_refused", {"approval": aid, "by": presser_id, "reason": "expired"})
@@ -226,7 +227,8 @@ class Actions:
         d = self._wrap_check(policy, policy.check_service(act["domain"], act["service"], act["entity_ids"], act["data"]))
         if not d.allowed or d.action_hash() != ap["action_hash"] or \
                 action_hash(act["domain"], act["service"], act["entity_ids"], act["data"]) != ap["action_hash"]:
-            self.state.claim_approval(aid, "failed", person.telegram_id, now, name=person.name)
+            # "blocked", never "failed" (architecture review 20): nothing was tried — the AI is told so
+            self.state.claim_approval(aid, "blocked", person.telegram_id, now, name=person.name)
             self.state.log("press_refused", {"approval": aid, "by": presser_id, "reason": d.reason or "action changed"})
             return {"toast": "Refused by the villa's rules.", "note": f"No longer allowed: {d.reason or 'the action changed'}.",
                     "executed": False}

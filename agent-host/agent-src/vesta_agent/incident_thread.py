@@ -24,12 +24,6 @@ from vesta_shared.messaging import incident_tag
 from . import layout
 from .notice import when
 
-def approval_thread(approval_id: str) -> str:
-    """The thread of an approval request: its copies in every chat it was sent to, settled together by a press, as an
-    incident's are (owner, 2026-10-10: one mechanism for every message that has copies in several chats)."""
-    return f"approval-{approval_id}"
-
-
 log = logging.getLogger("vesta.thread")
 
 Edit = Callable[..., Awaitable]     # (chat, message id, text[, keyboard])
