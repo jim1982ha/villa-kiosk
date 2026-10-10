@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.135 (10 October 2026)
+
+- app._converse: no written reply when this turn put an approval request in the asker's chat (the engine decides; the AI is told to answer anything else with send_message). The delete-after-decision backstop (state apprreply:, set_approval_answer) removed: one mechanism. Tests: the echo dropped even when the AI writes it; one message after an immediate press; shown red without the rule.
+
 ## 0.6.134 (10 October 2026)
 
 - app.approvals_now: the approval requests waiting and decided in the last 2 hours, added to before_answer (acting on) as "checked just now, never from memory"; ha_call_service's description: call it for every action asked now. State.approvals_since. Test; two mutations red.

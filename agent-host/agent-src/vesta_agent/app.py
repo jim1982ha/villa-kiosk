@@ -529,11 +529,18 @@ class Vesta:
                 answer = (answer + "\n\n" if answer else "") + \
                     f"Stopped: this answer reached the {res.limit_usd:g} USD limit per reply."
                 keyboard = {"inline_keyboard": [[{"text": "Continue", "callback_data": button_data.make(button_data.CONTINUE, cont)}]]}
+            # ⚠️ A REQUEST SHOWN HERE IS THE ANSWER (owner, 2026-10-10: "Approval request sent." under it, twice "redundant"):
+            # told not to, the AI still wrote it — and pressed at once, the request was decided before that line came, so
+            # nothing removed it. The engine decides: no written reply after a request put in this chat (anything else
+            # the person asked, the AI answers with send_message — tools.ha_call_service tells it so).
+            if not keyboard and not (res.problem or res.error) and \
+                    any(cid in self.thread.shown(approval_thread(a)) for a in res.approvals):
+                if answer:
+                    log.info("Chat %s: the AI's reply not sent, the approval request shown there says it all", cid)
+                answer = ""
             answered()                                       # "typing…" ends: the answer is going out
             # the camera pictures the AI looked at go with it (Toolbox.photos)
             mid = await self.delivery.reply(cid, answer, keyboard=keyboard, photos=res.photos)
-            for aid in res.approvals:                          # "awaiting approval": gone once it is decided
-                self.state.set_approval_answer(aid, cid, mid)
             await self.chat_jobs.replied(cid, mid)            # this turn's jobs: their waiting message, their "typing…"
 
     def before_answer(self) -> str:
@@ -627,12 +634,6 @@ class Vesta:
             await self.thread.close(thread, out["note"], out.get("body"))
             if out.get("follow"):
                 await self._follow(thread, out["follow"])
-            # ⚠️ AND THE ANSWER THAT SAID IT WAS ASKED GOES (owner, 2026-10-10: "I expect the message 'Request sent…
-            # Awaiting approval.' to disappear when it has been approved"): the request itself now says what happened
-            said = self.state.approval_answer(aid)
-            if said:
-                await self.delivery.delete(*said)
-                self.state.set_approval_answer(aid, None)
 
     async def _follow(self, thread: str, decision) -> None:
         """An approved action's device still on its way: read again until it gets there (or FOLLOW_FOR_S passes), and

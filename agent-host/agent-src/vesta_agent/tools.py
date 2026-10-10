@@ -128,7 +128,7 @@ class Toolbox:
         # got text. A send_message(camera=) option (0.12.57) was not used by the model either. The reply carries
         # them (app.converse): (base64, mime), in the order looked at, each picture once.
         self.photos: list[tuple[str, str]] = []
-        # the approval requests this run sent: the answer that says "awaiting approval" goes when one is decided
+        # the approval requests this run sent: one shown in the asker's chat is the answer there (app._converse)
         self.approvals: list[str] = []
         # ⚠️ tool_access DECIDES, THIS CLASS BUILDS (architecture review, 2026-10-06): allowed_for's answer — through
         # turn.Terms — is the whole list — every tool below is built only when it is in it, and the
@@ -263,9 +263,9 @@ class Toolbox:
                 if chat_id is not None and int(chat_id) in msg.chats:
                     # ⚠️ NO ECHO OF THE REQUEST (owner, 2026-10-10: "Approval request sent… Waiting for approval." under
                     # the request itself "is redundant"): the request in this chat already says it all
-                    answer = ("The request, with its Approve and Refuse buttons, is now in this chat and says everything: "
-                              "do not announce it or repeat it. Reply with an empty answer, unless the person asked "
-                              "something else as well; then answer only that.")
+                    answer = ("The request, with its Approve and Refuse buttons, is now in this chat and says everything. "
+                              "Your written reply will NOT be shown this time. If the person asked something else as "
+                              "well, answer only that, with send_message (to=here); otherwise do nothing more.")
             return _ok(answer)
         return handler
 

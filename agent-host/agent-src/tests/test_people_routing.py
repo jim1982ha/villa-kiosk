@@ -238,8 +238,8 @@ def test_in_a_listed_group_everyone_acts_with_the_groups_role_whatever_their_own
     assert both.member(JM, GROUP).role == "fm" and both.member(555, GROUP).role == "fm" and both.member(JM, JM).role == "owner"
 
 
-def test_the_answer_that_says_an_approval_was_asked_goes_once_it_is_decided(tmp_path, monkeypatch):
-    # owner, 2026-10-10: "I expect the message 'Request sent… Awaiting approval.' to disappear when it has been approved"
+def test_a_request_answered_at_once_leaves_one_message_in_the_askers_chat(tmp_path, monkeypatch):
+    # owner, 2026-10-10: approved at 18:12, the AI's "Approval request sent." still came at 18:13 under it
     from ai_fake import FakeAI
     v = make_agent(tmp_path, {"people": [{"telegram_id": JM, "name": "JM", "role": "owner"},
                                          {"telegram_id": GROUP, "name": "Group", "role": "fm"}],
@@ -250,14 +250,12 @@ def test_the_answer_that_says_an_approval_was_asked_goes_once_it_is_decided(tmp_
     FakeAI("Request sent. Awaiting approval.", act=asks).install(monkeypatch)
     run(v.converse(JM, v.policy().person(JM), "close the bedroom curtain"))
     (req_n, (_, req, kb)), = [(n, s) for n, s in enumerate(v.tg.sent, start=1001) if s[2]]
-    answer_n = next(n for n, (c, t, k) in enumerate(v.tg.sent, start=1001) if t == "Request sent. Awaiting approval.")
-    assert req.startswith("For: JM\n-------\n") and "\n-------\nWaiting for approval by " in req     # the agent's layout
+    assert len(v.tg.sent) == 1                                              # the request, and nothing under it
     press = {"id": "cb", "data": kb["inline_keyboard"][0][1]["callback_data"], "chat_id": JM, "user_id": JM,
              "message": {"message_id": req_n, "chat": {"id": JM}, "text": req}, "bot": BOT}
     run(v.on_ha_event("telegram_callback", press))
-    assert (JM, answer_n) in v.tg.deleted                                   # the "awaiting" answer is gone
     (_, mid, settled), = v.tg.edits
-    assert mid == req_n and re.search(r"\n-------\nRefused by JM on \d\d/\d\d/\d{4} \d\d:\d\d\. Nothing was done\.$", settled)
+    assert len(v.tg.sent) == 1 and mid == req_n and re.search(r"\n-------\nRefused by JM on .*Nothing was done\.$", settled)
 
 
 def test_the_siren_that_cannot_be_requested_says_so_in_the_agents_layout(tmp_path):
@@ -294,10 +292,11 @@ def test_a_request_shown_in_the_askers_chat_is_not_announced_again(tmp_path, mon
 
     async def asks(call):
         told.append(await call["call"]("ha_call_service", {"domain": "cover", "service": "open_cover", "entity_id": "cover.b"}))
-    FakeAI("  ", act=asks).install(monkeypatch)                # the AI does as it is told: nothing to add
+    # the AI writes its echo anyway, as it did on the villa ("Approval request sent.")
+    FakeAI("Approval request sent.", act=asks).install(monkeypatch)
     run(v.converse(JM, v.policy().person(JM), "open the bedroom curtain"))
-    assert "do not announce it" in told[0]["content"][0]["text"]
-    assert [bool(kb) for _, _, kb in v.tg.sent] == [True]      # the request alone: no answer under it
+    assert "will NOT be shown" in told[0]["content"][0]["text"]
+    assert [bool(kb) for _, _, kb in v.tg.sent] == [True]      # the request alone: the engine drops the echo
 
 
 def test_a_curtain_still_moving_is_said_to_be_and_the_request_says_opened_once_it_is(tmp_path, monkeypatch):
