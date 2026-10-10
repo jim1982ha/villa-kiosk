@@ -4,6 +4,7 @@ One stand-in (architecture review, 2026-10-07): two near-identical ones recorded
 real Kiosk's methods and parameters by tests/test_fakes.py.
 
     tickets   [(title, entity_id)]   ids t1, t2 …     notes   [note], in the same order     resolved   [ticket id]
+    reopened  [(ticket id, title)]   a resolved ticket open again (its problem came back)
     closed_by_hand   ids a person resolved in the Kiosk itself     known   ids the Kiosk has from before
 """
 from __future__ import annotations
@@ -13,7 +14,7 @@ class FakeKiosk:
     enabled = True
 
     def __init__(self):
-        self.tickets, self.notes, self.resolved = [], [], []
+        self.tickets, self.notes, self.resolved, self.reopened = [], [], [], []
         self.closed_by_hand, self.known = set(), set()
         self.titles: dict[str, str] = {}             # a ticket's title as it is now (update_ticket changes it)
         self.closed_meta: dict[str, dict] = {}       # a ticket closed by hand: {by, resolved_at}, as the Kiosk records it
@@ -36,6 +37,14 @@ class FakeKiosk:
 
     async def resolve_ticket(self, tid, note=None) -> bool:
         self.resolved.append(tid)
+        return True
+
+    async def reopen_ticket(self, tid, title, note=None) -> bool:
+        if tid in self.resolved:
+            self.resolved.remove(tid)
+        self.closed_by_hand.discard(tid)
+        self.reopened.append((tid, title))
+        self.titles[tid] = title
         return True
 
     async def held_tickets(self) -> dict[str, dict]:

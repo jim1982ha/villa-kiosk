@@ -265,7 +265,8 @@ def run(args) -> dict:
 
     result = {"as_of": today.isoformat(), "villa": pack.villa, "features_written": features_written,
               "new_findings": new, "still_open": still_open, "closed": closed, "again": again,
-              "tasks_to_create": tasks, "tasks_resolved": [a["task_id"] for a in resolved], "resolve_actions": resolved, "notes": notes}
+              "tasks_to_create": tasks, "tasks_resolved": [a["task_id"] for a in resolved], "resolve_actions": resolved,
+              "reopen_actions": night["reopen_actions"], "notes": notes}
     if args.out:
         with open(args.out, "w", encoding="utf-8") as fh:
             json.dump(result, fh, indent=1, default=str)
@@ -300,7 +301,7 @@ def main(argv=None):
     # the ticket's title says what is wrong, its note what to check (two fields, not one sentence)
     out["actions"] = [result.fault(t["todo_summary"], task_id=t["task_id"], check=t.get("check"), entity_id=t.get("entity_id"))
                       for t in res["tasks_to_create"]]
-    out["actions"] += res["resolve_actions"]
+    out["actions"] += res["resolve_actions"] + res.get("reopen_actions", [])
     out["send"] = told_now(res)
     print(json.dumps(out, indent=1, default=str))
     return 0

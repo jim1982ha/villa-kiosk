@@ -44,6 +44,14 @@ def occurrences(finding: dict | None) -> list[str]:
     return json.loads(finding.get("occurrences") or "null") or [finding["opened_day"]]
 
 
+def incident_runs(inc: dict) -> int:
+    """How many times an incident alerted in the AGAIN_DAYS before its latest run (store.reopen_incident keeps them)."""
+    from datetime import datetime, timedelta
+    latest = datetime.fromisoformat(inc.get("reopened_at") or inc["opened_at"])
+    runs = [o["opened_at"] for o in json.loads(inc.get("occurrences") or "[]")] + [latest.isoformat()]
+    return sum(1 for r in runs if datetime.fromisoformat(r) >= latest - timedelta(days=AGAIN_DAYS))
+
+
 def again_title(summary: str, again: int | None) -> str:
     """A problem's title with how often it came back: the Kiosk fault, the digest and the AI all read this one."""
     return f"{summary} (again: {again + 1} times in {AGAIN_DAYS} days)" if again else summary
@@ -77,6 +85,22 @@ class Problems:
             return cur["id"], False
         return self.store.add_task(rule_id, entity_id, summary, source=f"{source}:{int(source_id)}",
                                    check_text=check or None), True
+
+    def reopen_task(self, source: str, source_id: int, rule_id: str, entity_id: str, summary: str,
+                    check: str = "") -> tuple[int, str]:
+        """The task of a problem that came back: (task id, "open" — it still is | "reopened" — its last one, closed, open
+        again under `summary` (its Kiosk fault is to be reopened: result.reopened) | "new" — it never had one).
+
+        ⚠️ ONE PROBLEM, ONE FAULT (architecture review 24): each return opened a new task and a new Kiosk fault — 24 a day
+        for one access point, each opened and resolved, nothing saying they were the same."""
+        cur = self.store.open_task(rule_id, entity_id)
+        if cur:
+            return cur["id"], "open"
+        last = self.store.last_task(f"{source}:{int(source_id)}")
+        if last:
+            self.store.reopen_task(last["id"], summary)
+            return last["id"], "reopened"
+        return self.open_task(source, source_id, rule_id, entity_id, summary, check)[0], "new"
 
     # ---------------------------------------------------------------- closing
     def close(self, task_id: int, status: str) -> None:
@@ -119,7 +143,7 @@ class Problems:
     def record_night(self, findings, day: str, _muted_at_iso: str | None = None, *, state_rules, event_rules, worsened_step: float,
                      task_severities=("P2", "P3"), resolved_note: str = "") -> dict:
         """The night check's findings for `day`: {new, still_open, closed, again (came back: AGAIN_DAYS), tasks,
-        resolve_actions}. (`_muted_at_iso`: what a
+        resolve_actions, reopen_actions (a returning finding's fault open again)}. (`_muted_at_iso`: what a
         night check edited before 0.12.132 still passes — Mute is gone, it is ignored.)
         A finding has rule_id, entity_id, family, severity, summary, detail, check, day and as_dict()."""
         new, still_open, closed, again, fired = [], [], [], [], set()
@@ -160,19 +184,26 @@ class Problems:
             # ⚠️ ITS TASK AND ITS KIOSK TICKET CLOSE WITH IT (villa, 2026-10-01): the finding closed, the ticket
             # stayed "Open fault" for ever, and the Kiosk's Cockpit filled with faults long gone
             resolve += self.close_finding(o, day, resolved_note)
-        tasks = []
+        tasks, reopen = [], []
         for d in new + again:
             if d["severity"] in task_severities:
                 title = again_title(d["summary"], d.get("again"))
-                tid, created = self.open_task("finding", d["id"], d["rule_id"], d["entity_id"], title,
-                                              d.get("check") or "")
+                if d in again:
+                    tid, how = self.reopen_task("finding", d["id"], d["rule_id"], d["entity_id"], title, d.get("check") or "")
+                    if how == "reopened":
+                        reopen.append(result.reopened(tid, title, "Back again."))
+                        continue
+                    created = how == "new"
+                else:
+                    tid, created = self.open_task("finding", d["id"], d["rule_id"], d["entity_id"], title,
+                                                  d.get("check") or "")
                 if created:
                     # the Kiosk fault's title IS the task's, "(again: …)" included (architecture review 23: only the
                     # task row carried it — the Cockpit never said it)
                     tasks.append({"task_id": tid, "todo_summary": title[:250], "check": d.get("check") or "",
                                   "severity": d["severity"], "entity_id": d["entity_id"]})
         return {"new": new, "still_open": still_open, "closed": closed, "again": again, "tasks": tasks,
-                "resolve_actions": resolve}
+                "resolve_actions": resolve, "reopen_actions": reopen}
 
     def _came_back(self, f, day: str, may: bool) -> int | None:
         """⚠️ THE SAME PROBLEM, BACK (architecture review 22): a device offline every night and back by noon was closed
@@ -203,8 +234,13 @@ class Problems:
         if kind == "incident" and sid:
             inc = self.store.incident(sid)
             if inc and not inc.get("closed_at"):
+                # ⚠️ A DONE IS A DONE, WHEREVER IT IS GIVEN (architecture review 24): closed in the Kiosk, a door fault
+                # skipped the check a Done button gets — the door still unlocked, it stayed closed for good. The alert
+                # desk reads it again once (quiet_after_done), when its rule names its states
+                p = json.loads(inc.get("payload") or "{}")
+                p["check_quiet"] = "Closed in the Kiosk"
                 self.store.update_incident(sid, state=Incident.DONE, reply="Closed in the VESTA Kiosk",
-                                           closed_at=self.store.now())
+                                           closed_at=self.store.now(), payload=json.dumps(p))
                 return sid
         return None
 
@@ -235,7 +271,9 @@ class Problems:
         if kind == "finding":
             row = self.store.finding(sid)
             if row and row.get("status") == "open" and row.get("summary"):
-                return row["summary"]
+                # ⚠️ THE SAME NAME AS EVERY READER (architecture review 24): the repair renamed the fault to the bare
+                # summary seconds after the night wrote "(again: …)" — the Cockpit never showed it
+                return again_title(row["summary"], len(occurrences(row)) - 1)
         return self.title_of(task)
 
     def check_of(self, task: dict) -> str:
@@ -268,8 +306,11 @@ class Problems:
             p = json.loads(i.get("payload") or "{}")
             out.append({"id": f"incident-{i['id']}", "source": f"incident:{i['id']}", "rule_id": i["rule_id"],
                         "entity_id": i["entity_id"], "severity": i["severity"],
-                        "title": _no_code(p.get("message") or i["rule_id"]), "check": p.get("check") or "",
-                        "since": i["opened_at"][:10], "incident": i["id"],
+                        # its latest run is when it opened, how often it came back is in its title (review 24: a
+                        # reopened alert stayed "still open since the 1st", never new, never "again")
+                        "title": again_title(_no_code(p.get("message") or i["rule_id"]), incident_runs(i) - 1),
+                        "check": p.get("check") or "",
+                        "since": (i.get("reopened_at") or i["opened_at"])[:10], "incident": i["id"],
                         "figures": {"incident": i["id"], "occurrences": i["count"], "state": i["state"]}})
         out.sort(key=lambda r: (_ORDER.get(r["severity"], 9), r["since"]))
         return out

@@ -239,7 +239,7 @@ def test_a_door_locked_after_its_rule_stopped_watching_closes_its_alert(store):
     assert res["cleared"] == [iid] and store.incident(iid)["state"] == "resolved"
     assert res["settle"] == [{"incident_id": iid, "note": "Cleared on {time}: front_door is locked."}]
     assert [a for a in res["actions"] if a["action"] == "ticket.resolve"]          # its Kiosk fault closes too
-    assert [s for s in res["send"] if s["to"] == "fm" and "No reply needed" in s["status"]]
+    assert [s for s in res["send"] if s["to"] == "fm" and "No reply needed" in s["status"] and s["stage"] == "closed"], res["send"]
     assert not _tick(store, villa, 120).get("cleared")                  # closed once
 
 
@@ -374,7 +374,10 @@ def test_an_alert_back_within_four_hours_is_the_same_incident_back_again(store):
     assert again["decision"] == "reopened" and again["incident_id"] == iid and store.incident(iid)["closed_at"] is None
     assert [s for s in again["send"] if s["to"] == "fm" and s["status"].startswith("Back again: 2 times since ")
             and s["keyboard"]]
-    assert [a for a in again["actions"] if a["action"] == "ticket"]           # its fault in the Kiosk again
+    # its fault in the Kiosk open again — the same one, titled with how often (architecture review 24: a new one each time)
+    (back,) = [a for a in again["actions"] if a["action"] == "ticket.reopen"]
+    assert back["title"].endswith("(again: 2 times in 7 days)") and not [a for a in again["actions"] if a["action"] == "ticket"]
+    assert len(store.tasks(None)) == 1
     assert len(store.incidents(open_only=False)) == 1
     # Home Assistant's later events for this new run find it
     assert json.loads(store.incident(iid)["payload"])["ha_incident"].endswith(str(1790000000 + 75 * 60))
@@ -396,7 +399,7 @@ def test_after_done_the_desk_reads_the_device_once_and_reopens_what_is_still_bad
     assert res["not_quiet"] == [iid] and store.incident(iid)["closed_at"] is None
     (fm,) = [s for s in res["send"] if s["to"] == "fm"]
     assert fm["status"] == "Done by the facility manager, but front_door still reads unlocked: still open." and fm["keyboard"]
-    assert [a for a in res["actions"] if a["action"] == "ticket"]
+    assert [a for a in res["actions"] if a["action"] == "ticket.reopen"]      # its own fault, open again
     assert not _tick(store, villa, 60).get("not_quiet")                         # read once
 
 

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.142 (11 October 2026)
+
+Architecture review 24, all points, and the heading's word:
+- notice.heading(stage=): HEAD_WORDS — "new" New, "closed" Closed, any other stage Follow Up (by history only without a stage); Poster.post and adopt_ha pass the stage; result.STAGES gains "back" and "closed"; the desk's closing messages are "closed", a reopening "back".
+- desk.siren_gate counts an intrusion incident by last_seen_at.
+- Incidents keep their runs: store.reopen_incident / incident_occurrences (columns reopened_at, occurrences); count_incidents counts runs; facts.Ctx.incidents and compose.owner_weekly read runs; open_problems lists an incident as of its latest run with again_title (problems.incident_runs).
+- One problem, one fault: Problems.reopen_task (store.last_task / reopen_task, tasks.reopened_at); result.reopened → ticket.reopen (Tickets.reopen → Kiosk.reopen_ticket, else a new ticket); the desk's _ladder and record_night reopen instead of opening; repair reopens a fault resolved before its task reopened and resolves a recently closed task's fault still open.
+- Problems.current_title goes through again_title.
+- One desk `reopen` (a new run: Home Assistant's latest words and states, snapshot, siren; or the same run after a Done); Problems.closed_in_kiosk sets check_quiet ("Closed in the Kiosk").
+- The retune proposal is one per rule. d1.sqlite removed, agent-src/*.sqlite ignored, a test refuses a tracked store.
+- Tests: tests/test_comes_back.py and report/desk cases; 21 mutants, each red (run without bytecode: a stale .pyc had served a same-length mutant back).
+
 ## 0.6.141 (10 October 2026)
 
 Architecture review 23, all points:

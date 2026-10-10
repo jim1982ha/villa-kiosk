@@ -7,6 +7,7 @@ ticket.resolve), the AI's create_ticket tool, and the reconciliation at each sta
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Awaitable, Callable
 
 from vesta_shared import result
@@ -56,6 +57,19 @@ class Tickets:
         self.state.log("executed", {"tool": "ticket", "ticket": tid, "entity": entity_id})
         return tid
 
+    async def reopen(self, a: dict) -> bool:
+        """ticket.reopen {task_id, title, note}: the task's fault open again in the Kiosk under its new title — or, when it
+        never had one or it is gone, a new one for the task (architecture review 24: one problem, one fault)."""
+        task = self._store().task(int(a["task_id"]))
+        if not task or not self.kiosk.enabled:
+            return False
+        uid = task.get("todo_uid")
+        if uid and await self.kiosk.reopen_ticket(uid, ticket_title(a.get("title") or task.get("summary") or ""), a.get("note")):
+            log.info("Kiosk ticket %s open again: %s", uid, (a.get("title") or "")[:80])
+            return True
+        return bool(await self.create(a.get("title") or task.get("summary") or "", task.get("entity_id") or None,
+                                      a.get("note") or None, task["id"]))
+
     async def resolve(self, a: dict) -> bool:
         """ticket.resolve {task_id | ticket_id, note?}: the Kiosk's ticket resolved."""
         task = self._store().task(int(a.get("task_id") or 0)) if a.get("task_id") else None
@@ -86,6 +100,11 @@ class Tickets:
         closed = cleared = 0
         for t in problems.open_tasks():
             uid = t.get("todo_uid")
+            if uid and states.get(uid) == "resolved" and _before(held[uid].get("resolved_at"), t.get("reopened_at")):
+                # ⚠️ RESOLVED BEFORE IT CAME BACK (architecture review 24): the task reopened and its fault's reopening did
+                # not reach the Kiosk — that old resolution is not a person closing it now
+                await self.reopen({"task_id": t["id"], "title": t.get("summary") or ""})
+                continue
             if uid and states.get(uid) == "resolved":
                 iid = problems.closed_in_kiosk(t["id"])
                 if iid:
@@ -96,7 +115,18 @@ class Tickets:
                 problems.close(t["id"], CLEARED)
                 if uid and states.get(uid) not in (None, "resolved"):
                     await self.kiosk.resolve_ticket(uid, note="Cleared: the check no longer sees it.")
+                    states[uid] = "resolved"
                 cleared += 1
+        # ⚠️ A CLOSED TASK'S FAULT IS CLOSED (architecture review 24): a resolve that failed (the Kiosk down a moment) left
+        # the fault "Open" for good — only open tasks were read. Two days back: enough for any blip, never a person's
+        # own reopening of an old fault
+        recent = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+        for t in store.tasks(None):
+            uid = t.get("todo_uid")
+            if t["status"] != "open" and (t.get("done_at") or "") >= recent and uid and states.get(uid) not in (None, "resolved"):
+                if await self.kiosk.resolve_ticket(uid, note="Closed: the problem is over."):
+                    states[uid] = "resolved"
+                    cleared += 1
         if closed or cleared:
             log.info("Kiosk tickets reconciled: %d task(s) closed in the Kiosk, %d cleared with their ticket", closed, cleared)
         # ⚠️ AN OPEN FAULT SAYS WHAT IS WRONG NOW (owner, 2026-10-07): the ticket kept "battery at 5 %" for days while
@@ -129,3 +159,13 @@ class Tickets:
         if made:
             log.info("Kiosk tickets created for %d open task(s) that had none", made)
         return made
+
+
+def _before(resolved_at: str | None, reopened_at: str | None) -> bool:
+    """Was a fault resolved before its task reopened? Both are moments as the Kiosk and the store write them."""
+    if not (resolved_at and reopened_at):
+        return False
+    try:
+        return datetime.fromisoformat(resolved_at.replace("Z", "+00:00")) < datetime.fromisoformat(reopened_at)
+    except ValueError:
+        return False

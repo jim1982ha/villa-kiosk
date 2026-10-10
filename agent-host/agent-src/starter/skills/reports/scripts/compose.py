@@ -123,7 +123,7 @@ def fm_daily(pack: KnowledgePack, store: Store, as_of: date) -> str:
 
 
 def owner_weekly(pack: KnowledgePack, store: Store, energy: dict) -> str:
-    inc = [i for i in store.incidents(open_only=False)
+    inc = [i for i in store.incident_occurrences()            # every run, a reopened alert's included
            if energy["start"] <= villa_date(i["opened_at"], pack.time_zone or "UTC").isoformat() <= energy["end"]]
     p1 = sum(1 for i in inc if i["severity"] == "P1")
     # the alerts and the maintenance problems still open, counted apart as the concierge counts them: every open

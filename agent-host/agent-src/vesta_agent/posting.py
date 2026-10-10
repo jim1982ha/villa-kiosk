@@ -25,7 +25,8 @@ class Poster:
 
     async def post(self, chat: int, text: str, *, status: str = "", lead: str = "", roles=(), incident: int | None = None,
                    keyboard: dict | None = None, document: str | None = None, photo=None,
-                   thread: int | str | None = None, plain: bool = False, origin: Origin | None = None) -> int | None:
+                   thread: int | str | None = None, plain: bool = False, origin: Origin | None = None,
+                   stage: str | None = None) -> int | None:
         """The message in `chat`: its heading — who it is for (`roles`), the incident and its history — unless it answers
         the person who asked, in their chat, or is `plain`; its parts laid out (layout.py) to fit ONE Telegram message —
         a photo's or a file's caption included, so the copy recorded is the message sent; then its `thread` (an incident,
@@ -33,7 +34,7 @@ class Poster:
         # "{time}": the moment it says what happened, as every notice writes one (10/10/2026 15:04, the villa's time)
         now = when(datetime.now(timezone.utc), self.tz)
         text, status, lead = (x.replace("{time}", now) for x in (text, status or "", lead or ""))
-        head = self.notices.heading(chat, incident, roles) if self.notices and not plain and not (
+        head = self.notices.heading(chat, incident, roles, stage) if self.notices and not plain and not (
             origin and origin.holds and chat == origin.chat) else ""
         p = layout.parts(body=text, status=status, head=head, lead=lead)
         # ⚠️ A CAPTION IS 1,024 CHARACTERS (architecture review 20): laid out for 4,096, a long incident's snapshot went as a

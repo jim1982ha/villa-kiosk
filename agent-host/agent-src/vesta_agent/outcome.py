@@ -151,7 +151,7 @@ class Outcome:
             # the incident's message in this chat now: the earlier one there goes
             mid = await self.poster.post(chat, text, status=item.get("status") or "", roles=roles,
                                    incident=int(iid) if iid else None, keyboard=kb, document=doc,
-                                   thread=int(iid) if iid else None, origin=origin)
+                                   thread=int(iid) if iid else None, origin=origin, stage=item.get("stage"))
             if not mid:
                 done["not_sent"] += 1                         # delivery.py: refused, or Telegram off
                 continue
@@ -189,6 +189,9 @@ class Outcome:
                 elif kind == "ticket.resolve":
                     if await self.tickets.resolve(a):
                         done["resolved"] += 1
+                elif kind == "ticket.reopen":
+                    if await self.tickets.reopen(a):
+                        done["tickets"] += 1
                 elif kind == "snapshot.get":
                     photo = await camera_photo(self.reader, a.get("entity_id"))
                     if photo:
@@ -250,7 +253,7 @@ class Outcome:
             # "{time}" in its status: the villa's time now, as every message of the agent's writes it
             status = (h.get("status") or "").replace("{time}", when(datetime.now(timezone.utc), self.poster.tz))
             p = layout.parts(body=text, status=status,
-                             head=self.notices.heading(chat, int(iid)) if self.notices else "")
+                             head=self.notices.heading(chat, int(iid), stage=h.get("stage")) if self.notices else "")
             await self.thread.adopt(int(iid), chat, mid, p, keyboard=kb)
         if not found:
             log.info("Incident #%s: no Home Assistant message of its run to take over", iid)

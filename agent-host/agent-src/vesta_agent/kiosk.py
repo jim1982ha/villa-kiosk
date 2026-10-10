@@ -170,6 +170,21 @@ class Kiosk:
             return False
         return await self._edit(change)
 
+    async def reopen_ticket(self, tid: str, title: str, note: str | None = None) -> bool:
+        """One of the agent's resolved tickets open again — its problem came back (architecture review 24: each return
+        made a new fault, 24 a day for one access point, nothing saying they were the same). False when it is gone."""
+        def change(data: dict) -> bool:
+            tickets = list(data.get("tickets") or [])
+            for i, t in enumerate(tickets):
+                if isinstance(t, dict) and t.get("id") == tid:
+                    upd = {"at": _now(), "status": "open", "photoIds": [], "note": (note or f"Back again: {title}")[:500]}
+                    t = {k: v for k, v in t.items() if k != "resolvedAt"}
+                    tickets[i] = dict(t, status="open", title=title[:200], updates=list(t.get("updates") or []) + [upd])
+                    data["tickets"] = tickets
+                    return True
+            return False
+        return await self._edit(change)
+
     async def resolve_ticket(self, tid: str, note: str | None = None) -> bool:
         """Mark one of the agent's tickets resolved (the FM answered Done). False when it is gone or closed."""
         def change(data: dict) -> bool:

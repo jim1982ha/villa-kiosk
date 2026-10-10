@@ -38,7 +38,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 from vesta_shared.store import Incident, Store  # noqa: E402  (PYTHONPATH is set by the engine)
 from vesta_shared.params import VillaParams  # noqa: E402
 from vesta_shared.timeutil import day_time_label, villa_time  # noqa: E402
-from vesta_shared.problems import Problems  # noqa: E402  (a problem's lifecycle: one owner)
+from vesta_shared.problems import Problems, again_title, incident_runs  # noqa: E402  (a problem's lifecycle: one owner)
 from vesta_shared import result as R  # noqa: E402  (what the engine is asked to do: its shape)
 from vesta_shared import script  # noqa: E402  (client, store, settings, zone: one set-up)
 from vesta_shared import skill_settings  # noqa: E402  (rules.yaml, the villa's on top)
@@ -199,7 +199,7 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
         return out
     back = came_back(store, key, now, _params(params).behaviour("reopen_hours"))
     if back:
-        return _reopen(store, back, ev, now, sev, route, zone, out)
+        return reopen(store, back, ev, now, sev, route, out, zone=zone)
     iid = store.new_incident(key, rule_id, eid, sev, ev, now.isoformat())
     out["incident_id"] = iid
     out["decision"] = "new"
@@ -218,14 +218,23 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
     return out
 
 
-def _ladder(store: Store, iid: int, ev: dict, now: datetime, sev: str, route: dict, out: dict) -> None:
-    """Where an incident opened (or opened again) starts: the facility manager asked, with its task and Kiosk fault
-    (P1, P2 with the ladder); the morning list (P3); the record (P4)."""
+def _ladder(store: Store, iid: int, ev: dict, now: datetime, sev: str, route: dict, out: dict,
+            again: str | None = None) -> None:
+    """Where an incident opened (or opened `again`, under that title) starts: the facility manager asked, with its task
+    and Kiosk fault — the same ones open again when it came back (Problems.reopen_task) — (P1, P2 with the ladder); the
+    morning list (P3); the record (P4)."""
     if sev in ("P1", "P2") and route.get("ladder", True):
         store.update_incident(iid, state=Incident.ASKED, asked_at=now.isoformat(), assignee="fm")
-        tid, _ = Problems(store).open_task("incident", iid, ev["rule_id"], ev.get("entity_id", ""), ev["message"][:250],
-                                           route.get("check") or "")
-        out["actions"].append(R.fault(ev["message"][:200], task_id=tid, check=route.get("check"), entity_id=ev.get("entity_id", "")))
+        eid, check = ev.get("entity_id", ""), route.get("check") or ""
+        if again:
+            tid, how = Problems(store).reopen_task("incident", iid, ev["rule_id"], eid, again[:250], check)
+            if how == "reopened":
+                out["actions"].append(R.reopened(tid, again, "Back again."))
+            elif how == "new":
+                out["actions"].append(R.fault(again[:200], task_id=tid, check=check, entity_id=eid))
+            return
+        tid, _ = Problems(store).open_task("incident", iid, ev["rule_id"], eid, ev["message"][:250], check)
+        out["actions"].append(R.fault(ev["message"][:200], task_id=tid, check=check, entity_id=eid))
     elif sev == "P3":
         store.update_incident(iid, state=Incident.DIGEST)
     else:
@@ -243,27 +252,41 @@ def came_back(store: Store, key: str, now: datetime, hours: float) -> dict | Non
     return closed[-1] if closed else None
 
 
-def _reopen(store: Store, inc: dict, ev: dict, now: datetime, sev: str, route: dict, zone: str | None, out: dict) -> dict:
-    """`inc`, closed lately, open again: counted, its rule's latest states kept, its ladder (and fault) started again,
-    its messages "Back again" under its own number."""
+def reopen(store: Store, inc: dict, ev: dict, now: datetime, sev: str, route: dict, out: dict,
+           status: str | None = None, zone: str | None = None) -> dict:
+    """`inc`, closed, open again under its own number — the ONE way an incident reopens (architecture review 24: two
+    hand-written copies differed on the count, the alert's text, the heading). Without `status`: it came back (an alert
+    within reopen_hours) — a new run of it, counted, its text and states Home Assistant's latest, "Back again". With
+    `status`: it never went away (still bad after a Done) — the same run, `status` said. Either way its ladder starts
+    again and its task and Kiosk fault open again, titled with how often it came back."""
     p = json.loads(inc.get("payload") or "{}")
     for k in ("abandoned", "check_quiet"):
         p.pop(k, None)
-    p.update({k: ev[k] for k in ("mode", "bad_states", "state", "ha_incident") if ev.get(k) is not None})
-    store.update_incident(inc["id"], closed_at=None, reply=None, payload=json.dumps(p))
-    store.touch_incident(inc["id"], now.isoformat())
-    _ladder(store, inc["id"], ev, now, sev, route, out)
+    if status is None:
+        p.update({k: ev[k] for k in ("mode", "bad_states", "state", "ha_incident", "message", "summary", "entities")
+                  if ev.get(k) is not None})
+        store.update_incident(inc["id"], payload=json.dumps(p))
+        store.reopen_incident(inc["id"], now.isoformat())
+        store.touch_incident(inc["id"], now.isoformat())
+    else:
+        store.update_incident(inc["id"], closed_at=None, reply=None, payload=json.dumps(p))
     inc = store.incident(inc["id"])
-    since = day_time_label(villa_time(inc["opened_at"], zone or "UTC"), weekday=True)
-    status = f"Back again: {inc['count']} times since {since}"
-    out["incident_id"], out["decision"] = inc["id"], "reopened"
-    out["ha_messages"] = [R.ha_message(inc["id"], context=ev.get("_context_id"), stage="reminder", **about(inc, status))]
+    title = again_title(str(p.get("message") or inc["rule_id"])[:200], incident_runs(inc) - 1)
+    _ladder(store, inc["id"], {**p, "rule_id": inc["rule_id"], "entity_id": inc["entity_id"],
+                               "message": p.get("message") or inc["rule_id"]}, now, sev, route, out, again=title)
+    if status is None:
+        since = day_time_label(villa_time(inc["opened_at"], zone or "UTC"), weekday=True)
+        status = f"Back again: {len(json.loads(inc.get('occurrences') or '[]')) + 1} times since {since}"
+        out["ha_messages"] = [R.ha_message(inc["id"], context=ev.get("_context_id"), stage="back", **about(inc, status))]
+        if ev.get("snapshot"):
+            out["actions"].append(R.snapshot(ev["snapshot"], inc["id"]))
+        if route.get("intrusion"):
+            out["siren_gate"] = siren_gate(store, ev, now)
     for role in recipients(sev):
         ladder = bool(route.get("ladder", True) and role == "fm")
-        out["send"].append(R.message(role, **about(inc, status), incident=inc["id"], buttons=ladder, stage="reminder"))
-    if route.get("intrusion"):
-        out["siren_gate"] = siren_gate(store, ev, now)
-    store.audit("alert-desk", "reopened", {"incident": inc["id"], "count": inc["count"]})
+        out["send"].append(R.message(role, **about(inc, status), incident=inc["id"], buttons=ladder, stage="back"))
+    out["incident_id"], out["decision"] = inc["id"], "reopened"
+    store.audit("alert-desk", "reopened", {"incident": inc["id"], "status": status})
     return out
 
 
@@ -299,7 +322,7 @@ def _close(store: Store, inc: dict, now: datetime, out: dict, settled: str, told
     # its alert and reminders, in every chat, lose their buttons: nobody presses for something already over
     out.setdefault("settle", []).append(R.settle(inc["id"], settled))
     if inc["state"] in Incident.CHASED:
-        out["send"].append(R.message("fm", **about(inc, told), incident=inc["id"], stage="update"))
+        out["send"].append(R.message("fm", **about(inc, told), incident=inc["id"], stage="closed"))
 
 
 def rule_states(inc: dict) -> tuple[list[str], set[str]] | None:
@@ -349,14 +372,8 @@ def quiet_after_done(store: Store, now: datetime, client, clear_minutes: float, 
         if not still:
             continue
         route = route_for(inc["rule_id"], p.get("blueprint"))
-        ev = {**p, "rule_id": inc["rule_id"], "entity_id": inc["entity_id"], "message": p.get("message") or inc["rule_id"]}
-        store.update_incident(inc["id"], closed_at=None, reply=None)
-        _ladder(store, inc["id"], ev, now, inc["severity"], route, out)
-        inc = store.incident(inc["id"])
-        status = f"Done by {who}, but {'; '.join(still)}: still open."
-        for role in recipients(inc["severity"]):
-            ladder = bool(route.get("ladder", True) and role == "fm")
-            out["send"].append(R.message(role, **about(inc, status), incident=inc["id"], buttons=ladder, stage="reminder"))
+        reopen(store, store.incident(inc["id"]), {}, now, inc["severity"], route, out,
+               status=f"{who}, but {'; '.join(still)}: still open.")
         store.audit("alert-desk", "not_quiet", {"incident": inc["id"], "still": still})
         reopened.append(inc["id"])
     return reopened
@@ -431,7 +448,9 @@ def siren_gate(store: Store, ev: dict, now: datetime) -> dict:
     window = now - timedelta(minutes=cfg["window_min"])
     recent = [i for i in store.incidents(open_only=True)
               if route_for(i["rule_id"], json.loads(i.get("payload") or "{}").get("blueprint")).get("intrusion")
-              and datetime.fromisoformat(i["opened_at"]) >= window]
+              # ⚠️ WHEN IT LAST TRIPPED, NOT WHEN IT FIRST OPENED (architecture review 24): reopened "Back again", the
+              # garden alert of 20:00 tripping again at 22:00 counted as 20:00 — two sensors in a minute, no siren asked
+              and datetime.fromisoformat(i.get("last_seen_at") or i["opened_at"]) >= window]
     signals = {i["entity_id"] for i in recent}
     mode = (ev.get("villa_mode") or "unknown").lower()
     armed = len(signals) >= cfg["min_signals"] and mode in cfg["requires_villa_mode"]
@@ -452,11 +471,11 @@ def reply(store: Store, iid: int, text: str, sender_role: str, now: datetime, pa
     t = text.strip().lower()
     who = {"owner": "the owner", "fm": "the facility manager"}.get(sender_role, sender_role)
 
-    def here(status: str) -> dict:
+    def here(status: str, stage: str = "update") -> dict:
         """The answer in the chat it came from: it replaces the incident's message there, so it says it all."""
-        return R.message("here", **about(inc, status), incident=iid, stage="update")
+        return R.message("here", **about(inc, status), incident=iid, stage=stage)
     if inc.get("closed_at"):
-        out["send"].append(here("Already closed")); return out
+        out["send"].append(here("Already closed", "closed")); return out
     if t.startswith("done"):
         out["actions"] += Problems(store).close_incident(iid, Incident.DONE, now.isoformat(),
                                                          f"Done, answered by the {sender_role}.", reply=text)
@@ -464,9 +483,10 @@ def reply(store: Store, iid: int, text: str, sender_role: str, now: datetime, pa
         # nothing ever checked — a Done on a door still unlocked closed it for good. The tick reads it again (quiet_after_done)
         checks = rule_states(inc) is not None
         if checks:
-            store.update_incident(iid, payload=json.dumps({**json.loads(inc.get("payload") or "{}"), "check_quiet": who}))
+            store.update_incident(iid, payload=json.dumps({**json.loads(inc.get("payload") or "{}"),
+                                                           "check_quiet": f"Done by {who}"}))
         out["send"].append(here(f"Closed: done, answered by {who} on {{time}}."
-                                + (" The VESTA Agent will check it stays quiet." if checks else "")))
+                                + (" The VESTA Agent will check it stays quiet." if checks else ""), "closed"))
     elif t.startswith("need help"):
         store.update_incident(iid, state=Incident.ESCALATED, reply=text, escalated_at=now.isoformat(), assignee="owner")
         out["send"].append(R.message("owner", **about(inc, f"{who.capitalize()} needs help"), incident=iid, buttons=True,
@@ -525,16 +545,18 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
         cur = store.find_open_incident("critical_internet---villa_silent|agent")
         if cur:
             out["actions"] += Problems(store).close_incident(cur["id"], Incident.RECOVERED, now.isoformat())
-            out["send"].append(R.message("fm", **about(cur, "Closed on {time}: the villa is back online, Home Assistant answers again"), stage="update",
+            out["send"].append(R.message("fm", **about(cur, "Closed on {time}: the villa is back online, Home Assistant answers again"), stage="closed",
                                          incident=cur["id"]))
     # alert fatigue: a rule firing more than N times in 30 days without acknowledgement
     limit = params.behaviour("alert_fatigue_per_month")
     since = (now - timedelta(days=30)).isoformat()
-    rules = {i["rule_id"] for i in store.incidents(open_only=False) if i["opened_at"] >= since}
+    rules = {i["rule_id"] for i in store.incident_occurrences() if i["opened_at"] >= since}
     for r in rules:
         n = store.count_incidents(r, since)
         if n >= limit:
-            store.add_proposal("retune", f"Retune {r}: fired {n} times in 30 days",
+            # one proposal per rule: its count lives in the detail (architecture review 24: the count in the title made a
+            # new open proposal at every new count — "fired 21 times", "fired 22 times"…)
+            store.add_proposal("retune", f"Retune {r}: it fires too often",
                                f"The rule {r} fired {n} times in 30 days. Either the threshold is too tight or the device needs attention. "
                                "The VESTA Agent proposes a new threshold in the weekly report and applies nothing.", "Fewer useless messages")
     store.beat("agent_tick", now.isoformat())

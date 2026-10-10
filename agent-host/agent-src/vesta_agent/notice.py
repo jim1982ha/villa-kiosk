@@ -26,7 +26,11 @@ from zoneinfo import ZoneInfo
 
 
 #: A notice's kind (vesta_shared.result.message `stage`), as its history line says it.
-STAGES = {"new": "First time seen", "reminder": "Reminded", "escalated": "Escalated", "update": "Updated"}
+STAGES = {"new": "First time seen", "reminder": "Reminded", "escalated": "Escalated", "update": "Updated",
+          "back": "Back again", "closed": "Closed"}
+#: The heading's word for a notice of this stage (owner, 2026-10-11: a closing message headed "New #9" — "is it a
+#: closure or not?"): the message says what IT is; a notice without a stage goes by the incident's history, as before.
+HEAD_WORDS = {"new": "New", "closed": "Closed"}
 #: A role in a heading when no person of it is listed (owner, 2026-10-10: "the Facility Manager", capitals)
 ROLE_WORDS = {"owner": "the Owner", "fm": "the Facility Manager"}
 WHEN = "%d/%m/%Y %H:%M"
@@ -60,8 +64,9 @@ class Notices:
                 return [p.name]
         return pol.names_for(roles) or [ROLE_WORDS[r] for r in sorted(roles)]
 
-    def heading(self, chat: int, incident: int | None = None, to=None) -> str:
-        """The heading of a notice to `chat` (about `incident`), as it stands before this notice is recorded."""
+    def heading(self, chat: int, incident: int | None = None, to=None, stage: str | None = None) -> str:
+        """The heading of a notice to `chat` (about `incident`), as it stands before this notice is recorded: "New" for
+        the first alert, "Closed" for the message that ends it, "Follow Up" for anything else (`stage`)."""
         head = f"For: {', '.join(self._for(chat, to)) or 'this chat'}"
         lines = []
         if incident is not None:
@@ -70,7 +75,8 @@ class Notices:
                 p = self.severity(int(incident))
             except Exception:  # noqa: BLE001 — the heading is written without its priority, never not at all
                 p = None
-            head += f", {f'{p} ' if p else ''}Incident: {'Follow Up' if history else 'New'} #{incident}"
+            word = HEAD_WORDS.get(stage or "", "Follow Up") if stage else ("Follow Up" if history else "New")
+            head += f", {f'{p} ' if p else ''}Incident: {word} #{incident}"
             lines = [f"{STAGES.get(h.get('stage'), 'Sent')} on {when(datetime.fromisoformat(h['at']), self.tz)}, "
                      f"to {', '.join(h.get('to') or []) or 'nobody'}" for h in history]
         return "\n".join([head, *lines])               # the line under it is the layout's (layout.py)

@@ -32,7 +32,9 @@ decides alone to act on the villa.
    - `abandoned` with `still_true: false` (back to normal just as the rule gave up) closes the
      incident; still true, the owner hears it.
    - An alert back within `reopen_hours` (4) of its incident closing reopens it: "Back again: N
-     times since …", under its own number, its ladder and Kiosk fault started again.
+     times since …", under its own number, Home Assistant's latest words, its ladder started again
+     and its OWN task and Kiosk fault open again, titled "(again: N times in 7 days)". Each run is
+     counted on its own by the digest, the reports and the retune proposal.
 2. The engine's own connection to Home Assistant: while it is up, a beat every minute. Its absence
    is how the desk knows the villa is cut off (internet, power, Home Assistant down).
 3. Ladder button presses (Done / Need help) carrying the incident number.
@@ -73,7 +75,7 @@ message then says who pressed what, and when. Typing the word works too.
 
 | Button | Effect |
 |---|---|
-| Done | incident closed, its Kiosk ticket resolved; when its rule names its bad states, the device is read once `clear_minutes` (10) later — still bad, the incident opens again ("Done by …, but … still reads …: still open") |
+| Done | incident closed, its Kiosk ticket resolved; when its rule names its bad states, the device is read once `clear_minutes` (10) later — still bad, the incident opens again ("Done by …, but … still reads …: still open"). The same for a fault closed in the Kiosk ("Closed in the Kiosk, but …") |
 | Need help | escalated to the owner with the detail |
 
 ## The siren: strict human validation

@@ -552,7 +552,7 @@ def test_a_photo_with_a_long_heading_is_posted_as_one_message_and_recorded_as_se
         return 1
 
     class Notices:
-        def heading(self, chat, incident, roles):
+        def heading(self, chat, incident, roles, stage=None):
             return "For: JM, P1 Incident: Follow Up #9\n" + "\n".join(f"Reminded on 10/10/2026 1{i % 10}:00, to JM" for i in range(30))
     run(Poster(send=send, notices=Notices()).post(JM, "Camera snapshot", incident=9, photo=("SlBFRw==", "image/jpeg")))
     (text, photo), = sent

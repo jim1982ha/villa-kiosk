@@ -165,7 +165,8 @@ class Ctx:
     def incidents(self) -> list[dict]:
         if self._incidents is None:
             s, e = self.s_dt.astimezone(timezone.utc).isoformat(), self.e_dt.astimezone(timezone.utc).isoformat()
-            self._incidents = [i for i in self.store.incidents(open_only=False) if s <= (i.get("opened_at") or "") < e]
+            # every run of an alert, a reopened one's included (store.incident_occurrences, architecture review 24)
+            self._incidents = [i for i in self.store.incident_occurrences() if s <= (i.get("opened_at") or "") < e]
         return list(self._incidents)
 
     def rule_states(self) -> dict:

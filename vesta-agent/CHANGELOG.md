@@ -1,3 +1,16 @@
+## 0.12.148
+
+What you will see (architecture review 24, every point, and your question about "New #9"):
+- A message's heading now says what the message is: "New" only for the first alert, "Closed" for the message that ends an incident ("For: JM, P2 Incident: Closed #9"), "Follow Up" for everything in between — never "New" on a closing message again.
+- Two intrusions the same evening: the siren is offered again. Since 0.12.147 a sensor that had alerted earlier counted from its first alert, so a second break-in near it never asked for the siren.
+- The Cockpit now keeps "(again: N times in 7 days)" on a fault that came back. 0.12.147 wrote it, then the Cockpit's own update renamed it seconds later — what I told you in 0.12.147 about the Cockpit was not true until now.
+- A problem that keeps coming back is one fault in the Cockpit, reopened each time with how often it came back — no longer a new fault for each return.
+- An alert that keeps coming back is counted every time: the 07:00 digest lists it as new the day it came back, "(again: …)"; the weekly page counts each time; and "this rule fires too often" is proposed again when it should — once per rule, no longer a new proposal at each new count.
+- An alert that comes back says Home Assistant's latest words, with its camera picture when the rule sends one.
+- Closing a fault in the Cockpit now gets the same check as Done: if the door still reads unlocked 10 minutes later, the alert opens again ("Closed in the Kiosk, but … still reads unlocked: still open").
+- A fault whose closing did not reach the Cockpit (the Kiosk down a moment) is closed at the next check, and a fault reopened while the Kiosk was down is reopened, never taken for a person closing it.
+- A small test database that had been shipped inside the app by mistake (0.12.147, invented data) is gone, and can no longer be.
+
 ## 0.12.147
 
 What you will see (architecture review 23, every point):

@@ -116,8 +116,10 @@ def test_a_device_offline_every_night_is_the_same_problem_again_not_a_new_one(tm
         night = pb.record_night([_F("PM-UNAVAILABLE", "switch.plug", "P2", summary="Plug offline")], day, **rules)
         assert night["new"] == [] and [d["id"] for d in night["again"]] == [fid] and night["again"][0]["again"] == n
         # architecture review 23: the Kiosk fault says it too — its title is the task's
-        (task,) = night["tasks"]
-        assert task["todo_summary"] == f"Plug offline (again: {n + 1} times in 7 days)"
+        # architecture review 24: its own task and Kiosk fault open again, titled with how often — never a new one
+        (back,) = night["reopen_actions"]
+        assert night["tasks"] == [] and back["title"] == f"Plug offline (again: {n + 1} times in 7 days)"
+        assert store.task(back["task_id"])["status"] == "open" and len(store.tasks(None)) == 1
         # ...and so does what every reader shows: listed as of the day it came back, never "still open since the 7th"
         (row,) = pb.since(day)["new"]
         assert row["title"] == f"Plug offline (again: {n + 1} times in 7 days)" and row["since"] == day

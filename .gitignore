@@ -65,3 +65,7 @@ certs/
 # (fixtures of its entities, history and helpers) — the hard rule of CLAUDE.md.
 # They run locally; CI runs the synthetic tests beside them.
 agent-host/agent-src/tests/villa/
+
+# a store a test or a probe left in the agent's folder never ships inside the app (architecture review 24: d1.sqlite did)
+agent-host/agent-src/*.sqlite
+agent-host/agent-src/*.sqlite-*

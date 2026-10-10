@@ -273,6 +273,9 @@ Decisions of 2026-09-30 (owner):
   Review 23, 0.12.147: a reopened finding is its own occurrence (findings.reopened_day/_at/occurrences); every reader
   goes through `Problems.open_problems` and `again_title`. An incident back within `reopen_hours` reopens (desk
   `came_back`); after Done the desk reads the device once (`quiet_after_done`, `rule_states`).
+  Review 24, 0.12.148: an incident's runs are rows of their own to every reader (`store.incident_occurrences`); a
+  returning problem reopens its OWN task and Kiosk fault (`Problems.reopen_task`, `ticket.reopen`); the heading's word
+  comes from the notice's stage (`notice.HEAD_WORDS`). Mutation runs: `PYTHONDONTWRITEBYTECODE=1 python -B`.
 - No PDF (owner, 2026-09-30): the reports are self-contained HTML pages sent
   as attachments. Chromium was ~480 MB of a 1.1 GB image for this alone.
 - ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent

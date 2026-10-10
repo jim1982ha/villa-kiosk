@@ -95,7 +95,7 @@ class Store:
                         (_now(),))
         self.db.execute("DROP TABLE IF EXISTS mutes")
         cols = {r["name"] for r in self.db.execute("PRAGMA table_info(tasks)")}
-        for col in ("source", "check_text"):
+        for col in ("source", "check_text", "reopened_at"):
             if col not in cols:
                 self.db.execute(f"ALTER TABLE tasks ADD COLUMN {col} TEXT")
         # a finding that comes back (vesta_shared.problems AGAIN_DAYS) keeps when it came back and the days it was seen —
@@ -104,6 +104,11 @@ class Store:
         for col in ("reopened_day", "reopened_at", "occurrences"):
             if col not in cols:
                 self.db.execute(f"ALTER TABLE findings ADD COLUMN {col} TEXT")
+        # ...and so does an incident (architecture review 24): its earlier runs, each with when it opened, closed and how
+        cols = {r["name"] for r in self.db.execute("PRAGMA table_info(incidents)")}
+        for col in ("reopened_at", "occurrences"):
+            if col not in cols:
+                self.db.execute(f"ALTER TABLE incidents ADD COLUMN {col} TEXT")
         # ...and its rows are rewritten ONCE in today's shape (0.6.42), so no reader keeps a second way of
         # reading them: a task's source is the latest finding, else incident, of its rule and device
         # ("none:0" when neither exists: it then waits for a person, as before), and its "<what> Check: <how>"
@@ -224,8 +229,28 @@ class Store:
         r = self.db.execute("SELECT * FROM incidents WHERE id=?", (iid,)).fetchone()
         return dict(r) if r else None
 
+    def reopen_incident(self, iid: int, at: str) -> None:
+        """Incident `iid`, closed, open again at `at`: the run that ended is kept as an occurrence (opened, closed, how)."""
+        inc = self.incident(iid)
+        past = json.loads(inc.get("occurrences") or "[]") + [
+            {"opened_at": inc.get("reopened_at") or inc["opened_at"], "closed_at": inc.get("closed_at"), "state": inc.get("state")}]
+        self.update_incident(iid, closed_at=None, reply=None, reopened_at=at, occurrences=json.dumps(past))
+
+    def incident_occurrences(self) -> list[dict]:
+        """Every run of every incident as its own row — an incident reopened "Back again" is as many alerts as it had
+        runs (architecture review 24: 145 drops in a week read as one alert, opened on the 1st): the earlier runs with
+        their own opening, closing and outcome, the current one as the incident row says it."""
+        out = []
+        for i in self.incidents(open_only=False):
+            for o in json.loads(i.get("occurrences") or "[]"):
+                out.append({**i, "opened_at": o["opened_at"], "closed_at": o.get("closed_at"), "state": o.get("state"),
+                            "reply": None})
+            out.append({**i, "opened_at": i.get("reopened_at") or i["opened_at"]})
+        return sorted(out, key=lambda r: r["opened_at"])
+
     def count_incidents(self, rule_id: str, since_iso: str) -> int:
-        return self.db.execute("SELECT COUNT(*) FROM incidents WHERE rule_id=? AND opened_at>=?", (rule_id, since_iso)).fetchone()[0]
+        """How many times `rule_id` alerted since `since_iso` — every run, a reopened incident's included."""
+        return sum(1 for o in self.incident_occurrences() if o["rule_id"] == rule_id and o["opened_at"] >= since_iso)
 
     # tasks -----------------------------------------------------------------
     def add_task(self, rule_id: str, entity_id: str, summary: str, todo_uid: str | None = None,
@@ -247,6 +272,16 @@ class Store:
     def open_task(self, rule_id: str, entity_id: str) -> dict | None:
         r = self.db.execute("SELECT * FROM tasks WHERE rule_id=? AND entity_id=? AND status='open'", (rule_id, entity_id)).fetchone()
         return dict(r) if r else None
+
+    def last_task(self, source: str) -> dict | None:
+        """The latest task about `source` ("incident:12", "finding:3"), whatever its status."""
+        r = self.db.execute("SELECT * FROM tasks WHERE source=? ORDER BY id DESC LIMIT 1", (source,)).fetchone()
+        return dict(r) if r else None
+
+    def reopen_task(self, task_id: int, summary: str) -> None:
+        self.db.execute("UPDATE tasks SET status='open', done_at=NULL, summary=?, reopened_at=? WHERE id=?",
+                        (summary, _now(), task_id))
+        self.db.commit()
 
     def tasks(self, status: str | None = "open") -> list[dict]:
         q, args = "SELECT * FROM tasks", []

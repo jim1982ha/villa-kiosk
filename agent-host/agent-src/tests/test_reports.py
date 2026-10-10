@@ -859,3 +859,21 @@ def test_the_rule_ids_other_skills_read_are_written_once():
     for rid in (result.PARAM_MISSING, result.COUNTER_RESET):
         spelled = [p for p in glob.glob(os.path.join(STARTER_SKILLS, "*", "scripts", "*.py")) if f'"{rid}"' in open(p).read()]
         assert spelled == [], (rid, spelled)
+
+
+def test_an_alert_that_came_back_counts_each_run_in_the_week(tmp_path):
+    # architecture review 24: 145 drops of an access point, reopened "Back again", were one alert opened on the 1st —
+    # the week counted 0 for it and said "no critical device lost"
+    sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
+    import compose
+    facts, c, store = _ctx(tmp_path)
+    start = c.s_dt.astimezone(timezone.utc)
+    iid = store.new_incident("k", "automation.ap", "sensor.ap", "P1", {"message": "AP down"},
+                             at=(start - timedelta(days=2)).isoformat())                 # first opened before the week
+    for k in (1, 2, 3):
+        store.update_incident(iid, closed_at=(start + timedelta(hours=k)).isoformat(), state="done")
+        store.reopen_incident(iid, (start + timedelta(hours=k, minutes=30)).isoformat())
+    assert len([i for i in c.incidents() if i["id"] == iid]) == 3                         # each run of it in the week
+    end = (c.e_dt - timedelta(days=1)).date().isoformat()
+    text = compose.owner_weekly(c.pack, store, {"start": c.s_dt.date().isoformat(), "end": end, "total_kwh": None})
+    assert "3 alert(s), 3 critical" in text

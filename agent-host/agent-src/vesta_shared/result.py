@@ -46,7 +46,7 @@ def finding_name(finding: dict) -> str | None:
 
 #: What a notice about an incident is (its history line, vesta_agent/notice.py): the first one, a reminder to the same
 #: people, an escalation to others, any other update (an answer, a closing).
-STAGES = ("new", "reminder", "escalated", "update")
+STAGES = ("new", "reminder", "escalated", "update", "back", "closed")
 
 
 def message(to: str, text: str, *, status: str | None = None, incident: int | None = None, buttons: bool = False,
@@ -82,6 +82,11 @@ def fault(summary: str, *, task_id: int | None = None, check: str | None = None,
     """A task as a fault in the VESTA Kiosk: its title says what is wrong, its note what to check."""
     return {"action": "ticket", "summary": summary, "task_id": task_id, "note": fault_note(check),
             "entity_id": entity_id if entity_id and "," not in entity_id else None}
+
+
+def reopened(task_id: int, title: str, note: str = "") -> dict:
+    """Task `task_id`'s Kiosk fault open again under `title`: its problem came back (vesta_shared.problems)."""
+    return {"action": "ticket.reopen", "task_id": int(task_id), "title": title[:200], "note": note[:500]}
 
 
 def resolved(task_id: int, note: str | None = None) -> dict:
