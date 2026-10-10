@@ -593,7 +593,7 @@ class Vesta:
                 # a request sent before 0.12.128 has no thread: the pressed message is its one copy
                 await self.thread.post(thread, p.chat, int(p.mid), str(p.msg.get("text") or ""), buttons=True)
             # every copy of the request, in every chat, says what was decided, by whom and when (Outcome.ask)
-            await self.thread.close(thread, out["note"])
+            await self.thread.close(thread, out["note"], out.get("body"))
             # ⚠️ AND THE ANSWER THAT SAID IT WAS ASKED GOES (owner, 2026-10-10: "I expect the message 'Request sent…
             # Awaiting approval.' to disappear when it has been approved"): the request itself now says what happened
             said = self.state.approval_answer(aid)

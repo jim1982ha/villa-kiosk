@@ -1,3 +1,18 @@
+## 0.12.137
+
+What you will see:
+- In a private chat, "For:" names the person whose chat it is ("For: JM"), never every person of the role. In a group, it still names everyone of the role.
+- An approved request now says what happened and who approved it, and nothing more:
+
+      For: JM
+      -------
+      Opened Bedroom3 Curtain.
+      -------
+      Approved by JM on 10/10/2026 17:13.
+
+  If the device did not end up as asked, the middle line says so plainly instead ("Bedroom3 Curtain did not open: it reads closed."). "Not confirmed … I will not retry by myself" no longer appears.
+- A request either role may approve goes only to the chat it was asked from: no other chat sees it, waiting or decided.
+
 ## 0.12.136
 
 What you will see (a scan of every message the agent sends):

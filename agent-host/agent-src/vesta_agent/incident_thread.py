@@ -36,16 +36,19 @@ Edit = Callable[..., Awaitable]     # (chat, message id, text[, keyboard])
 Delete = Callable[[int, int], Awaitable]
 
 
-def with_status(text: str, note: str) -> str:
+def with_status(text: str, note: str, body: str | None = None) -> str:
     """A message with `note` as where it stands now: under a line at its bottom, in place of the status it had there.
 
     ⚠️ WHERE IT STANDS IS ALWAYS LAST (owner, 2026-10-10: "the update of the message shall appear at the bottom, after a
     ------- line"). A notice is heading / alert / status, each under a line (notice.py, messaging.incident_message):
     a press replaces the status ("Reminder: no answer after 15 min" becomes "Done pressed by JM_O on 10/10/2026 15:04");
-    a message with no status of its own gets the note under a line. The note is kept whole: the rest is shortened."""
+    a message with no status of its own gets the note under a line. The note is kept whole: the rest is shortened.
+    `body`: what the message says now, in place of what it said (an approved request: "Opened Bedroom3 Curtain.")."""
     sep = f"\n{RULE}\n"
     parts = text.rstrip().split(sep)
     base = sep.join(parts[:-1]) if len(parts) >= 3 else text.rstrip()
+    if body and len(parts) >= 3:
+        base = sep.join(parts[:-2] + [body])           # heading / the new body
     return f"{fit(base, TELEGRAM_LIMIT - tg_len(note) - len(sep))}{sep}{note}"
 
 
@@ -77,7 +80,7 @@ class IncidentThread:
             await self.edit(chat, mid, text, keyboard) if keyboard else await self.edit(chat, mid, text)
         await self.post(iid, chat, mid, text, buttons=bool(keyboard))
 
-    async def close(self, iid: int | str, note: str) -> int:
+    async def close(self, iid: int | str, note: str, body: str | None = None) -> int:
         """Every message of incident `iid` still showing its buttons, in every chat, loses them and shows `note` (who
         did what, when; "{time}": the villa's time now). Returns how many. Settled once: a second close changes nothing.
 
@@ -90,7 +93,7 @@ class IncidentThread:
                 continue
             # the note is kept whole, the alert's own text shortened to make room (architecture review 15: cut at 4,096
             # characters, a long alert lost "Done — Marie, 09:14" at its end)
-            text = with_status(rec["text"], note) if note else rec["text"]
+            text = with_status(rec["text"], note, body) if note else rec["text"]
             if self.edit and note:
                 await self.edit(chat, rec["mid"], text)
                 n += 1

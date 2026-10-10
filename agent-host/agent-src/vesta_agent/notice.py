@@ -8,7 +8,8 @@ and the one heading every such message carries (owner, 2026-10-10):
     <the message>
 
 `For` names the people of the message's role (`to`: owner or fm) as the Rules page's People list names them — never a
-group, which is only where they read it; without a role, the people of the roles the chat is listed with. The incident part, when the
+group, which is only where they read it; without a role, the people of the roles the chat is listed with. In a private
+chat, the one person whose chat it is. The incident part, when the
 message is about one: "New" for its first notice, "Follow Up" after; then one line per earlier notice — when, of what
 kind, to whom — whatever chat it went to (each chat keeps only an incident's latest message: incident_thread.py). A
 reply to a person in a chat carries none: it answers them.
@@ -49,6 +50,12 @@ class Notices:
         pol = self.policy()
         wanted = {to} if isinstance(to, str) else set(to or ())
         roles = (wanted & set(ROLE_WORDS)) or pol.roles_in(chat)
+        if int(chat) > 0:
+            # ⚠️ A PRIVATE CHAT IS ONE PERSON'S (owner, 2026-10-10: "why was this message addressed to Fabien, since it's a
+            # direct request from my personal chat?"): the reader is named, never every person of the role
+            own = list(dict.fromkeys(e.name for e in pol.entries if e.telegram_id == int(chat) and (e.role in roles or not roles)))
+            if own:
+                return own
         return pol.names_for(roles) or [ROLE_WORDS[r] for r in sorted(roles)]
 
     def heading(self, chat: int, incident: int | None = None, to=None) -> str:

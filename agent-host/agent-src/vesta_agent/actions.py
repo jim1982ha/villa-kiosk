@@ -57,8 +57,37 @@ class Outgoing:
     to: str | None = None       # the role it goes to its chats for ("owner"), for the heading; None: the chat's own
 
 
+#: The same verbs once done: the request's body after it is approved ("Opened Bedroom3 Curtain.").
+PAST = {"Turn on": "Turned on", "Turn off": "Turned off", "Lock": "Locked", "Unlock": "Unlocked", "Open": "Opened",
+        "Close": "Closed", "Press": "Pressed", "Run the scene": "Ran the scene", "Run the script": "Ran the script"}
+
+
 def plain(decision: Decision, names: Callable[[str], str]) -> str:
     """The action in plain words: every device (name and room), every parameter. Never an entity id."""
+    verb, target, extra = _words(decision, names)
+    state = EXPECT.get((decision.domain, decision.service))
+    tail = f" (final state: {state})" if state else ""
+    return f"{verb} {target}{extra}{tail}?"
+
+
+def done_words(decision: Decision, names: Callable[[str], str], result: dict) -> str:
+    """What happened, in one sentence: the body of an approved request (owner, 2026-10-10: "Opened Bedroom3 Curtain."
+    — never "Not confirmed: … I will not retry by myself" under it). A device that did not reach the state asked for is
+    said plainly in its place: the message never claims what did not happen."""
+    verb, target, extra = _words(decision, names)
+    if result.get("failed"):
+        return f"{verb} {target}{extra}: Home Assistant refused it, nothing was done."
+    bad = result.get("unconfirmed") or []
+    if bad and len(decision.entity_ids) == 1:
+        return f"{target} did not {verb.lower()}: it reads {bad[0][1]}."
+    if bad:
+        return f"{verb} {target}{extra}: not done for " + "; ".join(f"{n} (reads {s})" for n, s in bad) + "."
+    done = PAST.get(verb)
+    return f"{done} {target}{extra}." if done else f"Done: {verb[0].lower()}{verb[1:]} {target}{extra}."
+
+
+def _words(decision: Decision, names: Callable[[str], str]) -> tuple[str, str, str]:
+    """(verb, target, parameters) of an action, in plain words: one reading for the request and its result."""
     who = [names(e) for e in decision.entity_ids]
     if len(who) > 1:
         target = f"{len(who)} devices: " + "; ".join(who)
@@ -74,9 +103,7 @@ def plain(decision: Decision, names: Callable[[str], str]) -> str:
     extra = ""
     if decision.data:
         extra = " with " + ", ".join(f"{k} = {json.dumps(v, ensure_ascii=False, default=str)}" for k, v in sorted(decision.data.items()))
-    state = EXPECT.get((decision.domain, decision.service))
-    tail = f" (final state: {state})" if state else ""
-    return f"{verb} {target}{extra}{tail}?"
+    return verb, target, extra
 
 
 class Actions:
@@ -203,9 +230,9 @@ class Actions:
         self.state.log("approved", {"approval": aid, "by": person.name, "role": person.role})
         result = self.execute(d)
         self.state.finish_approval(aid, "done" if result["ok"] else "failed", result)
-        note = f"Approved by {person.name} on {{time}}. {result['text']}"
-        return {"toast": "Done." if result["ok"] else "Sent, not confirmed.", "note": note, "executed": True,
-                "result": result}
+        # the body says what happened, the status who approved it and when (owner, 2026-10-10)
+        return {"toast": "Done." if result["ok"] else "Sent, not confirmed.", "note": f"Approved by {person.name} on {{time}}.",
+                "body": done_words(d, self.names, result), "executed": True, "result": result}
 
     # ------------------------------------------------------------------ execute
     def execute(self, d: Decision) -> dict:
@@ -218,7 +245,8 @@ class Actions:
         except Exception as e:  # noqa: BLE001
             self.state.log("failed", {"domain": d.domain, "service": d.service, "entities": d.entity_ids, "error": str(e)[:300]})
             log.warning("Approved %s.%s on %s failed: %s", d.domain, d.service, ", ".join(d.entity_ids) or "-", str(e)[:300])
-            return {"ok": False, "text": f"Home Assistant refused or failed ({type(e).__name__}). Nothing confirmed."}
+            return {"ok": False, "failed": True,
+                    "text": f"Home Assistant refused or failed ({type(e).__name__}). Nothing confirmed."}
         self.state.log("executed", {"domain": d.domain, "service": d.service, "entities": d.entity_ids, "data": d.data})
         try:
             self.on_executed(d.domain, d.service, list(d.entity_ids))
@@ -245,7 +273,8 @@ class Actions:
         self.state.log("readback", {"entities": d.entity_ids, "expect": expect, "states": dict(rows)})
         if not bad:
             return {"ok": True, "text": f"Done: {', '.join(self.names(e) for e, _ in rows)} {expect}."}
-        return {"ok": False, "text": "Not confirmed: " + ", ".join(f"{self.names(e)} reads {s}" for e, s in bad) + ". I will not retry by myself."}
+        return {"ok": False, "unconfirmed": [(self.names(e), s) for e, s in bad],
+                "text": "Not confirmed: " + ", ".join(f"{self.names(e)} reads {s}" for e, s in bad) + ". I will not retry by myself."}
 
     # ------------------------------------------------------------------ system
     def system(self, domain: str, service: str, entity_id: str, data: dict | None = None, siren: str | None = None) -> bool:

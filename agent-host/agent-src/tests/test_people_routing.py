@@ -36,7 +36,10 @@ def test_a_message_for_a_role_reaches_every_chat_of_it_once_under_its_heading(tm
     done = run(v.outcome.carry_out({"send": [{"to": "fm", "text": "Pool pump offline."}]}))
     assert done["sent"] == 3 and [c for c, _, _ in v.tg.sent] == [JM, FABIEN, GROUP]
     # who it is for: the PEOPLE of the role, never the group they read it in
-    assert all(t.startswith("For: JM_FM, Fabien_FM\n") and body(t) == "Pool pump offline." for _, t, _ in v.tg.sent)
+    # a private chat names its own person, a group every person of the role (owner, 2026-10-10)
+    heads = {c: t.split("\n")[0] for c, t, _ in v.tg.sent}
+    assert heads == {JM: "For: JM_FM", FABIEN: "For: Fabien_FM", GROUP: "For: JM_FM, Fabien_FM"}
+    assert all(body(t) == "Pool pump offline." for _, t, _ in v.tg.sent)
     v.tg.sent.clear()
     run(v.outcome.carry_out({"send": [{"to": "owner", "text": "Siren off."}, {"to": "fm", "text": "Siren off."}]}))
     assert sorted(c for c, _, _ in v.tg.sent) == sorted([JM, FABIEN, GROUP])     # for both roles: once per chat
@@ -124,7 +127,7 @@ def test_in_a_private_chat_the_persons_own_role_decides_in_a_group_the_least(tmp
 def test_the_for_line_names_the_role_the_message_is_for(tmp_path):
     s = settings(str(tmp_path))
     n = Notices(State(s.state_path), lambda: Policy({"people": PEOPLE}), "UTC")
-    assert n.heading(JM, to="owner").startswith("For: Fabien_O, JM_O\n")
+    assert n.heading(JM, to="owner").startswith("For: JM_O\n")                   # his own chat: him, never Fabien
     assert n.heading(GROUP, to="fm").startswith("For: JM_FM, Fabien_FM\n")
     alone = Notices(State(s.state_path), lambda: Policy({"people": [PEOPLE[4]]}), "UTC")
     assert alone.heading(GROUP, to="owner").startswith("For: the Owner\n")          # a group alone: its role, capitalised
@@ -147,7 +150,8 @@ def test_the_agents_own_approvals_and_warnings_carry_the_heading_in_every_chat(t
                               "allowed_services": {"light.turn_on": "owner", "cover.open_cover": "any"}})
     _, msg = v.actions.request("light", "turn_on", "light.pool", {}, None, None)
     run(v.outcome.ask(msg))
-    assert all(t.startswith("For: Fabien_O, JM_O\n") for _, t, _ in v.tg.sent)
+    assert {c: t.split("\n")[0] for c, t, _ in v.tg.sent} == {FABIEN: "For: Fabien_O", JM: "For: JM_O",
+                                                              GROUP: "For: Fabien_O, JM_O"}
     v.tg.sent.clear()
     _, msg = v.actions.request("cover", "open_cover", "cover.pool", {}, v.policy().person(JM), JM)
     run(v.outcome.ask(msg))
@@ -263,3 +267,18 @@ def test_the_siren_that_cannot_be_requested_says_so_in_the_agents_layout(tmp_pat
     texts = [t for _, t, _ in v.tg.sent]
     assert texts and all(t.startswith("For: ") and "\n-------\nIntrusion suspected.\n-------\nThe siren cannot be requested: "
                          in t for t in texts)
+
+
+def test_an_approved_request_says_what_happened_and_who_approved_it_never_the_retry_words(tmp_path):
+    # owner, 2026-10-10: "For: JM / Opened Bedroom3 Curtain. / Approved by JM on …" — and only the asker's chat
+    from vesta_agent.actions import Decision, done_words
+    names = {"cover.bedroom3": "Bedroom3 Curtain"}.get
+    d = Decision(True, "", "any", "cover", "open_cover", ["cover.bedroom3"], {})
+    assert done_words(d, names, {"ok": True}) == "Opened Bedroom3 Curtain."
+    assert done_words(d, names, {"ok": False, "unconfirmed": [("Bedroom3 Curtain", "closed")]}) == \
+        "Bedroom3 Curtain did not open: it reads closed."                     # never claims what did not happen
+    assert "retry" not in done_words(d, names, {"ok": False, "failed": True})
+    from vesta_agent.incident_thread import with_status
+    req = "For: JM\n-------\nOpen Bedroom3 Curtain (final state: open)?\n-------\nWaiting for approval by the owner"
+    assert with_status(req, "Approved by JM on 10/10/2026 17:13.", "Opened Bedroom3 Curtain.") == \
+        "For: JM\n-------\nOpened Bedroom3 Curtain.\n-------\nApproved by JM on 10/10/2026 17:13."

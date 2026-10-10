@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.131 (10 October 2026)
+
+- notice: in a private chat the heading names that chat's own person.
+- actions: _words is the one reading of an action; done_words gives an approved request's body (PAST verbs; unconfirmed or failed said plainly); decide's note is "Approved by X on {time}." and returns `body`; execute flags `failed` / `unconfirmed`. IncidentThread.close / with_status take `body`. Tests; three mutations red.
+
 ## 0.6.130 (10 October 2026)
 
 Every send scanned: what the agent sends on its own goes through Outcome._post (heading, RULE, status); answers to the asker carry none. Three left out, fixed: the snapshot (heading with its incident, "Camera snapshot"), the siren's "cannot be requested" (under RULE), the report-button press (incident_thread.with_status). Tests pin each; three mutations red.
