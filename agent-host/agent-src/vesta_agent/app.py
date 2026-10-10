@@ -58,6 +58,7 @@ from .state import State
 from .telegram import Telegram, TelegramError
 from .tools import Toolbox, scrub
 from .turn import Turns
+from .notice import Notices
 
 log = logging.getLogger("vesta")
 
@@ -139,9 +140,11 @@ class Vesta:
                                settle_alert=self.thread.close)
         # a voice message's words (voice.py): the skill prepares the audio, Home Assistant reads it
         self.voice = Voice(self.s, self.tg, self.skills, self.code_command, self.delivery.send, self.state, self.cf_headers)
+        # the heading of every message the agent sends on its own (notice.py): who it is for, the incident, its history
+        self.notices = Notices(self.state, self.policy, settings.timezone)
         self.outcome = Outcome(policy=self.policy, state=self.state, send=self.delivery.send, actions=self.actions,
                                reader=self.reader, tickets=self.tickets, buttons=self.buttons, thread=self.thread,
-                               out_dir=settings.out_dir)
+                               notices=self.notices, out_dir=settings.out_dir)
         self.server_tools: list[dict] = []
         # the reports (ai_jobs.py): run, made without the AI, started from a chat
         # one AI turn, decided once: its tools by who asks, its brain, limit, record and folder (turn.py)
@@ -201,7 +204,7 @@ class Vesta:
         run's own (config.Settings.in_folder: its files' folder); the agent's without one."""
         return Toolbox(settings=settings or self.s, policy=self.policy(), reader=self.reader, actions=self.actions,
                        skills=self.skills, send=self.delivery.send, server_tools=self.server_tools, state=self.state,
-                       ticket=self.tickets.create if self.kiosk.enabled else None,
+                       ticket=self.tickets.create if self.kiosk.enabled else None, notices=self.notices,
                        carry_out=self.outcome.carry_out, start_job=self.jobs.start, allowed=allowed)
 
     def lock(self, chat_id: int) -> asyncio.Lock:
@@ -580,7 +583,9 @@ class Vesta:
                             resume=cont["session_id"], is_continue=True)
 
     async def _press_alert(self, p: "Press") -> None:
-        await self.buttons.press(p.q, p.chat, p.parts, p.person, p.toast)
+        # the presser as this chat knows them (one person may be both owner and fm, each with its name)
+        await self.buttons.press(p.q, p.chat, p.parts, p.person, p.toast,
+                                 name=self.policy().name_in(p.person.telegram_id, p.chat))
 
     async def _press_report(self, p: "Press") -> None:
         if not tool_access.may_start_job(self.policy(), self.server_tools, p.person, p.chat):
@@ -602,7 +607,7 @@ class Vesta:
     async def _tell_owner_text(self, text: str) -> None:
         owner = Routing(self.policy()).target("owner")
         if owner:
-            await self.delivery.send(owner, text)
+            await self.delivery.send(owner, self.notices.compose(int(owner), text))
 
     # ------------------------------------------------------------------ scheduled model jobs
     async def _tell_owner(self, problem: str | None, already_told: int | None) -> None:
@@ -618,7 +623,7 @@ class Vesta:
             return
         self.state.mark_owner_told(problem, now.isoformat())
         if int(owner) != int(already_told or 0):
-            await self.delivery.send(owner, text)
+            await self.delivery.send(owner, self.notices.compose(int(owner), text))
 
     async def housekeeping(self) -> None:
         if not self.server_tools and _now_local(self.s.timezone).minute % 10 == 0:

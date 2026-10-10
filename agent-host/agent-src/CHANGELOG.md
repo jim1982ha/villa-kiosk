@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.119 (10 October 2026)
+
+One heading for every notice, and one person in two roles (owner, 2026-10-10):
+- notice.Notices: compose(chat, text, incident) = "For: <names>[, Incident: New|Follow Up #N]", one line per earlier notice of the incident ("First time seen|Reminded|Escalated|Updated on dd/mm/yyyy HH:MM, to <names>"), "-------", the text; record(incident, stage, chats) after each result, one line for its chats together (state inchist:, KV_FAMILIES RECORDS). outcome.carry_out composes every message except an answer to its asker in their chat, and Home Assistant's taken over; app._tell_owner(_text) and the AI's send_message on schedule (tools) too. IncidentThread's own times / earlier() removed.
+- result.message / ha_message stage= (new · reminder · escalated · update); vesta_shared.messaging.incident_message(status, details) is the body only; alert-desk sets each stage, drops ASK and "Press Done" from its rules' checks.
+- Footers: "<button> pressed by <name> on dd/mm/yyyy HH:MM" (IncidentThread.close {time} as notice.when; the name policy.name_in(telegram id, chat)); "answered by", "Cleared in Home Assistant on", "Closed in the VESTA Kiosk on".
+- policy: a telegram id may be listed once per role (still refused twice in one role); people[id] is the owner's entry when it has both; entries lists all; names_for(chat), name_in(id, chat).
+- Tests: the heading and its history; one person in two roles named per chat; the footer. Updated: every test reading an incident's text reads its body (helpers.body). Each shown red with the old behaviour.
+
 ## 0.6.118 (10 October 2026)
 
 Two baselines (owner, 2026-10-10):

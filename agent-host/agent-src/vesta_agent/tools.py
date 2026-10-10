@@ -108,7 +108,7 @@ class Toolbox:
                  ticket: Callable[..., Awaitable[str]] | None = None,
                  carry_out: Callable[..., Awaitable[dict]] | None = None,
                  start_job: Callable[..., Awaitable[str]] | None = None,
-                 allowed: set[str] | None = None):
+                 allowed: set[str] | None = None, notices=None):
         self.s = settings
         self.policy = policy
         self.reader = reader
@@ -118,6 +118,7 @@ class Toolbox:
         self.ticket = ticket
         self.carry_out = carry_out
         self.start_job = start_job
+        self.notices = notices          # notice.Notices: the heading of a message the AI sends on its own (scheduled)
         self.server_tools = {t["name"]: t for t in server_tools}
         self.state = state
         self.parts = Parts()
@@ -272,7 +273,7 @@ class Toolbox:
             if ent and not re.match(r"^[a-z_]+\.[a-z0-9_]+$", ent):
                 return _err(f"{ent} is not an entity id.")
             try:
-                tid = await self.ticket(title=title[:200], entity_id=ent, note=str(args.get("note") or "")[:2000] or None)
+                await self.ticket(title=title[:200], entity_id=ent, note=str(args.get("note") or "")[:2000] or None)
             except Exception as e:  # noqa: BLE001
                 return _err(f"The Kiosk did not record the ticket ({type(e).__name__}).")
             # recorded once, by tickets.create (architecture review 16: logged here too, each ticket counted twice)
@@ -468,7 +469,11 @@ class Toolbox:
                 if not FILE_NAME.match(att) or not os.path.exists(os.path.join(self.s.out_dir, att)):
                     return _err(f"{att} is not a file in the out folder.")
                 path = os.path.join(self.s.out_dir, att)
-            mid = await self.send(int(chat), args.get("text", ""), document=path, origin=origin)
+            text = args.get("text", "")
+            if self.notices and origin is None:
+                # sent on its own (a scheduled report, a digest): the heading every such message has (notice.py)
+                text = self.notices.compose(int(chat), text)
+            mid = await self.send(int(chat), text, document=path, origin=origin)
             self.state.log("sent" if mid else "send_refused", {"to": to, "chars": len(args.get("text", "")), "attachment": att})
             if not mid:
                 # ⚠️ NEVER "Sent." FOR WHAT DID NOT ARRIVE (architecture review, 2026-10-06): the AI then told the

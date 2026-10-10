@@ -180,7 +180,8 @@ class Policy:
         self.behaviour: dict = v["behaviour"]
         self.jobs: dict[str, dict] = v["jobs"]
         self.keep: dict[str, int] = v["keep"]
-        self.people: dict[int, Person] = v["people"]
+        self.people: dict[int, Person] = v["people"]            # by Telegram id: the owner's entry when it has two
+        self.entries: list[Person] = v["entries"]               # every entry, one per id and role
         self.chats: dict[str, int] = v["chats"]
         self.owner_only: set[str] = v["owner_only"]
         self.excluded: set[str] = v["excluded"]
@@ -209,6 +210,19 @@ class Policy:
         if telegram_id is None or int(telegram_id) in ANONYMOUS_TELEGRAM_IDS:
             return None
         return self.people.get(int(telegram_id))
+
+    def names_for(self, chat_id: int) -> list[str]:
+        """Who a message to this chat is for: the name of every person of its role(s) (the "For:" of a notice)."""
+        roles = {r for r, c in self.chats.items() if int(c) == int(chat_id)}
+        return list(dict.fromkeys(e.name for e in self.entries if e.role in roles))
+
+    def name_in(self, telegram_id: int, chat_id: int) -> str | None:
+        """A person's name as this chat knows them: their entry for the chat's role when they have one (Fabien_FM in
+        the facility manager's chat), else their name."""
+        roles = {r for r, c in self.chats.items() if int(c) == int(chat_id)}
+        named = [e.name for e in self.entries if e.telegram_id == int(telegram_id) and e.role in roles]
+        p = self.person(telegram_id)
+        return named[0] if named else (p.name if p else None)
 
     def chat_role(self, chat_id: int) -> str | None:
         for role, cid in self.chats.items():
@@ -538,6 +552,10 @@ def read_policy(raw: dict) -> tuple[dict, list[str]]:
 
     # ---- people: a person is registered exactly when their id is valid; the first of a repeated id counts
     people: dict[int, Person] = {}
+    # ⚠️ ONE PERSON, TWO ROLES (owner, 2026-10-10: "allow a same Telegram ID to be defined both as owner and FM"): an id
+    # may be listed once per role, each entry with its own name ("Fabien" the owner, "Fabien_FM" the facility manager).
+    # The person is recognised with the owner's rights, the wider; each role's name is used where that role is meant.
+    entries: list[Person] = []
     plist = raw.get("people")
     if plist is not None and not isinstance(plist, list):
         out.append("people must be a list.")
@@ -552,8 +570,8 @@ def read_policy(raw: dict) -> tuple[dict, list[str]]:
             out.append(f"people, {who}: telegram_id must be the person's Telegram id (a positive number; "
                        "/whoami shows it). Until then the agent ignores this person.")
             ok = False
-        elif tid in people:
-            out.append(f"people, {who}: telegram_id {tid} is listed twice.")
+        elif any(e.telegram_id == tid and e.role == p.get("role") for e in entries):
+            out.append(f"people, {who}: telegram_id {tid} is listed twice as {p.get('role')}.")
             ok = False
         if p.get("role") not in ROLES:
             out.append(f"people, {who}: role must be owner or fm.")
@@ -568,8 +586,12 @@ def read_policy(raw: dict) -> tuple[dict, list[str]]:
         for extra in set(p) - {"telegram_id", "name", "role", "language"}:
             out.append(f"people, {who}: unknown field {extra!r}.")
         if ok:
-            people[tid] = Person(tid, name or str(tid), p["role"], str(lang or "en"))
+            person = Person(tid, name or str(tid), p["role"], str(lang or "en"))
+            entries.append(person)
+            if tid not in people or person.role == "owner":
+                people[tid] = person
     v["people"] = people
+    v["entries"] = entries
 
     # ---- chats: only the roles; a chat id that is not a number is skipped and named, never a crash
     chats: dict[str, int] = {}

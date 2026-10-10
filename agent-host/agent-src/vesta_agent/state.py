@@ -73,6 +73,7 @@ RECORDS, CURRENT = "records", "current"
 KV_FAMILIES: dict[str, str] = {
     "inc:": RECORDS,                # which skill answers an alert's buttons in a chat
     "incthread:": RECORDS,          # what a chat shows of an incident (incident_thread.py)
+    "inchist:": RECORDS,            # when each notice of an incident was sent, of what kind, to whom (notice.py)
     "hasent:": RECORDS,             # Home Assistant's own messages (also cleared after 24 hours as they are written)
     "saved_by_model:": RECORDS,     # a file the AI saved (its run folder is deleted with the out folder's files)
     "owner_told:": RECORDS,         # when the owner was last told of a problem (a 12-hour pause)
@@ -191,6 +192,14 @@ class State:
 
     def set_incident_message(self, incident: int | str, chat: int | str, record: dict) -> None:
         self.put(f"incthread:{incident}:{chat}", json.dumps(record))
+
+    def incident_history(self, incident: int | str) -> list[dict]:
+        """Every notice sent about an incident, oldest first: {at, stage, to} (notice.Notices)."""
+        v = self.get(f"inchist:{incident}")
+        return json.loads(v) if v else []
+
+    def set_incident_history(self, incident: int | str, history: list[dict]) -> None:
+        self.put(f"inchist:{incident}", json.dumps(history))
 
     def incident_chats(self, incident: int | str) -> list[tuple[int, dict]]:
         """(chat, record) of every chat this incident's message is shown in."""

@@ -92,7 +92,8 @@ def test_the_agent_reads_no_more_than_the_page_accepts():
                 "people": [{"telegram_id": 7, "name": "A", "role": "fm"}, {"telegram_id": 7, "name": "B", "role": "owner"}],
                 "allowed_services": {"light.turn_on": "any", "homeassistant.restart": "owner", "lock.lock": "maybe"}})
     assert p.chats == {"owner": -1} and p.tool_access == {} and p.jobs == {}
-    assert p.people[7].name == "A"                                          # the first of a repeated id
+    # one id in two roles (owner, 2026-10-10): recognised as the owner, each role's entry kept with its name
+    assert p.people[7].name == "B" and [(e.name, e.role) for e in p.entries] == [("A", "fm"), ("B", "owner")]
     assert p.allowed_services == {"light.turn_on": "any"}                   # a refused line is not offered
 
 
@@ -107,3 +108,16 @@ def test_the_siren_switches_itself_off_without_a_line_in_system_actions():
 def test_a_protective_list_written_as_text_still_protects():
     raw = {"owner_only_entities": "lock.front, lock.gate"}
     assert problems(raw) and Policy(raw).owner_only == {"lock.front", "lock.gate"}
+
+
+def test_one_person_in_both_roles_is_named_as_each_chat_knows_them():
+    # owner, 2026-10-10: Fabien is the owner and, as Fabien_FM, a facility manager — the same Telegram id twice
+    p = Policy({"people": [{"telegram_id": 1, "name": "Jean-Marie", "role": "fm"},
+                           {"telegram_id": 2, "name": "Fabien", "role": "owner"},
+                           {"telegram_id": 2, "name": "Fabien_FM", "role": "fm"}],
+                "chats": {"owner": -5, "fm": 1}})
+    assert p.person(2).role == "owner"                                     # the wider rights
+    assert p.names_for(1) == ["Jean-Marie", "Fabien_FM"] and p.names_for(-5) == ["Fabien"]   # "For:" of a notice
+    assert p.name_in(2, 1) == "Fabien_FM" and p.name_in(2, -5) == "Fabien"                    # a press's footer
+    twice = Policy({"people": [{"telegram_id": 2, "name": "A", "role": "fm"}, {"telegram_id": 2, "name": "B", "role": "fm"}]})
+    assert [e.name for e in twice.entries] == ["A"]                         # twice in ONE role: still refused

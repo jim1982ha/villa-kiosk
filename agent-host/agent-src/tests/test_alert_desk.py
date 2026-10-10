@@ -35,7 +35,8 @@ def test_opened_goes_to_the_fm_with_the_ladder_and_becomes_a_ticket(store):
     res = desk.intake(store, event(), T0, mode_reader=lambda: "occupied")
     assert res["decision"] == "new"
     fm = [s for s in res["send"] if s["to"] == "fm"]
-    assert fm and fm[0]["keyboard"] is True and f"Incident #{res['incident_id']}" in fm[0]["text"]
+    # the incident's number is the heading the engine writes (notice.py); the skill's text is the body alone
+    assert fm and fm[0]["keyboard"] is True and fm[0]["incident_id"] == res["incident_id"] and fm[0]["stage"] == "new"
     ticket = [a for a in res["actions"] if a["action"] == "ticket"]
     assert ticket and ticket[0]["entity_id"] == "lock.front_door" and ticket[0]["task_id"]
     assert not [s for s in res["send"] if s["to"] == "owner"]        # P2: the FM only
@@ -48,7 +49,7 @@ def test_resolved_closes_the_incident_and_its_ticket(store):
     assert store.incident(iid)["state"] == "resolved"
     assert [a for a in res["actions"] if a["action"] == "ticket.resolve"]
     assert "No reply needed" in res["send"][0]["text"]
-    assert res["settle"] == [{"incident_id": iid, "note": "Cleared in Home Assistant, {time}. No reply needed."}]
+    assert res["settle"] == [{"incident_id": iid, "note": "Cleared in Home Assistant on {time}."}]
     # the chase stops: no reminder for it any more
     assert desk.tick(store, T0 + timedelta(minutes=30))["reasked"] == []
 
@@ -132,7 +133,7 @@ def test_a_text_answer_settles_the_alerts_buttons_too(store):
     # "#2 done" typed in a chat: the alert and its reminders lose their buttons, like a press
     iid = desk.intake(store, event(), T0, mode_reader=lambda: "occupied")["incident_id"]
     res = desk.reply(store, iid, "done, it was the gardener", "fm", T0 + timedelta(minutes=5))
-    assert res["settle"] == [{"incident_id": iid, "note": "Done — the facility manager, {time}"}]
+    assert res["settle"] == [{"incident_id": iid, "note": "Done answered by the facility manager on {time}"}]
     assert "settle" not in desk.reply(store, iid, "what happened?", "fm", T0 + timedelta(minutes=6))
 
 

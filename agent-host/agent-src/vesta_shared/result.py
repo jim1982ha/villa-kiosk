@@ -44,10 +44,20 @@ def finding_name(finding: dict) -> str | None:
     return finding_detail(finding).get("name")
 
 
+#: What a notice about an incident is (its history line, vesta_agent/notice.py): the first one, a reminder to the same
+#: people, an escalation to others, any other update (an answer, a closing).
+STAGES = ("new", "reminder", "escalated", "update")
+
+
 def message(to: str, text: str, *, incident: int | None = None, buttons: bool = False,
-            attachment: str | None = None) -> dict:
-    """A message for `to` (here · owner · fm). `buttons`: the alert's Done / Not found / … for `incident`."""
+            attachment: str | None = None, stage: str | None = None) -> dict:
+    """A message for `to` (here · owner · fm). `buttons`: the alert's Done / Not found / … for `incident`; `stage`: what
+    this notice about it is (STAGES) — the engine writes its heading and its history line."""
     m = {"to": to, "text": text}
+    if stage is not None:
+        if stage not in STAGES:
+            raise ValueError(f"stage must be one of {', '.join(STAGES)}")
+        m["stage"] = stage
     if incident is not None:
         m["incident_id"] = int(incident)
     if buttons:
@@ -85,10 +95,15 @@ def settle(incident: int, note: str) -> dict:
     return {"incident_id": int(incident), "note": note}
 
 
-def ha_message(incident: int, text: str, context: str | None) -> dict:
+def ha_message(incident: int, text: str, context: str | None, stage: str | None = None) -> dict:
     """Home Assistant's own messages of the automation run `context` (the event's context) become `incident`'s
-    messages, rewritten as `text` — its number and the original alert, like every other message about it."""
-    return {"incident_id": int(incident), "text": text, "context": context}
+    messages, rewritten as `text` under the incident's heading, like every other notice about it (`stage`: STAGES)."""
+    m = {"incident_id": int(incident), "text": text, "context": context}
+    if stage is not None:
+        if stage not in STAGES:
+            raise ValueError(f"stage must be one of {', '.join(STAGES)}")
+        m["stage"] = stage
+    return m
 
 
 def siren(armed: bool, prompt: str | None, to: tuple[str, ...] = ("owner", "fm"), **detail) -> dict:

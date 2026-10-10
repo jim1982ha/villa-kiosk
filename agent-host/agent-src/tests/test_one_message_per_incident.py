@@ -3,12 +3,14 @@ the Telegram channel is not overflowed", each message recalling the original ale
 there and always written the same way — Home Assistant's own alert included. Synthetic villa; ids invented."""
 from __future__ import annotations
 
+import re
+
 import asyncio
 from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from helpers import make_agent
+from helpers import make_agent, body
 from ha_fake import FakeHA, tool
 from telegram_fake import BOT
 from vesta_agent.ha_events import CONTEXT_KEY
@@ -70,20 +72,20 @@ def shown(v, chat):
 def test_home_assistants_alert_takes_the_incidents_number(agent):
     ha_alert(agent)
     (grp,) = shown(agent, GROUP)
-    assert grp.startswith("Incident #1 · New alert\n") and SUMMARY in grp and "What to do:" in grp
+    assert grp.startswith("For: ") and ", Incident: New #1\n" in grp and body(grp).startswith("New alert\n") and SUMMARY in grp and "What to do:" in grp
     (fm,) = shown(agent, FM_CHAT)
-    assert fm.startswith("Incident #1 · New alert\n") and SUMMARY in fm and fm.endswith("Press Done, Not found or Need help.")
+    assert body(fm).startswith("New alert\n") and SUMMARY in fm and "Press Done" not in fm and "Reply Done" not in fm
 
 
 def test_each_chat_keeps_only_the_latest_message_and_it_recalls_the_alert(agent):
     ha_alert(agent)
     tick(agent, 20)                            # the reminder replaces the alert in the FM's chat
     (fm,) = shown(agent, FM_CHAT)
-    assert fm.startswith("Incident #1 · Reminder: no answer after 15 min\n") and SUMMARY in fm and "What to do:" in fm
+    assert body(fm).startswith("Reminder: no answer after 15 min\n") and SUMMARY in fm and "What to do:" in fm
     assert agent.tg.sent[-1][2], "the reminder carries the buttons"
     tick(agent, 50)                            # the escalation replaces Home Assistant's alert in the owner's chat
     (grp,) = shown(agent, GROUP)
-    assert grp.startswith("Incident #1 · No answer from the facility manager after 45 min\n") and SUMMARY in grp
+    assert body(grp).startswith("No answer from the facility manager after 45 min\n") and SUMMARY in grp
     assert (GROUP, 500) in agent.tg.deleted
     assert len(shown(agent, FM_CHAT)) == 1     # the FM's reminder is untouched by the owner's message
 
@@ -96,7 +98,7 @@ def test_an_answer_replaces_the_alert_where_it_was_given(agent):
     run(agent.on_ha_event("telegram_callback", {"id": "cb", "data": f"i:{iid}:done", "chat_id": FM_CHAT, "user_id": FM,
                                                 "message": {"message_id": reminder, "chat": {"id": FM_CHAT}}, "bot": BOT}))
     (fm,) = shown(agent, FM_CHAT)
-    assert fm.startswith("Incident #1 · Closed: done, answered by the facility manager.") and SUMMARY in fm
+    assert body(fm).startswith("Closed: done, answered by the facility manager.") and SUMMARY in fm
 
 
 def test_a_message_past_telegrams_48_hours_becomes_a_pointer(agent):
@@ -138,18 +140,18 @@ def test_need_help_reaches_the_owner_with_the_buttons_to_answer(agent):
                                                 "message": {"message_id": reminder, "chat": {"id": FM_CHAT}}, "bot": BOT}))
     owner = agent.thread.shown(int(iid))[GROUP]
     assert owner["buttons"] and not owner["settled"], owner
-    assert owner["text"].startswith("Incident #1 · The facility manager needs help") and SUMMARY in owner["text"]
+    assert body(owner["text"]).startswith("The facility manager needs help") and SUMMARY in owner["text"]
     assert all(mid != owner["mid"] for _, mid, _ in agent.tg.edits)     # never edited: its buttons are still there
     (fm,) = shown(agent, FM_CHAT)
-    assert fm.startswith("Incident #1 · Need help: the owner has been told")
+    assert body(fm).startswith("Need help: the owner has been told")
 
 
 def test_a_second_close_changes_nothing_and_the_records_are_pruned_with_the_others(agent):
     ha_alert(agent)
     iid = 1
     # the FM's alert and Home Assistant's, taken over WITH the buttons (owner, 2026-10-10: every message of an open alert)
-    assert run(agent.thread.close(iid, "Done — FM, {time}")) == 2
-    assert run(agent.thread.close(iid, "Done — FM, {time}")) == 0
+    assert run(agent.thread.close(iid, "Done pressed by FM on {time}")) == 2
+    assert run(agent.thread.close(iid, "Done pressed by FM on {time}")) == 0
     from datetime import datetime, timedelta, timezone
     soon = (datetime.now(timezone.utc) + timedelta(minutes=1)).isoformat()
     agent.state.prune(runs_before="1970", records_before=soon)
@@ -169,11 +171,17 @@ def test_every_message_of_an_open_alert_has_its_buttons_in_every_chat(agent):
     assert agent.tg.sent[-1][2], "an open alert's message carries its buttons"
 
 
-def test_a_new_message_says_when_the_earlier_ones_were_sent(agent):
-    # owner, 2026-10-10: the earlier message is deleted, so the latest says when the earlier ones came
+def test_every_notice_has_one_heading_with_the_incidents_history(agent):
+    # owner, 2026-10-10: "For: <Name>, Incident: <New/Follow Up> #N", one line per earlier notice (when, to whom), a rule,
+    # then the text — the incident's line, its earlier messages and its footer were three different makings
     from vesta_shared import result as R
-    run(agent.outcome.carry_out({"send": [R.message("fm", "Incident #7 · new", incident=7, buttons=True)]}, "alert-desk"))
-    assert "Earlier messages" not in agent.tg.sent[-1][1]                       # the first says nothing of the kind
-    run(agent.outcome.carry_out({"send": [R.message("fm", "Incident #7 · still there", incident=7, buttons=True)]}, "alert-desk"))
-    last = agent.tg.sent[-1][1]
-    assert last.startswith("Incident #7 · still there\nEarlier messages: ") and last.count(",") >= 1
+    run(agent.outcome.carry_out({"send": [R.message("fm", "Pump stopped", incident=7, buttons=True, stage="new")]}, "alert-desk"))
+    first = agent.tg.sent[-1][1]
+    assert first.startswith("For: ") and ", Incident: New #7\n-------\nPump stopped" in first
+    run(agent.outcome.carry_out({"send": [R.message("owner", "Still stopped", incident=7, buttons=True,
+                                                    stage="escalated")]}, "alert-desk"))
+    later = agent.tg.sent[-1][1]
+    head, text = later.split("\n-------\n")
+    lines = head.split("\n")
+    assert lines[0].endswith(", Incident: Follow Up #7") and text == "Still stopped"
+    assert re.match(r"First time seen on \d\d/\d\d/\d{4} \d\d:\d\d, to .+", lines[1]) and len(lines) == 2

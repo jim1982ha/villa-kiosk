@@ -73,8 +73,8 @@ def incident_tag(iid: int | str) -> str:
     return f"Incident #{iid}"
 
 
-def incident_message(iid: int | str, status: str, details: str = "", ask: str = "") -> str:
-    """An incident's message: "Incident #10 · <where it stands>", then the original alert (`details`), then what
-    to answer (`ask`). The words are the skill's; this is only their order."""
-    head = f"{incident_tag(iid)} · {status.strip()}" if status.strip() else incident_tag(iid)
-    return "\n".join(p for p in (head, (details or "").strip(), (ask or "").strip()) if p)
+def incident_message(status: str, details: str = "") -> str:
+    """The body of a notice about an incident: where it stands, then the original alert (`details`). Its number, who
+    it is for and its earlier notices are the heading the engine writes (vesta_agent/notice.py); what to answer is the
+    buttons under it (owner, 2026-10-10: "never mention any redundant text like Reply Done, Not found or Need help")."""
+    return "\n".join(p for p in (status.strip(), (details or "").strip()) if p)

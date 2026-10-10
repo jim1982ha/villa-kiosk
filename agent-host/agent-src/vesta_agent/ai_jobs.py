@@ -58,7 +58,7 @@ class AiJobs:
         return next(((sk, j) for sk, j in self.all() if j["name"] == name), None)
 
     def _language_of(self, role: str) -> str:
-        for p in self.policy().people.values():
+        for p in self.policy().entries:                # every entry: one person may be both owner and fm
             if p.role == role:
                 return LANG.get(p.language, p.language)
         return "English"

@@ -74,7 +74,7 @@ class Tickets:
             if uid and states.get(uid) == "resolved":
                 iid = problems.closed_in_kiosk(t["id"])
                 if iid:
-                    await self.settle_alert(iid, "Closed in the VESTA Kiosk, {time}.")
+                    await self.settle_alert(iid, "Closed in the VESTA Kiosk on {time}.")
                 closed += 1
             elif problems.source_gone(t):
                 problems.close(t["id"], CLEARED)

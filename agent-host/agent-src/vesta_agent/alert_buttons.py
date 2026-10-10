@@ -40,7 +40,8 @@ class AlertButtons:
         self.state.set_alert_skill(iid, chat, skill_name)
         return {"inline_keyboard": [[{"text": a, "callback_data": button_data.make(button_data.ALERT, iid, b)} for a, b in LADDER]]}
 
-    async def press(self, q: dict, chat: int, parts: list[str], person, toast: Callable[[str], Awaitable]) -> None:
+    async def press(self, q: dict, chat: int, parts: list[str], person, toast: Callable[[str], Awaitable],
+                    name: str | None = None) -> None:
         """Done / Not found / Need help / Mute on an alert (button_data: its incident and option; the presser is a
         registered person): the skill's on_reply decides, answering `here`."""
         iid, opt = parts
@@ -69,17 +70,19 @@ class AlertButtons:
             return await toast("Already answered.")
         self._pressing.add(key)
         try:
-            await self._answer(iid, opt, options[opt], skill, chat, person, toast)
+            await self._answer(iid, opt, options[opt], skill, chat, person, toast, name or person.name)
         finally:
             self._pressing.discard(key)
 
-    async def _answer(self, iid: str, opt: str, label: str, skill, chat: int, person, toast) -> None:
+    async def _answer(self, iid: str, opt: str, label: str, skill, chat: int, person, toast, name: str) -> None:
         await toast(f"{label}: noted.")
         self.state.log("ladder", {"incident": iid, "by": person.name, "reply": label})
         log.info("Button %s on incident #%s pressed by %s", label, iid, person.name)
         # the buttons go, and the message says who did what, when: nobody presses twice,
         # and the chat itself shows the incident was handled
-        await self.thread.close(int(iid), f"{label} — {person.name}, {{time}}")
+        # ⚠️ THE FOOTER (owner, 2026-10-10): "<button> pressed by <Name> on 09/10/2026 17:13", the name as the People list
+        # names this person for the chat's role
+        await self.thread.close(int(iid), f"{label} pressed by {name} on {{time}}")
         if self.run_job:
             await self.run_job(skill, skill.on_reply, 120, {"incident": iid, "text": label, "role": person.role},
                                Origin(chat))

@@ -52,7 +52,7 @@ def jobs(tmp_path, monkeypatch):
     make_skill(s.skills_dir, "rep", {"tools": [], "schedule": [{
         "when": "Mon 08:00", "name": "rep-weekly", "to": "fm", "prompt": "make it", "on_request": True,
         "button": "Weekly report", "without_ai": ["page.py --finish {to} --no-ai {why}"]}]}, {"page.py": "print('{}')\n"})
-    pol = types.SimpleNamespace(jobs={"rep-weekly": {"profile": "economy", "limit_usd": 1}}, people={},
+    pol = types.SimpleNamespace(jobs={"rep-weekly": {"profile": "economy", "limit_usd": 1}}, people={}, entries=[],
                                 chats={"owner": -1, "fm": -2})
     told, steps = [], []
 

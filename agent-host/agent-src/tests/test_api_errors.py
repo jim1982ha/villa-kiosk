@@ -5,7 +5,7 @@ The SDK reports a failure as an AssistantMessage whose `error` is set and whose 
 Each common case is driven through the real runner (a fake SDK client) and the real agent."""
 from __future__ import annotations
 
-from helpers import run_kit, run_terms
+from helpers import run_kit, run_terms, body
 import asyncio
 
 import pytest
@@ -121,7 +121,8 @@ def test_a_person_reads_the_reason_and_the_owner_is_told_once(agent, monkeypatch
     to_fm = [t for c, t, _ in agent.tg.sent if c == FM]
     to_owner = [t for c, t, _ in agent.tg.sent if c == OWNER_CHAT]
     assert to_fm == [api_errors.FOR_PERSON["credit"]] * 2
-    assert to_owner == [api_errors.NEEDS_THE_OWNER["credit"]]          # once, not at every reply
+    assert [body(t) for t in to_owner] == [api_errors.NEEDS_THE_OWNER["credit"]]          # once, not at every reply
+    assert to_owner[0].startswith("For: ")                             # sent on its own: its heading (notice.py)
     assert not any("API Error" in t or "{" in t for _, t, _ in agent.tg.sent)
 
 
@@ -221,8 +222,8 @@ def _report_without_ai(agent, monkeypatch, *, fail=False, stale=False, run_job=T
 def test_a_report_the_ai_cannot_make_is_made_from_its_figures_and_says_why(agent, monkeypatch):
     from vesta_agent import status
     to_fm = _report_without_ai(agent, monkeypatch)
-    assert to_fm == ["287 kWh this week. (Made without the AI: The Anthropic account has run out of credit.)"]
-    assert [t for c, t, _ in agent.tg.sent if c == OWNER_CHAT] == [api_errors.NEEDS_THE_OWNER["credit"]]
+    assert [body(t) for t in to_fm] == ["287 kWh this week. (Made without the AI: The Anthropic account has run out of credit.)"]
+    assert [body(t) for c, t, _ in agent.tg.sent if c == OWNER_CHAT] == [api_errors.NEEDS_THE_OWNER["credit"]]
     (row,) = [r for r in status.costs(agent.state)["runs"] if r.get("without_ai")]
     assert row["work"] == "rep-weekly" and row["cost"] == 0 and row["without_ai"] == {
         "why": "The Anthropic account has run out of credit.", "sent": 1, "failed": None}

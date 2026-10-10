@@ -9,7 +9,7 @@ import os
 import pytest
 import yaml
 
-from helpers import make_agent, make_skill, settings
+from helpers import make_agent, make_skill, settings, body
 from telegram_fake import BOT, FakeTelegram
 from ha_fake import FakeHA, tool
 from kiosk_fake import FakeKiosk
@@ -205,7 +205,7 @@ def test_a_reworded_reminder_keeps_its_buttons_and_an_unarmed_siren_warns_anyway
     assert kb and all(b["callback_data"].startswith("i:42:") for b in kb["inline_keyboard"][0])
     v.tg.sent.clear()
     run(v.outcome.carry_out({"siren_gate": R.siren(True, "Intrusion suspected.", ("fm",))}, "alert-desk"))
-    assert [t for _, t, _ in v.tg.sent] == ["Intrusion suspected."]
+    assert [body(t) for _, t, _ in v.tg.sent] == ["Intrusion suspected."]
 
 
 def test_the_result_builder_refuses_buttons_without_their_incident():

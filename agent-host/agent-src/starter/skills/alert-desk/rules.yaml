@@ -16,7 +16,7 @@ routes:
   - blueprint: critical_binary_trip
     severity: P1
     cooldown_min: 30
-    check: "Go to the device named. If it is water, close the supply valve of that room and photograph the floor. Press Done."
+    check: "Go to the device named. If it is water, close the supply valve of that room and photograph the floor."
   - blueprint: critical_presence_guard
     severity: P1
     cooldown_min: 15
@@ -25,11 +25,11 @@ routes:
   - blueprint: critical_condition
     severity: P2
     cooldown_min: 120
-    check: "Check the door, lock or supply named, put it right, then press Done."
+    check: "Check the door, lock or supply named, put it right."
   - blueprint: critical_watchdog
     severity: P2
     cooldown_min: 240
-    check: "Power and network of the device named. Press Done when it is back."
+    check: "Power and network of the device named, until it is back."
   - blueprint: critical_schedule
     severity: P2
     cooldown_min: 720

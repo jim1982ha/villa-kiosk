@@ -111,3 +111,9 @@ def run_terms(who="x", profile="auto", limit_usd=1.0, tools=()):
     """A run's terms (turn.Terms) for a test that calls runner.run itself."""
     from vesta_agent.turn import Terms
     return Terms(frozenset(tools), profile, float(limit_usd), who)
+
+
+def body(text: str) -> str:
+    """A notice's body: what follows its heading (vesta_agent/notice.py — "For: …", the incident, "-------")."""
+    from vesta_agent.notice import RULE
+    return text.split(f"{RULE}\n", 1)[1] if f"{RULE}\n" in text else text

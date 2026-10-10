@@ -70,7 +70,7 @@ async def camera_photo(reader, entity_id) -> tuple[str, str] | None:
 
 class Outcome:
     def __init__(self, *, policy: Callable, state, send: Callable[..., Awaitable], actions, reader, tickets, buttons,
-                 thread, out_dir: str = ""):
+                 thread, notices=None, out_dir: str = ""):
         self.policy = policy
         self.state = state
         self.send = send                # delivery.Delivery.send — the message id, or None when nothing arrived
@@ -79,6 +79,7 @@ class Outcome:
         self.tickets = tickets          # tickets.Tickets: ticket, ticket.resolve
         self.buttons = buttons          # alert_buttons.AlertButtons: an alert's buttons
         self.thread = thread            # incident_thread.IncidentThread: what each chat shows of an incident
+        self.notices = notices          # notice.Notices: the heading of every message the agent sends on its own
         self.out_dir = out_dir
 
     # ------------------------------------------------------------------ carry out
@@ -99,9 +100,16 @@ class Outcome:
         if gate_prompt and not pol.siren_entity:
             # no siren to ask for: the warning itself goes to the gate's people (it was dropped before, 0.12.80)
             items += [{"to": to, "text": gate_prompt} for to in gate.get("to") or ("owner",)]
+        # one result's messages are ONE notice of its incident: one history line, its chats together (notice.py)
+        noticed: dict[int, tuple[str | None, list[int]]] = {}
+
+        def notice(iid, stage, chat):
+            st, chs = noticed.get(int(iid), (stage, []))
+            noticed[int(iid)] = (st or stage, chs + [chat])
         # Home Assistant's own messages first: the desk's messages below then replace them where both land
         for h in res.get("ha_messages") or []:
-            await self.adopt_ha(h, skill_name)
+            for chat in await self.adopt_ha(h, skill_name):
+                notice(h["incident_id"], h.get("stage"), chat)
         # ⚠️ SETTLED BEFORE THIS RESULT'S MESSAGES ARE POSTED (architecture review 12, 2026-10-09): "Need help" sends the
         # owner a new message with the buttons; settled after it, that message lost them the moment it arrived
         for s in res.get("settle") or []:
@@ -128,8 +136,10 @@ class Outcome:
             # button — the buttons came only where the skill asked for them. Decided here, for every skill's message.
             if skill_name and iid and (item.get("keyboard") or self.buttons.open(iid)):
                 kb = self.buttons.keyboard(iid, chat, skill_name)
-            if iid:
-                text = text + self.thread.earlier(int(iid), chat)
+            # ⚠️ EVERY MESSAGE THE AGENT SENDS ON ITS OWN HAS ITS HEADING (owner, 2026-10-10): who it is for, the incident
+            # and its earlier notices (notice.Notices). An answer to the person who asked, in their chat, has none.
+            if self.notices and not (origin and origin.holds and chat == origin.chat):
+                text = self.notices.compose(chat, text, int(iid) if iid else None)
             doc = None
             att = item.get("attachment")
             if att:
@@ -147,8 +157,12 @@ class Outcome:
             if iid:
                 # the incident's message in this chat now: the earlier one there goes
                 await self.thread.post(int(iid), chat, mid, text, buttons=bool(kb))
+                notice(iid, item.get("stage"), chat)
             chats.add(chat)
             done["sent"] += 1
+        if self.notices:
+            for iid, (stage, chs) in noticed.items():
+                self.notices.record(iid, stage, chs)
         if gate_prompt and pol.siren_entity:
             # its own domain's turn_on (a switch or a siren entity: policy.SIREN_DOMAINS)
             answer, msg = await asyncio.to_thread(self.actions.request, pol.siren_entity.split(".")[0], "turn_on",
@@ -199,11 +213,11 @@ class Outcome:
         return [it for n, it in enumerate(items)
                 if not (it or {}).get("incident_id") or not route.target(it.get("to"), origin) or n in keep]
 
-    async def adopt_ha(self, h: dict, skill_name: str | None = None) -> int:
+    async def adopt_ha(self, h: dict, skill_name: str | None = None) -> list[int]:
         """Home Assistant's messages of one automation run become incident messages (outcome key ha_messages)."""
         ctx, iid, text = (h or {}).get("context"), (h or {}).get("incident_id"), (h or {}).get("text") or ""
         if not (ctx and str(iid or "").isdigit() and text):
-            return 0
+            return []
         found = self.state.ha_sent(ctx)
         for wait in HA_SENT_WAIT_S:
             if found:
@@ -213,7 +227,8 @@ class Outcome:
         for chat, mid in found:
             # Home Assistant's own alert, taken over: the incident's text, the earlier messages' times, its buttons
             kb = self.buttons.keyboard(int(iid), chat, skill_name) if skill_name and self.buttons.open(iid) else None
-            await self.thread.adopt(int(iid), chat, mid, text + self.thread.earlier(int(iid), chat), keyboard=kb)
+            shown = self.notices.compose(chat, text, int(iid)) if self.notices else text
+            await self.thread.adopt(int(iid), chat, mid, shown, keyboard=kb)
         if not found:
             log.info("Incident #%s: no Home Assistant message of its run to take over", iid)
-        return len(found)
+        return [chat for chat, _ in found]
