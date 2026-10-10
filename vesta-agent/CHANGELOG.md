@@ -1,3 +1,8 @@
+## 0.12.133
+
+What you will see:
+- People must list at least one Owner and at least one Facility manager (a person or a group). A save that would leave a role out is refused, and the Rules page says which role is missing: without it, that role's alerts, reminders, escalations and approvals would go nowhere. On a new install, fill People first.
+
 ## 0.12.132
 
 What you will see:

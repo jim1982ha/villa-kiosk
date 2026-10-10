@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.127 (10 October 2026)
+
+- policy.read_policy: a file with a People (or older chats) section names each role with no destination ("at least one Owner is needed…"); the page refuses such a save. A snippet without the section is not checked. The page tests start from a villa set up; the refusal shown red without the rule.
+
 ## 0.6.126 (10 October 2026)
 
 Not found and Mute removed (owner, 2026-10-10: "too complex for now, I want to simplify it"):

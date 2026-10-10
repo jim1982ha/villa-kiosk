@@ -20,6 +20,11 @@ HDR = {"X-Vesta-UI": "1"}
 def ui(tmp_path):
     s = settings(str(tmp_path))                                  # seeds policy.yaml from the starter example
     copy_skill("reports", s.skills_dir)
+    # a villa set up: one Owner and one Facility manager in People (the page refuses a save without them)
+    text = open(s.policy_path, encoding="utf-8").read()
+    with open(s.policy_path, "w", encoding="utf-8") as f:
+        f.write(text.replace("people: []", "people:\n  - {telegram_id: -100, name: Villa group, role: owner}\n"
+                                            "  - {telegram_id: -100, name: Villa group FM, role: fm}", 1))
     return s
 
 
@@ -52,11 +57,15 @@ def test_the_forms_save_keeps_the_files_comments_and_the_agent_reads_it(ui):
         doc = await (await c.get("/api/policy")).json()
         form = doc["form"]
         form["act_enabled"] = True
-        form["people"] = [{"telegram_id": 111, "name": "Owner A", "role": "owner", "language": "en"}]
         form["allowed_services"]["light.turn_on"] = "direct"
+        # owner, 2026-10-10: People needs at least one Owner and one Facility manager — without the latter, refused
+        form["people"] = [{"telegram_id": 111, "name": "Owner A", "role": "owner", "language": "en"}]
+        refused = await c.put("/api/policy/form", json={"form": form, "rev": doc["rev"]}, headers=HDR)
+        form["people"].append({"telegram_id": -100, "name": "Villa group", "role": "fm", "language": "en"})
         r = await c.put("/api/policy/form", json={"form": form, "rev": doc["rev"]}, headers=HDR)
-        return r.status, await r.json()
-    status, body = call(ui, fn)
+        return refused.status, await refused.json(), r.status, await r.json()
+    no_fm, why, status, body = call(ui, fn)
+    assert no_fm == 400 and any("at least one Facility manager" in p for p in why["problems"])
     assert status == 200, body
     text = open(ui.policy_path).read()
     assert "# People, and where the agent posts" in text                 # a comment of the example, kept

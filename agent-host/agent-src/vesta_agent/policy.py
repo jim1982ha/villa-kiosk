@@ -676,6 +676,15 @@ def read_policy(raw: dict) -> tuple[dict, list[str]]:
     for role, cid in legacy_chats(raw).items():
         if (cid, role) not in v["destinations"]:
             v["destinations"].append((cid, role))
+    # ⚠️ EACH ROLE HAS SOMEWHERE TO GO (owner, 2026-10-10: "the People section requires at least 1 entry with Owner role,
+    # and 1 entry with Facility Manager role"): without one, that role's alerts, reminders, escalations and approvals
+    # go nowhere. Named here, the page refuses a save that would leave a role out; the agent still runs meanwhile.
+    # (a file with no People section at all is a part of one — a snippet a test or an import checks — not a villa's file:
+    # every villa's file has the section, the starter's included)
+    for role in ROLES if "people" in raw or "chats" in raw else ():
+        if not any(r == role for _c, r in v["destinations"]):
+            out.append(f"people: at least one {ROLE_WORDS[role]} is needed (a person or a group): "
+                       f"without one, the messages for the {ROLE_WORDS[role].lower()} go nowhere.")
 
     # ---- the device lists (read even when written as text: see above)
     for key, domain in ENTITY_LISTS.items():
