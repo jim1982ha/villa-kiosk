@@ -1,3 +1,12 @@
+## 0.12.145
+
+What you will see:
+- A fault whose device is back to normal now closes by itself in the Cockpit, and its Telegram messages lose their buttons, within about 15 minutes. Before, three kinds stayed open for hours or for good:
+  - an alert whose Home Assistant rule stopped watching after its 30 minutes ("Entrance door unlocked", the door locked later): closed once the door has been locked for 10 minutes, and the message says "Cleared on …: Outdoor entrance Lock is locked again.";
+  - a "device unavailable" alert, which Home Assistant never says is over: closed once the device has been back for 10 minutes;
+  - a device the night check found offline ("shelly integration (3 devices) has been offline"): closed once every device of it has been back for 10 minutes, no longer only at the next night check.
+- An alert about a number (a temperature, a power) still waits for Home Assistant or a person: a changing number cannot say the problem is over.
+
 ## 0.12.144
 
 What you will see (architecture review 21, every point):
