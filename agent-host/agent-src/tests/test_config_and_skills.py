@@ -39,7 +39,7 @@ def test_only_the_key_and_the_mcp_address_block_start(tmp_path):
 def test_policy_and_prompt_seeded_once_and_never_merged(tmp_path):
     s = settings(str(tmp_path))
     pol = yaml.safe_load(open(s.policy_path))
-    assert pol["people"] == [] and pol["chats"] == {} and pol["owner_only_entities"] == []
+    assert pol["people"] == [] and "chats" not in pol and pol["owner_only_entities"] == []
     assert "VESTA Agent" in s.instructions()
     # a person's file is kept exactly, even when it lacks everything the example has
     with open(s.policy_path, "w") as f:

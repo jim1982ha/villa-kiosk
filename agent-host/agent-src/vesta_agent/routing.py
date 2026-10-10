@@ -3,11 +3,13 @@
 1. A reply to a person goes to the chat they wrote in or pressed a button in: `here`. While a person is
    being ANSWERED (a conversation) or a job they ASKED FOR runs, everything goes to their chat, the
    scripts' messages included — whatever a skill's steps name (owner, fm).
-2. A scheduled or alert message goes to its role's chat: `owner` or `fm` (policy.yaml `chats`).
-3. An approval request goes to the chat it was asked from, or to the owner chat when only the
+2. A scheduled or alert message goes to EVERY chat of its role: each chat id the People list names
+   with `owner` or `fm`, a person's or a group's (owner, 2026-10-10; the Chats card's one chat per
+   role is gone).
+3. An approval request goes to the chat it was asked from, or to every owner chat when only the
    owner may approve (or when it was asked from a chat the policy does not know).
-4. When the owner and the facility manager share one chat, a message meant for both is sent
-   once there (Outcome sends each (chat, text) once).
+4. A chat listed with both roles gets a message meant for both once (Outcome sends each (chat,
+   text) once).
 
 Skills say WHO a message is for (`here`, `owner`, `fm`); only this module says WHERE that is — and,
 from the same Origin, what the AI is offered (the destinations of send_message, start_job, the report
@@ -66,30 +68,28 @@ class Routing:
             return ["owner", "fm"]
         return ["here"] if origin.holds else ["here", "owner", "fm"]
 
-    def target(self, to: str | None, origin: Origin | None = None) -> int | None:
-        """Rules 1 and 2. None when there is nowhere to send it (no origin for `here`, an unset role chat)."""
+    def target(self, to: str | None, origin: Origin | None = None) -> list[int]:
+        """Rules 1 and 2: every chat it goes to. [] when there is nowhere to send it (no origin for `here`, nobody of
+        that role in the People list)."""
         if origin and origin.holds and to in TARGETS:
-            return origin.chat
+            return [origin.chat]
         if to == "here":
-            return origin.chat if origin else None
+            return [origin.chat] if origin else []
         if to in ("owner", "fm"):
-            return self.policy.chats.get(to)
-        return None
+            return self.policy.chats_for(to)
+        return []
 
-    def approver_chat(self, required_role: str | None, origin_chat: int | None) -> int | None:
+    def approver_chats(self, required_role: str | None, origin_chat: int | None) -> list[int]:
         """Rule 3: where an Approve / Refuse request is sent."""
-        owner = self.policy.chats.get("owner")
+        owners = self.policy.chats_for("owner")
         if required_role == "owner" or origin_chat is None:
-            return owner
-        known = self.policy.chat_role(origin_chat) is not None or int(origin_chat) in self.policy.people
-        return int(origin_chat) if known else owner
+            return owners
+        known = bool(self.policy.roles_in(origin_chat)) or int(origin_chat) in self.policy.people
+        return [int(origin_chat)] if known else owners
 
     def label(self, chat_id: int) -> str:
         """For the log: which chat this is, never who is in it."""
-        roles = [r for r, c in self.policy.chats.items() if int(c) == int(chat_id)]
-        if roles:
-            return " and ".join(f"{r}" for r in sorted(roles)) + " chat"
-        return "private chat" if int(chat_id) > 0 else "group"
+        return self.policy.chat_label(chat_id)
 
 
 def job_to(job: dict, origin: Origin | None) -> str:

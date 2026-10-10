@@ -43,7 +43,7 @@ from .api_errors import AI_DOWN, FOR_PERSON, NEEDS_THE_OWNER
 from .delivery import Delivery
 from .config import STARTER_DIR
 from .ha_events import CONTEXT_KEY, HaEvents
-from .incident_thread import IncidentThread
+from .incident_thread import IncidentThread, approval_thread
 from vesta_shared.result import FAULTS_CHANGED
 from .housekeeping import tidy
 from .kiosk import Kiosk, KioskError
@@ -211,8 +211,8 @@ class Vesta:
         """`allowed`: what the AI may use this time (turn.Terms.tools); None: everything switched on. `settings`: the
         run's own (config.Settings.in_folder: its files' folder); the agent's without one."""
         return Toolbox(settings=settings or self.s, policy=self.policy(), reader=self.reader, actions=self.actions,
-                       skills=self.skills, send=self.delivery.send, server_tools=self.server_tools, state=self.state,
-                       ticket=self.tickets.create if self.kiosk.enabled else None, notices=self.notices,
+                       skills=self.skills, ask=self.outcome.ask, server_tools=self.server_tools, state=self.state,
+                       ticket=self.tickets.create if self.kiosk.enabled else None,
                        carry_out=self.outcome.carry_out, start_job=self.jobs.start, allowed=allowed)
 
     def lock(self, chat_id: int) -> asyncio.Lock:
@@ -422,8 +422,7 @@ class Vesta:
                     return
             if not text and image is None:
                 return
-            await self.converse(got.chat, got.person, text, chat_role=self.policy().chat_role(got.chat) or "private",
-                                voice=got.voice_file is not None, image=image, held=held)
+            await self.converse(got.chat, got.person, text, voice=got.voice_file is not None, image=image, held=held)
         finally:
             held()
 
@@ -460,15 +459,15 @@ class Vesta:
                 # tenth of the price). The date and time ride on each message instead (runner.run).
                 f"Villa time zone: {self.s.timezone}. The current villa date and time head each message.")
 
-    async def converse(self, cid: int, person: Person | None, text: str, chat_role: str = "private",
+    async def converse(self, cid: int, person: Person | None, text: str,
                        resume: str | None = "auto", is_continue: bool = False, voice: bool = False,
                        image: tuple[str, str] | None = None, held=None):
         """`image`: a photo the person sent (base64, mime), `text` its caption: the AI looks at it. `held`: the chat's
         "typing…" taken when the message arrived (handle_message), carried on until the answer goes."""
         async with self.delivery.typing(cid, held=held) as answered:
-            await self._converse(cid, person, text, chat_role, resume, is_continue, voice, answered, image)
+            await self._converse(cid, person, text, resume, is_continue, voice, answered, image)
 
-    async def _converse(self, cid, person, text, chat_role, resume, is_continue, voice, answered, image=None):
+    async def _converse(self, cid, person, text, resume, is_continue, voice, answered, image=None):
         async with self.lock(cid):
             self.chat_jobs.turn(cid)                         # a job started now belongs to this turn (chat_jobs.py)
             if resume == "auto":
@@ -483,7 +482,7 @@ class Vesta:
                         "a photo (attached: look at it), with no message" if image else
                         "a voice message, as transcribed" if voice else "a message")
                 prompt = (f"{said[0].upper() + said[1:]} from {person.name if person else 'someone'} (role "
-                          f"{person.role if person else '?'}; language saved for them: {lang}) in the {chat_role} chat:\n"
+                          f"{person.role if person else '?'}; language saved for them: {lang}) in the {self.policy().chat_label(cid)}:\n"
                           f"\"\"\"{text}\"\"\"\nAnswer short.")
             if not is_continue:
                 checked = await asyncio.to_thread(self.before_answer)
@@ -572,13 +571,18 @@ class Vesta:
     async def _press_approval(self, p: "Press") -> None:
         aid, yn = p.parts
         ap = self.state.approval(aid)
-        if ap and ap["chat_id"] != p.chat:
+        thread = approval_thread(aid)
+        if ap and ap["chat_id"] != p.chat and p.chat not in self.thread.shown(thread):
             self.state.log("press_refused", {"approval": aid, "by": p.presser, "reason": "button pressed from another chat"})
             return await p.toast("This button belongs to another chat.")
         out = await asyncio.to_thread(self.actions.decide, aid, p.presser, yn == "y")
         await p.toast(out["toast"])
-        if out.get("edit") and p.mid:
-            await self.delivery.edit(p.chat, p.mid, out["edit"])
+        if out.get("note"):
+            if p.mid and p.chat not in self.thread.shown(thread):
+                # a request sent before 0.12.128 has no thread: the pressed message is its one copy
+                await self.thread.post(thread, p.chat, int(p.mid), str(p.msg.get("text") or ""), buttons=True)
+            # every copy of the request, in every chat, says what was decided, by whom and when (Outcome.ask)
+            await self.thread.close(thread, out["note"])
 
     async def _press_continue(self, p: "Press") -> None:
         cont = self.state.use_continuation(p.parts[0], p.chat, p.presser)
@@ -587,8 +591,7 @@ class Vesta:
         if cont.get("not_yours"):
             return await p.toast("Only the person who asked can continue this answer.")
         await p.toast("Continuing.")
-        await self.converse(p.chat, p.person, "", chat_role=self.policy().chat_role(p.chat) or "private",
-                            resume=cont["session_id"], is_continue=True)
+        await self.converse(p.chat, p.person, "", resume=cont["session_id"], is_continue=True)
 
     async def _press_alert(self, p: "Press") -> None:
         # the presser as this chat knows them (one person may be both owner and fm, each with its name)
@@ -613,25 +616,21 @@ class Vesta:
         return self.server_tools
 
     async def _tell_owner_text(self, text: str) -> None:
-        owner = Routing(self.policy()).target("owner")
-        if owner:
-            await self.delivery.send(owner, self.notices.compose(int(owner), text))
+        await self.outcome.carry_out({"send": [{"to": "owner", "text": text}]})
 
     # ------------------------------------------------------------------ scheduled model jobs
-    async def _tell_owner(self, problem: str | None, already_told: int | None) -> None:
+    async def _tell_owner(self, problem: str | None, already_told: list[int]) -> None:
         """No credit, a refused key: every reply and report stops until the owner acts. Told in the owner
         chat at most every 12 hours per kind, and not again in a chat that was just told."""
         text = NEEDS_THE_OWNER.get(problem or "")
-        owner = Routing(self.policy()).target("owner") if text else None
-        if not owner:
+        if not text or not Routing(self.policy()).target("owner"):
             return
         now = datetime.now(timezone.utc)
         last = self.state.owner_told(problem)
         if last and now - datetime.fromisoformat(last) < timedelta(hours=12):
             return
         self.state.mark_owner_told(problem, now.isoformat())
-        if int(owner) != int(already_told or 0):
-            await self.delivery.send(owner, self.notices.compose(int(owner), text))
+        await self.outcome.carry_out({"send": [{"to": "owner", "text": text}]}, skip=already_told)
 
     async def housekeeping(self) -> None:
         if not self.server_tools and _now_local(self.s.timezone).minute % 10 == 0:

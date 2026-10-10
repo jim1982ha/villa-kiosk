@@ -21,7 +21,7 @@ In the sidebar, **VESTA Agent**. It opens on:
   failures, scheduled jobs run. Then **Changes made on these pages** (every
   save, newest first, each with **Undo**), **Copy this setup to another
   villa** and **Import a setup** (below).
-- **Rules** — `policy.yaml` as forms: acting on or off, the people, the chats,
+- **Rules** — `policy.yaml` as forms: acting on or off, the people (and with them where the agent posts),
   what the agent may do and who decides (`any`, `owner`, `listed`, `direct`),
   the protected devices, the allowed lists, **What the AI can use** (below), the
   AI settings. **The file** shows the whole file for everything else. The
@@ -58,8 +58,9 @@ Rules → **What the AI can use**, three tabs, saved in `policy.yaml`:
   one set elsewhere (asking for an action: "What the agent may do"), and the
   ones always on.
 - **Who may use what** (`tool_access.fm`) — what the facility manager may make
-  the AI use, by group. The owner gets everything switched on. In the facility
-  manager's chat, never more than the facility manager's.
+  the AI use, by group. The owner gets everything switched on. In a group listed
+  for the facility manager, never more than the facility manager's; in a private
+  chat, the person's own role.
 
 A report gets only the tools its skill lists (`skill.yaml` `tools:`), among
 those switched on: Rules → The AI shows them per job. A skill that needs a tool
@@ -137,12 +138,17 @@ Acting on the villa is OFF (informs only)
 ```
 
 **Register the people.** In each chat the agent should use (a private chat
-with the bot, the villa group), each person sends `/whoami`; the bot answers
-with their Telegram id and the chat id. Then, on the VESTA Agent page, **Rules**
-(or the file `/addon_configs/<id>_vesta_agent[_dev]/agent/policy.yaml` with
-Studio Code Server): `people` (id, name, role `owner` or `fm`, language) and `chats`
-(`owner`, `fm`: a group id is a negative number). Saved changes apply within
-seconds, no restart. The same file holds the owner-only devices, the allowed
+with the bot, the villa group), send `/whoami`; the bot answers with the
+person's Telegram id and the chat id. Then, on the VESTA Agent page, **Rules ›
+People** (or the file `/addon_configs/<id>_vesta_agent[_dev]/agent/policy.yaml`
+with Studio Code Server): one row per person and role (id, name, role `owner` or
+`fm`, language). **People is also where the agent posts**: a message for a role
+goes to every chat listed with that role, a person's private chat or a group (a
+group's id is negative). Add the group as a row of each role whose messages it
+should get; a person in both roles is two rows with the same id. Every copy of
+a message updates together when someone answers. A person must have sent
+`/start` to the bot once before it can write to them; a chat Telegram refuses is
+named on the **Overview**. Saved changes apply within seconds, no restart. The same file holds the owner-only devices, the allowed
 actions and the agent's settings (AI model, limit per reply, web search).
 
 ## Telegram
@@ -159,7 +165,8 @@ Telegram button.
   own messages, or `/ask …`. Anything else is dropped by its code, unread by
   the AI. (A mention reaches it only while the bot is a group administrator;
   replies and commands always do.)
-- It answers only the chats listed in `policy.yaml`, and never leaves a group.
+- It answers only the chats listed in People, and never leaves a group. In a
+  group not listed yet, it answers only `/whoami`, and only to a listed person.
 - A button press on a Home Assistant message (the gate) is left to Home
   Assistant; the agent handles only the buttons of its own messages.
 - An alert's buttons disappear once one is pressed; the message then says who

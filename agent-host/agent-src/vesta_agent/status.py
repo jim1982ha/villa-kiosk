@@ -27,6 +27,21 @@ FAILURE_KINDS = ("failed", "action_failed", "send_failed", "script_failed", "cod
 ACTION_KINDS = ("executed", "direct")
 
 
+def unreachable(state, policy) -> list[str]:
+    """Each chat of the People list that Telegram refused the agent's last message to, in words: who, what Telegram
+    said, what to do. A chat no longer in People is not named (its row is gone at its next message anyway)."""
+    out = []
+    for chat, rec in sorted(state.unreachable().items()):
+        names = [e.name for e in policy.entries if e.telegram_id == chat]
+        if not names:
+            continue
+        fix = ("they must open a private chat with the bot and send it /start once" if chat > 0 else
+               "add the bot to the group again, or put the group's new id in People (/whoami in the group shows it)")
+        out.append(f"{' / '.join(dict.fromkeys(names))}: Telegram refused the last message ({rec.get('error')}). "
+                   f"To fix: {fix}.")
+    return out
+
+
 def figures(counts: dict[str, int], cost: float) -> list[list]:
     """The period's figures, [label, value] in the order the Overview shows them."""
     n = lambda *kinds: sum(counts.get(k, 0) for k in kinds)  # noqa: E731

@@ -168,13 +168,15 @@ SYSTEM = "system"
 
 def allowed_for(policy: Policy, server_tools: list[dict], role: str | None, chat_id: int | None = None) -> set[str]:
     """What a run may use, from who triggered it alone: everything switched on for the owner and for SYSTEM; the
-    facility manager loses what tool_access.fm refuses — and so does anyone in the facility manager's chat (never
-    more there than the facility manager may use), or a person the policy does not know (role None)."""
+    facility manager loses what tool_access.fm refuses — and so does anyone in a GROUP listed for the facility manager
+    (never more where facility managers read than the facility manager may use), or a person the policy does not know
+    (role None). In a private chat the person's own role decides: the owner who is also listed as facility manager
+    keeps the owner's tools there (before 0.12.128 their private chat, being the facility manager's chat, cut them)."""
     tools = switched_on(policy, server_tools)
     if role == SYSTEM:
         return tools
-    fm_chat = chat_id is not None and policy.chats.get("fm") == chat_id
-    if role != "owner" or fm_chat:
+    fm_group = chat_id is not None and int(chat_id) < 0 and "fm" in policy.roles_in(chat_id)
+    if role != "owner" or fm_group:
         tools = _without_groups(tools, fm_denied(policy))
     return tools
 

@@ -59,7 +59,7 @@ def test_the_forms_save_keeps_the_files_comments_and_the_agent_reads_it(ui):
     status, body = call(ui, fn)
     assert status == 200, body
     text = open(ui.policy_path).read()
-    assert "# Chat ids. A group id is a negative number" in text                 # a comment of the example, kept
+    assert "# People, and where the agent posts" in text                 # a comment of the example, kept
     raw = yaml.safe_load(text)
     assert raw["act_enabled"] is True and raw["allowed_services"]["light.turn_on"] == "direct"
     assert raw["people"][0]["telegram_id"] == 111
@@ -281,7 +281,7 @@ def test_the_costs_tab_reads_every_run_from_the_agents_records(ui):
     # the group says itself that nothing was recorded (the page compared the name, architecture review 9)
     assert {g["name"]: g["recorded"] for g in c["by_model"]}["not recorded"] is False and "g.recorded ?" in page_js()
     reply = next(r for r in c["runs"] if r["person"] == "Ann")
-    assert reply["chat"] == "owner chat" and reply["asked"] == "is the pool ok?" and reply["tokens_in"] == 300
+    assert reply["chat"] == "owner group" and reply["asked"] == "is the pool ok?" and reply["tokens_in"] == 300
     bob = next(r for r in c["runs"] if r["person"] == "Bob")
     assert bob["model"] is None and bob["tokens_in"] is None and bob["chat"] == "private chat"   # recorded before 0.6.9
     assert len(c["by_day"]) == 30 and sum(d["cost"] for d in c["by_day"]) == 1.5

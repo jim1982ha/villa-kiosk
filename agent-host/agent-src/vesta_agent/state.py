@@ -80,6 +80,7 @@ KV_FAMILIES: dict[str, str] = {
     "job:": CURRENT,                # a scheduled job's last slot: the Overview's "last run", one per job
     "siren:": CURRENT,              # when the siren must stop
     "listening_since": CURRENT,     # when the agent's record started (agent_records.listening_since)
+    "unreachable:": CURRENT,        # a chat Telegram refused the last message to (the Overview names it)
 }
 
 
@@ -146,6 +147,17 @@ class State:
     # scheduler.py (and sliced back by status.py, `k[4:]`), saved_by_model: by
     # tools.py — each parsing its own. The stored keys are unchanged, so the
     # records an agent already holds keep working with no migration.
+
+    # A chat Telegram refused the last message to: a person who never opened a private chat with the bot, a group the
+    # bot left or whose id changed. One row per chat, gone at the next message that arrives (delivery.py).
+    def unreachable(self) -> dict[int, dict]:
+        return {int(k.split(":", 1)[1]): json.loads(v) for k, v in self.kv_prefix("unreachable:").items()}
+
+    def set_unreachable(self, chat: int, error: str | None) -> None:
+        if error:
+            self.put(f"unreachable:{int(chat)}", json.dumps({"at": utcnow().isoformat(), "error": error[:300]}))
+        elif self.get(f"unreachable:{int(chat)}") is not None:
+            self.drop(f"unreachable:{int(chat)}")
 
     # When the siren must stop (siren.py): kept here so that a restart still stops it.
     def siren_stop(self) -> str | None:
@@ -336,11 +348,6 @@ class State:
                  requested_by, required_role, int(chat_id), action_hash, json.dumps(action, default=str)))
             self.db.commit()
         return aid
-
-    def set_approval_message(self, aid: str, message_id: int) -> None:
-        with self._lock:
-            self.db.execute("update approvals set message_id=? where id=?", (message_id, aid))
-            self.db.commit()
 
     def approval(self, aid: str) -> dict | None:
         r = self.db.execute("select * from approvals where id=?", (aid,)).fetchone()

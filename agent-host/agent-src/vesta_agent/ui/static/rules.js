@@ -110,16 +110,16 @@ export function rulesForms(doc, jobs = [], tools = null) {
   drawAi();
   const ai = card(place("ai"), "Which brain does each piece of work, the most ONE piece of work may cost (one chat reply, or one run of a job — not a monthly budget), and which tools a report gets: what the person who asks may use (on schedule, everything switched on). A reply that reaches its limit stops and offers Continue; a report that reaches it is still sent with what is done. A job that is not set does not run.",
     table(["Work", "Brain", withInfo("Limit (US$)", limitNote),
-      withInfo(place("tools"), `Every answer and every report gets the tools switched on in ${where("tools")}, by the role of the person who asks: the owner everything, the facility manager (and anyone in their chat) less what ${where("tools")} refuses them. A report on schedule gets everything switched on. A skill's own list limits nothing: the AI works without what a run lacks.`),
+      withInfo(place("tools"), `Every answer and every report gets the tools switched on in ${where("tools")}, by the role of the person who asks: the owner everything, the facility manager (and anyone in a group listed for the facility manager) less what ${where("tools")} refuses them. A report on schedule gets everything switched on. A skill's own list limits nothing: the AI works without what a run lacks.`),
       ""], aiBody, { cls: "ai", widths: ["30%", "22%", "15%", null, "44"] }));
   const missing = jobs.filter((j) => !j.set).map((j) => j.name);      // the agent's answer (server._jobs)
 
   // people
   const languages = (p) => ({ ...doc.languages, ...(p.language && !(p.language in doc.languages) ? { [p.language]: p.language } : {}) });
-  const people = card(W("people"), "Who the agent answers. Each person sends /whoami to the bot to read their Telegram id.",
+  const people = card(W("people"), "Who the agent answers, and where it posts: every message for a role goes to each chat listed with that role — a person's private chat (a positive id) or a group (a negative id). A person listed in both roles is two rows with the same id. /whoami, sent to the bot in a chat, shows that chat's id; a person must have sent /start to the bot once before it can write to them.",
     ...editTable(f.people, {
       cls: "people", add: "Add a person", blank: () => ({ telegram_id: "", name: "", role: "fm", language: "en" }),
-      columns: [{ title: "Name", width: "26%", phone: "a" }, { title: "Telegram id", width: "22%", phone: "b" },
+      columns: [{ title: "Name", width: "26%", phone: "a" }, { title: "Telegram id (person or group)", width: "22%", phone: "b" },
                 { title: "Role", width: "22%", phone: "c" }, { title: "Language", phone: "d" }],
       cell: (p, k, touched) => [
         () => h("input", { type: "text", value: p.name ?? "", "aria-label": "Name", oninput: (e) => { p.name = e.target.value; touched(); } }),
@@ -129,13 +129,6 @@ export function rulesForms(doc, jobs = [], tools = null) {
         () => sel(languages(p), p.language ?? "en", (v) => (p.language = v), "Language"),
       ][k](),
     }));
-
-  // chats
-  const chatId = (role) => h("input", { type: "text", inputmode: "numeric", value: f.chats[role] ?? "", oninput: on((t) => (f.chats[role] = t.value.trim() === "" ? null : (/^-?\d+$/.test(t.value.trim()) ? Number(t.value.trim()) : t.value))) });
-  const chats = card(W("chats"), "Where the agent posts on its own. A group id is negative; /whoami in the chat shows it.",
-    h("div", { class: "grid" },
-      field(W("chats.owner"), chatId("owner"), "Escalations, monthly report, owner-only approvals."),
-      field(W("chats.fm"), chatId("fm"), "Alerts, reminders, daily digest, weekly page.")));
 
   // devices: chosen from the villa's own, by name (owner, 2026-10-01: "free form text inputs are not
   // suitable"). A box like a menu shows what is chosen; it opens a list with a search and a checkbox per
@@ -250,7 +243,7 @@ export function rulesForms(doc, jobs = [], tools = null) {
   const canUse = tools ? toolsCard(f, tools, () => rules("forms")) : null;
   fill($view, doc.problems.length ? problemsBox(doc.problems, "To fix in this file:") : null, probs,
     jobsBanner(missing, () => rules("forms")),
-    inOrder("rules", { acting, people, chats, actions: services, protected: devices, ai, tools: canUse }));   // places.ORDER
+    inOrder("rules", { acting, people, actions: services, protected: devices, ai, tools: canUse }));   // places.ORDER
   if (jumpToTools && canUse) { jumpToTools = false; requestAnimationFrame(() => canUse.scrollIntoView({ block: "start" })); }
 }
 
@@ -328,7 +321,7 @@ export function toolsCard(f, t, reload) {
       }))));
   };
   // what a role changes: the (i) of its tab (owner, 2026-10-08: a paragraph above the table became a tooltip)
-  const ROLES_INFO = `When a person writes, the AI only gets the tools their role allows; in the facility manager's chat, never more than the facility manager's. A tool switched off in ${place("ha_tools")} or ${place("agent_tools")} is off for everyone. Guests: the agent answers only the people in ${where("people")} (owner or facility manager), so a guest gets no answer at all for now.`;
+  const ROLES_INFO = `When a person writes, the AI only gets the tools their role allows; in a group listed for the facility manager, never more than the facility manager's; in a private chat, the person's own role. A tool switched off in ${place("ha_tools")} or ${place("agent_tools")} is off for everyone. Guests: the agent answers only the people in ${where("people")} (owner or facility manager), so a guest gets no answer at all for now.`;
   const roles = () => {
     const fm = f.tool_access.fm;             // group → allowed, as the form says it (policy_doc.to_form)
     return [

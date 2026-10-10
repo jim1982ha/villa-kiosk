@@ -1,3 +1,14 @@
+## 0.12.128
+
+What you will see:
+- People is now the one place that says where the agent posts. The Chats card is gone: a message for the owner goes to every chat listed as Owner in People, and a message for the facility manager to every chat listed as Facility manager, whether it is a person's private chat or a group (a group's id is negative). Add the group as a row with the Owner role and a row with the Facility manager role to have it receive both.
+- Your current Chats card becomes rows of People, named "Owner chat" and "Facility manager chat": open Rules › People, rename them if you wish, add what is missing, and save once. Until then, the agent keeps posting where it did.
+- Every person listed in People now gets their role's messages in their private chat too. Each copy updates when anyone answers, and the "For:" line names the people of the role, never the group.
+- An approval for the owner (Approve / Refuse) now reaches every owner chat; one press updates every copy with who decided and when.
+- If Telegram refuses a message to a chat of People (for example, a person who never sent /start to the bot), the Overview names that chat and says how to fix it.
+- In your own private chat, you now get the owner's tools even if you are also listed as facility manager. In a group listed for the facility manager, nobody gets more than the facility manager.
+- In a group not listed yet, a person of People can send /whoami to read the group's id.
+
 ## 0.12.127
 
 Two safety fixes:

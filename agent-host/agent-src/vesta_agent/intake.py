@@ -77,12 +77,14 @@ def gate(event_type: str, m: dict, policy, bot_username: str | None, is_own_mess
         text = " ".join(str(a) for a in (args or [])).strip()
     else:
         cmd, text = "", (m.get("text") or "").strip()
-    if group and policy.chats and policy.chat_role(cid) is None:
-        return Intake("drop", cid, group=True, why="group not listed in policy.yaml")   # never leaveChat
-    if cmd == "/whoami":
+    # ⚠️ /whoami IS HOW A GROUP GETS INTO PEOPLE (0.12.128): its id is read there before it is listed — by anyone while
+    # People is empty, by a listed person once it is not (a stranger in an unlisted group still gets nothing)
+    if cmd == "/whoami" and (not group or not policy.destinations or policy.roles_in(cid)
+                             or policy.person(m.get("user_id")) is not None):
         return Intake("whoami", cid, group=group)
-    if group and not policy.chats:
-        return Intake("drop", cid, group=True)                # chat ids not filled yet: only /whoami in a group
+    if group and not policy.roles_in(cid):
+        # never leaveChat: the bot is Home Assistant's too
+        return Intake("drop", cid, group=True, why="group not listed in People" if policy.destinations else None)
     person = policy.person(m.get("user_id"))
     if group:
         mention = bool(bot_username) and f"@{bot_username}".lower() in text.lower()
@@ -90,7 +92,7 @@ def gate(event_type: str, m: dict, policy, bot_username: str | None, is_own_mess
             return Intake("drop", cid, group=True)            # people talking to each other
     if person is None:
         return Intake("unregistered", cid, group=group)
-    if not group and policy.chats and int(cid) not in policy.people:
+    if not group and policy.destinations and int(cid) not in policy.people:
         return Intake("drop", cid)
     if cmd == "/new":
         return Intake("new", cid, person, group=group)

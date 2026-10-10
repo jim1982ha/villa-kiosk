@@ -97,19 +97,18 @@ class ChatJobs:
         return True
 
     @contextlib.asynccontextmanager
-    async def held(self, chat: int | None, name: str):
-        """A job that runs on schedule, sending to `chat`: while it runs, the same job asked for there is "already
+    async def held(self, chats: list[int], name: str):
+        """A job that runs on schedule, sending to `chats`: while it runs, the same job asked for in one is "already
         being made", with its start time — one record of what runs, whatever started it (architecture review 14: the
         schedule kept its own, and a report asked for in the facility manager's chat at 08:01 ran a second time
         beside the scheduled one). No waiting message, no "typing…": nobody asked."""
-        key = (int(chat), name) if chat else None
-        mine = key is not None and key not in self._jobs
-        if mine:
+        mine = [k for k in ((int(c), name) for c in chats) if k not in self._jobs]
+        for key in mine:
             self._jobs[key] = {"started": time.time(), "turn": None}
         try:
             yield
         finally:
-            if mine:
+            for key in mine:
                 self._jobs.pop(key, None)
 
     async def result(self, origin: Origin) -> None:

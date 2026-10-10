@@ -181,8 +181,11 @@ class Policy:
         self.jobs: dict[str, dict] = v["jobs"]
         self.keep: dict[str, int] = v["keep"]
         self.people: dict[int, Person] = v["people"]            # by Telegram id: the owner's entry when it has two
-        self.entries: list[Person] = v["entries"]               # every entry, one per id and role
-        self.chats: dict[str, int] = v["chats"]
+        self.entries: list[Person] = v["entries"]               # every entry, one per id and role (a group's included)
+        # ⚠️ WHERE EACH ROLE'S MESSAGES GO IS THE PEOPLE LIST (owner, 2026-10-10: "each message shall be sent to either the
+        # Owner profiles or the Facility Manager profiles"): every chat id listed with a role, a person's or a group's.
+        # The Chats card (one chat per role) is gone; an older file's `chats:` is read as two more of these.
+        self.destinations: list[tuple[int, str]] = v["destinations"]
         self.owner_only: set[str] = v["owner_only"]
         self.excluded: set[str] = v["excluded"]
         self.allowed_services: dict[str, str] = v["allowed_services"]
@@ -211,24 +214,32 @@ class Policy:
             return None
         return self.people.get(int(telegram_id))
 
-    def names_for(self, chat_id: int) -> list[str]:
-        """Who a message to this chat is for: the name of every person of its role(s) (the "For:" of a notice)."""
-        roles = {r for r, c in self.chats.items() if int(c) == int(chat_id)}
-        return list(dict.fromkeys(e.name for e in self.entries if e.role in roles))
+    def chats_for(self, role: str) -> list[int]:
+        """Every chat a message for `role` goes to: each id listed with that role, once, in the list's order."""
+        return list(dict.fromkeys(c for c, r in self.destinations if r == role))
+
+    def roles_in(self, chat_id: int) -> set[str]:
+        """The roles a chat is listed with ({} for a chat the People list does not name)."""
+        return {r for c, r in self.destinations if c == int(chat_id)}
+
+    def names_for(self, roles) -> list[str]:
+        """Who a message for `roles` is for: every PERSON of those roles, as the People list names them (the "For:" of a
+        notice). A group is where they read it, never who it is for."""
+        return list(dict.fromkeys(e.name for e in self.entries if e.role in roles and e.telegram_id > 0))
 
     def name_in(self, telegram_id: int, chat_id: int) -> str | None:
-        """A person's name as this chat knows them: their entry for the chat's role when they have one (Fabien_FM in
-        the facility manager's chat), else their name."""
-        roles = {r for r, c in self.chats.items() if int(c) == int(chat_id)}
+        """A person's name as this chat knows them: their entry for a role the chat is listed with (Fabien_FM in a chat
+        of the facility manager's only), else their name — the owner's entry when they have both."""
+        roles = self.roles_in(chat_id)
         named = [e.name for e in self.entries if e.telegram_id == int(telegram_id) and e.role in roles]
         p = self.person(telegram_id)
-        return named[0] if named else (p.name if p else None)
+        return named[0] if len(set(named)) == 1 else (p.name if p else None)
 
-    def chat_role(self, chat_id: int) -> str | None:
-        for role, cid in self.chats.items():
-            if cid == int(chat_id):
-                return role
-        return None
+    def chat_label(self, chat_id: int) -> str:
+        """Which chat this is, in words, never who is in it: "owner and fm group", "private chat"."""
+        roles = " and ".join(sorted(self.roles_in(chat_id)))
+        kind = "group" if int(chat_id) < 0 else "private chat"
+        return f"{roles} {kind}" if roles else kind
 
     # ------------------------------------------------------------------ layer 2
     def check_service(self, domain: str, service: str, entity_id: Any = None, data: dict | None = None,
@@ -396,9 +407,8 @@ FIELDS: dict[str, tuple[str, bool, str | None]] = {
     "act_enabled": ("The agent may act on the villa", True, None),
     "approval_ttl_minutes": ("Approve buttons work for (minutes)", True, None),
     "people": (title("people"), True, None),
-    "chats": (title("chats"), True, None),
-    "chats.owner": (f"{ROLE_WORDS['owner']} chat", True, None),
-    "chats.fm": (f"{ROLE_WORDS['fm']} chat", True, None),
+    # an older file's one chat per role: read as rows of People, and moved there by the page's next save (policy_doc)
+    "chats": ("Chats (now rows of People)", False, None),
     "allowed_services": (title("actions"), True, "actions"),
     "owner_only_entities": ("Only the owner may approve", True, None),
     "excluded_entities": ("Left alone", True, None),
@@ -457,6 +467,13 @@ def problems(raw: Any) -> list[str]:
     if not isinstance(raw, dict):
         return ["The file must be a set of sections (name: value), not a list or a single value."]
     return read_policy(raw)[1]
+
+
+def legacy_chats(raw: dict) -> dict[str, int]:
+    """An older file's `chats:` section ({owner: id, fm: id}), its readable values only: what it said before People
+    became the one list. Nothing is named wrong in it — the page moves it into People at its next save."""
+    craw = raw.get("chats") if isinstance(raw, dict) else None
+    return {k: _id(craw[k]) for k in ROLES if k in craw and _id(craw[k])} if isinstance(craw, dict) else {}
 
 
 def _one_of(value, choices) -> bool:
@@ -557,7 +574,8 @@ def read_policy(raw: dict) -> tuple[dict, list[str]]:
         if val is not None and not valid:
             out.append(f"{k} must be a whole number from {lo} to {hi}.")
 
-    # ---- people: a person is registered exactly when their id is valid; the first of a repeated id counts
+    # ---- people: a person is registered exactly when their id is valid; the first of a repeated id counts. A GROUP is
+    # listed here too (a negative id): it is where its role's messages go, never a person — nobody writes as a group.
     people: dict[int, Person] = {}
     # ⚠️ ONE PERSON, TWO ROLES (owner, 2026-10-10: "allow a same Telegram ID to be defined both as owner and FM"): an id
     # may be listed once per role, each entry with its own name ("Fabien" the owner, "Fabien_FM" the facility manager).
@@ -573,9 +591,9 @@ def read_policy(raw: dict) -> tuple[dict, list[str]]:
         tid = _id(p.get("telegram_id"))
         who = p.get("name") or f"entry {i}"
         ok = True
-        if tid is None or tid <= 0:
-            out.append(f"people, {who}: telegram_id must be the person's Telegram id (a positive number; "
-                       "/whoami shows it). Until then the agent ignores this person.")
+        if tid is None or tid == 0:
+            out.append(f"people, {who}: telegram_id must be the person's or the group's Telegram id (a group's is "
+                       "negative; /whoami in the chat shows it). Until then the agent ignores this entry.")
             ok = False
         elif any(e.telegram_id == tid and e.role == p.get("role") for e in entries):
             out.append(f"people, {who}: telegram_id {tid} is listed twice as {p.get('role')}.")
@@ -595,26 +613,25 @@ def read_policy(raw: dict) -> tuple[dict, list[str]]:
         if ok:
             person = Person(tid, name or str(tid), p["role"], str(lang or "en"))
             entries.append(person)
-            if tid not in people or person.role == "owner":
+            if tid > 0 and (tid not in people or person.role == "owner"):
                 people[tid] = person
     v["people"] = people
     v["entries"] = entries
-
-    # ---- chats: only the roles; a chat id that is not a number is skipped and named, never a crash
-    chats: dict[str, int] = {}
+    v["destinations"] = [(e.telegram_id, e.role) for e in entries]
+    # an older file's `chats:` (one chat per role, before 0.12.128): still where that role's messages go — a
+    # destination only, never a person, so a private chat named there gains no rights it did not have. Its readable
+    # values say nothing; one that cannot be read is named, as before.
     craw = raw.get("chats")
     if craw is not None and not isinstance(craw, dict):
-        out.append("chats must be owner: <id> and fm: <id>.")
+        out.append("chats must be owner: <id> and fm: <id> (better: rows of People).")
     for k, val in (craw or {}).items() if isinstance(craw, dict) else ():
         if k not in ROLES:
             out.append(f"chats: {k!r} is not a role (owner or fm).")
-            continue
-        cid = _id(val)
-        if cid:
-            chats[k] = cid
-        elif val not in (None, "", 0, "0"):         # 0 = not set yet
+        elif not _id(val) and val not in (None, "", 0, "0"):         # 0 = not set yet
             out.append(f"chats.{k} must be a chat id (a group's is negative; /whoami in the chat shows it).")
-    v["chats"] = chats
+    for role, cid in legacy_chats(raw).items():
+        if (cid, role) not in v["destinations"]:
+            v["destinations"].append((cid, role))
 
     # ---- the device lists (read even when written as text: see above)
     for key, domain in ENTITY_LISTS.items():

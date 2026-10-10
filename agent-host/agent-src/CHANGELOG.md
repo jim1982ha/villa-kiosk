@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.122 (10 October 2026)
+
+People is the one list of where the agent posts (owner, 2026-10-10):
+- policy: a People entry may be a group (a negative id): a destination, never a person. `destinations` (chat, role) — the entries, then an older file's `chats:` (read, a destination only, an unreadable value named); `chats_for(role)`, `roles_in(chat)`, `names_for(roles)` (persons only), `chat_label`. `chats` and `chat_role` gone; FIELDS keeps `chats` read-only.
+- routing.target and approver_chats return every chat; outcome.carry_out expands each message to its chats (`_deliveries`, one per incident and chat), a `skip` for chats already told; the For line follows the message's role (notice `to`).
+- Approvals: actions.Outgoing.chats; Outcome.ask sends each copy and keeps them as one IncidentThread (`approval_thread`); a press closes them all with decide's `note`. Delivery.send has no approval_id.
+- One way out: the send_message tool, a failed job's notice and the owner's warnings go through carry_out; Toolbox takes `ask`, not `send`.
+- tool_access.allowed_for: limited in a GROUP listed for fm; in a private chat the person's role decides.
+- intake: an unlisted group is dropped; /whoami answered there to a listed person.
+- Delivery records a chat Telegram refuses (state `unreachable:`); status.unreachable names it on the Overview.
+- policy_doc: an older file's chats shown as People rows, `chats:` dropped at the next save. The Chats card and place are gone.
+- Tests: test_people_routing (every chat of a role, the approval in every owner chat, the migration, the unreachable chat, the rights per chat, the For line), each shown red without its fix; the tests' stand-in policies replaced by the real Policy.
+
 ## 0.6.121 (10 October 2026)
 
 Architecture review 17, defects A and B:

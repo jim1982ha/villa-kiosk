@@ -14,7 +14,7 @@ import yaml
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 
-from ..policy import DEFAULT_BEHAVIOUR, DEFAULTS, ENTITY_LISTS, form_sections
+from ..policy import DEFAULT_BEHAVIOUR, DEFAULTS, ENTITY_LISTS, ROLE_WORDS, form_sections, legacy_chats
 from ..tool_access import CHOOSE, OWN, ROLE_GROUPS
 
 #: What the forms edit. Everything else (system_actions, notify_recipients...) is edited in the file itself and
@@ -49,13 +49,17 @@ def to_form(text: str) -> dict:
         # save of the Rules form would drop the villa's limits (0.6.41)
         if isinstance(raw["settings"].get("keep"), dict):
             settings["keep"] = raw["settings"]["keep"]
-    chats = raw.get("chats") if isinstance(raw.get("chats"), dict) else {}
+    people = [p for p in (raw.get("people") or []) if isinstance(p, dict)] if isinstance(raw.get("people"), list) else []
+    # ⚠️ AN OLDER FILE'S CHATS BECOME ROWS OF PEOPLE (0.12.128: People is the one list of where messages go): shown
+    # here, and written there by the next save (apply_form drops `chats:`), so no install loses where it posted
+    listed = {(str(p.get("telegram_id")), p.get("role")) for p in people}
+    people += [{"telegram_id": cid, "name": f"{ROLE_WORDS[role]} chat", "role": role, "language": "en"}
+               for role, cid in legacy_chats(raw).items() if (str(cid), role) not in listed]
     return {
         "settings": settings,
         "act_enabled": raw.get("act_enabled", DEFAULTS["act_enabled"]),
         "approval_ttl_minutes": raw.get("approval_ttl_minutes", DEFAULTS["approval_ttl_minutes"]),
-        "people": [p for p in (raw.get("people") or []) if isinstance(p, dict)],
-        "chats": {"owner": chats.get("owner"), "fm": chats.get("fm")},
+        "people": people,
         "allowed_services": dict(raw.get("allowed_services") or {}),
         "siren_entity": raw.get("siren_entity"),
         "siren_auto_off_min": raw.get("siren_auto_off_min", DEFAULTS["siren_auto_off_min"]),
@@ -137,6 +141,8 @@ def apply_form(text: str, form: dict) -> str:
         if key not in doc and form[key] == defaults[key]:
             continue                               # absent and still the default: the file stays as it was
         _set(doc, key, form[key])
+    if "people" in form and "chats" in doc:
+        del doc["chats"]                           # its chats are rows of People now (to_form)
     if web is not None:                            # web search's switch: written in settings, where the agent reads it
         settings = doc.get("settings")
         if (settings or {}).get("web_search", DEFAULT_BEHAVIOUR.get("web_search", False)) != web:

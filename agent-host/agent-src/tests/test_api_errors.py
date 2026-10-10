@@ -234,7 +234,8 @@ def test_a_report_the_ai_cannot_make_is_made_from_its_figures_and_says_why(agent
 
 def test_a_step_that_fails_stops_the_report_and_an_old_file_never_stands_in(agent, monkeypatch):
     to_fm = _report_without_ai(agent, monkeypatch, fail=True, stale=True)
-    assert to_fm == [api_errors.for_job("rep-weekly", "credit")]      # not "999 kWh": last week's figures
+    # not "999 kWh": last week's figures; sent on its own, so under its heading (notice.py) as every such message
+    assert [body(t) for t in to_fm] == [api_errors.for_job("rep-weekly", "credit")] and to_fm[0].startswith("For: ")
     from vesta_agent import status
     (row,) = [r for r in status.costs(agent.state)["runs"] if r.get("without_ai")]
     assert row["without_ai"]["sent"] == 0 and row["without_ai"]["failed"] == "week.py"

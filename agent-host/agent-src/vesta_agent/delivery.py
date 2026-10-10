@@ -95,8 +95,7 @@ class Delivery:
         self._waiting: dict[int, dict] = {}   # chat → its one "typing…" loop and what holds it (hold)
 
     # ------------------------------------------------------------------ one message
-    async def send(self, chat_id: int, text: str, *, keyboard: dict | None = None, approval_id: str | None = None,
-                   document: str | None = None, photo: Photo | None = None, origin: Origin | None = None) -> int | None:
+    async def send(self, chat_id: int, text: str, *, keyboard: dict | None = None, document: str | None = None, photo: Photo | None = None, origin: Origin | None = None) -> int | None:
         """The message's id, or None: nothing arrived. `origin`: on whose behalf — a job asked for in a chat
         (kind JOB) makes this its result, which replaces the chat's "being prepared" message."""
         if self.tg is None:
@@ -111,6 +110,9 @@ class Delivery:
             log.warning("send failed%s: %s", f" after {len(ids)} part(s) arrived" if ids else "", e)
             self.state.log("send_failed", {"chat": chat_id, "error": str(e), "parts_arrived": len(ids)})
             if not ids:
+                # ⚠️ NAMED ON THE OVERVIEW (owner, 2026-10-10): with every chat of a role in People, a person who never
+                # sent /start to the bot silently missed every message meant for them
+                self.state.set_unreachable(chat_id, str(e))
                 return None
             # ⚠️ PARTLY ARRIVED IS NOT "NOTHING ARRIVED" (architecture review 15): a reply whose picture and first part
             # arrived was sent again whole, with "the picture could not be sent" — the person read it twice
@@ -121,10 +123,9 @@ class Delivery:
         mid = ids[-1] if ids else None
         if not mid:
             return None
+        self.state.set_unreachable(chat_id, None)
         log.info("Sent to chat %s (%s)%s%s%s", chat_id, Routing(self.policy()).label(chat_id),
                  " with buttons" if keyboard else "", " and a file" if document else "", " and a photo" if photo else "")
-        if approval_id:
-            self.state.set_approval_message(approval_id, mid)
         if origin is not None and origin.kind == JOB and self.on_job_result:
             await self.on_job_result(origin)                    # its waiting message goes, its "typing…" stops
         return mid

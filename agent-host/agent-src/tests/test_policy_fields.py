@@ -22,7 +22,7 @@ def test_the_page_writes_none_of_the_settings_names_itself():
     # where the page said "(USD)" and "Approve buttons work for" — each kept its own copy
     js = page_js()
     rendered = ("act_enabled", "approval_ttl_minutes", "settings.reply_limit_usd", "settings.conversation_reset",
-                "chats.owner", "chats.fm", "owner_only_entities", "excluded_entities", "siren_entity", "siren_auto_off_min")
+                "owner_only_entities", "excluded_entities", "siren_entity", "siren_auto_off_min")
     for path in rendered:
         assert f'"{policy.WORDS[path]}"' not in js, path
     assert "Every day at 04:00" not in js and policy.form_schema()["resets"] == policy.RESET_WORDS

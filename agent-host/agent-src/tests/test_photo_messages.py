@@ -26,15 +26,10 @@ def photo_event(chat, user, caption=None, mime="image/jpeg", reply_to=None):
     return e
 
 
-class _Policy:
-    chats = {"owner": GROUP}
-    people = {OWNER: object()}
-
-    def chat_role(self, cid):
-        return "owner" if cid == GROUP else None
-
-    def person(self, uid):
-        return object() if uid == OWNER else None
+def _Policy():
+    from vesta_agent.policy import Policy
+    return Policy({"people": [{"telegram_id": OWNER, "name": "Owner", "role": "owner"},
+                              {"telegram_id": GROUP, "name": "Group", "role": "owner"}]})
 
 
 def gate(e):

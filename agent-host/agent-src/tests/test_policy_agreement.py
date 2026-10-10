@@ -20,16 +20,19 @@ def test_acting_is_on_only_for_a_real_true(value):
 
 @pytest.mark.parametrize("value", ["@villa", "group", "1.5", [], {"x": 1}])
 def test_a_chat_id_that_is_not_a_number_is_skipped_and_named_never_a_crash(value):
-    p = Policy({"chats": {"owner": value, "fm": -100123}})
-    assert "owner" not in p.chats and p.chats["fm"] == -100123
+    p = Policy({"chats": {"owner": value, "fm": -100123}})      # an older file's chats: still read (0.12.128)
+    assert p.chats_for("owner") == [] and p.chats_for("fm") == [-100123]
     assert any("chats.owner" in x for x in problems({"chats": {"owner": value}}))
 
 
-@pytest.mark.parametrize("tid,registered", [(-5, False), (0, False), ("abc", False), ("42", True), (42, True)])
-def test_a_person_is_registered_exactly_when_the_page_accepts_their_id(tid, registered):
+@pytest.mark.parametrize("tid,registered,flagged", [(-5, False, False), (0, False, True), ("abc", False, True),
+                                                     ("42", True, False), (42, True, False)])
+def test_a_person_is_registered_exactly_when_the_page_accepts_their_id(tid, registered, flagged):
+    # a negative id is a GROUP (0.12.128): where its role's messages go, never a person who may write or approve
     raw = {"people": [{"telegram_id": tid, "name": "X", "role": "fm"}]}
-    flagged = any("telegram_id" in x for x in problems(raw))
-    assert (len(Policy(raw).people) == 1) is registered and flagged is (not registered)
+    assert (len(Policy(raw).people) == 1) is registered
+    assert any("telegram_id" in x for x in problems(raw)) is flagged
+    assert Policy(raw).chats_for("fm") == ([int(tid)] if not flagged else [])
 
 
 @pytest.mark.parametrize("key,lo,hi", [("approval_ttl_minutes", 1, 1440), ("siren_auto_off_min", 1, 60)])
@@ -91,7 +94,7 @@ def test_the_agent_reads_no_more_than_the_page_accepts():
                                       "b": {"profile": "economy", "limit_usd": 1, "x": 1}}},
                 "people": [{"telegram_id": 7, "name": "A", "role": "fm"}, {"telegram_id": 7, "name": "B", "role": "owner"}],
                 "allowed_services": {"light.turn_on": "any", "homeassistant.restart": "owner", "lock.lock": "maybe"}})
-    assert p.chats == {"owner": -1} and p.tool_access == {} and p.jobs == {}
+    assert p.destinations == [(7, "fm"), (7, "owner"), (-1, "owner")] and p.tool_access == {} and p.jobs == {}
     # one id in two roles (owner, 2026-10-10): recognised as the owner, each role's entry kept with its name
     assert p.people[7].name == "B" and [(e.name, e.role) for e in p.entries] == [("A", "fm"), ("B", "owner")]
     assert p.allowed_services == {"light.turn_on": "any"}                   # a refused line is not offered
@@ -114,11 +117,15 @@ def test_one_person_in_both_roles_is_named_as_each_chat_knows_them():
     # owner, 2026-10-10: Fabien is the owner and, as Fabien_FM, a facility manager — the same Telegram id twice
     p = Policy({"people": [{"telegram_id": 1, "name": "Jean-Marie", "role": "fm"},
                            {"telegram_id": 2, "name": "Fabien", "role": "owner"},
-                           {"telegram_id": 2, "name": "Fabien_FM", "role": "fm"}],
-                "chats": {"owner": -5, "fm": 1}})
-    assert p.person(2).role == "owner"                                     # the wider rights
-    assert p.names_for(1) == ["Jean-Marie", "Fabien_FM"] and p.names_for(-5) == ["Fabien"]   # "For:" of a notice
+                           {"telegram_id": 2, "name": "Fabien_FM", "role": "fm"},
+                           {"telegram_id": -5, "name": "Group_O", "role": "owner"}]})
+    assert p.person(2).role == "owner" and p.person(-5) is None             # the wider rights; a group is nobody
+    # "For:" of a notice: the persons of its role, never the group they read it in
+    assert p.names_for({"fm"}) == ["Jean-Marie", "Fabien_FM"] and p.names_for({"owner"}) == ["Fabien"]
     assert p.name_in(2, 1) == "Fabien_FM" and p.name_in(2, -5) == "Fabien"                    # a press's footer
+    # where each role's messages go: every chat listed with it (owner, 2026-10-10)
+    assert p.chats_for("owner") == [2, -5] and p.chats_for("fm") == [1, 2]
+    assert p.roles_in(2) == {"owner", "fm"} and p.chat_label(-5) == "owner group" and p.chat_label(9) == "private chat"
     twice = Policy({"people": [{"telegram_id": 2, "name": "A", "role": "fm"}, {"telegram_id": 2, "name": "B", "role": "fm"}]})
     assert [e.name for e in twice.entries] == ["A"]                         # twice in ONE role: still refused
 

@@ -78,7 +78,7 @@ def job_terms(policy, server_tools: list[dict], name: str, cfg: dict, origin: Or
 class Turns:
     def __init__(self, settings, state, policy: Callable, *, server_tools: Callable[[], Awaitable[list]],
                  toolbox: Callable, system_prompt: Callable[[], str],
-                 tell_owner: Callable[[str | None, int | None], Awaitable[None]],
+                 tell_owner: Callable[[str | None, list[int]], Awaitable[None]],
                  safe: Callable[[Awaitable], Awaitable[None]]):
         self.s, self.state, self.policy = settings, state, policy
         self.server_tools, self.toolbox, self.system_prompt = server_tools, toolbox, system_prompt
@@ -90,16 +90,16 @@ class Turns:
         (app.lock), and a Continue reads what the turn before it saved."""
         terms = chat_terms(self.s, self.policy(), await self.server_tools(), person, chat)
         return await self._run(terms, self.s.in_folder(f"chats/{chat}"), prompt, person, Origin(chat, CONVERSATION),
-                               resume, asked, chat, image)
+                               resume, asked, [chat], image)
 
     async def job(self, name: str, cfg: dict, prompt: str, origin: Origin | None, run_settings,
-                  told_chat: int | None) -> TurnResult:
-        """A skill's AI job, in `run_settings`' folder (the one its code steps use after it). `told_chat`: where its
-        result goes, so the owner is not told twice in the same chat."""
+                  told: list[int]) -> TurnResult:
+        """A skill's AI job, in `run_settings`' folder (the one its code steps use after it). `told`: the chats its
+        result goes to, so the owner is not told twice in the same chat."""
         terms = job_terms(self.policy(), await self.server_tools(), name, cfg, origin)
-        return await self._run(terms, run_settings, prompt, None, origin, None, None, told_chat)
+        return await self._run(terms, run_settings, prompt, None, origin, None, None, told)
 
-    async def _run(self, terms: Terms, run_settings, prompt, person, origin, resume, asked, told_chat,
+    async def _run(self, terms: Terms, run_settings, prompt, person, origin, resume, asked, told: list[int],
                    image=None) -> TurnResult:
         tb = self.toolbox(set(terms.tools), run_settings)
         kit = tb.for_run(person, origin)
@@ -109,5 +109,5 @@ class Turns:
                          list(tb.photos), terms.limit_usd)
         if out.problem:
             # no credit, a refused key: every reply and report stops until the owner acts (app._tell_owner decides)
-            await self._safe(self.tell_owner(out.problem, told_chat))
+            await self._safe(self.tell_owner(out.problem, told))
         return out

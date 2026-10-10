@@ -175,18 +175,20 @@ class UI:
     # ------------------------------------------------------------------ overview
     async def overview(self, _request):
         pol = rules_problems(_read(self.s.policy_path).decode("utf-8", "replace"))
-        report = None
+        report, unreachable = None, []
         if os.path.exists(self.s.state_path):
             try:
                 from ..scheduler import job_label
                 skills = self.skills.all()
-                report = status.report(State(self.s.state_path), self.s.store_path, 24,
-                                       label=lambda k: job_label(k, skills))
+                st = State(self.s.state_path)
+                unreachable = status.unreachable(st, page_policy(self.s.policy_path))
+                report = status.report(st, self.s.store_path, 24, label=lambda k: job_label(k, skills))
             except Exception as e:  # noqa: BLE001 — the overview shows what it can
                 log.warning("UI: the agent's records could not be read (%s)", type(e).__name__)
         return web.json_response({"version": __version__, "app_version": os.environ.get("VESTA_APP_VERSION", ""),
                                   "instance": self.s.instance,
                                   "policy_problems": pol, "skills": self._skill_rows(), "last_24h": report,
+                                  "unreachable": unreachable,
                                   "jobs_not_set": [j["name"] for j in self._jobs() if not j["set"]],
                                   "setup": setup_copy.offer()})
 

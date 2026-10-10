@@ -32,7 +32,6 @@ PLACES: dict[str, tuple[str, str]] = {
     "acting": ("Acting on the villa", "Rules"),
     "ai": ("AI brains and limits", "Rules"),
     "people": ("People", "Rules"),
-    "chats": ("Chats", "Rules"),
     "actions": ("Allowed actions", "Rules"),
     "protected": ("Protected devices", "Rules"),
     "tools": ("AI tools", "Rules"),
@@ -64,7 +63,7 @@ assert all(place.split(" › ")[0] in TABS.values() for _, place in PLACES.value
 #: the order of a tab's sections, top to bottom, by place key (architecture review 9: the order was a line of code,
 #: and every "move X below Y" edited it and the test that quoted it). The page draws its sections in this order.
 ORDER = {
-    "rules": ["acting", "people", "chats", "actions", "protected", "ai", "tools"],   # AI tools below AI brains (owner, 2026-10-08)
+    "rules": ["acting", "people", "actions", "protected", "ai", "tools"],   # AI tools below AI brains (owner, 2026-10-08)
 }
 assert all(k in PLACES for keys in ORDER.values() for k in keys), "an ordered section with no place"
 

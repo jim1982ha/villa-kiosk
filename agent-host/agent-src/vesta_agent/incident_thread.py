@@ -22,6 +22,12 @@ from vesta_shared.messaging import TELEGRAM_LIMIT, incident_tag, tg_len
 from .delivery import fit
 from .notice import when
 
+def approval_thread(approval_id: str) -> str:
+    """The thread of an approval request: its copies in every chat it was sent to, settled together by a press, as an
+    incident's are (owner, 2026-10-10: one mechanism for every message that has copies in several chats)."""
+    return f"approval-{approval_id}"
+
+
 Edit = Callable[..., Awaitable]     # (chat, message id, text[, keyboard])
 Delete = Callable[[int, int], Awaitable]
 
@@ -33,7 +39,7 @@ class IncidentThread:
         self.edit = edit                # Telegram's edit (its buttons go); None while Telegram is off
         self.delete = delete            # Telegram's deleteMessage: True when the message is gone
 
-    async def post(self, iid: int, chat: int, mid: int, text: str, *, buttons: bool = False) -> None:
+    async def post(self, iid: int | str, chat: int, mid: int, text: str, *, buttons: bool = False) -> None:
         """Message `mid`, just sent to `chat`, is now incident `iid`'s message there: the earlier one goes."""
         old = self.state.incident_message(iid, chat)
         if old and old["mid"] != mid:
@@ -51,7 +57,7 @@ class IncidentThread:
             await self.edit(chat, mid, text, keyboard) if keyboard else await self.edit(chat, mid, text)
         await self.post(iid, chat, mid, text, buttons=bool(keyboard))
 
-    async def close(self, iid: int, note: str) -> int:
+    async def close(self, iid: int | str, note: str) -> int:
         """Every message of incident `iid` still showing its buttons, in every chat, loses them and shows `note` (who
         did what, when; "{time}": the villa's time now). Returns how many. Settled once: a second close changes nothing.
 
@@ -71,6 +77,6 @@ class IncidentThread:
             self.state.set_incident_message(iid, chat, {**rec, "text": text, "settled": True})
         return n
 
-    def shown(self, iid: int) -> dict[int, dict]:
+    def shown(self, iid: int | str) -> dict[int, dict]:
         """What each chat shows of incident `iid`: {chat: {mid, text, buttons, settled}}."""
         return dict(self.state.incident_chats(iid))

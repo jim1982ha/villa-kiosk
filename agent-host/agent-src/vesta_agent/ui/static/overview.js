@@ -17,6 +17,8 @@ export async function overview() {
     jobsBanner(o.jobs_not_set, () => go("overview")),
     // the Rules and Skills tabs are one click away: only what is wrong with them is shown here
     o.policy_problems.length ? problemsBox(o.policy_problems, "Rules — to fix:") : null,
+    // a chat of People that Telegram refused the last message to (status.unreachable: the words are the agent's)
+    o.unreachable.length ? problemsBox(o.unreachable, `${plural(o.unreachable.length, "chat", "chats")} of ${where("people")} not reached:`) : null,
     off.length ? problemsBox(off.map((s) => `${s.name}: ${s.problem}`), `${plural(off.length, "skill", "skills")} not working:`) : null,
   ];
   if (r) {

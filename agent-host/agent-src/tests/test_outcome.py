@@ -125,26 +125,34 @@ def test_one_occasion_answers_every_routing_question():
     # architecture review, 2026-10-01: "who is asking" read in one place — what the AI is offered, where
     # each message lands, whether it may start a job — as a table, without building any tool
     from vesta_agent.routing import JOB, PRESS
-    r = Routing(Policy({"chats": {"owner": GROUP, "fm": FM_PRIVATE}}))
+    r = Routing(Policy({"people": [{"telegram_id": GROUP, "name": "Group", "role": "owner"},
+                                   {"telegram_id": FM_PRIVATE, "name": "FM", "role": "fm"}]}))
     scheduled, talk, job, press = None, Origin(ASKER, CONVERSATION), Origin(ASKER, JOB), Origin(ASKER, PRESS)
     assert [Routing.offered(o) for o in (scheduled, talk, job, press)] == [
         ["owner", "fm"], ["here"], ["here"], ["here", "owner", "fm"]]
-    assert [r.target("fm", o) for o in (scheduled, talk, job, press)] == [FM_PRIVATE, ASKER, ASKER, FM_PRIVATE]
-    assert [r.target("owner", o) for o in (scheduled, talk, press)] == [GROUP, ASKER, GROUP]   # a button may escalate
+    assert [r.target("fm", o) for o in (scheduled, talk, job, press)] == [[FM_PRIVATE], [ASKER], [ASKER], [FM_PRIVATE]]
+    assert [r.target("owner", o) for o in (scheduled, talk, press)] == [[GROUP], [ASKER], [GROUP]]   # a button may escalate
     assert talk.is_conversation and not job.is_conversation and not press.is_conversation
 
 
 def test_the_routing_rule():
-    pol = Policy({"people": [{"telegram_id": ASKER, "name": "A", "role": "fm"}],
-                  "chats": {"owner": GROUP, "fm": FM_PRIVATE}})
+    # owner, 2026-10-10: a role's messages go to EVERY chat the People list names with it, a person's or a group's
+    OWNER = 444
+    pol = Policy({"people": [{"telegram_id": ASKER, "name": "A", "role": "fm"},
+                             {"telegram_id": OWNER, "name": "O", "role": "owner"},
+                             {"telegram_id": GROUP, "name": "Group_O", "role": "owner"},
+                             {"telegram_id": FM_PRIVATE, "name": "F", "role": "fm"},
+                             {"telegram_id": GROUP, "name": "Group_FM", "role": "fm"}]})
     r = Routing(pol)
-    assert r.target("here", Origin(ASKER)) == ASKER                        # 1. a reply: where they wrote
-    assert r.target("here") is None                                        #    no one asked: nowhere
-    assert (r.target("owner"), r.target("fm")) == (GROUP, FM_PRIVATE)      # 2. scheduled / alert: the role's chat
-    assert r.target("fm", Origin(ASKER)) == FM_PRIVATE                     #    whoever is being answered
-    assert r.approver_chat("owner", ASKER) == GROUP                        # 3. owner only: the owner chat
-    assert r.approver_chat("any", ASKER) == ASKER                          #    otherwise where it was asked
-    assert r.approver_chat("any", -999) == GROUP                           #    an unknown chat: the owner chat
+    assert r.target("here", Origin(ASKER)) == [ASKER]                      # 1. a reply: where they wrote
+    assert r.target("here") == []                                          #    no one asked: nowhere
+    assert r.target("owner") == [OWNER, GROUP]                             # 2. scheduled / alert: every chat of the role
+    assert r.target("fm") == [ASKER, FM_PRIVATE, GROUP]
+    assert r.target("fm", Origin(ASKER)) == [ASKER, FM_PRIVATE, GROUP]     #    whoever is being answered
+    assert r.approver_chats("owner", ASKER) == [OWNER, GROUP]              # 3. owner only: every owner chat
+    assert r.approver_chats("any", ASKER) == [ASKER]                       #    otherwise where it was asked
+    assert r.approver_chats("any", -999) == [OWNER, GROUP]                 #    an unknown chat: the owner chats
+    assert Routing(Policy({})).target("owner") == []                       #    nobody of the role: nowhere
 
 
 def test_a_message_for_both_roles_sharing_one_chat_is_sent_once(agent):
@@ -203,11 +211,12 @@ def test_a_reworded_reminder_keeps_its_buttons_and_an_unarmed_siren_warns_anyway
     v, _ = agent
     run(v.outcome.carry_out({"send": [R.message("fm", "Reminder: the door. Answer below.", incident=42, buttons=True)]},
                             "alert-desk"))
-    (_, text, kb), = v.tg.sent
-    assert kb and all(b["callback_data"].startswith("i:42:") for b in kb["inline_keyboard"][0])
+    assert [c for c, _, _ in v.tg.sent] == [ASKER, FM_PRIVATE]                  # every chat of the role
+    assert all(kb and all(b["callback_data"].startswith("i:42:") for b in kb["inline_keyboard"][0])
+               for _, _, kb in v.tg.sent)
     v.tg.sent.clear()
     run(v.outcome.carry_out({"siren_gate": R.siren(True, "Intrusion suspected.", ("fm",))}, "alert-desk"))
-    assert [body(t) for _, t, _ in v.tg.sent] == ["Intrusion suspected."]
+    assert [body(t) for _, t, _ in v.tg.sent] == ["Intrusion suspected."] * 2
 
 
 def test_the_result_builder_refuses_buttons_without_their_incident():

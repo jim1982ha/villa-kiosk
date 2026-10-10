@@ -233,6 +233,11 @@ Decisions of 2026-09-30 (owner):
   and its on_limit / without_ai steps share out/runs/NAME-TIME, a chat out/chats/ID). One "running" record:
   `ChatJobs.held` registers a scheduled job where it sends. A job name two skills declare: the second is switched
   off. The tests' FakeAI acts through the run's own tools (`run_["call"]`), refused like the real guard.
+- People is the one list of where the agent posts (owner, 2026-10-10, 0.12.128): a message for a role goes to every
+  chat listed with it (`Policy.chats_for`; a group is a negative id, a destination and never a person). The Chats card
+  is gone; an older `chats:` is still read and moved into People by the page's next save. Every message leaves through
+  `outcome.carry_out` (the AI's send_message too), every approval through `Outcome.ask` (copies kept as one
+  IncidentThread, settled together). Rights per chat: a private chat is the person's role, a group listed for fm is fm.
 - No PDF (owner, 2026-09-30): the reports are self-contained HTML pages sent
   as attachments. Chromium was ~480 MB of a 1.1 GB image for this alone.
 - ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent

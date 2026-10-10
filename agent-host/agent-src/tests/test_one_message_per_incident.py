@@ -116,11 +116,12 @@ def test_the_owner_and_the_fm_in_one_chat_get_one_message_with_the_buttons(agent
                     R.message("owner", "Incident #9 · New alert\nx", incident=9)], "incident_id": 9}
     from vesta_agent.routing import Routing
     route = Routing(agent.policy())
-    kept = agent.outcome._one_per_incident(res["send"], route, None)
-    assert [m.get("keyboard") for m in kept] == [None, True, None]          # different chats: all three kept
-    route.target = lambda to, origin=None: GROUP                            # the owner and the FM share the group
-    kept = agent.outcome._one_per_incident(res["send"], route, None)
-    assert [m.get("keyboard") for m in kept if m.get("incident_id")] == [True]
+    route.target = lambda to, origin=None: {"owner": [GROUP], "fm": [FM_CHAT]}[to]
+    kept, _ = agent.outcome._deliveries(res["send"], route, None)
+    assert [m.get("keyboard") for _, m in kept] == [None, True, None]       # different chats: all three kept
+    route.target = lambda to, origin=None: [GROUP]                          # the owner and the FM share the group
+    kept, _ = agent.outcome._deliveries(res["send"], route, None)
+    assert [m.get("keyboard") for _, m in kept if m.get("incident_id")] == [True]
 
 
 def test_home_assistants_messages_of_another_run_are_never_taken(agent):

@@ -104,21 +104,22 @@ class Kit(NamedTuple):
 
 class Toolbox:
     def __init__(self, *, settings, policy: Policy, reader, actions, skills: Skills,
-                 send: Callable[..., Awaitable[Any]], server_tools: list[dict], state,
+                 ask: Callable[..., Awaitable[int]], server_tools: list[dict], state,
                  ticket: Callable[..., Awaitable[str]] | None = None,
                  carry_out: Callable[..., Awaitable[dict]] | None = None,
                  start_job: Callable[..., Awaitable[str]] | None = None,
-                 allowed: set[str] | None = None, notices=None):
+                 allowed: set[str] | None = None):
         self.s = settings
         self.policy = policy
         self.reader = reader
         self.actions = actions
         self.skills = skills
-        self.send = send
+        # ⚠️ ONE WAY OUT (owner, 2026-10-10: each message to every chat of its role): an approval request goes through
+        # Outcome.ask, a message through Outcome.carry_out — never a send of this class's own
+        self.ask = ask
         self.ticket = ticket
         self.carry_out = carry_out
         self.start_job = start_job
-        self.notices = notices          # notice.Notices: the heading of a message the AI sends on its own (scheduled)
         self.server_tools = {t["name"]: t for t in server_tools}
         self.state = state
         self.parts = Parts()
@@ -251,7 +252,7 @@ class Toolbox:
         async def handler(args: dict) -> dict:
             answer, msg = await asyncio.to_thread(self.actions.request, args.get("domain", ""), args.get("service", ""),
                                                   args.get("entity_id"), args.get("data") or {}, person, chat_id)
-            if msg and not await self.send(msg.chat_id, msg.text, keyboard=msg.keyboard, approval_id=msg.approval_id):
+            if msg and not await self.ask(msg):
                 answer += " But the request with its Approve button could not be delivered in Telegram: nobody has it."
             return _ok(answer)
         return handler
@@ -454,26 +455,23 @@ class Toolbox:
                     "person you are answering, or the chat this job was asked for in. Nothing goes to another chat. "
                     "A plain answer needs no tool: your reply is sent for you.")
         else:
-            desc = ("Send a message, with a file attached if needed. to=owner / to=fm: the configured owner or "
-                    "facility manager chat, for scheduled reports and digests.")
+            desc = ("Send a message, with a file attached if needed. to=owner / to=fm: every chat of the owner or of "
+                    "the facility manager (the People list), for scheduled reports and digests.")
         @tool("send_message", desc, schema)
         async def handler(args: dict) -> dict:
             to = args.get("to")
             # a model that writes a destination it was not offered is held to the asker's chat by routing
-            chat = Routing(self.policy).target(to, origin)
-            if not chat:
-                return _err(f"No {to} chat is configured.")
+            if not Routing(self.policy).target(to, origin):
+                return _err(f"Nobody is listed as {to} in People: nothing was sent.")
             att = args.get("attachment")
-            path = None
-            if att:
-                if not FILE_NAME.match(att) or not os.path.exists(os.path.join(self.s.out_dir, att)):
-                    return _err(f"{att} is not a file in the out folder.")
-                path = os.path.join(self.s.out_dir, att)
-            text = args.get("text", "")
-            if self.notices and origin is None:
-                # sent on its own (a scheduled report, a digest): the heading every such message has (notice.py)
-                text = self.notices.compose(int(chat), text)
-            mid = await self.send(int(chat), text, document=path, origin=origin)
+            if att and (not FILE_NAME.match(att) or not os.path.exists(os.path.join(self.s.out_dir, att))):
+                return _err(f"{att} is not a file in the out folder.")
+            if self.carry_out is None:
+                return _err("Messages cannot be sent from here.")
+            # every chat of its role, with the heading of a message sent on its own: the one way out (outcome.py)
+            item = {"to": to, "text": args.get("text", ""), **({"attachment": att} if att else {})}
+            done = await self.carry_out({"send": [item]}, None, origin, self.s.out_dir)
+            mid = done.get("sent")
             self.state.log("sent" if mid else "send_refused", {"to": to, "chars": len(args.get("text", "")), "attachment": att})
             if not mid:
                 # ⚠️ NEVER "Sent." FOR WHAT DID NOT ARRIVE (architecture review, 2026-10-06): the AI then told the

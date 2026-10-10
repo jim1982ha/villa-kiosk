@@ -35,19 +35,20 @@ settings:
 act_enabled: false            # informs only. true switches the act path on (every action still needs a button press).
 approval_ttl_minutes: 15      # an Approve button older than this does nothing
 
-# People, by Telegram user id (not the group). Send /whoami to the bot to read yours.
-# role: owner | fm. language: en, fr, id...
+# People, and where the agent posts: a message for a role goes to EVERY chat listed
+# with that role — a person's private chat (their Telegram user id) or a group (a
+# negative id). /whoami, sent to the bot in a chat, shows its id. A person listed in
+# both roles is two entries with the same id. role: owner | fm. language: en, fr, id...
+# ⚠️ A GROUP NOT LISTED HERE IS IGNORED, NEVER LEFT: the bot is Home Assistant's too.
 people: []
 #  - telegram_id: 123456789
 #    name: Owner
 #    role: owner
 #    language: en
-
-# Chat ids. A group id is a negative number; /whoami in the group shows it.
-# ⚠️ A GROUP NOT LISTED HERE IS IGNORED, NEVER LEFT: the bot is Home Assistant's too.
-chats: {}
-#  owner: -1000000000000
-#  fm: -1000000000000
+#  - telegram_id: -1000000000000
+#    name: Villa group
+#    role: fm
+#    language: en
 
 # Only the owner can approve an action on these, whatever the service (locks, the gate, the siren...).
 owner_only_entities: []

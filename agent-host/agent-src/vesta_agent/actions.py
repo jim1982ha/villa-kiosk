@@ -49,7 +49,7 @@ VERB = {
 
 @dataclass
 class Outgoing:
-    chat_id: int
+    chats: list[int]            # every chat the request goes to (routing rule 3): its copies are one thread
     text: str
     keyboard: dict | None = None
     approval_id: str | None = None
@@ -130,20 +130,20 @@ class Actions:
                      requester.name, result["text"])
             return (f"Executed without approval (this villa's rule for {d.domain}.{d.service} is direct). "
                     f"Result: {result['text']}"), None
-        target_chat = Routing(policy).approver_chat(d.required_role, origin_chat)
-        if d.required_role == "owner" and not target_chat:
-            self.state.log("refused", dict(base, reason="no owner chat configured"))
-            return "Refused: no owner chat is configured in policy.yaml.", None
-        if not target_chat:
+        targets = Routing(policy).approver_chats(d.required_role, origin_chat)
+        if d.required_role == "owner" and not targets:
+            self.state.log("refused", dict(base, reason="no owner in People"))
+            return "Refused: nobody is listed as owner in People.", None
+        if not targets:
             self.state.log("refused", dict(base, reason="no chat to ask in"))
             return "Refused: no chat to ask in.", None
         text = plain(d, self.names)
         action = {"domain": d.domain, "service": d.service, "entity_ids": d.entity_ids, "data": d.data, "plain": text}
-        aid = self.state.new_approval(action, d.action_hash(), d.required_role or "owner", int(target_chat),
+        aid = self.state.new_approval(action, d.action_hash(), d.required_role or "owner", int(targets[0]),
                                       requester.telegram_id if requester else None, policy.approval_ttl_minutes)
         who = "the owner" if d.required_role == "owner" else "the owner or the facility manager"
         self.state.log("requested", dict(base, approval=aid, required_role=d.required_role))
-        msg = Outgoing(int(target_chat),
+        msg = Outgoing([int(c) for c in targets],
                        f"{text}\nOnly {who} can approve. Expires in {policy.approval_ttl_minutes} min.",
                        {"inline_keyboard": [[{"text": "Approve", "callback_data": button_data.make(button_data.APPROVAL, aid, "y")},
                                              {"text": "Refuse", "callback_data": button_data.make(button_data.APPROVAL, aid, "n")}]]}, aid)
@@ -152,52 +152,52 @@ class Actions:
 
     # ------------------------------------------------------------------ decide
     def decide(self, aid: str, presser_id: int | None, approve: bool, now: datetime | None = None) -> dict:
-        """Returns {'toast': str for the presser only, 'edit': str or None, 'executed': bool}."""
+        """Returns {'toast': str for the presser only, 'note': str or None, 'executed': bool}. `note` is what every copy of
+        the request then says under it, its buttons gone ("{time}": the villa's time, filled by IncidentThread.close)."""
         now = now or datetime.now(timezone.utc)
         policy = self.policy_loader()
         person = policy.person(presser_id)
         ap = self.state.approval(aid)
         if not ap:
             self.state.log("press_refused", {"approval": aid, "by": presser_id, "reason": "unknown id"})
-            return {"toast": "This request does not exist.", "edit": None, "executed": False}
+            return {"toast": "This request does not exist.", "note": None, "executed": False}
         if person is None:
             self.state.log("press_refused", {"approval": aid, "by": presser_id, "reason": "not a registered person or anonymous"})
-            return {"toast": NOT_REGISTERED, "edit": None, "executed": False}
+            return {"toast": NOT_REGISTERED, "note": None, "executed": False}
         if ap["status"] != "pending":
-            return {"toast": f"Already {ap['status']}.", "edit": None, "executed": False}
+            return {"toast": f"Already {ap['status']}.", "note": None, "executed": False}
         if datetime.fromisoformat(ap["expires_at"]) < now:
             self.state.expire_approval(aid)
             self.state.log("press_refused", {"approval": aid, "by": presser_id, "reason": "expired"})
-            return {"toast": "Expired. Ask again.", "edit": f"{ap['action']['plain']}\nExpired, nothing was done.", "executed": False}
+            return {"toast": "Expired. Ask again.", "note": "Expired on {time}: nothing was done.", "executed": False}
         if not policy.role_can_approve(person.role, ap["required_role"]):
             self.state.log("press_refused", {"approval": aid, "by": presser_id, "reason": f"role {person.role}"})
             return {"toast": "Only the owner can approve this." if ap["required_role"] == "owner" else "You cannot approve this.",
-                    "edit": None, "executed": False}
+                    "note": None, "executed": False}
         act = ap["action"]
-        stamp = datetime.now().astimezone().strftime("%H:%M")
         if not approve:
             if self.state.claim_approval(aid, "refused", person.telegram_id, now):
                 self.state.log("refused_by_person", {"approval": aid, "by": person.name})
-                return {"toast": "Refused.", "edit": f"{act['plain']}\nRefused by {person.name} at {stamp}. Nothing was done.",
+                return {"toast": "Refused.", "note": f"Refused by {person.name} on {{time}}. Nothing was done.",
                         "executed": False}
-            return {"toast": "Already decided.", "edit": None, "executed": False}
+            return {"toast": "Already decided.", "note": None, "executed": False}
         # the policy may have changed since the request: check again, and the action must be the one approved
         d = self._wrap_check(policy, policy.check_service(act["domain"], act["service"], act["entity_ids"], act["data"]))
         if not d.allowed or d.action_hash() != ap["action_hash"] or \
                 action_hash(act["domain"], act["service"], act["entity_ids"], act["data"]) != ap["action_hash"]:
             self.state.claim_approval(aid, "failed", person.telegram_id, now)
             self.state.log("press_refused", {"approval": aid, "by": presser_id, "reason": d.reason or "action changed"})
-            return {"toast": "Refused by the villa's rules.", "edit": f"{act['plain']}\nNo longer allowed: {d.reason or 'the action changed'}.",
+            return {"toast": "Refused by the villa's rules.", "note": f"No longer allowed: {d.reason or 'the action changed'}.",
                     "executed": False}
         if not policy.role_can_approve(person.role, d.required_role):
-            return {"toast": "Only the owner can approve this.", "edit": None, "executed": False}
+            return {"toast": "Only the owner can approve this.", "note": None, "executed": False}
         if not self.state.claim_approval(aid, "approved", person.telegram_id, now):
-            return {"toast": "Already decided.", "edit": None, "executed": False}
+            return {"toast": "Already decided.", "note": None, "executed": False}
         self.state.log("approved", {"approval": aid, "by": person.name, "role": person.role})
         result = self.execute(d)
         self.state.finish_approval(aid, "done" if result["ok"] else "failed", result)
-        edit = f"{act['plain']}\nApproved by {person.name} at {stamp}. {result['text']}"
-        return {"toast": "Done." if result["ok"] else "Sent, not confirmed.", "edit": edit, "executed": True,
+        note = f"Approved by {person.name} on {{time}}. {result['text']}"
+        return {"toast": "Done." if result["ok"] else "Sent, not confirmed.", "note": note, "executed": True,
                 "result": result}
 
     # ------------------------------------------------------------------ execute
