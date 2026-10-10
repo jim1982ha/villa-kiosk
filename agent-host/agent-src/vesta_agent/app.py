@@ -99,6 +99,9 @@ def pack_needs_build(path: str) -> bool:
 
 #: How often the agent reads the VESTA Kiosk's faults (one closed in the Cockpit settles its alert's messages).
 KIOSK_EVERY_S = 300
+#: An approved action whose device is still moving (a curtain): looked at again this often, for this long, then the
+#: request says done or not done (app._follow).
+FOLLOW_EVERY_S, FOLLOW_FOR_S = 5, 90
 #: The largest photo the AI is shown: the Anthropic API takes an image of at most 5 MB.
 PHOTO_MAX_BYTES = 5 * 1024 * 1024
 
@@ -158,6 +161,7 @@ class Vesta:
         self.bot_username: str | None = None
         self._locks: dict[int, asyncio.Lock] = {}
         self._kiosk_read = 0.0            # when the Kiosk's faults were last read (housekeeping)
+        self._watching: set[asyncio.Task] = set()   # approved actions whose device is still on its way (_follow)
         self._pack = None
         self._pack_mtime = None
 
@@ -594,12 +598,30 @@ class Vesta:
                 await self.thread.post(thread, p.chat, int(p.mid), str(p.msg.get("text") or ""), buttons=True)
             # every copy of the request, in every chat, says what was decided, by whom and when (Outcome.ask)
             await self.thread.close(thread, out["note"], out.get("body"))
+            if out.get("follow"):
+                await self._follow(thread, out["follow"])
             # ⚠️ AND THE ANSWER THAT SAID IT WAS ASKED GOES (owner, 2026-10-10: "I expect the message 'Request sent…
             # Awaiting approval.' to disappear when it has been approved"): the request itself now says what happened
             said = self.state.approval_answer(aid)
             if said:
                 await self.delivery.delete(*said)
                 self.state.set_approval_answer(aid, None)
+
+    async def _follow(self, thread: str, decision) -> None:
+        """An approved action's device still on its way: read again until it gets there (or FOLLOW_FOR_S passes), and
+        the request then says done — or, at the end, not done. The press has had its answer already."""
+        async def watch():
+            waited = 0.0
+            while waited < FOLLOW_FOR_S:
+                await asyncio.sleep(FOLLOW_EVERY_S)
+                waited += FOLLOW_EVERY_S
+                body = await asyncio.to_thread(self.actions.recheck, decision)
+                if body:
+                    return await self.thread.rewrite(thread, body)
+            await self.thread.rewrite(thread, await asyncio.to_thread(self.actions.recheck, decision, True))
+        task = asyncio.create_task(self._safe(watch()))
+        self._watching.add(task)
+        task.add_done_callback(self._watching.discard)
 
     async def _press_continue(self, p: "Press") -> None:
         cont = self.state.use_continuation(p.parts[0], p.chat, p.presser)

@@ -298,3 +298,36 @@ def test_a_request_shown_in_the_askers_chat_is_not_announced_again(tmp_path, mon
     run(v.converse(JM, v.policy().person(JM), "open the bedroom curtain"))
     assert "do not announce it" in told[0]["content"][0]["text"]
     assert [bool(kb) for _, _, kb in v.tg.sent] == [True]      # the request alone: no answer under it
+
+
+def test_a_curtain_still_moving_is_said_to_be_and_the_request_says_opened_once_it_is(tmp_path, monkeypatch):
+    # owner, 2026-10-10: "Bedroom3 Curtain did not open: it reads closed … but the curtain is actually well opened" —
+    # it read "closed" until it had finished moving, 40 s later
+    from vesta_agent import app as app_mod
+    monkeypatch.setattr(app_mod, "FOLLOW_EVERY_S", 0)
+    v = make_agent(tmp_path, {"people": [{"telegram_id": JM, "name": "JM", "role": "owner"},
+                                         {"telegram_id": GROUP, "name": "Group", "role": "fm"}],
+                              "act_enabled": True, "allowed_services": {"cover.open_cover": "any"}})
+    reads = iter(["closed"] * 7 + ["open"])                 # the read-back right after, then the agent's later looks
+
+    class Writer:
+        def call_service(self, *a):
+            pass
+
+        def states(self, ids):
+            s = next(reads, "open")
+            return {i: {"state": s} for i in ids}
+    v.actions.writer_factory = Writer
+    _, msg = v.actions.request("cover", "open_cover", "cover.bedroom3", {}, v.policy().person(JM), JM)
+    run(v.outcome.ask(msg))
+    req_n = v.tg.next_id
+    press = {"id": "cb", "data": msg.keyboard["inline_keyboard"][0][0]["callback_data"], "chat_id": JM, "user_id": JM,
+             "message": {"message_id": req_n, "chat": {"id": JM}, "text": msg.text}, "bot": BOT}
+
+    async def go():
+        await v.on_ha_event("telegram_callback", press)
+        await asyncio.gather(*v._watching)
+    run(go())
+    first, last = v.tg.edits[0][2], v.tg.edits[-1][2]
+    assert "\n-------\nOpening " in first and "\n-------\nApproved by JM on " in first     # on its way, right away
+    assert "\n-------\nOpened " in last and "did not" not in last and last.split("\n-------\n")[-1].startswith("Approved by JM")

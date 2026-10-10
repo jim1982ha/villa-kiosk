@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.133 (10 October 2026)
+
+- actions: PROGRESS verbs; done_words(settled=False) says "Opening …" for a device still on its way; decide returns `follow`; Actions.recheck reads it again. app._follow looks every FOLLOW_EVERY_S up to FOLLOW_FOR_S and IncidentThread.rewrite changes the request's body in every copy. Test with a curtain that reads "closed" until it opens; shown red without the follow-up.
+
 ## 0.6.132 (10 October 2026)
 
 - tools.ha_call_service: a request shown in the asker's chat tells the AI not to announce it (empty answer unless something else was asked); app sends no answer when it is blank. Test; both changes shown red.

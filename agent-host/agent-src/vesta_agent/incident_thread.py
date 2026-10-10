@@ -100,6 +100,19 @@ class IncidentThread:
             self.state.set_incident_message(iid, chat, {**rec, "text": text, "settled": True})
         return n
 
+    async def rewrite(self, iid: int | str, body: str) -> None:
+        """Every copy of `iid` says `body` now in its middle part, its heading and status kept (an approved request whose
+        device got there: "Opening …" becomes "Opened …")."""
+        sep = f"\n{RULE}\n"
+        for chat, rec in self.state.incident_chats(iid):
+            parts = rec["text"].split(sep)
+            if len(parts) < 3:
+                continue
+            text = sep.join(parts[:-2] + [body, parts[-1]])
+            if self.edit:
+                await self.edit(chat, rec["mid"], text)
+            self.state.set_incident_message(iid, chat, {**rec, "text": text})
+
     def shown(self, iid: int | str) -> dict[int, dict]:
         """What each chat shows of incident `iid`: {chat: {mid, text, buttons, settled}}."""
         return dict(self.state.incident_chats(iid))

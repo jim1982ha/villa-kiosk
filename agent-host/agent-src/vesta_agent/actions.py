@@ -60,6 +60,9 @@ class Outgoing:
 #: The same verbs once done: the request's body after it is approved ("Opened Bedroom3 Curtain.").
 PAST = {"Turn on": "Turned on", "Turn off": "Turned off", "Lock": "Locked", "Unlock": "Unlocked", "Open": "Opened",
         "Close": "Closed", "Press": "Pressed", "Run the scene": "Ran the scene", "Run the script": "Ran the script"}
+#: ...and on their way: what an approved request says while the device is still moving (a curtain takes its time)
+PROGRESS = {"Turn on": "Turning on", "Turn off": "Turning off", "Lock": "Locking", "Unlock": "Unlocking",
+            "Open": "Opening", "Close": "Closing"}
 
 
 def plain(decision: Decision, names: Callable[[str], str]) -> str:
@@ -70,7 +73,7 @@ def plain(decision: Decision, names: Callable[[str], str]) -> str:
     return f"{verb} {target}{extra}{tail}?"
 
 
-def done_words(decision: Decision, names: Callable[[str], str], result: dict) -> str:
+def done_words(decision: Decision, names: Callable[[str], str], result: dict, settled: bool = True) -> str:
     """What happened, in one sentence: the body of an approved request (owner, 2026-10-10: "Opened Bedroom3 Curtain."
     — never "Not confirmed: … I will not retry by myself" under it). A device that did not reach the state asked for is
     said plainly in its place: the message never claims what did not happen."""
@@ -78,6 +81,10 @@ def done_words(decision: Decision, names: Callable[[str], str], result: dict) ->
     if result.get("failed"):
         return f"{verb} {target}{extra}: Home Assistant refused it, nothing was done."
     bad = result.get("unconfirmed") or []
+    if bad and not settled and verb in PROGRESS:
+        # ⚠️ NOT YET IS NOT "DID NOT" (owner, 2026-10-10: "the curtain is actually well opened"): a curtain reads "closed"
+        # until it has finished moving — it opened 40 s after the agent said it had not. The agent looks again (app)
+        return f"{PROGRESS[verb]} {target}{extra}…"
     if bad and len(decision.entity_ids) == 1:
         return f"{target} did not {verb.lower()}: it reads {bad[0][1]}."
     if bad:
@@ -230,9 +237,25 @@ class Actions:
         self.state.log("approved", {"approval": aid, "by": person.name, "role": person.role})
         result = self.execute(d)
         self.state.finish_approval(aid, "done" if result["ok"] else "failed", result)
-        # the body says what happened, the status who approved it and when (owner, 2026-10-10)
-        return {"toast": "Done." if result["ok"] else "Sent, not confirmed.", "note": f"Approved by {person.name} on {{time}}.",
-                "body": done_words(d, self.names, result), "executed": True, "result": result}
+        # the body says what happened, the status who approved it and when (owner, 2026-10-10); a device still on its
+        # way is said to be so, and `follow` asks the agent to look again until it gets there (app._follow)
+        moving = bool(result.get("unconfirmed")) and VERB.get(d.service) in PROGRESS
+        return {"toast": "Done." if result["ok"] else "Approved: on its way.", "note": f"Approved by {person.name} on {{time}}.",
+                "body": done_words(d, self.names, result, settled=not moving), "executed": True, "result": result,
+                "follow": d if moving else None}
+
+    def recheck(self, d: Decision, final: bool = False) -> str | None:
+        """An approved action whose device was still on its way, read again: what the request says now — done, or (when
+        `final`) not done — or None while it is still moving."""
+        expect = EXPECT.get((d.domain, d.service))
+        try:
+            st = self.writer_factory().states(d.entity_ids) or {}
+        except Exception:  # noqa: BLE001 — not readable now: looked at again, or said as not confirmed at the end
+            st = {}
+        bad = [(self.names(e), (st.get(e) or {}).get("state")) for e in d.entity_ids if (st.get(e) or {}).get("state") != expect]
+        if not bad:
+            return done_words(d, self.names, {"ok": True})
+        return done_words(d, self.names, {"ok": False, "unconfirmed": bad}) if final else None
 
     # ------------------------------------------------------------------ execute
     def execute(self, d: Decision) -> dict:
