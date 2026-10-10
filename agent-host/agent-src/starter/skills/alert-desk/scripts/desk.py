@@ -17,7 +17,8 @@ carries the same incident_id:
    "summary": "the rule's own message", "timestamp": "...", "reason"?: "...", ...}
 Only critical_condition, critical_binary_trip and critical_presence_guard ever
 send "resolved"; critical_schedule, critical_system and critical_watchdog send
-"opened" only — their incidents close through the ladder (Done).
+"opened" only — their incidents close through the ladder (Done), or, for the two whose
+condition the desk can read again, by `tick` (see SEEN_AGAIN).
 
 The output is the engine's standard form, built with vesta_shared/result.py (the shape there, every word here):
 {"send": [message], "actions": [fault | resolved | snapshot], "incident_id", "siren_gate"?, "settle"?}.
@@ -42,6 +43,7 @@ from vesta_shared import result as R  # noqa: E402  (what the engine is asked to
 from vesta_shared import script  # noqa: E402  (client, store, settings, zone: one set-up)
 from vesta_shared import skill_settings  # noqa: E402  (rules.yaml, the villa's on top)
 from vesta_shared.messaging import incident_tag  # noqa: E402
+from vesta_shared.device_state import OFFLINE  # noqa: E402  (what "offline" is, once)
 
 SKILL = os.path.dirname(HERE)
 # rules.yaml with the villa's own villa.rules.yaml on top (kept by updates): a villa's route comes FIRST, so it
@@ -59,6 +61,14 @@ LADDER_OPTIONS = ["Done", "Need help"]      # owner, 2026-10-10: Not found and M
 #: What a person still being asked can answer: the last line of every message that carries the buttons.
 #: The beat the engine writes every minute while its Home Assistant connection is up.
 HA_BEAT = "ha_events"
+
+#: ⚠️ OVER WHEN HOME ASSISTANT NO LONGER SAYS SO (villa, 2026-10-10: the Cockpit kept "Entrance door unlocked" hours
+#: after the door was locked, and a relay "unavailable" 5 hours after it was back). critical_condition stops watching
+#: after its "Repeat after" (30 min: "abandoned") — a door locked later was never said over; critical_watchdog never
+#: says a device came back. For these the desk reads the entity again (tick): its state when the incident opened is
+#: the problem; another state, held `clear_minutes`, ends it. A number is never compared (a temperature changes all
+#: the time): such an incident waits for Home Assistant or a person, as every other blueprint's.
+SEEN_AGAIN = ("critical_condition", "critical_watchdog")
 
 
 def now_utc(fake: str | None = None) -> datetime:
@@ -209,19 +219,95 @@ def resolved(store: Store, ev: dict, now: datetime) -> dict:
     inc = _find_by_ha_incident(store, ev.get("ha_incident")) or store.find_open_incident(f"{ev['rule_id']}|{ev.get('entity_id', '')}")
     if not inc:
         return out
-    was_chasing = inc["state"] in Incident.CHASED
-    out["actions"] += Problems(store).close_incident(inc["id"], Incident.RESOLVED, now.isoformat(),
-                                                     "Cleared: Home Assistant reports it is back to normal.")
+    _close(store, inc, now, out, "Cleared in Home Assistant on {time}.",
+           "Closed: Home Assistant reports it cleared on {time}. No reply needed.")
     out["incident_id"], out["decision"] = inc["id"], "resolved"
-    # its alert and reminders, in every chat, lose their buttons: nobody presses for something already over
-    out["settle"] = [R.settle(inc["id"], "Cleared in Home Assistant on {time}.")]
     # Home Assistant's all-clear takes the incident's number and the original alert, and replaces its older ones
     out["ha_messages"] = [R.ha_message(inc["id"], context=ev.get("_context_id"), **about(inc, ev["message"]))]
-    if was_chasing:
-        out["send"].append(R.message("fm", **about(inc, "Closed: Home Assistant reports it cleared on {time}. No reply needed."),
-                                     incident=inc["id"], stage="update"))
     store.audit("alert-desk", "resolved", {"incident": inc["id"]})
     return out
+
+
+def _close(store: Store, inc: dict, now: datetime, out: dict, settled: str, told: str) -> None:
+    """An incident that is over: closed with its task and Kiosk fault, its messages in every chat lose their buttons
+    and say `settled`; the facility manager, when still chased, is told `told` (no reply needed)."""
+    out["actions"] += Problems(store).close_incident(inc["id"], Incident.RESOLVED, now.isoformat(),
+                                                     "Cleared: Home Assistant reports it is back to normal.")
+    # its alert and reminders, in every chat, lose their buttons: nobody presses for something already over
+    out.setdefault("settle", []).append(R.settle(inc["id"], settled))
+    if inc["state"] in Incident.CHASED:
+        out["send"].append(R.message("fm", **about(inc, told), incident=inc["id"], stage="update"))
+
+
+def held_states(store: Store, inc: dict, client) -> dict[str, str] | None:
+    """{entity: the state that IS the problem} of an incident whose end the desk reads itself (SEEN_AGAIN); None for
+    any other, or when it cannot be known. A watchdog's event names it; a condition's is the entity's state when the
+    incident opened, read once from Home Assistant's history and kept in the incident."""
+    p = json.loads(inc.get("payload") or "{}")
+    if p.get("blueprint") not in SEEN_AGAIN:
+        return None
+    if p.get("held"):
+        return p["held"]
+    ents = [e for e in (p.get("entities") or [inc["entity_id"]]) if e]
+    if not ents:
+        return None
+    if p.get("blueprint") == "critical_watchdog":
+        held = {e: p.get("state") for e in ents} if p.get("state") in OFFLINE else None
+    else:
+        opened = datetime.fromisoformat(inc["opened_at"])
+        try:
+            hist = client.history(ents, opened - timedelta(minutes=1), opened)
+        except Exception:  # noqa: BLE001 — unreadable now: looked at again at the next tick
+            return None
+        held = {}
+        for e in ents:
+            rows = hist.get(e) or []
+            st = str((rows[-1] if rows else {}).get("state") or "")
+            if not st or st in OFFLINE or st == "unknown" or _number(st):
+                return None                       # unknown, or a number: never compared
+            held[e] = st
+    if held:
+        store.update_incident(inc["id"], payload=json.dumps({**p, "held": held}))
+    return held
+
+
+def _number(s: str) -> bool:
+    try:
+        float(s)
+        return True
+    except ValueError:
+        return False
+
+
+def seen_again(store: Store, now: datetime, client, clear_minutes: float, out: dict) -> list[int]:
+    """Every open incident Home Assistant will never say is over (SEEN_AGAIN), read again: one whose entities have all
+    left the state that was the problem — and stayed out of it `clear_minutes`, and are not offline — is closed
+    (`_close`). Returns their ids."""
+    closed = []
+    for inc in store.incidents(open_only=True):
+        held = held_states(store, inc, client)
+        if not held:
+            continue
+        try:
+            now_states = client.states(list(held))
+        except Exception:  # noqa: BLE001 — Home Assistant not readable now: the next tick
+            return closed
+        back = []
+        for e, bad in held.items():
+            st = now_states.get(e) or {}
+            s, since = st.get("state"), st.get("last_changed")
+            if not s or s == bad or s in OFFLINE or s == "unknown" or not since:
+                break
+            if now - datetime.fromisoformat(since).astimezone(timezone.utc) < timedelta(minutes=clear_minutes):
+                break
+            back.append(f"{(st.get('attributes') or {}).get('friendly_name') or e} is {s}")
+        else:
+            said = "; ".join(back)
+            _close(store, inc, now, out, f"Cleared on {{time}}: {said} again.",
+                   f"Closed on {{time}}: {said} again. No reply needed.")
+            store.audit("alert-desk", "seen_again", {"incident": inc["id"], "now": said})
+            closed.append(inc["id"])
+    return closed
 
 
 def abandoned(store: Store, ev: dict, now: datetime) -> dict:
@@ -296,13 +382,16 @@ def reply(store: Store, iid: int, text: str, sender_role: str, now: datetime, pa
     return out
 
 
-def tick(store: Store, now: datetime, params: VillaParams | None = None) -> dict:
-    """Every 5 minutes: chase ladder, villa-silent watch, alert fatigue."""
+def tick(store: Store, now: datetime, params: VillaParams | None = None, client=None) -> dict:
+    """Every 5 minutes: what Home Assistant will never say is over (`client`: its states, read again), chase ladder,
+    villa-silent watch, alert fatigue."""
     params = _params(params)                       # no parameters given: the desk's own timings, never a copy here
     reask = params.behaviour("reask_minutes")
     escal = params.behaviour("escalate_minutes")
     silent_min = params.behaviour("villa_silent_minutes")
     out = {"send": [], "actions": [], "escalated": [], "reasked": []}
+    if client is not None:
+        out["cleared"] = seen_again(store, now, client, params.behaviour("clear_minutes"), out)
     for inc in store.incidents(open_only=True):
         if inc["state"] not in (Incident.ASKED, Incident.REASKED):
             continue
@@ -366,7 +455,7 @@ def main(argv=None):
         ev = json.load(open(a.event)) if a.event else json.load(sys.stdin)
         res = intake(store, ev, now, params, lambda: villa_mode(ctx.client), zone=ctx.zone)
     elif a.cmd == "tick":
-        res = tick(store, now, params)
+        res = tick(store, now, params, ctx.live_client)
     elif a.cmd == "reply":
         res = reply(store, a.incident, a.text or "", a.sender, now, params)
     else:

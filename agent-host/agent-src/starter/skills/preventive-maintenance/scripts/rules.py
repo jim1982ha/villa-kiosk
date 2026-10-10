@@ -226,7 +226,9 @@ def battery_rules(asset: dict, entity_id: str, unit: str | None, level: float | 
 
 # --------------------------------------------------------- availability family
 def availability_rules(asset: dict, entity_id: str, state: str | None, last_changed_hours: float | None,
-                       params: VillaParams) -> list[Finding]:
+                       params: VillaParams, entities: list[str] | None = None) -> list[Finding]:
+    """`entities`: every device's entity the finding stands for (an integration down: one per device) — recheck.py
+    closes it once they are all back."""
     out = []
     slug = asset["slug"]
     if state in ("unavailable", "unknown") and last_changed_hours is not None:
@@ -234,7 +236,8 @@ def availability_rules(asset: dict, entity_id: str, state: str | None, last_chan
             sev = P2 if asset.get("critical") else P3
             out.append(Finding("PM-UNAVAILABLE", entity_id, slug, "availability", sev,
                                f"{asset['name']} has been offline for {last_changed_hours:.0f} h.",
-                               {"hours": round(last_changed_hours, 1), "critical": asset.get("critical", False)},
+                               {"hours": round(last_changed_hours, 1), "critical": asset.get("critical", False),
+                                "entities": list(entities or [entity_id])},
                                "Check power and radio range; for a battery device, change the battery and press its reset."))
     return out
 

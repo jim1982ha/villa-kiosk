@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.139 (10 October 2026)
+
+Faults that are over close by themselves (villa, 2026-10-10: three of nine Cockpit rows were long over):
+- alert-desk: tick reads again what Home Assistant never says is over (SEEN_AGAIN: critical_condition after "abandoned", critical_watchdog): the state the incident opened on (the watchdog's event; a condition's from Home Assistant's history, read once and kept as payload "held"), left for `clear_minutes` (rules.yaml, 10) and not offline, closes it through `_close` (task, Kiosk fault, settle, the facility manager told when chased); a number is never compared. The tick CLI is given the live client.
+- preventive-maintenance: recheck.py every 5 minutes — an open PM-UNAVAILABLE finding whose devices (detail "entities"; an integration-down finding now lists one per device) are all back `back_online_minutes` (settings.yaml, 10) closes as the night check would; Home Assistant is read only when a finding is open.
+- Tests: tests/test_back_online.py, alert-desk's seen-again cases (the CLI included); 12 mutants, each red.
+
 ## 0.6.138 (10 October 2026)
 
 Architecture review 21, all seven points:

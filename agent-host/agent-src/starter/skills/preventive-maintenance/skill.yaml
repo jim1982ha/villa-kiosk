@@ -5,6 +5,7 @@ scripts:
     description: the night's maintenance check of every device, for the day you name
     flags: {--as-of: date, --out: outfile, --skip-raw: switch}
     inject: [pack, store, zone]
+every_5_min: "recheck.py"     # a device found offline that is back: its fault closes now, not the next night
 schedule:
   - when: "02:00"             # code only: zero tokens; the 07:00 digest carries the words
     run: "nightly.py --out nightly.json"

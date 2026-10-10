@@ -152,7 +152,8 @@ def integration_down(groups: dict[str, dict], min_devices: float) -> dict[str, d
             first = groups[keys[0]]
             merged = {"asset": {"slug": f"integration_{plat}", "name": f"{plat} integration ({len(keys)} devices)", "critical": True},
                       "entity_id": first["entity_id"], "hours": max((groups[k]["hours"] or 0) for k in keys),
-                      "state": "unavailable", "names": [groups[k]["names"][0] for k in keys], "critical": True}
+                      "state": "unavailable", "names": [groups[k]["names"][0] for k in keys], "critical": True,
+                      "entity_ids": [groups[k]["entity_id"] for k in keys]}
             for k in keys:
                 out.pop(k)
             out[plat] = merged

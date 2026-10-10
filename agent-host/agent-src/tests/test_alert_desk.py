@@ -190,3 +190,97 @@ def test_only_done_and_need_help_and_an_old_not_found_is_chased_again(tmp_path):
     assert again.incident(iid)["state"] == "asked" and again.incident(iid)["asked_at"]
     tables = {r[0] for r in sqlite3.connect(path).execute("select name from sqlite_master where type='table'")}
     assert "mutes" not in tables
+
+
+# ---------------------------------------------------------------------- over when Home Assistant no longer says so
+class Villa:
+    """Home Assistant as the desk reads it again: each entity's states over time [(since, state)], and the asks."""
+    def __init__(self, **timeline):
+        self.timeline = timeline
+        self.now = T0
+        self.history_asks = 0
+
+    def _at(self, e, t):
+        rows = [(since, st) for since, st in self.timeline.get(e, []) if since <= t]
+        return rows[-1] if rows else (None, None)
+
+    def history(self, ids, start, end):
+        self.history_asks += 1
+        out = {}
+        for e in ids:
+            since, st = self._at(e, start)                  # Home Assistant gives the state at the window's start too
+            rows = [{"state": st, "last_changed": start.isoformat()}] if st else []
+            rows += [{"state": s, "last_changed": t.isoformat()} for t, s in self.timeline.get(e, []) if start < t < end]
+            out[e] = rows
+        return out
+
+    def states(self, ids):
+        out = {}
+        for e in ids:
+            since, st = self._at(e, self.now)
+            if st:
+                out[e] = {"state": st, "last_changed": since.isoformat(), "attributes": {"friendly_name": "Front door"}}
+        return out
+
+
+def _tick(store, villa, minutes):
+    villa.now = T0 + timedelta(minutes=minutes)
+    return desk.tick(store, villa.now, client=villa)
+
+
+def test_a_door_locked_after_its_rule_stopped_watching_closes_its_alert(store):
+    # villa, 2026-10-10: "Entrance door unlocked" was still an open fault hours after the door was locked — the rule had
+    # given up after 30 min ("abandoned") and nobody ever said the door was locked
+    villa = Villa(**{"lock.front_door": [(T0 - timedelta(minutes=10), "unlocked"), (T0 + timedelta(minutes=95), "locked")]})
+    iid = desk.intake(store, event(), T0, mode_reader=lambda: "occupied")["incident_id"]
+    desk.intake(store, event(phase="abandoned"), T0 + timedelta(minutes=30))
+    assert not _tick(store, villa, 60).get("cleared")                   # still unlocked
+    assert not _tick(store, villa, 100).get("cleared")                  # locked 5 min ago: not yet
+    res = _tick(store, villa, 106)
+    assert res["cleared"] == [iid] and store.incident(iid)["state"] == "resolved"
+    assert res["settle"] == [{"incident_id": iid, "note": "Cleared on {time}: Front door is locked again."}]
+    assert [a for a in res["actions"] if a["action"] == "ticket.resolve"]          # its Kiosk fault closes too
+    assert [s for s in res["send"] if s["to"] == "fm" and "No reply needed" in s["status"]]
+    assert villa.history_asks == 1                                      # the problem's state read once, then kept
+    assert not _tick(store, villa, 120).get("cleared")                  # closed once
+
+
+def test_a_device_back_after_the_watchdog_alerted_closes_its_alert(store):
+    # the watchdog says a device went unavailable, never that it came back
+    villa = Villa(**{"switch.pool_relay": [(T0 - timedelta(minutes=10), "unavailable"), (T0 + timedelta(hours=2), "off")]})
+    iid = desk.intake(store, event(blueprint="critical_watchdog", rule="automation.critical_devices_unavailable_watchdog",
+                                   entities=("switch.pool_relay",), label="Critical device unavailable",
+                                   state="unavailable"), T0, mode_reader=lambda: "occupied")["incident_id"]
+    assert not _tick(store, villa, 60).get("cleared")
+    assert _tick(store, villa, 135)["cleared"] == [iid]
+    assert villa.history_asks == 0                                      # the event said which state is the problem
+
+
+def test_a_number_or_another_kind_of_alert_is_never_closed_by_the_desk(store):
+    villa = Villa(**{"sensor.cabinet": [(T0 - timedelta(minutes=10), "61.5"), (T0 + timedelta(minutes=5), "40.2")],
+                     "binary_sensor.leak": [(T0 - timedelta(minutes=10), "on"), (T0 + timedelta(minutes=5), "off")]})
+    desk.intake(store, event(rule="automation.critical_condition_cabinet", entities=("sensor.cabinet",)), T0,
+                mode_reader=lambda: "occupied")
+    desk.intake(store, event(blueprint="critical_binary_trip", rule="automation.critical_water_leak",
+                             entities=("binary_sensor.leak",)), T0, mode_reader=lambda: "occupied")
+    assert not _tick(store, villa, 120).get("cleared")                  # a temperature changes all the time; a trip latches
+    assert len(store.incidents(open_only=True)) == 2
+
+
+def test_the_ticks_cli_reads_home_assistant_again(tmp_path):
+    # the engine runs "desk.py tick" every 5 minutes: it must be given Home Assistant, or nothing is read again
+    import subprocess
+    import sys
+    s = Store(str(tmp_path / "s.sqlite"))
+    iid = desk.intake(s, event(blueprint="critical_watchdog", entities=("switch.pool_relay",), state="unavailable"), T0,
+                      mode_reader=lambda: "occupied")["incident_id"]
+    fx = tmp_path / "fx"
+    fx.mkdir()
+    (fx / "states.json").write_text(json.dumps({"states": {"switch.pool_relay": {
+        "state": "off", "last_changed": (T0 + timedelta(minutes=5)).isoformat(), "attributes": {}}}}))
+    env = {**os.environ, "PYTHONPATH": PYTHONPATH}
+    r = subprocess.run([sys.executable, os.path.join(STARTER_SKILLS, "alert-desk", "scripts", "desk.py"), "tick",
+                        "--store", str(tmp_path / "s.sqlite"), "--fixture-dir", str(fx),
+                        "--now", (T0 + timedelta(minutes=30)).isoformat()], capture_output=True, text=True, env=env, timeout=60)
+    assert r.returncode == 0, r.stderr
+    assert json.loads(r.stdout)["cleared"] == [iid]

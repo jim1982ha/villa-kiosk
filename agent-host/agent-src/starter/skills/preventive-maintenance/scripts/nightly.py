@@ -217,7 +217,7 @@ def run(args) -> dict:
         a = dict(g["asset"]); a["critical"] = g["critical"]
         if len(g["names"]) > 1 and not a["slug"].startswith("integration_"):
             a["name"] = F.device_name(g["names"])
-        findings += R.availability_rules(a, g["entity_id"], g["state"], g["hours"], params)
+        findings += R.availability_rules(a, g["entity_id"], g["state"], g["hours"], params, g.get("entity_ids"))
 
     level_rows = [r for r in pack.entities("level")
                   if params.has(f"{r['asset']}_max_c") or params.has(f"{r['asset']}_max_humidity_pct")]
