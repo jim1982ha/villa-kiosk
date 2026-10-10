@@ -1,3 +1,9 @@
+## 0.12.135
+
+What you will see:
+- An approval request now has the same layout as every other message from the agent, in every chat, the one you asked from included: who it is for, a line, the action, a line, then "Waiting for approval by … (asked on 10/10/2026 16:55, expires in 15 min)". When someone presses, that last line becomes "Approved by JM on 10/10/2026 16:57. …" (or Refused, or Expired).
+- Once a request is approved, refused or expired, the agent's short answer "Request sent… Awaiting approval." disappears from the chat: the request itself now says what happened.
+
 ## 0.12.134
 
 What you will see:
