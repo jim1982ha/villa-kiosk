@@ -118,10 +118,10 @@ def test_the_owner_and_the_fm_in_one_chat_get_one_message_with_the_buttons(agent
     route = Routing(agent.policy())
     route.target = lambda to, origin=None: {"owner": [GROUP], "fm": [FM_CHAT]}[to]
     kept, _ = agent.outcome._deliveries(res["send"], route, None)
-    assert [m.get("keyboard") for _, m in kept] == [None, True, None]       # different chats: all three kept
+    assert [m.get("keyboard") for _, m, _ in kept] == [None, True, None]       # different chats: all three kept
     route.target = lambda to, origin=None: [GROUP]                          # the owner and the FM share the group
     kept, _ = agent.outcome._deliveries(res["send"], route, None)
-    assert [m.get("keyboard") for _, m in kept if m.get("incident_id")] == [True]
+    assert [(m.get("keyboard"), roles) for _, m, roles in kept if m.get("incident_id")] == [(True, {"owner", "fm"})]
 
 
 def test_home_assistants_messages_of_another_run_are_never_taken(agent):

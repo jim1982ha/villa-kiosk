@@ -163,11 +163,18 @@ class State:
     def siren_stop(self) -> str | None:
         return self.get("siren:stop_at")
 
-    def set_siren_stop(self, at_iso: str | None) -> None:
+    def siren_stopping(self) -> str | None:
+        """Which siren the stop is for: the one turned on, whatever the rules say by then (None: before 0.12.129)."""
+        return self.get("siren:entity")
+
+    def set_siren_stop(self, at_iso: str | None, entity: str | None = None) -> None:
         if at_iso:
             self.put("siren:stop_at", at_iso)
+            if entity:
+                self.put("siren:entity", entity)
         else:
             self.drop("siren:stop_at")
+            self.drop("siren:entity")
 
     # A scheduled job's last slot: claimed once per slot, by one tick.
     def claim_job_slot(self, job: str, slot_iso: str) -> bool:

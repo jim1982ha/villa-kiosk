@@ -97,7 +97,6 @@ class Outcome:
         route = Routing(self.policy())
         gate = res.get("siren_gate") or {}
         gate_prompt = gate.get("prompt") if gate.get("armed") else None
-        sent: set[tuple[int, str]] = set()
         chats: set[int] = set()
         pol = self.policy()
         items = list(res.get("send") or [])
@@ -105,11 +104,11 @@ class Outcome:
             # no siren to ask for: the warning itself goes to the gate's people (it was dropped before, 0.12.80)
             items += [{"to": to, "text": gate_prompt} for to in gate.get("to") or ("owner",)]
         # one result's messages are ONE notice of its incident: one history line, its chats together (notice.py)
-        noticed: dict[int, tuple[str | None, list[tuple[int, str | None]]]] = {}
+        noticed: dict[int, tuple[str | None, list[tuple[int, frozenset]]]] = {}
 
-        def notice(iid, stage, chat, to=None):
+        def notice(iid, stage, chat, roles=frozenset()):
             st, chs = noticed.get(int(iid), (stage, []))
-            noticed[int(iid)] = (st or stage, chs + [(chat, to)])
+            noticed[int(iid)] = (st or stage, chs + [(chat, frozenset(roles))])
         # Home Assistant's own messages first: the desk's messages below then replace them where both land
         for h in res.get("ha_messages") or []:
             for chat in await self.adopt_ha(h, skill_name):
@@ -120,16 +119,13 @@ class Outcome:
             if isinstance(s, dict) and str(s.get("incident_id") or "").isdigit():
                 await self.thread.close(int(s["incident_id"]), str(s.get("note") or ""))
         pairs, unrouted = self._deliveries(items, route, origin)
-        pairs = [(c, it) for c, it in pairs if c not in {int(x) for x in skip}]
+        pairs = [p for p in pairs if p[0] not in {int(x) for x in skip}]
         for item in unrouted:
             done["unrouted"] += 1
             self.state.log("send_unrouted", {"to": item.get("to"), "skill": skill_name})
             log.info("A message for %r had nowhere to go (nobody of that role in People)", item.get("to"))
-        for chat, item in pairs:
+        for chat, item, roles in pairs:
             text = item.get("text") or ""
-            if (chat, text) in sent:
-                continue                                     # rule 4: a chat listed with both roles
-            sent.add((chat, text))
             kb = None
             # ⚠️ ITS INCIDENT AS A FIELD (review 7): it was read out of the wording ("#N"), so a reworded reminder
             # lost its buttons. A message with the buttons and no incident of its own is the result's incident's.
@@ -139,10 +135,6 @@ class Outcome:
             # button — the buttons came only where the skill asked for them. Decided here, for every skill's message.
             if skill_name and iid and (item.get("keyboard") or self.buttons.open(iid)):
                 kb = self.buttons.keyboard(iid, chat, skill_name)
-            # ⚠️ EVERY MESSAGE THE AGENT SENDS ON ITS OWN HAS ITS HEADING (owner, 2026-10-10): who it is for, the incident
-            # and its earlier notices (notice.Notices). An answer to the person who asked, in their chat, has none.
-            if self.notices and not (origin and origin.holds and chat == origin.chat):
-                text = self.notices.compose(chat, text, int(iid) if iid else None, item.get("to"))
             doc = None
             att = item.get("attachment")
             if att:
@@ -153,14 +145,14 @@ class Outcome:
                     doc = path
                 else:
                     log.warning("Skill %s attached %r, which is not a file of the out folder: sent without it", skill_name, att)
-            mid = await self.send(chat, text, keyboard=kb, document=doc, origin=origin)
+            # the incident's message in this chat now: the earlier one there goes
+            mid = await self._post(chat, text, roles=roles, incident=int(iid) if iid else None, keyboard=kb, document=doc,
+                                   thread=int(iid) if iid else None, origin=origin)
             if not mid:
                 done["not_sent"] += 1                         # delivery.py: refused, or Telegram off
                 continue
             if iid:
-                # the incident's message in this chat now: the earlier one there goes
-                await self.thread.post(int(iid), chat, mid, text, buttons=bool(kb))
-                notice(iid, item.get("stage"), chat, item.get("to"))
+                notice(iid, item.get("stage"), chat, roles)
             chats.add(chat)
             done["sent"] += 1
         if self.notices:
@@ -174,7 +166,8 @@ class Outcome:
                 await self.ask(msg, head=gate_prompt, origin=origin)
             else:
                 for chat in route.target("owner"):
-                    await self.send(chat, gate_prompt + f"\n\nThe siren cannot be requested: {answer}", origin=origin)
+                    await self._post(chat, gate_prompt + f"\n\nThe siren cannot be requested: {answer}", roles={"owner"},
+                                     origin=origin)
         for a in res.get("actions") or []:
             kind = (a or {}).get("action")
             try:
@@ -188,8 +181,10 @@ class Outcome:
                 elif kind == "snapshot.get":
                     photo = await camera_photo(self.reader, a.get("entity_id"))
                     if photo:
+                        # its own thread: a newer snapshot of the incident replaces the older one in each chat
                         for chat in chats:
-                            await self.send(chat, f"{incident_tag(a.get('incident_id'))} · Snapshot", photo=photo, origin=origin)
+                            await self._post(chat, f"{incident_tag(a.get('incident_id'))} · Snapshot", photo=photo, plain=True,
+                                             thread=f"snapshot-{a.get('incident_id')}", origin=origin)
                 else:
                     self.state.log("action_ignored", {"action": kind, "skill": skill_name})
                     log.warning("Skill %s asked for an action this agent does not know: %s", skill_name, kind)
@@ -207,17 +202,36 @@ class Outcome:
         text = f"{head}\n\n{msg.text}" if head else msg.text
         n = 0
         for chat in msg.chats:
-            mid = await self.send(chat, text, keyboard=msg.keyboard, origin=origin)
-            if mid:
-                await self.thread.post(approval_thread(msg.approval_id), chat, mid, text, buttons=True)
+            # under its heading, as everything the agent sends on its own — not in the chat it was asked from: there it
+            # is part of the answer to the person who asked
+            if await self._post(chat, text, roles={msg.to} if msg.to else (), keyboard=msg.keyboard,
+                                thread=approval_thread(msg.approval_id), plain=chat == msg.asked_in, origin=origin):
                 n += 1
         return n
 
+    async def _post(self, chat: int, text: str, *, roles=(), incident: int | None = None, keyboard: dict | None = None,
+                    document: str | None = None, photo=None, thread: int | str | None = None, plain: bool = False,
+                    origin: Origin | None = None) -> int | None:
+        """ONE WAY A MESSAGE IS PUT IN A CHAT (architecture review 18): its heading — who it is for (`roles`, every role
+        it was sent for there), the incident and its history (notice.Notices) — unless it answers the person who asked,
+        in their chat, or is `plain`; then the send; then its `thread` (an incident, an approval, a snapshot): the
+        earlier copy in this chat goes. Three sends in this module did part of this by hand (the siren's warning and
+        the approvals had no heading, a snapshot piled up). The message id, or None when nothing arrived."""
+        if self.notices and not plain and not (origin and origin.holds and chat == origin.chat):
+            text = self.notices.compose(chat, text, incident, roles)
+        mid = await self.send(chat, text, keyboard=keyboard, document=document, photo=photo, origin=origin)
+        if mid and thread is not None:
+            await self.thread.post(thread, chat, mid, text, buttons=bool(keyboard))
+        return mid
+
     @staticmethod
-    def _deliveries(items: list, route: Routing, origin) -> tuple[list[tuple[int, dict]], list[dict]]:
-        """Each message in every chat it goes to, as (chat, message), and the messages that go nowhere. Of several
-        messages for one incident landing in one chat (a chat listed with both roles), the one with the buttons —
-        else the last. Any other message is kept as it is."""
+    def _deliveries(items: list, route: Routing, origin) -> tuple[list[tuple[int, dict, frozenset]], list[dict]]:
+        """Each message in every chat it goes to, as (chat, message, the roles it goes there for), and the messages that
+        go nowhere. One copy per chat: of several messages for one incident landing in one chat (a chat listed with both
+        roles), the one with the buttons — else the last; of the same text twice, the first.
+
+        ⚠️ THE ROLES ARE MERGED, NEVER DROPPED (architecture review 18): the copy kept for a group listed for the owner AND
+        the facility manager was headed "For:" the owner's people only, and its history named only them."""
         pairs: list[tuple[int, dict]] = []
         unrouted: list[dict] = []
         for it in items:
@@ -227,13 +241,15 @@ class Outcome:
                 unrouted.append(it)
             pairs += [(int(c), it) for c in chats]
         best: dict[tuple, int] = {}
+        roles: dict[tuple, set] = {}
         for n, (chat, it) in enumerate(pairs):
-            if it.get("incident_id"):
-                k = (chat, int(it["incident_id"]))
-                if k not in best or it.get("keyboard") or not pairs[best[k]][1].get("keyboard"):
-                    best[k] = n
-        keep = set(best.values())
-        return [p for n, p in enumerate(pairs) if not p[1].get("incident_id") or n in keep], unrouted
+            iid = it.get("incident_id")
+            k = ("incident", chat, int(iid)) if iid else ("text", chat, it.get("text") or "")
+            roles.setdefault(k, set()).update({it["to"]} if it.get("to") in ("owner", "fm") else set())
+            if k not in best or (iid and (it.get("keyboard") or not pairs[best[k]][1].get("keyboard"))):
+                best[k] = n
+        kept = sorted((n, k) for k, n in best.items())
+        return [(pairs[n][0], pairs[n][1], frozenset(roles[k])) for n, k in kept], unrouted
 
     async def adopt_ha(self, h: dict, skill_name: str | None = None) -> list[int]:
         """Home Assistant's messages of one automation run become incident messages (outcome key ha_messages)."""

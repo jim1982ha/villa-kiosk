@@ -85,7 +85,7 @@ def gate(event_type: str, m: dict, policy, bot_username: str | None, is_own_mess
     if group and not policy.roles_in(cid):
         # never leaveChat: the bot is Home Assistant's too
         return Intake("drop", cid, group=True, why="group not listed in People" if policy.destinations else None)
-    person = policy.person(m.get("user_id"))
+    person = policy.member(m.get("user_id"), cid, m.get("from_first"))     # a listed group's member has its role
     if group:
         mention = bool(bot_username) and f"@{bot_username}".lower() in text.lower()
         if not (cmd or mention or is_own_message(cid, m.get("reply_to_message_id"))):

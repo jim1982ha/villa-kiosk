@@ -65,9 +65,16 @@ def test_an_older_files_chats_still_route_and_the_page_moves_them_into_people(tm
     assert p.person(444) is None                    # a chat of the old card is where to post, never a person
     text = yaml.safe_dump(old)
     form = policy_doc.to_form(text)
-    assert [(r["telegram_id"], r["role"]) for r in form["people"]] == [(JM, "owner"), (GROUP, "owner"), (444, "fm")]
+    # architecture review 18: a row of People with a positive id IS a person — the old card's private chat of nobody
+    # listed (444) stays in `chats:`, still posted to, never registered; the group becomes a row
+    assert [(r["telegram_id"], r["role"]) for r in form["people"]] == [(JM, "owner"), (GROUP, "owner")]
     saved = yaml.safe_load(policy_doc.apply_form(text, form))
-    assert "chats" not in saved and Policy(saved).destinations == p.destinations
+    assert saved["chats"] == {"fm": 444} and Policy(saved).person(444) is None
+    assert sorted(Policy(saved).destinations) == sorted(p.destinations)
+    # a chat of someone already listed (their other role) becomes their row; nothing is left behind
+    mine = yaml.safe_dump({"people": [{"telegram_id": JM, "name": "JM", "role": "owner"}], "chats": {"fm": JM}})
+    saved = yaml.safe_load(policy_doc.apply_form(mine, policy_doc.to_form(mine)))
+    assert "chats" not in saved and Policy(saved).chats_for("fm") == [JM]
 
 
 def test_a_chat_telegram_refuses_is_named_on_the_overview_until_a_message_arrives(tmp_path):
@@ -75,12 +82,23 @@ def test_a_chat_telegram_refuses_is_named_on_the_overview_until_a_message_arrive
     s = settings(str(tmp_path))
     st, tg, pol = State(s.state_path), FakeTelegram(), Policy({"people": PEOPLE})
     d = Delivery(tg, st, lambda: pol)
-    tg.refuse.add("send")
+    tg.refuse.add("send")                                   # not the chat: the network, a refused message
+    assert run(d.send(FABIEN, "x")) is None and status.unreachable(st, pol) == []
+    tg.refuse = {"blocked"}                                 # Telegram refuses the CHAT: Fabien never sent /start
     assert run(d.send(FABIEN, "x")) is None
     (line,) = status.unreachable(st, pol)
     assert line.startswith("Fabien_O / Fabien_FM: Telegram refused the last message") and "/start" in line
     tg.refuse.clear()
     assert run(d.send(FABIEN, "x")) and status.unreachable(st, pol) == []
+
+
+def test_only_telegrams_refusal_of_a_chat_counts_as_unreachable():
+    # architecture review 18: a network blip at 01:30 left "send /start" on the Overview all day
+    from vesta_agent.telegram import _failed
+    assert _failed("sendMessage", {"error_code": 403, "description": "Forbidden: bot was blocked by the user"}).refused
+    assert _failed("sendMessage", {"error_code": 400, "description": "Bad Request: chat not found"}).refused
+    assert not _failed("sendMessage", {"error_code": 400, "description": "Bad Request: can't parse entities"}).refused
+    assert not _failed("sendMessage", {"error_code": 429, "description": "Too Many Requests"}).refused
 
 
 def test_in_a_private_chat_the_persons_own_role_decides_in_a_group_the_least(tmp_path):
@@ -103,3 +121,87 @@ def test_the_for_line_names_the_role_the_message_is_for(tmp_path):
     assert n.heading(GROUP, to="fm").startswith("For: JM_FM, Fabien_FM\n")
     alone = Notices(State(s.state_path), lambda: Policy({"people": [PEOPLE[4]]}), "UTC")
     assert alone.heading(GROUP, to="owner").startswith("For: the owner\n")          # a group alone: its role
+
+
+def test_a_chat_listed_for_both_roles_is_headed_for_both(tmp_path):
+    # architecture review 18: the one copy kept for a group of both roles was headed for the owner's people only
+    v = make_agent(tmp_path, {"people": [{"telegram_id": JM, "name": "JM_O", "role": "owner"},
+                                         {"telegram_id": FABIEN, "name": "Fabien_FM", "role": "fm"},
+                                         {"telegram_id": GROUP, "name": "Group_O", "role": "owner"},
+                                         {"telegram_id": GROUP, "name": "Group_FM", "role": "fm"}]})
+    run(v.outcome.carry_out({"send": [{"to": "owner", "text": "Door unlocked."}, {"to": "fm", "text": "Door unlocked."}]}))
+    heads = {c: t.split("\n")[0] for c, t, _ in v.tg.sent}
+    assert heads == {JM: "For: JM_O", GROUP: "For: JM_O, Fabien_FM", FABIEN: "For: Fabien_FM"}
+
+
+def test_the_agents_own_approvals_and_warnings_carry_the_heading_but_not_in_the_askers_chat(tmp_path):
+    # architecture review 18: approvals and "the siren cannot be requested" went without the heading
+    v = make_agent(tmp_path, {"people": PEOPLE, "act_enabled": True,
+                              "allowed_services": {"light.turn_on": "owner", "cover.open_cover": "any"}})
+    _, msg = v.actions.request("light", "turn_on", "light.pool", {}, None, None)
+    run(v.outcome.ask(msg))
+    assert all(t.startswith("For: Fabien_O, JM_O\n") for _, t, _ in v.tg.sent)
+    v.tg.sent.clear()
+    _, msg = v.actions.request("cover", "open_cover", "cover.pool", {}, v.policy().person(JM), JM)
+    run(v.outcome.ask(msg))
+    (chat, text, _), = v.tg.sent
+    assert chat == JM and not text.startswith("For:")              # asked here: part of the answer to the asker
+
+
+def test_an_unreadable_rules_file_keeps_the_last_good_rules_and_the_siren_that_sounds_stops(tmp_path):
+    from vesta_agent.siren import Siren
+    from datetime import datetime, timedelta, timezone
+    v = make_agent(tmp_path, {"people": PEOPLE, "siren_entity": "switch.siren_a"})
+    assert v.policy().chats_for("owner")
+    T0 = datetime(2026, 10, 10, 22, 0, tzinfo=timezone.utc)
+    v.siren.executed("switch", "turn_on", ["switch.siren_a"], now=T0)
+    import os
+    import time
+    with open(v.s.policy_path, "w") as f:
+        f.write('people: [{"telegram_id": 1, name: "unclosed}]\n')            # one quote left open, by hand
+    os.utime(v.s.policy_path, (time.time() + 5, time.time() + 5))
+    assert v.policy().chats_for("owner") == [FABIEN, JM, GROUP]         # the last good rules, never empty ones
+    calls = []
+    v.actions.system = lambda d, s, e, data=None, siren=None: calls.append((d, s, e, siren)) or True
+    assert run(v.siren.tick(T0 + timedelta(minutes=5)))
+    assert calls == [("switch", "turn_off", "switch.siren_a", "switch.siren_a")]
+    # another siren chosen while one sounds: the stop is still for the one turned on, and the rules allow it
+    from vesta_agent.policy import Policy as P
+    other = P({"siren_entity": "switch.siren_b"})
+    assert other.check_service("switch", "turn_off", "switch.siren_a", system=True, siren="switch.siren_a").allowed
+    assert not other.check_service("switch", "turn_off", "switch.pump", system=True, siren="switch.siren_a").allowed
+
+
+def test_a_newer_snapshot_of_an_incident_replaces_the_older_one(tmp_path):
+    # architecture review 18: "Incident #N · Snapshot" was never kept with its incident, so every one piled up
+    from ha_fake import FakeHA
+    v = make_agent(tmp_path, {"people": [{"telegram_id": JM, "name": "JM_O", "role": "owner"}]},
+                   reader=FakeHA(images={"camera.door": "SlBFRw=="}))
+    res = {"send": [{"to": "owner", "text": "Door forced."}], "actions": [{"action": "snapshot.get", "entity_id": "camera.door",
+                                                                           "incident_id": 9}]}
+    run(v.outcome.carry_out(res))
+    first = v.tg.next_id                                                # the snapshot: the last message sent
+    run(v.outcome.carry_out(res))
+    assert (JM, first) in v.tg.deleted
+
+
+def test_a_member_of_a_listed_group_acts_with_its_role_without_a_people_row(tmp_path):
+    # owner, 2026-10-10: "any person from a Telegram group shall be able to inherit from the group role"
+    RITA = 555
+    pol = Policy({"people": [{"telegram_id": JM, "name": "JM_O", "role": "owner"},
+                             {"telegram_id": GROUP, "name": "Group_O", "role": "owner", "language": "fr"}]})
+    rita = pol.member(RITA, GROUP, "Rita")
+    assert (rita.name, rita.role, rita.language) == ("Rita", "owner", "fr")
+    assert pol.member(RITA, RITA) is None and pol.member(RITA, -999) is None      # her own chat, an unlisted group
+    assert pol.member(1087968824, GROUP) is None                                  # an anonymous admin stays nobody
+    assert pol.member(JM, GROUP).name == "JM_O"                                   # a listed person keeps their entry
+    assert pol.chats_for("owner") == [JM, GROUP]                                  # and she gets no private copies
+    v = make_agent(tmp_path, {**pol.raw, "act_enabled": True, "allowed_services": {"light.turn_on": "owner"}})
+    _, msg = v.actions.request("light", "turn_on", "light.pool", {}, None, None)
+    run(v.outcome.ask(msg))
+    in_group = next(n for n, (c, _t, _k) in enumerate(v.tg.sent, start=1001) if c == GROUP)
+    press = {"id": "cb1", "data": button_data.make(button_data.APPROVAL, msg.approval_id, "n"), "chat_id": GROUP,
+             "user_id": RITA, "from_first": "Rita",
+             "message": {"message_id": in_group, "chat": {"id": GROUP}, "text": msg.text}, "bot": BOT}
+    run(v.on_ha_event("telegram_callback", press))
+    assert v.tg.edits and all("Refused by Rita on " in t for _, _, t in v.tg.edits)

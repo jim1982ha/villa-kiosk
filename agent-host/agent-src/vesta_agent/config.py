@@ -20,7 +20,6 @@ import os
 import shutil
 from dataclasses import dataclass, field
 
-import yaml
 
 APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STARTER_DIR = os.path.join(APP_DIR, "starter")
@@ -126,11 +125,11 @@ class Settings:
             m = None
         if self._policy_cache.get("mtime") != m or "value" not in self._policy_cache:
             try:
-                v = Policy.load(self.policy_path)
-            except (OSError, yaml.YAMLError):
-                v = Policy({})
-            except Exception as e:  # noqa: BLE001 — a value nothing foresaw: the last good rules, never a stop
-                # ⚠️ (architecture review 17): any other error stopped every message, alert and press at each reading
+                v = Policy.load(self.policy_path)       # a file that is not there is no rules: Policy({})
+            except Exception as e:  # noqa: BLE001 — unreadable: the last good rules, never a stop
+                # ⚠️ ANY READING THAT FAILS KEEPS THE LAST GOOD RULES (architecture review 17, then 18): any other error
+                # stopped every message, alert and press; a YAML slip by hand (one quote left open) gave EMPTY rules —
+                # nobody registered, alerts sent nowhere, the siren forgotten. The page names the slip (rules_problems).
                 import logging
                 logging.getLogger("vesta").error("policy.yaml could not be read (%s): the last good rules are kept",
                                                  type(e).__name__)

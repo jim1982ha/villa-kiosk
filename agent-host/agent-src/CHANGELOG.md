@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.123 (10 October 2026)
+
+Architecture review 18 (points 1 to 5), and the owner's rule for group members:
+- Policy.member(id, chat, name): a listed person's entry; else, in a group People lists, a member with its role (fm when listed for both), its language, the name Telegram gives. intake.gate, the press handler and actions.decide ask it; `direct` also for a listed group's member.
+- config.Settings.policy: ANY failed reading keeps the last good rules (a YAMLError gave Policy({})). siren: the stop records its entity (state `siren:entity`); check_service(system=True, siren=) allows turning that one off.
+- outcome._deliveries returns (chat, message, roles), one copy per chat with the roles merged; notice takes roles. Outcome._post: heading, send and thread in one step — approvals (Outgoing.to, asked_in), the siren warning and snapshots (thread `snapshot-N`) go through it.
+- telegram: TelegramError.refused (403, or 400 chat not found / upgraded / kicked); Delivery marks unreachable only then.
+- policy.legacy_rows: the page moves an old chat into People only for a group or someone listed; others stay in `chats:`.
+- Tests: each shown red without its fix (11 mutations).
+
 ## 0.6.122 (10 October 2026)
 
 People is the one list of where the agent posts (owner, 2026-10-10):

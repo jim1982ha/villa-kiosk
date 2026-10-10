@@ -39,14 +39,15 @@ class Notices:
     def __init__(self, state, policy: Callable, timezone_name: str):
         self.state, self.policy, self.tz = state, policy, timezone_name
 
-    def _for(self, chat: int, to: str | None = None) -> list[str]:
-        """Who a notice to `chat` is for: the People list's persons of role `to` (else of the chat's roles); the role
-        itself when no person of it is listed (a group alone)."""
+    def _for(self, chat: int, to=None) -> list[str]:
+        """Who a notice to `chat` is for: the People list's persons of the roles `to` (a role, or every role the copy went
+        there for: outcome merges them), else of the chat's roles; the role itself when no person of it is listed."""
         pol = self.policy()
-        roles = {to} if to in ROLE_WORDS else pol.roles_in(chat)
+        wanted = {to} if isinstance(to, str) else set(to or ())
+        roles = (wanted & set(ROLE_WORDS)) or pol.roles_in(chat)
         return pol.names_for(roles) or [ROLE_WORDS[r] for r in sorted(roles)]
 
-    def heading(self, chat: int, incident: int | None = None, to: str | None = None) -> str:
+    def heading(self, chat: int, incident: int | None = None, to=None) -> str:
         """The heading of a notice to `chat` (about `incident`), as it stands before this notice is recorded."""
         head = f"For: {', '.join(self._for(chat, to)) or 'this chat'}"
         lines = []
@@ -57,12 +58,12 @@ class Notices:
                      f"to {', '.join(h.get('to') or []) or 'nobody'}" for h in history]
         return "\n".join([head, *lines, RULE])
 
-    def compose(self, chat: int, text: str, incident: int | None = None, to: str | None = None) -> str:
-        """`text` under its heading; `to`: the role it is for."""
+    def compose(self, chat: int, text: str, incident: int | None = None, to=None) -> str:
+        """`text` under its heading; `to`: the role (or roles) it is for."""
         return f"{self.heading(chat, incident, to)}\n{text}"
 
-    def record(self, incident: int, stage: str | None, sent: list[tuple[int, str | None]], at: datetime | None = None) -> None:
-        """A notice about `incident` went to `sent` — (chat, the role it was for) — one result's messages being one
+    def record(self, incident: int, stage: str | None, sent: list[tuple[int, object]], at: datetime | None = None) -> None:
+        """A notice about `incident` went to `sent` — (chat, the role or roles it was for) — one result's messages being one
         notice: its history line. `stage` unset: "new" for the first, "update" after."""
         history = self.state.incident_history(incident)
         names = list(dict.fromkeys(n for c, to in sent for n in self._for(c, to)))

@@ -88,12 +88,15 @@ def test_an_unlisted_group_is_ignored_never_left(agent):
     assert agent.conversed == [] and agent.tg.sent == []        # FakeTelegram raises on leaveChat
 
 
-def test_unregistered_people_get_their_id_in_private_only(agent):
+def test_unregistered_people_get_their_id_in_private_and_a_listed_groups_members_its_role(agent):
     run(agent.on_ha_event("telegram_text", text_event(STRANGER, STRANGER, "hi")))
     assert agent.tg.sent and str(STRANGER) in agent.tg.sent[0][1]
     agent.tg.sent.clear()
+    # owner, 2026-10-10: "any person from a Telegram group shall inherit from the group role" — no People row needed
     run(agent.on_ha_event("telegram_text", text_event(GROUP, STRANGER, "@Villa_Test_bot hi")))
-    assert agent.tg.sent == [] and agent.conversed == []
+    assert agent.conversed == [(GROUP, "X", "hi")]                            # answered, named as Telegram names them
+    assert agent.policy().member(STRANGER, GROUP).role == "fm"                # listed for both roles: the narrower
+    assert agent.policy().member(STRANGER, STRANGER) is None                  # a member only in the group
 
 
 def test_a_press_on_a_home_assistant_message_is_left_to_its_automation(agent):

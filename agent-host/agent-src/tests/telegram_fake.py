@@ -13,7 +13,8 @@ What it records, in the order it happened:
   photos     (chat, (base64, mime))      documents  (chat, path)
   toasts     (callback id, text)         edits      (chat, message id, text)
   deleted    (chat, message id)          fetched    file ids     typing_in   chats
-`refuse = {"send"}` makes send fail as Telegram does (TelegramError); `{"photo"}` only a message with a photo;
+`refuse = {"send"}` makes send fail as Telegram does (TelegramError); `{"blocked"}` as Telegram refuses a chat (a person
+who never sent /start: 403, `refused`); `{"photo"}` only a message with a photo;
 `{"second part"}` fails from a message's second part on, the first having arrived (TelegramError.delivered);
 `{"delete"}` makes delete answer False (a message past Telegram's 48 hours). Anything else reached on it — getUpdates,
 leaveChat — raises: the agent must never call them.
@@ -41,6 +42,8 @@ class FakeTelegram:
         pass
 
     async def send(self, chat_id, text, keyboard=None, document=None, photo_b64=None, reply_to=None):
+        if "blocked" in self.refuse:
+            raise TelegramError("sendMessage: 403 Forbidden: bot can't initiate conversation with a user", refused=True)
         if "send" in self.refuse:
             raise TelegramError("sendMessage: 400 refused by the test")
         if photo_b64 and "photo" in self.refuse:

@@ -563,7 +563,7 @@ class Vesta:
                   button_data.ALERT: self._press_alert, button_data.REPORT: self._press_report}.get(kind)
         if handle is None:
             return await toast("Unknown button.")
-        person = pol.person(presser)
+        person = pol.member(presser, cid, q.get("from_first"))      # a listed group's member presses with its role
         if kind in button_data.FOR_PEOPLE_ONLY and person is None:
             return await toast(NOT_REGISTERED)
         await handle(Press(q, cid, mid, msg, presser, person, parts, toast))
@@ -575,7 +575,8 @@ class Vesta:
         if ap and ap["chat_id"] != p.chat and p.chat not in self.thread.shown(thread):
             self.state.log("press_refused", {"approval": aid, "by": p.presser, "reason": "button pressed from another chat"})
             return await p.toast("This button belongs to another chat.")
-        out = await asyncio.to_thread(self.actions.decide, aid, p.presser, yn == "y")
+        out = await asyncio.to_thread(self.actions.decide, aid, p.presser, yn == "y", chat=p.chat,
+                                      name=p.q.get("from_first"))
         await p.toast(out["toast"])
         if out.get("note"):
             if p.mid and p.chat not in self.thread.shown(thread):
@@ -596,7 +597,7 @@ class Vesta:
     async def _press_alert(self, p: "Press") -> None:
         # the presser as this chat knows them (one person may be both owner and fm, each with its name)
         await self.buttons.press(p.q, p.chat, p.parts, p.person, p.toast,
-                                 name=self.policy().name_in(p.person.telegram_id, p.chat))
+                                 name=self.policy().name_in(p.person.telegram_id, p.chat) or p.person.name)
 
     async def _press_report(self, p: "Press") -> None:
         if not tool_access.may_start_job(self.policy(), self.server_tools, p.person, p.chat):

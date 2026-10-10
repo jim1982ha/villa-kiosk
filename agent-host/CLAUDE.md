@@ -238,6 +238,10 @@ Decisions of 2026-09-30 (owner):
   is gone; an older `chats:` is still read and moved into People by the page's next save. Every message leaves through
   `outcome.carry_out` (the AI's send_message too), every approval through `Outcome.ask` (copies kept as one
   IncidentThread, settled together). Rights per chat: a private chat is the person's role, a group listed for fm is fm.
+  0.12.129: a listed group's MEMBERS inherit its role (`Policy.member`, the narrower when listed for both) — the
+  intake, a press and an approval's decide ask `member`, never `person`. A copy carries every role it went to its chat
+  for (`outcome._deliveries` merges them); `Outcome._post` is the one way a copy is put in a chat (heading, send,
+  thread). An unreadable policy.yaml keeps the last good rules; the siren's stop records the siren it turned on.
 - No PDF (owner, 2026-09-30): the reports are self-contained HTML pages sent
   as attachments. Chromium was ~480 MB of a 1.1 GB image for this alone.
 - ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent

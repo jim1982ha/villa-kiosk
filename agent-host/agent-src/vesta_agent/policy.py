@@ -214,6 +214,26 @@ class Policy:
             return None
         return self.people.get(int(telegram_id))
 
+    def member(self, telegram_id: int | None, chat_id: int | None, name: str | None = None) -> Person | None:
+        """Who this is, writing or pressing in `chat_id`: their People entry; else, in a GROUP the People list names, a
+        member of it with the group's role — the facility manager's when the group is listed for both (the narrower).
+
+        ⚠️ A GROUP'S MEMBERS INHERIT ITS ROLE (owner, 2026-10-10: "a person in the group can naturally send messages in
+        the group, without having to be defined as a people"): a People row also sends that person every message of
+        their role in private, so a group member had to choose between no answer and every alert twice. Listed people
+        keep their own role everywhere; a member's rights hold only in that group (an anonymous admin stays nobody)."""
+        p = self.person(telegram_id)
+        if p is not None or telegram_id is None or int(telegram_id) in ANONYMOUS_TELEGRAM_IDS or chat_id is None \
+                or int(chat_id) >= 0:
+            return p
+        roles = self.roles_in(chat_id)
+        if not roles:
+            return None
+        role = "fm" if "fm" in roles else "owner"
+        group = next((e for e in self.entries if e.telegram_id == int(chat_id) and e.role == role), None)
+        return Person(int(telegram_id), (name or "").strip() or f"a member of {group.name if group else 'the group'}",
+                      role, group.language if group else "en")
+
     def chats_for(self, role: str) -> list[int]:
         """Every chat a message for `role` goes to: each id listed with that role, once, in the list's order."""
         return list(dict.fromkeys(c for c, r in self.destinations if r == role))
@@ -243,7 +263,7 @@ class Policy:
 
     # ------------------------------------------------------------------ layer 2
     def check_service(self, domain: str, service: str, entity_id: Any = None, data: dict | None = None,
-                      system: bool = False) -> Decision:
+                      system: bool = False, siren: str | None = None) -> Decision:
         """Decide whether a service call may be asked for (and later executed).
 
         system=True is for the few calls the code itself makes without a person
@@ -290,9 +310,11 @@ class Policy:
         if system:
             # ⚠️ THE SIREN'S OWN STOP IS ALWAYS THE AGENT'S TO MAKE (architecture review, 2026-10-07): it needed a line in
             # system_actions, which only the file holds — a siren chosen on the page kept sounding past
-            # siren_auto_off_min. Switching the configured siren OFF is implied; nothing else is.
-            siren_off = bool(self.siren_entity) and ents == [self.siren_entity] and \
-                full == f"{self.siren_entity.split('.')[0]}.turn_off"
+            # siren_auto_off_min. Switching the configured siren OFF is implied; nothing else is. `siren`: the one the agent
+            # itself turned on (siren.py records it) — stopped even when the rules changed or could not be read since
+            # (architecture review 18: an emptied file or another siren chosen meanwhile left it sounding).
+            siren_off = any(s and ents == [s] and s.split(".")[0] in SIREN_DOMAINS and full == f"{s.split('.')[0]}.turn_off"
+                            for s in (self.siren_entity, siren))
             if siren_off or (full, ents[0] if len(ents) == 1 else None) in self.system_actions:
                 d.allowed, d.reason, d.required_role = True, "system action", "system"
                 return d
@@ -474,6 +496,28 @@ def legacy_chats(raw: dict) -> dict[str, int]:
     became the one list. Nothing is named wrong in it — the page moves it into People at its next save."""
     craw = raw.get("chats") if isinstance(raw, dict) else None
     return {k: _id(craw[k]) for k in ROLES if k in craw and _id(craw[k])} if isinstance(craw, dict) else {}
+
+
+def legacy_rows(raw: dict) -> tuple[list[dict], dict[str, int]]:
+    """An older file's chats as the page moves them: (the People rows it adds, the chats it leaves in `chats:`).
+
+    ⚠️ A ROW OF PEOPLE WITH A POSITIVE ID IS A REGISTERED PERSON (architecture review 18). The old card's private chat of
+    someone People does not list only RECEIVED its role's messages; made a row, it could write to the agent, press Done
+    and approve. So a row is added only for a group, or for a chat of someone already listed (their other role); any
+    other chat stays in `chats:`, where the agent still posts and nobody gains a right. One reading for the page
+    (policy_doc) and its test; the agent reads every old chat as a destination (read_policy)."""
+    plist = raw.get("people") if isinstance(raw, dict) and isinstance(raw.get("people"), list) else []
+    listed = {(_id(p.get("telegram_id")), p.get("role")) for p in plist if isinstance(p, dict)}
+    persons = {tid for tid, _ in listed if tid and tid > 0}
+    rows, kept = [], {}
+    for role, cid in legacy_chats(raw).items():
+        if (cid, role) in listed:
+            continue
+        if cid < 0 or cid in persons:
+            rows.append({"telegram_id": cid, "name": f"{ROLE_WORDS[role]} chat", "role": role, "language": "en"})
+        else:
+            kept[role] = cid
+    return rows, kept
 
 
 def _one_of(value, choices) -> bool:

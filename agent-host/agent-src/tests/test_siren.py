@@ -16,7 +16,7 @@ class FakeActions:
     def __init__(self, ok=True):
         self.calls, self.ok = [], ok
 
-    def system(self, domain, service, entity_id, data=None):
+    def system(self, domain, service, entity_id, data=None, siren=None):
         self.calls.append((domain, service, entity_id))
         return self.ok
 
@@ -103,3 +103,17 @@ def test_the_stop_is_kept_when_the_rules_cannot_be_read(tmp_path):
     assert s.state.siren_stop() is not None                                    # still due
     s.policy = lambda: POLICY
     assert asyncio.run(s.tick(T0 + timedelta(minutes=5))) and s.actions.calls  # switched off at the next tick
+
+
+def test_the_siren_turned_on_is_the_one_stopped_when_another_is_chosen_meanwhile(tmp_path):
+    # architecture review 18: the stop turned off the siren the rules named THEN, not the one sounding
+    pol = types.SimpleNamespace(siren_entity="switch.siren_a", siren_auto_off_min=3)
+    actions, st = FakeActions(), State(str(tmp_path / "s.db"))
+
+    async def tell(text):
+        pass
+    s = Siren(lambda: pol, st, actions, tell)
+    s.executed("switch", "turn_on", ["switch.siren_a"], now=T0)
+    pol.siren_entity = "switch.siren_b"
+    assert asyncio.run(s.tick(T0 + timedelta(minutes=3)))
+    assert actions.calls == [("switch", "turn_off", "switch.siren_a")]

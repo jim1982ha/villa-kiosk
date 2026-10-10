@@ -53,6 +53,8 @@ class Outgoing:
     text: str
     keyboard: dict | None = None
     approval_id: str | None = None
+    to: str | None = None       # the role it goes to its chats for ("owner"), for the heading; None: the chat's own
+    asked_in: int | None = None  # the chat it was asked from: there it is part of the answer, without a heading
 
 
 def plain(decision: Decision, names: Callable[[str], str]) -> str:
@@ -122,8 +124,8 @@ class Actions:
         # person, writing in a chat. A scheduled job, an alert, a skill (no requester)
         # still asks; so does anything an owner-only device hides behind (_wrap_check
         # raised it to "owner").
-        if (d.direct and d.required_role == "any" and requester is not None
-                and requester.telegram_id in policy.people and origin_chat is not None):
+        if (d.direct and d.required_role == "any" and requester is not None and origin_chat is not None
+                and (requester.telegram_id in policy.people or (int(origin_chat) < 0 and policy.roles_in(origin_chat)))):
             result = self.execute(d)
             self.state.log("direct", dict(base, by=requester.name, ok=result["ok"]))
             log.info("Direct %s.%s on %s, asked by %s: %s", d.domain, d.service, ", ".join(d.entity_ids),
@@ -146,17 +148,20 @@ class Actions:
         msg = Outgoing([int(c) for c in targets],
                        f"{text}\nOnly {who} can approve. Expires in {policy.approval_ttl_minutes} min.",
                        {"inline_keyboard": [[{"text": "Approve", "callback_data": button_data.make(button_data.APPROVAL, aid, "y")},
-                                             {"text": "Refuse", "callback_data": button_data.make(button_data.APPROVAL, aid, "n")}]]}, aid)
+                                             {"text": "Refuse", "callback_data": button_data.make(button_data.APPROVAL, aid, "n")}]]}, aid,
+                       to="owner" if targets == policy.chats_for("owner") else None,
+                       asked_in=int(origin_chat) if origin_chat is not None else None)
         return (f"Approval requested from {who} (buttons sent). Nothing happens until a person approves. "
                 f"Do not say it is done."), msg
 
     # ------------------------------------------------------------------ decide
-    def decide(self, aid: str, presser_id: int | None, approve: bool, now: datetime | None = None) -> dict:
+    def decide(self, aid: str, presser_id: int | None, approve: bool, now: datetime | None = None,
+               chat: int | None = None, name: str | None = None) -> dict:
         """Returns {'toast': str for the presser only, 'note': str or None, 'executed': bool}. `note` is what every copy of
         the request then says under it, its buttons gone ("{time}": the villa's time, filled by IncidentThread.close)."""
         now = now or datetime.now(timezone.utc)
         policy = self.policy_loader()
-        person = policy.person(presser_id)
+        person = policy.member(presser_id, chat, name)        # pressed in a listed group: its role (policy.member)
         ap = self.state.approval(aid)
         if not ap:
             self.state.log("press_refused", {"approval": aid, "by": presser_id, "reason": "unknown id"})
@@ -241,10 +246,11 @@ class Actions:
         return {"ok": False, "text": "Not confirmed: " + ", ".join(f"{self.names(e)} reads {s}" for e, s in bad) + ". I will not retry by myself."}
 
     # ------------------------------------------------------------------ system
-    def system(self, domain: str, service: str, entity_id: str, data: dict | None = None) -> bool:
-        """A call the code makes for itself (the agent's heartbeat helper). Listed in policy.system_actions only."""
+    def system(self, domain: str, service: str, entity_id: str, data: dict | None = None, siren: str | None = None) -> bool:
+        """A call the code makes for itself (the agent's heartbeat helper). Listed in policy.system_actions only — or the
+        stop of `siren`, the one the agent turned on (siren.py)."""
         policy = self.policy_loader()
-        d = policy.check_service(domain, service, entity_id, data, system=True)
+        d = policy.check_service(domain, service, entity_id, data, system=True, siren=siren)
         if not d.allowed:
             self.state.log("refused", {"system": True, "domain": domain, "service": service, "entity": entity_id, "reason": d.reason})
             return False

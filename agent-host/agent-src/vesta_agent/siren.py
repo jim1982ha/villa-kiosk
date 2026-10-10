@@ -29,7 +29,7 @@ class Siren:
                 or pol.siren_entity not in (entity_ids or []):
             return
         at = (now or datetime.now(timezone.utc)) + timedelta(minutes=pol.siren_auto_off_min)
-        self.state.set_siren_stop(at.isoformat())
+        self.state.set_siren_stop(at.isoformat(), pol.siren_entity)
         log.info("Siren on: it stops by itself at %s (%s min)", at.isoformat(timespec="seconds"), pol.siren_auto_off_min)
 
     async def tick(self, now: datetime | None = None) -> bool:
@@ -40,10 +40,13 @@ class Siren:
         # ⚠️ THE RULES READ BEFORE THE STOP IS FORGOTTEN (architecture review 17): cleared first, a reading that failed
         # lost it for good — the siren was never switched off, even after a restart
         pol = self.policy()
+        # ⚠️ THE SIREN THAT WAS TURNED ON (architecture review 18): the rules' siren may have changed since, or the rules
+        # may not have been readable — the stop is for the one that sounds
+        entity = self.state.siren_stopping() or pol.siren_entity
         self.state.set_siren_stop(None)
-        if not pol.siren_entity:
+        if not entity:
             return True
-        ok = await asyncio.to_thread(self.actions.system, pol.siren_entity.split(".")[0], "turn_off", pol.siren_entity)
+        ok = await asyncio.to_thread(self.actions.system, entity.split(".")[0], "turn_off", entity, siren=entity)
         await self.tell_owner("Siren switched off." if ok else "The siren could not be switched off: check it now.")
         return True
 

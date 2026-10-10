@@ -111,8 +111,10 @@ class Delivery:
             self.state.log("send_failed", {"chat": chat_id, "error": str(e), "parts_arrived": len(ids)})
             if not ids:
                 # ⚠️ NAMED ON THE OVERVIEW (owner, 2026-10-10): with every chat of a role in People, a person who never
-                # sent /start to the bot silently missed every message meant for them
-                self.state.set_unreachable(chat_id, str(e))
+                # sent /start to the bot silently missed every message meant for them. Only when TELEGRAM refused the
+                # chat (architecture review 18): a network blip at 01:30 said "send /start" all day.
+                if getattr(e, "refused", False):
+                    self.state.set_unreachable(chat_id, str(e))
                 return None
             # ⚠️ PARTLY ARRIVED IS NOT "NOTHING ARRIVED" (architecture review 15): a reply whose picture and first part
             # arrived was sent again whole, with "the picture could not be sent" — the person read it twice

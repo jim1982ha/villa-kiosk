@@ -14,7 +14,7 @@ import yaml
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 
-from ..policy import DEFAULT_BEHAVIOUR, DEFAULTS, ENTITY_LISTS, ROLE_WORDS, form_sections, legacy_chats
+from ..policy import DEFAULT_BEHAVIOUR, DEFAULTS, ENTITY_LISTS, form_sections, legacy_rows
 from ..tool_access import CHOOSE, OWN, ROLE_GROUPS
 
 #: What the forms edit. Everything else (system_actions, notify_recipients...) is edited in the file itself and
@@ -51,10 +51,9 @@ def to_form(text: str) -> dict:
             settings["keep"] = raw["settings"]["keep"]
     people = [p for p in (raw.get("people") or []) if isinstance(p, dict)] if isinstance(raw.get("people"), list) else []
     # ⚠️ AN OLDER FILE'S CHATS BECOME ROWS OF PEOPLE (0.12.128: People is the one list of where messages go): shown
-    # here, and written there by the next save (apply_form drops `chats:`), so no install loses where it posted
-    listed = {(str(p.get("telegram_id")), p.get("role")) for p in people}
-    people += [{"telegram_id": cid, "name": f"{ROLE_WORDS[role]} chat", "role": role, "language": "en"}
-               for role, cid in legacy_chats(raw).items() if (str(cid), role) not in listed]
+    # here, and written there by the next save — never a private chat of someone People does not list, which a row
+    # would register (policy.legacy_rows; apply_form leaves it in `chats:`)
+    people += legacy_rows(raw)[0]
     return {
         "settings": settings,
         "act_enabled": raw.get("act_enabled", DEFAULTS["act_enabled"]),
@@ -142,7 +141,11 @@ def apply_form(text: str, form: dict) -> str:
             continue                               # absent and still the default: the file stays as it was
         _set(doc, key, form[key])
     if "people" in form and "chats" in doc:
-        del doc["chats"]                           # its chats are rows of People now (to_form)
+        kept = legacy_rows(yaml.safe_load(text) if (text or "").strip() else {})[1]
+        if kept:
+            _set(doc, "chats", kept)               # private chats of nobody listed: still posted to, never a person
+        else:
+            del doc["chats"]                       # its chats are rows of People now (to_form)
     if web is not None:                            # web search's switch: written in settings, where the agent reads it
         settings = doc.get("settings")
         if (settings or {}).get("web_search", DEFAULT_BEHAVIOUR.get("web_search", False)) != web:

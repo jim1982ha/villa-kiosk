@@ -71,7 +71,7 @@ def rules_problems(text: str) -> list[str]:
     try:
         return policy_problems(yaml.safe_load(text) if text and text.strip() else {})
     except yaml.YAMLError as e:
-        return [f"The file cannot be read as YAML: {e}"]
+        return [f"The file cannot be read as YAML: {e}. Until it is fixed, the agent keeps the last rules it could read."]
     except Exception as e:  # noqa: BLE001 — named on the page, never an error 500 (architecture review 17)
         return [f"The file holds a value the agent cannot read ({type(e).__name__}): check the values written by hand."]
 

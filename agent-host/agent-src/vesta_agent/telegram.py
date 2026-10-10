@@ -27,10 +27,23 @@ log = logging.getLogger("vesta.telegram")
 
 
 class TelegramError(RuntimeError):
-    def __init__(self, *a, delivered: list[int] | None = None):
+    def __init__(self, *a, delivered: list[int] | None = None, refused: bool = False):
         super().__init__(*a)
         # the messages that DID arrive before it failed (a long reply cut in parts): never "nothing arrived"
         self.delivered: list[int] = list(delivered or [])
+        # Telegram itself refused this CHAT (blocked, never started, no such chat, a group whose id changed) — not the
+        # network, not the message: the only failure that says a person must act (the Overview's "not reached")
+        self.refused = refused
+
+
+#: Telegram's words when the chat itself cannot be written to (a 403 always is one).
+CHAT_REFUSED = ("chat not found", "upgraded to a supergroup", "peer_id_invalid", "bot was kicked", "not a member")
+
+
+def _failed(method: str, body: dict) -> TelegramError:
+    code, words = body.get("error_code"), str(body.get("description") or "")
+    refused = code == 403 or (code == 400 and any(w in words.lower() for w in CHAT_REFUSED))
+    return TelegramError(f"{method}: {code} {words}", refused=refused)
 
 
 #: A photo's or a file's caption: the first part of its text (Telegram takes 1,024; kept under it).
@@ -99,7 +112,7 @@ class Telegram:
         if not body.get("ok"):
             if body.get("error_code") == 409:
                 raise TelegramError("409 Conflict: a program is reading this bot with getUpdates while Home Assistant receives it")
-            raise TelegramError(f"{method}: {body.get('error_code')} {body.get('description')}")
+            raise _failed(method, body)
         return body.get("result")
 
     async def _post_form(self, method: str, form: aiohttp.FormData) -> dict:
@@ -112,7 +125,7 @@ class Telegram:
         except Exception as e:  # never log the URL: it holds the token
             raise TelegramError(f"{method}: {type(e).__name__}") from None
         if not body.get("ok"):
-            raise TelegramError(f"{method}: {body.get('error_code')} {body.get('description')}")
+            raise _failed(method, body)
         return body.get("result") or {}
 
     async def send(self, chat_id: int, text: str, keyboard: dict | None = None, document: str | None = None,
@@ -127,7 +140,7 @@ class Telegram:
             try:
                 res = await self._part(chat_id, part, document, photo_b64)
             except TelegramError as e:
-                raise TelegramError(str(e), delivered=ids) from None
+                raise TelegramError(str(e), delivered=ids, refused=e.refused) from None
             if res.get("message_id"):
                 ids.append(res["message_id"])
         return ids
