@@ -43,7 +43,9 @@ from .api_errors import AI_DOWN, FOR_PERSON, NEEDS_THE_OWNER
 from .delivery import Delivery
 from .config import STARTER_DIR
 from .ha_events import CONTEXT_KEY, HaEvents
-from .incident_thread import IncidentThread, approval_thread, with_status
+from . import layout
+from .approvals import Approvals
+from .incident_thread import IncidentThread
 from vesta_shared.result import FAULTS_CHANGED
 from .housekeeping import tidy
 from .kiosk import Kiosk, KioskError
@@ -99,9 +101,6 @@ def pack_needs_build(path: str) -> bool:
 
 #: How often the agent reads the VESTA Kiosk's faults (one closed in the Cockpit settles its alert's messages).
 KIOSK_EVERY_S = 300
-#: An approved action whose device is still moving (a curtain): looked at again this often, for this long, then the
-#: request says done or not done (app._follow).
-FOLLOW_EVERY_S, FOLLOW_FOR_S = 5, 90
 #: The largest photo the AI is shown: the Anthropic API takes an image of at most 5 MB.
 PHOTO_MAX_BYTES = 5 * 1024 * 1024
 
@@ -151,6 +150,10 @@ class Vesta:
         self.outcome = Outcome(policy=self.policy, state=self.state, send=self.delivery.send, actions=self.actions,
                                reader=self.reader, tickets=self.tickets, buttons=self.buttons, thread=self.thread,
                                notices=self.notices, out_dir=settings.out_dir, timezone_name=settings.timezone)
+        # an approval request from start to end (approvals.py); the siren's gate asks through it too
+        self.approvals = Approvals(state=self.state, policy=self.policy, actions=self.actions, thread=self.thread,
+                                   post=self.outcome._post, timezone_name=settings.timezone, safe=self._safe)
+        self.outcome.ask = self.approvals.ask
         self.server_tools: list[dict] = []
         # the reports (ai_jobs.py): run, made without the AI, started from a chat
         # one AI turn, decided once: its tools by who asks, its brain, limit, record and folder (turn.py)
@@ -161,7 +164,6 @@ class Vesta:
         self.bot_username: str | None = None
         self._locks: dict[int, asyncio.Lock] = {}
         self._kiosk_read = 0.0            # when the Kiosk's faults were last read (housekeeping)
-        self._watching: set[asyncio.Task] = set()   # approved actions whose device is still on its way (_follow)
         self._pack = None
         self._pack_mtime = None
 
@@ -222,7 +224,7 @@ class Vesta:
         """`allowed`: what the AI may use this time (turn.Terms.tools); None: everything switched on. `settings`: the
         run's own (config.Settings.in_folder: its files' folder); the agent's without one."""
         return Toolbox(settings=settings or self.s, policy=self.policy(), reader=self.reader, actions=self.actions,
-                       skills=self.skills, ask=self.outcome.ask, server_tools=self.server_tools, state=self.state,
+                       skills=self.skills, ask=self.approvals.ask, server_tools=self.server_tools, state=self.state,
                        ticket=self.tickets.create if self.kiosk.enabled else None,
                        carry_out=self.outcome.carry_out, start_job=self.jobs.start, allowed=allowed)
 
@@ -275,6 +277,8 @@ class Vesta:
             except KioskError as e:
                 log.warning("VESTA Kiosk: %s", e)
         await self.refresh_server_tools()
+        # a device still being followed when the agent stopped (an approved curtain): followed again (approvals.py)
+        await self._safe(self.approvals.resume())
         for sk in self.skills.all().values():
             without = tool_access.unavailable(self.policy(), self.server_tools or None, sk)
             if without:
@@ -533,8 +537,7 @@ class Vesta:
             # told not to, the AI still wrote it — and pressed at once, the request was decided before that line came, so
             # nothing removed it. The engine decides: no written reply after a request put in this chat (anything else
             # the person asked, the AI answers with send_message — tools.ha_call_service tells it so).
-            if not keyboard and not (res.problem or res.error) and \
-                    any(cid in self.thread.shown(approval_thread(a)) for a in res.approvals):
+            if not keyboard and not (res.problem or res.error) and self.approvals.shown_in(res.approvals, cid):
                 if answer:
                     log.info("Chat %s: the AI's reply not sent, the approval request shown there says it all", cid)
                 answer = ""
@@ -558,33 +561,8 @@ class Vesta:
             else:
                 out.append(f"[The {sk.name} skill's check could not run just now: say so if asked about it]")
         if self.policy().act_enabled:
-            out.append(self.approvals_now())
+            out.append(self.approvals.now())
         return "\n\n".join(out)
-
-    def approvals_now(self, now: datetime | None = None) -> str:
-        """The requests for approval as they stand now, for the AI before it answers.
-
-        ⚠️ NEVER FROM ITS MEMORY (owner, 2026-10-10): asked again for the curtain, the AI answered "Approval request already
-        sent 22 min ago, press the button" — it remembered asking, never learnt it had been approved, and asked nothing.
-        A press goes to the agent, not to the conversation: the agent says what is waiting and what was decided."""
-        now = now or datetime.now(timezone.utc)
-        rows = self.state.approvals_since((now - timedelta(hours=2)).isoformat())
-        pol = self.policy()
-
-        def who(tid):
-            p = pol.person(tid)
-            return p.name if p else "someone"
-        waiting = [r for r in rows if r["status"] == "pending" and datetime.fromisoformat(r["expires_at"]) > now]
-        decided = [r for r in rows if r not in waiting][:5]
-        lines = [f"- waiting: {r['action'].get('plain', '?')} (asked {when(datetime.fromisoformat(r['created_at']), self.s.timezone)})"
-                 for r in waiting] or ["- nothing is waiting for approval"]
-        for r in decided:
-            st = "expired" if r["status"] == "pending" else r["status"]
-            by = f" by {who(r['decided_by'])}" if r.get("decided_by") else ""
-            at = f" on {when(datetime.fromisoformat(r['decided_at']), self.s.timezone)}" if r.get("decided_at") else ""
-            lines.append(f"- {st}{by}{at}: {r['action'].get('plain', '?')}")
-        return ("[Requests for approval, checked just now; answer from this, never from memory. An action asked now is "
-                "a new request: call ha_call_service for it, whatever was asked before]\n" + "\n".join(lines))
 
     # ------------------------------------------------------------------ button presses
     async def handle_callback(self, q: dict):
@@ -607,7 +585,7 @@ class Vesta:
 
         # ⚠️ ONE TABLE OF BUTTON KINDS (button_data.py): each kind's handler below; who must be registered, once
         kind, parts = button_data.read(data)
-        handle = {button_data.APPROVAL: self._press_approval, button_data.CONTINUE: self._press_continue,
+        handle = {button_data.APPROVAL: self.approvals.press, button_data.CONTINUE: self._press_continue,
                   button_data.ALERT: self._press_alert, button_data.REPORT: self._press_report}.get(kind)
         if handle is None:
             return await toast("Unknown button.")
@@ -615,41 +593,6 @@ class Vesta:
         if kind in button_data.FOR_PEOPLE_ONLY and person is None:
             return await toast(NOT_REGISTERED)
         await handle(Press(q, cid, mid, msg, presser, person, parts, toast))
-
-    async def _press_approval(self, p: "Press") -> None:
-        aid, yn = p.parts
-        ap = self.state.approval(aid)
-        thread = approval_thread(aid)
-        if ap and ap["chat_id"] != p.chat and p.chat not in self.thread.shown(thread):
-            self.state.log("press_refused", {"approval": aid, "by": p.presser, "reason": "button pressed from another chat"})
-            return await p.toast("This button belongs to another chat.")
-        out = await asyncio.to_thread(self.actions.decide, aid, p.presser, yn == "y", chat=p.chat,
-                                      name=p.q.get("from_first"))
-        await p.toast(out["toast"])
-        if out.get("note"):
-            if p.mid and p.chat not in self.thread.shown(thread):
-                # a request sent before 0.12.128 has no thread: the pressed message is its one copy
-                await self.thread.post(thread, p.chat, int(p.mid), str(p.msg.get("text") or ""), buttons=True)
-            # every copy of the request, in every chat, says what was decided, by whom and when (Outcome.ask)
-            await self.thread.close(thread, out["note"], out.get("body"))
-            if out.get("follow"):
-                await self._follow(thread, out["follow"])
-
-    async def _follow(self, thread: str, decision) -> None:
-        """An approved action's device still on its way: read again until it gets there (or FOLLOW_FOR_S passes), and
-        the request then says done — or, at the end, not done. The press has had its answer already."""
-        async def watch():
-            waited = 0.0
-            while waited < FOLLOW_FOR_S:
-                await asyncio.sleep(FOLLOW_EVERY_S)
-                waited += FOLLOW_EVERY_S
-                body = await asyncio.to_thread(self.actions.recheck, decision)
-                if body:
-                    return await self.thread.rewrite(thread, body)
-            await self.thread.rewrite(thread, await asyncio.to_thread(self.actions.recheck, decision, True))
-        task = asyncio.create_task(self._safe(watch()))
-        self._watching.add(task)
-        task.add_done_callback(self._watching.discard)
 
     async def _press_continue(self, p: "Press") -> None:
         cont = self.state.use_continuation(p.parts[0], p.chat, p.presser)
@@ -674,8 +617,9 @@ class Vesta:
         await p.toast(said)
         if p.mid:
             # the message itself says so, its buttons gone: a toast alone is easily missed ("nothing happened")
-            # where it stands, under the line at the bottom, as every update of a message (incident_thread.with_status)
-            await self.delivery.edit(p.chat, p.mid, with_status(str(p.msg.get("text") or ""), said))
+            # where it stands, under the line at the bottom, as every update of a message (layout.py)
+            await self.delivery.edit(p.chat, p.mid, layout.render(layout.changed(layout.legacy(str(p.msg.get("text") or "")),
+                                                                                 status=said)))
 
     async def _server_tools(self) -> list[dict]:
         """HA MCP's tool list, read again when the agent has none yet."""
@@ -709,6 +653,8 @@ class Vesta:
         if self.kiosk.enabled and time.monotonic() - self._kiosk_read >= KIOSK_EVERY_S:
             self._kiosk_read = time.monotonic()
             await self._safe(self.tickets.repair())
+        # a request for approval nobody answered says so, in every chat, and loses its buttons (approvals.py)
+        await self._safe(self.approvals.expire())
 
     # ------------------------------------------------------------------ the VESTA Agent page's requests
     async def on_request(self, req: dict) -> dict:

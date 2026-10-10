@@ -1,3 +1,13 @@
+## 0.12.142
+
+What you will see (architecture review 19, every point):
+- A curtain that opens after an approval is no longer recorded as failed: the agent, asked later, says it opened, as the message does. If the agent restarts while a curtain is still moving, it picks the follow-up up again: the message never stays at "Opening…".
+- An approved siren request keeps its reason ("Intrusion suspected…") above "Turned on Siren.". More generally a message is updated part by part, so an alert's own text is never cut by a press.
+- Asked for an action together with a camera picture, you get the request and the picture.
+- A request nobody answers says "Expired on … : nothing was done." at its time and loses its buttons; the agent sees every request still waiting, even one asked hours ago.
+- Faults of alerts muted before Mute was removed now close in the Cockpit by themselves within 5 minutes.
+- Behind the scenes: an approval request is handled in one place, a message's layout in another, and "who acts with which role" has one answer.
+
 ## 0.12.141
 
 What you will see:

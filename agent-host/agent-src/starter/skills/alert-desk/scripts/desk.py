@@ -41,7 +41,7 @@ from vesta_shared.problems import Problems  # noqa: E402  (a problem's lifecycle
 from vesta_shared import result as R  # noqa: E402  (what the engine is asked to do: its shape)
 from vesta_shared import script  # noqa: E402  (client, store, settings, zone: one set-up)
 from vesta_shared import skill_settings  # noqa: E402  (rules.yaml, the villa's on top)
-from vesta_shared.messaging import incident_message, incident_tag  # noqa: E402  (an incident's message: one layout)
+from vesta_shared.messaging import incident_tag  # noqa: E402
 
 SKILL = os.path.dirname(HERE)
 # rules.yaml with the villa's own villa.rules.yaml on top (kept by updates): a villa's route comes FIRST, so it
@@ -89,12 +89,13 @@ def details(payload: dict, rule_id: str) -> str:
     return f"{text}\nWhat to do: {check}" if check else text
 
 
-def about(inc: dict, status: str, extra: str = "") -> str:
-    """A message about an open incident: its number and where it stands, the original alert, `extra` (what just
-    happened, in Home Assistant's words), then what to answer."""
+def about(inc: dict, status: str, extra: str = "") -> dict:
+    """A message about an open incident, as its parts: the original alert and `extra` (what just happened, in Home
+    Assistant's words) as its text, and where it stands as its status — the engine lays them out (heading, alert, status
+    at the bottom: vesta_agent/layout.py), never this skill. R.message(to, **about(...))."""
     inc = dict(inc)                                # a store row (find_open_incident) or a dict
     body = details(json.loads(inc.get("payload") or "{}"), inc["rule_id"])
-    return incident_message(status, f"{body}\n{extra}" if extra else body)
+    return {"text": f"{body}\n{extra}" if extra else body, "status": status}
 
 
 def chased(inc: dict) -> bool:
@@ -164,20 +165,20 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
         since = day_time_label(villa_time(cur["opened_at"], zone or "UTC"), weekday=True)
         status = f"Still there: {cur['count'] + 1} times since {since}"
         # Home Assistant's own new message for it takes the incident's number, and replaces its older ones
-        out["ha_messages"] = [R.ha_message(cur["id"], about(cur, status), ev.get("_context_id"), stage="reminder")]
+        out["ha_messages"] = [R.ha_message(cur["id"], context=ev.get("_context_id"), stage="reminder", **about(cur, status))]
         if (now - last) < timedelta(minutes=route["cooldown_min"]):
             out["decision"] = "counted"  # repeat inside the cooldown: no message of the desk's own
             return out
         out["decision"] = "repeat"
         ask = chased(cur)
-        out["send"].append(R.message("fm", about(cur, status), incident=cur["id"], buttons=ask, stage="reminder"))
+        out["send"].append(R.message("fm", **about(cur, status), incident=cur["id"], buttons=ask, stage="reminder"))
         if route.get("intrusion"):
             out["siren_gate"] = siren_gate(store, ev, now)
         return out
     iid = store.new_incident(key, rule_id, eid, sev, ev, now.isoformat())
     out["incident_id"] = iid
     out["decision"] = "new"
-    text = incident_message("", details(ev, rule_id))      # "New" is the heading's (Incident: New #N)
+    text = details(ev, rule_id)      # no status: "New" is the heading's (Incident: New #N)
     if ev.get("snapshot"):
         out["actions"].append(R.snapshot(ev["snapshot"], iid))
     out["ha_messages"] = [R.ha_message(iid, text, ev.get("_context_id"), stage="new")]
@@ -215,9 +216,9 @@ def resolved(store: Store, ev: dict, now: datetime) -> dict:
     # its alert and reminders, in every chat, lose their buttons: nobody presses for something already over
     out["settle"] = [R.settle(inc["id"], "Cleared in Home Assistant on {time}.")]
     # Home Assistant's all-clear takes the incident's number and the original alert, and replaces its older ones
-    out["ha_messages"] = [R.ha_message(inc["id"], about(inc, ev["message"]), ev.get("_context_id"))]
+    out["ha_messages"] = [R.ha_message(inc["id"], context=ev.get("_context_id"), **about(inc, ev["message"]))]
     if was_chasing:
-        out["send"].append(R.message("fm", about(inc, "Closed: Home Assistant reports it cleared on {time}. No reply needed."),
+        out["send"].append(R.message("fm", **about(inc, "Closed: Home Assistant reports it cleared on {time}. No reply needed."),
                                      incident=inc["id"], stage="update"))
     store.audit("alert-desk", "resolved", {"incident": inc["id"]})
     return out
@@ -231,9 +232,9 @@ def abandoned(store: Store, ev: dict, now: datetime) -> dict:
         return out
     store.update_incident(inc["id"], state=Incident.ESCALATED, escalated_at=now.isoformat(), assignee="owner")
     out["incident_id"], out["decision"] = inc["id"], "abandoned"
-    text = about(inc, "Still not clear, and the rule has stopped watching it", extra=ev["message"])
-    out["ha_messages"] = [R.ha_message(inc["id"], text, ev.get("_context_id"), stage="escalated")]
-    out["send"].append(R.message("owner", text, incident=inc["id"], buttons=True, stage="escalated"))
+    said = about(inc, "Still not clear, and the rule has stopped watching it", extra=ev["message"])
+    out["ha_messages"] = [R.ha_message(inc["id"], context=ev.get("_context_id"), stage="escalated", **said)]
+    out["send"].append(R.message("owner", **said, incident=inc["id"], buttons=True, stage="escalated"))
     return out
 
 
@@ -272,7 +273,7 @@ def reply(store: Store, iid: int, text: str, sender_role: str, now: datetime, pa
 
     def here(status: str) -> dict:
         """The answer in the chat it came from: it replaces the incident's message there, so it says it all."""
-        return R.message("here", about(inc, status), incident=iid, stage="update")
+        return R.message("here", **about(inc, status), incident=iid, stage="update")
     if inc.get("closed_at"):
         out["send"].append(here("Already closed")); return out
     if t.startswith("done"):
@@ -281,7 +282,7 @@ def reply(store: Store, iid: int, text: str, sender_role: str, now: datetime, pa
         out["send"].append(here(f"Closed: done, answered by {who} on {{time}}. The VESTA Agent will check it stays quiet."))
     elif t.startswith("need help"):
         store.update_incident(iid, state=Incident.ESCALATED, reply=text, escalated_at=now.isoformat(), assignee="owner")
-        out["send"].append(R.message("owner", about(inc, f"{who.capitalize()} needs help"), incident=iid, buttons=True,
+        out["send"].append(R.message("owner", **about(inc, f"{who.capitalize()} needs help"), incident=iid, buttons=True,
                                      stage="escalated"))
         out["send"].append(here(f"Need help, answered by {who} on {{time}}: the owner has been told"))
     else:
@@ -309,12 +310,12 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None) -> dict
         age = now - asked
         if inc["state"] == Incident.ASKED and age >= timedelta(minutes=reask):
             store.update_incident(inc["id"], state=Incident.REASKED, reasked_at=now.isoformat())
-            out["send"].append(R.message("fm", about(inc, f"Reminder: no answer after {int(reask)} min"), stage="reminder",
+            out["send"].append(R.message("fm", **about(inc, f"Reminder: no answer after {int(reask)} min"), stage="reminder",
                                          incident=inc["id"], buttons=True))
             out["reasked"].append(inc["id"])
         elif inc["state"] == Incident.REASKED and age >= timedelta(minutes=escal):
             store.update_incident(inc["id"], state=Incident.ESCALATED, escalated_at=now.isoformat(), assignee="owner")
-            out["send"].append(R.message("owner", about(inc, f"No answer from the facility manager after {int(escal)} min"), stage="escalated",
+            out["send"].append(R.message("owner", **about(inc, f"No answer from the facility manager after {int(escal)} min"), stage="escalated",
                                          incident=inc["id"], buttons=True))
             out["escalated"].append(inc["id"])
     # villa silent: the engine's Home Assistant connection has been down too long
@@ -327,14 +328,13 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None) -> dict
                                      now.isoformat())
             store.update_incident(iid, state=Incident.ASKED, asked_at=now.isoformat(), assignee="fm")
             for role in recipients("P1"):
-                out["send"].append(R.message(role, incident_message(
-                    f"[P1] Villa silent since {last[:16]} UTC",
-                    "No contact with Home Assistant. Check power, the router and the internet link."), incident=iid, stage="new"))
+                out["send"].append(R.message(role, "No contact with Home Assistant. Check power, the router and the internet link.",
+                                             status=f"[P1] Villa silent since {last[:16]} UTC", incident=iid, stage="new"))
     elif last:
         cur = store.find_open_incident("critical_internet---villa_silent|agent")
         if cur:
             out["actions"] += Problems(store).close_incident(cur["id"], Incident.RECOVERED, now.isoformat())
-            out["send"].append(R.message("fm", about(cur, "Closed on {time}: the villa is back online, Home Assistant answers again"), stage="update",
+            out["send"].append(R.message("fm", **about(cur, "Closed on {time}: the villa is back online, Home Assistant answers again"), stage="update",
                                          incident=cur["id"]))
     # alert fatigue: a rule firing more than N times in 30 days without acknowledgement
     limit = params.behaviour("alert_fatigue_per_month")

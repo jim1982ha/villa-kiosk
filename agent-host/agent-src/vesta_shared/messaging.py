@@ -84,6 +84,8 @@ def incident_message(status: str, details: str = "") -> str:
     2026-10-10: "never mention any redundant text like Reply Done or Need help").
 
     ⚠️ THE ALERT FIRST, WHERE IT STANDS LAST (owner, 2026-10-10): "the update of the message shall appear at the bottom,
-    after a ------- line", with its time. A button pressed later replaces that last part (IncidentThread.close)."""
+    after a ------- line", with its time. A button pressed later replaces that last part (IncidentThread.close).
+    Since 0.12.142 a skill gives the status apart (vesta_shared.result.message status=) and the engine lays the parts out
+    (vesta_agent/layout.py): this stays only for a skill edited before, which still joins them."""
     body, status = (details or "").strip(), status.strip()
     return f"{body}\n{RULE}\n{status}" if body and status else body or status

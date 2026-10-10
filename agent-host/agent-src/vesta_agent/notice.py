@@ -24,7 +24,6 @@ from datetime import datetime, timezone
 from typing import Callable
 from zoneinfo import ZoneInfo
 
-from vesta_shared.messaging import RULE  # the one line between a notice's parts
 
 #: A notice's kind (vesta_shared.result.message `stage`), as its history line says it.
 STAGES = {"new": "First time seen", "reminder": "Reminded", "escalated": "Escalated", "update": "Updated"}
@@ -54,8 +53,11 @@ class Notices:
             # ⚠️ A PRIVATE CHAT IS ONE PERSON'S (owner, 2026-10-10: "why was this message addressed to Fabien, since it's a
             # direct request from my personal chat?"): the reader is named, never every person of the role
             own = list(dict.fromkeys(e.name for e in pol.entries if e.telegram_id == int(chat) and (e.role in roles or not roles)))
-            if own:
+            if len(own) == 1:
                 return own
+            p = pol.person(chat)                       # listed in both roles, the copy for both: the one person, once
+            if p is not None:
+                return [p.name]
         return pol.names_for(roles) or [ROLE_WORDS[r] for r in sorted(roles)]
 
     def heading(self, chat: int, incident: int | None = None, to=None) -> str:
@@ -71,11 +73,12 @@ class Notices:
             head += f", {f'{p} ' if p else ''}Incident: {'Follow Up' if history else 'New'} #{incident}"
             lines = [f"{STAGES.get(h.get('stage'), 'Sent')} on {when(datetime.fromisoformat(h['at']), self.tz)}, "
                      f"to {', '.join(h.get('to') or []) or 'nobody'}" for h in history]
-        return "\n".join([head, *lines, RULE])
+        return "\n".join([head, *lines])               # the line under it is the layout's (layout.py)
 
     def compose(self, chat: int, text: str, incident: int | None = None, to=None) -> str:
-        """`text` under its heading; `to`: the role (or roles) it is for."""
-        return f"{self.heading(chat, incident, to)}\n{text}"
+        """`text` under its heading; `to`: the role (or roles) it is for (layout.py lays the parts out)."""
+        from .layout import parts, render
+        return render(parts(body=text, head=self.heading(chat, incident, to)))
 
     def record(self, incident: int, stage: str | None, sent: list[tuple[int, object]], at: datetime | None = None) -> None:
         """A notice about `incident` went to `sent` — (chat, the role or roles it was for) — one result's messages being one

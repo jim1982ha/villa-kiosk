@@ -243,6 +243,15 @@ Decisions of 2026-09-30 (owner):
   intake, a press and an approval's decide ask `member`, never `person`. A copy carries every role it went to its chat
   for (`outcome._deliveries` merges them); `Outcome._post` is the one way a copy is put in a chat (heading, send,
   thread). An unreadable policy.yaml keeps the last good rules; the siren's stop records the siren it turned on.
+- Review 19, 0.12.142 (2026-10-10): `layout.py` is a message's layout — head / lead / body / status, kept as PARTS in the
+  thread's record and rendered; nothing re-cuts a sent text (`layout.legacy` reads a record from before, once). A skill
+  gives the status apart (`result.message(status=)`; the alert desk's `about()` returns text + status).
+  `approvals.Approvals` is an approval request start to end: ask (every chat, lead kept), press (actions.decide checks
+  and executes), a moving device recorded "moving" and followed — resumed at start — to one verdict (done / failed),
+  expiry settled by housekeeping, and `now()` for the AI (every waiting request, decisions of the last 2 h, by
+  `decided_name`). Who acts with which role: `Policy.member` and `Policy.knows_chat` only. Mute's leftovers: an
+  incident "muted" counts as ended (`Incident.ENDED`), and Store / record_night keep Mute's old calls as no-ops for a
+  skill edited before.
 - No PDF (owner, 2026-09-30): the reports are self-contained HTML pages sent
   as attachments. Chromium was ~480 MB of a 1.1 GB image for this alone.
 - ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent

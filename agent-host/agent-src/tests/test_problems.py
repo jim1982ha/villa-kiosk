@@ -58,12 +58,16 @@ def test_every_reader_gets_one_answer_and_a_finding_handled_by_a_person_is_not_o
     assert [p["rule_id"] for p in pb.open_problems()] == ["PM-B"]
 
 
-def test_a_muted_alert_is_not_over_an_answered_one_is(pb):
+def test_an_answered_alert_is_over_one_still_open_or_back_to_normal_is_not(pb):
     iid = pb.store.new_incident("k", "automation.x", "lock.example_door", "P2", {"message": "m"})
     tid, _ = pb.open_task("incident", iid, "automation.x", "lock.example_door", "m")
-    pb.store.update_incident(iid, state="muted", closed_at="2026-10-01T00:00:00+00:00")
-    assert not pb.source_gone(pb.store.task(tid))                # the fault is still there
+    assert not pb.source_gone(pb.store.task(tid))                # still open
+    pb.store.update_incident(iid, state="recovered", closed_at="2026-10-01T00:00:00+00:00")
+    assert not pb.source_gone(pb.store.task(tid))                # back to normal by itself: its fault waits for a person
     pb.store.update_incident(iid, state="done")
+    assert pb.source_gone(pb.store.task(tid))
+    # an alert muted before Mute was removed (0.12.132) is over too (architecture review 19: test_problem_close)
+    pb.store.update_incident(iid, state="muted")
     assert pb.source_gone(pb.store.task(tid))
 
 

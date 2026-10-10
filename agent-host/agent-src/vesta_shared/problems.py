@@ -101,9 +101,10 @@ class Problems:
     # ⚠️ THE NIGHT'S LEDGER, HERE (architecture review 7, 2026-10-07): nightly.py kept it inline — raised,
     # an event closed the same night, a rerun not news twice, worsened, closed tonight, its task opened. Which
     # rules are states and which are events, the worsened step and which severities get a task stay the skill's.
-    def record_night(self, findings, day: str, *, state_rules, event_rules, worsened_step: float,
+    def record_night(self, findings, day: str, _muted_at_iso: str | None = None, *, state_rules, event_rules, worsened_step: float,
                      task_severities=("P2", "P3"), resolved_note: str = "") -> dict:
-        """The night check's findings for `day`: {new, still_open, closed, tasks, resolve_actions}.
+        """The night check's findings for `day`: {new, still_open, closed, tasks, resolve_actions}. (`_muted_at_iso`: what a
+        night check edited before 0.12.132 still passes — Mute is gone, it is ignored.)
         A finding has rule_id, entity_id, family, severity, summary, detail, check, day and as_dict()."""
         new, still_open, closed, fired = [], [], [], set()
         for f in findings:
@@ -170,7 +171,7 @@ class Problems:
         if kind == "incident":
             # over when it was answered or cleared — not when its rule stopped watching it
             inc = self.store.incident(sid)
-            return bool(inc) and bool(inc.get("closed_at")) and inc.get("state") in Incident.ANSWERED_OR_CLEARED
+            return bool(inc) and bool(inc.get("closed_at")) and inc.get("state") in Incident.ENDED
         return False                                     # no source of its own: it waits for a person
 
     # ---------------------------------------------------------------- reading

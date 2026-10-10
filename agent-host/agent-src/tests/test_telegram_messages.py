@@ -76,7 +76,8 @@ def test_an_edit_keeps_its_note_and_shows_as_a_send_does(tmp_path):
     d, tg = _delivery(tmp_path)
     thread = IncidentThread(d.state, "UTC", edit=d.edit, delete=d.delete)
     long_alert = "Incident #9 · **leak**\n" + "\n".join("detail " + "w" * 80 for _ in range(60))
-    asyncio.run(thread.post(9, GROUP, 77, long_alert, buttons=True))
+    from vesta_agent import layout
+    asyncio.run(thread.post(9, GROUP, 77, layout.parts(body=long_alert), buttons=True))
     asyncio.run(thread.close(9, "Done — Marie, {time}"))
     (_, _, text), = tg.edits
     assert "Done — Marie" in text and tg_len(text) <= TELEGRAM_LIMIT and "**" not in text
@@ -90,7 +91,8 @@ def test_a_double_tap_on_done_answers_once(tmp_path):
     from vesta_agent.incident_thread import IncidentThread
     d, tg = _delivery(tmp_path)
     thread = IncidentThread(d.state, "UTC", edit=d.edit, delete=d.delete)
-    asyncio.run(thread.post(5, GROUP, 70, "Incident #5 · leak", buttons=True))
+    from vesta_agent import layout
+    asyncio.run(thread.post(5, GROUP, 70, layout.parts(body="Incident #5 · leak"), buttons=True))
     ran, toasts = [], []
     skill = SimpleNamespace(name="desk", on_reply="desk.py reply")
 

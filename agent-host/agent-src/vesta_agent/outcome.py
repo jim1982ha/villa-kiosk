@@ -34,16 +34,13 @@ import asyncio
 import logging
 import os
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Awaitable, Callable
+from typing import Awaitable, Callable
 
-from .incident_thread import approval_thread
+from . import layout
 from .notice import when
 from .routing import Origin, Routing
 from .outcome_words import clean_summary, ticket_title  # noqa: F401 — the words of a record, shared with tickets.py
-from vesta_shared.messaging import RULE
 
-if TYPE_CHECKING:
-    from .actions import Outgoing
 
 #: How long Home Assistant's telegram_sent may trail its own vesta_critical_event (both come from one run, the
 #: message first; the socket hands them over in order, so this is a margin, not a wait that normally happens).
@@ -86,6 +83,8 @@ class Outcome:
         self.thread = thread            # incident_thread.IncidentThread: what each chat shows of an incident
         self.notices = notices          # notice.Notices: the heading of every message the agent sends on its own
         self.out_dir = out_dir
+        # an approval request is approvals.Approvals' (the siren's gate asks through it): set by the app
+        self.ask: Callable[..., Awaitable[int]] | None = None
         self.tz = timezone_name          # "{time}" in a message: the villa's time when it is sent
 
     # ------------------------------------------------------------------ carry out
@@ -149,7 +148,8 @@ class Outcome:
                 else:
                     log.warning("Skill %s attached %r, which is not a file of the out folder: sent without it", skill_name, att)
             # the incident's message in this chat now: the earlier one there goes
-            mid = await self._post(chat, text, roles=roles, incident=int(iid) if iid else None, keyboard=kb, document=doc,
+            mid = await self._post(chat, text, status=item.get("status") or "", roles=roles,
+                                   incident=int(iid) if iid else None, keyboard=kb, document=doc,
                                    thread=int(iid) if iid else None, origin=origin)
             if not mid:
                 done["not_sent"] += 1                         # delivery.py: refused, or Telegram off
@@ -169,7 +169,7 @@ class Outcome:
                 await self.ask(msg, head=gate_prompt, origin=origin)
             else:
                 for chat in route.target("owner"):
-                    await self._post(chat, f"{gate_prompt}\n{RULE}\nThe siren cannot be requested: {answer}", roles={"owner"},
+                    await self._post(chat, gate_prompt, status=f"The siren cannot be requested: {answer}", roles={"owner"},
                                      origin=origin)
         for a in res.get("actions") or []:
             kind = (a or {}).get("action")
@@ -198,38 +198,23 @@ class Outcome:
                 log.warning("action %s failed (%s)", kind, type(e).__name__)
         return done
 
-    async def ask(self, msg: Outgoing, head: str = "", origin: Origin | None = None) -> int:
-        """An approval request (actions.request's Outgoing) in every chat it is for, each copy one message of the same
-        thread: a press in one settles them all (app._press_approval). Returns how many chats have it.
-
-        ⚠️ THE ALERTS' MECHANISM, NOT A SECOND ONE (owner, 2026-10-10): an approval for the owner now reaches every
-        owner chat, and its copies are kept and settled as an incident's are (incident_thread.py)."""
-        text = f"{head}\n\n{msg.text}" if head else msg.text
-        n = 0
-        for chat in msg.chats:
-            # under its heading, as everything the agent sends on its own — in the chat it was asked from too (owner,
-            # 2026-10-10: "make sure the confirmation message respects the format, with the header and the footer")
-            if await self._post(chat, text, roles={msg.to} if msg.to else (), keyboard=msg.keyboard,
-                                thread=approval_thread(msg.approval_id), origin=origin):
-                n += 1
-        return n
-
-    async def _post(self, chat: int, text: str, *, roles=(), incident: int | None = None, keyboard: dict | None = None,
-                    document: str | None = None, photo=None, thread: int | str | None = None, plain: bool = False,
-                    origin: Origin | None = None) -> int | None:
+    async def _post(self, chat: int, text: str, *, status: str = "", lead: str = "", roles=(), incident: int | None = None,
+                    keyboard: dict | None = None, document: str | None = None, photo=None,
+                    thread: int | str | None = None, plain: bool = False, origin: Origin | None = None) -> int | None:
         """ONE WAY A MESSAGE IS PUT IN A CHAT (architecture review 18): its heading — who it is for (`roles`, every role
         it was sent for there), the incident and its history (notice.Notices) — unless it answers the person who asked,
         in their chat, or is `plain`; then the send; then its `thread` (an incident, an approval, a snapshot): the
         earlier copy in this chat goes. Three sends in this module did part of this by hand (the siren's warning and
         the approvals had no heading, a snapshot piled up). The message id, or None when nothing arrived."""
-        if "{time}" in text:
-            # the moment it says what happened, as every notice writes one (10/10/2026 15:04, the villa's time)
-            text = text.replace("{time}", when(datetime.now(timezone.utc), self.tz))
-        if self.notices and not plain and not (origin and origin.holds and chat == origin.chat):
-            text = self.notices.compose(chat, text, incident, roles)
-        mid = await self.send(chat, text, keyboard=keyboard, document=document, photo=photo, origin=origin)
+        # "{time}": the moment it says what happened, as every notice writes one (10/10/2026 15:04, the villa's time)
+        now = when(datetime.now(timezone.utc), self.tz)
+        text, status, lead = (x.replace("{time}", now) for x in (text, status or "", lead or ""))
+        head = self.notices.heading(chat, incident, roles) if self.notices and not plain and not (
+            origin and origin.holds and chat == origin.chat) else ""
+        p = layout.parts(body=text, status=status, head=head, lead=lead)
+        mid = await self.send(chat, layout.render(p), keyboard=keyboard, document=document, photo=photo, origin=origin)
         if mid and thread is not None:
-            await self.thread.post(thread, chat, mid, text, buttons=bool(keyboard))
+            await self.thread.post(thread, chat, mid, p, buttons=bool(keyboard))
         return mid
 
     @staticmethod
@@ -273,8 +258,9 @@ class Outcome:
         for chat, mid in found:
             # Home Assistant's own alert, taken over: the incident's text, the earlier messages' times, its buttons
             kb = self.buttons.keyboard(int(iid), chat, skill_name) if skill_name and self.buttons.open(iid) else None
-            shown = self.notices.compose(chat, text, int(iid)) if self.notices else text
-            await self.thread.adopt(int(iid), chat, mid, shown, keyboard=kb)
+            p = layout.parts(body=text, status=h.get("status") or "",
+                             head=self.notices.heading(chat, int(iid)) if self.notices else "")
+            await self.thread.adopt(int(iid), chat, mid, p, keyboard=kb)
         if not found:
             log.info("Incident #%s: no Home Assistant message of its run to take over", iid)
         return [chat for chat, _ in found]

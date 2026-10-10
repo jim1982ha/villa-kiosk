@@ -90,3 +90,14 @@ def test_the_same_night_run_again_tells_an_event_once(tmp_path):
     first = Problems(store).record_night([_F("E-RUN", "c", "P3")], "2026-10-07", **rules)
     again = Problems(store).record_night([_F("E-RUN", "c", "P3")], "2026-10-07", **rules)
     assert len(first["new"]) == 1 and again["new"] == [] and again["tasks"] == []
+
+
+def test_mute_leftovers_close_and_an_edited_skill_still_runs(tmp_path):
+    # architecture review 19: a fault muted before 0.12.132 stayed open in the Cockpit for good, and a night check the villa
+    # edited before still calls Mute's helpers — both must go on working without Mute
+    store, iid, tid = _incident_with_task(tmp_path)
+    store.update_incident(iid, state="muted", closed_at=NOW)
+    assert Problems(store).source_gone(store.task(tid))                       # the repair closes it and its fault
+    assert store.is_muted("r", "e") is False and store.mutes() == [] and store.mute("r", "e", NOW, "owner") is None
+    old_call = Problems(store).record_night([], "2026-10-07", NOW, state_rules=set(), event_rules=set(), worsened_step=15)
+    assert old_call["new"] == []

@@ -9,6 +9,8 @@ from __future__ import annotations
 import asyncio
 import re
 
+import pytest
+
 import yaml
 
 from helpers import body, make_agent, settings
@@ -127,10 +129,10 @@ def test_in_a_private_chat_the_persons_own_role_decides_in_a_group_the_least(tmp
 def test_the_for_line_names_the_role_the_message_is_for(tmp_path):
     s = settings(str(tmp_path))
     n = Notices(State(s.state_path), lambda: Policy({"people": PEOPLE}), "UTC")
-    assert n.heading(JM, to="owner").startswith("For: JM_O\n")                   # his own chat: him, never Fabien
-    assert n.heading(GROUP, to="fm").startswith("For: JM_FM, Fabien_FM\n")
+    assert n.heading(JM, to="owner") == "For: JM_O"                   # his own chat: him, never Fabien
+    assert n.heading(GROUP, to="fm") == "For: JM_FM, Fabien_FM"
     alone = Notices(State(s.state_path), lambda: Policy({"people": [PEOPLE[4]]}), "UTC")
-    assert alone.heading(GROUP, to="owner").startswith("For: the Owner\n")          # a group alone: its role, capitalised
+    assert alone.heading(GROUP, to="owner") == "For: the Owner"          # a group alone: its role, capitalised
 
 
 def test_a_chat_listed_for_both_roles_is_headed_for_both(tmp_path):
@@ -276,9 +278,9 @@ def test_an_approved_request_says_what_happened_and_who_approved_it_never_the_re
     assert done_words(d, names, {"ok": False, "unconfirmed": [("Bedroom3 Curtain", "closed")]}) == \
         "Bedroom3 Curtain did not open: it reads closed."                     # never claims what did not happen
     assert "retry" not in done_words(d, names, {"ok": False, "failed": True})
-    from vesta_agent.incident_thread import with_status
-    req = "For: JM\n-------\nOpen Bedroom3 Curtain (final state: open)?\n-------\nWaiting for approval by the owner"
-    assert with_status(req, "Approved by JM on 10/10/2026 17:13.", "Opened Bedroom3 Curtain.") == \
+    from vesta_agent import layout
+    req = layout.parts(head="For: JM", body="Open Bedroom3 Curtain (final state: open)?", status="Waiting for approval by the owner")
+    assert layout.render(layout.changed(req, status="Approved by JM on 10/10/2026 17:13.", body="Opened Bedroom3 Curtain.")) == \
         "For: JM\n-------\nOpened Bedroom3 Curtain.\n-------\nApproved by JM on 10/10/2026 17:13."
 
 
@@ -302,8 +304,8 @@ def test_a_request_shown_in_the_askers_chat_is_not_announced_again(tmp_path, mon
 def test_a_curtain_still_moving_is_said_to_be_and_the_request_says_opened_once_it_is(tmp_path, monkeypatch):
     # owner, 2026-10-10: "Bedroom3 Curtain did not open: it reads closed … but the curtain is actually well opened" —
     # it read "closed" until it had finished moving, 40 s later
-    from vesta_agent import app as app_mod
-    monkeypatch.setattr(app_mod, "FOLLOW_EVERY_S", 0)
+    from vesta_agent import approvals as appr_mod
+    monkeypatch.setattr(appr_mod, "FOLLOW_EVERY_S", 0)
     v = make_agent(tmp_path, {"people": [{"telegram_id": JM, "name": "JM", "role": "owner"},
                                          {"telegram_id": GROUP, "name": "Group", "role": "fm"}],
                               "act_enabled": True, "allowed_services": {"cover.open_cover": "any"}})
@@ -325,7 +327,7 @@ def test_a_curtain_still_moving_is_said_to_be_and_the_request_says_opened_once_i
 
     async def go():
         await v.on_ha_event("telegram_callback", press)
-        await asyncio.gather(*v._watching)
+        await asyncio.gather(*v.approvals._watching)
     run(go())
     first, last = v.tg.edits[0][2], v.tg.edits[-1][2]
     assert "\n-------\nOpening " in first and "\n-------\nApproved by JM on " in first     # on its way, right away
@@ -341,9 +343,113 @@ def test_the_ai_is_told_what_is_waiting_and_what_was_decided_never_left_to_its_m
                               "act_enabled": True, "allowed_services": {"cover.open_cover": "any"}})
     t0 = datetime(2026, 10, 10, 9, 36, tzinfo=timezone.utc)
     aid = v.state.new_approval({"plain": "Open Bedroom3 Curtain (final state: open)?"}, "h", "any", JM, JM, 15, now=t0)
-    assert "- nothing is waiting" not in v.approvals_now(now=t0 + timedelta(minutes=1))
-    assert "- waiting: Open Bedroom3 Curtain" in v.approvals_now(now=t0 + timedelta(minutes=1))
-    v.state.claim_approval(aid, "approved", JM, now=t0 + timedelta(minutes=1))
-    later = v.approvals_now(now=t0 + timedelta(minutes=22))
+    assert "- nothing is waiting" not in v.approvals.now(now=t0 + timedelta(minutes=1))
+    assert "- waiting: Open Bedroom3 Curtain" in v.approvals.now(now=t0 + timedelta(minutes=1))
+    v.state.claim_approval(aid, "approved", JM, now=t0 + timedelta(minutes=1), name="JM")
+    later = v.approvals.now(now=t0 + timedelta(minutes=22))
     assert "- nothing is waiting for approval" in later and "- approved by JM on " in later and "never from memory" in later
     assert "Requests for approval" in v.before_answer()                 # in front of every message, acting on
+
+
+def _curtain_villa(tmp_path, reads, ttl=15):
+    v = make_agent(tmp_path, {"people": [{"telegram_id": JM, "name": "JM", "role": "owner"},
+                                         {"telegram_id": GROUP, "name": "Group", "role": "fm"}],
+                              "act_enabled": True, "approval_ttl_minutes": ttl,
+                              "allowed_services": {"cover.open_cover": "any"}})
+    reads = iter(reads)
+
+    class Writer:
+        def call_service(self, *a):
+            pass
+
+        def states(self, ids):
+            s = next(reads, "open")
+            return {i: {"state": s} for i in ids}
+    v.actions.writer_factory = Writer
+    return v
+
+
+def test_a_moving_curtain_is_recorded_moving_then_done_and_the_ai_reads_the_same(tmp_path, monkeypatch):
+    # architecture review 19: recorded "failed" at the first reading while the message said "Opened" — the AI said failed
+    from vesta_agent import approvals as appr_mod
+    monkeypatch.setattr(appr_mod, "FOLLOW_EVERY_S", 0)
+    v = _curtain_villa(tmp_path, ["closed"] * 3 + ["open"])
+    _, msg = v.actions.request("cover", "open_cover", "cover.bedroom3", {}, v.policy().person(JM), JM)
+    run(v.approvals.ask(msg))
+    out = v.actions.decide(msg.approval_id, JM, True, chat=JM)
+    assert v.state.approval(msg.approval_id)["status"] == "moving" and out["toast"] == "Approved: on its way."
+    assert "approved, the device still on its way by JM" in v.approvals.now()
+    run(v.approvals._follow(msg.approval_id, out["follow"]))
+    assert v.state.approval(msg.approval_id)["status"] == "done" and "- done by JM" in v.approvals.now()
+
+
+def test_a_follow_cut_by_a_restart_is_taken_up_again(tmp_path, monkeypatch):
+    from vesta_agent import approvals as appr_mod
+    monkeypatch.setattr(appr_mod, "FOLLOW_EVERY_S", 0)
+    v = _curtain_villa(tmp_path, ["closed", "open"])
+    _, msg = v.actions.request("cover", "open_cover", "cover.bedroom3", {}, v.policy().person(JM), JM)
+    run(v.approvals.ask(msg))
+    v.actions.decide(msg.approval_id, JM, True, chat=JM)          # recorded "moving"; the agent stops here
+
+    async def restart():
+        await v.approvals.resume()
+        await asyncio.gather(*v.approvals._watching)
+    run(restart())
+    assert v.state.approval(msg.approval_id)["status"] == "done"
+    assert v.tg.edits and "\n-------\nOpened " in v.tg.edits[-1][2]
+
+
+def test_an_expired_request_says_so_and_a_long_wait_is_still_seen_by_the_ai(tmp_path):
+    from datetime import datetime, timedelta, timezone
+    v = _curtain_villa(tmp_path, [], ttl=300)                       # a villa that lets a request wait 5 hours
+    _, msg = v.actions.request("cover", "open_cover", "cover.bedroom3", {}, v.policy().person(JM), JM)
+    run(v.approvals.ask(msg))
+    in3h = datetime.now(timezone.utc) + timedelta(hours=3)
+    assert "- waiting: Open " in v.approvals.now(now=in3h)          # three hours on: still waiting, and the AI knows
+    assert run(v.approvals.expire(now=in3h)) == 0
+    assert run(v.approvals.expire(now=in3h + timedelta(hours=3))) == 1
+    (_, _, text), = v.tg.edits
+    assert re.search(r"\n-------\nExpired on \d\d/\d\d/\d{4} \d\d:\d\d: nothing was done\.$", text)
+    assert v.state.approval(msg.approval_id)["status"] == "expired"
+
+
+def test_the_pictures_still_come_when_the_request_is_the_answer(tmp_path, monkeypatch):
+    # architecture review 19: "open the gate and show me the entrance camera" — the request came, the picture never
+    from ai_fake import FakeAI
+    v = _curtain_villa(tmp_path, [])
+
+    async def asks(call):
+        await call["call"]("ha_call_service", {"domain": "cover", "service": "open_cover", "entity_id": "cover.b"})
+    FakeAI("Approval request sent.", act=asks).install(monkeypatch)
+    from vesta_agent.turn import Turns
+    real = Turns.chat
+
+    async def with_photo(self, *a, **k):
+        res = await real(self, *a, **k)
+        res.photos.append(("SlBFRw==", "image/jpeg"))
+        return res
+    monkeypatch.setattr(Turns, "chat", with_photo)
+    run(v.converse(JM, v.policy().person(JM), "open the curtain and show me the camera"))
+    # the request, then the picture alone — no "Approval request sent." with it
+    assert [(bool(k), t) for _, t, k in v.tg.sent][1:] == [(False, "")] and v.tg.sent[0][2] and len(v.tg.photos) == 1
+
+
+@pytest.mark.parametrize("chat,who,known_as,acts", [
+    (JM, JM, "owner", "owner"),      # a listed person, in their own chat: their row (the owner's when both)
+    (GROUP, JM, "fm", "fm"),         # in a listed group: the group's role, whatever their own (fm when listed for both)
+    (GROUP, 555, "fm", "fm"),        # an unlisted member of a listed group: the group's role
+    (-999, JM, "owner", None),       # an unlisted group: still known, but nobody acts there (dropped, never left)
+    (555, 555, None, None),          # an unlisted person in their own chat: nobody
+])
+def test_who_acts_with_which_role_is_one_answer_everywhere(chat, who, known_as, acts):
+    # architecture review 19: "who is this, in this chat" was answered in four places (intake, a press, the direct rule,
+    # the approver chats) — each now asks policy.member / knows_chat
+    from vesta_agent import intake
+    from vesta_agent.routing import Routing
+    pol = Policy({"people": PEOPLE})
+    m = pol.member(who, chat)
+    assert (m.role if m else None) == known_as
+    got = intake.gate("telegram_text", {"chat_id": chat, "user_id": who, "text": "@bot hi"}, pol, "bot", lambda *a: False)
+    assert (got.person.role if got.action == "converse" else None) == acts
+    assert pol.knows_chat(chat) is bool(acts)
+    assert Routing(pol).approver_chats("any", chat) == ([chat] if acts else pol.chats_for("owner"))

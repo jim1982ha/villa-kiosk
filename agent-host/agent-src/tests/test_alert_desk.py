@@ -48,7 +48,7 @@ def test_resolved_closes_the_incident_and_its_ticket(store):
     assert res["decision"] == "resolved" and res["incident_id"] == iid
     assert store.incident(iid)["state"] == "resolved"
     assert [a for a in res["actions"] if a["action"] == "ticket.resolve"]
-    assert "No reply needed" in res["send"][0]["text"]
+    assert "No reply needed" in res["send"][0]["status"]                # where it stands: its own part (layout.py)
     assert res["settle"] == [{"incident_id": iid, "note": "Cleared in Home Assistant on {time}."}]
     # the chase stops: no reminder for it any more
     assert desk.tick(store, T0 + timedelta(minutes=30))["reasked"] == []
@@ -101,10 +101,10 @@ def test_villa_silent_follows_the_engine_connection_beat(store):
     store.beat("ha_events", T0.isoformat())
     assert not desk.tick(store, T0 + timedelta(minutes=10))["send"]
     res = desk.tick(store, T0 + timedelta(minutes=40))
-    assert any("Villa silent" in s["text"] for s in res["send"])
+    assert any("Villa silent" in s.get("status", "") for s in res["send"])
     store.beat("ha_events", (T0 + timedelta(minutes=41)).isoformat())
     res = desk.tick(store, T0 + timedelta(minutes=42))
-    assert any("back online" in s["text"] for s in res["send"])
+    assert any("back online" in s.get("status", "") for s in res["send"])
 
 
 def test_the_desk_writes_no_home_assistant_helper(store):
@@ -171,8 +171,7 @@ def test_a_repeated_alert_says_since_when_in_the_villas_time(store, monkeypatch)
     # owner, 2026-10-07: "(4 times since 2026-10-03T00:00)" — UTC, written as a machine writes it
     desk.intake(store, event(), T0, mode_reader=lambda: "occupied", zone="Asia/Makassar")
     res = desk.intake(store, event(), T0 + timedelta(hours=6), mode_reader=lambda: "occupied", zone="Asia/Makassar")
-    text = res["send"][0]["text"]
-    assert text.splitlines()[-1].endswith("since Thu 1 Oct, 17:00")     # 09:00 UTC is 17:00 in the villa (the status: last)
+    assert res["send"][0]["status"].endswith("since Thu 1 Oct, 17:00")  # 09:00 UTC is 17:00 in the villa
 
 
 def test_only_done_and_need_help_and_an_old_not_found_is_chased_again(tmp_path):

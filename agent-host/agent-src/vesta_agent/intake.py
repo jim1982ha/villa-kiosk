@@ -92,8 +92,6 @@ def gate(event_type: str, m: dict, policy, bot_username: str | None, is_own_mess
             return Intake("drop", cid, group=True)            # people talking to each other
     if person is None:
         return Intake("unregistered", cid, group=group)
-    if not group and policy.destinations and int(cid) not in policy.people:
-        return Intake("drop", cid)
     if cmd == "/new":
         return Intake("new", cid, person, group=group)
     if voice:

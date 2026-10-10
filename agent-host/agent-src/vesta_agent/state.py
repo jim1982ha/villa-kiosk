@@ -100,6 +100,9 @@ class State:
         if "at" not in {r[1] for r in self.db.execute("pragma table_info(kv)")}:
             self.db.execute("alter table kv add column at text")
             self.db.execute("update kv set at = ?", (utcnow().isoformat(),))
+        # who decided a request, as the message names them (a group's member is in no People row: approvals.Approvals.now)
+        if "decided_name" not in {r[1] for r in self.db.execute("pragma table_info(approvals)")}:
+            self.db.execute("alter table approvals add column decided_name text")
         self.db.commit()
         self._migrate_incident_messages()
         # ⚠️ WHEN THE RECORD STARTED, KEPT (architecture review 16): read as the oldest record kept, it moved forward every
@@ -372,13 +375,21 @@ class State:
             r["action"] = json.loads(r["action"])
         return rows
 
-    def claim_approval(self, aid: str, status: str, decided_by: int, now: datetime | None = None) -> bool:
+    def approvals_in(self, status: str) -> list[dict]:
+        """The approval requests in `status` (pending, moving…), oldest first, their action read back."""
+        rows = [dict(r) for r in self.db.execute("select * from approvals where status = ? order by created_at", (status,))]
+        for r in rows:
+            r["action"] = json.loads(r["action"])
+        return rows
+
+    def claim_approval(self, aid: str, status: str, decided_by: int, now: datetime | None = None,
+                       name: str | None = None) -> bool:
         """Move a pending approval to its decision once. False if somebody else was first."""
         now = now or utcnow()
         with self._lock:
             cur = self.db.execute(
-                "update approvals set status=?, decided_by=?, decided_at=? where id=? and status='pending'",
-                (status, decided_by, now.isoformat(), aid))
+                "update approvals set status=?, decided_by=?, decided_at=?, decided_name=? where id=? and status='pending'",
+                (status, decided_by, now.isoformat(), name, aid))
             self.db.commit()
             return cur.rowcount == 1
 

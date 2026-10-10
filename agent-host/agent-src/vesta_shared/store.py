@@ -71,6 +71,9 @@ class Incident:
     DIGEST, LOGGED = "digest", "logged"                                  # never chased: the morning list, the record
     CHASED = (ASKED, REASKED, ESCALATED)
     ANSWERED_OR_CLEARED = (DONE, RESOLVED)    # over: its task and ticket close with it (not recovered)
+    # an incident muted before 0.12.132 (Mute is gone): over too — its task and Kiosk fault close at the next repair,
+    # never left open in the Cockpit for good (architecture review 19)
+    ENDED = ANSWERED_OR_CLEARED + ("muted",)
 
 
 def _now() -> str:
@@ -255,6 +258,17 @@ class Store:
     def decide_proposal(self, pid: int, status: str):
         self.db.execute("UPDATE proposals SET status=?, decided_at=? WHERE id=?", (status, _now(), pid))
         self.db.commit()
+
+    # ⚠️ KEPT FOR A SKILL EDITED BEFORE 0.12.132 (architecture review 19): Mute is gone, but a villa's own copy of a starter
+    # skill is kept by updates and may still call these — an alert is never silenced now, and nothing fails at night.
+    def is_muted(self, rule_id: str, entity_id: str, now_iso: str | None = None) -> bool:
+        return False
+
+    def mutes(self) -> list[dict]:
+        return []
+
+    def mute(self, *args, **kwargs) -> None:
+        return None
 
     # cache -----------------------------------------------------------------
     def cache_get(self, key: str) -> Any | None:

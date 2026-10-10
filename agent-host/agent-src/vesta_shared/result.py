@@ -49,12 +49,15 @@ def finding_name(finding: dict) -> str | None:
 STAGES = ("new", "reminder", "escalated", "update")
 
 
-def message(to: str, text: str, *, incident: int | None = None, buttons: bool = False,
+def message(to: str, text: str, *, status: str | None = None, incident: int | None = None, buttons: bool = False,
             attachment: str | None = None, stage: str | None = None) -> dict:
     """A message for `to` (here · owner · fm). `buttons`: the alert's Done / Need help for `incident`; `stage`: what
     this notice about it is (STAGES) — the engine writes its heading and its history line. "{time}" in `text` is the
-    villa's time when it is sent (10/10/2026 15:04), as in a settle note."""
+    villa's time when it is sent (10/10/2026 15:04), as in a settle note. `status`: where it stands, shown under a line
+    at the bottom (vesta_agent/layout.py) — given apart, never written into `text`."""
     m = {"to": to, "text": text}
+    if status:
+        m["status"] = status
     if stage is not None:
         if stage not in STAGES:
             raise ValueError(f"stage must be one of {', '.join(STAGES)}")
@@ -96,10 +99,10 @@ def settle(incident: int, note: str) -> dict:
     return {"incident_id": int(incident), "note": note}
 
 
-def ha_message(incident: int, text: str, context: str | None, stage: str | None = None) -> dict:
+def ha_message(incident: int, text: str, context: str | None, stage: str | None = None, status: str | None = None) -> dict:
     """Home Assistant's own messages of the automation run `context` (the event's context) become `incident`'s
     messages, rewritten as `text` under the incident's heading, like every other notice about it (`stage`: STAGES)."""
-    m = {"incident_id": int(incident), "text": text, "context": context}
+    m = {"incident_id": int(incident), "text": text, "context": context, **({"status": status} if status else {})}
     if stage is not None:
         if stage not in STAGES:
             raise ValueError(f"stage must be one of {', '.join(STAGES)}")

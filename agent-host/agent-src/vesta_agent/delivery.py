@@ -167,7 +167,12 @@ class Delivery:
         Telegram refuses does not take the answer with it."""
         photos = list(photos)[-PHOTOS_PER_REPLY:]
         if not (text or keyboard):
-            return None
+            # ⚠️ NO WORDS, STILL THE PICTURES (architecture review 19): a reply whose sentence was dropped (an approval
+            # request shown in the chat says it all) lost the camera picture asked for with it
+            mid = None
+            for p in photos:
+                mid = await self.send(chat_id, "", photo=p) or mid
+            return mid
         if photos and text and not keyboard:
             for p in photos[:-1]:
                 await self.send(chat_id, "", photo=p)

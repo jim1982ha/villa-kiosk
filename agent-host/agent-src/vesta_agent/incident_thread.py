@@ -19,9 +19,9 @@ from typing import Awaitable, Callable
 
 import logging
 
-from vesta_shared.messaging import RULE, TELEGRAM_LIMIT, incident_tag, tg_len
+from vesta_shared.messaging import incident_tag
 
-from .delivery import fit
+from . import layout
 from .notice import when
 
 def approval_thread(approval_id: str) -> str:
@@ -36,22 +36,6 @@ Edit = Callable[..., Awaitable]     # (chat, message id, text[, keyboard])
 Delete = Callable[[int, int], Awaitable]
 
 
-def with_status(text: str, note: str, body: str | None = None) -> str:
-    """A message with `note` as where it stands now: under a line at its bottom, in place of the status it had there.
-
-    ⚠️ WHERE IT STANDS IS ALWAYS LAST (owner, 2026-10-10: "the update of the message shall appear at the bottom, after a
-    ------- line"). A notice is heading / alert / status, each under a line (notice.py, messaging.incident_message):
-    a press replaces the status ("Reminder: no answer after 15 min" becomes "Done pressed by JM_O on 10/10/2026 15:04");
-    a message with no status of its own gets the note under a line. The note is kept whole: the rest is shortened.
-    `body`: what the message says now, in place of what it said (an approved request: "Opened Bedroom3 Curtain.")."""
-    sep = f"\n{RULE}\n"
-    parts = text.rstrip().split(sep)
-    base = sep.join(parts[:-1]) if len(parts) >= 3 else text.rstrip()
-    if body and len(parts) >= 3:
-        base = sep.join(parts[:-2] + [body])           # heading / the new body
-    return f"{fit(base, TELEGRAM_LIMIT - tg_len(note) - len(sep))}{sep}{note}"
-
-
 class IncidentThread:
     def __init__(self, state, timezone: str, edit: Edit | None = None, delete: Delete | None = None):
         self.state = state
@@ -59,8 +43,9 @@ class IncidentThread:
         self.edit = edit                # Telegram's edit (its buttons go); None while Telegram is off
         self.delete = delete            # Telegram's deleteMessage: True when the message is gone
 
-    async def post(self, iid: int | str, chat: int, mid: int, text: str, *, buttons: bool = False) -> None:
-        """Message `mid`, just sent to `chat`, is now incident `iid`'s message there: the earlier one goes."""
+    async def post(self, iid: int | str, chat: int, mid: int, parts: dict, *, buttons: bool = False) -> None:
+        """Message `mid`, just sent to `chat` with these `parts` (layout.py), is now incident `iid`'s message there: the
+        earlier one goes."""
         old = self.state.incident_message(iid, chat)
         if old and old["mid"] != mid:
             gone = bool(self.delete and await self.delete(chat, old["mid"]))
@@ -70,15 +55,17 @@ class IncidentThread:
             # what happened to the earlier copy, said (owner, 2026-10-10: two messages of #14 stayed in the group)
             log.info("%s in chat %s: message %s replaced by %s (%s)", iid, chat, old["mid"], mid,
                      "deleted" if gone else "kept, now a pointer" if self.edit else "kept")
-        self.state.set_incident_message(iid, chat, {"mid": mid, "text": text, "buttons": buttons, "settled": False})
+        self.state.set_incident_message(iid, chat, {"mid": mid, "parts": parts, "text": layout.render(parts),
+                                                    "buttons": buttons, "settled": False})
 
-    async def adopt(self, iid: int, chat: int, mid: int, text: str, keyboard: dict | None = None) -> None:
+    async def adopt(self, iid: int, chat: int, mid: int, parts: dict, keyboard: dict | None = None) -> None:
         """One of Home Assistant's own messages (a VESTA rule's alert, its all-clear) belongs to incident `iid`: it is
         rewritten as the incident's message — its number, the original alert and, while it is open, its buttons
         (`keyboard`) — and replaces the earlier one."""
+        text = layout.render(parts)
         if self.edit:
             await self.edit(chat, mid, text, keyboard) if keyboard else await self.edit(chat, mid, text)
-        await self.post(iid, chat, mid, text, buttons=bool(keyboard))
+        await self.post(iid, chat, mid, parts, buttons=bool(keyboard))
 
     async def close(self, iid: int | str, note: str, body: str | None = None) -> int:
         """Every message of incident `iid` still showing its buttons, in every chat, loses them and shows `note` (who
@@ -91,28 +78,26 @@ class IncidentThread:
         for chat, rec in self.state.incident_chats(iid):
             if not rec.get("buttons") or rec.get("settled"):
                 continue
-            # the note is kept whole, the alert's own text shortened to make room (architecture review 15: cut at 4,096
-            # characters, a long alert lost "Done — Marie, 09:14" at its end)
-            text = with_status(rec["text"], note, body) if note else rec["text"]
+            # where it stands is the note now, under the line at the bottom; a new body when one is given (an approved
+            # request: what happened) — the head and the lead kept (layout.py)
+            p = layout.changed(layout.of(rec), status=note, body=body) if note else layout.of(rec)
+            text = layout.render(p)
             if self.edit and note:
                 await self.edit(chat, rec["mid"], text)
                 n += 1
-            self.state.set_incident_message(iid, chat, {**rec, "text": text, "settled": True})
+            self.state.set_incident_message(iid, chat, {**rec, "parts": p, "text": text, "settled": True})
         return n
 
     async def rewrite(self, iid: int | str, body: str) -> None:
         """Every copy of `iid` says `body` now in its middle part, its heading and status kept (an approved request whose
         device got there: "Opening …" becomes "Opened …")."""
-        sep = f"\n{RULE}\n"
         for chat, rec in self.state.incident_chats(iid):
-            parts = rec["text"].split(sep)
-            if len(parts) < 3:
-                continue
-            text = sep.join(parts[:-2] + [body, parts[-1]])
+            p = layout.changed(layout.of(rec), body=body)
+            text = layout.render(p)
             if self.edit:
                 await self.edit(chat, rec["mid"], text)
-            self.state.set_incident_message(iid, chat, {**rec, "text": text})
+            self.state.set_incident_message(iid, chat, {**rec, "parts": p, "text": text})
 
     def shown(self, iid: int | str) -> dict[int, dict]:
-        """What each chat shows of incident `iid`: {chat: {mid, text, buttons, settled}}."""
+        """What each chat shows of incident `iid`: {chat: {mid, parts, text, buttons, settled}}."""
         return dict(self.state.incident_chats(iid))

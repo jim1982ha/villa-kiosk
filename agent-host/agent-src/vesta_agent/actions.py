@@ -22,7 +22,6 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable
 
-from vesta_shared.messaging import RULE
 from . import button_data
 from .policy import NOT_REGISTERED, Decision, Person, Policy, action_hash
 from .routing import Routing
@@ -55,6 +54,7 @@ class Outgoing:
     keyboard: dict | None = None
     approval_id: str | None = None
     to: str | None = None       # the role it goes to its chats for ("owner"), for the heading; None: the chat's own
+    status: str = ""            # where it stands, under the line at the bottom (layout.py): replaced by the decision
 
 
 #: The same verbs once done: the request's body after it is approved ("Opened Bedroom3 Curtain.").
@@ -159,7 +159,7 @@ class Actions:
         # still asks; so does anything an owner-only device hides behind (_wrap_check
         # raised it to "owner").
         if (d.direct and d.required_role == "any" and requester is not None and origin_chat is not None
-                and (requester.telegram_id in policy.people or (int(origin_chat) < 0 and policy.roles_in(origin_chat)))):
+                and policy.member(requester.telegram_id, origin_chat) is not None):      # one answer: policy.member
             result = self.execute(d)
             self.state.log("direct", dict(base, by=requester.name, ok=result["ok"]))
             log.info("Direct %s.%s on %s, asked by %s: %s", d.domain, d.service, ", ".join(d.entity_ids),
@@ -180,13 +180,13 @@ class Actions:
         who = "the owner" if d.required_role == "owner" else "the owner or the facility manager"
         self.state.log("requested", dict(base, approval=aid, required_role=d.required_role))
         msg = Outgoing([int(c) for c in targets],
-                       # the action, then — under the line — where it stands, replaced by the decision when pressed
+                       # the action as its body, where it stands as its status — replaced by the decision when pressed
                        # (owner, 2026-10-10: every message of the agent's in the same layout, the asker's chat included)
-                       f"{text}\n{RULE}\nWaiting for approval by {who} (asked on {{time}}, expires in "
-                       f"{policy.approval_ttl_minutes} min).",
+                       text,
                        {"inline_keyboard": [[{"text": "Approve", "callback_data": button_data.make(button_data.APPROVAL, aid, "y")},
                                              {"text": "Refuse", "callback_data": button_data.make(button_data.APPROVAL, aid, "n")}]]}, aid,
-                       to="owner" if targets == policy.chats_for("owner") else None)
+                       to="owner" if d.required_role == "owner" or origin_chat is None else None,
+                       status=f"Waiting for approval by {who} (asked on {{time}}, expires in {policy.approval_ttl_minutes} min).")
         return (f"Approval requested from {who} (buttons sent). Nothing happens until a person approves. "
                 f"Do not say it is done."), msg
 
@@ -217,7 +217,7 @@ class Actions:
                     "note": None, "executed": False}
         act = ap["action"]
         if not approve:
-            if self.state.claim_approval(aid, "refused", person.telegram_id, now):
+            if self.state.claim_approval(aid, "refused", person.telegram_id, now, name=person.name):
                 self.state.log("refused_by_person", {"approval": aid, "by": person.name})
                 return {"toast": "Refused.", "note": f"Refused by {person.name} on {{time}}. Nothing was done.",
                         "executed": False}
@@ -226,21 +226,24 @@ class Actions:
         d = self._wrap_check(policy, policy.check_service(act["domain"], act["service"], act["entity_ids"], act["data"]))
         if not d.allowed or d.action_hash() != ap["action_hash"] or \
                 action_hash(act["domain"], act["service"], act["entity_ids"], act["data"]) != ap["action_hash"]:
-            self.state.claim_approval(aid, "failed", person.telegram_id, now)
+            self.state.claim_approval(aid, "failed", person.telegram_id, now, name=person.name)
             self.state.log("press_refused", {"approval": aid, "by": presser_id, "reason": d.reason or "action changed"})
             return {"toast": "Refused by the villa's rules.", "note": f"No longer allowed: {d.reason or 'the action changed'}.",
                     "executed": False}
         if not policy.role_can_approve(person.role, d.required_role):
             return {"toast": "Only the owner can approve this.", "note": None, "executed": False}
-        if not self.state.claim_approval(aid, "approved", person.telegram_id, now):
+        if not self.state.claim_approval(aid, "approved", person.telegram_id, now, name=person.name):
             return {"toast": "Already decided.", "note": None, "executed": False}
         self.state.log("approved", {"approval": aid, "by": person.name, "role": person.role})
         result = self.execute(d)
-        self.state.finish_approval(aid, "done" if result["ok"] else "failed", result)
-        # the body says what happened, the status who approved it and when (owner, 2026-10-10); a device still on its
-        # way is said to be so, and `follow` asks the agent to look again until it gets there (app._follow)
+        # the body says what happened, the status who approved it and when (owner, 2026-10-10). A device still on its way
+        # is recorded "moving", never "failed" (architecture review 19: the AI read "failed" for a curtain that opened):
+        # approvals.Approvals follows it and writes the one verdict — done or failed — with the message's last words
         moving = bool(result.get("unconfirmed")) and VERB.get(d.service) in PROGRESS
-        return {"toast": "Done." if result["ok"] else "Approved: on its way.", "note": f"Approved by {person.name} on {{time}}.",
+        self.state.finish_approval(aid, "moving" if moving else "done" if result["ok"] else "failed", result)
+        toast = "Done." if result["ok"] else "Approved: on its way." if moving else \
+            "Home Assistant refused it." if result.get("failed") else "Sent, not confirmed."
+        return {"toast": toast, "note": f"Approved by {person.name} on {{time}}.",
                 "body": done_words(d, self.names, result, settled=not moving), "executed": True, "result": result,
                 "follow": d if moving else None}
 

@@ -238,9 +238,19 @@ def test_the_kiosk_answer_gives_who_closed_a_fault_and_when():
 def test_a_press_puts_where_it_stands_last_in_place_of_the_old_status():
     # owner, 2026-10-10: "the update of the message (when clicked) shall appear at the bottom, after a ------- line",
     # with its time — never stacked under an older status
-    from vesta_agent.incident_thread import with_status
-    reminder = "For: JM_FM\n-------\nDoor left open\nWhat to do: close it\n-------\nReminder: no answer after 15 min"
-    assert with_status(reminder, "Done pressed by JM_O on 10/10/2026 15:04") == \
+    from vesta_agent import layout
+    reminder = layout.parts(head="For: JM_FM", body="Door left open\nWhat to do: close it",
+                            status="Reminder: no answer after 15 min")
+    assert layout.render(layout.changed(reminder, status="Done pressed by JM_O on 10/10/2026 15:04")) == \
         "For: JM_FM\n-------\nDoor left open\nWhat to do: close it\n-------\nDone pressed by JM_O on 10/10/2026 15:04"
-    new = "For: JM_FM, Incident: New #14\n-------\nDoor left open"
-    assert with_status(new, "Done pressed by JM_O on 10/10/2026 15:04") == f"{new}\n-------\nDone pressed by JM_O on 10/10/2026 15:04"
+    new = layout.parts(head="For: JM_FM, Incident: New #14", body="Door left open")
+    assert layout.render(layout.changed(new, status="Done pressed by JM_O on 10/10/2026 15:04")) == \
+        "For: JM_FM, Incident: New #14\n-------\nDoor left open\n-------\nDone pressed by JM_O on 10/10/2026 15:04"
+    # architecture review 19: the parts are kept, never cut out of the text — an alert holding its own "-------" line
+    # keeps its end at a press, and a request's lead (why it is asked) stays when its body says what became of it
+    odd = layout.parts(head="For: JM_FM", body="Pump log:\n-------\nstopped at 03:00")
+    assert layout.render(layout.changed(odd, status="Done")).endswith("Pump log:\n-------\nstopped at 03:00\n-------\nDone")
+    siren = layout.parts(head="For: the Owner", lead="Intrusion suspected: 2 sensors.", body="Turn on Siren?",
+                         status="Waiting for approval")
+    assert layout.render(layout.changed(siren, status="Approved by JM", body="Turned on Siren.")) == \
+        "For: the Owner\n-------\nIntrusion suspected: 2 sensors.\nTurned on Siren.\n-------\nApproved by JM"

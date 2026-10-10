@@ -240,6 +240,10 @@ class Policy:
         return Person(int(telegram_id), (name or "").strip() or f"a member of {group.name if group else 'the group'}",
                       role, group.language if group else "en")
 
+    def knows_chat(self, chat_id: int) -> bool:
+        """Is this a chat of the People list: a listed group, or the private chat of a listed person?"""
+        return bool(self.roles_in(chat_id)) or int(chat_id) in self.people
+
     def chats_for(self, role: str) -> list[int]:
         """Every chat a message for `role` goes to: each id listed with that role, once, in the list's order."""
         return list(dict.fromkeys(c for c, r in self.destinations if r == role))

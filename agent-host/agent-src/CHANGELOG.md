@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.136 (10 October 2026)
+
+Architecture review 19, all seven points:
+- layout.py (new): parts head / lead / body / status, render, changed, legacy; IncidentThread records parts (post/adopt/close/rewrite), with_status gone; notice.heading has no line (layout adds it); Outcome._post builds parts (status, lead); result.message / ha_message take `status`; alert-desk's about() returns text + status.
+- approvals.py (new): Approvals — ask, shown_in, press, follow (+ resume at start), expire (housekeeping), now (for the AI). actions.decide records "moving" for a device on its way and gives honest toasts; state: approvals_in, decided_name. Outcome.ask and app's approval code moved here.
+- Delivery.reply sends the pictures when the words are dropped.
+- Policy.knows_chat; actions' direct rule asks member; routing asks knows_chat; intake's dead private-chat rule gone; a private chat listed in both roles names its person once.
+- Incident.ENDED ("muted" from before 0.12.132 is over); Store.is_muted / mutes / mute and record_night's old argument kept as no-ops.
+- Tests: the moving curtain recorded then done, resumed after a restart, expiry and a 3-hour wait, pictures kept, the parts (an alert holding "-------", the siren's lead), the role table, the muted leftovers; each shown red without its fix.
+
 ## 0.6.135 (10 October 2026)
 
 - app._converse: no written reply when this turn put an approval request in the asker's chat (the engine decides; the AI is told to answer anything else with send_message). The delete-after-decision backstop (state apprreply:, set_approval_answer) removed: one mechanism. Tests: the echo dropped even when the AI writes it; one message after an immediate press; shown red without the rule.

@@ -84,8 +84,7 @@ class Routing:
         owners = self.policy.chats_for("owner")
         if required_role == "owner" or origin_chat is None:
             return owners
-        known = bool(self.policy.roles_in(origin_chat)) or int(origin_chat) in self.policy.people
-        return [int(origin_chat)] if known else owners
+        return [int(origin_chat)] if self.policy.knows_chat(origin_chat) else owners
 
     def label(self, chat_id: int) -> str:
         """For the log: which chat this is, never who is in it."""
