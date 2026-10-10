@@ -185,3 +185,47 @@ def test_every_notice_has_one_heading_with_the_incidents_history(agent):
     lines = head.split("\n")
     assert lines[0].endswith(", Incident: Follow Up #7") and text == "Still stopped"
     assert re.match(r"First time seen on \d\d/\d\d/\d{4} \d\d:\d\d, to .+", lines[1]) and len(lines) == 2
+
+
+def test_a_fault_closed_in_the_kiosk_says_who_and_when_on_telegram():
+    # owner, 2026-10-10: a Close in the Cockpit must act on the Telegram messages like a button: who, and when
+    from vesta_agent.tickets import kiosk_close_note
+    note = kiosk_close_note({"by": "Facility manager", "resolved_at": "2026-10-10T09:13:00.000Z"}, "Asia/Singapore")
+    assert note == "Closed in the VESTA Kiosk by Facility manager on 10/10/2026 17:13."
+    assert kiosk_close_note({}, "UTC") == "Closed in the VESTA Kiosk on {time}."     # an older Kiosk: noticed now
+
+
+def test_the_kiosk_is_read_every_five_minutes(agent, monkeypatch):
+    # it was read at start, at 01:30 and after the night check only: an alert closed in the Cockpit kept its buttons
+    from vesta_agent import app as app_module
+    calls = []
+
+    async def repair():
+        calls.append(1)
+        return 0
+    agent.tickets.repair = repair
+    agent.kiosk = type("K", (), {"enabled": True})()
+    clock = [1000.0]
+    monkeypatch.setattr(app_module.time, "monotonic", lambda: clock[0])
+    run(agent.housekeeping())
+    clock[0] += 60
+    run(agent.housekeeping())                                          # a minute later: not again
+    clock[0] += app_module.KIOSK_EVERY_S
+    run(agent.housekeeping())
+    assert len(calls) == 2
+
+
+def test_the_kiosk_answer_gives_who_closed_a_fault_and_when():
+    # the real reader of the Kiosk's Facility records (the fake skips it): the close's profile and moment reach the note
+    from vesta_agent.kiosk import Kiosk
+    k = Kiosk("http://kiosk.invalid", "token")
+
+    async def answer(method, path, body=None):
+        return 200, {"data": {"tickets": [
+            {"id": "va-1", "title": "Door", "status": "resolved", "resolvedAt": "2026-10-10T09:13:00.000Z",
+             "updates": [{"at": "2026-10-10T09:13:00.000Z", "status": "resolved", "by": "Owner", "photoIds": []}]},
+            {"id": "va-2", "title": "Pump", "status": "open"}]}}
+    k._req = answer
+    held = run(k.held_tickets())
+    assert held["va-1"]["by"] == "Owner" and held["va-1"]["resolved_at"] == "2026-10-10T09:13:00.000Z"
+    assert held["va-2"]["by"] == "" and held["va-2"]["status"] == "open"

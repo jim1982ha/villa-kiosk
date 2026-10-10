@@ -17,9 +17,24 @@ from .outcome_words import ticket_title
 log = logging.getLogger("vesta.outcome")
 
 
+def kiosk_close_note(ticket: dict, zone: str) -> str:
+    """The note a fault closed in the VESTA Kiosk leaves on its alert's messages: "Closed in the VESTA Kiosk by Facility
+    manager on 10/10/2026 17:13" — the profile and the moment the Kiosk recorded; the moment noticed without them."""
+    from datetime import datetime
+    from .notice import when
+    by = f" by {ticket['by']}" if ticket.get("by") else ""
+    try:
+        at = when(datetime.fromisoformat(str(ticket.get("resolved_at")).replace("Z", "+00:00")), zone)
+    except ValueError:
+        at = "{time}"
+    return f"Closed in the VESTA Kiosk{by} on {at}."
+
+
 class Tickets:
-    def __init__(self, *, kiosk, state, store_path: str, settle_alert: Callable[[int, str], Awaitable[int]]):
+    def __init__(self, *, kiosk, state, store_path: str, settle_alert: Callable[[int, str], Awaitable[int]],
+                 timezone: str = "UTC"):
         self.kiosk = kiosk
+        self.timezone = timezone              # the villa's: the note's time (notice.when)
         self.state = state
         self.store_path = store_path
         self.settle_alert = settle_alert      # incident_thread.IncidentThread.close: an incident closed in the Kiosk
@@ -74,7 +89,8 @@ class Tickets:
             if uid and states.get(uid) == "resolved":
                 iid = problems.closed_in_kiosk(t["id"])
                 if iid:
-                    await self.settle_alert(iid, "Closed in the VESTA Kiosk on {time}.")
+                    # who and when, as a button's footer says it (owner, 2026-10-10): the Kiosk's own record of the close
+                    await self.settle_alert(iid, kiosk_close_note(held.get(uid) or {}, self.timezone))
                 closed += 1
             elif problems.source_gone(t):
                 problems.close(t["id"], CLEARED)

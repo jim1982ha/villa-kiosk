@@ -1,3 +1,10 @@
+## 0.12.126
+
+What you will see:
+- A fault closed in the VESTA Kiosk's Cockpit now reaches Telegram within 5 minutes: the alert's messages lose their buttons in every chat and say "Closed in the VESTA Kiosk by Facility manager on 10/10/2026 17:13", with who closed it (the Kiosk profile) and when. Before, the agent only noticed at its next start, at 01:30 or after the night check, and did not say who.
+
+This needs VESTA 2.496.320 or later for the "by" part; with an older VESTA the note gives only the time.
+
 ## 0.12.125
 
 What you will see:

@@ -28,6 +28,7 @@ import os
 import signal
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Awaitable, Callable
@@ -96,6 +97,8 @@ def pack_needs_build(path: str) -> bool:
     return pack is None or not pack.devices
 
 
+#: How often the agent reads the VESTA Kiosk's faults (one closed in the Cockpit settles its alert's messages).
+KIOSK_EVERY_S = 300
 #: The largest photo the AI is shown: the Anthropic API takes an image of at most 5 MB.
 PHOTO_MAX_BYTES = 5 * 1024 * 1024
 
@@ -137,7 +140,7 @@ class Vesta:
         self.buttons = AlertButtons(state=self.state, skills=self.skills, store_path=settings.store_path,
                                     thread=self.thread, run_job=self.run_code_job)
         self.tickets = Tickets(kiosk=self.kiosk, state=self.state, store_path=settings.store_path,
-                               settle_alert=self.thread.close)
+                               settle_alert=self.thread.close, timezone=settings.timezone)
         # a voice message's words (voice.py): the skill prepares the audio, Home Assistant reads it
         self.voice = Voice(self.s, self.tg, self.skills, self.code_command, self.delivery.send, self.state, self.cf_headers)
         # the heading of every message the agent sends on its own (notice.py): who it is for, the incident, its history
@@ -154,6 +157,7 @@ class Vesta:
                            turns=self.turns, safe=self._safe)
         self.bot_username: str | None = None
         self._locks: dict[int, asyncio.Lock] = {}
+        self._kiosk_read = 0.0            # when the Kiosk's faults were last read (housekeeping)
         self._pack = None
         self._pack_mtime = None
 
@@ -628,6 +632,12 @@ class Vesta:
     async def housekeeping(self) -> None:
         if not self.server_tools and _now_local(self.s.timezone).minute % 10 == 0:
             await self.refresh_server_tools()
+        # ⚠️ A FAULT CLOSED IN THE KIOSK REACHES TELEGRAM WITHIN 5 MINUTES (owner, 2026-10-10: "will a Close in the cockpit
+        # also act on the Telegram notifications?"): the Kiosk was read at start, at 01:30 and after the night check
+        # only — an alert closed in the Cockpit kept its buttons in every chat for hours
+        if self.kiosk.enabled and time.monotonic() - self._kiosk_read >= KIOSK_EVERY_S:
+            self._kiosk_read = time.monotonic()
+            await self._safe(self.tickets.repair())
 
     # ------------------------------------------------------------------ the VESTA Agent page's requests
     async def on_request(self, req: dict) -> dict:

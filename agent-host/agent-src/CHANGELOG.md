@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.120 (10 October 2026)
+
+- app.housekeeping reads the Kiosk every KIOSK_EVERY_S (300 s): tickets.repair, so a fault closed in the Cockpit settles its alert's messages within minutes (it ran at start, at 01:30 and after the night check only).
+- kiosk.held_tickets gives each ticket's resolved_at and the profile of its last update (`by`, recorded by VESTA 2.496.320); tickets.kiosk_close_note: "Closed in the VESTA Kiosk by <profile> on dd/mm/yyyy HH:MM", the Kiosk's own moment (notice.when).
+- Tests: the note, the 5-minute read, the real reader of the Kiosk's answer, the note on Telegram after a close in the Kiosk. Each shown red with the old behaviour.
+
 ## 0.6.119 (10 October 2026)
 
 One heading for every notice, and one person in two roles (owner, 2026-10-10):

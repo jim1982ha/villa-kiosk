@@ -108,6 +108,7 @@ def test_the_tasks_and_the_kiosks_tickets_agree(agent):
     st.update_incident(iid, state="asked")
     alert, _ = pb.open_task("incident", iid, "automation.example_door", "lock.example_door", "Door left open")
     st.set_task_uid(alert, "t-alert")
+    kiosk.closed_meta["t-alert"] = {"by": "Facility manager", "resolved_at": "2026-10-10T09:13:00.000Z"}
     run(v.outcome.carry_out({"send": [{"to": "fm", "text": f"Door left open. Incident #{iid}.", "keyboard": True}],
                              "incident_id": iid}, "alert-desk"))
     run(v.tickets.repair())
@@ -116,7 +117,8 @@ def test_the_tasks_and_the_kiosks_tickets_agree(agent):
     # an alert's fault closed in the Kiosk: its incident closes too — the desk stops chasing it — and the
     # alert's message loses its buttons (villa, 2026-10-01: it kept reminding, then escalated to the owner)
     assert st.task(alert)["status"] == "closed_in_kiosk" and st.incident(iid)["closed_at"]
-    assert any("Closed in the VESTA Kiosk" in text for _, _, text in v.tg.edits)
+    # owner, 2026-10-10: who closed it in the Cockpit, and when — as a button's footer says it
+    assert any("Closed in the VESTA Kiosk by Facility manager on 10/10/2026 " in text for _, _, text in v.tg.edits)
 
 
 def test_one_occasion_answers_every_routing_question():
