@@ -21,6 +21,7 @@ import { useFmTerms } from "@/fm/useFmTerms";
 import EvidenceRow from "./EvidenceRow";
 import ErasableRow from "./ErasableRow";
 import AgentMark from "./AgentMark";
+import RecordMeta from "./RecordMeta";
 import { formatMoney } from "@/utils/money";
 
 export default function RecentWorkList({ limit = 12 }: { limit?: number }) {
@@ -68,12 +69,11 @@ export default function RecentWorkList({ limit = 12 }: { limit?: number }) {
                   ? <Wrench size={16} className="muted" />
                   : <CalendarCheck size={16} className="muted" />}
                 <strong>{source.title}</strong>
+              </div>
+              <RecordMeta when={`${localStamp(c.at)}${c.by && c.by !== "—" ? ` · ${c.by}` : ""}`}>
                 {source.kind === "fault" && <span className="fm-clause">fault</span>}
                 <AgentMark record={c} />
-              </div>
-              <div className="fm-row-sub muted">
-                {localStamp(c.at)}{c.by && c.by !== "—" ? ` · ${c.by}` : ""}
-              </div>
+              </RecordMeta>
               {c.note && <div className="fm-timeline-note">{c.note}</div>}
               {c.photoIds.length > 0 && (
                 <EvidenceRow photoIds={c.photoIds} disabled />

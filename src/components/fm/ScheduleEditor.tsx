@@ -15,6 +15,7 @@ import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
 import { scheduleStatus, shortDate } from "@/fm/fmEngine";
 import type { FmSchedule } from "@/fm/fmTypes";
 import AgentMark from "./AgentMark";
+import RecordMeta from "./RecordMeta";
 import { EMPTY_SCHEDULE_DRAFT as EMPTY, scheduleToDraft as toDraft, draftDays, scheduleWrite, type ScheduleDraft as Draft } from "@/fm/scheduleDraft";
 import FormActions from "./FormActions";
 
@@ -139,14 +140,13 @@ export default function ScheduleEditor() {
               <div className="fm-row-main">
                 <div className="fm-row-title">
                   <strong>{s.title}</strong>
+                </div>
+                <RecordMeta when={`Every ${s.everyDays} days · due by ${due.dueAt ? shortDate(due.dueAt) : "—"}`}>
                   {s.clause && <span className="fm-clause">Cl. {s.clause}</span>}
                   {s.room && <span className="fm-clause">{s.room}</span>}
                   {!s.enabled && <span className="fm-clause">Paused</span>}
                   <AgentMark record={s} />
-                </div>
-                <div className="fm-row-sub muted">
-                  Every {s.everyDays} days · due by {due.dueAt ? shortDate(due.dueAt) : "—"}
-                </div>
+                </RecordMeta>
               </div>
               <button
                 className="btn ghost"

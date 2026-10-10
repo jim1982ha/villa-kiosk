@@ -1,3 +1,9 @@
+## 2.496.321
+
+### Changed
+- Cockpit cards read the same everywhere (Faults, Today, Schedule, Spend, work done, saved documents): right under the title, one line with the card's pills (room, "by VESTA Agent", the device…) followed by when it happened.
+- A fault card no longer repeats "Open · date · VESTA Agent" and "Resolved · date · VESTA Agent" lines: when it was opened, picked up and resolved — and by whom — is on that line ("Opened 2026-10-09 02:01 · resolved 2026-10-10 02:01 by VESTA Agent"). Its notes ("Check: …", "Cleared: …", "Done, …", "Now: …") each stay, all in the same style.
+
 ## 2.496.320
 
 ### Fixed

@@ -29,6 +29,7 @@ import NotesField from "./NotesField";
 import MarkdownPreview from "./MarkdownPreview";
 import SavedDocumentsList from "./SavedDocumentsList";
 import AgentMark from "./AgentMark";
+import RecordMeta from "./RecordMeta";
 import { formatMoney } from "@/utils/money";
 import CostFields from "./CostFields";
 import { useDeviceChoice } from "./useDeviceChoice";
@@ -235,29 +236,24 @@ export default function SpendTab(
             <div className="fm-row-main">
               <div className="fm-row-title">
                 <strong>{c.label}</strong>
+              </div>
+              <RecordMeta when={localStamp(c.at)}>
                 <span className="fm-clause">{categoryName(terms, c.category)}</span>
                 <AgentMark record={c} />
-              </div>
-              <div className="fm-row-sub muted">{localStamp(c.at)}</div>
+                {c.entityId ? (
+                  <button className="fm-entity-chip" title={c.entityId}
+                    onClick={(e) => { e.stopPropagation(); onOpenEntity?.(c.entityId!); }}>
+                    {c.deviceLabel ?? c.entityId}
+                  </button>
+                ) : c.deviceLabel ? (
+                  <span className="fm-entity-chip" style={{ cursor: "default" }}>{c.deviceLabel}</span>
+                ) : null}
+              </RecordMeta>
               {c.note && <div className="fm-timeline-note">{c.note}</div>}
               {/* The receipt itself, openable — the whole point of attaching
                   one is that somebody can later check it. */}
               {c.photoIds.length > 0 && (
                 <EvidenceRow photoIds={c.photoIds} disabled />
-              )}
-              {(c.entityId || c.deviceLabel) && (
-                <div className="fm-chiprow">
-                  {c.entityId ? (
-                    <button className="fm-entity-chip" title={c.entityId}
-                      onClick={(e) => { e.stopPropagation(); onOpenEntity?.(c.entityId!); }}>
-                      {c.deviceLabel ?? c.entityId}
-                    </button>
-                  ) : (
-                    <span className="fm-entity-chip" style={{ cursor: "default" }}>
-                      {c.deviceLabel}
-                    </span>
-                  )}
-                </div>
               )}
             </div>
             <span className="fm-amount">{money(c.amountIdr)}</span>

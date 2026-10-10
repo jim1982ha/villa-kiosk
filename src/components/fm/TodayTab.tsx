@@ -15,6 +15,7 @@ import RecentWorkList from "./RecentWorkList";
 import NotesField from "./NotesField";
 import InlineConfirm from "@/components/common/InlineConfirm";
 import AgentMark from "./AgentMark";
+import RecordMeta from "./RecordMeta";
 import { formatMoney } from "@/utils/money";
 import CostFields from "./CostFields";
 import FormActions from "./FormActions";
@@ -118,14 +119,13 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
             <div className="fm-row-main">
               <div className="fm-row-title">
                 <strong>{s.schedule.title}</strong>
+              </div>
+              <RecordMeta when={`${dueText(s)} · every ${s.schedule.everyDays} days`
+                + (s.last ? ` · last ${localStamp(s.last.at)} by ${s.last.by || "—"}` : "")}>
                 {s.schedule.clause && <span className="fm-clause">Cl. {s.schedule.clause}</span>}
                 {s.schedule.room && <span className="fm-clause">{s.schedule.room}</span>}
                 <AgentMark record={s.schedule} />
-              </div>
-              <div className="fm-row-sub muted">
-                {dueText(s)} · every {s.schedule.everyDays} days
-                {s.last && ` · last ${localStamp(s.last.at)} by ${s.last.by || "—"}`}
-              </div>
+              </RecordMeta>
             </div>
             <span className={`fm-badge ${s.state}`}>{STATE_LABEL[s.state]}</span>
             <button
