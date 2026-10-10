@@ -1,3 +1,8 @@
+## 2.496.322
+
+### Changed
+- Cockpit, fault cards: only the latest "Now: …" line is shown. Each is the VESTA Agent's record of a new reading ("battery at 0 %", then 2 %, then 7 %); the earlier ones are what the fault said before. Every other note stays.
+
 ## 2.496.321
 
 ### Changed
