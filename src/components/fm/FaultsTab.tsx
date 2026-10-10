@@ -23,6 +23,7 @@ import FaultStageModal from "./FaultStageModal";
 import NotesField from "./NotesField";
 import DeviceSearchPicker, { type DeviceOption } from "./DeviceSearchPicker";
 import AgentMark from "./AgentMark";
+import RecordMeta, { RecordNotes } from "./RecordMeta";
 import InlineConfirm from "@/components/common/InlineConfirm";
 import { useDeviceChoice } from "./useDeviceChoice";
 import FormActions from "./FormActions";
@@ -32,6 +33,17 @@ import FormActions from "./FormActions";
 const LABEL: Record<FmTicketStatus, string> = {
   open: "Open", in_progress: "In progress", resolved: "Resolved",
 };
+
+/** When a fault happened, in one line: opened, picked up, resolved — and by whom, from its history. */
+function faultWhen(t: FmTicket): string {
+  const last = (status: string) => [...(t.updates ?? [])].reverse().find((u) => u.status === status);
+  const by = (u?: { by?: string }) => (u?.by ? ` by ${u.by}` : "");
+  const parts = [`Opened ${localStamp(t.openedAt)}`];
+  const picked = last("in_progress");
+  if (t.status === "in_progress" && picked) parts.push(`in progress since ${localStamp(picked.at)}${by(picked)}`);
+  if (t.resolvedAt) parts.push(`resolved ${localStamp(t.resolvedAt)}${by(last("resolved"))}`);
+  return parts.join(" · ");
+}
 
 export default function FaultsTab(
   { onOpenEntity, unavailableIds, deviceOptions, reportFaultFor, onFaultFormOpened }: {
@@ -285,63 +297,38 @@ export default function FaultsTab(
             <div className="fm-fault-head">
               <div className="fm-row-title">
                 <strong>{t.title}</strong>
-                {t.room && <span className="fm-clause">{t.room}</span>}
-                {/* Read this row differently: a guest reports a symptom from
-                    inside the villa, not a diagnosis. */}
-                {t.reportedBy === "guest" && <span className="fm-clause guest">guest report</span>}
-                <AgentMark record={t} />
               </div>
               <span className={`fm-badge ${isTicketResolved(t) ? "ok" : t.status === "open" ? "overdue" : "due-soon"}`}>
                 {LABEL[t.status]}
               </span>
             </div>
             <div className="fm-row-main">
-              <div className="fm-row-sub muted">
-                Opened {localStamp(t.openedAt)}
-                {t.resolvedAt && ` · resolved ${localStamp(t.resolvedAt)}`}
-              </div>
+              {/* ⚠️ ONE LINE UNDER THE TITLE (owner, 2026-10-11): the pills and when, together — the
+                  history's "Open · … · VESTA Agent" lines only repeated it, so its notes alone stay
+                  below, each in the "Check: …" style. Who picked it up and who resolved it are on
+                  this line. */}
+              <RecordMeta when={faultWhen(t)}>
+                {t.room && <span className="fm-clause">{t.room}</span>}
+                {/* Read this row differently: a guest reports a symptom from
+                    inside the villa, not a diagnosis. */}
+                {t.reportedBy === "guest" && <span className="fm-clause guest">guest report</span>}
+                <AgentMark record={t} />
+                {t.entityId ? (
+                  <button className="fm-entity-chip" title={t.entityId}
+                    onClick={(e) => { e.stopPropagation(); onOpenEntity(t.entityId!); }}>
+                    {t.deviceLabel ?? label(t.entityId)}
+                  </button>
+                ) : t.deviceLabel ? (
+                  // Free-text device: nothing to open, so a plain (non-
+                  // clickable) chip rather than a button that does nothing.
+                  <span className="fm-entity-chip" style={{ cursor: "default" }}>{t.deviceLabel}</span>
+                ) : null}
+              </RecordMeta>
+              <RecordNotes notes={[t.note, ...(t.updates ?? []).map((u) => u.note)]} />
               {/* The photos themselves, not a count of them. "3 photo(s)"
                   is a claim; a thumbnail you can open is the evidence. */}
-              {t.note && <div className="fm-timeline-note">{t.note}</div>}
               {t.photoIds.length > 0 && (
                 <EvidenceRow photoIds={t.photoIds} disabled />
-              )}
-              {/* The fault's own history. Rendered on the card rather than
-                  behind another tap: "what has actually been done about this"
-                  is the question anyone opening the Faults tab is asking.
-                  A history of ONE plain "Open" entry only repeats "Opened …"
-                  above, so it shows once something has happened. */}
-              {(t.updates?.length ?? 0) > (t.updates?.[0]?.note || t.updates?.[0]?.photoIds?.length ? 0 : 1) && (
-                <ol className="fm-timeline">
-                  {t.updates!.map((u, i) => (
-                    <li key={i}>
-                      <span className={`fm-timeline-dot ${u.status}`} aria-hidden="true" />
-                      <div>
-                        <span className="fm-timeline-head">
-                          {LABEL[u.status]}
-                          <span className="muted"> · {localStamp(u.at)}{u.by ? ` · ${u.by}` : ""}</span>
-                        </span>
-                        {u.note && <div className="fm-timeline-note">{u.note}</div>}
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              )}
-              {(t.entityId || t.deviceLabel) && (
-                <div className="fm-chiprow">
-                  {t.entityId ? (
-                    <button className="fm-entity-chip" title={t.entityId}
-                      onClick={(e) => { e.stopPropagation(); onOpenEntity(t.entityId!); }}>
-                      {t.deviceLabel ?? label(t.entityId)}
-                    </button>
-                  ) : (
-                    // Free-text device: nothing to open, so a plain (non-
-                    // clickable) chip rather than a button that does nothing.
-                    <span className="fm-entity-chip" style={{ cursor: "default" }}>
-                      {t.deviceLabel}
-                    </span>
-                  )}
-                </div>
               )}
             </div>
             {closingId !== t.id && (TICKET_NEXT[t.status] || !isTicketResolved(t)) && (
