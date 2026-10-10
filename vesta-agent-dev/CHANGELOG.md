@@ -1,3 +1,11 @@
+## 0.12.124
+
+What you will see:
+- Every message about an open alert now has its Done / Not found / Need help buttons, in every chat it reaches: the facility manager's, the owner's group, and Home Assistant's own alert once the agent has taken it over. Nobody has to type an answer anymore; the messages say "Press Done" instead of "Reply Done".
+- Each new message about an alert still replaces the earlier one in that chat, and now ends with when the earlier messages were sent ("Earlier messages: Fri 9 Oct, 06:11, Sat 10 Oct, 12:17.").
+- A press still writes on the message who pressed what, and when.
+- "typing…" now shows from the moment your message reaches the agent until its answer arrives, for every kind of message: while a photo is fetched or a voice message transcribed, while the AI answers, and while a report is made. Before, it started only when the AI began, 2 to 3 seconds late for a photo.
+
 ## 0.12.123
 
 What you will see:
