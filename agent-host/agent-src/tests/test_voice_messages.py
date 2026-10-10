@@ -71,9 +71,10 @@ def test_a_private_voice_message_becomes_the_message(agent):
     assert not os.listdir(os.path.join(agent.s.out_dir, "voice"))
 
 
-def test_a_photo_is_not_a_message(agent):
+def test_a_photo_is_a_message_not_a_voice_one(agent):
+    # owner, 2026-10-10: a photo is read as a message (tests/test_photo_messages.py) — never transcribed as voice
     run(agent.on_ha_event("telegram_attachment", voice_event(OWNER, OWNER, mime="image/jpeg")))
-    assert agent.tg.fetched == [] and agent.conversed == []
+    assert agent.stt_calls == [] and [c[2] for c in agent.conversed] == [False]
 
 
 def test_in_a_group_only_a_voice_reply_to_the_agent_is_read(agent):

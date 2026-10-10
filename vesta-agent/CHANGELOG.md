@@ -1,3 +1,10 @@
+## 0.12.123
+
+What you will see:
+- The agent now looks at a photo you send it and answers about it. A photo follows the same rule as a text message: in a group, start its caption with /ask (or mention the agent, or reply to one of its messages); in a private chat with the agent, just send it. Until now every photo was dropped without a reply.
+- If a photo cannot be fetched from Telegram, or is too large (over 5 MB), the agent says so.
+- A file that is neither a photo nor a voice message is still not read, and the agent's activity record now says it was received and why it was left.
+
 ## 0.12.122
 
 What you will see:

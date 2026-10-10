@@ -211,15 +211,31 @@ def with_time(settings, prompt: str, now: datetime | None = None) -> str:
     return f"[Villa time: {now:%A %d %B %Y, %H:%M}]\n{prompt}"
 
 
+def message(prompt: str, image: tuple[str, str] | None = None):
+    """What the SDK is sent: the text, or — with a photo a person sent (base64, mime) — one message holding the picture
+    and the text, so the AI looks at it (owner, 2026-10-10)."""
+    if image is None:
+        return prompt
+
+    async def one():
+        data, mime = image
+        yield {"type": "user", "parent_tool_use_id": None,
+               "message": {"role": "user", "content": [
+                   {"type": "image", "source": {"type": "base64", "media_type": mime, "data": data}},
+                   {"type": "text", "text": prompt}]}}
+    return one()
+
+
 async def run(settings, system_prompt: str, prompt: str, kit, terms, state, resume: str | None = None,
-              asked: str | None = None) -> RunResult:
-    """One run: `kit` its built tools (tools.Toolbox.for_run), `terms` its brain, limit and record (turn.Terms)."""
+              asked: str | None = None, image: tuple[str, str] | None = None) -> RunResult:
+    """One run: `kit` its built tools (tools.Toolbox.for_run), `terms` its brain, limit and record (turn.Terms);
+    `image` a photo the person sent with the message (base64, mime)."""
     clean_environ()
     opts, denied = build_options(settings, system_prompt, kit, terms, state, resume)
     c = Collector(resume)
     try:
         async with ClaudeSDKClient(options=opts) as client:
-            await client.query(with_time(settings, prompt))
+            await client.query(message(with_time(settings, prompt), image))
             async for msg in client.receive_response():
                 c.feed(msg)
     except Exception as e:  # noqa: BLE001
@@ -252,6 +268,6 @@ async def run(settings, system_prompt: str, prompt: str, kit, terms, state, resu
     if retrying:
         # the session could not be resumed (lost, or from an older version): answer in a new one
         # the same run for the Costs tab: what was asked goes with it (it was dropped, so the answered run had none)
-        return await run(settings, system_prompt, prompt, kit, terms, state, None, asked)
+        return await run(settings, system_prompt, prompt, kit, terms, state, None, asked, image)
     return RunResult("\n\n".join(texts).strip(), session_id, stopped, cost, denied, err, problem)
 

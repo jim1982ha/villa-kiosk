@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.117 (10 October 2026)
+
+A photo is a message (owner, 2026-10-10: two screenshots with "/ask" in the group were dropped without a reply or a record):
+- intake.gate: an image attachment goes through the same rules as a text message. Its caption is put in the command's own shape (Home Assistant fires a caption as text, never as a command event) and meets the one command rule; no rule of its own. A file that is neither voice nor image is dropped with its reason recorded.
+- app.handle_message fetches the photo (PHOTO_MAX_BYTES, 5 MB, the API's limit; a failure is said to the person); converse(image=); the message says a photo is attached; the Costs row's question reads "[photo] caption".
+- runner.message: the text, or one user message with the image block and the text; runner.run(image=), turn.Turns.chat(image=).
+- Tests (tests/test_photo_messages.py): the gate's rules for photos in a group and a private chat, a pdf dropped and said; the AI given the picture and its caption; a photo that cannot be fetched is said; the SDK message. test_intake, test_voice_messages and test_prompt_cache updated from "a photo is not a message". Each shown red with the old behaviour.
+
 ## 0.6.116 (10 October 2026)
 
 The villa's status, given, not fetched (owner, 2026-10-10: "what's the status of the villa now?" answered "everything ok" with three Shelly pump devices offline; the run made one HA MCP call and never ran concierge.py status):

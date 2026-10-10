@@ -46,7 +46,9 @@ def ev(chat, user, text="hi", **k):
     ("telegram_command", {"chat_id": OWNER, "user_id": OWNER, "command": "/ask@OtherBot", "args": ["x"]}, "drop", ""),
     ("telegram_command", {"chat_id": OWNER, "user_id": OWNER, "command": f"/ask@{BOT}", "args": ["pool", "ok?"]},
      "converse", "pool ok?"),
-    ("telegram_attachment", {"chat_id": OWNER, "user_id": OWNER, "file_mime_type": "image/jpeg"}, "drop", ""),
+    # a photo is a message (owner, 2026-10-10): in a private chat, always read; a file that is no photo, dropped and said
+    ("telegram_attachment", {"chat_id": OWNER, "user_id": OWNER, "file_mime_type": "image/jpeg"}, "converse", ""),
+    ("telegram_attachment", {"chat_id": OWNER, "user_id": OWNER, "file_mime_type": "application/pdf"}, "drop", ""),
     ("telegram_text", ev(OWNER, OWNER, f"@{BOT}"), "drop", ""),                                 # nothing left to say
 ])
 def test_what_the_agent_does_with_each_message(etype, m, action, text):

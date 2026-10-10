@@ -95,6 +95,10 @@ def pack_needs_build(path: str) -> bool:
     return pack is None or not pack.devices
 
 
+#: The largest photo the AI is shown: the Anthropic API takes an image of at most 5 MB.
+PHOTO_MAX_BYTES = 5 * 1024 * 1024
+
+
 class Vesta:
     def __init__(self, settings, telegram: Telegram | None = None, reader=None, writer_factory=None,
                  kiosk: Kiosk | None = None, skills: Skills | None = None):
@@ -396,10 +400,30 @@ class Vesta:
         if got.voice_file is not None:
             text = intake.without_mention(await self.voice.transcribe(got.chat, got.person, got.voice_file),
                                           self.bot_username)
-        if not text:
+        image = None
+        if got.photo_file is not None:
+            image = await self._photo(got.chat, got.photo_file, str(m.get("file_mime_type") or "image/jpeg"))
+            if image is None:
+                return
+        if not text and image is None:
             return
         await self.converse(got.chat, got.person, text, chat_role=self.policy().chat_role(got.chat) or "private",
-                            voice=got.voice_file is not None)
+                            voice=got.voice_file is not None, image=image)
+
+    async def _photo(self, chat: int, file_id: str, mime: str) -> tuple[str, str] | None:
+        """A photo a person sent, ready for the AI (base64, mime); None — and the person told why — when it cannot be."""
+        import base64
+        if self.tg is None or not file_id:
+            return None
+        try:
+            data = await self.tg.download(file_id, limit=PHOTO_MAX_BYTES)
+        except TelegramError as e:
+            log.warning("A photo could not be fetched from Telegram: %s", e)
+            await self.delivery.send(chat, "This photo could not be fetched from Telegram, or it is too large "
+                                           f"(over {PHOTO_MAX_BYTES // 1_000_000} MB). Send it again, or describe it.")
+            return None
+        log.info("Photo received in chat %s (%d KB)", chat, len(data) // 1024)
+        return base64.b64encode(data).decode("ascii"), mime
 
     def _resume_for(self, chat_id: int) -> str | None:
         sid, last = self.state.session(chat_id)
@@ -420,11 +444,13 @@ class Vesta:
                 f"Villa time zone: {self.s.timezone}. The current villa date and time head each message.")
 
     async def converse(self, cid: int, person: Person | None, text: str, chat_role: str = "private",
-                       resume: str | None = "auto", is_continue: bool = False, voice: bool = False):
+                       resume: str | None = "auto", is_continue: bool = False, voice: bool = False,
+                       image: tuple[str, str] | None = None):
+        """`image`: a photo the person sent (base64, mime), `text` its caption: the AI looks at it."""
         async with self.delivery.typing(cid) as answered:
-            await self._converse(cid, person, text, chat_role, resume, is_continue, voice, answered)
+            await self._converse(cid, person, text, chat_role, resume, is_continue, voice, answered, image)
 
-    async def _converse(self, cid, person, text, chat_role, resume, is_continue, voice, answered):
+    async def _converse(self, cid, person, text, chat_role, resume, is_continue, voice, answered, image=None):
         async with self.lock(cid):
             self.chat_jobs.turn(cid)                         # a job started now belongs to this turn (chat_jobs.py)
             if resume == "auto":
@@ -435,8 +461,10 @@ class Vesta:
             else:
                 # ⚠️ THE LANGUAGE OF THE ANSWER IS THE SKILL'S RULE (owner, 2026-10-05): the
                 # engine says which language is saved for the person, never "answer in it".
-                said = "a voice message, as transcribed" if voice else "a message"
-                prompt = (f"{said.capitalize()} from {person.name if person else 'someone'} (role "
+                said = ("a photo (attached: look at it) with this message" if image and text else
+                        "a photo (attached: look at it), with no message" if image else
+                        "a voice message, as transcribed" if voice else "a message")
+                prompt = (f"{said[0].upper() + said[1:]} from {person.name if person else 'someone'} (role "
                           f"{person.role if person else '?'}; language saved for them: {lang}) in the {chat_role} chat:\n"
                           f"\"\"\"{text}\"\"\"\nAnswer short.")
             if not is_continue:
@@ -445,7 +473,8 @@ class Vesta:
                     prompt = f"{checked}\n\n{prompt}"
             pol = self.policy()
             # what this person may make the AI use here, the chat's brain and limit, its folder: turn.py decides
-            res = await self.turns.chat(person, cid, prompt, resume=resume, asked=None if is_continue else text)
+            asked = None if is_continue else (f"[photo] {text}".strip() if image else text)
+            res = await self.turns.chat(person, cid, prompt, resume=resume, asked=asked, image=image)
             if res.session_id:
                 self.state.set_session(cid, res.session_id)
             log.info("Answered %s in chat %s (%s)%s", person.name if person else "system", cid,

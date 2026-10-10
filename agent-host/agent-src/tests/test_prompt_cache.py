@@ -29,4 +29,4 @@ def test_each_message_carries_the_villa_time():
     now = datetime(2026, 10, 9, 14, 32, tzinfo=ZoneInfo("Asia/Makassar"))
     assert runner.with_time(s, "Is the pool OK?", now) == "[Villa time: Friday 09 October 2026, 14:32]\nIs the pool OK?"
     # every run sends its message through it: chats, Continue and AI jobs all call runner.run
-    assert "client.query(with_time(settings, prompt))" in inspect.getsource(runner.run)
+    assert "client.query(message(with_time(settings, prompt), image))" in inspect.getsource(runner.run)

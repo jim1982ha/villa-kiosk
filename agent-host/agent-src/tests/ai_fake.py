@@ -33,7 +33,8 @@ class FakeAI:
         self.cost_usd, self.act, self.delay_s = cost_usd, act, delay_s
         self.runs: list[dict] = []
 
-    async def run(self, settings, system_prompt, prompt, kit, terms, state, resume=None, asked=None) -> runner.RunResult:
+    async def run(self, settings, system_prompt, prompt, kit, terms, state, resume=None, asked=None,
+                  image=None) -> runner.RunResult:
         tools = {t.name: t for t in kit.tools}
 
         async def call_tool(name: str, args: dict | None = None) -> dict:
@@ -44,7 +45,7 @@ class FakeAI:
 
         call = {"who": terms.who, "prompt": prompt, "allowed": kit.names, "tools": set(terms.tools), "resume": resume,
                 "limit_usd": terms.limit_usd, "profile": terms.profile, "asked": asked, "system_prompt": system_prompt,
-                "folder": settings.out_dir, "call": call_tool}
+                "folder": settings.out_dir, "call": call_tool, "image": image}
         self.runs.append(call)
         if self.act:
             await self.act(call)

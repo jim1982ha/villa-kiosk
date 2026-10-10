@@ -8,7 +8,7 @@ and patch `converse` to watch it. Here each message gets one answer:
     whoami        /whoami: the ids, answered even before policy.yaml lists any chat
     unregistered  a person policy.yaml does not know (told so in a private chat only)
     new           /new: the conversation starts again
-    converse      the text (or the voice message to transcribe) for the AI
+    converse      the text (or the voice message to transcribe, or the photo with its caption) for the AI
 
 Also the conversation-reset rule ("Delete conversation context at", settings.conversation_reset), which had no
 test at all.
@@ -31,6 +31,7 @@ class Intake:
     person: object = None
     text: str = ""
     voice_file: str | None = None        # a voice message to transcribe first
+    photo_file: str | None = None        # a photo the AI looks at, its caption the text
     group: bool = False
     why: str = ""                        # a drop worth a record ("group not listed in policy.yaml")
 
@@ -55,14 +56,25 @@ def gate(event_type: str, m: dict, policy, bot_username: str | None, is_own_mess
     except (TypeError, ValueError):
         return Intake("drop")
     group = cid < 0                      # Telegram: groups negative, private chats positive; no type field
-    voice = event_type == "telegram_attachment"
-    if voice and not str(m.get("file_mime_type") or "").startswith("audio/"):
-        return Intake("drop", cid, group=group)               # a photo or a file: nothing the agent does with it
-    if event_type == "telegram_command":
-        cmd, addressed = command_name(m.get("command") or "", bot_username)
+    mime = str(m.get("file_mime_type") or "")
+    attachment = event_type == "telegram_attachment"
+    voice = attachment and mime.startswith("audio/")
+    # ⚠️ A PHOTO IS A MESSAGE (owner, 2026-10-10: Fabien sent a screenshot with "/ask are you sure ?" in the group, twice,
+    # and the agent dropped it without a word or a record). It is read as a text message is — its caption the text, by
+    # the same rules (in a group: /ask, a mention or a reply to the agent; in a private chat: always) — and the AI sees it.
+    photo = attachment and mime.startswith("image/")
+    if attachment and not (voice or photo):
+        return Intake("drop", cid, group=group, why=f"a file the agent does not read ({mime or 'unknown type'})")
+    command, args = m.get("command"), m.get("args")
+    if photo and (m.get("text") or "").strip().startswith("/"):
+        # a photo's caption is plain text to Home Assistant ("/ask are you sure ?"), never a command event: put in the
+        # command's own shape, it meets the one command rule below — a photo has no rule of its own
+        command, args = (m.get("text") or "").strip().split(" ", 1)[0], (m.get("text") or "").strip().split()[1:]
+    if command is not None:
+        cmd, addressed = command_name(command or "", bot_username)
         if not addressed or cmd not in OWN_COMMANDS:
             return Intake("drop", cid, group=group)           # a command for Home Assistant's automations or another bot
-        text = " ".join(str(a) for a in (m.get("args") or [])).strip()
+        text = " ".join(str(a) for a in (args or [])).strip()
     else:
         cmd, text = "", (m.get("text") or "").strip()
     if group and policy.chats and policy.chat_role(cid) is None:
@@ -85,6 +97,9 @@ def gate(event_type: str, m: dict, policy, bot_username: str | None, is_own_mess
     if voice:
         # in a group, only a voice message that replies to the agent reaches here (no mention possible)
         return Intake("converse", cid, person, voice_file=str(m.get("file_id") or ""), group=group)
+    if photo:
+        return Intake("converse", cid, person, without_mention(text, bot_username),
+                      photo_file=str(m.get("file_id") or ""), group=group)
     text = without_mention(text, bot_username)
     return Intake("converse", cid, person, text, group=group) if text else Intake("drop", cid, group=group)
 
