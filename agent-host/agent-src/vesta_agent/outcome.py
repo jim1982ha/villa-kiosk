@@ -40,7 +40,7 @@ from .incident_thread import approval_thread
 from .notice import when
 from .routing import Origin, Routing
 from .outcome_words import clean_summary, ticket_title  # noqa: F401 — the words of a record, shared with tickets.py
-from vesta_shared.messaging import incident_tag
+from vesta_shared.messaging import RULE
 
 if TYPE_CHECKING:
     from .actions import Outgoing
@@ -169,7 +169,7 @@ class Outcome:
                 await self.ask(msg, head=gate_prompt, origin=origin)
             else:
                 for chat in route.target("owner"):
-                    await self._post(chat, gate_prompt + f"\n\nThe siren cannot be requested: {answer}", roles={"owner"},
+                    await self._post(chat, f"{gate_prompt}\n{RULE}\nThe siren cannot be requested: {answer}", roles={"owner"},
                                      origin=origin)
         for a in res.get("actions") or []:
             kind = (a or {}).get("action")
@@ -184,9 +184,11 @@ class Outcome:
                 elif kind == "snapshot.get":
                     photo = await camera_photo(self.reader, a.get("entity_id"))
                     if photo:
-                        # its own thread: a newer snapshot of the incident replaces the older one in each chat
+                        # its own thread: a newer snapshot of the incident replaces the older one in each chat; under the
+                        # heading of every message the agent sends on its own (owner, 2026-10-10: "all formatted the same")
+                        iid = int(a["incident_id"]) if str(a.get("incident_id") or "").isdigit() else None
                         for chat in chats:
-                            await self._post(chat, f"{incident_tag(a.get('incident_id'))} · Snapshot", photo=photo, plain=True,
+                            await self._post(chat, "Camera snapshot", incident=iid, photo=photo,
                                              thread=f"snapshot-{a.get('incident_id')}", origin=origin)
                 else:
                     self.state.log("action_ignored", {"action": kind, "skill": skill_name})

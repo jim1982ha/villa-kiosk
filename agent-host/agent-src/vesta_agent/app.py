@@ -43,7 +43,7 @@ from .api_errors import AI_DOWN, FOR_PERSON, NEEDS_THE_OWNER
 from .delivery import Delivery
 from .config import STARTER_DIR
 from .ha_events import CONTEXT_KEY, HaEvents
-from .incident_thread import IncidentThread, approval_thread
+from .incident_thread import IncidentThread, approval_thread, with_status
 from vesta_shared.result import FAULTS_CHANGED
 from .housekeeping import tidy
 from .kiosk import Kiosk, KioskError
@@ -624,7 +624,8 @@ class Vesta:
         await p.toast(said)
         if p.mid:
             # the message itself says so, its buttons gone: a toast alone is easily missed ("nothing happened")
-            await self.delivery.edit(p.chat, p.mid, f"{p.msg.get('text') or ''}\n\n{said}".strip())
+            # where it stands, under the line at the bottom, as every update of a message (incident_thread.with_status)
+            await self.delivery.edit(p.chat, p.mid, with_status(str(p.msg.get("text") or ""), said))
 
     async def _server_tools(self) -> list[dict]:
         """HA MCP's tool list, read again when the agent has none yet."""

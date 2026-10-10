@@ -191,6 +191,9 @@ def test_a_newer_snapshot_of_an_incident_replaces_the_older_one(tmp_path):
                                                                            "incident_id": 9}]}
     run(v.outcome.carry_out(res))
     first = v.tg.next_id                                                # the snapshot: the last message sent
+    # under the heading every message of the agent's carries (owner, 2026-10-10: "all formatted the same way")
+    assert v.tg.sent[-1][1].startswith("For: JM_O")
+    assert v.tg.sent[-1][1].endswith("-------\nCamera snapshot")
     run(v.outcome.carry_out(res))
     assert (JM, first) in v.tg.deleted
 
@@ -251,3 +254,12 @@ def test_the_answer_that_says_an_approval_was_asked_goes_once_it_is_decided(tmp_
     assert (JM, answer_n) in v.tg.deleted                                   # the "awaiting" answer is gone
     (_, mid, settled), = v.tg.edits
     assert mid == req_n and re.search(r"\n-------\nRefused by JM on \d\d/\d\d/\d{4} \d\d:\d\d\. Nothing was done\.$", settled)
+
+
+def test_the_siren_that_cannot_be_requested_says_so_in_the_agents_layout(tmp_path):
+    from vesta_shared import result as R
+    v = make_agent(tmp_path, {"people": PEOPLE, "siren_entity": "switch.siren"})          # acting is off: refused
+    run(v.outcome.carry_out({"siren_gate": R.siren(True, "Intrusion suspected.", ("owner", "fm"))}, "alert-desk"))
+    texts = [t for _, t, _ in v.tg.sent]
+    assert texts and all(t.startswith("For: ") and "\n-------\nIntrusion suspected.\n-------\nThe siren cannot be requested: "
+                         in t for t in texts)

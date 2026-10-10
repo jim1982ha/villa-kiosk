@@ -259,7 +259,7 @@ def test_a_report_asked_for_while_the_ai_is_down_is_a_button_that_needs_no_ai(ag
     asyncio.run(go())
     said = "Making the Weekly report without the AI, from its figures and charts: it will be sent here."
     assert agent.tg.toasts == [("cb1", said)]
-    assert agent.tg.edits == [(FM, agent.tg.next_id - 1, f"No credit.\n\n{said}")]   # its buttons gone, it says so
+    assert agent.tg.edits == [(FM, agent.tg.next_id - 1, f"No credit.\n-------\n{said}")]   # its buttons gone, it says so
     assert [t for c, t, _ in agent.tg.sent if c == FM][1] == \
         "287 kWh this week. (Made without the AI: The Anthropic account has run out of credit.)"
 

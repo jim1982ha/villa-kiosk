@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.130 (10 October 2026)
+
+Every send scanned: what the agent sends on its own goes through Outcome._post (heading, RULE, status); answers to the asker carry none. Three left out, fixed: the snapshot (heading with its incident, "Camera snapshot"), the siren's "cannot be requested" (under RULE), the report-button press (incident_thread.with_status). Tests pin each; three mutations red.
+
 ## 0.6.129 (10 October 2026)
 
 - Approvals in the notice layout everywhere: actions.request writes the action, RULE, "Waiting for approval by … (asked on {time}, …)"; Outcome.ask composes the heading in the asking chat too (Outgoing.asked_in gone); a decision replaces the status (with_status).

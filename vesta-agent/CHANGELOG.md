@@ -1,3 +1,11 @@
+## 0.12.136
+
+What you will see (a scan of every message the agent sends):
+- A camera snapshot of an incident now has the same heading as the incident's messages ("For: …, P1 Incident: Follow Up #9"), with "Camera snapshot" under the line.
+- "The siren cannot be requested: …" now sits at the bottom, under a line, like every other status.
+- A report started from its button while the AI is unavailable: the message now says "Making the … report" under a line at the bottom.
+- The rest already followed one of the two layouts: everything the agent sends on its own (alerts, reminders, escalations, approvals, reports, warnings) has the heading and the status at the bottom; a direct answer to the person who just wrote or pressed has none.
+
 ## 0.12.135
 
 What you will see:
