@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.128 (10 October 2026)
+
+- Policy.member: in a listed group everyone — a listed person included — acts with the group's role (fm when listed for both); a person's row applies in their private chat. Test shown red without it; the approval test presses in the owner's private chat.
+- app: the start-up warning is for an empty People (no destinations), not for People without persons.
+
 ## 0.6.127 (10 October 2026)
 
 - policy.read_policy: a file with a People (or older chats) section names each role with no destination ("at least one Owner is needed…"); the page refuses such a save. A snippet without the section is not checked. The page tests start from a villa set up; the refusal shown red without the rule.

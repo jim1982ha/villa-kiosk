@@ -220,16 +220,22 @@ class Policy:
 
         ⚠️ A GROUP'S MEMBERS INHERIT ITS ROLE (owner, 2026-10-10: "a person in the group can naturally send messages in
         the group, without having to be defined as a people"): a People row also sends that person every message of
-        their role in private, so a group member had to choose between no answer and every alert twice. Listed people
-        keep their own role everywhere; a member's rights hold only in that group (an anonymous admin stays nobody)."""
+        their role in private, so a group member had to choose between no answer and every alert twice. A member's rights
+        hold only in that group (an anonymous admin stays nobody).
+
+        ⚠️ THE GROUP'S ROLE, WHOEVER WRITES THERE (owner, 2026-10-10: "people in a Telegram group inherit automatically the
+        role of the Telegram group they are in, irrespective of their own individual role"): a listed person kept their
+        row's role in the group, so an Owner group refused the siren's approval to JM (listed as Facility manager) and
+        accepted it from any unlisted member. Their own row's role holds in their private chat."""
         p = self.person(telegram_id)
-        if p is not None or telegram_id is None or int(telegram_id) in ANONYMOUS_TELEGRAM_IDS or chat_id is None \
-                or int(chat_id) >= 0:
+        if telegram_id is None or int(telegram_id) in ANONYMOUS_TELEGRAM_IDS or chat_id is None or int(chat_id) >= 0:
             return p
         roles = self.roles_in(chat_id)
         if not roles:
-            return None
+            return p
         role = "fm" if "fm" in roles else "owner"
+        if p is not None:
+            return p if p.role == role else Person(p.telegram_id, p.name, role, p.language)
         group = next((e for e in self.entries if e.telegram_id == int(chat_id) and e.role == role), None)
         return Person(int(telegram_id), (name or "").strip() or f"a member of {group.name if group else 'the group'}",
                       role, group.language if group else "en")

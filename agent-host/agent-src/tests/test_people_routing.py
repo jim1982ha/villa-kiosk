@@ -51,6 +51,13 @@ def test_an_approval_for_the_owner_reaches_every_owner_chat_and_one_press_settle
     in_group = next(n for n, (c, _t, _k) in enumerate(v.tg.sent, start=1001) if c == GROUP)
     press = {"id": "cb1", "data": button_data.make(button_data.APPROVAL, aid, "n"), "chat_id": GROUP, "user_id": FABIEN,
              "message": {"message_id": in_group, "chat": {"id": GROUP}, "text": msg.text}, "bot": BOT}
+    # in the group, listed for both roles, everyone is its Facility manager (owner, 2026-10-10): the owner's approval
+    # is not theirs to give there
+    run(v.on_ha_event("telegram_callback", press))
+    assert v.tg.edits == [] and v.tg.toasts[-1][1] == "Only the owner can approve this."
+    # in his own private chat Fabien is the Owner he is listed as
+    in_private = next(n for n, (c, _t, _k) in enumerate(v.tg.sent, start=1001) if c == FABIEN)
+    press = {**press, "id": "cb2", "chat_id": FABIEN, "message": {"message_id": in_private, "chat": {"id": FABIEN}, "text": msg.text}}
     run(v.on_ha_event("telegram_callback", press))
     # every copy, in every chat, says who refused and when — its buttons gone (one mechanism: incident_thread.py)
     assert sorted(c for c, _, _ in v.tg.edits) == sorted([FABIEN, JM, GROUP])
@@ -205,3 +212,17 @@ def test_a_member_of_a_listed_group_acts_with_its_role_without_a_people_row(tmp_
              "message": {"message_id": in_group, "chat": {"id": GROUP}, "text": msg.text}, "bot": BOT}
     run(v.on_ha_event("telegram_callback", press))
     assert v.tg.edits and all("Refused by Rita on " in t for _, _, t in v.tg.edits)
+
+
+def test_in_a_listed_group_everyone_acts_with_the_groups_role_whatever_their_own():
+    # the owner's People of 2026-10-10: the group as Owner, JM and Fabien as Facility manager — in the group JM was
+    # refused the siren's approval while any unlisted member could give it
+    pol = Policy({"people": [{"telegram_id": GROUP, "name": "Group Chat", "role": "owner"},
+                             {"telegram_id": FABIEN, "name": "Fabien", "role": "fm"},
+                             {"telegram_id": JM, "name": "JM", "role": "fm"}]})
+    assert pol.member(JM, GROUP).role == "owner" and pol.member(555, GROUP).role == "owner"     # everyone in the group
+    assert pol.member(JM, JM).role == "fm" and pol.person(JM).role == "fm"                     # in private: their own
+    both = Policy({"people": [{"telegram_id": GROUP, "name": "G_O", "role": "owner"}, {"telegram_id": GROUP, "name": "G_FM", "role": "fm"},
+                              {"telegram_id": JM, "name": "JM_O", "role": "owner"}]})
+    # "irrespective of their own individual role" (owner, 2026-10-10): a group of both roles is the narrower, for all
+    assert both.member(JM, GROUP).role == "fm" and both.member(555, GROUP).role == "fm" and both.member(JM, JM).role == "owner"

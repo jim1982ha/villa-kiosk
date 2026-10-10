@@ -279,9 +279,10 @@ class Vesta:
         if pack_needs_build(self.s.pack_path):
             await asyncio.to_thread(self.build_pack)
         pol = self.policy()
-        if not pol.people:
-            log.warning("policy.yaml has no people yet: the agent answers nobody. Ask each person to send /whoami "
-                        "to the bot and copy the ids from this log into the agent's policy.yaml.")
+        # People rows with no person but a group still answer its members (policy.member): only an empty list is "nobody"
+        if not pol.destinations:
+            log.warning("People is empty: the agent answers nobody and posts nowhere. In each chat to use, send /whoami "
+                        "to the bot and add the ids on the VESTA Agent page, Rules › People.")
         log.info("Acting on the villa is %s", "ON" if pol.act_enabled else "OFF (informs only)")
 
     async def refresh_server_tools(self):

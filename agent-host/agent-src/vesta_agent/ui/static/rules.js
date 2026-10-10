@@ -116,7 +116,7 @@ export function rulesForms(doc, jobs = [], tools = null) {
 
   // people
   const languages = (p) => ({ ...doc.languages, ...(p.language && !(p.language in doc.languages) ? { [p.language]: p.language } : {}) });
-  const people = card(W("people"), "Who the agent answers, and where it posts: every message for a role goes to each chat listed with that role — a person's private chat (a positive id) or a group (a negative id). A person listed in both roles is two rows with the same id. /whoami, sent to the bot in a chat, shows that chat's id; a person must have sent /start to the bot once before it can write to them.",
+  const people = card(W("people"), "Who the agent answers, and where it posts: every message for a role goes to each chat listed with that role — a person's private chat (a positive id) or a group (a negative id). Everyone in a listed group acts there with the group's role, whatever their own row says; a person's row is their private chat and their role in it. A person listed in both roles is two rows with the same id. /whoami, sent to the bot in a chat, shows that chat's id; a person must have sent /start to the bot once before it can write to them.",
     ...editTable(f.people, {
       cls: "people", add: "Add a person", blank: () => ({ telegram_id: "", name: "", role: "fm", language: "en" }),
       columns: [{ title: "Name", width: "26%", phone: "a" }, { title: "Telegram id (person or group)", width: "22%", phone: "b" },
