@@ -24,20 +24,42 @@ from vesta_shared import script  # noqa: E402  (pack, store, client: one set-up)
 from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
 from vesta_shared.problems import Problems  # noqa: E402  (what is still open: one owner)
 from vesta_shared.store import Store  # noqa: E402
+from vesta_shared.messaging import incident_tag  # noqa: E402  ("Incident #N", the same everywhere)
 
 
 
 # ------------------------------------------------------------------ status
+SHOW = 12        # names listed per line; the rest counted ("and 3 more")
+
+
+def _names(items: list[str]) -> str:
+    return "; ".join(items[:SHOW]) + (f"; and {len(items) - SHOW} more" if len(items) > SHOW else "")
+
+
 def status(pack: KnowledgePack, states: dict, store: Store | None) -> dict:
-    """The chat equivalent of the kiosk light: green / amber / red with reasons."""
-    problems, watch = [], []
+    """The chat equivalent of the kiosk light: green / amber / red, and EVERY reason by name.
+
+    ⚠️ NAMED, NOT COUNTED (owner, 2026-10-10: asked "what's the status of the villa now?" the agent said everything
+    was fine while three Shelly pump devices were offline). An offline pump was a "Watch" line per sensor (cut at 6,
+    one plug's sensors filled it), the night check's problems were only a count ("Other open problems: 7"), and an
+    open problem alone left the villa green. Now: each offline DEVICE once, by its name (knowledge_pack.device_of);
+    red when one the villa marks critical is offline, a lock open or an alarm on; amber when anything else is
+    offline, on watch, or a problem or an alert is open; green only when nothing is."""
+    problems, offline, watch = [], {}, []
     for fam in ("security", "power", "energy", "runtime", "level", "battery"):
         for r in pack.entities(fam):
             st = states.get(r["entity_id"], {})
             s = st.get("state")
             asset = pack.assets.get(r["asset"], {})
             if s in ("unavailable", "unknown"):
-                (problems if asset.get("critical") else watch).append(f"{r['name']} offline")
+                key, name = pack.device_of(r["entity_id"])
+                if name is None:
+                    continue                               # a device Home Assistant knows nothing about
+                if asset.get("critical"):
+                    if f"{name} offline" not in problems:
+                        problems.append(f"{name} offline")
+                else:
+                    offline.setdefault(key, name)
             elif fam == "security" and r["entity_id"].startswith("lock.") and s == "unlocked":
                 problems.append(f"{r['name']} unlocked")
             elif fam == "security" and r.get("device_class") in ("moisture", "smoke") and s == "on":
@@ -45,26 +67,30 @@ def status(pack: KnowledgePack, states: dict, store: Store | None) -> dict:
             elif fam == "battery" and r.get("unit") == "%":
                 try:
                     if float(s) <= 20:
-                        watch.append(f"{r['name']} {float(s):.0f}%")
+                        watch.append(f"{pack.device_name(r['entity_id'], r['name'])} battery {float(s):.0f}%")
                 except (TypeError, ValueError):
                     pass
-    incidents = store.incidents() if store else []
-    # the maintenance problems still open (the alerts are the incidents above), as every reader counts them
-    tasks = [p for p in Problems(store).open_problems() if not p["incident"]] if store else []
-    colour = "red" if problems else ("amber" if (watch or incidents) else "green")
+    open_now = Problems(store).open_problems() if store else []
+    alerts = [p for p in open_now if p["incident"]]
+    tasks = [p for p in open_now if not p["incident"]]
+    offline_names = sorted(set(offline.values()))
+    colour = "red" if problems else ("amber" if (offline_names or watch or open_now) else "green")
     lines = [f"{pack.villa}: {colour.upper()}"]
     if problems:
-        lines.append("Now: " + "; ".join(problems[:6]))
-    if incidents:
-        lines.append(f"Open incidents: {len(incidents)}")
+        lines.append("Now: " + _names(problems))
+    if offline_names:
+        lines.append(f"Offline ({len(offline_names)}): " + _names(offline_names))
+    if alerts:
+        lines.append(f"Open alerts ({len(alerts)}): " + _names([f"{incident_tag(p['incident'])} · {p['title'][:120]}" for p in alerts]))
     if tasks:
-        lines.append(f"Other open problems: {len(tasks)}")
+        lines.append(f"Open problems ({len(tasks)}): " + _names([p["title"][:160] for p in tasks]))
     if watch:
-        lines.append("Watch: " + "; ".join(watch[:6]))
+        lines.append("Watch: " + _names(watch))
     if colour == "green":
-        lines.append("Nothing open, all critical devices online.")
-    return {"colour": colour, "problems": problems, "watch": watch, "open_incidents": len(incidents),
-            "open_tasks": len(tasks), "text": "\n".join(lines)}
+        lines.append("Nothing open, every device online.")
+    return {"colour": colour, "problems": problems, "offline": offline_names, "watch": watch,
+            "open_alerts": [p["title"] for p in alerts], "open_problems": [p["title"] for p in tasks],
+            "open_incidents": len(alerts), "open_tasks": len(tasks), "text": "\n".join(lines)}
 
 
 # ------------------------------------------------------------------ resolve

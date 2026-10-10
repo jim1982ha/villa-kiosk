@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.116 (10 October 2026)
+
+The villa's status, given, not fetched (owner, 2026-10-10: "what's the status of the villa now?" answered "everything ok" with three Shelly pump devices offline; the run made one HA MCP call and never ran concierge.py status):
+- skill.yaml before_answer: a command of the skill's own (checked as every hook), run by the engine before each conversation turn (not a Continue); its "text" heads the message, or a line saying the check could not run (app.before_answer).
+- villa-concierge: before_answer "concierge.py status". status names each offline device once (knowledge_pack.device_of; a device HA knows nothing about left out), every open problem and alert by title (lists cut at 12 with "and N more"); red for a critical device, lock or alarm, amber for anything else offline, on watch or open, green only with nothing. It listed offline sensors as "Watch" cut at 6, open problems as a count, and stayed green with a problem open. SKILL.md: answer status from the check, "everything is fine" only on GREEN, name every item.
+- Tests (tests/test_villa_status.py): devices named once, a problem never green, problems named; the check heads the message, a failed one is said; the starter skill declares it. Each shown red with the old behaviour.
+
 ## 0.6.115 (10 October 2026)
 
 Architecture review 16, candidates C and E:

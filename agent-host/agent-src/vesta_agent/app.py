@@ -439,6 +439,10 @@ class Vesta:
                 prompt = (f"{said.capitalize()} from {person.name if person else 'someone'} (role "
                           f"{person.role if person else '?'}; language saved for them: {lang}) in the {chat_role} chat:\n"
                           f"\"\"\"{text}\"\"\"\nAnswer short.")
+            if not is_continue:
+                checked = await asyncio.to_thread(self.before_answer)
+                if checked:
+                    prompt = f"{checked}\n\n{prompt}"
             pol = self.policy()
             # what this person may make the AI use here, the chat's brain and limit, its folder: turn.py decides
             res = await self.turns.chat(person, cid, prompt, resume=resume, asked=None if is_continue else text)
@@ -471,6 +475,22 @@ class Vesta:
             # the camera pictures the AI looked at go with it (Toolbox.photos)
             mid = await self.delivery.reply(cid, answer, keyboard=keyboard, photos=res.photos)
             await self.chat_jobs.replied(cid, mid)            # this turn's jobs: their waiting message, their "typing…"
+
+    def before_answer(self) -> str:
+        """What each skill's `before_answer` check says now (skills.Skill.before_answer: its script's "text"), for the
+        AI to have in front of it before it answers. A check that fails is said to have failed, never left out
+        silently: the AI must not answer as if it had seen it."""
+        out = []
+        for sk in self.skills.all().values():
+            if not sk.before_answer:
+                continue
+            ans = script_run.run_command(self.s, self.state, sk, sk.before_answer, timeout=60)
+            text = (ans.result() or {}).get("text") if ans.ok else None
+            if text:
+                out.append(f"[Checked just now by the {sk.name} skill; answer from this, never from memory]\n{text}")
+            else:
+                out.append(f"[The {sk.name} skill's check could not run just now: say so if asked about it]")
+        return "\n\n".join(out)
 
     # ------------------------------------------------------------------ button presses
     async def handle_callback(self, q: dict):

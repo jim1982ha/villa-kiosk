@@ -1,3 +1,13 @@
+## 0.12.122
+
+What you will see:
+- Asked about the villa ("what's the status of the villa now?", "is everything ok?"), the agent answers from a full check made just before it replies, every time. Until now it could take one quick look and answer "everything ok" while three pump devices were offline.
+- That check names everything: each device that is offline (once, by its name, not each of its sensors), every open problem ("Pool pump ran 7.3 h of 14.0 h yesterday") and every open alert. It never says green while a problem is open, and the agent says "everything is fine" only when it is green.
+- If the check cannot run, the agent says it could not check the villa, instead of answering as if it had.
+- For skill authors: a skill can name a check the agent runs before every answer (skill.yaml before_answer). The villa-concierge skill uses it.
+
+If the Skills page shows villa-concierge as edited here, it is not updated automatically: open it and choose "Take the release version" to get this change.
+
 ## 0.12.121
 
 What changes for you:

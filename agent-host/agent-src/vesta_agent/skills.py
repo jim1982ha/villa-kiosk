@@ -25,6 +25,7 @@ and skill.yaml (what the engine needs):
       critical_event: "desk.py intake --event {event}"
       voice_message: "voice.py prepare --audio {audio} --language {language}"   # prints {"stt": {...}}
     on_reply: "desk.py reply --incident {incident} --text {text} --from {role}"
+    before_answer: "concierge.py status"   what the AI is given before EVERY answer in a chat: the script's "text"
 
 Nothing is compiled or cached across calls: a changed folder counts at the next
 use, a deleted one is gone with its schedule. A skill whose skill.yaml is broken
@@ -200,6 +201,11 @@ class Skill:
     every_5_min: str | None = None
     on_event: dict[str, str] = field(default_factory=dict)
     on_reply: str | None = None
+    # ⚠️ GIVEN, NOT FETCHED (owner, 2026-10-10: "what's the status of the villa now?" got "everything ok" while three
+    # pump devices were offline — the AI took one quick look instead of the skill's check). A skill's own check the
+    # engine runs before each answer, its result put in front of the AI: what a person must be told is never left to
+    # the AI deciding to look.
+    before_answer: str | None = None
 
     @property
     def skill_md(self) -> str:
@@ -269,6 +275,8 @@ def parse_skill(name: str, path: str) -> Skill:
         sk.on_event[ev] = _check_command(path, str(cmd), f"on_event.{ev}")
     if raw.get("on_reply"):
         sk.on_reply = _check_command(path, str(raw["on_reply"]), "on_reply")
+    if raw.get("before_answer"):
+        sk.before_answer = _check_command(path, str(raw["before_answer"]), "before_answer")
     asked = {j["name"] for j in sk.schedule if j.get("on_request")}
     for script, spec in sk.scripts.items():
         for cmd, job in spec.job_only.items():

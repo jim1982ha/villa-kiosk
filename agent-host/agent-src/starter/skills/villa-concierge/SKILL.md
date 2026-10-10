@@ -58,10 +58,17 @@ Assistant and brings the text back here.
 
 ## Reading (no confirmation)
 
-- "Is everything OK" / "status": `concierge.py status` gives the colour and
-  the reasons, the same logic as the kiosk light: red when a critical device
-  is offline, a lock open or an alarm sensor on; amber when something is on
-  watch or an incident is open; green otherwise. Say it in two lines.
+- "Is everything OK" / "status" / "how is the villa": the villa's status,
+  checked just now, is at the top of every message you receive ("Checked just
+  now by the villa-concierge skill"). Answer from it, never from memory or from
+  a quick look of your own. Red: a critical device is offline, a lock open or
+  an alarm on. Amber: a device is offline, something is on watch, or a problem
+  or an alert is open. Green: nothing at all.
+  - Say "everything is fine" ONLY when it says GREEN.
+  - Otherwise give the colour, then name every offline device and every open
+    problem and alert it lists, one short line each. Do not shorten the list
+    to a count, and do not leave out what is not critical.
+  - If it says the check could not run, say you could not check the villa now.
 - "What is on in the kitchen", "temperature in bedroom 1", "when did the pool
   pump run today": resolve with `concierge.py find --what --where`, then read
   states (ha_get_state) or 24 h of history (ha_get_history) for those entities
