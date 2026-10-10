@@ -141,17 +141,18 @@ class Kiosk:
         return {tid: t["status"] for tid, t in (await self.held_tickets()).items()}
 
     async def held_tickets(self) -> dict[str, dict]:
-        """{ticket id: {status, title, resolved_at, by}} of the Facility records, as the Kiosk holds them now: `by` the
-        profile that closed it ("Facility manager"), from its last update, when the Kiosk recorded one."""
+        """{ticket id: {status, title, resolved_at, by, updated_at}} of the Facility records, as the Kiosk holds them now:
+        `by` the profile that closed it ("Facility manager") and `updated_at` when, from its last update."""
         status, got = await self._req("GET", "/agent/v1/fm-data")
         if status != 200:
             raise KioskError(f"reading the Facility records answered {status}")
         data = got.get("data") if isinstance(got.get("data"), dict) else {}
-        def last_by(t: dict) -> str:
+        def last(t: dict, key: str) -> str:
             ups = [u for u in t.get("updates") or [] if isinstance(u, dict)]
-            return str(ups[-1].get("by") or "") if ups else ""
+            return str(ups[-1].get(key) or "") if ups else ""
         return {t["id"]: {"status": str(t.get("status") or ""), "title": str(t.get("title") or ""),
-                          "resolved_at": str(t.get("resolvedAt") or ""), "by": last_by(t)}
+                          "resolved_at": str(t.get("resolvedAt") or ""), "by": last(t, "by"),
+                          "updated_at": last(t, "at")}
                 for t in data.get("tickets") or [] if isinstance(t, dict) and isinstance(t.get("id"), str)}
 
     async def update_ticket(self, tid: str, title: str) -> bool:

@@ -35,6 +35,10 @@ decides alone to act on the villa.
      times since …", under its own number, Home Assistant's latest words, its ladder started again
      and its OWN task and Kiosk fault open again, titled "(again: N times in 7 days)". Each run is
      counted on its own by the digest, the reports and the retune proposal.
+   - A condition whose rule has said nothing for `ha_silent_hours` (12) is read by the desk too: a
+     blueprint reload cancels the rule's run without an "abandoned".
+   - An alert that no chat of the facility manager's received (Telegram refused them all) is handed
+     to the owner at the next tick.
 2. The engine's own connection to Home Assistant: while it is up, a beat every minute. Its absence
    is how the desk knows the villa is cut off (internet, power, Home Assistant down).
 3. Ladder button presses (Done / Need help) carrying the incident number.
@@ -75,7 +79,7 @@ message then says who pressed what, and when. Typing the word works too.
 
 | Button | Effect |
 |---|---|
-| Done | incident closed, its Kiosk ticket resolved; when its rule names its bad states, the device is read once `clear_minutes` (10) later — still bad, the incident opens again ("Done by …, but … still reads …: still open"). The same for a fault closed in the Kiosk ("Closed in the Kiosk, but …") |
+| Done | incident closed, its Kiosk ticket resolved; the device is read once `clear_minutes` (10) later. Still bad (its rule names its bad states): the incident opens again, "still there" — "Done by …, but … still reads …: still open. VESTA keeps watching it." — and the desk closes it when it is right. Not knowable (an older alert, a number): the people asked are told what it reads. The same for a fault closed in the Kiosk ("Closed in the Kiosk, but …"); a fault a person REOPENS in the Kiosk asks the facility manager again at once |
 | Need help | escalated to the owner with the detail |
 
 ## The siren: strict human validation

@@ -41,6 +41,7 @@ class IncidentThread:
         self.tz = timezone
         self.edit = edit                # Telegram's edit (its buttons go); None while Telegram is off
         self.delete = delete            # Telegram's deleteMessage: True when the message is gone
+        self.retitle = None             # notice.Notices.retitle: a copy's heading as its incident stands now
 
     async def post(self, iid: int | str, chat: int, mid: int, parts: dict, *, buttons: bool = False) -> None:
         """Message `mid`, just sent to `chat` with these `parts` (layout.py), is now incident `iid`'s message there: the
@@ -83,7 +84,10 @@ class IncidentThread:
                 continue
             # where it stands is the note now, under the line at the bottom; a new body when one is given (an approved
             # request: what happened) — the head and the lead kept (layout.py). Settled: decided, whatever Telegram said — a copy it did not take is owed and tried again (`catch_up`)
-            n += await self._show(iid, chat, {**rec, "settled": True}, layout.changed(layout.of(rec), status=note, body=body))
+            p = layout.changed(layout.of(rec), status=note, body=body)
+            if self.retitle:
+                p = {**p, "head": self.retitle(iid, p.get("head") or "")}      # "Closed" once its incident is (notice.py)
+            n += await self._show(iid, chat, {**rec, "settled": True}, p)
         return n
 
     async def rewrite(self, iid: int | str, body: str) -> None:

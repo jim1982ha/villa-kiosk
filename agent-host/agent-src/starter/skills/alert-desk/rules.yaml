@@ -79,4 +79,5 @@ behaviour:
   villa_silent_minutes: 30     # no contact with Home Assistant this long: the villa is silent (P1)
   alert_fatigue_per_month: 20  # a rule firing more often than this in 30 days, unanswered, is named
   reopen_hours: 4              # an alert back within this long after its incident closed reopens it ("Back again")
-  clear_minutes: 10            # a device back to normal this long ends an alert Home Assistant never says is over
+  clear_minutes: 10
+  ha_silent_hours: 12          # a condition's rule silent this long has stopped watching (a reload cancels its run)            # a device back to normal this long ends an alert Home Assistant never says is over

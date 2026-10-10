@@ -111,20 +111,25 @@ class Tickets:
                     # who and when, as a button's footer says it (owner, 2026-10-10): the Kiosk's own record of the close
                     await self.settle_alert(iid, kiosk_close_note(held.get(uid) or {}, self.timezone))
                 closed += 1
-            elif problems.source_gone(t):
+            elif problems.source_gone(t) and not t.get("reopened_by"):
                 problems.close(t["id"], CLEARED)
                 if uid and states.get(uid) not in (None, "resolved"):
                     await self.kiosk.resolve_ticket(uid, note="Cleared: the check no longer sees it.")
                     states[uid] = "resolved"
                 cleared += 1
         # ⚠️ A CLOSED TASK'S FAULT IS CLOSED (architecture review 24): a resolve that failed (the Kiosk down a moment) left
-        # the fault "Open" for good — only open tasks were read. Two days back: enough for any blip, never a person's
-        # own reopening of an old fault
+        # the fault "Open" for good — only open tasks were read. Two days back: enough for any blip.
+        # ⚠️ BUT A PERSON'S REOPENING IS THEIRS (architecture review 25): the fault reopened in the Cockpit for the
+        # facility manager to look was resolved again within 5 minutes. Updated in the Kiosk after the task closed: a
+        # person reopened it — its task opens again and the facility manager is asked (Problems.reopened_in_kiosk)
         recent = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
         for t in store.tasks(None):
             uid = t.get("todo_uid")
             if t["status"] != "open" and (t.get("done_at") or "") >= recent and uid and states.get(uid) not in (None, "resolved"):
-                if await self.kiosk.resolve_ticket(uid, note="Closed: the problem is over."):
+                if _before(t.get("done_at"), held[uid].get("updated_at")):
+                    problems.reopened_in_kiosk(t["id"], held[uid].get("by") or "")
+                    log.info("Kiosk ticket %s reopened by a person: its task is open again", uid)
+                elif await self.kiosk.resolve_ticket(uid, note="Closed: the problem is over."):
                     states[uid] = "resolved"
                     cleared += 1
         if closed or cleared:
@@ -162,10 +167,10 @@ class Tickets:
 
 
 def _before(resolved_at: str | None, reopened_at: str | None) -> bool:
-    """Was a fault resolved before its task reopened? Both are moments as the Kiosk and the store write them."""
+    """Is the first moment before the second? Moments as the Kiosk ("…Z") and the store ("…+00:00") write them."""
     if not (resolved_at and reopened_at):
         return False
     try:
-        return datetime.fromisoformat(resolved_at.replace("Z", "+00:00")) < datetime.fromisoformat(reopened_at)
+        return datetime.fromisoformat(resolved_at.replace("Z", "+00:00")) < datetime.fromisoformat(reopened_at.replace("Z", "+00:00"))
     except ValueError:
         return False

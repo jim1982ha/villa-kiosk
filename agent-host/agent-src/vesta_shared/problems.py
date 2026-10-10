@@ -244,6 +244,33 @@ class Problems:
                 return sid
         return None
 
+    def reopened_in_kiosk(self, task_id: int, by: str = "") -> int | None:
+        """A person reopened a closed task's fault in the VESTA Kiosk: the task is open again, theirs until they close
+        it (the night check's "gone" never closes it); its incident, if any, opens again and its facility manager is
+        asked at once (the alert desk: payload "kiosk_reopened"). Returns that incident's id.
+
+        ⚠️ A PERSON'S REOPENING IS NEVER UNDONE (architecture review 25): the agent resolved it again within 5 minutes."""
+        task = self.store.task(task_id)
+        self.store.reopen_task(task_id, task.get("summary") or "", by=by or "a person")
+        kind, sid = self._source(task)
+        if kind == "incident" and sid:
+            inc = self.store.incident(sid)
+            if inc and inc.get("closed_at"):
+                p = json.loads(inc.get("payload") or "{}")
+                p["kiosk_reopened"] = by or "a person"
+                p.pop("check_quiet", None)
+                self.store.update_incident(sid, closed_at=None, reply=None, state=Incident.ASKED,
+                                           asked_at=self.store.now(), assignee="fm", payload=json.dumps(p))
+                return sid
+        return None
+
+    def unreached(self, iid: int) -> None:
+        """No chat of the facility manager's received incident `iid` (Telegram refused them all): the alert desk hands
+        it to the owner at its next tick (payload "unreached")."""
+        inc = self.store.incident(iid)
+        if inc and not inc.get("closed_at"):
+            self.store.update_incident(iid, payload=json.dumps({**json.loads(inc.get("payload") or "{}"), "unreached": True}))
+
     def source_gone(self, task: dict) -> bool:
         """True when the finding or incident a task is about is closed — the task outlived it."""
         kind, sid = self._source(task)

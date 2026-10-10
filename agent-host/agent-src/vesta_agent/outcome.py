@@ -127,6 +127,7 @@ class Outcome:
             done["unrouted"] += 1
             self.state.log("send_unrouted", {"to": item.get("to"), "skill": skill_name})
             log.info("A message for %r had nowhere to go (nobody of that role in People)", item.get("to"))
+        asked: dict[int, list[tuple[int, bool]]] = {}   # incident → (chat, reached) of the facility manager's, with buttons
         for chat, item, roles in pairs:
             text = item.get("text") or ""
             kb = None
@@ -152,6 +153,8 @@ class Outcome:
             mid = await self.poster.post(chat, text, status=item.get("status") or "", roles=roles,
                                    incident=int(iid) if iid else None, keyboard=kb, document=doc,
                                    thread=int(iid) if iid else None, origin=origin, stage=item.get("stage"))
+            if iid and kb and "fm" in roles:
+                asked.setdefault(int(iid), []).append((chat, bool(mid)))
             if not mid:
                 done["not_sent"] += 1                         # delivery.py: refused, or Telegram off
                 continue
@@ -162,6 +165,15 @@ class Outcome:
         if self.notices:
             for iid, (stage, chs) in noticed.items():
                 self.notices.record(iid, stage, chs)
+        # ⚠️ AN ALERT NOBODY OF THE FACILITY MANAGER'S RECEIVED (architecture review 25): Telegram refused every chat of
+        # theirs (a person who never pressed Start) — the alert desk hands it to the owner at its next tick, never
+        # 45 minutes later. Only a REFUSED chat counts: Telegram switched off is not "unreachable"
+        refused = set(self.state.unreachable())
+        for iid, tried in asked.items():
+            if not any(ok for _, ok in tried) and all(chat in refused for chat, _ in tried):
+                from vesta_shared.problems import Problems
+                Problems(self.tickets._store()).unreached(iid)
+                log.warning("Incident #%s: no chat of the facility manager's received it — handed to the owner", iid)
         if gate_prompt and pol.siren_entity:
             # its own domain's turn_on (a switch or a siren entity: policy.SIREN_DOMAINS)
             answer, msg = await asyncio.to_thread(self.actions.request, pol.siren_entity.split(".")[0], "turn_on",

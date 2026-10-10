@@ -92,6 +92,8 @@ class Delivery:
         self.policy = policy
         # a message sent on behalf of a job asked for in a chat is its result: chat_jobs.ChatJobs.result, set by it
         self.on_job_result: Callable[[Origin], Awaitable[None]] | None = None
+        # a chat Telegram newly refuses (it was reachable): the owner is told once (app.Vesta._tell_unreachable)
+        self.on_unreachable: Callable[[int, str], Awaitable[None]] | None = None
         self._waiting: dict[int, dict] = {}   # chat → its one "typing…" loop and what holds it (hold)
 
     # ------------------------------------------------------------------ one message
@@ -114,7 +116,10 @@ class Delivery:
                 # sent /start to the bot silently missed every message meant for them. Only when TELEGRAM refused the
                 # chat (architecture review 18): a network blip at 01:30 said "send /start" all day.
                 if getattr(e, "refused", False):
+                    newly = int(chat_id) not in self.state.unreachable()
                     self.state.set_unreachable(chat_id, str(e))
+                    if newly and self.on_unreachable:
+                        await self.on_unreachable(int(chat_id), str(e))
                 return None
             # ⚠️ PARTLY ARRIVED IS NOT "NOTHING ARRIVED" (architecture review 15): a reply whose picture and first part
             # arrived was sent again whole, with "the picture could not be sent" — the person read it twice

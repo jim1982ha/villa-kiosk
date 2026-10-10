@@ -1,3 +1,14 @@
+## 0.12.149
+
+What you will see (architecture review 25, every point):
+- A fault closed while the problem is still there is no longer forgotten. Ten minutes after a Done, or a close in the Cockpit, the agent reads the device again: still unlocked (or still offline), the alert opens again — "Closed in the Kiosk, but Laundry Room Aqara still reads unlocked: still open. VESTA keeps watching it." — and the agent closes it itself once it is right. When it cannot tell (an alert from before your rules said their bad states, or a temperature), it says so: "Note: VESTA cannot check this one; … reads unlocked."
+- A fault you reopen in the Cockpit stays open: the facility manager is asked again at once, with the buttons. (0.12.148 closed it again within 5 minutes — my mistake.)
+- Every copy of a closed alert is headed "Closed", in every chat — no more "New #9" above "Cleared on …".
+- A fault still there after Done is marked "Still there", no longer "Back again".
+- When Telegram refuses someone (a person who never pressed Start with the bot), you are told once on Telegram, with what to do. An alert that no facility manager's chat received comes to you at once, not 45 minutes later.
+- An alert Home Assistant stopped watching without saying so (a reload of its rule) is watched by the agent after 12 hours of silence.
+- "Back again" and the Cockpit now count the same way ("3 times in 7 days"); the reports show each return in its own words; the 5-minute check reads the alert history once instead of once per rule.
+
 ## 0.12.148
 
 What you will see (architecture review 24, every point, and your question about "New #9"):

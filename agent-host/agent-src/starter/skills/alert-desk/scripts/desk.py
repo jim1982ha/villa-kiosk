@@ -219,7 +219,7 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
 
 
 def _ladder(store: Store, iid: int, ev: dict, now: datetime, sev: str, route: dict, out: dict,
-            again: str | None = None) -> None:
+            again: str | None = None, note: str = "Back again.") -> None:
     """Where an incident opened (or opened `again`, under that title) starts: the facility manager asked, with its task
     and Kiosk fault — the same ones open again when it came back (Problems.reopen_task) — (P1, P2 with the ladder); the
     morning list (P3); the record (P4)."""
@@ -229,7 +229,7 @@ def _ladder(store: Store, iid: int, ev: dict, now: datetime, sev: str, route: di
         if again:
             tid, how = Problems(store).reopen_task("incident", iid, ev["rule_id"], eid, again[:250], check)
             if how == "reopened":
-                out["actions"].append(R.reopened(tid, again, "Back again."))
+                out["actions"].append(R.reopened(tid, again, note))
             elif how == "new":
                 out["actions"].append(R.fault(again[:200], task_id=tid, check=check, entity_id=eid))
             return
@@ -257,26 +257,35 @@ def reopen(store: Store, inc: dict, ev: dict, now: datetime, sev: str, route: di
     """`inc`, closed, open again under its own number — the ONE way an incident reopens (architecture review 24: two
     hand-written copies differed on the count, the alert's text, the heading). Without `status`: it came back (an alert
     within reopen_hours) — a new run of it, counted, its text and states Home Assistant's latest, "Back again". With
-    `status`: it never went away (still bad after a Done) — the same run, `status` said. Either way its ladder starts
-    again and its task and Kiosk fault open again, titled with how often it came back."""
+    `status`: it never went away (still bad after a Done or a close in the Kiosk) — the same run, "Still there", and
+    the desk watches it from now on (seen_again). Either way its ladder starts again and its task and Kiosk fault open
+    again, titled with how often it came back.
+
+    ⚠️ "STILL THERE" IS NOT "BACK AGAIN" (architecture review 25): a door never locked was reopened "Back again"."""
     p = json.loads(inc.get("payload") or "{}")
     for k in ("abandoned", "check_quiet"):
         p.pop(k, None)
-    if status is None:
+    came_back_now = status is None
+    if came_back_now:
+        ended = p.get("message")                      # the run that ended keeps its own words (store.reopen_incident)
         p.update({k: ev[k] for k in ("mode", "bad_states", "state", "ha_incident", "message", "summary", "entities")
                   if ev.get(k) is not None})
         store.update_incident(inc["id"], payload=json.dumps(p))
-        store.reopen_incident(inc["id"], now.isoformat())
+        store.reopen_incident(inc["id"], now.isoformat(), message=ended)
         store.touch_incident(inc["id"], now.isoformat())
     else:
+        p["abandoned"] = True                         # Home Assistant no longer watches it: the desk does (watched_for)
         store.update_incident(inc["id"], closed_at=None, reply=None, payload=json.dumps(p))
     inc = store.incident(inc["id"])
-    title = again_title(str(p.get("message") or inc["rule_id"])[:200], incident_runs(inc) - 1)
+    runs = incident_runs(inc)
+    title = again_title(str(p.get("message") or inc["rule_id"])[:200], runs - 1)
     _ladder(store, inc["id"], {**p, "rule_id": inc["rule_id"], "entity_id": inc["entity_id"],
-                               "message": p.get("message") or inc["rule_id"]}, now, sev, route, out, again=title)
-    if status is None:
-        since = day_time_label(villa_time(inc["opened_at"], zone or "UTC"), weekday=True)
-        status = f"Back again: {len(json.loads(inc.get('occurrences') or '[]')) + 1} times since {since}"
+                               "message": p.get("message") or inc["rule_id"]}, now, sev, route, out, again=title,
+            note="Back again." if came_back_now else "Still there after the close.")
+    if came_back_now:
+        # one counter, the Kiosk fault's and the digest's (architecture review 25: "N times since the 1st" and "again:
+        # M times in 7 days" drifted apart)
+        status = f"Back again: {runs} times in 7 days"
         out["ha_messages"] = [R.ha_message(inc["id"], context=ev.get("_context_id"), stage="back", **about(inc, status))]
         if ev.get("snapshot"):
             out["actions"].append(R.snapshot(ev["snapshot"], inc["id"]))
@@ -284,7 +293,8 @@ def reopen(store: Store, inc: dict, ev: dict, now: datetime, sev: str, route: di
             out["siren_gate"] = siren_gate(store, ev, now)
     for role in recipients(sev):
         ladder = bool(route.get("ladder", True) and role == "fm")
-        out["send"].append(R.message(role, **about(inc, status), incident=inc["id"], buttons=ladder, stage="back"))
+        out["send"].append(R.message(role, **about(inc, status), incident=inc["id"], buttons=ladder,
+                                     stage="back" if came_back_now else "still"))
     out["incident_id"], out["decision"] = inc["id"], "reopened"
     store.audit("alert-desk", "reopened", {"incident": inc["id"], "status": status})
     return out
@@ -339,19 +349,44 @@ def rule_states(inc: dict) -> tuple[list[str], set[str]] | None:
     return (ents, set(bad)) if ents and bad else None
 
 
-def watched_for(inc: dict) -> tuple[list[str], set[str]] | None:
+def watched_for(inc: dict, now: datetime | None = None, silent_hours: float = 12) -> tuple[list[str], set[str]] | None:
     """(entities, bad states) of an OPEN incident whose end the desk reads itself (SEEN_AGAIN): a watchdog's, or a
-    condition's once its rule stopped watching (until then Home Assistant says it itself)."""
+    condition's once its rule stopped watching — said by "abandoned", or by `silent_hours` without a word from it.
+
+    ⚠️ A RULE THAT WENT QUIET HAS STOPPED (architecture review 25): a blueprint reload cancels the rule's run without
+    an "abandoned" — the desk waited for an all-clear that could never come."""
     p = json.loads(inc.get("payload") or "{}")
     if p.get("blueprint") == "critical_condition" and not p.get("abandoned"):
-        return None
+        heard = datetime.fromisoformat(inc.get("last_seen_at") or inc["opened_at"])
+        if now is None or now - heard < timedelta(hours=silent_hours):
+            return None
     return rule_states(inc)
 
 
+def still_there(inc: dict, client) -> tuple[bool | None, list[str]]:
+    """Is an incident's problem still there, read from Home Assistant now? (True, what is still bad) · (False, []) ·
+    (None, what each device reads) when its rule never said which states are bad — the desk cannot tell, and says so.
+
+    ⚠️ ONE ANSWER, EVERY CLOSE (architecture review 25): checked only when the rule named its states, a Done — or a close
+    in the Kiosk — on a door still unlocked dropped the check without a word, and nothing watched the door again."""
+    p = json.loads(inc.get("payload") or "{}")
+    rs = rule_states(inc)
+    ents = rs[0] if rs else [e for e in (p.get("entities") or [inc["entity_id"]]) if e and "." in e]
+    states = client.states(ents) if ents else {}
+
+    def name(e):
+        return (states[e].get("attributes") or {}).get("friendly_name") or e
+    if rs:
+        bad = [f"{name(e)} still reads {states[e]['state']}" for e in ents if (states.get(e) or {}).get("state") in rs[1]]
+        return bool(bad), bad
+    return None, [f"{name(e)} reads {states[e]['state']}" for e in ents if states.get(e)]
+
+
 def quiet_after_done(store: Store, now: datetime, client, clear_minutes: float, out: dict) -> list[int]:
-    """Every incident answered Done `clear_minutes` ago or more and not yet checked, read again once: a watched entity
-    still in one of its rule's bad states reopens it — "Done by …, but … still reads …" — under its own number, the
-    ladder started again. Returns the ids reopened."""
+    """Every incident answered Done — or closed in the Kiosk — `clear_minutes` ago or more and not yet checked, read
+    again once (still_there): still bad, it reopens — "…, but … still reads …: still open" — and the desk watches it
+    until it is right; unknown (its rule names no states), the people asked are told what each device reads, that VESTA
+    cannot check it. Returns the ids reopened."""
     reopened = []
     for inc in store.incidents(open_only=False):
         if '"check_quiet"' not in (inc.get("payload") or ""):
@@ -360,32 +395,32 @@ def quiet_after_done(store: Store, now: datetime, client, clear_minutes: float, 
         if not (inc.get("closed_at") and p.get("check_quiet")) or \
                 now - datetime.fromisoformat(inc["closed_at"]) < timedelta(minutes=clear_minutes):
             continue
-        rs = rule_states(inc)
         try:
-            states = client.states(rs[0]) if rs else {}
+            there, words = still_there(inc, client)
         except Exception:  # noqa: BLE001 — Home Assistant not readable now: the next tick
             return reopened
         who = p.pop("check_quiet")
         store.update_incident(inc["id"], payload=json.dumps(p))           # checked once, whatever it reads
-        still = [f"{(states[e].get('attributes') or {}).get('friendly_name') or e} still reads {states[e]['state']}"
-                 for e in (rs[0] if rs else []) if (states.get(e) or {}).get("state") in rs[1]]
-        if not still:
-            continue
-        route = route_for(inc["rule_id"], p.get("blueprint"))
-        reopen(store, store.incident(inc["id"]), {}, now, inc["severity"], route, out,
-               status=f"{who}, but {'; '.join(still)}: still open.")
-        store.audit("alert-desk", "not_quiet", {"incident": inc["id"], "still": still})
-        reopened.append(inc["id"])
+        if there:
+            reopen(store, store.incident(inc["id"]), {}, now, inc["severity"], route_for(inc["rule_id"], p.get("blueprint")),
+                   out, status=f"{who}, but {'; '.join(words)}: still open. VESTA keeps watching it.")
+            store.audit("alert-desk", "not_quiet", {"incident": inc["id"], "still": words})
+            reopened.append(inc["id"])
+        elif there is None and words:
+            inc = store.incident(inc["id"])
+            for role in recipients(inc["severity"]):
+                out["send"].append(R.message(role, **about(inc, f"{who}. Note: VESTA cannot check this one; "
+                                                                f"{'; '.join(words)}."), incident=inc["id"], stage="closed"))
     return reopened
 
 
-def seen_again(store: Store, now: datetime, client, clear_minutes: float, out: dict) -> list[int]:
+def seen_again(store: Store, now: datetime, client, clear_minutes: float, out: dict, silent_hours: float = 12) -> list[int]:
     """Every open incident Home Assistant will never say is over (watched_for), read again: one with NO watched entity
     in any of its rule's bad states — each readable, and out of them `clear_minutes` — is closed (`_close`). Returns
     their ids."""
     closed = []
     for inc in store.incidents(open_only=True):
-        watched = watched_for(inc)
+        watched = watched_for(inc, now, silent_hours)
         if not watched:
             continue
         ents, bad = watched
@@ -481,10 +516,10 @@ def reply(store: Store, iid: int, text: str, sender_role: str, now: datetime, pa
                                                          f"Done, answered by the {sender_role}.", reply=text)
         # ⚠️ A PROMISE THE CODE KEEPS (architecture review 23): "will check it stays quiet" was written since 0.9.0 and
         # nothing ever checked — a Done on a door still unlocked closed it for good. The tick reads it again (quiet_after_done)
+        # read again whatever the rule: still bad, it reopens; not knowable, the people asked are told (still_there)
         checks = rule_states(inc) is not None
-        if checks:
-            store.update_incident(iid, payload=json.dumps({**json.loads(inc.get("payload") or "{}"),
-                                                           "check_quiet": f"Done by {who}"}))
+        store.update_incident(iid, payload=json.dumps({**json.loads(inc.get("payload") or "{}"),
+                                                       "check_quiet": f"Done by {who}"}))
         out["send"].append(here(f"Closed: done, answered by {who} on {{time}}."
                                 + (" The VESTA Agent will check it stays quiet." if checks else ""), "closed"))
     elif t.startswith("need help"):
@@ -512,9 +547,30 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
     silent_min = params.behaviour("villa_silent_minutes")
     out = {"send": [], "actions": [], "escalated": [], "reasked": []}
     if client is not None:
-        out["cleared"] = seen_again(store, now, client, params.behaviour("clear_minutes"), out)
+        out["cleared"] = seen_again(store, now, client, params.behaviour("clear_minutes"), out,
+                                    params.behaviour("ha_silent_hours"))
         out["not_quiet"] = quiet_after_done(store, now, client, params.behaviour("clear_minutes"), out)
     for inc in store.incidents(open_only=True):
+        p = json.loads(inc.get("payload") or "{}")
+        if p.get("kiosk_reopened"):
+            # ⚠️ A FAULT A PERSON REOPENED IN THE KIOSK (architecture review 25): the facility manager is asked at once,
+            # its buttons back — the ladder runs from now
+            by = p.pop("kiosk_reopened")
+            store.update_incident(inc["id"], payload=json.dumps(p))
+            out["send"].append(R.message("fm", **about(inc, f"Reopened in the Kiosk by {by} on {{time}}: please look again."),
+                                         stage="reminder", incident=inc["id"], buttons=True))
+            continue
+        if p.get("unreached") and inc["state"] in (Incident.ASKED, Incident.REASKED):
+            # ⚠️ NOBODY OF THE FACILITY MANAGER'S RECEIVED IT (architecture review 25): Telegram refused every chat of
+            # theirs, and the owner heard of it only at the 45-minute escalation — told now
+            p.pop("unreached")
+            store.update_incident(inc["id"], payload=json.dumps(p), state=Incident.ESCALATED,
+                                  escalated_at=now.isoformat(), assignee="owner")
+            out["send"].append(R.message("owner", **about(inc, "Not delivered to the facility manager: Telegram refused "
+                                                               "every chat of theirs. Over to you."),
+                                         stage="escalated", incident=inc["id"], buttons=True))
+            out["escalated"].append(inc["id"])
+            continue
         if inc["state"] not in (Incident.ASKED, Incident.REASKED):
             continue
         asked = datetime.fromisoformat(inc["asked_at"])
@@ -550,9 +606,8 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
     # alert fatigue: a rule firing more than N times in 30 days without acknowledgement
     limit = params.behaviour("alert_fatigue_per_month")
     since = (now - timedelta(days=30)).isoformat()
-    rules = {i["rule_id"] for i in store.incident_occurrences() if i["opened_at"] >= since}
-    for r in rules:
-        n = store.count_incidents(r, since)
+    # every rule's runs counted in ONE pass (architecture review 25: a pass per rule over all history, every 5 minutes)
+    for r, n in store.incident_counts(since).items():
         if n >= limit:
             # one proposal per rule: its count lives in the detail (architecture review 24: the count in the title made a
             # new open proposal at every new count — "fired 21 times", "fired 22 times"…)

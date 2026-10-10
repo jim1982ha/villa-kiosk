@@ -20,6 +20,8 @@ named who a message was for. The skill now writes only what happened; this write
 """
 from __future__ import annotations
 
+import re
+
 from datetime import datetime, timezone
 from typing import Callable
 from zoneinfo import ZoneInfo
@@ -27,7 +29,7 @@ from zoneinfo import ZoneInfo
 
 #: A notice's kind (vesta_shared.result.message `stage`), as its history line says it.
 STAGES = {"new": "First time seen", "reminder": "Reminded", "escalated": "Escalated", "update": "Updated",
-          "back": "Back again", "closed": "Closed"}
+          "back": "Back again", "still": "Still there", "closed": "Closed"}
 #: The heading's word for a notice of this stage (owner, 2026-10-11: a closing message headed "New #9" — "is it a
 #: closure or not?"): the message says what IT is; a notice without a stage goes by the incident's history, as before.
 HEAD_WORDS = {"new": "New", "closed": "Closed"}
@@ -42,10 +44,13 @@ def when(at: datetime, zone: str) -> str:
 
 
 class Notices:
-    def __init__(self, state, policy: Callable, timezone_name: str, severity: Callable[[int], str | None] | None = None):
+    def __init__(self, state, policy: Callable, timezone_name: str, severity: Callable[[int], str | None] | None = None,
+                 closed: Callable[[int], bool] | None = None):
         self.state, self.policy, self.tz = state, policy, timezone_name
         # an incident's priority (P1…P4) as its skill stored it: "P2 Incident: New #18" (owner, 2026-10-10)
         self.severity = severity or (lambda _iid: None)
+        # whether an incident is closed as its skill stored it: its copies are headed "Closed" (architecture review 25)
+        self.closed = closed or (lambda _iid: False)
 
     def _for(self, chat: int, to=None) -> list[str]:
         """Who a notice to `chat` is for: the People list's persons of the roles `to` (a role, or every role the copy went
@@ -75,11 +80,40 @@ class Notices:
                 p = self.severity(int(incident))
             except Exception:  # noqa: BLE001 — the heading is written without its priority, never not at all
                 p = None
-            word = HEAD_WORDS.get(stage or "", "Follow Up") if stage else ("Follow Up" if history else "New")
+            word = self.word(int(incident), stage, bool(history))
             head += f", {f'{p} ' if p else ''}Incident: {word} #{incident}"
             lines = [f"{STAGES.get(h.get('stage'), 'Sent')} on {when(datetime.fromisoformat(h['at']), self.tz)}, "
                      f"to {', '.join(h.get('to') or []) or 'nobody'}" for h in history]
         return "\n".join([head, *lines])               # the line under it is the layout's (layout.py)
+
+    def word(self, incident: int, stage: str | None = None, history: bool = True) -> str:
+        """The heading's word for a notice about `incident`: what the notice is (`stage`) — else what the incident is
+        (closed: "Closed") — else "Follow Up" once anything was sent about it, "New" before."""
+        if stage:
+            return HEAD_WORDS.get(stage, "Follow Up")
+        try:
+            if self.closed(int(incident)):
+                return "Closed"
+        except Exception:  # noqa: BLE001 — the heading is written without it, never not at all
+            pass
+        return "Follow Up" if history else "New"
+
+    def retitle(self, incident, head: str) -> str:
+        """A copy's heading as the incident stands now: an incident closed since is "Closed" in every copy settled
+        (architecture review 25: the owner's earlier copy kept "New #9" under "Cleared in Home Assistant on …")."""
+        if not str(incident).isdigit() or not head:
+            return head
+        first, _, rest = head.partition("\n")
+        word = "Closed" if self._is_closed(int(incident)) else None
+        if word:
+            first = re.sub(r"Incident: (New|Follow Up|Closed) #", f"Incident: {word} #", first)
+        return first + ("\n" + rest if rest else "")
+
+    def _is_closed(self, incident: int) -> bool:
+        try:
+            return bool(self.closed(incident))
+        except Exception:  # noqa: BLE001
+            return False
 
     def record(self, incident: int, stage: str | None, sent: list[tuple[int, object]], at: datetime | None = None) -> None:
         """A notice about `incident` went to `sent` — (chat, the role or roles it was for) — one result's messages being one

@@ -46,7 +46,7 @@ def finding_name(finding: dict) -> str | None:
 
 #: What a notice about an incident is (its history line, vesta_agent/notice.py): the first one, a reminder to the same
 #: people, an escalation to others, any other update (an answer, a closing).
-STAGES = ("new", "reminder", "escalated", "update", "back", "closed")
+STAGES = ("new", "reminder", "escalated", "update", "back", "still", "closed")
 
 
 def message(to: str, text: str, *, status: str | None = None, incident: int | None = None, buttons: bool = False,

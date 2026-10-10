@@ -276,6 +276,9 @@ Decisions of 2026-09-30 (owner):
   Review 24, 0.12.148: an incident's runs are rows of their own to every reader (`store.incident_occurrences`); a
   returning problem reopens its OWN task and Kiosk fault (`Problems.reopen_task`, `ticket.reopen`); the heading's word
   comes from the notice's stage (`notice.HEAD_WORDS`). Mutation runs: `PYTHONDONTWRITEBYTECODE=1 python -B`.
+  Review 25, 0.12.149: closed is not over — the desk's `still_there` after every Done and Kiosk close (reopen "still",
+  or "VESTA cannot check this one"); a person's Kiosk reopening is kept (`Problems.reopened_in_kiosk`); a settled copy
+  is retitled from the incident's state (`Notices.retitle`); a refused fm chat escalates at once and tells the owner.
 - No PDF (owner, 2026-09-30): the reports are self-contained HTML pages sent
   as attachments. Chromium was ~480 MB of a 1.1 GB image for this alone.
 - ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent

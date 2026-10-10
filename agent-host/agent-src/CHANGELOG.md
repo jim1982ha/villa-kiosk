@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.143 (11 October 2026)
+
+Architecture review 25, all points:
+- alert-desk: still_there (True / False / None with what each device reads) after every Done and Kiosk close; still bad → reopen "still" (stage "still", Kiosk note "Still there after the close.", payload abandoned so seen_again watches it); not knowable → "Note: VESTA cannot check this one"; watched_for also takes a condition whose rule was silent ha_silent_hours (12); the tick asks the fm on payload kiosk_reopened and escalates on payload unreached; one counter "Back again: N times in 7 days".
+- Problems.reopened_in_kiosk (tasks.reopened_by; repair compares the ticket's last update with the task's done_at instead of re-resolving; source_gone never clears a task a person reopened); Problems.unreached; Kiosk.held_tickets gives updated_at.
+- Outcome marks an alert whose fm chats were all refused; Delivery.on_unreachable → Vesta._tell_unreachable tells the owner once.
+- notice: closed callable, word() and retitle(); IncidentThread.close retitles a settled copy.
+- store: incident_counts in one pass; reopen_incident keeps each run's words and drops runs older than 40 days.
+- Tests: tests/test_closed_not_over.py; 21 mutants, each red (run without bytecode).
+
 ## 0.6.142 (11 October 2026)
 
 Architecture review 24, all points, and the heading's word:

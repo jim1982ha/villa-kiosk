@@ -372,7 +372,7 @@ def test_an_alert_back_within_four_hours_is_the_same_incident_back_again(store):
     assert _tick(store, villa, 35)["cleared"] == [iid]
     again = _ap(store, 75)
     assert again["decision"] == "reopened" and again["incident_id"] == iid and store.incident(iid)["closed_at"] is None
-    assert [s for s in again["send"] if s["to"] == "fm" and s["status"].startswith("Back again: 2 times since ")
+    assert [s for s in again["send"] if s["to"] == "fm" and s["status"] == "Back again: 2 times in 7 days"
             and s["keyboard"]]
     # its fault in the Kiosk open again — the same one, titled with how often (architecture review 24: a new one each time)
     (back,) = [a for a in again["actions"] if a["action"] == "ticket.reopen"]
@@ -398,7 +398,7 @@ def test_after_done_the_desk_reads_the_device_once_and_reopens_what_is_still_bad
     res = _done(store, villa, iid, 20)
     assert res["not_quiet"] == [iid] and store.incident(iid)["closed_at"] is None
     (fm,) = [s for s in res["send"] if s["to"] == "fm"]
-    assert fm["status"] == "Done by the facility manager, but front_door still reads unlocked: still open." and fm["keyboard"]
+    assert fm["status"] == "Done by the facility manager, but front_door still reads unlocked: still open. VESTA keeps watching it." and fm["keyboard"]
     assert [a for a in res["actions"] if a["action"] == "ticket.reopen"]      # its own fault, open again
     assert not _tick(store, villa, 60).get("not_quiet")                         # read once
 

@@ -168,7 +168,7 @@ def test_a_door_closed_in_the_kiosk_is_read_again_as_a_done_is(tmp_path):
     out = desk.tick(store, datetime.now(timezone.utc) + timedelta(minutes=11), client=Villa())
     assert out["not_quiet"] == [iid]
     (fm,) = [s for s in out["send"] if s["to"] == "fm"]
-    assert fm["status"] == "Closed in the Kiosk, but Door still reads unlocked: still open."
+    assert fm["status"] == "Closed in the Kiosk, but Door still reads unlocked: still open. VESTA keeps watching it."
 
 
 def test_an_alert_back_again_says_home_assistants_latest_words_and_brings_its_picture(tmp_path):

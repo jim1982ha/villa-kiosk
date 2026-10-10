@@ -132,6 +132,7 @@ class Vesta:
         self.kiosk = kiosk if kiosk is not None else Kiosk(settings.kiosk_url, settings.kiosk_token, cf)
         # everything that reaches a chat, and whether it did (delivery.py)
         self.delivery = Delivery(self.tg, self.state, self.policy)
+        self.delivery.on_unreachable = self._tell_unreachable
         self.chat_jobs = ChatJobs(self.delivery, self._safe, self.state, settings.timezone)     # a job asked for in a chat, start to end
         self.actions = Actions(self.policy, self.state, self.writer_factory, names=self.name_of, related=self.related_entities,
                                executed=lambda *a: self.siren.executed(*a))
@@ -147,7 +148,8 @@ class Vesta:
         # a voice message's words (voice.py): the skill prepares the audio, Home Assistant reads it
         self.voice = Voice(self.s, self.tg, self.skills, self.code_command, self.delivery.send, self.state, self.cf_headers)
         # the heading of every message the agent sends on its own (notice.py): who it is for, the incident, its history
-        self.notices = Notices(self.state, self.policy, settings.timezone, severity=self._severity)
+        self.notices = Notices(self.state, self.policy, settings.timezone, severity=self._severity, closed=self._closed)
+        self.thread.retitle = self.notices.retitle           # a settled copy of a closed incident is headed "Closed"
         # putting one message in one chat (posting.py): the alerts and the approval requests both use it
         self.poster = Poster(send=self.delivery.send, thread=self.thread, notices=self.notices,
                              timezone_name=settings.timezone)
@@ -180,6 +182,11 @@ class Vesta:
             for p in policy_problems(pol.raw):
                 log.warning("policy.yaml: %s", p)
         return pol
+
+    def _closed(self, iid: int) -> bool:
+        """Is the incident closed, as the store holds it (the notices' heading: "Closed")."""
+        from vesta_shared.store import Store
+        return bool((Store(self.s.store_path).incident(int(iid)) or {}).get("closed_at"))
 
     def _severity(self, iid: int) -> str | None:
         """An incident's priority (P1…P4) as the store holds it: the notices' heading says it."""
@@ -635,6 +642,21 @@ class Vesta:
 
     async def _tell_owner_text(self, text: str) -> None:
         await self.outcome.carry_out({"send": [{"to": "owner", "text": text}]})
+
+    async def _tell_unreachable(self, chat: int, error: str) -> None:
+        """⚠️ TOLD ON TELEGRAM, ONCE (architecture review 25): only the VESTA Agent page named a person Telegram refuses —
+        Fabien never pressed Start and missed every message meant for him. Said to the owner's chats (never to the
+        refused one) the first time; again only once it was reached in between."""
+        names = [e.name for e in self.policy().entries if e.telegram_id == int(chat)]
+        if not names:
+            return
+        who = " / ".join(dict.fromkeys(names))
+        fix = (f"they open a private chat with @{self.bot_username or 'the bot'} and press Start (or send /start) once"
+               if chat > 0 else "add the bot to the group again, or put the group's new id in People")
+        await self.outcome.carry_out({"send": [{"to": "owner", "text": f"{who} cannot be reached on Telegram: Telegram "
+                                                f"refuses the agent's messages. Until {fix}, their messages go nowhere."}]},
+                                     skip=[int(chat)])
+        log.info("Told the owner that chat %s cannot be reached", chat)
 
     # ------------------------------------------------------------------ scheduled model jobs
     async def _tell_owner(self, problem: str | None, already_told: list[int]) -> None:

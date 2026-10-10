@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 SCHEMA = """
@@ -95,7 +95,7 @@ class Store:
                         (_now(),))
         self.db.execute("DROP TABLE IF EXISTS mutes")
         cols = {r["name"] for r in self.db.execute("PRAGMA table_info(tasks)")}
-        for col in ("source", "check_text", "reopened_at"):
+        for col in ("source", "check_text", "reopened_at", "reopened_by"):
             if col not in cols:
                 self.db.execute(f"ALTER TABLE tasks ADD COLUMN {col} TEXT")
         # a finding that comes back (vesta_shared.problems AGAIN_DAYS) keeps when it came back and the days it was seen —
@@ -229,11 +229,17 @@ class Store:
         r = self.db.execute("SELECT * FROM incidents WHERE id=?", (iid,)).fetchone()
         return dict(r) if r else None
 
-    def reopen_incident(self, iid: int, at: str) -> None:
-        """Incident `iid`, closed, open again at `at`: the run that ended is kept as an occurrence (opened, closed, how)."""
+    #: How long an incident's earlier runs are kept (the monthly report reads a month back).
+    RUNS_KEPT_DAYS = 40
+
+    def reopen_incident(self, iid: int, at: str, message: str | None = None) -> None:
+        """Incident `iid`, closed, open again at `at`: the run that ended is kept as an occurrence (opened, closed, how,
+        its own words `message`); runs older than RUNS_KEPT_DAYS go."""
         inc = self.incident(iid)
-        past = json.loads(inc.get("occurrences") or "[]") + [
-            {"opened_at": inc.get("reopened_at") or inc["opened_at"], "closed_at": inc.get("closed_at"), "state": inc.get("state")}]
+        cutoff = (datetime.fromisoformat(at) - timedelta(days=self.RUNS_KEPT_DAYS)).isoformat()
+        past = [o for o in json.loads(inc.get("occurrences") or "[]") if o["opened_at"] >= cutoff] + [
+            {"opened_at": inc.get("reopened_at") or inc["opened_at"], "closed_at": inc.get("closed_at"), "state": inc.get("state"),
+             **({"message": message} if message else {})}]
         self.update_incident(iid, closed_at=None, reply=None, reopened_at=at, occurrences=json.dumps(past))
 
     def incident_occurrences(self) -> list[dict]:
@@ -243,14 +249,30 @@ class Store:
         out = []
         for i in self.incidents(open_only=False):
             for o in json.loads(i.get("occurrences") or "[]"):
+                # each run in its own words (architecture review 25: the earlier runs read the latest run's text)
+                payload = i.get("payload")
+                if o.get("message"):
+                    payload = json.dumps({**json.loads(payload or "{}"), "message": o["message"]})
                 out.append({**i, "opened_at": o["opened_at"], "closed_at": o.get("closed_at"), "state": o.get("state"),
-                            "reply": None})
+                            "reply": None, "payload": payload})
             out.append({**i, "opened_at": i.get("reopened_at") or i["opened_at"]})
         return sorted(out, key=lambda r: r["opened_at"])
 
     def count_incidents(self, rule_id: str, since_iso: str) -> int:
         """How many times `rule_id` alerted since `since_iso` — every run, a reopened incident's included."""
-        return sum(1 for o in self.incident_occurrences() if o["rule_id"] == rule_id and o["opened_at"] >= since_iso)
+        return self.incident_counts(since_iso).get(rule_id, 0)
+
+    def incident_counts(self, since_iso: str) -> dict[str, int]:
+        """{rule: how many times it alerted since `since_iso`}, every run counted, in one read of the incidents still
+        open or touched since then."""
+        counts: dict[str, int] = {}
+        for i in self.db.execute("SELECT rule_id, opened_at, reopened_at, occurrences FROM incidents "
+                                 "WHERE closed_at IS NULL OR closed_at >= ? OR last_seen_at >= ?", (since_iso, since_iso)):
+            runs = [o["opened_at"] for o in json.loads(i["occurrences"] or "[]")] + [i["reopened_at"] or i["opened_at"]]
+            n = sum(1 for r in runs if r >= since_iso)
+            if n:
+                counts[i["rule_id"]] = counts.get(i["rule_id"], 0) + n
+        return counts
 
     # tasks -----------------------------------------------------------------
     def add_task(self, rule_id: str, entity_id: str, summary: str, todo_uid: str | None = None,
@@ -278,9 +300,10 @@ class Store:
         r = self.db.execute("SELECT * FROM tasks WHERE source=? ORDER BY id DESC LIMIT 1", (source,)).fetchone()
         return dict(r) if r else None
 
-    def reopen_task(self, task_id: int, summary: str) -> None:
-        self.db.execute("UPDATE tasks SET status='open', done_at=NULL, summary=?, reopened_at=? WHERE id=?",
-                        (summary, _now(), task_id))
+    def reopen_task(self, task_id: int, summary: str, by: str | None = None) -> None:
+        """Open again (`by`: the person who reopened its fault in the Kiosk; None: its problem came back)."""
+        self.db.execute("UPDATE tasks SET status='open', done_at=NULL, summary=?, reopened_at=?, reopened_by=? WHERE id=?",
+                        (summary, _now(), by, task_id))
         self.db.commit()
 
     def tasks(self, status: str | None = "open") -> list[dict]:
