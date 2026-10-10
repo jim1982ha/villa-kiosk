@@ -1,3 +1,8 @@
+## 0.12.139
+
+What you will see:
+- An approved curtain (or lock, light, switch…) that is still moving no longer gets "did not open". The request first says "Opening Bedroom3 Curtain…" with "Approved by JM on …", and the agent looks again every 5 seconds for up to 90 seconds: the line then becomes "Opened Bedroom3 Curtain.", or, if it never got there, "Bedroom3 Curtain did not open: it reads closed." Before, it read the curtain a second after the command — some curtains say "closed" until they have finished moving.
+
 ## 0.12.138
 
 What you will see:
