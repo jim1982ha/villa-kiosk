@@ -282,3 +282,19 @@ def test_an_approved_request_says_what_happened_and_who_approved_it_never_the_re
     req = "For: JM\n-------\nOpen Bedroom3 Curtain (final state: open)?\n-------\nWaiting for approval by the owner"
     assert with_status(req, "Approved by JM on 10/10/2026 17:13.", "Opened Bedroom3 Curtain.") == \
         "For: JM\n-------\nOpened Bedroom3 Curtain.\n-------\nApproved by JM on 10/10/2026 17:13."
+
+
+def test_a_request_shown_in_the_askers_chat_is_not_announced_again(tmp_path, monkeypatch):
+    # owner, 2026-10-10: "Approval request sent … Waiting for approval." under the request "is redundant"
+    from ai_fake import FakeAI
+    v = make_agent(tmp_path, {"people": [{"telegram_id": JM, "name": "JM", "role": "owner"},
+                                         {"telegram_id": GROUP, "name": "Group", "role": "fm"}],
+                              "act_enabled": True, "allowed_services": {"cover.open_cover": "any"}})
+    told = []
+
+    async def asks(call):
+        told.append(await call["call"]("ha_call_service", {"domain": "cover", "service": "open_cover", "entity_id": "cover.b"}))
+    FakeAI("  ", act=asks).install(monkeypatch)                # the AI does as it is told: nothing to add
+    run(v.converse(JM, v.policy().person(JM), "open the bedroom curtain"))
+    assert "do not announce it" in told[0]["content"][0]["text"]
+    assert [bool(kb) for _, _, kb in v.tg.sent] == [True]      # the request alone: no answer under it

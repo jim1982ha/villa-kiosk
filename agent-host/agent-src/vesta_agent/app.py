@@ -505,7 +505,7 @@ class Vesta:
             log.info("Answered %s in chat %s (%s)%s", person.name if person else "system", cid,
                      f"{res.cost_usd:.3f} USD" if isinstance(res.cost_usd, (int, float)) else "cost unknown",
                      f", error {res.error}" if res.error else "")
-            answer = res.text
+            answer = (res.text or "").strip()               # an empty answer sends nothing (a request said it all)
             if res.problem or res.error:
                 # ⚠️ NEVER THE RAW ERROR (owner, 2026-10-06): the reason in plain words (api_errors); the owner was
                 # told by the turn when no retry can help (no credit, a refused key)

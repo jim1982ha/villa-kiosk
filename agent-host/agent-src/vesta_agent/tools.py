@@ -258,6 +258,12 @@ class Toolbox:
                 answer += " But the request with its Approve button could not be delivered in Telegram: nobody has it."
             elif msg:
                 self.approvals.append(msg.approval_id)
+                if chat_id is not None and int(chat_id) in msg.chats:
+                    # ⚠️ NO ECHO OF THE REQUEST (owner, 2026-10-10: "Approval request sent… Waiting for approval." under
+                    # the request itself "is redundant"): the request in this chat already says it all
+                    answer = ("The request, with its Approve and Refuse buttons, is now in this chat and says everything: "
+                              "do not announce it or repeat it. Reply with an empty answer, unless the person asked "
+                              "something else as well; then answer only that.")
             return _ok(answer)
         return handler
 
