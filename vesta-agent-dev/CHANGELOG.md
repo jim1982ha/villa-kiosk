@@ -1,3 +1,8 @@
+## 0.12.138
+
+What you will see:
+- When you ask for an action and the Approve / Refuse request appears in your own chat, the agent no longer adds "Approval request sent… Waiting for approval." under it: the request says it all. If you asked something else in the same message, only that is answered. Should the AI still write such a line, it disappears once the request is decided, as before.
+
 ## 0.12.137
 
 What you will see:
