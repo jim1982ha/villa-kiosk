@@ -148,7 +148,11 @@ group's id is negative). Add the group as a row of each role whose messages it
 should get; a person in both roles is two rows with the same id. Every copy of
 a message updates together when someone answers. A person must have sent
 `/start` to the bot once before it can write to them; a chat Telegram refuses is
-named on the **Overview**. Saved changes apply within seconds, no restart. The same file holds the owner-only devices, the allowed
+named on the **Overview**. **Anyone in a group listed in People acts with the
+group's role** (the facility manager's when the group is listed for both), with
+no row of their own: they can ask, answer and press buttons there, and get no
+private copies. Give someone a row only to reach them in private too, or to give
+them a wider role than their group's. Saved changes apply within seconds, no restart. The same file holds the owner-only devices, the allowed
 actions and the agent's settings (AI model, limit per reply, web search).
 
 ## Telegram

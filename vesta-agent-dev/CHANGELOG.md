@@ -1,3 +1,13 @@
+## 0.12.129
+
+What you will see:
+- Anyone in a group listed in People now acts with that group's role, without a row of their own: they can ask the agent, answer an alert and press its buttons in the group, and they get no private copies. When the group is listed for both roles, its members act as facility manager. Give someone a row only if they should also get messages in private, or a wider role than the group's.
+- A slip while editing the rules file by hand (a quote left open) no longer empties the rules: the agent keeps the last rules it could read, and the Rules page says what to fix. The siren that was switched on is always the one switched off, even if another siren is chosen while it sounds.
+- In a group listed for both roles, the "For:" line names both: the owner's people and the facility managers.
+- Approval requests, and the warning that the siren cannot be requested, now start with the same heading as every other message from the agent (not in the chat where the request was asked: there it answers the person). A newer camera snapshot of an incident replaces the older one.
+- The Overview now names a chat as not reached only when Telegram refuses that chat (blocked, never started, no such chat), not after a short network cut.
+- Moving an old Chats card into People never registers a private chat of someone who is not in People: such a chat stays where it was and still gets its messages.
+
 ## 0.12.128
 
 What you will see:
