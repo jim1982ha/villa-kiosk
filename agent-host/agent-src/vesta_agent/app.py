@@ -59,7 +59,7 @@ from .state import State
 from .telegram import Telegram, TelegramError
 from .tools import Toolbox, scrub
 from .turn import Turns
-from .notice import Notices
+from .notice import Notices, when
 
 log = logging.getLogger("vesta")
 
@@ -550,7 +550,34 @@ class Vesta:
                 out.append(f"[Checked just now by the {sk.name} skill; answer from this, never from memory]\n{text}")
             else:
                 out.append(f"[The {sk.name} skill's check could not run just now: say so if asked about it]")
+        if self.policy().act_enabled:
+            out.append(self.approvals_now())
         return "\n\n".join(out)
+
+    def approvals_now(self, now: datetime | None = None) -> str:
+        """The requests for approval as they stand now, for the AI before it answers.
+
+        ⚠️ NEVER FROM ITS MEMORY (owner, 2026-10-10): asked again for the curtain, the AI answered "Approval request already
+        sent 22 min ago, press the button" — it remembered asking, never learnt it had been approved, and asked nothing.
+        A press goes to the agent, not to the conversation: the agent says what is waiting and what was decided."""
+        now = now or datetime.now(timezone.utc)
+        rows = self.state.approvals_since((now - timedelta(hours=2)).isoformat())
+        pol = self.policy()
+
+        def who(tid):
+            p = pol.person(tid)
+            return p.name if p else "someone"
+        waiting = [r for r in rows if r["status"] == "pending" and datetime.fromisoformat(r["expires_at"]) > now]
+        decided = [r for r in rows if r not in waiting][:5]
+        lines = [f"- waiting: {r['action'].get('plain', '?')} (asked {when(datetime.fromisoformat(r['created_at']), self.s.timezone)})"
+                 for r in waiting] or ["- nothing is waiting for approval"]
+        for r in decided:
+            st = "expired" if r["status"] == "pending" else r["status"]
+            by = f" by {who(r['decided_by'])}" if r.get("decided_by") else ""
+            at = f" on {when(datetime.fromisoformat(r['decided_at']), self.s.timezone)}" if r.get("decided_at") else ""
+            lines.append(f"- {st}{by}{at}: {r['action'].get('plain', '?')}")
+        return ("[Requests for approval, checked just now; answer from this, never from memory. An action asked now is "
+                "a new request: call ha_call_service for it, whatever was asked before]\n" + "\n".join(lines))
 
     # ------------------------------------------------------------------ button presses
     async def handle_callback(self, q: dict):

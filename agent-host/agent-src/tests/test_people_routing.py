@@ -331,3 +331,20 @@ def test_a_curtain_still_moving_is_said_to_be_and_the_request_says_opened_once_i
     first, last = v.tg.edits[0][2], v.tg.edits[-1][2]
     assert "\n-------\nOpening " in first and "\n-------\nApproved by JM on " in first     # on its way, right away
     assert "\n-------\nOpened " in last and "did not" not in last and last.split("\n-------\n")[-1].startswith("Approved by JM")
+
+
+def test_the_ai_is_told_what_is_waiting_and_what_was_decided_never_left_to_its_memory(tmp_path):
+    # owner, 2026-10-10: asked again, the AI said "already sent 22 min ago, press the button" for a request approved at
+    # 17:37 — it remembered asking and never learnt the answer
+    from datetime import datetime, timedelta, timezone
+    v = make_agent(tmp_path, {"people": [{"telegram_id": JM, "name": "JM", "role": "owner"},
+                                         {"telegram_id": GROUP, "name": "Group", "role": "fm"}],
+                              "act_enabled": True, "allowed_services": {"cover.open_cover": "any"}})
+    t0 = datetime(2026, 10, 10, 9, 36, tzinfo=timezone.utc)
+    aid = v.state.new_approval({"plain": "Open Bedroom3 Curtain (final state: open)?"}, "h", "any", JM, JM, 15, now=t0)
+    assert "- nothing is waiting" not in v.approvals_now(now=t0 + timedelta(minutes=1))
+    assert "- waiting: Open Bedroom3 Curtain" in v.approvals_now(now=t0 + timedelta(minutes=1))
+    v.state.claim_approval(aid, "approved", JM, now=t0 + timedelta(minutes=1))
+    later = v.approvals_now(now=t0 + timedelta(minutes=22))
+    assert "- nothing is waiting for approval" in later and "- approved by JM on " in later and "never from memory" in later
+    assert "Requests for approval" in v.before_answer()                 # in front of every message, acting on

@@ -1,3 +1,8 @@
+## 0.12.140
+
+What you will see:
+- Asked again for an action, the agent no longer says "Approval request already sent … press the button" when nothing is waiting. Before each answer it now reads which approval requests are waiting and which were decided in the last two hours (by whom, when), and every action asked is a new request. Before, it went by its memory of the conversation: it remembered asking, but never learnt that the request had been approved.
+
 ## 0.12.139
 
 What you will see:

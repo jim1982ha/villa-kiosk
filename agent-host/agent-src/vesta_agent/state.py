@@ -377,6 +377,14 @@ class State:
         d["action"] = json.loads(d["action"])
         return d
 
+    def approvals_since(self, since_iso: str) -> list[dict]:
+        """The approval requests asked since `since_iso`, newest first, their action read back."""
+        rows = [dict(r) for r in self.db.execute("select * from approvals where created_at >= ? order by created_at desc",
+                                                 (since_iso,))]
+        for r in rows:
+            r["action"] = json.loads(r["action"])
+        return rows
+
     def claim_approval(self, aid: str, status: str, decided_by: int, now: datetime | None = None) -> bool:
         """Move a pending approval to its decision once. False if somebody else was first."""
         now = now or utcnow()

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.134 (10 October 2026)
+
+- app.approvals_now: the approval requests waiting and decided in the last 2 hours, added to before_answer (acting on) as "checked just now, never from memory"; ha_call_service's description: call it for every action asked now. State.approvals_since. Test; two mutations red.
+
 ## 0.6.133 (10 October 2026)
 
 - actions: PROGRESS verbs; done_words(settled=False) says "Opening …" for a device still on its way; decide returns `follow`; Actions.recheck reads it again. app._follow looks every FOLLOW_EVERY_S up to FOLLOW_FOR_S and IncidentThread.rewrite changes the request's body in every copy. Test with a curtain that reads "closed" until it opens; shown red without the follow-up.

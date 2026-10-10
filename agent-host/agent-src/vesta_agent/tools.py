@@ -250,7 +250,9 @@ class Toolbox:
               "request with Approve and Refuse buttons to the person allowed to approve it. A service the villa marks direct "
               "runs at once when the person writing to you asked for it; the answer says which happened and the result. "
               "Name every entity explicitly; use absolute states, never toggle. The villa's rules may refuse the request: "
-              "say so plainly.", schema)
+              "say so plainly. Call it for EVERY action asked now, even one asked before: whether a request is waiting "
+              "or was decided is in the requests line in front of the message, never in your memory of the conversation.",
+              schema)
         async def handler(args: dict) -> dict:
             answer, msg = await asyncio.to_thread(self.actions.request, args.get("domain", ""), args.get("service", ""),
                                                   args.get("entity_id"), args.get("data") or {}, person, chat_id)
