@@ -139,10 +139,9 @@
 .cockpit-attention-item {
   position: relative; display: flex; flex-direction: column; border-radius: 10px; background: var(--bg-input);
 }
-/* ⚠️ THE WHOLE CARD OPENS THE DEVICE (owner, 2026-10-10: "only the upper half seems clickable"): the head is the one
-   <button>, its hit area stretched over the card; a fault's Close and its "sure?" sit above it and stay their own. */
-button.cockpit-attention-row.tappable::after { content: ""; position: absolute; inset: 0; border-radius: 10px; }
-.cockpit-attention-close, .cockpit-attention-confirm, .cockpit-attention-item .fm-inline-error { position: relative; z-index: 1; }
+/* THE WHOLE CARD OPENS THE DEVICE (owner, 2026-10-10): the card takes the click (CockpitOverview), a fault's Close and
+   its "sure?" stop theirs. No layer stretched over the card: it lay on top of Close (2.496.318). */
+.cockpit-attention-item.tappable { cursor: pointer; }
 .cockpit-attention-close {
   flex: none; display: inline-flex; align-items: center; gap: 2px;
   min-height: 32px; padding: 0 var(--space-2); font-size: var(--text-xs);

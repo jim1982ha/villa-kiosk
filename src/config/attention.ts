@@ -41,6 +41,8 @@ export interface AttentionItem {
    *  owner's device groups, then Home Assistant's device registry) — what
    *  groupAttention folds on. Set exactly when `entityId` is. */
   device?: { key: string; label: string; room?: string };
+  /** The open fault about this very entity, when this item is its live state (groupAttention): one problem, not two. */
+  fault?: AttentionItem;
 }
 
 /**
@@ -73,8 +75,9 @@ const ATTENTION_RANK: Record<AttentionKind, number> = { alarm: 0, unavailable: 1
 
 /**
  * Fold problems into one row per device. Pure, and it only GROUPS: every item
- * given comes back exactly once (the oracle checks it), so a fault's Close
- * button and ticket survive inside its device's row.
+ * given comes back exactly once — as a line, or as the `fault` of the live line
+ * about the same entity (mergeFaults) — so a fault's Close button and ticket
+ * survive inside its device's row.
  *
  * Rows are ordered by their most serious problem, then by title, then by key —
  * never by which problem arrived first, so a ticket landing on a door already listed
@@ -89,7 +92,7 @@ export function groupAttention(items: readonly AttentionItem[]): AttentionGroup[
   }
   const groups: AttentionGroup[] = [];
   for (const [key, list] of byKey) {
-    const sorted = [...list].sort((a, b) => ATTENTION_RANK[a.kind] - ATTENTION_RANK[b.kind]);
+    const sorted = mergeFaults([...list].sort((a, b) => ATTENTION_RANK[a.kind] - ATTENTION_RANK[b.kind]));
     const worst = sorted[0];
     // ⚠️ ONE SHAPE FOR EVERY ROW (owner, 2026-10-10: "all these lines feel inconsistently shown"): a device's row is
     // titled by the DEVICE, whatever its problems. With ONE problem it read as the problem — an open fault on the
@@ -118,11 +121,34 @@ export function attentionLineIn(group: AttentionGroup, item: AttentionItem): str
   return group.key.startsWith("device:") ? attentionLine(item) : item.detail;
 }
 
+/**
+ * A fault about the SAME entity whose live state is already listed is that state's fault, not a second problem.
+ *
+ * ⚠️ ONE PROBLEM, ONE LINE (owner, 2026-10-10: "why do we see 2 lines for the same issue?"): the laundry door read
+ * "Unlocked" (its live state) and "Open fault: Laundry Room door unlocked" (the agent's ticket for the VESTA rule's
+ * alert about it); an offline pump plug read "Unavailable" and "Open fault: … offline for 9 h". The fault goes onto
+ * the live line (`fault`), which keeps its Close. A fault on another entity of the device stays its own line.
+ */
+function mergeFaults(items: AttentionItem[]): AttentionItem[] {
+  // copies: the villa model's items are shared by every render and profile — a fault written onto one would stay
+  // there after it was closed
+  const out = items.map((i) => ({ ...i, fault: undefined }) as AttentionItem);
+  const live = new Map(out.filter((i) => (i.kind === "alarm" || i.kind === "unavailable") && i.entityId)
+    .map((i) => [i.entityId as string, i]));
+  return out.filter((i) => {
+    const state = i.kind === "fault" && i.entityId ? live.get(i.entityId) : undefined;
+    if (!state || state.fault) return true;
+    state.fault = i;
+    return false;
+  });
+}
+
 /** One problem's line inside a device's row. A state needs no more than its
  *  word ("Unlocked", "Unavailable"); a fault or a schedule names itself, since
  *  its title is what is wrong, not the device ("Open fault: Entrance door
  *  unlocked"). */
 export function attentionLine(item: AttentionItem): string {
+  if (item.fault) return `${item.detail} — ${item.fault.detail.toLowerCase()}: ${item.fault.title}`;
   return item.kind === "fault" || item.kind === "schedule" ? `${item.detail}: ${item.title}` : item.detail;
 }
 
