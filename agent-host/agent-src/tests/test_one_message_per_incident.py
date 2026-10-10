@@ -72,7 +72,7 @@ def shown(v, chat):
 def test_home_assistants_alert_takes_the_incidents_number(agent):
     ha_alert(agent)
     (grp,) = shown(agent, GROUP)
-    assert grp.startswith("For: ") and ", Incident: New #1\n" in grp and status(grp) == "" and body(grp).startswith("🔓") and SUMMARY in grp and "What to do:" in grp
+    assert grp.startswith("For: ") and ", P2 Incident: New #1\n" in grp and status(grp) == "" and body(grp).startswith("🔓") and SUMMARY in grp and "What to do:" in grp
     (fm,) = shown(agent, FM_CHAT)
     assert status(fm) == "" and body(fm).startswith("🔓") and SUMMARY in fm and "Press Done" not in fm and "Reply Done" not in fm
 

@@ -144,7 +144,7 @@ class Vesta:
         # a voice message's words (voice.py): the skill prepares the audio, Home Assistant reads it
         self.voice = Voice(self.s, self.tg, self.skills, self.code_command, self.delivery.send, self.state, self.cf_headers)
         # the heading of every message the agent sends on its own (notice.py): who it is for, the incident, its history
-        self.notices = Notices(self.state, self.policy, settings.timezone)
+        self.notices = Notices(self.state, self.policy, settings.timezone, severity=self._severity)
         self.outcome = Outcome(policy=self.policy, state=self.state, send=self.delivery.send, actions=self.actions,
                                reader=self.reader, tickets=self.tickets, buttons=self.buttons, thread=self.thread,
                                notices=self.notices, out_dir=settings.out_dir, timezone_name=settings.timezone)
@@ -170,6 +170,13 @@ class Vesta:
             for p in policy_problems(pol.raw):
                 log.warning("policy.yaml: %s", p)
         return pol
+
+    def _severity(self, iid: int) -> str | None:
+        """An incident's priority (P1…P4) as the store holds it: the notices' heading says it."""
+        from vesta_shared.store import Store
+        inc = Store(self.s.store_path).incident(int(iid)) or {}
+        sev = str(inc.get("severity") or "")
+        return sev if sev in ("P1", "P2", "P3", "P4") else None
 
     def pack(self):
         """The knowledge pack, read again when the nightly rebuild changes it (None until it is built)."""

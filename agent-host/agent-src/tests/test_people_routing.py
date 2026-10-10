@@ -120,7 +120,7 @@ def test_the_for_line_names_the_role_the_message_is_for(tmp_path):
     assert n.heading(JM, to="owner").startswith("For: Fabien_O, JM_O\n")
     assert n.heading(GROUP, to="fm").startswith("For: JM_FM, Fabien_FM\n")
     alone = Notices(State(s.state_path), lambda: Policy({"people": [PEOPLE[4]]}), "UTC")
-    assert alone.heading(GROUP, to="owner").startswith("For: the owner\n")          # a group alone: its role
+    assert alone.heading(GROUP, to="owner").startswith("For: the Owner\n")          # a group alone: its role, capitalised
 
 
 def test_a_chat_listed_for_both_roles_is_headed_for_both(tmp_path):

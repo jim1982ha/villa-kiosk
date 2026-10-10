@@ -1,7 +1,7 @@
 """A message the agent sends on its own — an alert, its reminder or escalation, a night check's finding, a report —
 and the one heading every such message carries (owner, 2026-10-10):
 
-    For: Jean-Marie, Fabien_FM, Incident: Follow Up #9
+    For: Jean-Marie, Fabien_FM, P1 Incident: Follow Up #9
     First time seen on 09/10/2026 13:12, to Jean-Marie, Fabien_FM
     Escalated on 09/10/2026 13:27, to Fabien
     -------
@@ -27,7 +27,8 @@ from vesta_shared.messaging import RULE  # the one line between a notice's parts
 
 #: A notice's kind (vesta_shared.result.message `stage`), as its history line says it.
 STAGES = {"new": "First time seen", "reminder": "Reminded", "escalated": "Escalated", "update": "Updated"}
-ROLE_WORDS = {"owner": "the owner", "fm": "the facility manager"}
+#: A role in a heading when no person of it is listed (owner, 2026-10-10: "the Facility Manager", capitals)
+ROLE_WORDS = {"owner": "the Owner", "fm": "the Facility Manager"}
 WHEN = "%d/%m/%Y %H:%M"
 
 
@@ -37,8 +38,10 @@ def when(at: datetime, zone: str) -> str:
 
 
 class Notices:
-    def __init__(self, state, policy: Callable, timezone_name: str):
+    def __init__(self, state, policy: Callable, timezone_name: str, severity: Callable[[int], str | None] | None = None):
         self.state, self.policy, self.tz = state, policy, timezone_name
+        # an incident's priority (P1…P4) as its skill stored it: "P2 Incident: New #18" (owner, 2026-10-10)
+        self.severity = severity or (lambda _iid: None)
 
     def _for(self, chat: int, to=None) -> list[str]:
         """Who a notice to `chat` is for: the People list's persons of the roles `to` (a role, or every role the copy went
@@ -54,7 +57,11 @@ class Notices:
         lines = []
         if incident is not None:
             history = self.state.incident_history(incident)
-            head += f", Incident: {'Follow Up' if history else 'New'} #{incident}"
+            try:
+                p = self.severity(int(incident))
+            except Exception:  # noqa: BLE001 — the heading is written without its priority, never not at all
+                p = None
+            head += f", {f'{p} ' if p else ''}Incident: {'Follow Up' if history else 'New'} #{incident}"
             lines = [f"{STAGES.get(h.get('stage'), 'Sent')} on {when(datetime.fromisoformat(h['at']), self.tz)}, "
                      f"to {', '.join(h.get('to') or []) or 'nobody'}" for h in history]
         return "\n".join([head, *lines, RULE])

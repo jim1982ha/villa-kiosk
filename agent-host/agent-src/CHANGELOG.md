@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.125 (10 October 2026)
+
+- notice.Notices(severity=): the heading says the incident's priority ("P2 Incident: New #18"), read from the store (app._severity, P1-P4 only; any failure leaves it out). ROLE_WORDS capitalised ("the Facility Manager"). Tests pin both; the priority shown red without it.
+
 ## 0.6.124 (10 October 2026)
 
 The owner's notice layout (2026-10-10): heading / alert / status, each under messaging.RULE.
