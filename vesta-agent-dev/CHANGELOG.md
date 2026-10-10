@@ -1,3 +1,13 @@
+## 0.12.146
+
+What you will see (architecture review 22, every point):
+- An alert now closes by itself only when the problem is really over. In 0.12.145 a lock gone from "unlocked" to "jammed" could be closed as cleared, and a rule watching two locks closed at the wrong moment. Your Home Assistant rules now send their own list of bad states with each alert (I updated the two rule templates), and an alert closes only when no watched device is in any of them for 10 minutes. Wi-Fi access points "disconnected" are covered too.
+- When a Home Assistant rule stops watching (after its "Repeat after") but the problem had just cleared, you are no longer told "Still not clear": the alert closes.
+- A message Telegram refuses to update is now tried again for 2 hours. 0.12.144 said "about an hour", but it really gave up after about 6 minutes, so a short internet cut could leave the buttons for good.
+- A device that drops every night and comes back in the day is now the same fault coming back, not a new one every morning: the 07:00 digest says "again (3 times in 7 days)", and so does its fault in the Cockpit.
+- Home Assistant's own "resolved" message joins its incident even when the agent closed it first: no second, unnumbered message in the group.
+- A report that arrived is never followed, after a restart, by "it was stopped by a restart"; a scheduled report that arrived is not sent a second time.
+
 ## 0.12.145
 
 What you will see:
