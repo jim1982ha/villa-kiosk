@@ -1,3 +1,19 @@
+## 0.12.125
+
+What you will see:
+- Every message the agent sends on its own (an alert, its reminder or escalation, a night check, a warning, a scheduled report) starts the same way:
+
+      For: Jean-Marie, Fabien_FM, Incident: Follow Up #9
+      First time seen on 09/10/2026 13:12, to Jean-Marie, Fabien_FM
+      Escalated on 09/10/2026 13:27, to Fabien
+      -------
+      (the message)
+
+  "For" names the people of that chat's role, as the Rules page's People list names them. The incident line says New for its first message and Follow Up after, and lists every earlier message: when it was sent, what it was, and who it went to. A message with no incident only has "For" and the line. An answer to someone in a chat has no heading.
+- The messages no longer say "Press Done, Not found or Need help" or "Press Done when it is back": the buttons are under them.
+- A pressed button now reads "Done pressed by Fabien_FM on 10/10/2026 17:13", with the name this chat knows the person by.
+- One Telegram id can now be listed twice in People, once as owner and once as facility manager, each with its own name (for example "Fabien" and "Fabien_FM"). The person has the owner's rights; each name is used where its role is meant.
+
 ## 0.12.124
 
 What you will see:
