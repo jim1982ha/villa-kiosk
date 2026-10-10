@@ -115,7 +115,7 @@ class Toolbox:
         self.actions = actions
         self.skills = skills
         # ⚠️ ONE WAY OUT (owner, 2026-10-10: each message to every chat of its role): an approval request goes through
-        # Outcome.ask, a message through Outcome.carry_out — never a send of this class's own
+        # approvals.Approvals.ask, a message through Outcome.carry_out — never a send of this class's own
         self.ask = ask
         self.ticket = ticket
         self.carry_out = carry_out

@@ -107,6 +107,12 @@ class Scheduler:
         self.housekeeping = housekeeping    # async () -> None, every tick
         self._last_every: datetime | None = None
         self._running: dict[str, asyncio.Task] = {}     # job key → its task, while it runs
+        # ⚠️ A RUN CUT BY A STOP IS RUN AGAIN (architecture review 21): the slot was claimed before the run, so an update
+        # in the middle of the morning report lost it for the day, without a word. A run in progress is recorded
+        # (state.job_running); one still recorded at start was cut, and its slot may be claimed once more in its window
+        self._cut: dict[str, str] = state.jobs_cut()
+        if self._cut:
+            log.info("Scheduled runs cut by the last stop, run again in their window: %s", ", ".join(sorted(self._cut)))
 
     def _start(self, key: str, make) -> bool:
         """Start `make()` as a task unless the same job is still running. True if started."""
@@ -136,6 +142,9 @@ class Scheduler:
             await asyncio.gather(*[t for t in self._running.values() if not t.done()], return_exceptions=True)
 
     def _claim(self, job: str, slot: datetime) -> bool:
+        if self._cut.get(job) == slot.isoformat():
+            del self._cut[job]
+            return True
         return self.state.claim_job_slot(job, slot.isoformat())
 
     async def tick(self, now: datetime | None = None) -> list[str]:
@@ -163,12 +172,21 @@ class Scheduler:
                     continue
                 name = f"{sk.name}:{job['when']}"
 
-                async def run(sk=sk, job=job):
-                    await self._after_pack()
-                    if job.get("run"):
-                        await self.run_code(sk, job["run"], job["timeout"])
-                    else:
-                        await self.run_model(sk, job)
+                async def run(sk=sk, job=job, key=key, slot=slot):
+                    self.state.job_running(key, slot.isoformat())
+                    cut = False
+                    try:
+                        await self._after_pack()
+                        if job.get("run"):
+                            await self.run_code(sk, job["run"], job["timeout"])
+                        else:
+                            await self.run_model(sk, job)
+                    except asyncio.CancelledError:
+                        cut = True            # the agent is stopping: the record stays for the next start
+                        raise
+                    finally:
+                        if not cut:
+                            self.state.job_running(key, None)
                 if self._start(key, run):
                     started.append(name)
         if self.housekeeping:

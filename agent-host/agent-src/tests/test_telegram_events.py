@@ -152,7 +152,7 @@ def test_telegram_gets_plain_text_not_markdown(agent):
 
 
 def test_a_kiosk_ticket_title_has_no_leading_emoji_or_rule_code():
-    from vesta_agent.outcome import ticket_title as _ticket_title
+    from vesta_agent.outcome_words import ticket_title as _ticket_title
     assert _ticket_title("🚨 [VESTA-WD-01] Pump offline\nmore") == "Pump offline"
     assert _ticket_title("⚠️  Battery low") == "Battery low"
     assert _ticket_title("Battery low") == "Battery low"

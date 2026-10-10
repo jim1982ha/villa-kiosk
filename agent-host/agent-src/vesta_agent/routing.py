@@ -80,8 +80,9 @@ class Routing:
         return []
 
     def approver_chats(self, required_role: str | None, origin_chat: int | None) -> list[int]:
-        """Rule 3: where an Approve / Refuse request is sent."""
-        owners = self.policy.chats_for("owner")
+        """Rule 3: where an Approve / Refuse request is sent — never where nobody can press it (Policy.may_approve_in): a
+        group listed for both roles acts as the facility manager's, so an owner's request is not sent there."""
+        owners = [c for c in self.policy.chats_for("owner") if self.policy.may_approve_in(c, "owner")]
         if required_role == "owner" or origin_chat is None:
             return owners
         return [int(origin_chat)] if self.policy.knows_chat(origin_chat) else owners

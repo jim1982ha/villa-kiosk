@@ -29,8 +29,10 @@ Work = Callable[[Origin], Awaitable[None]]
 
 
 class ChatJobs:
-    def __init__(self, delivery, safe: Callable[[Awaitable], Awaitable[None]]):
+    def __init__(self, delivery, safe: Callable[[Awaitable], Awaitable[None]], state=None, timezone_name: str = "UTC"):
         self.delivery = delivery
+        # what runs, kept across a stop (state.chat_job): a job cut by one is said ended at the next start (`recover`)
+        self.state, self.tz = state, timezone_name
         delivery.on_job_result = self.result               # a message sent on behalf of a job is its result
         self._safe = safe                                  # logs what a task raised (app.Vesta._safe)
         self.notices = JobNotices()                        # the waiting messages, by turn
@@ -66,6 +68,7 @@ class ChatJobs:
         await self._carry(chat, self.notices.replied(key, mid))
         for (c, name), j in list(self._jobs.items()):
             if c == chat and j["turn"] == key:
+                self._keep(chat, name, mid)
                 self._typing_on(chat, name)
 
     # ------------------------------------------------------------------ a job
@@ -78,23 +81,60 @@ class ChatJobs:
             return False
         key = ("press", chat, int(waiting_mid)) if waiting_mid else ("turn", chat, self._turn.get(chat, 0))
         self._jobs[(chat, name)] = {"started": time.time(), "turn": key}
+        self._keep(chat, name, waiting_mid)
         self.notices.started(key, name)
         log.info("Job %s asked for in chat %s: %s", name, chat, self.notices.describe(key))
 
         async def run() -> None:
+            cut = False
             try:
                 if waiting_mid:
                     await self._carry(chat, self.notices.replied(key, int(waiting_mid)))
                     self._typing_on(chat, name)
                 await work(Origin(chat, JOB, job=name, role=role))
+            except asyncio.CancelledError:
+                cut = True                    # the agent is stopping: its record stays, the next start says so (recover)
+                raise
             finally:
                 self._jobs.pop((chat, name), None)
                 self._typing_off(chat, name)
-                await self._carry(chat, self.notices.ended(key, name))
+                if not cut:
+                    if self.state is not None:
+                        self.state.chat_job(chat, name, None)
+                    await self._carry(chat, self.notices.ended(key, name))
         task = asyncio.create_task(self._safe(run()))
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
         return True
+
+    def _keep(self, chat: int, name: str, mid: int | None) -> None:
+        j = self._jobs.get((chat, name))
+        if self.state is not None and j is not None:
+            self.state.chat_job(chat, name, {"started": j["started"], "mid": mid})
+
+    async def recover(self) -> int:
+        """At start: every job asked for in a chat that the last stop cut is said ended there — its waiting message
+        says so, or a message does when it had none. Returns how many.
+
+        ⚠️ NEVER A PROMISE LEFT HANGING (architecture review 21): the jobs running lived in memory only, so an update in
+        the minutes a report was being made left "it will arrive in this chat in a few minutes" — and nothing, ever.
+        It is not run again by itself: a report costs the AI again, the person asks when they still want it."""
+        if self.state is None:
+            return 0
+        from datetime import datetime, timezone
+        from .notice import when
+        n = 0
+        for chat, name, rec in self.state.chat_jobs_cut():
+            at = when(datetime.fromtimestamp(float(rec.get("started") or time.time()), timezone.utc), self.tz)
+            text = f"The {name} job asked for at {at} was stopped by a restart of the agent: ask again to have it."
+            log.info("Job %s in chat %s was cut by the last stop: said so", name, chat)
+            if self.delivery.tg is None:
+                continue
+            mid = rec.get("mid")
+            if not (mid and await self.delivery.edit(chat, int(mid), text)):
+                await self.delivery.send(chat, text)
+            n += 1
+        return n
 
     @contextlib.asynccontextmanager
     async def held(self, chats: list[int], name: str):

@@ -75,11 +75,6 @@ class Notices:
                      f"to {', '.join(h.get('to') or []) or 'nobody'}" for h in history]
         return "\n".join([head, *lines])               # the line under it is the layout's (layout.py)
 
-    def compose(self, chat: int, text: str, incident: int | None = None, to=None) -> str:
-        """`text` under its heading; `to`: the role (or roles) it is for (layout.py lays the parts out)."""
-        from .layout import parts, render
-        return render(parts(body=text, head=self.heading(chat, incident, to)))
-
     def record(self, incident: int, stage: str | None, sent: list[tuple[int, object]], at: datetime | None = None) -> None:
         """A notice about `incident` went to `sent` — (chat, the role or roles it was for) — one result's messages being one
         notice: its history line. `stage` unset: "new" for the first, "update" after."""

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.138 (10 October 2026)
+
+Architecture review 21, all seven points:
+- incident_thread: a copy is recorded shown only when Telegram took the edit (`_show`); one refused is `owed` and retried by `catch_up` from housekeeping, OWED_TRIES (12) times; `settled` stays the decision. telegram.edit: "message is not modified" is shown; a photo's or a file's message is edited through editMessageCaption.
+- approvals: resume ends every "approved" decided before this process started (Approvals.started, no 2-minute guard) and settles a decided request whose copies still carry buttons; ask records a request no chat received "undelivered" (state.undeliver_approval; STATES row); STATES gains the note column (approvals.note / toast) — actions.decide returns the state, never words.
+- outcome's siren gate: a request no owner chat took is said as the warning with "The siren cannot be requested", to the fm chats when no owner chat takes it either.
+- Policy.may_approve_in(chat, role): the approver chats of an owner request leave out a group listed for both roles; Policy.member names a listed person as `name_in` (one name per chat; app's alert press uses it).
+- chat_jobs: a job asked for in a chat is recorded (state.chat_job) and kept when cut by a stop; ChatJobs.recover at start says so in its waiting message. scheduler: a scheduled run is recorded (state.job_running) and a run cut by a stop may claim its slot once more (state.jobs_cut).
+- app._press_report keeps the answer whole (parts, not layout.legacy); removed Notices.compose, Outcome.send, the outcome re-export of the record words; stale comments.
+- Tests: tests/helpers.restarted (a new agent on the same records, through start()); tests/test_recorded_is_shown.py; FakeTelegram refuses edits ({"edit"}) or one chat ({"blocked 111"}); 16 mutants, each red.
+
 ## 0.6.137 (10 October 2026)
 
 Architecture review 20, all seven points:

@@ -26,25 +26,37 @@ log = logging.getLogger("vesta.approvals")
 FOLLOW_EVERY_S, FOLLOW_FOR_S = 5, 90
 #: How far back the AI is told of decided requests (the waiting ones, whatever their age, until they expire).
 DECIDED_FOR = timedelta(hours=2)
-EXPIRED = "Expired on {time}: nothing was done."
-#: A request "approved" this long ago with no outcome recorded: the agent stopped while carrying it out (resume ends it).
-STUCK_AFTER = timedelta(minutes=2)
 
-#: ⚠️ ONE TABLE OF A REQUEST'S STATES (architecture review 20): their words were written in four places and "failed" meant
-#: three things — the villa's rules refused it at the press (nothing tried), Home Assistant refused it, or the device never
-#: got there — told to the AI as "failed by JM". state → (what the AI is told, after "by <name> on <time>"; the press's
-#: toast when it comes after this state).
-STATES: dict[str, tuple[str, str]] = {
-    "pending": ("waiting for approval", "Still waiting."),
-    "approved": ("approved, its result not recorded yet", "Already approved."),
-    "moving": ("approved; the device was still on its way", "Already approved: on its way."),
-    "done": ("approved, and done", "Already approved and done."),
-    "failed": ("approved, but it did not happen", "Already approved; it did not happen."),
-    "blocked": ("pressed, but the villa's rules no longer allowed it: nothing was tried", "No longer allowed."),
-    "refused": ("refused", "Already refused."),
-    "expired": ("expired: nobody answered in time", "Expired. Ask again."),
-    "unknown": ("approved; the agent restarted before it could see the result", "Already approved."),
+_APPROVED = "Approved by {by} on {time}."
+#: ⚠️ ONE TABLE OF A REQUEST'S STATES (architecture review 20, 21): their words were written in four places and "failed"
+#: meant three things — the villa's rules refused it at the press (nothing tried), Home Assistant refused it, or the device
+#: never got there — told to the AI as "failed by JM"; then the notes under the request were still written in actions.py
+#: and here, twice each. state → (what the AI is told, after "by <name> on <time>"; the press's toast when it comes after
+#: this state; the note every copy shows under its line — `note()`).
+STATES: dict[str, tuple[str, str, str]] = {
+    "pending": ("waiting for approval", "Still waiting.", ""),
+    "approved": ("approved, its result not recorded yet", "Already approved.", _APPROVED),
+    "moving": ("approved; the device was still on its way", "Already approved: on its way.", _APPROVED),
+    "done": ("approved, and done", "Already approved and done.", _APPROVED),
+    "failed": ("approved, but it did not happen", "Already approved; it did not happen.", _APPROVED),
+    "blocked": ("pressed, but the villa's rules no longer allowed it: nothing was tried", "No longer allowed.",
+                "No longer allowed: {why}."),
+    "refused": ("refused", "Already refused.", "Refused by {by} on {time}. Nothing was done."),
+    "expired": ("expired: nobody answered in time", "Expired. Ask again.", "Expired on {time}: nothing was done."),
+    "unknown": ("approved; the agent restarted before it could see the result", "Already approved.", _APPROVED),
+    # nobody received it (architecture review 21): never "waiting" — no chat had its buttons
+    "undelivered": ("never delivered: no chat received it, nothing is waiting", "Never delivered.", ""),
 }
+
+
+def note(state: str, by: str = "", why: str = "", time: str = "{time}") -> str:
+    """What every copy of a request says under its line once it is in `state` ("{time}": now, filled when shown)."""
+    return STATES[state][2].format(by=by or "someone", why=why or "the villa's rules changed", time=time)
+
+
+def toast(state: str) -> str:
+    """The press's answer when the request is already in `state`."""
+    return STATES.get(state, ("", f"Already {state}.", ""))[1]
 
 
 def approval_thread(approval_id: str) -> str:
@@ -57,8 +69,10 @@ class Approvals:
     def __init__(self, *, state, policy: Callable, actions, thread, post: Callable[..., Awaitable], timezone_name: str,
                  safe: Callable[[Awaitable], Awaitable]):
         self.state, self.policy, self.actions, self.thread = state, policy, actions, thread
-        self.post = post                # outcome.Outcome._post: the one way a message is put in a chat
+        self.post = post                # posting.Poster.post: the one way a message is put in a chat
         self.tz, self._safe = timezone_name, safe
+        # a request "approved" before this moment, still without its outcome, was cut by a stop (resume)
+        self.started = datetime.now(timezone.utc)
         self._watching: set[asyncio.Task] = set()
 
     # ------------------------------------------------------------------ asked and shown
@@ -67,6 +81,10 @@ class Approvals:
         thread: a press in one settles them all. `head`: why it is asked (the intrusion), kept when the body changes.
         Returns how many chats have it.
 
+        ⚠️ NONE IS "UNDELIVERED", NEVER "WAITING" (architecture review 21): recorded pending before the sends, a request
+        no chat received was told to the AI as waiting until it expired — "it is waiting for your approval", no button
+        anywhere.
+
         ⚠️ THE ALERTS' MECHANISM, NOT A SECOND ONE (owner, 2026-10-10): its copies are kept and settled as an incident's
         are (incident_thread.py), under the heading every message of the agent's carries — in the asking chat too."""
         n = 0
@@ -74,6 +92,9 @@ class Approvals:
             if await self.post(chat, msg.text, status=msg.status, lead=head, roles={msg.to} if msg.to else (),
                                keyboard=msg.keyboard, thread=approval_thread(msg.approval_id), origin=origin):
                 n += 1
+        if not n:
+            self.state.undeliver_approval(msg.approval_id)
+            log.warning("approval %s: no chat received it", msg.approval_id)
         return n
 
     def shown_in(self, approval_ids, chat: int) -> bool:
@@ -93,13 +114,13 @@ class Approvals:
         out = await asyncio.to_thread(self.actions.decide, aid, p.presser, yn == "y", chat=p.chat,
                                       name=p.q.get("from_first"))
         await p.toast(out["toast"])
-        if not out.get("note"):
+        if not out.get("state"):
             return
         if p.mid and p.chat not in self.thread.shown(key):
             # a request sent before 0.12.128 has no thread: the pressed message is its one copy
             from .layout import legacy
             await self.thread.post(key, p.chat, int(p.mid), legacy(str(p.msg.get("text") or "")), buttons=True)
-        await self.thread.close(key, out["note"], out.get("body"))
+        await self.thread.close(key, note(out["state"], out.get("by", ""), out.get("why", "")), out.get("body"))
         if out.get("follow"):
             self._watch(aid, out["follow"])
 
@@ -132,15 +153,19 @@ class Approvals:
         self.state.finish_approval(aid, status, {"ok": status == "done", "text": body})
         await self.thread.rewrite(approval_thread(aid), body)
 
-    async def resume(self, now: datetime | None = None) -> None:
+    async def resume(self) -> None:
         """At start: a request still "moving" (its device was being followed when the agent stopped) is followed again —
-        never left saying "Opening…" for good; one "approved" for minutes with no outcome (the agent stopped while carrying
-        it out) is ended by reading its device now, or said unknown (architecture review 20)."""
-        now = now or datetime.now(timezone.utc)
+        never left saying "Opening…" for good; one "approved" before this start with no outcome (the agent stopped while
+        carrying it out) is ended by reading its device now, or said unknown (architecture review 20); one decided whose
+        copies still carry their buttons says so in every chat.
+
+        ⚠️ WHENEVER IT WAS APPROVED (architecture review 21): only a request approved more than 2 minutes before was
+        ended — one approved in the seconds before an update came back 40 s later, under that limit, and nothing looks
+        again: its buttons stayed for good. Before this start, no one can still be carrying it out."""
         for ap in self.state.approvals_in("moving"):
             self._watch(ap["id"], self._decision(ap))
         for ap in self.state.approvals_in("approved"):
-            if ap.get("decided_at") and now - datetime.fromisoformat(ap["decided_at"]) > STUCK_AFTER:
+            if ap.get("decided_at") and datetime.fromisoformat(ap["decided_at"]) < self.started:
                 # its copies may still carry the buttons (the press stopped before them): who approved it, and what is
                 # known now — the device in the state asked for is done, anything else is said unknown, never "failed"
                 body = await asyncio.to_thread(self.actions.recheck, self._decision(ap))
@@ -148,7 +173,15 @@ class Approvals:
                 said = body or "The agent restarted before it could see the result: check the device."
                 self.state.finish_approval(ap["id"], status, {"ok": bool(body), "text": said})
                 await self.thread.close(approval_thread(ap["id"]),
-                                        f"Approved by {ap.get('decided_name') or 'someone'} on {self._at(ap['decided_at'])}.", said)
+                                        note(status, ap.get("decided_name"), time=self._at(ap["decided_at"])), said)
+        # decided, but stopped before its copies said so (the press's own task cut by the stop): they say it now, their
+        # buttons gone — a copy already settled is left as it is (IncidentThread.close)
+        for ap in self.state.approvals_decided_since((self.started - timedelta(days=1)).isoformat()):
+            if ap["status"] in ("approved", "moving", "undelivered") or not ap.get("decided_at"):
+                continue
+            key = approval_thread(ap["id"])
+            if any(r.get("buttons") and not r.get("settled") for r in self.thread.shown(key).values()):
+                await self.thread.close(key, note(ap["status"], ap.get("decided_name"), time=self._at(ap["decided_at"])))
 
     @staticmethod
     def _decision(ap: dict) -> Decision:
@@ -165,7 +198,7 @@ class Approvals:
         n = 0
         for ap in self.state.approvals_in("pending"):
             if datetime.fromisoformat(ap["expires_at"]) <= now and self.state.expire_approval(ap["id"]):
-                await self.thread.close(approval_thread(ap["id"]), EXPIRED)
+                await self.thread.close(approval_thread(ap["id"]), note("expired"))
                 n += 1
         return n
 

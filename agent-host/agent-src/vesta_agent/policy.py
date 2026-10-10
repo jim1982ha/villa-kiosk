@@ -235,10 +235,26 @@ class Policy:
             return p
         role = "fm" if "fm" in roles else "owner"
         if p is not None:
-            return p if p.role == role else Person(p.telegram_id, p.name, role, p.language)
+            # ⚠️ NAMED AS THIS CHAT KNOWS THEM (architecture review 21): listed twice (JM_O, JM_FM), a person pressing in
+            # a group of the facility manager's read "Done pressed by JM_FM" on an alert and "Approved by JM_O" on a
+            # request — the name of a role they did not have there. One name, `name_in`'s, for every press and record
+            name = self.name_in(p.telegram_id, chat_id) or p.name
+            return p if (p.role, p.name) == (role, name) else Person(p.telegram_id, name, role, p.language)
         group = next((e for e in self.entries if e.telegram_id == int(chat_id) and e.role == role), None)
         return Person(int(telegram_id), (name or "").strip() or f"a member of {group.name if group else 'the group'}",
                       role, group.language if group else "en")
+
+    def may_approve_in(self, chat_id: int, required_role: str | None) -> bool:
+        """Can someone acting in `chat_id` approve a request that needs `required_role`? The rule of `member`: a private
+        chat is its person's role; a listed group, its role for everyone in it — the facility manager's when listed for
+        both. Where a request's buttons go (routing.approver_chats) and who may press them (actions.decide) are this one
+        answer (architecture review 21: an owner's request reached a group listed for both, where "Only the owner can
+        approve this." answered every press)."""
+        if int(chat_id) < 0:
+            roles = self.roles_in(chat_id)
+            return bool(roles) and self.role_can_approve("fm" if "fm" in roles else "owner", required_role)
+        p = self.person(chat_id)
+        return p is not None and self.role_can_approve(p.role, required_role)
 
     def knows_chat(self, chat_id: int) -> bool:
         """Is this a chat of the People list: a listed group, or the private chat of a listed person?"""

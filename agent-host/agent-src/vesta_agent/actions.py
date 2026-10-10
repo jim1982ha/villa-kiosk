@@ -168,8 +168,9 @@ class Actions:
                     f"Result: {result['text']}"), None
         targets = Routing(policy).approver_chats(d.required_role, origin_chat)
         if d.required_role == "owner" and not targets:
-            self.state.log("refused", dict(base, reason="no owner in People"))
-            return "Refused: nobody is listed as owner in People.", None
+            self.state.log("refused", dict(base, reason="no chat where the owner can approve"))
+            return ("Refused: no chat in People where the owner can approve it (an owner's private chat, or a group "
+                    "listed for the owner only; a group listed for both roles acts as the facility manager)."), None
         if not targets:
             self.state.log("refused", dict(base, reason="no chat to ask in"))
             return "Refused: no chat to ask in.", None
@@ -193,36 +194,36 @@ class Actions:
     # ------------------------------------------------------------------ decide
     def decide(self, aid: str, presser_id: int | None, approve: bool, now: datetime | None = None,
                chat: int | None = None, name: str | None = None) -> dict:
-        """Returns {'toast': str for the presser only, 'note': str or None, 'executed': bool}. `note` is what every copy of
-        the request then says under it, its buttons gone ("{time}": the villa's time, filled by IncidentThread.close)."""
+        """Returns {'toast': str for the presser only, 'state': the request's new state or None when the press changed
+        nothing, 'by': who decided, 'why': what the rules said, 'executed': bool} — and once approved its 'body' (what
+        happened) and 'follow' (a device still on its way). The words every copy then shows are approvals.note's."""
         now = now or datetime.now(timezone.utc)
         policy = self.policy_loader()
         person = policy.member(presser_id, chat, name)        # pressed in a listed group: its role (policy.member)
         ap = self.state.approval(aid)
         if not ap:
             self.state.log("press_refused", {"approval": aid, "by": presser_id, "reason": "unknown id"})
-            return {"toast": "This request does not exist.", "note": None, "executed": False}
+            return {"toast": "This request does not exist.", "state": None, "executed": False}
         if person is None:
             self.state.log("press_refused", {"approval": aid, "by": presser_id, "reason": "not a registered person or anonymous"})
-            return {"toast": NOT_REGISTERED, "note": None, "executed": False}
+            return {"toast": NOT_REGISTERED, "state": None, "executed": False}
+        from .approvals import toast                         # one table of a request's states and their words
         if ap["status"] != "pending":
-            from .approvals import STATES                    # one table of a request's states and their words
-            return {"toast": STATES.get(ap["status"], ("", f"Already {ap['status']}."))[1], "note": None, "executed": False}
+            return {"toast": toast(ap["status"]), "state": None, "executed": False}
         if datetime.fromisoformat(ap["expires_at"]) < now:
-            self.state.expire_approval(aid)
+            expired = self.state.expire_approval(aid)
             self.state.log("press_refused", {"approval": aid, "by": presser_id, "reason": "expired"})
-            return {"toast": "Expired. Ask again.", "note": "Expired on {time}: nothing was done.", "executed": False}
+            return {"toast": toast("expired"), "state": "expired" if expired else None, "executed": False}
         if not policy.role_can_approve(person.role, ap["required_role"]):
             self.state.log("press_refused", {"approval": aid, "by": presser_id, "reason": f"role {person.role}"})
             return {"toast": "Only the owner can approve this." if ap["required_role"] == "owner" else "You cannot approve this.",
-                    "note": None, "executed": False}
+                    "state": None, "executed": False}
         act = ap["action"]
         if not approve:
             if self.state.claim_approval(aid, "refused", person.telegram_id, now, name=person.name):
                 self.state.log("refused_by_person", {"approval": aid, "by": person.name})
-                return {"toast": "Refused.", "note": f"Refused by {person.name} on {{time}}. Nothing was done.",
-                        "executed": False}
-            return {"toast": "Already decided.", "note": None, "executed": False}
+                return {"toast": "Refused.", "state": "refused", "by": person.name, "executed": False}
+            return {"toast": "Already decided.", "state": None, "executed": False}
         # the policy may have changed since the request: check again, and the action must be the one approved
         d = self._wrap_check(policy, policy.check_service(act["domain"], act["service"], act["entity_ids"], act["data"]))
         if not d.allowed or d.action_hash() != ap["action_hash"] or \
@@ -230,22 +231,23 @@ class Actions:
             # "blocked", never "failed" (architecture review 20): nothing was tried — the AI is told so
             self.state.claim_approval(aid, "blocked", person.telegram_id, now, name=person.name)
             self.state.log("press_refused", {"approval": aid, "by": presser_id, "reason": d.reason or "action changed"})
-            return {"toast": "Refused by the villa's rules.", "note": f"No longer allowed: {d.reason or 'the action changed'}.",
+            return {"toast": "Refused by the villa's rules.", "state": "blocked", "why": d.reason or "the action changed",
                     "executed": False}
         if not policy.role_can_approve(person.role, d.required_role):
-            return {"toast": "Only the owner can approve this.", "note": None, "executed": False}
+            return {"toast": "Only the owner can approve this.", "state": None, "executed": False}
         if not self.state.claim_approval(aid, "approved", person.telegram_id, now, name=person.name):
-            return {"toast": "Already decided.", "note": None, "executed": False}
+            return {"toast": "Already decided.", "state": None, "executed": False}
         self.state.log("approved", {"approval": aid, "by": person.name, "role": person.role})
         result = self.execute(d)
         # the body says what happened, the status who approved it and when (owner, 2026-10-10). A device still on its way
         # is recorded "moving", never "failed" (architecture review 19: the AI read "failed" for a curtain that opened):
         # approvals.Approvals follows it and writes the one verdict — done or failed — with the message's last words
         moving = bool(result.get("unconfirmed")) and VERB.get(d.service) in PROGRESS
-        self.state.finish_approval(aid, "moving" if moving else "done" if result["ok"] else "failed", result)
-        toast = "Done." if result["ok"] else "Approved: on its way." if moving else \
+        state = "moving" if moving else "done" if result["ok"] else "failed"
+        self.state.finish_approval(aid, state, result)
+        said = "Done." if result["ok"] else "Approved: on its way." if moving else \
             "Home Assistant refused it." if result.get("failed") else "Sent, not confirmed."
-        return {"toast": toast, "note": f"Approved by {person.name} on {{time}}.",
+        return {"toast": said, "state": state, "by": person.name,
                 "body": done_words(d, self.names, result, settled=not moving), "executed": True, "result": result,
                 "follow": d if moving else None}
 

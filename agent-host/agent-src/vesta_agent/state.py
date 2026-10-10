@@ -78,6 +78,8 @@ KV_FAMILIES: dict[str, str] = {
     "saved_by_model:": RECORDS,     # a file the AI saved (its run folder is deleted with the out folder's files)
     "owner_told:": RECORDS,         # when the owner was last told of a problem (a 12-hour pause)
     "job:": CURRENT,                # a scheduled job's last slot: the Overview's "last run", one per job
+    "jobrun:": CURRENT,             # a scheduled run in progress: one left at start was cut by a stop (scheduler.py)
+    "chatjob:": CURRENT,            # a job asked for in a chat, in progress: one left at start was cut (chat_jobs.py)
     "siren:": CURRENT,              # when the siren must stop
     "listening_since": CURRENT,     # when the agent's record started (agent_records.listening_since)
     "unreachable:": CURRENT,        # a chat Telegram refused the last message to (the Overview names it)
@@ -193,6 +195,36 @@ class State:
             self.db.commit()
             return True
 
+    def job_running(self, job: str, slot_iso: str | None) -> None:
+        """A scheduled run of `job` for `slot_iso` started (None: it ended, however) — scheduler.Scheduler."""
+        if slot_iso:
+            self.put(f"jobrun:{job}", slot_iso)
+        else:
+            self.drop(f"jobrun:{job}")
+
+    def jobs_cut(self) -> dict[str, str]:
+        """{job: slot} of the scheduled runs a stop cut (still recorded running), read once at start and cleared."""
+        cut = {k[len("jobrun:"):]: v for k, v in self.kv_prefix("jobrun:").items()}
+        for k in cut:
+            self.drop(f"jobrun:{k}")
+        return cut
+
+    def chat_job(self, chat: int, name: str, record: dict | None) -> None:
+        """A job asked for in `chat` runs (`record`: when it started, its waiting message) — None: it ended (chat_jobs)."""
+        if record is None:
+            self.drop(f"chatjob:{chat}:{name}")
+        else:
+            self.put(f"chatjob:{chat}:{name}", json.dumps(record))
+
+    def chat_jobs_cut(self) -> list[tuple[int, str, dict]]:
+        """(chat, job, record) of the jobs asked for in a chat that a stop cut, read once at start and cleared."""
+        out = []
+        for k, v in self.kv_prefix("chatjob:").items():
+            _fam, chat, name = k.split(":", 2)
+            out.append((int(chat), name, json.loads(v)))
+            self.drop(k)
+        return out
+
     def jobs_run(self) -> list[tuple[str, str]]:
         """(job, last slot) for every scheduled job, oldest slot first."""
         return sorted(((k[len("job:"):], v) for k, v in self.kv_prefix("job:").items()), key=lambda kv: kv[1])
@@ -226,6 +258,16 @@ class State:
     def incident_chats(self, incident: int | str) -> list[tuple[int, dict]]:
         """(chat, record) of every chat this incident's message is shown in."""
         return sorted((int(k.rsplit(":", 1)[1]), json.loads(v)) for k, v in self.kv_prefix(f"incthread:{incident}:").items())
+
+    def incident_messages_owed(self) -> list[tuple[str, int, dict]]:
+        """(incident, chat, record) of every copy Telegram did not take the last change of (incident_thread.catch_up)."""
+        out = []
+        for k, v in self.kv_prefix("incthread:").items():
+            if '"owed": true' in v:                   # most records are not: read only those
+                _fam, rest = k.split(":", 1)
+                iid, chat = rest.rsplit(":", 1)
+                out.append((int(iid) if iid.isdigit() else iid, int(chat), json.loads(v)))
+        return out
 
     def _migrate_incident_messages(self) -> None:
         """Records of 0.12.106–0.12.114 (incmsg: with the buttons, inclast: the latest message) into one record per
@@ -402,9 +444,16 @@ class State:
     def expire_approval(self, aid: str) -> bool:
         """A pending request past its time is expired — once: False when a press claimed it first (architecture review
         20: the expiry wrote "nothing was done" on a request a press had just carried out)."""
+        return self._end_pending(aid, "expired")
+
+    def undeliver_approval(self, aid: str) -> bool:
+        """A pending request no chat received ends "undelivered" (approvals.Approvals.ask): nothing waits for it."""
+        return self._end_pending(aid, "undelivered")
+
+    def _end_pending(self, aid: str, status: str) -> bool:
         with self._lock:
-            cur = self.db.execute("update approvals set status='expired', decided_at=? where id=? and status='pending'",
-                                  (utcnow().isoformat(), aid))
+            cur = self.db.execute("update approvals set status=?, decided_at=? where id=? and status='pending'",
+                                  (status, utcnow().isoformat(), aid))
             self.db.commit()
             return cur.rowcount == 1
 

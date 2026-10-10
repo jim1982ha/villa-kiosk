@@ -16,7 +16,7 @@ A skill script prints its decision in the standard form; this module does it:
               telegram_sent events, same context) are rewritten as `text` and become the incident's messages
 
 ⚠️ ONE MESSAGE PER INCIDENT PER CHAT (owner, 2026-10-09). A message with an incident_id replaces that incident's
-earlier messages in its chat (alert_buttons.AlertButtons.replace), whoever sent them; two messages of one result
+earlier messages in its chat (incident_thread.IncidentThread.post), whoever sent them; two messages of one result
 for the same incident and chat (the owner and the FM sharing a chat) send only one — the one with the buttons.
 
 ⚠️ ONE PATH FOR EVERY CALLER (owner, 2026-10-01). Before, only the scheduler and the
@@ -38,7 +38,6 @@ from typing import Awaitable, Callable
 from . import layout
 from .posting import Poster
 from .routing import Origin, Routing
-from .outcome_words import clean_summary, ticket_title  # noqa: F401 — the words of a record, shared with tickets.py
 
 
 #: How long Home Assistant's telegram_sent may trail its own vesta_critical_event (both come from one run, the
@@ -74,7 +73,6 @@ class Outcome:
                  thread, notices=None, out_dir: str = "", timezone_name: str = "UTC", poster=None, ask=None):
         self.policy = policy
         self.state = state
-        self.send = send                # delivery.Delivery.send — the message id, or None when nothing arrived
         self.actions = actions
         self.reader = reader
         self.tickets = tickets          # tickets.Tickets: ticket, ticket.resolve
@@ -84,7 +82,8 @@ class Outcome:
         self.out_dir = out_dir
         # an approval request is approvals.Approvals' (the siren's gate asks through it), handed in at construction
         self.ask: Callable[..., Awaitable[int]] | None = ask
-        # putting one message in one chat (posting.py), shared with the approvals; built from the parts above when alone
+        # putting one message in one chat (posting.py), shared with the approvals; built from `send` (delivery.Delivery.send)
+        # and the parts above when alone
         self.poster = poster or Poster(send=send, thread=thread, notices=notices, timezone_name=timezone_name)
 
     # ------------------------------------------------------------------ carry out
@@ -167,12 +166,17 @@ class Outcome:
                                                   pol.siren_entity, {}, None, None)
             if msg and self.ask is None:
                 answer, msg = "no way to ask for an approval here (Outcome built without the approvals)", None
-            if msg:
-                await self.ask(msg, head=gate_prompt, origin=origin)
-            else:
+            # ⚠️ THE INTRUSION IS SAID, WHATEVER BECOMES OF THE REQUEST (architecture review 21): its words travel only as
+            # the siren request's lead — a request no owner chat received showed them nowhere
+            if msg and not await self.ask(msg, head=gate_prompt, origin=origin):
+                answer, msg = "no chat of the owner's received the request", None
+            if not msg:
+                said, told = f"The siren cannot be requested: {answer}", 0
                 for chat in route.target("owner"):
-                    await self.poster.post(chat, gate_prompt, status=f"The siren cannot be requested: {answer}", roles={"owner"},
-                                     origin=origin)
+                    told += bool(await self.poster.post(chat, gate_prompt, status=said, roles={"owner"}, origin=origin))
+                if not told:
+                    for chat in route.target("fm"):          # no chat of the owner's has it: the facility manager's do
+                        await self.poster.post(chat, gate_prompt, status=said, roles={"fm"}, origin=origin)
         for a in res.get("actions") or []:
             kind = (a or {}).get("action")
             try:

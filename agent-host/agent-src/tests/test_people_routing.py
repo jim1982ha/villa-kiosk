@@ -47,27 +47,35 @@ def test_a_message_for_a_role_reaches_every_chat_of_it_once_under_its_heading(tm
     assert sorted(c for c, _, _ in v.tg.sent) == sorted([JM, FABIEN, GROUP])     # for both roles: once per chat
 
 
-def test_an_approval_for_the_owner_reaches_every_owner_chat_and_one_press_settles_them_all(tmp_path):
+def test_an_approval_for_the_owner_reaches_every_chat_where_the_owner_can_press_and_one_press_settles_them_all(tmp_path):
     v = make_agent(tmp_path, {"people": PEOPLE, "act_enabled": True, "allowed_services": {"light.turn_on": "owner"}})
     answer, msg = v.actions.request("light", "turn_on", "light.pool", {}, None, None)
-    assert msg and msg.chats == [FABIEN, JM, GROUP]
-    assert run(v.outcome.ask(msg)) == 3
+    # architecture review 21: never the group listed for both roles — everyone there acts as its Facility manager
+    # (owner, 2026-10-10), so its buttons only answered "Only the owner can approve this."
+    assert msg and msg.chats == [FABIEN, JM]
+    assert run(v.outcome.ask(msg)) == 2
     aid = msg.approval_id
-    in_group = next(n for n, (c, _t, _k) in enumerate(v.tg.sent, start=1001) if c == GROUP)
-    press = {"id": "cb1", "data": button_data.make(button_data.APPROVAL, aid, "n"), "chat_id": GROUP, "user_id": FABIEN,
-             "message": {"message_id": in_group, "chat": {"id": GROUP}, "text": msg.text}, "bot": BOT}
-    # in the group, listed for both roles, everyone is its Facility manager (owner, 2026-10-10): the owner's approval
-    # is not theirs to give there
-    run(v.on_ha_event("telegram_callback", press))
-    assert v.tg.edits == [] and v.tg.toasts[-1][1] == "Only the owner can approve this."
-    # in his own private chat Fabien is the Owner he is listed as
     in_private = next(n for n, (c, _t, _k) in enumerate(v.tg.sent, start=1001) if c == FABIEN)
-    press = {**press, "id": "cb2", "chat_id": FABIEN, "message": {"message_id": in_private, "chat": {"id": FABIEN}, "text": msg.text}}
-    run(v.on_ha_event("telegram_callback", press))
+    press = {"id": "cb2", "data": button_data.make(button_data.APPROVAL, aid, "n"), "chat_id": FABIEN, "user_id": FABIEN,
+             "message": {"message_id": in_private, "chat": {"id": FABIEN}, "text": msg.text}, "bot": BOT}
+    run(v.on_ha_event("telegram_callback", press))            # in his own private chat Fabien is the Owner he is listed as
     # every copy, in every chat, says who refused and when — its buttons gone (one mechanism: incident_thread.py)
-    assert sorted(c for c, _, _ in v.tg.edits) == sorted([FABIEN, JM, GROUP])
+    assert sorted(c for c, _, _ in v.tg.edits) == sorted([FABIEN, JM])
     assert all(re.search(r"\n-------\nRefused by Fabien_O on \d\d/\d\d/\d{4} \d\d:\d\d\. Nothing was done\.$", t)
                for _, _, t in v.tg.edits)
+
+
+def test_a_group_listed_for_both_roles_cannot_press_an_owners_request(tmp_path):
+    # the rule where the buttons go and the rule who may press them are one answer (Policy.may_approve_in)
+    pol = Policy({"people": PEOPLE})
+    assert not pol.may_approve_in(GROUP, "owner") and pol.may_approve_in(GROUP, "any")
+    assert pol.may_approve_in(JM, "owner") and pol.may_approve_in(FABIEN, "owner")
+    rows = [{"telegram_id": GROUP, "name": "Group_O", "role": "owner"}, {"telegram_id": GROUP, "name": "Group_FM", "role": "fm"}]
+    from vesta_agent.routing import Routing
+    assert Routing(Policy({"people": rows})).approver_chats("owner", None) == []
+    v = make_agent(tmp_path, {"people": rows, "act_enabled": True, "allowed_services": {"light.turn_on": "owner"}})
+    answer, msg = v.actions.request("light", "turn_on", "light.pool", {}, None, None)
+    assert msg is None and answer.startswith("Refused: no chat in People where the owner can approve it")
 
 
 def test_an_older_files_chats_still_route_and_the_page_moves_them_into_people(tmp_path):
@@ -152,8 +160,7 @@ def test_the_agents_own_approvals_and_warnings_carry_the_heading_in_every_chat(t
                               "allowed_services": {"light.turn_on": "owner", "cover.open_cover": "any"}})
     _, msg = v.actions.request("light", "turn_on", "light.pool", {}, None, None)
     run(v.outcome.ask(msg))
-    assert {c: t.split("\n")[0] for c, t, _ in v.tg.sent} == {FABIEN: "For: Fabien_O", JM: "For: JM_O",
-                                                              GROUP: "For: Fabien_O, JM_O"}
+    assert {c: t.split("\n")[0] for c, t, _ in v.tg.sent} == {FABIEN: "For: Fabien_O", JM: "For: JM_O"}
     v.tg.sent.clear()
     _, msg = v.actions.request("cover", "open_cover", "cover.pool", {}, v.policy().person(JM), JM)
     run(v.outcome.ask(msg))
@@ -453,7 +460,9 @@ def test_who_acts_with_which_role_is_one_answer_everywhere(chat, who, known_as, 
     got = intake.gate("telegram_text", {"chat_id": chat, "user_id": who, "text": "@bot hi"}, pol, "bot", lambda *a: False)
     assert (got.person.role if got.action == "converse" else None) == acts
     assert pol.knows_chat(chat) is bool(acts)
-    assert Routing(pol).approver_chats("any", chat) == ([chat] if acts else pol.chats_for("owner"))
+    assert Routing(pol).approver_chats("any", chat) == ([chat] if acts else [FABIEN, JM])
+    # where an owner's request goes is where someone acting there may approve it (architecture review 21)
+    assert pol.may_approve_in(chat, "owner") is (acts == "owner")
 
 
 def _press(v, msg, yn="y", chat=JM, who=JM):
@@ -492,18 +501,6 @@ def test_a_decision_on_a_request_asked_hours_ago_is_told_to_the_ai(tmp_path):
     aid = v.state.new_approval({"plain": "Open Bedroom3 Curtain?"}, "h", "any", JM, JM, 300, now=t0)
     v.state.claim_approval(aid, "refused", JM, name="JM")
     assert "- Open Bedroom3 Curtain? — refused (by JM on " in v.approvals.now()
-
-
-def test_an_approval_left_half_done_by_a_restart_is_ended(tmp_path):
-    from datetime import datetime, timedelta, timezone
-    v = _curtain_villa(tmp_path, ["open"])
-    _, msg = v.actions.request("cover", "open_cover", "cover.bedroom3", {}, v.policy().person(JM), JM)
-    run(v.approvals.ask(msg))
-    v.state.claim_approval(msg.approval_id, "approved", JM, name="JM")          # the agent stopped right here
-    run(v.approvals.resume(now=datetime.now(timezone.utc) + timedelta(minutes=5)))
-    assert v.state.approval(msg.approval_id)["status"] == "done"                # the curtain reads open: done
-    (_, _, text), = v.tg.edits
-    assert "\n-------\nApproved by JM on " in text and "Opened " in text     # its buttons gone, what happened said
 
 
 def test_expiry_never_overrides_a_press_that_came_first(tmp_path):

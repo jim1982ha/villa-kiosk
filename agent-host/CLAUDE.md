@@ -236,13 +236,13 @@ Decisions of 2026-09-30 (owner):
 - People is the one list of where the agent posts (owner, 2026-10-10, 0.12.128): a message for a role goes to every
   chat listed with it (`Policy.chats_for`; a group is a negative id, a destination and never a person). The Chats card
   is gone; an older `chats:` is still read and moved into People by the page's next save. Every message leaves through
-  `outcome.carry_out` (the AI's send_message too), every approval through `Outcome.ask` (copies kept as one
+  `outcome.carry_out` (the AI's send_message too), every approval through `Approvals.ask` (copies kept as one
   IncidentThread, settled together). Rights per chat: a private chat is the person's role, a group listed for fm is fm.
   0.12.129: a listed group's MEMBERS inherit its role (`Policy.member`, the narrower when listed for both; 0.12.134:
   listed people too, whatever their own row — their row is their private chat) — the
   intake, a press and an approval's decide ask `member`, never `person`. A copy carries every role it went to its chat
-  for (`outcome._deliveries` merges them); `Outcome._post` is the one way a copy is put in a chat (heading, send,
-  thread). An unreadable policy.yaml keeps the last good rules; the siren's stop records the siren it turned on.
+  for (`outcome._deliveries` merges them); `posting.Poster.post` is the one way a copy is put in a chat (heading,
+  send, thread). An unreadable policy.yaml keeps the last good rules; the siren's stop records the siren it turned on.
 - Review 19, 0.12.142 (2026-10-10): `layout.py` is a message's layout — head / lead / body / status, kept as PARTS in the
   thread's record and rendered; nothing re-cuts a sent text (`layout.legacy` reads a record from before, once). A skill
   gives the status apart (`result.message(status=)`; the alert desk's `about()` returns text + status).
@@ -259,6 +259,13 @@ Decisions of 2026-09-30 (owner):
   their time; `expire_approval` claims once; resume ends a request left "approved" by a stop. `layout.render` drops the
   head's oldest history first and never asks for a negative room. Tests press Approve through handle_callback and wait
   with `Approvals.idle()`.
+  Review 21, 0.12.144: what is RECORDED is what is SHOWN. A copy's record keeps `settled` (decided) apart from `owed`
+  (Telegram did not take the edit): `IncidentThread.catch_up` retries owed copies from housekeeping. `Approvals.resume`
+  ends everything decided before this process's start; `ask` with no copy ends "undelivered". `approvals.STATES` holds
+  the note under a request too (`note()`); `actions.decide` returns a state. Where an owner's request goes and who may
+  press it are one answer, `Policy.may_approve_in`. A chat job and a scheduled run are recorded while they run and taken
+  up at start (`ChatJobs.recover`, `Scheduler._cut`); a cancelled run keeps its record. `tests/helpers.restarted` stops
+  and starts a real agent on the same records.
 - No PDF (owner, 2026-09-30): the reports are self-contained HTML pages sent
   as attachments. Chromium was ~480 MB of a 1.1 GB image for this alone.
 - ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent

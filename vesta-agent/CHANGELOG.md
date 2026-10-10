@@ -1,3 +1,14 @@
+## 0.12.144
+
+What you will see (architecture review 21, every point):
+- A request approved in the seconds before an update or a restart is finished when the agent comes back: the device is read and every copy says what happened — its buttons never stay. Any decision whose messages had not changed yet when the agent stopped says so at the start too.
+- If Telegram does not take an update of a message (a short network cut), the agent tries again every few minutes, for about an hour: a chat no longer keeps Done / Need help, or Approve / Refuse, under something already decided. A message sent with a file or a photo is now updated too (it never was).
+- A request that reached no chat is never told as "waiting for approval": the agent knows it was never delivered. During an intrusion, if no chat of the owner's receives the siren request, the "Intrusion suspected…" warning still goes out — to the facility manager's chats when no owner chat takes it.
+- A request only the owner can approve is no longer sent to a group listed for both roles: everyone there acts as Facility Manager, so its buttons only answered "Only the owner can approve this." It goes to the owner's own chat (or a group listed for the owner only).
+- A report asked for in a chat and cut by an update says so at the next start: "The weekly job asked for at … was stopped by a restart of the agent: ask again to have it." A scheduled report cut the same way runs again when the agent is back, within its half-hour window.
+- Someone listed twice in People under two names is named the same way on every button in one chat: the name that chat knows.
+- Behind the scenes: the words under a request are written in one table, unused code is gone, and the tests stop and start the agent in the middle of a press or a report.
+
 ## 0.12.143
 
 What you will see (architecture review 20, every point):

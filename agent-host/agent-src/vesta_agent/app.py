@@ -132,7 +132,7 @@ class Vesta:
         self.kiosk = kiosk if kiosk is not None else Kiosk(settings.kiosk_url, settings.kiosk_token, cf)
         # everything that reaches a chat, and whether it did (delivery.py)
         self.delivery = Delivery(self.tg, self.state, self.policy)
-        self.chat_jobs = ChatJobs(self.delivery, self._safe)     # a job asked for in a chat, start to end
+        self.chat_jobs = ChatJobs(self.delivery, self._safe, self.state, settings.timezone)     # a job asked for in a chat, start to end
         self.actions = Actions(self.policy, self.state, self.writer_factory, names=self.name_of, related=self.related_entities,
                                executed=lambda *a: self.siren.executed(*a))
         self.siren = Siren(self.policy, self.state, self.actions, self._tell_owner_text)
@@ -283,6 +283,8 @@ class Vesta:
         await self.refresh_server_tools()
         # a device still being followed when the agent stopped (an approved curtain): followed again (approvals.py)
         await self._safe(self.approvals.resume())
+        # a job asked for in a chat that the stop cut: its waiting message says so (chat_jobs.py)
+        await self._safe(self.chat_jobs.recover())
         for sk in self.skills.all().values():
             without = tool_access.unavailable(self.policy(), self.server_tools or None, sk)
             if without:
@@ -608,9 +610,8 @@ class Vesta:
         await self.converse(p.chat, p.person, "", resume=cont["session_id"], is_continue=True)
 
     async def _press_alert(self, p: "Press") -> None:
-        # the presser as this chat knows them (one person may be both owner and fm, each with its name)
-        await self.buttons.press(p.q, p.chat, p.parts, p.person, p.toast,
-                                 name=self.policy().name_in(p.person.telegram_id, p.chat) or p.person.name)
+        # the presser as this chat knows them (Policy.member: one person may be both owner and fm, each with its name)
+        await self.buttons.press(p.q, p.chat, p.parts, p.person, p.toast, name=p.person.name)
 
     async def _press_report(self, p: "Press") -> None:
         if not tool_access.may_start_job(self.policy(), self.server_tools, p.person, p.chat):
@@ -621,9 +622,10 @@ class Vesta:
         await p.toast(said)
         if p.mid:
             # the message itself says so, its buttons gone: a toast alone is easily missed ("nothing happened")
-            # where it stands, under the line at the bottom, as every update of a message (layout.py)
-            await self.delivery.edit(p.chat, p.mid, layout.render(layout.changed(layout.legacy(str(p.msg.get("text") or "")),
-                                                                                 status=said)))
+            # where it stands, under the line at the bottom, as every update of a message (layout.py). The answer the
+            # buttons came with is its body whole: an answer of the AI's, never cut apart at a line of its own (review 21)
+            await self.delivery.edit(p.chat, p.mid, layout.render(layout.parts(body=str(p.msg.get("text") or ""),
+                                                                               status=said)))
 
     async def _server_tools(self) -> list[dict]:
         """HA MCP's tool list, read again when the agent has none yet."""
@@ -659,6 +661,8 @@ class Vesta:
             await self._safe(self.tickets.repair())
         # a request for approval nobody answered says so, in every chat, and loses its buttons (approvals.py)
         await self._safe(self.approvals.expire())
+        # a copy Telegram did not take the last change of (a network blip): tried again (incident_thread.py)
+        await self._safe(self.thread.catch_up())
 
     # ------------------------------------------------------------------ the VESTA Agent page's requests
     async def on_request(self, req: dict) -> dict:

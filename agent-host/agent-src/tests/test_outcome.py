@@ -149,9 +149,11 @@ def test_the_routing_rule():
     assert r.target("owner") == [OWNER, GROUP]                             # 2. scheduled / alert: every chat of the role
     assert r.target("fm") == [ASKER, FM_PRIVATE, GROUP]
     assert r.target("fm", Origin(ASKER)) == [ASKER, FM_PRIVATE, GROUP]     #    whoever is being answered
-    assert r.approver_chats("owner", ASKER) == [OWNER, GROUP]              # 3. owner only: every owner chat
+    # 3. owner only: every owner chat where it can be pressed — not the group listed for both roles, where everyone
+    #    acts as the facility manager (architecture review 21: its buttons only answered "Only the owner can approve")
+    assert r.approver_chats("owner", ASKER) == [OWNER]
     assert r.approver_chats("any", ASKER) == [ASKER]                       #    otherwise where it was asked
-    assert r.approver_chats("any", -999) == [OWNER, GROUP]                 #    an unknown chat: the owner chats
+    assert r.approver_chats("any", -999) == [OWNER]                        #    an unknown chat: the owner chats
     assert Routing(Policy({})).target("owner") == []                       #    nobody of the role: nowhere
 
 

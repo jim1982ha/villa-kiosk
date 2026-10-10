@@ -46,6 +46,9 @@ def _failed(method: str, body: dict) -> TelegramError:
     return TelegramError(f"{method}: {code} {words}", refused=refused)
 
 
+#: Telegram's words when an edit changes nothing (it already shows this), or targets a photo's or a file's caption.
+NOT_MODIFIED, NO_TEXT = "message is not modified", "no text in the message to edit"
+
 #: A photo's or a file's caption: the first part of its text (Telegram takes 1,024; kept under it).
 CAPTION = 1000
 
@@ -223,12 +226,25 @@ class Telegram:
 
     async def edit(self, chat_id: int, message_id: int, text: str, keyboard: dict | None = None) -> bool:
         """Rewrite one of the bot's messages: its buttons go, or become `keyboard`. False when Telegram refuses."""
+        extra = {"reply_markup": keyboard} if keyboard else {}
         try:
-            extra = {"reply_markup": keyboard} if keyboard else {}
             await self.api("editMessageText", chat_id=chat_id, message_id=message_id, text=text[:4096], **extra)
             return True
         except TelegramError as e:
-            log.warning("editMessageText failed: %s", e)
+            if NOT_MODIFIED in str(e):
+                return True                         # it already says this: shown
+            if NO_TEXT not in str(e):
+                log.warning("editMessageText failed: %s", e)
+                return False
+        # ⚠️ A PHOTO'S OR A FILE'S MESSAGE HAS A CAPTION, NOT A TEXT (architecture review 21): editMessageText is refused
+        # there, every time — an alert sent with its file kept its buttons for good
+        try:
+            await self.api("editMessageCaption", chat_id=chat_id, message_id=message_id, caption=text[:1024], **extra)
+            return True
+        except TelegramError as e:
+            if NOT_MODIFIED in str(e):
+                return True
+            log.warning("editMessageCaption failed: %s", e)
             return False
 
 def dump(obj: Any) -> str:

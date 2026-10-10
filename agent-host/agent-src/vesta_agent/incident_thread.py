@@ -29,6 +29,9 @@ log = logging.getLogger("vesta.thread")
 Edit = Callable[..., Awaitable]     # (chat, message id, text[, keyboard])
 Delete = Callable[[int, int], Awaitable]
 
+#: How many times a copy Telegram refused to update is tried again (housekeeping: about an hour), then given up.
+OWED_TRIES = 12
+
 
 class IncidentThread:
     def __init__(self, state, timezone: str, edit: Edit | None = None, delete: Delete | None = None):
@@ -63,7 +66,8 @@ class IncidentThread:
 
     async def close(self, iid: int | str, note: str, body: str | None = None) -> int:
         """Every message of incident `iid` still showing its buttons, in every chat, loses them and shows `note` (who
-        did what, when; "{time}": the villa's time now). Returns how many. Settled once: a second close changes nothing.
+        did what, when; "{time}": the villa's time now). Returns how many chats show it now. Settled once: a second close
+        changes nothing.
 
         ⚠️ ALL OF THEM, NOT THE ONE PRESSED (owner, 2026-10-01): a P1 goes to the owner's chat and the facility
         manager's; pressed in one, the others kept buttons that only answered "already closed"."""
@@ -72,25 +76,44 @@ class IncidentThread:
         for chat, rec in self.state.incident_chats(iid):
             if not rec.get("buttons") or rec.get("settled"):
                 continue
+            if not note:
+                self.state.set_incident_message(iid, chat, {**rec, "settled": True})
+                continue
             # where it stands is the note now, under the line at the bottom; a new body when one is given (an approved
-            # request: what happened) — the head and the lead kept (layout.py)
-            p = layout.changed(layout.of(rec), status=note, body=body) if note else layout.of(rec)
-            text = layout.render(p)
-            if self.edit and note:
-                await self.edit(chat, rec["mid"], text)
-                n += 1
-            self.state.set_incident_message(iid, chat, {**rec, "parts": p, "text": text, "settled": True})
+            # request: what happened) — the head and the lead kept (layout.py). Settled: decided, whatever Telegram said — a copy it did not take is owed and tried again (`catch_up`)
+            n += await self._show(iid, chat, {**rec, "settled": True}, layout.changed(layout.of(rec), status=note, body=body))
         return n
 
     async def rewrite(self, iid: int | str, body: str) -> None:
         """Every copy of `iid` says `body` now in its middle part, its heading and status kept (an approved request whose
         device got there: "Opening …" becomes "Opened …")."""
         for chat, rec in self.state.incident_chats(iid):
-            p = layout.changed(layout.of(rec), body=body)
-            text = layout.render(p)
-            if self.edit:
-                await self.edit(chat, rec["mid"], text)
-            self.state.set_incident_message(iid, chat, {**rec, "parts": p, "text": text})
+            await self._show(iid, chat, rec, layout.changed(layout.of(rec), body=body))
+
+    async def _show(self, iid: int | str, chat: int, rec: dict, p: dict) -> bool:
+        """The copy in `chat` shows `p` now (its buttons gone). The record keeps `p` whatever Telegram said; a copy Telegram
+        did not take is OWED and tried again by `catch_up`.
+
+        ⚠️ RECORDED ONLY WHEN SHOWN (architecture review 21): a refused edit (a network blip) was recorded settled like
+        a shown one and never tried again — one chat kept Done / Need help, "Already answered." at every press."""
+        text = layout.render(p)
+        ok = bool(self.edit and await self.edit(chat, rec["mid"], text))
+        tries = 0 if ok else int(rec.get("owed_tries") or 0) + 1
+        rec = {k: v for k, v in rec.items() if k not in ("owed", "owed_tries")} | {"parts": p, "text": text}
+        if not ok:
+            rec |= {"owed": tries < OWED_TRIES, "owed_tries": tries}
+            log.info("%s in chat %s: message %s not updated (%s)", iid, chat, rec["mid"],
+                     "tried again later" if rec["owed"] else "given up")
+        self.state.set_incident_message(iid, chat, rec)
+        return ok
+
+    async def catch_up(self) -> int:
+        """Every copy a refused edit left behind is tried again (housekeeping, every few minutes; at most OWED_TRIES times
+        each — a message deleted in the chat can never be changed). Returns how many are shown now."""
+        n = 0
+        for iid, chat, rec in self.state.incident_messages_owed():
+            n += await self._show(iid, chat, rec, layout.of(rec))
+        return n
 
     def shown(self, iid: int | str) -> dict[int, dict]:
         """What each chat shows of incident `iid`: {chat: {mid, parts, text, buttons, settled}}."""

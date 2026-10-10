@@ -86,6 +86,25 @@ def make_agent(tmp_path, policy: dict, *, skills=(), telegram=None, reader=None,
     return Vesta(s, telegram=tg, reader=reader or FakeHA(), kiosk=kiosk or Kiosk("", ""))
 
 
+def restarted(v):
+    """The same villa after the agent stopped and started again: a new agent on the same records, files and Telegram /
+    Home Assistant stand-ins, through its real `start()` — what it takes up again (architecture review 21: nothing tested
+    a stop in the middle of a press or a report)."""
+    import asyncio
+    from vesta_agent.app import Vesta
+    v.state.db.close()
+    again = Vesta(v.s, telegram=v.tg, reader=v.reader, kiosk=v.kiosk)
+    again.actions.writer_factory = v.actions.writer_factory
+    asyncio.run(_started(again))
+    return again
+
+
+async def _started(v):
+    await v.start()
+    await v.approvals.idle()
+    await v.chat_jobs.idle()
+
+
 def make_skill(skills_dir: str, name: str, spec: dict, scripts: dict[str, str] | None = None, md: str = "") -> str:
     """A skill folder written for a test: its skill.yaml (`spec`), SKILL.md and scripts {file name: code}."""
     import yaml
