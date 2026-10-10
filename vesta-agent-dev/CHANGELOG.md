@@ -1,3 +1,13 @@
+## 0.12.147
+
+What you will see (architecture review 23, every point):
+- A fault that comes back within 7 days now really says so. 0.12.146 claimed it, but did not: the "again" text was written where nothing read it. Now the 07:00 digest lists it as new, as of the day it came back, "(again: 3 times in 7 days)"; its Cockpit fault says the same; a critical one sends its message at once, as a new one does. A fault closed in the Kiosk the time before no longer hides it from the digest, the weekly page and the AI when it comes back.
+- When a Home Assistant rule stops watching just as the problem cleared, its own message in the group now says "Cleared on …: back to normal", no longer the orange "no longer tracked".
+- An alert that comes back within 4 hours of closing reopens the same incident — "Back again: 3 times since …", same number — instead of a new number, a new message and a new Cockpit fault each time.
+- After Done, the agent now really checks the device 10 minutes later: still unlocked (or still offline), the alert opens again — "Done by Fabien, but … still reads unlocked: still open." An alert whose rule says nothing of its states no longer promises the check.
+- A device that is offline no longer keeps an alert open when its rule itself accepts offline (the rule does not list "unavailable").
+- Two safeguards: a list of bad states sent as one word is read as one state; a message Telegram refused, given up once, gets its own 2 hours of retries at its next change.
+
 ## 0.12.146
 
 What you will see (architecture review 22, every point):
