@@ -1,3 +1,9 @@
+## 0.12.141
+
+What you will see:
+- When an approval request appears in the chat you asked from, nothing else follows it: the agent no longer sends the AI's "Approval request sent." under it. The AI kept writing it although told not to, and when you approved at once it even arrived after the decision. If you asked something else in the same message, that is still answered.
+- When the request goes to other chats (an owner approval asked from a facility manager's chat), the short answer in your chat stays: it is the only sign there that the owner was asked.
+
 ## 0.12.140
 
 What you will see:
