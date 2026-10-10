@@ -1,3 +1,10 @@
+## 2.496.317
+
+### Changed
+- Cockpit, "Needs attention": every line now has the same shape. Each one is a card titled by the device (for example "Entrance door"), with its room, and its problems listed inside the card, one line each, even when there is only one. Before, three shapes were mixed: a device with one problem showed it in grey under its name; a device with only an open fault was titled by the fault's text ("Entrance door unlocked"), with a tall "Close" box beside it that cut the text short; a device with several problems listed them outside its card.
+- "Close" on an open fault is now at the end of that fault's own line, inside the card.
+- A problem that belongs to no device (a task for the whole villa) keeps its own title, with "Open fault" as its line.
+
 ## 2.496.316
 
 ### Fixed

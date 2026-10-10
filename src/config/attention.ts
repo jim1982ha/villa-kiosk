@@ -91,13 +91,15 @@ export function groupAttention(items: readonly AttentionItem[]): AttentionGroup[
   for (const [key, list] of byKey) {
     const sorted = [...list].sort((a, b) => ATTENTION_RANK[a.kind] - ATTENTION_RANK[b.kind]);
     const worst = sorted[0];
-    // A device with ONE problem reads exactly as it did before grouping.
-    const one = sorted.length === 1;
+    // ⚠️ ONE SHAPE FOR EVERY ROW (owner, 2026-10-10: "all these lines feel inconsistently shown"): a device's row is
+    // titled by the DEVICE, whatever its problems. With ONE problem it read as the problem — an open fault on the
+    // entrance lock was titled "Entrance door unlocked" while the same lock with two problems was titled "Entrance";
+    // the problems are the row's lines (attentionLineIn), one or several. A problem with no device stands for itself.
     groups.push({
       key,
       kind: worst.kind,
-      title: one || !worst.device ? worst.title : worst.device.label,
-      room: one || !worst.device ? worst.room ?? worst.device?.room : worst.device.room ?? worst.room,
+      title: worst.device ? worst.device.label : worst.title,
+      room: worst.device ? worst.device.room ?? worst.room : worst.room,
       // The DEVICE, as the map opens it — not the entity the problem names. A
       // ticket on a pump's energy meter opened the meter's chart while the
       // map's pump badge opens its power (2.496.258).
@@ -107,6 +109,13 @@ export function groupAttention(items: readonly AttentionItem[]): AttentionGroup[
   }
   return groups.sort((a, b) => ATTENTION_RANK[a.kind] - ATTENTION_RANK[b.kind]
     || a.title.localeCompare(b.title) || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+}
+
+/** A problem's line inside ITS row: under a device, what attentionLine says ("Unlocked", "Open fault: Entrance door
+ *  unlocked"); in a row that is the problem itself (no device), only its status ("Open fault") — its title is the
+ *  row's already. Every row shows its problems this way, one or several. */
+export function attentionLineIn(group: AttentionGroup, item: AttentionItem): string {
+  return group.key.startsWith("device:") ? attentionLine(item) : item.detail;
 }
 
 /** One problem's line inside a device's row. A state needs no more than its
