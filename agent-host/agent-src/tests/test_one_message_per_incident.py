@@ -72,7 +72,7 @@ def test_home_assistants_alert_takes_the_incidents_number(agent):
     (grp,) = shown(agent, GROUP)
     assert grp.startswith("Incident #1 · New alert\n") and SUMMARY in grp and "What to do:" in grp
     (fm,) = shown(agent, FM_CHAT)
-    assert fm.startswith("Incident #1 · New alert\n") and SUMMARY in fm and fm.endswith("Reply Done, Not found or Need help.")
+    assert fm.startswith("Incident #1 · New alert\n") and SUMMARY in fm and fm.endswith("Press Done, Not found or Need help.")
 
 
 def test_each_chat_keeps_only_the_latest_message_and_it_recalls_the_alert(agent):
@@ -110,7 +110,7 @@ def test_a_message_past_telegrams_48_hours_becomes_a_pointer(agent):
 def test_the_owner_and_the_fm_in_one_chat_get_one_message_with_the_buttons(agent):
     from vesta_shared import result as R
     res = {"send": [R.message("owner", "Incident #9 · New alert\nx"),
-                    R.message("fm", "Incident #9 · New alert\nx\nReply Done, Not found or Need help.", incident=9, buttons=True),
+                    R.message("fm", "Incident #9 · New alert\nx\nPress Done, Not found or Need help.", incident=9, buttons=True),
                     R.message("owner", "Incident #9 · New alert\nx", incident=9)], "incident_id": 9}
     from vesta_agent.routing import Routing
     route = Routing(agent.policy())
@@ -147,9 +147,33 @@ def test_need_help_reaches_the_owner_with_the_buttons_to_answer(agent):
 def test_a_second_close_changes_nothing_and_the_records_are_pruned_with_the_others(agent):
     ha_alert(agent)
     iid = 1
-    assert run(agent.thread.close(iid, "Done — FM, {time}")) == 1      # the FM's alert (Home Assistant's has no buttons)
+    # the FM's alert and Home Assistant's, taken over WITH the buttons (owner, 2026-10-10: every message of an open alert)
+    assert run(agent.thread.close(iid, "Done — FM, {time}")) == 2
     assert run(agent.thread.close(iid, "Done — FM, {time}")) == 0
     from datetime import datetime, timedelta, timezone
     soon = (datetime.now(timezone.utc) + timedelta(minutes=1)).isoformat()
     agent.state.prune(runs_before="1970", records_before=soon)
     assert agent.thread.shown(iid) == {}
+
+
+def test_every_message_of_an_open_alert_has_its_buttons_in_every_chat(agent):
+    # owner, 2026-10-10: "the user shall not have to type to reply anything" — the group's copy of incident #9 was Home
+    # Assistant's own alert, taken over without the buttons and saying "Reply Done"
+    ha_alert(agent)
+    group_edit = next(kb for (c, mid, _), kb in zip(agent.tg.edits, agent.tg.edit_keyboards) if c == GROUP and mid == 500)
+    assert group_edit and all(b["callback_data"].startswith("i:1:") for b in group_edit["inline_keyboard"][0])
+    assert all("Reply Done" not in t for _, t, _ in agent.tg.sent) and all("Reply Done" not in t for _, _, t in agent.tg.edits)
+    # a message about it with no buttons asked for still gets them while it is open
+    from vesta_shared import result as R
+    run(agent.outcome.carry_out({"send": [R.message("owner", "Incident #1 · still open", incident=1)]}, "alert-desk"))
+    assert agent.tg.sent[-1][2], "an open alert's message carries its buttons"
+
+
+def test_a_new_message_says_when_the_earlier_ones_were_sent(agent):
+    # owner, 2026-10-10: the earlier message is deleted, so the latest says when the earlier ones came
+    from vesta_shared import result as R
+    run(agent.outcome.carry_out({"send": [R.message("fm", "Incident #7 · new", incident=7, buttons=True)]}, "alert-desk"))
+    assert "Earlier messages" not in agent.tg.sent[-1][1]                       # the first says nothing of the kind
+    run(agent.outcome.carry_out({"send": [R.message("fm", "Incident #7 · still there", incident=7, buttons=True)]}, "alert-desk"))
+    last = agent.tg.sent[-1][1]
+    assert last.startswith("Incident #7 · still there\nEarlier messages: ") and last.count(",") >= 1

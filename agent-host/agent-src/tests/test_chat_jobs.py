@@ -15,11 +15,16 @@ DAILY = {"name": "fm-daily", "button": "Daily digest"}
 
 
 class _Delivery:
-    """What chat_jobs.py needs of delivery.Delivery: the Telegram stand-in and the typing loop."""
+    """What chat_jobs.py needs of delivery.Delivery: the Telegram stand-in, its REAL hold (the one "typing…" of a chat)
+    over a quick typing loop."""
+    from vesta_agent.delivery import Delivery as _Real
+    hold = _Real.hold
+
     def __init__(self):
         from telegram_fake import FakeTelegram
         self.tg = FakeTelegram()
         self.on_job_result = None
+        self._waiting = {}
 
     async def edit(self, chat, mid, text):                 # delivery.Delivery's own (architecture review 15)
         return await self.tg.edit(chat, mid, text)

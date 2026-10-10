@@ -208,10 +208,11 @@ class Telegram:
                 log.warning("Telegram refused \"typing…\" in chat %s: %s", chat_id, why)
             return False
 
-    async def edit(self, chat_id: int, message_id: int, text: str) -> bool:
-        """Rewrite one of the bot's messages (its buttons go). False when Telegram refuses."""
+    async def edit(self, chat_id: int, message_id: int, text: str, keyboard: dict | None = None) -> bool:
+        """Rewrite one of the bot's messages: its buttons go, or become `keyboard`. False when Telegram refuses."""
         try:
-            await self.api("editMessageText", chat_id=chat_id, message_id=message_id, text=text[:4096])
+            extra = {"reply_markup": keyboard} if keyboard else {}
+            await self.api("editMessageText", chat_id=chat_id, message_id=message_id, text=text[:4096], **extra)
             return True
         except TelegramError as e:
             log.warning("editMessageText failed: %s", e)

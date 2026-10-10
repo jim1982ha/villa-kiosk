@@ -57,7 +57,8 @@ def _params(params: VillaParams | None) -> VillaParams:
     return params if params.defaults else params.with_defaults(DEFAULTS)
 LADDER_OPTIONS = ["Done", "Not found", "Need help", "Mute"]
 #: What a person still being asked can answer: the last line of every message that carries the buttons.
-ASK = "Reply Done, Not found or Need help."
+# the buttons under every message of an open alert (the engine puts them there, owner 2026-10-10); typing works too
+ASK = "Press Done, Not found or Need help."
 #: The beat the engine writes every minute while its Home Assistant connection is up.
 HA_BEAT = "ha_events"
 

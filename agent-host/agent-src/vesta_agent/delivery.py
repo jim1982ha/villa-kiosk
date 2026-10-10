@@ -92,6 +92,7 @@ class Delivery:
         self.policy = policy
         # a message sent on behalf of a job asked for in a chat is its result: chat_jobs.ChatJobs.result, set by it
         self.on_job_result: Callable[[Origin], Awaitable[None]] | None = None
+        self._waiting: dict[int, dict] = {}   # chat → its one "typing…" loop and what holds it (hold)
 
     # ------------------------------------------------------------------ one message
     async def send(self, chat_id: int, text: str, *, keyboard: dict | None = None, approval_id: str | None = None,
@@ -132,13 +133,14 @@ class Delivery:
     # ⚠️ ONE WAY TO TELEGRAM FOR A MESSAGE'S WHOLE LIFE (architecture review 15, 2026-10-10): sending came here, but the
     # incident thread, the chat jobs and the button presses edited and deleted on Telegram themselves — each deciding
     # again whether Telegram was on, cutting a long text where a send splits it, and skipping plain_text.
-    async def edit(self, chat_id: int, message_id: int, text: str) -> bool:
-        """Rewrite one of the agent's messages (its buttons go), as a send would show it: plain text, and — one message
-        cannot be split — at most Telegram's limit, cut between lines. False: Telegram is off, or refused."""
+    async def edit(self, chat_id: int, message_id: int, text: str, keyboard: dict | None = None) -> bool:
+        """Rewrite one of the agent's messages (its buttons go, or become `keyboard`), as a send would show it: plain
+        text, and — one message cannot be split — at most Telegram's limit, cut between lines. False: Telegram is off,
+        or refused."""
         if self.tg is None:
             return False
         text = fit(plain_text(text))
-        ok = await self.tg.edit(int(chat_id), int(message_id), text)
+        ok = await self.tg.edit(int(chat_id), int(message_id), text, keyboard)
         if not ok:
             self.state.log("edit_refused", {"chat": chat_id, "message": message_id})
         return bool(ok)
@@ -175,21 +177,51 @@ class Delivery:
             mid = await self.send(chat_id, text or "…", keyboard=keyboard)
         return mid
 
-    @contextlib.asynccontextmanager
-    async def typing(self, chat_id: int) -> AsyncIterator[Callable[[], None]]:
-        """"typing…" in the chat until the block ends or the yielded stop() is called (owner, 2026-10-06: "like if
-        it was starting to write"). Telegram shows it about 5 s, so it is said again every TYPING_EVERY_S."""
-        stop = asyncio.Event()
-        task = asyncio.create_task(self.typing_loop(chat_id, stop)) if self.tg is not None else None
-        try:
-            yield stop.set
-        finally:
-            stop.set()
-            if task:
-                await task
+    # ⚠️ ONE "TYPING…" FOR EVERY WAIT (owner, 2026-10-10: "make sure each message sent to the agent triggers this Typing
+    # notification in a consistent way, for all the time the user is waiting for any reply ... coded one time"). A chat
+    # is WAITING while anything holds it — a message being read (a photo fetched, a voice message transcribed), the AI
+    # answering, a report being made — and shows "typing…" from the first hold to the last release, by ONE loop: two
+    # loops in one chat hide each other (measured 2026-10-09). The conversation's own and a job's were two mechanisms
+    # (here and chat_jobs.py); a photo's download ran before either, 2.6 s with nothing shown (villa, 12:32).
+    def hold(self, chat_id: int, label: str | None = None) -> Callable[[], None]:
+        """The chat waits for the agent from now: "typing…" shows until every hold of it is released. Returns the
+        release (safe to call twice). `label`: a job's name, for the loop's account in the log at its end."""
+        if self.tg is None:
+            return lambda: None
+        chat = int(chat_id)
+        w = self._waiting.get(chat)
+        if w is None:
+            w = {"stop": asyncio.Event(), "holds": {}, "labels": set()}
+            w["task"] = asyncio.create_task(self.typing_loop(chat, w["stop"], w["labels"]))
+            self._waiting[chat] = w
+        token = object()
+        w["holds"][token] = label
+        if label:
+            w["labels"].add(label)
 
-    async def typing_loop(self, chat_id: int, stop: asyncio.Event, job: str | None = None) -> None:
-        """`job`: the loop of a job asked for in a chat, which says at its end how many times it was sent."""
+        def release() -> None:
+            if w["holds"].pop(token, False) is False:
+                return                                    # released already
+            if not w["holds"]:
+                w["stop"].set()
+                if self._waiting.get(chat) is w:
+                    self._waiting.pop(chat, None)
+        return release
+
+    @contextlib.asynccontextmanager
+    async def typing(self, chat_id: int, held: Callable[[], None] | None = None) -> AsyncIterator[Callable[[], None]]:
+        """"typing…" in the chat until the block ends or the yielded stop() is called (owner, 2026-10-06: "like if
+        it was starting to write"): a hold (above). `held`: one taken earlier, when the wait began before this block —
+        the message arrived, then its photo was fetched."""
+        release = held or self.hold(chat_id)
+        try:
+            yield release
+        finally:
+            release()
+
+    async def typing_loop(self, chat_id: int, stop: asyncio.Event, labels: set[str] | None = None) -> None:
+        """One chat's "typing…", said again every TYPING_EVERY_S until `stop`. `labels`: the jobs that held it, for
+        the account the loop gives at its end (how many were sent, and when)."""
         said = False
         sent = accepted = 0
         last = None
@@ -213,6 +245,7 @@ class Delivery:
                 await asyncio.wait_for(stop.wait(), timeout=TYPING_EVERY_S)
             except asyncio.TimeoutError:
                 pass
+        job = ", ".join(sorted(labels or ()))
         if job:
             # ⚠️ SAID AT THE END (villa, 2026-10-09 15:27: "typing…" vanished before the weekly report came, and the log
             # held only the first one): whether the repeats ran until the result, or stopped early

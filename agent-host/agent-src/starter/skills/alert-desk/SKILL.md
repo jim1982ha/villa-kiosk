@@ -58,9 +58,12 @@ included (it is rewritten with the incident's number as soon as the desk knows i
 - Alert fatigue: a rule that fired 20 times in 30 days becomes a "retune" proposal in the
   weekly report. Nothing is changed automatically.
 
-## Replies
+## Answers
 
-| Reply | Effect |
+Every message about an open alert carries the buttons below, in every chat it reaches (the agent adds them); the
+message then says who pressed what, and when. Typing the word works too.
+
+| Button | Effect |
 |---|---|
 | Done | incident closed, its Kiosk ticket resolved, a "stays quiet" check the next night |
 | Not found | stays open, mentioned in the weekly report |

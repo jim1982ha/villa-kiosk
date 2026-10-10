@@ -396,19 +396,25 @@ class Vesta:
             self.state.set_session(got.chat, None)
             await self.delivery.send(got.chat, "New conversation.")
             return
-        text = got.text
-        if got.voice_file is not None:
-            text = intake.without_mention(await self.voice.transcribe(got.chat, got.person, got.voice_file),
-                                          self.bot_username)
-        image = None
-        if got.photo_file is not None:
-            image = await self._photo(got.chat, got.photo_file, str(m.get("file_mime_type") or "image/jpeg"))
-            if image is None:
+        # the person waits from now: "typing…" while the message is read (a photo fetched, a voice transcribed) and
+        # answered, until the answer goes (delivery.Delivery.hold — the one "typing…" of every wait)
+        held = self.delivery.hold(got.chat)
+        try:
+            text = got.text
+            if got.voice_file is not None:
+                text = intake.without_mention(await self.voice.transcribe(got.chat, got.person, got.voice_file),
+                                              self.bot_username)
+            image = None
+            if got.photo_file is not None:
+                image = await self._photo(got.chat, got.photo_file, str(m.get("file_mime_type") or "image/jpeg"))
+                if image is None:
+                    return
+            if not text and image is None:
                 return
-        if not text and image is None:
-            return
-        await self.converse(got.chat, got.person, text, chat_role=self.policy().chat_role(got.chat) or "private",
-                            voice=got.voice_file is not None, image=image)
+            await self.converse(got.chat, got.person, text, chat_role=self.policy().chat_role(got.chat) or "private",
+                                voice=got.voice_file is not None, image=image, held=held)
+        finally:
+            held()
 
     async def _photo(self, chat: int, file_id: str, mime: str) -> tuple[str, str] | None:
         """A photo a person sent, ready for the AI (base64, mime); None — and the person told why — when it cannot be."""
@@ -445,9 +451,10 @@ class Vesta:
 
     async def converse(self, cid: int, person: Person | None, text: str, chat_role: str = "private",
                        resume: str | None = "auto", is_continue: bool = False, voice: bool = False,
-                       image: tuple[str, str] | None = None):
-        """`image`: a photo the person sent (base64, mime), `text` its caption: the AI looks at it."""
-        async with self.delivery.typing(cid) as answered:
+                       image: tuple[str, str] | None = None, held=None):
+        """`image`: a photo the person sent (base64, mime), `text` its caption: the AI looks at it. `held`: the chat's
+        "typing…" taken when the message arrived (handle_message), carried on until the answer goes."""
+        async with self.delivery.typing(cid, held=held) as answered:
             await self._converse(cid, person, text, chat_role, resume, is_continue, voice, answered, image)
 
     async def _converse(self, cid, person, text, chat_role, resume, is_continue, voice, answered, image=None):

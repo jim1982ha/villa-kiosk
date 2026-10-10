@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.118 (10 October 2026)
+
+Two baselines (owner, 2026-10-10):
+- Every message about an open alert carries its buttons, in every chat: outcome.carry_out gives the keyboard when the skill asks or the incident is open (AlertButtons.open); adopt_ha edits Home Assistant's message with the keyboard (Telegram.edit / Delivery.edit keyboard=, IncidentThread.adopt keyboard=). IncidentThread keeps each chat's message times and earlier() adds "Earlier messages: …" to a new message. alert-desk: "Press Done…" (ASK, rules.yaml checks, SKILL.md "Answers"). Reports and digests carry no buttons.
+- One "typing…" for every wait: Delivery.hold(chat, label) — one loop per chat, held by whatever the person waits for, released by each; Delivery.typing(held=) is a hold. handle_message holds from the message's acceptance (a photo fetched, a voice transcribed) and hands the hold to converse; ChatJobs holds for its jobs (its own loop removed).
+- Tests: buttons on every open alert's message and on Home Assistant's taken over, none saying "Reply Done"; the earlier messages' times; one loop per chat however many hold it, released by the last; "typing…" already shown while a photo is fetched. Each shown red with the old behaviour.
+
 ## 0.6.117 (10 October 2026)
 
 A photo is a message (owner, 2026-10-10: two screenshots with "/ask" in the group were dropped without a reply or a record):

@@ -30,6 +30,7 @@ class FakeTelegram:
         self.bot, self.audio = bot or BOT, audio
         self.sent, self.photos, self.documents = [], [], []
         self.toasts, self.edits, self.deleted, self.fetched, self.typing_in = [], [], [], [], []
+        self.edit_keyboards = []
         self.refuse: set[str] = set()
         self.next_id = 1000
 
@@ -76,8 +77,9 @@ class FakeTelegram:
         self.typing_in.append(chat_id)
         return True
 
-    async def edit(self, chat_id, message_id, text):
+    async def edit(self, chat_id, message_id, text, keyboard=None):
         self.edits.append((chat_id, message_id, text))
+        self.edit_keyboards.append(keyboard)             # the buttons an edit gave the message (None: they went)
         return True
 
     def __getattr__(self, name):          # getUpdates, leaveChat... must never be reached

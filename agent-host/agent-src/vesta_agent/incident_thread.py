@@ -14,15 +14,16 @@ shown before it, whatever order the caller uses.
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Awaitable, Callable
 from zoneinfo import ZoneInfo
 
 from vesta_shared.messaging import TELEGRAM_LIMIT, incident_tag, tg_len
+from vesta_shared.timeutil import day_time_label
 
 from .delivery import fit
 
-Edit = Callable[[int, int, str], Awaitable]
+Edit = Callable[..., Awaitable]     # (chat, message id, text[, keyboard])
 Delete = Callable[[int, int], Awaitable]
 
 
@@ -33,6 +34,17 @@ class IncidentThread:
         self.edit = edit                # Telegram's edit (its buttons go); None while Telegram is off
         self.delete = delete            # Telegram's deleteMessage: True when the message is gone
 
+    def earlier(self, iid: int, chat: int) -> str:
+        """The line a new message about incident `iid` in `chat` ends with: when each earlier message was sent there —
+        the earlier messages are deleted, so the latest says when they came (owner, 2026-10-10). "" for the first."""
+        rec = self.state.incident_message(iid, chat) or {}
+        times = rec.get("times") or ([rec["at"]] if rec.get("at") else [])
+        if not times:
+            return ""
+        zone = ZoneInfo(self.tz)
+        return "\nEarlier messages: " + ", ".join(day_time_label(datetime.fromisoformat(t).astimezone(zone), weekday=True)
+                                                    for t in times[-6:]) + "."
+
     async def post(self, iid: int, chat: int, mid: int, text: str, *, buttons: bool = False) -> None:
         """Message `mid`, just sent to `chat`, is now incident `iid`'s message there: the earlier one goes."""
         old = self.state.incident_message(iid, chat)
@@ -41,14 +53,18 @@ class IncidentThread:
             if not gone and self.edit:
                 # past Telegram's 48 hours: the old message cannot go, so it stops repeating the incident
                 await self.edit(chat, old["mid"], f"{incident_tag(iid)} · see the newer message below.")
-        self.state.set_incident_message(iid, chat, {"mid": mid, "text": text, "buttons": buttons, "settled": False})
+        now = datetime.now(timezone.utc).isoformat()
+        times = ((old or {}).get("times") or []) + [now] if not old or old["mid"] != mid else (old.get("times") or [now])
+        self.state.set_incident_message(iid, chat, {"mid": mid, "text": text, "buttons": buttons, "settled": False,
+                                                    "times": times[-12:]})
 
-    async def adopt(self, iid: int, chat: int, mid: int, text: str) -> None:
+    async def adopt(self, iid: int, chat: int, mid: int, text: str, keyboard: dict | None = None) -> None:
         """One of Home Assistant's own messages (a VESTA rule's alert, its all-clear) belongs to incident `iid`: it is
-        rewritten as the incident's message — its number and the original alert — and replaces the earlier one."""
+        rewritten as the incident's message — its number, the original alert and, while it is open, its buttons
+        (`keyboard`) — and replaces the earlier one."""
         if self.edit:
-            await self.edit(chat, mid, text)
-        await self.post(iid, chat, mid, text)
+            await self.edit(chat, mid, text, keyboard) if keyboard else await self.edit(chat, mid, text)
+        await self.post(iid, chat, mid, text, buttons=bool(keyboard))
 
     async def close(self, iid: int, note: str) -> int:
         """Every message of incident `iid` still showing its buttons, in every chat, loses them and shows `note` (who

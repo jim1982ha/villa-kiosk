@@ -229,7 +229,7 @@ def test_an_answer_settles_the_alert_in_every_chat_and_its_reminder(agent):
     # one message per incident per chat (owner, 2026-10-09): the reminder replaced the alert in the FM's chat
     fm_alert = next(1001 + n for n, (c, t, _) in enumerate(agent.tg.sent) if c == FM and t.startswith("🔒 Door unlocked"))
     assert (FM, fm_alert) in agent.tg.deleted
-    edited = sorted((c, t.split("\n\n")[0]) for c, _, t in agent.tg.edits)
+    edited = sorted((c, t.split("\n")[0]) for c, _, t in agent.tg.edits)       # its first line (then "Earlier messages")
     assert edited == sorted([(GROUP, f"🔒 Door unlocked. Incident #{iid}."), (FM, f"Reminder, incident #{iid}: m.")])
     assert all(re.search(r"\n\nDone — FM, \d\d:\d\d$", t) for _, _, t in agent.tg.edits)
     # settled once: no chat still shows the incident's buttons unanswered

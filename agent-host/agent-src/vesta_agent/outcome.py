@@ -101,7 +101,7 @@ class Outcome:
             items += [{"to": to, "text": gate_prompt} for to in gate.get("to") or ("owner",)]
         # Home Assistant's own messages first: the desk's messages below then replace them where both land
         for h in res.get("ha_messages") or []:
-            await self.adopt_ha(h)
+            await self.adopt_ha(h, skill_name)
         # ⚠️ SETTLED BEFORE THIS RESULT'S MESSAGES ARE POSTED (architecture review 12, 2026-10-09): "Need help" sends the
         # owner a new message with the buttons; settled after it, that message lost them the moment it arrived
         for s in res.get("settle") or []:
@@ -123,8 +123,13 @@ class Outcome:
             # ⚠️ ITS INCIDENT AS A FIELD (review 7): it was read out of the wording ("#N"), so a reworded reminder
             # lost its buttons. A message with the buttons and no incident of its own is the result's incident's.
             iid = item.get("incident_id") or (res.get("incident_id") if item.get("keyboard") else None)
-            if item.get("keyboard") and skill_name and iid:
+            # ⚠️ EVERY MESSAGE ABOUT AN OPEN ALERT HAS ITS BUTTONS, IN EVERY CHAT (owner, 2026-10-10: "the user shall not
+            # have to type to reply anything"): the owner's group got the reminder of incident #9 with "Reply Done" and no
+            # button — the buttons came only where the skill asked for them. Decided here, for every skill's message.
+            if skill_name and iid and (item.get("keyboard") or self.buttons.open(iid)):
                 kb = self.buttons.keyboard(iid, chat, skill_name)
+            if iid:
+                text = text + self.thread.earlier(int(iid), chat)
             doc = None
             att = item.get("attachment")
             if att:
@@ -194,7 +199,7 @@ class Outcome:
         return [it for n, it in enumerate(items)
                 if not (it or {}).get("incident_id") or not route.target(it.get("to"), origin) or n in keep]
 
-    async def adopt_ha(self, h: dict) -> int:
+    async def adopt_ha(self, h: dict, skill_name: str | None = None) -> int:
         """Home Assistant's messages of one automation run become incident messages (outcome key ha_messages)."""
         ctx, iid, text = (h or {}).get("context"), (h or {}).get("incident_id"), (h or {}).get("text") or ""
         if not (ctx and str(iid or "").isdigit() and text):
@@ -206,7 +211,9 @@ class Outcome:
             await asyncio.sleep(wait)
             found = self.state.ha_sent(ctx)
         for chat, mid in found:
-            await self.thread.adopt(int(iid), chat, mid, text)
+            # Home Assistant's own alert, taken over: the incident's text, the earlier messages' times, its buttons
+            kb = self.buttons.keyboard(int(iid), chat, skill_name) if skill_name and self.buttons.open(iid) else None
+            await self.thread.adopt(int(iid), chat, mid, text + self.thread.earlier(int(iid), chat), keyboard=kb)
         if not found:
             log.info("Incident #%s: no Home Assistant message of its run to take over", iid)
         return len(found)

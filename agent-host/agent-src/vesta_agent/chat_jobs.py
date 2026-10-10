@@ -36,7 +36,7 @@ class ChatJobs:
         self.notices = JobNotices()                        # the waiting messages, by turn
         self._jobs: dict[tuple[int, str], dict] = {}       # (chat, job) → {started, turn}: the jobs running
         self._turn: dict[int, int] = {}                    # chat → its current conversation turn
-        self._typing: dict[int, tuple[asyncio.Event, asyncio.Task, set[str]]] = {}   # chat → its jobs' "typing…"
+        self._typing: dict[tuple[int, str], Callable[[], None]] = {}   # (chat, job) → its hold of the chat's "typing…"
         # the tasks, kept: asyncio holds only a weak reference to a task nobody keeps, and `idle` waits for them
         self._tasks: set[asyncio.Task] = set()
 
@@ -141,25 +141,13 @@ class ChatJobs:
             await self.delivery.edit(chat, mid, f"The {job} job ended without a result this time. Ask again in a moment.")
 
     def _typing_on(self, chat: int, name: str) -> None:
-        """⚠️ "typing…" UNTIL THE RESULT IS THERE (owner, 2026-10-07), one loop per chat whatever the number of jobs:
-        a second loop would send inside the first one's 5 s, and Telegram then shows neither (measured 2026-10-09)."""
-        if self.delivery.tg is None or (chat, name) not in self._jobs:
+        """⚠️ "typing…" UNTIL THE RESULT IS THERE (owner, 2026-10-07): the job holds the chat's one "typing…"
+        (delivery.Delivery.hold) — never a loop of its own: a second one hides the first (measured 2026-10-09)."""
+        if self.delivery.tg is None or (chat, name) not in self._jobs or (chat, name) in self._typing:
             return
-        entry = self._typing.get(chat)
-        if entry and not entry[0].is_set():
-            entry[2].add(name)
-            return
-        stop = asyncio.Event()
-        task = asyncio.create_task(self.delivery.typing_loop(chat, stop, name))
-        self._tasks.add(task)
-        task.add_done_callback(self._tasks.discard)
-        self._typing[chat] = (stop, task, {name})
+        self._typing[(chat, name)] = self.delivery.hold(chat, name)
 
     def _typing_off(self, chat: int, name: str) -> None:
-        entry = self._typing.get(chat)
-        if not entry:
-            return
-        entry[2].discard(name)
-        if not entry[2]:
-            entry[0].set()
-            self._typing.pop(chat, None)
+        release = self._typing.pop((chat, name), None)
+        if release:
+            release()

@@ -30,6 +30,11 @@ class AlertButtons:
         from vesta_shared.store import Store
         return Store(self.store_path)
 
+    def open(self, iid: int | str) -> bool:
+        """Is incident `iid` still waiting for an answer (not closed)? Its messages then carry the buttons."""
+        inc = self._store().incident(int(iid)) if str(iid).isdigit() else None
+        return bool(inc) and not inc.get("closed_at")
+
     def keyboard(self, iid: int, chat: int, skill_name: str) -> dict:
         """The buttons of incident `iid`, for a message to `chat` from `skill_name` (whose on_reply answers them)."""
         self.state.set_alert_skill(iid, chat, skill_name)
