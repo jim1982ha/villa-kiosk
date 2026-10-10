@@ -68,6 +68,10 @@ ck("ONE attention rule: open faults + tasks overdue or never — a task merely d
   ck("  ...a resolved or unknown fault is left exactly as it is",
      E.withTicketClosed(d, "t1", k) === d && E.withTicketClosed(d, "nope", k) === d);
   ck("  ...and is never stamped resolved without a resolvedAt (the proxy refuses that)", !!t2.resolvedAt && !!t3.resolvedAt);
+  // owner, 2026-10-10: the agent's note on the alert's Telegram messages says who closed it, and when
+  const byFm = E.withTicketClosed(d, "t2", k, "Facility manager").tickets.find((t) => t.id === "t2");
+  ck("  ...and says which profile closed it, for the agent's note on Telegram",
+     byFm.updates.at(-1).by === "Facility manager" && !("by" in t2.updates[0]), byFm.updates);
 }
 
 const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
@@ -79,7 +83,7 @@ ck("no screen parses an amount or ranks/moves a fault by itself",
    && /ticketRank\(a\)/.test(src("components/fm/FaultsTab.tsx")) && !/const NEXT:/.test(src("components/fm/FaultsTab.tsx")));
 ck("the store erases a fault through withoutTicket", /mutate\(\(d\) => withoutTicket\(d, id\), elevation\)/.test(src("fm/FmDataContext.tsx")));
 ck("the one-step close goes through the store's one writer (mutate), and both screens call it",
-   /mutate\(\(d\) => withTicketClosed\(d, id, stamp\(\)\)\)/.test(src("fm/FmDataContext.tsx"))
+   /mutate\(\(d\) => withTicketClosed\(d, id, stamp\(\), role \? ROLE_LABELS\[role\] : undefined\)\)/.test(src("fm/FmDataContext.tsx"))
    && /closeTicket\(id\)/.test(src("components/fm/FaultsTab.tsx"))
    && /closeTicket\(fault\.ticketId/.test((src("components/cockpit/CockpitModal.tsx") + src("components/cockpit/CockpitOverview.tsx")))
    && /ticketId: t\.id/.test(src("config/attention.ts")));

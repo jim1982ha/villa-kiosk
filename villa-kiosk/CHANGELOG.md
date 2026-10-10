@@ -1,3 +1,11 @@
+## 2.496.320
+
+### Fixed
+- Cockpit, "Needs attention": pointing at a fault's "Close" button now highlights that button, not the whole card. (Pressing it already closed the fault rather than opening the device.)
+
+### Changed
+- Closing a fault now records which profile closed it (Owner or Facility manager). The VESTA Agent uses it to write on the alert's Telegram messages who closed it and when.
+
 ## 2.496.319
 
 ### Fixed

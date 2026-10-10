@@ -184,6 +184,9 @@ ck("the card takes the click and Close stops its own there; no layer stretched o
    /className=\{`cockpit-attention-item[\s\S]{0,120}onClick: \(\) => onOpenEntity/.test(cockpit)
    && /cockpit-attention-close"[\s\S]{0,200}onClick=\{\(e\) => \{ e\.stopPropagation\(\)/.test(cockpit)
    && /cockpit-attention-confirm" onClick=\{\(e\) => e\.stopPropagation\(\)\}/.test(cockpit)
-   && !/cockpit-attention-row[^{]*::after/.test(css08));
+   && !/cockpit-attention-row[^{]*::after/.test(css08)
+   // the card lights up as the device it opens, never while the pointer is on Close; Close lights up itself
+   && /\.cockpit-attention-item\.tappable:hover:not\(:has\(\.cockpit-attention-close:hover/.test(css08)
+   && /\.cockpit-attention-close:hover \{/.test(css08));
 
 done("✅ one row per device in Needs attention");
