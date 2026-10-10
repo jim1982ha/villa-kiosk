@@ -1,3 +1,8 @@
+## 2.496.318
+
+### Fixed
+- Cockpit, "Needs attention": the whole card now opens its device, not only its top half. A fault's "Close" button on its line still works on its own.
+
 ## 2.496.317
 
 ### Changed

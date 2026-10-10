@@ -247,7 +247,7 @@ function CockpitAttentionRow({ group, onOpenEntity, canCloseFault }: {
   const tappable = !!group.entityId;
   const Head = tappable ? "button" : "div";
   return (
-    <div className="cockpit-attention-item">
+    <div className={`cockpit-attention-item${tappable ? " tappable" : ""}`}>
       <Head
         type={tappable ? "button" : undefined}
         className={`cockpit-attention-row${tappable ? " tappable" : ""}`}
