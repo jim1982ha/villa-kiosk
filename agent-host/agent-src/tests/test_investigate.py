@@ -165,7 +165,9 @@ def test_the_investigation_page_carries_the_account_and_its_charts(tmp_path):
              "summary": "The heater ran without stopping from 03:09 for 1 h 45 min, then its supply went off at 06:00.",
              "timeline": [{"time": "03:09", "text": "It starts and does not stop.", "unusual": True}],
              "causes": [{"cause": "Water escaping downstream", "evidence": "a run far longer than any before",
-                         "confirm": "look for a leak after the pump"}],
+                         "confirm": "look for a leak after the pump"},
+                        {"cause": "A power surge", "evidence": "no surge recorded", "confirm": "-",
+                         "source": "a maker's support page", "verdict": "not supported"}],
              "cannot_tell": ["No leak sensor in the room."], "warned_earlier": ["An alert on a run over 10 min."],
              "checked": "Its power, the logbook, the automations."}
     (tmp_path / "n.json").write_text(json.dumps(notes))
@@ -177,7 +179,8 @@ def test_the_investigation_page_carries_the_account_and_its_charts(tmp_path):
     out = json.loads(r.stdout)
     page = (tmp_path / "p.html").read_text()
     for part in ("The heater on the night of 9 October", "Timeline", "Water escaping downstream", "No leak sensor",
-                 "An alert on a run over 10 min.", "Heater Power", "<svg", 'rel="icon"'):
+                 "An alert on a run over 10 min.", "Heater Power", "<svg", 'rel="icon"',
+                 "not supported", "Lead from the web: a maker&#39;s support page"):
         assert part in page, part
     assert out["charts"] == 1 and out["message"]["title"] == notes["title"]
     assert out["message"]["text"] == notes["summary"] + " Details in the attached page."   # one short block

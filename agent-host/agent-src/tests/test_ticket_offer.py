@@ -421,3 +421,19 @@ def test_the_command_alone_shows_the_skills_own_example_and_off_says_so(tmp_path
     os.utime(v.s.policy_path, (1, os.path.getmtime(v.s.policy_path) + 5))
     run(v.on_ha_event("telegram_command", {"chat_id": JM, "user_id": JM, "command": "/investigate", "args": ["x"]}))
     assert "The investigate skill is switched off on this villa" in v.tg.sent[-1][1]
+
+
+def test_web_research_is_switched_by_the_persons_own_words(tmp_path, monkeypatch):
+    # owner, 2026-10-11: web research "only if the user mention it in the request" — the engine matches the words the
+    # skill declares; the AI is told ON or off
+    from ai_fake import FakeAI
+    v = _with_investigate(tmp_path)
+    ai = FakeAI("ok").install(monkeypatch)
+    run(v.converse(JM, v.policy().person(JM), "why did the heater stop?", invoked="investigate"))
+    assert "Web research: off" in ai.runs[0]["prompt"] and "Web research: ON" not in ai.runs[0]["prompt"]
+    n = len(ai.runs)
+    run(v.converse(JM, v.policy().person(JM), "why did the heater stop? you can use internet", invoked="investigate"))
+    assert "Web research: ON" in ai.runs[n]["prompt"]
+    n = len(ai.runs)
+    run(v.converse(JM, v.policy().person(JM), "see the website of the heater", invoked="investigate"))
+    assert "Web research: off" in ai.runs[n]["prompt"]                      # a word, never part of one

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.162 (11 October 2026)
+
+- skill.yaml `modes:` (a command skill): name → words / said_on / said_off; Skill.modes_for(text) matches whole words
+  and app._converse says each mode's line before the request. investigate: `web_research` (internet, web, online, en
+  ligne); SKILL.md "Web research"; the page shows a lead's source and verdict.
+
 ## 0.6.161 (11 October 2026)
 
 - investigate: web_search in skill.yaml tools (the page's Skill tools card; read_skill says when it is switched off);

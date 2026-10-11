@@ -565,8 +565,10 @@ class Vesta:
                 inv = f"{time.time():.3f}" if invoked else None
                 sk = self.skills.get(invoked) if invoked else None
                 if sk is not None:
+                    # its modes, as the person's own words set them (skill.yaml `modes`): said before the request
+                    modes = "".join(f"{m}\n" for m in sk.modes_for(text))
                     prompt = (f"{person.name if person else 'The person'} wrote /{sk.command}: this is a request for the "
-                              f"{sk.name} skill. Read it with read_skill and follow it.\n\n{prompt}")
+                              f"{sk.name} skill. Read it with read_skill and follow it.\n{modes}\n{prompt}")
             if not is_continue:
                 checked = await asyncio.to_thread(self.before_answer)
                 if checked:

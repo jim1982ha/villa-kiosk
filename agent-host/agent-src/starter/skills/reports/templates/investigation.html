@@ -27,9 +27,10 @@
 <section>
   <h2>What it most likely means</h2>
   {# a block per cause, not a three-column table: on a phone the columns cut words in two #}
-  {% for c in n.causes %}<div class="card"><p><b>{{ loop.index }}. {{ c.cause }}</b></p>
+  {% for c in n.causes %}<div class="card"><p><b>{{ loop.index }}. {{ c.cause }}</b>{% if c.verdict %} <span class="st {{ {"consistent": "watch", "not supported": "ok", "cannot tell": "flat"}.get(c.verdict, "flat") }}">{{ c.verdict }}</span>{% endif %}</p>
     {% if c.evidence %}<p><span class="note">What points to it:</span> {{ c.evidence }}</p>{% endif %}
-    {% if c.confirm %}<p><span class="note">How to confirm on site:</span> {{ c.confirm }}</p>{% endif %}</div>
+    {% if c.confirm %}<p><span class="note">How to confirm on site:</span> {{ c.confirm }}</p>{% endif %}
+    {% if c.source %}<p class="note">Lead from the web: {{ c.source }}</p>{% endif %}</div>
   {% endfor %}
 </section>
 {% endif %}

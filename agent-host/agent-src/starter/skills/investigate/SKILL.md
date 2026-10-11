@@ -77,6 +77,20 @@ The person wants the TRUE and COMPLETE story, not a quick reply. Take the time t
    Every time and number still comes from Home Assistant: the web only explains them. Say where it came from ("the
    maker's manual says…"). Do not search for what the records already answer, nor for anything about the people.
 
+   **Web research — only when the message says "Web research: ON"** (the person asked for it in their own words):
+   once the timeline and `around` are read, describe the pattern you found in general words (the kind of device and
+   what it did, e.g. "a pump that runs without stopping, then its circuit's protection trips") and search the web for
+   its known causes, the correlations that usually go with it, and any outside event at that time (weather, grid).
+   - At most 5 searches. Never the villa's name, its address, a person, or a device's name in a search: the pattern,
+     the kind of device and its make and model only; for weather or a grid outage, at most the town.
+   - Every lead found is a QUESTION for the records, never an answer: for each, say what the records show for or
+     against it. In the account, each such cause carries "source" (where it came from) and "verdict": consistent
+     (the records fit it), not supported (the records contradict it — say so, keep it in the list as ruled out) or
+     cannot tell (no record can judge it — say what would).
+   - Nothing from the web replaces a time or a number from Home Assistant. In "checked", say web research was on and
+     how many searches you made.
+   When the message says "Web research: off", do none of this: the web only for a manual or an error code (step 6).
+
 7. **Reason, before writing.** For each unusual thing, ask what physically explains it. Keep several causes when the
    evidence allows several, rank them, and say for each what points to it and what would confirm it. Separate clearly:
    what Home Assistant SHOWS (measured, with times) · what it most likely MEANS · what it CANNOT tell (no sensor there,
@@ -100,7 +114,8 @@ report the agent sends.
         "timeline": [{"time": "09/10 02:40", "text": "The water heater starts and does not stop (normally about
                       20 min at a time).", "unusual": true}, … one per moment that matters, before, during, after],
         "causes": [{"cause": "…", "evidence": "what in the records points to it", "confirm": "how to confirm on site"},
-                   … most likely first],
+                   … most likely first; a lead from web research also has "source" (where it came from) and
+                   "verdict" ("consistent", "not supported" or "cannot tell")],
         "cannot_tell": ["what no sensor saw, gaps in the records, what only a person on site can check", …],
         "warned_earlier": ["which alert, sensor or change — and how much earlier it would have warned", …],
         "checked": "what you read: devices, the period, the logbook, the automations"}

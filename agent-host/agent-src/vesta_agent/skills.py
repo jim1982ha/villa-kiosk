@@ -226,6 +226,21 @@ class Skill:
     deliver: dict[str, str] = field(default_factory=dict)
     # how to write it, the skill's own example ("/investigate why did …?"): said to a person who sent the command alone
     usage: str = ""
+    # ⚠️ A MODE THE PERSON'S OWN WORDS SWITCH ON (owner, 2026-10-11: web research "only if the user mention it in the
+    # request"): name → {"words": [...], "on": what the AI is told when the request holds one of them (skill.yaml
+    # said_on), "off": else (said_off)}.
+    # The engine only matches the words (Skill.modes_for); what each mode means is the skill's own text.
+    modes: dict[str, dict] = field(default_factory=dict)
+
+    def modes_for(self, text: str) -> list[str]:
+        """What the AI is told of each mode for this request: its `on` text when one of its words is in it, else `off`."""
+        out = []
+        for name, m in self.modes.items():
+            hit = any(re.search(rf"(?<!\w){re.escape(w)}(?!\w)", text or "", re.I) for w in m["words"])
+            said = m["on"] if hit else m["off"]
+            if said:
+                out.append(said)
+        return out
 
     @property
     def skill_md(self) -> str:
@@ -258,6 +273,15 @@ def parse_skill(name: str, path: str) -> Skill:
             raise SkillError("command: an empty list")
         sk.command, sk.also = cmds[0], cmds[1:]
         sk.usage = str(raw.get("usage") or "").strip()[:200]
+    for name, m in (raw.get("modes") or {}).items():
+        if not sk.command:
+            raise SkillError("modes: only a skill with a command has them (they read the request that called it)")
+        words = (m or {}).get("words") if isinstance(m, dict) else None
+        if not isinstance(words, list) or not words or not all(isinstance(w, str) and w.strip() for w in words):
+            raise SkillError(f"modes: {name} needs `words`, a list of the words that switch it on")
+        # said_on / said_off — never `on:` / `off:`, which YAML reads as true / false
+        sk.modes[str(name)] = {"words": [w.strip() for w in words], "on": str(m.get("said_on") or "").strip(),
+                               "off": str(m.get("said_off") or "").strip()}
     deliver = raw.get("deliver") or {}
     if deliver:
         if not sk.command:
