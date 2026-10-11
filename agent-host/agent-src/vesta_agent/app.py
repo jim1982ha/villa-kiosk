@@ -144,7 +144,8 @@ class Vesta:
         self.buttons = AlertButtons(state=self.state, skills=self.skills, store_path=settings.store_path,
                                     thread=self.thread, run_job=self.run_code_job)
         self.tickets = Tickets(kiosk=self.kiosk, state=self.state, store_path=settings.store_path,
-                               settle_alert=self.thread.close, timezone=settings.timezone)
+                               settle_alert=self.thread.close, timezone=settings.timezone,
+                               tell_fm=lambda text: self.outcome.carry_out({"send": [{"to": "fm", "text": text}]}))
         # a voice message's words (voice.py): the skill prepares the audio, Home Assistant reads it
         self.voice = Voice(self.s, self.tg, self.skills, self.code_command, self.delivery.send, self.state, self.cf_headers)
         # the heading of every message the agent sends on its own (notice.py): who it is for, the incident, its history

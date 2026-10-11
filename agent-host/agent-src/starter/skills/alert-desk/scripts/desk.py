@@ -365,7 +365,8 @@ def watched_for(inc: dict, now: datetime | None = None, silent_hours: float = 12
 
 def still_there(inc: dict, client) -> tuple[bool | None, list[str]]:
     """Is an incident's problem still there, read from Home Assistant now? (True, what is still bad) · (False, []) ·
-    (None, what each device reads) when its rule never said which states are bad — the desk cannot tell, and says so.
+    (None, what each device reads) when its rule never said which states are bad, or a device does not answer — the
+    desk cannot tell, and says so.
 
     ⚠️ ONE ANSWER, EVERY CLOSE (architecture review 25): checked only when the rule named its states, a Done — or a close
     in the Kiosk — on a door still unlocked dropped the check without a word, and nothing watched the door again."""
@@ -375,11 +376,20 @@ def still_there(inc: dict, client) -> tuple[bool | None, list[str]]:
     states = client.states(ents) if ents else {}
 
     def name(e):
-        return (states[e].get("attributes") or {}).get("friendly_name") or e
+        return ((states.get(e) or {}).get("attributes") or {}).get("friendly_name") or e
+
+    def silent(e):        # a device that does not answer: absent, or reading "unavailable" / "unknown"
+        return (states.get(e) or {}).get("state") in (None, "unavailable", "unknown")
     if rs:
         bad = [f"{name(e)} still reads {states[e]['state']}" for e in ents if (states.get(e) or {}).get("state") in rs[1]]
-        return bool(bad), bad
-    return None, [f"{name(e)} reads {states[e]['state']}" for e in ents if states.get(e)]
+        if bad:
+            return True, bad
+        # ⚠️ A DEVICE THAT DOES NOT ANSWER IS NOT FIXED (architecture review 26): an offline lock after Done counted as
+        # "not in a bad state" — closed without a word. Unless its rule calls that state bad, the desk cannot tell.
+        mute = [f"{name(e)} does not answer" for e in ents if silent(e)]
+        return (None, mute) if mute else (False, [])
+    return None, [f"{name(e)} reads {states[e]['state']}" if not silent(e) else f"{name(e)} does not answer"
+                  for e in ents]
 
 
 def quiet_after_done(store: Store, now: datetime, client, clear_minutes: float, out: dict) -> list[int]:

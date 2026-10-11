@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.145 (11 October 2026)
+
+- Review 26: a fault's step says what it is — `kind` reopened / retitled (`title`, `was`) / reading (`title`), the
+  Kiosk agreement's `ticketUpdate.kinds` (agent-contract.json, copied from the Kiosk 2.496.323); no "Now: …" note.
+  `kiosk.agent_title` (its steps' `title`, or an old "Now: …" note) and `person_titled`: a person's title stays —
+  update_ticket writes a reading, reopen_ticket keeps it. `held_tickets` gives agent_title and the last reopened step
+  (`reopened_at` / `reopened_by`); tickets.repair reads a person's reopening from it, never from `updated_at`, and tells
+  the facility manager of a night fault reopened (`tell_fm`, `kiosk_reopen_note`). alert-desk `still_there`: a device
+  absent, unavailable or unknown (not a bad state of its rule) is "cannot check … does not answer". Tests:
+  test_fault_steps.py (11), each shown failing on its rule.
+
 ## 0.6.144 (11 October 2026)
 
 - Tickets.reopen, when it makes a new fault (none, or the Kiosk lost it): its note is the task's check (result.fault_note), never the reopening's "Back again." (villa: the Onsen pump's new fault). Test shown failing without it.

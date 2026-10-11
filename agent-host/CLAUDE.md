@@ -279,6 +279,11 @@ Decisions of 2026-09-30 (owner):
   Review 25, 0.12.149: closed is not over — the desk's `still_there` after every Done and Kiosk close (reopen "still",
   or "VESTA cannot check this one"); a person's Kiosk reopening is kept (`Problems.reopened_in_kiosk`); a settled copy
   is retitled from the incident's state (`Notices.retitle`); a refused fm chat escalates at once and tells the owner.
+- Review 26, 0.12.151 (with the Kiosk 2.496.323): a fault's step carries its `kind` (agent-contract.json
+  `ticketUpdate`: reopened, retitled {title, was}, reading {title}; none = a status step) — neither side reads a note's
+  first words (`kiosk.OLD_TITLE_NOTE` reads the old "Now: …" only). A title a person wrote stays (`person_titled`); a
+  reopening is the Kiosk's "Reopen fault" step (`held_tickets` reopened_at/by); `still_there` says a silent device
+  cannot be checked. Every Kiosk step records the profile (`by`) and the typed name (`who`).
 - No PDF (owner, 2026-09-30): the reports are self-contained HTML pages sent
   as attachments. Chromium was ~480 MB of a 1.1 GB image for this alone.
 - ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent

@@ -31,10 +31,24 @@ def kiosk_close_note(ticket: dict, zone: str) -> str:
     return f"Closed in the VESTA Kiosk{by} on {at}."
 
 
+def kiosk_reopen_note(ticket: dict, summary: str, zone: str) -> str:
+    """What the facility manager reads when a person reopened a night check's fault in the VESTA Kiosk: "Reopened in the
+    VESTA Kiosk by Owner on 10/10/2026 17:13: Pool pump weak. Please look again." """
+    from datetime import datetime
+    from .notice import when
+    by = f" by {ticket['reopened_by']}" if ticket.get("reopened_by") else ""
+    try:
+        at = f" on {when(datetime.fromisoformat(str(ticket.get('reopened_at')).replace('Z', '+00:00')), zone)}"
+    except ValueError:
+        at = ""
+    return f"Reopened in the VESTA Kiosk{by}{at}: {summary}. Please look again."
+
+
 class Tickets:
     def __init__(self, *, kiosk, state, store_path: str, settle_alert: Callable[[int, str], Awaitable[int]],
-                 timezone: str = "UTC"):
+                 timezone: str = "UTC", tell_fm: Callable[[str], Awaitable[object]] | None = None):
         self.kiosk = kiosk
+        self.tell_fm = tell_fm                # a message to the facility manager (a night fault reopened in the Kiosk)
         self.timezone = timezone              # the villa's: the note's time (notice.when)
         self.state = state
         self.store_path = store_path
@@ -122,14 +136,18 @@ class Tickets:
         # ⚠️ A CLOSED TASK'S FAULT IS CLOSED (architecture review 24): a resolve that failed (the Kiosk down a moment) left
         # the fault "Open" for good — only open tasks were read. Two days back: enough for any blip.
         # ⚠️ BUT A PERSON'S REOPENING IS THEIRS (architecture review 25): the fault reopened in the Cockpit for the
-        # facility manager to look was resolved again within 5 minutes. Updated in the Kiosk after the task closed: a
-        # person reopened it — its task opens again and the facility manager is asked (Problems.reopened_in_kiosk)
+        # facility manager to look was resolved again within 5 minutes. Reopened in the Kiosk after the task closed —
+        # its "Reopen fault" step, never a guess from timings (review 26: a fault picked up after a close that did not
+        # land was taken for a reopening, and its facility manager told to look again at a job just taken) — its task
+        # opens again and the facility manager is asked: an alert's by the desk (Problems.reopened_in_kiosk), a night
+        # check's fault here (review 26: it told nobody)
         recent = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
         for t in store.tasks(None):
             uid = t.get("todo_uid")
             if t["status"] != "open" and (t.get("done_at") or "") >= recent and uid and states.get(uid) not in (None, "resolved"):
-                if _before(t.get("done_at"), held[uid].get("updated_at")):
-                    problems.reopened_in_kiosk(t["id"], held[uid].get("by") or "")
+                if _before(t.get("done_at"), held[uid].get("reopened_at")):
+                    if not problems.reopened_in_kiosk(t["id"], held[uid].get("reopened_by") or "") and self.tell_fm:
+                        await self.tell_fm(kiosk_reopen_note(held[uid], t.get("summary") or held[uid]["title"], self.timezone))
                     log.info("Kiosk ticket %s reopened by a person: its task is open again", uid)
                 elif await self.kiosk.resolve_ticket(uid, note="Closed: the problem is over."):
                     states[uid] = "resolved"
@@ -142,7 +160,9 @@ class Tickets:
         for t in problems.open_tasks():
             uid = t.get("todo_uid")
             now_title = ticket_title(problems.current_title(t))[:200]
-            if uid and uid in held and held[uid]["status"] != "resolved" and now_title and held[uid]["title"] != now_title:
+            # the title the agent last gave it, not the one it has: a title a person wrote stays (Kiosk.update_ticket)
+            said = held.get(uid, {}).get("agent_title") or held.get(uid, {}).get("title")
+            if uid and uid in held and held[uid]["status"] != "resolved" and now_title and said != now_title:
                 try:
                     if await self.kiosk.update_ticket(uid, now_title):
                         updated += 1

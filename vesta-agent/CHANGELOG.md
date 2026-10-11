@@ -1,3 +1,13 @@
+## 0.12.151
+
+What you will see (architecture review 26, every point — with VESTA (dev2) 2.496.323):
+- A fault card no longer repeats its title under it: when the agent updates the title (a battery at 9 %, then 7 %), the card says once what it read before ("Was: …"), with its date.
+- "In progress since … by Fabien" stays Fabien's: the agent's title updates no longer replace it with "by VESTA Agent".
+- A title someone writes in the Cockpit (say "Front door lock — part ordered") stays. The agent's latest reading shows under it ("VESTA reads: …"), and it no longer writes its own title back over yours every night.
+- A resolved fault now has a "Reopen fault" button in the Cockpit. The agent sees the reopening and asks the facility manager to look again; for a night-check fault it sends them a message ("Reopened in the VESTA Kiosk by Owner on …: … Please look again."), where before it told nobody. A fault picked up after a close that did not reach the Cockpit is closed again, instead of being taken for a reopening.
+- After Done, a lock or device that does not answer (offline, or gone) is no longer counted as fixed in silence: "Note: VESTA cannot check this one; Laundry Room Aqara does not answer."
+- Who closed a fault is the profile that pressed the button (Owner or Facility manager), whether with "Mark resolved" or "Close — no action needed".
+
 ## 0.12.150
 
 What you will see:

@@ -38,6 +38,31 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+# What a step in a fault's history is — the agreement's `ticketUpdate.kinds` (agent-contract.json), never a note's
+# first words (architecture review 26: the Kiosk took "Now: …" for a status step and showed it under the title it
+# repeated). A step without a kind changes the status.
+REOPENED, RETITLED, READING = "reopened", "retitled", "reading"
+OLD_TITLE_NOTE = "Now: "            # this agent's title step before the kinds (0.12.150 and earlier), still read
+
+
+def agent_title(t: dict) -> str | None:
+    """The title the agent last gave ticket `t` — from its steps (each says the title it gave), or an old "Now: …" note;
+    None when its steps never said (a ticket written before 0.12.151)."""
+    for u in reversed([u for u in t.get("updates") or [] if isinstance(u, dict)]):
+        if isinstance(u.get("title"), str) and u["title"]:
+            return u["title"]
+        if not u.get("kind") and str(u.get("note") or "").startswith(OLD_TITLE_NOTE):
+            return str(u["note"])[len(OLD_TITLE_NOTE):][:200]
+    return None
+
+
+def person_titled(t: dict) -> bool:
+    """A person changed the ticket's title in the Kiosk: it is no longer the one the agent last gave it.
+    ⚠️ THEIRS STAYS (architecture review 26): every night the agent wrote its own back over "Front door — part ordered"."""
+    mine = agent_title(t)
+    return mine is not None and str(t.get("title") or "") != mine
+
+
 class Kiosk:
     def __init__(self, url: str, token: str, headers: dict | None = None):
         self.url = url.rstrip("/")
@@ -126,7 +151,7 @@ class Kiosk:
         def change(data: dict) -> str:
             tickets = list(data.get("tickets") or [])
             t = {"id": tid, "title": title[:200], "status": "open", "openedAt": _now(), "photoIds": [],
-                 "updates": [{"at": _now(), "status": "open", "photoIds": []}]}
+                 "updates": [{"at": _now(), "status": "open", "photoIds": [], "title": title[:200]}]}
             if entity_id:
                 t["entityId"] = entity_id
             if note:
@@ -141,8 +166,9 @@ class Kiosk:
         return {tid: t["status"] for tid, t in (await self.held_tickets()).items()}
 
     async def held_tickets(self) -> dict[str, dict]:
-        """{ticket id: {status, title, resolved_at, by, updated_at}} of the Facility records, as the Kiosk holds them now:
-        `by` the profile that closed it ("Facility manager") and `updated_at` when, from its last update."""
+        """{ticket id: {status, title, agent_title, resolved_at, by, reopened_at, reopened_by}} of the Facility records,
+        as the Kiosk holds them now: `by` the profile of its last step ("Facility manager" who closed it), `agent_title`
+        the title the agent last gave it (None: never said), `reopened_*` its last reopening, from its steps."""
         status, got = await self._req("GET", "/agent/v1/fm-data")
         if status != 200:
             raise KioskError(f"reading the Facility records answered {status}")
@@ -150,22 +176,33 @@ class Kiosk:
         def last(t: dict, key: str) -> str:
             ups = [u for u in t.get("updates") or [] if isinstance(u, dict)]
             return str(ups[-1].get(key) or "") if ups else ""
+        def reopened(t: dict) -> dict:
+            ups = [u for u in t.get("updates") or [] if isinstance(u, dict) and u.get("kind") == REOPENED]
+            return {"reopened_at": str(ups[-1].get("at") or ""), "reopened_by": str(ups[-1].get("by") or "")} if ups else {}
         return {t["id"]: {"status": str(t.get("status") or ""), "title": str(t.get("title") or ""),
-                          "resolved_at": str(t.get("resolvedAt") or ""), "by": last(t, "by"),
-                          "updated_at": last(t, "at")}
+                          "agent_title": agent_title(t), "resolved_at": str(t.get("resolvedAt") or ""),
+                          "by": last(t, "by"), **reopened(t)}
                 for t in data.get("tickets") or [] if isinstance(t, dict) and isinstance(t.get("id"), str)}
 
     async def update_ticket(self, tid: str, title: str) -> bool:
         """An open ticket says what is wrong NOW (owner, 2026-10-07: "battery at 5 %" stayed while it read 0 %): its
-        title follows, and its history says when it changed. False when it is gone, closed, or already says it."""
+        title follows, its history keeping the one before (a "retitled" step); under a title a person wrote, the title
+        stays theirs and the reading is a "reading" step. False when it is gone, closed, or already says it."""
+        title = title[:200]
+
         def change(data: dict) -> bool:
             tickets = list(data.get("tickets") or [])
             for i, t in enumerate(tickets):
                 if isinstance(t, dict) and t.get("id") == tid:
-                    if t.get("status") == "resolved" or t.get("title") == title[:200]:
+                    if t.get("status") == "resolved" or (agent_title(t) or t.get("title")) == title:
                         return False
-                    upd = {"at": _now(), "status": t.get("status") or "open", "photoIds": [], "note": f"Now: {title[:300]}"}
-                    tickets[i] = dict(t, title=title[:200], updates=list(t.get("updates") or []) + [upd])
+                    step = {"at": _now(), "status": t.get("status") or "open", "photoIds": [], "title": title}
+                    if person_titled(t):
+                        t = dict(t, updates=list(t.get("updates") or []) + [{**step, "kind": READING}])
+                    else:
+                        t = dict(t, title=title, updates=list(t.get("updates") or [])
+                                 + [{**step, "kind": RETITLED, "was": str(t.get("title") or "")}])
+                    tickets[i] = t
                     data["tickets"] = tickets
                     return True
             return False
@@ -178,9 +215,12 @@ class Kiosk:
             tickets = list(data.get("tickets") or [])
             for i, t in enumerate(tickets):
                 if isinstance(t, dict) and t.get("id") == tid:
-                    upd = {"at": _now(), "status": "open", "photoIds": [], "note": (note or f"Back again: {title}")[:500]}
+                    upd = {"at": _now(), "status": "open", "photoIds": [], "kind": REOPENED, "title": title[:200],
+                           "note": (note or f"Back again: {title}")[:500]}
+                    mine = not person_titled(t)                 # a title a person wrote stays theirs (review 26)
                     t = {k: v for k, v in t.items() if k != "resolvedAt"}
-                    tickets[i] = dict(t, status="open", title=title[:200], updates=list(t.get("updates") or []) + [upd])
+                    tickets[i] = dict(t, status="open", title=title[:200] if mine else t.get("title"),
+                                      updates=list(t.get("updates") or []) + [upd])
                     data["tickets"] = tickets
                     return True
             return False
