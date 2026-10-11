@@ -12,7 +12,7 @@ vesta_agent/            the engine: Home Assistant events, Telegram (send only),
                         approvals, runner, scheduler, skills loader
 vesta_shared/           the engine's library, also imported by the skills' scripts (read-only
                         HA MCP client, store, knowledge pack)
-starter/skills/         the five skills, copied ONCE to VESTA_SKILLS_DIR on the first start
+starter/skills/         the starter skills, each copied ONCE to VESTA_SKILLS_DIR (on the first start, or the release that adds it)
 starter/config/         policy.yaml (empty) and instructions.md, copied to VESTA_AGENT_CONFIG_DIR
 tests/                  synthetic tests, run by CI; tests/villa/ (the villa's own data) is local only
 ```

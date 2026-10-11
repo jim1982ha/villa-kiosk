@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.152 (11 October 2026)
+
+- README: a starter skill is copied once, on the first start or by the release that adds it. The image's start-up check
+  (agent-host/tests/container_test.sh) and DOCS.md list the six starter skills.
+
 ## 0.6.151 (11 October 2026)
 
 - Starter skill `investigate` (find / timeline / around: read-only, every flag against the device's own previous days,

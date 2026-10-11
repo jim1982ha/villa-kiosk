@@ -128,8 +128,8 @@ The log shows the start summary (never a key or token), one self-test line per
 connection, then the agent:
 
 ```
-Starter skills copied to the skills folder (first start): alert-desk, preventive-maintenance, reports, roi-energy, villa-concierge
-Skills: alert-desk, preventive-maintenance, reports, roi-energy, villa-concierge
+Starter skills copied to the skills folder (first start): alert-desk, investigate, preventive-maintenance, reports, roi-energy, villa-concierge
+Skills: alert-desk, investigate, preventive-maintenance, reports, roi-energy, villa-concierge
 Telegram: sending as @<the bot> (Home Assistant receives; the agent reads its events)
 VESTA Kiosk: agreement 1
 HA MCP: 77 tools on the server, 15 shown to the model

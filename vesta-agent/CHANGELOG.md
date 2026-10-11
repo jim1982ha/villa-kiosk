@@ -1,3 +1,7 @@
+## 0.12.158
+
+What you will see: the same as 0.12.157 (the investigate skill), which was pushed but not published: the image's start-up check still expected five starter skills.
+
 ## 0.12.157
 
 What you will see:
