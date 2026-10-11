@@ -1,3 +1,33 @@
+## 0.12.169
+
+What you will see:
+- /investigate now brings what a chat answer cannot: the page opens with what your records PROVE, laid out by the
+  agent itself, not retold by the AI — for any device and any investigation:
+  - "What the records show": every unusual period of each device read, with its times and how far from its own normal
+    ("running from 03:09 to 04:55 (1 h 45 min) — longer than any run of its normal (9 min)"), what else stopped
+    answering next to those moments, and the automations that ran then and could have switched something.
+  - "Ruled out by the records": a switch or relay that stayed off the whole time, an automation that ran but can only
+    notify or record, a web lead your records contradict.
+  - The timeline, built from the records (what a person saw on site is added, marked "reported").
+  - "What would have warned earlier": when an alert on the same limit would have fired, and how long before the
+    trouble ended ("would have warned at 03:14, 1 h 40 min before it ended").
+  - The chat message starts with one line of those facts (the longest unusual periods), then the AI's explanation.
+  The AI's part is what the facts MEAN — the likely causes, what cannot be known, what to check on site.
+- The charts explain themselves: each shaded band says what it is ("supply off", "unusual run", "stop-start", "not
+  answering") with a legend under the chart, and the same hours of each of the days before are drawn faintly behind,
+  so what is not normal shows at a glance (a period of a day or less). Under the charts, "On the same timeline" shows
+  the switches, relays, doors… read with it, the other devices that stopped answering and the automations that could
+  act at those moments — tap any of them for its time.
+- The "Sources (web)" section is always there: when no web page was used it says so.
+- Short blips are no longer flagged: a level is judged over at least 2 minutes and a reading of exactly 0 over at least
+  a minute (the limits an alert would need; investigate's settings.yaml).
+- The agent's log now says how long each step and each whole answer took, so a slow answer can be explained.
+- Any web search the AI makes during an investigation — asked for or not, even for a manual — now requires its web
+  pages in "Sources (web)", and "How it was checked" lists the searches made.
+- /investigate now uses its own brain, Auto (Sonnet), with a limit of 3 US$ per answer — every other chat answer keeps your Rules page's brain (Economy) and limit. The brain and the limit are in the investigate skill's skill.yaml (brain, limit_usd), so you can change them there.
+- A device that runs only a few seconds now and then (a pump topping up) is now understood: the investigation counts its normal runs, so it can say "far longer than any normal run" and "exactly 0 W where it normally reads a little: its supply was off" — before, it read "normal: 0 runs a day" and could say neither.
+- An /investigate with web research ("…you can use internet…") always shows its web sources. The page has a "Sources (web)" section listing every web page used, as links, and each cause found on the web says where it came from and its verdict against your records (consistent, not supported, cannot tell). The page cannot be made without them: before, a page researched with 5 web searches named no source.
+
 ## 0.12.168
 
 What you will see:
