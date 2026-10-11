@@ -325,14 +325,20 @@ def same_hours_before(base_rows: list[tuple[datetime, str]], start: datetime, en
 
 def state_series(rows: list[tuple[datetime, str]], start: datetime, end: datetime) -> list[dict]:
     """A device without numbers as its changes over [start, end): each {at, state, as} — `as` on / off / offline /
-    other, by the same vocabularies the timeline judges with, so the page needs no list of its own."""
+    other (value: one that reports a value, not a state), by the same vocabularies the timeline judges with."""
+    # ⚠️ A VALUE IS NOT A STATE (owner, 2026-10-12: a relay's "Uptime" filled its whole lane): an entity with more
+    # different states than `state_lane_max` reports a value (a time, a text) — its lane shows only when it stopped
+    # reporting, never each value as "another state"
+    distinct = {s for _, s in rows if s not in OFFLINE | NO_VALUE}
+    value = len(distinct) > th("state_lane_max")
     out = []
     for t, s in rows:
         t = max(t, start)
         if t >= end:
             break
-        tag = "offline" if s in OFFLINE | NO_VALUE else "on" if s in ON_STATES else "off" if s in OFF_STATES else "other"
-        if out and out[-1]["state"] == s:
+        tag = "offline" if s in OFFLINE | NO_VALUE else "value" if value else "on" if s in ON_STATES else \
+            "off" if s in OFF_STATES else "other"
+        if out and (out[-1]["state"] == s or out[-1]["as"] == tag == "value"):
             continue
         if out and out[-1]["at"] == t.isoformat():
             out.pop()                                          # two states at the same instant: the last one holds

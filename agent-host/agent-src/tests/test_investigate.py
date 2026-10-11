@@ -740,7 +740,7 @@ def test_the_hours_chart_stops_at_an_hour_and_draws_its_usual_as_one_line():
     import compose
     chart = compose.hourchart({"unit": "hour", "bins": [
         {"at": T(9, h).isoformat(), "minutes": m, "usual": u} for h, m, u in ((2, 0, 0.3), (3, 58, 0.2), (4, 0, 8))]}, Z)
-    assert ">60</text>" in chart and ">80</text>" not in chart
+    assert ">60</span>" in chart and ">80</span>" not in chart
     assert chart.count('class="usual"') == 1 and chart.count(f'stroke="{compose.USUAL}"') == 1   # one line, no dashes
 
 
@@ -850,3 +850,38 @@ def test_a_lead_names_its_web_page_and_links_its_number_or_says_the_records(tmp_
             in page)
     notes["causes"][0]["source"] = "the villa's records"
     assert _page(tmp_path, notes, ["pump runs nonstop"], readings=False)[0] == 0
+
+
+def test_every_word_of_a_chart_is_page_text_at_the_reports_size():
+    # owner, 2026-10-12: "the X-axis and Y-axis and the graph legends … a font size different from the text in the
+    # report" — no word is drawn in a chart any more: each is laid over it, in the page's own size
+    sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
+    import compose
+    charts = [compose.line([("2026-10-01", 40), ("2026-10-02", 97)], "%"),
+              compose.hourchart({"unit": "hour", "bins": [{"at": T(9, h).isoformat(), "minutes": 5, "usual": 1}
+                                                          for h in range(3)]}, Z),
+              compose.strip([{"name": "Spa Relay", "bands": [{"start": T(9, 2), "end": T(9, 4), "state": "on",
+                                                               "as": "on"}]}], T(9, 2), T(9, 15), Z)]
+    for chart in charts:
+        assert "<text" not in chart and '<span class="ax"' in chart, chart[:200]
+    assert '">Spa Relay</span>' in charts[2]
+    head = open(os.path.join(STARTER_SKILLS, "reports", "templates", "page_head.html"), encoding="utf-8").read()
+    import re
+    note = re.search(r"(?:^|[}\n])\.note\{([^}]*)\}", head).group(1)
+    assert "font-size:13px" in head[head.index(".chart .ax{"):][:200] and "font-size:13px" in note   # the notes' size
+
+
+def test_a_device_that_reports_a_value_has_no_state_band():
+    # owner, 2026-10-12: a relay's "Uptime" (a new time at every reading) filled its whole lane as "another state"
+    import investigate
+    rows = [(T(9, 2) + timedelta(minutes=10 * k), f"2026-10-0{k % 9 + 1}T00:00:00") for k in range(12)]
+    rows.insert(5, (T(9, 2, 45), "unavailable"))
+    got = investigate.state_series(rows, T(9, 2), T(9, 15))
+    assert [g["as"] for g in got] == ["value", "offline", "value"]           # only when it stopped reporting shows
+    door = investigate.state_series([(T(9, 2), "open"), (T(9, 3), "closed"), (T(9, 4), "jammed")], T(9, 2), T(9, 15))
+    assert [g["as"] for g in door] == ["on", "off", "other"]                  # a few states: a state lane
+    sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
+    import compose
+    lane = compose.strip([{"name": "Uptime", "bands": [{"start": T(9, 2), "end": T(9, 15), "state": "x", "as": "value"}]}],
+                         T(9, 2), T(9, 15), Z)
+    assert "opacity=\".55\"" not in lane and compose.strip_legend([{"bands": [{"as": "value"}]}]) == []

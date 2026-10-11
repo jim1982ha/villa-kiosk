@@ -64,7 +64,8 @@ def test_a_percentage_line_stays_within_0_to_100_while_its_values_do():
     # owner, 2026-10-05: "the Y axis shall never go above 100 % when the value is 100 %" — but never a cap
     import re
     import compose
-    top = lambda svg: max(float(v.replace(",", "")) for v in re.findall(r'text-anchor="end" fill="var\(--ink2\)">([-\d.,]+)<', svg))
+    # the axis values are page text over the chart (compose._framed): right-aligned spans
+    top = lambda svg: max(float(v.replace(",", "")) for v in re.findall(r'translate\(-100%,-80%\)[^"]*">([-\d.,]+)</span>', svg))
     assert top(compose.line([("2026-10-01", 100), ("2026-10-02", 100), ("2026-10-03", 100)], "%")) == 100
     assert top(compose.line([("2026-10-01", 40), ("2026-10-02", 97)], "%")) == 100
     assert top(compose.line([("2026-10-01", 80), ("2026-10-02", 135)], "%")) > 135          # an energy change: no cap

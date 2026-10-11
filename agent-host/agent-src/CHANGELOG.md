@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.167 (12 October 2026)
+
+- compose._framed lays every <text> of a chart over it as page text (.chart .ax, 13 px; 11 px under 480 px wide).
+- investigate.state_series: more than `state_lane_max` (settings.yaml, 8) different states = a value (`as: value`): its
+  lane draws only its offline bands.
+
 ## 0.6.166 (12 October 2026)
 
 - compose._tip is a mark laid over the chart as page text by _framed (CSS .chart .pt, 13 px, after the svg): every

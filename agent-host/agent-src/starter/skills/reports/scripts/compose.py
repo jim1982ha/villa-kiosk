@@ -210,17 +210,31 @@ def _tip(x: float, y: float, x0: float, x1: float, top: float, bottom: float, la
 
 
 _TIP = re.compile(r"<!--pt (\{.*?\})-->")
+_TEXT = re.compile(r"<text ([^>]*)>(.*?)</text>", re.S)
 
 
 def _framed(svg: str) -> str:
     """A chart with its tips: the svg, then each tip as a hover/tap area over its column (positions in % of the chart,
     so they follow it at any width), its text in the page's own font."""
     tips = [json.loads(m) for m in _TIP.findall(svg)]
-    if not tips:
-        return svg
     vb = re.search(r'viewBox="0 0 ([\d.]+) ([\d.]+)"', svg)
     w_, h_ = (float(vb.group(1)), float(vb.group(2))) if vb else (W, H)
-    out = []
+    # ⚠️ EVERY WORD OF A CHART IS PAGE TEXT (owner, 2026-10-12: "the X-axis and Y-axis and the graph legends … a font
+    # size different from the text in the report"): drawn in the chart, axis values and lane names grew with it — laid
+    # over it here, at the report's size (.chart .ax), where the chart put them
+    words = []
+    for attrs, said in _TEXT.findall(svg):
+        a = dict(re.findall(r'([\w-]+)="([^"]*)"', attrs))
+        try:
+            x, y = float(a.get("x", 0)), float(a.get("y", 0))
+        except ValueError:
+            continue
+        shift = {"end": "-100%", "middle": "-50%"}.get(a.get("text-anchor"), "0")
+        colour = a.get("fill") if a.get("fill", "").startswith("var(") else ""
+        words.append(f'<span class="ax" style="left:{x / w_ * 100:.2f}%;top:{y / h_ * 100:.2f}%;'
+                     f'transform:translate({shift},-80%){";color:" + colour if colour else ""}">{said}</span>')
+    svg = _TEXT.sub("", svg)
+    out = words
     for t in tips:
         side = " l" if t["x"] < w_ * .3 else " r" if t["x"] > w_ * .7 else ""
         cw, ch = t["x1"] - t["x0"], max(t["bottom"] - t["top"], 1)
@@ -643,7 +657,7 @@ def strip(lanes: list[dict], start: datetime, end: datetime, zone: ZoneInfo) -> 
                    'opacity=".06"/>')
         for b in lane.get("bands") or []:
             a_, b_ = max(b["start"], start), min(b["end"], end)
-            if b_ <= a_ or b.get("as") == "off":
+            if b_ <= a_ or b.get("as") in ("off", "value"):        # off: the empty lane; a value: not a state
                 continue
             out.append(f'<rect x="{x(a_):.1f}" y="{top}" width="{max(x(b_) - x(a_), 1.5):.1f}" height="{LANE_H - 6}" '
                        f'fill="{LANE_STYLE.get(b.get("as"), LANE_STYLE["other"])[1]}" opacity=".55"/>')

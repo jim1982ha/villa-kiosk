@@ -18,4 +18,5 @@ behaviour:
   level_change_ratio: 0.33    # a reading this share away from its level is a change of level…
   level_change_gap_s: 120     # …once it has lasted this long (and a run's level is judged only over this long)
   noise_per_hour: 30          # an entity changing more often than this an hour is background, not an event
+  state_lane_max: 8           # an entity with more different states than this reports a value (a time, a text), not a state
   coincide_s: 600             # the page puts an event next to an unusual moment when it happened within this of it
