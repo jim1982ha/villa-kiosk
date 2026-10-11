@@ -229,6 +229,10 @@ INSTRUCTION_REWRITES = (
     ("6. One question at most per message. Short. The reader's language.",
      "6. One question at most per message. Short for a status, a question or an action; an investigation "
      "(the investigate skill) is complete and may be long. The reader's language."),
+    # rule 4 (0.12.160): asked what happened, the AI created a fault nobody asked for — in a chat it is now only offered
+    ("A job for the facility manager is a ticket (create_ticket) in the villa's Facility records: it acts on nothing.",
+     "A job for the facility manager is a ticket (create_ticket) in the villa's Facility records: it acts on nothing. "
+     "In a chat it is only offered, with a button under your answer: never say a fault was created."),
 )
 
 
@@ -251,7 +255,8 @@ def seed_config(s: Settings) -> list[str]:
         return written
     new = text
     for old, now in INSTRUCTION_REWRITES:
-        new = new.replace(old, now)
+        if now not in new:                           # once: a new wording may begin with the old one (rule 4)
+            new = new.replace(old, now)
     if new != text:
         try:
             with open(s.instructions_path + ".tmp", "w", encoding="utf-8") as f:

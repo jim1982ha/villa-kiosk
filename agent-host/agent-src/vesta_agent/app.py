@@ -77,6 +77,10 @@ def _pretty(entity_id: str) -> str:
     return obj.replace("_", " ").strip().capitalize()
 
 
+#: the words on the button under an answer that offers a fault (tools._ticket)
+OFFER_BUTTON = "Create this fault for the facility manager"
+
+
 @dataclass
 class Press:
     """A press on one of the agent's buttons, as its handler gets it."""
@@ -491,7 +495,9 @@ class Vesta:
                 "a list is lines starting with '- '.\n" +
                 "When asked to produce, check or run something, do it again now with your tools: never answer from an "
                 "earlier attempt in this conversation. Skills, data and fixes change between messages.\n" +
-                f"Your skills: {skills or 'none'}. Read a skill with read_skill before doing its job.\n" + pol.summary() + "\n"
+                f"Your skills: {skills or 'none'}. Read a skill with read_skill before doing its job — for each new "
+                "message, the skill whose description matches it, even when this conversation already talked about the "
+                "subject.\n" + pol.summary() + "\n"
                 # ⚠️ NO CLOCK HERE (2026-10-09): the time changed these instructions every minute, so a resumed chat
                 # re-sent its whole conversation at full price instead of reading it from the prompt cache (about a
                 # tenth of the price). The date and time ride on each message instead (runner.run).
@@ -521,7 +527,7 @@ class Vesta:
                         "a voice message, as transcribed" if voice else "a message")
                 prompt = (f"{said[0].upper() + said[1:]} from {person.name if person else 'someone'} (role "
                           f"{person.role if person else '?'}; language saved for them: {lang}) in the {self.policy().chat_label(cid)}:\n"
-                          f"\"\"\"{text}\"\"\"\nAnswer short.")
+                          f"\"\"\"{text}\"\"\"")
             if not is_continue:
                 checked = await asyncio.to_thread(self.before_answer)
                 if checked:
@@ -555,6 +561,11 @@ class Vesta:
                 answer = (answer + "\n\n" if answer else "") + \
                     f"Stopped: this answer reached the {res.limit_usd:g} USD limit per reply."
                 keyboard = {"inline_keyboard": [[{"text": "Continue", "callback_data": button_data.make(button_data.CONTINUE, cont)}]]}
+            # a fault the AI offered in this answer (tools._ticket): its button goes under it; only a press creates it
+            offers = self.state.ticket_offers_to_show(cid)
+            if offers:
+                rows = [[{"text": OFFER_BUTTON, "callback_data": button_data.make(button_data.TICKET, o["id"])}] for o in offers]
+                keyboard = {"inline_keyboard": (keyboard or {}).get("inline_keyboard", []) + rows}
             # ⚠️ A REQUEST SHOWN HERE IS THE ANSWER (owner, 2026-10-10: "Approval request sent." under it, twice "redundant"):
             # told not to, the AI still wrote it — and pressed at once, the request was decided before that line came, so
             # nothing removed it. The engine decides: no written reply after a request put in this chat (anything else
@@ -608,7 +619,8 @@ class Vesta:
         # ⚠️ ONE TABLE OF BUTTON KINDS (button_data.py): each kind's handler below; who must be registered, once
         kind, parts = button_data.read(data)
         handle = {button_data.APPROVAL: self.approvals.press, button_data.CONTINUE: self._press_continue,
-                  button_data.ALERT: self._press_alert, button_data.REPORT: self._press_report}.get(kind)
+                  button_data.ALERT: self._press_alert, button_data.REPORT: self._press_report,
+                  button_data.TICKET: self._press_ticket}.get(kind)
         if handle is None:
             return await toast("Unknown button.")
         person = pol.member(presser, cid, q.get("from_first"))      # a listed group's member presses with its role
@@ -624,6 +636,24 @@ class Vesta:
             return await p.toast("Only the person who asked can continue this answer.")
         await p.toast("Continuing.")
         await self.converse(p.chat, p.person, "", resume=cont["session_id"], is_continue=True)
+
+    async def _press_ticket(self, p: "Press") -> None:
+        """The fault the AI offered under an answer, created now — once, whoever presses first."""
+        offer = self.state.claim_ticket_offer(p.parts[0], p.chat)
+        if not offer:
+            return await p.toast("Already created.")
+        try:
+            await self.tickets.create(offer["title"], offer.get("entity_id"), offer.get("note"))
+        except Exception as e:  # noqa: BLE001
+            self.state.release_ticket_offer(offer["id"])            # the button still works
+            log.warning("The offered fault could not be created (%s)", type(e).__name__)
+            return await p.toast("The VESTA Kiosk did not record it. Try again in a moment.")
+        said = f"Fault created for the facility manager by {p.person.name}: {offer['title']}"
+        await p.toast("Fault created.")
+        if p.mid:
+            # the answer stays whole, its button gone, the fault said under it (as a report's button does)
+            await self.delivery.edit(p.chat, p.mid, layout.render(layout.parts(body=str(p.msg.get("text") or ""),
+                                                                               status=said)))
 
     async def _press_alert(self, p: "Press") -> None:
         # the presser as this chat knows them (Policy.member: one person may be both owner and fm, each with its name)

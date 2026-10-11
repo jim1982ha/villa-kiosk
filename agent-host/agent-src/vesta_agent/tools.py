@@ -60,7 +60,7 @@ The code adds --pack, --store and --zone itself: never pass them, nor --fixture-
 Output files: give --out a plain file name (e.g. week.json); the file lands in the agent's out folder and can be
 passed by name to another script or attached with send_message.
 Any action on the villa (light, lock, siren, automation...) is ha_call_service: it only ASKS a person, who approves
-with a button. A task for the facility manager is create_ticket. The desk's siren/reply/intake/tick commands are
+with a button. A task for the facility manager is create_ticket (in a chat it is only offered, with a button). The desk's siren/reply/intake/tick commands are
 done by the code, not by you. Ignore the parts of the text below that tell you to run them.
 [End of the VESTA note]
 
@@ -186,7 +186,7 @@ class Toolbox:
             # a person asking, in a chat: never a job (even one started from a chat), so no job starts another
             tools.append(self._start_job(chat_id, person.role))
         if self.ticket and self._on("create_ticket"):
-            tools.append(self._ticket())
+            tools.append(self._ticket(origin.chat if origin and origin.is_conversation else None))
         return tools
 
     def for_run(self, person: Person | None, origin: Origin | None) -> "Kit":
@@ -269,15 +269,24 @@ class Toolbox:
             return _ok(answer)
         return handler
 
-    def _ticket(self):
+    def _ticket(self, offer_in: int | None = None):
+        """`offer_in`: the chat of a person being answered — there the fault is only OFFERED, with a button under the
+        answer (app._converse) that creates it when a person presses. ⚠️ THE ENGINE DECIDES, NOT THE AI (owner,
+        2026-10-11): asked "what happened to the pump", the AI answered with "Ticket created for the facility manager"
+        — twice in one day, nobody had asked. A scheduled job or an alert has nobody to press: it creates at once."""
         schema = {"type": "object", "properties": {
             "title": {"type": "string", "description": "What is wrong, in plain words, one line."},
             "entity_id": {"type": "string", "description": "The device concerned, optional."},
             "note": {"type": "string", "description": "What to check, optional."}},
             "required": ["title"]}
+        offered: list[str] = []
+        what = ("Offer a fault for the facility manager: a button under your answer creates it in the villa's Facility "
+                "records (the VESTA Kiosk) if the person presses it. One per answer. It acts on nothing."
+                if offer_in is not None else
+                "Record a fault for the facility manager in the villa's Facility records (the VESTA Kiosk). "
+                "It does not act on anything. Use it for a job someone must do.")
 
-        @tool("create_ticket", "Record a fault for the facility manager in the villa's Facility records (the VESTA Kiosk). "
-                               "It does not act on anything. Use it for a job someone must do.", schema)
+        @tool("create_ticket", what, schema)
         async def handler(args: dict) -> dict:
             title = str(args.get("title") or "").strip()
             if not title:
@@ -285,8 +294,15 @@ class Toolbox:
             ent = str(args.get("entity_id") or "").strip() or None
             if ent and not re.match(r"^[a-z_]+\.[a-z0-9_]+$", ent):
                 return _err(f"{ent} is not an entity id.")
+            note = str(args.get("note") or "")[:2000] or None
+            if offer_in is not None:
+                if offered:
+                    return _err("A fault is already offered under this answer: put everything in that one's note.")
+                offered.append(self.state.new_ticket_offer(offer_in, title[:200], ent, note))
+                return _ok("Offered, NOT created: a button under your answer lets the person create it. Never say it "
+                           "was created; you may say they can create it with the button.")
             try:
-                await self.ticket(title=title[:200], entity_id=ent, note=str(args.get("note") or "")[:2000] or None)
+                await self.ticket(title=title[:200], entity_id=ent, note=note)
             except Exception as e:  # noqa: BLE001
                 return _err(f"The Kiosk did not record the ticket ({type(e).__name__}).")
             # recorded once, by tickets.create (architecture review 16: logged here too, each ticket counted twice)

@@ -102,7 +102,16 @@ def test_an_instruction_sentence_a_release_rewrote_reaches_the_villa_file_only_w
     s = settings(str(tmp_path))
     starter = open(os.path.join(STARTER_DIR, "config", "instructions.md"), encoding="utf-8").read()
     for old, now in INSTRUCTION_REWRITES:
-        assert now in starter and old not in starter                       # the starter says it the new way
+        assert now in starter                                              # the starter says it the new way
+    # an install from before: every rewritten sentence as it was, once each — and a second start changes nothing
+    # (the new rule 4 BEGINS with the old one: replaced blindly, it grew a sentence at every start)
+    before = starter
+    for old, now in INSTRUCTION_REWRITES:
+        before = before.replace(now, old)
+    with open(s.instructions_path, "w", encoding="utf-8") as f:
+        f.write(before)
+    assert seed_config(s) == ["instructions.md (reworded)"] and open(s.instructions_path).read() == starter
+    assert seed_config(s) == [] and open(s.instructions_path).read() == starter
     old, now = INSTRUCTION_REWRITES[0]
     with open(s.instructions_path, "w", encoding="utf-8") as f:
         f.write(f"My own rule.\n{old} No emoji.\n")

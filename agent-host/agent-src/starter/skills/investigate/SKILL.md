@@ -97,6 +97,7 @@ Rules for the answer:
   when the account spans several days.
 - Devices and rooms by their names, never an entity id or a rule code.
 - Say "I could not read …" for anything that failed, and what that leaves uncertain.
-- Do not create a fault or a ticket instead of answering. At the end, you may OFFER one sentence of next step (an
-  alert to add, a check to do on site) — offer, never do it unasked.
+- Answer first, completely: a fault is never the answer. Only if a person must check or do something on site, you may
+  then call create_ticket once — in a chat it only puts a button under your answer, and the person decides. Never
+  write that a fault or a ticket was created.
 - Do not make an HTML page unless the person asks for one.

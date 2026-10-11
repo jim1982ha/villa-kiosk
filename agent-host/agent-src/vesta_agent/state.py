@@ -46,6 +46,17 @@ create table if not exists continuations(
   requested_by integer,
   used integer not null default 0
 );
+-- a fault the AI offered in a chat, created only when a person presses its button (owner, 2026-10-11)
+create table if not exists ticket_offers(
+  id text primary key,
+  created_at text not null,
+  chat_id integer not null,
+  title text not null,
+  entity_id text,
+  note text,
+  shown integer not null default 0,
+  used integer not null default 0
+);
 create table if not exists kv(
   k text primary key,
   v text
@@ -395,6 +406,7 @@ class State:
             sess = self.db.execute("delete from sessions where last_used < ?", (sessions_before,)).rowcount \
                 if sessions_before else 0
             cont = self.db.execute("delete from continuations where created_at < ?", (records_before,)).rowcount
+            cont += self.db.execute("delete from ticket_offers where created_at < ?", (records_before,)).rowcount
             msgs = self.db.execute("delete from own_messages where sent_at < ?", (records_before,)).rowcount
             for prefix, life in KV_FAMILIES.items():
                 if life == RECORDS:
@@ -494,6 +506,38 @@ class State:
                             (cid, utcnow().isoformat(), int(chat_id), session_id, requested_by))
             self.db.commit()
         return cid
+
+    # ------------------------------------------------------------------ a fault offered in a chat
+    def new_ticket_offer(self, chat_id: int, title: str, entity_id: str | None, note: str | None) -> str:
+        oid = secrets.token_urlsafe(9)
+        with self._lock:
+            self.db.execute("insert into ticket_offers(id, created_at, chat_id, title, entity_id, note) values(?,?,?,?,?,?)",
+                            (oid, utcnow().isoformat(), int(chat_id), title, entity_id, note))
+            self.db.commit()
+        return oid
+
+    def ticket_offers_to_show(self, chat_id: int) -> list[dict]:
+        """The faults offered in this chat that no answer carries yet: the answer going out now shows them."""
+        with self._lock:
+            rows = [dict(r) for r in self.db.execute("select * from ticket_offers where chat_id=? and shown=0 "
+                                                      "order by created_at", (int(chat_id),))]
+            self.db.execute("update ticket_offers set shown=1 where chat_id=? and shown=0", (int(chat_id),))
+            self.db.commit()
+        return rows
+
+    def claim_ticket_offer(self, oid: str, chat_id: int) -> dict | None:
+        """The offer, claimed for one press (None: no such offer, or pressed already); `release_ticket_offer`
+        gives it back when the Kiosk did not record the fault, so the button still works."""
+        with self._lock:
+            n = self.db.execute("update ticket_offers set used=1 where id=? and chat_id=? and used=0", (oid, int(chat_id))).rowcount
+            self.db.commit()
+            r = self.db.execute("select * from ticket_offers where id=?", (oid,)).fetchone() if n else None
+        return dict(r) if r else None
+
+    def release_ticket_offer(self, oid: str) -> None:
+        with self._lock:
+            self.db.execute("update ticket_offers set used=0 where id=?", (oid,))
+            self.db.commit()
 
     def use_continuation(self, cid: str, chat_id: int, by: int | None = None) -> dict | None:
         """The continuation, used up — or {"not_yours": True}, left as it is, when `by` is not the person who

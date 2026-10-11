@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.154 (11 October 2026)
+
+- create_ticket in a conversation only OFFERS (state.ticket_offers; button kind "t", app._press_ticket: claimed once,
+  released when the Kiosk refuses); one offer per answer; a scheduled job or alert hook still creates at once.
+  tests/test_ticket_offer.py.
+- The chat prompt no longer ends with "Answer short."; the system prompt asks for the matching skill on every new message.
+- INSTRUCTION_REWRITES: rule 4 (offered in a chat); a rewrite applies once even when the new wording begins with the old.
+
 ## 0.6.153 (11 October 2026)
 
 - McpClient.logbook: hours_back is counted back from end_time (ha-mcp), not from now — a past period read every hour

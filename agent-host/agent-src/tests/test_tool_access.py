@@ -448,7 +448,8 @@ def test_a_ticket_the_ai_creates_is_one_action(agent, monkeypatch):
         return "T1"
     tb = agent.toolbox()
     tb.ticket = create
-    tool = next(t for t in tb.tool_objects(Person(OWNER, "O", "owner"), Origin(OWNER_CHAT, CONVERSATION)) if t.name == "create_ticket")
+    # a scheduled job's (in a chat it is only offered: test_ticket_offer)
+    tool = next(t for t in tb.tool_objects(None, None) if t.name == "create_ticket")
     before = sum(1 for c in agent.state.calls_since("1970") if c["kind"] == "executed")
     run(tool.handler({"title": "Pool pump noisy"}))
     assert sum(1 for c in agent.state.calls_since("1970") if c["kind"] == "executed") == before + 1
