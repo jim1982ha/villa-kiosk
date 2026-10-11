@@ -1,3 +1,14 @@
+## 0.12.165
+
+What you will see (architecture review 32 — the investigation, end to end):
+- Pressing "Create this fault for the facility manager" (or "Don't create it") under an investigation now always says what happened under the message — "Fault created for the facility manager by JM: …". Before, the buttons vanished and the text was cut off with no word.
+- "Continue" after an investigation that stopped at its limit always goes on with that same investigation, even if you wrote something else in between; it offers one fault per investigation (never two), and never titles it with an older investigation of the same chat.
+- When the agent asks the AI again for a missing page and that attempt stops (its limit, no credit), you read the true reason and get the "Continue" button — not "the page could not be made".
+- /investigate with the investigate skill switched off answers that it is switched off, instead of saying nothing. /investigate alone shows the skill's own example.
+- The investigation's summary always fits one message with its page, even when it goes to several people.
+- If Home Assistant's history of a device could not be read whole, the investigation says from when nothing is known — it no longer stretches the last reading to the end of the period.
+- The investigation's thresholds (what counts as unusual) are in the skill's settings.yaml, which a villa can change in villa.settings.yaml.
+
 ## 0.12.164
 
 What you will see:
