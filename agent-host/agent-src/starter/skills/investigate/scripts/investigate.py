@@ -37,6 +37,8 @@ OFFLINE = {"unavailable"}                 # the device does not answer
 NO_VALUE = {"unknown", ""}                # it answers, without a value
 MAX_LINES = 120                           # per part: enough for a night, short enough to reason about
 NOISE_PER_HOUR = 30                       # an entity changing more often than this is background, not an event
+DAY_ONLY = re.compile(r"^\d{4}-\d{2}-\d{2}$")    # a date without a time
+ENTITY_ID = re.compile(r"^[a-z_]+\.[a-z0-9_]+$")    # sensor.a, binary_sensor.b: what find gives, never a word
 
 
 # ------------------------------------------------------------------ small helpers
@@ -470,9 +472,15 @@ def main(argv=None):
             if not (a.start and a.end):
                 raise SystemExit(f"{a.cmd} needs --start and --end (the villa's time, e.g. 2026-10-09T02:00).")
             start, end = parse_time(a.start, zone), parse_time(a.end, zone)
+            if DAY_ONLY.match(a.end.strip()):
+                end += timedelta(days=1)                   # "--end 2026-10-09" is the whole of the 9th, as a person means it
             if end <= start:
                 raise SystemExit("--end must be after --start.")
             ids = [x.strip() for part in (a.entities or []) for x in part.split(",") if x.strip()]
+            wrong = [x for x in ids if not ENTITY_ID.match(x)]
+            if wrong:
+                raise SystemExit(f"--entities takes the ids find gives (like sensor.a), separated by "
+                                 f"commas: {', '.join(repr(x) for x in wrong[:3])} is not one. Run find first.")
             if a.cmd == "timeline":
                 if not ids:
                     raise SystemExit("timeline needs --entities: ids from find, separated by commas.")

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.153 (11 October 2026)
+
+- McpClient.logbook: hours_back is counted back from end_time (ha-mcp), not from now — a past period read every hour
+  between its start and now (67 h for one day two days ago, 24 pages, 75 s on the villa); test_ha_reads pins it.
+- investigate.py: a date alone as --end is the whole of that day; --entities refuses what is not an entity id.
+- config.load logs what seed_config wrote (an instruction rewording left no trace).
+
 ## 0.6.152 (11 October 2026)
 
 - README: a starter skill is copied once, on the first start or by the release that adds it. The image's start-up check

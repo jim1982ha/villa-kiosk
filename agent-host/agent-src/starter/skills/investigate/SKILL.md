@@ -35,7 +35,9 @@ The person wants the TRUE and COMPLETE story, not a quick reply. Take the time t
    `run_skill_script investigate investigate.py timeline --entities <ids, separated by commas> --start <…> --end <…>`
    - The period: from at least 2 hours BEFORE the first sign of trouble to AFTER things were back to normal (or now).
      When the moment is unknown, read the whole day or days first, then narrow on what stands out.
-   - At most about 5 ids in one `--entities` (it is a short text); repeat `--entities` for more.
+   - At most about 5 ids in one `--entities` (it is a short text); repeat `--entities` for more. Only ids from find
+     (sensor.…, switch.…), never words. A date alone is a whole day: `--start 2026-10-09 --end 2026-10-09` reads the
+     9th from 00:00 to midnight.
    - Each line flagged "⟵" is unusual against the device's own normal (the days before): a run far longer than any
      before, a level 1.5× or more its normal, exactly 0 where it normally reads a little (its supply was off), no
      answer, stop-start cycling. These flags are the backbone of your answer.

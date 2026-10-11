@@ -1,3 +1,11 @@
+## 0.12.159
+
+What you will see (from your tries of investigate on the Agent page):
+- An investigation of a past day is about three times faster: asking about the 9th read 67 hours of the logbook (75 s) instead of that one day. The same fix applies to every report that reads a period in the past.
+- "--end 2026-10-09" now means the whole of the 9th, as you meant it, instead of "the end is not after the start".
+- Words given where the script needs device ids ("--entities house pump") are refused with a clear message saying to run find first, instead of being silently ignored.
+- The agent's log now says when it rewrote a sentence of your instructions at start (rule 6 in 0.12.157).
+
 ## 0.12.158
 
 What you will see: the same as 0.12.157 (the investigate skill), which was pushed but not published: the image's start-up check still expected five starter skills.

@@ -110,3 +110,31 @@ def test_no_device_of_any_villa_is_written_in_the_skill():
                 text = open(os.path.join(root, name), encoding="utf-8").read()
                 ids = set(re.findall(r"\b(?:sensor|switch|binary_sensor|automation|light|climate)\.[a-z0-9_]+\b", text))
                 assert ids <= {"sensor.a", "binary_sensor.b", "sensor.c"}, (name, ids)   # the usage examples only
+
+
+def _main(tmp_path, *args):
+    """The script as the agent runs it, Home Assistant read from an empty fixture folder; (exit, what it said)."""
+    import contextlib
+    import io
+    import json
+    import investigate
+    out = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(out):
+            code = investigate.main([*args, "--fixture-dir", str(tmp_path), "--store", str(tmp_path / "s.sqlite"),
+                                     "--zone", "UTC"])
+    except SystemExit as e:
+        return 1, str(e.code)
+    return code, json.loads(out.getvalue())
+
+
+def test_a_date_alone_is_the_whole_day_and_words_are_not_device_ids(tmp_path):
+    # the owner's tries on the page (2026-10-11): "--start 2026-10-09 --end 2026-10-09" was refused as an empty
+    # period, and "--entities house pump" was taken without a word
+    code, said = _main(tmp_path, "around", "--start", "2026-10-09", "--end", "2026-10-09")
+    assert code == 0, said
+    code, said = _main(tmp_path, "around", "--start", "2026-10-09", "--end", "2026-10-09",
+                       "--entities", "house pump")
+    assert code == 1 and "'house pump' is not one" in said and "Run find first" in said
+    code, said = _main(tmp_path, "around", "--start", "2026-10-09T05:00", "--end", "2026-10-09T05:00")
+    assert code == 1 and "--end must be after --start" in said           # a time given is taken as given

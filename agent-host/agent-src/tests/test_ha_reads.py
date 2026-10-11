@@ -30,6 +30,27 @@ def test_a_logbook_page_that_repeats_ends_the_reading_and_counts_once():
     assert len(got) == 4                            # each flip once, not once per page
 
 
+class WindowSession:
+    """ha-mcp as it answers: hours_back counted back from end_time."""
+
+    def __init__(self):
+        self.args = []
+
+    def call_raw(self, name, args):
+        self.args.append(args)
+        return {"content": [{"type": "text", "text": json.dumps({"success": True, "entries": [], "has_more": False})}]}
+
+
+def test_a_past_period_asks_for_its_own_hours_counted_back_from_its_end():
+    # 2026-10-11: counted from now, one day two days ago read 67 hours (24 pages, 75 s)
+    for start, end, hours in ((T - timedelta(days=3), T - timedelta(days=2), 24),
+                              (T - timedelta(days=3, minutes=30), T - timedelta(days=2), 25),
+                              (T - timedelta(minutes=5), T, 1)):
+        session = WindowSession()
+        McpClient("http://unused", "UTC", session=session).logbook(start, end)
+        assert (session.args[0]["hours_back"], session.args[0]["end_time"]) == (hours, end.isoformat())
+
+
 class HistorySession:
     """A statistics or history read whose pages misbehave: `pages` is what each call answers."""
 

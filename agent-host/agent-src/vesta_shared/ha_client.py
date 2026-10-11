@@ -350,8 +350,11 @@ class McpClient(HABase):
                 "config": {"time_zone": self.zone, "location_name": home.get("friendly_name")}}
 
     def logbook(self, start, end, entity_id=None):
-        now = datetime.now(timezone.utc)
-        hours = max(1, int((now - start.astimezone(timezone.utc)).total_seconds() // 3600) + 1)
+        # ⚠️ hours_back COUNTS BACK FROM end_time, not from now (ha-mcp: "24 hours back from <end_time>"). Counted from
+        # now, one day two days ago read 67 hours of logbook in 24 pages, 75 s (investigate, 2026-10-11) — and a period
+        # far enough back would end at the 20-page cap before reaching its own end.
+        span = (end.astimezone(timezone.utc) - start.astimezone(timezone.utc)).total_seconds()
+        hours = max(1, -int(-span // 3600))
         # ⚠️ A PAGE MUST BRING NEW ROWS. ha-mcp 8.5.0 answered the same first page to every offset
         # (seen on the villa: one 3-day read became 20 identical calls, and every flip of a
         # device was counted 20 times by the reconnect check). Rows are kept once each, and the

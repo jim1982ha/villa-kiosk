@@ -16,6 +16,7 @@ Anthropic key it needs to think (runner.py builds its environment).
 
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 from dataclasses import dataclass, field
@@ -215,7 +216,8 @@ def load() -> Settings:
     )
     for d in (s.data_dir, s.config_dir, s.out_dir, s.work_dir, s.claude_dir):
         os.makedirs(d, exist_ok=True)
-    seed_config(s)
+    for name in seed_config(s):          # said once, at the start that wrote it: the only trace a rewording leaves
+        logging.getLogger("vesta").info("Settings: %s written from this version's starter", name)
     return s
 
 
