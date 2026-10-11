@@ -554,7 +554,7 @@ def reply(store: Store, iid: int, text: str, sender_role: str, now: datetime, pa
         out["send"].append(here("Already closed", "closed")); return out
     if t.startswith("done"):
         out["actions"] += Problems(store).close_incident(iid, Incident.DONE, now.isoformat(),
-                                                         f"Done by {who} on Telegram.", who=name, reply=text)
+                                                         f"Done by {who} on Telegram.", who=who, reply=text)
         # ⚠️ A PROMISE THE CODE KEEPS (architecture review 23): "will check it stays quiet" was written since 0.9.0 and
         # nothing ever checked — a Done on a door still unlocked closed it for good. The tick reads it again (quiet_after_done)
         # read again whatever the rule: still bad, it reopens; not knowable, the people asked are told (still_there)

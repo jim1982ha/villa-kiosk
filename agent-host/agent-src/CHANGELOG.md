@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.149 (11 October 2026)
+
+- Review 31 (agreement: ticketUpdate kind "cleared", copied from the Kiosk 2.496.325): Kiosk.resolve_ticket with `who`
+  records a completion (who; its by stamped by the Kiosk), without it writes kind cleared; reopen_ticket writes `was`
+  when it changes the title; the desk's Done always passes who.
+
 ## 0.6.148 (11 October 2026)
 
 - Review 30: record_night keeps an event finding with a task open until a quiet night (closes_tonight takes event_rules);

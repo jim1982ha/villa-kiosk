@@ -67,7 +67,7 @@ def test_a_title_change_is_a_retitled_step_keeping_the_title_before_and_never_a_
 def test_every_kind_the_agent_writes_is_one_the_agreement_declares():
     from vesta_agent import kiosk
     kinds = json.load(open(CONTRACT))["ticketUpdate"]["kinds"]
-    assert {kiosk.REOPENED, kiosk.RETITLED, kiosk.READING} == set(kinds)
+    assert {kiosk.REOPENED, kiosk.RETITLED, kiosk.READING, kiosk.CLEARED} == set(kinds)
 
 
 def test_a_reopening_in_the_kiosk_is_read_from_its_step_and_an_old_now_note_still_names_the_agents_title():
@@ -279,3 +279,24 @@ def test_a_done_on_telegram_resolves_the_fault_by_the_person(tmp_path):
     out = desk.reply(store, iid, "Done", "fm", T0 + timedelta(minutes=5), name="Fabien")
     (res,) = [a for a in out["actions"] if a["action"] == "ticket.resolve"]
     assert res["who"] == "Fabien"
+
+
+# ---------------------------------------------------------------------- review 31
+def test_a_persons_done_records_the_work_and_the_agents_own_clear_is_no_repair():
+    k, doc = kiosk_holding({"id": "va-1", "title": "Gate jammed", "status": "open", "updates": []},
+                           {"id": "va-2", "title": "AP offline", "status": "open", "updates": []})
+    assert run(k.resolve_ticket("va-1", note="Done by Made on Telegram.", who="Made"))
+    (c,) = doc["data"]["completions"]
+    assert c["ticketId"] == "va-1" and c["who"] == "Made" and c["scheduleId"] == ""      # Recent work names Made
+    assert "kind" not in ticket(doc, "va-1")["updates"][-1]
+    assert run(k.resolve_ticket("va-2", note="Cleared: the check no longer sees it."))
+    assert ticket(doc, "va-2")["updates"][-1]["kind"] == "cleared" and len(doc["data"]["completions"]) == 1
+
+
+def test_a_reopening_under_a_new_title_says_the_title_it_replaced():
+    k, doc = kiosk_holding()
+    tid = run(k.add_ticket("Pump plug offline for 9 h"))
+    ticket(doc, tid)["status"] = "resolved"
+    assert run(k.reopen_ticket(tid, "Pump plug offline again", "Back again."))
+    step = ticket(doc, tid)["updates"][-1]
+    assert step["kind"] == "reopened" and step["was"] == "Pump plug offline for 9 h"

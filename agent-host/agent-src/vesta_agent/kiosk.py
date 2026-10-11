@@ -41,7 +41,7 @@ def _now() -> str:
 # What a step in a fault's history is — the agreement's `ticketUpdate.kinds` (agent-contract.json), never a note's
 # first words (architecture review 26: the Kiosk took "Now: …" for a status step and showed it under the title it
 # repeated). A step without a kind changes the status.
-REOPENED, RETITLED, READING = "reopened", "retitled", "reading"
+REOPENED, RETITLED, READING, CLEARED = "reopened", "retitled", "reading", "cleared"
 OLD_TITLE_NOTE = "Now: "            # this agent's title step before the kinds (0.12.150 and earlier), still read
 
 
@@ -234,6 +234,8 @@ class Kiosk:
                     upd = {"at": _now(), "status": "open", "photoIds": [], "kind": REOPENED, "title": title[:200],
                            "note": (note or f"Back again: {title}")[:500]}
                     mine = not person_titled(t)                 # a title a person wrote stays theirs (review 26)
+                    if mine and str(t.get("title") or "") != title[:200]:
+                        upd["was"] = str(t.get("title") or "")  # the title it replaces: the card's "Was:" (review 31)
                     t = {k: v for k, v in t.items() if k != "resolvedAt"}
                     tickets[i] = dict(t, status="open", title=title[:200] if mine else t.get("title"),
                                       updates=list(t.get("updates") or []) + [upd])
@@ -243,7 +245,10 @@ class Kiosk:
         return await self._edit(change)
 
     async def resolve_ticket(self, tid: str, note: str | None = None, who: str | None = None) -> bool:
-        """Mark one of the agent's tickets resolved (the FM answered Done). False when it is gone or closed."""
+        """Mark one of the agent's tickets resolved. By `who` — a person's Done: their name on the card, and the work
+        recorded as the Kiosk's own "Mark resolved" records it (a completion, in Recent work; review 31: a Done on
+        Telegram never appeared there). Without — the agent's own clearing of a problem gone: kind "cleared", never a
+        repair in any figure. False when it is gone or closed."""
         def change(data: dict) -> bool:
             tickets = list(data.get("tickets") or [])
             for i, t in enumerate(tickets):
@@ -256,6 +261,12 @@ class Kiosk:
                         upd["note"] = note[:500]
                     if who:
                         upd["who"] = who[:80]       # the person, on the card (faultWhen: who, else by)
+                        # its `by` is the Kiosk's to stamp ("VESTA Agent"); the person is `who` (fmEngine.workedBy)
+                        data["completions"] = list(data.get("completions") or []) + [{
+                            "id": "va-cp-" + secrets.token_hex(6), "scheduleId": "", "ticketId": tid, "at": now,
+                            "by": "", "who": who[:80], "photoIds": [], **({"note": note[:500]} if note else {})}]
+                    else:
+                        upd["kind"] = CLEARED
                     tickets[i] = dict(t, status="resolved", resolvedAt=now,
                                       updates=list(t.get("updates") or []) + [upd])
                     data["tickets"] = tickets

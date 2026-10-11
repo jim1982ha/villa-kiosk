@@ -1,3 +1,10 @@
+## 0.12.155
+
+What you will see (architecture review 31 — with VESTA (dev2) 2.496.325):
+- A repair confirmed with Done on Telegram appears under "Recent work" in the Cockpit, by the person who did it, like one marked resolved in the Cockpit.
+- A fault the agent closes because the problem went away is recorded as "closed, no action": it no longer counts as a repair in the time-to-repair figures.
+- A fault the agent reopens under a new title says on its card which title it replaced ("Was: …").
+
 ## 0.12.154
 
 What you will see (architecture review 30 — the night check and the reports):
