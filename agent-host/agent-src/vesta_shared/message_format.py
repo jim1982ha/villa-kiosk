@@ -4,7 +4,7 @@ in the future — without risking to miss any rule").
 
 Every alert and every report is written as plain text in this shape:
 
-    The Lys House, daily report on 11/10/2026.     ← title                       (one line)
+    Villa Example, daily report on 11/10/2026.     ← title                       (one line)
     To: JM                                         ← who it is for              ("To: " line)
                                                    ← (an empty line, between sections and between items)
     New since yesterday:                           ← a section's label          (a line ending ":")

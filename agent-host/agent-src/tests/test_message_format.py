@@ -10,13 +10,13 @@ from helpers import make_agent
 from vesta_shared import message_format as F
 
 OWNER, FM = 111, 222
-DAILY = F.document("The Lys House, daily report on 11/10/2026.", "", [
+DAILY = F.document("Villa Example, daily report on 11/10/2026.", "", [
     ("New since yesterday", ["- P3 Onsen pump used 0.12 kWh/day (-76%)."]),
     ("Still open", ["- Incident #5 · ⚠️ House Pump Power has not run.", "- P2 Motion1 battery at 7%: replace now."])])
 
 
 def test_a_report_is_written_in_the_owners_shape():
-    assert DAILY == ("The Lys House, daily report on 11/10/2026.\nTo:\n\n"
+    assert DAILY == ("Villa Example, daily report on 11/10/2026.\nTo:\n\n"
                      "New since yesterday:\n- P3 Onsen pump used 0.12 kWh/day (-76%).\n\n"
                      "Still open:\n- Incident #5 · ⚠️ House Pump Power has not run.\n\n- P2 Motion1 battery at 7%: replace now.")
 
@@ -24,7 +24,7 @@ def test_a_report_is_written_in_the_owners_shape():
 def test_its_parts_are_read_back_from_the_text_as_sent():
     text = F.fill_to(DAILY, ["JM"])
     got = [(k, text[a:b]) for k, a, b in F.parts(text)]
-    assert got == [("title", "The Lys House, daily report on 11/10/2026."), ("to", "To: JM"),
+    assert got == [("title", "Villa Example, daily report on 11/10/2026."), ("to", "To: JM"),
                    ("label", "New since yesterday:"), ("item", "- P3 Onsen pump used 0.12 kWh/day (-76%)."),
                    ("label", "Still open:"), ("item", "- Incident #5 · ⚠️ House Pump Power has not run."),
                    ("item", "- P2 Motion1 battery at 7%: replace now.")]
@@ -93,7 +93,7 @@ def test_a_report_asked_for_in_a_chat_names_its_reader(tmp_path):
 def test_a_report_titled_as_data_keeps_its_shape_whatever_the_ai_wrote(tmp_path):
     # the AI translated "To:" ("Kepada:"), or sent one quiet line: the report fell back to "For: JM / -------", unstyled
     v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]})
-    t = "The Lys House, daily report on 11/10/2026."
+    t = "Villa Example, daily report on 11/10/2026."
     asyncio.run(v.outcome.carry_out({"send": [{"to": "fm", "title": t, "text": "Vila tenang: tidak ada yang baru."}]}, "x"))
     text = v.tg.sent[-1][1]
     assert text == f"{t}\nTo: JM\nVila tenang: tidak ada yang baru." and F.telegram_entities(text)[0]["type"] == "underline"
@@ -112,14 +112,14 @@ def test_home_assistants_words_never_change_an_alerts_layout():
 def test_a_long_report_goes_as_whole_messages_none_lost(tmp_path):
     # one long daily lost its whole "Still open" section, cut at Telegram's 4,096
     v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]})
-    t = "The Lys House, daily report on 11/10/2026."
+    t = "Villa Example, daily report on 11/10/2026."
     body = F.split_title(F.document(t, "", [("New since yesterday", [f"- P3 sensor {i} has been offline for 33 h, "
                                                                      f"{'x' * 90}." for i in range(40)]),
                                             ("Still open", ["- Incident #5 · ⚠️ House Pump Power has not run."])]))[1]
     asyncio.run(v.outcome.carry_out({"send": [{"to": "fm", "title": t, "text": body}]}, "reports"))
     texts = [m for c, m, _ in v.tg.sent]
     assert len(texts) >= 2 and all(len(m) <= 4096 for m in texts)
-    assert [m.split("\n")[0] for m in texts] == [f"The Lys House, daily report on 11/10/2026 ({i}/{len(texts)})."
+    assert [m.split("\n")[0] for m in texts] == [f"Villa Example, daily report on 11/10/2026 ({i}/{len(texts)})."
                                                   for i in range(1, len(texts) + 1)]
     assert all(m.split("\n")[1] == "To: JM" and F.telegram_entities(m) for m in texts)
     assert "Still open:\n- Incident #5" in texts[-1]

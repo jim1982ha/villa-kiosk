@@ -1,3 +1,7 @@
+## 0.12.156
+
+What you will see: nothing new. The notes of 0.12.152 and 0.12.154 named this villa in their examples; a published add-on never names a villa (the redistributable hard rule), so they now say "Villa Example".
+
 ## 0.12.155
 
 What you will see (architecture review 31 — with VESTA (dev2) 2.496.325):
@@ -11,7 +15,7 @@ What you will see (architecture review 30 — the night check and the reports):
 - A fault such as "Pool Pump ran 3.0 h against 8.0 h scheduled." stays open in the Cockpit until you close it, or until a night passes without it. It was created and closed by the agent in the same second ("Cleared: the check no longer sees it"), and the morning report said "Nothing new, nothing open".
 - The monthly page's "Fixed" lists only what ended — no longer a pump that ran short once, or a one-night event.
 - An alert that opens between midnight and 08:00 is dated the villa's day: a "no action needed" alert of 06:30 is under "Also noted", no longer under "Still open".
-- The night check's message at 02:00 has the same layout as the alerts and reports: "The Lys House, night check on 11/10/2026." underlined, "To:", "New:" and "Back again:", each item a quote, "What to do: …".
+- The night check's message at 02:00 has the same layout as the alerts and reports: "Villa Example, night check on 11/10/2026." underlined, "To:", "New:" and "Back again:", each item a quote, "What to do: …".
 - Asked "is everything OK?", a sensor that simply has no value (a wind chill on a warm day) no longer turns the villa AMBER; a low battery is the night check's finding (one threshold, its own).
 - A problem back after a long run (offline for weeks, gone a day, back) says "(again: …)" — it read like a new problem.
 
@@ -32,7 +36,7 @@ What you will see — every alert and report on Telegram, in one layout (your re
 - One incident, one picture: the group, Fabien's chat and yours always show the same message. A reminder sent to the facility managers only updates the group's copy quietly (no sound), and buttons stay where an answer is still expected.
 - Every answer names the person: "Done pressed by Fabien on 11/10/2026 10:27." — never "answered by the fm". "Need help" says the same thing everywhere: "the owner is asked to act".
 - When Home Assistant stops watching an alert that is still wrong: "Still not right when Home Assistant stopped watching it on …. VESTA keeps watching it and closes it once it is right. Press Done when it is fixed." Home Assistant's own "no longer tracked … (Repeat after)" line is gone.
-- Reports (daily, weekly, monthly) use the same layout: "The Lys House, daily report on 11/10/2026." underlined, "To:", then "New since yesterday:" and "Still open:", each item its own quote. The "Still open: 6. An alert: press Done…" sentence is gone. A long report comes as whole messages "(1/2)", "(2/2)" instead of being cut.
+- Reports (daily, weekly, monthly) use the same layout: "Villa Example, daily report on 11/10/2026." underlined, "To:", then "New since yesterday:" and "Still open:", each item its own quote. The "Still open: 6. An alert: press Done…" sentence is gone. A long report comes as whole messages "(1/2)", "(2/2)" instead of being cut.
 - The default "What to do" of a condition alert no longer speaks of a door: "Check the device named and put it right."
 - A villa silent alert shows the villa's time, not UTC.
 

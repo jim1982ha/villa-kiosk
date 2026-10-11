@@ -201,7 +201,7 @@ def test_one_incident_one_picture_in_every_chat(tmp_path):
     # sent to the facility managers only left the group's copy "(new)" with the first alert; "To:" named one reader
     from vesta_shared import result as R
     GROUP, JM2 = -100123, 333
-    v = make_agent(tmp_path, {"people": [{"telegram_id": GROUP, "name": "TheLysHouse", "role": "owner"},
+    v = make_agent(tmp_path, {"people": [{"telegram_id": GROUP, "name": "VillaGroup", "role": "owner"},
                                          {"telegram_id": FM, "name": "Fabien", "role": "fm"},
                                          {"telegram_id": JM2, "name": "JM", "role": "fm"}]})
     run = asyncio.run

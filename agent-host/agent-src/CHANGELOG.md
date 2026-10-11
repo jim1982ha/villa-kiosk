@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.150 (11 October 2026)
+
+- No villa's name in tracked files: examples in message_format, compose and two tests now say "Villa Example" (the
+  Kiosk's hard-rules gate refused the published changelog on main).
+
 ## 0.6.149 (11 October 2026)
 
 - Review 31 (agreement: ticketUpdate kind "cleared", copied from the Kiosk 2.496.325): Kiosk.resolve_ticket with `who`

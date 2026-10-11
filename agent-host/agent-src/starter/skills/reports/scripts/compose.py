@@ -89,7 +89,7 @@ def for_the_ai(doc: str) -> dict:
 
 
 def title(villa: str, name: str, on: date) -> str:
-    """A report message's title (owner, 2026-10-11): "The Lys House, daily report on 11/10/2026." """
+    """A report message's title (owner, 2026-10-11): "Villa Example, daily report on 11/10/2026." """
     return f"{villa}, {name} report on {day_label(on, numeric=True)}."
 
 
