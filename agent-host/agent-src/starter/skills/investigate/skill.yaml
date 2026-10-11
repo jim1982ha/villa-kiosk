@@ -11,13 +11,8 @@ brain: auto
 limit_usd: 3
 # what the agent shows a person who sends /investigate alone
 usage: "/investigate why did the water heater stop last night?"
-# Web research only when the person asks for it (owner, 2026-10-11): one of these words in the request switches it on.
-# The agent only matches the words; what the AI is told is the text below.
-modes:
-  web_research:
-    words: [internet, web, online, en ligne]
-    said_on: "Web research: ON — the person asked for it. Follow \"Web research\" in the skill: look for the known causes and correlations of the pattern you found, then test every lead against the records, and list your web pages in the account's sources."
-    said_off: "Web research: off — use web search only for a device's manual or an error code the records cannot explain (step 6)."
+# Web research is part of EVERY investigation (owner, 2026-10-12: "always use web_search by default"): SKILL.md step 6.
+# The page cannot be made without a web search where web search is available, nor without its sources cited.
 # ⚠️ WHAT EVERY /investigate ANSWER CARRIES (owner, 2026-10-11: "always trigger the full use of the skill — HTML report in
 # the response and buttons to create and cancel a ticket creation"), checked by the engine after the AI's turn:
 #   page: the file the answer must have sent (send_message attachment). Missing: the AI is sent back once to make and

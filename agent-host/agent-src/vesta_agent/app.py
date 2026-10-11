@@ -178,6 +178,7 @@ class Vesta:
                            turns=self.turns, safe=self._safe)
         self.bot_username: str | None = None
         self._locks: dict[int, asyncio.Lock] = {}
+        self._web_searches: dict[str, list] = {}      # inv → its web searches (toolbox: every turn of one investigation)
         self._kiosk_read = 0.0            # when the Kiosk's faults were last read (housekeeping)
         self._pack = None
         self._pack_mtime = None
@@ -244,10 +245,17 @@ class Vesta:
                 inv: str | None = None) -> Toolbox:
         """`allowed`: what the AI may use this time (turn.Terms.tools); None: everything switched on. `settings`: the
         run's own (config.Settings.in_folder: its files' folder); the agent's without one."""
+        searched = None
+        if inv:
+            # one investigation's web searches, whichever of its turns made them (its page follow-up, a Continue)
+            searched = self._web_searches.setdefault(inv, [])
+            while len(self._web_searches) > 50:
+                self._web_searches.pop(next(iter(self._web_searches)))
         return Toolbox(settings=settings or self.s, policy=self.policy(), reader=self.reader, actions=self.actions,
                        skills=self.skills, ask=self.approvals.ask, server_tools=self.server_tools, state=self.state,
                        ticket=self.tickets.create if self.kiosk.enabled else None,
-                       carry_out=self.outcome.carry_out, start_job=self.jobs.start, allowed=allowed, invoked=invoked, inv=inv)
+                       carry_out=self.outcome.carry_out, start_job=self.jobs.start, allowed=allowed, invoked=invoked, inv=inv,
+                       searched=searched)
 
     def lock(self, chat_id: int) -> asyncio.Lock:
         return self._locks.setdefault(int(chat_id), asyncio.Lock())

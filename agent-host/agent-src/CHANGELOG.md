@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.165 (12 October 2026)
+
+- investigate: no `modes` (web research is SKILL.md step 6, always). An investigation's web searches are one list
+  across its turns (app._web_searches by `inv` → Toolbox(searched=)), so its page follow-up knows them.
+- compose.py investigation: [n] citations (cited/citing: every source cited, every [n] a source; links #src-n; the
+  chat message drops them); web_said; BANDS plain words + own colours (--c5 added), READINGS / USUAL; hourchart
+  (investigate.running_per_hour: minutes running per hour vs the same hour's average before); normal_series only for a
+  device read as levels; normal_words in sentences; axis labels through timeutil.
+- investigation_facts: `log` (time order, pills unusual / usual / reported), `findings` (Ruled out / To check / What the
+  records cannot tell, grouped), `alerts` per device and rule; plain alert rules and period reasons in investigate.py.
+
 ## 0.6.164 (12 October 2026)
 
 - vesta_shared.ha_client READ_ACTIONS: ha_manage_blueprints allowed for `get` only (every other action refused, even

@@ -1,19 +1,20 @@
-"""The facts of an investigation, from its records — what the page states before the AI says what it means.
+"""The facts of an investigation, from its records — what the page states beside what the AI says it means.
 
-⚠️ FACTS FIRST (owner, 2026-10-11: "the investigate skill is not providing any added-value against a 'normal' query").
-The page was the AI's retelling of the script's lines: a summary, a timeline and causes it chose to write, no better than
-a chat answer. What the records PROVE is now laid out by code, from the investigate skill's own readings — the AI only
-explains it:
+⚠️ FACTS FROM CODE (owner, 2026-10-11: "the investigate skill is not providing any added-value against a 'normal'
+query"). What the records PROVE is laid out by code, from the investigate skill's own readings — the AI only explains
+it. ⚠️ GROUPED, IN PLAIN WORDS (owner, 2026-10-12: "you keep repeating the same lines … group the findings per
+information they are providing"): one entry per KIND of finding, its devices listed under it.
 
-  established   each unusual period of each device (when, how long, against its own normal), a reading that stops,
-                a control that stayed on, what else stopped answering or ran next to an unusual moment
-  ruled_out     a control that never left "off" while the device ran; an automation that ran but can switch nothing;
-                a lead from the web the records contradict (the AI's verdict "not supported")
-  timeline      those moments in order, from the records (and what the account says a person saw, marked so)
-  alerts        when an alert on the same limit that flagged a period would have fired, and how long before it ended
-  key           the one line of facts the chat message starts with
-  lanes         what else happened, on the charts' time axis: each device read without numbers (its states), the other
-                devices that stopped answering and the automations that could act next to an unusual moment
+  log        every moment, in time order, each marked "unusual" (a period flagged against the device's own normal, a
+             device that stopped answering), "usual" (an automation that ran, a device back) or "reported" (what the
+             account says a person saw or did)
+  findings   grouped: what the records rule out (switches that stayed off, automations that can only notify, leads the
+             records contradict), what to check (an automation that could act on a device read here, or not readable),
+             and what the records cannot tell (no reading kept, a history cut short, and the AI's own)
+  alerts     per device, each limit once: when an alert on it would have fired, how long before the trouble ended, and
+             the other times it would have fired again
+  key        the one line of facts the chat message starts with
+  lanes      what else happened, on the charts' time axis (the strip under them)
 
 Nothing here knows a device, a room or a villa: every name, time and limit comes from the readings
 (investigate.py timeline / around --out), which carry the settings they were judged with.
@@ -36,6 +37,18 @@ def _on(a: dict) -> str:
 def lasting(seconds) -> str:
     s = int(round(float(seconds)))
     return f"{s} s" if s < 90 else f"{s // 60} min" if s < 5400 else f"{s // 3600} h {s % 3600 // 60} min"
+
+
+#: what a device did in a period of each kind (investigate.py's kinds), as a person says it
+DID = (("running", "ran"), ("no power", "had no power"), ("offline", "stopped reporting"),
+       ("no value", "reported no value"), ("stops and restarts", "stopped and restarted"))
+
+
+def did(kind: str) -> str:
+    for k, words in DID:
+        if str(kind).startswith(k):
+            return words + str(kind)[len("stops and restarts"):] if k == "stops and restarts" else words
+    return str(kind)
 
 
 def _t(iso) -> datetime | None:
@@ -71,12 +84,6 @@ def _flagged(data: dict) -> list[dict]:
     return sorted(out, key=lambda x: x["start"])
 
 
-def _by_minute(items: list[dict], clock, one: str, many: str) -> list[dict]:
-    """Things that did the same in the same minute as ONE row: a device and its own readings drop off together."""
-    return [{"at": _t(xs[0]["at"]), "text": ", ".join(x["name"] for x in xs) + " " + (one if len(xs) == 1 else many),
-             "unusual": False} for xs in _grouped(items, clock)]
-
-
 def _grouped(items: list[dict], clock) -> list[list[dict]]:
     groups: dict[str, list[dict]] = {}
     for x in sorted(items, key=lambda x: x["at"]):
@@ -88,9 +95,19 @@ def _near(t: datetime, moments: list[datetime], within: float) -> bool:
     return any(abs((t - m).total_seconds()) <= within for m in moments)
 
 
+def _and(xs: list[str]) -> str:
+    """"a, b and c" — a list as a person says it."""
+    xs = [str(x) for x in xs if str(x)]
+    return xs[0] if len(xs) == 1 else ", ".join(xs[:-1]) + " and " + xs[-1] if xs else ""
+
+
+def _names(xs: list[str], most: int = 8) -> str:
+    return ", ".join(xs[:most]) + (f" and {len(xs) - most} more" if len(xs) > most else "")
+
+
 def facts(data: dict | None, around: dict | None, notes: dict | None = None) -> dict:
     """The page's facts from investigate.py's readings (`data`: timeline --out, `around`: around --out) and the AI's
-    account (`notes`: only its web leads judged "not supported" and the moments a person reported)."""
+    account (`notes`: only its leads judged "not supported", what it cannot tell and the moments a person reported)."""
     data, around, notes = data or {}, around or {}, notes or {}
     clock = _Clock(data if data.get("zone") else around)
     within = float((data.get("settings") or around.get("settings") or {}).get("coincide_s") or 0)
@@ -98,112 +115,123 @@ def facts(data: dict | None, around: dict | None, notes: dict | None = None) -> 
     # ⚠️ NEXT TO WHAT BEGAN (2026-10-11, on the villa's records): with the ends too, 22 moments ± 10 min covered half the
     # day and every automation of the day looked "next to" the trouble. A cause comes before or at a start.
     moments = [f["start"] for f in flagged]
-    established, ruled_out, rows, alerts = [], [], [], []
-    warned: dict[tuple, list] = {}
+    rows: list[dict] = []
+    off_controls, harmless, contradicted, check, cannot = [], [], [], [], []
+    warned: dict[str, dict[str, list]] = {}
 
     # ------------------------------------------------------------------ each device, against its own normal
     ran = [e for e in data.get("entities") or [] if e.get("runs") and not e.get("control")]
     for f in flagged:
-        established.append(f"{f['name']}: {f['kind']} from {clock(f['start'])} to {clock(f['end'])} "
-                           f"({lasting(f['seconds'])}) — {f['why']}.")
-        rows.append({"at": f["start"], "text": f"{f['name']}: {f['kind']} begins — {f['why']}", "unusual": True})
-        rows.append({"at": f["end"], "text": f"{f['name']}: {f['kind']} ends, after {lasting(f['seconds'])}",
-                     "unusual": False})
+        rows.append({"at": f["start"], "pill": "unusual",
+                     "text": f"{f['name']} {did(f['kind'])} "
+                             f"{'in' if f['kind'].startswith('stops and restarts') else 'for'} {lasting(f['seconds'])}, "
+                             f"until {clock(f['end'])} — {f['why']}"})
         al = f.get("alert") or {}
         fired = _t(al.get("at"))
         # ⚠️ EARLIER MEANS IN TIME TO MATTER: an alert 11 s before a 71-s drop-out ended warned of nothing — only one
         # that fires in the first half of the trouble is said
         if fired and al.get("rule") and (f["end"] - fired) >= (fired - f["start"]):
-            warned.setdefault((f["name"], al["rule"]), []).append((fired, f))
-    for (name, rule), times in warned.items():
-        first, f = times[0]
-        alerts.append(f"An alert on “{name}: {rule}” would have warned at {clock(first)}, "
-                      f"{lasting((f['end'] - first).total_seconds())} before that {f['kind']} ended "
-                      f"({clock(f['start'])} to {clock(f['end'])})"
-                      + (f"; and again at {', '.join(clock(t) for t, _ in times[1:])}" if len(times) > 1 else "") + ".")
+            warned.setdefault(f["name"], {}).setdefault(al["rule"], []).append((fired, f))
+    who = ", ".join(r.get("label") or r.get("entity_id") for r in ran)
+    days = data.get("baseline_days")
+    before = f" and the {days:g} days before" if isinstance(days, (int, float)) and days > 0 else ""
     for e in data.get("entities") or []:
         name = e.get("label") or e.get("entity_id")
         if e.get("nothing"):
-            established.append(f"{name}: Home Assistant kept no reading of it in this period — nothing to judge it by.")
+            cannot.append(f"{name}: Home Assistant kept no reading of it in this period, so it cannot be judged.")
         cut = _t(e.get("cut"))
         if cut:
-            established.append(f"{name}: its records could not be read after {clock(cut)} — nothing is known of it "
-                               "after that.")
-        if e.get("control") in ("off", "on") and ran:
-            who = ", ".join(r.get("label") or r.get("entity_id") for r in ran)
-            days = data.get("baseline_days")
-            before = f" and the {days:g} days before" if isinstance(days, (int, float)) and days > 0 else ""
-            if e["control"] == "off":
-                ruled_out.append(f"{name} stayed off for the whole period{before}, while {who} ran: it did not turn "
-                                 f"{'it' if len(ran) == 1 else 'them'} on.")
-            else:
-                established.append(f"{name} stayed on for the whole period{before}: it may supply {who}, but its "
-                                   "state does not explain their starts and stops.")
+            cannot.append(f"{name}: its records could not be read after {clock(cut)}, so nothing is known of it after "
+                          "that.")
+        if e.get("control") == "off" and ran:
+            off_controls.append(name)
+        elif e.get("control") == "on" and ran:
+            cannot.append(f"{name} stayed on for the whole period{before}: it may supply {who}, but its state does "
+                          "not explain their starts and stops.")
 
     # ------------------------------------------------------------------ what else happened next to those moments
     read = {e.get("entity_id") for e in data.get("entities") or []}      # their own drop-outs are flagged above
     went = [x for x in around.get("offline") or [] if _t(x.get("at")) and x.get("id") not in read]
     near_went = [x for x in went if _near(_t(x["at"]), moments, within)]
-    if near_went:
-        groups = _grouped(near_went, clock)
-        established.append("Also stopped answering next to an unusual moment: "
-                           + "; ".join(f"{clock(_t(xs[0]['at']))} {', '.join(x['name'] for x in xs)}" for xs in groups[:8])
-                           + (f" (and {len(groups) - 8} more moments)" if len(groups) > 8 else "") + ".")
     near_ids = {x.get("id") for x in near_went}
     came = [x for x in around.get("back") or [] if x.get("id") in near_ids and _t(x.get("at"))]
-    rows += _by_minute(near_went, clock, "stops answering", "stop answering")
-    rows += _by_minute(came, clock, "answers again", "answer again")
+    for xs in _grouped(near_went, clock):
+        rows.append({"at": _t(xs[0]["at"]), "pill": "unusual",
+                     "text": _names([x["name"] for x in xs]) + (" stops" if len(xs) == 1 else " stop") + " reporting"})
+    for xs in _grouped(came, clock):
+        rows.append({"at": _t(xs[0]["at"]), "pill": "usual",
+                     "text": _names([x["name"] for x in xs]) + (" reports" if len(xs) == 1 else " report") + " again"})
 
-    acted, unproven, harmless_near, harmless_other = [], [], [], 0
+    acted, unproven, harmless_other = [], [], 0
     for a in around.get("automations") or []:
         times = [t for t in (_t(x) for x in a.get("times") or []) if t]
         close = [t for t in times if _near(t, moments, within)]
+        if not close:
+            harmless_other += a.get("can") == "nothing"
+            continue
         if a.get("can") == "nothing":
-            if close:
-                harmless_near.append(a)
-            else:
-                harmless_other += 1
-        elif close:
-            (acted if a.get("can") == "changes" else unproven).append((a, close))
-            for t in close[:3]:
-                rows.append({"at": t, "text": f"Automation “{a.get('name')}” runs ("
-                             + ("it can act on: " + _on(a) if a.get("can") == "changes"
-                                else "what it can do could not be read") + ")", "unusual": False})
+            harmless.append(f"{a.get('name')} ({_and(a.get('does') or []) or 'nothing'})")
+            what = "it only " + (_and(a.get("does") or []) or "watches")
+        elif a.get("can") == "changes":
+            acted.append((a, close))
+            what = "it can act on " + _on(a)
+        else:
+            unproven.append((a, close))
+            what = "what it can do could not be read"
+        for t in close[:3]:
+            rows.append({"at": t, "pill": "usual", "text": f"Automation “{a.get('name')}” runs — {what}"})
     for a, close in acted:
         mine = {t.get("id") for t in a.get("targets") or []} & read
-        established.append(f"Automation “{a.get('name')}” ran next to an unusual moment ({clock(close[0])}) and can act "
-                           f"on: {_on(a)}" + (" — among the devices read here: check whether it acted" if mine else
-                                              " — none of the devices read here" if a.get("targets") else
-                                              " — check whether it acted on the device") + ".")
+        if mine or not a.get("targets"):
+            check.append(f"Automation “{a.get('name')}” ran at {clock(close[0])} and can act on {_on(a)}"
+                         + (" — one of the devices read here: check whether it did." if mine else
+                            " — its targets could not be read: check whether it acted on the device."))
     for a, close in unproven:
-        established.append(f"Automation “{a.get('name')}” ran next to an unusual moment ({clock(close[0])}); what it "
-                           "can do could not be read, so it is neither proven nor ruled out.")
-    for a in harmless_near:
-        does = " and ".join(a.get("does") or []) or "nothing"
-        ruled_out.append(f"Automation “{a.get('name')}” ran then, but all it can do is: {does} — it switched nothing.")
-    if harmless_other:
-        ruled_out.append(f"{harmless_other} other automation{'s' if harmless_other > 1 else ''} that ran in the period "
-                         "switch nothing (they only notify or record).")
+        check.append(f"Automation “{a.get('name')}” ran at {clock(close[0])}, but what it can do could not be read: "
+                     "it is neither proven nor ruled out.")
 
     # ------------------------------------------------------------------ the AI's account: only what it adds
     for c in notes.get("causes") or []:
         if isinstance(c, dict) and c.get("verdict") == "not supported":
-            ruled_out.append(f"{c.get('cause')}" + (f" — {c['evidence']}" if c.get("evidence") else "")
-                             + (f" (lead from: {c['source']})" if c.get("source") else "") + ".")
+            contradicted.append(f"{c.get('cause')}" + (f" — {c['evidence']}" if c.get("evidence") else ""))
+    cannot += [str(x) for x in notes.get("cannot_tell") or [] if str(x).strip()]
     told = [r for r in notes.get("timeline") or [] if isinstance(r, dict) and r.get("text")]
 
-    lanes = _lanes(data, near_went, acted, unproven)
+    findings = []
+    if off_controls or harmless or harmless_other or contradicted:
+        out = []
+        if off_controls:
+            out.append({"lead": f"Stayed off for the whole period{before}, so it did not turn {who} on:",
+                        "items": off_controls})
+        if harmless or harmless_other:
+            out.append({"lead": "Ran next to an unusual moment, but can only notify or record, so it switched nothing:",
+                        "items": harmless + ([f"and {harmless_other} other automation"
+                                              f"{'s' if harmless_other > 1 else ''} that ran in the period (the same)"]
+                                             if harmless_other else [])})
+        if contradicted:
+            out.append({"lead": "Leads the records contradict:", "items": contradicted})
+        findings.append({"title": "Ruled out", "groups": out})
+    if check:
+        findings.append({"title": "To check", "groups": [{"lead": "", "items": check}]})
+    if cannot:
+        findings.append({"title": "What the records cannot tell", "groups": [{"lead": "", "items": cannot}]})
+
+    alerts = [{"name": name, "items": [
+        {"rule": rule, "at": clock(times[0][0]), "ahead": lasting((times[0][1]["end"] - times[0][0]).total_seconds()),
+         "what": did(times[0][1]["kind"]), "span": f"{clock(times[0][1]['start'])}–{clock(times[0][1]['end'])}",
+         "again": [clock(t) for t, _ in times[1:]]} for rule, times in rules.items()]}
+        for name, rules in warned.items()]
+
     rows.sort(key=lambda r: r["at"])
-    timeline = [{"time": clock(r["at"]), "text": r["text"], "unusual": r["unusual"]} for r in rows[:60]]
-    if timeline:
-        # what a person saw or did is not in the records: kept, marked as reported, after the recorded moments
-        timeline += [{"time": str(r.get("time") or ""), "text": str(r["text"]), "unusual": bool(r.get("unusual")),
-                      "reported": True} for r in told]
-    else:
-        timeline = [{"time": str(r.get("time") or ""), "text": str(r["text"]), "unusual": bool(r.get("unusual"))}
-                    for r in told]
-    return {"established": established, "ruled_out": ruled_out, "timeline": timeline, "alerts": alerts,
-            "recorded": bool(rows), "key": key_line(flagged, clock), "lanes": lanes}
+    log = [{"time": clock(r["at"]), "text": r["text"], "pill": r["pill"]} for r in rows[:80]]
+    # what a person saw or did is not in the records: kept, marked as reported, after the recorded moments
+    log += [{"time": str(r.get("time") or ""), "text": str(r["text"]), "pill": "reported"} for r in told]
+    return {"log": log, "findings": findings, "alerts": alerts, "recorded": bool(rows),
+            "key": key_line(flagged, clock), "lanes": _lanes(data, near_went, acted, unproven),
+            # what the page states, for the AI to read back before sending (compose.py's result)
+            "established": [r["text"] for r in log if r["pill"] == "unusual"],
+            "ruled_out": [f"{g['lead']} {', '.join(g['items'])}".strip() for f in findings if f["title"] == "Ruled out"
+                          for g in f["groups"]]}
 
 
 def _lanes(data: dict, went: list[dict], acted: list, unproven: list) -> list[dict]:
@@ -219,7 +247,7 @@ def _lanes(data: dict, went: list[dict], acted: list, unproven: list) -> list[di
                   "state": s.get("state"), "as": s.get("as")} for i, s in enumerate(states)]
         out.append({"name": e.get("label") or e.get("entity_id"), "bands": bands})
     if went:
-        out.append({"name": "Other devices that stopped answering", "marks": [
+        out.append({"name": "Other devices that stopped reporting", "marks": [
             {"at": _t(xs[0]["at"]), "text": ", ".join(x["name"] for x in xs), "as": "went"}
             for xs in _grouped(went, lambda t: t.replace(second=0, microsecond=0))]})
     marks = [{"at": t, "text": f"“{a.get('name')}” (can act on: {_on(a)})", "as": "can_act"}
@@ -241,7 +269,7 @@ def key_line(flagged: list[dict], clock) -> str:
         by: dict[str, list[dict]] = {}
         for f in sorted(chosen, key=lambda f: f["start"]):
             by.setdefault(f["name"], []).append(f)
-        out = "; ".join(name + ": " + ", ".join(f"{f['kind']} {clock(f['start'])}–{clock(f['end'])} "
+        out = "; ".join(name + ": " + ", ".join(f"{did(f['kind'])} {clock(f['start'])}–{clock(f['end'])} "
                                                 f"({lasting(f['seconds'])})" for f in fs) for name, fs in by.items())
         more = len(flagged) - len(chosen)
         return "Recorded: " + out + (f"; +{more} more" if more else "") + "."

@@ -478,10 +478,14 @@ def page(facts: dict, notes: dict, limit: str | None = None, without_ai: str | N
 
 #: what an unusual period IS, by its kind (investigate.py's period kinds, any device): the band's word and colour. One
 #: table — the bands, their labels and the legend under the chart all read it.
-BANDS = (("no power", "supply off", "var(--crit)"), ("offline", "not answering", "var(--ink2)"),
-         ("no value", "not answering", "var(--ink2)"), ("stops and restarts", "stop-start", "var(--warn)"),
-         ("running", "unusual run", "var(--warn)"))
+#: ⚠️ PLAIN WORDS, COLOURS APART (owner, 2026-10-12: "what is supply? what is stop-start? … too similar colours"):
+#: each kind its own hue, none the readings' green or the usual line's blue.
+BANDS = (("no power", "read 0: no power reached it", "var(--crit)"),
+         ("offline", "stopped reporting", "var(--ink2)"), ("no value", "stopped reporting", "var(--ink2)"),
+         ("stops and restarts", "kept stopping and restarting", "var(--c5)"),
+         ("running", "ran longer or harder than usual", "var(--warn)"))
 OTHER_BAND = ("unusual", "var(--crit)")
+READINGS, USUAL = "var(--acc)", "var(--c3)"           # the device's own line, and its usual: never a band's colour
 
 
 def band_of(kind: str) -> tuple[str, str]:
@@ -518,7 +522,7 @@ def timechart(series: list, unit: str, zone: ZoneInfo, marks: list = (), normals
     y = _scale(lo, hi, PAD_T, H - PAD_B)
     x = lambda t: PAD_L + (t - t0).total_seconds() / span * (W - PAD_L - PAD_R)
     long = span > 86400
-    lab = lambda t: t.astimezone(zone).strftime("%d/%m %H:%M" if long else "%H:%M")
+    lab = lambda t: day_time_label(t.astimezone(zone)) if long else f"{t.astimezone(zone):%H:%M}"
     out = [f'<svg viewBox="0 0 {W} {H}" role="img" aria-label="{_esc(unit)} over the period">',
            *_axis(ticks, y, PAD_L, W - PAD_R)]
     for m in marks:
@@ -545,10 +549,10 @@ def timechart(series: list, unit: str, zone: ZoneInfo, marks: list = (), normals
             path.append(f"{'L' if pen else 'M'}{x(t):.1f},{y(v):.1f}")
             pen = True
         return " ".join(path)
-    for line in behind:                                  # the days before, faint: what "normal" looks like
-        out.append(f'<path class="normal" d="{drawn(line)}" fill="none" stroke="var(--ink2)" stroke-width="1" '
-                   f'opacity=".45"/>')
-    out.append(f'<path d="{drawn(pts)}" fill="none" stroke="var(--acc)" stroke-width="1.5"/>')
+    for line in behind:                                  # the days before, dashed: what "usual" looks like
+        out.append(f'<path class="normal" d="{drawn(line)}" fill="none" stroke="{USUAL}" stroke-width="1" '
+                   f'stroke-dasharray="3 2" opacity=".8"/>')
+    out.append(f'<path d="{drawn(pts)}" fill="none" stroke="{READINGS}" stroke-width="1.8"/>')
     for k in range(5):                               # five times under the axis
         t = t0 + (t1 - t0) * k / 4
         anchor = "start" if k == 0 else "end" if k == 4 else "middle"
@@ -563,14 +567,52 @@ def timechart(series: list, unit: str, zone: ZoneInfo, marks: list = (), normals
     return "".join(out)
 
 
+def hourchart(per_hour: dict, zone: ZoneInfo) -> str:
+    """Minutes running in each hour (or day) of the period, as bars, its usual for the same hour as a tick on each
+    (investigate.py running_per_hour) — a device that runs a few seconds now and then shows its trouble here at once."""
+    bins = []
+    for b in per_hour.get("bins") or []:
+        try:
+            bins.append((datetime.fromisoformat(b["at"]), float(b.get("minutes") or 0), b.get("usual")))
+        except (KeyError, TypeError, ValueError):
+            continue
+    if not bins:
+        return ""
+    day = per_hour.get("unit") == "day"
+    top = max([m for _, m, _ in bins] + [u for _, _, u in bins if isinstance(u, (int, float))] + [1.0])
+    lo, hi, ticks = _ticks(0.0, top * 1.1)
+    y = _scale(lo, hi, PAD_T, H - PAD_B)
+    slot = (W - PAD_L - PAD_R) / len(bins)
+    lab = (lambda t: day_label(t.astimezone(zone))) if day else (lambda t: f"{t.astimezone(zone):%H:%M}")
+    out = [f'<svg viewBox="0 0 {W} {H}" role="img" aria-label="Minutes running per {"day" if day else "hour"}">',
+           *_axis(ticks, y, PAD_L, W - PAD_R)]
+    for i, (t, m, u) in enumerate(bins):
+        x0 = PAD_L + i * slot
+        if m > 0:
+            out.append(f'<rect x="{x0 + slot * .15:.1f}" y="{y(m):.1f}" width="{slot * .7:.1f}" '
+                       f'height="{max(y(0) - y(m), .5):.1f}" fill="{READINGS}"/>')
+        if isinstance(u, (int, float)):
+            out.append(f'<line x1="{x0 + slot * .05:.1f}" x2="{x0 + slot * .95:.1f}" y1="{y(u):.1f}" y2="{y(u):.1f}" '
+                       f'stroke="{USUAL}" stroke-width="2"/>')
+        said = f"{lab(t)} · ran {_nice(m)} min" + (f" (usually {_nice(float(u))} min)" if isinstance(u, (int, float))
+                                                    else "")
+        out.append(_tip(x0 + slot / 2, y(max(m, u or 0)), x0, x0 + slot, PAD_T, H - PAD_B, said))
+    every = max(1, len(bins) // 6)
+    for i in range(0, len(bins), every):
+        out.append(f'<text x="{PAD_L + i * slot:.1f}" y="{H - 6}" font-size="10" fill="var(--ink2)">{lab(bins[i][0])}'
+                   '</text>')
+    out.append("</svg>")
+    return "".join(out)
+
+
 LANE_H, LANE_LABEL = 22, 12
 #: what each band or mark of the strip is: its legend word and colour — the strip and its legend read this one table
 #: ("off" is the empty lane: nothing drawn)
-LANE_STYLE = {"on": ("on or open", "var(--acc)", "band"), "other": ("another state", "var(--warn)", "band"),
-              "offline": ("not answering", "var(--ink2)", "band"),
-              "went": ("another device stopped answering", "var(--crit)", "mark"),
-              "can_act": ("an automation that can act ran", "var(--warn)", "mark"),
-              "unproven": ("an automation not readable ran", "var(--ink2)", "mark")}
+LANE_STYLE = {"on": ("on or open", "var(--acc)", "band"), "other": ("in another state", "var(--c4)", "band"),
+              "offline": ("not reporting", "var(--ink2)", "band"),
+              "went": ("another device stopped reporting", "var(--crit)", "mark"),
+              "can_act": ("an automation that can switch something ran", "var(--warn)", "mark"),
+              "unproven": ("an automation we could not read ran", "var(--c5)", "mark")}
 
 
 def strip_legend(lanes: list[dict]) -> list[dict]:
@@ -589,7 +631,7 @@ def strip(lanes: list[dict], start: datetime, end: datetime, zone: ZoneInfo) -> 
     span = (end - start).total_seconds()
     x = lambda t: PAD_L + (t - start).total_seconds() / span * (W - PAD_L - PAD_R)    # noqa: E731
     long = span > 86400
-    lab = lambda t: t.astimezone(zone).strftime("%d/%m %H:%M" if long else "%H:%M")     # noqa: E731
+    lab = lambda t: day_time_label(t.astimezone(zone)) if long else f"{t.astimezone(zone):%H:%M}"     # noqa: E731
     h = len(lanes) * (LANE_H + LANE_LABEL) + 18
     out = [f'<svg viewBox="0 0 {W} {h}" role="img" aria-label="What else happened, on the same time axis">']
     for i, lane in enumerate(lanes):
@@ -625,20 +667,28 @@ def _lasting(seconds) -> str:
 
 
 def normal_words(ref: dict, unit: str) -> str:
-    """investigate.py's normal of a device, in a line: how often and how long it runs, at what level."""
+    """investigate.py's normal of a device, in plain sentences (owner, 2026-10-12: "54.3 runs a day, usually 9 s …
+    doesn't seem proper English"): how often it starts, how long a run lasts, what it reads running and at rest."""
     if not ref:
         return ""
     u = f" {unit}" if unit else ""
-    bits = [f"{ref['runs_per_day']:g} runs a day" if isinstance(ref.get("runs_per_day"), (int, float)) else ""]
-    if "run_median_s" in ref:
-        bits.append(f"usually {_lasting(ref['run_median_s'])}")
-    if "run_longest_s" in ref:
-        bits.append(f"longest {_lasting(ref['run_longest_s'])}")
-    if "level_median" in ref:
-        bits.append(f"at about {_nice(float(ref['level_median']))}{u}")
-    if "rest_median" in ref:
-        bits.append(f"at rest {_nice(float(ref['rest_median']))}{u}")
-    return ", ".join(b for b in bits if b) + "."
+    days = ref.get("days")
+    when = f"over the {days:g} days before" if isinstance(days, (int, float)) else "the days before"
+    out = []
+    per_day = ref.get("runs_per_day")
+    if isinstance(per_day, (int, float)) and per_day > 0 and "run_median_s" in ref:
+        out.append(f"Usually ({when}) it started about {per_day:.0f} time{'s' if round(per_day) != 1 else ''} a day; "
+                   f"a run usually lasted {_lasting(ref['run_median_s'])}"
+                   + (f" and never more than {_lasting(ref['run_longest_s'])}"
+                      if _lasting(ref.get("run_longest_s", ref["run_median_s"])) != _lasting(ref["run_median_s"])
+                      else "") + ".")
+    level = [f"while running it read about {_nice(float(ref['level_median']))}{u}" if "level_median" in ref else "",
+             f"at rest about {_nice(float(ref['rest_median']))}{u}" if "rest_median" in ref else ""]
+    level = [x for x in level if x]
+    if level:
+        said = "; ".join(level)
+        out.append(said[:1].upper() + said[1:] + ".")
+    return " ".join(out)
 
 
 INVESTIGATION_FIELDS = ("title", "summary", "timeline", "causes", "cannot_tell", "warned_earlier", "checked", "sources")
@@ -652,6 +702,37 @@ TITLE_MAX, TO_ROOM = 90, 120
 SUMMARY_MAX = TELEGRAM_CAPTION - TITLE_MAX - TO_ROOM - KEY_MAX - len(DETAILS) - 6     # the line breaks between them
 
 
+CITE = re.compile(r"\[(\d{1,2})\]")
+#: every text of the account a reference may stand in (owner, 2026-10-12: "I am expecting to see the text section where
+#: you used any of these web page content … with reference numbers")
+CITING = ("summary", "causes", "cannot_tell", "warned_earlier")
+
+
+def cited(notes: dict) -> set[int]:
+    """The reference numbers [n] the account's texts carry."""
+    texts = [str(notes.get("summary") or "")]
+    for c in notes.get("causes") or []:
+        if isinstance(c, dict):
+            texts += [str(c.get(k) or "") for k in ("cause", "evidence", "confirm", "source")]
+    texts += [str(x) for k in ("cannot_tell", "warned_earlier") for x in notes.get(k) or []]
+    return {int(n) for t in texts for n in CITE.findall(t)}
+
+
+def citing(count: int):
+    """The page's filter: a text with its [n] as links to its numbered web page (only numbers that exist)."""
+    def cite(text) -> Markup:
+        return Markup(CITE.sub(lambda m: (f'<sup class="ref"><a href="#src-{m.group(1)}">[{m.group(1)}]</a></sup>'
+                                          if 1 <= int(m.group(1)) <= count else m.group(0)), str(escape(text))))
+    return cite
+
+
+def web_said(searches: list[str]) -> str:
+    """What the page says of the web: how many searches the AI made (the agent counted them)."""
+    n = len(searches)
+    return f"{n} web search{'es' if n != 1 else ''} made, every lead tested against the records." if n else \
+        "No web search was made."
+
+
 def web_pages(notes: dict) -> list[dict]:
     """The account's sources that are web pages (http/https): the only ones the page links to."""
     return [x for x in notes.get("sources") or [] if isinstance(x, dict)
@@ -659,7 +740,7 @@ def web_pages(notes: dict) -> list[dict]:
 
 
 def web_searches() -> list[str]:
-    """The web searches the AI made in this run before asking for the page (the agent's VESTA_WEB_SEARCHES)."""
+    """The web searches the AI made for this investigation before asking for the page (the agent's VESTA_WEB_SEARCHES)."""
     try:
         got = json.loads(os.environ.get("VESTA_WEB_SEARCHES") or "[]")
     except ValueError:
@@ -680,15 +761,23 @@ def investigation(notes: dict, data: dict | None, around: dict | None = None, se
             marks = [(p["start"], p["end"], p.get("kind") or "") for p in e.get("periods") or [] if p.get("why")]
             normals = [n["series"] for n in e.get("normal_series") or [] if n.get("series")]
             unit = e.get("unit") or ""
-            legend = [{"word": f"its readings{f' ({unit})' if unit else ''}", "colour": "var(--acc)", "shape": "line"}]
+            legend = [{"word": f"what it read{f' ({unit})' if unit else ''}", "colour": READINGS, "shape": "line"}]
             legend += [{"word": w, "colour": c, "shape": "band"}
                        for w, c in dict.fromkeys(band_of(k) for _, _, k in marks)]
             if normals:
-                legend.append({"word": f"the same hours on each of the {len(normals)} day{'s' if len(normals) > 1 else ''}"
-                                       " before", "colour": "var(--ink2)", "shape": "faint"})
+                legend.append({"word": f"what it read at the same hours on each of the {len(normals)} "
+                                       f"day{'s' if len(normals) > 1 else ''} before", "colour": USUAL, "shape": "dash"})
+            hours = e.get("per_hour") or {}
+            per = "day" if hours.get("unit") == "day" else "hour"
             charts.append({"name": e.get("name") or e.get("entity_id"),
                            "svg": Markup(timechart(e["series"], unit, zone, marks, normals)),
-                           "normal": normal_words(e.get("normal") or {}, unit), "legend": legend})
+                           "normal": normal_words(e.get("normal") or {}, unit), "legend": legend,
+                           "hours": Markup(hourchart(hours, zone)) if hours else "",
+                           "hours_title": f"How many minutes it ran each {per}",
+                           "hours_legend": [{"word": f"minutes it ran that {per}", "colour": READINGS, "shape": "band"}]
+                           + ([{"word": f"its usual for that hour (the days before)", "colour": USUAL,
+                                "shape": "line"}] if per == "hour" and any(b.get("usual") is not None
+                                                                         for b in hours.get("bins") or []) else [])})
     lanes_svg = ""
     try:
         a_, b_ = datetime.fromisoformat(data["start"]), datetime.fromisoformat(data["end"])
@@ -704,6 +793,7 @@ def investigation(notes: dict, data: dict | None, around: dict | None = None, se
     return TPL.get_template("investigation.html").render(
         title=notes.get("title") or "Investigation", n=notes, charts=charts, period=period, f=found,
         lanes=Markup(lanes_svg), lanes_legend=strip_legend(found.get("lanes") or []), web_pages=web_pages(notes),
+        cite=citing(len(web_pages(notes))), web=web_said(searches or []),
         searches=searches or [], generated=day_time_label(datetime.now(zone)))
 
 
@@ -835,16 +925,28 @@ def _investigation(a) -> int:
     # ⚠️ WEB RESEARCH SHOWS ITS SOURCES (owner, 2026-10-11: the page of a web-researched investigation named none). When
     # the person's words switched it on (the agent's VESTA_MODES), the page is refused until it lists them, and every
     # lead from the web carries its verdict against the records.
-    # 0.12.169 (owner: "include the sources, when web_search tool is used"): ANY web search the AI made in this run (the
-    # agent's VESTA_WEB_SEARCHES), research asked for or not — a manual, an error code — needs its pages listed too.
-    modes = {m for m in os.environ.get("VESTA_MODES", "").split(",") if m}
+    # ANY web search the AI made for this investigation (the agent's VESTA_WEB_SEARCHES) needs its pages listed (owner,
+    # 2026-10-11: "include the sources, when web_search tool is used")
     searches = web_searches()
     sources = web_pages(notes)
-    if ("web_research" in modes or searches) and not sources:
-        why = (f"you searched the web {len(searches)} time{'s' if len(searches) > 1 else ''}" if searches
-               else "web research was on")
-        print(f"investigation: {why} — list every web page you used in `sources`, each "
-              '{"title": "…", "url": "https://…"}, and run this again.', file=sys.stderr)
+    if searches and not sources:
+        print(f"investigation: you searched the web {len(searches)} time{'s' if len(searches) > 1 else ''} — list "
+              'every web page you used in `sources`, each {"title": "…", "url": "https://…"}, and run this again.',
+              file=sys.stderr)
+        return 1
+    # ⚠️ EACH WEB PAGE WHERE IT WAS USED (owner, 2026-10-12): every source cited as [n] in the text that used it, and
+    # every [n] a source of the list
+    refs, n_pages = cited(notes), len(sources)
+    if refs - set(range(1, n_pages + 1)):
+        print(f"investigation: the text cites {', '.join(f'[{n}]' for n in sorted(refs - set(range(1, n_pages + 1))))}"
+              f" but `sources` has {n_pages}: number them in the order of `sources`, from [1].", file=sys.stderr)
+        return 1
+    unused = [f"[{i}] {sources[i - 1].get('title') or sources[i - 1].get('url')}" for i in range(1, n_pages + 1)
+              if i not in refs]
+    if unused:
+        print("investigation: cite every web page in the text where you used it, as [n] (n = its place in `sources`); "
+              f"never cited: {'; '.join(unused)}. Cite it, or take it out of `sources` if it was not used.",
+              file=sys.stderr)
         return 1
     bad = [str(c.get("cause") or "?") for c in notes.get("causes") or []
            if isinstance(c, dict) and c.get("source") and c.get("verdict") not in VERDICTS]
@@ -859,7 +961,8 @@ def _investigation(a) -> int:
         f.write(html)
     # the chat message: the recorded facts, then the AI's essence — the page is the account (owner, 2026-10-11: "much
     # more synthetic and shorter")
-    doc = document(str(notes["title"]).strip(), "", [(None, [x for x in (found["key"], summary + DETAILS) if x])])
+    bubble = " ".join(re.sub(r"\s*\[\d{1,2}\]", "", summary).split())   # the chat message has no page for [n]
+    doc = document(str(notes["title"]).strip(), "", [(None, [x for x in (found["key"], bubble + DETAILS) if x])])
     print(json.dumps({"html": a.out, "html_chars": len(html), "charts": html.count("<svg"),
                       # what the page states from the records: the AI reads it against its account before sending
                       "established": found["established"][:20], "ruled_out": found["ruled_out"][:20],

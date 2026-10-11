@@ -7,9 +7,9 @@
 {# The whole page: its style, then one part per section, shown in reports.yaml's order. Nothing is fetched:
    the file is sent as it is and opens, prints or saves as PDF on the reader's phone. #}
 <style>{% raw %}
-:root{--paper:#F7F8F5;--card:#FFFFFF;--ink:#14211C;--ink2:#5E6B65;--line:#E2E6E1;--acc:#1F7A4D;--acc2:#2A8C8C;--c3:#4A6FA5;--c4:#B58B3A;--good:#1F7A4D;--warn:#C48A1B;--crit:#B3402E;--info:#3B6EA5;--goodbg:#E6F2EA;--warnbg:#FBF1DC;--critbg:#F8E3DF;--infobg:#E4ECF6;--grid:#E9ECE8}
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--paper:#0F1613;--card:#172019;--ink:#EEF2EE;--ink2:#A3B0A9;--line:#2A3630;--acc:#4CAF7D;--acc2:#4FB3B3;--c3:#7C9BD0;--c4:#D2A95A;--good:#4CAF7D;--warn:#E0A63A;--crit:#E06A56;--info:#6E9BD8;--goodbg:#1B3327;--warnbg:#3A2E15;--critbg:#3D1F1A;--infobg:#1C2B40;--grid:#243029;color-scheme:dark}}
-:root[data-theme="dark"]{--paper:#0F1613;--card:#172019;--ink:#EEF2EE;--ink2:#A3B0A9;--line:#2A3630;--acc:#4CAF7D;--acc2:#4FB3B3;--c3:#7C9BD0;--c4:#D2A95A;--good:#4CAF7D;--warn:#E0A63A;--crit:#E06A56;--info:#6E9BD8;--goodbg:#1B3327;--warnbg:#3A2E15;--critbg:#3D1F1A;--infobg:#1C2B40;--grid:#243029;color-scheme:dark}
+:root{--paper:#F7F8F5;--card:#FFFFFF;--ink:#14211C;--ink2:#5E6B65;--line:#E2E6E1;--acc:#1F7A4D;--acc2:#2A8C8C;--c3:#4A6FA5;--c4:#B58B3A;--c5:#7B5EA7;--good:#1F7A4D;--warn:#C48A1B;--crit:#B3402E;--info:#3B6EA5;--goodbg:#E6F2EA;--warnbg:#FBF1DC;--critbg:#F8E3DF;--infobg:#E4ECF6;--grid:#E9ECE8}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--paper:#0F1613;--card:#172019;--ink:#EEF2EE;--ink2:#A3B0A9;--line:#2A3630;--acc:#4CAF7D;--acc2:#4FB3B3;--c3:#7C9BD0;--c4:#D2A95A;--c5:#B49AE0;--good:#4CAF7D;--warn:#E0A63A;--crit:#E06A56;--info:#6E9BD8;--goodbg:#1B3327;--warnbg:#3A2E15;--critbg:#3D1F1A;--infobg:#1C2B40;--grid:#243029;color-scheme:dark}}
+:root[data-theme="dark"]{--paper:#0F1613;--card:#172019;--ink:#EEF2EE;--ink2:#A3B0A9;--line:#2A3630;--acc:#4CAF7D;--acc2:#4FB3B3;--c3:#7C9BD0;--c4:#D2A95A;--c5:#B49AE0;--good:#4CAF7D;--warn:#E0A63A;--crit:#E06A56;--info:#6E9BD8;--goodbg:#1B3327;--warnbg:#3A2E15;--critbg:#3D1F1A;--infobg:#1C2B40;--grid:#243029;color-scheme:dark}
 body{background:var(--paper);color:var(--ink);font-family:Jost,system-ui,sans-serif;padding:0 16px;padding-block:24px 48px;font-size:15px;line-height:1.45}
 .wrap{max-width:900px;margin:0 auto;display:grid;gap:28px}
 h1{font-family:"Cormorant Garamond",Georgia,serif;font-size:36px;font-weight:600;margin:0;line-height:1.1;text-wrap:balance}
@@ -23,6 +23,10 @@ details.fold[open]>summary::before{content:"▾ "}details.fold[open]>summary{mar
 .sw{display:inline-block;width:10px;height:10px;border-radius:2px;opacity:.6;vertical-align:-1px}
 .sw.line{width:14px;height:0;border-top:2px solid;border-radius:0;opacity:1;vertical-align:3px;background:none}
 .sw.line.faint{opacity:.5}.sw.mark{width:3px;height:11px;border-radius:0;opacity:1}
+.sw.dash{width:14px;height:0;border-top:2px dashed;border-radius:0;opacity:1;vertical-align:3px;background:none}
+.stack{display:grid;gap:12px}sup.ref a{color:var(--info);text-decoration:none;font-size:11px;margin-left:1px}
+.groups p.lead{margin:10px 0 4px;font-weight:600}.groups ul{margin:0 0 4px}
+.st.usual{background:var(--grid);color:var(--ink2)}ol.srcs li{margin:3px 0}
 p{margin:0}
 .eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--acc);font-weight:600}
 .head{display:grid;gap:8px}

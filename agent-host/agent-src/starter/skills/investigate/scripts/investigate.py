@@ -278,6 +278,29 @@ def threshold(values: list[float]) -> float | None:
 CHART_POINTS = 400                        # a chart's points: each the highest reading of its slice (a surge stays seen)
 
 
+def running_per_hour(ps: list[dict], start: datetime, end: datetime, base: list[dict], baseline_days: float) -> dict:
+    """Minutes running in each hour of the period (each day, past 2 days), and its usual: the same hour's average over
+    the days before. {"bins": [{"at", "minutes", "usual"}], "unit": "hour" | "day"}."""
+    step = timedelta(hours=1) if end - start <= timedelta(days=2) else timedelta(days=1)
+    edges, t = [], start
+    while t < end:
+        edges.append(t)
+        t += step
+
+    def ran(periods_: list[dict], a: datetime, b: datetime) -> float:
+        return sum(max(0.0, (min(p["end"], b) - max(p["start"], a)).total_seconds())
+                   for p in periods_ if p["kind"] == "running") / 60
+    days = int(baseline_days)
+    bins = []
+    for a in edges:
+        b = min(a + step, end)
+        usual = None
+        if step == timedelta(hours=1) and days > 0:
+            usual = round(sum(ran(base, a - timedelta(days=k), b - timedelta(days=k)) for k in range(1, days + 1)) / days, 1)
+        bins.append({"at": a.isoformat(), "minutes": round(ran(ps, a, b), 1), "usual": usual})
+    return {"bins": bins, "unit": "hour" if step == timedelta(hours=1) else "day"}
+
+
 def spoken(eid: str) -> str:
     """A name for an entity Home Assistant gives none (no state, no history): its id said as words, never the id."""
     words = eid.split(".", 1)[-1].replace("_", " ").strip()
@@ -395,7 +418,11 @@ def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_da
         if series and any(number(v) is not None for _, v in rows):
             part.update(name=attrs.get("friendly_name") or eid, unit=attrs.get("unit_of_measurement") or "",
                         series=chart_series(rows, start, end),
-                        normal_series=same_hours_before(base_rows, start, end, baseline_days))
+                        # ⚠️ THE CHART THAT FITS THE DEVICE (owner, 2026-10-12: "would you use other metric?"): a device
+                        # that RUNS gets its minutes running per hour against its usual — its days before drawn as
+                        # lines were spikes nobody could read; one read as LEVELS (a temperature) keeps them, dashed
+                        **({"per_hour": running_per_hour(ps, start, end, periods(base_rows, start, on), baseline_days)}
+                           if on else {"normal_series": same_hours_before(base_rows, start, end, baseline_days)}))
         elif series:
             part["states"] = state_series(rows, start, end)        # a lane under the charts (reports' compose.py)
         parts.append(part)
@@ -451,13 +478,13 @@ def _cycles(ps: list[dict]) -> list[dict]:
         if len(runs) >= th("cycle_min_runs") and len(group) >= th("cycle_min_periods"):
             levels = [p["mean"] for p in runs if "mean" in p]
             nth = runs[int(th("cycle_min_runs")) - 1]           # the run that makes it cycling: an alert there
-            out.append({"alert": {"rule": f"{th('cycle_min_runs'):g} runs shorter than {lasting(th('cycle_short_s'))} "
-                                          "in a row", "at": nth["start"]},
+            out.append({"alert": {"rule": f"it starts {th('cycle_min_runs'):g} times in a row, each run shorter than "
+                                          f"{lasting(th('cycle_short_s'))}", "at": nth["start"]},
                         "kind": f"stops and restarts {len(runs)} times", "start": group[0]["start"],
                         "end": group[-1]["end"], "seconds": (group[-1]["end"] - group[0]["start"]).total_seconds(),
                         **({"mean": sum(levels) / len(levels), "min": min(p["min"] for p in runs),
                             "max": max(p["max"] for p in runs)} if levels else {}),
-                        "why": "short-cycling: runs of " + lasting(statistics.median(p["seconds"] for p in runs))})
+                        "why": "runs of about " + lasting(statistics.median(p["seconds"] for p in runs)) + " each"})
             i = j
         else:
             out.append(ps[i])
@@ -476,24 +503,24 @@ def _notable(ps: list[dict], ref: dict, on: float | None) -> list[dict]:
         if p["kind"] == "running":
             limit = max(longest * th("longer_ratio"), longest + th("longer_extra_s")) if longest else None
             if limit and p["seconds"] > limit:
-                why.append(f"longer than any run of its normal ({lasting(longest)})")
-                alerts.append((limit, f"running longer than {lasting(limit)}"))
+                why.append(f"longer than its longest usual run ({lasting(longest)})")
+                alerts.append((limit, f"it runs for more than {lasting(limit)} without stopping"))
             # a level is judged only over as long as an alert on it would need (a start-up surge of 8 s is not one)
             lasts = p["seconds"] >= th("level_change_gap_s")
             if lasts and level and "mean" in p and p["mean"] > level * th("level_high_ratio"):
-                why.append(f"draws {p['mean'] / level:.1f}× its normal level")
-                alerts.append((th("level_change_gap_s"), f"drawing over {th('level_high_ratio'):g}× its normal level "
-                                                         f"for {lasting(th('level_change_gap_s'))}"))
-            if lasts and level and "mean" in p and p["mean"] < level * th("level_low_ratio"):
-                why.append(f"draws only {p['mean'] / level:.0%} of its normal level")
-                alerts.append((th("level_change_gap_s"), f"drawing under {th('level_low_ratio'):.0%} of its normal "
+                why.append(f"about {p['mean'] / level:.1f}× its usual running level")
+                alerts.append((th("level_change_gap_s"), f"it stays above {th('level_high_ratio'):g}× its usual running "
                                                          f"level for {lasting(th('level_change_gap_s'))}"))
+            if lasts and level and "mean" in p and p["mean"] < level * th("level_low_ratio"):
+                why.append(f"only {p['mean'] / level:.0%} of its usual running level")
+                alerts.append((th("level_change_gap_s"), f"it stays below {th('level_low_ratio'):.0%} of its usual "
+                                                         f"running level for {lasting(th('level_change_gap_s'))}"))
         elif p["kind"] == "no power" and rest and rest > 0 and p["seconds"] >= th("offline_min_s"):
-            why.append(f"exactly 0 where it reads {rest:g} at rest: its supply was off")
-            alerts.append((th("offline_min_s"), f"reading exactly 0 for {lasting(th('offline_min_s'))}"))
+            why.append(f"it read 0 instead of its usual {rest:g} at rest")
+            alerts.append((th("offline_min_s"), f"it reads 0 for {lasting(th('offline_min_s'))}"))
         elif p["kind"] in ("offline", "no value") and p["seconds"] >= th("offline_min_s"):
-            why.append("did not answer" if p["kind"] == "offline" else "answered without a value")
-            alerts.append((th("offline_min_s"), f"not answering for {lasting(th('offline_min_s'))}"))
+            why.append("it stopped reporting" if p["kind"] == "offline" else "it reported no value")
+            alerts.append((th("offline_min_s"), f"it stops reporting for {lasting(th('offline_min_s'))}"))
         if why:
             p["why"] = "; ".join(why)
         # ⚠️ WHAT WOULD HAVE WARNED, BY THE RULE THAT FLAGGED IT (the facts-first page, 2026-10-11): the earliest moment

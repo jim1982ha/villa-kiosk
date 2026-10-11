@@ -53,7 +53,9 @@ The person wants the TRUE and COMPLETE story, not a quick reply. Take the time t
    doors, locks, switches, people, and the VESTA Agent's own alerts. Match times to the timeline: a device dropping off
    79 seconds after another stops, an automation that ran at the moment a device turned on, a person arriving.
 
-5. **Check what acts on it — from what things CAN do, never from their running at the time.**
+5. **Check what acts on it — from what things CAN do, never from their running at the time.** (The page lists what
+   the records rule out by itself — a switch that stayed off, an automation that can only notify: never repeat those
+   as causes.)
    - A control the timeline marks "stayed off for the whole period … it is NOT what turned it on" is not a cause: a
      control that never left "off" turned nothing on. Never write that it "controls" the device.
    - `around` says under each automation that ran what it is ABLE to do. "Switches nothing" means it cannot have
@@ -69,30 +71,22 @@ The person wants the TRUE and COMPLETE story, not a quick reply. Take the time t
 6. **Fill the gaps with the raw tools only where needed:** ha_get_history for an entity the script did not read,
    ha_get_logs (logbook) for a minute that matters, ha_get_state for how things are now.
 
-   **Search the web (web_search) when the records alone cannot explain what they show** — never instead of them:
-   - the device's manual, or the known failure modes of its make and model (its name and model are in its Home
-     Assistant device: ha_get_device) — how its own control behaves (a pressure switch, a thermostat, a protection);
-   - what an error code, or a pattern of readings, means for that kind of device;
-   - an outside event at that time and place (a storm, a grid outage) when several devices stopped together.
-   Every time and number still comes from Home Assistant: the web only explains them. Say where it came from ("the
-   maker's manual says…"). Do not search for what the records already answer, nor for anything about the people.
-   EVERY web search, whatever it was for, puts its pages in the account's "sources": the agent knows you searched, and
-   the page is refused without them.
-
-   **Web research — only when the message says "Web research: ON"** (the person asked for it in their own words):
-   once the timeline and `around` are read, describe the pattern you found in general words (the kind of device and
-   what it did, e.g. "a pump that runs without stopping, then its circuit's protection trips") and search the web for
-   its known causes, the correlations that usually go with it, and any outside event at that time (weather, grid).
+   **Search the web (web_search) — always** (owner, 2026-10-12), once the timeline and `around` are read, never
+   instead of them:
+   - Describe the pattern you found in general words (the kind of device and what it did, e.g. "a pump that runs
+     without stopping, then its circuit's protection trips") and search for its known causes and the correlations
+     that usually go with it; also the device's manual or its make and model's known failures (ha_get_device), what an
+     error code means, and an outside event at that time (a storm, a grid outage) when several devices stopped together.
    - At most 5 searches. Never the villa's name, its address, a person, or a device's name in a search: the pattern,
      the kind of device and its make and model only; for weather or a grid outage, at most the town.
    - Every lead found is a QUESTION for the records, never an answer: for each, say what the records show for or
-     against it. In the account, each such cause carries "source" (where it came from) and "verdict": consistent
-     (the records fit it), not supported (the records contradict it — say so, keep it in the list as ruled out) or
-     cannot tell (no record can judge it — say what would).
-   - Nothing from the web replaces a time or a number from Home Assistant. In "checked", say web research was on and
-     how many searches you made. List every web page you used in "sources" (title and address): the page is refused
-     without them, and a lead with a "source" but no "verdict" is refused too.
-   When the message says "Web research: off", do none of this: the web only for a manual or an error code (step 6).
+     against it. Such a cause carries "source" and "verdict": consistent (the records fit it), not supported (the
+     records contradict it — it then appears under "Ruled out") or cannot tell (no record can judge it — say what
+     would).
+   - Nothing from the web replaces a time or a number from Home Assistant.
+   - List every web page you used in "sources", and CITE it where you used it, as [1], [2]… (its place in "sources")
+     in the summary, a cause's evidence, what cannot be told or what would have warned. The page is refused with a
+     page never cited, or with a [n] that is not in "sources".
 
 7. **Reason, before writing.** For each unusual thing, ask what physically explains it. Keep several causes when the
    evidence allows several, rank them, and say for each what points to it and what would confirm it. Separate clearly:
@@ -130,9 +124,10 @@ rules out is not a cause; if you think a fact is misleading, say why in "cannot_
         "cannot_tell": ["what no sensor saw, gaps in the records, what only a person on site can check", …],
         "warned_earlier": ["a sensor, rule or change the records cannot measure (the page already gives when an
                            alert on each unusual period would have fired)", …],
-        "checked": "what you read: devices, the period, the logbook, the automations",
-        "sources": [{"title": "the page's title", "url": "https://…"}, … every web page you used — required
-                    whenever you searched the web: the page cannot be made without them]}
+        "checked": "what you read in Home Assistant: devices, the period, the logbook, the automations (the page
+                    says what the web gave by itself — do not)",
+        "sources": [{"title": "the page's title", "url": "https://…"}, … every web page you used, numbered by
+                    its place: [1] is the first — each cited in the text where you used it]}
 
    (the example is invented: write the devices and times of THIS investigation). For the charts and the recorded
    facts, your last timeline run must be the one of the whole period with `--out timeline.json`, all the devices that

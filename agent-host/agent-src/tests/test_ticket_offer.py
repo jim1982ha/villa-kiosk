@@ -141,6 +141,19 @@ def _with_investigate(tmp_path):
     return v
 
 
+def _with_a_moded_investigate(tmp_path):
+    """The investigate skill given a mode, as any command skill may declare one (skill.yaml `modes`): the engine's
+    mechanism is generic — the investigation itself has none since 2026-10-12 (it always searches the web)."""
+    import yaml
+    v = _with_investigate(tmp_path)
+    path = os.path.join(v.s.skills_dir, "investigate", "skill.yaml")
+    spec = yaml.safe_load(open(path))
+    spec["modes"] = {"web_research": {"words": ["internet", "web", "online", "en ligne"],
+                                      "said_on": "Web research: ON", "said_off": "Web research: off"}}
+    open(path, "w").write(yaml.safe_dump(spec))
+    return v
+
+
 def test_investigate_is_refused_without_its_command_and_given_with_it(tmp_path, monkeypatch):
     # owner, 2026-10-11: "only triggered when user mentions /investigation in the question (and never if not)"
     from ai_fake import FakeAI
@@ -423,11 +436,11 @@ def test_the_command_alone_shows_the_skills_own_example_and_off_says_so(tmp_path
     assert "The investigate skill is switched off on this villa" in v.tg.sent[-1][1]
 
 
-def test_web_research_is_switched_by_the_persons_own_words(tmp_path, monkeypatch):
-    # owner, 2026-10-11: web research "only if the user mention it in the request" — the engine matches the words the
-    # skill declares; the AI is told ON or off
+def test_a_mode_is_switched_by_the_persons_own_words(tmp_path, monkeypatch):
+    # a command skill's `modes` (generic since 2026-10-11): the engine matches the words the skill declares; the AI is
+    # told ON or off
     from ai_fake import FakeAI
-    v = _with_investigate(tmp_path)
+    v = _with_a_moded_investigate(tmp_path)
     ai = FakeAI("ok").install(monkeypatch)
     run(v.converse(JM, v.policy().person(JM), "why did the heater stop?", invoked="investigate"))
     assert "Web research: off" in ai.runs[0]["prompt"] and "Web research: ON" not in ai.runs[0]["prompt"]
@@ -440,10 +453,10 @@ def test_web_research_is_switched_by_the_persons_own_words(tmp_path, monkeypatch
 
 
 def test_the_requests_modes_reach_the_skills_scripts(tmp_path, monkeypatch):
-    # the page script can only require web sources if it knows web research was on (VESTA_MODES)
+    # a skill's scripts know the modes the request switched on (VESTA_MODES)
     from ai_fake import FakeAI
     from vesta_agent.skills import script_env
-    v = _with_investigate(tmp_path)
+    v = _with_a_moded_investigate(tmp_path)
     seen = []
 
     async def act(call):
@@ -525,3 +538,32 @@ def test_the_log_says_how_long_each_script_and_the_whole_answer_took(tmp_path, m
     assert took and float(took.group(1)) >= 0.2
     whole = re.search(r"Answered JM in chat 111 \(0\.010 USD, (\d+) s\)", said)
     assert whole and int(whole.group(1)) >= 1
+
+
+def test_an_investigations_searches_reach_the_page_made_in_its_follow_up(tmp_path, monkeypatch):
+    # the AI searched in the first turn and made the page only when sent back for it (deliver.page): the page script
+    # must still know the searches, or it cannot require their sources
+    import json
+    from ai_fake import FakeAI
+    from helpers import make_skill
+    v = _with_investigate(tmp_path)
+    make_skill(v.s.skills_dir, "echo", {"tools": [], "scripts": {"env.py": {"description": "says its environment",
+                                                                           "commands": {"show": "its environment"}}}},
+               {"env.py": "import json, os\nprint(json.dumps({'searched': os.environ.get('VESTA_WEB_SEARCHES', '')}))\n"})
+    said, search = [], ["pump runs without stopping causes"]
+
+    async def act(call):
+        if not said:
+            for q in search:
+                await call["web_search"](q)
+            said.append(None)
+        else:
+            said.append(await call["call"]("run_skill_script", {"skill": "echo", "script": "env.py", "args": ["show"]}))
+    FakeAI("ok", act=act).install(monkeypatch)
+    run(v.converse(JM, v.policy().person(JM), "the pump", invoked="investigate"))
+    assert len(said) == 2                                                      # the turn, then its page follow-up
+    assert json.loads(json.loads(said[1]["content"][0]["text"])["searched"]) == ["pump runs without stopping causes"]
+    said.clear()
+    search.clear()                                                            # another investigation, no search
+    run(v.converse(JM, v.policy().person(JM), "the heater", invoked="investigate"))
+    assert len(said) == 2 and json.loads(said[1]["content"][0]["text"])["searched"] == ""   # never the other's

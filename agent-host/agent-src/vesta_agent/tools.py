@@ -111,7 +111,8 @@ class Toolbox:
                  ticket: Callable[..., Awaitable[str]] | None = None,
                  carry_out: Callable[..., Awaitable[dict]] | None = None,
                  start_job: Callable[..., Awaitable[str]] | None = None,
-                 allowed: set[str] | None = None, invoked: str | None = None, inv: str | None = None):
+                 allowed: set[str] | None = None, invoked: str | None = None, inv: str | None = None,
+                 searched: list | None = None):
         self.s = settings
         # the skill the person's "/command" called for in this turn (intake.gate): the only command skill it may use
         self.invoked = invoked
@@ -129,7 +130,9 @@ class Toolbox:
         self.server_tools = {t["name"]: t for t in server_tools}
         self.state = state
         self.parts = Parts()
-        self.searched: list[str] = []      # this run's web searches, in order (runner.make_guard adds them)
+        # this run's web searches, in order (runner.make_guard adds them) — an investigation's own list, shared by its
+        # page follow-up and a Continue (app.toolbox), so the page knows every search made for it
+        self.searched: list[str] = searched if searched is not None else []
         # ⚠️ A PICTURE THE AI LOOKED AT IS SHOWN TO THE PERSON TOO (2026-10-06). ha_get_camera_image shows it to the
         # AI only: asked "show me the living room camera", it looked, wrote "here's the current view", and the chat
         # got text. A send_message(camera=) option (0.12.57) was not used by the model either. The reply carries
