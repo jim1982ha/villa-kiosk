@@ -1,3 +1,12 @@
+## 0.12.153
+
+What you will see (architecture review 29 — with VESTA (dev2) 2.496.324; this also finishes review 27, which 0.12.152's notes counted as done too early):
+- "Reopen fault" in the Cockpit works on any fault, however long ago it was closed: the facility manager is asked again ("Reopened in the VESTA Kiosk by Owner on 11/10/2026 07:05. Please look again."). It was ignored past two days.
+- A lock or device that stops answering no longer closes its alert as if all were well: "Laundry lock does not answer: VESTA cannot tell if it is right. Still open." — said once; the alert closes when the device answers and is right (your choice A).
+- A title you write on a fault stays yours, for good — also on faults made before 0.12.151, where the agent now adds its reading under your title instead of replacing it ("VESTA reads: …").
+- Who did it, said the same everywhere: a Done on Telegram shows "resolved … by Fabien" on the Cockpit card (not "by VESTA Agent"); a name typed when resolving in the Cockpit is the one named on Telegram; "Closed in the VESTA Kiosk by … on …" and "Reopened in the VESTA Kiosk by … on …" carry who and the real time.
+- A fault's note reads "What to do: …", as the Telegram alert says it (it read "Check: Check the device named…").
+
 ## 0.12.152
 
 What you will see — every alert and report on Telegram, in one layout (your requests of 11 October, and architecture reviews 27 and 28):
