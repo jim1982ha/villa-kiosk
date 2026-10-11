@@ -80,7 +80,8 @@ The person wants the TRUE and COMPLETE story, not a quick reply. Take the time t
    - At most 5 searches. Never the villa's name, its address, a person, or a device's name in a search: the pattern,
      the kind of device and its make and model only; for weather or a grid outage, at most the town.
    - Every lead found is a QUESTION for the records, never an answer: for each, say what the records show for or
-     against it. Such a cause carries "source" and "verdict": consistent (the records fit it), not supported (the
+     against it. Such a cause carries "source" — its web page as [n], e.g. "[2]" (or "the records" when a record
+     raised it), never a name: the page shows the title and the link — and "verdict": consistent (the records fit it), not supported (the
      records contradict it — it then appears under "Ruled out") or cannot tell (no record can judge it — say what
      would).
    - Nothing from the web replaces a time or a number from Home Assistant.

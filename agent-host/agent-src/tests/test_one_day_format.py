@@ -103,9 +103,9 @@ def test_every_point_of_a_reports_chart_says_its_day_and_value():
     sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
     import compose
     svg = compose.line([("2026-09-21", 100), ("2026-09-22", 59.4), ("2026-09-23", None), ("2026-09-24", 61)], "W")
-    assert svg.count('class="pt"') == 3 and "<title>Mon 21 Sep · 100 W</title>" not in svg
-    assert "<title>21 Sep · 100 W</title>" in svg and "<script" not in svg
+    assert svg.count('class="pt"') == 3 and 'aria-label="Mon 21 Sep · 100 W"' not in svg
+    assert 'aria-label="21 Sep · 100 W"' in svg and "<script" not in svg
     bars = compose.bars([{"label": "W1", "value": 30}, {"label": "W2", "value": None}])
-    assert bars.count('class="pt"') == 1 and "<title>W1 · 30</title>" in bars
+    assert bars.count('class="pt"') == 1 and 'aria-label="W1 · 30"' in bars
     pairs = compose.pairs([{"day": "Mon", "kwh": 12.5, "prev_kwh": 10}])
-    assert "<title>Mon · 12 kWh · before 10</title>" in pairs
+    assert 'aria-label="Mon · 12 kWh · before 10"' in pairs

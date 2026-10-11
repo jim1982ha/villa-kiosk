@@ -160,14 +160,14 @@ def test_the_investigation_page_carries_the_account_and_its_charts(tmp_path):
              "causes": [{"cause": "Water escaping downstream", "evidence": "a run far longer than any before",
                          "confirm": "look for a leak after the pump"},
                         {"cause": "A power surge", "evidence": "no surge recorded", "confirm": "-",
-                         "source": "a maker's support page", "verdict": "not supported"}],
+                         "source": "the weather station's records", "verdict": "not supported"}],
              "cannot_tell": ["No leak sensor in the room."], "warned_earlier": ["A leak sensor on the floor."],
              "checked": "Its power, the logbook, the automations."}
     code, err, page, out = _page(tmp_path, notes)
     assert code == 0, err
     for part in ("The heater on the night of 9 October", "Investigation conclusions", "Water escaping downstream",
                  "No leak sensor", "A leak sensor on the floor.", "Heater Power", "<svg", 'rel="icon"', "not supported",
-                 "Where the lead came from: a maker&#39;s support page", "The gardener found water on the floor."):
+                 "Where the lead came from: the weather station&#39;s records", "The gardener found water on the floor."):
         assert part in page, part
     assert out["charts"] == 3 and out["message"]["title"] == notes["title"]   # the chart, its hours, the strip
     key, said = out["message"]["text"].split("\n\n")                         # the recorded facts, then the summary
@@ -538,9 +538,11 @@ def test_the_page_is_laid_out_as_the_owner_asked(tmp_path):
     assert order == sorted(order)
     assert '<details class="card fold"><summary><h2>Everything recorded, in time order (' in page
     assert "<details open" not in page and page.count("<details") == 1
-    assert '<span class="st flat">reported</span> Water on the floor' in page
+    # owner, 2026-10-12: "reported" in yellow, "usual" in green
+    assert '<span class="st watch">reported</span> Water on the floor' in page
     assert '<span class="st bad">unusual</span> Heater Power ran for 1 h 45 min' in page
-    assert '<span class="st usual">usual</span> Next Relay reports again' in page
+    assert '<span class="st ok">usual</span> Next Relay reports again' in page
+    assert '<div class="themes" role="radiogroup"' in page and 'id="th-auto" checked' in page   # Light / Auto / Dark
     assert "<h3>What the records cannot tell</h3>" in page and "No leak sensor." in page
     assert any("did not turn Heater Power on" in x for x in out["ruled_out"]) and out["established"]
 
@@ -665,13 +667,17 @@ def test_a_state_lane_tags_each_state_by_the_timelines_own_words():
 def test_the_page_names_each_band_and_draws_the_strip(tmp_path):
     code, err, page, _ = _page(tmp_path, {"title": "The heater", "summary": "It ran."})
     assert code == 0, err
-    legend = page[page.index("Heater Power</h2>"):page.index("Usually (over the 3 days before)")]
+    # what the chart shows is said ABOVE it, its legend under it (owner, 2026-10-12)
+    assert page.index("Heater Power</h2>") < page.index("Usually (over the 3 days before)") < \
+        page.index("<svg", page.index("Heater Power</h2>"))
+    legend = page[page.index("Usually (over the 3 days before)"):page.index("How many minutes it ran each hour")]
     for word in ("what it read (W)", "ran longer or harder than usual", "kept stopping and restarting",
                  "read 0: no power reached it"):
         assert word in legend, word
     hours = page[page.index("How many minutes it ran each hour"):page.index("On the same timeline")]
     assert "minutes it ran that hour" in hours and "its usual for that hour (the days before)" in hours
     strip = page[page.index("On the same timeline"):]
+    assert strip.index("An empty lane means off") < strip.index("<svg")
     assert "Heater Relay" in strip and "Other devices that stopped reporting" in strip and "Next Relay" in strip
     assert "02:00–15:00 · off" not in strip                                 # "off" is the empty lane: nothing drawn
 
@@ -710,16 +716,32 @@ def test_every_chart_and_the_strip_have_a_legend_of_what_they_draw(tmp_path):
     assert "on or open" not in strip                                        # the relay stayed off: nothing drawn, no key
 
 
-def test_a_tooltip_stays_inside_its_chart_whatever_its_length():
+def test_a_tooltip_is_page_text_over_its_column_never_covered():
+    # owner, 2026-10-12: the tip was chart text — it grew with the screen and the next bars covered it. Now page text
+    # (13 px, page_head.html), laid over the chart after it, its place in % of the chart
     sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
     import re
     import compose
-    tip = compose._tip(200, 60, 195, 205, 10, 130, "09:12 · “an automation with a very long name” (can act on: "
-                       + ", ".join(f"Device number {k}" for k in range(30)) + ")")
-    x, w = (float(v) for v in re.search(r'<g class="pt-tip"><rect x="([\d.]+)" y="[\d.]+" width="([\d.]+)"', tip).groups())
-    assert x >= 0 and x + w <= compose.W and tip.count("<tspan") == 3 and "…" in tip
-    short = compose._tip(200, 60, 195, 205, 10, 130, "09:12 · 1,234 W")
-    assert short.count("<tspan") == 1 and 'font-size="8.5"' in short
+    chart = compose.hourchart({"unit": "hour", "bins": [
+        {"at": T(9, h).isoformat(), "minutes": m, "usual": 0.3} for h, m in ((2, 0), (3, 50), (4, 58), (5, 52))]}, Z)
+    svg_end = chart.index("</svg>")
+    tips = re.findall(r'<span class="pt" tabindex="0" aria-label="([^"]+)" style="left:([\d.]+)%;width:([\d.]+)%', chart)
+    assert len(tips) == 4 and chart.index('class="pt"') > svg_end                # after the chart: nothing covers them
+    assert tips[0][0] == "02:00 · ran 0 min (usually 0.3 min)"
+    assert all(0 <= float(left) and float(left) + float(w) <= 100.01 for _, left, w in tips)
+    assert '<span class="tip l">' in chart and '<span class="tip r">' in chart   # at the edges, anchored inside
+    head = open(os.path.join(STARTER_SKILLS, "reports", "templates", "page_head.html"), encoding="utf-8").read()
+    assert ".chart .pt .tip{" in head and "font-size:13px" in head[head.index(".chart .pt .tip{"):][:400]
+
+
+def test_the_hours_chart_stops_at_an_hour_and_draws_its_usual_as_one_line():
+    # 2026-10-12: the scale went to 80 min in an hour, and a dash per hour at 0 read as a broken axis
+    sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
+    import compose
+    chart = compose.hourchart({"unit": "hour", "bins": [
+        {"at": T(9, h).isoformat(), "minutes": m, "usual": u} for h, m, u in ((2, 0, 0.3), (3, 58, 0.2), (4, 0, 8))]}, Z)
+    assert ">60</text>" in chart and ">80</text>" not in chart
+    assert chart.count('class="usual"') == 1 and chart.count(f'stroke="{compose.USUAL}"') == 1   # one line, no dashes
 
 
 def test_an_automation_made_from_a_blueprint_says_what_it_acts_on():
@@ -811,3 +833,20 @@ def test_what_an_automation_does_is_said_as_a_person_says_a_list():
     import investigation_facts as mod
     assert mod._and(["fires an event", "notifies", "records a value"]) == "fires an event, notifies and records a value"
     assert mod._and(["notifies"]) == "notifies" and mod._and([]) == ""
+
+
+
+def test_a_lead_names_its_web_page_and_links_its_number_or_says_the_records(tmp_path):
+    # owner, 2026-10-12: "Where the lead came from: AGM Service, booster pump failure guide" — no number, no link
+    notes = {"title": "t", "summary": "It ran [1].",
+             "sources": [{"title": "Common Causes of Booster Pump Failure", "url": "https://example.org/agm"}],
+             "causes": [{"cause": "A leak", "evidence": "ran 3 h", "source": "AGM Service guide", "verdict": "consistent"}]}
+    code, err, _, _ = _page(tmp_path, notes, ["pump runs nonstop"], readings=False)
+    assert code == 1 and "as [n]" in err and "AGM Service guide" in err
+    notes["causes"][0]["source"] = "[1]"
+    code, err, page, _ = _page(tmp_path, notes, ["pump runs nonstop"], readings=False)
+    assert code == 0, err
+    assert ('Where the lead came from: Common Causes of Booster Pump Failure <sup class="ref"><a href="#src-1">[1]</a>'
+            in page)
+    notes["causes"][0]["source"] = "the villa's records"
+    assert _page(tmp_path, notes, ["pump runs nonstop"], readings=False)[0] == 0

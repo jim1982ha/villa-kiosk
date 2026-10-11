@@ -10,10 +10,21 @@
 :root{--paper:#F7F8F5;--card:#FFFFFF;--ink:#14211C;--ink2:#5E6B65;--line:#E2E6E1;--acc:#1F7A4D;--acc2:#2A8C8C;--c3:#4A6FA5;--c4:#B58B3A;--c5:#7B5EA7;--good:#1F7A4D;--warn:#C48A1B;--crit:#B3402E;--info:#3B6EA5;--goodbg:#E6F2EA;--warnbg:#FBF1DC;--critbg:#F8E3DF;--infobg:#E4ECF6;--grid:#E9ECE8}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--paper:#0F1613;--card:#172019;--ink:#EEF2EE;--ink2:#A3B0A9;--line:#2A3630;--acc:#4CAF7D;--acc2:#4FB3B3;--c3:#7C9BD0;--c4:#D2A95A;--c5:#B49AE0;--good:#4CAF7D;--warn:#E0A63A;--crit:#E06A56;--info:#6E9BD8;--goodbg:#1B3327;--warnbg:#3A2E15;--critbg:#3D1F1A;--infobg:#1C2B40;--grid:#243029;color-scheme:dark}}
 :root[data-theme="dark"]{--paper:#0F1613;--card:#172019;--ink:#EEF2EE;--ink2:#A3B0A9;--line:#2A3630;--acc:#4CAF7D;--acc2:#4FB3B3;--c3:#7C9BD0;--c4:#D2A95A;--c5:#B49AE0;--good:#4CAF7D;--warn:#E0A63A;--crit:#E06A56;--info:#6E9BD8;--goodbg:#1B3327;--warnbg:#3A2E15;--critbg:#3D1F1A;--infobg:#1C2B40;--grid:#243029;color-scheme:dark}
+:root:has(#th-light:checked){--paper:#F7F8F5;--card:#FFFFFF;--ink:#14211C;--ink2:#5E6B65;--line:#E2E6E1;--acc:#1F7A4D;--acc2:#2A8C8C;--c3:#4A6FA5;--c4:#B58B3A;--c5:#7B5EA7;--good:#1F7A4D;--warn:#C48A1B;--crit:#B3402E;--info:#3B6EA5;--goodbg:#E6F2EA;--warnbg:#FBF1DC;--critbg:#F8E3DF;--infobg:#E4ECF6;--grid:#E9ECE8;color-scheme:light}
+:root:has(#th-dark:checked){--paper:#0F1613;--card:#172019;--ink:#EEF2EE;--ink2:#A3B0A9;--line:#2A3630;--acc:#4CAF7D;--acc2:#4FB3B3;--c3:#7C9BD0;--c4:#D2A95A;--c5:#B49AE0;--good:#4CAF7D;--warn:#E0A63A;--crit:#E06A56;--info:#6E9BD8;--goodbg:#1B3327;--warnbg:#3A2E15;--critbg:#3D1F1A;--infobg:#1C2B40;--grid:#243029;color-scheme:dark}
+.themes{display:inline-flex;gap:2px;padding:2px;border-radius:999px;border:1px solid var(--line);float:right}
+.themes input{position:absolute;opacity:0;pointer-events:none}
+.themes label{font-size:12px;color:var(--ink2);padding:4px 10px;border-radius:999px;cursor:pointer}
+.themes input:checked+label{background:var(--goodbg);color:var(--ink)}.themes input:focus-visible+label{outline:2px solid var(--acc)}
 body{background:var(--paper);color:var(--ink);font-family:Jost,system-ui,sans-serif;padding:0 16px;padding-block:24px 48px;font-size:15px;line-height:1.45}
 .wrap{max-width:900px;margin:0 auto;display:grid;gap:28px}
 h1{font-family:"Cormorant Garamond",Georgia,serif;font-size:36px;font-weight:600;margin:0;line-height:1.1;text-wrap:balance}
-.pt{outline:none;cursor:default}.pt .pt-dot,.pt .pt-tip{opacity:0;transition:opacity .12s}.pt:hover .pt-dot,.pt:focus .pt-dot,.pt:hover .pt-tip,.pt:focus .pt-tip{opacity:1}.pt-dot{fill:var(--card);stroke:var(--ink);stroke-width:2}.pt-tip rect{fill:var(--ink)}.pt-tip text{fill:var(--card);font-weight:600}
+.chart{position:relative}.chart>svg{display:block}
+.chart .pt{position:absolute;outline:none;cursor:default}
+.chart .pt .dot{position:absolute;width:8px;height:8px;margin:-4px 0 0 -4px;border-radius:50%;background:var(--card);border:2px solid var(--ink);opacity:0}
+.chart .pt .tip{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);display:none;z-index:3;width:max-content;max-width:min(300px,70vw);white-space:normal;background:var(--ink);color:var(--card);font-size:13px;font-weight:600;line-height:1.35;padding:5px 9px;border-radius:6px;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+.chart .pt .tip.l{left:-8px;transform:none}.chart .pt .tip.r{left:auto;right:-8px;transform:none}
+.chart .pt:hover .dot,.chart .pt:focus .dot{opacity:1}.chart .pt:hover .tip,.chart .pt:focus .tip{display:block}
 h2{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink2);margin:0 0 12px;font-weight:600}
 h3{font-size:12px;color:var(--ink2);margin:14px 0 6px;font-weight:600}
 details.fold>summary{cursor:pointer;list-style:none}details.fold>summary::-webkit-details-marker{display:none}
@@ -26,7 +37,7 @@ details.fold[open]>summary::before{content:"▾ "}details.fold[open]>summary{mar
 .sw.dash{width:14px;height:0;border-top:2px dashed;border-radius:0;opacity:1;vertical-align:3px;background:none}
 .stack{display:grid;gap:12px}sup.ref a{color:var(--info);text-decoration:none;font-size:11px;margin-left:1px}
 .groups p.lead{margin:10px 0 4px;font-weight:600}.groups ul{margin:0 0 4px}
-.st.usual{background:var(--grid);color:var(--ink2)}ol.srcs li{margin:3px 0}
+.groups p.note{margin-top:14px}ol.srcs li{margin:3px 0}
 p{margin:0}
 .eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--acc);font-weight:600}
 .head{display:grid;gap:8px}

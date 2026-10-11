@@ -1,3 +1,13 @@
+## 0.12.172
+
+What you will see on an /investigate page:
+- A Light / Auto / Dark switch at the top, as on the VESTA Agent page.
+- Tooltips in the page's own text size, above everything: no bar covers them any more (every report's charts).
+- "How many minutes it ran each hour" stops at 60 minutes, and its usual is one blue line instead of a dash per hour.
+- What a chart shows is said above it; its legend stays under it.
+- "Where the lead came from" names the web page with its number, linked to it in "Web contribution".
+- "usual" marks in green, "reported" in yellow; a line's space before "Worked out from the records…".
+
 ## 0.12.171
 
 What you will see on an /investigate page:

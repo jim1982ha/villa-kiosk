@@ -200,39 +200,35 @@ def _nice(v: float) -> str:
 
 def _tip(x: float, y: float, x0: float, x1: float, top: float, bottom: float, label: str, w_: float = W) -> str:
     """A point's value on hover, or a tap on a phone (owner, 2026-10-07): a column of the chart answers with its day
-    and value. SVG and the page's CSS only (.pt in templates/report.html): nothing runs in the reader's browser."""
-    # ⚠️ SMALL AND WRAPPED (owner, 2026-10-12: "it's way too big"): the chart's units grow with the screen, so a long
-    # label at 11 ran off a wide page — 8.5, wrapped to the chart's width, at most three lines
-    lines = _wrap(label, int((w_ - 12) / (TIP_FONT * 0.6)))
-    tw = min(max(len(s) for s in lines) * TIP_FONT * 0.6 + 10, w_ - 4)
-    th_ = len(lines) * (TIP_FONT + 3) + 6
-    bx = min(max(x - tw / 2, 2), w_ - tw - 2)
-    by = y - th_ - 8 if y - th_ - 8 > 2 else y + 8
-    text = "".join(f'<tspan x="{bx + tw / 2:.1f}" dy="{TIP_FONT + 3 if i else 0}">{_esc(s)}</tspan>'
-                   for i, s in enumerate(lines))
-    return (f'<g class="pt" tabindex="0"><title>{_esc(label)}</title>'
-            f'<rect x="{x0:.1f}" y="{top:.1f}" width="{max(x1 - x0, 1):.1f}" height="{bottom - top:.1f}" fill="transparent"/>'
-            f'<circle class="pt-dot" cx="{x:.1f}" cy="{y:.1f}" r="3"/>'
-            f'<g class="pt-tip"><rect x="{bx:.1f}" y="{by:.1f}" width="{tw:.1f}" height="{th_:.1f}" rx="3"/>'
-            f'<text x="{bx + tw / 2:.1f}" y="{by + TIP_FONT + 2:.1f}" font-size="{TIP_FONT}" text-anchor="middle">{text}'
-            '</text></g></g>')
+    and value. CSS only (.chart .pt in templates/page_head.html): nothing runs in the reader's browser.
+
+    ⚠️ PAGE TEXT, NOT CHART TEXT (owner, 2026-10-12: "the tooltip … consistent with the size of the font used in the
+    report"): drawn inside the chart, a tip grew with the screen and the bars drawn after it covered it. It is a mark
+    here, laid over the chart as the page's own text by _framed, at the report's size, above everything."""
+    return "<!--pt " + json.dumps({"x": round(x, 1), "y": round(y, 1), "x0": round(x0, 1), "x1": round(max(x1, x0 + 1), 1),
+                                   "top": round(top, 1), "bottom": round(bottom, 1), "label": str(label)}) + "-->"
 
 
-TIP_FONT = 8.5
+_TIP = re.compile(r"<!--pt (\{.*?\})-->")
 
 
-def _wrap(label: str, width: int) -> list[str]:
-    """A label in lines of at most `width` characters, by words; at most three, the last one cut with "…"."""
-    lines, cur = [], ""
-    for word in str(label).split():
-        if cur and len(cur) + 1 + len(word) > width:
-            lines.append(cur)
-            cur = word
-        else:
-            cur = f"{cur} {word}" if cur else word
-    lines.append(cur)
-    lines = [s if len(s) <= width else s[:width - 1] + "…" for s in lines]
-    return lines if len(lines) <= 3 else lines[:2] + [(lines[2][:width - 1]) + "…"]
+def _framed(svg: str) -> str:
+    """A chart with its tips: the svg, then each tip as a hover/tap area over its column (positions in % of the chart,
+    so they follow it at any width), its text in the page's own font."""
+    tips = [json.loads(m) for m in _TIP.findall(svg)]
+    if not tips:
+        return svg
+    vb = re.search(r'viewBox="0 0 ([\d.]+) ([\d.]+)"', svg)
+    w_, h_ = (float(vb.group(1)), float(vb.group(2))) if vb else (W, H)
+    out = []
+    for t in tips:
+        side = " l" if t["x"] < w_ * .3 else " r" if t["x"] > w_ * .7 else ""
+        cw, ch = t["x1"] - t["x0"], max(t["bottom"] - t["top"], 1)
+        out.append(f'<span class="pt" tabindex="0" aria-label="{_esc(t["label"])}" style="left:{t["x0"] / w_ * 100:.2f}%;'
+                   f'width:{cw / w_ * 100:.2f}%;top:{t["top"] / h_ * 100:.2f}%;height:{ch / h_ * 100:.2f}%">'
+                   f'<i class="dot" style="left:{(t["x"] - t["x0"]) / cw * 100:.1f}%;'
+                   f'top:{(t["y"] - t["top"]) / ch * 100:.1f}%"><span class="tip{side}">{_esc(t["label"])}</span></i></span>')
+    return '<div class="chart">' + _TIP.sub("", svg) + "".join(out) + "</div>"
 
 
 def _day(s: str) -> str:
@@ -277,7 +273,7 @@ def line(series: list, unit: str = "", ref: float | None = None, area: bool = Fa
     out += [_tip(x, yy, x - step / 2, x + step / 2, PAD_T, H - PAD_B, f"{_day(d)} · {_nice(v)}{u}")
             for (d, v), (x, yy) in zip(pts, xy)]
     out.append("</svg>")
-    return "".join(out)
+    return _framed("".join(out))
 
 
 def bars(items: list, highlight_last: bool = True) -> str:
@@ -305,7 +301,7 @@ def bars(items: list, highlight_last: bool = True) -> str:
             out.append(_tip(x + w / 2, y(b["value"]), PAD_L + i * slot, PAD_L + (i + 1) * slot, PAD_T, H - PAD_B,
                             f"{b['label']} · {_nice(b['value'])}"))
     out.append("</svg>")
-    return "".join(out)
+    return _framed("".join(out))
 
 
 def pairs(rows: list) -> str:
@@ -337,7 +333,7 @@ def pairs(rows: list) -> str:
             out.append(_tip(x0 + w, y(top_v), PAD_L + i * slot, PAD_L + (i + 1) * slot, PAD_T, h - PAD_B,
                             f"{r['day']} · {words}", w_))
     out.append("</svg>")
-    return "".join(out)
+    return _framed("".join(out))
 
 
 # ---------------------------------------------------------------- the AI's sentences, checked
@@ -564,7 +560,7 @@ def timechart(series: list, unit: str, zone: ZoneInfo, marks: list = (), normals
         if v is not None:
             out.append(_tip(x(t), y(v), x(t), x(tn), PAD_T, H - PAD_B, f"{lab(t)} · {_nice(v)}{u}"))
     out.append("</svg>")
-    return "".join(out)
+    return _framed("".join(out))
 
 
 def hourchart(per_hour: dict, zone: ZoneInfo) -> str:
@@ -580,29 +576,35 @@ def hourchart(per_hour: dict, zone: ZoneInfo) -> str:
         return ""
     day = per_hour.get("unit") == "day"
     top = max([m for _, m, _ in bins] + [u for _, _, u in bins if isinstance(u, (int, float))] + [1.0])
-    lo, hi, ticks = _ticks(0.0, top * 1.1)
+    # an hour holds 60 minutes: the scale stops there (2026-10-12: it went to 80), a day at its own top
+    lo, hi, ticks = (0.0, 60.0, [0.0, 15.0, 30.0, 45.0, 60.0]) if not day and top > 45 else _ticks(0.0, top * 1.1)
     y = _scale(lo, hi, PAD_T, H - PAD_B)
     slot = (W - PAD_L - PAD_R) / len(bins)
     lab = (lambda t: day_label(t.astimezone(zone))) if day else (lambda t: f"{t.astimezone(zone):%H:%M}")
     out = [f'<svg viewBox="0 0 {W} {H}" role="img" aria-label="Minutes running per {"day" if day else "hour"}">',
            *_axis(ticks, y, PAD_L, W - PAD_R)]
+    usual = []
     for i, (t, m, u) in enumerate(bins):
         x0 = PAD_L + i * slot
         if m > 0:
             out.append(f'<rect x="{x0 + slot * .15:.1f}" y="{y(m):.1f}" width="{slot * .7:.1f}" '
                        f'height="{max(y(0) - y(m), .5):.1f}" fill="{READINGS}"/>')
         if isinstance(u, (int, float)):
-            out.append(f'<line x1="{x0 + slot * .05:.1f}" x2="{x0 + slot * .95:.1f}" y1="{y(u):.1f}" y2="{y(u):.1f}" '
-                       f'stroke="{USUAL}" stroke-width="2"/>')
+            usual.append((x0, x0 + slot, y(u)))
         said = f"{lab(t)} · ran {_nice(m)} min" + (f" (usually {_nice(float(u))} min)" if isinstance(u, (int, float))
                                                     else "")
         out.append(_tip(x0 + slot / 2, y(max(m, u or 0)), x0, x0 + slot, PAD_T, H - PAD_B, said))
+    if usual:
+        # ⚠️ ONE LINE, OVER THE BARS (2026-10-12): a dash per hour, most at 0, read as a broken axis under the bars
+        path = " ".join(f"{'M' if i == 0 else 'L'}{a_:.1f},{yy:.1f} L{b_:.1f},{yy:.1f}" for i, (a_, b_, yy) in enumerate(usual))
+        out.append(f'<path class="usual" d="{path}" fill="none" stroke="{USUAL}" stroke-width="2" '
+                   'stroke-linejoin="round"/>')
     every = max(1, len(bins) // 6)
     for i in range(0, len(bins), every):
         out.append(f'<text x="{PAD_L + i * slot:.1f}" y="{H - 6}" font-size="10" fill="var(--ink2)">{lab(bins[i][0])}'
                    '</text>')
     out.append("</svg>")
-    return "".join(out)
+    return _framed("".join(out))
 
 
 LANE_H, LANE_LABEL = 22, 12
@@ -658,7 +660,7 @@ def strip(lanes: list[dict], start: datetime, end: datetime, zone: ZoneInfo) -> 
         anchor = "start" if k == 0 else "end" if k == 4 else "middle"
         out.append(f'<text x="{x(t):.1f}" y="{h - 4}" font-size="10" text-anchor="{anchor}" fill="var(--ink2)">{lab(t)}</text>')
     out.append("</svg>")
-    return "".join(out)
+    return _framed("".join(out))
 
 
 def _lasting(seconds) -> str:
@@ -724,6 +726,22 @@ def citing(count: int):
         return Markup(CITE.sub(lambda m: (f'<sup class="ref"><a href="#src-{m.group(1)}">[{m.group(1)}]</a></sup>'
                                           if 1 <= int(m.group(1)) <= count else m.group(0)), str(escape(text))))
     return cite
+
+
+def naming(pages: list[dict]):
+    """The page's filter for where a lead came from: each [n] said as its web page's title, then its number as a link
+    (owner, 2026-10-12: "I expect to see a referenced number for each of these and an associated link")."""
+    cite = citing(len(pages))
+
+    def named(text) -> Markup:
+        said = CITE.sub(lambda m: (f"{pages[int(m.group(1)) - 1].get('title') or 'web page'} [{m.group(1)}]"
+                                   if 1 <= int(m.group(1)) <= len(pages) else m.group(0)), str(text))
+        return cite(said)
+    return named
+
+
+#: a lead's source is a web page ([n]) or the records — never a name the page cannot link
+RECORDS = re.compile(r"\b(records?|home assistant)\b", re.I)
 
 
 def web_said(searches: list[str]) -> str:
@@ -793,7 +811,7 @@ def investigation(notes: dict, data: dict | None, around: dict | None = None, se
     return TPL.get_template("investigation.html").render(
         title=notes.get("title") or "Investigation", n=notes, charts=charts, period=period, f=found,
         lanes=Markup(lanes_svg), lanes_legend=strip_legend(found.get("lanes") or []), web_pages=web_pages(notes),
-        cite=citing(len(web_pages(notes))), web=web_said(searches or []),
+        cite=citing(len(web_pages(notes))), named=naming(web_pages(notes)), web=web_said(searches or []),
         searches=searches or [], generated=day_time_label(datetime.now(zone)))
 
 
@@ -947,6 +965,12 @@ def _investigation(a) -> int:
         print("investigation: cite every web page in the text where you used it, as [n] (n = its place in `sources`); "
               f"never cited: {'; '.join(unused)}. Cite it, or take it out of `sources` if it was not used.",
               file=sys.stderr)
+        return 1
+    unlinked = [str(c.get("source")) for c in notes.get("causes") or [] if isinstance(c, dict) and c.get("source")
+                and not CITE.search(str(c["source"])) and not RECORDS.search(str(c["source"]))]
+    if unlinked:
+        print("investigation: a cause's `source` is the web page it came from, as [n] (its place in `sources`), or "
+              f"\"the records\" — not a name: {'; '.join(unlinked[:3])}", file=sys.stderr)
         return 1
     bad = [str(c.get("cause") or "?") for c in notes.get("causes") or []
            if isinstance(c, dict) and c.get("source") and c.get("verdict") not in VERDICTS]

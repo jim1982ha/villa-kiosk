@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.166 (12 October 2026)
+
+- compose._tip is a mark laid over the chart as page text by _framed (CSS .chart .pt, 13 px, after the svg): every
+  report chart. hourchart: 0–60 for hours, the usual as one path. naming(): a cause's source as its page's title + [n];
+  a source neither [n] nor "the records" is refused. investigation.html: CSS-only Light / Auto / Dark switch
+  (page_head :root:has(#th-…:checked)), descriptions above charts, pills usual = ok, reported = watch.
+
 ## 0.6.165 (12 October 2026)
 
 - investigate: no `modes` (web research is SKILL.md step 6, always). An investigation's web searches are one list
