@@ -1,3 +1,11 @@
+## 0.12.173
+
+What you will see:
+- Every word on a report's charts — the axis values, the lane names, the band labels — is now the report's own text
+  size (13 px, the size of the legends and notes), on any screen.
+- In "On the same timeline", a device that reports a value rather than a state (a relay's "Uptime", a text) no longer
+  fills its lane: it shows only when it stopped reporting.
+
 ## 0.12.172
 
 What you will see on an /investigate page:
