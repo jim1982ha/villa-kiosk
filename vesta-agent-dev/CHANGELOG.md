@@ -1,3 +1,11 @@
+## 0.12.160
+
+What you will see:
+- The agent no longer creates a fault for the facility manager on its own when you ask it something in a chat. When it thinks someone must check or do something on site, its answer ends with a button "Create this fault for the facility manager": only a press creates it (once, even if pressed twice), and the answer then says who created it. Faults from alerts and from the night check are created as before.
+- A question no longer comes with "Answer short." added by the agent: how long an answer is follows the instructions (short for a status, complete for an investigation).
+- Before each new message the AI is told to read the skill that matches it, even when the same subject was discussed earlier in the conversation (today it answered your investigation from an earlier discussion instead of investigating).
+- Rule 4 of your instructions gains: "In a chat it is only offered, with a button under your answer: never say a fault was created." Updated at start only if that sentence is still as shipped.
+
 ## 0.12.159
 
 What you will see (from your tries of investigate on the Agent page):
