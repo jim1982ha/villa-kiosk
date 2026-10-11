@@ -302,12 +302,12 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
       }],
     })), [mutate]);
 
-  const updateTicket = useCallback((id: string, patch: Partial<FmTicket>) =>
-    mutate((d) => withTicketPatch(d, id, patch, stamp())), [mutate]);
-
-  // who recorded it: the signed-in profile, on every step of a fault (the one-step close and the stage dialog alike),
+  // who recorded it: the signed-in profile, on every step of a fault (a rename, the one-step close and the stage dialog alike),
   // for the agent's note on Telegram and the card's "by …"
   const { role } = useProfile();
+  const updateTicket = useCallback((id: string, patch: Partial<FmTicket>) =>
+    mutate((d) => withTicketPatch(d, id, patch, stamp(), role ? ROLE_LABELS[role] : undefined)), [mutate, role]);
+
   const advanceTicket = useCallback((
     id: string,
     to: FmTicketStatus,

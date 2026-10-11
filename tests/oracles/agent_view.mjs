@@ -156,12 +156,16 @@ ck("every Facility card: its pills and when on one line under the title (RecordM
     ] };
   const lines = faultNoteLines(t, stamp);
   ck("a fault card: its check, each step's note with its date, and of its title changes only the latest, as \"Was: …\"",
-     JSON.stringify(lines) === JSON.stringify(["Check: Replace the battery.", "Battery ordered (10-10 02)", "Was: Motion battery at 8% (10-10 04)"]), lines);
+     JSON.stringify(lines) === JSON.stringify(["Check: Replace the battery.", "Battery ordered (10-10 02)", "Was: Motion battery at 8% (renamed by VESTA Agent, 10-10 04)"]), lines);
   ck("  ...the title it has now is never repeated under it", !lines.some((l) => l.includes(t.title)), lines);
   const when = faultWhen(t, stamp);
   ck("\"in progress since\" is the person's, never the agent's title change", when === "Opened 10-10 01 · in progress since 10-10 02 by Fabien", when);
   const reading = { ...t, title: "Front door — part ordered", updates: [...t.updates,
     { at: at(5), status: "in_progress", by: "VESTA Agent", kind: "reading", title: "Front door unavailable", photoIds: [] }] };
+  const renamedByHand = { ...t, title: "Motion battery — ordered", updates: [...t.updates,
+    { at: at(5), status: "in_progress", by: "Facility manager", kind: "retitled", title: "Motion battery — ordered", was: "Motion battery at 7%", photoIds: [] }] };
+  ck("a person's rename says what it was and who renamed it (review 29)",
+     faultNoteLines(renamedByHand, stamp).at(-1) === "Was: Motion battery at 7% (renamed by Facility manager, 10-10 05)", faultNoteLines(renamedByHand, stamp));
   ck("a title a person wrote stays; the agent's reading shows under it as \"VESTA reads: …\"",
      faultNoteLines(reading, stamp).at(-1) === "VESTA reads: Front door unavailable (10-10 05)", faultNoteLines(reading, stamp));
   const old = { ...t, updates: [t.updates[1],

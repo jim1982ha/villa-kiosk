@@ -48,6 +48,16 @@ ck("reopening clears the resolution time (a stale one corrupts every MTTR figure
      && E.withTicketAdvanced(picked, "t1", "resolved", { photoIds: [] }, undefined, k(), "Owner").completions[0].by === "Owner");
 }
 ck("an unknown fault changes nothing", E.withTicketAdvanced(t0, "nope", "resolved", { photoIds: [] }, cost, k()) === t0);
+{
+  // review 29: a person's rename is a step — who, the title before and after — and a patch that keeps the title is none
+  const renamed = E.withTicketPatch(t0, "t1", { title: "Leak — part ordered" }, { now: "2026-09-27T14:00:00.000Z" }, "Facility manager");
+  const step = renamed.tickets[0].updates?.at(-1);
+  ck("a rename in the editor records a retitled step with who, the title before and after",
+     step && step.kind === "retitled" && step.by === "Facility manager" && step.was === "Leak" && step.title === "Leak — part ordered"
+     && step.status === "open", step);
+  ck("  ...a patch that does not change the title records no step",
+     E.withTicketPatch(t0, "t1", { note: "x", title: "Leak" }, { now: "later" }).tickets[0].updates === undefined);
+}
 const patched = E.withTicketPatch(t0, "t1", { status: "resolved" }, { now: "2026-09-27T13:00:00.000Z" });
 ck("a patch to resolved stamps the time; one that keeps it keeps it",
    patched.tickets[0].resolvedAt === "2026-09-27T13:00:00.000Z"

@@ -64,7 +64,8 @@ export function faultNoteLines(t: Pick<FmTicket, "note" | "updates">, stamp: (at
     }
     // an old "Now: …" step names only the new title: what it replaced is the title step before it, when there is one
     const before = u.kind === "retitled" ? u.was : titled.slice(0, i).filter((x) => x !== undefined).pop();
-    if (before) lines.push(`Was: ${before} (${stamp(u.at)})`);
+    // who renamed it, when the step says (a person's rename in the editor, the VESTA Agent's own) — review 29
+    if (before) lines.push(`Was: ${before} (${u.by ? `renamed by ${u.by}, ` : ""}${stamp(u.at)})`);
   });
   return lines.map((n) => n.trim()).filter(Boolean);
 }

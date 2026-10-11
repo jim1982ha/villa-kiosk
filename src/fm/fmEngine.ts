@@ -357,13 +357,21 @@ export function withoutCompletion(d: FmData, id: string): FmData {
 /** Patch a fault. The resolution time is stamped when — and only when — the
  *  status becomes resolved (the operator marks it done, the app records WHEN:
  *  the mean-time-to-resolution evidence rests on it). */
-export function withTicketPatch(d: FmData, id: string, patch: Partial<FmTicket>, k: Pick<FmStamp, "now">): FmData {
+export function withTicketPatch(d: FmData, id: string, patch: Partial<FmTicket>, k: Pick<FmStamp, "now">, by?: string): FmData {
   return {
     ...d,
     tickets: d.tickets.map((t) => {
       if (t.id !== id) return t;
       const next = { ...t, ...patch };
       if (isTicketResolved(patch) && !next.resolvedAt) next.resolvedAt = k.now;
+      // ⚠️ A PERSON'S RENAME IS A STEP (review 29): it left no trace — the card's "Was: …" named the title two renames
+      // back, and the VESTA Agent could only guess a person's title by comparing titles
+      if (patch.title !== undefined && patch.title !== t.title) {
+        next.updates = [...(t.updates ?? []), {
+          at: k.now, status: next.status, kind: "retitled" as const, title: patch.title, was: t.title, photoIds: [],
+          ...(by ? { by } : {}),
+        }];
+      }
       return next;
     }),
   };
