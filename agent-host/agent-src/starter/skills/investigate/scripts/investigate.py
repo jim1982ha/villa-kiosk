@@ -36,6 +36,11 @@ from zoneinfo import ZoneInfo
 from vesta_shared import script, skill_settings  # noqa: E402  (client, store, zone: one set-up for every skill script)
 
 OFFLINE = {"unavailable"}                 # the device does not answer
+# ⚠️ WHAT A CONTROL CAN PROVE (architecture review 32 follow-up, 2026-10-11): an on/off control that stayed OFF the whole
+# period — and the days before — while another device ran is not what turned that device on. An account blamed a
+# switch that had never once been on. Any control, any device: nothing here names one.
+CONTROL_DOMAINS = ("switch", "light", "fan", "input_boolean", "valve", "siren", "humidifier")
+OFF_STATES, ON_STATES = {"off", "closed"}, {"on", "open"}
 NO_VALUE = {"unknown", ""}                # it answers, without a value
 MAX_LINES = 120                           # per part: enough for a night, short enough to reason about
 # ⚠️ THE THRESHOLDS ARE THE SKILL'S, NOT THE SCRIPT'S (architecture review 32; the 0.12.80 rule): settings.yaml, with a
@@ -291,7 +296,7 @@ def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_da
     """`series`: each numeric device's readings for a chart too (--out: the investigation page, reports' compose.py)."""
     span_days = (end - start).total_seconds() > 86400
     parts = []
-    names = client.states(ids) if series else {}
+    names = client.states(ids)
     for eid in ids:
         rows = rows_of(client, eid, start, end)
         if not rows:
@@ -335,14 +340,36 @@ def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_da
         for p in ps:
             totals[p["kind"]] = totals.get(p["kind"], 0) + p["seconds"]
         lines.append("  in total: " + ", ".join(f"{k} {lasting(v)}" for k, v in sorted(totals.items(), key=lambda x: -x[1])))
+        attrs = (names.get(eid) or {}).get("attributes") or {}
         part = {"entity_id": eid, "running_above": on, "normal": ref, "lines": lines,
-                "periods": [{**p, "start": p["start"].isoformat(), "end": p["end"].isoformat()} for p in shown[:MAX_LINES]]}
+                "periods": [{**p, "start": p["start"].isoformat(), "end": p["end"].isoformat()} for p in shown[:MAX_LINES]],
+                "label": attrs.get("friendly_name") or eid, "runs": sum(1 for p in ps if p["kind"] == "running")}
+        if eid.split(".")[0] in CONTROL_DOMAINS:
+            seen = {str(v) for _, v in base_rows + rows if str(v) not in OFFLINE | NO_VALUE}
+            part["control"] = "off" if seen and seen <= OFF_STATES else "on" if seen and seen <= ON_STATES else None
         if series and any(number(v) is not None for _, v in rows):
-            attrs = (names.get(eid) or {}).get("attributes") or {}
             part.update(name=attrs.get("friendly_name") or eid, unit=attrs.get("unit_of_measurement") or "",
                         series=chart_series(rows, start, end))
         parts.append(part)
+    _controls(parts, baseline_days)
     return {"lines": [l for p in parts for l in p["lines"]], "entities": parts}
+
+
+def _controls(parts: list[dict], baseline_days: float) -> None:
+    """Under each on/off control read with the devices it might drive: what its states prove about them. Only a control
+    that never left one state proves anything — one that changed may or may not drive them, and says nothing here."""
+    ran = [p for p in parts if p.get("runs") and not p.get("control")]
+    if not ran:
+        return
+    who = ", ".join(f"{p['label']} ({p['runs']} run{'s' if p['runs'] > 1 else ''})" for p in ran)
+    before = f" and the {baseline_days:g} days before" if baseline_days > 0 else ""
+    for c in parts:
+        if c.get("control") == "off":
+            c["lines"].append(f"  ⟵ stayed off for the whole period{before}, while {who} ran: it is NOT what turned "
+                              f"{'it' if len(ran) == 1 else 'them'} on")
+        elif c.get("control") == "on":
+            c["lines"].append(f"  stayed on for the whole period{before}: it may supply {who}, but its state does not "
+                              "explain their starts and stops")
 
 
 def _cycles(ps: list[dict]) -> list[dict]:
@@ -447,11 +474,12 @@ def around(client, store, start: datetime, end: datetime, focus: list[str], zone
         lines.append("…and answered again:")
         lines += [f"  {at(t, zone, span_days)}  {n} ({e})" for t, n, e in _first_per(back)[:40]]
     if autos:
-        lines.append("Automations that ran:")
+        lines.append("Automations that ran (and what each one is able to do):")
         for eid, a in sorted(autos.items(), key=lambda x: x[1]["times"][0]):
             ts = a["times"]
             lines.append(f"  {a['name']} ({eid}): {len(ts)}× from {at(ts[0], zone, span_days)} to {at(ts[-1], zone, span_days)}"
                          + (f" — {a['why']}" if a["why"] else ""))
+            lines.append(f"    able to: {automation_can(client, eid, start, end)}")
     if sent:
         lines.append("Notifications sent:")
         lines += [f"  {at(t, zone, span_days)}  {n}" for t, n in sent[:40]]
@@ -467,6 +495,94 @@ def around(client, store, start: datetime, end: datetime, focus: list[str], zone
     if noisy:
         lines.append("Left out as background (change constantly): " + ", ".join(e for _, e in noisy))
     return {"lines": lines}
+
+
+# What an action does, by its kind (`domain.service`, or the kind of step): only these change nothing on the villa.
+#: ⚠️ WHAT AN AUTOMATION CAN DO, READ — NEVER INFERRED FROM ITS RUNNING THEN (review 32 follow-up): an account named a
+#: watchdog that "ran during the event" as a possible cause; all it could do was notify and record a date.
+HARMLESS = {"notify": "notifies", "persistent_notification": "notifies", "tts": "speaks a message",
+            "logbook": "writes the logbook", "system_log": "writes the log", "input_datetime": "records a value",
+            "input_text": "records a value", "input_number": "records a value", "counter": "records a value",
+            "input_select": "records a value", "event": "fires an event", "delay": None, "wait": None, "stop": None}
+
+
+def _actions(node, out: set) -> None:
+    """Every action an automation's config can take, at any depth (choose, if/then/else, repeat, parallel, sequence)."""
+    if isinstance(node, list):
+        for x in node:
+            _actions(x, out)
+        return
+    if not isinstance(node, dict):
+        return
+    for key in ("action", "service"):
+        v = node.get(key)
+        if isinstance(v, str) and "." in v:
+            out.add(v)
+    if isinstance(node.get("event"), str):
+        out.add("event.fire")
+    if "scene" in node and isinstance(node.get("scene"), str):
+        out.add("scene.turn_on")
+    if node.get("device_id") and node.get("type") and node.get("domain"):
+        out.add(f"{node['domain']}.{node['type']}")                     # a device action: acts on the device itself
+    for k, v in node.items():
+        if k not in ("action", "service", "event") and isinstance(v, (list, dict)):
+            _actions(v, out)
+
+
+def _say_actions(calls: set) -> str:
+    changes = sorted(c for c in calls if c.split(".")[0] not in HARMLESS)
+    harmless = sorted({HARMLESS[c.split(".")[0]] for c in calls if HARMLESS.get(c.split(".")[0])})
+    if not calls:
+        return "nothing — it has no action"
+    if not changes:
+        return " and ".join(harmless) + " only: it switches nothing, so it cannot have turned a device on or off"
+    scripts = [c for c in changes if c.startswith("script.")]
+    return ("CAN change things: " + ", ".join(changes) + (f" (and {', '.join(harmless)})" if harmless else "")
+            + ("; a script it runs may do more — read it" if scripts else ""))
+
+
+def automation_can(client, eid: str, start: datetime, end: datetime) -> str:
+    """What an automation is able to do, read from its own config — or, built from a blueprint whose text cannot be read
+    here, said to be unproven, with what its runs kept by Home Assistant actually did in the period."""
+    try:
+        body = client.tool("ha_config_get_automation", {"identifier": eid}) or {}
+    except Exception as e:  # noqa: BLE001 — said, never guessed
+        return f"its configuration could not be read ({type(e).__name__}): not proven either way"
+    cfg = body.get("config") if isinstance(body.get("config"), dict) else body
+    if isinstance(cfg, dict) and cfg.get("use_blueprint"):
+        path = (cfg["use_blueprint"] or {}).get("path") or "a blueprint"
+        did = _traced(client, eid, start, end)
+        return (f"built from the blueprint {path}, whose actions cannot be read here — not proven either way"
+                + (f"; its runs in this period kept by Home Assistant did: {did}" if did else
+                   "; Home Assistant no longer keeps its runs of this period"))
+    calls: set = set()
+    _actions((cfg or {}).get("actions") or (cfg or {}).get("action") or [], calls)
+    return _say_actions(calls)
+
+
+def _traced(client, eid: str, start: datetime, end: datetime) -> str:
+    """What the runs Home Assistant still keeps (its last few) did inside the period, in the same words."""
+    try:
+        listed = client.tool("ha_get_automation_traces", {"automation_id": eid, "limit": 10}) or {}
+    except Exception:  # noqa: BLE001
+        return ""
+    calls: set = set()
+    for t in listed.get("traces") or []:
+        try:
+            began = datetime.fromisoformat(str((t.get("timestamp") or {}).get("start")))
+        except (TypeError, ValueError):
+            continue
+        if not (start <= began < end):
+            continue
+        try:
+            detail = client.tool("ha_get_automation_traces", {"automation_id": eid, "run_id": t.get("run_id")}) or {}
+        except Exception:  # noqa: BLE001
+            continue
+        for step in detail.get("action_trace") or []:
+            params = ((step or {}).get("result") or {}).get("params") or {}
+            if params.get("domain") and params.get("service"):
+                calls.add(f"{params['domain']}.{params['service']}")
+    return _say_actions(calls) if calls else ""
 
 
 def _first_per(items):

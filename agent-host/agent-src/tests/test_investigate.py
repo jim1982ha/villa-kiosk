@@ -227,3 +227,71 @@ def test_a_history_cut_short_is_said_and_never_stretched_to_the_end():
     lines = investigate.timeline(Cut(), ["sensor.heater_power"], T(9, 2), T(9, 15), 3, Z)["lines"]
     assert any("could not be read whole: nothing is known after 04:00:00" in x for x in lines)
     assert not any(x.strip().split(" → ")[-1].startswith("15:00") for x in lines if " → " in x)   # no period to the end
+
+
+# ---- what a control and an automation can prove (2026-10-11: an account blamed a switch never once on, and a
+# watchdog that could only notify; universal — any control, any device, any automation)
+class _WithControl(_Client):
+    """The heater's night, with an on/off control that stays `state` throughout."""
+
+    def __init__(self, state):
+        super().__init__()
+        self.control_state = state
+
+    def history(self, ids, start, end):
+        if ids[0].startswith("switch."):
+            return {ids[0]: [{"state": self.control_state, "last_changed": start.isoformat()}]}
+        return super().history(ids, start, end)
+
+
+def test_a_control_that_stayed_off_is_said_not_to_have_turned_the_device_on():
+    import investigate
+    res = investigate.timeline(_WithControl("off"), ["sensor.heater_power", "switch.a"], T(9, 2), T(9, 15), 3, Z)
+    (line,) = [x for x in res["lines"] if "NOT what turned" in x]
+    assert "stayed off for the whole period and the 3 days before" in line and "Heater Power" in line
+    res = investigate.timeline(_WithControl("on"), ["sensor.heater_power", "switch.a"], T(9, 2), T(9, 15), 3, Z)
+    assert any("stayed on for the whole period" in x and "does not explain" in x for x in res["lines"])
+    assert not any("NOT what turned" in x for x in res["lines"])
+
+
+def test_a_control_that_changed_proves_nothing_and_says_nothing():
+    import investigate
+
+    class Moving(_Client):
+        def history(self, ids, start, end):
+            if ids[0].startswith("switch."):
+                return {ids[0]: [{"state": "off", "last_changed": start.isoformat()},
+                                 {"state": "on", "last_changed": (start + timedelta(hours=1)).isoformat()}]}
+            return super().history(ids, start, end)
+    lines = investigate.timeline(Moving(), ["sensor.heater_power", "switch.a"], T(9, 2), T(9, 15), 3, Z)["lines"]
+    assert not any("whole period" in x for x in lines)
+
+
+def test_each_automation_says_what_it_is_able_to_do():
+    import investigate
+    configs = {
+        "automation.watch": {"config": {"actions": [{"choose": [{"sequence": [
+            {"action": "notify.send_message"}, {"event": "some_event"}]}]},
+            {"action": "input_datetime.set_datetime"}]}},
+        "automation.acts": {"config": {"actions": [{"if": [], "then": [{"action": "switch.turn_on"}],
+                                                    "else": [{"action": "script.something"}]}]}},
+        "automation.made": {"config": {"use_blueprint": {"path": "some/blueprint.yaml"}}},
+    }
+
+    class C:
+        def tool(self, name, args):
+            if name == "ha_config_get_automation":
+                return configs[args["identifier"]]
+            if name == "ha_get_automation_traces" and "run_id" not in args:
+                return {"traces": [{"run_id": "r1", "timestamp": {"start": T(9, 3).isoformat()}},
+                                   {"run_id": "r0", "timestamp": {"start": T(1, 3).isoformat()}}]}
+            if name == "ha_get_automation_traces":              # r0, outside the period, switched something
+                did = ("switch", "turn_on") if args["run_id"] == "r0" else ("input_datetime", "set_datetime")
+                return {"action_trace": [{"result": {"params": {"domain": did[0], "service": did[1]}}}]}
+            return {}
+    watch = investigate.automation_can(C(), "automation.watch", T(9, 2), T(9, 15))
+    assert "switches nothing" in watch and "notifies" in watch and "records a value" in watch
+    acts = investigate.automation_can(C(), "automation.acts", T(9, 2), T(9, 15))
+    assert acts.startswith("CAN change things: script.something, switch.turn_on") and "read it" in acts
+    made = investigate.automation_can(C(), "automation.made", T(9, 2), T(9, 15))
+    assert "not proven either way" in made and "did: records a value only" in made

@@ -29,6 +29,8 @@ The person wants the TRUE and COMPLETE story, not a quick reply. Take the time t
    Keep the entities that measure or control the thing asked about (its power, its state, its switch, its sensor).
    Also keep from its "same physical device" and "same room" lists anything that could share a supply or a cabinet:
    a device next to it that stopped at the same moment is evidence of a common cause (a breaker, a power cut).
+   Read every on/off control found next to it (a switch, a relay, a light, a valve…) in the SAME timeline as the
+   device: the timeline then says whether that control could have turned it on (step 3).
    If find gives nothing useful, try other words (the device type, the room) before saying so.
 
 3. **Read what they did, against their normal.**
@@ -51,11 +53,18 @@ The person wants the TRUE and COMPLETE story, not a quick reply. Take the time t
    doors, locks, switches, people, and the VESTA Agent's own alerts. Match times to the timeline: a device dropping off
    79 seconds after another stops, an automation that ran at the moment a device turned on, a person arriving.
 
-5. **Check what acts on it.** For each automation that ran on or around the device, or that should have warned
-   (search with ha_search the device's name or words like its type), read it with ha_config_get_automation and, for a
-   run at the moment that matters, ha_get_automation_traces. Answer: did anything in Home Assistant turn it on or off?
-   Which rule saw it, and why did it (not) warn? If nothing in Home Assistant acted, say what did: a person, the
-   device's own control (a pressure switch, a thermostat, a timer), or a power cut.
+5. **Check what acts on it — from what things CAN do, never from their running at the time.**
+   - A control the timeline marks "stayed off for the whole period … it is NOT what turned it on" is not a cause: a
+     control that never left "off" turned nothing on. Never write that it "controls" the device.
+   - `around` says under each automation that ran what it is ABLE to do. "Switches nothing" means it cannot have
+     turned anything on or off: it only watched — say what it saw, never that it "misfired". "CAN change things"
+     lists what it could switch: only those can be a cause, and only if its run matches the moment. "Not proven either
+     way" (its actions could not be read) is never a cause without other evidence: say it could not be checked.
+   - For an automation that should have warned, read it with ha_config_get_automation: which case does it watch, and
+     why did it (not) warn?
+   - If nothing in Home Assistant acted, say what did: a person, the device's own control (a pressure switch, a
+     thermostat, a timer), or a power cut. For every long or unusual run, ask both directions: did the device cause the
+     damage, or did the damage keep it running (water escaping keeps a pump running; an open window keeps cooling on)?
 
 6. **Fill the gaps with the raw tools only where needed:** ha_get_history for an entity the script did not read,
    ha_get_logs (logbook) for a minute that matters, ha_get_state for how things are now.

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.160 (11 October 2026)
+
+- investigate.py timeline: an on/off control (CONTROL_DOMAINS) that stayed in OFF_STATES the whole period and its
+  baseline, read with a device that ran, is marked "NOT what turned it on"; one always on, "does not explain".
+- investigate.py around: each automation that ran says what it is able to do (automation_can: its config's actions at
+  any depth, HARMLESS kinds vs what can change things; a blueprint's: unproven, with its kept traces in the period).
+- SKILL.md step 5 reads them; both cause directions are asked.
+
 ## 0.6.159 (11 October 2026)
 
 Architecture review 32:
