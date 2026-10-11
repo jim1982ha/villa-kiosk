@@ -1,3 +1,12 @@
+## 0.12.162
+
+What you will see:
+- An investigation runs only when you ask for it: write /investigation followed by your question ("/investigation why did the pump run all night on 9 October?"), in your private chat or in the group. Without it the agent never investigates; asked what happened without it, it answers briefly and says you can write /investigation for a full analysis. /investigation alone asks you for the question.
+- The answer is a short message (3 to 5 sentences) with the whole account attached as a page, in the same style as the weekly report: what happened, a chart of each device over the period with the unusual times shaded, the timeline, the likely causes with how to confirm them on site, what Home Assistant cannot tell, what would have warned earlier, and how it was checked.
+- The AI's working notes ("Let me read the skill…", "Now let me send…") never reach the chat any more: only its answer does.
+- A fault the agent suggests comes with two buttons: "Create this fault for the facility manager" and "Don't create it". When the answer was a page, the suggestion comes as its own short message naming the fault.
+- On the Agent page, Skills › investigate says "only when a person writes /investigation".
+
 ## 0.12.161
 
 What you will see: an investigation, and every report that reads a device's history, reads it many times faster. Home Assistant's history tool re-read the whole period for every page of 1,000 readings: the 3 days before the 9th of a power meter that reports every few seconds took about 90 pages, each one re-reading all 3 days — minutes for one device while you waited. The history is now read in short time slices, each once.
