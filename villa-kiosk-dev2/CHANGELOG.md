@@ -1,3 +1,8 @@
+## 2.496.324
+
+### Changed
+- Cockpit, fault cards: renaming a fault records who renamed it. The card's "Was: …" line now names the title it really replaced and who changed it ("Was: Pump at 9 % (renamed by Facility manager, 11/10 07:10)"), and the VESTA Agent recognises your title for sure and never writes its own over it.
+
 ## 2.496.323
 
 ### Added
