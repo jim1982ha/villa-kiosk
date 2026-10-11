@@ -141,14 +141,48 @@ const loose = ["FaultsTab", "RecentWorkList", "SpendTab", "TodayTab", "ScheduleE
     return !(s.indexOf("<RecordMeta") > -1 && s.indexOf("<RecordMeta") < m && m < s.indexOf("</RecordMeta>")); });
 ck("every Facility card: its pills and when on one line under the title (RecordMeta)", loose.length === 0, loose);
 {
-  // owner, 2026-10-11: "only show the latest one" of the agent's "Now: …" title records — driven through the function
-  const { latestTitleChangeOnly } = await import("../../src/fm/faultNotes.ts");
-  const shown = latestTitleChangeOnly?.(["Cleared: x", "Now: 0 %", "Done, y", "Now: 2 %", "Now: 7 %"]);
-  ck("a fault card shows only the latest \"Now: …\" line, every other note kept in order",
-     JSON.stringify(shown) === JSON.stringify(["Cleared: x", "Done, y", "Now: 7 %"]), shown);
+  // review 26: a step says what it is (agent-contract.json ticketUpdate) — the card read the agent's title changes by
+  // their first words and took them for status steps. Driven through the functions, with a fixed clock.
+  const { faultNoteLines, faultWhen } = await import("../../src/fm/faultNotes.ts");
+  const { FM_TICKET_UPDATE_KINDS } = await import("@/fm/fmTypes");
+  const at = (h) => `2026-10-10T${String(h).padStart(2, "0")}:00:00Z`;
+  const stamp = (s) => s.slice(5, 13).replace("T", " ");
+  const t = { id: "t", status: "in_progress", openedAt: at(1), title: "Motion battery at 7%", note: "Check: Replace the battery.",
+    photoIds: [], updates: [
+      { at: at(1), status: "open", by: "VESTA Agent", photoIds: [], title: "Motion battery at 9%" },
+      { at: at(2), status: "in_progress", by: "Facility manager", who: "Fabien", note: "Battery ordered", photoIds: [] },
+      { at: at(3), status: "in_progress", by: "VESTA Agent", kind: "retitled", title: "Motion battery at 8%", was: "Motion battery at 9%", photoIds: [] },
+      { at: at(4), status: "in_progress", by: "VESTA Agent", kind: "retitled", title: "Motion battery at 7%", was: "Motion battery at 8%", photoIds: [] },
+    ] };
+  const lines = faultNoteLines(t, stamp);
+  ck("a fault card: its check, each step's note with its date, and of its title changes only the latest, as \"Was: …\"",
+     JSON.stringify(lines) === JSON.stringify(["Check: Replace the battery.", "Battery ordered (10-10 02)", "Was: Motion battery at 8% (10-10 04)"]), lines);
+  ck("  ...the title it has now is never repeated under it", !lines.some((l) => l.includes(t.title)), lines);
+  const when = faultWhen(t, stamp);
+  ck("\"in progress since\" is the person's, never the agent's title change", when === "Opened 10-10 01 · in progress since 10-10 02 by Fabien", when);
+  const reading = { ...t, title: "Front door — part ordered", updates: [...t.updates,
+    { at: at(5), status: "in_progress", by: "VESTA Agent", kind: "reading", title: "Front door unavailable", photoIds: [] }] };
+  ck("a title a person wrote stays; the agent's reading shows under it as \"VESTA reads: …\"",
+     faultNoteLines(reading, stamp).at(-1) === "VESTA reads: Front door unavailable (10-10 05)", faultNoteLines(reading, stamp));
+  const old = { ...t, updates: [t.updates[1],
+    { at: at(3), status: "in_progress", note: "Now: Motion battery at 8%", photoIds: [] },
+    { at: at(4), status: "in_progress", note: "Now: Motion battery at 7%", photoIds: [] }] };
+  ck("a history written before the kinds: its last \"Now: …\" is read as a title change, never as a status step",
+     JSON.stringify(faultNoteLines(old, stamp).slice(1)) === JSON.stringify(["Battery ordered (10-10 02)", "Was: Motion battery at 8% (10-10 04)"])
+     && faultWhen(old, stamp).endsWith("since 10-10 02 by Fabien"), [faultNoteLines(old, stamp), faultWhen(old, stamp)]);
+  const reopened = { ...t, status: "open", updates: [...t.updates,
+    { at: at(6), status: "resolved", by: "Facility manager", photoIds: [] },
+    { at: at(7), status: "open", by: "Owner", kind: "reopened", note: "Still beeping", photoIds: [] }] };
+  ck("a reopened fault says when and by whom", faultWhen(reopened, stamp) === "Opened 10-10 01 · reopened 10-10 07 by Owner", faultWhen(reopened, stamp));
+  const contract = JSON.parse(readFileSync(new URL("../../rootfs/usr/share/vesta/agent-contract.json", import.meta.url), "utf8"));
+  ck("the step kinds are the agreement's, the one list both sides read",
+     JSON.stringify(FM_TICKET_UPDATE_KINDS) === JSON.stringify(contract.ticketUpdate.kinds) && contract.ticketUpdate.kinds.includes("reopened"));
 }
-ck("a fault card no longer repeats its history's status lines",
-   !/fm-timeline-head|fm-timeline-dot/.test(src("components/fm/FaultsTab.tsx")) && /RecordNotes notes=\{\[t\.note, \.\.\.latestTitleChangeOnly\(\(t\.updates/.test(src("components/fm/FaultsTab.tsx")));
+const faults = src("components/fm/FaultsTab.tsx");
+ck("a fault card no longer repeats its history's status lines, and reads its notes and when through faultNotes",
+   !/fm-timeline-head|fm-timeline-dot/.test(faults) && /RecordNotes notes=\{faultNoteLines\(t, localStamp\)\}/.test(faults)
+   && /when=\{faultWhen\(t, localStamp\)\}/.test(faults) && !/startsWith\("Now: "\)/.test(faults));
+ck("a resolved fault offers \"Reopen fault\"", /isTicketResolved\(t\) \? "Reopen fault"/.test(faults));
 
 console.log("\n  the agreement's sample, as the app reads it (2.496.234):");
 {

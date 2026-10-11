@@ -1,3 +1,14 @@
+## 2.496.323
+
+### Added
+- Cockpit, fault cards: a resolved fault can be reopened ("Reopen fault", with an optional reason). The VESTA Agent reads the reopening and asks the facility manager to look again, instead of guessing it from timings.
+
+### Changed
+- A fault card no longer repeats its title under it. When the VESTA Agent updates a title (a battery at 9 %, then 7 %), the card shows what it said before, once: "Was: Motion battery at 8 % (2026-10-10 04:00)". When a person has written their own title, it stays, and the agent's latest reading shows under it as "VESTA reads: …".
+- "In progress since … by …" is always the person who picked the fault up: the VESTA Agent's title updates no longer replace their time and name. A reopened fault says when and by whom.
+- Each note on a fault card shows its date.
+- "Mark in progress" and "Mark resolved" record the profile that pressed them (Owner or Facility manager), as "Close — no action needed" already did, with the typed name kept apart. The card shows the typed name when there is one.
+
 ## 2.496.322
 
 ### Changed

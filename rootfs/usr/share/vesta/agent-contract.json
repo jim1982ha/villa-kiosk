@@ -10,6 +10,8 @@
     "buttonIdPattern": "^[A-Za-z0-9_-]{1,40}$",
     "entityPattern": "^[a-z_]+\\.[a-z0-9_]+$"
   },
+  "_ticketUpdate": "One step in a Facility fault's history (FmTicketUpdate in src/fm/fmTypes.ts; the VESTA Agent writes them through /agent/v1/fm-data). `kind` says what the step is, so neither side reads a note's first words: none = a status step (raised, picked up, resolved; `by` the profile that recorded it, `who` the name typed for who does the work); reopened = a resolved fault open again (`by` who reopened it); retitled = the VESTA Agent changed the title (`title` the new one, `was` the one before); reading = what the VESTA Agent reads now on a fault whose title a person changed (`title`): the person's title stays. A step the VESTA Agent writes carries `title` when it gives the fault one.",
+  "ticketUpdate": { "kinds": ["reopened", "retitled", "reading"] },
   "_answering": "Who may press a message's buttons: every profile holding this capability in roles.json (never a guest).",
   "answeringCapability": "viewAgent",
   "samples": {

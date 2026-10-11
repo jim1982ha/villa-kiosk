@@ -24,7 +24,7 @@ import NotesField from "./NotesField";
 import DeviceSearchPicker, { type DeviceOption } from "./DeviceSearchPicker";
 import AgentMark from "./AgentMark";
 import RecordMeta, { RecordNotes } from "./RecordMeta";
-import { latestTitleChangeOnly } from "@/fm/faultNotes";
+import { faultNoteLines, faultWhen } from "@/fm/faultNotes";
 import InlineConfirm from "@/components/common/InlineConfirm";
 import { useDeviceChoice } from "./useDeviceChoice";
 import FormActions from "./FormActions";
@@ -34,17 +34,6 @@ import FormActions from "./FormActions";
 const LABEL: Record<FmTicketStatus, string> = {
   open: "Open", in_progress: "In progress", resolved: "Resolved",
 };
-
-/** When a fault happened, in one line: opened, picked up, resolved — and by whom, from its history. */
-function faultWhen(t: FmTicket): string {
-  const last = (status: string) => [...(t.updates ?? [])].reverse().find((u) => u.status === status);
-  const by = (u?: { by?: string }) => (u?.by ? ` by ${u.by}` : "");
-  const parts = [`Opened ${localStamp(t.openedAt)}`];
-  const picked = last("in_progress");
-  if (t.status === "in_progress" && picked) parts.push(`in progress since ${localStamp(picked.at)}${by(picked)}`);
-  if (t.resolvedAt) parts.push(`resolved ${localStamp(t.resolvedAt)}${by(last("resolved"))}`);
-  return parts.join(" · ");
-}
 
 export default function FaultsTab(
   { onOpenEntity, unavailableIds, deviceOptions, reportFaultFor, onFaultFormOpened }: {
@@ -308,7 +297,7 @@ export default function FaultsTab(
                   history's "Open · … · VESTA Agent" lines only repeated it, so its notes alone stay
                   below, each in the "Check: …" style. Who picked it up and who resolved it are on
                   this line. */}
-              <RecordMeta when={faultWhen(t)}>
+              <RecordMeta when={faultWhen(t, localStamp)}>
                 {t.room && <span className="fm-clause">{t.room}</span>}
                 {/* Read this row differently: a guest reports a symptom from
                     inside the villa, not a diagnosis. */}
@@ -325,10 +314,9 @@ export default function FaultsTab(
                   <span className="fm-entity-chip" style={{ cursor: "default" }}>{t.deviceLabel}</span>
                 ) : null}
               </RecordMeta>
-              {/* "Now: …" is the agent's record of a title change: only the latest one shows, the earlier
-                  ones were what it said before (owner, 2026-10-11: "only show the latest one") — the other
-                  notes stay */}
-              <RecordNotes notes={[t.note, ...latestTitleChangeOnly((t.updates ?? []).map((u) => u.note))]} />
+              {/* Its notes, each with its date; of the title changes only the latest, as "Was: …" (owner,
+                  2026-10-11: "only show the latest one"; review 26) — faultNoteLines */}
+              <RecordNotes notes={faultNoteLines(t, localStamp)} />
               {/* The photos themselves, not a count of them. "3 photo(s)"
                   is a claim; a thumbnail you can open is the evidence. */}
               {t.photoIds.length > 0 && (
@@ -343,7 +331,8 @@ export default function FaultsTab(
                     // through the same dialog, so the record always carries who
                     // and what behind the change.
                     onClick={(e) => { e.stopPropagation(); setStaging({ ticket: t, to: TICKET_NEXT[t.status]! }); }}>
-                    Mark {LABEL[TICKET_NEXT[t.status]!].toLowerCase()}
+                    {/* a resolved fault can be reopened (review 26): the VESTA Agent reads it, never guesses it */}
+                    {isTicketResolved(t) ? "Reopen fault" : `Mark ${LABEL[TICKET_NEXT[t.status]!].toLowerCase()}`}
                   </button>
                 )}
                 {/* ⚠️ THE ONE-STEP CLOSE, BESIDE THE TWO-STEP FLOW, NOT INSTEAD

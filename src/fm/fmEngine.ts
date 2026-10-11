@@ -376,10 +376,16 @@ export function withTicketPatch(d: FmData, id: string, patch: Partial<FmTicket>,
  * only a RESOLUTION files a completion (with its cost) — picking a fault up is
  * a step, not work done, and counting it would inflate every "work done" figure.
  */
+/**
+ * `step.who` is the name typed for who handles it; `by` the signed-in profile that recorded it — the same as the
+ * one-step close records (architecture review 26: "Mark resolved" kept only the typed name, often empty, so the
+ * agent's Telegram note and the card said "by Facility manager" for one close and nothing for the other).
+ * Reopening a resolved fault is a step of its own kind ("reopened"): the VESTA Agent reads it, never guesses it.
+ */
 export function withTicketAdvanced(
   d: FmData, id: string, to: FmTicket["status"],
-  step: { by?: string; note?: string; photoIds: string[] },
-  cost: Omit<FmCost, "id" | "at" | "photoIds"> | undefined, k: FmStamp,
+  step: { who?: string; note?: string; photoIds: string[] },
+  cost: Omit<FmCost, "id" | "at" | "photoIds"> | undefined, k: FmStamp, by?: string,
 ): FmData {
   if (!d.tickets.some((t) => t.id === id)) return d;
   const at = k.now;
@@ -393,12 +399,15 @@ export function withTicketAdvanced(
       resolvedAt: resolving ? at : undefined,
       photoIds: [...t.photoIds, ...step.photoIds],
       costId: costId ?? t.costId,
-      updates: [...(t.updates ?? []), { at, status: to, ...step }],
+      updates: [...(t.updates ?? []), {
+        at, status: to, ...step, ...(by ? { by } : {}),
+        ...(to === "open" && isTicketResolved(t) ? { kind: "reopened" as const } : {}),
+      }],
     })),
     completions: resolving
       ? [...d.completions, {
           id: k.id("cp"), scheduleId: "", ticketId: id, at,
-          by: step.by ?? "—", note: step.note, photoIds: step.photoIds, costId,
+          by: step.who ?? by ?? "—", note: step.note, photoIds: step.photoIds, costId,
         }]
       : d.completions,
     costs: costId ? [...d.costs, { ...cost!, id: costId, at, photoIds: step.photoIds }] : d.costs,
@@ -439,9 +448,10 @@ export function withTicketClosed(d: FmData, id: string, k: Pick<FmStamp, "now">,
 // could reach it, and several already disagreed with the engine or with each
 // other. tests/oracles/fm_rules.mjs drives them by value.
 
-/** Where a fault goes next from the Faults tab. Resolved is final there. */
+/** Where a fault goes next from the Faults tab. A resolved fault can be reopened (architecture review 26: there was
+ *  no way to, and the VESTA Agent guessed a reopening from timings). */
 export const TICKET_NEXT: Readonly<Record<FmTicketStatus, FmTicketStatus | null>> = {
-  open: "in_progress", in_progress: "resolved", resolved: null,
+  open: "in_progress", in_progress: "resolved", resolved: "open",
 };
 
 /** A fault's place in the list: open, then in progress, then resolved. A

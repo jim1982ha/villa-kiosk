@@ -10,8 +10,8 @@ const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
 const R = await import("@/fm/fmDocuments");
 
 
-ck("a fault goes open → in progress → resolved, and resolved is final on the Faults tab",
-   E.TICKET_NEXT.open === "in_progress" && E.TICKET_NEXT.in_progress === "resolved" && E.TICKET_NEXT.resolved === null);
+ck("a fault goes open → in progress → resolved, and a resolved one can be reopened (review 26: there was no way to)",
+   E.TICKET_NEXT.open === "in_progress" && E.TICKET_NEXT.in_progress === "resolved" && E.TICKET_NEXT.resolved === "open");
 ck("rank: open, in progress, resolved — and a status this build does not know ranks as OPEN (the engine's reading)",
    E.ticketRank({ status: "open" }) === 0 && E.ticketRank({ status: "in_progress" }) === 1 && E.ticketRank({ status: "resolved" }) === 2
    && E.ticketRank({ status: "escalated" }) === 0 && E.isTicketOpen({ status: "escalated" }));

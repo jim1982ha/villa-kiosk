@@ -55,7 +55,7 @@ export default function FaultStageModal({
   // useModalA11y. It registers useBackToClose itself, so calling both would
   // push this surface onto the dismissal stack twice.
   const dialogRef = useModalA11y(onClose);
-  const [by, setBy] = useState("");
+  const [who, setWho] = useState("");
   const [note, setNote] = useState("");
   const [photoIds, setPhotoIds] = useState<string[]>([]);
   const [amount, setAmount] = useState("");
@@ -74,7 +74,7 @@ export default function FaultStageModal({
     setFailed(null);
     const result = await advanceTicket(
       ticket.id, to,
-      { by: by.trim() || undefined, note: note.trim() || undefined, photoIds },
+      { who: who.trim() || undefined, note: note.trim() || undefined, photoIds },
       amountIdr > 0
         ? {
             amountIdr, category,
@@ -110,7 +110,7 @@ export default function FaultStageModal({
           <div className="fm-banner">{ticket.title}</div>
           <label className="fm-field">
             <span>Who{asksCost ? " did the work" : "'s handling it"} (optional)</span>
-            <input value={by} onChange={(e) => setBy(e.target.value)}
+            <input value={who} onChange={(e) => setWho(e.target.value)}
               placeholder="e.g. Wayan / AC contractor" />
           </label>
           <NotesField

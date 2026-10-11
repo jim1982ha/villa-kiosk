@@ -75,7 +75,7 @@ interface FmDataContextValue {
   advanceTicket: (
     id: string,
     to: FmTicketStatus,
-    step: { by?: string; note?: string; photoIds: string[] },
+    step: { who?: string; note?: string; photoIds: string[] },
     cost?: Omit<FmCost, "id" | "at" | "photoIds">,
   ) => Promise<FmWriteResult>;
   /** Close a fault in ONE step, nothing done ("Close — no action needed"):
@@ -305,15 +305,16 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
   const updateTicket = useCallback((id: string, patch: Partial<FmTicket>) =>
     mutate((d) => withTicketPatch(d, id, patch, stamp())), [mutate]);
 
+  // who recorded it: the signed-in profile, on every step of a fault (the one-step close and the stage dialog alike),
+  // for the agent's note on Telegram and the card's "by …"
+  const { role } = useProfile();
   const advanceTicket = useCallback((
     id: string,
     to: FmTicketStatus,
-    step: { by?: string; note?: string; photoIds: string[] },
+    step: { who?: string; note?: string; photoIds: string[] },
     cost?: Omit<FmCost, "id" | "at" | "photoIds">,
-  ) => mutate((d) => withTicketAdvanced(d, id, to, step, cost, stamp())), [mutate]);
+  ) => mutate((d) => withTicketAdvanced(d, id, to, step, cost, stamp(), role ? ROLE_LABELS[role] : undefined)), [mutate, role]);
 
-  // who closed it: the signed-in profile, recorded on the ticket for the agent's note on Telegram
-  const { role } = useProfile();
   const closeTicket = useCallback((id: string) =>
     mutate((d) => withTicketClosed(d, id, stamp(), role ? ROLE_LABELS[role] : undefined)), [mutate, role]);
 
