@@ -360,6 +360,46 @@ with tempfile.TemporaryDirectory() as tmp:
     ck("  ...while a real delete against a READ baseline still collects it",
        not os.path.exists(photo))
 
+# ── a fault's documents (the VESTA Agent's investigation report, 2.496.326; owner, 2026-10-11: "make sure all of the
+# photos and/or HTML reports in attachment are well deleted when the superadmin is deleting a fault")
+with tempfile.TemporaryDirectory() as tmp:
+    proxy.DATA_DIR = tmp
+    store = proxy._data(proxy.FM_EVIDENCE_NAME)
+    os.makedirs(store)
+    files = {"p": os.path.join(store, "p" * 32 + ".jpg"), "s": os.path.join(store, "s" * 32 + ".jpg"),
+             "d": os.path.join(store, "d" * 32 + ".html"), "keep": os.path.join(store, "k" * 32 + ".html")}
+    for path in files.values():
+        with open(path, "wb") as fh:
+            fh.write(b"x")
+    fault = {"id": "t", "status": "open", "photoIds": ["p" * 32], "documentIds": ["d" * 32],
+             "updates": [{"at": "x", "status": "open", "photoIds": ["s" * 32]}]}
+    other = {"id": "u", "status": "open", "photoIds": [], "documentIds": ["k" * 32]}
+    proxy._fm_after_write({"tickets": [fault, other]}, {"tickets": [other]}, True)      # the superadmin deletes "t"
+    ck("deleting a fault deletes its photos, its stages' photos and its documents",
+       not any(os.path.exists(files[k]) for k in ("p", "s", "d")))
+    ck("  ...and never another fault's document", os.path.exists(files["keep"]))
+    orphan = os.path.join(store, "o" * 32 + ".html")
+    with open(orphan, "wb") as fh:
+        fh.write(b"x")
+    os.utime(orphan, (1, _t.time() - proxy.FM_EVIDENCE_ORPHAN_GRACE_SECONDS - 60))
+    proxy._fm_after_write({"tickets": [other]}, {"tickets": [other]}, True)
+    ck("a document nothing ever pointed at goes after the grace window", not os.path.exists(orphan))
+    ck("a referenced document stays", os.path.exists(files["keep"]))
+    ck("the delete refuses any other kind of file", proxy._delete_evidence("k" * 32, ".py") is False
+       and os.path.exists(files["keep"]))
+ch = proxy._fm_classify({"tickets": [{"id": "t", "status": "open", "photoIds": [], "documentIds": ["d1", "d2"]}]},
+                        {"tickets": [{"id": "t", "status": "open", "photoIds": [], "documentIds": ["d1"]}]})
+ck("classify: the document a KEPT record lost", ch.dropped_documents == {("tickets", "t"): {"d2"}})
+ck("the agent may not drop a document from a fault it keeps",
+   proxy._fm_agent_write_guard(None, {}, {"tickets": [{"id": "t", "status": "open", "photoIds": [], "documentIds": ["d1"]}]},
+                               {"tickets": [{"id": "t", "status": "open", "photoIds": [], "documentIds": []}]}) is not None)
+ck("documentIds must be a list of ids",
+   "documentIds is not a list of document ids" in proxy._fm_record_errors("tickets", {"id": "t", "status": "open",
+                                                                                      "photoIds": [], "documentIds": "x"}))
+ck("a document is served sandboxed: no script, nothing fetched",
+   proxy.FM_DOCUMENT_CSP.startswith("sandbox;") and "allow-scripts" not in proxy.FM_DOCUMENT_CSP
+   and "default-src 'none'" in proxy.FM_DOCUMENT_CSP)
+
 # ── the websocket gate: default deny, and no camera for guest ─────────────
 # The guest refusal named `camera/stream` alone, which was every way into a
 # camera's picture only while HLS was the only way. WebRTC added four more.

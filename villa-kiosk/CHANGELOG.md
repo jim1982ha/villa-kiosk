@@ -1,3 +1,11 @@
+## 2.496.326
+
+### Added
+- A fault can carry the VESTA Agent's investigation report. When you press "Create this fault for the facility manager" under an /investigate answer (VESTA Agent 0.12.164), the fault's card in the Cockpit shows "Investigation report": it opens the same page, on the iPad, with no internet needed. The page is shown locked down: it can display text and charts, nothing else.
+
+### Changed
+- Deleting a fault (superadmin) deletes everything attached to it: its photos, the photos of each of its steps, and its reports — at once, with the fault. A report or photo nothing points at any more is removed the same way.
+
 ## 2.496.325
 
 ### Fixed

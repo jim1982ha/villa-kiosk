@@ -175,6 +175,10 @@ export interface FmTicket extends FmProvenance {
   room?: string;
   note?: string;
   photoIds: string[];
+  /** Documents kept with the fault — the VESTA Agent's investigation report, attached when a person pressed "Create
+   *  this fault" under it (owner, 2026-10-11). Served sandboxed at /fm-document/{id}; deleted with the fault, as its
+   *  photos are (supervisor-proxy FM_EVIDENCE_KINDS). Absent on every fault made before. */
+  documentIds?: string[];
   costId?: string;
   /** Every status change, in order. Optional because faults raised before
    *  this existed have none — read it as "no steps recorded", never as an
