@@ -1,3 +1,7 @@
+## 0.12.161
+
+What you will see: an investigation, and every report that reads a device's history, reads it many times faster. Home Assistant's history tool re-read the whole period for every page of 1,000 readings: the 3 days before the 9th of a power meter that reports every few seconds took about 90 pages, each one re-reading all 3 days — minutes for one device while you waited. The history is now read in short time slices, each once.
+
 ## 0.12.160
 
 What you will see:

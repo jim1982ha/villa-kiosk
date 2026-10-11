@@ -170,6 +170,12 @@ class McpSession:
         return self._post("tools/call", {"name": name, "arguments": args}) or {}
 
 
+#: history() reads by time slices (ha-mcp fetches the whole period on every page): its page, first slice and bounds
+HISTORY_PAGE = 1000
+HISTORY_SLICE, HISTORY_MIN_SLICE, HISTORY_MAX_SLICE = timedelta(hours=6), timedelta(minutes=5), timedelta(days=2)
+HISTORY_MAX_CALLS = 400          # a 10-day read of a meter reporting every second stays inside it
+
+
 def paged(fetch, step: int, max_pages: int = 20) -> list:
     """Every row of a paged read, each once. `fetch(offset) -> (rows, has_more, next_offset)`.
 
@@ -273,17 +279,45 @@ class McpClient(HABase):
         return out
 
     def history(self, entity_ids, start, end):
+        """Every recorded state of each entity in [start, end), oldest first.
+
+        ⚠️ READ BY TIME SLICES, NOT BY PAGES (2026-10-11): ha-mcp fetches the WHOLE period from Home Assistant on every
+        call and cuts its page out after — 3 days of a power meter that reports every few seconds were read 88 times
+        over to page through them (minutes for one device). A slice holding more than a page is halved and read again;
+        a quiet slice lets the next one double. Each slice opens with the state carried over from before it, stamped
+        at the slice's start: kept only for the first slice, never counted as a change."""
         out = {}
         for eid in entity_ids:
-            def fetch(offset, eid=eid):
-                body = self.tool("ha_get_history", {
-                    "entity_ids": eid, "source": "history", "order": "asc", "minimal_response": True,
-                    "significant_changes_only": False, "limit": 1000, "offset": offset,
-                    "start_time": start.astimezone(timezone.utc).isoformat(), "end_time": end.astimezone(timezone.utc).isoformat()})
-                ent = next(iter(body.get("entities") or []), {})
-                return ent.get("states") or [], ent.get("has_more"), ent.get("next_offset")
-            out[eid] = paged(fetch, 1000, max_pages=200)
+            out[eid] = self._history_one(eid, start.astimezone(timezone.utc), end.astimezone(timezone.utc))
         return out
+
+    def _history_one(self, eid, start, end):
+        def fetch(a, b, offset=0):
+            body = self.tool("ha_get_history", {
+                "entity_ids": eid, "source": "history", "order": "asc", "minimal_response": True,
+                "significant_changes_only": False, "limit": HISTORY_PAGE, "offset": offset,
+                "start_time": a.isoformat(), "end_time": b.isoformat()})
+            ent = next(iter(body.get("entities") or []), {})
+            return ent.get("states") or [], ent.get("has_more"), ent.get("next_offset")
+
+        rows: list[dict] = []
+        at, span, calls = start, HISTORY_SLICE, 0
+        while at < end and calls < HISTORY_MAX_CALLS:
+            to = min(end, at + span)
+            batch, more, _ = fetch(at, to)
+            calls += 1
+            if more and span > HISTORY_MIN_SLICE:
+                span /= 2                                 # too many readings in this slice: a shorter one, same start
+                continue
+            if more:                                      # a slice of minutes still holds more: its pages, as before
+                batch = paged(lambda off, a=at, b=to: fetch(a, b, off), HISTORY_PAGE, max_pages=20)
+            if rows and batch and batch[0].get("state") == rows[-1].get("state"):
+                batch = batch[1:]                         # the carried-over state, stamped at the slice's start
+            rows.extend(batch)
+            at = to
+            if len(batch) < HISTORY_PAGE // 4:
+                span = min(span * 2, HISTORY_MAX_SLICE)
+        return rows
 
     def helpers(self):
         helpers = []

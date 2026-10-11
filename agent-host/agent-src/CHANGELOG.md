@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.155 (11 October 2026)
+
+- McpClient.history reads by time slices (6 h, halved when a slice holds more than a page, doubled when quiet, at most
+  400 calls): ha-mcp fetches the whole period for every page. A slice's carried-over opening state is dropped after
+  the first. tests/test_ha_reads.py: a recorder stand-in that answers as ha-mcp does.
+
 ## 0.6.154 (11 October 2026)
 
 - create_ticket in a conversation only OFFERS (state.ticket_offers; button kind "t", app._press_ticket: claimed once,

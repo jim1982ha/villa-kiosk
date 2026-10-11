@@ -74,6 +74,41 @@ def test_statistics_and_history_stop_on_a_page_that_brings_nothing_new():
         s = HistorySession(pages)
         got = McpClient("http://unused", "UTC", session=s).statistics(["sensor.x"], T - timedelta(days=1), T)
         assert s.calls == 2 and len(got["sensor.x"]) == 3
-    s = HistorySession([[{"state": "on", "last_changed": "2026-09-30T10:00:00+00:00"}], []])
-    assert len(McpClient("http://unused", "UTC", session=s).history(["sensor.x"], T - timedelta(days=1), T)["sensor.x"]) == 1
-    assert s.calls == 2
+
+
+class Recorder:
+    """ha_get_history as ha-mcp answers it (seen on the villa, 2026-10-11): the window's states, opening with the state
+    carried over from before it stamped at the window's start; the WHOLE window fetched, then cut to limit/offset."""
+
+    def __init__(self, rows):
+        self.rows, self.windows = rows, []
+
+    def call_raw(self, name, args):
+        a, b = datetime.fromisoformat(args["start_time"]), datetime.fromisoformat(args["end_time"])
+        self.windows.append((a, b))
+        inside = [(t, v) for t, v in self.rows if a <= t < b]
+        before = [(t, v) for t, v in self.rows if t < a][-1:]
+        states = [{"state": before[0][1], "last_changed": a.isoformat()}] if before and not (inside and inside[0][0] == a) else []
+        states += [{"state": v, "last_changed": t.isoformat()} for t, v in inside]
+        off, lim = args.get("offset") or 0, args["limit"]
+        return {"content": [{"type": "text", "text": json.dumps({"success": True, "entities": [
+            {"entity_id": args["entity_ids"], "states": states[off:off + lim], "has_more": off + lim < len(states),
+             "next_offset": off + lim if off + lim < len(states) else None}]})}]}
+
+
+def test_a_dense_history_is_read_by_slices_each_once_and_whole():
+    # 2026-10-11: 3 days of a power meter reporting every few seconds were paged 88 times, ha-mcp re-reading the whole
+    # 3 days for each page — minutes for one device, in the middle of an answer
+    start = T - timedelta(days=3)
+    rows = [(start - timedelta(seconds=7), "0.0")]                       # the state the period opens with
+    rows += [(start + timedelta(seconds=5 * i), f"{i % 7}.0") for i in range(3 * 86400 // 5)]
+    rec = Recorder(rows)
+    got = McpClient("http://unused", "UTC", session=rec).history(["sensor.meter"], start, T)["sensor.meter"]
+    # every reading once, at its own time: none added, none moved to a slice's edge
+    assert [(r["state"], r["last_changed"]) for r in got] == [(v, t.isoformat()) for t, v in rows if start <= t < T]
+    assert len(rec.windows) < 150                                        # was 52 pages of the WHOLE period each
+    assert max(b - a for a, b in rec.windows) <= timedelta(hours=6)      # never the whole period at once
+    quiet = Recorder([(start - timedelta(hours=1), "off"), (start + timedelta(hours=30), "on")])
+    got = McpClient("http://unused", "UTC", session=quiet).history(["switch.x"], start, T)["switch.x"]
+    assert [r["state"] for r in got] == ["off", "on"]                    # the opening state, then the one change
+    assert len(quiet.windows) <= 6                                       # a quiet device: slices grow
