@@ -183,6 +183,7 @@ class Outcome:
                 posted.setdefault(int(iid), []).append(chat)
             chats.add(chat)
             done["sent"] += 1
+            done.setdefault("messages", {})[chat] = mid          # each chat's message: a page's buttons go under it
         if self.notices:
             for (iid, stage), chs in noticed.items():
                 self.notices.record(iid, stage, chs)

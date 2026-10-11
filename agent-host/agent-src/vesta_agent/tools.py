@@ -132,6 +132,7 @@ class Toolbox:
         self.photos: list[tuple[str, str]] = []
         self.sent = 0                  # messages send_message delivered in this run (an answer may be one: a page)
         self.attached: list[str] = []  # the files those messages carried (a command skill's page: app._delivered)
+        self.pages: dict[str, int] = {}  # each of those files → the message it went with, in the asker's chat
         self.offered: list[str] = []   # the faults offered in this run (tools._ticket in a chat)
         # the approval requests this run sent: one shown in the asker's chat is the answer there (app._converse)
         self.approvals: list[str] = []
@@ -528,5 +529,8 @@ class Toolbox:
             self.sent += 1
             if att:
                 self.attached.append(att)
+                here = (done.get("messages") or {}).get(origin.chat) if origin else None
+                if isinstance(here, int) and not isinstance(here, bool):
+                    self.pages[att] = here
             return _ok("Sent.")
         return handler

@@ -227,6 +227,19 @@ class Telegram:
                 log.warning("Telegram refused \"typing…\" in chat %s: %s", chat_id, why)
             return False
 
+    async def buttons(self, chat_id: int, message_id: int, keyboard: dict | None) -> bool:
+        """Put `keyboard` under one of the bot's messages (None: its buttons go), its text or file untouched — a page
+        sent with its message gets the buttons of its answer (app._converse). False when Telegram refuses."""
+        try:
+            await self.api("editMessageReplyMarkup", chat_id=chat_id, message_id=message_id,
+                           reply_markup=keyboard or {"inline_keyboard": []})
+            return True
+        except TelegramError as e:
+            if NOT_MODIFIED in str(e):
+                return True
+            log.warning("editMessageReplyMarkup failed: %s", e)
+            return False
+
     async def edit(self, chat_id: int, message_id: int, text: str, keyboard: dict | None = None) -> bool:
         """Rewrite one of the bot's messages: its buttons go, or become `keyboard`. False when Telegram refuses."""
         extra = {"reply_markup": keyboard} if keyboard else {}

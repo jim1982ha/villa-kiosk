@@ -57,6 +57,7 @@ class TurnResult:
     sent: int = 0                  # messages its send_message delivered (Toolbox.sent)
     attached: list[str] = field(default_factory=list)   # the files they carried (Toolbox.attached)
     offered: int = 0               # faults it offered (Toolbox.offered)
+    pages: dict[str, int] = field(default_factory=dict)   # a file sent → its message (Toolbox.pages)
     earlier: str = ""              # RunResult.earlier
 
     @property
@@ -114,7 +115,7 @@ class Turns:
         out = TurnResult(res.text, res.session_id, res.stopped_at_limit, res.cost_usd, res.problem, res.error,
                          list(tb.photos), terms.limit_usd, list(tb.approvals), sent=getattr(tb, "sent", 0),
                          earlier=getattr(res, "earlier", ""), attached=list(getattr(tb, "attached", [])),
-                         offered=len(getattr(tb, "offered", [])))
+                         offered=len(getattr(tb, "offered", [])), pages=dict(getattr(tb, "pages", {})))
         if out.problem:
             # no credit, a refused key: every reply and report stops until the owner acts (app._tell_owner decides)
             await self._safe(self.tell_owner(out.problem, told))

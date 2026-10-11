@@ -154,6 +154,12 @@ class Delivery:
             self.state.log("edit_refused", {"chat": chat_id, "message": message_id})
         return bool(ok)
 
+    async def buttons(self, chat_id: int, message_id: int, keyboard: dict | None) -> bool:
+        """Put buttons under one of the agent's messages already sent, its text untouched. False: off, or refused."""
+        if self.tg is None:
+            return False
+        return bool(await self.tg.buttons(int(chat_id), int(message_id), keyboard))
+
     async def delete(self, chat_id: int, message_id: int) -> bool:
         """Delete one of the agent's messages. False: Telegram is off, or refused (past its 48 hours)."""
         if self.tg is None:

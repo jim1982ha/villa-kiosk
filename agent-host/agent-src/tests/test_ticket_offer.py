@@ -8,7 +8,7 @@ import os
 
 from helpers import make_agent
 from kiosk_fake import FakeKiosk
-from telegram_fake import BOT
+from telegram_fake import BOT, FakeTelegram
 from vesta_agent.app import NO_OFFER_BUTTON, OFFER_BUTTON
 
 JM = 111
@@ -214,7 +214,8 @@ def _investigating(tmp_path, monkeypatch, *, page_on_run=(1,), offer=False):
             open(os.path.join(out, "investigation.html"), "w").write("<html></html>")
             await call["call"]("send_message", {"to": "here", "text": "It ran 3 h. The page has the rest.",
                                                 "attachment": "investigation.html"})
-    ai = FakeAI("", act=act).install(monkeypatch)
+    # told to write nothing after the page, it writes a long message anyway (the villa, 20:20)
+    ai = FakeAI("I've completed a thorough investigation. Key finding: …", act=act).install(monkeypatch)
     run(v.converse(JM, v.policy().person(JM), "the heater on the 9th", invoked="investigate"))
     return v, runs
 
@@ -222,16 +223,22 @@ def _investigating(tmp_path, monkeypatch, *, page_on_run=(1,), offer=False):
 def test_an_investigation_that_sent_its_page_gets_the_buttons_from_its_own_account(tmp_path, monkeypatch):
     v, runs = _investigating(tmp_path, monkeypatch)
     assert len(runs) == 1                                                   # nothing missing: no second turn
-    (_, offer, kb), = [s for s in v.tg.sent if s[2]]
-    assert "Water heater on the night of 9 October" in offer                 # offered by the engine, from the account
-    assert [b["text"] for b in kb["inline_keyboard"][-1]] == [OFFER_BUTTON, NO_OFFER_BUTTON]
+    # owner, 2026-10-11 20:20: "it shall be all in 1 message" — the page's message, its buttons under it, nothing else
+    (page,) = v.tg.sent
+    assert page[1].endswith("It ran 3 h. The page has the rest.") and not any("thorough" in t for _, t, _ in v.tg.sent)
+    (_, mid, kb), = v.tg.buttoned
+    assert mid == v.tg.next_id and [b["text"] for b in kb["inline_keyboard"][-1]] == [OFFER_BUTTON, NO_OFFER_BUTTON]
+    offer = v.state.claim_ticket_offer(kb["inline_keyboard"][-1][0]["callback_data"].split(":")[1], JM)
+    assert offer["title"] == "Water heater on the night of 9 October"     # offered by the engine, from the account
 
 
 def test_an_investigation_that_forgot_its_page_is_sent_back_to_it_once(tmp_path, monkeypatch):
     v, runs = _investigating(tmp_path, monkeypatch, page_on_run=(2,), offer=True)
     assert len(runs) == 2 and "has not sent investigation.html" in runs[1]
-    (_, offer, kb), = [s for s in v.tg.sent if s[2]]
-    assert "Check the float switch" in offer                                 # the AI's own offer: no second one
+    (_, _, kb), = v.tg.buttoned
+    assert len(kb["inline_keyboard"]) == 1                                  # the AI's own offer: no second one
+    assert v.state.claim_ticket_offer(kb["inline_keyboard"][0][0]["callback_data"].split(":")[1], JM)["title"] == \
+        "Check the float switch"
 
 
 def test_an_investigation_that_never_makes_its_page_says_so(tmp_path, monkeypatch):
@@ -239,3 +246,64 @@ def test_an_investigation_that_never_makes_its_page_says_so(tmp_path, monkeypatc
     assert len(runs) == 2
     assert any("The report page could not be made this time." in t for _, t, _ in v.tg.sent)
     assert any(kb for _, _, kb in v.tg.sent)                                 # the buttons all the same
+
+
+def test_buttons_telegram_refuses_on_the_page_come_on_their_own(tmp_path, monkeypatch):
+    # editMessageReplyMarkup refused: the offer is not lost, it comes as its own short message, named
+    real = FakeTelegram.buttons
+
+    async def refused(self, chat_id, message_id, keyboard):
+        return False
+    monkeypatch.setattr(FakeTelegram, "buttons", refused)
+    v, runs = _investigating(tmp_path, monkeypatch)
+    assert len(v.tg.sent) == 2 and v.tg.sent[1][2]                         # the page, then the offer with its buttons
+    assert "Water heater on the night of 9 October" in v.tg.sent[1][1]
+    monkeypatch.setattr(FakeTelegram, "buttons", real)
+
+
+# ---- the fault created from an investigation keeps its report (owner, 2026-10-11: "make sure the fault ticket has the
+# HTML report in attachment in it")
+def _press_create_under_the_page(v):
+    (_, mid, kb), = v.tg.buttoned
+    data = kb["inline_keyboard"][-1][0]["callback_data"]
+    run(v.on_ha_event("telegram_callback", {"id": "cb", "data": data, "chat_id": JM, "user_id": JM, "bot": BOT,
+                                            "message": {"message_id": mid, "chat": {"id": JM}, "caption": "x"}}))
+
+
+def test_the_fault_created_from_an_investigation_carries_its_report(tmp_path, monkeypatch):
+    v, _ = _investigating(tmp_path, monkeypatch)
+    k = v.kiosk
+    _press_create_under_the_page(v)
+    assert k.tickets == [("Water heater on the night of 9 October", None)]
+    assert k.documents == [b"<html></html>"] and k.ticket_documents == [["d1"]]
+
+
+def test_a_later_investigation_never_swaps_the_report_of_an_earlier_offer(tmp_path, monkeypatch):
+    v, _ = _investigating(tmp_path, monkeypatch)
+    out = v.s.in_folder(f"chats/{JM}").out_dir
+    open(os.path.join(out, "investigation.html"), "w").write("<html>another night</html>")    # the next one's page
+    _press_create_under_the_page(v)
+    assert v.kiosk.documents == [b"<html></html>"]
+
+
+def test_a_kiosk_that_holds_no_documents_still_gets_the_fault_and_says_why(tmp_path, monkeypatch):
+    v, _ = _investigating(tmp_path, monkeypatch)
+    v.kiosk.documents = None                                                 # a Kiosk older than 2.496.326
+    _press_create_under_the_page(v)
+    assert v.kiosk.tickets and v.kiosk.ticket_documents == [[]]
+    assert "could not be attached: this VESTA Kiosk cannot hold it yet" in v.kiosk.notes[0]
+
+
+def test_the_real_kiosk_client_writes_the_document_ids_into_the_new_fault():
+    # the stand-in above keeps them aside: here the record the real client writes to the Kiosk's Facility data
+    from vesta_agent.kiosk import Kiosk
+    k, data = Kiosk("http://kiosk", "token"), {"tickets": []}
+
+    async def edit(change):
+        return change(data)
+    k._edit = edit
+    run(k.add_ticket("Water heater on the night of 9 October", document_ids=["d1"]))
+    (t,) = data["tickets"]
+    assert t["documentIds"] == ["d1"] and t["photoIds"] == []
+    run(k.add_ticket("Another fault"))
+    assert "documentIds" not in data["tickets"][1]                         # none: the field is not written at all

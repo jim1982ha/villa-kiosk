@@ -25,6 +25,7 @@ import asyncio
 import json
 import logging
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -574,6 +575,13 @@ class Vesta:
             answer = (res.text or "").strip()               # an empty answer sends nothing (a request said it all)
             if not answer and not res.sent and not res.approvals and res.earlier:
                 answer = res.earlier                        # ended on a tool call with nothing sent: its last words
+            # ⚠️ THE PAGE'S MESSAGE IS THE ANSWER (owner, 2026-10-11: "the response … shall be all in 1 message, the
+            # details being in the HTML file"): told to write nothing after it, the AI still added a long second message
+            page_mid = res.pages.get(sk.deliver["page"]) if sk is not None and sk.deliver.get("page") else None
+            if page_mid and answer and not (res.problem or res.error):
+                log.info("Chat %s: the AI's text after its page is not sent (%d characters): the page's message is the "
+                         "answer", cid, len(answer))
+                answer = ""
             if res.problem or res.error:
                 # ⚠️ NEVER THE RAW ERROR (owner, 2026-10-06): the reason in plain words (api_errors); the owner was
                 # told by the turn when no retry can help (no credit, a refused key)
@@ -594,14 +602,27 @@ class Vesta:
                     f"Stopped: this answer reached the {res.limit_usd:g} USD limit per reply."
                 keyboard = {"inline_keyboard": [[{"text": "Continue", "callback_data": button_data.make(button_data.CONTINUE, cont)}]]}
             # a fault the AI offered in this answer (tools._ticket): its button goes under it; only a press creates it
+            if page_mid:
+                # the report goes with the fault if a person creates it (owner, 2026-10-11): each offer its own copy, so a
+                # later investigation in this chat can never put another page on it
+                out = self.s.in_folder(f"chats/{cid}").out_dir
+                for oid in self.state.offer_documents(cid):
+                    copy = os.path.join(out, f"report-{oid}.html")
+                    try:
+                        shutil.copyfile(os.path.join(out, sk.deliver["page"]), copy)
+                        self.state.set_offer_document(oid, copy)
+                    except OSError as e:
+                        log.warning("Chat %s: the report could not be kept for its fault (%s)", cid, type(e).__name__)
             offers = self.state.ticket_offers_to_show(cid)
-            if offers and not answer:
-                # the answer was a message of its own (a page sent with send_message): the offer comes on its own, named
+            rows = [[{"text": OFFER_BUTTON, "callback_data": button_data.make(button_data.TICKET, o["id"], "y")},
+                     {"text": NO_OFFER_BUTTON, "callback_data": button_data.make(button_data.TICKET, o["id"], "n")}]
+                    for o in offers]
+            if rows and page_mid and not answer and await self.delivery.buttons(cid, page_mid, {"inline_keyboard": rows}):
+                rows = []                                   # under the page's own message: one message, the whole answer
+            if rows and not answer:
+                # the answer was a message of its own the buttons could not join: the offer comes on its own, named
                 answer = "A fault for the facility manager, if you want one:\n" + "\n".join(f"- {o['title']}" for o in offers)
-            if offers:
-                rows = [[{"text": OFFER_BUTTON, "callback_data": button_data.make(button_data.TICKET, o["id"], "y")},
-                         {"text": NO_OFFER_BUTTON, "callback_data": button_data.make(button_data.TICKET, o["id"], "n")}]
-                        for o in offers]
+            if rows:
                 keyboard = {"inline_keyboard": (keyboard or {}).get("inline_keyboard", []) + rows}
             # ⚠️ A REQUEST SHOWN HERE IS THE ANSWER (owner, 2026-10-10: "Approval request sent." under it, twice "redundant"):
             # told not to, the AI still wrote it — and pressed at once, the request was decided before that line came, so
@@ -632,6 +653,7 @@ class Vesta:
             res = dataclasses.replace(
                 res, session_id=again.session_id or res.session_id, sent=res.sent + again.sent,
                 attached=res.attached + again.attached, offered=res.offered + again.offered,
+                pages={**res.pages, **again.pages},
                 cost_usd=(res.cost_usd or 0) + (again.cost_usd or 0) if (res.cost_usd or again.cost_usd) else None,
                 text=res.text or again.text)
             if again.session_id:
@@ -720,10 +742,12 @@ class Vesta:
             await p.toast("No fault created.")
             if p.mid:
                 await self.delivery.edit(p.chat, p.mid, layout.render(layout.parts(
-                    body=str(p.msg.get("text") or ""), status=f"No fault created: declined by {p.person.name}.")))
+                    body=str(p.msg.get("text") or p.msg.get("caption") or ""),
+                    status=f"No fault created: declined by {p.person.name}.")))
             return
         try:
-            await self.tickets.create(offer["title"], offer.get("entity_id"), offer.get("note"))
+            await self.tickets.create(offer["title"], offer.get("entity_id"), offer.get("note"),
+                                      document=offer.get("document"))
         except Exception as e:  # noqa: BLE001
             self.state.release_ticket_offer(offer["id"])            # the button still works
             log.warning("The offered fault could not be created (%s)", type(e).__name__)
@@ -731,9 +755,10 @@ class Vesta:
         said = f"Fault created for the facility manager by {p.person.name}: {offer['title']}"
         await p.toast("Fault created.")
         if p.mid:
-            # the answer stays whole, its button gone, the fault said under it (as a report's button does)
-            await self.delivery.edit(p.chat, p.mid, layout.render(layout.parts(body=str(p.msg.get("text") or ""),
-                                                                               status=said)))
+            # the answer stays whole, its button gone, the fault said under it (as a report's button does) — a page's
+            # message is a file's caption
+            await self.delivery.edit(p.chat, p.mid, layout.render(layout.parts(
+                body=str(p.msg.get("text") or p.msg.get("caption") or ""), status=said)))
 
     async def _press_alert(self, p: "Press") -> None:
         # the presser as this chat knows them (Policy.member: one person may be both owner and fm, each with its name)

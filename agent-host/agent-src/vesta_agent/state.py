@@ -55,7 +55,8 @@ create table if not exists ticket_offers(
   entity_id text,
   note text,
   shown integer not null default 0,
-  used integer not null default 0
+  used integer not null default 0,
+  document text                     -- its own copy of the page to keep with the fault (an investigation's report)
 );
 create table if not exists kv(
   k text primary key,
@@ -124,6 +125,9 @@ class State:
         # who decided a request, as the message names them (a group's member is in no People row: approvals.Approvals.now)
         if "decided_name" not in {r[1] for r in self.db.execute("pragma table_info(approvals)")}:
             self.db.execute("alter table approvals add column decided_name text")
+        # an offer made before 0.12.164 has no page to keep with its fault
+        if "document" not in {r[1] for r in self.db.execute("pragma table_info(ticket_offers)")}:
+            self.db.execute("alter table ticket_offers add column document text")
         self.db.commit()
         self._migrate_incident_messages()
         # ⚠️ WHEN THE RECORD STARTED, KEPT (architecture review 16): read as the oldest record kept, it moved forward every
@@ -525,6 +529,16 @@ class State:
                             (oid, utcnow().isoformat(), int(chat_id), title, entity_id, note))
             self.db.commit()
         return oid
+
+    def offer_documents(self, chat_id: int) -> list[str]:
+        """The ids of the offers this chat's answer is about to show (a page goes with each: set_offer_document)."""
+        with self._lock:
+            return [r["id"] for r in self.db.execute("select id from ticket_offers where chat_id=? and shown=0", (int(chat_id),))]
+
+    def set_offer_document(self, oid: str, path: str) -> None:
+        with self._lock:
+            self.db.execute("update ticket_offers set document=? where id=?", (path, oid))
+            self.db.commit()
 
     def ticket_offers_to_show(self, chat_id: int) -> list[dict]:
         """The faults offered in this chat that no answer carries yet: the answer going out now shows them."""

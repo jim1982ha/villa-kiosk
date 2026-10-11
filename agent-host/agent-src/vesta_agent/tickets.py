@@ -13,6 +13,7 @@ from typing import Awaitable, Callable
 from vesta_shared import kiosk_words, result
 from vesta_shared.problems import CLEARED, Problems
 
+from .kiosk import KioskError
 from .outcome_words import ticket_title
 
 log = logging.getLogger("vesta.outcome")
@@ -44,12 +45,29 @@ class Tickets:
         return Store(self.store_path)
 
     async def create(self, title: str, entity_id: str | None = None, note: str | None = None,
-                            task_id: int | None = None) -> str | None:
-        """A fault in the Kiosk's Facility records. With a task_id, the task remembers its ticket."""
+                            task_id: int | None = None, document: str | None = None) -> str | None:
+        """A fault in the Kiosk's Facility records. With a task_id, the task remembers its ticket. `document`: an HTML
+        page to keep with it (an investigation's report, owner 2026-10-11) — a Kiosk that cannot hold it gets the fault
+        all the same, its note saying so."""
         if not self.kiosk.enabled:
             self.state.log("ticket_skipped", {"reason": "no Kiosk configured", "summary": (title or "")[:80]})
             return None
-        tid = await self.kiosk.add_ticket(ticket_title(title)[:200], entity_id=entity_id, note=note)
+        docs = None
+        if document:
+            why = None
+            try:
+                with open(document, "rb") as f:
+                    kept = await self.kiosk.add_document(f.read())
+                docs = [kept] if kept else None
+                why = None if kept else "this VESTA Kiosk cannot hold it yet"
+            except OSError:
+                why = "the page was no longer kept"
+            except KioskError as e:
+                why = f"the Kiosk could not be reached ({e})"
+            if why:
+                log.warning("Fault %r: its report was not attached: %s", (title or "")[:60], why)
+                note = ((note or "") + f"\n(The investigation report could not be attached: {why}.)").strip()
+        tid = await self.kiosk.add_ticket(ticket_title(title)[:200], entity_id=entity_id, note=note, document_ids=docs)
         log.info("Kiosk ticket %s created: %s", tid, ticket_title(title)[:80])
         if task_id:
             self._store().set_task_uid(int(task_id), tid)

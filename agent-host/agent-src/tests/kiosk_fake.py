@@ -23,6 +23,8 @@ class FakeKiosk:
         self.readings: list[tuple[str, str]] = []    # the agent's readings under a title a person wrote
         self.closed_meta: dict[str, dict] = {}       # a ticket closed by hand: {by, resolved_at}, as the Kiosk records it
         self.info = {"contract": 1}
+        self.documents: list | None = []             # pages kept (add_document); None: a Kiosk with no documents
+        self.ticket_documents: list[list[str]] = []   # each ticket's documentIds, in the order of `tickets`
 
     async def check(self) -> bool:
         return True
@@ -33,7 +35,15 @@ class FakeKiosk:
     async def heartbeats(self, stop, status=lambda: None) -> None:
         await stop.wait()
 
-    async def add_ticket(self, title, entity_id=None, note=None) -> str:
+    async def add_document(self, html: bytes):
+        """A Kiosk that holds documents (2.496.326+); `self.documents = None` plays an older one (no document kept)."""
+        if self.documents is None:
+            return None
+        self.documents.append(html)
+        return f"d{len(self.documents)}"
+
+    async def add_ticket(self, title, entity_id=None, note=None, document_ids=None) -> str:
+        self.ticket_documents.append(list(document_ids or []))
         self.tickets.append((title, entity_id))
         self.notes.append(note)
         self.titles[f"t{len(self.tickets)}"] = self.agent_titles[f"t{len(self.tickets)}"] = title

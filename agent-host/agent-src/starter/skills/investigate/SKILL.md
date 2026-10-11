@@ -73,9 +73,11 @@ report the agent sends.
 
 8. **Save the account** with save_file, as `investigation.json` — plain sentences, no Markdown:
 
-       {"title": "Water heater on the night of 9 October",
-        "summary": "3 to 5 sentences: what happened with its key times and durations, the most likely cause, and what to
-                    check on site first. This is the chat message: it must stand on its own.",
+       {"title": "Water heater on the night of 9 October",     (at most 90 characters)
+        "summary": "4 to 6 sentences, at most 800 characters: what happened (the key times and durations, against
+                    the device's normal), the most likely cause and what points to it, what to check on site first,
+                    and what would have warned earlier. It is the whole chat message: the details go in the other
+                    fields, which make the page.",
         "timeline": [{"time": "09/10 02:40", "text": "The water heater starts and does not stop (normally about
                       20 min at a time).", "unusual": true}, … one per moment that matters, before, during, after],
         "causes": [{"cause": "…", "evidence": "what in the records points to it", "confirm": "how to confirm on site"},
@@ -91,7 +93,8 @@ report the agent sends.
    --out investigation.html`. It prints a `message` {title, text}.
 
 10. **Send it:** send_message(to="here", title= the message's title, text= the message's text, attachment=
-    "investigation.html"). That message and its page ARE the answer: after it, write nothing.
+    "investigation.html"). That message and its page ARE the answer: after it, write nothing — the agent does not
+    send anything you write after the page, and puts the fault buttons under the page's message itself.
 
 If the page cannot be made (a script failed), say so in one line and write the account in the chat instead, in the
 same parts, plain text.

@@ -160,13 +160,32 @@ class Kiosk:
                 raise KioskError(f"writing the Facility records answered {status}: {str(res.get('error', ''))[:200]}")
         raise KioskError("the Facility records kept changing")
 
-    async def add_ticket(self, title: str, entity_id: str | None = None, note: str | None = None) -> str:
+    async def add_document(self, html: bytes) -> str | None:
+        """Store one HTML page for a fault (the VESTA Kiosk 2.496.326 and later: /agent/v1/fm-document) — its id, or None
+        when this Kiosk cannot hold documents (an older one answers 404) or refused it. Kept with the fault, deleted with it."""
+        did = secrets.token_hex(16)
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=60), headers=self.headers) as http:
+                async with http.post(f"{self.url}/agent/v1/fm-document?id={did}", data=html,
+                                     headers={"Content-Type": "text/html; charset=utf-8"}) as r:
+                    if r.status == 200:
+                        return did
+                    log.warning("The Kiosk did not keep the document: it answered %s%s", r.status,
+                                " (a Kiosk older than 2.496.326 holds no documents)" if r.status == 404 else "")
+                    return None
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            raise KioskError(f"POST /agent/v1/fm-document: {type(e).__name__}") from None
+
+    async def add_ticket(self, title: str, entity_id: str | None = None, note: str | None = None,
+                         document_ids: list[str] | None = None) -> str:
         tid = "va-" + secrets.token_hex(8)
 
         def change(data: dict) -> str:
             tickets = list(data.get("tickets") or [])
             t = {"id": tid, "title": title[:200], "status": "open", "openedAt": _now(), "photoIds": [],
                  "updates": [{"at": _now(), "status": "open", "photoIds": [], "title": title[:200]}]}
+            if document_ids:
+                t["documentIds"] = list(document_ids)
             if entity_id:
                 t["entityId"] = entity_id
             if note:

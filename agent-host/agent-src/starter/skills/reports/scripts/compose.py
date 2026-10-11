@@ -526,6 +526,9 @@ def normal_words(ref: dict, unit: str) -> str:
 
 
 INVESTIGATION_FIELDS = ("title", "summary", "timeline", "causes", "cannot_tell", "warned_earlier", "checked")
+#: the chat message is the title and the summary, under the page's file: ONE bubble, so within Telegram's 1,024 for a
+#: file's caption — title, "To: …" and summary together (owner, 2026-10-11: "all in 1 message … a bit more detailed")
+SUMMARY_MAX, TITLE_MAX = 800, 90
 
 
 def investigation(notes: dict, data: dict | None) -> str:
@@ -664,6 +667,16 @@ def _investigation(a) -> int:
         print(f"investigation: the notes need at least a title and a summary (the fields: {', '.join(INVESTIGATION_FIELDS)}).",
               file=sys.stderr)
         return 1
+    summary = " ".join(str(notes["summary"]).split())
+    if len(" ".join(str(notes["title"]).split())) > TITLE_MAX:
+        print(f"investigation: the title is longer than {TITLE_MAX} characters: say the device and the day, shorter.",
+              file=sys.stderr)
+        return 1
+    if len(summary) > SUMMARY_MAX:
+        print(f"investigation: the summary is {len(summary)} characters; it is the chat message, at most {SUMMARY_MAX}: "
+              "4 to 6 sentences (what happened, the most likely cause and its evidence, what to check first). Shorten it in the "
+              "notes and run this again; the details belong in the other fields.", file=sys.stderr)
+        return 1
     data = None
     if a.data:
         try:
@@ -674,8 +687,7 @@ def _investigation(a) -> int:
     with open(a.out, "w", encoding="utf-8") as f:
         f.write(html)
     # the chat message: the essence only — the page is the account (owner, 2026-10-11: "much more synthetic and shorter")
-    doc = document(str(notes["title"]).strip(), "", [(None, [str(notes["summary"]).strip(),
-                                                             "The full account, with its timeline and charts, is in the attached page."])])
+    doc = document(str(notes["title"]).strip(), "", [(None, [summary + " Details in the attached page."])])
     print(json.dumps({"html": a.out, "html_chars": len(html), "charts": html.count("<svg"),
                       "unknown_fields": sorted(set(notes) - set(INVESTIGATION_FIELDS)),
                       **({"data": "could not be read: no chart"} if a.data and data is None else {}),

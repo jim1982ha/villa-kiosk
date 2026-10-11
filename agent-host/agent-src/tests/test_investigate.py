@@ -180,8 +180,16 @@ def test_the_investigation_page_carries_the_account_and_its_charts(tmp_path):
                  "An alert on a run over 10 min.", "Heater Power", "<svg", 'rel="icon"'):
         assert part in page, part
     assert out["charts"] == 1 and out["message"]["title"] == notes["title"]
-    assert out["message"]["text"].startswith(notes["summary"]) and "attached page" in out["message"]["text"]
-    assert len(out["message"]["text"]) < 400                                  # the chat bubble stays short
+    assert out["message"]["text"] == notes["summary"] + " Details in the attached page."   # one short block
+    long = {**notes, "summary": "It ran. " * 120}
+    (tmp_path / "long.json").write_text(json.dumps(long))
+    r = subprocess.run([sys.executable, compose, "investigation", "--notes", str(tmp_path / "long.json"),
+                        "--out", str(tmp_path / "l.html")], capture_output=True, text=True,
+                       env={**os.environ, "PYTHONPATH": PYTHONPATH})
+    assert r.returncode == 1 and "at most 800" in r.stderr                    # one bubble: Telegram's 1,024 under a file
+    from vesta_shared.message_format import TO
+    title, summary = "T" * 90, "S" * 800                                     # the longest title and summary allowed …
+    assert len(f"{title}\n{TO}the Owner, JM, Fabien\n{summary} Details in the attached page.") <= 1024   # … fit
     (tmp_path / "bad.json").write_text(json.dumps({"title": "x"}))
     r = subprocess.run([sys.executable, compose, "investigation", "--notes", str(tmp_path / "bad.json"),
                         "--out", str(tmp_path / "q.html")], capture_output=True, text=True,

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.158 (11 October 2026)
+
+- A command skill's page message is the answer: the AI's text after it is not sent (logged), the fault offer's buttons go
+  under it (Telegram.buttons: editMessageReplyMarkup; Delivery.buttons; outcome's done["messages"]; Toolbox.pages,
+  TurnResult.pages, carried through _delivered's follow-up), the named offer message only when Telegram refuses.
+  A press on it edits the caption.
+- compose.py investigation: the summary is the chat message, at most 800 characters and the title 90 (refused above):
+  title, "To:" and summary fit Telegram's 1,024 under a file — one bubble.
+- A fault created from an investigation keeps its report: each offer gets its own copy of the page
+  (state.ticket_offers.document, migrated), tickets.create(document=) uploads it (Kiosk.add_document:
+  /agent/v1/fm-document, Kiosk 2.496.326) and writes documentIds; a Kiosk without it gets the fault and a note.
+
 ## 0.6.157 (11 October 2026)
 
 - investigate's command is /investigate only (owner). skill.yaml `command:` may also be a list (the first is written,

@@ -1,3 +1,9 @@
+## 0.12.164
+
+What you will see:
+- An /investigate answer is ONE message: the page attached, the title, a summary of up to 800 characters (what happened with its times, the most likely cause and what points to it, what to check first, what would have warned earlier) and "Details in the attached page.", with the "Create this fault for the facility manager" / "Don't create it" buttons under that same message. The long second message the AI wrote after the page is no longer sent.
+- Pressing "Create this fault for the facility manager" keeps the investigation report WITH the fault: in the Cockpit, the fault's card shows "Investigation report", which opens the page on the iPad (with VESTA 2.496.326). A VESTA Kiosk that cannot hold it yet still gets the fault, its note saying the report could not be attached.
+
 ## 0.12.163
 
 What you will see:

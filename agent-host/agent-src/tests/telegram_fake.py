@@ -31,6 +31,7 @@ class FakeTelegram:
     def __init__(self, bot: dict | None = None, audio: bytes = b""):
         self.bot, self.audio = bot or BOT, audio
         self.sent, self.photos, self.documents = [], [], []
+        self.buttoned: list = []         # (chat, message, keyboard): buttons put under a message already sent
         self.toasts, self.edits, self.deleted, self.fetched, self.typing_in = [], [], [], [], []
         self.edit_keyboards = []
         self.refuse: set[str] = set()
@@ -79,6 +80,12 @@ class FakeTelegram:
 
     async def typing(self, chat_id) -> bool:
         self.typing_in.append(chat_id)
+        return True
+
+    async def buttons(self, chat_id, message_id, keyboard):
+        if "buttons" in self.refuse:
+            return False
+        self.buttoned.append((chat_id, message_id, keyboard))
         return True
 
     async def edit(self, chat_id, message_id, text, keyboard=None):
