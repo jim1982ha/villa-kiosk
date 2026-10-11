@@ -191,6 +191,24 @@ def test_each_tool_call_is_recorded_in_short_with_the_run(agent):
                        {"tool": "ha_get_state", "input": '"entity_id": "sensor.x"'}]
 
 
+def test_only_the_text_after_the_last_tool_call_is_the_answer():
+    # owner, 2026-10-11: the person read "Let me first read the investigate skill… Now let me send this to the FM…"
+    # and the report twice — every text of the run was joined
+    from claude_agent_sdk import AssistantMessage, TextBlock, ToolUseBlock
+    c = runner.Collector()
+    for content in ([TextBlock("Let me read the skill."), ToolUseBlock("1", "mcp__vesta__read_skill", {})],
+                    [TextBlock("Now the timeline:"), ToolUseBlock("2", "mcp__vesta__run_skill_script", {})],
+                    [TextBlock("WHAT HAPPENED\nThe pump ran 3 h."), TextBlock("HOW I CHECKED\nIts history.")]):
+        c.feed(AssistantMessage(content=content, model="sonnet"))
+    assert c.answer == "WHAT HAPPENED\nThe pump ran 3 h.\n\nHOW I CHECKED\nIts history."
+    ended_on_a_tool = runner.Collector()
+    ended_on_a_tool.feed(AssistantMessage(content=[TextBlock("The answer."), ToolUseBlock("3", "mcp__vesta__x", {})],
+                                          model="sonnet"))
+    # ended on a tool call (a page sent with send_message): no answer of its own; its last words kept aside, said
+    # only when nothing reached the person (app._converse)
+    assert ended_on_a_tool.answer == "" and ended_on_a_tool.earlier == "The answer."
+
+
 def test_the_page_gets_the_servers_list_from_the_agent(agent):
     listed = tool_access.read_list(agent.s.data_dir)
     assert listed["server"] == "ha-mcp 8.6.0" and len(listed["tools"]) == len(SERVER)

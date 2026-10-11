@@ -149,6 +149,8 @@ class SkillError(ValueError):
 VILLA_CHOICES = "villa.skill.yaml"
 TRASH = ".trash"              # skills deleted or replaced: kept to undo, trimmed by housekeeping (settings.keep.files_days)
 TOOL = re.compile(r"^[a-z][a-z0-9_]{1,60}$")
+SKILL_COMMAND = re.compile(r"^[a-z][a-z0-9_]{1,31}$")     # Telegram's own rule for a bot command
+RESERVED_COMMANDS = {"/ask", "/new", "/whoami", "/start", "/help"}   # the agent's own (intake.OWN_COMMANDS) and Telegram's
 KEPT = ".kept.json"           # starter skills the owner chose to keep as edited, with the release they kept them at
 
 
@@ -213,6 +215,10 @@ class Skill:
     # engine runs before each answer, its result put in front of the AI: what a person must be told is never left to
     # the AI deciding to look.
     before_answer: str | None = None
+    # ⚠️ A SKILL ONLY ITS COMMAND STARTS (owner, 2026-10-11: investigate "only triggered when user mentions
+    # /investigation in the question, and never if not"): the AI never sees it among its skills, its tools refuse it,
+    # and a message carrying "/<command>" tells the AI to use it (intake.gate, Toolbox.gated). Without the "/".
+    command: str | None = None
 
     @property
     def skill_md(self) -> str:
@@ -233,6 +239,12 @@ def parse_skill(name: str, path: str) -> Skill:
     if not isinstance(raw, dict):
         raise SkillError("skill.yaml is not a mapping")
     sk = Skill(name=name, path=path, description=str(raw.get("description") or "").strip())
+    if raw.get("command") is not None:
+        cmd = str(raw["command"]).strip().lstrip("/").lower()
+        if not SKILL_COMMAND.match(cmd) or "/" + cmd in RESERVED_COMMANDS:
+            raise SkillError(f"command: {raw['command']} is not a free Telegram command (lower-case letters, digits, _; "
+                             f"not {', '.join(sorted(RESERVED_COMMANDS))})")
+        sk.command = cmd
     for script, spec in (raw.get("scripts") or {}).items():
         spec = spec or {}
         if not _script_file_ok(path, script):
@@ -491,6 +503,14 @@ class Skills:
         return updated, kept
 
     # ------------------------------------------------------------------ reading
+    def commands(self) -> dict[str, str]:
+        """"/command" → the skill it starts, for the skills switched on (Skill.command); the first name wins a clash."""
+        out: dict[str, str] = {}
+        for name, sk in self.all().items():
+            if sk.command:
+                out.setdefault("/" + sk.command, name)
+        return out
+
     def all(self, include_off: bool = False) -> dict[str, Skill]:
         """The skills the agent uses — without those the villa switched off, unless `include_off` (the page)."""
         switched_off = set(self._off() or ())

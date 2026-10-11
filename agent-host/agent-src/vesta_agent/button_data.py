@@ -11,9 +11,9 @@ APPROVAL = "a"      # Approve / Refuse an action:      a:<approval id>:<y|n>
 CONTINUE = "c"      # Continue an answer at its limit:  c:<continuation id>
 ALERT = "i"         # Done / Need help on an alert: i:<incident id>:<option>
 REPORT = "w"        # a report without the AI:          w:<problem>:<job>
-TICKET = "t"        # create a fault the AI offered:    t:<offer id>
+TICKET = "t"        # a fault the AI offered:           t:<offer id>:<y|n>
 
-PARTS = {APPROVAL: 2, CONTINUE: 1, ALERT: 2, REPORT: 2, TICKET: 1}
+PARTS = {APPROVAL: 2, CONTINUE: 1, ALERT: 2, REPORT: 2, TICKET: 2}
 # who may press is the handler's to judge; these need a person policy.yaml knows before anything else is read
 # (an approval checks it itself, with the press recorded for the owner to see)
 FOR_PEOPLE_ONLY = {CONTINUE, ALERT, REPORT, TICKET}

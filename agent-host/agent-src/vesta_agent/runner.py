@@ -65,6 +65,7 @@ class RunResult:
     error: str | None = None
     # why it failed, in one word (api_errors.classify): what the person is told, never the raw error
     problem: str | None = None
+    earlier: str = ""              # Collector.earlier: the last text before a tool call, for a run that sent nothing
 
 
 class Collector:
@@ -76,6 +77,10 @@ class Collector:
 
     def __init__(self, session_id: str | None = None):
         self.texts: list[str] = []
+        # ⚠️ THE ANSWER IS WHAT IT WRITES AFTER ITS LAST TOOL CALL (owner, 2026-10-11): every text of the run was joined,
+        # so the person read "Let me first read the investigate skill… Now let me send this to the FM…" and the report
+        # twice. A text followed by a tool call is the AI working; a new tool call starts the answer afresh.
+        self.segments: list[list[str]] = [[]]
         self.steps: list[dict] = []          # each tool the AI called: its name, and what it asked, in short
         self.session_id, self.stopped, self.cost, self.err = session_id, False, None, None
         self.usage, self.turns, self.ms = {}, None, None
@@ -83,14 +88,19 @@ class Collector:
 
     def feed(self, msg) -> None:
         if isinstance(msg, AssistantMessage):
-            for b in msg.content:
-                if isinstance(b, ToolUseBlock) and len(self.steps) < MAX_STEPS:
-                    self.steps.append(step(b.name, b.input))
             words = [b.text.strip() for b in msg.content if isinstance(b, TextBlock) and b.text.strip()]
             if getattr(msg, "error", None):
                 self.kind = msg.error
                 self.raw += " ".join(words)
                 return
+            for b in msg.content:
+                if isinstance(b, ToolUseBlock):
+                    if len(self.steps) < MAX_STEPS:
+                        self.steps.append(step(b.name, b.input))
+                    if self.segments[-1]:
+                        self.segments.append([])
+                elif isinstance(b, TextBlock) and b.text.strip():
+                    self.segments[-1].append(b.text.strip())
             self.texts += words
         elif isinstance(msg, ResultMessage):
             self.session_id = msg.session_id or self.session_id
@@ -101,6 +111,16 @@ class Collector:
                 self.err = msg.subtype if msg.subtype != "success" else f"api error {msg.api_error_status}"
                 self.status = getattr(msg, "api_error_status", None) or self.status
                 self.raw += " " + (msg.result or "") + " " + " ".join(getattr(msg, "errors", None) or [])
+
+    @property
+    def answer(self) -> str:
+        """The text written after the last tool call ("" when the run ended on one: its message said it all)."""
+        return "\n\n".join(self.segments[-1]).strip()
+
+    @property
+    def earlier(self) -> str:
+        """The last text written before a tool call: said only when nothing else reached the person (app._converse)."""
+        return "\n\n".join(next((seg for seg in reversed(self.segments[:-1]) if seg), [])).strip()
 
     def fail(self, e: BaseException) -> None:
         """An exception from the SDK or the network. ResultError carries the API's status and prose."""
@@ -269,5 +289,5 @@ async def run(settings, system_prompt: str, prompt: str, kit, terms, state, resu
         # the session could not be resumed (lost, or from an older version): answer in a new one
         # the same run for the Costs tab: what was asked goes with it (it was dropped, so the answered run had none)
         return await run(settings, system_prompt, prompt, kit, terms, state, None, asked, image)
-    return RunResult("\n\n".join(texts).strip(), session_id, stopped, cost, denied, err, problem)
+    return RunResult(c.answer, session_id, stopped, cost, denied, err, problem, c.earlier)
 

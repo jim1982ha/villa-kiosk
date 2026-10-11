@@ -138,3 +138,62 @@ def test_a_date_alone_is_the_whole_day_and_words_are_not_device_ids(tmp_path):
     assert code == 1 and "'house pump' is not one" in said and "Run find first" in said
     code, said = _main(tmp_path, "around", "--start", "2026-10-09T05:00", "--end", "2026-10-09T05:00")
     assert code == 1 and "--end must be after --start" in said           # a time given is taken as given
+
+
+def test_timeline_out_saves_each_device_with_its_chart(tmp_path):
+    # the investigation page's charts (reports' compose.py investigation --data): the highest reading of each slice,
+    # so a short surge is still drawn
+    import investigate
+    res = investigate.timeline(_Client(), ["sensor.heater_power"], T(9, 2), T(9, 15), 3, Z, series=True)
+    (part,) = res["entities"]
+    assert part["name"] == "Heater Power" and part["unit"] == "W" and len(part["series"]) == investigate.CHART_POINTS
+    assert max(v for _, v in part["series"] if v is not None) == 2500.0       # the stop-start surges are kept
+    assert any(p.get("why") for p in part["periods"])                         # the unusual periods, for shading
+
+
+def test_the_investigation_page_carries_the_account_and_its_charts(tmp_path):
+    # owner, 2026-10-11: the investigate skill "uses the report skill to create all this in a HTML report file",
+    # the chat message "much more synthetic and shorter"
+    import json
+    import subprocess
+    import investigate
+    from helpers import PYTHONPATH
+    data = investigate.timeline(_Client(), ["sensor.heater_power"], T(9, 2), T(9, 15), 3, Z, series=True)
+    (tmp_path / "t.json").write_text(json.dumps({"start": T(9, 2).isoformat(), "end": T(9, 15).isoformat(),
+                                                 "zone": "UTC", **data}, default=str))
+    notes = {"title": "The heater on the night of 9 October",
+             "summary": "The heater ran without stopping from 03:09 for 1 h 45 min, then its supply went off at 06:00.",
+             "timeline": [{"time": "03:09", "text": "It starts and does not stop.", "unusual": True}],
+             "causes": [{"cause": "Water escaping downstream", "evidence": "a run far longer than any before",
+                         "confirm": "look for a leak after the pump"}],
+             "cannot_tell": ["No leak sensor in the room."], "warned_earlier": ["An alert on a run over 10 min."],
+             "checked": "Its power, the logbook, the automations."}
+    (tmp_path / "n.json").write_text(json.dumps(notes))
+    compose = os.path.join(STARTER_SKILLS, "reports", "scripts", "compose.py")
+    r = subprocess.run([sys.executable, compose, "investigation", "--notes", str(tmp_path / "n.json"),
+                        "--data", str(tmp_path / "t.json"), "--out", str(tmp_path / "p.html")],
+                       capture_output=True, text=True, env={**os.environ, "PYTHONPATH": PYTHONPATH})
+    assert r.returncode == 0, r.stderr
+    out = json.loads(r.stdout)
+    page = (tmp_path / "p.html").read_text()
+    for part in ("The heater on the night of 9 October", "Timeline", "Water escaping downstream", "No leak sensor",
+                 "An alert on a run over 10 min.", "Heater Power", "<svg", 'rel="icon"'):
+        assert part in page, part
+    assert out["charts"] == 1 and out["message"]["title"] == notes["title"]
+    assert out["message"]["text"].startswith(notes["summary"]) and "attached page" in out["message"]["text"]
+    assert len(out["message"]["text"]) < 400                                  # the chat bubble stays short
+    (tmp_path / "bad.json").write_text(json.dumps({"title": "x"}))
+    r = subprocess.run([sys.executable, compose, "investigation", "--notes", str(tmp_path / "bad.json"),
+                        "--out", str(tmp_path / "q.html")], capture_output=True, text=True,
+                       env={**os.environ, "PYTHONPATH": PYTHONPATH})
+    assert r.returncode == 1 and "a title and a summary" in r.stderr and "Traceback" not in r.stderr
+
+
+def test_a_surge_inside_one_slice_of_the_chart_is_still_drawn():
+    # a 1-second surge between two ordinary readings of the same slice: its highest value, never its last
+    import investigate
+    t0 = T(9, 3)
+    rows = [(t0, "10"), (t0 + timedelta(seconds=1), "3712"), (t0 + timedelta(seconds=2), "10"),
+            (t0 + timedelta(seconds=30), "unavailable")]
+    pts = investigate.chart_series(rows, t0, t0 + timedelta(seconds=4000))   # slices of 10 s
+    assert pts[0][1] == 3712.0 and pts[1][1] == 10.0 and pts[4][1] is None   # offline from then: a gap, not a zero

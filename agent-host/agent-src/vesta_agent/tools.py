@@ -108,8 +108,10 @@ class Toolbox:
                  ticket: Callable[..., Awaitable[str]] | None = None,
                  carry_out: Callable[..., Awaitable[dict]] | None = None,
                  start_job: Callable[..., Awaitable[str]] | None = None,
-                 allowed: set[str] | None = None):
+                 allowed: set[str] | None = None, invoked: str | None = None):
         self.s = settings
+        # the skill the person's "/command" called for in this turn (intake.gate): the only command skill it may use
+        self.invoked = invoked
         self.policy = policy
         self.reader = reader
         self.actions = actions
@@ -128,6 +130,7 @@ class Toolbox:
         # got text. A send_message(camera=) option (0.12.57) was not used by the model either. The reply carries
         # them (app.converse): (base64, mime), in the order looked at, each picture once.
         self.photos: list[tuple[str, str]] = []
+        self.sent = 0                  # messages send_message delivered in this run (an answer may be one: a page)
         # the approval requests this run sent: one shown in the asker's chat is the answer there (app._converse)
         self.approvals: list[str] = []
         # ⚠️ tool_access DECIDES, THIS CLASS BUILDS (architecture review, 2026-10-06): allowed_for's answer — through
@@ -329,6 +332,13 @@ class Toolbox:
             return _ok(scrub(json.dumps(self.status_report(hours), default=str), self._secrets()))
         return handler
 
+    def gated(self, skill) -> str | None:
+        """Why this run may not use `skill`: a skill only its command starts (skills.Skill.command), not called for."""
+        if skill is not None and skill.command and skill.name != self.invoked:
+            return (f"The {skill.name} skill runs only when the person writes /{skill.command} with their question. "
+                    f"Answer without it; you may tell them to write /{skill.command} for that.")
+        return None
+
     def _read_skill(self):
         @tool("read_skill", "Read the full instructions of one of your skills before doing its job.",
               {"type": "object", "properties": {"skill": {"type": "string"}}, "required": ["skill"]})
@@ -337,6 +347,8 @@ class Toolbox:
             skill = self.skills.get(sk)
             if skill is None:
                 return _err(f"No skill {sk}. Your skills: {', '.join(self.skills.all()) or 'none'}.")
+            if self.gated(skill):
+                return _err(self.gated(skill))
             scripts = []
             for name, spec in sorted(skill.scripts.items()):
                 if spec.commands is None:
@@ -374,6 +386,9 @@ class Toolbox:
         async def handler(args: dict) -> dict:
             sk, sc = args.get("skill", ""), args.get("script", "")
             skill = self.skills.get(sk)
+            if self.gated(skill):
+                self.state.log("script_refused", {"skill": sk, "script": sc, "args": args.get("args"), "reason": "command"})
+                return _err(self.gated(skill))
             job = (skill.scripts[sc].job_only.get(str((args.get("args") or [""])[0])) if sc in skill.scripts else None) \
                 if skill and origin and origin.is_conversation else None
             if job:
@@ -508,5 +523,6 @@ class Toolbox:
                 # ⚠️ NEVER "Sent." FOR WHAT DID NOT ARRIVE (architecture review, 2026-10-06): the AI then told the
                 # person "the report is in your chat"
                 return _err("Telegram did not take this message: nothing was sent. Say so plainly; do not retry in a loop.")
+            self.sent += 1
             return _ok("Sent.")
         return handler

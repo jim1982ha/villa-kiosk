@@ -100,6 +100,7 @@ KV_FAMILIES: dict[str, str] = {
     "chatjob:": CURRENT,            # a job asked for in a chat, in progress: one left at start was cut (chat_jobs.py)
     "siren:": CURRENT,              # when the siren must stop
     "listening_since": CURRENT,     # when the agent's record started (agent_records.listening_since)
+    "invoked:": CURRENT,            # the skill a chat's last turn was called for by its command (a Continue goes on)
     "unreachable:": CURRENT,        # a chat Telegram refused the last message to (the Overview names it)
 }
 
@@ -506,6 +507,15 @@ class State:
                             (cid, utcnow().isoformat(), int(chat_id), session_id, requested_by))
             self.db.commit()
         return cid
+
+    # ------------------------------------------------------------------ a skill called for by its command
+    def set_invoked(self, chat_id: int, skill: str | None) -> None:
+        """The skill this chat's turn was called for by its "/command" (none: a turn without one)."""
+        self.put(f"invoked:{int(chat_id)}", skill or "")
+
+    def invoked(self, chat_id: int) -> str | None:
+        """The skill the chat's last turn was called for: a Continue goes on with it."""
+        return self.get(f"invoked:{int(chat_id)}") or None
 
     # ------------------------------------------------------------------ a fault offered in a chat
     def new_ticket_offer(self, chat_id: int, title: str, entity_id: str | None, note: str | None) -> str:

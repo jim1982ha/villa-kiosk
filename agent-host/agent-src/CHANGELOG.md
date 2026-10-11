@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.156 (11 October 2026)
+
+- skill.yaml `command:` (skills.Skill.command; Skills.commands): a skill only its "/command" starts — out of the AI's
+  skill list (named apart in the system prompt), refused by read_skill / run_skill_script without it (Toolbox.gated),
+  called for by intake.gate (as Telegram's command or anywhere in the text; it addresses the agent in a group), carried
+  through a Continue (State.invoked). investigate declares `command: investigation`; the concierge points to it.
+- runner.Collector: the answer is the text after the last tool call (Collector.answer); the last text before one
+  (`earlier`) is said only when the run sent nothing (TurnResult.sent).
+- A fault offer: buttons Create / Don't create (button_data.TICKET t:<id>:<y|n>); alone in its own message when the
+  answer was a page.
+- reports: compose.py investigation (templates/investigation.html, time charts `timechart`), the page head shared
+  (templates/page_head.html); investigate.py timeline --out saves each device's chart series.
+
 ## 0.6.155 (11 October 2026)
 
 - McpClient.history reads by time slices (6 h, halved when a slice holds more than a page, doubled when quiet, at most

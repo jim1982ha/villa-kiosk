@@ -5,6 +5,8 @@
   compose.py owner-weekly  --pack pack.json --store S --energy week.json          -> 3 lines (chat)
   compose.py fm-weekly     --facts facts.json [--notes notes.json] --out page.html
   compose.py owner-monthly --facts facts.json [--notes notes.json] --out page.html
+  compose.py investigation --notes investigation.json [--data timeline.json] --out investigation.html
+             (the investigate skill's account as a page: its notes, and the charts of investigate.py timeline --out)
 
 A page is built from facts.py's FIGURES and the AI's notes.json (the sentences reports.yaml asks
 for, saved with the save_file tool), laid out by templates/report.html (one part per section, in
@@ -449,6 +451,105 @@ def page(facts: dict, notes: dict, limit: str | None = None, without_ai: str | N
         chart_pairs=lambda r: Markup(pairs(r)), without_ai=without_ai)
 
 
+def timechart(series: list, unit: str, zone: ZoneInfo, marks: list[tuple[str, str]] = ()) -> str:
+    """A device's readings over the period, by TIME (investigate.py timeline --out: [time, value], None = no number):
+    the Y axis and its grid as every chart here, the unusual periods (`marks`: [start, end]) shaded, a value on
+    hover or tap. A gap where the device gave no number."""
+    pts = []
+    for t, v in series:
+        try:
+            pts.append((datetime.fromisoformat(t), None if v is None else float(v)))
+        except (TypeError, ValueError):
+            continue
+    vals = [v for _, v in pts if v is not None]
+    if len(vals) < 2:
+        return '<p class="note">Not enough readings to draw.</p>'
+    t0, t1 = pts[0][0], pts[-1][0]
+    span = (t1 - t0).total_seconds() or 1.0
+    lo, hi, ticks = _ticks(min(0.0, min(vals)), max(vals) * 1.1 or 1)
+    y = _scale(lo, hi, PAD_T, H - PAD_B)
+    x = lambda t: PAD_L + (t - t0).total_seconds() / span * (W - PAD_L - PAD_R)
+    long = span > 86400
+    lab = lambda t: t.astimezone(zone).strftime("%d/%m %H:%M" if long else "%H:%M")
+    out = [f'<svg viewBox="0 0 {W} {H}" role="img" aria-label="{_esc(unit)} over the period">',
+           *_axis(ticks, y, PAD_L, W - PAD_R)]
+    for a_, b_ in marks:
+        try:
+            ma, mb = max(datetime.fromisoformat(a_), t0), min(datetime.fromisoformat(b_), t1)
+        except (TypeError, ValueError):
+            continue
+        if mb > ma:
+            out.append(f'<rect x="{x(ma):.1f}" y="{PAD_T}" width="{max(x(mb) - x(ma), 1):.1f}" height="{H - PAD_B - PAD_T}" '
+                       f'fill="var(--crit)" opacity=".10"/>')
+    path, pen = [], False
+    for t, v in pts:
+        if v is None:
+            pen = False
+            continue
+        path.append(f"{'L' if pen else 'M'}{x(t):.1f},{y(v):.1f}")
+        pen = True
+    out.append(f'<path d="{" ".join(path)}" fill="none" stroke="var(--acc)" stroke-width="1.5"/>')
+    for k in range(5):                               # five times under the axis
+        t = t0 + (t1 - t0) * k / 4
+        anchor = "start" if k == 0 else "end" if k == 4 else "middle"
+        out.append(f'<text x="{x(t):.1f}" y="{H - 6}" font-size="10" text-anchor="{anchor}" fill="var(--ink2)">{lab(t)}</text>')
+    u = f" {unit}" if unit else ""
+    every = max(1, len(pts) // 100)
+    for i in range(0, len(pts) - 1, every):
+        (t, v), (tn, _) = pts[i], pts[min(i + every, len(pts) - 1)]
+        if v is not None:
+            out.append(_tip(x(t), y(v), x(t), x(tn), PAD_T, H - PAD_B, f"{lab(t)} · {_nice(v)}{u}"))
+    out.append("</svg>")
+    return "".join(out)
+
+
+def _lasting(seconds) -> str:
+    s = int(round(float(seconds)))
+    return f"{s} s" if s < 90 else f"{s // 60} min" if s < 5400 else f"{s // 3600} h {s % 3600 // 60} min"
+
+
+def normal_words(ref: dict, unit: str) -> str:
+    """investigate.py's normal of a device, in a line: how often and how long it runs, at what level."""
+    if not ref:
+        return ""
+    u = f" {unit}" if unit else ""
+    bits = [f"{ref['runs_per_day']:g} runs a day" if isinstance(ref.get("runs_per_day"), (int, float)) else ""]
+    if "run_median_s" in ref:
+        bits.append(f"usually {_lasting(ref['run_median_s'])}")
+    if "run_longest_s" in ref:
+        bits.append(f"longest {_lasting(ref['run_longest_s'])}")
+    if "level_median" in ref:
+        bits.append(f"at about {_nice(float(ref['level_median']))}{u}")
+    if "rest_median" in ref:
+        bits.append(f"at rest {_nice(float(ref['rest_median']))}{u}")
+    return ", ".join(b for b in bits if b) + "."
+
+
+INVESTIGATION_FIELDS = ("title", "summary", "timeline", "causes", "cannot_tell", "warned_earlier", "checked")
+
+
+def investigation(notes: dict, data: dict | None) -> str:
+    """The investigate skill's account as a page: its notes (INVESTIGATION_FIELDS) and, from investigate.py timeline
+    --out, a chart per device that gave numbers, its unusual periods shaded."""
+    data = data or {}
+    zone = ZoneInfo(data.get("zone") or "UTC")
+    charts = []
+    for e in data.get("entities") or []:
+        if e.get("series"):
+            marks = [(p["start"], p["end"]) for p in e.get("periods") or [] if p.get("why")]
+            charts.append({"name": e.get("name") or e.get("entity_id"), "svg": Markup(timechart(e["series"], e.get("unit") or "", zone, marks)),
+                           "normal": normal_words(e.get("normal") or {}, e.get("unit") or "")})
+    period = ""
+    try:
+        a, b = (datetime.fromisoformat(data[k]).astimezone(zone) for k in ("start", "end"))
+        period = f"{day_time_label(a)} to {day_time_label(b)}"
+    except (KeyError, TypeError, ValueError):
+        pass
+    return TPL.get_template("investigation.html").render(
+        title=notes.get("title") or "Investigation", n=notes, charts=charts, period=period,
+        generated=day_time_label(datetime.now(zone)))
+
+
 def without_ai_note(why: str) -> str:
     """What a message made without the AI says (the job's without_ai steps): why, and what is missing."""
     return (f"(Made without the AI: {why.strip()} Every figure is complete; VESTA's readings and "
@@ -457,14 +558,16 @@ def without_ai_note(why: str) -> str:
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["fm-daily", "fm-weekly", "owner-weekly", "owner-monthly"])
+    ap.add_argument("cmd", choices=["fm-daily", "fm-weekly", "owner-weekly", "owner-monthly", "investigation"])
     script.arguments(ap, pack=True)               # --pack --store --zone --fixture-dir --now
     ap.add_argument("--energy"); ap.add_argument("--as-of")
-    ap.add_argument("--facts"); ap.add_argument("--notes"); ap.add_argument("--out")
+    ap.add_argument("--facts"); ap.add_argument("--notes"); ap.add_argument("--out"); ap.add_argument("--data")
     ap.add_argument("--finish", choices=["here", "owner", "fm"], help="the job's on_limit step: send the page")
     ap.add_argument("--since"); ap.add_argument("--limit")
     ap.add_argument("--no-ai", metavar="WHY", help="the job's without_ai step: the AI could not run (WHY, in words)")
     a = ap.parse_args(argv)
+    if a.cmd == "investigation":
+        return _investigation(a)
     # ⚠️ THREE WAYS, NAMED ONCE (architecture review 5, 2026-10-07): for the AI (no --finish); the job's on_limit step
     # (--finish --since --limit: what is done, sent); its without_ai step (--finish --no-ai). They were told apart by
     # five repeated flag tests, and a combination nobody uses (--finish without --out) silently sent nothing.
@@ -546,6 +649,38 @@ def main(argv=None):
         # into whole messages by the agent (posting.py), never here
         print(json.dumps({"send": [send(a.finish, doc + "\n\n" + without_ai_note(a.no_ai))]}, indent=1)); return 0
     print(json.dumps({"message": for_the_ai(doc)}, indent=1)); return 0
+
+
+def _investigation(a) -> int:
+    """compose.py investigation --notes N [--data D] --out page.html: the page, and the short message that carries it."""
+    if not (a.notes and a.out):
+        print("investigation needs --notes (the account, saved with save_file) and --out (the page).", file=sys.stderr)
+        return 1
+    try:
+        notes = json.load(open(a.notes, encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        print(f"investigation: {a.notes} could not be read ({type(e).__name__}).", file=sys.stderr); return 1
+    if not isinstance(notes, dict) or not str(notes.get("title") or "").strip() or not str(notes.get("summary") or "").strip():
+        print(f"investigation: the notes need at least a title and a summary (the fields: {', '.join(INVESTIGATION_FIELDS)}).",
+              file=sys.stderr)
+        return 1
+    data = None
+    if a.data:
+        try:
+            data = json.load(open(a.data, encoding="utf-8"))
+        except (OSError, ValueError):
+            data = None                              # the page without its charts, said in its result
+    html = investigation(notes, data)
+    with open(a.out, "w", encoding="utf-8") as f:
+        f.write(html)
+    # the chat message: the essence only — the page is the account (owner, 2026-10-11: "much more synthetic and shorter")
+    doc = document(str(notes["title"]).strip(), "", [(None, [str(notes["summary"]).strip(),
+                                                             "The full account, with its timeline and charts, is in the attached page."])])
+    print(json.dumps({"html": a.out, "html_chars": len(html), "charts": html.count("<svg"),
+                      "unknown_fields": sorted(set(notes) - set(INVESTIGATION_FIELDS)),
+                      **({"data": "could not be read: no chart"} if a.data and data is None else {}),
+                      "message": for_the_ai(doc)}, indent=1))
+    return 0
 
 
 if __name__ == "__main__":

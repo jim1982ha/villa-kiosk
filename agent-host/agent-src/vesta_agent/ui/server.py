@@ -466,7 +466,8 @@ class UI:
         acts += [row(self.WHEN.get(ev, ev), script=cmd) for ev, cmd in sk.on_event.items()]
         if sk.on_reply:
             acts.append(row("an answer to one of its alerts", script=sk.on_reply))
-        acts.append({**row("in a chat"), "note": "when a person asks about it"})
+        acts.append({**row("in a chat"), "note": f"only when a person writes /{sk.command}" if sk.command
+                     else "when a person asks about it"})
         scripts = [spec.view() for _, spec in sorted(sk.scripts.items())]      # skills.Script: one reading
         return web.json_response({
             "name": name, "ok": h["ok"], "off": name in pol.skills_off, "description": sk.description,

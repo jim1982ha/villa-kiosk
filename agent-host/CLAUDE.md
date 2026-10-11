@@ -108,6 +108,8 @@ Decisions of 2026-09-30 (owner):
   villa's instructions.md only where it still stands word for word (`config.INSTRUCTION_REWRITES`).
   0.12.160 (owner, 2026-10-11): in a CONVERSATION create_ticket only offers a fault (`state.ticket_offers`, button
   `button_data.TICKET`, `app._press_ticket`); jobs and alert hooks create at once. Never let the AI create one unasked.
+  0.12.162: skill.yaml `command:` makes a skill run ONLY on its "/command" (intake.gate, Toolbox.gated) — investigate
+  (/investigation). A chat answer is the text after the AI's LAST tool call (runner.Collector.answer).
 - ⚠️ SKILLS BEFORE CODE (owner, 2026-10-01, mandatory): whatever a skill can
   define (report sections, thresholds, wording, routes, which scripts the model
   may run, which rules are VESTA alerts) lives in the skill, never in

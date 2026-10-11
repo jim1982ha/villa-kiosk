@@ -1,14 +1,13 @@
 ---
 name: investigate
-description: Find out what happened and why, from Home Assistant's records, and answer in the chat with the full account — timeline, evidence, causes ranked by likelihood, what cannot be known, and what would have warned earlier.
+description: Find out what happened and why, from Home Assistant's records — answered with a short message and the whole account (timeline, charts, causes ranked by likelihood, what cannot be known, what would have warned earlier) as an HTML page.
 ---
 
 # investigate
 
-Use this skill when a person asks what happened, why, since when, for how long, what caused something, what turned
-something on or off, or asks you to check the logs or the history — about any device, room or event, now or in the
-past (a flood, a power cut, a pump or a heater that ran too long, a door, an alarm, a strange bill, a device that
-stopped). It is not for "is everything OK now?" (villa-concierge) nor for a report (reports).
+You are here because the person wrote /investigation with their question: find out what happened, why, since when,
+for how long, what caused it or what turned it on or off — about any device, room or event, now or in the past (a flood,
+a power cut, a pump or a heater that ran too long, a door, an alarm, a strange bill, a device that stopped).
 
 The person wants the TRUE and COMPLETE story, not a quick reply. Take the time to read; then answer once, completely.
 
@@ -66,38 +65,41 @@ The person wants the TRUE and COMPLETE story, not a quick reply. Take the time t
    damage (a missing sensor, an alert on how long something runs, a rule that only watches the opposite case, a switch
    that does not actually control the device).
 
-## The answer — in the chat, complete
+## The answer — a short message, and the whole account as a page
 
-Write it as one complete account, the first thing the person reads. It may be long: the agent sends it in as many
-messages as needed. Plain text (Telegram shows no Markdown: no **, no #, no tables). Use these parts, each headed by its
-name on its own line:
+The person reads a SHORT message in the chat and opens the page for the rest (owner, 2026-10-11: "the response in the
+chat bubble shall be much more synthetic and shorter"). The page is made by the reports skill, so it looks like every
+report the agent sends.
 
-    WHAT HAPPENED
-    One to three sentences: the essence, with the key times and durations.
+8. **Save the account** with save_file, as `investigation.json` — plain sentences, no Markdown:
 
-    TIMELINE (villa time)
-    - 02:40 The water heater starts and does not stop (normally it runs about 20 min at a time).
-    - 03:15 It draws twice its normal power (about 4,000 W against 2,000 W).
-    - … one line per moment that matters, before, during and after, in order.
+       {"title": "Water heater on the night of 9 October",
+        "summary": "3 to 5 sentences: what happened with its key times and durations, the most likely cause, and what to
+                    check on site first. This is the chat message: it must stand on its own.",
+        "timeline": [{"time": "09/10 02:40", "text": "The water heater starts and does not stop (normally about
+                      20 min at a time).", "unusual": true}, … one per moment that matters, before, during, after],
+        "causes": [{"cause": "…", "evidence": "what in the records points to it", "confirm": "how to confirm on site"},
+                   … most likely first],
+        "cannot_tell": ["what no sensor saw, gaps in the records, what only a person on site can check", …],
+        "warned_earlier": ["which alert, sensor or change — and how much earlier it would have warned", …],
+        "checked": "what you read: devices, the period, the logbook, the automations"}
 
-    WHAT IT MOST LIKELY MEANS
-    The causes, most likely first, each with the evidence for it and how to confirm it on site.
+   (the example is invented: write the devices and times of THIS investigation). For the charts, your last timeline
+   run must be the one of the whole period with `--out timeline.json`, all the devices that matter in it.
 
-    WHAT HOME ASSISTANT CANNOT TELL
-    What no sensor saw, gaps in the records, what only a person on site can check.
+9. **Make the page:** `run_skill_script reports compose.py investigation --notes investigation.json --data timeline.json
+   --out investigation.html`. It prints a `message` {title, text}.
 
-    WHAT WOULD HAVE WARNED EARLIER
-    Concrete: which alert, which sensor, which change — and how much earlier it would have warned.
+10. **Send it:** send_message(to="here", title= the message's title, text= the message's text, attachment=
+    "investigation.html"). That message and its page ARE the answer: after it, write nothing.
 
-    HOW I CHECKED
-    One line: what you read (devices, the period, logbook, automations), so the person can trust it or ask for more.
+If the page cannot be made (a script failed), say so in one line and write the account in the chat instead, in the
+same parts, plain text.
 
-Rules for the answer:
+Rules for the account:
 - Every number and time comes from a script or a tool. Give units (W, kWh, °C, min). Times as "03:09", with the date
   when the account spans several days.
 - Devices and rooms by their names, never an entity id or a rule code.
 - Say "I could not read …" for anything that failed, and what that leaves uncertain.
-- Answer first, completely: a fault is never the answer. Only if a person must check or do something on site, you may
-  then call create_ticket once — in a chat it only puts a button under your answer, and the person decides. Never
-  write that a fault or a ticket was created.
-- Do not make an HTML page unless the person asks for one.
+- A fault is never the answer. Only if a person must check or do something on site, you may call create_ticket once —
+  in a chat it is only offered, with a button, and the person decides. Never write that a fault was created.

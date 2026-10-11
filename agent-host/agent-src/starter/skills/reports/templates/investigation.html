@@ -1,0 +1,44 @@
+{% include "page_head.html" %}
+{# An investigation: what happened and why (the investigate skill writes the notes, compose.py investigation lays them
+   out). The same head and style as every report: one look for every page the agent sends. #}
+<body><main class="wrap">
+<header class="head">
+  <div class="eyebrow">Investigation</div>
+  <h1>{{ n.title }}</h1>
+  <p class="meta">{{ period }} · generated {{ generated }}</p>
+</header>
+{% if n.summary %}<section class="card"><h2>What happened</h2><p>{{ n.summary }}</p></section>{% endif %}
+{% for c in charts %}
+<section class="card">
+  <h2>{{ c.name }}</h2>
+  {{ c.svg }}
+  {% if c.normal %}<p class="note">Its normal (the days before): {{ c.normal }}</p>{% endif %}
+</section>
+{% endfor %}
+{% if n.timeline %}
+<section>
+  <h2>Timeline</h2>
+  <div class="card tbl"><table><tr><th style="white-space:nowrap">When</th><th>What</th></tr>
+  {% for t in n.timeline %}<tr><td style="white-space:nowrap">{{ t.time }}</td><td>{% if t.unusual %}<span class="st bad">unusual</span> {% endif %}{{ t.text }}</td></tr>{% endfor %}
+  </table></div>
+</section>
+{% endif %}
+{% if n.causes %}
+<section>
+  <h2>What it most likely means</h2>
+  {# a block per cause, not a three-column table: on a phone the columns cut words in two #}
+  {% for c in n.causes %}<div class="card"><p><b>{{ loop.index }}. {{ c.cause }}</b></p>
+    {% if c.evidence %}<p><span class="note">What points to it:</span> {{ c.evidence }}</p>{% endif %}
+    {% if c.confirm %}<p><span class="note">How to confirm on site:</span> {{ c.confirm }}</p>{% endif %}</div>
+  {% endfor %}
+</section>
+{% endif %}
+{% if n.cannot_tell %}
+<section class="card"><h2>What Home Assistant cannot tell</h2><ul>{% for x in n.cannot_tell %}<li>{{ x }}</li>{% endfor %}</ul></section>
+{% endif %}
+{% if n.warned_earlier %}
+<section class="card"><h2>What would have warned earlier</h2><ul>{% for x in n.warned_earlier %}<li>{{ x }}</li>{% endfor %}</ul></section>
+{% endif %}
+{% if n.checked %}<section class="card"><h2>How it was checked</h2><p class="note">{{ n.checked }}</p></section>{% endif %}
+<p class="foot">Every time and figure comes from Home Assistant's records, read by the VESTA Agent; the causes are its reading of them, to be confirmed on site. Nothing on the villa was changed.</p>
+</main></body></html>

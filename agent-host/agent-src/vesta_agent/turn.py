@@ -54,6 +54,8 @@ class TurnResult:
     photos: list[tuple[str, str]] = field(default_factory=list)   # (base64, mime) the AI looked at, each once
     limit_usd: float = 0.0         # the limit it ran under (its Terms): what "Stopped at the limit" says
     approvals: list[str] = field(default_factory=list)   # the approval requests it sent (Toolbox.approvals)
+    sent: int = 0                  # messages its send_message delivered (Toolbox.sent)
+    earlier: str = ""              # RunResult.earlier
 
     @property
     def failed(self) -> bool:
@@ -86,12 +88,13 @@ class Turns:
         self.tell_owner, self._safe = tell_owner, safe
 
     async def chat(self, person, chat: int, prompt: str, *, resume: str | None = None,
-                   asked: str | None = None, image: tuple[str, str] | None = None) -> TurnResult:
+                   asked: str | None = None, image: tuple[str, str] | None = None,
+                   invoked: str | None = None) -> TurnResult:
         """A person's message (or a Continue) answered in `chat`. The chat keeps one folder: its turns take turns
         (app.lock), and a Continue reads what the turn before it saved."""
         terms = chat_terms(self.s, self.policy(), await self.server_tools(), person, chat)
         return await self._run(terms, self.s.in_folder(f"chats/{chat}"), prompt, person, Origin(chat, CONVERSATION),
-                               resume, asked, [chat], image)
+                               resume, asked, [chat], image, invoked)
 
     async def job(self, name: str, cfg: dict, prompt: str, origin: Origin | None, run_settings,
                   told: list[int]) -> TurnResult:
@@ -101,13 +104,13 @@ class Turns:
         return await self._run(terms, run_settings, prompt, None, origin, None, None, told)
 
     async def _run(self, terms: Terms, run_settings, prompt, person, origin, resume, asked, told: list[int],
-                   image=None) -> TurnResult:
-        tb = self.toolbox(set(terms.tools), run_settings)
+                   image=None, invoked: str | None = None) -> TurnResult:
+        tb = self.toolbox(set(terms.tools), run_settings, invoked)
         kit = tb.for_run(person, origin)
         res = await runner.run(run_settings, self.system_prompt(), prompt, kit, terms, self.state, resume=resume, asked=asked,
                                image=image)
         out = TurnResult(res.text, res.session_id, res.stopped_at_limit, res.cost_usd, res.problem, res.error,
-                         list(tb.photos), terms.limit_usd, list(tb.approvals))
+                         list(tb.photos), terms.limit_usd, list(tb.approvals), getattr(tb, "sent", 0), getattr(res, "earlier", ""))
         if out.problem:
             # no credit, a refused key: every reply and report stops until the owner acts (app._tell_owner decides)
             await self._safe(self.tell_owner(out.problem, told))

@@ -34,6 +34,7 @@ class Intake:
     photo_file: str | None = None        # a photo the AI looks at, its caption the text
     group: bool = False
     why: str = ""                        # a drop worth a record ("group not listed in policy.yaml")
+    invoked: str | None = None           # the skill its "/command" calls for (skills.Skill.command), its token removed
 
 
 def command_name(cmd: str, bot_username: str | None) -> tuple[str, bool]:
@@ -50,7 +51,22 @@ def without_mention(text: str, bot_username: str | None) -> str:
     return (text or "").strip()
 
 
-def gate(event_type: str, m: dict, policy, bot_username: str | None, is_own_message: Callable[[int, object], bool]) -> Intake:
+SKILL_TOKEN = re.compile(r"(?<![\w/])(/[a-z][a-z0-9_]*)(?:@\w+)?(?![\w/])", re.I)
+
+
+def skill_called(text: str, skill_commands: dict[str, str]) -> tuple[str | None, str]:
+    """(the skill a "/command" anywhere in the text calls for, the text without it) — or (None, text)."""
+    for m in SKILL_TOKEN.finditer(text or ""):
+        skill = skill_commands.get(m.group(1).lower())
+        if skill:
+            return skill, " ".join((text[:m.start()] + text[m.end():]).split())
+    return None, text
+
+
+def gate(event_type: str, m: dict, policy, bot_username: str | None, is_own_message: Callable[[int, object], bool],
+         skill_commands: dict[str, str] | None = None) -> Intake:
+    """`skill_commands`: "/command" → the skill only it starts (skills.Skills.commands)."""
+    skill_commands = skill_commands or {}
     try:
         cid = int(m.get("chat_id"))
     except (TypeError, ValueError):
@@ -72,11 +88,15 @@ def gate(event_type: str, m: dict, policy, bot_username: str | None, is_own_mess
         command, args = (m.get("text") or "").strip().split(" ", 1)[0], (m.get("text") or "").strip().split()[1:]
     if command is not None:
         cmd, addressed = command_name(command or "", bot_username)
-        if not addressed or cmd not in OWN_COMMANDS:
+        if not addressed or (cmd not in OWN_COMMANDS and cmd not in skill_commands):
             return Intake("drop", cid, group=group)           # a command for Home Assistant's automations or another bot
         text = " ".join(str(a) for a in (args or [])).strip()
     else:
         cmd, text = "", (m.get("text") or "").strip()
+    # a skill's command, as the message's command or written anywhere in it: that skill, and only then
+    invoked = skill_commands.get(cmd)
+    if invoked is None:
+        invoked, text = skill_called(text, skill_commands)
     # ⚠️ /whoami IS HOW A GROUP GETS INTO PEOPLE (0.12.128): its id is read there before it is listed — by anyone while
     # People is empty, by a listed person once it is not (a stranger in an unlisted group still gets nothing)
     if cmd == "/whoami" and (not group or not policy.destinations or policy.roles_in(cid)
@@ -88,7 +108,7 @@ def gate(event_type: str, m: dict, policy, bot_username: str | None, is_own_mess
     person = policy.member(m.get("user_id"), cid, m.get("from_first"))     # a listed group's member has its role
     if group:
         mention = bool(bot_username) and f"@{bot_username}".lower() in text.lower()
-        if not (cmd or mention or is_own_message(cid, m.get("reply_to_message_id"))):
+        if not (cmd or mention or invoked or is_own_message(cid, m.get("reply_to_message_id"))):
             return Intake("drop", cid, group=True)            # people talking to each other
     if person is None:
         return Intake("unregistered", cid, group=group)
@@ -99,9 +119,11 @@ def gate(event_type: str, m: dict, policy, bot_username: str | None, is_own_mess
         return Intake("converse", cid, person, voice_file=str(m.get("file_id") or ""), group=group)
     if photo:
         return Intake("converse", cid, person, without_mention(text, bot_username),
-                      photo_file=str(m.get("file_id") or ""), group=group)
+                      photo_file=str(m.get("file_id") or ""), group=group, invoked=invoked)
     text = without_mention(text, bot_username)
-    return Intake("converse", cid, person, text, group=group) if text else Intake("drop", cid, group=group)
+    if not text and not invoked:
+        return Intake("drop", cid, group=group)
+    return Intake("converse", cid, person, text, group=group, invoked=invoked)    # "/investigation" alone: app asks what
 
 
 def resume_for(session_id: str | None, last_iso: str | None, rule: str, zone: str, now: datetime | None = None) -> str | None:

@@ -79,6 +79,7 @@ def _pretty(entity_id: str) -> str:
 
 #: the words on the button under an answer that offers a fault (tools._ticket)
 OFFER_BUTTON = "Create this fault for the facility manager"
+NO_OFFER_BUTTON = "Don't create it"
 
 
 @dataclass
@@ -236,13 +237,13 @@ class Vesta:
             return None
         return out
 
-    def toolbox(self, allowed: set[str] | None = None, settings=None) -> Toolbox:
+    def toolbox(self, allowed: set[str] | None = None, settings=None, invoked: str | None = None) -> Toolbox:
         """`allowed`: what the AI may use this time (turn.Terms.tools); None: everything switched on. `settings`: the
         run's own (config.Settings.in_folder: its files' folder); the agent's without one."""
         return Toolbox(settings=settings or self.s, policy=self.policy(), reader=self.reader, actions=self.actions,
                        skills=self.skills, ask=self.approvals.ask, server_tools=self.server_tools, state=self.state,
                        ticket=self.tickets.create if self.kiosk.enabled else None,
-                       carry_out=self.outcome.carry_out, start_job=self.jobs.start, allowed=allowed)
+                       carry_out=self.outcome.carry_out, start_job=self.jobs.start, allowed=allowed, invoked=invoked)
 
     def lock(self, chat_id: int) -> asyncio.Lock:
         return self._locks.setdefault(int(chat_id), asyncio.Lock())
@@ -425,7 +426,8 @@ class Vesta:
     # ------------------------------------------------------------------ messages
     async def handle_message(self, event_type: str, m: dict):
         """A Telegram message, as Home Assistant fired it (fields checked live on 2026-09-30): intake.py decides."""
-        got = intake.gate(event_type, m, self.policy(), self.bot_username, self.state.is_own_message)
+        got = intake.gate(event_type, m, self.policy(), self.bot_username, self.state.is_own_message,
+                          self.skills.commands())
         from_id = m.get("user_id")
         if got.action != "drop":
             # ⚠️ THE START OF THE TIMELINE (owner, 2026-10-09: the log must cover "the moment the message to request a
@@ -462,9 +464,15 @@ class Vesta:
                 image = await self._photo(got.chat, got.photo_file, str(m.get("file_mime_type") or "image/jpeg"))
                 if image is None:
                     return
+            if got.invoked and not text and image is None:
+                cmd = (self.skills.get(got.invoked).command if self.skills.get(got.invoked) else got.invoked)
+                await self.delivery.send(got.chat, f"Write your question after /{cmd}, for example: /{cmd} why did the "
+                                                   "pump run all night on 9 October?")
+                return
             if not text and image is None:
                 return
-            await self.converse(got.chat, got.person, text, voice=got.voice_file is not None, image=image, held=held)
+            await self.converse(got.chat, got.person, text, voice=got.voice_file is not None, image=image, held=held,
+                                invoked=got.invoked)
         finally:
             held()
 
@@ -489,15 +497,22 @@ class Vesta:
 
     def system_prompt(self) -> str:
         pol = self.policy()
-        skills = "; ".join(f"{n} ({sk.description})" if sk.description else n for n, sk in self.skills.all().items())
+        everyone = self.skills.all()
+        skills = "; ".join(f"{n} ({sk.description})" if sk.description else n for n, sk in everyone.items() if not sk.command)
+        # ⚠️ NOT CHOSEN BY THE AI (owner, 2026-10-11): a skill with a command is used only when the person writes it
+        by_command = ", ".join(f"{n} (/{sk.command})" for n, sk in everyone.items() if sk.command)
         return (self.s.instructions() + "\n\n" +
                 "Telegram shows your text exactly as written: plain text only, no Markdown (no ** or #, no tables); "
-                "a list is lines starting with '- '.\n" +
+                "a list is lines starting with '- '.\n"
+                "Only the text you write after your LAST tool call reaches the person: write your whole answer there, "
+                "once. Text written before a tool call is never sent, and never send your answer with send_message too.\n" +
                 "When asked to produce, check or run something, do it again now with your tools: never answer from an "
                 "earlier attempt in this conversation. Skills, data and fixes change between messages.\n" +
                 f"Your skills: {skills or 'none'}. Read a skill with read_skill before doing its job — for each new "
                 "message, the skill whose description matches it, even when this conversation already talked about the "
-                "subject.\n" + pol.summary() + "\n"
+                "subject.\n" +
+                (f"Skills used ONLY when the person writes their command, never otherwise: {by_command}.\n"
+                 if by_command else "") + pol.summary() + "\n"
                 # ⚠️ NO CLOCK HERE (2026-10-09): the time changed these instructions every minute, so a resumed chat
                 # re-sent its whole conversation at full price instead of reading it from the prompt cache (about a
                 # tenth of the price). The date and time ride on each message instead (runner.run).
@@ -505,13 +520,13 @@ class Vesta:
 
     async def converse(self, cid: int, person: Person | None, text: str,
                        resume: str | None = "auto", is_continue: bool = False, voice: bool = False,
-                       image: tuple[str, str] | None = None, held=None):
+                       image: tuple[str, str] | None = None, held=None, invoked: str | None = None):
         """`image`: a photo the person sent (base64, mime), `text` its caption: the AI looks at it. `held`: the chat's
         "typing…" taken when the message arrived (handle_message), carried on until the answer goes."""
         async with self.delivery.typing(cid, held=held) as answered:
-            await self._converse(cid, person, text, resume, is_continue, voice, answered, image)
+            await self._converse(cid, person, text, resume, is_continue, voice, answered, image, invoked)
 
-    async def _converse(self, cid, person, text, resume, is_continue, voice, answered, image=None):
+    async def _converse(self, cid, person, text, resume, is_continue, voice, answered, image=None, invoked=None):
         async with self.lock(cid):
             self.chat_jobs.turn(cid)                         # a job started now belongs to this turn (chat_jobs.py)
             if resume == "auto":
@@ -528,6 +543,15 @@ class Vesta:
                 prompt = (f"{said[0].upper() + said[1:]} from {person.name if person else 'someone'} (role "
                           f"{person.role if person else '?'}; language saved for them: {lang}) in the {self.policy().chat_label(cid)}:\n"
                           f"\"\"\"{text}\"\"\"")
+            # a skill only its command starts (skills.Skill.command): this turn's, or — for a Continue — the turn it goes on
+            if is_continue:
+                invoked = self.state.invoked(cid)
+            else:
+                self.state.set_invoked(cid, invoked)
+                sk = self.skills.get(invoked) if invoked else None
+                if sk is not None:
+                    prompt = (f"{person.name if person else 'The person'} wrote /{sk.command}: this is a request for the "
+                              f"{sk.name} skill. Read it with read_skill and follow it.\n\n{prompt}")
             if not is_continue:
                 checked = await asyncio.to_thread(self.before_answer)
                 if checked:
@@ -535,13 +559,15 @@ class Vesta:
             pol = self.policy()
             # what this person may make the AI use here, the chat's brain and limit, its folder: turn.py decides
             asked = None if is_continue else (f"[photo] {text}".strip() if image else text)
-            res = await self.turns.chat(person, cid, prompt, resume=resume, asked=asked, image=image)
+            res = await self.turns.chat(person, cid, prompt, resume=resume, asked=asked, image=image, invoked=invoked)
             if res.session_id:
                 self.state.set_session(cid, res.session_id)
             log.info("Answered %s in chat %s (%s)%s", person.name if person else "system", cid,
                      f"{res.cost_usd:.3f} USD" if isinstance(res.cost_usd, (int, float)) else "cost unknown",
                      f", error {res.error}" if res.error else "")
             answer = (res.text or "").strip()               # an empty answer sends nothing (a request said it all)
+            if not answer and not res.sent and not res.approvals and res.earlier:
+                answer = res.earlier                        # ended on a tool call with nothing sent: its last words
             if res.problem or res.error:
                 # ⚠️ NEVER THE RAW ERROR (owner, 2026-10-06): the reason in plain words (api_errors); the owner was
                 # told by the turn when no retry can help (no credit, a refused key)
@@ -563,8 +589,13 @@ class Vesta:
                 keyboard = {"inline_keyboard": [[{"text": "Continue", "callback_data": button_data.make(button_data.CONTINUE, cont)}]]}
             # a fault the AI offered in this answer (tools._ticket): its button goes under it; only a press creates it
             offers = self.state.ticket_offers_to_show(cid)
+            if offers and not answer:
+                # the answer was a message of its own (a page sent with send_message): the offer comes on its own, named
+                answer = "A fault for the facility manager, if you want one:\n" + "\n".join(f"- {o['title']}" for o in offers)
             if offers:
-                rows = [[{"text": OFFER_BUTTON, "callback_data": button_data.make(button_data.TICKET, o["id"])}] for o in offers]
+                rows = [[{"text": OFFER_BUTTON, "callback_data": button_data.make(button_data.TICKET, o["id"], "y")},
+                         {"text": NO_OFFER_BUTTON, "callback_data": button_data.make(button_data.TICKET, o["id"], "n")}]
+                        for o in offers]
                 keyboard = {"inline_keyboard": (keyboard or {}).get("inline_keyboard", []) + rows}
             # ⚠️ A REQUEST SHOWN HERE IS THE ANSWER (owner, 2026-10-10: "Approval request sent." under it, twice "redundant"):
             # told not to, the AI still wrote it — and pressed at once, the request was decided before that line came, so
@@ -638,10 +669,16 @@ class Vesta:
         await self.converse(p.chat, p.person, "", resume=cont["session_id"], is_continue=True)
 
     async def _press_ticket(self, p: "Press") -> None:
-        """The fault the AI offered under an answer, created now — once, whoever presses first."""
+        """The fault the AI offered under an answer, created now — or declined ("n") — once, whoever presses first."""
         offer = self.state.claim_ticket_offer(p.parts[0], p.chat)
         if not offer:
-            return await p.toast("Already created.")
+            return await p.toast("Already decided.")
+        if p.parts[1] == "n":
+            await p.toast("No fault created.")
+            if p.mid:
+                await self.delivery.edit(p.chat, p.mid, layout.render(layout.parts(
+                    body=str(p.msg.get("text") or ""), status=f"No fault created: declined by {p.person.name}.")))
+            return
         try:
             await self.tickets.create(offer["title"], offer.get("entity_id"), offer.get("note"))
         except Exception as e:  # noqa: BLE001

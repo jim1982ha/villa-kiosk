@@ -1,6 +1,6 @@
 ---
 name: villa-concierge
-description: Talk to the villa in the chat. Status ("is everything OK", "what is on"), questions about a room or a device, and actions on the villa asked with ha_call_service, approved by a person. Also answers "which room?" for a new device and records accept / later / ignore on proposals. Use on any chat message that is not an incident reply, a report request, or a question about what happened in the past and why (the investigate skill).
+description: Talk to the villa in the chat. Status ("is everything OK", "what is on"), questions about a room or a device, and actions on the villa asked with ha_call_service, approved by a person. Also answers "which room?" for a new device and records accept / later / ignore on proposals. Use on any chat message that is not an incident reply or a report request.
 ---
 
 # villa-concierge
@@ -25,6 +25,12 @@ Answer in the language the message is written in — for a voice message, the
 language spoken. The language saved for the person (shown with the message)
 is only for a message that does not tell ("ok", a number) and for what you
 send on your own. Device names stay as in Home Assistant.
+
+## A question about what happened, and why
+
+"What happened to the pump last night?", "why did the heater stop?": answer briefly from what you can read now, then
+end with this one line, as it is: "For a full analysis with a report page, write /investigation followed by your
+question." The investigation is its own skill, used only when the person writes /investigation: never try to do it here.
 
 ## Which devices a person means
 

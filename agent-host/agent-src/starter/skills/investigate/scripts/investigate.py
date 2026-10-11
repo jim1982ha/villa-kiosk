@@ -10,9 +10,10 @@ Assistant client is read-only) and knows no device of any villa: everything come
         physical device, and the powered devices in the same room (often on the same circuit or in the same cabinet).
 
   investigate.py timeline  --entities sensor.a,binary_sensor.b [--entities sensor.c] --start 2026-10-09T02:00
-                           --end 2026-10-09T15:00 [--baseline-days 3]
+                           --end 2026-10-09T15:00 [--baseline-days 3] [--out timeline.json]
         What each entity did in that period, as periods (running / idle / no power at all / offline) with their
         times, durations and levels — compared with the same entity's normal behaviour over the days before.
+        --out also saves the reading with each device's chart, for the investigation page (reports' compose.py).
 
   investigate.py around    --start 2026-10-09T02:00 --end 2026-10-09T15:00 [--entities sensor.a,...]
         Everything else Home Assistant recorded then: automations that ran, devices that dropped off or came back,
@@ -252,9 +253,35 @@ def threshold(values: list[float]) -> float | None:
     return max(hi * 0.10, 2.0)
 
 
-def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_days: float, zone: ZoneInfo) -> dict:
+CHART_POINTS = 400                        # a chart's points: each the highest reading of its slice (a surge stays seen)
+
+
+def chart_series(rows: list[tuple[datetime, str]], start: datetime, end: datetime) -> list[list]:
+    """The readings as at most CHART_POINTS [time, value] points over [start, end): each slice's HIGHEST reading, the
+    last value carried through a slice with none; None where the device gave no number (offline)."""
+    if not rows or end <= start:
+        return []
+    step = (end - start) / CHART_POINTS
+    out, i, last = [], 0, None
+    while i < len(rows) and rows[i][0] < start:
+        last = number(rows[i][1]); i += 1
+    for k in range(CHART_POINTS):
+        a, b = start + k * step, start + (k + 1) * step
+        vals = [last] if last is not None else []
+        while i < len(rows) and rows[i][0] < b:
+            last = number(rows[i][1]); i += 1
+            vals.append(last)
+        nums = [v for v in vals if v is not None]
+        out.append([a.isoformat(), max(nums) if nums else None])
+    return out
+
+
+def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_days: float, zone: ZoneInfo,
+             series: bool = False) -> dict:
+    """`series`: each numeric device's readings for a chart too (--out: the investigation page, reports' compose.py)."""
     span_days = (end - start).total_seconds() > 86400
     parts = []
+    names = client.states(ids) if series else {}
     for eid in ids:
         rows = rows_of(client, eid, start, end)
         if not rows:
@@ -293,8 +320,13 @@ def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_da
         for p in ps:
             totals[p["kind"]] = totals.get(p["kind"], 0) + p["seconds"]
         lines.append("  in total: " + ", ".join(f"{k} {lasting(v)}" for k, v in sorted(totals.items(), key=lambda x: -x[1])))
-        parts.append({"entity_id": eid, "running_above": on, "normal": ref, "lines": lines,
-                      "periods": [{**p, "start": p["start"].isoformat(), "end": p["end"].isoformat()} for p in shown[:MAX_LINES]]})
+        part = {"entity_id": eid, "running_above": on, "normal": ref, "lines": lines,
+                "periods": [{**p, "start": p["start"].isoformat(), "end": p["end"].isoformat()} for p in shown[:MAX_LINES]]}
+        if series and any(number(v) is not None for _, v in rows):
+            attrs = (names.get(eid) or {}).get("attributes") or {}
+            part.update(name=attrs.get("friendly_name") or eid, unit=attrs.get("unit_of_measurement") or "",
+                        series=chart_series(rows, start, end))
+        parts.append(part)
     return {"lines": [l for p in parts for l in p["lines"]], "entities": parts}
 
 
@@ -460,6 +492,7 @@ def main(argv=None):
     ap.add_argument("--entities", action="append")       # may be given several times: each one is a short text
     ap.add_argument("--start"); ap.add_argument("--end")
     ap.add_argument("--baseline-days", default="3")
+    ap.add_argument("--out", help="timeline: also save the reading, with each device's chart, for the investigation page")
     a = ap.parse_args(argv)
     ctx = script.Context(a)
     zone = ctx.Z                                           # the villa's time zone
@@ -484,7 +517,13 @@ def main(argv=None):
             if a.cmd == "timeline":
                 if not ids:
                     raise SystemExit("timeline needs --entities: ids from find, separated by commas.")
-                res = timeline(ctx.client, ids[:12], start, end, float(a.baseline_days), zone)
+                res = timeline(ctx.client, ids[:12], start, end, float(a.baseline_days), zone, series=bool(a.out))
+                if a.out:
+                    # the whole reading, charts included, for the investigation page; the AI gets the lines only
+                    with open(a.out, "w", encoding="utf-8") as f:
+                        json.dump({"start": start.isoformat(), "end": end.isoformat(), "zone": str(zone), **res}, f,
+                                  ensure_ascii=False, default=str)
+                    res = {"lines": res["lines"], "saved": a.out}
             else:
                 res = around(ctx.client, ctx.store, start, end, ids, zone)
     except SystemExit:

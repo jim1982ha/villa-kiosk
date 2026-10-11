@@ -77,7 +77,7 @@ def jobs(tmp_path, monkeypatch):
     monkeypatch.setattr("vesta_agent.tool_access.allowed_for", lambda *a: set())
     d = Delivery()
     st = State(s.state_path)
-    turns = Turns(s, st, lambda: pol, server_tools=server_tools, toolbox=lambda allowed, settings=None: Toolbox(),
+    turns = Turns(s, st, lambda: pol, server_tools=server_tools, toolbox=lambda allowed, settings=None, invoked=None: Toolbox(),
                   system_prompt=lambda: "sys", tell_owner=tell_owner, safe=safe)
     # the real Outcome: a job's notice goes out the one way every message does (outcome.carry_out)
     out = Outcome(policy=lambda: pol, state=st, send=d.send, actions=None, reader=None, tickets=None, buttons=None,
