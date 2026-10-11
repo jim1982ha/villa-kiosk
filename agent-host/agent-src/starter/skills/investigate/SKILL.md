@@ -69,6 +69,14 @@ The person wants the TRUE and COMPLETE story, not a quick reply. Take the time t
 6. **Fill the gaps with the raw tools only where needed:** ha_get_history for an entity the script did not read,
    ha_get_logs (logbook) for a minute that matters, ha_get_state for how things are now.
 
+   **Search the web (web_search) when the records alone cannot explain what they show** — never instead of them:
+   - the device's manual, or the known failure modes of its make and model (its name and model are in its Home
+     Assistant device: ha_get_device) — how its own control behaves (a pressure switch, a thermostat, a protection);
+   - what an error code, or a pattern of readings, means for that kind of device;
+   - an outside event at that time and place (a storm, a grid outage) when several devices stopped together.
+   Every time and number still comes from Home Assistant: the web only explains them. Say where it came from ("the
+   maker's manual says…"). Do not search for what the records already answer, nor for anything about the people.
+
 7. **Reason, before writing.** For each unusual thing, ask what physically explains it. Keep several causes when the
    evidence allows several, rank them, and say for each what points to it and what would confirm it. Separate clearly:
    what Home Assistant SHOWS (measured, with times) · what it most likely MEANS · what it CANNOT tell (no sensor there,

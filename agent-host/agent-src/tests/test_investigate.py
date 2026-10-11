@@ -295,3 +295,15 @@ def test_each_automation_says_what_it_is_able_to_do():
     assert acts.startswith("CAN change things: script.something, switch.turn_on") and "read it" in acts
     made = investigate.automation_can(C(), "automation.made", T(9, 2), T(9, 15))
     assert "not proven either way" in made and "did: records a value only" in made
+
+
+def test_the_investigation_lists_web_search_among_its_tools():
+    # owner, 2026-10-11: "my expectation then would be to see the web_search tool in this list" (Skills › Skill tools)
+    from vesta_agent import tool_access
+    from vesta_agent.policy import Policy
+    from vesta_agent.skills import Skills
+    sk = Skills(os.path.join(STARTER_SKILLS)).get("investigate")
+    cards = {c["tool"]: c for c in tool_access.needs(Policy({}), None, sk)}
+    assert cards["web_search"]["label"] == "Web search"
+    text = open(os.path.join(STARTER_SKILLS, "investigate", "SKILL.md"), encoding="utf-8").read()
+    assert "web_search" in text and "never instead of them" in text

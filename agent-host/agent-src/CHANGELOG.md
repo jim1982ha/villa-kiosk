@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.161 (11 October 2026)
+
+- investigate: web_search in skill.yaml tools (the page's Skill tools card; read_skill says when it is switched off);
+  SKILL.md step 6 says when to search the web and that it only explains the records.
+
 ## 0.6.160 (11 October 2026)
 
 - investigate.py timeline: an on/off control (CONTROL_DOMAINS) that stayed in OFF_STATES the whole period and its

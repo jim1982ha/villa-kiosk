@@ -20,7 +20,8 @@ deliver:
 # The Home Assistant tools an investigation reads with (VESTA Agent page → Rules › AI tools).
 # They limit nothing: who asks decides. The AI is told if one is switched off.
 tools: [ha_search, ha_get_entity, ha_get_device, ha_get_state, ha_get_history, ha_get_logs,
-        ha_get_automation_traces, ha_config_get_automation, ha_list_floors_areas, save_file, send_message]
+        ha_get_automation_traces, ha_config_get_automation, ha_list_floors_areas, save_file, send_message,
+        web_search]
 
 scripts:
   investigate.py:
