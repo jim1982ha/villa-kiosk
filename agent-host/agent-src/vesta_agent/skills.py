@@ -151,6 +151,7 @@ VILLA_CHOICES = "villa.skill.yaml"
 TRASH = ".trash"              # skills deleted or replaced: kept to undo, trimmed by housekeeping (settings.keep.files_days)
 TOOL = re.compile(r"^[a-z][a-z0-9_]{1,60}$")
 SKILL_COMMAND = re.compile(r"^[a-z][a-z0-9_]{1,31}$")     # Telegram's own rule for a bot command
+BRAINS = ("economy", "auto", "performance")                # policy.PROFILES' names: what a skill's `brain` may say
 RESERVED_COMMANDS = OWN_COMMANDS | {"/start", "/help"}   # the agent's own (one list: intake.py) and Telegram's
 KEPT = ".kept.json"           # starter skills the owner chose to keep as edited, with the release they kept them at
 
@@ -231,16 +232,21 @@ class Skill:
     # said_on), "off": else (said_off)}.
     # The engine only matches the words (Skill.modes_for); what each mode means is the skill's own text.
     modes: dict[str, dict] = field(default_factory=dict)
+    # ⚠️ ITS OWN BRAIN AND LIMIT (owner, 2026-10-11): an investigation run on the villa's everyday brain (Economy, haiku)
+    # skipped steps and misread its own figures. A command skill may name the brain its answers use (economy / auto /
+    # performance) and its limit per answer; everything else keeps the Rules page's.
+    brain: str | None = None
+    limit_usd: float | None = None
+
+    def active_modes(self, text: str) -> list[str]:
+        """The modes one of whose words the request holds (whole words, any case)."""
+        return [name for name, m in self.modes.items()
+                if any(re.search(rf"(?<!\w){re.escape(w)}(?!\w)", text or "", re.I) for w in m["words"])]
 
     def modes_for(self, text: str) -> list[str]:
         """What the AI is told of each mode for this request: its `on` text when one of its words is in it, else `off`."""
-        out = []
-        for name, m in self.modes.items():
-            hit = any(re.search(rf"(?<!\w){re.escape(w)}(?!\w)", text or "", re.I) for w in m["words"])
-            said = m["on"] if hit else m["off"]
-            if said:
-                out.append(said)
-        return out
+        on = set(self.active_modes(text))
+        return [said for name, m in self.modes.items() if (said := (m["on"] if name in on else m["off"]))]
 
     @property
     def skill_md(self) -> str:
@@ -273,6 +279,17 @@ def parse_skill(name: str, path: str) -> Skill:
             raise SkillError("command: an empty list")
         sk.command, sk.also = cmds[0], cmds[1:]
         sk.usage = str(raw.get("usage") or "").strip()[:200]
+        if raw.get("brain") is not None:
+            if str(raw["brain"]) not in BRAINS:
+                raise SkillError(f"brain: {raw['brain']} is not one of {', '.join(BRAINS)}")
+            sk.brain = str(raw["brain"])
+        if raw.get("limit_usd") is not None:
+            try:
+                sk.limit_usd = float(raw["limit_usd"])
+            except (TypeError, ValueError):
+                sk.limit_usd = -1.0
+            if not 0.05 <= sk.limit_usd <= 20:
+                raise SkillError("limit_usd: a number of US$ per answer, from 0.05 to 20")
     for name, m in (raw.get("modes") or {}).items():
         if not sk.command:
             raise SkillError("modes: only a skill with a command has them (they read the request that called it)")
@@ -783,6 +800,8 @@ def script_env(settings) -> dict:
         "VESTA_STATE": settings.state_path,
         "VILLA_TZ": settings.timezone,
         "TZ": settings.timezone,
+        "VESTA_MODES": getattr(settings, "request_modes", "") or "",
+        "VESTA_WEB_SEARCHES": getattr(settings, "web_searches", "") or "",
     }
 
 

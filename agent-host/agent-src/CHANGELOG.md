@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.6.163 (11 October 2026)
+
+- Facts first: reports/scripts/investigation_facts.py lays out, from investigate.py's readings (timeline --out, and
+  now around --out: offline/back, automations with `can` nothing/changes/unproven, `changes`, `does`, notifications),
+  the page's "What the records show", "Ruled out by the records", timeline, "What would have warned earlier" and the
+  message's key line (KEY_MAX; SUMMARY_MAX now 554). compose.py investigation --around; its result lists the facts.
+- investigate.py: each flagged period carries `alert` {rule, at} — the earliest an alert on the limit that flagged it
+  would fire, only within the period; a level is judged over level_change_gap_s, a zero over offline_min_s;
+  `coincide_s` (600) joins events to unusual moments; automation_able (automation_can kept as its text).
+- investigate.py timeline --out: `normal_series` (same_hours_before: the baseline's same hours, per day, period ≤ 1
+  day) and, for an entity without numbers, `states` (state_series: on/off/offline/other by the timeline's own
+  vocabularies); worth_a_line groups stop-start BEFORE hiding ordinary periods (the burst vanished with > 40 periods).
+  compose.py: BANDS / band_of (band word + colour, the legend), timechart(normals), strip(lanes); investigation_facts
+  `lanes`; web_pages() is the one "which sources are links"; "Sources (web)" always rendered.
+- script_run logs each AI script's duration; app logs each answer's duration ("Answered … (cost, N s)").
+- The run's web searches: runner.make_guard records each WebSearch query in tools.Kit.searched (Toolbox.searched);
+  run_skill_script passes them as Settings.web_searches → VESTA_WEB_SEARCHES. compose.py investigation refuses a page
+  without `sources` after any search; the page lists the searches. tests/ai_fake: call["web_search"] through the real
+  hook.
+
+- skill.yaml `brain` (economy / auto / performance: skills.BRAINS = policy.PROFILES) and `limit_usd` (0.05–20): a
+  command skill's answers, its page follow-up included, use them (turn.chat_terms). investigate: auto, 3 US$.
+- investigate.threshold: "high" is the top `high_quantile` (0.999, settings.yaml) of the readings, not the 95th
+  percentile — a device idle 99 % of the time had its runs never counted.
+- The request's active modes reach the skill's scripts (Settings.request_modes → VESTA_MODES), through the page's
+  follow-up turn and a Continue (continuations.modes, migrated). Skill.active_modes.
+- reports compose.py investigation: `sources` [{title, url}] rendered as "Sources (web)"; with web_research on, refused
+  without them; a cause with a source refused without its verdict.
+
 ## 0.6.162 (11 October 2026)
 
 - skill.yaml `modes:` (a command skill): name → words / said_on / said_off; Skill.modes_for(text) matches whole words

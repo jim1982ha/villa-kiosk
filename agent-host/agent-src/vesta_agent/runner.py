@@ -164,7 +164,8 @@ def step(name: str, args) -> dict:
     return {"tool": key, "input": said[:160]}
 
 
-def make_guard(allowed: set[str], state, who: str):
+def make_guard(allowed: set[str], state, who: str, searched: list | None = None):
+    """`searched`: the run's web searches, each query added as it is made (tools.Kit.searched)."""
     denied: list[str] = []
 
     async def can_use_tool(tool_name, tool_input, context):
@@ -177,6 +178,8 @@ def make_guard(allowed: set[str], state, who: str):
     async def pre_tool_use(input_data, tool_use_id, context):
         name = (input_data or {}).get("tool_name", "")
         if name in allowed:
+            if name == WEB_SEARCH and searched is not None:
+                searched.append(str(((input_data or {}).get("tool_input") or {}).get("query") or "")[:160])
             return {}
         if name not in denied:
             denied.append(name)
@@ -192,7 +195,7 @@ def build_options(settings, system_prompt: str, kit, terms, state,
     """The SDK's options for one run: `kit` the tools it was built (tools.Kit), `terms` what it may do (turn.Terms) —
     the brain and the limit are the terms', never chosen here (architecture review 14)."""
     server, allowed = kit.server, kit.names
-    can_use_tool, pre_hook, denied = make_guard(allowed, state, terms.who)
+    can_use_tool, pre_hook, denied = make_guard(allowed, state, terms.who, getattr(kit, "searched", None))
     # WebSearch exists for the CLI only when this run allows it; every other built-in stays off and denied.
     web = WEB_SEARCH in allowed
     opts = ClaudeAgentOptions(

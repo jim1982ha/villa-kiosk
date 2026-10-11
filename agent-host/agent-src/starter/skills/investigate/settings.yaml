@@ -1,19 +1,21 @@
 # What the investigation counts as unusual, against each device's own normal (the days before). A villa's own
 # villa.settings.yaml may change any of them (kept by updates). Moved out of the script (architecture review 32).
 behaviour:
-  running_fraction: 0.10      # "running" above this share of its usual high readings (its 95th percentile)…
+  running_fraction: 0.10      # "running" above this share of its high readings (its top `high_quantile`)…
+  high_quantile: 0.999        # its high readings: the top 0.1 % — a device that runs a few seconds an hour still has them
   running_min: 2.0            # …and never below this reading
   flat_spread: 0.5            # a device whose readings spread less than this share of its high is read as levels, not runs
   longer_ratio: 2             # a run longer than this many times its longest normal one is flagged…
   longer_extra_s: 300         # …and longer than it by at least this
   level_high_ratio: 1.5       # a run drawing this many times its usual level is flagged
   level_low_ratio: 0.6        # …and one drawing less than this share of it
-  offline_min_s: 60           # a device silent (or without a value) this long is flagged
+  offline_min_s: 60           # a device silent, without a value or reading exactly 0 (supply off) this long is flagged
   cycle_short_s: 180          # periods shorter than this, in a row, are stop-start cycling…
   cycle_min_runs: 3           # …when at least this many of them are runs…
   cycle_min_periods: 6        # …among at least this many periods
   ordinary_max_s: 3600        # an unflagged run or rest shorter than this is ordinary…
   ordinary_hide_over: 40      # …and not listed when a device has more periods than this
   level_change_ratio: 0.33    # a reading this share away from its level is a change of level…
-  level_change_gap_s: 120     # …once it has lasted this long
+  level_change_gap_s: 120     # …once it has lasted this long (and a run's level is judged only over this long)
   noise_per_hour: 30          # an entity changing more often than this an hour is background, not an event
+  coincide_s: 600             # the page puts an event next to an unusual moment when it happened within this of it

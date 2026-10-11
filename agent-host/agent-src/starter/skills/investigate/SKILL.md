@@ -1,6 +1,6 @@
 ---
 name: investigate
-description: Find out what happened and why, from Home Assistant's records — answered with a short message and the whole account (timeline, charts, causes ranked by likelihood, what cannot be known, what would have warned earlier) as an HTML page.
+description: Find out what happened and why, from Home Assistant's records — answered with a short message and the whole account as an HTML page (what the records establish and rule out, timeline, charts, causes ranked by likelihood, what cannot be known, what would have warned earlier).
 ---
 
 # investigate
@@ -48,8 +48,8 @@ The person wants the TRUE and COMPLETE story, not a quick reply. Take the time t
      is the kind of contrast the person needs.
 
 4. **Read everything else recorded then.**
-   `run_skill_script investigate investigate.py around --start <…> --end <…> --entities <the ids you focus on>`
-   It lists the automations that ran, devices that stopped answering and came back (with times), notifications sent,
+   `run_skill_script investigate investigate.py around --start <…> --end <…> --entities <the ids you focus on>
+   --out around.json` (the whole period, like the last timeline). It lists the automations that ran, devices that stopped answering and came back (with times), notifications sent,
    doors, locks, switches, people, and the VESTA Agent's own alerts. Match times to the timeline: a device dropping off
    79 seconds after another stops, an automation that ran at the moment a device turned on, a person arriving.
 
@@ -76,6 +76,8 @@ The person wants the TRUE and COMPLETE story, not a quick reply. Take the time t
    - an outside event at that time and place (a storm, a grid outage) when several devices stopped together.
    Every time and number still comes from Home Assistant: the web only explains them. Say where it came from ("the
    maker's manual says…"). Do not search for what the records already answer, nor for anything about the people.
+   EVERY web search, whatever it was for, puts its pages in the account's "sources": the agent knows you searched, and
+   the page is refused without them.
 
    **Web research — only when the message says "Web research: ON"** (the person asked for it in their own words):
    once the timeline and `around` are read, describe the pattern you found in general words (the kind of device and
@@ -88,7 +90,8 @@ The person wants the TRUE and COMPLETE story, not a quick reply. Take the time t
      (the records fit it), not supported (the records contradict it — say so, keep it in the list as ruled out) or
      cannot tell (no record can judge it — say what would).
    - Nothing from the web replaces a time or a number from Home Assistant. In "checked", say web research was on and
-     how many searches you made.
+     how many searches you made. List every web page you used in "sources" (title and address): the page is refused
+     without them, and a lead with a "source" but no "verdict" is refused too.
    When the message says "Web research: off", do none of this: the web only for a manual or an error code (step 6).
 
 7. **Reason, before writing.** For each unusual thing, ask what physically explains it. Keep several causes when the
@@ -104,27 +107,40 @@ The person reads a SHORT message in the chat and opens the page for the rest (ow
 chat bubble shall be much more synthetic and shorter"). The page is made by the reports skill, so it looks like every
 report the agent sends.
 
+**The records speak first.** From your `--out` files the page writes, by itself: what the records show (every unusual
+period with its times and its normal, what else stopped answering then, the automations that ran then and could act),
+what they rule out (a control that stayed off, an automation that switches nothing), the timeline, and when an alert on
+the same limits would have warned. The message starts with a line of those facts. So do NOT retell them: your part is
+what they MEAN — the causes, what cannot be known, what to check on site. Never contradict them: a control the page
+rules out is not a cause; if you think a fact is misleading, say why in "cannot_tell".
+
 8. **Save the account** with save_file, as `investigation.json` — plain sentences, no Markdown:
 
        {"title": "Water heater on the night of 9 October",     (at most 90 characters)
-        "summary": "4 to 6 sentences, at most 750 characters: what happened (the key times and durations, against
-                    the device's normal), the most likely cause and what points to it, what to check on site first,
-                    and what would have warned earlier. It is the whole chat message: the details go in the other
-                    fields, which make the page.",
-        "timeline": [{"time": "09/10 02:40", "text": "The water heater starts and does not stop (normally about
-                      20 min at a time).", "unusual": true}, … one per moment that matters, before, during, after],
+        "summary": "3 to 5 sentences, at most 550 characters: the most likely cause and what points to it, what to
+                    check on site first. The chat message puts it under the line of recorded facts (times and
+                    durations): do not repeat them, explain them.",
+        "timeline": [{"time": "09/10 07:30", "text": "The gardener found water on the floor.", "unusual": true}, …
+                     ONLY what a person saw or did that the records do not show — the page builds the recorded
+                     timeline itself; leave it out when there is nothing such],
         "causes": [{"cause": "…", "evidence": "what in the records points to it", "confirm": "how to confirm on site"},
                    … most likely first; a lead from web research also has "source" (where it came from) and
                    "verdict" ("consistent", "not supported" or "cannot tell")],
         "cannot_tell": ["what no sensor saw, gaps in the records, what only a person on site can check", …],
-        "warned_earlier": ["which alert, sensor or change — and how much earlier it would have warned", …],
-        "checked": "what you read: devices, the period, the logbook, the automations"}
+        "warned_earlier": ["a sensor, rule or change the records cannot measure (the page already gives when an
+                           alert on each unusual period would have fired)", …],
+        "checked": "what you read: devices, the period, the logbook, the automations",
+        "sources": [{"title": "the page's title", "url": "https://…"}, … every web page you used — required
+                    whenever you searched the web: the page cannot be made without them]}
 
-   (the example is invented: write the devices and times of THIS investigation). For the charts, your last timeline
-   run must be the one of the whole period with `--out timeline.json`, all the devices that matter in it.
+   (the example is invented: write the devices and times of THIS investigation). For the charts and the recorded
+   facts, your last timeline run must be the one of the whole period with `--out timeline.json`, all the devices that
+   matter in it (with their controls), and your last around run the same period with `--out around.json`.
 
 9. **Make the page:** `run_skill_script reports compose.py investigation --notes investigation.json --data timeline.json
-   --out investigation.html`. It prints a `message` {title, text}.
+   --around around.json --out investigation.html`. It prints a `message` {title, text} and the facts the page
+   states ("established", "ruled_out"). Read them against your account before sending: if they disagree, fix the
+   account and make the page again.
 
 10. **Send it:** send_message(to="here", title= the message's title, text= the message's text, attachment=
     "investigation.html"). That message and its page ARE the answer: after it, write nothing — the agent does not

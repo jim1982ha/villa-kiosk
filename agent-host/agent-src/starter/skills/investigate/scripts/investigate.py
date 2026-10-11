@@ -15,9 +15,10 @@ Assistant client is read-only) and knows no device of any villa: everything come
         times, durations and levels — compared with the same entity's normal behaviour over the days before.
         --out also saves the reading with each device's chart, for the investigation page (reports' compose.py).
 
-  investigate.py around    --start 2026-10-09T02:00 --end 2026-10-09T15:00 [--entities sensor.a,...]
+  investigate.py around    --start 2026-10-09T02:00 --end 2026-10-09T15:00 [--entities sensor.a,...] [--out around.json]
         Everything else Home Assistant recorded then: automations that ran, devices that dropped off or came back,
         notifications sent, people and doors, and the VESTA Agent's own alerts and faults.
+        --out also saves them as data (who dropped off and came back, each automation and what it is able to do).
 
 Times given and printed are the villa's (--zone, set by the agent). Output: JSON, each part with a "lines" list the
 model can quote, and the raw figures under it.
@@ -256,12 +257,18 @@ def normal(rows: list[tuple[datetime, str]], end: datetime, on_above: float | No
 
 
 def threshold(values: list[float]) -> float | None:
-    """Above this a numeric entity counts as running: 10 % of its high readings (its 95th percentile), at least a
-    little above zero. None for an entity that hardly moves (a temperature): read as levels, not runs."""
+    """Above this a numeric entity counts as running: a share (running_fraction) of its HIGH readings — the top
+    `high_quantile` of them, so a single spike does not set it — at least a little above zero. None for an entity that
+    hardly moves (a temperature): read as levels, not runs.
+
+    ⚠️ HIGH IS ITS TOP READINGS, NOT ITS 95th PERCENTILE (2026-10-11): a meter reporting its idle every few seconds and
+    running a few seconds an hour has 99 % of its readings at rest — its 95th percentile WAS its rest, its runs were
+    never counted ("normal: 0 runs a day"), and an investigation could say neither "longer than any normal run" nor
+    "its supply was off"."""
     vals = sorted(v for v in values if v is not None)
     if len(vals) < 5:
         return None
-    hi = vals[int(len(vals) * 0.95) - 1]
+    hi = vals[min(len(vals) - 1, int(len(vals) * th("high_quantile")))]
     lo = vals[int(len(vals) * 0.05)]
     if hi <= 0 or (hi - lo) < hi * th("flat_spread"):
         return None
@@ -269,6 +276,39 @@ def threshold(values: list[float]) -> float | None:
 
 
 CHART_POINTS = 400                        # a chart's points: each the highest reading of its slice (a surge stays seen)
+
+
+def same_hours_before(base_rows: list[tuple[datetime, str]], start: datetime, end: datetime,
+                      baseline_days: float) -> list[dict]:
+    """The device's normal drawn behind its chart: the SAME HOURS on each of the days before, from the readings already
+    read for its normal (no other reading). Only for a period of a day or less — a longer one has no "same hours"."""
+    if not base_rows or end - start > timedelta(days=1):
+        return []
+    out = []
+    for k in range(1, int(baseline_days) + 1):
+        shifted = [(t + timedelta(days=k), s) for t, s in base_rows if t < end - timedelta(days=k)]
+        if shifted and shifted[0][0] <= end:
+            pts = chart_series(shifted, start, end)
+            if any(v is not None for _, v in pts):
+                out.append({"days_before": k, "series": pts})
+    return out
+
+
+def state_series(rows: list[tuple[datetime, str]], start: datetime, end: datetime) -> list[dict]:
+    """A device without numbers as its changes over [start, end): each {at, state, as} — `as` on / off / offline /
+    other, by the same vocabularies the timeline judges with, so the page needs no list of its own."""
+    out = []
+    for t, s in rows:
+        t = max(t, start)
+        if t >= end:
+            break
+        tag = "offline" if s in OFFLINE | NO_VALUE else "on" if s in ON_STATES else "off" if s in OFF_STATES else "other"
+        if out and out[-1]["state"] == s:
+            continue
+        if out and out[-1]["at"] == t.isoformat():
+            out.pop()                                          # two states at the same instant: the last one holds
+        out.append({"at": t.isoformat(), "state": s, "as": tag})
+    return out[-CHART_POINTS:]
 
 
 def chart_series(rows: list[tuple[datetime, str]], start: datetime, end: datetime) -> list[list]:
@@ -300,7 +340,8 @@ def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_da
     for eid in ids:
         rows = rows_of(client, eid, start, end)
         if not rows:
-            parts.append({"entity_id": eid, "lines": [f"{eid}: nothing recorded in this period."]})
+            parts.append({"entity_id": eid, "lines": [f"{eid}: nothing recorded in this period."], "nothing": True,
+                          "label": ((names.get(eid) or {}).get("attributes") or {}).get("friendly_name") or eid})
             continue
         # where Home Assistant's history could not be read further (vesta_shared.ha_client: its cap) — never stretched
         cut = (getattr(client, "history_cut", None) or {}).get(eid)
@@ -320,8 +361,7 @@ def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_da
                 f", longest {lasting(r['run_longest_s'])}" if "run_longest_s" in r else "",
                 f", at about {r['level_median']:g}" if "level_median" in r else "")
                 + (f"; at rest {r['rest_median']:g}" if "rest_median" in r else ""))
-        notable = _notable(ps, ref, on)
-        shown = _cycles(notable)
+        shown, hidden = worth_a_line(ps, ref, on)
         for p in shown[:MAX_LINES]:
             lvl = f" at {p['mean']:.4g} (from {p['min']:.4g} to {p['max']:.4g})" if "mean" in p and on else \
                 (f" reading {p['mean']:.4g}" if "mean" in p else "")
@@ -330,7 +370,6 @@ def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_da
                          f"for {lasting(p['seconds'])}{lvl}{flag}")
         if len(shown) > MAX_LINES:
             lines.append(f"  … {len(shown) - MAX_LINES} more periods (narrow the period to see them)")
-        hidden = len(ps) - len(notable)
         if hidden > 0:
             lines.append(f"  ({hidden} short ordinary periods not listed: like its normal)")
         if on:
@@ -342,17 +381,29 @@ def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_da
         lines.append("  in total: " + ", ".join(f"{k} {lasting(v)}" for k, v in sorted(totals.items(), key=lambda x: -x[1])))
         attrs = (names.get(eid) or {}).get("attributes") or {}
         part = {"entity_id": eid, "running_above": on, "normal": ref, "lines": lines,
-                "periods": [{**p, "start": p["start"].isoformat(), "end": p["end"].isoformat()} for p in shown[:MAX_LINES]],
+                "periods": [_saved(p) for p in shown[:MAX_LINES]], **({"cut": cut.isoformat()} if cut else {}),
                 "label": attrs.get("friendly_name") or eid, "runs": sum(1 for p in ps if p["kind"] == "running")}
         if eid.split(".")[0] in CONTROL_DOMAINS:
             seen = {str(v) for _, v in base_rows + rows if str(v) not in OFFLINE | NO_VALUE}
             part["control"] = "off" if seen and seen <= OFF_STATES else "on" if seen and seen <= ON_STATES else None
         if series and any(number(v) is not None for _, v in rows):
             part.update(name=attrs.get("friendly_name") or eid, unit=attrs.get("unit_of_measurement") or "",
-                        series=chart_series(rows, start, end))
+                        series=chart_series(rows, start, end),
+                        normal_series=same_hours_before(base_rows, start, end, baseline_days))
+        elif series:
+            part["states"] = state_series(rows, start, end)        # a lane under the charts (reports' compose.py)
         parts.append(part)
     _controls(parts, baseline_days)
-    return {"lines": [l for p in parts for l in p["lines"]], "entities": parts}
+    return {"lines": [l for p in parts for l in p["lines"]], "entities": parts, "baseline_days": baseline_days,
+            # what the page needs of this skill's settings to join the readings (reports' compose.py investigation)
+            "settings": {"coincide_s": th("coincide_s")}}
+
+
+def _saved(p: dict) -> dict:
+    out = {**p, "start": p["start"].isoformat(), "end": p["end"].isoformat()}
+    if p.get("alert"):
+        out["alert"] = {**p["alert"], "at": p["alert"]["at"].isoformat()}
+    return out
 
 
 def _controls(parts: list[dict], baseline_days: float) -> None:
@@ -372,6 +423,15 @@ def _controls(parts: list[dict], baseline_days: float) -> None:
                               "explain their starts and stops")
 
 
+def worth_a_line(ps: list[dict], ref: dict, on: float | None) -> tuple[list[dict], int]:
+    """(the periods worth a line, how many ordinary ones were left out). ⚠️ STOP-START FIRST (2026-10-11): judged first,
+    the short runs of a stop-start burst were "ordinary" and dropped before they could be grouped — the pump's 8 restarts
+    of 9 October vanished from the page once a short run's level stopped being flagged."""
+    grouped = _cycles(ps)
+    notable = _notable(grouped, ref, on)
+    return notable, len(grouped) - len(notable)
+
+
 def _cycles(ps: list[dict]) -> list[dict]:
     """Six or more short running / idle periods in a row (each under 3 minutes) said as ONE line: "stops and restarts
     8 times" — what a person needs to know, not sixteen lines."""
@@ -384,7 +444,10 @@ def _cycles(ps: list[dict]) -> list[dict]:
         runs = [p for p in group if p["kind"] == "running"]
         if len(runs) >= th("cycle_min_runs") and len(group) >= th("cycle_min_periods"):
             levels = [p["mean"] for p in runs if "mean" in p]
-            out.append({"kind": f"stops and restarts {len(runs)} times", "start": group[0]["start"],
+            nth = runs[int(th("cycle_min_runs")) - 1]           # the run that makes it cycling: an alert there
+            out.append({"alert": {"rule": f"{th('cycle_min_runs'):g} runs shorter than {lasting(th('cycle_short_s'))} "
+                                          "in a row", "at": nth["start"]},
+                        "kind": f"stops and restarts {len(runs)} times", "start": group[0]["start"],
                         "end": group[-1]["end"], "seconds": (group[-1]["end"] - group[0]["start"]).total_seconds(),
                         **({"mean": sum(levels) / len(levels), "min": min(p["min"] for p in runs),
                             "max": max(p["max"] for p in runs)} if levels else {}),
@@ -403,22 +466,36 @@ def _notable(ps: list[dict], ref: dict, on: float | None) -> list[dict]:
     rest = ref.get("rest_median")
     out = []
     for p in ps:
-        why = []
+        why, alerts = [], []
         if p["kind"] == "running":
-            if longest and p["seconds"] > max(longest * th("longer_ratio"), longest + th("longer_extra_s")):
+            limit = max(longest * th("longer_ratio"), longest + th("longer_extra_s")) if longest else None
+            if limit and p["seconds"] > limit:
                 why.append(f"longer than any run of its normal ({lasting(longest)})")
-            if level and "mean" in p and p["mean"] > level * th("level_high_ratio"):
+                alerts.append((limit, f"running longer than {lasting(limit)}"))
+            # a level is judged only over as long as an alert on it would need (a start-up surge of 8 s is not one)
+            lasts = p["seconds"] >= th("level_change_gap_s")
+            if lasts and level and "mean" in p and p["mean"] > level * th("level_high_ratio"):
                 why.append(f"draws {p['mean'] / level:.1f}× its normal level")
-            if level and "mean" in p and p["mean"] < level * th("level_low_ratio"):
+                alerts.append((th("level_change_gap_s"), f"drawing over {th('level_high_ratio'):g}× its normal level "
+                                                         f"for {lasting(th('level_change_gap_s'))}"))
+            if lasts and level and "mean" in p and p["mean"] < level * th("level_low_ratio"):
                 why.append(f"draws only {p['mean'] / level:.0%} of its normal level")
-        elif p["kind"] == "no power" and rest and rest > 0:
+                alerts.append((th("level_change_gap_s"), f"drawing under {th('level_low_ratio'):.0%} of its normal "
+                                                         f"level for {lasting(th('level_change_gap_s'))}"))
+        elif p["kind"] == "no power" and rest and rest > 0 and p["seconds"] >= th("offline_min_s"):
             why.append(f"exactly 0 where it reads {rest:g} at rest: its supply was off")
+            alerts.append((th("offline_min_s"), f"reading exactly 0 for {lasting(th('offline_min_s'))}"))
         elif p["kind"] in ("offline", "no value") and p["seconds"] >= th("offline_min_s"):
             why.append("did not answer" if p["kind"] == "offline" else "answered without a value")
-        elif on is None and len(ps) <= MAX_LINES:
-            pass
+            alerts.append((th("offline_min_s"), f"not answering for {lasting(th('offline_min_s'))}"))
         if why:
             p["why"] = "; ".join(why)
+        # ⚠️ WHAT WOULD HAVE WARNED, BY THE RULE THAT FLAGGED IT (the facts-first page, 2026-10-11): the earliest moment
+        # an alert on the same limit would have fired — only while the period still lasted, never after it
+        fired = [(s, rule) for s, rule in alerts if s < p["seconds"]]
+        if fired:
+            s, rule = min(fired)
+            p["alert"] = {"rule": rule, "at": p["start"] + timedelta(seconds=s)}
         ordinary = not why and p["kind"] in ("running", "idle") and p["seconds"] < th("ordinary_max_s") \
             and len(ps) > th("ordinary_hide_over")
         if not ordinary:
@@ -473,13 +550,16 @@ def around(client, store, start: datetime, end: datetime, focus: list[str], zone
     if back:
         lines.append("…and answered again:")
         lines += [f"  {at(t, zone, span_days)}  {n} ({e})" for t, n, e in _first_per(back)[:40]]
+    ran = []
     if autos:
         lines.append("Automations that ran (and what each one is able to do):")
         for eid, a in sorted(autos.items(), key=lambda x: x[1]["times"][0]):
             ts = a["times"]
+            able = automation_able(client, eid, start, end)
             lines.append(f"  {a['name']} ({eid}): {len(ts)}× from {at(ts[0], zone, span_days)} to {at(ts[-1], zone, span_days)}"
                          + (f" — {a['why']}" if a["why"] else ""))
-            lines.append(f"    able to: {automation_can(client, eid, start, end)}")
+            lines.append(f"    able to: {able['text']}")
+            ran.append({"id": eid, "name": a["name"], "times": [t.isoformat() for t in ts], **able})
     if sent:
         lines.append("Notifications sent:")
         lines += [f"  {at(t, zone, span_days)}  {n}" for t, n in sent[:40]]
@@ -494,7 +574,12 @@ def around(client, store, start: datetime, end: datetime, focus: list[str], zone
     noisy = sorted(((n, e) for e, n in count.items() if n / hours > th("noise_per_hour") and e not in focus), reverse=True)[:8]
     if noisy:
         lines.append("Left out as background (change constantly): " + ", ".join(e for _, e in noisy))
-    return {"lines": lines}
+    # the same, as data — the investigation page builds its facts from it (reports' compose.py investigation --around)
+    data = {"offline": [{"at": t.isoformat(), "name": n, "id": e} for t, n, e in _first_per(offline)[:40]],
+            "back": [{"at": t.isoformat(), "name": n, "id": e} for t, n, e in _first_per(back)[:40]],
+            "automations": ran, "notifications": [{"at": t.isoformat(), "name": n} for t, n in sent[:40]],
+            "settings": {"coincide_s": th("coincide_s")}}
+    return {"lines": lines, "data": data}
 
 
 # What an action does, by its kind (`domain.service`, or the kind of step): only these change nothing on the villa.
@@ -506,11 +591,12 @@ HARMLESS = {"notify": "notifies", "persistent_notification": "notifies", "tts": 
             "input_select": "records a value", "event": "fires an event", "delay": None, "wait": None, "stop": None}
 
 
-def _actions(node, out: set) -> None:
-    """Every action an automation's config can take, at any depth (choose, if/then/else, repeat, parallel, sequence)."""
+def _actions(node, out: set, targets: set | None = None) -> None:
+    """Every action an automation's config can take, at any depth (choose, if/then/else, repeat, parallel, sequence) —
+    and, in `targets`, the entities its actions that change things name (a template's: not readable, left out)."""
     if isinstance(node, list):
         for x in node:
-            _actions(x, out)
+            _actions(x, out, targets)
         return
     if not isinstance(node, dict):
         return
@@ -518,6 +604,12 @@ def _actions(node, out: set) -> None:
         v = node.get(key)
         if isinstance(v, str) and "." in v:
             out.add(v)
+            if targets is not None and v.split(".")[0] not in HARMLESS:
+                for where in (node, node.get("target"), node.get("data")):
+                    named = (where or {}).get("entity_id") if isinstance(where, dict) else None
+                    for e in ([named] if isinstance(named, str) else named if isinstance(named, list) else []):
+                        if isinstance(e, str) and ENTITY_ID.match(e):
+                            targets.add(e)
     if isinstance(node.get("event"), str):
         out.add("event.fire")
     if "scene" in node and isinstance(node.get("scene"), str):
@@ -526,12 +618,12 @@ def _actions(node, out: set) -> None:
         out.add(f"{node['domain']}.{node['type']}")                     # a device action: acts on the device itself
     for k, v in node.items():
         if k not in ("action", "service", "event") and isinstance(v, (list, dict)):
-            _actions(v, out)
+            _actions(v, out, targets)
 
 
 def _say_actions(calls: set) -> str:
-    changes = sorted(c for c in calls if c.split(".")[0] not in HARMLESS)
-    harmless = sorted({HARMLESS[c.split(".")[0]] for c in calls if HARMLESS.get(c.split(".")[0])})
+    changes = _changes(calls)
+    harmless = _harmless(calls)
     if not calls:
         return "nothing — it has no action"
     if not changes:
@@ -542,22 +634,54 @@ def _say_actions(calls: set) -> str:
 
 
 def automation_can(client, eid: str, start: datetime, end: datetime) -> str:
+    """What an automation is able to do, in words (see `automation_able`)."""
+    return automation_able(client, eid, start, end)["text"]
+
+
+def automation_able(client, eid: str, start: datetime, end: datetime) -> dict:
     """What an automation is able to do, read from its own config — or, built from a blueprint whose text cannot be read
-    here, said to be unproven, with what its runs kept by Home Assistant actually did in the period."""
+    here, said to be unproven, with what its runs kept by Home Assistant actually did in the period.
+    {"text", "can": "nothing" (it switches nothing) | "changes" (the actions in "changes") | "unproven"}: the page sorts
+    by "can", never by the words."""
     try:
         body = client.tool("ha_config_get_automation", {"identifier": eid}) or {}
     except Exception as e:  # noqa: BLE001 — said, never guessed
-        return f"its configuration could not be read ({type(e).__name__}): not proven either way"
+        return {"text": f"its configuration could not be read ({type(e).__name__}): not proven either way",
+                "can": "unproven", "changes": []}
     cfg = body.get("config") if isinstance(body.get("config"), dict) else body
     if isinstance(cfg, dict) and cfg.get("use_blueprint"):
         path = (cfg["use_blueprint"] or {}).get("path") or "a blueprint"
         did = _traced(client, eid, start, end)
-        return (f"built from the blueprint {path}, whose actions cannot be read here — not proven either way"
-                + (f"; its runs in this period kept by Home Assistant did: {did}" if did else
-                   "; Home Assistant no longer keeps its runs of this period"))
-    calls: set = set()
-    _actions((cfg or {}).get("actions") or (cfg or {}).get("action") or [], calls)
-    return _say_actions(calls)
+        return {"text": f"built from the blueprint {path}, whose actions cannot be read here — not proven either way"
+                        + (f"; its runs in this period kept by Home Assistant did: {did}" if did else
+                           "; Home Assistant no longer keeps its runs of this period"),
+                "can": "unproven", "changes": []}
+    calls, targets = set(), set()
+    _actions((cfg or {}).get("actions") or (cfg or {}).get("action") or [], calls, targets)
+    changes = _changes(calls)
+    out = {"text": _say_actions(calls), "can": "changes" if changes else "nothing", "changes": changes,
+           "does": _harmless(calls)}
+    if changes:
+        # what it can act ON, by name: "it can switch the jacuzzi's relay" says at once whether it could touch the device
+        out["targets"] = [{"id": e, "name": _name(client, e)} for e in sorted(targets)]
+        if targets:
+            out["text"] += "; on: " + ", ".join(f"{t['name']} ({t['id']})" for t in out["targets"])
+    return out
+
+
+def _name(client, eid: str) -> str:
+    try:
+        return ((client.states([eid]).get(eid) or {}).get("attributes") or {}).get("friendly_name") or eid
+    except Exception:  # noqa: BLE001 — a name is a help
+        return eid
+
+
+def _changes(calls: set) -> list[str]:
+    return sorted(c for c in calls if c.split(".")[0] not in HARMLESS)
+
+
+def _harmless(calls: set) -> list[str]:
+    return sorted({HARMLESS[c.split(".")[0]] for c in calls if HARMLESS.get(c.split(".")[0])})
 
 
 def _traced(client, eid: str, start: datetime, end: datetime) -> str:
@@ -624,7 +748,7 @@ def main(argv=None):
     ap.add_argument("--entities", action="append")       # may be given several times: each one is a short text
     ap.add_argument("--start"); ap.add_argument("--end")
     ap.add_argument("--baseline-days", default="3")
-    ap.add_argument("--out", help="timeline: also save the reading, with each device's chart, for the investigation page")
+    ap.add_argument("--out", help="timeline / around: also save the reading as data (charts, events), for the investigation page")
     a = ap.parse_args(argv)
     ctx = script.Context(a)
     zone = ctx.Z                                           # the villa's time zone
@@ -658,6 +782,13 @@ def main(argv=None):
                     res = {"lines": res["lines"], "saved": a.out}
             else:
                 res = around(ctx.client, ctx.store, start, end, ids, zone)
+                if a.out:
+                    with open(a.out, "w", encoding="utf-8") as f:
+                        json.dump({"start": start.isoformat(), "end": end.isoformat(), "zone": str(zone), **res["data"]},
+                                  f, ensure_ascii=False, default=str)
+                    res = {"lines": res["lines"], "saved": a.out}
+                else:
+                    res = {"lines": res["lines"]}
     except SystemExit:
         raise
     except Exception as e:  # noqa: BLE001 — said plainly to the model, which says it to the person

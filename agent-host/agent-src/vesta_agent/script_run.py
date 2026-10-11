@@ -109,4 +109,8 @@ def _answer(settings, state, skill, script, args, code, out, err, seconds, by) -
                     f": {ans.error[:300]}" if ans.error else "")
     if by == PAGE:
         log.info("UI: tried %s %s %s (exit %s, %.1f s)", skill.name, script, " ".join(args), code, ans.seconds)
+    elif ans.ok:
+        # ⚠️ WHERE AN ANSWER'S TIME GOES (owner, 2026-10-11: "i had to wait for almost 20 min"): each script's own
+        # duration in the log, beside the run's total — the records hold it too, but the log is what can be read
+        log.info("Skill %s: %s %s took %.1f s", skill.name, script, (args[0] if args else ""), ans.seconds)
     return ans

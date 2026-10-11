@@ -43,7 +43,13 @@ class FakeAI:
                 return {"content": [{"type": "text", "text": f"{name} is not one of this run's tools."}], "is_error": True}
             return await tools[name].handler(dict(args or {}))
 
-        call = {"who": terms.who, "prompt": prompt, "allowed": kit.names, "tools": set(terms.tools), "resume": resume,
+        _, pre_hook, _ = runner.make_guard(kit.names, state, terms.who, kit.searched)
+
+        async def web_search(query: str) -> dict:
+            # through the real run's hook: allowed only when the run was given WebSearch, recorded as the real one is
+            return await pre_hook({"tool_name": runner.WEB_SEARCH, "tool_input": {"query": query}}, None, None)
+
+        call = {"web_search": web_search, "who": terms.who, "prompt": prompt, "allowed": kit.names, "tools": set(terms.tools), "resume": resume,
                 "limit_usd": terms.limit_usd, "profile": terms.profile, "asked": asked, "system_prompt": system_prompt,
                 "folder": settings.out_dir, "call": call_tool, "image": image}
         self.runs.append(call)

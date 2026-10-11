@@ -5,7 +5,7 @@
   compose.py owner-weekly  --pack pack.json --store S --energy week.json          -> 3 lines (chat)
   compose.py fm-weekly     --facts facts.json [--notes notes.json] --out page.html
   compose.py owner-monthly --facts facts.json [--notes notes.json] --out page.html
-  compose.py investigation --notes investigation.json [--data timeline.json] --out investigation.html
+  compose.py investigation --notes investigation.json [--data timeline.json] [--around around.json] --out investigation.html
              (the investigate skill's account as a page: its notes, and the charts of investigate.py timeline --out)
 
 A page is built from facts.py's FIGURES and the AI's notes.json (the sentences reports.yaml asks
@@ -59,6 +59,7 @@ from vesta_shared.axis import is_flat, label as axis_label, nice_axis  # noqa: E
 from vesta_shared.store import Incident, Store  # noqa: E402
 from vesta_shared.timeutil import day_label, day_time_label, villa_date  # noqa: E402  (the one day format)
 from vesta_shared.problems import Problems  # noqa: E402  (what is still open: one owner)
+from investigation_facts import KEY_MAX, facts as investigation_facts  # noqa: E402  (what the records establish)
 
 TPL = Environment(loader=FileSystemLoader(os.path.join(HERE, "..", "templates")), autoescape=True)
 NUM = re.compile(r"(?<![\w.])-?\d{1,3}(?:,\d{3})+(?:\.\d+)?|(?<![\w.])-?\d+(?:\.\d+)?")
@@ -451,10 +452,23 @@ def page(facts: dict, notes: dict, limit: str | None = None, without_ai: str | N
         chart_pairs=lambda r: Markup(pairs(r)), without_ai=without_ai)
 
 
-def timechart(series: list, unit: str, zone: ZoneInfo, marks: list[tuple[str, str]] = ()) -> str:
+#: what an unusual period IS, by its kind (investigate.py's period kinds, any device): the band's word and colour. One
+#: table — the bands, their labels and the legend under the chart all read it.
+BANDS = (("no power", "supply off", "var(--crit)"), ("offline", "not answering", "var(--ink2)"),
+         ("no value", "not answering", "var(--ink2)"), ("stops and restarts", "stop-start", "var(--warn)"),
+         ("running", "unusual run", "var(--warn)"))
+OTHER_BAND = ("unusual", "var(--crit)")
+
+
+def band_of(kind: str) -> tuple[str, str]:
+    return next(((word, colour) for k, word, colour in BANDS if str(kind).startswith(k)), OTHER_BAND)
+
+
+def timechart(series: list, unit: str, zone: ZoneInfo, marks: list = (), normals: list = ()) -> str:
     """A device's readings over the period, by TIME (investigate.py timeline --out: [time, value], None = no number):
-    the Y axis and its grid as every chart here, the unusual periods (`marks`: [start, end]) shaded, a value on
-    hover or tap. A gap where the device gave no number."""
+    the Y axis and its grid as every chart here, the unusual periods (`marks`: [start, end, kind]) shaded in their
+    band's colour and named when there is room, the same hours of the days before (`normals`: series) faint behind, a
+    value on hover or tap. A gap where the device gave no number."""
     pts = []
     for t, v in series:
         try:
@@ -464,31 +478,53 @@ def timechart(series: list, unit: str, zone: ZoneInfo, marks: list[tuple[str, st
     vals = [v for _, v in pts if v is not None]
     if len(vals) < 2:
         return '<p class="note">Not enough readings to draw.</p>'
+    behind = []
+    for s in normals:
+        line = []
+        for t, v in s:
+            try:
+                line.append((datetime.fromisoformat(t), None if v is None else float(v)))
+            except (TypeError, ValueError):
+                continue
+        behind.append(line)
+    every_val = vals + [v for line in behind for _, v in line if v is not None]
     t0, t1 = pts[0][0], pts[-1][0]
     span = (t1 - t0).total_seconds() or 1.0
-    lo, hi, ticks = _ticks(min(0.0, min(vals)), max(vals) * 1.1 or 1)
+    lo, hi, ticks = _ticks(min(0.0, min(every_val)), max(every_val) * 1.1 or 1)
     y = _scale(lo, hi, PAD_T, H - PAD_B)
     x = lambda t: PAD_L + (t - t0).total_seconds() / span * (W - PAD_L - PAD_R)
     long = span > 86400
     lab = lambda t: t.astimezone(zone).strftime("%d/%m %H:%M" if long else "%H:%M")
     out = [f'<svg viewBox="0 0 {W} {H}" role="img" aria-label="{_esc(unit)} over the period">',
            *_axis(ticks, y, PAD_L, W - PAD_R)]
-    for a_, b_ in marks:
+    for m in marks:
+        a_, b_, kind = (list(m) + [""])[:3]
         try:
             ma, mb = max(datetime.fromisoformat(a_), t0), min(datetime.fromisoformat(b_), t1)
         except (TypeError, ValueError):
             continue
         if mb > ma:
-            out.append(f'<rect x="{x(ma):.1f}" y="{PAD_T}" width="{max(x(mb) - x(ma), 1):.1f}" height="{H - PAD_B - PAD_T}" '
-                       f'fill="var(--crit)" opacity=".10"/>')
-    path, pen = [], False
-    for t, v in pts:
-        if v is None:
-            pen = False
-            continue
-        path.append(f"{'L' if pen else 'M'}{x(t):.1f},{y(v):.1f}")
-        pen = True
-    out.append(f'<path d="{" ".join(path)}" fill="none" stroke="var(--acc)" stroke-width="1.5"/>')
+            word, colour = band_of(kind)
+            w_ = max(x(mb) - x(ma), 1)
+            out.append(f'<rect x="{x(ma):.1f}" y="{PAD_T}" width="{w_:.1f}" height="{H - PAD_B - PAD_T}" '
+                       f'fill="{colour}" opacity=".14"/>')
+            if w_ >= 6.2 * len(word) + 6:                # named where the word fits; the legend names them all
+                out.append(f'<text x="{x(ma) + w_ / 2:.1f}" y="{PAD_T + 10}" font-size="10" text-anchor="middle" '
+                           f'fill="{colour}">{_esc(word)}</text>')
+
+    def drawn(line: list) -> str:
+        path, pen = [], False
+        for t, v in line:
+            if v is None:
+                pen = False
+                continue
+            path.append(f"{'L' if pen else 'M'}{x(t):.1f},{y(v):.1f}")
+            pen = True
+        return " ".join(path)
+    for line in behind:                                  # the days before, faint: what "normal" looks like
+        out.append(f'<path class="normal" d="{drawn(line)}" fill="none" stroke="var(--ink2)" stroke-width="1" '
+                   f'opacity=".45"/>')
+    out.append(f'<path d="{drawn(pts)}" fill="none" stroke="var(--acc)" stroke-width="1.5"/>')
     for k in range(5):                               # five times under the axis
         t = t0 + (t1 - t0) * k / 4
         anchor = "start" if k == 0 else "end" if k == 4 else "middle"
@@ -499,6 +535,48 @@ def timechart(series: list, unit: str, zone: ZoneInfo, marks: list[tuple[str, st
         (t, v), (tn, _) = pts[i], pts[min(i + every, len(pts) - 1)]
         if v is not None:
             out.append(_tip(x(t), y(v), x(t), x(tn), PAD_T, H - PAD_B, f"{lab(t)} · {_nice(v)}{u}"))
+    out.append("</svg>")
+    return "".join(out)
+
+
+LANE_H, LANE_LABEL = 22, 12
+LANE_COLOUR = {"on": "var(--acc)", "offline": "var(--ink2)", "other": "var(--warn)"}       # "off" is the empty lane
+
+
+def strip(lanes: list[dict], start: datetime, end: datetime, zone: ZoneInfo) -> str:
+    """Other things on the SAME time axis as the charts (investigation_facts.lanes): one lane each — a device without
+    numbers as bands of its states ("off" left empty), events as marks — every band and mark answering on tap."""
+    if not lanes or end <= start:
+        return ""
+    span = (end - start).total_seconds()
+    x = lambda t: PAD_L + (t - start).total_seconds() / span * (W - PAD_L - PAD_R)    # noqa: E731
+    long = span > 86400
+    lab = lambda t: t.astimezone(zone).strftime("%d/%m %H:%M" if long else "%H:%M")     # noqa: E731
+    h = len(lanes) * (LANE_H + LANE_LABEL) + 18
+    out = [f'<svg viewBox="0 0 {W} {h}" role="img" aria-label="What else happened, on the same time axis">']
+    for i, lane in enumerate(lanes):
+        top = i * (LANE_H + LANE_LABEL) + LANE_LABEL
+        out.append(f'<text x="{PAD_L}" y="{top - 3}" font-size="10" fill="var(--ink2)">{_esc(lane["name"])}</text>')
+        out.append(f'<rect x="{PAD_L}" y="{top}" width="{W - PAD_L - PAD_R}" height="{LANE_H - 6}" fill="var(--ink2)" '
+                   'opacity=".06"/>')
+        for b in lane.get("bands") or []:
+            a_, b_ = max(b["start"], start), min(b["end"], end)
+            if b_ <= a_ or b.get("as") == "off":
+                continue
+            out.append(f'<rect x="{x(a_):.1f}" y="{top}" width="{max(x(b_) - x(a_), 1.5):.1f}" height="{LANE_H - 6}" '
+                       f'fill="{LANE_COLOUR.get(b.get("as"), "var(--warn)")}" opacity=".55"/>')
+            out.append(_tip(x(a_), top + (LANE_H - 6) / 2, x(a_), max(x(b_), x(a_) + 3), top, top + LANE_H - 6,
+                            f"{lab(a_)}–{lab(b_)} · {b['state']}"))
+        for e in lane.get("marks") or []:
+            if start <= e["at"] <= end:
+                out.append(f'<rect x="{x(e["at"]) - 1:.1f}" y="{top}" width="3" height="{LANE_H - 6}" '
+                           f'fill="{e.get("colour") or "var(--crit)"}"/>')
+                out.append(_tip(x(e["at"]), top + (LANE_H - 6) / 2, x(e["at"]) - 3, x(e["at"]) + 3, top,
+                                top + LANE_H - 6, f"{lab(e['at'])} · {e['text']}"))
+    for k in range(5):
+        t = start + (end - start) * k / 4
+        anchor = "start" if k == 0 else "end" if k == 4 else "middle"
+        out.append(f'<text x="{x(t):.1f}" y="{h - 4}" font-size="10" text-anchor="{anchor}" fill="var(--ink2)">{lab(t)}</text>')
     out.append("</svg>")
     return "".join(out)
 
@@ -525,26 +603,55 @@ def normal_words(ref: dict, unit: str) -> str:
     return ", ".join(b for b in bits if b) + "."
 
 
-INVESTIGATION_FIELDS = ("title", "summary", "timeline", "causes", "cannot_tell", "warned_earlier", "checked")
+INVESTIGATION_FIELDS = ("title", "summary", "timeline", "causes", "cannot_tell", "warned_earlier", "checked", "sources")
+VERDICTS = ("consistent", "not supported", "cannot tell")
 #: the chat message is the title and the summary, under the page's file: ONE bubble, so within a file's caption
 #: (TELEGRAM_CAPTION) — title, "To: …" and summary together (owner, 2026-10-11: "all in 1 message … a bit more
 #: detailed"). Derived, never typed (review 32): room kept for a "To:" naming several people.
 DETAILS = " Details in the attached page."
 TITLE_MAX, TO_ROOM = 90, 120
-SUMMARY_MAX = TELEGRAM_CAPTION - TITLE_MAX - TO_ROOM - len(DETAILS) - 4     # the line breaks between them
+#: the message starts with the recorded facts (investigation_facts.key_line), then the AI's summary
+SUMMARY_MAX = TELEGRAM_CAPTION - TITLE_MAX - TO_ROOM - KEY_MAX - len(DETAILS) - 6     # the line breaks between them
 
 
-def investigation(notes: dict, data: dict | None) -> str:
-    """The investigate skill's account as a page: its notes (INVESTIGATION_FIELDS) and, from investigate.py timeline
-    --out, a chart per device that gave numbers, its unusual periods shaded."""
+def web_pages(notes: dict) -> list[dict]:
+    """The account's sources that are web pages (http/https): the only ones the page links to."""
+    return [x for x in notes.get("sources") or [] if isinstance(x, dict)
+            and re.match(r"https?://", str(x.get("url") or ""))]
+
+
+def web_searches() -> list[str]:
+    """The web searches the AI made in this run before asking for the page (the agent's VESTA_WEB_SEARCHES)."""
+    try:
+        got = json.loads(os.environ.get("VESTA_WEB_SEARCHES") or "[]")
+    except ValueError:
+        return []
+    return [str(q) for q in got if str(q).strip()] if isinstance(got, list) else []
+
+
+def investigation(notes: dict, data: dict | None, around: dict | None = None, searches: list[str] | None = None) -> str:
+    """The investigate skill's account as a page: first what the records establish and rule out (investigation_facts,
+    from investigate.py timeline / around --out), a chart per device that gave numbers, its unusual periods shaded;
+    then the AI's reading of them (its notes, INVESTIGATION_FIELDS)."""
     data = data or {}
+    found = investigation_facts(data, around, notes)
     zone = ZoneInfo(data.get("zone") or "UTC")
     charts = []
     for e in data.get("entities") or []:
         if e.get("series"):
-            marks = [(p["start"], p["end"]) for p in e.get("periods") or [] if p.get("why")]
-            charts.append({"name": e.get("name") or e.get("entity_id"), "svg": Markup(timechart(e["series"], e.get("unit") or "", zone, marks)),
-                           "normal": normal_words(e.get("normal") or {}, e.get("unit") or "")})
+            marks = [(p["start"], p["end"], p.get("kind") or "") for p in e.get("periods") or [] if p.get("why")]
+            normals = [n["series"] for n in e.get("normal_series") or [] if n.get("series")]
+            legend = list(dict.fromkeys(band_of(k) for _, _, k in marks))
+            charts.append({"name": e.get("name") or e.get("entity_id"),
+                           "svg": Markup(timechart(e["series"], e.get("unit") or "", zone, marks, normals)),
+                           "normal": normal_words(e.get("normal") or {}, e.get("unit") or ""),
+                           "legend": [{"word": w, "colour": c} for w, c in legend], "days_behind": len(normals)})
+    lanes_svg = ""
+    try:
+        a_, b_ = datetime.fromisoformat(data["start"]), datetime.fromisoformat(data["end"])
+        lanes_svg = strip(found.get("lanes") or [], a_, b_, zone)
+    except (KeyError, TypeError, ValueError):
+        pass
     period = ""
     try:
         a, b = (datetime.fromisoformat(data[k]).astimezone(zone) for k in ("start", "end"))
@@ -552,8 +659,9 @@ def investigation(notes: dict, data: dict | None) -> str:
     except (KeyError, TypeError, ValueError):
         pass
     return TPL.get_template("investigation.html").render(
-        title=notes.get("title") or "Investigation", n=notes, charts=charts, period=period,
-        generated=day_time_label(datetime.now(zone)))
+        title=notes.get("title") or "Investigation", n=notes, charts=charts, period=period, f=found,
+        lanes=Markup(lanes_svg), web_pages=web_pages(notes),
+        searches=searches or [], generated=day_time_label(datetime.now(zone)))
 
 
 def without_ai_note(why: str) -> str:
@@ -568,6 +676,7 @@ def main(argv=None):
     script.arguments(ap, pack=True)               # --pack --store --zone --fixture-dir --now
     ap.add_argument("--energy"); ap.add_argument("--as-of")
     ap.add_argument("--facts"); ap.add_argument("--notes"); ap.add_argument("--out"); ap.add_argument("--data")
+    ap.add_argument("--around")
     ap.add_argument("--finish", choices=["here", "owner", "fm"], help="the job's on_limit step: send the page")
     ap.add_argument("--since"); ap.add_argument("--limit")
     ap.add_argument("--no-ai", metavar="WHY", help="the job's without_ai step: the AI could not run (WHY, in words)")
@@ -680,22 +789,52 @@ def _investigation(a) -> int:
               "4 to 6 sentences (what happened, the most likely cause and its evidence, what to check first). Shorten it in the "
               "notes and run this again; the details belong in the other fields.", file=sys.stderr)
         return 1
-    data = None
-    if a.data:
-        try:
-            data = json.load(open(a.data, encoding="utf-8"))
-        except (OSError, ValueError):
-            data = None                              # the page without its charts, said in its result
-    html = investigation(notes, data)
+    # ⚠️ WEB RESEARCH SHOWS ITS SOURCES (owner, 2026-10-11: the page of a web-researched investigation named none). When
+    # the person's words switched it on (the agent's VESTA_MODES), the page is refused until it lists them, and every
+    # lead from the web carries its verdict against the records.
+    # 0.12.169 (owner: "include the sources, when web_search tool is used"): ANY web search the AI made in this run (the
+    # agent's VESTA_WEB_SEARCHES), research asked for or not — a manual, an error code — needs its pages listed too.
+    modes = {m for m in os.environ.get("VESTA_MODES", "").split(",") if m}
+    searches = web_searches()
+    sources = web_pages(notes)
+    if ("web_research" in modes or searches) and not sources:
+        why = (f"you searched the web {len(searches)} time{'s' if len(searches) > 1 else ''}" if searches
+               else "web research was on")
+        print(f"investigation: {why} — list every web page you used in `sources`, each "
+              '{"title": "…", "url": "https://…"}, and run this again.', file=sys.stderr)
+        return 1
+    bad = [str(c.get("cause") or "?") for c in notes.get("causes") or []
+           if isinstance(c, dict) and c.get("source") and c.get("verdict") not in VERDICTS]
+    if bad:
+        print(f"investigation: a lead from the web needs its verdict against the records ({', '.join(VERDICTS)}): "
+              f"{'; '.join(bad[:3])}", file=sys.stderr)
+        return 1
+    data, around = _read_json(a.data), _read_json(a.around)        # unread: the page without them, said in its result
+    found = investigation_facts(data, around, notes)
+    html = investigation(notes, data, around, searches)
     with open(a.out, "w", encoding="utf-8") as f:
         f.write(html)
-    # the chat message: the essence only — the page is the account (owner, 2026-10-11: "much more synthetic and shorter")
-    doc = document(str(notes["title"]).strip(), "", [(None, [summary + DETAILS])])
+    # the chat message: the recorded facts, then the AI's essence — the page is the account (owner, 2026-10-11: "much
+    # more synthetic and shorter")
+    doc = document(str(notes["title"]).strip(), "", [(None, [x for x in (found["key"], summary + DETAILS) if x])])
     print(json.dumps({"html": a.out, "html_chars": len(html), "charts": html.count("<svg"),
+                      # what the page states from the records: the AI reads it against its account before sending
+                      "established": found["established"][:20], "ruled_out": found["ruled_out"][:20],
                       "unknown_fields": sorted(set(notes) - set(INVESTIGATION_FIELDS)),
-                      **({"data": "could not be read: no chart"} if a.data and data is None else {}),
+                      **({"data": "could not be read: no chart and no recorded facts"} if a.data and data is None else {}),
+                      **({"around": "could not be read: nothing ruled out from it"} if a.around and around is None else {}),
                       "message": for_the_ai(doc)}, indent=1))
     return 0
+
+
+def _read_json(path: str | None) -> dict | None:
+    if not path:
+        return None
+    try:
+        got = json.load(open(path, encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return got if isinstance(got, dict) else None
 
 
 if __name__ == "__main__":

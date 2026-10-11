@@ -27,6 +27,7 @@ import json
 import logging
 import os
 import re
+from dataclasses import replace
 from datetime import datetime
 from typing import Any, Awaitable, Callable, NamedTuple
 
@@ -100,6 +101,8 @@ class Kit(NamedTuple):
     server: Any
     names: set[str]
     tools: list
+    # the web searches the run makes (runner's guard adds each query): the run's scripts are told (run_skill_script)
+    searched: list | None = None
 
 
 class Toolbox:
@@ -126,6 +129,7 @@ class Toolbox:
         self.server_tools = {t["name"]: t for t in server_tools}
         self.state = state
         self.parts = Parts()
+        self.searched: list[str] = []      # this run's web searches, in order (runner.make_guard adds them)
         # ⚠️ A PICTURE THE AI LOOKED AT IS SHOWN TO THE PERSON TOO (2026-10-06). ha_get_camera_image shows it to the
         # AI only: asked "show me the living room camera", it looked, wrote "here's the current view", and the chat
         # got text. A send_message(camera=) option (0.12.57) was not used by the model either. The reply carries
@@ -200,7 +204,7 @@ class Toolbox:
         """This run's tools: the SDK server, the names it may call and the built tools — all read off the same list."""
         tools = self.tool_objects(person, origin)
         names = {f"mcp__{SERVER}__{t.name}" for t in tools} | ({WEB_SEARCH} if self.include_web else set())
-        return Kit(create_sdk_mcp_server(name=SERVER, version=__version__, tools=tools), names, tools)
+        return Kit(create_sdk_mcp_server(name=SERVER, version=__version__, tools=tools), names, tools, self.searched)
 
     def _proxy(self, name: str):
         t = self.server_tools[name]
@@ -418,7 +422,10 @@ class Toolbox:
                 # ⚠️ THE NEXT PART OF THE SAME RUN, NOT A NEW RUN: running it again would carry its
                 # tickets and messages out a second time.
                 return _ok(self.parts.serve(key, None, part))
-            ans = await asyncio.to_thread(script_run.run, self.s, self.state, skill, sc, final, by=script_run.AI)
+            # ⚠️ A SCRIPT KNOWS THE WEB WAS USED (owner, 2026-10-11: "include the sources, when web_search tool is used"):
+            # the investigation page refuses to be made without the pages behind what the AI read on the web
+            run_s = replace(self.s, web_searches=json.dumps(self.searched[:20])) if self.searched else self.s
+            ans = await asyncio.to_thread(script_run.run, run_s, self.state, skill, sc, final, by=script_run.AI)
             out = ans.text()
             if ans.ok and self.carry_out:
                 # ⚠️ THE SAME RESULT AS ON SCHEDULE (owner, 2026-10-01): its tickets are created and its

@@ -402,3 +402,19 @@ def test_a_mode_belongs_to_a_command_skill_and_needs_its_words(tmp_path):
         else:
             with pytest.raises(SkillError):
                 parse_skill("s", str(d))
+
+
+def test_a_skills_brain_is_one_the_rules_know(tmp_path):
+    from vesta_agent.skills import SkillError, parse_skill
+    d = tmp_path / "s"
+    (d / "scripts").mkdir(parents=True)
+    (d / "SKILL.md").write_text("x")
+    for raw, ok in (("command: look\nbrain: performance\nlimit_usd: 2\n", True), ("command: look\nbrain: genius\n", False),
+                    ("command: look\nlimit_usd: 500\n", False)):
+        (d / "skill.yaml").write_text("description: x\n" + raw)
+        if ok:
+            sk = parse_skill("s", str(d))
+            assert (sk.brain, sk.limit_usd) == ("performance", 2.0)
+        else:
+            with pytest.raises(SkillError):
+                parse_skill("s", str(d))

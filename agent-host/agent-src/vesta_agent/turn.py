@@ -66,10 +66,12 @@ class TurnResult:
         return bool(self.problem or (self.error and not self.text))
 
 
-def chat_terms(settings, policy, server_tools: list[dict], person, chat: int) -> Terms:
-    """A person answered in a chat: what THEY may use there, the villa's chat brain and reply limit."""
+def chat_terms(settings, policy, server_tools: list[dict], person, chat: int, brain: str | None = None,
+               limit_usd: float | None = None) -> Terms:
+    """A person answered in a chat: what THEY may use there, the villa's chat brain and reply limit — or the brain and
+    limit the command skill it was called for names (skills.Skill.brain / limit_usd)."""
     return Terms(frozenset(tool_access.allowed_for(policy, server_tools, person.role if person else None, chat)),
-                 settings.profile, float(settings.reply_limit_usd),
+                 brain or settings.profile, float(limit_usd if limit_usd is not None else settings.reply_limit_usd),
                  agent_records.for_person(person.name if person else None, chat))
 
 
@@ -92,11 +94,14 @@ class Turns:
 
     async def chat(self, person, chat: int, prompt: str, *, resume: str | None = None,
                    asked: str | None = None, image: tuple[str, str] | None = None,
-                   invoked: str | None = None, inv: str | None = None) -> TurnResult:
+                   invoked: str | None = None, inv: str | None = None, modes: list[str] | None = None,
+                   brain: str | None = None, limit_usd: float | None = None) -> TurnResult:
         """A person's message (or a Continue) answered in `chat`. The chat keeps one folder: its turns take turns
         (app.lock), and a Continue reads what the turn before it saved."""
-        terms = chat_terms(self.s, self.policy(), await self.server_tools(), person, chat)
-        return await self._run(terms, self.s.in_folder(f"chats/{chat}"), prompt, person, Origin(chat, CONVERSATION),
+        terms = chat_terms(self.s, self.policy(), await self.server_tools(), person, chat, brain, limit_usd)
+        from dataclasses import replace
+        run_settings = replace(self.s.in_folder(f"chats/{chat}"), request_modes=",".join(modes or []))
+        return await self._run(terms, run_settings, prompt, person, Origin(chat, CONVERSATION),
                                resume, asked, [chat], image, invoked, inv)
 
     async def job(self, name: str, cfg: dict, prompt: str, origin: Origin | None, run_settings,

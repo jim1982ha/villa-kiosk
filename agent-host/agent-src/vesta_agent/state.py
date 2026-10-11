@@ -46,7 +46,8 @@ create table if not exists continuations(
   requested_by integer,
   used integer not null default 0,
   invoked text,                     -- the command skill the answer it continues was called for (review 32)
-  inv text                          -- and the investigation it belongs to: its offers, its page
+  inv text,                         -- and the investigation it belongs to: its offers, its page
+  modes text                        -- and the modes the request's words switched on (skills.Skill.modes)
 );
 -- a fault the AI offered in a chat, created only when a person presses its button (owner, 2026-10-11)
 create table if not exists ticket_offers(
@@ -132,7 +133,7 @@ class State:
             if col not in {r[1] for r in self.db.execute("pragma table_info(ticket_offers)")}:
                 self.db.execute(f"alter table ticket_offers add column {col} text")
         # a Continue made before 0.12.165 continues no command skill
-        for col in ("invoked", "inv"):
+        for col in ("invoked", "inv", "modes"):
             if col not in {r[1] for r in self.db.execute("pragma table_info(continuations)")}:
                 self.db.execute(f"alter table continuations add column {col} text")
         self.db.commit()
@@ -512,14 +513,15 @@ class State:
 
     # ------------------------------------------------------------------ continue
     def new_continuation(self, chat_id: int, session_id: str, requested_by: int | None,
-                         invoked: str | None = None, inv: str | None = None) -> str:
+                         invoked: str | None = None, inv: str | None = None, modes: list[str] | None = None) -> str:
         """⚠️ A CONTINUE CARRIES WHAT IT CONTINUES (review 32): the command skill its answer was called for and the
         investigation it belongs to — kept per chat, a "thanks" in between made the old Continue lose its skill."""
         cid = secrets.token_urlsafe(9)
         with self._lock:
-            self.db.execute("insert into continuations(id, created_at, chat_id, session_id, requested_by, invoked, inv) "
-                            "values(?,?,?,?,?,?,?)",
-                            (cid, utcnow().isoformat(), int(chat_id), session_id, requested_by, invoked, inv))
+            self.db.execute("insert into continuations(id, created_at, chat_id, session_id, requested_by, invoked, inv, "
+                            "modes) values(?,?,?,?,?,?,?,?)",
+                            (cid, utcnow().isoformat(), int(chat_id), session_id, requested_by, invoked, inv,
+                             ",".join(modes or [])))
             self.db.commit()
         return cid
 

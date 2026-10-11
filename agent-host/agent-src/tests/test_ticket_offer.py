@@ -437,3 +437,91 @@ def test_web_research_is_switched_by_the_persons_own_words(tmp_path, monkeypatch
     n = len(ai.runs)
     run(v.converse(JM, v.policy().person(JM), "see the website of the heater", invoked="investigate"))
     assert "Web research: off" in ai.runs[n]["prompt"]                      # a word, never part of one
+
+
+def test_the_requests_modes_reach_the_skills_scripts(tmp_path, monkeypatch):
+    # the page script can only require web sources if it knows web research was on (VESTA_MODES)
+    from ai_fake import FakeAI
+    from vesta_agent.skills import script_env
+    v = _with_investigate(tmp_path)
+    seen = []
+
+    async def act(call):
+        seen.append(call["folder"])
+    ai = FakeAI("ok", act=act).install(monkeypatch)
+    captured = {}
+    real = v.turns._run
+
+    async def spy(terms, run_settings, *a, **k):
+        captured.setdefault("envs", []).append(script_env(run_settings)["VESTA_MODES"])
+        return await real(terms, run_settings, *a, **k)
+    v.turns._run = spy
+    run(v.converse(JM, v.policy().person(JM), "the heater, use internet", invoked="investigate"))
+    assert captured["envs"] == ["web_research", "web_research"]                  # its page follow-up keeps the mode
+    captured.clear()
+    run(v.converse(JM, v.policy().person(JM), "the heater", invoked="investigate"))
+    assert captured["envs"] == ["", ""]
+
+
+def test_an_investigation_uses_its_own_brain_while_every_other_answer_keeps_the_villas(tmp_path, monkeypatch):
+    # owner, 2026-10-11: the investigation ran on the villa's Economy brain (haiku) and skipped steps
+    from ai_fake import FakeAI
+    from helpers import copy_skill
+    from vesta_agent import skills
+    from vesta_agent.policy import PROFILES
+    assert set(skills.BRAINS) == set(PROFILES)                               # one list of brains
+    v = make_agent(tmp_path, {"people": PEOPLE, "settings": {"profile": "economy", "reply_limit_usd": 1}},
+                   kiosk=FakeKiosk())
+    copy_skill("investigate", v.s.skills_dir)
+    ai = FakeAI("ok").install(monkeypatch)
+    run(v.converse(JM, v.policy().person(JM), "what is on?"))
+    assert (ai.runs[-1]["profile"], ai.runs[-1]["limit_usd"]) == ("economy", 1.0)
+    n = len(ai.runs)
+    run(v.converse(JM, v.policy().person(JM), "the heater", invoked="investigate"))
+    assert all((r["profile"], r["limit_usd"]) == ("auto", 3.0) for r in ai.runs[n:])   # its page follow-up too
+
+
+def test_a_web_search_the_ai_made_reaches_the_runs_scripts(tmp_path, monkeypatch):
+    # owner, 2026-10-11: "include the sources, when web_search tool is used" — asked for or not. The page script can only
+    # require them if it knows the AI searched: the run's guard records each search, run_skill_script passes them on.
+    import json
+    from ai_fake import FakeAI
+    from helpers import make_skill
+    v = make_agent(tmp_path, {"people": PEOPLE}, kiosk=FakeKiosk())
+    make_skill(v.s.skills_dir, "echo", {"tools": [], "scripts": {"env.py": {"description": "says its environment",
+                                                                           "commands": {"show": "its environment"}}}},
+               {"env.py": "import json, os\nprint(json.dumps({'searched': os.environ.get('VESTA_WEB_SEARCHES', '')}))\n"})
+    said = []
+
+    async def act(call):
+        said.append(await call["call"]("run_skill_script", {"skill": "echo", "script": "env.py", "args": ["show"]}))
+        await call["web_search"]("centrifugal pump runs without stopping")
+        said.append(await call["call"]("run_skill_script", {"skill": "echo", "script": "env.py", "args": ["show"]}))
+    FakeAI("ok", act=act).install(monkeypatch)
+    run(v.converse(JM, v.policy().person(JM), "the heater"))
+    got = [json.loads(s["content"][0]["text"])["searched"] for s in said]
+    assert got[0] == ""                                                     # no search yet: nothing said
+    assert json.loads(got[1]) == ["centrifugal pump runs without stopping"]
+
+
+def test_the_log_says_how_long_each_script_and_the_whole_answer_took(tmp_path, monkeypatch, caplog):
+    # owner, 2026-10-11: "i had to wait for almost 20 min" — and the log could not say where the time went
+    import logging
+    import re
+    from ai_fake import FakeAI
+    from helpers import make_skill
+    v = make_agent(tmp_path, {"people": PEOPLE}, kiosk=FakeKiosk())
+    make_skill(v.s.skills_dir, "echo", {"tools": [], "scripts": {"env.py": {"description": "says hello",
+                                                                           "commands": {"show": "hello"}}}},
+               {"env.py": "import time\ntime.sleep(0.2)\nprint('{}')\n"})
+
+    async def act(call):
+        await call["call"]("run_skill_script", {"skill": "echo", "script": "env.py", "args": ["show"]})
+    FakeAI("ok", act=act, delay_s=1.2).install(monkeypatch)              # the AI's own thinking time
+    with caplog.at_level(logging.INFO, logger="vesta"):
+        run(v.converse(JM, v.policy().person(JM), "the heater"))
+    said = "\n".join(r.getMessage() for r in caplog.records)
+    took = re.search(r"Skill echo: env\.py show took (\d+\.\d) s", said)
+    assert took and float(took.group(1)) >= 0.2
+    whole = re.search(r"Answered JM in chat 111 \(0\.010 USD, (\d+) s\)", said)
+    assert whole and int(whole.group(1)) >= 1
