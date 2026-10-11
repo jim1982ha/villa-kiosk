@@ -1,3 +1,11 @@
+## 0.12.157
+
+What you will see:
+- A new starter skill, investigate. Ask in the chat what happened and why ("what happened to the pump on the night of the 9th?", "since when is the heater off?", "check the logs for the gate") and the answer comes in the chat as one complete account: what happened, a timeline with times, what it most likely means, what Home Assistant cannot tell, what would have warned earlier, and how it was checked. It finds the devices from your words (and what shares their box or room), compares what they did with their own previous days, and reads the automations, devices that dropped off and notifications of the same hours. It names no device: it works for any villa and any question of that kind.
+- The skill appears on its own after this update, even though the villa was installed before it. A starter skill you delete still stays deleted.
+- Rule 6 of the agent's instructions now says answers are short for a status, a question or an action, while an investigation is complete and may be long. Your instructions file is updated only if that sentence is still word for word as shipped: if you reworded it, yours is kept.
+- villa-concierge no longer claims questions about what happened in the past: it leaves them to investigate.
+
 ## 0.12.156
 
 What you will see: nothing new. The notes of 0.12.152 and 0.12.154 named this villa in their examples; a published add-on never names a villa (the redistributable hard rule), so they now say "Villa Example".

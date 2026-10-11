@@ -219,8 +219,20 @@ def load() -> Settings:
     return s
 
 
+#: Sentences of the starter instructions a release rewrote: (as an earlier release wrote it, as it is now). ⚠️ THE
+#: VILLA'S instructions.md WAS COPIED ONCE (seed_config) and a later release never reaches it — so the owner's
+#: "proceed" changed nothing on a villa already installed (rule 6, 2026-10-11). The old sentence is replaced only
+#: where it still stands word for word: one the person reworded is theirs, and nothing else in the file is touched.
+INSTRUCTION_REWRITES = (
+    ("6. One question at most per message. Short. The reader's language.",
+     "6. One question at most per message. Short for a status, a question or an action; an investigation "
+     "(the investigate skill) is complete and may be long. The reader's language."),
+)
+
+
 def seed_config(s: Settings) -> list[str]:
-    """policy.yaml and instructions.md from the starter copies, when absent.
+    """policy.yaml and instructions.md from the starter copies, when absent; then each INSTRUCTION_REWRITES sentence
+    still word for word in the villa's instructions.md brought to its current wording.
 
     ⚠️ ONLY WHEN THE FILE IS MISSING, never merged into one that exists: a default
     spread under a person's file would bring back every line they deleted."""
@@ -230,4 +242,20 @@ def seed_config(s: Settings) -> list[str]:
         if not os.path.exists(target) and os.path.exists(src):
             shutil.copyfile(src, target)
             written.append(os.path.basename(target))
+    try:
+        with open(s.instructions_path, encoding="utf-8") as f:
+            text = f.read()
+    except OSError:
+        return written
+    new = text
+    for old, now in INSTRUCTION_REWRITES:
+        new = new.replace(old, now)
+    if new != text:
+        try:
+            with open(s.instructions_path + ".tmp", "w", encoding="utf-8") as f:
+                f.write(new)
+            os.replace(s.instructions_path + ".tmp", s.instructions_path)
+            written.append("instructions.md (reworded)")
+        except OSError:
+            pass                                     # a file that cannot be written keeps its wording: never a failed start
     return written

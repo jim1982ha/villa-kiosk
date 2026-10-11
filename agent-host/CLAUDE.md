@@ -103,6 +103,9 @@ Decisions of 2026-09-30 (owner):
   skill never edited there follows the release (fingerprints of every shipped
   version in `agent-src/starter/shipped-skills.json`; a test fails until a
   changed starter is recorded); an edited one is kept.
+  0.12.157: a starter skill a later release ADDS reaches an older install (`skills.OFFERED`, .offered.json: the
+  names an install was given; a deleted one stays deleted); a rewritten starter instruction sentence reaches the
+  villa's instructions.md only where it still stands word for word (`config.INSTRUCTION_REWRITES`).
 - ⚠️ SKILLS BEFORE CODE (owner, 2026-10-01, mandatory): whatever a skill can
   define (report sections, thresholds, wording, routes, which scripts the model
   may run, which rules are VESTA alerts) lives in the skill, never in

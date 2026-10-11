@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.151 (11 October 2026)
+
+- Starter skill `investigate` (find / timeline / around: read-only, every flag against the device's own previous days,
+  no device named; tests/test_investigate.py).
+- A starter skill a later release adds reaches an install made before it: `skills.OFFERED` (.offered.json) records the
+  names an install was given (`OFFERED_BEFORE_THE_RECORD` for installs from before the record); a name not in it is
+  copied once, a deleted one stays deleted. The start logs and records it in History ("added by engine").
+- `config.INSTRUCTION_REWRITES`: a starter instruction sentence a release rewrote replaces the villa's copy only where
+  it still stands word for word (rule 6: an investigation is complete and may be long).
+- villa-concierge's SKILL.md leaves questions about what happened in the past to investigate.
+
 ## 0.6.150 (11 October 2026)
 
 - No villa's name in tracked files: examples in message_format, compose and two tests now say "Villa Example" (the

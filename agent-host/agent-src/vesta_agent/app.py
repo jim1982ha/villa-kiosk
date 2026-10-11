@@ -57,7 +57,7 @@ from .tickets import Tickets
 from .policy import NOT_REGISTERED, Person, Policy, problems as policy_problems
 from .routing import Origin, Routing
 from .scheduler import Scheduler
-from .skills import Skills, script_env
+from .skills import SEEDED, Skills, script_env
 from .state import State
 from .telegram import Telegram, TelegramError
 from .tools import Toolbox, scrub
@@ -247,9 +247,17 @@ class Vesta:
     async def start(self):
         for p, blocking in self.s.problems():
             (log.error if blocking else log.warning)("Setting missing: %s", p)
+        first = not os.path.exists(os.path.join(self.skills.dir, SEEDED))
         copied = self.skills.seed()
         if copied:
-            log.info("Starter skills copied to the skills folder (first start): %s", ", ".join(copied))
+            log.info("Starter skills copied to the skills folder (%s): %s",
+                     "first start" if first else "new in this version", ", ".join(copied))
+            if not first:
+                from . import __version__
+                from .history import History
+                for name in copied:
+                    History(self.s.history_path).record("Release", f"{name} added by engine {__version__} (a new starter skill)",
+                                                        {"kind": "release", "skill": name}, None, None)
         try:
             updated, kept = self.skills.update_starters()
         except OSError as e:

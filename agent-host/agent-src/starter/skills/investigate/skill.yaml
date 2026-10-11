@@ -1,0 +1,18 @@
+# investigate — what happened, and why: a full account from Home Assistant's records, answered in the chat.
+# The one line below is what the AI sees to choose this skill: it names the questions that call for it.
+description: Investigates what happened and why — an incident, a fault, damage, a flood, a power cut, a device that stopped or behaved strangely, "check the logs/history", "what caused", "since when", "how long", "who or what turned it on". Answers in the chat with the full timeline, the evidence, the likely causes and what would have warned earlier.
+
+# The Home Assistant tools an investigation reads with (VESTA Agent page → Rules › AI tools).
+# They limit nothing: who asks decides. The AI is told if one is switched off.
+tools: [ha_search, ha_get_entity, ha_get_device, ha_get_state, ha_get_history, ha_get_logs,
+        ha_get_automation_traces, ha_config_get_automation, ha_list_floors_areas]
+
+scripts:
+  investigate.py:
+    description: Reads Home Assistant for an investigation and returns short, checked facts (read-only)
+    commands:
+      find: the devices a word or a room means, and what sits next to them (same physical device, same room)
+      timeline: what each device did in a period, as periods with times and levels, compared with its own normal
+      around: everything else recorded then — automations, devices that stopped answering, notifications, VESTA alerts
+    flags: {--what: text, --where: text, --entities: text, --start: date, --end: date, --baseline-days: text}
+    inject: [store, zone]

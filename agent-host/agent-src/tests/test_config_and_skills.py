@@ -67,16 +67,52 @@ def test_behaviour_settings_reload_live_and_bad_values_fall_back(tmp_path):
 # ---------------------------------------------------------------------- skills as files
 def test_the_starter_skills_all_load():
     names = sorted(Skills(os.path.join(STARTER_DIR, "skills")).all())
-    assert names == ["alert-desk", "preventive-maintenance", "reports", "roi-energy", "villa-concierge"]
+    assert names == ["alert-desk", "investigate", "preventive-maintenance", "reports", "roi-energy", "villa-concierge"]
 
 
 def test_seeded_once_and_a_deleted_skill_stays_deleted(tmp_path):
     sk = Skills(str(tmp_path / "skills"), os.path.join(STARTER_DIR, "skills"))
-    assert len(sk.seed()) == 5
+    assert len(sk.seed()) == 6
     import shutil
     shutil.rmtree(tmp_path / "skills" / "roi-energy")
-    assert sk.seed() == []                      # the marker, not the folders, says it was done
+    assert sk.seed() == []                      # the record, not the folders, says it was done
     assert "roi-energy" not in sk.all()
+
+
+def test_a_new_starter_skill_reaches_a_villa_installed_before_it_and_a_deleted_one_stays_deleted(tmp_path):
+    # 2026-10-11: the marker said "copied once", so investigate would have been taken for a skill the owner deleted
+    import shutil
+    from vesta_agent.skills import OFFERED, OFFERED_BEFORE_THE_RECORD, SEEDED
+    skills = tmp_path / "skills"
+    skills.mkdir()
+    for name in OFFERED_BEFORE_THE_RECORD:                                  # a villa installed before the record...
+        if name != "roi-energy":                                           # ...whose owner deleted one
+            shutil.copytree(os.path.join(STARTER_DIR, "skills", name), skills / name)
+    (skills / SEEDED).write_text("The starter skills were copied here once.\n")
+    sk = Skills(str(skills), os.path.join(STARTER_DIR, "skills"))
+    assert sk.seed() == ["investigate"]
+    assert "investigate" in sk.all() and "roi-energy" not in sk.all()
+    assert (skills / OFFERED).exists() and sk.seed() == []
+    shutil.rmtree(skills / "investigate")                                  # deleted by the owner in turn
+    assert sk.seed() == [] and "investigate" not in sk.all()
+
+
+def test_an_instruction_sentence_a_release_rewrote_reaches_the_villa_file_only_where_it_still_stands(tmp_path):
+    from vesta_agent.config import INSTRUCTION_REWRITES, seed_config
+    s = settings(str(tmp_path))
+    starter = open(os.path.join(STARTER_DIR, "config", "instructions.md"), encoding="utf-8").read()
+    for old, now in INSTRUCTION_REWRITES:
+        assert now in starter and old not in starter                       # the starter says it the new way
+    old, now = INSTRUCTION_REWRITES[0]
+    with open(s.instructions_path, "w", encoding="utf-8") as f:
+        f.write(f"My own rule.\n{old} No emoji.\n")
+    assert seed_config(s) == ["instructions.md (reworded)"]
+    assert open(s.instructions_path).read() == f"My own rule.\n{now} No emoji.\n"
+    assert seed_config(s) == []                                            # once
+    with open(s.instructions_path, "w", encoding="utf-8") as f:
+        f.write("6. One question at most per message. Very short. My language.\n")
+    seed_config(s)
+    assert open(s.instructions_path).read() == "6. One question at most per message. Very short. My language.\n"
 
 
 def test_every_starter_skill_version_is_recorded_as_shipped():

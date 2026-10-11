@@ -1,6 +1,6 @@
 ---
 name: villa-concierge
-description: Talk to the villa in the chat. Status ("is everything OK", "what is on"), questions about a room or a device, and actions on the villa asked with ha_call_service, approved by a person. Also answers "which room?" for a new device and records accept / later / ignore on proposals. Use on any chat message that is not an incident reply or a report request.
+description: Talk to the villa in the chat. Status ("is everything OK", "what is on"), questions about a room or a device, and actions on the villa asked with ha_call_service, approved by a person. Also answers "which room?" for a new device and records accept / later / ignore on proposals. Use on any chat message that is not an incident reply, a report request, or a question about what happened in the past and why (the investigate skill).
 ---
 
 # villa-concierge

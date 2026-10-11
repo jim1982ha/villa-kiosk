@@ -115,6 +115,13 @@ WHEN = re.compile(r"^(?:(Mon|Tue|Wed|Thu|Fri|Sat|Sun|[1-9]|[12][0-9]|3[01]) )?([
 FLAG_KINDS = {"text", "date", "outfile", "infile", "switch"}
 INJECTS = {"pack", "store", "zone"}
 SEEDED = ".seeded"
+# ⚠️ A NEW STARTER SKILL IS NOT A DELETED ONE (investigate, 2026-10-11): the marker said "copied once, never again",
+# so a skill a later release adds was taken for one the owner deleted and never reached a villa installed before it.
+# The names this install was GIVEN are kept here: a starter name not in it is new, copied once and added; a name in
+# it whose folder is gone was deleted by the owner and stays deleted.
+OFFERED = ".offered.json"
+#: the starter skills of every install made before OFFERED existed: what such an install was given
+OFFERED_BEFORE_THE_RECORD = ("alert-desk", "preventive-maintenance", "reports", "roi-energy", "villa-concierge")
 # Every version of each starter skill a release has shipped, as fingerprints
 # (starter/shipped-skills.json). A skill folder equal to one of them was never
 # edited here, so an update may replace it; any other folder is the owner's.
@@ -416,25 +423,41 @@ class Skills:
 
     # ------------------------------------------------------------------ seeding
     def seed(self) -> list[str]:
-        """Copy the starter skills ONCE, on the first start, then never again.
+        """Copy each starter skill ONCE — all of them on the first start, a new one on the first start of the release
+        that brings it — then never again. Returns the names copied.
 
-        ⚠️ THE MARKER, NOT THE FOLDERS, SAYS IT WAS DONE: checking "is this skill
+        ⚠️ THE RECORD, NOT THE FOLDERS, SAYS WHAT WAS GIVEN: checking "is this skill
         there?" would bring a deleted skill back at the next start."""
         os.makedirs(self.dir, exist_ok=True)
-        marker = os.path.join(self.dir, SEEDED)
-        if os.path.exists(marker) or not self.starter_dir or not os.path.isdir(self.starter_dir):
+        if not self.starter_dir or not os.path.isdir(self.starter_dir):
             return []
+        marker = os.path.join(self.dir, SEEDED)
+        given = self._offered(set(OFFERED_BEFORE_THE_RECORD) if os.path.exists(marker) else set())
+        starters = sorted(n for n in os.listdir(self.starter_dir) if os.path.isdir(os.path.join(self.starter_dir, n)))
         copied = []
-        for name in sorted(os.listdir(self.starter_dir)):
-            src = os.path.join(self.starter_dir, name)
+        for name in starters:
             dst = os.path.join(self.dir, name)
-            if os.path.isdir(src) and not os.path.exists(dst):
-                shutil.copytree(src, dst, ignore=shutil.ignore_patterns("__pycache__"))
+            if name not in given and not os.path.exists(dst):
+                shutil.copytree(os.path.join(self.starter_dir, name), dst, ignore=shutil.ignore_patterns("__pycache__"))
                 copied.append(name)
-        with open(marker, "w", encoding="utf-8") as f:
-            f.write("The starter skills were copied here once. Delete a skill's folder to remove it; "
-                    "it will not come back.\n")
+        if not os.path.exists(marker):
+            with open(marker, "w", encoding="utf-8") as f:
+                f.write("The starter skills were copied here once. Delete a skill's folder to remove it; "
+                        "it will not come back.\n")
+        if set(starters) - given or not os.path.exists(os.path.join(self.dir, OFFERED)):
+            path = os.path.join(self.dir, OFFERED)
+            with open(path + ".tmp", "w", encoding="utf-8") as f:
+                json.dump(sorted(given | set(starters)), f, indent=1)
+            os.replace(path + ".tmp", path)          # whole or not at all: half a record would forget a deletion
         return copied
+
+    def _offered(self, before: set[str]) -> set[str]:
+        """The starter skills this install was given (OFFERED); `before` when it has no record yet."""
+        try:
+            with open(os.path.join(self.dir, OFFERED), encoding="utf-8") as f:
+                return set(json.load(f))
+        except (OSError, ValueError, TypeError):
+            return before
 
     # ------------------------------------------------------------------ updating
     def update_starters(self) -> tuple[list[str], list[str]]:
