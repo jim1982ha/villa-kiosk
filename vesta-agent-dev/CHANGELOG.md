@@ -1,3 +1,22 @@
+## 0.12.171
+
+What you will see on an /investigate page:
+- Every investigation searches the web: the "only if you write internet / web / online" trigger is gone.
+- "Investigation conclusions" first, the charts right under it.
+- Each web page used is numbered, and the text cites it where it was used ([1], [2]… link to the page); the page is
+  refused if a listed page is never cited.
+- The charts in plain words, each kind of shading its own colour: "ran longer or harder than usual", "kept stopping
+  and restarting", "read 0: no power reached it", "stopped reporting".
+- The chart fits the device: one that runs (a pump, a heater, an AC) also gets "How many minutes it ran each hour",
+  against its usual for that hour; one read as a level (a temperature) shows its usual days as a dashed line.
+- Its usual said in sentences: "Usually (over the 3 days before) it started about 54 times a day; a run usually
+  lasted 9 s and never more than 9 min…".
+- "Ruled out, and what the records cannot tell" is one section, grouped by what each finding means.
+- "What would have warned earlier" names each device once, one line per alert, repeats merged.
+- "Everything recorded, in time order" (folded) replaces "What the records show" and the timeline: each line marked
+  unusual, usual or reported.
+- "Web contribution" (the searches made and the numbered pages) sits in "How it was checked, and its sources".
+
 ## 0.12.170
 
 What you will see on an /investigate page:
