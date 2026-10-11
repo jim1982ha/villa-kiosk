@@ -1,3 +1,7 @@
+## 0.12.167
+
+What you will see: the investigate skill now lists "Web search" among its tools (Agent page › Skills › investigate › Skill tools), and its procedure says when to use it — the device's manual or its make and model's known failures, what an error code or a pattern of readings means, an outside event (a storm, a grid outage) when several devices stopped together. Every time and number still comes from Home Assistant; the account says where a web explanation came from. It follows your Rules › AI tools switch.
+
 ## 0.12.166
 
 What you will see in an investigation (any device, any automation):
