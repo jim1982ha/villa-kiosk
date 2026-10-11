@@ -20,6 +20,7 @@ from typing import Any
 
 import aiohttp
 
+from vesta_shared.message_format import telegram_entities
 from vesta_shared.messaging import split_message
 
 
@@ -153,6 +154,8 @@ class Telegram:
             form = aiohttp.FormData()
             form.add_field("chat_id", str(chat_id))
             form.add_field("caption", part.text)
+            for k, v in _italic("caption_entities", part.text).items():
+                form.add_field(k, json.dumps(v))
             if part.keyboard:
                 form.add_field("reply_markup", json.dumps(part.keyboard))
             if part.reply_to:
@@ -168,7 +171,7 @@ class Telegram:
             data_b64, mime = photo_b64
             form.add_field("photo", base64.b64decode(data_b64), filename="snapshot.jpg", content_type=mime or "image/jpeg")
             return await self._post_form("sendPhoto", form)     # refused: an error, never the caption alone
-        data: dict[str, Any] = {"chat_id": chat_id, "text": part.text}
+        data: dict[str, Any] = {"chat_id": chat_id, "text": part.text, **_italic("entities", part.text)}
         if part.keyboard:
             data["reply_markup"] = part.keyboard
         if part.reply_to:
@@ -228,7 +231,8 @@ class Telegram:
         """Rewrite one of the bot's messages: its buttons go, or become `keyboard`. False when Telegram refuses."""
         extra = {"reply_markup": keyboard} if keyboard else {}
         try:
-            await self.api("editMessageText", chat_id=chat_id, message_id=message_id, text=text[:4096], **extra)
+            await self.api("editMessageText", chat_id=chat_id, message_id=message_id, text=text[:4096], **extra,
+                           **_italic("entities", text[:4096]))
             return True
         except TelegramError as e:
             if NOT_MODIFIED in str(e):
@@ -239,13 +243,20 @@ class Telegram:
         # ⚠️ A PHOTO'S OR A FILE'S MESSAGE HAS A CAPTION, NOT A TEXT (architecture review 21): editMessageText is refused
         # there, every time — an alert sent with its file kept its buttons for good
         try:
-            await self.api("editMessageCaption", chat_id=chat_id, message_id=message_id, caption=text[:1024], **extra)
+            await self.api("editMessageCaption", chat_id=chat_id, message_id=message_id, caption=text[:1024], **extra,
+                           **_italic("caption_entities", text[:1024]))
             return True
         except TelegramError as e:
             if NOT_MODIFIED in str(e):
                 return True
             log.warning("editMessageCaption failed: %s", e)
             return False
+
+def _italic(key: str, text: str) -> dict:
+    """{key: how Telegram shows this message} — the one style table, vesta_shared.message_format.TELEGRAM — else {}."""
+    found = telegram_entities(text)
+    return {key: found} if found else {}
+
 
 def dump(obj: Any) -> str:
     return json.dumps(obj, default=str)[:500]

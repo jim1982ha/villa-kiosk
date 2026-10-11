@@ -1,3 +1,15 @@
+## 0.12.152
+
+What you will see — every alert and report on Telegram, in one layout (your requests of 11 October, and architecture reviews 27 and 28):
+- An alert reads, top to bottom: "#9-P2 (new)" (underlined; "existing" once anything was sent, "closed" at the end — never "Follow Up"), "To:" with everyone it went to, the alert itself as a quote, then "Status:" with what was sent and to whom ("- Alert sent 11/10/2026 09:57 to the Owner, Fabien, JM") and where it stands, in italics.
+- Where it stands starts with an icon: ⚠️ new alert, ⚠️ ⚙️ follow-up, 🆘 Need help pressed, ☑️ closed but VESTA cannot check the device, ✅ closed.
+- One incident, one picture: the group, Fabien's chat and yours always show the same message. A reminder sent to the facility managers only updates the group's copy quietly (no sound), and buttons stay where an answer is still expected.
+- Every answer names the person: "Done pressed by Fabien on 11/10/2026 10:27." — never "answered by the fm". "Need help" says the same thing everywhere: "the owner is asked to act".
+- When Home Assistant stops watching an alert that is still wrong: "Still not right when Home Assistant stopped watching it on …. VESTA keeps watching it and closes it once it is right. Press Done when it is fixed." Home Assistant's own "no longer tracked … (Repeat after)" line is gone.
+- Reports (daily, weekly, monthly) use the same layout: "The Lys House, daily report on 11/10/2026." underlined, "To:", then "New since yesterday:" and "Still open:", each item its own quote. The "Still open: 6. An alert: press Done…" sentence is gone. A long report comes as whole messages "(1/2)", "(2/2)" instead of being cut.
+- The default "What to do" of a condition alert no longer speaks of a door: "Check the device named and put it right."
+- A villa silent alert shows the villa's time, not UTC.
+
 ## 0.12.151
 
 What you will see (architecture review 26, every point — with VESTA (dev2) 2.496.323):

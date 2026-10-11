@@ -72,7 +72,8 @@ the conclusions are yours.
    `owner-monthly ... --out owner_monthly.html`). Your readings show as "VESTA's reading"; a slot
    reports.yaml marks `checked: true` is refused if one of its numbers is not in its figures — fix
    it and compose again (once).
-6. `send_message` with `attachment` the page's file name and, as text, your headline. Started from
+6. `send_message` with `attachment` the page's file name, `title` the `message`'s "title" as it is and
+   `text` its "text" (your headline). The agent writes the title and who it is for at the top. Started from
    a chat: `to: here`. On schedule: `to: fm` (weekly) or `to: owner` (monthly).
 
 Spend with care: the job has a spending limit (VESTA Agent page → Rules → AI jobs). Read what the

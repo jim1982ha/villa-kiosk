@@ -48,7 +48,7 @@ def test_resolved_closes_the_incident_and_its_ticket(store):
     assert res["decision"] == "resolved" and res["incident_id"] == iid
     assert store.incident(iid)["state"] == "resolved"
     assert [a for a in res["actions"] if a["action"] == "ticket.resolve"]
-    assert "No reply needed" in res["send"][0]["status"]                # where it stands: its own part (layout.py)
+    assert res["send"][0]["status"] == "Cleared in Home Assistant on {time}."   # its own part, the same words everywhere
     assert res["settle"] == [{"incident_id": iid, "note": "Cleared in Home Assistant on {time}."}]
     # the chase stops: no reminder for it any more
     assert desk.tick(store, T0 + timedelta(minutes=30))["reasked"] == []
@@ -133,7 +133,7 @@ def test_a_text_answer_settles_the_alerts_buttons_too(store):
     # "#2 done" typed in a chat: the alert and its reminders lose their buttons, like a press
     iid = desk.intake(store, event(), T0, mode_reader=lambda: "occupied")["incident_id"]
     res = desk.reply(store, iid, "done, it was the gardener", "fm", T0 + timedelta(minutes=5))
-    assert res["settle"] == [{"incident_id": iid, "note": "Done answered by the facility manager on {time}"}]
+    assert res["settle"] == [{"incident_id": iid, "note": "Done pressed by the facility manager on {time}."}]
     assert "settle" not in desk.reply(store, iid, "what happened?", "fm", T0 + timedelta(minutes=6))
 
 
@@ -239,7 +239,8 @@ def test_a_door_locked_after_its_rule_stopped_watching_closes_its_alert(store):
     assert res["cleared"] == [iid] and store.incident(iid)["state"] == "resolved"
     assert res["settle"] == [{"incident_id": iid, "note": "Cleared on {time}: front_door is locked."}]
     assert [a for a in res["actions"] if a["action"] == "ticket.resolve"]          # its Kiosk fault closes too
-    assert [s for s in res["send"] if s["to"] == "fm" and "No reply needed" in s["status"] and s["stage"] == "closed"], res["send"]
+    assert [s for s in res["send"] if s["to"] == "fm" and s["status"] == "Cleared on {time}: front_door is locked."
+            and s["stage"] == "closed"], res["send"]
     assert not _tick(store, villa, 120).get("cleared")                  # closed once
 
 
@@ -398,7 +399,7 @@ def test_after_done_the_desk_reads_the_device_once_and_reopens_what_is_still_bad
     res = _done(store, villa, iid, 20)
     assert res["not_quiet"] == [iid] and store.incident(iid)["closed_at"] is None
     (fm,) = [s for s in res["send"] if s["to"] == "fm"]
-    assert fm["status"] == "Done by the facility manager, but front_door still reads unlocked: still open. VESTA keeps watching it." and fm["keyboard"]
+    assert fm["status"] == "Done pressed by the facility manager, but front_door still reads unlocked: still open. VESTA keeps watching it." and fm["keyboard"]
     assert [a for a in res["actions"] if a["action"] == "ticket.reopen"]      # its own fault, open again
     assert not _tick(store, villa, 60).get("not_quiet")                         # read once
 
@@ -406,7 +407,7 @@ def test_after_done_the_desk_reads_the_device_once_and_reopens_what_is_still_bad
 def test_after_done_a_quiet_device_stays_closed_and_an_alert_without_states_promises_nothing(store):
     villa = Villa(**{"lock.front_door": [(T0 - timedelta(minutes=10), "unlocked"), (T0 + timedelta(minutes=15), "locked")]})
     iid = _left_unlocked(store, abandon=False)
-    assert "will check it stays quiet" in desk.reply(store, iid, "Done", "fm", T0 + timedelta(minutes=20))["send"][0]["status"]
+    assert "VESTA will check it stays right." in desk.reply(store, iid, "Done", "fm", T0 + timedelta(minutes=20))["send"][0]["status"]
     assert not _tick(store, villa, 31)["not_quiet"] and store.incident(iid)["closed_at"]
     villa.timeline["lock.front_door"].append((T0 + timedelta(days=3), "unlocked"))     # days later: another story
     assert not _tick(store, villa, 3 * 1440 + 30)["not_quiet"] and store.incident(iid)["closed_at"]

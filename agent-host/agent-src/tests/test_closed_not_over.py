@@ -112,10 +112,10 @@ def test_a_copy_settled_after_its_incident_closed_is_headed_closed(tmp_path):
     iid = st.new_incident("k", "automation.r", "lock.a", "P2", {"message": "Door unlocked"})
     run(v.outcome.carry_out({"send": [{"to": "fm", "text": "Door unlocked", "incident_id": iid, "keyboard": True,
                                        "stage": "new"}]}, "alert-desk"))
-    assert "Incident: New #" in v.tg.sent[-1][1]
+    assert v.tg.sent[-1][1].split("\n")[0] == f"#{iid}-P2 (new)"
     st.update_incident(iid, closed_at=datetime.now(timezone.utc).isoformat(), state="resolved")
     run(v.outcome.carry_out({"settle": [{"incident_id": iid, "note": "Cleared in Home Assistant on {time}."}]}))
-    assert f"Incident: Closed #{iid}" in v.tg.edits[-1][2]
+    assert v.tg.edits[-1][2].startswith(f"#{iid}-P2 (closed)\n")
 
 
 # ---------------------------------------------------------------------- 5 · a person Telegram refuses

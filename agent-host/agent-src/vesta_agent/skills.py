@@ -24,7 +24,7 @@ and skill.yaml (what the engine needs):
     on_event:
       critical_event: "desk.py intake --event {event}"
       voice_message: "voice.py prepare --audio {audio} --language {language}"   # prints {"stt": {...}}
-    on_reply: "desk.py reply --incident {incident} --text {text} --from {role}"
+    on_reply: "desk.py reply --incident {incident} --text {text} --from {role} --name {name}"
     before_answer: "concierge.py status"   what the AI is given before EVERY answer in a chat: the script's "text"
 
 Nothing is compiled or cached across calls: a changed folder counts at the next

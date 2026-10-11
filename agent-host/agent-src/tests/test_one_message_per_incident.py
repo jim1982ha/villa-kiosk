@@ -72,7 +72,7 @@ def shown(v, chat):
 def test_home_assistants_alert_takes_the_incidents_number(agent):
     ha_alert(agent)
     (grp,) = shown(agent, GROUP)
-    assert grp.startswith("For: ") and ", P2 Incident: New #1\n" in grp and status(grp) == "" and body(grp).startswith("🔓") and SUMMARY in grp and "What to do:" in grp
+    assert grp.startswith("#1-P2 (new)\nTo: ") and status(grp) == "" and body(grp).startswith("🔓") and SUMMARY in grp and "What to do:" in grp
     (fm,) = shown(agent, FM_CHAT)
     assert status(fm) == "" and body(fm).startswith("🔓") and SUMMARY in fm and "Press Done" not in fm and "Reply Done" not in fm
 
@@ -100,8 +100,9 @@ def test_an_answer_replaces_the_alert_where_it_was_given(agent):
     (fm,) = shown(agent, FM_CHAT)
     # the alert first, then where it stands, with when (owner, 2026-10-10) — and no promise of a check this alert's rule
     # gives no states for (architecture review 23: "will check it stays quiet" was never kept)
-    assert re.fullmatch(r"Closed: done, answered by the facility manager on \d\d/\d\d/\d{4} \d\d:\d\d\.", status(fm)) \
-        and body(fm).index(SUMMARY) < body(fm).index("Closed:")
+    # who pressed it by name, as the button's own footer says it (owner, 2026-10-11)
+    assert re.fullmatch(r"Done pressed by Wayan on \d\d/\d\d/\d{4} \d\d:\d\d\.", status(fm)) \
+        and body(fm).index(SUMMARY) < fm.index("Done pressed by")
 
 
 def test_a_message_past_telegrams_48_hours_becomes_a_pointer(agent):
@@ -144,11 +145,10 @@ def test_need_help_reaches_the_owner_with_the_buttons_to_answer(agent):
                                                 "message": {"message_id": reminder, "chat": {"id": FM_CHAT}}, "bot": BOT}))
     owner = agent.thread.shown(int(iid))[GROUP]
     assert owner["buttons"] and not owner["settled"], owner
-    assert status(owner["text"]) == "The facility manager needs help" and SUMMARY in owner["text"]
+    assert re.fullmatch(r"Need help pressed by Wayan on .+: the owner is asked to act\.", status(owner["text"])) and SUMMARY in owner["text"]
     assert all(mid != owner["mid"] for _, mid, _ in agent.tg.edits)     # never edited: its buttons are still there
     (fm,) = shown(agent, FM_CHAT)
-    assert re.fullmatch(r"Need help, answered by the facility manager on \d\d/\d\d/\d{4} \d\d:\d\d: the owner has been told",
-                        status(fm))
+    assert status(fm) == status(owner["text"])                         # the same sentence in every chat (2026-10-11)
 
 
 def test_a_second_close_changes_nothing_and_the_records_are_pruned_with_the_others(agent):
@@ -177,19 +177,18 @@ def test_every_message_of_an_open_alert_has_its_buttons_in_every_chat(agent):
 
 
 def test_every_notice_has_one_heading_with_the_incidents_history(agent):
-    # owner, 2026-10-10: "For: <Name>, Incident: <New/Follow Up> #N", one line per earlier notice (when, to whom), a rule,
-    # then the text — the incident's line, its earlier messages and its footer were three different makings
+    # owner, 2026-10-10: one heading for every notice. 2026-10-11 (#21: "redundant and at different places"), in the
+    # order the owner drew: "#7 (existing)", "To: Wayan", the alert, then "Status:" — the history ("- Alert sent
+    # 11/10/2026 09:57 to Wayan") and where it stands, each a block — never "For: the Owner, Incident: Follow Up #7"
     from vesta_shared import result as R
     run(agent.outcome.carry_out({"send": [R.message("fm", "Pump stopped", incident=7, buttons=True, stage="new")]}, "alert-desk"))
     first = agent.tg.sent[-1][1]
-    assert first.startswith("For: ") and ", Incident: New #7\n-------\nPump stopped" in first
+    assert re.fullmatch(r"#7 \(new\)\nTo: .+\nPump stopped\n\nStatus:\n⚠️ New alert", first)
     run(agent.outcome.carry_out({"send": [R.message("owner", "Still stopped", incident=7, buttons=True,
                                                     stage="escalated")]}, "alert-desk"))
     later = agent.tg.sent[-1][1]
-    head, text = later.split("\n-------\n")
-    lines = head.split("\n")
-    assert lines[0].endswith(", Incident: Follow Up #7") and text == "Still stopped"
-    assert re.match(r"First time seen on \d\d/\d\d/\d{4} \d\d:\d\d, to .+", lines[1]) and len(lines) == 2
+    assert re.fullmatch(r"#7 \(existing\)\nTo: .+\nStill stopped\n\nStatus:\n"
+                        r"- Alert sent \d\d/\d\d/\d{4} \d\d:\d\d to [^\n]+\n\n⚠️ ⚙️ Still open", later), later
 
 
 def test_a_fault_closed_in_the_kiosk_says_who_and_when_on_telegram():
@@ -244,9 +243,9 @@ def test_a_press_puts_where_it_stands_last_in_place_of_the_old_status():
                             status="Reminder: no answer after 15 min")
     assert layout.render(layout.changed(reminder, status="Done pressed by JM_O on 10/10/2026 15:04")) == \
         "For: JM_FM\n-------\nDoor left open\nWhat to do: close it\n-------\nDone pressed by JM_O on 10/10/2026 15:04"
-    new = layout.parts(head="For: JM_FM, Incident: New #14", body="Door left open")
+    new = layout.parts(head="#14-P2 (closed)\nTo: JM_FM", body="Door left open")
     assert layout.render(layout.changed(new, status="Done pressed by JM_O on 10/10/2026 15:04")) == \
-        "For: JM_FM, Incident: New #14\n-------\nDoor left open\n-------\nDone pressed by JM_O on 10/10/2026 15:04"
+        "#14-P2 (closed)\nTo: JM_FM\nDoor left open\n\nStatus:\n✅ Done pressed by JM_O on 10/10/2026 15:04"
     # architecture review 19: the parts are kept, never cut out of the text — an alert holding its own "-------" line
     # keeps its end at a press, and a request's lead (why it is asked) stays when its body says what became of it
     odd = layout.parts(head="For: JM_FM", body="Pump log:\n-------\nstopped at 03:00")

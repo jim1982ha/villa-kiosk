@@ -48,15 +48,17 @@ def villa_day(zone: "str | ZoneInfo", as_of: str | None = None, last_finished: b
     return today - timedelta(days=1) if last_finished else today
 
 
-def day_label(d: date, weekday: bool = False, long: bool = False, year: bool = False) -> str:
+def day_label(d: date, weekday: bool = False, long: bool = False, year: bool = False, numeric: bool = False) -> str:
     """A day as every message and report writes it: "5 Oct", never "05 Oct". weekday: "Mon 5 Oct"; long:
-    "Monday 5 October"; year: "… 2026".
+    "Monday 5 October"; year: "… 2026"; numeric: "05/10/2026", as a message's title and its notices say it.
 
     ⚠️ ONE FORMAT (2026-10-05): seven hand-written strftime("%d %b") calls in the skills, four stripping
     the leading zero and three not, so the same report said "05 Oct" in one line and "5 Oct" in the next.
     (Seven helpers here — ms_to_local, parse_iso, fmt_day… — had no caller at all; they went.) Seven more
     ("%a %d %b": "Mon 05 Oct") were found by the architecture review of 2026-10-07: weekday and long are here
     so no skill needs its own."""
+    if numeric:
+        return f"{d:%d}/{d:%m}/{d.year}"
     out = f"{d.day} {d:%B}" if long else f"{d.day} {d:%b}"
     if weekday or long:
         out = f"{d:%A} {out}" if long else f"{d:%a} {out}"

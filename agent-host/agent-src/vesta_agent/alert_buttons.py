@@ -82,7 +82,8 @@ class AlertButtons:
         # and the chat itself shows the incident was handled
         # ⚠️ THE FOOTER (owner, 2026-10-10): "<button> pressed by <Name> on 09/10/2026 17:13", the name as the People list
         # names this person for the chat's role
-        await self.thread.close(int(iid), f"{label} pressed by {name} on {{time}}")
+        await self.thread.close(int(iid), f"{label} pressed by {name} on {{time}}.",
+                                mark="help" if opt == "need_help" else None)       # 🆘 (layout.MARK_ICONS)
         if self.run_job:
-            await self.run_job(skill, skill.on_reply, 120, {"incident": iid, "text": label, "role": person.role},
+            await self.run_job(skill, skill.on_reply, 120, {"incident": iid, "text": label, "role": person.role, "name": name},
                                Origin(chat))

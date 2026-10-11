@@ -51,7 +51,8 @@ from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
 from vesta_shared import result as R  # noqa: E402  (what the engine is asked to do: its shape)
 from vesta_shared import script  # noqa: E402  (pack, store, zone, day: one set-up)
 from vesta_shared.params import MissingParameter  # noqa: E402
-from vesta_shared.messaging import fmt_money, incident_tag, split_message  # noqa: E402
+from vesta_shared.messaging import fmt_money, incident_tag  # noqa: E402
+from vesta_shared.message_format import document, split_title  # noqa: E402  (the one shape: title, To:, sections)
 from vesta_shared.axis import is_flat, label as axis_label, nice_axis  # noqa: E402  (the one axis rule)
 from vesta_shared.store import Incident, Store  # noqa: E402
 from vesta_shared.timeutil import day_label, day_time_label, villa_date  # noqa: E402  (the one day format)
@@ -72,6 +73,24 @@ def _grouped(items: list[dict], group_from: int, words: dict) -> list[str]:
         else:
             out.append(f"- {group['severity']} {group['title']}: {group['shown']}.")
     return out
+
+
+def send(to: str, doc: str, **k) -> dict:
+    """The message that sends a report written in the shape: its title as data — the agent writes it and "To:" over the
+    text, and cuts a long one into whole messages (vesta_agent/posting.py; review 28)."""
+    t, body = split_title(doc)
+    return R.message(to, body, title=t, **k)
+
+
+def for_the_ai(doc: str) -> dict:
+    """What the AI is handed to send: {title, text} — send_message(title=…, text=…) (SKILL.md)."""
+    t, body = split_title(doc)
+    return {"title": t, "text": body}
+
+
+def title(villa: str, name: str, on: date) -> str:
+    """A report message's title (owner, 2026-10-11): "The Lys House, daily report on 11/10/2026." """
+    return f"{villa}, {name} report on {day_label(on, numeric=True)}."
 
 
 def fm_daily(pack: KnowledgePack, store: Store, as_of: date) -> str:
@@ -100,26 +119,27 @@ def fm_daily(pack: KnowledgePack, store: Store, as_of: date) -> str:
     noted = {p["incident"] for p in view["new"] if p["incident"]
              and (store.incident(p["incident"]) or {}).get("state") == Incident.DIGEST}
     open_now = [p for p in view["open"] if p not in new and p["incident"] not in noted]
-    lines = [f"{pack.villa}, {day_label(as_of, weekday=True)} morning."]
+    # ⚠️ THE ONE SHAPE (owner, 2026-10-11): a title, "To:" (the agent names who), then each section's label and its
+    # items, each item its own quote on Telegram — vesta_shared.message_format; never a style written here
+    sections = []
     if new:
-        lines.append("New:")
-        lines += _grouped([{"kind": p["rule_id"], "severity": p["severity"], "subject": name_of(p["entity_id"], p["title"]),
-                            "title": p["title"]} for p in new], group_from, words)
+        sections.append(("New since yesterday", _grouped([{"kind": p["rule_id"], "severity": p["severity"],
+                                                           "subject": name_of(p["entity_id"], p["title"]),
+                                                           "title": p["title"]} for p in new], group_from, words)))
     if noted:
-        lines.append("Also noted (no action needed yet):")
-        lines += [f"- {p['title']}" for p in view["new"] if p["incident"] in noted]
+        sections.append(("Also noted (no action needed yet)", [f"- {p['title']}" for p in view["new"] if p["incident"] in noted]))
     if open_now:
         # ⚠️ AN INCIDENT NUMBER ONLY WHERE "#N done" WORKS: an alert's incident number. It used to print task numbers,
-        # which no reply could close; a maintenance finding is closed in the VESTA Kiosk instead.
-        lines.append(f"Still open: {len(open_now)}. An alert: press Done or Need help on its message; "
-                     "the rest: close it in the VESTA Kiosk (Facility → Faults) when it is done.")
+        # which no reply could close; a maintenance finding is closed in the VESTA Kiosk instead. (Owner, 2026-10-11: the
+        # line "Still open: 6. An alert: press Done … the rest: close it in the VESTA Kiosk" gave no useful indication.)
         alerts = [p for p in open_now if p["incident"]]
-        lines += [f"- {incident_tag(p['incident'])} · {p['title'][:160]}" for p in alerts]
-        lines += _grouped([{"kind": p["rule_id"], "severity": p["severity"], "subject": name_of(p["entity_id"], p["title"]),
-                            "title": p["title"][:160]} for p in open_now if not p["incident"]], group_from, words)[:8]
-    if len(lines) == 1:
-        lines.append("Nothing new, nothing open.")
-    return "\n".join(lines)
+        sections.append(("Still open", [f"- {incident_tag(p['incident'])} · {p['title'][:160]}" for p in alerts]
+                         + _grouped([{"kind": p["rule_id"], "severity": p["severity"],
+                                      "subject": name_of(p["entity_id"], p["title"]), "title": p["title"][:160]}
+                                     for p in open_now if not p["incident"]], group_from, words)[:8]))
+    if not sections:
+        sections.append((None, ["Nothing new, nothing open."]))
+    return document(title(pack.villa, "daily", as_of), "", sections)
 
 
 def owner_weekly(pack: KnowledgePack, store: Store, energy: dict) -> str:
@@ -134,9 +154,11 @@ def owner_weekly(pack: KnowledgePack, store: Store, energy: dict) -> str:
     kwh = f"{energy['total_kwh']:.0f} kWh" if energy.get("total_kwh") is not None else "kWh n/a"
     vs = f" ({energy['total_vs_prev_pct']:+.0f}%)" if energy.get("total_vs_prev_pct") is not None else ""
     cost = f", {fmt_money(energy['total_cost'], energy['currency'])}" if energy.get("total_cost") else ""
-    return (f"{pack.villa}, week to {energy['end']}: {kwh}{vs}{cost}.\n"
-            f"{len(inc)} alert(s), {p1} critical, {alerts_open} still open; {open_tasks} maintenance problem(s) open.\n"
-            + ("All quiet." if not still and not p1 else "Details in the FM weekly page."))
+    return document(title(pack.villa, "weekly", date.fromisoformat(energy["end"])), "", [
+        ("Energy this week", [f"- {kwh}{vs}{cost}."]),
+        ("Alerts and problems", [f"- {len(inc)} alert(s), {p1} critical, {alerts_open} still open; {open_tasks} "
+                                 f"maintenance problem(s) open.",
+                                 "- All quiet." if not still and not p1 else "- Details in the FM weekly page."])])
 
 
 # ---------------------------------------------------------------- the charts
@@ -461,13 +483,20 @@ def main(argv=None):
             print(f"{a.cmd} needs --facts: first run facts.py {a.cmd} --energy <period>.json --out facts.json.", file=sys.stderr)
             return 1
         name = "weekly" if a.cmd == "fm-weekly" else "monthly"
+
+        def message(villa: str, *items: str) -> str:
+            # the page's chat message, in the one shape: its title, "To:" (the agent names who), what it says
+            today = datetime.now(ZoneInfo(villa_zone or "UTC")).date()
+            return document(title(villa or "The villa", name, today), "", [(None, [i for i in items if i])])
+        villa_zone = None
         if mode == "limit" and (not os.path.exists(a.facts) or (a.since and datetime.fromtimestamp(
                 os.path.getmtime(a.facts)).astimezone() < datetime.fromisoformat(a.since))):
-            print(json.dumps({"send": [R.message(a.finish, (
+            print(json.dumps({"send": [send(a.finish, message("", (
                 f"The {name} report stopped at its {a.limit} USD limit before its figures were ready, so there is "
-                f"nothing to send. Its limit can be raised on the VESTA Agent page (Rules → AI jobs)."))]}))
+                f"nothing to send. Its limit can be raised on the VESTA Agent page (Rules → AI jobs).")))]}))
             return 0
         facts = json.load(open(a.facts, encoding="utf-8"))
+        villa_zone = facts.get("zone")
         notes = {}
         if a.notes and os.path.exists(a.notes) and mode != "no_ai":
             try:
@@ -483,13 +512,16 @@ def main(argv=None):
             with open(a.out, "w", encoding="utf-8") as f:
                 f.write(html)
             res["html"] = a.out
+        head = good.get("headline") or good.get("hero") or ""
+        # the text to send with the page, in the one shape — the AI sends it as it is (SKILL.md, step 6)
+        res["message"] = for_the_ai(message(facts.get("villa") or "", head))
         if mode == "no_ai":
-            res = {"send": [R.message(a.finish, f"The {name} report.\n\n{without_ai_note(a.no_ai)}",
-                                      attachment=os.path.basename(a.out))]}
+            res = {"send": [send(a.finish, message(facts.get("villa") or "", without_ai_note(a.no_ai)),
+                                 attachment=os.path.basename(a.out))]}
         elif mode == "limit":
-            head = good.get("headline") or good.get("hero") or f"The {name} report."
-            res = {"send": [R.message(a.finish, f"{head}\n\n(This report stopped at its {a.limit} USD limit: some readings "
-                                                "are missing.)", attachment=os.path.basename(a.out))]}
+            res = {"send": [send(a.finish, message(facts.get("villa") or "", head, f"(This report stopped at its "
+                                                   f"{a.limit} USD limit: some readings are missing.)"),
+                                 attachment=os.path.basename(a.out))]}
         print(json.dumps(res, indent=1)); return 0
 
     if a.cmd == "owner-weekly" and not a.energy:
@@ -503,17 +535,17 @@ def main(argv=None):
     as_of = s.day(a.as_of)
     if a.cmd == "fm-daily":
         try:
-            messages = split_message(fm_daily(pack, store, as_of))
+            doc = fm_daily(pack, store, as_of)
         except MissingParameter as e:
             print(f"fm-daily: {e}", file=sys.stderr)
             return 1
     else:
-        messages = [owner_weekly(pack, store, json.load(open(a.energy)))]
+        doc = owner_weekly(pack, store, json.load(open(a.energy)))
     if mode == "no_ai":
-        # a job's without_ai step: the messages are sent as written, saying they were made without the AI
-        messages[-1] = messages[-1] + "\n\n" + without_ai_note(a.no_ai)
-        print(json.dumps({"send": [R.message(a.finish, m) for m in messages]}, indent=1)); return 0
-    print(json.dumps({"messages": messages}, indent=1)); return 0
+        # a job's without_ai step: the message is sent as written, saying it was made without the AI; a long one is cut
+        # into whole messages by the agent (posting.py), never here
+        print(json.dumps({"send": [send(a.finish, doc + "\n\n" + without_ai_note(a.no_ai))]}, indent=1)); return 0
+    print(json.dumps({"message": for_the_ai(doc)}, indent=1)); return 0
 
 
 if __name__ == "__main__":

@@ -49,8 +49,22 @@ def finding_name(finding: dict) -> str | None:
 STAGES = ("new", "reminder", "escalated", "update", "back", "still", "closed")
 
 
+#: What a bottom line says beyond its stage (vesta_agent/layout.py draws it): a person asked for help; a closure VESTA
+#: could not check (the device does not answer, or its rule names no bad state). Owner, 2026-10-11.
+MARKS = ("help", "unchecked")
+
+
+def _mark(m: dict, mark: str | None) -> dict:
+    if mark is not None:
+        if mark not in MARKS:
+            raise ValueError(f"mark must be one of {', '.join(MARKS)}")
+        m["mark"] = mark
+    return m
+
+
 def message(to: str, text: str, *, status: str | None = None, incident: int | None = None, buttons: bool = False,
-            attachment: str | None = None, stage: str | None = None) -> dict:
+            attachment: str | None = None, stage: str | None = None, mark: str | None = None,
+            title: str | None = None) -> dict:
     """A message for `to` (here · owner · fm). `buttons`: the alert's Done / Need help for `incident`; `stage`: what
     this notice about it is (STAGES) — the engine writes its heading and its history line. "{time}" in `text` is the
     villa's time when it is sent (10/10/2026 15:04), as in a settle note. `status`: where it stands, shown under a line
@@ -70,7 +84,9 @@ def message(to: str, text: str, *, status: str | None = None, incident: int | No
         m["keyboard"] = True
     if attachment:
         m["attachment"] = attachment
-    return m
+    if title:
+        m["title"] = title          # a report's title: the agent writes it, and "To:" under it (message_format.titled)
+    return _mark(m, mark)
 
 
 def fault_note(check: str | None) -> str | None:
@@ -99,9 +115,10 @@ def snapshot(entity_id: str, incident: int) -> dict:
     return {"action": "snapshot.get", "entity_id": entity_id, "incident_id": int(incident)}
 
 
-def settle(incident: int, note: str) -> dict:
-    """Every message carrying the incident's buttons loses them and shows `note` ("{time}": the villa's time)."""
-    return {"incident_id": int(incident), "note": note}
+def settle(incident: int, note: str, mark: str | None = None) -> dict:
+    """Every message carrying the incident's buttons loses them and shows `note` ("{time}": the villa's time); `mark`:
+    MARKS."""
+    return _mark({"incident_id": int(incident), "note": note}, mark)
 
 
 def ha_message(incident: int, text: str, context: str | None, stage: str | None = None, status: str | None = None) -> dict:

@@ -107,22 +107,40 @@ class Outcome:
             # no siren to ask for: the warning itself goes to the gate's people (it was dropped before, 0.12.80)
             items += [{"to": to, "text": gate_prompt} for to in gate.get("to") or ("owner",)]
         # one result's messages are ONE notice of its incident: one history line, its chats together (notice.py)
-        noticed: dict[int, tuple[str | None, list[tuple[int, frozenset]]]] = {}
+        # one history line per kind of notice this result sent (owner, 2026-10-11: "Escalated … to Jim, Fabien" — Fabien
+        # had only been told his own "Need help" was passed on): {(incident, stage): chats}
+        noticed: dict[tuple[int, str | None], list[tuple[int, frozenset]]] = {}
 
         def notice(iid, stage, chat, roles=frozenset()):
-            st, chs = noticed.get(int(iid), (stage, []))
-            noticed[int(iid)] = (st or stage, chs + [(chat, frozenset(roles))])
+            noticed.setdefault((int(iid), stage), []).append((chat, frozenset(roles)))
+        pairs, unrouted = self._deliveries(items, route, origin)
+        pairs = [p for p in pairs if p[0] not in {int(x) for x in skip}]
+
+        def incident_of(item):
+            return item.get("incident_id") or (res.get("incident_id") if item.get("keyboard") else None)
+        # who this result's notice of each incident goes to: its "To:" line, the same in every chat (notice.heading)
+        going: dict[int, list[str]] = {}
+        sent_to: dict[int, list[str]] = {}              # a report's: everyone its "To:" names, the same in every chat
+        if self.notices:
+            for chat, item, roles in pairs:
+                names = self.notices.recipients(chat, roles)
+                if incident_of(item):
+                    going.setdefault(int(incident_of(item)), []).extend(names)
+                else:
+                    sent_to.setdefault(id(item), []).extend(names)
+            going = {k: list(dict.fromkeys(v)) for k, v in going.items()}
+            sent_to = {k: list(dict.fromkeys(v)) for k, v in sent_to.items()}
+        posted: dict[int, list[int]] = {}               # incident → the chats this result showed it in, the last one last
         # Home Assistant's own messages first: the desk's messages below then replace them where both land
         for h in res.get("ha_messages") or []:
-            for chat in await self.adopt_ha(h, skill_name):
+            for chat in await self.adopt_ha(h, skill_name, going.get(int(h.get("incident_id") or 0))):
                 notice(h["incident_id"], h.get("stage"), chat)
+                posted.setdefault(int(h["incident_id"]), []).append(chat)
         # ⚠️ SETTLED BEFORE THIS RESULT'S MESSAGES ARE POSTED (architecture review 12, 2026-10-09): "Need help" sends the
         # owner a new message with the buttons; settled after it, that message lost them the moment it arrived
         for s in res.get("settle") or []:
             if isinstance(s, dict) and str(s.get("incident_id") or "").isdigit():
-                await self.thread.close(int(s["incident_id"]), str(s.get("note") or ""))
-        pairs, unrouted = self._deliveries(items, route, origin)
-        pairs = [p for p in pairs if p[0] not in {int(x) for x in skip}]
+                await self.thread.close(int(s["incident_id"]), str(s.get("note") or ""), mark=s.get("mark"))
         for item in unrouted:
             done["unrouted"] += 1
             self.state.log("send_unrouted", {"to": item.get("to"), "skill": skill_name})
@@ -133,7 +151,7 @@ class Outcome:
             kb = None
             # ⚠️ ITS INCIDENT AS A FIELD (review 7): it was read out of the wording ("#N"), so a reworded reminder
             # lost its buttons. A message with the buttons and no incident of its own is the result's incident's.
-            iid = item.get("incident_id") or (res.get("incident_id") if item.get("keyboard") else None)
+            iid = incident_of(item)
             # ⚠️ EVERY MESSAGE ABOUT AN OPEN ALERT HAS ITS BUTTONS, IN EVERY CHAT (owner, 2026-10-10: "the user shall not
             # have to type to reply anything"): the owner's group got the reminder of incident #9 with "Reply Done" and no
             # button — the buttons came only where the skill asked for them. Decided here, for every skill's message.
@@ -152,7 +170,9 @@ class Outcome:
             # the incident's message in this chat now: the earlier one there goes
             mid = await self.poster.post(chat, text, status=item.get("status") or "", roles=roles,
                                    incident=int(iid) if iid else None, keyboard=kb, document=doc,
-                                   thread=int(iid) if iid else None, origin=origin, stage=item.get("stage"))
+                                   thread=int(iid) if iid else None, origin=origin, stage=item.get("stage"),
+                                   mark=item.get("mark"), also=going.get(int(iid)) if iid else sent_to.get(id(item)),
+                                   title=item.get("title"))
             if iid and kb and "fm" in roles:
                 asked.setdefault(int(iid), []).append((chat, bool(mid)))
             if not mid:
@@ -160,11 +180,19 @@ class Outcome:
                 continue
             if iid:
                 notice(iid, item.get("stage"), chat, roles)
+                posted.setdefault(int(iid), []).append(chat)
             chats.add(chat)
             done["sent"] += 1
         if self.notices:
-            for iid, (stage, chs) in noticed.items():
+            for (iid, stage), chs in noticed.items():
                 self.notices.record(iid, stage, chs)
+        # ⚠️ ONE INCIDENT, ONE PICTURE (owner, 2026-10-11): a reminder went to the facility manager only, and the group's
+        # copy kept "(new)" and the first alert — every other copy now shows what was just sent, quietly
+        for iid, shown_in in posted.items():
+            latest = (self.thread.shown(iid).get(shown_in[-1]) or {})
+            if latest.get("parts"):
+                await self.thread.sync(iid, layout.of(latest), skip=set(shown_in), keyboard=(
+                    lambda c, i=iid: self.buttons.keyboard(i, c, skill_name)) if skill_name and self.buttons.open(iid) else None)
         # ⚠️ AN ALERT NOBODY OF THE FACILITY MANAGER'S RECEIVED (architecture review 25): Telegram refused every chat of
         # theirs (a person who never pressed Start) — the alert desk hands it to the owner at its next tick, never
         # 45 minutes later. Only a REFUSED chat counts: Telegram switched off is not "unreachable"
@@ -248,7 +276,7 @@ class Outcome:
         kept = sorted((n, k) for k, n in best.items())
         return [(pairs[n][0], pairs[n][1], frozenset(roles[k])) for n, k in kept], unrouted
 
-    async def adopt_ha(self, h: dict, skill_name: str | None = None) -> list[int]:
+    async def adopt_ha(self, h: dict, skill_name: str | None = None, also: list[str] | None = None) -> list[int]:
         """Home Assistant's messages of one automation run become incident messages (outcome key ha_messages)."""
         ctx, iid, text = (h or {}).get("context"), (h or {}).get("incident_id"), (h or {}).get("text") or ""
         if not (ctx and str(iid or "").isdigit() and text):
@@ -265,7 +293,7 @@ class Outcome:
             # "{time}" in its status: the villa's time now, as every message of the agent's writes it
             status = (h.get("status") or "").replace("{time}", when(datetime.now(timezone.utc), self.poster.tz))
             p = layout.parts(body=text, status=status,
-                             head=self.notices.heading(chat, int(iid), stage=h.get("stage")) if self.notices else "")
+                             head=self.notices.heading(chat, int(iid), stage=h.get("stage"), also=also) if self.notices else "")
             await self.thread.adopt(int(iid), chat, mid, p, keyboard=kb)
         if not found:
             log.info("Incident #%s: no Home Assistant message of its run to take over", iid)

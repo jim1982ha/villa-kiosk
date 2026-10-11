@@ -121,7 +121,7 @@ def test_a_press_on_the_agents_own_message_is_handled(agent):
     press = {**old, "id": "cb2", "data": "i:1:need_help"}
     run(agent.on_ha_event("telegram_callback", press))
     assert agent.tg.toasts[-1][1] == "Need help: noted."
-    assert any(status(t) == "The facility manager needs help" for _, t, _ in agent.tg.sent)   # the owner is told
+    assert any(status(t).startswith("Need help pressed by ") for _, t, _ in agent.tg.sent)   # the owner is told
 
 
 def test_a_press_in_a_private_chat_is_answered_there_and_its_buttons_go(agent):
@@ -142,7 +142,7 @@ def test_a_press_in_a_private_chat_is_answered_there_and_its_buttons_go(agent):
     (chat, m, text), = agent.tg.edits
     assert (chat, m) == (FM, mid)
     assert text.startswith("🚨 Incident #1: pump stopped\n-------\nDone pressed by FM on ")    # what, then who and when, under a line
-    assert re.search(r" on \d\d/\d\d/\d{4} \d\d:\d\d$", text)
+    assert re.search(r" on \d\d/\d\d/\d{4} \d\d:\d\d\.$", text)
 
 
 def test_telegram_gets_plain_text_not_markdown(agent):
@@ -239,10 +239,12 @@ def test_an_answer_settles_the_alert_in_every_chat_and_its_reminder(agent):
     # one message per incident per chat (owner, 2026-10-09): the reminder replaced the alert in the FM's chat
     fm_alert = next(1001 + n for n, (c, t, _) in enumerate(agent.tg.sent) if c == FM and body(t).startswith("🔒 Door unlocked"))
     assert (FM, fm_alert) in agent.tg.deleted
-    edited = sorted((c, body(t).split("\n")[0]) for c, _, t in agent.tg.edits)       # its body's first line
-    assert edited == sorted([(OWNER, f"🔒 Door unlocked. Incident #{iid}."), (GROUP, f"🔒 Door unlocked. Incident #{iid}."),
-                             (FM, f"Reminder, incident #{iid}: m.")])
-    assert all(re.search(r"\n-------\nDone pressed by FM on \d\d/\d\d/\d{4} \d\d:\d\d$", t) for _, _, t in agent.tg.edits)
+    # every copy was told at the press (owner, 2026-10-01) — and ends showing the same thing, in every chat (owner,
+    # 2026-10-11: one incident, one picture)
+    assert {c for c, _, _ in agent.tg.edits} == {OWNER, GROUP, FM}
+    shown = {c: r["text"] for c, r in agent.thread.shown(iid).items()}
+    assert set(shown) == {OWNER, GROUP, FM} and len(set(shown.values())) == 1, shown
+    assert re.search(r"\n(?:(?:✅|⚠️|⚠️ ⚙️) )?Done pressed by FM on \d\d/\d\d/\d{4} \d\d:\d\d\.", shown[GROUP]), shown[GROUP]
     # settled once: no chat still shows the incident's buttons unanswered
     assert not [c for c, r in agent.thread.shown(iid).items() if r["buttons"] and not r["settled"]]
 
@@ -253,5 +255,5 @@ def test_an_incident_home_assistant_clears_settles_its_alerts(agent):
     run(agent.outcome.carry_out({"send": [{"to": "fm", "text": f"Incident #{iid}.", "keyboard": True}], "incident_id": iid}, "alert-desk"))
     run(agent.outcome.carry_out({"settle": [{"incident_id": iid, "note": "Cleared in Home Assistant, {time}. No reply needed."}]}, "alert-desk"))
     assert sorted(c for c, _, _ in agent.tg.edits) == sorted([FM, GROUP])     # every chat of the role: each settled
-    assert all(re.search(r"\n-------\nCleared in Home Assistant, \d\d/\d\d/\d{4} \d\d:\d\d\. No reply needed\.$", text)
+    assert all(re.search(r"(?:\n-------\n|\n\n|Status:\n)(?:(?:✅|⚠️|⚠️ ⚙️) )?Cleared in Home Assistant, \d\d/\d\d/\d{4} \d\d:\d\d\. No reply needed\.$", text)
                for _, _, text in agent.tg.edits)

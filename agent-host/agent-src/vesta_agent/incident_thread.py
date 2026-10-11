@@ -43,7 +43,8 @@ class IncidentThread:
         self.delete = delete            # Telegram's deleteMessage: True when the message is gone
         self.retitle = None             # notice.Notices.retitle: a copy's heading as its incident stands now
 
-    async def post(self, iid: int | str, chat: int, mid: int, parts: dict, *, buttons: bool = False) -> None:
+    async def post(self, iid: int | str, chat: int, mid: int, parts: dict, *, buttons: bool = False,
+                   keyboard: dict | None = None) -> None:
         """Message `mid`, just sent to `chat` with these `parts` (layout.py), is now incident `iid`'s message there: the
         earlier one goes."""
         old = self.state.incident_message(iid, chat)
@@ -55,8 +56,10 @@ class IncidentThread:
             # what happened to the earlier copy, said (owner, 2026-10-10: two messages of #14 stayed in the group)
             log.info("%s in chat %s: message %s replaced by %s (%s)", iid, chat, old["mid"], mid,
                      "deleted" if gone else "kept, now a pointer" if self.edit else "kept")
+        # its buttons kept with it: a quiet update (`sync`) or a retry (`catch_up`) shows them again, never drops them
         self.state.set_incident_message(iid, chat, {"mid": mid, "parts": parts, "text": layout.render(parts),
-                                                    "buttons": buttons, "settled": False})
+                                                    "buttons": buttons, "settled": False,
+                                                    **({"kb": keyboard} if buttons and keyboard else {})})
 
     async def adopt(self, iid: int, chat: int, mid: int, parts: dict, keyboard: dict | None = None) -> None:
         """One of Home Assistant's own messages (a VESTA rule's alert, its all-clear) belongs to incident `iid`: it is
@@ -65,29 +68,55 @@ class IncidentThread:
         text = layout.render(parts)
         if self.edit:
             await self.edit(chat, mid, text, keyboard) if keyboard else await self.edit(chat, mid, text)
-        await self.post(iid, chat, mid, parts, buttons=bool(keyboard))
+        await self.post(iid, chat, mid, parts, buttons=bool(keyboard), keyboard=keyboard)
 
-    async def close(self, iid: int | str, note: str, body: str | None = None) -> int:
-        """Every message of incident `iid` still showing its buttons, in every chat, loses them and shows `note` (who
-        did what, when; "{time}": the villa's time now). Returns how many chats show it now. Settled once: a second close
-        changes nothing.
+    async def close(self, iid: int | str, note: str, body: str | None = None, mark: str | None = None) -> int:
+        """Every message of incident `iid`, in every chat, loses its buttons and shows `note` (who did what, when;
+        "{time}": the villa's time now) — a copy without buttons too (owner, 2026-10-11: one incident, one picture).
+        Returns how many chats show it now. Settled once: a second close changes nothing but a heading now "(closed)".
 
         ⚠️ ALL OF THEM, NOT THE ONE PRESSED (owner, 2026-10-01): a P1 goes to the owner's chat and the facility
         manager's; pressed in one, the others kept buttons that only answered "already closed"."""
         note = note.replace("{time}", when(datetime.now(timezone.utc), self.tz))     # 10/10/2026 17:13, as every notice
         n = 0
         for chat, rec in self.state.incident_chats(iid):
-            if not rec.get("buttons") or rec.get("settled"):
+            if rec.get("settled") and self.retitle:
+                # ⚠️ SETTLED BEFORE ITS INCIDENT CLOSED (owner, 2026-10-11): a press settles every copy at once, the desk
+                # closes the incident just after — the group's copy kept "New" above "Done pressed by Fabien"
+                p = layout.of(rec)
+                head = self.retitle(iid, p.get("head") or "", chat)
+                if head != (p.get("head") or ""):
+                    n += await self._show(iid, chat, rec, {**p, "head": head})
+                continue
+            if rec.get("settled"):
                 continue
             if not note:
                 self.state.set_incident_message(iid, chat, {**rec, "settled": True})
                 continue
             # where it stands is the note now, under the line at the bottom; a new body when one is given (an approved
             # request: what happened) — the head and the lead kept (layout.py). Settled: decided, whatever Telegram said — a copy it did not take is owed and tried again (`catch_up`)
-            p = layout.changed(layout.of(rec), status=note, body=body)
+            p = layout.changed(layout.of(rec), status=note, body=body, mark=mark)
             if self.retitle:
-                p = {**p, "head": self.retitle(iid, p.get("head") or "")}      # "Closed" once its incident is (notice.py)
+                p = {**p, "head": self.retitle(iid, p.get("head") or "", chat)}      # "Closed" once its incident is (notice.py)
             n += await self._show(iid, chat, {**rec, "settled": True}, p)
+        return n
+
+    async def sync(self, iid: int | str, parts: dict, skip=(), keyboard=None) -> int:
+        """Every copy of incident `iid` outside `skip` (the chats just sent it) shows `parts` too — the same title,
+        "To:", history and status in every chat, edited quietly (an edit makes no sound) (owner, 2026-10-11: "this should
+        be exactly the same, since we are speaking about the same incident"). A copy still asked to answer keeps its
+        buttons (`keyboard(chat)`). Returns how many changed."""
+        n = 0
+        for chat, rec in self.state.incident_chats(iid):
+            if chat in skip or not rec.get("mid"):
+                continue
+            p = {**parts, "limit": layout.of(rec).get("limit")}
+            if self.retitle:
+                p["head"] = self.retitle(iid, p.get("head") or "", chat)
+            if layout.render(p) == rec.get("text"):
+                continue
+            live = rec.get("buttons") and not rec.get("settled")
+            n += await self._show(iid, chat, rec, p, keyboard=(keyboard(chat) if live and keyboard else None))
         return n
 
     async def rewrite(self, iid: int | str, body: str) -> None:
@@ -96,17 +125,22 @@ class IncidentThread:
         for chat, rec in self.state.incident_chats(iid):
             await self._show(iid, chat, rec, layout.changed(layout.of(rec), body=body))
 
-    async def _show(self, iid: int | str, chat: int, rec: dict, p: dict) -> bool:
+    async def _show(self, iid: int | str, chat: int, rec: dict, p: dict, keyboard: dict | None = None) -> bool:
         """The copy in `chat` shows `p` now (its buttons gone). The record keeps `p` whatever Telegram said; a copy Telegram
         did not take is OWED and tried again by `catch_up`.
 
         ⚠️ RECORDED ONLY WHEN SHOWN (architecture review 21): a refused edit (a network blip) was recorded settled like
         a shown one and never tried again — one chat kept Done / Need help, "Already answered." at every press."""
         text = layout.render(p)
-        ok = bool(self.edit and await self.edit(chat, rec["mid"], text))
+        # a copy that keeps its buttons keeps them through the edit, and through a retry (`catch_up`: its "kb")
+        keyboard = keyboard or (rec.get("kb") if rec.get("buttons") and not rec.get("settled") else None)
+        ok = bool(self.edit and await (self.edit(chat, rec["mid"], text, keyboard) if keyboard
+                                       else self.edit(chat, rec["mid"], text)))
         now = datetime.now(timezone.utc)
         since = rec.get("owed_since") or now.isoformat()
         rec = {k: v for k, v in rec.items() if k not in ("owed", "owed_since", "owed_tries")} | {"parts": p, "text": text}
+        if keyboard:
+            rec["kb"] = keyboard
         if not ok:
             rec |= {"owed": now - datetime.fromisoformat(since) < OWED_FOR, "owed_since": since}
             if not rec["owed"]:

@@ -284,6 +284,11 @@ Decisions of 2026-09-30 (owner):
   first words (`kiosk.OLD_TITLE_NOTE` reads the old "Now: …" only). A title a person wrote stays (`person_titled`); a
   reopening is the Kiosk's "Reopen fault" step (`held_tickets` reopened_at/by); `still_there` says a silent device
   cannot be checked. Every Kiosk step records the profile (`by`) and the typed name (`who`).
+- Messages, 0.12.152 (owner, 2026-10-11; reviews 27–28): `vesta_shared/message_format.py` is the ONE shape of every
+  alert and report and the ONE style table (TELEGRAM) — another channel is another table; no other module names a style
+  (test). An alert: `notice.heading` + `layout._incident`; one incident = one picture in every chat
+  (`IncidentThread.sync` after every result, buttons kept per copy). A report is titled as data (`title=`), the agent
+  writes "To:" and its pages. Chat replies and approval requests keep the "For:" layout (owner's choice).
 - No PDF (owner, 2026-09-30): the reports are self-contained HTML pages sent
   as attachments. Chromium was ~480 MB of a 1.1 GB image for this alone.
 - ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent

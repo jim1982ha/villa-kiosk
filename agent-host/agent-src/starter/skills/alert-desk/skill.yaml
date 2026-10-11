@@ -10,4 +10,4 @@ scripts:                      # what the MODEL may run (the code runs the hooks 
 every_5_min: "desk.py tick"   # the chase ladder and the villa-silent watch, no model
 on_event:
   critical_event: "desk.py intake --event {event}"
-on_reply: "desk.py reply --incident {incident} --text {text} --from {role}"
+on_reply: "desk.py reply --incident {incident} --text {text} --from {role} --name {name}"

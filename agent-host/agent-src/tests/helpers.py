@@ -133,14 +133,34 @@ def run_terms(who="x", profile="auto", limit_usd=1.0, tools=()):
 
 
 def body(text: str) -> str:
-    """A notice's body: what follows its heading (vesta_agent/notice.py — "For: …", the incident, "-------")."""
+    """A notice's body: what follows its heading — an incident's alert and what is under it ("#9-P2 (new)", "To …:"), or
+    what follows "For: …" and its "-------" (vesta_agent/notice.py, layout.py)."""
+    from vesta_shared.message_format import INCIDENT_TITLE
     from vesta_shared.messaging import RULE
+    first, _, rest = text.partition("\n")
+    if INCIDENT_TITLE.fullmatch(first):
+        return rest.partition("\n")[2]
     return text.split(f"{RULE}\n", 1)[1] if f"{RULE}\n" in text else text
 
 
 def status(text: str) -> str:
     """Where a notice says it stands: its last part, under the last "-------" (messaging.incident_message — the alert
     first, the status last; a press's note replaces it: vesta_agent/layout.py)."""
+    from vesta_shared.message_format import INCIDENT_TITLE, STATUS
     from vesta_shared.messaging import RULE
-    parts = text.split(f"\n{RULE}\n")            # heading / alert / status
-    return parts[-1] if len(parts) >= 3 else ""
+    from vesta_agent.layout import STAGE_WORDS
+    from vesta_shared.message_format import MARK_ICONS, STAGE_ICONS
+    if INCIDENT_TITLE.fullmatch(text.partition("\n")[0]) and f"\n\n{STATUS}:\n" in text:
+        last = text.rsplit(f"\n\n{STATUS}:\n", 1)[1].rsplit("\n\n", 1)[-1]     # its last block: where it stands
+    else:
+        parts = text.split(f"\n{RULE}\n")            # heading / alert / status
+        last = parts[-1] if len(parts) >= 3 else ""
+    # the icon in front (layout.stage_line) is the stage again — pinned by test_one_saying, set aside here; a bottom
+    # line that is only the stage ("⚠️ New alert") says nothing of its own
+    for word, icon in STAGE_ICONS.items():
+        if last == f"{icon} {STAGE_WORDS[word]}":
+            return ""
+    for icon in sorted([*STAGE_ICONS.values(), *MARK_ICONS.values()], key=len, reverse=True):
+        if last.startswith(f"{icon} "):
+            return last[len(icon) + 1:]
+    return last

@@ -103,13 +103,16 @@ def details(payload: dict, rule_id: str) -> str:
     return f"{text}\nWhat to do: {check}" if check else text
 
 
-def about(inc: dict, status: str, extra: str = "") -> dict:
-    """A message about an open incident, as its parts: the original alert and `extra` (what just happened, in Home
-    Assistant's words) as its text, and where it stands as its status — the engine lays them out (heading, alert, status
-    at the bottom: vesta_agent/layout.py), never this skill. R.message(to, **about(...))."""
+def about(inc: dict, status: str) -> dict:
+    """A message about an incident, as its parts: the original alert as its text, where it stands — in the desk's own
+    words — as its status; the engine lays them out (heading, alert, status at the bottom: vesta_agent/layout.py).
+
+    ⚠️ ONE SAYING PER THING (owner, 2026-10-11, the laundry door's #21: "redundant and at different places"): Home
+    Assistant's own words for a later phase ("🔶 … no longer tracked after 30 min ("Repeat after"); the next breach
+    alerts again.") went under the alert — its name a second time, the rule's jargon, and "no longer tracked" above the
+    desk's "VESTA keeps watching it". What happened is the status's, said once."""
     inc = dict(inc)                                # a store row (find_open_incident) or a dict
-    body = details(json.loads(inc.get("payload") or "{}"), inc["rule_id"])
-    return {"text": f"{body}\n{extra}" if extra else body, "status": status}
+    return {"text": details(json.loads(inc.get("payload") or "{}"), inc["rule_id"]), "status": status}
 
 
 def chased(inc: dict) -> bool:
@@ -313,26 +316,31 @@ def resolved(store: Store, ev: dict, now: datetime) -> dict:
         late = _find_by_ha_incident(store, ev.get("ha_incident"), closed_within=timedelta(days=1), now=now)
         if late:
             out["incident_id"], out["decision"] = late["id"], "resolved_late"
-            out["ha_messages"] = [R.ha_message(late["id"], context=ev.get("_context_id"), **about(late, ev["message"]))]
+            out["ha_messages"] = [R.ha_message(late["id"], context=ev.get("_context_id"),
+                                               **about(late, "Cleared in Home Assistant on {time}."))]
         return out
-    _close(store, inc, now, out, "Cleared in Home Assistant on {time}.",
-           "Closed: Home Assistant reports it cleared on {time}. No reply needed.")
+    _close(store, inc, now, out, "Cleared in Home Assistant on {time}.")
     out["incident_id"], out["decision"] = inc["id"], "resolved"
     # Home Assistant's all-clear takes the incident's number and the original alert, and replaces its older ones
-    out["ha_messages"] = [R.ha_message(inc["id"], context=ev.get("_context_id"), **about(inc, ev["message"]))]
+    # its status in the desk's words, as every other end says it (never "✅ <the alert's name> — resolved after …")
+    out["ha_messages"] = [R.ha_message(inc["id"], context=ev.get("_context_id"),
+                                       **about(inc, "Cleared in Home Assistant on {time}."))]
     store.audit("alert-desk", "resolved", {"incident": inc["id"]})
     return out
 
 
-def _close(store: Store, inc: dict, now: datetime, out: dict, settled: str, told: str,
+def _close(store: Store, inc: dict, now: datetime, out: dict, settled: str,
            note: str = "Cleared: Home Assistant reports it is back to normal.") -> None:
     """An incident that is over: closed with its task and its Kiosk fault (`note`: what the fault says), its messages in
-    every chat lose their buttons and say `settled`; the facility manager, when still chased, is told `told`."""
+    every chat lose their buttons and say `settled`; the facility manager, when still chased, is told the same — ONE
+    wording per end (owner, 2026-10-11: the group read "Cleared in Home Assistant on …" and the
+    facility manager "Closed: Home Assistant reports it cleared on … No reply needed." for the same end)."""
     out["actions"] += Problems(store).close_incident(inc["id"], Incident.RESOLVED, now.isoformat(), note)
     # its alert and reminders, in every chat, lose their buttons: nobody presses for something already over
     out.setdefault("settle", []).append(R.settle(inc["id"], settled))
     if inc["state"] in Incident.CHASED:
-        out["send"].append(R.message("fm", **about(inc, told), incident=inc["id"], stage="closed"))
+        # the same words as every other copy (owner, 2026-10-11: one incident, one picture; ✅ already says no reply)
+        out["send"].append(R.message("fm", **about(inc, settled), incident=inc["id"], stage="closed"))
 
 
 def rule_states(inc: dict) -> tuple[list[str], set[str]] | None:
@@ -420,7 +428,8 @@ def quiet_after_done(store: Store, now: datetime, client, clear_minutes: float, 
             inc = store.incident(inc["id"])
             for role in recipients(inc["severity"]):
                 out["send"].append(R.message(role, **about(inc, f"{who}. Note: VESTA cannot check this one; "
-                                                                f"{'; '.join(words)}."), incident=inc["id"], stage="closed"))
+                                                                f"{'; '.join(words)}."), incident=inc["id"], stage="closed",
+                                             mark="unchecked"))           # ☑️ closed, not checked (owner, 2026-10-11)
     return reopened
 
 
@@ -444,7 +453,7 @@ def seen_again(store: Store, now: datetime, client, clear_minutes: float, out: d
             continue
         said = "; ".join(f"{(now_states[e].get('attributes') or {}).get('friendly_name') or e} is {now_states[e]['state']}"
                          for e in ents)
-        _close(store, inc, now, out, f"Cleared on {{time}}: {said}.", f"Closed on {{time}}: {said}. No reply needed.",
+        _close(store, inc, now, out, f"Cleared on {{time}}: {said}.",
                note="Cleared: back to normal, read again by the VESTA Agent.")
         store.audit("alert-desk", "seen_again", {"incident": inc["id"], "now": said})
         closed.append(inc["id"])
@@ -464,7 +473,7 @@ def abandoned(store: Store, ev: dict, now: datetime) -> dict:
     out["incident_id"] = inc["id"]
     if str(ev.get("still_true")).lower() == "false":
         cleared = "Cleared on {time}: back to normal when Home Assistant stopped watching."
-        _close(store, inc, now, out, cleared, "Closed on {time}: back to normal. No reply needed.")
+        _close(store, inc, now, out, cleared)
         out["decision"] = "abandoned_cleared"
         # ⚠️ ITS OWN MESSAGE SAYS THE SAME END (architecture review 23): taken over with the rule's "🔶 no longer
         # tracked" as its status, Home Assistant's "✅ cleared just inside the limit" became an orange warning
@@ -475,7 +484,9 @@ def abandoned(store: Store, ev: dict, now: datetime) -> dict:
     store.update_incident(inc["id"], payload=json.dumps(p))
     store.update_incident(inc["id"], state=Incident.ESCALATED, escalated_at=now.isoformat(), assignee="owner")
     out["decision"] = "abandoned"
-    said = about(inc, "Still not clear, and the rule has stopped watching it", extra=ev["message"])
+    # who watches it now, and what to do: the rule stopped, the desk did not (seen_again)
+    said = about(inc, "Still not right when Home Assistant stopped watching it on {time}. VESTA keeps watching it and "
+                      "closes it once it is right. Press Done when it is fixed.")
     out["ha_messages"] = [R.ha_message(inc["id"], context=ev.get("_context_id"), stage="escalated", **said)]
     out["send"].append(R.message("owner", **said, incident=inc["id"], buttons=True, stage="escalated"))
     return out
@@ -508,47 +519,55 @@ def siren_gate(store: Store, ev: dict, now: datetime) -> dict:
                    reason=None if armed else ("villa not vacant/away" if mode not in cfg["requires_villa_mode"] else "single signal"))
 
 
-def reply(store: Store, iid: int, text: str, sender_role: str, now: datetime, params: VillaParams | None = None) -> dict:
+def reply(store: Store, iid: int, text: str, sender_role: str, now: datetime, params: VillaParams | None = None,
+          name: str | None = None) -> dict:
+    """A person's answer to incident `iid` (a button: Done, Need help; or text). `name`: the person, as the People list
+    names them — every line about the answer says it the way the button's own footer does ("Done pressed by Fabien on
+    …"): owner, 2026-10-11, the same press read "Done pressed by Fabien" on one message and "Done answered by the
+    facility manager" on the next."""
     inc = store.incident(iid)
     out = {"send": [], "actions": []}
     if not inc:
         out["send"].append(R.message("here", f"There is no {incident_tag(iid)}.")); return out
     t = text.strip().lower()
-    who = {"owner": "the owner", "fm": "the facility manager"}.get(sender_role, sender_role)
+    who = name or {"owner": "the owner", "fm": "the facility manager"}.get(sender_role, sender_role)
 
-    def here(status: str, stage: str = "update") -> dict:
+    def here(status: str, stage: str = "update", mark: str | None = None) -> dict:
         """The answer in the chat it came from: it replaces the incident's message there, so it says it all."""
-        return R.message("here", **about(inc, status), incident=iid, stage=stage)
+        return R.message("here", **about(inc, status), incident=iid, stage=stage, mark=mark)
     if inc.get("closed_at"):
         out["send"].append(here("Already closed", "closed")); return out
     if t.startswith("done"):
         out["actions"] += Problems(store).close_incident(iid, Incident.DONE, now.isoformat(),
-                                                         f"Done, answered by the {sender_role}.", reply=text)
+                                                         f"Done by {who} on Telegram.", reply=text)
         # ⚠️ A PROMISE THE CODE KEEPS (architecture review 23): "will check it stays quiet" was written since 0.9.0 and
         # nothing ever checked — a Done on a door still unlocked closed it for good. The tick reads it again (quiet_after_done)
         # read again whatever the rule: still bad, it reopens; not knowable, the people asked are told (still_there)
         checks = rule_states(inc) is not None
         store.update_incident(iid, payload=json.dumps({**json.loads(inc.get("payload") or "{}"),
-                                                       "check_quiet": f"Done by {who}"}))
-        out["send"].append(here(f"Closed: done, answered by {who} on {{time}}."
-                                + (" The VESTA Agent will check it stays quiet." if checks else ""), "closed"))
+                                                       "check_quiet": f"Done pressed by {who}"}))
+        out["send"].append(here(f"Done pressed by {who} on {{time}}."
+                                + (" VESTA will check it stays right." if checks else ""), "closed"))
     elif t.startswith("need help"):
         store.update_incident(iid, state=Incident.ESCALATED, reply=text, escalated_at=now.isoformat(), assignee="owner")
-        out["send"].append(R.message("owner", **about(inc, f"{who.capitalize()} needs help"), incident=iid, buttons=True,
-                                     stage="escalated"))
-        out["send"].append(here(f"Need help, answered by {who} on {{time}}: the owner has been told"))
+        # ONE sentence in every chat (owner, 2026-10-11: one incident, one picture — "over to you" / "the owner has been
+        # told" were two)
+        helped = f"Need help pressed by {who} on {{time}}: the owner is asked to act."
+        out["send"].append(R.message("owner", **about(inc, helped), incident=iid, buttons=True, stage="escalated",
+                                     mark="help"))
+        out["send"].append(here(helped, mark="help"))
     else:
         store.update_incident(iid, reply=text)
         out["send"].append(here(f"Noted from {who} on {{time}}: {text}"))
     # the answer, on the alert and its reminders in every chat (a button press has already done it, by name)
     said = next((w for w in LADDER_OPTIONS if t.startswith(w.lower())), None)
     if said:
-        out["settle"] = [R.settle(iid, f"{said} answered by {who} on {{time}}")]
+        out["settle"] = [R.settle(iid, f"{said} pressed by {who} on {{time}}.", mark="help" if said == "Need help" else None)]
     store.audit("alert-desk", "reply", {"incident": iid, "by": sender_role, "text": text})
     return out
 
 
-def tick(store: Store, now: datetime, params: VillaParams | None = None, client=None) -> dict:
+def tick(store: Store, now: datetime, params: VillaParams | None = None, client=None, zone: str | None = None) -> dict:
     """Every 5 minutes: what Home Assistant will never say is over (`client`: its states, read again), chase ladder,
     villa-silent watch, alert fatigue."""
     params = _params(params)                       # no parameters given: the desk's own timings, never a copy here
@@ -606,7 +625,8 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
             store.update_incident(iid, state=Incident.ASKED, asked_at=now.isoformat(), assignee="fm")
             for role in recipients("P1"):
                 out["send"].append(R.message(role, "No contact with Home Assistant. Check power, the router and the internet link.",
-                                             status=f"[P1] Villa silent since {last[:16]} UTC", incident=iid, stage="new"))
+                                             status=f"Villa silent since {day_time_label(villa_time(last, zone or 'UTC'), weekday=True)}",
+                                             incident=iid, stage="new"))   # the priority is the heading's; the villa's time
     elif last:
         cur = store.find_open_incident("critical_internet---villa_silent|agent")
         if cur:
@@ -632,7 +652,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd", choices=["intake", "tick", "reply", "status"])
     script.arguments(ap)                           # --store --zone --fixture-dir --now: one set-up for every script
-    ap.add_argument("--event"); ap.add_argument("--incident", type=int); ap.add_argument("--text"); ap.add_argument("--from", dest="sender", default="fm")
+    ap.add_argument("--event"); ap.add_argument("--incident", type=int); ap.add_argument("--text"); ap.add_argument("--from", dest="sender", default="fm"); ap.add_argument("--name")
     a = ap.parse_args(argv)
     ctx = script.Context(a, skill=SKILL, settings_file="rules.yaml")
     store = ctx.store
@@ -644,9 +664,9 @@ def main(argv=None):
         ev = json.load(open(a.event)) if a.event else json.load(sys.stdin)
         res = intake(store, ev, now, params, lambda: villa_mode(ctx.client), zone=ctx.zone)
     elif a.cmd == "tick":
-        res = tick(store, now, params, ctx.live_client)
+        res = tick(store, now, params, ctx.live_client, zone=ctx.zone)
     elif a.cmd == "reply":
-        res = reply(store, a.incident, a.text or "", a.sender, now, params)
+        res = reply(store, a.incident, a.text or "", a.sender, now, params, name=a.name)
     else:
         res = {"open": store.incidents(), "beats": {n: store.last_beat(n) for n in (HA_BEAT, "agent_tick", "maintenance_nightly")}}
     print(json.dumps(res, indent=1, default=str))

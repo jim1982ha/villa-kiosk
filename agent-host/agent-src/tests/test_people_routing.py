@@ -205,8 +205,8 @@ def test_a_newer_snapshot_of_an_incident_replaces_the_older_one(tmp_path):
     run(v.outcome.carry_out(res))
     first = v.tg.next_id                                                # the snapshot: the last message sent
     # under the heading every message of the agent's carries (owner, 2026-10-10: "all formatted the same way")
-    assert v.tg.sent[-1][1].startswith("For: JM_O")
-    assert v.tg.sent[-1][1].endswith("-------\nCamera snapshot")
+    assert v.tg.sent[-1][1].startswith("#9 (new)\nTo: JM_O\n")
+    assert v.tg.sent[-1][1].endswith("\nCamera snapshot\n\nStatus:\n⚠️ New alert")
     run(v.outcome.carry_out(res))
     assert (JM, first) in v.tg.deleted
 
@@ -552,8 +552,12 @@ def test_a_photo_with_a_long_heading_is_posted_as_one_message_and_recorded_as_se
         return 1
 
     class Notices:
-        def heading(self, chat, incident, roles, stage=None):
-            return "For: JM, P1 Incident: Follow Up #9\n" + "\n".join(f"Reminded on 10/10/2026 1{i % 10}:00, to JM" for i in range(30))
+        def heading(self, chat, incident, roles, stage=None, also=None):
+            return "#9-P1 (existing)\nTo: JM\n" + "\n".join(f"- Reminder sent 10/10/2026 10:{i:02d} to JM" for i in range(30))
     run(Poster(send=send, notices=Notices()).post(JM, "Camera snapshot", incident=9, photo=("SlBFRw==", "image/jpeg")))
     (text, photo), = sent
-    assert photo and len(text) <= 1000 and text.endswith("-------\nCamera snapshot")       # one caption: one message
+    assert photo and len(text) <= 1000 and text.startswith("#9-P1 (existing)\nTo: JM\nCamera snapshot\n\nStatus:\n"
+                                                         "- Reminder sent 10/10/2026 10:00 to JM\n- … ") \
+        and text.endswith("to JM\n\n⚠️ ⚙️ Still open")                         # one caption: one message
+    # the first notice always kept, the newest kept, those between counted (review 28)
+    assert "10:29 to JM" in text and "10:01 to JM" not in text

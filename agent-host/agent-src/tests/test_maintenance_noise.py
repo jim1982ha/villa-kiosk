@@ -238,10 +238,10 @@ def test_the_morning_message_says_each_thing_once(tmp_path):
     r = _run(COMPOSE, "fm-daily", "--pack", str(tmp_path / "pack.json"), "--store", str(tmp_path / "s.sqlite"),
              "--as-of", "2026-10-04")
     assert r.returncode == 0, r.stderr
-    text = "\n".join(json.loads(r.stdout)["messages"])
+    m = json.loads(r.stdout)["message"]; text = m["title"] + "\n" + m["text"]
     assert "4 sensors have not reported: Sensor 0, Sensor 1, Sensor 2, Sensor 3." in text      # one line for the kind
     assert text.count("Motion battery") == 1                                                # new: not again under Still open
-    assert "Still open: 1." in text and "Old lock" in text
+    assert "\nStill open:\n" in text and "Old lock" in text
 
 
 # ------------------------------------------------------------------------------------------ run twice

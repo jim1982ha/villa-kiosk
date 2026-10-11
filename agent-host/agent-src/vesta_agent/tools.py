@@ -460,6 +460,8 @@ class Toolbox:
         targets = Routing.offered(origin)
         schema = {"type": "object", "properties": {
             "to": {"type": "string", "enum": targets}, "text": {"type": "string"},
+            "title": {"type": "string", "description": "A report's title, exactly as its script printed it (its "
+                      "\"title\"): the agent writes it at the top, and who the message is for under it."},
             "attachment": {"type": "string", "description": "A file name in the out folder (an HTML report page), optional."}},
             "required": ["to", "text"]}
         if origin and origin.holds:
@@ -481,7 +483,8 @@ class Toolbox:
             if self.carry_out is None:
                 return _err("Messages cannot be sent from here.")
             # every chat of its role, with the heading of a message sent on its own: the one way out (outcome.py)
-            item = {"to": to, "text": args.get("text", ""), **({"attachment": att} if att else {})}
+            item = {"to": to, "text": args.get("text", ""), **({"attachment": att} if att else {}),
+                    **({"title": str(args["title"])} if args.get("title") else {})}
             done = await self.carry_out({"send": [item]}, None, origin, self.s.out_dir)
             mid = done.get("sent")
             self.state.log("sent" if mid else "send_refused", {"to": to, "chars": len(args.get("text", "")), "attachment": att})

@@ -25,7 +25,7 @@ routes:
   - blueprint: critical_condition
     severity: P2
     cooldown_min: 120
-    check: "Check the door, lock or supply named, put it right."
+    check: "Check the device named and put it right."
   - blueprint: critical_watchdog
     severity: P2
     cooldown_min: 240

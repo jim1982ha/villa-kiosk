@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.146 (11 October 2026)
+
+- vesta_shared/message_format.py: the ONE shape of alerts and reports (title, "To:", sections; document / titled /
+  pages / split_title) and the ONE style table (TELEGRAM: title underline, item blockquote, note blockquote+italic),
+  read back by `parts` — an alert by fixed zones, its Home Assistant text one item whatever it says; telegram.py only
+  applies `telegram_entities` (MessageEntities, never markup). test_no_style_is_written_anywhere_else.
+- notice.heading: "#9-P2 (new|existing|closed)", "To:" everyone the incident went to (names read now from the chats in
+  history), history lines "- Alert sent …", the first notice always kept ("- … N earlier notices"). retitle rebuilds a
+  copy sent before. layout: stage icons and marks (result.MARKS help / unchecked).
+- outcome: one history line per stage; every other copy synced (IncidentThread.sync, buttons kept: record "kb");
+  close() settles every copy. A report is titled as data (result.message title=, send_message title=): posting writes
+  its title and "To:" and cuts it into whole pages.
+- alert-desk: statuses in its own words (no Home Assistant phase text), the person's name (--name), one Need help
+  sentence, one closing wording; reports: fm-daily / owner-weekly / page messages in the shape.
+
 ## 0.6.145 (11 October 2026)
 
 - Review 26: a fault's step says what it is — `kind` reopened / retitled (`title`, `was`) / reading (`title`), the

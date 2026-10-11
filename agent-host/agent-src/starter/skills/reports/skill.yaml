@@ -40,9 +40,10 @@ schedule:
       - "compose.py fm-daily --finish {to} --no-ai {why}"
     prompt: >-
       It is 07:00. Read the reports skill, compose the facility manager daily digest (fm-daily) with
-      run_skill_script, and send it to the fm chat with send_message, written in {fm_language}, keeping every
-      number exactly as the script gave it. If there is nothing to report, send one short line saying the villa
-      is quiet, so the facility manager knows the VESTA Agent is alive. No rule codes, no entity ids.
+      run_skill_script, and send its `message` to the fm chat with send_message: title= its "title" as it is,
+      text= its "text" written in {fm_language}, keeping every number exactly as the script gave it and its
+      layout (each section label on its own line, an empty line between items). Send it even when it says
+      nothing is new, so the facility manager knows the VESTA Agent is alive. No rule codes, no entity ids.
   - when: "Mon 08:00"
     name: fm-weekly
     to: fm
@@ -60,8 +61,9 @@ schedule:
       It is Monday 08:00. Read the reports skill and make the facility manager's weekly report, following its
       steps "A weekly or monthly report": the week's energy, facts.py fm-weekly, your readings from the clues,
       the playbook and Home Assistant, saved in notes.json (in {fm_language}), compose.py fm-weekly, then
-      send_message to fm with the page attached, its text the page's one-line summary. On schedule only, then send
-      the owner the three owner-weekly lines (compose.py owner-weekly --energy week.json), in {owner_language};
+      send_message to fm with the page attached, title= and text= the `message` compose.py printed. On schedule
+      only, then send the owner the owner-weekly `message` (compose.py owner-weekly --energy week.json): title= as
+      it is, text= in {owner_language}, its layout kept (section labels, an empty line between items);
       when the report was asked for in a chat, the page is the whole answer: send nothing else.
   - when: "1 08:00"
     name: owner-monthly
@@ -82,4 +84,4 @@ schedule:
       month, following its steps "A weekly or monthly report" (with the filtration optimiser and the proposals
       first, so the page carries them): the month's energy, facts.py owner-monthly, your readings from the
       clues, the playbook and Home Assistant, saved in notes.json (in {owner_language}), compose.py
-      owner-monthly, then send_message to owner with the page attached.
+      owner-monthly, then send_message to owner with the page attached, title= and text= the `message` compose.py printed.
