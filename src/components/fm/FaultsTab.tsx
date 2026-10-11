@@ -11,13 +11,14 @@
 // all — a spare part, or something not yet wired into Home Assistant.
 
 import { useEffect, useState } from "react";
-import { ChevronDown, ChevronRight, Plus, Wrench } from "lucide-react";
+import { ChevronDown, ChevronRight, FileText, Plus, Wrench } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
 import { isTicketOpen, isTicketResolved, localStamp, ticketStats, ticketRank, TICKET_NEXT } from "@/fm/fmEngine";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
+import { documentUrl } from "@/fm/fmApi";
 import ErasableRow from "./ErasableRow";
 import FaultStageModal from "./FaultStageModal";
 import NotesField from "./NotesField";
@@ -325,6 +326,18 @@ export default function FaultsTab(
                   is a claim; a thumbnail you can open is the evidence. */}
               {t.photoIds.length > 0 && (
                 <EvidenceRow photoIds={t.photoIds} disabled />
+              )}
+              {/* The investigation report the VESTA Agent attached (owner, 2026-10-11): opens on the iPad, offline */}
+              {(t.documentIds?.length ?? 0) > 0 && (
+                <div className="fm-documents">
+                  {t.documentIds!.map((id, i) => (
+                    <a key={id} className="fm-document-link" href={documentUrl(id)} target="_blank"
+                      rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
+                      <FileText size={15} aria-hidden="true" />
+                      {t.documentIds!.length > 1 ? `Investigation report ${i + 1}` : "Investigation report"}
+                    </a>
+                  ))}
+                </div>
               )}
             </div>
             {closingId !== t.id && (TICKET_NEXT[t.status] || !isTicketResolved(t)) && (

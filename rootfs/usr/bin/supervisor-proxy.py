@@ -1618,24 +1618,35 @@ def _fm_ids(doc) -> dict:
     return {name: set(_fm_by_id(doc, name)) for name in FM_RECORD_COLLECTIONS}
 
 
-def _fm_record_photo_ids(record) -> set:
-    """Every photo one record points at, its per-stage updates included — the
-    ONE photo walk. A fault's per-stage updates carry their own photos (see
-    FmTicketUpdate); missing those would delete a live photo."""
+# THE KINDS OF EVIDENCE a record points at: its field → the file each id names in the evidence store. A photo
+# (photoIds, a JPEG) and — since 2.496.326 — a document (documentIds, an HTML page: the VESTA Agent's investigation
+# report on the fault it raised; owner, 2026-10-11). ONE walk, ONE sweep for both: a document nothing points at any
+# more (its fault deleted by the superadmin) is deleted exactly as a photo is.
+FM_EVIDENCE_KINDS = (("photoIds", ".jpg"), ("documentIds", ".html"))
+
+
+def _fm_record_evidence_ids(record, field: str) -> set:
+    """Every id of one kind (`field`) one record points at, its per-stage updates included — the ONE evidence walk.
+    A fault's per-stage updates carry their own photos (see FmTicketUpdate); missing those would delete a live one."""
     ids = set()
     if not isinstance(record, dict):
         return ids
-    if isinstance(record.get("photoIds"), list):
-        ids.update(str(p) for p in record["photoIds"])
+    if isinstance(record.get(field), list):
+        ids.update(str(p) for p in record[field])
     if isinstance(record.get("updates"), list):
         for u in record["updates"]:
-            if isinstance(u, dict) and isinstance(u.get("photoIds"), list):
-                ids.update(str(p) for p in u["photoIds"])
+            if isinstance(u, dict) and isinstance(u.get(field), list):
+                ids.update(str(p) for p in u[field])
     return ids
 
 
-def _fm_referenced_photo_ids(doc) -> set:
-    """Every evidence photo id the document still points at, anywhere."""
+def _fm_record_photo_ids(record) -> set:
+    """Every photo one record points at (_fm_record_evidence_ids)."""
+    return _fm_record_evidence_ids(record, "photoIds")
+
+
+def _fm_referenced_evidence_ids(doc, field: str) -> set:
+    """Every evidence id of one kind the document still points at, anywhere."""
     ids = set()
     if not isinstance(doc, dict):
         return ids
@@ -1643,8 +1654,13 @@ def _fm_referenced_photo_ids(doc) -> set:
         items = doc.get(name)
         if isinstance(items, list):
             for it in items:
-                ids |= _fm_record_photo_ids(it)
+                ids |= _fm_record_evidence_ids(it, field)
     return ids
+
+
+def _fm_referenced_photo_ids(doc) -> set:
+    """Every evidence photo id the document still points at, anywhere."""
+    return _fm_referenced_evidence_ids(doc, "photoIds")
 
 
 # THE FACILITY RECORD'S VOCABULARY: /usr/share/vesta/fm-records.json (the
@@ -1689,6 +1705,9 @@ def _fm_record_errors(name: str, record) -> set:
     if "photoIds" in record and not (isinstance(record["photoIds"], list)
                                      and all(isinstance(p, str) for p in record["photoIds"])):
         errors.add("photoIds is not a list of photo ids")
+    if "documentIds" in record and not (isinstance(record["documentIds"], list)
+                                        and all(isinstance(p, str) for p in record["documentIds"])):
+        errors.add("documentIds is not a list of document ids")
     if name == "tickets":
         if record.get("status") not in FM_TICKET_STATUSES:
             errors.add(f"status is not one of {', '.join(FM_TICKET_STATUSES)}")
@@ -1714,13 +1733,14 @@ def _fm_record_errors(name: str, record) -> set:
 
 class _FmChange:
     """What one write does to the Facility record. Built by _fm_classify."""
-    __slots__ = ("removed", "added", "changed", "dropped_photos", "unknown_keys", "invalid")
+    __slots__ = ("removed", "added", "changed", "dropped_photos", "dropped_documents", "unknown_keys", "invalid")
 
     def __init__(self):
         self.removed = {}         # {collection: set of ids no longer present}
         self.added = {}           # {collection: [records with a new id]}
         self.changed = {}         # {collection: [ids whose record differs]}
         self.dropped_photos = {}  # {(collection, id): photos a KEPT record lost}
+        self.dropped_documents = {}  # {(collection, id): documents a KEPT record lost}
         self.unknown_keys = set() # top-level keys this server does not know, changed
         self.invalid = []         # [(collection, id or "#index", problem)] NEW problems only
 
@@ -1742,6 +1762,9 @@ def _fm_classify(old, new) -> _FmChange:
             lost = _fm_record_photo_ids(before[i]) - _fm_record_photo_ids(after[i])
             if lost:
                 ch.dropped_photos[(name, i)] = lost
+            lost = _fm_record_evidence_ids(before[i], "documentIds") - _fm_record_evidence_ids(after[i], "documentIds")
+            if lost:
+                ch.dropped_documents[(name, i)] = lost
         items = new.get(name, [])
         if not isinstance(items, list):
             if items != old.get(name, []):
@@ -1907,12 +1930,12 @@ def _fm_write_guard(request: web.Request, body, old, new):
     return None
 
 
-def _delete_evidence(photo_id: str) -> bool:
-    """Remove one evidence JPEG, with the id and the resolved path both
-    checked — this deletes a file from a path built out of stored data."""
-    if not FM_EVIDENCE_ID_RE.fullmatch(photo_id):
+def _delete_evidence(photo_id: str, ext: str = ".jpg") -> bool:
+    """Remove one evidence file — a JPEG, or a document's page (`ext`, one of FM_EVIDENCE_KINDS) — with the id, the
+    kind and the resolved path all checked: this deletes a file from a path built out of stored data."""
+    if not FM_EVIDENCE_ID_RE.fullmatch(photo_id) or ext not in {e for _, e in FM_EVIDENCE_KINDS}:
         return False
-    path = os.path.join(_data(FM_EVIDENCE_NAME), f"{photo_id}.jpg")
+    path = os.path.join(_data(FM_EVIDENCE_NAME), f"{photo_id}{ext}")
     if os.path.realpath(os.path.dirname(path)) != os.path.realpath(_data(FM_EVIDENCE_NAME)):
         return False
     try:
@@ -1940,8 +1963,6 @@ def _fm_after_write(old, new, baseline_readable: bool = True) -> None:
     sweep is separate and answers a different question (old evidence, still
     referenced), so both run here.
     """
-    referenced = _fm_referenced_photo_ids(new)
-
     # ⚠️ NOTHING REFERENCE-BASED RUNS ON A BASELINE WE COULD NOT READ. Steps 1
     # and 2 both answer "does anything still point at this photo?", and both
     # read that answer out of documents. If the stored document was unusable,
@@ -1958,31 +1979,35 @@ def _fm_after_write(old, new, baseline_readable: bool = True) -> None:
         _prune_fm_evidence()
         return
 
-    # 1. Anything this write dropped a reference to goes immediately: it was
-    #    referenced a moment ago, so there is no in-flight form to protect.
-    for photo_id in _fm_referenced_photo_ids(old) - referenced:
-        _delete_evidence(photo_id)
-
-    # 2. Anything on disk that nothing has EVER referenced and is older than
-    #    the grace window — the cancelled-form case.
+    # Every kind of evidence by the same two steps (FM_EVIDENCE_KINDS): a fault the superadmin deletes takes its
+    # photos AND its documents with it.
     cutoff = time.time() - FM_EVIDENCE_ORPHAN_GRACE_SECONDS
     try:
         names = os.listdir(_data(FM_EVIDENCE_NAME))
     except OSError:
         names = []
-    for name in names:
-        if not name.endswith(".jpg"):
-            continue
-        photo_id = name[:-4]
-        if photo_id in referenced:
-            continue
-        path = os.path.join(_data(FM_EVIDENCE_NAME), name)
-        try:
-            if os.path.getmtime(path) >= cutoff:
-                continue      # still inside the grace window
-        except OSError:
-            continue
-        _delete_evidence(photo_id)
+    for field, ext in FM_EVIDENCE_KINDS:
+        referenced = _fm_referenced_evidence_ids(new, field)
+        # 1. Anything this write dropped a reference to goes immediately: it was
+        #    referenced a moment ago, so there is no in-flight form to protect.
+        for photo_id in _fm_referenced_evidence_ids(old, field) - referenced:
+            _delete_evidence(photo_id, ext)
+
+        # 2. Anything on disk that nothing has EVER referenced and is older than
+        #    the grace window — the cancelled-form case.
+        for name in names:
+            if not name.endswith(ext):
+                continue
+            photo_id = name[:-len(ext)]
+            if photo_id in referenced:
+                continue
+            path = os.path.join(_data(FM_EVIDENCE_NAME), name)
+            try:
+                if os.path.getmtime(path) >= cutoff:
+                    continue      # still inside the grace window
+            except OSError:
+                continue
+            _delete_evidence(photo_id, ext)
 
     # 3. Retention: referenced or not, evidence past the window goes. Kept on
     #    this path as well as the upload path so a villa that stops uploading
@@ -2854,6 +2879,15 @@ FM_EVIDENCE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{6,64}$")
 # must not have its attachments deleted underneath it.
 FM_EVIDENCE_ORPHAN_GRACE_SECONDS = 12 * 3600
 _JPEG_MAGIC = b"\xff\xd8\xff"
+# A document (FM_EVIDENCE_KINDS): one self-contained HTML page the VESTA Agent made (an investigation report, ~60 KB:
+# its style and charts inline, nothing fetched). The cap is the photo's: generous, and never a way to fill /data.
+FM_DOCUMENT_MAX_BYTES = 3_000_000
+_HTML_MAGIC = b"<!doctype html"
+# ⚠️ A DOCUMENT IS SERVED SANDBOXED (2.496.326). It is HTML from another program, served from the kiosk's own origin —
+# where the session cookie and every route live. `sandbox` without allow-scripts gives it a unique origin and no
+# script at all; nothing may be fetched (default-src 'none'): only its inline style and data: images (the page's icon,
+# its charts are inline SVG). A page made wrong, or by a token that leaked, can show text and nothing else.
+FM_DOCUMENT_CSP = "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'"
 
 
 def _prune_fm_evidence() -> int:
@@ -2891,28 +2925,32 @@ async def fm_evidence_post_handler(request: web.Request) -> web.Response:
     return await _store_evidence(request)
 
 
-async def _store_evidence(request: web.Request) -> web.Response:
+async def _store_evidence(request: web.Request, ext: str = ".jpg") -> web.Response:
     """The upload itself, for whichever door let the caller in: the app's
-    (/fm-evidence) or the VESTA Agent's (/agent/v1/fm-evidence). Same id rule,
-    size cap, JPEG check and atomic write for both — one copy of the checks."""
+    (/fm-evidence) or the VESTA Agent's (/agent/v1/fm-evidence, /agent/v1/fm-document). Same id rule,
+    size cap, type check and atomic write for every kind — one copy of the checks. `ext`: .jpg a photo, .html a
+    document (FM_EVIDENCE_KINDS)."""
     photo_id = request.query.get("id", "")
-    if not FM_EVIDENCE_ID_RE.fullmatch(photo_id):
+    if not FM_EVIDENCE_ID_RE.fullmatch(photo_id) or ext not in {e for _, e in FM_EVIDENCE_KINDS}:
         return web.json_response({"error": "bad photo id"}, status=400)
+    limit = FM_DOCUMENT_MAX_BYTES if ext == ".html" else FM_EVIDENCE_MAX_BYTES
 
     os.makedirs(_data(FM_EVIDENCE_NAME), exist_ok=True)
-    dest = os.path.join(_data(FM_EVIDENCE_NAME), f"{photo_id}.jpg")
+    dest = os.path.join(_data(FM_EVIDENCE_NAME), f"{photo_id}{ext}")
     if os.path.realpath(os.path.dirname(dest)) != os.path.realpath(_data(FM_EVIDENCE_NAME)):
         return web.json_response({"error": "bad path"}, status=400)
 
     body = bytearray()
     async for chunk in request.content.iter_chunked(64 * 1024):
         body.extend(chunk)
-        if len(body) > FM_EVIDENCE_MAX_BYTES:
-            return web.json_response({"error": "photo too large"}, status=413)
+        if len(body) > limit:
+            return web.json_response({"error": "photo too large" if ext == ".jpg" else "document too large"}, status=413)
     # Same defence as the GLB upload: validate the stream head so this endpoint
     # can't be used to publish an arbitrary file type into /data.
-    if not bytes(body).startswith(_JPEG_MAGIC):
+    if ext == ".jpg" and not bytes(body).startswith(_JPEG_MAGIC):
         return web.json_response({"error": "not a JPEG"}, status=400)
+    if ext == ".html" and not bytes(body).lstrip()[:len(_HTML_MAGIC)].lower() == _HTML_MAGIC:
+        return web.json_response({"error": "not an HTML page"}, status=400)
 
     # Was a hand-rolled temp-then-replace using a PREDICTABLE "<dest>.part"
     # path and no failure cleanup: two concurrent posts of the same id raced
@@ -2951,6 +2989,27 @@ async def fm_evidence_get_handler(request: web.Request) -> web.StreamResponse:
         # cached hard — an evidence photo never changes once written.
         "Cache-Control": "private, max-age=31536000, immutable",
         "Content-Type": "image/jpeg",
+    })
+
+
+async def fm_document_get_handler(request: web.Request) -> web.StreamResponse:
+    """Serve one document of a fault (an investigation report) — owner and facility manager only, as a photo is, and
+    sandboxed (FM_DOCUMENT_CSP): it opens on the iPad from the fault's card, offline, and can run nothing."""
+    if (refused := _refuse(request, "manageFacility",
+                           "Only the owner and facility-manager profiles may view evidence.")) is not None:
+        return refused
+    doc_id = request.match_info.get("id", "")
+    if not FM_EVIDENCE_ID_RE.fullmatch(doc_id):
+        return web.json_response({"error": "bad document id"}, status=400)
+    path = os.path.join(_data(FM_EVIDENCE_NAME), f"{doc_id}.html")
+    if os.path.realpath(os.path.dirname(path)) != os.path.realpath(_data(FM_EVIDENCE_NAME)) or not os.path.isfile(path):
+        return web.json_response({"error": "not found"}, status=404)
+    return web.FileResponse(path, headers={
+        "Cache-Control": "private, max-age=31536000, immutable",      # a random id, never reused: never changes
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Security-Policy": FM_DOCUMENT_CSP,
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "no-referrer",
     })
 
 
@@ -3184,6 +3243,10 @@ def _fm_agent_write_guard(request: web.Request, body, old, new):
         name, rid = sorted(ch.dropped_photos)[0]
         return _forbidden(f"The VESTA Agent may not remove photos from a record "
                           f"({name} {rid}): that would delete the evidence.")
+    if ch.dropped_documents:
+        name, rid = sorted(ch.dropped_documents)[0]
+        return _forbidden(f"The VESTA Agent may not remove documents from a record "
+                          f"({name} {rid}): that would delete the evidence.")
     return None
 
 
@@ -3200,6 +3263,14 @@ async def agent_fm_evidence_handler(request: web.Request) -> web.Response:
     if (refused := _agent_refuse(request, "agentWrite")) is not None:
         return refused
     return await _store_evidence(request)
+
+
+async def agent_fm_document_handler(request: web.Request) -> web.Response:
+    """Store a document for a fault (the investigation report a person asked to keep with it: owner, 2026-10-11): one
+    HTML page, then referenced by the fault's documentIds — and deleted with it (_fm_after_write)."""
+    if (refused := _agent_refuse(request, "agentWrite")) is not None:
+        return refused
+    return await _store_evidence(request, ".html")
 
 
 # ── Messages and choices (PLAN A6) ───────────────────────────────────────────
@@ -3751,6 +3822,7 @@ def build_app(data_dir: str | None = None) -> web.Application:
     app.router.add_put("/fm-data", fm_data_put_handler)
     app.router.add_post("/fm-evidence", fm_evidence_post_handler)
     app.router.add_get("/fm-evidence/{id}", fm_evidence_get_handler)
+    app.router.add_get("/fm-document/{id}", fm_document_get_handler)
     app.router.add_post("/telemetry", telemetry_post_handler)
     app.router.add_get("/telemetry", telemetry_get_handler)
     app.router.add_put("/device-config", device_config_put_handler)
@@ -3776,6 +3848,7 @@ def build_app(data_dir: str | None = None) -> web.Application:
     app.router.add_get("/agent/v1/fm-data", agent_fm_get_handler)
     app.router.add_put("/agent/v1/fm-data", agent_fm_put_handler)
     app.router.add_post("/agent/v1/fm-evidence", agent_fm_evidence_handler)
+    app.router.add_post("/agent/v1/fm-document", agent_fm_document_handler)
     app.router.add_post("/agent/v1/messages", agent_messages_post_handler)
     app.router.add_get("/agent/v1/choices", agent_choices_handler)
     app.router.add_post("/agent/v1/heartbeat", agent_heartbeat_handler)

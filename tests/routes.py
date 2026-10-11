@@ -104,8 +104,14 @@ ck("every path the app requests is answered", not unreachable,
 # under a prefix one.
 asked_full = set()
 for f in (ROOT / "src").rglob("*.ts*"):
-    for m in re.finditer(r'ingressPath\("([^"?]+)', f.read_text(encoding="utf-8")):
+    text = f.read_text(encoding="utf-8")
+    for m in re.finditer(r'ingressPath\("([^"?]+)', text):
         asked_full.add("/" + m.group(1).lstrip("/"))
+    # a path with its id in it (`fm-document/${id}`, 2.496.326): the id as "x", so the whole path is checked too
+    for m in re.finditer(r'ingressPath\(`([^`?]+)`', text):
+        path = "/" + re.sub(r"\$\{[^}]*\}", "x", m.group(1)).lstrip("/")
+        if not path.startswith("/model/"):           # the model is nginx's own static file, as above
+            asked_full.add(path)
 backend_locs = [(bool(m.group(1)), m.group(2)) for m in
                 re.finditer(r"location\s+(=\s*)?(\S+)\s*\{([^}]*)\}", ng)
                 if "127.0.0.1:8100" in m.group(3)]

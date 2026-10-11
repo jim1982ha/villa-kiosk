@@ -402,6 +402,9 @@
 
 /* Evidence thumbnails */
 .fm-evidence { display: flex; flex-direction: column; gap: 6px; }
+.fm-documents { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.fm-document-link { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 8px;
+  border: 1px solid var(--hairline); color: inherit; text-decoration: none; font-size: 13px; font-weight: 600; }
 .fm-evidence-strip { display: flex; flex-wrap: wrap; gap: 8px; }
 .fm-thumb {
   position: relative; width: 68px; height: 68px; border-radius: 10px;

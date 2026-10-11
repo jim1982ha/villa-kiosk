@@ -196,3 +196,8 @@ export async function uploadEvidence(file: Blob): Promise<string> {
 export function evidenceUrl(photoId: string): string {
   return `${ingressPath("fm-evidence")}/${encodeURIComponent(photoId)}`;
 }
+
+/** URL for opening a fault's document (an investigation report): served sandboxed by the add-on, nothing fetched. */
+export function documentUrl(documentId: string): string {
+  return ingressPath(`fm-document/${encodeURIComponent(documentId)}`);
+}

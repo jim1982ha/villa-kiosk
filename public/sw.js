@@ -179,7 +179,8 @@ const NEVER_CACHE = [
   "/device-config", "/fm-data", "/telemetry", "/addon-config", "/model-upload",
   "/agent-status", "/agent-messages", "/agent-choices", "/kiosk-rooms", "/healthz",
 ];
-const NEVER_CACHE_FRAGMENTS = ["/api/", "/auth/", "/agent/v1/", "camera_proxy"];
+// "/fm-document/": a fault's report — deleted with its fault (2.496.326), so never kept on a device after it
+const NEVER_CACHE_FRAGMENTS = ["/api/", "/auth/", "/agent/v1/", "camera_proxy", "/fm-document/"];
 
 function swRoute(url, mode, destination, origin) {
   if (url.searchParams.has(SW_BYPASS_PARAM)) return "bypass";
