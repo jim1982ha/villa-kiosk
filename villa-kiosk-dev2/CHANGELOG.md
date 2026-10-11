@@ -1,3 +1,12 @@
+## 2.496.325
+
+### Fixed
+- Faults tab and monthly recap: "mean resolution" counts only the time a fault was really open. A pump fixed in 2 h, reopened a month later and fixed in 2 h again reads 4 h (it read 722 h).
+- Faults closed with no work done ("Close — no action needed", or cleared by the VESTA Agent because the problem went away) no longer count as repairs. They are shown apart ("closed, no action"); before, ten short Wi-Fi blips made a real 48 h repair read 4.5 h.
+- A monthly recap made after a fault was reopened still lists the fault fixed that month, as it stood at the end of the month (it disappeared, while its cost stayed in the spend section).
+- A fault reopened by the VESTA Agent under a new title: its "Was: …" line names the title it really replaced.
+- Recent work and the recap name the person who did a repair confirmed with Done on Telegram (with VESTA Agent 0.12.155).
+
 ## 2.496.324
 
 ### Changed
