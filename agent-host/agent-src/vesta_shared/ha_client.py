@@ -68,6 +68,9 @@ READ_TOOLS = {
     "ha_list_floors_areas", "ha_get_camera_image", "ha_get_todo", "ha_get_overview", "ha_get_system_health",
 }
 WRITE_TOOLS = {"ha_call_service"}
+#: A tool that can also write, allowed for its READ actions only (the `action` argument), refused for every other one.
+#: ha_manage_blueprints `get`: what an automation built from a blueprint can do (investigate's automation_able).
+READ_ACTIONS = {"ha_manage_blueprints": {"get"}}
 BROWSER_UA = "Mozilla/5.0 (X11; Linux aarch64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128 Safari/537.36 VESTA"
 
 
@@ -218,9 +221,12 @@ class McpClient(HABase):
 
     # ------------------------------------------------------------------ core
     def tool(self, name: str, args: dict) -> Any:
-        if name in WRITE_TOOLS and not self.write:
+        if name in READ_ACTIONS:
+            if (args or {}).get("action") not in READ_ACTIONS[name]:
+                raise HAError(f"{name} refused: only its {', '.join(sorted(READ_ACTIONS[name]))} action is allowed")
+        elif name in WRITE_TOOLS and not self.write:
             raise HAError(f"{name} refused: this client is read-only")
-        if name not in READ_TOOLS and name not in WRITE_TOOLS:
+        elif name not in READ_TOOLS and name not in WRITE_TOOLS:
             raise HAError(f"{name} refused: not an allowed ha-mcp tool")
         res = self.mcp.call_raw(name, args)
         text = "".join(c.get("text", "") for c in res.get("content", []) if c.get("type") == "text")

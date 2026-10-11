@@ -278,6 +278,12 @@ def threshold(values: list[float]) -> float | None:
 CHART_POINTS = 400                        # a chart's points: each the highest reading of its slice (a surge stays seen)
 
 
+def spoken(eid: str) -> str:
+    """A name for an entity Home Assistant gives none (no state, no history): its id said as words, never the id."""
+    words = eid.split(".", 1)[-1].replace("_", " ").strip()
+    return words[:1].upper() + words[1:] if words else eid
+
+
 def same_hours_before(base_rows: list[tuple[datetime, str]], start: datetime, end: datetime,
                       baseline_days: float) -> list[dict]:
     """The device's normal drawn behind its chart: the SAME HOURS on each of the days before, from the readings already
@@ -341,7 +347,7 @@ def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_da
         rows = rows_of(client, eid, start, end)
         if not rows:
             parts.append({"entity_id": eid, "lines": [f"{eid}: nothing recorded in this period."], "nothing": True,
-                          "label": ((names.get(eid) or {}).get("attributes") or {}).get("friendly_name") or eid})
+                          "label": ((names.get(eid) or {}).get("attributes") or {}).get("friendly_name") or spoken(eid)})
             continue
         # where Home Assistant's history could not be read further (vesta_shared.ha_client: its cap) — never stretched
         cut = (getattr(client, "history_cut", None) or {}).get(eid)
@@ -650,12 +656,18 @@ def automation_able(client, eid: str, start: datetime, end: datetime) -> dict:
                 "can": "unproven", "changes": []}
     cfg = body.get("config") if isinstance(body.get("config"), dict) else body
     if isinstance(cfg, dict) and cfg.get("use_blueprint"):
-        path = (cfg["use_blueprint"] or {}).get("path") or "a blueprint"
-        did = _traced(client, eid, start, end)
-        return {"text": f"built from the blueprint {path}, whose actions cannot be read here — not proven either way"
-                        + (f"; its runs in this period kept by Home Assistant did: {did}" if did else
-                           "; Home Assistant no longer keeps its runs of this period"),
-                "can": "unproven", "changes": []}
+        # ⚠️ A BLUEPRINT IS READ, ITS INPUTS FILLED (owner, 2026-10-12: five automations said "could not be read"): the
+        # blueprint's own actions, each {"__input__": name} replaced by this automation's input or the default
+        made = _from_blueprint(client, cfg["use_blueprint"] or {})
+        if made is not None:
+            cfg = {"actions": made}
+        else:
+            path = (cfg["use_blueprint"] or {}).get("path") or "a blueprint"
+            did = _traced(client, eid, start, end)
+            return {"text": f"built from the blueprint {path}, whose actions cannot be read here — not proven either way"
+                            + (f"; its runs in this period kept by Home Assistant did: {did}" if did else
+                               "; Home Assistant no longer keeps its runs of this period"),
+                    "can": "unproven", "changes": []}
     calls, targets = set(), set()
     _actions((cfg or {}).get("actions") or (cfg or {}).get("action") or [], calls, targets)
     changes = _changes(calls)
@@ -667,6 +679,31 @@ def automation_able(client, eid: str, start: datetime, end: datetime) -> dict:
         if targets:
             out["text"] += "; on: " + ", ".join(f"{t['name']} ({t['id']})" for t in out["targets"])
     return out
+
+
+def _from_blueprint(client, use: dict):
+    """A blueprint automation's actions with its inputs filled in — None when the blueprint cannot be read."""
+    try:
+        got = client.tool("ha_manage_blueprints", {"action": "get", "path": use.get("path"), "domain": "automation"}) or {}
+    except Exception:  # noqa: BLE001 — unreadable: said "not proven", never guessed
+        return None
+    got = got.get("data") if isinstance(got.get("data"), dict) else got
+    bp = got.get("config") if isinstance(got.get("config"), dict) else None
+    if not bp:
+        return None
+    given = dict(use.get("input") or {})
+    defaults = {k: (v or {}).get("default") for k, v in ((bp.get("blueprint") or {}).get("input") or {}).items()
+                if isinstance(v, dict)}
+
+    def fill(node):
+        if isinstance(node, dict):
+            if set(node) == {"__input__"}:
+                return given.get(node["__input__"], defaults.get(node["__input__"]))
+            return {k: fill(v) for k, v in node.items()}
+        if isinstance(node, list):
+            return [fill(v) for v in node]
+        return node
+    return fill(bp.get("actions") or bp.get("action") or [])
 
 
 def _name(client, eid: str) -> str:

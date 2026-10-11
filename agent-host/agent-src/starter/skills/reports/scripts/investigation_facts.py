@@ -124,7 +124,7 @@ def facts(data: dict | None, around: dict | None, notes: dict | None = None) -> 
     for e in data.get("entities") or []:
         name = e.get("label") or e.get("entity_id")
         if e.get("nothing"):
-            established.append(f"{name}: nothing recorded in the period — no reading to judge it by.")
+            established.append(f"{name}: Home Assistant kept no reading of it in this period — nothing to judge it by.")
         cut = _t(e.get("cut"))
         if cut:
             established.append(f"{name}: its records could not be read after {clock(cut)} — nothing is known of it "
@@ -189,7 +189,7 @@ def facts(data: dict | None, around: dict | None, notes: dict | None = None) -> 
     for c in notes.get("causes") or []:
         if isinstance(c, dict) and c.get("verdict") == "not supported":
             ruled_out.append(f"{c.get('cause')}" + (f" — {c['evidence']}" if c.get("evidence") else "")
-                             + (f" (lead from the web: {c['source']})" if c.get("source") else "") + ".")
+                             + (f" (lead from: {c['source']})" if c.get("source") else "") + ".")
     told = [r for r in notes.get("timeline") or [] if isinstance(r, dict) and r.get("text")]
 
     lanes = _lanes(data, near_went, acted, unproven)
@@ -220,11 +220,11 @@ def _lanes(data: dict, went: list[dict], acted: list, unproven: list) -> list[di
         out.append({"name": e.get("label") or e.get("entity_id"), "bands": bands})
     if went:
         out.append({"name": "Other devices that stopped answering", "marks": [
-            {"at": _t(xs[0]["at"]), "text": ", ".join(x["name"] for x in xs), "colour": "var(--ink2)"}
+            {"at": _t(xs[0]["at"]), "text": ", ".join(x["name"] for x in xs), "as": "went"}
             for xs in _grouped(went, lambda t: t.replace(second=0, microsecond=0))]})
-    marks = [{"at": t, "text": f"“{a.get('name')}” (can act on: {_on(a)})", "colour": "var(--warn)"}
+    marks = [{"at": t, "text": f"“{a.get('name')}” (can act on: {_on(a)})", "as": "can_act"}
              for a, close in acted for t in close] + \
-            [{"at": t, "text": f"“{a.get('name')}” (what it can do could not be read)", "colour": "var(--ink2)"}
+            [{"at": t, "text": f"“{a.get('name')}” (what it can do could not be read)", "as": "unproven"}
              for a, close in unproven for t in close]
     if marks:
         out.append({"name": "Automations that could act", "marks": sorted(marks, key=lambda m: m["at"])})

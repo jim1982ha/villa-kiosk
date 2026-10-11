@@ -201,14 +201,38 @@ def _nice(v: float) -> str:
 def _tip(x: float, y: float, x0: float, x1: float, top: float, bottom: float, label: str, w_: float = W) -> str:
     """A point's value on hover, or a tap on a phone (owner, 2026-10-07): a column of the chart answers with its day
     and value. SVG and the page's CSS only (.pt in templates/report.html): nothing runs in the reader's browser."""
-    tw = 6.2 * len(label) + 14
+    # ⚠️ SMALL AND WRAPPED (owner, 2026-10-12: "it's way too big"): the chart's units grow with the screen, so a long
+    # label at 11 ran off a wide page — 8.5, wrapped to the chart's width, at most three lines
+    lines = _wrap(label, int((w_ - 12) / (TIP_FONT * 0.6)))
+    tw = min(max(len(s) for s in lines) * TIP_FONT * 0.6 + 10, w_ - 4)
+    th_ = len(lines) * (TIP_FONT + 3) + 6
     bx = min(max(x - tw / 2, 2), w_ - tw - 2)
-    by = y - 30 if y - 30 > 2 else y + 10
+    by = y - th_ - 8 if y - th_ - 8 > 2 else y + 8
+    text = "".join(f'<tspan x="{bx + tw / 2:.1f}" dy="{TIP_FONT + 3 if i else 0}">{_esc(s)}</tspan>'
+                   for i, s in enumerate(lines))
     return (f'<g class="pt" tabindex="0"><title>{_esc(label)}</title>'
             f'<rect x="{x0:.1f}" y="{top:.1f}" width="{max(x1 - x0, 1):.1f}" height="{bottom - top:.1f}" fill="transparent"/>'
-            f'<circle class="pt-dot" cx="{x:.1f}" cy="{y:.1f}" r="4"/>'
-            f'<g class="pt-tip"><rect x="{bx:.1f}" y="{by:.1f}" width="{tw:.1f}" height="20" rx="4"/>'
-            f'<text x="{bx + tw / 2:.1f}" y="{by + 14:.1f}" font-size="11" text-anchor="middle">{_esc(label)}</text></g></g>')
+            f'<circle class="pt-dot" cx="{x:.1f}" cy="{y:.1f}" r="3"/>'
+            f'<g class="pt-tip"><rect x="{bx:.1f}" y="{by:.1f}" width="{tw:.1f}" height="{th_:.1f}" rx="3"/>'
+            f'<text x="{bx + tw / 2:.1f}" y="{by + TIP_FONT + 2:.1f}" font-size="{TIP_FONT}" text-anchor="middle">{text}'
+            '</text></g></g>')
+
+
+TIP_FONT = 8.5
+
+
+def _wrap(label: str, width: int) -> list[str]:
+    """A label in lines of at most `width` characters, by words; at most three, the last one cut with "…"."""
+    lines, cur = [], ""
+    for word in str(label).split():
+        if cur and len(cur) + 1 + len(word) > width:
+            lines.append(cur)
+            cur = word
+        else:
+            cur = f"{cur} {word}" if cur else word
+    lines.append(cur)
+    lines = [s if len(s) <= width else s[:width - 1] + "…" for s in lines]
+    return lines if len(lines) <= 3 else lines[:2] + [(lines[2][:width - 1]) + "…"]
 
 
 def _day(s: str) -> str:
@@ -540,7 +564,21 @@ def timechart(series: list, unit: str, zone: ZoneInfo, marks: list = (), normals
 
 
 LANE_H, LANE_LABEL = 22, 12
-LANE_COLOUR = {"on": "var(--acc)", "offline": "var(--ink2)", "other": "var(--warn)"}       # "off" is the empty lane
+#: what each band or mark of the strip is: its legend word and colour — the strip and its legend read this one table
+#: ("off" is the empty lane: nothing drawn)
+LANE_STYLE = {"on": ("on or open", "var(--acc)", "band"), "other": ("another state", "var(--warn)", "band"),
+              "offline": ("not answering", "var(--ink2)", "band"),
+              "went": ("another device stopped answering", "var(--crit)", "mark"),
+              "can_act": ("an automation that can act ran", "var(--warn)", "mark"),
+              "unproven": ("an automation not readable ran", "var(--ink2)", "mark")}
+
+
+def strip_legend(lanes: list[dict]) -> list[dict]:
+    """The strip's legend: only what it draws."""
+    seen = [b.get("as") for lane in lanes for b in lane.get("bands") or [] if b.get("as") != "off"] + \
+           [m.get("as") for lane in lanes for m in lane.get("marks") or []]
+    return [{"word": LANE_STYLE[k][0], "colour": LANE_STYLE[k][1], "shape": LANE_STYLE[k][2]}
+            for k in dict.fromkeys(seen) if k in LANE_STYLE]
 
 
 def strip(lanes: list[dict], start: datetime, end: datetime, zone: ZoneInfo) -> str:
@@ -564,13 +602,13 @@ def strip(lanes: list[dict], start: datetime, end: datetime, zone: ZoneInfo) -> 
             if b_ <= a_ or b.get("as") == "off":
                 continue
             out.append(f'<rect x="{x(a_):.1f}" y="{top}" width="{max(x(b_) - x(a_), 1.5):.1f}" height="{LANE_H - 6}" '
-                       f'fill="{LANE_COLOUR.get(b.get("as"), "var(--warn)")}" opacity=".55"/>')
+                       f'fill="{LANE_STYLE.get(b.get("as"), LANE_STYLE["other"])[1]}" opacity=".55"/>')
             out.append(_tip(x(a_), top + (LANE_H - 6) / 2, x(a_), max(x(b_), x(a_) + 3), top, top + LANE_H - 6,
                             f"{lab(a_)}–{lab(b_)} · {b['state']}"))
         for e in lane.get("marks") or []:
             if start <= e["at"] <= end:
                 out.append(f'<rect x="{x(e["at"]) - 1:.1f}" y="{top}" width="3" height="{LANE_H - 6}" '
-                           f'fill="{e.get("colour") or "var(--crit)"}"/>')
+                           f'fill="{LANE_STYLE.get(e.get("as"), LANE_STYLE["went"])[1]}"/>')
                 out.append(_tip(x(e["at"]), top + (LANE_H - 6) / 2, x(e["at"]) - 3, x(e["at"]) + 3, top,
                                 top + LANE_H - 6, f"{lab(e['at'])} · {e['text']}"))
     for k in range(5):
@@ -641,11 +679,16 @@ def investigation(notes: dict, data: dict | None, around: dict | None = None, se
         if e.get("series"):
             marks = [(p["start"], p["end"], p.get("kind") or "") for p in e.get("periods") or [] if p.get("why")]
             normals = [n["series"] for n in e.get("normal_series") or [] if n.get("series")]
-            legend = list(dict.fromkeys(band_of(k) for _, _, k in marks))
+            unit = e.get("unit") or ""
+            legend = [{"word": f"its readings{f' ({unit})' if unit else ''}", "colour": "var(--acc)", "shape": "line"}]
+            legend += [{"word": w, "colour": c, "shape": "band"}
+                       for w, c in dict.fromkeys(band_of(k) for _, _, k in marks)]
+            if normals:
+                legend.append({"word": f"the same hours on each of the {len(normals)} day{'s' if len(normals) > 1 else ''}"
+                                       " before", "colour": "var(--ink2)", "shape": "faint"})
             charts.append({"name": e.get("name") or e.get("entity_id"),
-                           "svg": Markup(timechart(e["series"], e.get("unit") or "", zone, marks, normals)),
-                           "normal": normal_words(e.get("normal") or {}, e.get("unit") or ""),
-                           "legend": [{"word": w, "colour": c} for w, c in legend], "days_behind": len(normals)})
+                           "svg": Markup(timechart(e["series"], unit, zone, marks, normals)),
+                           "normal": normal_words(e.get("normal") or {}, unit), "legend": legend})
     lanes_svg = ""
     try:
         a_, b_ = datetime.fromisoformat(data["start"]), datetime.fromisoformat(data["end"])
@@ -660,7 +703,7 @@ def investigation(notes: dict, data: dict | None, around: dict | None = None, se
         pass
     return TPL.get_template("investigation.html").render(
         title=notes.get("title") or "Investigation", n=notes, charts=charts, period=period, f=found,
-        lanes=Markup(lanes_svg), web_pages=web_pages(notes),
+        lanes=Markup(lanes_svg), lanes_legend=strip_legend(found.get("lanes") or []), web_pages=web_pages(notes),
         searches=searches or [], generated=day_time_label(datetime.now(zone)))
 
 

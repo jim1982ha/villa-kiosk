@@ -180,7 +180,7 @@ def test_the_investigation_page_carries_the_account_and_its_charts(tmp_path):
     page = (tmp_path / "p.html").read_text()
     for part in ("The heater on the night of 9 October", "Timeline", "Water escaping downstream", "No leak sensor",
                  "An alert on a run over 10 min.", "Heater Power", "<svg", 'rel="icon"',
-                 "not supported", "Lead from the web: a maker&#39;s support page"):
+                 "not supported", "Where the lead came from: a maker&#39;s support page"):
         assert part in page, part
     assert out["charts"] == 1 and out["message"]["title"] == notes["title"]
     key, said = out["message"]["text"].split("\n\n")                         # the recorded facts, then the summary
@@ -495,7 +495,7 @@ def test_a_web_lead_the_records_contradict_is_listed_as_ruled_out():
     f = mod.facts(None, None, {"causes": [{"cause": "A grid outage", "evidence": "the neighbours kept power",
                                            "source": "a utility notice", "verdict": "not supported"},
                                           {"cause": "A stuck valve", "verdict": "consistent", "source": "x"}]})
-    assert f["ruled_out"] == ["A grid outage — the neighbours kept power (lead from the web: a utility notice)."]
+    assert f["ruled_out"] == ["A grid outage — the neighbours kept power (lead from: a utility notice)."]
 
 
 def test_any_web_search_needs_its_sources_research_asked_or_not(tmp_path):
@@ -540,9 +540,13 @@ def test_the_page_puts_the_records_before_the_ai_reading(tmp_path):
                        capture_output=True, text=True, env={**os.environ, "PYTHONPATH": PYTHONPATH})
     assert r.returncode == 0, r.stderr
     out, page = json.loads(r.stdout), (tmp_path / "p.html").read_text()
-    order = [page.index(x) for x in ("What the records show", "Ruled out by the records", "Timeline",
-                                     "What it most likely means", "What would have warned earlier")]
+    # owner, 2026-10-12: the AI's reading first; the long lists of facts folded; checked and sources one section
+    order = [page.index(x) for x in ("What it most likely means", "What the records show", "Ruled out by the records",
+                                     "Timeline (", "What would have warned earlier", "How it was checked, and its sources")]
     assert order == sorted(order)
+    assert '<details class="card fold"><summary><h2>What the records show (' in page
+    assert '<details class="card fold"><summary><h2>Timeline (' in page and "<details open" not in page
+    assert page.count("<h2>Sources (web)</h2>") == 0 and "<h3>Sources (web)</h3>" in page
     assert "reported</span> Water on the floor" in page                       # what a person saw, marked so
     assert any("stayed off" in x for x in out["ruled_out"]) and out["established"]   # the AI reads them back
 
@@ -707,3 +711,105 @@ def test_the_sources_section_is_always_there_and_says_when_no_web_page_was_used(
     one = page({"sources": [{"title": "Pump manual", "url": "https://example.org/m"},
                             {"title": "not a link", "url": "javascript:alert(1)"}]})
     assert 'href="https://example.org/m"' in one and "No web page was used" not in one and "javascript" not in one
+
+
+def test_every_chart_and_the_strip_have_a_legend_of_what_they_draw(tmp_path):
+    import json
+    import subprocess
+    from helpers import PYTHONPATH
+    import investigate
+    c = _Around()
+    for name, res in (("t.json", investigate.timeline(c, ["sensor.heater_power", "switch.a"], T(9, 2), T(9, 15), 3, Z,
+                                                       series=True)),
+                      ("a.json", investigate.around(c, None, T(9, 2), T(9, 15), ["sensor.heater_power"], Z)["data"])):
+        (tmp_path / name).write_text(json.dumps({"start": T(9, 2).isoformat(), "end": T(9, 15).isoformat(),
+                                                 "zone": "UTC", **res}, default=str))
+    (tmp_path / "n.json").write_text(json.dumps({"title": "The heater", "summary": "It ran."}))
+    compose = os.path.join(STARTER_SKILLS, "reports", "scripts", "compose.py")
+    r = subprocess.run([sys.executable, compose, "investigation", "--notes", str(tmp_path / "n.json"), "--data",
+                        str(tmp_path / "t.json"), "--around", str(tmp_path / "a.json"), "--out", str(tmp_path / "p.html")],
+                       capture_output=True, text=True, env={**os.environ, "PYTHONPATH": PYTHONPATH})
+    assert r.returncode == 0, r.stderr
+    page = (tmp_path / "p.html").read_text()
+    svgs = page.count("<svg viewBox")
+    assert page.count('class="note legend"') == svgs == 2                    # the chart and the strip: each its legend
+    chart = page[page.index("Heater Power</h2>"):page.index("On the same timeline")]
+    assert "its readings (W)" in chart and "the same hours on each of the 3 days before" in chart
+    strip = page[page.index("On the same timeline"):page.index("Timeline (")]
+    assert "another device stopped answering" in strip                     # Next Relay
+    assert "on or open" not in strip                                        # the relay stayed off: nothing drawn, no key
+
+
+def test_a_tooltip_stays_inside_its_chart_whatever_its_length():
+    sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
+    import re
+    import compose
+    tip = compose._tip(200, 60, 195, 205, 10, 130, "09:12 · “an automation with a very long name” (can act on: "
+                       + ", ".join(f"Device number {k}" for k in range(30)) + ")")
+    x, w = (float(v) for v in re.search(r'<g class="pt-tip"><rect x="([\d.]+)" y="[\d.]+" width="([\d.]+)"', tip).groups())
+    assert x >= 0 and x + w <= compose.W and tip.count("<tspan") == 3 and "…" in tip
+    short = compose._tip(200, 60, 195, 205, 10, 130, "09:12 · 1,234 W")
+    assert short.count("<tspan") == 1 and 'font-size="8.5"' in short
+
+
+def test_an_automation_made_from_a_blueprint_says_what_it_acts_on():
+    # 2026-10-12: five automations of the villa said "could not be read" — the blueprint is read (its `get` only) and
+    # each input filled with the automation's own, a default where it gave none
+    import investigate
+    bp = {"blueprint": {"input": {"fan": {"name": "Fan"}, "level": {"default": 70}}},
+          "actions": [{"choose": [{"sequence": [{"action": "homeassistant.turn_on",
+                                                  "target": {"entity_id": {"__input__": "fan"}}}]}]},
+                      {"action": "notify.notify", "data": {"message": {"__input__": "level"}}}]}
+
+    class C(_Around):
+        def tool(self, name, args):
+            if name == "ha_config_get_automation":
+                return {"config": {"use_blueprint": {"path": "fan.yaml", "input": {"fan": "switch.spa"}}}}
+            if name == "ha_manage_blueprints":
+                assert args == {"action": "get", "path": "fan.yaml", "domain": "automation"}
+                return {"success": True, "data": {"config": bp}}
+            return super().tool(name, args)
+    got = investigate.automation_able(C(), "automation.x", T(9, 2), T(9, 15))
+    assert got["can"] == "changes" and got["changes"] == ["homeassistant.turn_on"]
+    assert got["targets"] == [{"id": "switch.spa", "name": "Spa Relay"}]
+
+    class Unreadable(C):
+        def tool(self, name, args):
+            if name == "ha_manage_blueprints":
+                raise RuntimeError("no file access")
+            return super().tool(name, args)
+    assert investigate.automation_able(Unreadable(), "automation.x", T(9, 2), T(9, 15))["can"] == "unproven"
+
+
+def test_the_read_only_client_allows_a_blueprints_get_and_nothing_else_of_it():
+    from vesta_shared.ha_client import HAError, McpClient
+
+    class Session:
+        calls = []
+
+        def call_raw(self, name, args):
+            Session.calls.append((name, args))
+            return {"content": [{"type": "text", "text": "{}"}]}
+    c = McpClient("http://x", "UTC", session=Session())
+    c.tool("ha_manage_blueprints", {"action": "get", "path": "a.yaml"})
+    for action in ("save", "delete", "import", "substitute", None):
+        try:
+            c.tool("ha_manage_blueprints", {"action": action, "path": "a.yaml"})
+            raise AssertionError(f"{action} was allowed")
+        except HAError as e:
+            assert "only its get action" in str(e)
+    assert Session.calls == [("ha_manage_blueprints", {"action": "get", "path": "a.yaml"})]
+
+
+def test_a_device_home_assistant_names_nowhere_is_said_in_words_never_by_its_id():
+    import investigate
+
+    class Silent(_Around):
+        def history(self, ids, start, end):
+            return {ids[0]: []} if ids[0] == "sensor.pump_current" else super().history(ids, start, end)
+
+        def states(self, ids):
+            return {i: v for i, v in super().states(ids).items() if i != "sensor.pump_current"}
+    _, f = _facts(Silent(), ("sensor.heater_power", "sensor.pump_current"))
+    assert "Pump current: Home Assistant kept no reading of it in this period — nothing to judge it by." in f["established"]
+    assert not any("sensor.pump_current" in x for x in f["established"])

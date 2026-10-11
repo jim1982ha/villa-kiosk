@@ -1,43 +1,15 @@
 {% include "page_head.html" %}
-{# An investigation: what happened and why. FACTS FIRST (owner, 2026-10-11): what the records establish and rule out,
-   and the timeline, are laid out by code from the readings (investigation_facts.py, `f`); the AI's reading of them
-   (its notes, `n`) comes after, marked as such. The same head and style as every report. #}
+{# An investigation: what happened and why. What the records establish and rule out, the charts and the timeline are
+   laid out by code from the readings (investigation_facts.py, `f`); the AI's reading of them (its notes, `n`) is the
+   part a person reads first (owner, 2026-10-12: "What it most likely means shall appear first"), the long lists of
+   facts are folded until opened. Every chart has its legend. The same head and style as every report. #}
+{% macro legend(items) %}{% if items %}<p class="note legend">{% for b in items %}<span class="key">{% if b.shape == "line" %}<span class="sw line" style="border-color:{{ b.colour }}"></span>{% elif b.shape == "faint" %}<span class="sw line faint" style="border-color:{{ b.colour }}"></span>{% elif b.shape == "mark" %}<span class="sw mark" style="background:{{ b.colour }}"></span>{% else %}<span class="sw" style="background:{{ b.colour }}"></span>{% endif %} {{ b.word }}</span>{% endfor %}</p>{% endif %}{% endmacro %}
 <body><main class="wrap">
 <header class="head">
   <div class="eyebrow">Investigation</div>
   <h1>{{ n.title }}</h1>
   <p class="meta">{{ period }} · generated {{ generated }}</p>
 </header>
-{% if f.established %}
-<section class="card"><h2>What the records show</h2><ul>{% for x in f.established %}<li>{{ x }}</li>{% endfor %}</ul></section>
-{% endif %}
-{% if f.ruled_out %}
-<section class="card"><h2>Ruled out by the records</h2><ul>{% for x in f.ruled_out %}<li>{{ x }}</li>{% endfor %}</ul></section>
-{% endif %}
-{% for c in charts %}
-<section class="card">
-  <h2>{{ c.name }}</h2>
-  {{ c.svg }}
-  {% if c.legend or c.days_behind %}<p class="note">{% for b in c.legend %}<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:{{ b.colour }};opacity:.5;vertical-align:-1px"></span> {{ b.word }}{% if not loop.last or c.days_behind %} · {% endif %}{% endfor %}{% if c.days_behind %}<span style="display:inline-block;width:14px;border-top:2px solid var(--ink2);opacity:.6;vertical-align:3px"></span> the same hours on each of the {{ c.days_behind }} day{{ "s" if c.days_behind > 1 }} before{% endif %}</p>{% endif %}
-  {% if c.normal %}<p class="note">Its normal (the days before): {{ c.normal }}</p>{% endif %}
-</section>
-{% endfor %}
-{% if lanes %}
-<section class="card">
-  <h2>On the same timeline</h2>
-  {{ lanes }}
-  <p class="note">Filled: on, open or another state; grey: not answering; empty: off. Tap a band or a mark for its time and what it was.</p>
-</section>
-{% endif %}
-{% if f.timeline %}
-<section>
-  <h2>Timeline</h2>
-  <div class="card tbl"><table><tr><th style="white-space:nowrap">When</th><th>What</th></tr>
-  {% for t in f.timeline %}<tr><td style="white-space:nowrap">{{ t.time }}</td><td>{% if t.unusual %}<span class="st bad">unusual</span> {% endif %}{% if t.reported %}<span class="st flat">reported</span> {% endif %}{{ t.text }}</td></tr>{% endfor %}
-  </table></div>
-  {% if f.recorded %}<p class="note">From Home Assistant's records{% if f.timeline | selectattr("reported") | list %}; “reported”: what the account says a person saw or did, not in the records{% endif %}.</p>{% endif %}
-</section>
-{% endif %}
 {% if n.summary or n.causes %}
 <section>
   <h2>What it most likely means</h2>
@@ -46,9 +18,40 @@
   {% for c in n.causes %}<div class="card"><p><b>{{ loop.index }}. {{ c.cause }}</b>{% if c.verdict %} <span class="st {{ {"consistent": "watch", "not supported": "ok", "cannot tell": "flat"}.get(c.verdict, "flat") }}">{{ c.verdict }}</span>{% endif %}</p>
     {% if c.evidence %}<p><span class="note">What points to it:</span> {{ c.evidence }}</p>{% endif %}
     {% if c.confirm %}<p><span class="note">How to confirm on site:</span> {{ c.confirm }}</p>{% endif %}
-    {% if c.source %}<p class="note">Lead from the web: {{ c.source }}</p>{% endif %}</div>
+    {% if c.source %}<p class="note">Where the lead came from: {{ c.source }}</p>{% endif %}</div>
   {% endfor %}
 </section>
+{% endif %}
+{% if f.established %}
+<details class="card fold"><summary><h2>What the records show ({{ f.established | length }})</h2></summary>
+  <ul>{% for x in f.established %}<li>{{ x }}</li>{% endfor %}</ul></details>
+{% endif %}
+{% if f.ruled_out %}
+<section class="card"><h2>Ruled out by the records</h2><ul>{% for x in f.ruled_out %}<li>{{ x }}</li>{% endfor %}</ul></section>
+{% endif %}
+{% for c in charts %}
+<section class="card">
+  <h2>{{ c.name }}</h2>
+  {{ c.svg }}
+  {{ legend(c.legend) }}
+  {% if c.normal %}<p class="note">Its normal (the days before): {{ c.normal }}</p>{% endif %}
+</section>
+{% endfor %}
+{% if lanes %}
+<section class="card">
+  <h2>On the same timeline</h2>
+  {{ lanes }}
+  {{ legend(lanes_legend) }}
+  <p class="note">An empty lane is off. Tap a band or a mark for its time and what it was.</p>
+</section>
+{% endif %}
+{% if f.timeline %}
+<details class="card fold"><summary><h2>Timeline ({{ f.timeline | length }} moments)</h2></summary>
+  <div class="tbl"><table><tr><th style="white-space:nowrap">When</th><th>What</th></tr>
+  {% for t in f.timeline %}<tr><td style="white-space:nowrap">{{ t.time }}</td><td>{% if t.unusual %}<span class="st bad">unusual</span> {% endif %}{% if t.reported %}<span class="st flat">reported</span> {% endif %}{{ t.text }}</td></tr>{% endfor %}
+  </table></div>
+  {% if f.recorded %}<p class="note">From Home Assistant's records{% if f.timeline | selectattr("reported") | list %}; “reported”: what the account says a person saw or did, not in the records{% endif %}.</p>{% endif %}
+</details>
 {% endif %}
 {% if n.cannot_tell %}
 <section class="card"><h2>What Home Assistant cannot tell</h2><ul>{% for x in n.cannot_tell %}<li>{{ x }}</li>{% endfor %}</ul></section>
@@ -57,10 +60,13 @@
 <section class="card"><h2>What would have warned earlier</h2><ul>{% for x in f.alerts %}<li>{{ x }}</li>{% endfor %}{% for x in n.warned_earlier %}<li>{{ x }}</li>{% endfor %}</ul>
   {% if f.alerts %}<p class="note">The alert times are worked out from the records, with the same limits that marked each period unusual.</p>{% endif %}</section>
 {% endif %}
-{% if n.checked or searches %}<section class="card"><h2>How it was checked</h2>{% if n.checked %}<p class="note">{{ n.checked }}</p>{% endif %}
-  {% if searches %}<p class="note">Web searches made ({{ searches | length }}): {% for q in searches %}“{{ q }}”{% if not loop.last %}; {% endif %}{% endfor %}</p>{% endif %}</section>{% endif %}
-{# ALWAYS SHOWN (owner, 2026-10-11): an investigation that used no web page says so — a missing section could not be
-   told from a hidden one #}
-<section class="card"><h2>Sources (web)</h2>{% if web_pages %}<ul>{% for x in web_pages %}<li><a href="{{ x.url }}" rel="noopener noreferrer">{{ x.title or x.url }}</a></li>{% endfor %}</ul>{% else %}<p class="note">No web page was used: this account rests only on Home Assistant's records.</p>{% endif %}</section>
+{# ONE SECTION (owner, 2026-10-12): how it was checked and its sources. The sources are ALWAYS said (2026-10-11): an
+   investigation that used no web page says so — a missing list could not be told from a hidden one #}
+<section class="card"><h2>How it was checked, and its sources</h2>
+  {% if n.checked %}<p class="note">{{ n.checked }}</p>{% endif %}
+  {% if searches %}<p class="note">Web searches made ({{ searches | length }}): {% for q in searches %}“{{ q }}”{% if not loop.last %}; {% endif %}{% endfor %}</p>{% endif %}
+  <h3>Sources (web)</h3>
+  {% if web_pages %}<ul>{% for x in web_pages %}<li><a href="{{ x.url }}" rel="noopener noreferrer">{{ x.title or x.url }}</a></li>{% endfor %}</ul>{% else %}<p class="note">No web page was used: this account rests only on Home Assistant's records.</p>{% endif %}
+</section>
 <p class="foot">Every time and figure comes from Home Assistant's records, read by the VESTA Agent; the causes are its reading of them, to be confirmed on site. Nothing on the villa was changed.</p>
 </main></body></html>

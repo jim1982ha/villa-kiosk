@@ -15,6 +15,14 @@ body{background:var(--paper);color:var(--ink);font-family:Jost,system-ui,sans-se
 h1{font-family:"Cormorant Garamond",Georgia,serif;font-size:36px;font-weight:600;margin:0;line-height:1.1;text-wrap:balance}
 .pt{outline:none;cursor:default}.pt .pt-dot,.pt .pt-tip{opacity:0;transition:opacity .12s}.pt:hover .pt-dot,.pt:focus .pt-dot,.pt:hover .pt-tip,.pt:focus .pt-tip{opacity:1}.pt-dot{fill:var(--card);stroke:var(--ink);stroke-width:2}.pt-tip rect{fill:var(--ink)}.pt-tip text{fill:var(--card);font-weight:600}
 h2{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink2);margin:0 0 12px;font-weight:600}
+h3{font-size:12px;color:var(--ink2);margin:14px 0 6px;font-weight:600}
+details.fold>summary{cursor:pointer;list-style:none}details.fold>summary::-webkit-details-marker{display:none}
+details.fold>summary h2{display:inline;margin:0}details.fold>summary::before{content:"▸ ";color:var(--ink2)}
+details.fold[open]>summary::before{content:"▾ "}details.fold[open]>summary{margin-bottom:12px}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px}.legend .key{white-space:nowrap}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;opacity:.6;vertical-align:-1px}
+.sw.line{width:14px;height:0;border-top:2px solid;border-radius:0;opacity:1;vertical-align:3px;background:none}
+.sw.line.faint{opacity:.5}.sw.mark{width:3px;height:11px;border-radius:0;opacity:1}
 p{margin:0}
 .eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--acc);font-weight:600}
 .head{display:grid;gap:8px}

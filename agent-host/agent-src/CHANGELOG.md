@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.164 (12 October 2026)
+
+- vesta_shared.ha_client READ_ACTIONS: ha_manage_blueprints allowed for `get` only (every other action refused, even
+  on a write client's read path). investigate.automation_able reads a blueprint automation's actions
+  (_from_blueprint: {"__input__"} filled from use_blueprint.input, else the blueprint's default).
+- investigation.html: the AI's reading first; established facts and timeline in <details class="fold">; one legend
+  macro (charts: readings / bands / days before; strip: compose.strip_legend from LANE_STYLE); checked + sources one
+  section. compose._tip: TIP_FONT 8.5, _wrap to the chart width, at most 3 lines (every report's charts).
+- investigate.spoken(): a name for an entity with no state; "Where the lead came from" for a cause's source.
+
 ## 0.6.163 (11 October 2026)
 
 - Facts first: reports/scripts/investigation_facts.py lays out, from investigate.py's readings (timeline --out, and

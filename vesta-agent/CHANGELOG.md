@@ -1,3 +1,17 @@
+## 0.12.170
+
+What you will see on an /investigate page:
+- "What it most likely means" comes first. "What the records show" and the timeline are folded (tap to open), each
+  with how many lines it holds.
+- Every chart has a legend: the device's readings, each kind of shaded band, the days before; the "On the same
+  timeline" strip lists only what it draws.
+- Tooltips are smaller and wrap within the chart, on every report's charts.
+- "How it was checked, and its sources" is one section: what was read, the web searches made, the web pages.
+- Automations made from a blueprint are read too: each says what it can act on, or is ruled out when it can only
+  notify or record — none is left "could not be read" when the blueprint is readable.
+- A cause says "Where the lead came from" (a web page or one of your records), and a sensor Home Assistant keeps no
+  history for is named in words, never by its technical id.
+
 ## 0.12.169
 
 What you will see:

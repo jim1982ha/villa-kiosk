@@ -124,8 +124,9 @@ rules out is not a cause; if you think a fact is misleading, say why in "cannot_
                      ONLY what a person saw or did that the records do not show — the page builds the recorded
                      timeline itself; leave it out when there is nothing such],
         "causes": [{"cause": "…", "evidence": "what in the records points to it", "confirm": "how to confirm on site"},
-                   … most likely first; a lead from web research also has "source" (where it came from) and
-                   "verdict" ("consistent", "not supported" or "cannot tell")],
+                   … most likely first; a lead from web research also has "source" (where it came from: the web
+                   page's name, or the record that raised it) and "verdict" ("consistent", "not supported" or
+                   "cannot tell")],
         "cannot_tell": ["what no sensor saw, gaps in the records, what only a person on site can check", …],
         "warned_earlier": ["a sensor, rule or change the records cannot measure (the page already gives when an
                            alert on each unusual period would have fired)", …],
