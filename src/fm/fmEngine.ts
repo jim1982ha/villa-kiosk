@@ -10,7 +10,7 @@
 import {
   NO_FM_TERMS,
   type FmTerms,
-  type FmCompletion, type FmCost, type FmData, type FmSchedule, type FmTicket, type FmTicketStatus,
+  type FmCompletion, type FmCost, type FmData, type FmSchedule, type FmTicket, type FmTicketStatus, type FmTicketUpdate,
 } from "./fmTypes";
 import { fullDate, monthYear } from "@/utils/dateText";
 
@@ -200,6 +200,8 @@ export interface TicketStats {
   /** Tickets the mean is computed from — see ticketStats. Equal to `resolved`
    *  unless some resolved ticket carries no usable resolution time. */
   meanCoversTickets: number;
+  /** Resolved with no work done (isClearedStep): counted apart, never in `resolved` nor the mean. */
+  closedWithoutAction: number;
 }
 
 /** Is this fault closed?
@@ -226,8 +228,64 @@ export function isTicketOpen(t: { status?: FmTicket["status"] }): boolean {
   return !isTicketResolved(t);
 }
 
+/** Who did a piece of work: the person, when someone else recorded it (a VESTA Agent completion for a Done on
+ *  Telegram), else who recorded it. One reading for every list and report. */
+export function workedBy(c: Pick<FmCompletion, "by" | "who">): string {
+  return c.who || c.by || "—";
+}
+
+/** A step that resolved a fault with no work done: the Kiosk's "Close — no action needed", the VESTA Agent's own
+ *  clearing of a problem gone (kind "cleared", agent-contract.json). ⚠️ The one place a step written before the kind
+ *  existed is read by its note (review 31: such closes counted as repairs in every figure). */
+export function isClearedStep(u: FmTicketUpdate): boolean {
+  if (u.kind) return u.kind === "cleared";
+  const n = u.note ?? "";
+  return isTicketResolved(u) && (n === CLOSED_WITHOUT_ACTION || n.startsWith("Cleared:") || n.startsWith("Closed: the problem is over"));
+}
+
+/** The time a fault was really open, in ms: from its opening (or a reopening) to each resolution, never the time it
+ *  sat resolved in between (review 31: fixed in 2 h, reopened a month later, fixed in 2 h read 722 h). Without
+ *  steps: opened → resolved. Null when it cannot be told. */
+export function openTimeMs(t: FmTicket): number | null {
+  const steps = (t.updates ?? []).filter((u) => u.status);
+  if (!steps.some((u) => isTicketResolved(u))) {
+    const ms = t.resolvedAt ? Date.parse(t.resolvedAt) - Date.parse(t.openedAt) : NaN;
+    return Number.isFinite(ms) && ms >= 0 ? ms : null;
+  }
+  let since: number | null = Date.parse(t.openedAt), total = 0;
+  for (const u of steps) {
+    const at = Date.parse(u.at);
+    if (!Number.isFinite(at)) continue;
+    if (isTicketResolved(u)) {
+      if (since !== null && Number.isFinite(since) && at >= since) total += at - since;
+      since = null;
+    } else if (since === null) since = at;                       // open again
+  }
+  return total;
+}
+
+/** A fault as it stood at `iso`: its status, and when it was resolved if it was by then — a past month's report tells
+ *  that month, never the fault as it is today (review 31: reopened in October, it vanished from September's recap). */
+export function ticketAt(t: FmTicket, iso: string): { status: FmTicket["status"]; resolvedAt?: string } {
+  const until = Date.parse(iso);
+  const all = (t.updates ?? []).filter((u) => u.status);
+  if (!all.length) return { status: t.status, resolvedAt: t.resolvedAt };     // no history: as it is
+  const steps = all.filter((u) => Date.parse(u.at) <= until);
+  const last = steps[steps.length - 1];
+  if (!last) return { status: "open" };
+  return { status: last.status, resolvedAt: isTicketResolved(last) ? last.at : undefined };
+}
+
+/** Did the fault resolve in `month` ("2026-09")? From its steps — a resolution the fault was later reopened from
+ *  counts — else its resolvedAt. */
+export function resolvedInMonth(t: FmTicket, month: string): boolean {
+  const steps = (t.updates ?? []).filter((u) => isTicketResolved(u));
+  const ats = steps.length ? steps.map((u) => u.at) : (t.resolvedAt ? [t.resolvedAt] : []);
+  return ats.some((a) => monthKey(a) === month);
+}
+
 export function ticketStats(tickets: readonly FmTicket[]): TicketStats {
-  let open = 0, inProgress = 0, resolved = 0, totalMs = 0, timed = 0;
+  let open = 0, inProgress = 0, resolved = 0, cleared = 0, totalMs = 0, timed = 0;
   for (const t of tickets) {
     if (t.status === "open") open++;
     else if (t.status === "in_progress") inProgress++;
@@ -239,15 +297,17 @@ export function ticketStats(tickets: readonly FmTicket[]): TicketStats {
     // one nobody ever asks again.
     else if (isTicketOpen(t)) open++;
     else {
+      // ⚠️ A CLOSE WITH NO WORK IS NOT A REPAIR (review 31): ten 10-minute Wi-Fi blips cleared by the agent made a
+      // 48 h fridge repair read "4.5 h", one duplicate closed after 92 days "2208 h"
+      const lastResolve = [...(t.updates ?? [])].reverse().find((u) => isTicketResolved(u));
+      if (lastResolve && isClearedStep(lastResolve)) { cleared++; continue; }
       resolved++;
-      if (t.resolvedAt) {
-        const ms = Date.parse(t.resolvedAt) - Date.parse(t.openedAt);
-        if (Number.isFinite(ms) && ms >= 0) { totalMs += ms; timed++; }
-      }
+      const ms = openTimeMs(t);
+      if (ms !== null) { totalMs += ms; timed++; }
     }
   }
   return {
-    open, inProgress, resolved,
+    open, inProgress, resolved, closedWithoutAction: cleared,
     meanResolutionHours: timed ? totalMs / timed / 3_600_000 : null,
     // ⚠️ HOW MANY TICKETS THE MEAN ACTUALLY COVERS. `resolved` and `timed` are
     // independent counters: a ticket resolved with no resolvedAt, or with a
@@ -357,13 +417,21 @@ export function withoutCompletion(d: FmData, id: string): FmData {
 /** Patch a fault. The resolution time is stamped when — and only when — the
  *  status becomes resolved (the operator marks it done, the app records WHEN:
  *  the mean-time-to-resolution evidence rests on it). */
-export function withTicketPatch(d: FmData, id: string, patch: Partial<FmTicket>, k: Pick<FmStamp, "now">): FmData {
+export function withTicketPatch(d: FmData, id: string, patch: Partial<FmTicket>, k: Pick<FmStamp, "now">, by?: string): FmData {
   return {
     ...d,
     tickets: d.tickets.map((t) => {
       if (t.id !== id) return t;
       const next = { ...t, ...patch };
       if (isTicketResolved(patch) && !next.resolvedAt) next.resolvedAt = k.now;
+      // ⚠️ A PERSON'S RENAME IS A STEP (review 29): it left no trace — the card's "Was: …" named the title two renames
+      // back, and the VESTA Agent could only guess a person's title by comparing titles
+      if (patch.title !== undefined && patch.title !== t.title) {
+        next.updates = [...(t.updates ?? []), {
+          at: k.now, status: next.status, kind: "retitled" as const, title: patch.title, was: t.title, photoIds: [],
+          ...(by ? { by } : {}),
+        }];
+      }
       return next;
     }),
   };
@@ -376,10 +444,16 @@ export function withTicketPatch(d: FmData, id: string, patch: Partial<FmTicket>,
  * only a RESOLUTION files a completion (with its cost) — picking a fault up is
  * a step, not work done, and counting it would inflate every "work done" figure.
  */
+/**
+ * `step.who` is the name typed for who handles it; `by` the signed-in profile that recorded it — the same as the
+ * one-step close records (architecture review 26: "Mark resolved" kept only the typed name, often empty, so the
+ * agent's Telegram note and the card said "by Facility manager" for one close and nothing for the other).
+ * Reopening a resolved fault is a step of its own kind ("reopened"): the VESTA Agent reads it, never guesses it.
+ */
 export function withTicketAdvanced(
   d: FmData, id: string, to: FmTicket["status"],
-  step: { by?: string; note?: string; photoIds: string[] },
-  cost: Omit<FmCost, "id" | "at" | "photoIds"> | undefined, k: FmStamp,
+  step: { who?: string; note?: string; photoIds: string[] },
+  cost: Omit<FmCost, "id" | "at" | "photoIds"> | undefined, k: FmStamp, by?: string,
 ): FmData {
   if (!d.tickets.some((t) => t.id === id)) return d;
   const at = k.now;
@@ -393,12 +467,15 @@ export function withTicketAdvanced(
       resolvedAt: resolving ? at : undefined,
       photoIds: [...t.photoIds, ...step.photoIds],
       costId: costId ?? t.costId,
-      updates: [...(t.updates ?? []), { at, status: to, ...step }],
+      updates: [...(t.updates ?? []), {
+        at, status: to, ...step, ...(by ? { by } : {}),
+        ...(to === "open" && isTicketResolved(t) ? { kind: "reopened" as const } : {}),
+      }],
     })),
     completions: resolving
       ? [...d.completions, {
           id: k.id("cp"), scheduleId: "", ticketId: id, at,
-          by: step.by ?? "—", note: step.note, photoIds: step.photoIds, costId,
+          by: step.who ?? by ?? "—", note: step.note, photoIds: step.photoIds, costId,
         }]
       : d.completions,
     costs: costId ? [...d.costs, { ...cost!, id: costId, at, photoIds: step.photoIds }] : d.costs,
@@ -428,7 +505,7 @@ export function withTicketClosed(d: FmData, id: string, k: Pick<FmStamp, "now">,
       ...x,
       status: "resolved",
       resolvedAt: at,
-      updates: [...(x.updates ?? []), { at, status: "resolved", note: CLOSED_WITHOUT_ACTION, photoIds: [], ...(by ? { by } : {}) }],
+      updates: [...(x.updates ?? []), { at, status: "resolved", kind: "cleared" as const, note: CLOSED_WITHOUT_ACTION, photoIds: [], ...(by ? { by } : {}) }],
     })),
   };
 }
@@ -439,9 +516,10 @@ export function withTicketClosed(d: FmData, id: string, k: Pick<FmStamp, "now">,
 // could reach it, and several already disagreed with the engine or with each
 // other. tests/oracles/fm_rules.mjs drives them by value.
 
-/** Where a fault goes next from the Faults tab. Resolved is final there. */
+/** Where a fault goes next from the Faults tab. A resolved fault can be reopened (architecture review 26: there was
+ *  no way to, and the VESTA Agent guessed a reopening from timings). */
 export const TICKET_NEXT: Readonly<Record<FmTicketStatus, FmTicketStatus | null>> = {
-  open: "in_progress", in_progress: "resolved", resolved: null,
+  open: "in_progress", in_progress: "resolved", resolved: "open",
 };
 
 /** A fault's place in the list: open, then in progress, then resolved. A

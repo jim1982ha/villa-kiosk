@@ -26,6 +26,7 @@
 // side. The literal union TYPES stay below — the compiler needs words — and
 // tests/oracles/fm_records.mjs fails when they and the table part.
 import FM_RECORDS from "../../rootfs/usr/share/vesta/fm-records.json" with { type: "json" };
+import AGENT_CONTRACT from "../../rootfs/usr/share/vesta/agent-contract.json" with { type: "json" };
 
 /** Who last created or changed a record, when it was not a person
  *  (docs/agent-integration/PLAN.md F6). Set by the ADD-ON, never by this app:
@@ -82,6 +83,9 @@ export interface FmCompletion extends FmProvenance {
   /** ISO timestamp of when the work was done (not when it was logged). */
   at: string;
   by: string;
+  /** Who did the work when someone else recorded it — the person a VESTA Agent completion is for (its `by` is the
+   *  agent's, stamped by the Kiosk). Read through fmEngine.workedBy. */
+  who?: string;
   note?: string;
   photoIds: string[];
   /** Set when logging the completion also recorded what it cost. */
@@ -139,10 +143,24 @@ export interface FmTicketUpdate {
   at: string;
   /** The status this update moved the fault TO. */
   status: FmTicketStatus;
+  /** The profile that recorded it ("Facility manager"), or "VESTA Agent". */
   by?: string;
+  /** The name typed for who handles it or did the work ("Wayan / AC contractor"). */
+  who?: string;
   note?: string;
   photoIds: string[];
+  /** What this step is, said once in the agreement (agent-contract.json `ticketUpdate`) — none: a status step.
+   *  ⚠️ NEVER READ FROM A NOTE'S FIRST WORDS (architecture review 26): the card guessed "Now: …" by its prefix. */
+  kind?: FmTicketUpdateKind;
+  /** The title the VESTA Agent gave the fault at this step (retitled, reading, reopened, raised). */
+  title?: string;
+  /** retitled: the title before. */
+  was?: string;
 }
+
+export type FmTicketUpdateKind = "reopened" | "retitled" | "reading" | "cleared";
+/** Every kind, from the agreement the VESTA Agent writes by. */
+export const FM_TICKET_UPDATE_KINDS = AGENT_CONTRACT.ticketUpdate.kinds as readonly FmTicketUpdateKind[];
 
 /** A fault raised against a device or room. */
 export interface FmTicket extends FmProvenance {

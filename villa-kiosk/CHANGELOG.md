@@ -1,3 +1,28 @@
+## 2.496.325
+
+### Fixed
+- Faults tab and monthly recap: "mean resolution" counts only the time a fault was really open. A pump fixed in 2 h, reopened a month later and fixed in 2 h again reads 4 h (it read 722 h).
+- Faults closed with no work done ("Close — no action needed", or cleared by the VESTA Agent because the problem went away) no longer count as repairs. They are shown apart ("closed, no action"); before, ten short Wi-Fi blips made a real 48 h repair read 4.5 h.
+- A monthly recap made after a fault was reopened still lists the fault fixed that month, as it stood at the end of the month (it disappeared, while its cost stayed in the spend section).
+- A fault reopened by the VESTA Agent under a new title: its "Was: …" line names the title it really replaced.
+- Recent work and the recap name the person who did a repair confirmed with Done on Telegram (with VESTA Agent 0.12.155).
+
+## 2.496.324
+
+### Changed
+- Cockpit, fault cards: renaming a fault records who renamed it. The card's "Was: …" line now names the title it really replaced and who changed it ("Was: Pump at 9 % (renamed by Facility manager, 11/10 07:10)"), and the VESTA Agent recognises your title for sure and never writes its own over it.
+
+## 2.496.323
+
+### Added
+- Cockpit, fault cards: a resolved fault can be reopened ("Reopen fault", with an optional reason). The VESTA Agent reads the reopening and asks the facility manager to look again, instead of guessing it from timings.
+
+### Changed
+- A fault card no longer repeats its title under it. When the VESTA Agent updates a title (a battery at 9 %, then 7 %), the card shows what it said before, once: "Was: Motion battery at 8 % (2026-10-10 04:00)". When a person has written their own title, it stays, and the agent's latest reading shows under it as "VESTA reads: …".
+- "In progress since … by …" is always the person who picked the fault up: the VESTA Agent's title updates no longer replace their time and name. A reopened fault says when and by whom.
+- Each note on a fault card shows its date.
+- "Mark in progress" and "Mark resolved" record the profile that pressed them (Owner or Facility manager), as "Close — no action needed" already did, with the typed name kept apart. The card shows the typed name when there is one.
+
 ## 2.496.322
 
 ### Changed

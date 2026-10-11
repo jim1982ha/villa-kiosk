@@ -9,7 +9,7 @@
 import { useState } from "react";
 import { Check, CalendarClock, Trash2 } from "lucide-react";
 import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
-import { budgetStatus, isTicketOpen, localStamp, scheduleBoard, shortDate, type ScheduleStatus, parseAmount, fmAttention } from "@/fm/fmEngine";
+import { budgetStatus, isTicketOpen, localStamp, scheduleBoard, shortDate, type ScheduleStatus, parseAmount, fmAttention, workedBy } from "@/fm/fmEngine";
 import EvidenceRow from "./EvidenceRow";
 import RecentWorkList from "./RecentWorkList";
 import NotesField from "./NotesField";
@@ -121,7 +121,7 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
                 <strong>{s.schedule.title}</strong>
               </div>
               <RecordMeta when={`${dueText(s)} · every ${s.schedule.everyDays} days`
-                + (s.last ? ` · last ${localStamp(s.last.at)} by ${s.last.by || "—"}` : "")}>
+                + (s.last ? ` · last ${localStamp(s.last.at)} by ${workedBy(s.last)}` : "")}>
                 {s.schedule.clause && <span className="fm-clause">Cl. {s.schedule.clause}</span>}
                 {s.schedule.room && <span className="fm-clause">{s.schedule.room}</span>}
                 <AgentMark record={s.schedule} />

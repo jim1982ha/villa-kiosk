@@ -16,7 +16,7 @@
 import { useMemo } from "react";
 import { CalendarCheck, Wrench } from "lucide-react";
 import { useFmData } from "@/fm/FmDataContext";
-import { localStamp, completionSource } from "@/fm/fmEngine";
+import { localStamp, completionSource, workedBy } from "@/fm/fmEngine";
 import { useFmTerms } from "@/fm/useFmTerms";
 import EvidenceRow from "./EvidenceRow";
 import ErasableRow from "./ErasableRow";
@@ -70,7 +70,7 @@ export default function RecentWorkList({ limit = 12 }: { limit?: number }) {
                   : <CalendarCheck size={16} className="muted" />}
                 <strong>{source.title}</strong>
               </div>
-              <RecordMeta when={`${localStamp(c.at)}${c.by && c.by !== "—" ? ` · ${c.by}` : ""}`}>
+              <RecordMeta when={`${localStamp(c.at)}${workedBy(c) !== "—" ? ` · ${workedBy(c)}` : ""}`}>
                 {source.kind === "fault" && <span className="fm-clause">fault</span>}
                 <AgentMark record={c} />
               </RecordMeta>

@@ -647,9 +647,9 @@ let d = { schedules: [{ id: "s1", title: "Filter", everyDays: 30, enabled: true 
 const docs = [];
 d = e.withCompletion(d, { scheduleId: "s1", at: k.now, by: "FM", photoIds: ["a"] }, { amountIdr: e.parseAmount("150.000"), label: "Filter", category: "minor" }, k); docs.push(d);
 d = { ...d, tickets: [{ id: "t1", title: "Leak", status: "open", openedAt: k.now, photoIds: [] }] };
-d = e.withTicketAdvanced(d, "t1", "in_progress", { by: "FM", photoIds: [] }, undefined, k); docs.push(d);
-d = e.withTicketAdvanced(d, "t1", "resolved", { by: "FM", photoIds: ["b"] }, { amountIdr: 20, label: "Seal", category: "major" }, k); docs.push(d);
-d = e.withTicketAdvanced(d, "t1", "open", { by: "FM", photoIds: [] }, undefined, k); docs.push(d);
+d = e.withTicketAdvanced(d, "t1", "in_progress", { who: "FM", photoIds: [] }, undefined, k); docs.push(d);
+d = e.withTicketAdvanced(d, "t1", "resolved", { who: "FM", photoIds: ["b"] }, { amountIdr: 20, label: "Seal", category: "major" }, k); docs.push(d);
+d = e.withTicketAdvanced(d, "t1", "open", { who: "FM", photoIds: [] }, undefined, k); docs.push(d);
 d = e.withTicketPatch(d, "t1", { status: "resolved" }, k); docs.push(d);
 console.log(JSON.stringify(docs));
 """ % (ROOT / "tests" / "consistency" / "alias-hook.mjs").as_uri()
