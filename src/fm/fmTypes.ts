@@ -83,6 +83,9 @@ export interface FmCompletion extends FmProvenance {
   /** ISO timestamp of when the work was done (not when it was logged). */
   at: string;
   by: string;
+  /** Who did the work when someone else recorded it — the person a VESTA Agent completion is for (its `by` is the
+   *  agent's, stamped by the Kiosk). Read through fmEngine.workedBy. */
+  who?: string;
   note?: string;
   photoIds: string[];
   /** Set when logging the completion also recorded what it cost. */
@@ -155,7 +158,7 @@ export interface FmTicketUpdate {
   was?: string;
 }
 
-export type FmTicketUpdateKind = "reopened" | "retitled" | "reading";
+export type FmTicketUpdateKind = "reopened" | "retitled" | "reading" | "cleared";
 /** Every kind, from the agreement the VESTA Agent writes by. */
 export const FM_TICKET_UPDATE_KINDS = AGENT_CONTRACT.ticketUpdate.kinds as readonly FmTicketUpdateKind[];
 

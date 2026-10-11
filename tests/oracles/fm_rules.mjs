@@ -88,4 +88,34 @@ ck("the one-step close goes through the store's one writer (mutate), and both sc
    && /closeTicket\(fault\.ticketId/.test((src("components/cockpit/CockpitModal.tsx") + src("components/cockpit/CockpitOverview.tsx")))
    && /ticketId: t\.id/.test(src("config/attention.ts")));
 
+{
+  // review 31: what the Cockpit counts and tells
+  const T = (id, updates, extra = {}) => ({ id, title: id, status: "resolved", openedAt: "2026-09-01T00:00:00.000Z",
+    resolvedAt: updates.at(-1).at, photoIds: [], updates, ...extra });
+  const st = (at, status, x = {}) => ({ at, status, photoIds: [], ...x });
+  const twice = T("pump", [st("2026-09-01T02:00:00.000Z", "resolved", { who: "Made" }),
+    st("2026-10-01T00:00:00.000Z", "open", { kind: "reopened" }), st("2026-10-01T02:00:00.000Z", "resolved", { who: "Made" })]);
+  ck("time to repair counts only the time a fault was open (2 h + 2 h, a month apart: 4 h)",
+     E.ticketStats([twice]).meanResolutionHours === 4, E.ticketStats([twice]));
+  const blips = Array.from({ length: 10 }, (_, i) => T(`ap${i}`, [st("2026-09-01T00:10:00.000Z", "resolved",
+    { note: "Cleared: the check no longer sees it." })]));
+  const fridge = T("fridge", [st("2026-09-03T00:00:00.000Z", "resolved", { who: "Made" })]);
+  const dup = T("dup", [st("2026-12-02T00:00:00.000Z", "resolved", { kind: "cleared", note: "Closed without action" })]);
+  const s4 = E.ticketStats([...blips, fridge, dup]);
+  ck("a close with no work is not a repair: apart, never in the mean (an old step read by its note once)",
+     s4.resolved === 1 && s4.closedWithoutAction === 11 && s4.meanResolutionHours === 48, s4);
+  const closedNow = E.withTicketClosed({ ...EMPTY_FM_DATA, tickets: [{ id: "x", title: "x", status: "open",
+    openedAt: "2026-09-01T00:00:00.000Z", photoIds: [] }] }, "x", { now: "2026-09-02T00:00:00.000Z" }).tickets[0];
+  ck("  ...\"Close — no action needed\" writes the kind cleared", closedNow.updates.at(-1).kind === "cleared", closedNow.updates);
+  ck("who did the work: the person a completion is for, else who recorded it",
+     E.workedBy({ by: "VESTA Agent", who: "Made" }) === "Made" && E.workedBy({ by: "Wayan" }) === "Wayan" && E.workedBy({ by: "" }) === "—");
+  // a fault fixed in September, reopened in October: September's recap still tells it, as it stood then
+  const sept = { ...EMPTY_FM_DATA, tickets: [{ id: "tk3", title: "Pool pump seized", status: "open", openedAt: "2026-08-28T00:00:00.000Z",
+    photoIds: ["p"], updates: [st("2026-09-05T00:00:00.000Z", "resolved", { who: "Made" }),
+      st("2026-10-02T00:00:00.000Z", "open", { kind: "reopened" })] }] };
+  const recap = R.buildMonthlyRecap({ fm: sept, month: "2026-09", villaName: "V", readiness: null });
+  ck("a past month's recap tells a fault fixed that month, as it stood then, even reopened since",
+     /\| Pool pump seized \| resolved \| 05 Sept 2026 \|/.test(recap) || /Pool pump seized \| resolved \|/.test(recap), recap.split("## 3.")[1]);
+}
+
 done("✅ the Facility rules, in the engine");

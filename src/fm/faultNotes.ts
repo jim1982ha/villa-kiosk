@@ -50,11 +50,15 @@ export function faultWhen(t: FmTicket, stamp: (at: string) => string): string {
 export function faultNoteLines(t: Pick<FmTicket, "note" | "updates">, stamp: (at: string) => string): string[] {
   const ups = t.updates ?? [];
   const titled = ups.map(titleOf);
-  const lastTitle = titled.map((x) => x !== undefined).lastIndexOf(true);
+  // ⚠️ A REOPENING THAT GIVES A NEW TITLE IS A RENAME TOO (review 31): it is a status step, and its `was` the title it
+  // replaced — read as a status step only, "Was:" named the title two renames back
+  const renamed = ups.map((u, i) => titled[i] ?? (u.kind === "reopened" && u.was && u.title ? u.title : undefined));
+  const lastTitle = renamed.map((x) => x !== undefined).lastIndexOf(true);
   const lines = [t.note ?? ""];
   ups.forEach((u, i) => {
     if (titled[i] === undefined) {
       if (u.note) lines.push(`${u.note} (${stamp(u.at)})`);
+      if (i === lastTitle) lines.push(`Was: ${u.was} (${u.by ? `renamed by ${u.by}, ` : ""}${stamp(u.at)})`);
       return;
     }
     if (i !== lastTitle) return;
@@ -63,7 +67,7 @@ export function faultNoteLines(t: Pick<FmTicket, "note" | "updates">, stamp: (at
       return;
     }
     // an old "Now: …" step names only the new title: what it replaced is the title step before it, when there is one
-    const before = u.kind === "retitled" ? u.was : titled.slice(0, i).filter((x) => x !== undefined).pop();
+    const before = u.kind === "retitled" ? u.was : renamed.slice(0, i).filter((x) => x !== undefined).pop();
     // who renamed it, when the step says (a person's rename in the editor, the VESTA Agent's own) — review 29
     if (before) lines.push(`Was: ${before} (${u.by ? `renamed by ${u.by}, ` : ""}${stamp(u.at)})`);
   });

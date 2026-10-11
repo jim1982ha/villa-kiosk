@@ -14,7 +14,7 @@
 // document unchanged, needs no viewer, and stays readable if it is ever
 // archived as plain text years later for a dispute.
 
-import { budgetStatus, completionsInMonth, localStamp, monthKey, monthLabel, scheduleStatus, shortDate, ticketStats } from "./fmEngine";
+import { budgetStatus, completionsInMonth, localStamp, monthKey, monthLabel, scheduleStatus, shortDate, resolvedInMonth, ticketAt, ticketStats, workedBy } from "./fmEngine";
 import { categoryName, NO_FM_TERMS, type FmData, type FmTerms } from "./fmTypes";
 import type { BudgetStatus } from "./fmEngine";
 import type { ReadinessResult } from "./readiness";
@@ -140,7 +140,7 @@ export function buildMonthlyRecap(input: RecapInput): string {
     L.push(`|---|---|---|---|---|---|`);
     for (const { completion: c, schedule: s } of done) {
       L.push(`| ${shortDate(c.at)} | ${cell(s?.title ?? "(removed task)")} | ${cell(s?.clause ?? "—")} `
-        + `| ${cell(c.by || "—")} | ${c.photoIds.length} photo(s) | ${cell(c.note ?? "")} |`);
+        + `| ${cell(workedBy(c))} | ${c.photoIds.length} photo(s) | ${cell(c.note ?? "")} |`);
     }
   }
   L.push("");
@@ -182,9 +182,12 @@ export function buildMonthlyRecap(input: RecapInput): string {
   }
 
   // ── 3. Faults ──────────────────────────────────────────────────────────────
-  const inMonth = fm.tickets.filter(
-    (t) => monthKey(t.openedAt) === month
-      || (t.resolvedAt && monthKey(t.resolvedAt) === month));
+  // ⚠️ THE MONTH AS IT WAS (review 31): chosen and shown from the fault's steps — reopened in October, a fault fixed in
+  // September left September's recap while its cost stayed in §2
+  const [yy, mm] = month.split("-").map(Number);
+  const monthEnd = new Date(yy, mm, 1).toISOString();
+  const inMonth = fm.tickets.filter((t) => monthKey(t.openedAt) === month || resolvedInMonth(t, month))
+    .map((t) => ({ ...t, ...ticketAt(t, monthEnd) }));
   const stats = ticketStats(fm.tickets);
   L.push(`## 3. Faults and response`);
   L.push(`- Open: **${stats.open}** · In progress: **${stats.inProgress}** · Resolved (all time): **${stats.resolved}**`);
@@ -196,6 +199,7 @@ export function buildMonthlyRecap(input: RecapInput): string {
         + `carry no usable resolution time)`;
     L.push(`- Mean time to resolution: **${stats.meanResolutionHours.toFixed(1)} hours**${covers}`);
   }
+  if (stats.closedWithoutAction) L.push(`- Closed without action (not counted as repairs): **${stats.closedWithoutAction}**`);
   L.push("");
   if (inMonth.length) {
     L.push(`| Opened | Fault | Status | Resolved | Evidence |`);

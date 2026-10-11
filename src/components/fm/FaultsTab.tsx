@@ -158,6 +158,10 @@ export default function FaultsTab(
           </span>
           <span className="l">mean resolution</span>
         </div>
+        {/* closes with no work done, apart from the repairs (review 31: they made the mean say 4.5 h for a 48 h repair) */}
+        {stats.closedWithoutAction > 0 && (
+          <div className="fm-stat"><span className="n">{stats.closedWithoutAction}</span><span className="l">closed, no action</span></div>
+        )}
       </div>
 
       {!adding && (

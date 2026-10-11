@@ -166,6 +166,13 @@ ck("every Facility card: its pills and when on one line under the title (RecordM
     { at: at(5), status: "in_progress", by: "Facility manager", kind: "retitled", title: "Motion battery — ordered", was: "Motion battery at 7%", photoIds: [] }] };
   ck("a person's rename says what it was and who renamed it (review 29)",
      faultNoteLines(renamedByHand, stamp).at(-1) === "Was: Motion battery at 7% (renamed by Facility manager, 10-10 05)", faultNoteLines(renamedByHand, stamp));
+  const reopenedRenamed = { ...t, status: "open", title: "Pump plug offline again", updates: [...t.updates,
+    { at: at(6), status: "resolved", by: "VESTA Agent", note: "Cleared: the check no longer sees it.", photoIds: [] },
+    { at: at(7), status: "open", by: "VESTA Agent", kind: "reopened", title: "Pump plug offline again",
+      was: "Motion battery at 7%", note: "Back again.", photoIds: [] }] };
+  ck("a reopening under a new title is a rename: \"Was:\" names the title it replaced (review 31)",
+     faultNoteLines(reopenedRenamed, stamp).slice(-2).join(" | ") === "Back again. (10-10 07) | Was: Motion battery at 7% (renamed by VESTA Agent, 10-10 07)",
+     faultNoteLines(reopenedRenamed, stamp));
   ck("a title a person wrote stays; the agent's reading shows under it as \"VESTA reads: …\"",
      faultNoteLines(reading, stamp).at(-1) === "VESTA reads: Front door unavailable (10-10 05)", faultNoteLines(reading, stamp));
   const old = { ...t, updates: [t.updates[1],
