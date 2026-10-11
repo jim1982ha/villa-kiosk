@@ -123,7 +123,7 @@ def gate(event_type: str, m: dict, policy, bot_username: str | None, is_own_mess
     text = without_mention(text, bot_username)
     if not text and not invoked:
         return Intake("drop", cid, group=group)
-    return Intake("converse", cid, person, text, group=group, invoked=invoked)    # "/investigation" alone: app asks what
+    return Intake("converse", cid, person, text, group=group, invoked=invoked)    # the command alone: app asks for the question
 
 
 def resume_for(session_id: str | None, last_iso: str | None, rule: str, zone: str, now: datetime | None = None) -> str | None:

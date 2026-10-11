@@ -216,9 +216,13 @@ class Skill:
     # the AI deciding to look.
     before_answer: str | None = None
     # ⚠️ A SKILL ONLY ITS COMMAND STARTS (owner, 2026-10-11: investigate "only triggered when user mentions
-    # /investigation in the question, and never if not"): the AI never sees it among its skills, its tools refuse it,
+    # /investigation in the question, and never if not" — then "only allow /investigate"): the AI never sees it among its skills, its tools refuse it,
     # and a message carrying "/<command>" tells the AI to use it (intake.gate, Toolbox.gated). Without the "/".
     command: str | None = None
+    also: list[str] = field(default_factory=list)   # other spellings that start it too: command's first
+    # what every answer of a command skill carries, checked after the AI's turn (app._delivered): {"page": file sent with
+    # send_message, "fault_offer": the saved account a fault is offered from when the AI offered none}
+    deliver: dict[str, str] = field(default_factory=dict)
 
     @property
     def skill_md(self) -> str:
@@ -240,11 +244,24 @@ def parse_skill(name: str, path: str) -> Skill:
         raise SkillError("skill.yaml is not a mapping")
     sk = Skill(name=name, path=path, description=str(raw.get("description") or "").strip())
     if raw.get("command") is not None:
-        cmd = str(raw["command"]).strip().lstrip("/").lower()
-        if not SKILL_COMMAND.match(cmd) or "/" + cmd in RESERVED_COMMANDS:
-            raise SkillError(f"command: {raw['command']} is not a free Telegram command (lower-case letters, digits, _; "
-                             f"not {', '.join(sorted(RESERVED_COMMANDS))})")
-        sk.command = cmd
+        # one command, or a list: the first is the one the agent writes, the others start it too (a common spelling)
+        given = raw["command"] if isinstance(raw["command"], list) else [raw["command"]]
+        cmds = [str(c).strip().lstrip("/").lower() for c in given]
+        for cmd, c in zip(cmds, given):
+            if not SKILL_COMMAND.match(cmd) or "/" + cmd in RESERVED_COMMANDS:
+                raise SkillError(f"command: {c} is not a free Telegram command (lower-case letters, digits, _; "
+                                 f"not {', '.join(sorted(RESERVED_COMMANDS))})")
+        if not cmds:
+            raise SkillError("command: an empty list")
+        sk.command, sk.also = cmds[0], cmds[1:]
+    deliver = raw.get("deliver") or {}
+    if deliver:
+        if not sk.command:
+            raise SkillError("deliver: only a skill with a command has it (its answers are the ones checked)")
+        if not isinstance(deliver, dict) or set(deliver) - {"page", "fault_offer"} or \
+                not all(isinstance(v, str) and FILE_NAME.match(v) for v in deliver.values()):
+            raise SkillError("deliver: page and/or fault_offer, each a plain file name")
+        sk.deliver = dict(deliver)
     for script, spec in (raw.get("scripts") or {}).items():
         spec = spec or {}
         if not _script_file_ok(path, script):
@@ -507,8 +524,8 @@ class Skills:
         """"/command" → the skill it starts, for the skills switched on (Skill.command); the first name wins a clash."""
         out: dict[str, str] = {}
         for name, sk in self.all().items():
-            if sk.command:
-                out.setdefault("/" + sk.command, name)
+            for cmd in ([sk.command] + sk.also) if sk.command else []:
+                out.setdefault("/" + cmd, name)
         return out
 
     def all(self, include_off: bool = False) -> dict[str, Skill]:

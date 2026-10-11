@@ -4,6 +4,7 @@ answer creates it, once; a scheduled job, with nobody to press, still creates it
 from __future__ import annotations
 
 import asyncio
+import os
 
 from helpers import make_agent
 from kiosk_fake import FakeKiosk
@@ -152,13 +153,14 @@ def test_investigate_is_refused_without_its_command_and_given_with_it(tmp_path, 
                                                             "args": ["find", "--what", "pump"]}))
     ai = FakeAI("ok", act=act).install(monkeypatch)
     run(v.converse(JM, v.policy().person(JM), "what happened to the pump?"))
-    assert all(r.get("is_error") and "/investigation" in r["content"][0]["text"] for r in said)
+    assert all(r.get("is_error") and "/investigate" in r["content"][0]["text"] for r in said)
     sys_prompt = ai.runs[-1]["system_prompt"]
-    assert "investigate (/investigation)" in sys_prompt and "Your skills:" in sys_prompt
+    assert "investigate (/investigate)" in sys_prompt and "Your skills:" in sys_prompt
     assert "investigate (" not in sys_prompt.split("Your skills:")[1].split("\n")[0]     # not among the AI's choices
     said.clear()
+    before = len(ai.runs)
     run(v.converse(JM, v.policy().person(JM), "what happened to the pump?", invoked="investigate"))
-    assert not said[0].get("is_error") and "wrote /investigation" in ai.runs[-1]["prompt"]
+    assert not said[0].get("is_error") and "wrote /investigate" in ai.runs[before]["prompt"]
 
 
 def test_a_continue_goes_on_with_the_skill_its_turn_was_called_for(tmp_path, monkeypatch):
@@ -171,6 +173,69 @@ def test_a_continue_goes_on_with_the_skill_its_turn_was_called_for(tmp_path, mon
     FakeAI("ok", act=act).install(monkeypatch)
     run(v.converse(JM, v.policy().person(JM), "the pump", invoked="investigate"))
     run(v.converse(JM, v.policy().person(JM), "", resume="s", is_continue=True))
-    assert not said[1].get("is_error")
+    assert said and not any(r.get("is_error") for r in said)              # the turn, its Continue (and their follow-ups)
     run(v.converse(JM, v.policy().person(JM), "and the lights?"))                       # a new question: gone again
-    assert said[2].get("is_error")
+    assert said[-1].get("is_error")
+
+
+def test_a_command_starts_a_fresh_conversation_so_nothing_earlier_is_reused(tmp_path, monkeypatch):
+    # owner, 2026-10-11 20:00: "/investigation …" was answered in 19 s from the chat's earlier answer — no reading, no page
+    from ai_fake import FakeAI
+    from vesta_agent import runner
+    v = _with_investigate(tmp_path)
+    ai = FakeAI(runner.RunResult("ok", "sess-new", False, 0.01, [])).install(monkeypatch)
+    v.state.set_session(JM, "sess-earlier")
+    run(v.converse(JM, v.policy().person(JM), "the pump", invoked="investigate"))
+    assert ai.runs[0]["resume"] is None                                     # (the page's follow-up, if any, resumes it)
+    run(v.converse(JM, v.policy().person(JM), "and why at 03:09?"))          # the follow-up goes on from the investigation
+    assert ai.runs[-1]["resume"] == "sess-new"
+
+
+# ---- every /investigate answer carries its page and the fault buttons (owner, 2026-10-11: "make sure this always
+# trigger the full use of the skill — HTML report in the response and buttons to create and cancel a ticket creation")
+def _investigating(tmp_path, monkeypatch, *, page_on_run=(1,), offer=False):
+    """JM writes /investigate; the AI sends the page on the runs listed in `page_on_run` (1 = its first), saves the
+    account, and offers a fault itself only when `offer`. (agent, the AI stand-in)"""
+    import json as _json
+    from ai_fake import FakeAI
+    v = _with_investigate(tmp_path)
+    out = v.s.in_folder(f"chats/{JM}").out_dir
+    os.makedirs(out, exist_ok=True)
+    runs = []
+
+    async def act(call):
+        runs.append(call["prompt"])
+        if len(runs) == 1:
+            await call["call"]("save_file", {"name": "investigation.json", "content": _json.dumps(
+                {"title": "Water heater on the night of 9 October", "summary": "It ran 3 h; check the pipes."})})
+            if offer:
+                await call["call"]("create_ticket", {"title": "Check the float switch"})
+        if len(runs) in page_on_run:
+            open(os.path.join(out, "investigation.html"), "w").write("<html></html>")
+            await call["call"]("send_message", {"to": "here", "text": "It ran 3 h. The page has the rest.",
+                                                "attachment": "investigation.html"})
+    ai = FakeAI("", act=act).install(monkeypatch)
+    run(v.converse(JM, v.policy().person(JM), "the heater on the 9th", invoked="investigate"))
+    return v, runs
+
+
+def test_an_investigation_that_sent_its_page_gets_the_buttons_from_its_own_account(tmp_path, monkeypatch):
+    v, runs = _investigating(tmp_path, monkeypatch)
+    assert len(runs) == 1                                                   # nothing missing: no second turn
+    (_, offer, kb), = [s for s in v.tg.sent if s[2]]
+    assert "Water heater on the night of 9 October" in offer                 # offered by the engine, from the account
+    assert [b["text"] for b in kb["inline_keyboard"][-1]] == [OFFER_BUTTON, NO_OFFER_BUTTON]
+
+
+def test_an_investigation_that_forgot_its_page_is_sent_back_to_it_once(tmp_path, monkeypatch):
+    v, runs = _investigating(tmp_path, monkeypatch, page_on_run=(2,), offer=True)
+    assert len(runs) == 2 and "has not sent investigation.html" in runs[1]
+    (_, offer, kb), = [s for s in v.tg.sent if s[2]]
+    assert "Check the float switch" in offer                                 # the AI's own offer: no second one
+
+
+def test_an_investigation_that_never_makes_its_page_says_so(tmp_path, monkeypatch):
+    v, runs = _investigating(tmp_path, monkeypatch, page_on_run=())
+    assert len(runs) == 2
+    assert any("The report page could not be made this time." in t for _, t, _ in v.tg.sent)
+    assert any(kb for _, _, kb in v.tg.sent)                                 # the buttons all the same

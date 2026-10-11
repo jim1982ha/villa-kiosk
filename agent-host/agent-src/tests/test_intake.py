@@ -96,24 +96,23 @@ def test_every_button_the_agent_sends_is_written_through_the_one_table():
         assert not re.search(r'"callback_data":\s*f?"', src), f"{path}: a button's data written by hand"
 
 
-# ---- a skill only its command starts (owner, 2026-10-11: investigate "only triggered when user mentions /investigation
-# in the question, and never if not")
-CMDS = {"/investigation": "investigate"}
+# ---- a skill only its command starts (owner, 2026-10-11: investigate only on its command, "/investigate", never if not)
+CMDS = {"/investigate": "investigate"}
 
 
 @pytest.mark.parametrize("etype,m,invoked,text", [
     # as Telegram's command, in a private chat and in the group (where it addresses the agent, as /ask does)
-    ("telegram_command", ev(OWNER, OWNER, "", command="/investigation", args=["why", "did", "the", "pump", "run?"]),
+    ("telegram_command", ev(OWNER, OWNER, "", command="/investigate", args=["why", "did", "the", "pump", "run?"]),
      "investigate", "why did the pump run?"),
-    ("telegram_command", ev(GROUP, OWNER, "", command=f"/investigation@{BOT}", args=["the", "pump"]), "investigate", "the pump"),
+    ("telegram_command", ev(GROUP, OWNER, "", command=f"/investigate@{BOT}", args=["the", "pump"]), "investigate", "the pump"),
     # written anywhere in the text
-    ("telegram_text", ev(OWNER, OWNER, "please /investigation the flood on the 9th"), "investigate", "please the flood on the 9th"),
-    ("telegram_text", ev(GROUP, OWNER, "the flood /Investigation"), "investigate", "the flood"),
+    ("telegram_text", ev(OWNER, OWNER, "please /investigate the flood on the 9th"), "investigate", "please the flood on the 9th"),
+    ("telegram_text", ev(GROUP, OWNER, "the flood /Investigate"), "investigate", "the flood"),
     # never without it — and never from a look-alike
     ("telegram_text", ev(OWNER, OWNER, "what happened to the pump on the 9th?"), None, "what happened to the pump on the 9th?"),
-    ("telegram_text", ev(OWNER, OWNER, "see /investigations/9 and the pump"), None, "see /investigations/9 and the pump"),
-    ("telegram_text", ev(OWNER, OWNER, "read https://example.com/investigation first"), None,
-     "read https://example.com/investigation first"),                                    # a web address is not a command
+    ("telegram_text", ev(OWNER, OWNER, "see /investigated/9 and the pump"), None, "see /investigated/9 and the pump"),
+    ("telegram_text", ev(OWNER, OWNER, "read https://example.com/investigate first"), None,
+     "read https://example.com/investigate first"),                                    # a web address is not a command
     ("telegram_command", ev(OWNER, OWNER, "", command="/ask", args=["what", "happened?"]), None, "what happened?"),
 ])
 def test_only_the_command_calls_its_skill(etype, m, invoked, text):
@@ -122,9 +121,11 @@ def test_only_the_command_calls_its_skill(etype, m, invoked, text):
 
 
 def test_the_command_alone_still_reaches_the_agent_which_asks_for_the_question():
-    got = intake.gate("telegram_command", ev(OWNER, OWNER, "", command="/investigation", args=[]), Pol(), BOT,
+    got = intake.gate("telegram_command", ev(OWNER, OWNER, "", command="/investigate", args=[]), Pol(), BOT,
                       lambda c, mid: False, CMDS)
     assert (got.action, got.invoked, got.text) == ("converse", "investigate", "")
-    # a command no skill declares is still Home Assistant's
+    # a command no skill declares is still Home Assistant's — "/investigation" too, since 0.12.163 (owner: only /investigate)
+    assert intake.gate("telegram_command", ev(OWNER, OWNER, "", command="/investigation", args=["x"]), Pol(), BOT,
+                       lambda c, mid: False, CMDS).action == "drop"
     assert intake.gate("telegram_command", ev(OWNER, OWNER, "", command="/lights", args=[]), Pol(), BOT,
                        lambda c, mid: False, CMDS).action == "drop"

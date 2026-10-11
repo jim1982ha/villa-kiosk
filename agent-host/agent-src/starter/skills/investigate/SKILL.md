@@ -5,7 +5,7 @@ description: Find out what happened and why, from Home Assistant's records — a
 
 # investigate
 
-You are here because the person wrote /investigation with their question: find out what happened, why, since when,
+You are here because the person wrote /investigate with their question: find out what happened, why, since when,
 for how long, what caused it or what turned it on or off — about any device, room or event, now or in the past (a flood,
 a power cut, a pump or a heater that ran too long, a door, an alarm, a strange bill, a device that stopped).
 

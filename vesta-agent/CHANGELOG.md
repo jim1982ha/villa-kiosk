@@ -1,3 +1,10 @@
+## 0.12.163
+
+What you will see:
+- The command is now /investigate (and only /investigate: /investigation is no longer recognised). Example: "/investigate why did the pump run all night on 9 October?"
+- /investigate always investigates. In a chat that already held an earlier answer about the same device, the AI answered from that answer in 19 seconds — nothing read, no page, no fault buttons. An /investigate message now starts a fresh conversation, so the only way to answer it is to read Home Assistant and make the page; your next question carries on from the investigation.
+- Every /investigate answer now always carries the HTML page and the "Create this fault for the facility manager" / "Don't create it" buttons. The agent checks this itself after the AI has answered: a page the AI did not send, it is asked once more to make and send (if it still cannot, you are told the page could not be made); no fault offered by the AI, the agent offers one titled from the investigation itself.
+
 ## 0.12.162
 
 What you will see:

@@ -131,6 +131,8 @@ class Toolbox:
         # them (app.converse): (base64, mime), in the order looked at, each picture once.
         self.photos: list[tuple[str, str]] = []
         self.sent = 0                  # messages send_message delivered in this run (an answer may be one: a page)
+        self.attached: list[str] = []  # the files those messages carried (a command skill's page: app._delivered)
+        self.offered: list[str] = []   # the faults offered in this run (tools._ticket in a chat)
         # the approval requests this run sent: one shown in the asker's chat is the answer there (app._converse)
         self.approvals: list[str] = []
         # ⚠️ tool_access DECIDES, THIS CLASS BUILDS (architecture review, 2026-10-06): allowed_for's answer — through
@@ -282,7 +284,7 @@ class Toolbox:
             "entity_id": {"type": "string", "description": "The device concerned, optional."},
             "note": {"type": "string", "description": "What to check, optional."}},
             "required": ["title"]}
-        offered: list[str] = []
+        offered = self.offered
         what = ("Offer a fault for the facility manager: a button under your answer creates it in the villa's Facility "
                 "records (the VESTA Kiosk) if the person presses it. One per answer. It acts on nothing."
                 if offer_in is not None else
@@ -524,5 +526,7 @@ class Toolbox:
                 # person "the report is in your chat"
                 return _err("Telegram did not take this message: nothing was sent. Say so plainly; do not retry in a loop.")
             self.sent += 1
+            if att:
+                self.attached.append(att)
             return _ok("Sent.")
         return handler

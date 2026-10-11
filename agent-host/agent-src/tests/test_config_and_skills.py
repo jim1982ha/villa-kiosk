@@ -380,3 +380,9 @@ def test_the_agent_keeps_its_last_good_rules_when_the_file_cannot_be_read(tmp_pa
     monkeypatch.setattr(config_module.Policy, "load", staticmethod(broken))
     _os.utime(s.policy_path, (1, _os.path.getmtime(s.policy_path) + 5))
     assert s.policy() is good                                                 # the last good rules, never a stop
+
+
+def test_the_investigate_skill_answers_to_its_one_command():
+    # owner, 2026-10-11: "remove /investigation key word, and only allow /investigate"
+    sk = Skills(os.path.join(STARTER_DIR, "skills"))
+    assert sk.commands() == {"/investigate": "investigate"} and sk.get("investigate").command == "investigate"

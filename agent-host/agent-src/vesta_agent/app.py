@@ -530,7 +530,10 @@ class Vesta:
         async with self.lock(cid):
             self.chat_jobs.turn(cid)                         # a job started now belongs to this turn (chat_jobs.py)
             if resume == "auto":
-                resume = self._resume_for(cid)
+                # ⚠️ A COMMAND'S SKILL STARTS A FRESH CONVERSATION (owner, 2026-10-11, 20:00): "/investigation" in a chat
+                # that already held the morning's answer about the same pump was answered from it in 19 s — no reading
+                # at all, no page. With nothing earlier to lean on, the only way to answer is to do the skill's work.
+                resume = None if invoked and not is_continue else self._resume_for(cid)
             lang = LANG.get(person.language, person.language) if person else "English"
             if is_continue:
                 prompt = "Continue exactly where you stopped. Do not repeat what you already wrote."
@@ -565,6 +568,9 @@ class Vesta:
             log.info("Answered %s in chat %s (%s)%s", person.name if person else "system", cid,
                      f"{res.cost_usd:.3f} USD" if isinstance(res.cost_usd, (int, float)) else "cost unknown",
                      f", error {res.error}" if res.error else "")
+            sk = self.skills.get(invoked) if invoked else None
+            if sk is not None and sk.deliver and not (res.problem or res.error or res.stopped_at_limit):
+                res = await self._delivered(sk, cid, person, res, asked or "")
             answer = (res.text or "").strip()               # an empty answer sends nothing (a request said it all)
             if not answer and not res.sent and not res.approvals and res.earlier:
                 answer = res.earlier                        # ended on a tool call with nothing sent: its last words
@@ -609,6 +615,43 @@ class Vesta:
             # the camera pictures the AI looked at go with it (Toolbox.photos)
             mid = await self.delivery.reply(cid, answer, keyboard=keyboard, photos=res.photos)
             await self.chat_jobs.replied(cid, mid)            # this turn's jobs: their waiting message, their "typing…"
+
+    async def _delivered(self, sk, cid: int, person, res, asked: str):
+        """⚠️ WHAT A COMMAND SKILL'S ANSWER CARRIES, CHECKED — NEVER LEFT TO THE AI (owner, 2026-10-11: "make sure this
+        always trigger the full use of the skill — HTML report in the response and buttons to create and cancel a
+        ticket creation"). skill.yaml `deliver`: the page the answer must have sent (missing: the AI is sent back to it
+        once, then the person is told), and a fault always offered (none by the AI: offered from the saved account)."""
+        import dataclasses
+        page, account = sk.deliver.get("page"), sk.deliver.get("fault_offer")
+        if page and page not in res.attached:
+            log.info("Chat %s: /%s answered without %s: the AI is sent back to make it", cid, sk.command, page)
+            again = await self.turns.chat(
+                person, cid, f"Your answer has not sent {page}: every /{sk.command} answer carries it. Make it now and send "
+                             f"it with send_message (attachment {page}), as the {sk.name} skill says. Write nothing else.",
+                resume=res.session_id, invoked=sk.name)
+            res = dataclasses.replace(
+                res, session_id=again.session_id or res.session_id, sent=res.sent + again.sent,
+                attached=res.attached + again.attached, offered=res.offered + again.offered,
+                cost_usd=(res.cost_usd or 0) + (again.cost_usd or 0) if (res.cost_usd or again.cost_usd) else None,
+                text=res.text or again.text)
+            if again.session_id:
+                self.state.set_session(cid, again.session_id)
+            if page not in res.attached:
+                log.warning("Chat %s: /%s still without %s", cid, sk.command, page)
+                res = dataclasses.replace(res, text=((res.text or res.earlier or "").strip() + "\n\n" +
+                                                     "The report page could not be made this time.").strip())
+        if account and not res.offered:
+            notes = {}
+            try:
+                with open(os.path.join(self.s.in_folder(f"chats/{cid}").out_dir, account), encoding="utf-8") as f:
+                    notes = json.load(f)
+            except (OSError, ValueError):
+                pass
+            notes = notes if isinstance(notes, dict) else {}
+            title = str(notes.get("title") or "").strip() or f"Check on site: {asked.strip()}"
+            self.state.new_ticket_offer(cid, title[:200], None, str(notes.get("summary") or "").strip()[:2000] or None)
+            res = dataclasses.replace(res, offered=1)
+        return res
 
     def before_answer(self) -> str:
         """What each skill's `before_answer` check says now (skills.Skill.before_answer: its script's "text"), for the

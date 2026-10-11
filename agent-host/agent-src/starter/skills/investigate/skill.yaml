@@ -2,9 +2,18 @@
 # The one line below is what the AI sees to choose this skill: it names the questions that call for it.
 description: Investigates what happened and why — an incident, a fault, damage, a flood, a power cut, a device that stopped or behaved strangely, "check the logs/history", "what caused", "since when", "how long", "who or what turned it on". Answers with a short message and the full account as an HTML page (timeline, charts, likely causes, what would have warned earlier).
 
-# ⚠️ ONLY BY ITS COMMAND (owner, 2026-10-11): the skill runs when a message carries /investigation — never otherwise.
+# ⚠️ ONLY BY ITS COMMAND (owner, 2026-10-11): the skill runs when a message carries /investigate — never otherwise.
 # The AI does not see it among its skills, and its tools refuse it without the command.
-command: investigation
+command: investigate
+# ⚠️ WHAT EVERY /investigate ANSWER CARRIES (owner, 2026-10-11: "always trigger the full use of the skill — HTML report in
+# the response and buttons to create and cancel a ticket creation"), checked by the engine after the AI's turn:
+#   page: the file the answer must have sent (send_message attachment). Missing: the AI is sent back once to make and
+#         send it; still missing, the person is told plainly.
+#   fault_offer: a Create / Don't create offer always comes. None made by the AI: the engine offers one, titled from
+#         this file's "title", its note the "summary" (the account the skill saves).
+deliver:
+  page: investigation.html
+  fault_offer: investigation.json
 
 # The Home Assistant tools an investigation reads with (VESTA Agent page → Rules › AI tools).
 # They limit nothing: who asks decides. The AI is told if one is switched off.

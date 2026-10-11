@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.157 (11 October 2026)
+
+- investigate's command is /investigate only (owner). skill.yaml `command:` may also be a list (the first is written,
+  the others start it too: Skill.also).
+- A command skill's turn (Skill.command) never resumes the chat's conversation (app._converse): resumed, the AI answered
+  the command from an earlier answer with no tool call. A Continue still resumes; the next turn resumes the
+  investigation's session.
+- skill.yaml `deliver:` (a command skill only): `page` the file every answer must have sent, `fault_offer` the saved
+  account a fault is offered from when the AI offered none — checked by app._delivered after the turn (one
+  follow-up turn for a missing page, then the person is told). Toolbox.attached / offered, TurnResult fields.
+
 ## 0.6.156 (11 October 2026)
 
 - skill.yaml `command:` (skills.Skill.command; Skills.commands): a skill only its "/command" starts — out of the AI's

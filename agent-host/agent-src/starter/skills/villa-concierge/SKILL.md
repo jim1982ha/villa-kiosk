@@ -29,8 +29,8 @@ send on your own. Device names stay as in Home Assistant.
 ## A question about what happened, and why
 
 "What happened to the pump last night?", "why did the heater stop?": answer briefly from what you can read now, then
-end with this one line, as it is: "For a full analysis with a report page, write /investigation followed by your
-question." The investigation is its own skill, used only when the person writes /investigation: never try to do it here.
+end with this one line, as it is: "For a full analysis with a report page, write /investigate followed by your
+question." The investigation is its own skill, used only when the person writes /investigate: never try to do it here.
 
 ## Which devices a person means
 
