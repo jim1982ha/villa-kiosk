@@ -79,10 +79,14 @@ def test_an_integration_down_finding_names_every_device_it_stands_for():
 def test_a_p2_back_again_is_told_at_once_with_how_often():
     sys.path.insert(0, os.path.join(SKILL, "scripts"))
     import nightly
-    said = nightly.told_now({"new_findings": [], "again": [{"severity": "P2", "summary": "Plug offline", "again": 2,
+    said = nightly.told_now({"villa": "Example", "as_of": "2026-10-10", "new_findings": [], "again": [
+                                                           {"severity": "P2", "summary": "Plug offline", "again": 2,
                                                             "check": "Look at the plug."},
                                                            {"severity": "P3", "summary": "Weak pump", "again": 1}]})
-    assert [m["text"] for m in said] == ["Plug offline (again: 3 times in 7 days)\nWhat to check: Look at the plug."]
+    # the night check's message in the one shape (review 30): its title as data, "Back again:", what to do
+    (m,) = said
+    assert m["title"] == "Example, night check on 10/10/2026." and \
+        m["text"] == "Back again:\n- Plug offline (again: 3 times in 7 days)\nWhat to do: Look at the plug."
 
 
 def test_the_night_runs_output_carries_those_messages(monkeypatch, capsys):
@@ -95,4 +99,4 @@ def test_the_night_runs_output_carries_those_messages(monkeypatch, capsys):
                                                       "again": [back], "resolve_actions": []})
     nightly.main(["--pack", "p.json"])
     out = json.loads(capsys.readouterr().out)
-    assert [m["text"] for m in out["send"]] == ["Plug offline (again: 2 times in 7 days)\nWhat to check: Look."]
+    assert [m["text"] for m in out["send"]] == ["Back again:\n- Plug offline (again: 2 times in 7 days)\nWhat to do: Look."]

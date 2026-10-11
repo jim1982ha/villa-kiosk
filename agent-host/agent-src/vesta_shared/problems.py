@@ -65,10 +65,22 @@ def worsened(change_pct: float | None, last_reported_pct: float | None, step: fl
     return change_pct is not None and abs(change_pct) - abs(last_reported_pct or 0) >= step
 
 
-def closes_tonight(open_rows: list[dict], fired: set[tuple[str, str]], state_rules) -> list[dict]:
-    """The open findings that close tonight: a STATE rule (a condition that holds or not) that did not fire
-    for its entity. An event rule closes the night it fires, never here."""
-    return [o for o in open_rows if o["rule_id"] in state_rules and (o["rule_id"], o["entity_id"]) not in fired]
+def closes_tonight(open_rows: list[dict], fired: set[tuple[str, str]], state_rules, event_rules=()) -> list[dict]:
+    """The open findings that close tonight: a STATE rule (a condition that holds or not) that did not fire for its
+    entity — or an EVENT rule's finding kept open for its fault (record_night) that did not fire again."""
+    return [o for o in open_rows if (o["rule_id"] in state_rules or o["rule_id"] in event_rules)
+            and (o["rule_id"], o["entity_id"]) not in fired]
+
+
+def villa_day_of(iso: str) -> str:
+    """The villa's day of a stored moment, as a finding's day is written: in the zone the agent runs in (the Supervisor
+    sets TZ in every app's container: the villa's)."""
+    import os
+    from .timeutil import villa_date
+    try:
+        return villa_date(iso, os.environ.get("TZ") or "UTC").isoformat()
+    except Exception:  # noqa: BLE001 — a zone this machine does not know: the stored date
+        return str(iso)[:10]
 
 
 class Problems:
@@ -167,9 +179,15 @@ class Problems:
                 d["again"] = len(occurrences(self.store.finding(fid))) - 1
                 again.append(d)
             elif f.rule_id in event_rules:
-                self.store.close_finding(f.rule_id, f.entity_id, day)        # events close the same night
+                # ⚠️ AN EVENT WITH A FAULT STAYS OPEN A NIGHT (architecture review 30): closed the night it fired, its new
+                # fault was resolved by the repair the same second — "Cleared: the check no longer sees it", the digest
+                # "nothing new", the monthly page "Fixed". It closes when a night passes without it, or a person does.
+                if f.severity not in task_severities:
+                    self.store.close_finding(f.rule_id, f.entity_id, day)    # no fault: closes the same night, as ever
                 if is_new:                                                    # a rerun of the same night: told already
                     new.append(d)
+                elif f.severity in task_severities and prev_row and prev_row["opened_day"] != day:
+                    still_open.append(d)                                      # again while its fault is open: the same one
             elif is_new:
                 new.append(d)
             else:
@@ -180,7 +198,7 @@ class Problems:
                     f.detail["last_reported_pct"] = f.detail.get("change_pct")
                     self.store.set_finding_detail(fid, f.detail)
         resolve = []
-        for o in closes_tonight(self.store.findings(status="open"), fired, state_rules):
+        for o in closes_tonight(self.store.findings(status="open"), fired, state_rules, event_rules):
             closed.append(o)
             # ⚠️ ITS TASK AND ITS KIOSK TICKET CLOSE WITH IT (villa, 2026-10-01): the finding closed, the ticket
             # stayed "Open fault" for ever, and the Kiosk's Cockpit filled with faults long gone
@@ -222,7 +240,10 @@ class Problems:
         last = self.store.last_closed_finding(f.rule_id, f.entity_id, since, day)
         if not last:
             return None
-        seen = [x for x in (json.loads(last.get("occurrences") or "null") or [last["opened_day"]]) if x >= since] + [day]
+        runs = json.loads(last.get("occurrences") or "null") or [last["opened_day"]]
+        # ⚠️ THE RUN BEFORE COUNTS WHEN IT ENDED IN THE WINDOW (architecture review 30): opened 20 days ago, closed
+        # yesterday, back today — "(again: …)" was not said at all, the message read as a new problem
+        seen = ([x for x in runs if x >= since] or [since]) + [day]
         self.store.reopen_finding(last["id"], f.severity, f.summary, f.detail, day, seen)
         return last["id"]
 
@@ -340,7 +361,9 @@ class Problems:
                         # reopened alert stayed "still open since the 1st", never new, never "again")
                         "title": again_title(_no_code(p.get("message") or i["rule_id"]), incident_runs(i) - 1),
                         "check": p.get("check") or "",
-                        "since": (i.get("reopened_at") or i["opened_at"])[:10], "incident": i["id"],
+                        # the VILLA's day it opened (review 30: the UTC date dated an alert of 06:30 at UTC+8 the day
+                        # before — under "Still open" where "Also noted" was due)
+                        "since": villa_day_of(i.get("reopened_at") or i["opened_at"]), "incident": i["id"],
                         "figures": {"incident": i["id"], "occurrences": i["count"], "state": i["state"]}})
         out.sort(key=lambda r: (_ORDER.get(r["severity"], 9), r["since"]))
         return out

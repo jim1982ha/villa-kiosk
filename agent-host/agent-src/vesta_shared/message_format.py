@@ -59,8 +59,8 @@ def document(title: str, to: str, sections: list[tuple[str | None, list[str]]]) 
     first = True
     for label, items in sections:
         items = [i.strip() for i in items if i and i.strip()]
-        if not items and not label:
-            continue
+        if not items:
+            continue                                 # a section with nothing in it is not said
         lead = [f"{label}:"] if label else []
         if not first or label:
             out.append("")

@@ -525,8 +525,11 @@ def s_money(c: Ctx) -> dict:
 
 
 def s_fixed_suggest(c: Ctx) -> dict:
+    # ⚠️ "FIXED" IS WHAT ENDED, NOT WHAT HAPPENED ONCE (architecture review 30): a pump that ran short one night, or a
+    # battery-trend event, opened and closed the same day — listed "Fixed" though nobody repaired anything
     fixed = [{"title": _no_code(f["summary"]), "day": f.get("closed_day")} for f in c.store.findings(status="closed")
-             if f.get("closed_day") and c.start.isoformat() <= f["closed_day"] <= c.end.isoformat()]
+             if f.get("closed_day") and c.start.isoformat() <= f["closed_day"] <= c.end.isoformat()
+             and f["closed_day"] != (f.get("reopened_day") or f.get("opened_day"))]
     props = [{"id": p["id"], "title": p.get("title"), "detail": p.get("detail"), "benefit": p.get("benefit")}
              for p in c.store.proposals("open")]
     return {"fixed": fixed, "proposals": props}

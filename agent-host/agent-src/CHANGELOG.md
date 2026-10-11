@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.148 (11 October 2026)
+
+- Review 30: record_night keeps an event finding with a task open until a quiet night (closes_tonight takes event_rules);
+  open_problems dates an incident the villa's day (problems.villa_day_of, TZ); _came_back counts the run before when it
+  ended in the window; facts.s_fixed_suggest skips what opened and closed the same day; message_format.document says no
+  empty section. Skills: night check told_now in the one shape (title=, fault_note); concierge uses device_state.is_offline
+  and leaves the battery to the night check.
+
 ## 0.6.147 (11 October 2026)
 
 - Review 29: tickets.repair hears a Kiosk "reopened" step at any age (the 2 days only retry a failed close);

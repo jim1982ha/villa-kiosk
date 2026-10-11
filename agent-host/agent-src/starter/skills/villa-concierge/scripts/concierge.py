@@ -25,6 +25,7 @@ from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
 from vesta_shared.problems import Problems  # noqa: E402  (what is still open: one owner)
 from vesta_shared.store import Store  # noqa: E402
 from vesta_shared.messaging import incident_tag  # noqa: E402  ("Incident #N", the same everywhere)
+from vesta_shared.device_state import is_offline  # noqa: E402  (the one "offline")
 
 
 
@@ -51,7 +52,9 @@ def status(pack: KnowledgePack, states: dict, store: Store | None) -> dict:
             st = states.get(r["entity_id"], {})
             s = st.get("state")
             asset = pack.assets.get(r["asset"], {})
-            if s in ("unavailable", "unknown"):
+            # ⚠️ ONE "OFFLINE" (architecture review 30): "unknown" is a sensor with no value on a warm day while its device
+            # reports — the villa read AMBER, "Offline: Weather Station", where the night check and the report said none
+            if is_offline(s):
                 key, name = pack.device_of(r["entity_id"])
                 if name is None:
                     continue                               # a device Home Assistant knows nothing about
@@ -64,12 +67,8 @@ def status(pack: KnowledgePack, states: dict, store: Store | None) -> dict:
                 problems.append(f"{r['name']} unlocked")
             elif fam == "security" and r.get("device_class") in ("moisture", "smoke") and s == "on":
                 problems.append(f"{r['name']} ALARM")
-            elif fam == "battery" and r.get("unit") == "%":
-                try:
-                    if float(s) <= 20:
-                        watch.append(f"{pack.device_name(r['entity_id'], r['name'])} battery {float(s):.0f}%")
-                except (TypeError, ValueError):
-                    pass
+            # ⚠️ A LOW BATTERY IS THE NIGHT CHECK'S (architecture review 30): a "<= 20" here was a second threshold beside
+            # its battery_warn_pct; its battery finding is an open problem, listed below
     open_now = Problems(store).open_problems() if store else []
     alerts = [p for p in open_now if p["incident"]]
     tasks = [p for p in open_now if not p["incident"]]

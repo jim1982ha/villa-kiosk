@@ -25,7 +25,7 @@ import argparse
 import json
 import os
 import sys
-from datetime import datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -33,7 +33,8 @@ sys.path.insert(0, HERE)
 from vesta_shared import script  # noqa: E402  (client, pack, store, settings, zone: one set-up)
 from vesta_shared.messaging import no_code as _no_code  # noqa: E402
 from vesta_shared.params import VillaParams, MissingParameter  # noqa: E402
-from vesta_shared.timeutil import villa_day  # noqa: E402
+from vesta_shared.timeutil import day_label, villa_day  # noqa: E402
+from vesta_shared.message_format import document, split_title  # noqa: E402  (the one shape of a message)
 from vesta_shared.device_state import is_offline  # noqa: E402
 from vesta_shared.problems import Problems, again_title  # noqa: E402  (a problem's lifecycle: one owner)
 from vesta_shared import result  # noqa: E402  (what the engine is asked to do: its shape; R is rules.py)
@@ -274,11 +275,19 @@ def run(args) -> dict:
 
 
 def told_now(res: dict) -> list[dict]:
-    """The facility manager's messages at 02:00: each P2 found new — or back again, with how often (architecture review
-    23: it came back in silence) — with what to check."""
-    return [result.message("fm", f"{_no_code(again_title(d.get('summary', ''), d.get('again')))}\n"
-                                 f"What to check: {d.get('check', '')}")
-            for d in res["new_findings"] + res["again"] if d.get("severity") == "P2"]
+    """The facility manager's message at 02:00: each P2 found new — or back again, with how often (architecture review
+    23: it came back in silence) — with what to do, in the one shape of every alert and report (vesta_shared.
+    message_format; review 30: it kept "For: … / -------" and its own "What to check:")."""
+    def item(d):
+        note = result.fault_note(d.get("check"))
+        return f"- {_no_code(again_title(d.get('summary', ''), d.get('again')))}" + (f"\n{note}" if note else "")
+    new = [item(d) for d in res["new_findings"] if d.get("severity") == "P2"]
+    back = [item(d) for d in res["again"] if d.get("severity") == "P2"]
+    if not (new or back):
+        return []
+    title = f"{res.get('villa') or 'The villa'}, night check on {day_label(date.fromisoformat(res['as_of']), numeric=True)}."
+    body = split_title(document(title, "", [("New", new), ("Back again", back)]))[1]
+    return [result.message("fm", body, title=title)]
 
 
 def _plain_name(entity_id: str) -> str:

@@ -148,4 +148,8 @@ def test_an_event_finding_is_never_counted_again(tmp_path):
     pb = Problems(store)
     rules = dict(state_rules=set(), event_rules={"E-RUN"}, worsened_step=15)
     pb.record_night([_F("E-RUN", "c", "P3")], "2026-10-07", **rules)
-    assert len(pb.record_night([_F("E-RUN", "c", "P3")], "2026-10-08", **rules)["new"]) == 1
+    # review 30: its fault stays open a night; fired again meanwhile, it is the same open problem — never counted twice
+    second = pb.record_night([_F("E-RUN", "c", "P3")], "2026-10-08", **rules)
+    assert second["new"] == [] and len(second["still_open"]) == 1
+    assert len(pb.record_night([], "2026-10-09", **rules)["closed"]) == 1               # a quiet night: it closes
+    assert len(pb.record_night([_F("E-RUN", "c", "P3")], "2026-10-12", **rules)["new"]) == 1

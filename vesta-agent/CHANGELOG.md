@@ -1,3 +1,13 @@
+## 0.12.154
+
+What you will see (architecture review 30 — the night check and the reports):
+- A fault such as "Pool Pump ran 3.0 h against 8.0 h scheduled." stays open in the Cockpit until you close it, or until a night passes without it. It was created and closed by the agent in the same second ("Cleared: the check no longer sees it"), and the morning report said "Nothing new, nothing open".
+- The monthly page's "Fixed" lists only what ended — no longer a pump that ran short once, or a one-night event.
+- An alert that opens between midnight and 08:00 is dated the villa's day: a "no action needed" alert of 06:30 is under "Also noted", no longer under "Still open".
+- The night check's message at 02:00 has the same layout as the alerts and reports: "The Lys House, night check on 11/10/2026." underlined, "To:", "New:" and "Back again:", each item a quote, "What to do: …".
+- Asked "is everything OK?", a sensor that simply has no value (a wind chill on a warm day) no longer turns the villa AMBER; a low battery is the night check's finding (one threshold, its own).
+- A problem back after a long run (offline for weeks, gone a day, back) says "(again: …)" — it read like a new problem.
+
 ## 0.12.153
 
 What you will see (architecture review 29 — with VESTA (dev2) 2.496.324; this also finishes review 27, which 0.12.152's notes counted as done too early):
