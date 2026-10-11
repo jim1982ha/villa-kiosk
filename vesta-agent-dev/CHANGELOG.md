@@ -1,3 +1,10 @@
+## 0.12.166
+
+What you will see in an investigation (any device, any automation):
+- An on/off control (a switch, relay, light, valve…) that stayed off the whole period and the days before, while the device being investigated ran, is said NOT to be what turned that device on — the investigation of 9 October blamed a relay that was never once on.
+- Every automation that ran in the period comes with what it is able to do, read from its own settings: "notifies and records a value only: it switches nothing" — or what it CAN switch. One made from a blueprint the agent cannot read is said to be "not proven either way", with what its runs kept by Home Assistant actually did. An automation that switches nothing is never presented as a cause any more.
+- The account asks, for every long or unusual run, whether the device caused the damage or the damage kept it running (water escaping keeps a pump running; an open window keeps cooling on).
+
 ## 0.12.165
 
 What you will see (architecture review 32 — the investigation, end to end):
