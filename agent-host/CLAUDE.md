@@ -109,7 +109,10 @@ Decisions of 2026-09-30 (owner):
   0.12.160 (owner, 2026-10-11): in a CONVERSATION create_ticket only offers a fault (`state.ticket_offers`, button
   `button_data.TICKET`, `app._press_ticket`); jobs and alert hooks create at once. Never let the AI create one unasked.
   0.12.162: skill.yaml `command:` makes a skill run ONLY on its "/command" (intake.gate, Toolbox.gated) — investigate
-  (/investigation). A chat answer is the text after the AI's LAST tool call (runner.Collector.answer).
+  (/investigate). A chat answer is the text after the AI's LAST tool call (runner.Collector.answer).
+  Review 32, 0.12.165: `fault_offers.FaultOffers` is a fault offer start to end (one per investigation `inv`, its page,
+  shown once delivered, pressed within the caption limit); a Continue carries `invoked` and `inv`;
+  `vesta_shared.messaging.TELEGRAM_CAPTION` is the one caption limit; `McpClient.history_cut` says a cut read.
 - ⚠️ SKILLS BEFORE CODE (owner, 2026-10-01, mandatory): whatever a skill can
   define (report sections, thresholds, wording, routes, which scripts the model
   may run, which rules are VESTA alerts) lives in the skill, never in

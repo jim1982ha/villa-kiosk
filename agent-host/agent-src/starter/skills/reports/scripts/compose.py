@@ -53,7 +53,7 @@ from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
 from vesta_shared import result as R  # noqa: E402  (what the engine is asked to do: its shape)
 from vesta_shared import script  # noqa: E402  (pack, store, zone, day: one set-up)
 from vesta_shared.params import MissingParameter  # noqa: E402
-from vesta_shared.messaging import fmt_money, incident_tag  # noqa: E402
+from vesta_shared.messaging import TELEGRAM_CAPTION, fmt_money, incident_tag  # noqa: E402
 from vesta_shared.message_format import document, split_title  # noqa: E402  (the one shape: title, To:, sections)
 from vesta_shared.axis import is_flat, label as axis_label, nice_axis  # noqa: E402  (the one axis rule)
 from vesta_shared.store import Incident, Store  # noqa: E402
@@ -526,9 +526,12 @@ def normal_words(ref: dict, unit: str) -> str:
 
 
 INVESTIGATION_FIELDS = ("title", "summary", "timeline", "causes", "cannot_tell", "warned_earlier", "checked")
-#: the chat message is the title and the summary, under the page's file: ONE bubble, so within Telegram's 1,024 for a
-#: file's caption — title, "To: …" and summary together (owner, 2026-10-11: "all in 1 message … a bit more detailed")
-SUMMARY_MAX, TITLE_MAX = 800, 90
+#: the chat message is the title and the summary, under the page's file: ONE bubble, so within a file's caption
+#: (TELEGRAM_CAPTION) — title, "To: …" and summary together (owner, 2026-10-11: "all in 1 message … a bit more
+#: detailed"). Derived, never typed (review 32): room kept for a "To:" naming several people.
+DETAILS = " Details in the attached page."
+TITLE_MAX, TO_ROOM = 90, 120
+SUMMARY_MAX = TELEGRAM_CAPTION - TITLE_MAX - TO_ROOM - len(DETAILS) - 4     # the line breaks between them
 
 
 def investigation(notes: dict, data: dict | None) -> str:
@@ -687,7 +690,7 @@ def _investigation(a) -> int:
     with open(a.out, "w", encoding="utf-8") as f:
         f.write(html)
     # the chat message: the essence only — the page is the account (owner, 2026-10-11: "much more synthetic and shorter")
-    doc = document(str(notes["title"]).strip(), "", [(None, [summary + " Details in the attached page."])])
+    doc = document(str(notes["title"]).strip(), "", [(None, [summary + DETAILS])])
     print(json.dumps({"html": a.out, "html_chars": len(html), "charts": html.count("<svg"),
                       "unknown_fields": sorted(set(notes) - set(INVESTIGATION_FIELDS)),
                       **({"data": "could not be read: no chart"} if a.data and data is None else {}),

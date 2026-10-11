@@ -186,10 +186,7 @@ def test_the_investigation_page_carries_the_account_and_its_charts(tmp_path):
     r = subprocess.run([sys.executable, compose, "investigation", "--notes", str(tmp_path / "long.json"),
                         "--out", str(tmp_path / "l.html")], capture_output=True, text=True,
                        env={**os.environ, "PYTHONPATH": PYTHONPATH})
-    assert r.returncode == 1 and "at most 800" in r.stderr                    # one bubble: Telegram's 1,024 under a file
-    from vesta_shared.message_format import TO
-    title, summary = "T" * 90, "S" * 800                                     # the longest title and summary allowed …
-    assert len(f"{title}\n{TO}the Owner, JM, Fabien\n{summary} Details in the attached page.") <= 1024   # … fit
+    assert r.returncode == 1 and "at most" in r.stderr                       # the chat message stays one bubble
     (tmp_path / "bad.json").write_text(json.dumps({"title": "x"}))
     r = subprocess.run([sys.executable, compose, "investigation", "--notes", str(tmp_path / "bad.json"),
                         "--out", str(tmp_path / "q.html")], capture_output=True, text=True,
@@ -205,3 +202,28 @@ def test_a_surge_inside_one_slice_of_the_chart_is_still_drawn():
             (t0 + timedelta(seconds=30), "unavailable")]
     pts = investigate.chart_series(rows, t0, t0 + timedelta(seconds=4000))   # slices of 10 s
     assert pts[0][1] == 3712.0 and pts[1][1] == 10.0 and pts[4][1] is None   # offline from then: a gap, not a zero
+
+
+def test_the_longest_summary_with_a_long_to_line_is_still_one_bubble():
+    # review 32: the limit was worked out by hand against 1,024 while the agent cuts captions at 1,000 — derived now, with
+    # room for a "To:" naming several people; checked through the agent's own layout of a message with a file
+    sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
+    import compose
+    from vesta_agent.telegram import layout
+    from vesta_shared.message_format import titled
+    text = titled("T" * compose.TITLE_MAX, ["the Owner", "JM", "Fabien", "the facility manager group", "Housekeeping"],
+                  "S" * compose.SUMMARY_MAX + compose.DETAILS)
+    assert len(layout(text, {"inline_keyboard": []}, "document")) == 1
+
+
+def test_a_history_cut_short_is_said_and_never_stretched_to_the_end():
+    import investigate
+
+    class Cut(_Client):
+        def history(self, ids, start, end):
+            got = super().history(ids, start, end)
+            self.history_cut = {ids[0]: T(9, 4)} if start >= T(9, 2) else {}   # the period read stopped at 04:00
+            return {ids[0]: [r for r in got[ids[0]] if datetime.fromisoformat(r["last_changed"]) < T(9, 4)]}
+    lines = investigate.timeline(Cut(), ["sensor.heater_power"], T(9, 2), T(9, 15), 3, Z)["lines"]
+    assert any("could not be read whole: nothing is known after 04:00:00" in x for x in lines)
+    assert not any(x.strip().split(" → ")[-1].startswith("15:00") for x in lines if " → " in x)   # no period to the end

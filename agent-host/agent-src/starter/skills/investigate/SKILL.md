@@ -15,6 +15,7 @@ The person wants the TRUE and COMPLETE story, not a quick reply. Take the time t
 
 - `scripts/investigate.py`   find · timeline · around — reads Home Assistant and returns short, checked facts.
   It never changes anything. Times are the villa's.
+- `settings.yaml`             what counts as unusual (a villa's own villa.settings.yaml may change it)
 
 ## The procedure — follow every step
 
@@ -38,8 +39,9 @@ The person wants the TRUE and COMPLETE story, not a quick reply. Take the time t
      (sensor.…, switch.…), never words. A date alone is a whole day: `--start 2026-10-09 --end 2026-10-09` reads the
      9th from 00:00 to midnight.
    - Each line flagged "⟵" is unusual against the device's own normal (the days before): a run far longer than any
-     before, a level 1.5× or more its normal, exactly 0 where it normally reads a little (its supply was off), no
-     answer, stop-start cycling. These flags are the backbone of your answer.
+     before, a level well above or below its normal, exactly 0 where it normally reads a little (its supply was off),
+     no answer, stop-start cycling — each line says by how much (the limits are in settings.yaml). These flags are the
+     backbone of your answer.
    - Read the normal line: how often and how long it usually runs. "Longest normal run 10 s" against "ran 1 h 46 min"
      is the kind of contrast the person needs.
 
@@ -74,7 +76,7 @@ report the agent sends.
 8. **Save the account** with save_file, as `investigation.json` — plain sentences, no Markdown:
 
        {"title": "Water heater on the night of 9 October",     (at most 90 characters)
-        "summary": "4 to 6 sentences, at most 800 characters: what happened (the key times and durations, against
+        "summary": "4 to 6 sentences, at most 750 characters: what happened (the key times and durations, against
                     the device's normal), the most likely cause and what points to it, what to check on site first,
                     and what would have warned earlier. It is the whole chat message: the details go in the other
                     fields, which make the page.",

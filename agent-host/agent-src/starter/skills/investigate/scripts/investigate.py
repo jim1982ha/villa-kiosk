@@ -26,18 +26,28 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import statistics
 import sys
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from vesta_shared import script  # noqa: E402  (client, store, zone: one set-up for every skill script)
+from vesta_shared import script, skill_settings  # noqa: E402  (client, store, zone: one set-up for every skill script)
 
 OFFLINE = {"unavailable"}                 # the device does not answer
 NO_VALUE = {"unknown", ""}                # it answers, without a value
 MAX_LINES = 120                           # per part: enough for a night, short enough to reason about
-NOISE_PER_HOUR = 30                       # an entity changing more often than this is background, not an event
+# ⚠️ THE THRESHOLDS ARE THE SKILL'S, NOT THE SCRIPT'S (architecture review 32; the 0.12.80 rule): settings.yaml, with a
+# villa's own villa.settings.yaml on top. A missing one is named, never guessed (`th`).
+BEHAVIOUR = skill_settings.behaviour(skill_settings.load(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."), "settings.yaml"))
+
+
+def th(name: str) -> float:
+    if name not in BEHAVIOUR:
+        raise KeyError(f"investigate's settings.yaml has no behaviour.{name}")
+    return BEHAVIOUR[name]
 DAY_ONLY = re.compile(r"^\d{4}-\d{2}-\d{2}$")    # a date without a time
 ENTITY_ID = re.compile(r"^[a-z_]+\.[a-z0-9_]+$")    # sensor.a, binary_sensor.b: what find gives, never a word
 
@@ -213,8 +223,8 @@ def level_jumps(rows: list[tuple[datetime, str]], start: datetime, end: datetime
         if base is None:
             base, since = v, t
             continue
-        if abs(v - base) >= base / 3:
-            if since is None or (t - since).total_seconds() >= 120:
+        if abs(v - base) >= base * th("level_change_ratio"):
+            if since is None or (t - since).total_seconds() >= th("level_change_gap_s"):
                 out.append({"at": t, "from": base, "to": v})
                 base, since = v, t
         else:
@@ -248,9 +258,9 @@ def threshold(values: list[float]) -> float | None:
         return None
     hi = vals[int(len(vals) * 0.95) - 1]
     lo = vals[int(len(vals) * 0.05)]
-    if hi <= 0 or (hi - lo) < hi * 0.5:
+    if hi <= 0 or (hi - lo) < hi * th("flat_spread"):
         return None
-    return max(hi * 0.10, 2.0)
+    return max(hi * th("running_fraction"), th("running_min"))
 
 
 CHART_POINTS = 400                        # a chart's points: each the highest reading of its slice (a surge stays seen)
@@ -287,11 +297,16 @@ def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_da
         if not rows:
             parts.append({"entity_id": eid, "lines": [f"{eid}: nothing recorded in this period."]})
             continue
+        # where Home Assistant's history could not be read further (vesta_shared.ha_client: its cap) — never stretched
+        cut = (getattr(client, "history_cut", None) or {}).get(eid)
         base_rows = rows_of(client, eid, start - timedelta(days=baseline_days), start) if baseline_days > 0 else []
         on = threshold([number(s) for _, s in base_rows + rows])
-        ps = periods(rows, end, on)
+        ps = periods(rows, min(cut, end) if cut else end, on)
         ref = normal(base_rows, start, on) if base_rows else {}
         lines = [f"{eid}: {len(rows)} readings" + (f"; counted as running above {on:g}" if on else "")]
+        if cut:
+            lines.append(f"  ⚠️ its history could not be read whole: nothing is known after {at(cut, zone, span_days)} "
+                         "(too many readings) — say so, and narrow the period to read the rest")
         if ref:
             r = ref
             lines.append("  normal (the %g days before): %s runs a day%s%s%s" % (
@@ -336,11 +351,11 @@ def _cycles(ps: list[dict]) -> list[dict]:
     out, i = [], 0
     while i < len(ps):
         j = i
-        while j < len(ps) and ps[j]["kind"] in ("running", "idle") and ps[j]["seconds"] < 180:
+        while j < len(ps) and ps[j]["kind"] in ("running", "idle") and ps[j]["seconds"] < th("cycle_short_s"):
             j += 1
         group = ps[i:j]
         runs = [p for p in group if p["kind"] == "running"]
-        if len(runs) >= 3 and len(group) >= 6:
+        if len(runs) >= th("cycle_min_runs") and len(group) >= th("cycle_min_periods"):
             levels = [p["mean"] for p in runs if "mean" in p]
             out.append({"kind": f"stops and restarts {len(runs)} times", "start": group[0]["start"],
                         "end": group[-1]["end"], "seconds": (group[-1]["end"] - group[0]["start"]).total_seconds(),
@@ -363,21 +378,22 @@ def _notable(ps: list[dict], ref: dict, on: float | None) -> list[dict]:
     for p in ps:
         why = []
         if p["kind"] == "running":
-            if longest and p["seconds"] > max(longest * 2, longest + 300):
+            if longest and p["seconds"] > max(longest * th("longer_ratio"), longest + th("longer_extra_s")):
                 why.append(f"longer than any run of its normal ({lasting(longest)})")
-            if level and "mean" in p and p["mean"] > level * 1.5:
+            if level and "mean" in p and p["mean"] > level * th("level_high_ratio"):
                 why.append(f"draws {p['mean'] / level:.1f}× its normal level")
-            if level and "mean" in p and p["mean"] < level * 0.6:
+            if level and "mean" in p and p["mean"] < level * th("level_low_ratio"):
                 why.append(f"draws only {p['mean'] / level:.0%} of its normal level")
         elif p["kind"] == "no power" and rest and rest > 0:
             why.append(f"exactly 0 where it reads {rest:g} at rest: its supply was off")
-        elif p["kind"] in ("offline", "no value") and p["seconds"] >= 60:
+        elif p["kind"] in ("offline", "no value") and p["seconds"] >= th("offline_min_s"):
             why.append("did not answer" if p["kind"] == "offline" else "answered without a value")
         elif on is None and len(ps) <= MAX_LINES:
             pass
         if why:
             p["why"] = "; ".join(why)
-        ordinary = not why and p["kind"] in ("running", "idle") and p["seconds"] < 3600 and len(ps) > 40
+        ordinary = not why and p["kind"] in ("running", "idle") and p["seconds"] < th("ordinary_max_s") \
+            and len(ps) > th("ordinary_hide_over")
         if not ordinary:
             out.append(p)
     return out
@@ -410,7 +426,7 @@ def around(client, store, start: datetime, end: datetime, focus: list[str], zone
             sent.append((t, name))
         elif eid in went_ids:
             continue                                     # said under "answered again"
-        elif eid in focus or (count.get(eid, 0) / hours <= NOISE_PER_HOUR and dom in (
+        elif eid in focus or (count.get(eid, 0) / hours <= th("noise_per_hour") and dom in (
                 "lock", "binary_sensor", "switch", "cover", "valve", "person", "alarm_control_panel", "input_boolean",
                 "input_select", "climate", "water_heater")):
             events.append((t, name, state, eid))
@@ -447,7 +463,7 @@ def around(client, store, start: datetime, end: datetime, focus: list[str], zone
     lines += _vesta(store, start, end, zone, span_days)
     if not lines:
         lines.append("Nothing else was recorded in this period.")
-    noisy = sorted(((n, e) for e, n in count.items() if n / hours > NOISE_PER_HOUR and e not in focus), reverse=True)[:8]
+    noisy = sorted(((n, e) for e, n in count.items() if n / hours > th("noise_per_hour") and e not in focus), reverse=True)[:8]
     if noisy:
         lines.append("Left out as background (change constantly): " + ", ".join(e for _, e in noisy))
     return {"lines": lines}

@@ -10,6 +10,9 @@ from __future__ import annotations
 import re
 
 TELEGRAM_LIMIT = 4096
+#: A photo's or a file's caption: Telegram takes 1,024, kept under it — ONE number for the agent that sends and edits it
+#: and for a skill that writes one (reports' investigation summary; architecture review 32: 1,000 and 1,024 by hand)
+TELEGRAM_CAPTION = 1000
 
 
 def no_code(s: str) -> str:

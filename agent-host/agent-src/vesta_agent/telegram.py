@@ -21,7 +21,7 @@ from typing import Any
 import aiohttp
 
 from vesta_shared.message_format import telegram_entities
-from vesta_shared.messaging import split_message
+from vesta_shared.messaging import TELEGRAM_CAPTION, split_message
 
 
 log = logging.getLogger("vesta.telegram")
@@ -50,8 +50,8 @@ def _failed(method: str, body: dict) -> TelegramError:
 #: Telegram's words when an edit changes nothing (it already shows this), or targets a photo's or a file's caption.
 NOT_MODIFIED, NO_TEXT = "message is not modified", "no text in the message to edit"
 
-#: A photo's or a file's caption: the first part of its text (Telegram takes 1,024; kept under it).
-CAPTION = 1000
+#: A photo's or a file's caption: the first part of its text (vesta_shared.messaging.TELEGRAM_CAPTION).
+CAPTION = TELEGRAM_CAPTION
 
 
 @dataclass(frozen=True)
@@ -256,8 +256,8 @@ class Telegram:
         # ⚠️ A PHOTO'S OR A FILE'S MESSAGE HAS A CAPTION, NOT A TEXT (architecture review 21): editMessageText is refused
         # there, every time — an alert sent with its file kept its buttons for good
         try:
-            await self.api("editMessageCaption", chat_id=chat_id, message_id=message_id, caption=text[:1024], **extra,
-                           **_italic("caption_entities", text[:1024]))
+            await self.api("editMessageCaption", chat_id=chat_id, message_id=message_id, caption=text[:CAPTION], **extra,
+                           **_italic("caption_entities", text[:CAPTION]))
             return True
         except TelegramError as e:
             if NOT_MODIFIED in str(e):

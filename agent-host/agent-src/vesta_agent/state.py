@@ -44,7 +44,9 @@ create table if not exists continuations(
   chat_id integer not null,
   session_id text not null,
   requested_by integer,
-  used integer not null default 0
+  used integer not null default 0,
+  invoked text,                     -- the command skill the answer it continues was called for (review 32)
+  inv text                          -- and the investigation it belongs to: its offers, its page
 );
 -- a fault the AI offered in a chat, created only when a person presses its button (owner, 2026-10-11)
 create table if not exists ticket_offers(
@@ -56,7 +58,8 @@ create table if not exists ticket_offers(
   note text,
   shown integer not null default 0,
   used integer not null default 0,
-  document text                     -- its own copy of the page to keep with the fault (an investigation's report)
+  document text,                    -- its own copy of the page to keep with the fault (an investigation's report)
+  inv text                          -- the investigation it came from (one offer each: fault_offers.py)
 );
 create table if not exists kv(
   k text primary key,
@@ -101,7 +104,6 @@ KV_FAMILIES: dict[str, str] = {
     "chatjob:": CURRENT,            # a job asked for in a chat, in progress: one left at start was cut (chat_jobs.py)
     "siren:": CURRENT,              # when the siren must stop
     "listening_since": CURRENT,     # when the agent's record started (agent_records.listening_since)
-    "invoked:": CURRENT,            # the skill a chat's last turn was called for by its command (a Continue goes on)
     "unreachable:": CURRENT,        # a chat Telegram refused the last message to (the Overview names it)
 }
 
@@ -125,9 +127,14 @@ class State:
         # who decided a request, as the message names them (a group's member is in no People row: approvals.Approvals.now)
         if "decided_name" not in {r[1] for r in self.db.execute("pragma table_info(approvals)")}:
             self.db.execute("alter table approvals add column decided_name text")
-        # an offer made before 0.12.164 has no page to keep with its fault
-        if "document" not in {r[1] for r in self.db.execute("pragma table_info(ticket_offers)")}:
-            self.db.execute("alter table ticket_offers add column document text")
+        # an offer made before 0.12.164 has no page to keep with its fault; before 0.12.165, no investigation
+        for col in ("document", "inv"):
+            if col not in {r[1] for r in self.db.execute("pragma table_info(ticket_offers)")}:
+                self.db.execute(f"alter table ticket_offers add column {col} text")
+        # a Continue made before 0.12.165 continues no command skill
+        for col in ("invoked", "inv"):
+            if col not in {r[1] for r in self.db.execute("pragma table_info(continuations)")}:
+                self.db.execute(f"alter table continuations add column {col} text")
         self.db.commit()
         self._migrate_incident_messages()
         # ⚠️ WHEN THE RECORD STARTED, KEPT (architecture review 16): read as the oldest record kept, it moved forward every
@@ -504,50 +511,50 @@ class State:
             self.db.commit()
 
     # ------------------------------------------------------------------ continue
-    def new_continuation(self, chat_id: int, session_id: str, requested_by: int | None) -> str:
+    def new_continuation(self, chat_id: int, session_id: str, requested_by: int | None,
+                         invoked: str | None = None, inv: str | None = None) -> str:
+        """⚠️ A CONTINUE CARRIES WHAT IT CONTINUES (review 32): the command skill its answer was called for and the
+        investigation it belongs to — kept per chat, a "thanks" in between made the old Continue lose its skill."""
         cid = secrets.token_urlsafe(9)
         with self._lock:
-            self.db.execute("insert into continuations(id, created_at, chat_id, session_id, requested_by) values(?,?,?,?,?)",
-                            (cid, utcnow().isoformat(), int(chat_id), session_id, requested_by))
+            self.db.execute("insert into continuations(id, created_at, chat_id, session_id, requested_by, invoked, inv) "
+                            "values(?,?,?,?,?,?,?)",
+                            (cid, utcnow().isoformat(), int(chat_id), session_id, requested_by, invoked, inv))
             self.db.commit()
         return cid
 
-    # ------------------------------------------------------------------ a skill called for by its command
-    def set_invoked(self, chat_id: int, skill: str | None) -> None:
-        """The skill this chat's turn was called for by its "/command" (none: a turn without one)."""
-        self.put(f"invoked:{int(chat_id)}", skill or "")
-
-    def invoked(self, chat_id: int) -> str | None:
-        """The skill the chat's last turn was called for: a Continue goes on with it."""
-        return self.get(f"invoked:{int(chat_id)}") or None
-
     # ------------------------------------------------------------------ a fault offered in a chat
-    def new_ticket_offer(self, chat_id: int, title: str, entity_id: str | None, note: str | None) -> str:
+    def new_ticket_offer(self, chat_id: int, title: str, entity_id: str | None, note: str | None,
+                         inv: str | None = None) -> str:
         oid = secrets.token_urlsafe(9)
         with self._lock:
-            self.db.execute("insert into ticket_offers(id, created_at, chat_id, title, entity_id, note) values(?,?,?,?,?,?)",
-                            (oid, utcnow().isoformat(), int(chat_id), title, entity_id, note))
+            self.db.execute("insert into ticket_offers(id, created_at, chat_id, title, entity_id, note, inv) "
+                            "values(?,?,?,?,?,?,?)", (oid, utcnow().isoformat(), int(chat_id), title, entity_id, note, inv))
             self.db.commit()
         return oid
 
-    def offer_documents(self, chat_id: int) -> list[str]:
-        """The ids of the offers this chat's answer is about to show (a page goes with each: set_offer_document)."""
+    def pending_offers(self, chat_id: int) -> list[dict]:
+        """The faults offered in this chat that no message carries yet (fault_offers.FaultOffers shows them)."""
         with self._lock:
-            return [r["id"] for r in self.db.execute("select id from ticket_offers where chat_id=? and shown=0", (int(chat_id),))]
+            return [dict(r) for r in self.db.execute("select * from ticket_offers where chat_id=? and shown=0 "
+                                                      "order by created_at", (int(chat_id),))]
+
+    def offers_shown(self, ids: list[str]) -> None:
+        """⚠️ SHOWN ONCE IT ARRIVED (review 32): marked before the answer went out, an answer Telegram refused lost its
+        offer for good."""
+        with self._lock:
+            self.db.executemany("update ticket_offers set shown=1 where id=?", [(i,) for i in ids])
+            self.db.commit()
+
+    def offers_of(self, inv: str) -> int:
+        """How many faults one investigation offered (one each: a Continue after a limit offered a second)."""
+        with self._lock:
+            return self.db.execute("select count(*) from ticket_offers where inv=?", (inv,)).fetchone()[0]
 
     def set_offer_document(self, oid: str, path: str) -> None:
         with self._lock:
             self.db.execute("update ticket_offers set document=? where id=?", (path, oid))
             self.db.commit()
-
-    def ticket_offers_to_show(self, chat_id: int) -> list[dict]:
-        """The faults offered in this chat that no answer carries yet: the answer going out now shows them."""
-        with self._lock:
-            rows = [dict(r) for r in self.db.execute("select * from ticket_offers where chat_id=? and shown=0 "
-                                                      "order by created_at", (int(chat_id),))]
-            self.db.execute("update ticket_offers set shown=1 where chat_id=? and shown=0", (int(chat_id),))
-            self.db.commit()
-        return rows
 
     def claim_ticket_offer(self, oid: str, chat_id: int) -> dict | None:
         """The offer, claimed for one press (None: no such offer, or pressed already); `release_ticket_offer`

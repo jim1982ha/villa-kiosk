@@ -108,10 +108,11 @@ class Toolbox:
                  ticket: Callable[..., Awaitable[str]] | None = None,
                  carry_out: Callable[..., Awaitable[dict]] | None = None,
                  start_job: Callable[..., Awaitable[str]] | None = None,
-                 allowed: set[str] | None = None, invoked: str | None = None):
+                 allowed: set[str] | None = None, invoked: str | None = None, inv: str | None = None):
         self.s = settings
         # the skill the person's "/command" called for in this turn (intake.gate): the only command skill it may use
         self.invoked = invoked
+        self.inv = inv                 # the investigation this run belongs to (fault_offers: one offer each)
         self.policy = policy
         self.reader = reader
         self.actions = actions
@@ -304,7 +305,7 @@ class Toolbox:
             if offer_in is not None:
                 if offered:
                     return _err("A fault is already offered under this answer: put everything in that one's note.")
-                offered.append(self.state.new_ticket_offer(offer_in, title[:200], ent, note))
+                offered.append(self.state.new_ticket_offer(offer_in, title[:200], ent, note, self.inv))
                 return _ok("Offered, NOT created: a button under your answer lets the person create it. Never say it "
                            "was created; you may say they can create it with the button.")
             try:

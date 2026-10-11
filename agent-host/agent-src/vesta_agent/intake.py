@@ -26,7 +26,7 @@ OWN_COMMANDS = {"/ask", "/new", "/whoami"}
 
 @dataclass
 class Intake:
-    action: str                          # drop · whoami · unregistered · new · converse
+    action: str                          # drop · whoami · unregistered · new · command_off · converse
     chat: int = 0
     person: object = None
     text: str = ""
@@ -64,9 +64,11 @@ def skill_called(text: str, skill_commands: dict[str, str]) -> tuple[str | None,
 
 
 def gate(event_type: str, m: dict, policy, bot_username: str | None, is_own_message: Callable[[int, object], bool],
-         skill_commands: dict[str, str] | None = None) -> Intake:
-    """`skill_commands`: "/command" → the skill only it starts (skills.Skills.commands)."""
-    skill_commands = skill_commands or {}
+         skill_commands: dict[str, str] | None = None, commands_off: dict[str, str] | None = None) -> Intake:
+    """`skill_commands`: "/command" → the skill only it starts (skills.Skills.commands); `commands_off`: those of the
+    skills the villa switched off — ⚠️ ANSWERED, NEVER DROPPED (review 32: "/investigate" with the skill off was silence,
+    while the concierge still told people to write it)."""
+    skill_commands, commands_off = skill_commands or {}, commands_off or {}
     try:
         cid = int(m.get("chat_id"))
     except (TypeError, ValueError):
@@ -88,7 +90,7 @@ def gate(event_type: str, m: dict, policy, bot_username: str | None, is_own_mess
         command, args = (m.get("text") or "").strip().split(" ", 1)[0], (m.get("text") or "").strip().split()[1:]
     if command is not None:
         cmd, addressed = command_name(command or "", bot_username)
-        if not addressed or (cmd not in OWN_COMMANDS and cmd not in skill_commands):
+        if not addressed or (cmd not in OWN_COMMANDS and cmd not in skill_commands and cmd not in commands_off):
             return Intake("drop", cid, group=group)           # a command for Home Assistant's automations or another bot
         text = " ".join(str(a) for a in (args or [])).strip()
     else:
@@ -114,6 +116,8 @@ def gate(event_type: str, m: dict, policy, bot_username: str | None, is_own_mess
         return Intake("unregistered", cid, group=group)
     if cmd == "/new":
         return Intake("new", cid, person, group=group)
+    if cmd in commands_off:
+        return Intake("command_off", cid, person, group=group, invoked=commands_off[cmd])
     if voice:
         # in a group, only a voice message that replies to the agent reaches here (no mention possible)
         return Intake("converse", cid, person, voice_file=str(m.get("file_id") or ""), group=group)

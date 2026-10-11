@@ -112,3 +112,18 @@ def test_a_dense_history_is_read_by_slices_each_once_and_whole():
     got = McpClient("http://unused", "UTC", session=quiet).history(["switch.x"], start, T)["switch.x"]
     assert [r["state"] for r in got] == ["off", "on"]                    # the opening state, then the one change
     assert len(quiet.windows) <= 6                                       # a quiet device: slices grow
+
+
+def test_a_history_read_cut_short_says_where(monkeypatch):
+    # review 32: stopped at its cap, it returned what it had, and the last state read was stretched to the end
+    from vesta_shared import ha_client
+    monkeypatch.setattr(ha_client, "HISTORY_MAX_CALLS", 8)
+    start = T - timedelta(days=3)
+    rows = [(start + timedelta(seconds=5 * i), f"{i % 7}.0") for i in range(3 * 86400 // 5)]
+    client = McpClient("http://unused", "UTC", session=Recorder(rows))
+    got = client.history(["sensor.meter"], start, T)["sensor.meter"]
+    cut = client.history_cut["sensor.meter"]
+    assert got and start < cut < T and all(datetime.fromisoformat(r["last_changed"]) < cut for r in got)
+    whole = McpClient("http://unused", "UTC", session=Recorder(rows[:10]))
+    whole.history(["sensor.meter"], start, T)
+    assert whole.history_cut == {}                                       # read whole: nothing said

@@ -58,6 +58,7 @@ from .tickets import Tickets
 from .policy import NOT_REGISTERED, Person, Policy, problems as policy_problems
 from .routing import Origin, Routing
 from .scheduler import Scheduler
+from .fault_offers import FaultOffers
 from .skills import SEEDED, Skills, script_env
 from .state import State
 from .telegram import Telegram, TelegramError
@@ -78,9 +79,7 @@ def _pretty(entity_id: str) -> str:
     return obj.replace("_", " ").strip().capitalize()
 
 
-#: the words on the button under an answer that offers a fault (tools._ticket)
-OFFER_BUTTON = "Create this fault for the facility manager"
-NO_OFFER_BUTTON = "Don't create it"
+from .fault_offers import CREATE as OFFER_BUTTON, DECLINE as NO_OFFER_BUTTON  # noqa: E402  (tests name them)
 
 
 @dataclass
@@ -152,6 +151,9 @@ class Vesta:
         self.tickets = Tickets(kiosk=self.kiosk, state=self.state, store_path=settings.store_path,
                                settle_alert=self.thread.close, timezone=settings.timezone,
                                tell_fm=lambda text: self.outcome.carry_out({"send": [{"to": "fm", "text": text}]}))
+        # a fault offered in a chat, start to end (fault_offers.py, review 32)
+        self.fault_offers = FaultOffers(self.state, self.delivery, self.tickets,
+                                        lambda chat: self.s.in_folder(f"chats/{chat}").out_dir)
         # a voice message's words (voice.py): the skill prepares the audio, Home Assistant reads it
         self.voice = Voice(self.s, self.tg, self.skills, self.code_command, self.delivery.send, self.state, self.cf_headers)
         # the heading of every message the agent sends on its own (notice.py): who it is for, the incident, its history
@@ -238,13 +240,14 @@ class Vesta:
             return None
         return out
 
-    def toolbox(self, allowed: set[str] | None = None, settings=None, invoked: str | None = None) -> Toolbox:
+    def toolbox(self, allowed: set[str] | None = None, settings=None, invoked: str | None = None,
+                inv: str | None = None) -> Toolbox:
         """`allowed`: what the AI may use this time (turn.Terms.tools); None: everything switched on. `settings`: the
         run's own (config.Settings.in_folder: its files' folder); the agent's without one."""
         return Toolbox(settings=settings or self.s, policy=self.policy(), reader=self.reader, actions=self.actions,
                        skills=self.skills, ask=self.approvals.ask, server_tools=self.server_tools, state=self.state,
                        ticket=self.tickets.create if self.kiosk.enabled else None,
-                       carry_out=self.outcome.carry_out, start_job=self.jobs.start, allowed=allowed, invoked=invoked)
+                       carry_out=self.outcome.carry_out, start_job=self.jobs.start, allowed=allowed, invoked=invoked, inv=inv)
 
     def lock(self, chat_id: int) -> asyncio.Lock:
         return self._locks.setdefault(int(chat_id), asyncio.Lock())
@@ -427,8 +430,9 @@ class Vesta:
     # ------------------------------------------------------------------ messages
     async def handle_message(self, event_type: str, m: dict):
         """A Telegram message, as Home Assistant fired it (fields checked live on 2026-09-30): intake.py decides."""
-        got = intake.gate(event_type, m, self.policy(), self.bot_username, self.state.is_own_message,
-                          self.skills.commands())
+        on = self.skills.commands()
+        got = intake.gate(event_type, m, self.policy(), self.bot_username, self.state.is_own_message, on,
+                          {c: s for c, s in self.skills.commands(include_off=True).items() if c not in on})
         from_id = m.get("user_id")
         if got.action != "drop":
             # ⚠️ THE START OF THE TIMELINE (owner, 2026-10-09: the log must cover "the moment the message to request a
@@ -448,6 +452,11 @@ class Vesta:
             if not got.group:
                 await self.delivery.send(got.chat, f"{NOT_REGISTERED} Your Telegram id is {from_id}.")
             return
+        if got.action == "command_off":
+            cmd = (self.skills.all(include_off=True).get(got.invoked).command if got.invoked else "") or ""
+            await self.delivery.send(got.chat, f"The {got.invoked} skill is switched off on this villa (VESTA Agent page › "
+                                               f"Skills). Write your question without /{cmd}.")
+            return
         if got.action == "new":
             self.state.set_session(got.chat, None)
             await self.delivery.send(got.chat, "New conversation.")
@@ -466,9 +475,11 @@ class Vesta:
                 if image is None:
                     return
             if got.invoked and not text and image is None:
-                cmd = (self.skills.get(got.invoked).command if self.skills.get(got.invoked) else got.invoked)
-                await self.delivery.send(got.chat, f"Write your question after /{cmd}, for example: /{cmd} why did the "
-                                                   "pump run all night on 9 October?")
+                # the example is the skill's own (skill.yaml usage): no device of any villa in the engine
+                sk = self.skills.get(got.invoked)
+                cmd = sk.command if sk else got.invoked
+                await self.delivery.send(got.chat, f"Write your question after /{cmd}" +
+                                         (f", for example: {sk.usage}" if sk and sk.usage else "") + ".")
                 return
             if not text and image is None:
                 return
@@ -521,13 +532,14 @@ class Vesta:
 
     async def converse(self, cid: int, person: Person | None, text: str,
                        resume: str | None = "auto", is_continue: bool = False, voice: bool = False,
-                       image: tuple[str, str] | None = None, held=None, invoked: str | None = None):
+                       image: tuple[str, str] | None = None, held=None, invoked: str | None = None,
+                       inv: str | None = None):
         """`image`: a photo the person sent (base64, mime), `text` its caption: the AI looks at it. `held`: the chat's
         "typing…" taken when the message arrived (handle_message), carried on until the answer goes."""
         async with self.delivery.typing(cid, held=held) as answered:
-            await self._converse(cid, person, text, resume, is_continue, voice, answered, image, invoked)
+            await self._converse(cid, person, text, resume, is_continue, voice, answered, image, invoked, inv)
 
-    async def _converse(self, cid, person, text, resume, is_continue, voice, answered, image=None, invoked=None):
+    async def _converse(self, cid, person, text, resume, is_continue, voice, answered, image=None, invoked=None, inv=None):
         async with self.lock(cid):
             self.chat_jobs.turn(cid)                         # a job started now belongs to this turn (chat_jobs.py)
             if resume == "auto":
@@ -547,11 +559,10 @@ class Vesta:
                 prompt = (f"{said[0].upper() + said[1:]} from {person.name if person else 'someone'} (role "
                           f"{person.role if person else '?'}; language saved for them: {lang}) in the {self.policy().chat_label(cid)}:\n"
                           f"\"\"\"{text}\"\"\"")
-            # a skill only its command starts (skills.Skill.command): this turn's, or — for a Continue — the turn it goes on
-            if is_continue:
-                invoked = self.state.invoked(cid)
-            else:
-                self.state.set_invoked(cid, invoked)
+            # a skill only its command starts (skills.Skill.command): this turn's, or — for a Continue — the one its
+            # button carries (state.new_continuation), with its investigation `inv`: when it began, its offers
+            if not is_continue:
+                inv = f"{time.time():.3f}" if invoked else None
                 sk = self.skills.get(invoked) if invoked else None
                 if sk is not None:
                     prompt = (f"{person.name if person else 'The person'} wrote /{sk.command}: this is a request for the "
@@ -563,7 +574,8 @@ class Vesta:
             pol = self.policy()
             # what this person may make the AI use here, the chat's brain and limit, its folder: turn.py decides
             asked = None if is_continue else (f"[photo] {text}".strip() if image else text)
-            res = await self.turns.chat(person, cid, prompt, resume=resume, asked=asked, image=image, invoked=invoked)
+            res = await self.turns.chat(person, cid, prompt, resume=resume, asked=asked, image=image, invoked=invoked,
+                                        inv=inv)
             if res.session_id:
                 self.state.set_session(cid, res.session_id)
             log.info("Answered %s in chat %s (%s)%s", person.name if person else "system", cid,
@@ -571,7 +583,7 @@ class Vesta:
                      f", error {res.error}" if res.error else "")
             sk = self.skills.get(invoked) if invoked else None
             if sk is not None and sk.deliver and not (res.problem or res.error or res.stopped_at_limit):
-                res = await self._delivered(sk, cid, person, res, asked or "")
+                res = await self._delivered(sk, cid, person, res, asked or "", inv)
             answer = (res.text or "").strip()               # an empty answer sends nothing (a request said it all)
             if not answer and not res.sent and not res.approvals and res.earlier:
                 answer = res.earlier                        # ended on a tool call with nothing sent: its last words
@@ -597,31 +609,15 @@ class Vesta:
                     answer += "\n\nA report can still be made without the AI, from its figures and charts:"
                     keyboard = ai_down.keyboard(res.problem, off.buttons)
             if res.stopped_at_limit and res.session_id:
-                cont = self.state.new_continuation(cid, res.session_id, person.telegram_id if person else None)
+                cont = self.state.new_continuation(cid, res.session_id, person.telegram_id if person else None,
+                                                   invoked=invoked, inv=inv)
                 answer = (answer + "\n\n" if answer else "") + \
                     f"Stopped: this answer reached the {res.limit_usd:g} USD limit per reply."
                 keyboard = {"inline_keyboard": [[{"text": "Continue", "callback_data": button_data.make(button_data.CONTINUE, cont)}]]}
             # a fault the AI offered in this answer (tools._ticket): its button goes under it; only a press creates it
             if page_mid:
-                # the report goes with the fault if a person creates it (owner, 2026-10-11): each offer its own copy, so a
-                # later investigation in this chat can never put another page on it
-                out = self.s.in_folder(f"chats/{cid}").out_dir
-                for oid in self.state.offer_documents(cid):
-                    copy = os.path.join(out, f"report-{oid}.html")
-                    try:
-                        shutil.copyfile(os.path.join(out, sk.deliver["page"]), copy)
-                        self.state.set_offer_document(oid, copy)
-                    except OSError as e:
-                        log.warning("Chat %s: the report could not be kept for its fault (%s)", cid, type(e).__name__)
-            offers = self.state.ticket_offers_to_show(cid)
-            rows = [[{"text": OFFER_BUTTON, "callback_data": button_data.make(button_data.TICKET, o["id"], "y")},
-                     {"text": NO_OFFER_BUTTON, "callback_data": button_data.make(button_data.TICKET, o["id"], "n")}]
-                    for o in offers]
-            if rows and page_mid and not answer and await self.delivery.buttons(cid, page_mid, {"inline_keyboard": rows}):
-                rows = []                                   # under the page's own message: one message, the whole answer
-            if rows and not answer:
-                # the answer was a message of its own the buttons could not join: the offer comes on its own, named
-                answer = "A fault for the facility manager, if you want one:\n" + "\n".join(f"- {o['title']}" for o in offers)
+                self.fault_offers.keep_page(cid, sk.deliver["page"])
+            answer, rows, offered_ids = await self.fault_offers.show(cid, page_mid, answer)
             if rows:
                 keyboard = {"inline_keyboard": (keyboard or {}).get("inline_keyboard", []) + rows}
             # ⚠️ A REQUEST SHOWN HERE IS THE ANSWER (owner, 2026-10-10: "Approval request sent." under it, twice "redundant"):
@@ -635,13 +631,14 @@ class Vesta:
             answered()                                       # "typing…" ends: the answer is going out
             # the camera pictures the AI looked at go with it (Toolbox.photos)
             mid = await self.delivery.reply(cid, answer, keyboard=keyboard, photos=res.photos)
+            self.fault_offers.delivered(offered_ids, mid)
             await self.chat_jobs.replied(cid, mid)            # this turn's jobs: their waiting message, their "typing…"
 
-    async def _delivered(self, sk, cid: int, person, res, asked: str):
+    async def _delivered(self, sk, cid: int, person, res, asked: str, inv: str | None):
         """⚠️ WHAT A COMMAND SKILL'S ANSWER CARRIES, CHECKED — NEVER LEFT TO THE AI (owner, 2026-10-11: "make sure this
         always trigger the full use of the skill — HTML report in the response and buttons to create and cancel a
         ticket creation"). skill.yaml `deliver`: the page the answer must have sent (missing: the AI is sent back to it
-        once, then the person is told), and a fault always offered (none by the AI: offered from the saved account)."""
+        once, then the person is told), and a fault always offered — one per investigation `inv` (fault_offers)."""
         import dataclasses
         page, account = sk.deliver.get("page"), sk.deliver.get("fault_offer")
         if page and page not in res.attached:
@@ -649,30 +646,26 @@ class Vesta:
             again = await self.turns.chat(
                 person, cid, f"Your answer has not sent {page}: every /{sk.command} answer carries it. Make it now and send "
                              f"it with send_message (attachment {page}), as the {sk.name} skill says. Write nothing else.",
-                resume=res.session_id, invoked=sk.name)
+                resume=res.session_id, invoked=sk.name, inv=inv)
+            # ⚠️ THE FOLLOW-UP'S OWN OUTCOME GOES ON (review 32): merged by hand, it lost its stop at the limit (no Continue)
+            # and its problem (no credit read as "the page could not be made")
             res = dataclasses.replace(
                 res, session_id=again.session_id or res.session_id, sent=res.sent + again.sent,
                 attached=res.attached + again.attached, offered=res.offered + again.offered,
-                pages={**res.pages, **again.pages},
+                pages={**res.pages, **again.pages}, photos=res.photos + again.photos,
+                approvals=res.approvals + again.approvals, stopped_at_limit=again.stopped_at_limit,
+                problem=again.problem, error=again.error,
                 cost_usd=(res.cost_usd or 0) + (again.cost_usd or 0) if (res.cost_usd or again.cost_usd) else None,
                 text=res.text or again.text)
             if again.session_id:
                 self.state.set_session(cid, again.session_id)
-            if page not in res.attached:
+            if page not in res.attached and not (res.problem or res.error or res.stopped_at_limit):
                 log.warning("Chat %s: /%s still without %s", cid, sk.command, page)
                 res = dataclasses.replace(res, text=((res.text or res.earlier or "").strip() + "\n\n" +
                                                      "The report page could not be made this time.").strip())
-        if account and not res.offered:
-            notes = {}
-            try:
-                with open(os.path.join(self.s.in_folder(f"chats/{cid}").out_dir, account), encoding="utf-8") as f:
-                    notes = json.load(f)
-            except (OSError, ValueError):
-                pass
-            notes = notes if isinstance(notes, dict) else {}
-            title = str(notes.get("title") or "").strip() or f"Check on site: {asked.strip()}"
-            self.state.new_ticket_offer(cid, title[:200], None, str(notes.get("summary") or "").strip()[:2000] or None)
-            res = dataclasses.replace(res, offered=1)
+        if account and inv:
+            self.fault_offers.ensure(cid, inv, account, asked, float(inv))
+            res = dataclasses.replace(res, offered=max(res.offered, 1))
         return res
 
     def before_answer(self) -> str:
@@ -731,34 +724,11 @@ class Vesta:
         if cont.get("not_yours"):
             return await p.toast("Only the person who asked can continue this answer.")
         await p.toast("Continuing.")
-        await self.converse(p.chat, p.person, "", resume=cont["session_id"], is_continue=True)
+        await self.converse(p.chat, p.person, "", resume=cont["session_id"], is_continue=True,
+                            invoked=cont.get("invoked"), inv=cont.get("inv"))
 
     async def _press_ticket(self, p: "Press") -> None:
-        """The fault the AI offered under an answer, created now — or declined ("n") — once, whoever presses first."""
-        offer = self.state.claim_ticket_offer(p.parts[0], p.chat)
-        if not offer:
-            return await p.toast("Already decided.")
-        if p.parts[1] == "n":
-            await p.toast("No fault created.")
-            if p.mid:
-                await self.delivery.edit(p.chat, p.mid, layout.render(layout.parts(
-                    body=str(p.msg.get("text") or p.msg.get("caption") or ""),
-                    status=f"No fault created: declined by {p.person.name}.")))
-            return
-        try:
-            await self.tickets.create(offer["title"], offer.get("entity_id"), offer.get("note"),
-                                      document=offer.get("document"))
-        except Exception as e:  # noqa: BLE001
-            self.state.release_ticket_offer(offer["id"])            # the button still works
-            log.warning("The offered fault could not be created (%s)", type(e).__name__)
-            return await p.toast("The VESTA Kiosk did not record it. Try again in a moment.")
-        said = f"Fault created for the facility manager by {p.person.name}: {offer['title']}"
-        await p.toast("Fault created.")
-        if p.mid:
-            # the answer stays whole, its button gone, the fault said under it (as a report's button does) — a page's
-            # message is a file's caption
-            await self.delivery.edit(p.chat, p.mid, layout.render(layout.parts(
-                body=str(p.msg.get("text") or p.msg.get("caption") or ""), status=said)))
+        await self.fault_offers.press(p)
 
     async def _press_alert(self, p: "Press") -> None:
         # the presser as this chat knows them (Policy.member: one person may be both owner and fm, each with its name)

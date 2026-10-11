@@ -54,6 +54,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+from .intake import OWN_COMMANDS  # noqa: E402  (the agent's own commands: one list)
 from typing import Any
 from dataclasses import dataclass, field
 
@@ -150,7 +151,7 @@ VILLA_CHOICES = "villa.skill.yaml"
 TRASH = ".trash"              # skills deleted or replaced: kept to undo, trimmed by housekeeping (settings.keep.files_days)
 TOOL = re.compile(r"^[a-z][a-z0-9_]{1,60}$")
 SKILL_COMMAND = re.compile(r"^[a-z][a-z0-9_]{1,31}$")     # Telegram's own rule for a bot command
-RESERVED_COMMANDS = {"/ask", "/new", "/whoami", "/start", "/help"}   # the agent's own (intake.OWN_COMMANDS) and Telegram's
+RESERVED_COMMANDS = OWN_COMMANDS | {"/start", "/help"}   # the agent's own (one list: intake.py) and Telegram's
 KEPT = ".kept.json"           # starter skills the owner chose to keep as edited, with the release they kept them at
 
 
@@ -223,6 +224,8 @@ class Skill:
     # what every answer of a command skill carries, checked after the AI's turn (app._delivered): {"page": file sent with
     # send_message, "fault_offer": the saved account a fault is offered from when the AI offered none}
     deliver: dict[str, str] = field(default_factory=dict)
+    # how to write it, the skill's own example ("/investigate why did …?"): said to a person who sent the command alone
+    usage: str = ""
 
     @property
     def skill_md(self) -> str:
@@ -254,6 +257,7 @@ def parse_skill(name: str, path: str) -> Skill:
         if not cmds:
             raise SkillError("command: an empty list")
         sk.command, sk.also = cmds[0], cmds[1:]
+        sk.usage = str(raw.get("usage") or "").strip()[:200]
     deliver = raw.get("deliver") or {}
     if deliver:
         if not sk.command:
@@ -520,10 +524,11 @@ class Skills:
         return updated, kept
 
     # ------------------------------------------------------------------ reading
-    def commands(self) -> dict[str, str]:
-        """"/command" → the skill it starts, for the skills switched on (Skill.command); the first name wins a clash."""
+    def commands(self, include_off: bool = False) -> dict[str, str]:
+        """"/command" → the skill it starts, for the skills switched on (Skill.command) — or every skill, `include_off`
+        (a switched-off skill's command is answered, never dropped: intake.gate); the first name wins a clash."""
         out: dict[str, str] = {}
-        for name, sk in self.all().items():
+        for name, sk in self.all(include_off=include_off).items():
             for cmd in ([sk.command] + sk.also) if sk.command else []:
                 out.setdefault("/" + cmd, name)
         return out

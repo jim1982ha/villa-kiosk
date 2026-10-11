@@ -176,6 +176,13 @@ HISTORY_SLICE, HISTORY_MIN_SLICE, HISTORY_MAX_SLICE = timedelta(hours=6), timede
 HISTORY_MAX_CALLS = 400          # a 10-day read of a meter reporting every second stays inside it
 
 
+def _when(row: dict) -> datetime | None:
+    try:
+        return datetime.fromisoformat(str(row.get("last_changed") or row.get("last_updated")))
+    except (TypeError, ValueError):
+        return None
+
+
 def paged(fetch, step: int, max_pages: int = 20) -> list:
     """Every row of a paged read, each once. `fetch(offset) -> (rows, has_more, next_offset)`.
 
@@ -287,6 +294,9 @@ class McpClient(HABase):
         a quiet slice lets the next one double. Each slice opens with the state carried over from before it, stamped
         at the slice's start: kept only for the first slice, never counted as a change."""
         out = {}
+        # ⚠️ A READ CUT SHORT SAYS SO (architecture review 32): stopped at its cap, it handed back what it had and a reader
+        # stretched the last state to the period's end — "ran until 15:00", made up. {entity: where the read stopped}.
+        self.history_cut: dict[str, datetime] = {}
         for eid in entity_ids:
             out[eid] = self._history_one(eid, start.astimezone(timezone.utc), end.astimezone(timezone.utc))
         return out
@@ -311,12 +321,18 @@ class McpClient(HABase):
                 continue
             if more:                                      # a slice of minutes still holds more: its pages, as before
                 batch = paged(lambda off, a=at, b=to: fetch(a, b, off), HISTORY_PAGE, max_pages=20)
+                if len(batch) >= HISTORY_PAGE * 20:       # even its pages could not hold it: read no further
+                    rows.extend(batch[1:] if rows and batch and batch[0].get("state") == rows[-1].get("state") else batch)
+                    self.history_cut[eid] = _when(rows[-1]) or at
+                    return rows
             if rows and batch and batch[0].get("state") == rows[-1].get("state"):
                 batch = batch[1:]                         # the carried-over state, stamped at the slice's start
             rows.extend(batch)
             at = to
             if len(batch) < HISTORY_PAGE // 4:
                 span = min(span * 2, HISTORY_MAX_SLICE)
+        if at < end:
+            self.history_cut[eid] = at                    # the call cap: nothing read after `at`
         return rows
 
     def helpers(self):

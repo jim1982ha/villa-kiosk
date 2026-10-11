@@ -129,3 +129,12 @@ def test_the_command_alone_still_reaches_the_agent_which_asks_for_the_question()
                        lambda c, mid: False, CMDS).action == "drop"
     assert intake.gate("telegram_command", ev(OWNER, OWNER, "", command="/lights", args=[]), Pol(), BOT,
                        lambda c, mid: False, CMDS).action == "drop"
+
+
+def test_a_switched_off_skills_command_is_answered_never_dropped():
+    # review 32: "/investigate" with the skill switched off was silence — no reply, nothing in the log
+    got = intake.gate("telegram_command", ev(OWNER, OWNER, "", command="/investigate", args=["the", "pump"]), Pol(), BOT,
+                      lambda c, mid: False, {}, {"/investigate": "investigate"})
+    assert (got.action, got.invoked) == ("command_off", "investigate")
+    assert intake.gate("telegram_command", ev(OWNER, OWNER, "", command="/lights", args=[]), Pol(), BOT,
+                       lambda c, mid: False, {}, {"/investigate": "investigate"}).action == "drop"   # still HA's

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.159 (11 October 2026)
+
+Architecture review 32:
+- fault_offers.FaultOffers: an offer's whole life (ensure one per investigation from an account written for it,
+  keep_page, show — marked shown once delivered —, press within the caption limit). state: ticket_offers.inv,
+  pending_offers / offers_shown / offers_of; the per-chat `invoked:` key is gone.
+- A Continue carries its command skill and investigation (continuations.invoked / inv, migrated).
+- _delivered's follow-up passes on its stop, problem, error, photos and approvals.
+- intake.gate answers a switched-off skill's command (command_off); skill.yaml `usage:`; RESERVED_COMMANDS from
+  intake.OWN_COMMANDS.
+- vesta_shared.messaging.TELEGRAM_CAPTION, used by telegram.py and reports' compose (SUMMARY_MAX derived, TO_ROOM).
+- investigate: settings.yaml behaviour thresholds (th()); McpClient.history_cut, said by timeline and never stretched.
+
 ## 0.6.158 (11 October 2026)
 
 - A command skill's page message is the answer: the AI's text after it is not sent (logged), the fault offer's buttons go
